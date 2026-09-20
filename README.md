@@ -28,4 +28,7 @@
 ## 文档
 
 - `AGENTS.md`：项目目标、模块边界、工具契约、里程碑
+- `CONTEXT.md`：领域语言与权威事实归属
+- `docs/architecture.md`：运行组件、代码 module、依赖方向与关键跨系统流程
+- `docs/interface-contracts.md`：跨 module interface、DTO 字段、唯一 owner 与演进规则
 - `docs/orca-compatibility.md`：上游 submodule 与 Orca CLI 的版本基线，以及已验证和未验证的能力

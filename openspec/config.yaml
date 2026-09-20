@@ -1,32 +1,50 @@
-schema: spec-driven
+schema: orchestrated-delivery
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Orca Companion 是 TypeScript strict、ESM、Node.js 24、pnpm 的单包项目，使用
+  LangGraph JS 构建 Coordinator agent loop，使用 Ink/React 提供前台 TUI。
+  根目录 AGENTS.md 定义工程边界与完成标准；CONTEXT.md 是领域术语的唯一事实源；
+  GitHub Decision Tickets 与已确认 Route Map 是规划决策的权威来源。
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  Companion 只运行 Coordinator Agent，并通过公开 Orca CLI 调度现有 Worker Harness。
+  领域规则、应用用例、workflow、Orca/agent/storage adapters、CLI/TUI 和 bootstrap
+  必须保持既定依赖方向。不得直接访问 Orca 数据库、私有 RPC 或上游私有源码。
 
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+  当前十一个 change 是一次性完整规划包，可以同时达到 apply-ready；实际 apply、验证和
+  archive 必须按架构合同基线 → M0 控制基线 → M1 → M2 严格串行。架构合同基线使用
+  current-head；其余十个 change 使用 predecessor-contract，并在实施前核验直接前驱已归档、
+  主规格存在且冻结接缝仍成立。架构合同或 M0 控制基线失败时，所有后续 change 停止实施并回到规划。
+
+  行为验证使用 Vitest。真实 Codex Worker Harness 集成测试使用 MiniMax-M3，并且只能在
+  显式选择的隔离项目和专用身份中运行。普通检查不得构建 references/orca submodule。
+
+rules:
+  proposal:
+    - 使用中文，保持简洁；Capability 路径和代码标识保持英文。
+    - 明确直接前驱、里程碑边界和不在本 change 内实现的内容。
+  specs:
+    - 每个 requirement 至少包含一个可观察的 Scenario；不得把内部实现步骤写成行为契约。
+    - 当前规划包只新增独立 capability，避免依赖尚未归档的主规格。
+  design:
+    - 决策使用稳定 D-ID，并明确权威来源、失败关闭行为和模块归属。
+    - 不重复 CONTEXT.md；只引用与本 change 直接相关的领域约束。
+  implementation-plan:
+    - 架构合同基线使用 current-head；Change 2 至 11 使用 predecessor-contract。
+    - predecessor-contract 必须列出直接前驱、冻结接缝和实施前漂移检查。
+    - 每个 IP-ID 都要有最小文件清单、Requirement/Scenario 映射和可运行验证命令。
+  tasks:
+    - 所有任务初始保持未勾选，并引用一个或多个 IP-ID。
+    - 任务按依赖顺序排列；不得提前创建 verification.md。
+  verification:
+    - 仅在实现任务完成并固定实现 HEAD 后创建。
+
+operations:
+  apply:
+    guidance:
+      - 只实施序列中第一个尚未归档的 change；apply-ready 不代表可越过前驱实施。
+      - 开始编辑前执行 implementation-plan 的基线和前驱接缝检查；漂移时停止并回到规划。
+      - 不在 apply 阶段创建 verification.md。
+  archive:
+    guidance:
+      - 只有 verification 结论为 PASS 且实现任务全部完成时归档。
+      - 归档后再开放直接后继 change 的实施门禁。

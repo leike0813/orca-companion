@@ -1,0 +1,198 @@
+name: orchestrated-delivery
+version: 1
+description: Orca Companion delegated delivery workflow - planning → implementation → verification
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Initial proposal document outlining the change
+    template: proposal.md
+    instruction: |
+      Create the proposal document that establishes WHY this change is needed.
+
+      Sections:
+      - **Why**: 1-2 sentences on the problem or opportunity. What problem does this solve? Why now?
+      - **What Changes**: Bullet list of changes. Be specific about new capabilities, modifications, or removals. Mark breaking changes with **BREAKING**.
+      - **Capabilities**: Identify which specs will be created or modified:
+        - **New Capabilities**: List capabilities being introduced. Each becomes a new `specs/<capability-path>/spec.md`. Use kebab-case for path segments you introduce and follow the project's existing spec organization.
+        - **Modified Capabilities**: List existing capabilities whose REQUIREMENTS are changing. Each needs a delta spec file at the exact existing path under `openspec/specs/`.
+      - **Impact**: Affected code, APIs, dependencies, or systems.
+
+      Research existing specs before filling the Capabilities section: run
+      `openspec list --specs`, inspect likely matches with `openspec show
+      "<spec-id>" --type spec --json --no-scenarios`, then read every relevant
+      spec in full with `openspec show "<spec-id>" --type spec`. Append `--store
+      "<id>"` only for a registered standalone store. Reuse an existing
+      capability's exact path instead of introducing a near duplicate.
+
+      Every change must either declare at least one capability or explicitly
+      set `skip_specs: true` in `.openspec.yaml` when no spec-level behavior
+      changes. Do not invent a requirement only to satisfy validation.
+
+      Keep it concise. Focus on why and what; implementation details belong in design.md.
+    requires: []
+
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Detailed specifications for the change
+    template: spec.md
+    instruction: |
+      Create specification files that define WHAT the system should do. A spec
+      is a behavior contract, not an implementation plan.
+
+      Include observable behavior, inputs, outputs, error conditions, and
+      external constraints. Avoid internal symbols, library choices, and
+      step-by-step implementation details.
+
+      Create one spec file per capability listed in the proposal. Preserve the
+      exact capability path. New path segments use kebab-case and follow the
+      existing project organization. Confirm modified paths with `openspec list
+      --specs`; do not move or rename capabilities.
+
+      Use these delta headers:
+      - **ADDED Requirements**: New behavior
+      - **MODIFIED Requirements**: Full updated existing requirement
+      - **REMOVED Requirements**: Include **Reason** and **Migration**
+      - **RENAMED Requirements**: Use FROM:/TO:
+
+      Each requirement uses `### Requirement: <name>` and MUST/SHALL language.
+      Every scenario uses exactly `#### Scenario: <name>` with WHEN/THEN.
+
+      New capabilities start with a `## Purpose` of at least 50 characters.
+      Existing capabilities omit Purpose. For MODIFIED requirements, copy the
+      entire matching requirement from the main spec before editing it. Resolve
+      the planning root from the instructions response instead of assuming the
+      repository when a store may be active.
+    requires:
+      - proposal
+
+  - id: design
+    generates: design.md
+    description: Technical design document with implementation details
+    template: design.md
+    instruction: |
+      Create the design document that explains HOW to implement the change.
+
+      Close every choice that would alter implementation: interfaces, schemas,
+      state, persistence, permissions, errors, transactions, audit,
+      dependencies, migration, and file ownership. Give each decision a stable
+      D-ID so the implementation plan can reference it.
+
+      Cover Context, Goals / Non-Goals, Decisions with rationale and considered
+      alternatives, Risks / Trade-offs, Migration Plan, and only genuinely
+      deferrable Open Questions. Resolve any question that could change specs,
+      approach, or task breakdown before proceeding.
+    requires:
+      - proposal
+      - specs
+
+  - id: implementation-plan
+    generates: implementation-plan.md
+    description: Code-level implementation map for a reconciled repository baseline
+    template: implementation-plan.md
+    instruction: |
+      Create the implementation plan: the code construction drawing that maps
+      the approved specs and design onto a declared repository baseline.
+
+      Declare exactly one baseline mode:
+      - `current-head`: record the exact planning commit and reconcile it with
+        the implementation HEAD before editing.
+      - `predecessor-contract`: record the direct predecessor change, the
+        planning commit, and the minimal frozen seams supplied by predecessor
+        artifacts. Before editing, require the predecessor to be archived,
+        confirm its main specs exist, and reconcile actual files and symbols
+        against those seams. Drift returns the change to planning.
+
+      Read relevant production code, callers, tests, direct dependency changes,
+      and repository commands that exist at planning time. Give every
+      implementation slice a stable IP-ID. Account for authoritative inputs;
+      existing or expected files and symbols to reuse; every planned file;
+      ordered side effects and failure handling; applicable schema, state,
+      persistence, permission, error, transaction, idempotency, version, audit,
+      migration, and observability; Requirement/Scenario evidence; file
+      allowlists; and escalation conditions.
+
+      Reference Requirement/Scenario names and D-IDs instead of copying their
+      text. Use file paths and symbols, not line numbers. Move undecided public
+      contracts, data rules, transaction boundaries, dependencies, or scope
+      choices back into design.md.
+
+      The plan is complete only when every Requirement/Scenario, planned file,
+      and verification obligation maps to an IP-ID and runnable command, and an
+      implementation agent need not invent a contract or test scope.
+    requires:
+      - specs
+      - design
+
+  - id: tasks
+    generates: tasks.md
+    description: Implementation checklist with trackable tasks
+    template: tasks.md
+    instruction: |
+      Create the implementation task list. Resolve any design Open Question that
+      would change what gets built before writing tasks.
+
+      Follow the checkbox template exactly. Group tasks under numbered headings;
+      every task uses `- [ ] X.Y`, references one or more implementation-plan
+      IP-IDs, stays small enough for one session, follows dependency order, and
+      names a runnable command or observable completion check. Tasks track order
+      and completion; do not duplicate the construction drawing.
+    requires:
+      - implementation-plan
+
+  - id: verification
+    generates: verification.md
+    description: Final acceptance conclusion and follow-up guidance
+    template: verification.md
+    instruction: |
+      Create the final verification artifact only after implementation tasks are
+      complete and the verification agent has received a fixed implementation
+      checkpoint. Planning and implementation agents must not create it early.
+
+      Read proposal, specs, design, implementation-plan, tasks, the actual final
+      implementation, and existing test evidence. Verify every Requirement,
+      Scenario, and IP-ID. Run the necessary checks; repair in-scope defects when
+      authorized, rerun affected checks, and update the final HEAD after any
+      material product change. Do not edit planning artifacts to hide a mismatch.
+      Escalate public contract, permission, persistence, transaction, migration,
+      dependency, or approved-scope changes.
+
+      Record:
+      - the input implementation HEAD, current final HEAD, and verification agent;
+      - exactly one conclusion: PASS, FAIL, or BLOCKED, with its boundary;
+      - Requirement/Scenario/IP-ID evidence and runnable command results;
+      - fixes made during verification;
+      - required targeted-audit scope, conclusion, and evidence;
+      - follow-up cautions that do not invalidate the current conclusion.
+
+      PASS is allowed only when all in-scope obligations and required evidence are
+      complete and no required audit remains pending. In-scope defects, missing
+      evidence, and pending required audits are not follow-up cautions. Keep this
+      artifact aligned with the current final product; Git retains its history.
+    requires:
+      - proposal
+      - specs
+      - design
+      - implementation-plan
+      - tasks
+
+apply:
+  requires: [proposal, specs, design, implementation-plan, tasks]
+  tracks: tasks.md
+  instruction: |
+    Read every context file, including implementation-plan.md, before editing.
+    Enforce its declared baseline mode first. For `current-head`, reconcile the
+    named planning commit with the implementation HEAD. For
+    `predecessor-contract`, require the direct predecessor to be archived and its
+    main specs present, then reconcile actual files and symbols with every frozen
+    seam. Stop and return to planning when either check fails.
+
+    Execute tasks by IP-ID in dependency order and stay inside each IP-ID file
+    allowlist. Run each IP-ID's stated checks. Mark a task complete only after
+    both its behavior and evidence obligations pass. Do not create
+    verification.md during apply; hand a fixed final implementation checkpoint
+    to the verification agent. Report modified files, covered
+    Requirement/Scenario names, commands and results, and any deviation by IP-ID.
+
+    Pause and ask or escalate when artifacts conflict, planned symbols drift, a
+    public field, dependency, migration, state, or unplanned file is needed, a
+    named command is absent or failing, or a Scenario cannot be satisfied.
