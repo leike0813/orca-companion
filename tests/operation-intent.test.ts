@@ -222,6 +222,25 @@ test('重复 OperationId 返回既有记录而不是创建第二条意图', asyn
   }
 });
 
+test('重复 OperationId 不能改绑目标或操作类别', async () => {
+  await runOperation(
+    'op-1' as OperationId,
+    'run-create',
+    recordingBackend([], acceptedOutcome('op-1', 'req-1')),
+  );
+
+  const duplicate = beginIntent(store, {
+    coordinationScopeId: SCOPE,
+    operationId: 'op-1' as OperationId,
+    target: { kind: 'orca_run', id: 'other-run' },
+    operationCategory: 'run-start',
+    writer,
+    expectedRevision: revisionOf(),
+  });
+
+  expect(duplicate).toMatchObject({ kind: 'rejected', rejection: { code: 'invalid_state' } });
+});
+
 test('rejected 收尾记录分类且不携带 backend request 引用', async () => {
   const rejected: OperationOutcome<unknown> = { kind: 'rejected', code: 'run_not_startable', message: '未启动' };
   const run = await runOperation('op-2' as OperationId, 'run-create', recordingBackend([], rejected));

@@ -39,6 +39,7 @@ import {
   type OperationIntent,
 } from '../../application/dto/operation-intent.js';
 import type { SourceRevisionRef } from '../../domain/coordinator/session-state.js';
+import type { DeliveryVerdict } from '../../domain/delivery-verdict.js';
 import type {
   ExecutionGraph,
   GraphVersionRecord,
@@ -88,6 +89,8 @@ import {
   type CoordinationRejectionCode,
   type CoordinationSnapshot,
   type CoordinatorSessionRegistration,
+  type DeliverySettlementRecord,
+  type DeliveryVerdictRecord,
   type MaterializationBindingRecord,
   type PendingInteractionRecord,
   type PendingInteractionState,
@@ -609,12 +612,17 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (!category.ok) {
         return category;
       }
+      const expectedHead = requireNullableString(command['expectedHead'], 'expectedHead');
+      if (!expectedHead.ok) {
+        return expectedHead;
+      }
       return ok({
         ...base,
         kind: 'begin-intent',
         operationId: operationId.value as OperationId,
         target: target.value,
         operationCategory: category.value,
+        ...(expectedHead.value === null ? {} : { expectedHead: expectedHead.value }),
       });
     }
     case 'settle-intent': {
@@ -1057,9 +1065,112 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         creationOperationId: creationOperationId.value as OperationId,
       });
     }
+    case 'record-delivery-settlement': {
+      const dedupeKey = requireString(command['dedupeKey'], 'dedupeKey');
+      if (!dedupeKey.ok) {
+        return dedupeKey;
+      }
+      const deliveryId = requireString(command['deliveryId'], 'deliveryId');
+      if (!deliveryId.ok) {
+        return deliveryId;
+      }
+      const runId = requireString(command['runId'], 'runId');
+      if (!runId.ok) {
+        return runId;
+      }
+      const consumerGeneration = requireCount(command['consumerGeneration'], 'consumerGeneration');
+      if (!consumerGeneration.ok) {
+        return consumerGeneration;
+      }
+      const workerTaskId = requireString(command['workerTaskId'], 'workerTaskId');
+      if (!workerTaskId.ok) {
+        return workerTaskId;
+      }
+      const dispatchId = requireString(command['dispatchId'], 'dispatchId');
+      if (!dispatchId.ok) {
+        return dispatchId;
+      }
+      const attemptId = requireString(command['attemptId'], 'attemptId');
+      if (!attemptId.ok) {
+        return attemptId;
+      }
+      const role = requireEnum(command['role'], WORKER_ROLES, 'role');
+      if (!role.ok) {
+        return role;
+      }
+      const contractRevision = requireCount(command['contractRevision'], 'contractRevision');
+      if (!contractRevision.ok) {
+        return contractRevision;
+      }
+      const orcaResultRef = requireString(command['orcaResultRef'], 'orcaResultRef');
+      if (!orcaResultRef.ok) {
+        return orcaResultRef;
+      }
+      return ok({
+        ...base,
+        kind: 'record-delivery-settlement',
+        dedupeKey: dedupeKey.value,
+        deliveryId: deliveryId.value,
+        runId: runId.value,
+        consumerGeneration: consumerGeneration.value,
+        workerTaskId: workerTaskId.value as WorkerTaskId,
+        dispatchId: dispatchId.value as DispatchId,
+        attemptId: attemptId.value,
+        role: role.value,
+        contractRevision: contractRevision.value,
+        orcaResultRef: orcaResultRef.value,
+      });
+    }
+    case 'record-delivery-verdict': {
+      const verdictId = requireString(command['verdictId'], 'verdictId');
+      if (!verdictId.ok) {
+        return verdictId;
+      }
+      const verdict = decodeDeliveryVerdict(command['verdict']);
+      if (!verdict.ok) {
+        return verdict;
+      }
+      if (command['finalizerRole'] !== 'finalizer') {
+        return fail('finalizerRole 必须是 finalizer');
+      }
+      const sessionBindingRef = requireString(command['sessionBindingRef'], 'sessionBindingRef');
+      if (!sessionBindingRef.ok) {
+        return sessionBindingRef;
+      }
+      return ok({
+        ...base,
+        kind: 'record-delivery-verdict',
+        verdictId: verdictId.value,
+        verdict: verdict.value,
+        finalizerRole: 'finalizer',
+        sessionBindingRef: sessionBindingRef.value,
+      });
+    }
     default:
       return fail(`未登记的 command variant: ${kind.value}`);
   }
+}
+
+/**
+ * 交付结论的边界解析：引用列表必须是非空字符串数组，空列表本身不是错误——「没有阻塞项」或
+ * 「没有证据」的语义判断属于领域层，边界只拒绝形状不合法的载荷。
+ */
+function decodeDeliveryVerdict(raw: unknown): Decoded<DeliveryVerdict> {
+  if (!isRecord(raw)) {
+    return fail('verdict 必须是对象');
+  }
+  const kind = raw['kind'];
+  const refsField = kind === 'deliverable' ? 'evidenceRefs' : kind === 'blocked' ? 'blockerRefs' : null;
+  if (refsField === null) {
+    return fail(`verdict.kind 取值不受支持: ${String(kind)}`);
+  }
+  const refs = requireStringArray(raw[refsField], `verdict.${refsField}`);
+  if (!refs.ok) {
+    return refs;
+  }
+  return kind === 'deliverable'
+    ? ok({ kind: 'deliverable', evidenceRefs: refs.value })
+    : ok({ kind: 'blocked', blockerRefs: refs.value });
 }
 
 type ScopeRow = {
@@ -1128,6 +1239,7 @@ type IntentRow = {
   readonly initiated_by_session_id: string;
   readonly initiated_by_incarnation_id: string;
   readonly expected_revision: number;
+  readonly expected_head: string | null;
   readonly state: string;
   readonly outcome_class: string | null;
   readonly backend_request_id: string | null;
@@ -1222,6 +1334,32 @@ type MaterializationBindingRow = {
   readonly orca_task_id: string;
   readonly creation_operation_id: string;
   readonly created_at: number;
+};
+
+type DeliverySettlementRow = {
+  readonly coordination_scope_id: string;
+  readonly dedupe_key: string;
+  readonly delivery_id: string;
+  readonly run_id: string;
+  readonly consumer_generation: number;
+  readonly worker_task_id: string;
+  readonly dispatch_id: string;
+  readonly attempt_id: string;
+  readonly role: string;
+  readonly contract_revision: number;
+  readonly orca_result_ref: string;
+  readonly accepted_at: number;
+};
+
+type DeliveryVerdictRow = {
+  readonly coordination_scope_id: string;
+  readonly verdict_id: string;
+  readonly verdict_sequence: number;
+  readonly verdict_kind: string;
+  readonly verdict_refs: string;
+  readonly finalizer_role: string;
+  readonly session_binding_ref: string;
+  readonly recorded_at: number;
 };
 
 function decodeGraphVersionRow(row: GraphVersionRow): Decoded<GraphVersionRecord> {
@@ -1344,6 +1482,69 @@ function decodeMaterializationBindingRow(row: MaterializationBindingRow): Materi
   };
 }
 
+function decodeDeliverySettlementRow(row: DeliverySettlementRow): Decoded<DeliverySettlementRecord> {
+  const role = decodeWorkerRole(row.role);
+  if (role === null) {
+    return fail(`delivery_settlements.role 取值不受支持: ${row.role}`);
+  }
+  return ok({
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    dedupeKey: row.dedupe_key,
+    deliveryId: row.delivery_id,
+    runId: row.run_id,
+    consumerGeneration: row.consumer_generation,
+    workerTaskId: row.worker_task_id as WorkerTaskId,
+    dispatchId: row.dispatch_id as DispatchId,
+    attemptId: row.attempt_id,
+    role,
+    contractRevision: row.contract_revision,
+    orcaResultRef: row.orca_result_ref,
+    acceptedAt: row.accepted_at,
+  });
+}
+
+function decodeDeliveryVerdictRow(row: DeliveryVerdictRow): Decoded<DeliveryVerdictRecord> {
+  const role = decodeWorkerRole(row.finalizer_role);
+  if (role !== 'finalizer') {
+    return fail(`delivery_verdicts.finalizer_role 必须是 finalizer: ${row.finalizer_role}`);
+  }
+  const refs = decodeStringArrayColumn(row.verdict_refs);
+  if (refs === null) {
+    return fail('delivery_verdicts.verdict_refs 不是字符串数组');
+  }
+  let verdict: DeliveryVerdict;
+  if (row.verdict_kind === 'deliverable') {
+    verdict = { kind: 'deliverable', evidenceRefs: refs };
+  } else if (row.verdict_kind === 'blocked') {
+    verdict = { kind: 'blocked', blockerRefs: refs };
+  } else {
+    return fail(`delivery_verdicts.verdict_kind 取值不受支持: ${row.verdict_kind}`);
+  }
+  return ok({
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    verdictId: row.verdict_id,
+    verdictSequence: row.verdict_sequence,
+    verdict,
+    finalizerRole: 'finalizer',
+    sessionBindingRef: row.session_binding_ref,
+    recordedAt: row.recorded_at,
+  });
+}
+
+/** JSON 文本列的解码；形状不合法时返回 `null`，由调用方转成结构化拒绝。 */
+function decodeStringArrayColumn(raw: string): readonly string[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== 'string' || item.length === 0)) {
+    return null;
+  }
+  return parsed as readonly string[];
+}
+
 function decodeScopeRow(row: ScopeRow): Decoded<ScopeRecord> {
   if (!isCoordinationMode(row.mode)) {
     return fail(`scope.mode 取值不受支持: ${row.mode}`);
@@ -1446,6 +1647,7 @@ function decodeIntentRow(row: IntentRow): Decoded<OperationIntent> {
     operationCategory: row.operation_category,
     laneKey: row.lane_key,
     expectedRevision: row.expected_revision,
+    expectedHead: row.expected_head,
     initiatedBy: {
       coordinatorSessionId: row.initiated_by_session_id as CoordinatorSessionId,
       runtimeIncarnationId: row.initiated_by_incarnation_id as RuntimeIncarnationId,
@@ -1804,6 +2006,35 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           workPackageId,
         );
 
+  const readDeliverySettlementRows = (
+    scopeId: string,
+    dedupeKey: string | undefined,
+  ): readonly DeliverySettlementRow[] =>
+    dedupeKey === undefined
+      ? many<DeliverySettlementRow>(
+          db.prepare(
+            `SELECT * FROM delivery_settlements
+             WHERE coordination_scope_id = ? ORDER BY accepted_at, dedupe_key`,
+          ),
+          scopeId,
+        )
+      : many<DeliverySettlementRow>(
+          db.prepare(
+            'SELECT * FROM delivery_settlements WHERE coordination_scope_id = ? AND dedupe_key = ?',
+          ),
+          scopeId,
+          dedupeKey,
+        );
+
+  const readDeliveryVerdictRows = (scopeId: string): readonly DeliveryVerdictRow[] =>
+    many<DeliveryVerdictRow>(
+      db.prepare(
+        `SELECT * FROM delivery_verdicts
+         WHERE coordination_scope_id = ? ORDER BY verdict_sequence`,
+      ),
+      scopeId,
+    );
+
   const buildSnapshot = (scopeId: string, scope: ScopeRecord): Decoded<CoordinationSnapshot> => {
     const leases = readLeases(scopeId);
     if (!leases.ok) {
@@ -1837,6 +2068,17 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
     if (!segments.ok) {
       return segments;
     }
+    const settlements = decodeRows(
+      readDeliverySettlementRows(scopeId, undefined),
+      decodeDeliverySettlementRow,
+    );
+    if (!settlements.ok) {
+      return settlements;
+    }
+    const verdicts = decodeRows(readDeliveryVerdictRows(scopeId), decodeDeliveryVerdictRow);
+    if (!verdicts.ok) {
+      return verdicts;
+    }
     return ok({
       scope,
       sessions: sessions.value,
@@ -1853,6 +2095,8 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       materializationBindings: readMaterializationBindingRows(scopeId, undefined).map(
         decodeMaterializationBindingRow,
       ),
+      deliverySettlements: settlements.value,
+      deliveryVerdicts: verdicts.value,
     });
   };
 
@@ -2023,6 +2267,23 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
               decodeMaterializationBindingRow,
             ),
           };
+        case 'delivery-settlements': {
+          const settlements = decodeRows(
+            readDeliverySettlementRows(scopeId, input.dedupeKey),
+            decodeDeliverySettlementRow,
+          );
+          if (!settlements.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: settlements.message };
+          }
+          return { kind: 'delivery-settlements', settlements: settlements.value };
+        }
+        case 'delivery-verdicts': {
+          const verdicts = decodeRows(readDeliveryVerdictRows(scopeId), decodeDeliveryVerdictRow);
+          if (!verdicts.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: verdicts.message };
+          }
+          return { kind: 'delivery-verdicts', verdicts: verdicts.value };
+        }
         default:
           return { kind: 'rejected', code: 'invalid_query', message: '未登记的 query variant' };
       }
@@ -2360,6 +2621,64 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         );
         return ok(null);
       }
+      case 'record-delivery-settlement': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) {
+          return holder;
+        }
+        // 主键或 Delivery 身份冲突一律由约束路径转成结构化拒绝：调用方回读既有记录再决定是否确认，
+        // 绝不在这里覆盖已登记的 Orca 结果引用。
+        db.prepare(
+          `INSERT INTO delivery_settlements (
+             coordination_scope_id, dedupe_key, delivery_id, run_id, consumer_generation, worker_task_id,
+             dispatch_id, attempt_id, role, contract_revision, orca_result_ref, accepted_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.dedupeKey,
+          cmd.deliveryId,
+          cmd.runId,
+          cmd.consumerGeneration,
+          cmd.workerTaskId,
+          cmd.dispatchId,
+          cmd.attemptId,
+          cmd.role,
+          cmd.contractRevision,
+          cmd.orcaResultRef,
+          now,
+        );
+        return ok(null);
+      }
+      case 'record-delivery-verdict': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) {
+          return holder;
+        }
+        const nextSequenceRow = db
+          .prepare(
+            `SELECT COALESCE(MAX(verdict_sequence), 0) + 1 AS next_sequence
+             FROM delivery_verdicts WHERE coordination_scope_id = ?`,
+          )
+          .get(cmd.coordinationScopeId) as { readonly next_sequence: number };
+        const refs =
+          cmd.verdict.kind === 'deliverable' ? cmd.verdict.evidenceRefs : cmd.verdict.blockerRefs;
+        db.prepare(
+          `INSERT INTO delivery_verdicts (
+             coordination_scope_id, verdict_id, verdict_sequence, verdict_kind, verdict_refs,
+             finalizer_role, session_binding_ref, recorded_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.verdictId,
+          nextSequenceRow.next_sequence,
+          cmd.verdict.kind,
+          JSON.stringify(refs),
+          cmd.finalizerRole,
+          cmd.sessionBindingRef,
+          now,
+        );
+        return ok(null);
+      }
       case 'create-scope': {
         db.prepare(
           `INSERT INTO scope (
@@ -2486,9 +2805,9 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         db.prepare(
           `INSERT INTO operation_intents (
              coordination_scope_id, operation_id, target_kind, target_id, operation_category, lane_key,
-             initiated_by_session_id, initiated_by_incarnation_id, expected_revision, state,
+             initiated_by_session_id, initiated_by_incarnation_id, expected_revision, expected_head, state,
              outcome_class, backend_request_id, blocking_reason, created_at, settled_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, NULL, ?, NULL)`,
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, NULL, ?, NULL)`,
         ).run(
           cmd.coordinationScopeId,
           cmd.operationId,
@@ -2499,6 +2818,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           cmd.writer.coordinatorSessionId,
           cmd.writer.runtimeIncarnationId,
           cmd.expectedRevision,
+          cmd.expectedHead ?? null,
           now,
         );
         return ok(null);

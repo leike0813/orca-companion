@@ -16,6 +16,12 @@ import type {
   OperationRef,
   ReconcileResult,
 } from '../dto/operation-outcome.js';
+import type {
+  CoordinationScopeId,
+  CoordinatorSessionId,
+  EntityRef,
+  RuntimeIncarnationId,
+} from '../dto/identity.js';
 
 export type ExecutionAuthority =
   | { readonly kind: 'route_planning' }
@@ -188,6 +194,40 @@ export type WorktreeListResult = {
 export interface ExecutionBackend {
   query(input: ExecutionQuery): Promise<ExecutionQueryResult>;
   mutate(input: ExecutionMutation, scope: ExecutionScope): Promise<OperationOutcome<unknown>>;
+}
+
+/**
+ * 组装一次变更操作的 ExecutionScope。
+ *
+ * 身份、fencing、target 与 expected revision 全部由调用方从可信来源提供；模型与 Worker 不能填写
+ * 这些字段。这里只做字段搬运，因此多个用例可以共用同一个构造，而不必各自复制 scope 字面量。
+ */
+export type ExecutionScopeFields = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly coordinatorSessionId: CoordinatorSessionId;
+  readonly runtimeIncarnationId: RuntimeIncarnationId;
+  readonly fencingGeneration: number;
+  readonly backendIdentityRef: string;
+  readonly operationId: string;
+  readonly target: EntityRef<string>;
+  readonly expectedRevision: number;
+  readonly timeoutMs: number;
+  readonly authority: ExecutionAuthority;
+};
+
+export function buildExecutionScope(fields: ExecutionScopeFields): ExecutionScope {
+  return {
+    coordinationScopeId: fields.coordinationScopeId,
+    coordinatorSessionId: fields.coordinatorSessionId,
+    runtimeIncarnationId: fields.runtimeIncarnationId,
+    fencingGeneration: fields.fencingGeneration,
+    backendIdentityRef: fields.backendIdentityRef,
+    operationId: fields.operationId,
+    target: fields.target,
+    expectedRevision: fields.expectedRevision,
+    timeoutMs: fields.timeoutMs,
+    authority: fields.authority,
+  };
 }
 
 /** 按原 OperationId 做一次只读对账；没有可恢复资源结果时继续阻塞。 */

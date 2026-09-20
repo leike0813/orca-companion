@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 6;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -36,6 +36,8 @@ export const COORDINATION_TABLES: readonly string[] = [
   'planning_responsibility',
   'session_segments',
   'materialization_bindings',
+  'delivery_settlements',
+  'delivery_verdicts',
 ];
 
 export type Migration = {
@@ -274,11 +276,65 @@ const MIGRATION_4: readonly string[] = [
    ) STRICT`,
 ];
 
+/**
+ * M5：Delivery 结算去重事实与分支级 Delivery Verdict。
+ *
+ * `delivery_settlements` 一行同时表达三件事：稳定去重键（主键）、被接受的
+ * `AcceptedWorkerResultRef`（Orca 结果引用与角色、契约 revision、接受时间），以及该 Delivery 的
+ * 归属。它刻意**不**保存结果正文——正文只归 Orca，本地留副本就会产生第二份真值。第二个唯一索引
+ * 让同一个 Delivery 身份只能被结算一次，因此重放不会写出第二行，也不会产生第二份结果。
+ *
+ * `delivery_verdicts` 只追加分支级结论记录：结论类型（`deliverable` / `blocked`）、引用集合、
+ * Finalizer 角色与会话引用。它不修改 Execution Graph、Accepted Worker Result、Git 历史或
+ * Operation Intent，`verdict_sequence` 让「最新结论」有确定的读取顺序。
+ */
+const MIGRATION_5: readonly string[] = [
+  `CREATE TABLE IF NOT EXISTS delivery_settlements (
+     coordination_scope_id TEXT NOT NULL,
+     dedupe_key TEXT NOT NULL,
+     delivery_id TEXT NOT NULL,
+     run_id TEXT NOT NULL,
+     consumer_generation INTEGER NOT NULL,
+     worker_task_id TEXT NOT NULL,
+     dispatch_id TEXT NOT NULL,
+     attempt_id TEXT NOT NULL,
+     role TEXT NOT NULL,
+     contract_revision INTEGER NOT NULL,
+     orca_result_ref TEXT NOT NULL,
+     accepted_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, dedupe_key)
+   ) STRICT`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS delivery_settlements_delivery_identity
+     ON delivery_settlements (
+       coordination_scope_id, delivery_id, run_id, consumer_generation, worker_task_id, dispatch_id, attempt_id
+     )`,
+  `CREATE TABLE IF NOT EXISTS delivery_verdicts (
+     coordination_scope_id TEXT NOT NULL,
+     verdict_id TEXT NOT NULL,
+     verdict_sequence INTEGER NOT NULL,
+     verdict_kind TEXT NOT NULL,
+     verdict_refs TEXT NOT NULL,
+     finalizer_role TEXT NOT NULL,
+     session_binding_ref TEXT NOT NULL,
+     recorded_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, verdict_id)
+   ) STRICT`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS delivery_verdicts_sequence
+     ON delivery_verdicts (coordination_scope_id, verdict_sequence)`,
+];
+
+/** M6：Integration Operation 的 Git HEAD 前置条件。 */
+const MIGRATION_6: readonly string[] = [
+  `ALTER TABLE operation_intents ADD COLUMN expected_head TEXT`,
+];
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, statements: MIGRATION_1 },
   { version: 2, statements: MIGRATION_2 },
   { version: 3, statements: MIGRATION_3 },
   { version: 4, statements: MIGRATION_4 },
+  { version: 5, statements: MIGRATION_5 },
+  { version: 6, statements: MIGRATION_6 },
 ];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {

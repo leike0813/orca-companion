@@ -25,6 +25,7 @@ export type BeginIntentRequest = {
   readonly operationId: OperationId;
   readonly target: EntityRef<string>;
   readonly operationCategory: string;
+  readonly expectedHead?: string;
   readonly writer: CoordinationWriter;
   readonly expectedRevision: Revision;
 };
@@ -117,6 +118,21 @@ function laneState(
 export function beginIntent(store: BranchCoordinationStore, request: BeginIntentRequest): BeginIntentResult {
   const existing = readIntent(store, request.coordinationScopeId, request.operationId);
   if (existing !== null) {
+    if (
+      existing.target.kind !== request.target.kind ||
+      existing.target.id !== request.target.id ||
+      existing.operationCategory !== request.operationCategory ||
+      (request.expectedHead !== undefined && existing.expectedHead !== request.expectedHead)
+    ) {
+      return {
+        kind: 'rejected',
+        rejection: {
+          kind: 'rejected',
+          code: 'invalid_state',
+          message: `OperationId ${request.operationId} 已绑定到不同的目标或前置条件`,
+        },
+      };
+    }
     return { kind: 'existing', intent: existing };
   }
   const laneKey = laneKeyOf(request.target, request.operationCategory);
@@ -129,6 +145,7 @@ export function beginIntent(store: BranchCoordinationStore, request: BeginIntent
     operationId: request.operationId,
     target: request.target,
     operationCategory: request.operationCategory,
+    ...(request.expectedHead === undefined ? {} : { expectedHead: request.expectedHead }),
   });
   if (result.kind === 'rejected') {
     // 并发落在同一 lane 或同一 OperationId 上：以只读查询还原事实，不改用新 ID。

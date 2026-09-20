@@ -509,3 +509,94 @@ test('Materialization Binding 可按 Work Package 读回，并只保存最小索
   expect(Object.keys(read.bindings[0] ?? {})).not.toContain('worktreePath');
   expect(Object.keys(read.bindings[0] ?? {})).not.toContain('taskStatus');
 });
+
+test('Delivery 结算记录只保存去重键与结果引用，重放不产生第二行', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+
+  const settlement = (expectedRevision: number): CoordinationCommand => ({
+    kind: 'record-delivery-settlement',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(SESSION_A),
+    dedupeKey: '["delivery-1","run-1",1,"wt-1","wt-1","attempt-1"]',
+    deliveryId: 'delivery-1',
+    runId: 'run-1',
+    consumerGeneration: 1,
+    workerTaskId: 'worker-task-1' as WorkerTaskId,
+    dispatchId: 'dispatch-1' as DispatchId,
+    attemptId: 'attempt-1',
+    role: 'implementation',
+    contractRevision: 3,
+    orcaResultRef: 'orca-task-1#abc123',
+  });
+
+  expect(submit(settlement).kind).toBe('committed');
+  const read = store.query({ kind: 'delivery-settlements', coordinationScopeId: SCOPE });
+  expect(read.kind).toBe('delivery-settlements');
+  if (read.kind !== 'delivery-settlements') {
+    return;
+  }
+  expect(read.settlements).toHaveLength(1);
+  expect(read.settlements[0]?.orcaResultRef).toBe('orca-task-1#abc123');
+  expect(read.settlements[0]?.role).toBe('implementation');
+  // Accepted Worker Result 正文只归 Orca：本地记录里没有正文列。
+  expect(Object.keys(read.settlements[0] ?? {})).not.toContain('result');
+  expect(Object.keys(read.settlements[0] ?? {})).not.toContain('body');
+
+  // 重放同一个 Delivery 身份被唯一约束拒绝；调用方回读既有记录而不是写出第二行。
+  const replayed = submit(settlement);
+  expect(replayed.kind).toBe('rejected');
+  const after = store.query({ kind: 'delivery-settlements', coordinationScopeId: SCOPE });
+  expect(after.kind === 'delivery-settlements' ? after.settlements : []).toHaveLength(1);
+
+  // 同一组局部 ID 在新 Run / consumer generation 中是另一条合法身份。
+  const nextGeneration = submit((expectedRevision) => ({
+    ...settlement(expectedRevision),
+    dedupeKey: '["delivery-1","run-2",2,"worker-task-1","dispatch-1","attempt-1"]',
+    runId: 'run-2',
+    consumerGeneration: 2,
+    orcaResultRef: 'orca-task-1#def456',
+  }));
+  expect(nextGeneration.kind).toBe('committed');
+});
+
+test('Delivery Verdict 追加记录并保持确定顺序', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+
+  const blocked = submit((expectedRevision) => ({
+    kind: 'record-delivery-verdict',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(SESSION_A),
+    verdictId: 'verdict-1',
+    verdict: { kind: 'blocked', blockerRefs: ['blocker-1'] },
+    finalizerRole: 'finalizer',
+    sessionBindingRef: 'session-binding-1',
+  }));
+  expect(blocked.kind).toBe('committed');
+
+  const deliverable = submit((expectedRevision) => ({
+    kind: 'record-delivery-verdict',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(SESSION_A),
+    verdictId: 'verdict-2',
+    verdict: { kind: 'deliverable', evidenceRefs: ['orca-task-1#abc123'] },
+    finalizerRole: 'finalizer',
+    sessionBindingRef: 'session-binding-2',
+  }));
+  expect(deliverable.kind).toBe('committed');
+
+  const read = store.query({ kind: 'delivery-verdicts', coordinationScopeId: SCOPE });
+  expect(read.kind).toBe('delivery-verdicts');
+  if (read.kind !== 'delivery-verdicts') {
+    return;
+  }
+  expect(read.verdicts.map((verdict) => verdict.verdictId)).toEqual(['verdict-1', 'verdict-2']);
+  expect(read.verdicts.map((verdict) => verdict.verdictSequence)).toEqual([1, 2]);
+  expect(read.verdicts[1]?.verdict).toEqual({ kind: 'deliverable', evidenceRefs: ['orca-task-1#abc123'] });
+});

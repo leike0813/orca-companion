@@ -16,6 +16,7 @@
 import type { ControlState, CoordinationMode } from '../../domain/coordination/mode.js';
 import type { LeaseKind, LeaseRecord } from '../../domain/coordination/leases.js';
 import type { SourceRevisionRef } from '../../domain/coordinator/session-state.js';
+import type { DeliveryVerdict } from '../../domain/delivery-verdict.js';
 import type { ExecutionGraph, GraphVersionRecord, GraphVersionRecordKind } from '../../domain/planning/execution-graph.js';
 import type { ExecutionAuthorizationManifest, ExecutionAuthorizationRecord, WorkerRole } from '../../domain/planning/execution-authorization.js';
 import { TICKET_CLAIM_STATES, type TicketClaimState } from '../../domain/planning/ticket-claim.js';
@@ -199,6 +200,43 @@ export type MaterializationBindingRecord = {
   readonly createdAt: number;
 };
 
+/**
+ * 一条已结算的 Delivery（IC-08 Extend）。
+ *
+ * 一行同时是稳定去重键与 `AcceptedWorkerResultRef`：去重键是主键，结果是 Orca 的结果引用。
+ * 它**不**保存 Accepted Worker Result 正文，也不复制 Orca 的 Task/Dispatch 状态。
+ */
+export type DeliverySettlementRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly dedupeKey: string;
+  readonly deliveryId: string;
+  readonly runId: string;
+  readonly consumerGeneration: number;
+  readonly workerTaskId: WorkerTaskId;
+  readonly dispatchId: DispatchId;
+  readonly attemptId: string;
+  readonly role: WorkerRole;
+  readonly contractRevision: number;
+  readonly orcaResultRef: string;
+  readonly acceptedAt: number;
+};
+
+/**
+ * 一条分支级 Delivery Verdict 记录（IC-08 Extend）。
+ *
+ * 追加写入，不就地改写：`verdictSequence` 单调递增，因此「最新结论」有确定顺序；结论本身只引用
+ * 既有权威事实，不携带任何可以覆盖它们的字段。
+ */
+export type DeliveryVerdictRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly verdictId: string;
+  readonly verdictSequence: number;
+  readonly verdict: DeliveryVerdict;
+  readonly finalizerRole: 'finalizer';
+  readonly sessionBindingRef: string;
+  readonly recordedAt: number;
+};
+
 /** `status` 与启动对账用的单次只读投影；不触发续约、对账或任何写入。 */
 export type CoordinationSnapshot = {
   readonly scope: ScopeRecord;
@@ -212,6 +250,8 @@ export type CoordinationSnapshot = {
   readonly planningResponsibility: PlanningResponsibilityRecord | null;
   readonly sessionSegments: readonly SessionSegmentRecord[];
   readonly materializationBindings: readonly MaterializationBindingRecord[];
+  readonly deliverySettlements: readonly DeliverySettlementRecord[];
+  readonly deliveryVerdicts: readonly DeliveryVerdictRecord[];
 };
 
 export type CoordinationQuery =
@@ -265,7 +305,14 @@ export type CoordinationQuery =
       readonly kind: 'materialization-bindings';
       readonly coordinationScopeId: CoordinationScopeId;
       readonly workPackageId?: WorkPackageId;
-    };
+    }
+  | {
+      readonly kind: 'delivery-settlements';
+      readonly coordinationScopeId: CoordinationScopeId;
+      /** 给出去重键时只返回该条；否则返回该 Scope 的全部结算记录。 */
+      readonly dedupeKey?: string;
+    }
+  | { readonly kind: 'delivery-verdicts'; readonly coordinationScopeId: CoordinationScopeId };
 
 export type CoordinationQueryRejectionCode = 'unreadable' | 'invalid_query';
 
@@ -292,6 +339,8 @@ export type CoordinationQueryResult =
   | { readonly kind: 'planning-responsibility'; readonly responsibility: PlanningResponsibilityRecord | null }
   | { readonly kind: 'session-segments'; readonly segments: readonly SessionSegmentRecord[] }
   | { readonly kind: 'materialization-bindings'; readonly bindings: readonly MaterializationBindingRecord[] }
+  | { readonly kind: 'delivery-settlements'; readonly settlements: readonly DeliverySettlementRecord[] }
+  | { readonly kind: 'delivery-verdicts'; readonly verdicts: readonly DeliveryVerdictRecord[] }
   | {
       readonly kind: 'rejected';
       readonly code: CoordinationQueryRejectionCode;
@@ -363,6 +412,7 @@ export type CoordinationCommand =
       readonly operationId: OperationId;
       readonly target: EntityRef<string>;
       readonly operationCategory: string;
+      readonly expectedHead?: string;
     })
   | (CoordinationCommandBase & {
       readonly kind: 'settle-intent';
@@ -473,6 +523,27 @@ export type CoordinationCommand =
       readonly workPackageId: WorkPackageId;
       readonly orcaTaskId: string;
       readonly creationOperationId: OperationId;
+    })
+  | (CoordinationCommandBase & {
+      readonly kind: 'record-delivery-settlement';
+      readonly dedupeKey: string;
+      readonly deliveryId: string;
+      readonly runId: string;
+      readonly consumerGeneration: number;
+      readonly workerTaskId: WorkerTaskId;
+      readonly dispatchId: DispatchId;
+      readonly attemptId: string;
+      readonly role: WorkerRole;
+      readonly contractRevision: number;
+      /** Orca 侧结果引用；本地不保存结果正文。 */
+      readonly orcaResultRef: string;
+    })
+  | (CoordinationCommandBase & {
+      readonly kind: 'record-delivery-verdict';
+      readonly verdictId: string;
+      readonly verdict: DeliveryVerdict;
+      readonly finalizerRole: 'finalizer';
+      readonly sessionBindingRef: string;
     });
 
 export type CoordinationRejectionCode =
