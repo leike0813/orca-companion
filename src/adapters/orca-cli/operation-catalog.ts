@@ -18,6 +18,9 @@ import type {
   ExecutionMutation,
   ExecutionOperation,
   ExecutionQuery,
+  WorktreeCreation,
+  WorktreeListResult,
+  WorktreeSummary,
 } from '../../application/ports/execution-backend.js';
 import type { OutputLimits } from './process-runner.js';
 
@@ -318,6 +321,83 @@ export function parseTerminalShow(result: unknown): OperationParse<TerminalSumma
     return record;
   }
   return parseTerminalSummary(record['terminal']);
+}
+
+/** worktree 条目的公开字段；只取定位与核验需要的部分，不镜像 Orca 的 worktree 记录。 */
+export function parseWorktreeSummary(raw: unknown): OperationParse<WorktreeSummary> {
+  const worktree = readRecord(raw);
+  if (worktree === undefined) {
+    return invalid('worktree: 条目不是对象');
+  }
+  const worktreeId = readString(worktree, 'id');
+  const path = readString(worktree, 'path');
+  if (worktreeId === null || worktreeId.length === 0 || path === null || path.length === 0) {
+    return invalid('worktree: 缺少 id 或 path');
+  }
+  return parsed({
+    worktreeId,
+    path,
+    branch: readString(worktree, 'branch'),
+    head: readString(worktree, 'head'),
+    displayName: readString(worktree, 'displayName'),
+    comment: readString(worktree, 'comment'),
+    isMainWorktree: readBoolean(worktree, 'isMainWorktree') ?? false,
+  });
+}
+
+export function parseWorktreeList(result: unknown): OperationParse<WorktreeListResult> {
+  const record = requireRecord(result, 'worktree list');
+  if (isParseFailure(record)) {
+    return record;
+  }
+  const worktrees = readArray(record, 'worktrees');
+  if (worktrees === null) {
+    return invalid('worktree list: 缺少 worktrees');
+  }
+  const entries: WorktreeSummary[] = [];
+  for (const raw of worktrees) {
+    const entry = parseWorktreeSummary(raw);
+    if (!entry.ok) {
+      return entry;
+    }
+    entries.push(entry.value);
+  }
+  const totalCount = readNumber(record, 'totalCount');
+  const truncated = readBoolean(record, 'truncated');
+  if (totalCount === null || !Number.isSafeInteger(totalCount) || totalCount < 0 || truncated === null) {
+    return invalid('worktree list: 缺少 totalCount 或 truncated');
+  }
+  const rawHostScope = readRecordField(record, 'hostScope');
+  let hostScope: WorktreeListResult['hostScope'] = null;
+  if (rawHostScope !== undefined) {
+    const hostIds = readArray(rawHostScope, 'hostIds');
+    const omittedHostIds = readArray(rawHostScope, 'omittedHostIds');
+    if (
+      hostIds === null ||
+      omittedHostIds === null ||
+      hostIds.some((id) => typeof id !== 'string' || id.length === 0) ||
+      omittedHostIds.some((id) => typeof id !== 'string' || id.length === 0)
+    ) {
+      return invalid('worktree list: hostScope 字段无效');
+    }
+    hostScope = {
+      hostIds: hostIds as readonly string[],
+      omittedHostIds: omittedHostIds as readonly string[],
+    };
+  }
+  return parsed({ worktrees: entries, totalCount, truncated, hostScope });
+}
+
+export function parseWorktreeCreation(result: unknown): OperationParse<WorktreeCreation> {
+  const record = requireRecord(result, 'worktree create');
+  if (isParseFailure(record)) {
+    return record;
+  }
+  const worktreeId = readString(record, 'id');
+  if (worktreeId === null || worktreeId.length === 0) {
+    return invalid('worktree create: 回执缺少 worktree id');
+  }
+  return parsed({ worktreeId });
 }
 
 function readStringArray(source: Record<string, unknown>, key: string): readonly string[] | undefined {
@@ -644,6 +724,18 @@ export const ORCA_OPERATIONS = {
     identity: 'none',
     buildArgv: () => ['worktree', 'current', '--json'],
   },
+  'worktree-list': {
+    mutating: false,
+    format: 'json',
+    identity: 'none',
+    buildArgv: (input) => {
+      const args = ['worktree', 'list', '--json'];
+      pushFlag(args, '--repo', input.repo);
+      pushFlag(args, '--limit', input.limit);
+      return args;
+    },
+    parseResult: parseWorktreeList,
+  },
   'terminal-list': {
     mutating: false,
     format: 'json',
@@ -815,6 +907,18 @@ export const ORCA_OPERATIONS = {
     identity: 'none',
     buildArgv: (input) => ['orchestration', 'request-show', '--request', input.requestId, '--json'],
     parseResult: parseRequestShow,
+  },
+  'worktree-create': {
+    mutating: true,
+    format: 'json',
+    identity: 'none',
+    buildArgv: (input) => {
+      const args = ['worktree', 'create', '--repo', input.repo, '--name', input.name, '--json'];
+      pushFlag(args, '--base-branch', input.baseBranch);
+      pushFlag(args, '--comment', input.comment);
+      return args;
+    },
+    parseResult: parseWorktreeCreation,
   },
   'terminal-create': {
     mutating: true,

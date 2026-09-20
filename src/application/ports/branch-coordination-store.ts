@@ -17,12 +17,13 @@ import type { ControlState, CoordinationMode } from '../../domain/coordination/m
 import type { LeaseKind, LeaseRecord } from '../../domain/coordination/leases.js';
 import type { SourceRevisionRef } from '../../domain/coordinator/session-state.js';
 import type { ExecutionGraph, GraphVersionRecord, GraphVersionRecordKind } from '../../domain/planning/execution-graph.js';
-import type { ExecutionAuthorizationManifest, ExecutionAuthorizationRecord } from '../../domain/planning/execution-authorization.js';
+import type { ExecutionAuthorizationManifest, ExecutionAuthorizationRecord, WorkerRole } from '../../domain/planning/execution-authorization.js';
 import { TICKET_CLAIM_STATES, type TicketClaimState } from '../../domain/planning/ticket-claim.js';
 import type { IntentState, OperationIntent } from '../dto/operation-intent.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
+  DispatchId,
   GraphGeneration,
   GraphId,
   GraphVersion,
@@ -31,8 +32,11 @@ import type {
   PlanningCycleId,
   Revision,
   RuntimeIncarnationId,
+  SessionSegmentId,
   StableId,
   EntityRef,
+  WorkerTaskId,
+  WorkPackageId,
 } from '../dto/identity.js';
 
 export type { LeaseKind, LeaseRecord };
@@ -161,6 +165,40 @@ export type PlanningResponsibilityRecord = {
   readonly assignedAt: number;
 };
 
+/**
+ * 一次 Worker Harness 会话中断的显式 Segment 前置事实（IC-07 Extend）。
+ *
+ * 它只记录中断时能核验的事实，供后续 change 判断与恢复；本记录不含 Recovery Budget 计数、Capsule
+ * 内容或替代 Session，因此不可能被读成「已经恢复」。
+ */
+export type SessionSegmentRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly segmentId: SessionSegmentId;
+  readonly workPackageId: WorkPackageId;
+  readonly role: WorkerRole;
+  readonly workerTaskId: WorkerTaskId;
+  readonly dispatchId: DispatchId;
+  readonly attemptId: string;
+  readonly sessionBindingId: string;
+  /** 最后可引用的 transcript 位置；`null` 表示 transcript 已无法引用。 */
+  readonly lastTranscriptRef: string | null;
+  /** 中断时可核验的终态收据引用；核验不了时为 `null`。 */
+  readonly terminalReceiptRef: string | null;
+  /** `false` 时后继路径只能阻塞，不得假装原 session 继续。 */
+  readonly transcriptReferenceable: boolean;
+  readonly verifiable: boolean;
+  readonly recordedAt: number;
+};
+
+/** 最小物化绑定：只回答「这个 Work Package 的当前角色级 Orca Task 是哪一个」。 */
+export type MaterializationBindingRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly workPackageId: WorkPackageId;
+  readonly orcaTaskId: string;
+  readonly creationOperationId: OperationId;
+  readonly createdAt: number;
+};
+
 /** `status` 与启动对账用的单次只读投影；不触发续约、对账或任何写入。 */
 export type CoordinationSnapshot = {
   readonly scope: ScopeRecord;
@@ -172,6 +210,8 @@ export type CoordinationSnapshot = {
   readonly unresolvedIntents: readonly OperationIntent[];
   readonly planningHandoffs: readonly PlanningHandoffRecord[];
   readonly planningResponsibility: PlanningResponsibilityRecord | null;
+  readonly sessionSegments: readonly SessionSegmentRecord[];
+  readonly materializationBindings: readonly MaterializationBindingRecord[];
 };
 
 export type CoordinationQuery =
@@ -215,7 +255,17 @@ export type CoordinationQuery =
       readonly coordinationScopeId: CoordinationScopeId;
       readonly proposalId: string;
     }
-  | { readonly kind: 'planning-responsibility'; readonly coordinationScopeId: CoordinationScopeId };
+  | { readonly kind: 'planning-responsibility'; readonly coordinationScopeId: CoordinationScopeId }
+  | {
+      readonly kind: 'session-segments';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly workPackageId?: WorkPackageId;
+    }
+  | {
+      readonly kind: 'materialization-bindings';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly workPackageId?: WorkPackageId;
+    };
 
 export type CoordinationQueryRejectionCode = 'unreadable' | 'invalid_query';
 
@@ -240,6 +290,8 @@ export type CoordinationQueryResult =
   | { readonly kind: 'planning-handoffs'; readonly handoffs: readonly PlanningHandoffRecord[] }
   | { readonly kind: 'planning-handoff'; readonly handoff: PlanningHandoffRecord | null }
   | { readonly kind: 'planning-responsibility'; readonly responsibility: PlanningResponsibilityRecord | null }
+  | { readonly kind: 'session-segments'; readonly segments: readonly SessionSegmentRecord[] }
+  | { readonly kind: 'materialization-bindings'; readonly bindings: readonly MaterializationBindingRecord[] }
   | {
       readonly kind: 'rejected';
       readonly code: CoordinationQueryRejectionCode;
@@ -401,6 +453,26 @@ export type CoordinationCommand =
       readonly kind: 'advance-map-revision';
       /** 新地图 revision；必须恰好是当前值 + 1，不能跳号或回退。 */
       readonly mapRevision: Revision;
+    })
+  | (CoordinationCommandBase & {
+      readonly kind: 'record-session-segment';
+      readonly segmentId: SessionSegmentId;
+      readonly workPackageId: WorkPackageId;
+      readonly role: WorkerRole;
+      readonly workerTaskId: WorkerTaskId;
+      readonly dispatchId: DispatchId;
+      readonly attemptId: string;
+      readonly sessionBindingId: string;
+      readonly lastTranscriptRef: string | null;
+      readonly terminalReceiptRef: string | null;
+      readonly transcriptReferenceable: boolean;
+      readonly verifiable: boolean;
+    })
+  | (CoordinationCommandBase & {
+      readonly kind: 'record-materialization-binding';
+      readonly workPackageId: WorkPackageId;
+      readonly orcaTaskId: string;
+      readonly creationOperationId: OperationId;
     });
 
 export type CoordinationRejectionCode =

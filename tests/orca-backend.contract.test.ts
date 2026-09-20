@@ -13,8 +13,8 @@ import {
 } from '../src/adapters/orca-cli/error-classification.js';
 import {
   createOrcaExecutionBackend,
-  reconcileOperation,
 } from '../src/adapters/orca-cli/orca-backend.js';
+import { reconcileOperation } from '../src/application/ports/execution-backend.js';
 import {
   parseWorkerShow,
   parseWorkerStartReceipt,

@@ -8,8 +8,13 @@ import { afterEach, beforeEach, expect, test } from 'vitest';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
+  DispatchId,
+  OperationId,
   PlanningCycleId,
   RuntimeIncarnationId,
+  SessionSegmentId,
+  WorkerTaskId,
+  WorkPackageId,
 } from '../src/application/dto/identity.js';
 import type {
   CoordinationCommand,
@@ -374,4 +379,133 @@ test('当前 schema 的数据库可以关闭后重开', () => {
   store = reopened.store;
 
   expect(revisionOf()).toBe(revision);
+});
+
+/**
+ * Session Segment 是跨重启可读的前置事实（change: `m1-admit-work-package-specifications`，IP-A5）。
+ *
+ * 记录里不含 Recovery Budget 计数、Capsule 或替代 Segment：读回来的事实只回答「中断发生在哪里」，
+ * 不构成任何恢复动作已经发生的证据。
+ */
+/** 两个新记录都是执行事实：写入者必须是 Execution Coordination Lease 持有者。 */
+function acquireExecutionLease(): void {
+  const acquired = store.transact({
+    kind: 'acquire-execution-lease',
+    coordinationScopeId: SCOPE,
+    expectedRevision: revisionOf(),
+    writer: writer(SESSION_A),
+  });
+  if (acquired.kind !== 'committed') {
+    throw new Error(`无法取得测试 Execution Lease: ${acquired.message}`);
+  }
+}
+
+test('Session Segment 在重启后仍可读取，且不带恢复副作用', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+  const segmentId = 'segment-1' as SessionSegmentId;
+
+  const recorded = submit((expectedRevision) => ({
+    kind: 'record-session-segment',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(SESSION_A),
+    segmentId,
+    workPackageId: 'wp-1' as WorkPackageId,
+    role: 'implementation',
+    workerTaskId: 'task-1' as WorkerTaskId,
+    dispatchId: 'dispatch-1' as DispatchId,
+    attemptId: 'attempt-1',
+    sessionBindingId: 'binding-1',
+    lastTranscriptRef: 'transcript:12',
+    terminalReceiptRef: 'receipt:1',
+    transcriptReferenceable: true,
+    verifiable: true,
+  }));
+  expect(recorded.kind).toBe('committed');
+
+  store.close();
+  const reopened = openCoordinationStore({ databasePath: join(directory, 'coordination.sqlite'), clock });
+  if (reopened.kind !== 'opened') {
+    throw new Error(reopened.message);
+  }
+  store = reopened.store;
+
+  const read = store.query({ kind: 'session-segments', coordinationScopeId: SCOPE });
+  expect(read.kind).toBe('session-segments');
+  if (read.kind !== 'session-segments') {
+    return;
+  }
+  expect(read.segments).toHaveLength(1);
+  const segment = read.segments[0];
+  expect(segment).toBeDefined();
+  if (segment === undefined) {
+    return;
+  }
+  expect(segment.segmentId).toBe(segmentId);
+  expect(segment.role).toBe('implementation');
+  expect(segment.workPackageId).toBe('wp-1');
+  expect(segment.dispatchId).toBe('dispatch-1');
+  expect(segment.transcriptReferenceable).toBe(true);
+  // 记录里没有恢复预算、Capsule 或替代 Segment 字段。
+  expect(Object.keys(segment)).not.toContain('recoveryBudget');
+  expect(Object.keys(segment)).not.toContain('capsuleRef');
+  expect(Object.keys(segment)).not.toContain('replacementSegmentId');
+
+  // 同一 Segment 不能重复登记，也不产生第二条替代 Segment。
+  const duplicate = submit((expectedRevision) => ({
+    kind: 'record-session-segment',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(SESSION_A),
+    segmentId,
+    workPackageId: 'wp-1' as WorkPackageId,
+    role: 'implementation',
+    workerTaskId: 'task-1' as WorkerTaskId,
+    dispatchId: 'dispatch-1' as DispatchId,
+    attemptId: 'attempt-1',
+    sessionBindingId: 'binding-1',
+    lastTranscriptRef: 'transcript:13',
+    terminalReceiptRef: null,
+    transcriptReferenceable: true,
+    verifiable: false,
+  }));
+  expect(duplicate.kind).toBe('rejected');
+  expect(store.query({ kind: 'session-segments', coordinationScopeId: SCOPE })).toMatchObject({
+    segments: [expect.objectContaining({ lastTranscriptRef: 'transcript:12' })],
+  });
+});
+
+test('Materialization Binding 可按 Work Package 读回，并只保存最小索引', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+
+  const recorded = submit((expectedRevision) => ({
+    kind: 'record-materialization-binding',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(SESSION_A),
+    workPackageId: 'wp-1' as WorkPackageId,
+    orcaTaskId: 'task-1',
+    creationOperationId: 'op-1' as OperationId,
+  }));
+  expect(recorded.kind).toBe('committed');
+
+  const read = store.query({
+    kind: 'materialization-bindings',
+    coordinationScopeId: SCOPE,
+    workPackageId: 'wp-1' as WorkPackageId,
+  });
+  expect(read.kind).toBe('materialization-bindings');
+  if (read.kind !== 'materialization-bindings') {
+    return;
+  }
+  expect(read.bindings).toHaveLength(1);
+  expect(read.bindings[0]?.orcaTaskId).toBe('task-1');
+  expect(read.bindings[0]?.creationOperationId).toBe('op-1');
+  // 不复制 worktree 路径或 Orca Task 状态：绑定只保存最小索引。
+  expect(Object.keys(read.bindings[0] ?? {})).not.toContain('worktreePath');
+  expect(Object.keys(read.bindings[0] ?? {})).not.toContain('taskStatus');
 });

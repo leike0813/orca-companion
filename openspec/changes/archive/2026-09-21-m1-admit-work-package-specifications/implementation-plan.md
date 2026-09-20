@@ -66,14 +66,13 @@
 
 1. 读取当前事实（Work Package 图位置、Authorization 引用、预算、控制状态）；
 2. IP-A1 判定；拒绝则记录原因并结束，不产生任何副作用；
-3. 查询该 Work Package 的既有 worktree；存在且通过核验则复用，否则建立并核验；
-4. 持久化 Operation Intent（含稳定 OperationId 与 expected revision）；
-5. 调用 `task-create`；
-6. 调用 `worker-start --task <taskId>`，跳过步骤 5 的产物无法表达依赖时的分支不由本 change 处理；
-7. 核验 receipt 并回读 Work Package 绑定；
-8. 完成 Operation Intent；任一步返回 unknown 时，以原 OperationId 对账，仍不确定则阻塞该 mutation lane。
+3. 查询该 Work Package 的既有 worktree；存在且通过核验则复用，否则以独立 Operation Intent 建立、回读核验并结算；
+4. 回读 Materialization Binding；没有绑定时以独立 Operation Intent 调用 `task-create`；
+5. 核验 Task receipt，写入 Materialization Binding 后结算 Task intent；
+6. 以独立 Operation Intent 调用 `worker-start --task <taskId>` 并核验 receipt；
+7. 完成 Worker intent；任一步返回 unknown 时，以对应的原 OperationId 对账，仍不确定则阻塞该 mutation lane。
 
-失败处理：步骤 3 失败不留下半个 Task；步骤 5 或 6 返回 rejected 且能证明未产生副作用时清理为「未物化」；返回 unknown 时保留现场并阻塞。所有步骤不得重试换 ID。
+失败处理：worktree 建立失败不留下半个 Task；`task-create` 或 `worker-start` 返回 rejected 且能证明未产生副作用时按确定结果收尾；返回 unknown 时保留现场并阻塞。所有步骤不得重试换 ID。
 
 ## 5. Schema、状态与持久化落实
 

@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -34,6 +34,8 @@ export const COORDINATION_TABLES: readonly string[] = [
   'execution_authorizations',
   'planning_handoffs',
   'planning_responsibility',
+  'session_segments',
+  'materialization_bindings',
 ];
 
 export type Migration = {
@@ -233,10 +235,50 @@ const MIGRATION_3: readonly string[] = [
    ) STRICT`,
 ];
 
+/**
+ * M4：会话中断的 Session Segment 前置事实与最小物化绑定。
+ *
+ * `session_segments` 只记录中断时能核验的事实：角色、Task、Dispatch、Attempt、Session Binding、
+ * 最后可引用的 transcript 位置与终态收据引用。它刻意不含 Recovery Budget 计数、Capsule 或替代
+ * Session——那些属于恢复 change，记录在这里只会制造第二份状态。
+ *
+ * `materialization_bindings` 只保存 `WorkPackageId → OrcaTaskId` 与创建它的 OperationId；worktree
+ * 路径与 Orca Task 状态都属于外部权威，复制进来就会变成第二份真值。
+ */
+const MIGRATION_4: readonly string[] = [
+  `CREATE TABLE IF NOT EXISTS session_segments (
+     coordination_scope_id TEXT NOT NULL,
+     segment_id TEXT NOT NULL,
+     work_package_id TEXT NOT NULL,
+     role TEXT NOT NULL,
+     worker_task_id TEXT NOT NULL,
+     dispatch_id TEXT NOT NULL,
+     attempt_id TEXT NOT NULL,
+     session_binding_id TEXT NOT NULL,
+     last_transcript_ref TEXT,
+     terminal_receipt_ref TEXT,
+     transcript_referenceable INTEGER NOT NULL,
+     verifiable INTEGER NOT NULL,
+     recorded_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, segment_id)
+   ) STRICT`,
+  `CREATE INDEX IF NOT EXISTS session_segments_dispatch
+     ON session_segments (coordination_scope_id, dispatch_id)`,
+  `CREATE TABLE IF NOT EXISTS materialization_bindings (
+     coordination_scope_id TEXT NOT NULL,
+     work_package_id TEXT NOT NULL,
+     orca_task_id TEXT NOT NULL,
+     creation_operation_id TEXT NOT NULL,
+     created_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, work_package_id)
+   ) STRICT`,
+];
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, statements: MIGRATION_1 },
   { version: 2, statements: MIGRATION_2 },
   { version: 3, statements: MIGRATION_3 },
+  { version: 4, statements: MIGRATION_4 },
 ];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {

@@ -43,9 +43,9 @@ CONTEXT.md 已经给出本 change 全部领域词汇（Work Package、Specificat
 
 物化用例按固定顺序执行：读取当前事实 → 判定前置条件 → 查该 Work Package 是否已有通过核验的 worktree → 无则建立并核验身份 → 物化角色级 Orca Task。worktree 的存在性通过实时查询仓库与 Orca 事实得出，不把路径复制进本地记录；Materialization Binding 只保存 `WorkPackageId → OrcaTaskId` 与创建 OperationId，可由实时事实重建并可丢弃。替代方案是把 worktree 路径写进 Execution Graph，被否决：Execution Graph 不拥有 Git/Orca 的 worktree 事实。
 
-### D3: 一个 Dispatch Candidate 对应一次 mutation，unknown 以原 OperationId 对账
+### D3: 每次 mutation 使用独立 OperationId，unknown 以原 ID 对账
 
-物化走 M0 已冻结的两步路径（`task-create` → `worker-start --task`）。两次调用共用一个稳定 OperationId，并且都先持久化 Operation Intent 再执行。返回 unknown 时只允许以该 OperationId 对账，禁止换 ID 重试。拒绝必须能证明未产生副作用，否则归入 unknown。替代方案是把两步合并为一次调用，被否决：安装版本不支持 `worker-start --spec`。
+物化走 M0 已冻结的两步路径（`task-create` → `worker-start --task`）。每次外部 mutation 使用自己的稳定 OperationId，并且都先持久化 Operation Intent 再执行；Task 创建成功后先写入 Materialization Binding，再结算该 intent 并启动 Worker。返回 unknown 时只允许以原 OperationId 对账，禁止换 ID 重试。拒绝必须能证明未产生副作用，否则归入 unknown。替代方案是把两步合并为一次调用，被否决：安装版本不支持 `worker-start --spec`。
 
 ### D4: Task Envelope 与 Worker 报告以运行时 schema 校验的 DTO 表达
 

@@ -16,7 +16,6 @@ import type {
   ExecutionQueryResult,
   OperationOutcome,
   OperationRef,
-  ReconcileResult,
 } from '../../application/dto/operation-outcome.js';
 import type {
   ExecutionAuthority,
@@ -31,7 +30,6 @@ import {
   isRegisteredOrcaOperation,
   operationSpec,
   parseOrcaEnvelope,
-  parseRequestShow,
   readRecord,
   type OperationSpec,
   type OrcaEnvelope,
@@ -455,34 +453,4 @@ export function createOrcaExecutionBackend(options: OrcaExecutionBackendOptions)
   }
 
   return { query, mutate };
-}
-
-/**
- * 按原 OperationId 对账一次不确定结果。只做只读查询，绝不重放 mutation；仍不确定时报告阻塞。
- * `absent` 与 `pending` 都不是「未发生」的证明，因此都返回 `blocked` 并保留该 mutation lane。
- */
-export async function reconcileOperation(
-  backend: ExecutionBackend,
-  operation: OperationRef,
-): Promise<ReconcileResult> {
-  const requestId = operation.backendRequestId;
-  if (requestId === undefined) {
-    return { kind: 'blocked', operation, reason: 'no_backend_request_id' };
-  }
-  const result = await backend.query({ operation: 'request-show', requestId });
-  if (result.kind !== 'accepted') {
-    return { kind: 'blocked', operation, reason: 'unavailable' };
-  }
-  const parsed = parseRequestShow(result.value);
-  if (!parsed.ok) {
-    return { kind: 'blocked', operation, reason: 'unrecognized' };
-  }
-  if (parsed.value.state === 'completed') {
-    return {
-      kind: 'settled',
-      operation,
-      statement: parsed.value.interpretation ?? 'Orca 记录了该请求的确定收据',
-    };
-  }
-  return { kind: 'blocked', operation, reason: parsed.value.state === 'pending' ? 'pending' : 'absent' };
 }

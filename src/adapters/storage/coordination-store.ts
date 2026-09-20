@@ -49,12 +49,15 @@ import type {
 import { GRAPH_VERSION_RECORD_KINDS, isGraphVersionRecordKind } from '../../domain/planning/execution-graph.js';
 import {
   parseManifest,
+  WORKER_ROLES,
   type ExecutionAuthorizationManifest,
   type ExecutionAuthorizationRecord,
+  type WorkerRole,
 } from '../../domain/planning/execution-authorization.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
+  DispatchId,
   EntityRef,
   GraphGeneration,
   GraphId,
@@ -63,6 +66,8 @@ import type {
   OperationId,
   PlanningCycleId,
   RuntimeIncarnationId,
+  SessionSegmentId,
+  WorkerTaskId,
   WorkPackageId,
 } from '../../application/dto/identity.js';
 import {
@@ -83,6 +88,7 @@ import {
   type CoordinationRejectionCode,
   type CoordinationSnapshot,
   type CoordinatorSessionRegistration,
+  type MaterializationBindingRecord,
   type PendingInteractionRecord,
   type PendingInteractionState,
   type PlanningHandoffPhase,
@@ -90,6 +96,7 @@ import {
   type PlanningResponsibilityRecord,
   type ScopeRecord,
   type SessionLifecycleState,
+  type SessionSegmentRecord,
   type TicketClaimRecord,
   type TicketClaimState,
   type WakeAdmissionRecord,
@@ -967,6 +974,89 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       }
       return ok({ ...base, kind: 'advance-map-revision', mapRevision: mapRevision.value });
     }
+    case 'record-session-segment': {
+      const segmentId = requireString(command['segmentId'], 'segmentId');
+      if (!segmentId.ok) {
+        return segmentId;
+      }
+      const workPackageId = requireString(command['workPackageId'], 'workPackageId');
+      if (!workPackageId.ok) {
+        return workPackageId;
+      }
+      const role = requireEnum(command['role'], WORKER_ROLES, 'role');
+      if (!role.ok) {
+        return role;
+      }
+      const workerTaskId = requireString(command['workerTaskId'], 'workerTaskId');
+      if (!workerTaskId.ok) {
+        return workerTaskId;
+      }
+      const dispatchId = requireString(command['dispatchId'], 'dispatchId');
+      if (!dispatchId.ok) {
+        return dispatchId;
+      }
+      const attemptId = requireString(command['attemptId'], 'attemptId');
+      if (!attemptId.ok) {
+        return attemptId;
+      }
+      // 空 Session Binding 是「无法证明身份」这一事实本身，必须原样落盘而不是被拒绝。
+      const sessionBindingId = requireNullableString(command['sessionBindingId'], 'sessionBindingId');
+      if (!sessionBindingId.ok || sessionBindingId.value === null) {
+        return fail('sessionBindingId 必须是字符串（空字符串表示无法证明身份）');
+      }
+      const lastTranscriptRef = requireNullableString(command['lastTranscriptRef'], 'lastTranscriptRef');
+      if (!lastTranscriptRef.ok) {
+        return lastTranscriptRef;
+      }
+      const terminalReceiptRef = requireNullableString(command['terminalReceiptRef'], 'terminalReceiptRef');
+      if (!terminalReceiptRef.ok) {
+        return terminalReceiptRef;
+      }
+      const transcriptReferenceable = command['transcriptReferenceable'];
+      if (typeof transcriptReferenceable !== 'boolean') {
+        return fail('transcriptReferenceable 必须是布尔值');
+      }
+      const verifiable = command['verifiable'];
+      if (typeof verifiable !== 'boolean') {
+        return fail('verifiable 必须是布尔值');
+      }
+      return ok({
+        ...base,
+        kind: 'record-session-segment',
+        segmentId: segmentId.value as SessionSegmentId,
+        workPackageId: workPackageId.value as WorkPackageId,
+        role: role.value,
+        workerTaskId: workerTaskId.value as WorkerTaskId,
+        dispatchId: dispatchId.value as DispatchId,
+        attemptId: attemptId.value,
+        sessionBindingId: sessionBindingId.value,
+        lastTranscriptRef: lastTranscriptRef.value,
+        terminalReceiptRef: terminalReceiptRef.value,
+        transcriptReferenceable,
+        verifiable,
+      });
+    }
+    case 'record-materialization-binding': {
+      const workPackageId = requireString(command['workPackageId'], 'workPackageId');
+      if (!workPackageId.ok) {
+        return workPackageId;
+      }
+      const orcaTaskId = requireString(command['orcaTaskId'], 'orcaTaskId');
+      if (!orcaTaskId.ok) {
+        return orcaTaskId;
+      }
+      const creationOperationId = requireString(command['creationOperationId'], 'creationOperationId');
+      if (!creationOperationId.ok) {
+        return creationOperationId;
+      }
+      return ok({
+        ...base,
+        kind: 'record-materialization-binding',
+        workPackageId: workPackageId.value as WorkPackageId,
+        orcaTaskId: orcaTaskId.value,
+        creationOperationId: creationOperationId.value as OperationId,
+      });
+    }
     default:
       return fail(`未登记的 command variant: ${kind.value}`);
   }
@@ -1110,6 +1200,30 @@ type PlanningResponsibilityRow = {
   readonly assigned_at: number;
 };
 
+type SessionSegmentRow = {
+  readonly coordination_scope_id: string;
+  readonly segment_id: string;
+  readonly work_package_id: string;
+  readonly role: string;
+  readonly worker_task_id: string;
+  readonly dispatch_id: string;
+  readonly attempt_id: string;
+  readonly session_binding_id: string;
+  readonly last_transcript_ref: string | null;
+  readonly terminal_receipt_ref: string | null;
+  readonly transcript_referenceable: number;
+  readonly verifiable: number;
+  readonly recorded_at: number;
+};
+
+type MaterializationBindingRow = {
+  readonly coordination_scope_id: string;
+  readonly work_package_id: string;
+  readonly orca_task_id: string;
+  readonly creation_operation_id: string;
+  readonly created_at: number;
+};
+
 function decodeGraphVersionRow(row: GraphVersionRow): Decoded<GraphVersionRecord> {
   if (!isGraphVersionRecordKind(row.record_kind)) {
     return fail(`graph_versions.record_kind 取值不受支持: ${row.record_kind}`);
@@ -1191,6 +1305,42 @@ function decodePlanningResponsibilityRow(row: PlanningResponsibilityRow): Planni
     coordinatorSessionId: row.coordinator_session_id as CoordinatorSessionId,
     sourceProposalId: row.source_proposal_id,
     assignedAt: row.assigned_at,
+  };
+}
+
+function decodeWorkerRole(raw: string): WorkerRole | null {
+  return (WORKER_ROLES as readonly string[]).includes(raw) ? (raw as WorkerRole) : null;
+}
+
+function decodeSessionSegmentRow(row: SessionSegmentRow): Decoded<SessionSegmentRecord> {
+  const role = decodeWorkerRole(row.role);
+  if (role === null) {
+    return fail(`session_segments.role 取值不受支持: ${row.role}`);
+  }
+  return ok({
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    segmentId: row.segment_id as SessionSegmentId,
+    workPackageId: row.work_package_id as WorkPackageId,
+    role,
+    workerTaskId: row.worker_task_id as WorkerTaskId,
+    dispatchId: row.dispatch_id as DispatchId,
+    attemptId: row.attempt_id,
+    sessionBindingId: row.session_binding_id,
+    lastTranscriptRef: row.last_transcript_ref,
+    terminalReceiptRef: row.terminal_receipt_ref,
+    transcriptReferenceable: row.transcript_referenceable === 1,
+    verifiable: row.verifiable === 1,
+    recordedAt: row.recorded_at,
+  });
+}
+
+function decodeMaterializationBindingRow(row: MaterializationBindingRow): MaterializationBindingRecord {
+  return {
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    workPackageId: row.work_package_id as WorkPackageId,
+    orcaTaskId: row.orca_task_id,
+    creationOperationId: row.creation_operation_id as OperationId,
+    createdAt: row.created_at,
   };
 }
 
@@ -1612,6 +1762,48 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       scopeId,
     );
 
+  const readSessionSegmentRows = (
+    scopeId: string,
+    workPackageId: string | undefined,
+  ): readonly SessionSegmentRow[] =>
+    workPackageId === undefined
+      ? many<SessionSegmentRow>(
+          db.prepare(
+            `SELECT * FROM session_segments
+             WHERE coordination_scope_id = ? ORDER BY recorded_at, segment_id`,
+          ),
+          scopeId,
+        )
+      : many<SessionSegmentRow>(
+          db.prepare(
+            `SELECT * FROM session_segments
+             WHERE coordination_scope_id = ? AND work_package_id = ? ORDER BY recorded_at, segment_id`,
+          ),
+          scopeId,
+          workPackageId,
+        );
+
+  const readMaterializationBindingRows = (
+    scopeId: string,
+    workPackageId: string | undefined,
+  ): readonly MaterializationBindingRow[] =>
+    workPackageId === undefined
+      ? many<MaterializationBindingRow>(
+          db.prepare(
+            `SELECT * FROM materialization_bindings
+             WHERE coordination_scope_id = ? ORDER BY created_at, work_package_id`,
+          ),
+          scopeId,
+        )
+      : many<MaterializationBindingRow>(
+          db.prepare(
+            `SELECT * FROM materialization_bindings
+             WHERE coordination_scope_id = ? AND work_package_id = ?`,
+          ),
+          scopeId,
+          workPackageId,
+        );
+
   const buildSnapshot = (scopeId: string, scope: ScopeRecord): Decoded<CoordinationSnapshot> => {
     const leases = readLeases(scopeId);
     if (!leases.ok) {
@@ -1641,6 +1833,10 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       return handoffs;
     }
     const responsibilityRow = readPlanningResponsibilityRow(scopeId);
+    const segments = decodeRows(readSessionSegmentRows(scopeId, undefined), decodeSessionSegmentRow);
+    if (!segments.ok) {
+      return segments;
+    }
     return ok({
       scope,
       sessions: sessions.value,
@@ -1653,6 +1849,10 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       planningHandoffs: handoffs.value,
       planningResponsibility:
         responsibilityRow === undefined ? null : decodePlanningResponsibilityRow(responsibilityRow),
+      sessionSegments: segments.value,
+      materializationBindings: readMaterializationBindingRows(scopeId, undefined).map(
+        decodeMaterializationBindingRow,
+      ),
     });
   };
 
@@ -1806,6 +2006,23 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
             responsibility: row === undefined ? null : decodePlanningResponsibilityRow(row),
           };
         }
+        case 'session-segments': {
+          const segments = decodeRows(
+            readSessionSegmentRows(scopeId, input.workPackageId),
+            decodeSessionSegmentRow,
+          );
+          if (!segments.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: segments.message };
+          }
+          return { kind: 'session-segments', segments: segments.value };
+        }
+        case 'materialization-bindings':
+          return {
+            kind: 'materialization-bindings',
+            bindings: readMaterializationBindingRows(scopeId, input.workPackageId).map(
+              decodeMaterializationBindingRow,
+            ),
+          };
         default:
           return { kind: 'rejected', code: 'invalid_query', message: '未登记的 query variant' };
       }
@@ -2080,6 +2297,66 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           cmd.mapRevision,
           now,
           cmd.coordinationScopeId,
+        );
+        return ok(null);
+      }
+      case 'record-session-segment': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) {
+          return holder;
+        }
+        const existing = one<SessionSegmentRow>(
+          db.prepare(
+            `SELECT * FROM session_segments WHERE coordination_scope_id = ? AND segment_id = ?`,
+          ),
+          cmd.coordinationScopeId,
+          cmd.segmentId,
+        );
+        if (existing !== undefined) {
+          return fail(`Session Segment ${cmd.segmentId} 已存在`, 'constraint');
+        }
+        db.prepare(
+          `INSERT INTO session_segments (
+             coordination_scope_id, segment_id, work_package_id, role, worker_task_id, dispatch_id,
+             attempt_id, session_binding_id, last_transcript_ref, terminal_receipt_ref,
+             transcript_referenceable, verifiable, recorded_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.segmentId,
+          cmd.workPackageId,
+          cmd.role,
+          cmd.workerTaskId,
+          cmd.dispatchId,
+          cmd.attemptId,
+          cmd.sessionBindingId,
+          cmd.lastTranscriptRef,
+          cmd.terminalReceiptRef,
+          cmd.transcriptReferenceable ? 1 : 0,
+          cmd.verifiable ? 1 : 0,
+          now,
+        );
+        return ok(null);
+      }
+      case 'record-materialization-binding': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) {
+          return holder;
+        }
+        db.prepare(
+          `INSERT INTO materialization_bindings (
+             coordination_scope_id, work_package_id, orca_task_id, creation_operation_id, created_at
+           ) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT (coordination_scope_id, work_package_id) DO UPDATE SET
+             orca_task_id = excluded.orca_task_id,
+             creation_operation_id = excluded.creation_operation_id,
+             created_at = excluded.created_at`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.workPackageId,
+          cmd.orcaTaskId,
+          cmd.creationOperationId,
+          now,
         );
         return ok(null);
       }

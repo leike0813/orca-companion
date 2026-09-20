@@ -13,6 +13,8 @@
 import type {
   ExecutionQueryResult,
   OperationOutcome,
+  OperationRef,
+  ReconcileResult,
 } from '../dto/operation-outcome.js';
 
 export type ExecutionAuthority =
@@ -44,6 +46,8 @@ export type ExecutionQuery =
   | { readonly operation: 'status' }
   | { readonly operation: 'host-list' }
   | { readonly operation: 'worktree-current' }
+  /** 按仓库选择器列举 Orca 管理的 worktree；`repo` 缺省时由 Orca 从当前上下文推断。 */
+  | { readonly operation: 'worktree-list'; readonly repo?: string; readonly limit?: number }
   | { readonly operation: 'terminal-list'; readonly worktree?: string; readonly limit?: number }
   | { readonly operation: 'terminal-show'; readonly terminal: string }
   | {
@@ -97,6 +101,15 @@ export type ExecutionQuery =
 /** 变更操作。身份与 operationId 只能来自 controller 签发的 ExecutionScope。 */
 export type ExecutionMutation =
   | {
+      readonly operation: 'worktree-create';
+      /** 仓库选择器，例如 `path:<canonical-worktree>`；不依赖调用进程的隐含上下文。 */
+      readonly repo: string;
+      readonly name: string;
+      readonly baseBranch?: string;
+      /** Work Package 归属标记；写入 Orca worktree metadata，是「复用而不是重建」的判据。 */
+      readonly comment?: string;
+    }
+  | {
       readonly operation: 'terminal-create';
       readonly worktree: string;
       readonly title?: string;
@@ -139,7 +152,75 @@ export type ExecutionMutation =
 
 export type ExecutionOperation = ExecutionQuery | ExecutionMutation;
 
+/**
+ * `worktree-list` / `worktree-create` 的 read-only projection。
+ *
+ * 这是 Application 层看到的 worktree 事实；字段只用于定位与核验（绑定哪个基线、属于哪个 Work
+ * Package），不复制 Orca 的 worktree 状态机，也不成为第二份权威。
+ */
+export type WorktreeSummary = {
+  readonly worktreeId: string;
+  readonly path: string;
+  /** 分支 ref，例如 `refs/heads/docs/wp-1`；Orca 未报告时为 `null`。 */
+  readonly branch: string | null;
+  readonly head: string | null;
+  readonly displayName: string | null;
+  readonly comment: string | null;
+  readonly isMainWorktree: boolean;
+};
+
+/** 建立 worktree 的确定结果只给出身份；其余事实一律回读，不从创建响应推断。 */
+export type WorktreeCreation = {
+  readonly worktreeId: string;
+};
+
+export type WorktreeListResult = {
+  readonly worktrees: readonly WorktreeSummary[];
+  readonly totalCount: number;
+  readonly truncated: boolean;
+  /** `null` 表示当前 Orca 版本未证明列举覆盖范围。 */
+  readonly hostScope: {
+    readonly hostIds: readonly string[];
+    readonly omittedHostIds: readonly string[];
+  } | null;
+};
+
 export interface ExecutionBackend {
   query(input: ExecutionQuery): Promise<ExecutionQueryResult>;
   mutate(input: ExecutionMutation, scope: ExecutionScope): Promise<OperationOutcome<unknown>>;
+}
+
+/** 按原 OperationId 做一次只读对账；没有可恢复资源结果时继续阻塞。 */
+export async function reconcileOperation(
+  backend: ExecutionBackend,
+  operation: OperationRef,
+): Promise<ReconcileResult> {
+  const requestId = operation.backendRequestId;
+  if (requestId === undefined) {
+    return { kind: 'blocked', operation, reason: 'no_backend_request_id' };
+  }
+  const result = await backend.query({ operation: 'request-show', requestId });
+  if (result.kind !== 'accepted') {
+    return { kind: 'blocked', operation, reason: 'unavailable' };
+  }
+  const value = result.value;
+  if (typeof value !== 'object' || value === null) {
+    return { kind: 'blocked', operation, reason: 'unrecognized' };
+  }
+  const state = (value as { readonly state?: unknown }).state;
+  if (state === 'completed') {
+    const interpretation = (value as { readonly interpretation?: unknown }).interpretation;
+    return {
+      kind: 'settled',
+      operation,
+      statement:
+        typeof interpretation === 'string' && interpretation.length > 0
+          ? interpretation
+          : '后端记录了请求完成，但未返回可恢复的资源结果',
+    };
+  }
+  if (state === 'pending' || state === 'absent') {
+    return { kind: 'blocked', operation, reason: state };
+  }
+  return { kind: 'blocked', operation, reason: 'unrecognized' };
 }
