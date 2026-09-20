@@ -9,7 +9,11 @@
     "pnpm": ">=11"
   },
   "packageManager": "pnpm@11.10.0",
+  "bin": {
+    "orca-companion": "./dist/src/interfaces/cli/main.js"
+  },
   "scripts": {
+    "build": "tsc --noEmit false --outDir dist",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

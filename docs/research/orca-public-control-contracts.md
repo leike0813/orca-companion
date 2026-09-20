@@ -96,7 +96,7 @@ Dispatch 状态机（`references/orca/src/main/runtime/orchestration/types.ts`�
 | --- | --- | --- | --- |
 | 观测 | `orca orchestration worker-show --dispatch <id>` | 不存在 → `dispatch_not_found`（exit 1）；返回 `dispatch`、`worker`、`observation{status,exactWorker}`、`terminalResource` | 实测 |
 | 读输出 | `orca orchestration worker-read --dispatch <id> [--source auto|transcript|terminal] [--cursor] [--limit]` | identity 漂移 → `worker_identity_changed`（exit 1）；`fallbackReason` 取值 `provider_unsupported / session_not_reported / transcript_empty / transcript_missing / transcript_unreadable / transcript_parse_failed / remote_capability_unavailable`；cursor 与 source 绑定，`source_changed` 时须重开读取 | 实测+契约 |
-| 资源核算 | `orca orchestration worker-list [--run <id>] [--terminal-state <s>] [--include-remote] [--cursor] [--limit]` | 无需 sender 身份；`workers[]{dispatchId,taskId,runId,workerState,dispatchStatus,agentTerminalHandle,terminalState,resource}`；`terminalState` 取值 `active / reclaimable / retained / release_pending / release_unknown / released` | 实测 |
+| 资源核算 | `orca orchestration worker-list [--run <id>] [--terminal-state <s>]` | 无需 sender 身份；`workers[]{dispatchId,taskId,runId,workerState,dispatchStatus,agentTerminalHandle,terminalState,resource}`；`terminalState` 取值 `active / reclaimable / retained / release_pending / release_unknown / released` | 实测 |
 | 停止 | `orca orchestration worker-stop --dispatch <id>` | 只关闭该受监督 Dispatch 名下的精确 agent 终端；不删 worktree、setup 终端、配置页签或无关进程 | 契约 |
 | 放弃并标记不确定 | `orca orchestration worker-abandon --dispatch <id>` | `processAction` 为 `none`，保留全部可能存活的资源，不做进程或文件系统动作 | 契约 |
 | 释放 | `orca orchestration worker-release --dispatch <id>` | 幂等；先归档可读输出再关闭；重复调用报 `already_released`；**只有 `release_unknown` 退出 1** | 契约 |
