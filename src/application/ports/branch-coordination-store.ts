@@ -16,10 +16,14 @@
 import type { ControlState, CoordinationMode } from '../../domain/coordination/mode.js';
 import type { LeaseKind, LeaseRecord } from '../../domain/coordination/leases.js';
 import type { SourceRevisionRef } from '../../domain/coordinator/session-state.js';
+import type { ExecutionGraph, GraphVersionRecord, GraphVersionRecordKind } from '../../domain/planning/execution-graph.js';
+import type { ExecutionAuthorizationManifest, ExecutionAuthorizationRecord } from '../../domain/planning/execution-authorization.js';
+import { TICKET_CLAIM_STATES, type TicketClaimState } from '../../domain/planning/ticket-claim.js';
 import type { IntentState, OperationIntent } from '../dto/operation-intent.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
+  GraphGeneration,
   GraphId,
   GraphVersion,
   InteractionId,
@@ -32,14 +36,12 @@ import type {
 } from '../dto/identity.js';
 
 export type { LeaseKind, LeaseRecord };
+export { TICKET_CLAIM_STATES };
+export type { TicketClaimState };
 
 export const SESSION_LIFECYCLE_STATES = ['registered', 'active', 'cancelled'] as const;
 
 export type SessionLifecycleState = (typeof SESSION_LIFECYCLE_STATES)[number];
-
-export const TICKET_CLAIM_STATES = ['active', 'completed', 'released'] as const;
-
-export type TicketClaimState = (typeof TICKET_CLAIM_STATES)[number];
 
 export const PENDING_INTERACTION_STATES = ['open', 'answered', 'cancelled'] as const;
 
@@ -50,6 +52,8 @@ export type ScopeRecord = {
   readonly mode: CoordinationMode;
   readonly controlState: ControlState;
   readonly planningCycleId: PlanningCycleId | null;
+  /** 当前 Route Map revision；候选图与未决交接提案据此判定过期。 */
+  readonly mapRevision: Revision;
   readonly graphId: GraphId | null;
   readonly graphVersion: GraphVersion | null;
   readonly authorizationId: StableId | null;
@@ -112,6 +116,51 @@ export type WakeAdmissionRecord = {
   readonly admittedAt: number;
 };
 
+/**
+ * Route Planning 责任交接的阶段（IC-05 Extend）。
+ *
+ * 阶段是持久事实：`prepared` 只产出提案，`reviewed` 表示接收方已独立复核，`cutover` 才把责任转移，
+ * `cancelled` 是终态。崩溃后从阶段确定性恢复，不猜测责任归属。
+ */
+export const PLANNING_HANDOFF_PHASES = ['prepared', 'reviewed', 'cutover', 'cancelled'] as const;
+
+export type PlanningHandoffPhase = (typeof PLANNING_HANDOFF_PHASES)[number];
+
+/** 允许的阶段迁移；未列出的迁移在 store 边界被拒绝。 */
+export const PLANNING_HANDOFF_TRANSITIONS: Readonly<Record<PlanningHandoffPhase, readonly PlanningHandoffPhase[]>> =
+  {
+    prepared: ['reviewed', 'cancelled'],
+    reviewed: ['cutover', 'cancelled'],
+    cutover: [],
+    cancelled: [],
+  };
+
+export type PlanningHandoffRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly proposalId: string;
+  readonly sourceCoordinatorSessionId: CoordinatorSessionId;
+  readonly targetCoordinatorSessionId: CoordinatorSessionId;
+  readonly phase: PlanningHandoffPhase;
+  readonly mapRevision: Revision;
+  readonly planRevision: Revision;
+  readonly graphId: GraphId | null;
+  readonly graphVersion: GraphVersion | null;
+  /** 可移植 Coordinator Context Capsule 的引用；本库不保存 Capsule 内容。 */
+  readonly capsuleRef: string | null;
+  /** 提案级 CAS revision；与 Scope revision 分离，避免交接提交强迫 Scope 全局串行。 */
+  readonly proposalRevision: Revision;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+};
+
+/** 当前 Route Planning 责任方；一个 Scope 最多一行，因此不可能同时存在两个责任方。 */
+export type PlanningResponsibilityRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly coordinatorSessionId: CoordinatorSessionId;
+  readonly sourceProposalId: string | null;
+  readonly assignedAt: number;
+};
+
 /** `status` 与启动对账用的单次只读投影；不触发续约、对账或任何写入。 */
 export type CoordinationSnapshot = {
   readonly scope: ScopeRecord;
@@ -121,6 +170,8 @@ export type CoordinationSnapshot = {
   readonly ticketClaims: readonly TicketClaimRecord[];
   readonly pendingInteractions: readonly PendingInteractionRecord[];
   readonly unresolvedIntents: readonly OperationIntent[];
+  readonly planningHandoffs: readonly PlanningHandoffRecord[];
+  readonly planningResponsibility: PlanningResponsibilityRecord | null;
 };
 
 export type CoordinationQuery =
@@ -140,7 +191,31 @@ export type CoordinationQuery =
       readonly kind: 'wake-admissions';
       readonly coordinationScopeId: CoordinationScopeId;
       readonly coordinatorSessionId?: CoordinatorSessionId;
-    };
+    }
+  | {
+      readonly kind: 'graph-versions';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly graphId: GraphId;
+    }
+  | {
+      readonly kind: 'graph-version';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly graphId: GraphId;
+      readonly graphVersion: GraphVersion;
+    }
+  | { readonly kind: 'authorizations'; readonly coordinationScopeId: CoordinationScopeId }
+  | {
+      readonly kind: 'authorization';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly authorizationId: string;
+    }
+  | { readonly kind: 'planning-handoffs'; readonly coordinationScopeId: CoordinationScopeId }
+  | {
+      readonly kind: 'planning-handoff';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly proposalId: string;
+    }
+  | { readonly kind: 'planning-responsibility'; readonly coordinationScopeId: CoordinationScopeId };
 
 export type CoordinationQueryRejectionCode = 'unreadable' | 'invalid_query';
 
@@ -158,6 +233,13 @@ export type CoordinationQueryResult =
   | { readonly kind: 'intent'; readonly intent: OperationIntent | null }
   | { readonly kind: 'budget-counters'; readonly counters: readonly BudgetCounterRecord[] }
   | { readonly kind: 'wake-admissions'; readonly admissions: readonly WakeAdmissionRecord[] }
+  | { readonly kind: 'graph-versions'; readonly versions: readonly GraphVersionRecord[] }
+  | { readonly kind: 'graph-version'; readonly version: GraphVersionRecord | null }
+  | { readonly kind: 'authorizations'; readonly authorizations: readonly ExecutionAuthorizationRecord[] }
+  | { readonly kind: 'authorization'; readonly authorization: ExecutionAuthorizationRecord | null }
+  | { readonly kind: 'planning-handoffs'; readonly handoffs: readonly PlanningHandoffRecord[] }
+  | { readonly kind: 'planning-handoff'; readonly handoff: PlanningHandoffRecord | null }
+  | { readonly kind: 'planning-responsibility'; readonly responsibility: PlanningResponsibilityRecord | null }
   | {
       readonly kind: 'rejected';
       readonly code: CoordinationQueryRejectionCode;
@@ -263,6 +345,62 @@ export type CoordinationCommand =
       readonly wakeBatchId: string;
       readonly admissionState: WakeAdmissionState;
       readonly sourceRevisions: readonly SourceRevisionRef[];
+    })
+  | (CoordinationCommandBase & {
+      readonly kind: 'initialize-scope';
+      readonly mode: CoordinationMode;
+      readonly controlState: ControlState;
+      readonly planningCycleId: PlanningCycleId | null;
+      readonly coordinatorSessionId: CoordinatorSessionId;
+      readonly coordinatorModelConfigurationRef: string;
+    })
+  | (CoordinationCommandBase & {
+      readonly kind: 'record-graph-version';
+      readonly graphId: GraphId;
+      readonly generation: GraphGeneration;
+      readonly graphVersion: GraphVersion;
+      readonly recordKind: GraphVersionRecordKind;
+      readonly parentVersion: GraphVersion | null;
+      readonly mapRevision: Revision;
+      readonly planRevision: Revision;
+      readonly orcaRunId: string;
+      readonly graph: ExecutionGraph;
+    })
+  | (CoordinationCommandBase & {
+      readonly kind: 'record-authorization';
+      readonly authorizationId: string;
+      readonly authorizationVersion: Revision;
+      readonly manifestVersion: number;
+      readonly fingerprint: string;
+      readonly approvalRef: string;
+      readonly manifest: ExecutionAuthorizationManifest;
+    })
+  | (CoordinationCommandBase & {
+      readonly kind: 'record-planning-handoff';
+      readonly proposalId: string;
+      readonly sourceCoordinatorSessionId: CoordinatorSessionId;
+      readonly targetCoordinatorSessionId: CoordinatorSessionId;
+      readonly phase: PlanningHandoffPhase;
+      readonly mapRevision: Revision;
+      readonly planRevision: Revision;
+      readonly graphId: GraphId | null;
+      readonly graphVersion: GraphVersion | null;
+      readonly capsuleRef: string | null;
+      /** `null` 表示创建提案；否则必须与当前 proposalRevision 精确相等。 */
+      readonly expectedProposalRevision: Revision | null;
+    })
+  | (CoordinationCommandBase & {
+      readonly kind: 'transition-to-execution';
+      readonly planningCycleId: PlanningCycleId | null;
+      readonly graphId: GraphId;
+      readonly graphVersion: GraphVersion;
+      readonly authorizationId: string;
+      readonly authorizationVersion: Revision;
+    })
+  | (CoordinationCommandBase & {
+      readonly kind: 'advance-map-revision';
+      /** 新地图 revision；必须恰好是当前值 + 1，不能跳号或回退。 */
+      readonly mapRevision: Revision;
     });
 
 export type CoordinationRejectionCode =

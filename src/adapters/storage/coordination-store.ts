@@ -40,18 +40,35 @@ import {
 } from '../../application/dto/operation-intent.js';
 import type { SourceRevisionRef } from '../../domain/coordinator/session-state.js';
 import type {
+  ExecutionGraph,
+  GraphVersionRecord,
+  ScopeEnvelope,
+  WorkPackage,
+  WorkPackageBudget,
+} from '../../domain/planning/execution-graph.js';
+import { GRAPH_VERSION_RECORD_KINDS, isGraphVersionRecordKind } from '../../domain/planning/execution-graph.js';
+import {
+  parseManifest,
+  type ExecutionAuthorizationManifest,
+  type ExecutionAuthorizationRecord,
+} from '../../domain/planning/execution-authorization.js';
+import type {
   CoordinationScopeId,
   CoordinatorSessionId,
   EntityRef,
+  GraphGeneration,
   GraphId,
   GraphVersion,
   InteractionId,
   OperationId,
   PlanningCycleId,
   RuntimeIncarnationId,
+  WorkPackageId,
 } from '../../application/dto/identity.js';
 import {
   PENDING_INTERACTION_STATES,
+  PLANNING_HANDOFF_PHASES,
+  PLANNING_HANDOFF_TRANSITIONS,
   SESSION_LIFECYCLE_STATES,
   TICKET_CLAIM_STATES,
   WAKE_ADMISSION_STATES,
@@ -68,6 +85,9 @@ import {
   type CoordinatorSessionRegistration,
   type PendingInteractionRecord,
   type PendingInteractionState,
+  type PlanningHandoffPhase,
+  type PlanningHandoffRecord,
+  type PlanningResponsibilityRecord,
   type ScopeRecord,
   type SessionLifecycleState,
   type TicketClaimRecord,
@@ -141,6 +161,20 @@ function requireCount(raw: unknown, field: string): Decoded<number> {
     return fail(`${field} 必须是非负整数`);
   }
   return ok(raw);
+}
+
+function requireStringArray(raw: unknown, field: string): Decoded<readonly string[]> {
+  if (!Array.isArray(raw)) {
+    return fail(`${field} 必须是数组`);
+  }
+  const values: string[] = [];
+  for (const [index, entry] of raw.entries()) {
+    if (typeof entry !== 'string' || entry.length === 0) {
+      return fail(`${field}.${index} 必须是非空字符串`);
+    }
+    values.push(entry);
+  }
+  return ok(values);
 }
 
 function requireNullableCount(raw: unknown, field: string): Decoded<number | null> {
@@ -238,6 +272,129 @@ function decodeSourceRevisionList(raw: unknown, field: string): Decoded<readonly
     values.push(decoded.value);
   }
   return ok(values);
+}
+
+/**
+ * Execution Graph 的读写边界校验。
+ *
+ * 图在写入前已经过一次同样的校验，读取时再校验一次不是冗余：JSON 负载可能在旧实现、外部工具或
+ * 手工修复下变形，而「读出一个字段缺失的图」比直接失败危险得多。
+ */
+function decodeScopeEnvelope(raw: unknown, field: string): Decoded<ScopeEnvelope> {
+  if (!isRecord(raw)) {
+    return fail(`${field} 必须是对象`);
+  }
+  const include = requireStringArray(raw['include'], `${field}.include`);
+  if (!include.ok) {
+    return include;
+  }
+  const exclude = requireStringArray(raw['exclude'], `${field}.exclude`);
+  if (!exclude.ok) {
+    return exclude;
+  }
+  return ok({ include: include.value, exclude: exclude.value });
+}
+
+function decodeWorkPackageBudget(raw: unknown, field: string): Decoded<WorkPackageBudget> {
+  if (!isRecord(raw)) {
+    return fail(`${field} 必须是对象`);
+  }
+  const keys = [
+    'implementationAttempts',
+    'validatorRepairs',
+    'graphRevisions',
+    'specificationRevisions',
+    'maxRecoveriesPerWorkerAttempt',
+  ] as const;
+  const values: Record<string, number> = {};
+  for (const key of keys) {
+    const parsed = requireCount(raw[key], `${field}.${key}`);
+    if (!parsed.ok) {
+      return parsed;
+    }
+    values[key] = parsed.value;
+  }
+  return ok({
+    implementationAttempts: values['implementationAttempts'] ?? 0,
+    validatorRepairs: values['validatorRepairs'] ?? 0,
+    graphRevisions: values['graphRevisions'] ?? 0,
+    specificationRevisions: values['specificationRevisions'] ?? 0,
+    maxRecoveriesPerWorkerAttempt: values['maxRecoveriesPerWorkerAttempt'] ?? 0,
+  });
+}
+
+function decodeWorkPackage(raw: unknown, field: string): Decoded<WorkPackage> {
+  if (!isRecord(raw)) {
+    return fail(`${field} 必须是对象`);
+  }
+  const workPackageId = requireString(raw['workPackageId'], `${field}.workPackageId`);
+  if (!workPackageId.ok) {
+    return workPackageId;
+  }
+  const title = requireString(raw['title'], `${field}.title`);
+  if (!title.ok) {
+    return title;
+  }
+  const dependsOn = requireStringArray(raw['dependsOn'], `${field}.dependsOn`);
+  if (!dependsOn.ok) {
+    return dependsOn;
+  }
+  const scopeEnvelope = decodeScopeEnvelope(raw['scopeEnvelope'], `${field}.scopeEnvelope`);
+  if (!scopeEnvelope.ok) {
+    return scopeEnvelope;
+  }
+  const budget = decodeWorkPackageBudget(raw['budget'], `${field}.budget`);
+  if (!budget.ok) {
+    return budget;
+  }
+  return ok({
+    workPackageId: workPackageId.value as WorkPackageId,
+    title: title.value,
+    dependsOn: dependsOn.value.map((value) => value as WorkPackageId),
+    scopeEnvelope: scopeEnvelope.value,
+    budget: budget.value,
+  });
+}
+
+function decodeExecutionGraph(raw: unknown, field: string): Decoded<ExecutionGraph> {
+  if (!isRecord(raw)) {
+    return fail(`${field} 必须是对象`);
+  }
+  const graphId = requireString(raw['graphId'], `${field}.graphId`);
+  if (!graphId.ok) {
+    return graphId;
+  }
+  const generation = requireCount(raw['generation'], `${field}.generation`);
+  if (!generation.ok) {
+    return generation;
+  }
+  const concurrencyLimit = requireCount(raw['concurrencyLimit'], `${field}.concurrencyLimit`);
+  if (!concurrencyLimit.ok) {
+    return concurrencyLimit;
+  }
+  const rawWorkPackages = raw['workPackages'];
+  if (!Array.isArray(rawWorkPackages)) {
+    return fail(`${field}.workPackages 必须是数组`);
+  }
+  const workPackages: WorkPackage[] = [];
+  for (const [index, entry] of rawWorkPackages.entries()) {
+    const decoded = decodeWorkPackage(entry, `${field}.workPackages.${index}`);
+    if (!decoded.ok) {
+      return decoded;
+    }
+    workPackages.push(decoded.value);
+  }
+  return ok({
+    graphId: graphId.value as GraphId,
+    generation: generation.value as GraphGeneration,
+    concurrencyLimit: concurrencyLimit.value,
+    workPackages,
+  });
+}
+
+function decodeManifestInput(raw: unknown, field: string): Decoded<ExecutionAuthorizationManifest> {
+  const parsed = parseManifest(raw, field);
+  return parsed.ok ? ok(parsed.value) : fail(`${parsed.field}: ${parsed.message}`);
 }
 
 function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
@@ -577,6 +734,239 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         sourceRevisions: sourceRevisions.value,
       });
     }
+    case 'initialize-scope': {
+      const mode = requireEnum(command['mode'], COORDINATION_MODES, 'mode');
+      if (!mode.ok) {
+        return mode;
+      }
+      const control = requireEnum(command['controlState'], CONTROL_STATES, 'controlState');
+      if (!control.ok) {
+        return control;
+      }
+      const cycle = requireNullableString(command['planningCycleId'], 'planningCycleId');
+      if (!cycle.ok) {
+        return cycle;
+      }
+      const sessionId = requireString(command['coordinatorSessionId'], 'coordinatorSessionId');
+      if (!sessionId.ok) {
+        return sessionId;
+      }
+      const configurationRef = requireString(
+        command['coordinatorModelConfigurationRef'],
+        'coordinatorModelConfigurationRef',
+      );
+      if (!configurationRef.ok) {
+        return configurationRef;
+      }
+      return ok({
+        ...base,
+        kind: 'initialize-scope',
+        mode: mode.value,
+        controlState: control.value,
+        planningCycleId: cycle.value as PlanningCycleId | null,
+        coordinatorSessionId: sessionId.value as CoordinatorSessionId,
+        coordinatorModelConfigurationRef: configurationRef.value,
+      });
+    }
+    case 'record-graph-version': {
+      const graphId = requireString(command['graphId'], 'graphId');
+      if (!graphId.ok) {
+        return graphId;
+      }
+      const generation = requireCount(command['generation'], 'generation');
+      if (!generation.ok) {
+        return generation;
+      }
+      const graphVersion = requireCount(command['graphVersion'], 'graphVersion');
+      if (!graphVersion.ok || graphVersion.value === 0) {
+        return fail('graphVersion 必须是正的安全整数');
+      }
+      const recordKind = requireEnum(command['recordKind'], GRAPH_VERSION_RECORD_KINDS, 'recordKind');
+      if (!recordKind.ok) {
+        return recordKind;
+      }
+      const parentVersion = requireNullableCount(command['parentVersion'], 'parentVersion');
+      if (!parentVersion.ok) {
+        return parentVersion;
+      }
+      const mapRevision = requireCount(command['mapRevision'], 'mapRevision');
+      if (!mapRevision.ok) {
+        return mapRevision;
+      }
+      const planRevision = requireCount(command['planRevision'], 'planRevision');
+      if (!planRevision.ok) {
+        return planRevision;
+      }
+      const orcaRunId = requireString(command['orcaRunId'], 'orcaRunId');
+      if (!orcaRunId.ok) {
+        return orcaRunId;
+      }
+      const graph = decodeExecutionGraph(command['graph'], 'graph');
+      if (!graph.ok) {
+        return graph;
+      }
+      if (graph.value.graphId !== graphId.value || graph.value.generation !== generation.value) {
+        return fail('graph 负载与 graphId/generation 不一致');
+      }
+      return ok({
+        ...base,
+        kind: 'record-graph-version',
+        graphId: graphId.value as GraphId,
+        generation: generation.value as GraphGeneration,
+        graphVersion: graphVersion.value as GraphVersion,
+        recordKind: recordKind.value,
+        parentVersion: parentVersion.value === null ? null : (parentVersion.value as GraphVersion),
+        mapRevision: mapRevision.value,
+        planRevision: planRevision.value,
+        orcaRunId: orcaRunId.value,
+        graph: graph.value,
+      });
+    }
+    case 'record-authorization': {
+      const authorizationId = requireString(command['authorizationId'], 'authorizationId');
+      if (!authorizationId.ok) {
+        return authorizationId;
+      }
+      const authorizationVersion = requireCount(command['authorizationVersion'], 'authorizationVersion');
+      if (!authorizationVersion.ok || authorizationVersion.value === 0) {
+        return fail('authorizationVersion 必须是正的安全整数');
+      }
+      const manifestVersion = requireCount(command['manifestVersion'], 'manifestVersion');
+      if (!manifestVersion.ok) {
+        return manifestVersion;
+      }
+      const fingerprint = requireString(command['fingerprint'], 'fingerprint');
+      if (!fingerprint.ok) {
+        return fingerprint;
+      }
+      const approvalRef = requireString(command['approvalRef'], 'approvalRef');
+      if (!approvalRef.ok) {
+        return approvalRef;
+      }
+      const manifest = decodeManifestInput(command['manifest'], 'manifest');
+      if (!manifest.ok) {
+        return manifest;
+      }
+      if (manifest.value.manifestVersion !== manifestVersion.value) {
+        return fail('manifest 正文的 manifestVersion 与记录字段不一致');
+      }
+      return ok({
+        ...base,
+        kind: 'record-authorization',
+        authorizationId: authorizationId.value,
+        authorizationVersion: authorizationVersion.value,
+        manifestVersion: manifestVersion.value,
+        fingerprint: fingerprint.value,
+        approvalRef: approvalRef.value,
+        manifest: manifest.value,
+      });
+    }
+    case 'record-planning-handoff': {
+      const proposalId = requireString(command['proposalId'], 'proposalId');
+      if (!proposalId.ok) {
+        return proposalId;
+      }
+      const sourceSessionId = requireString(
+        command['sourceCoordinatorSessionId'],
+        'sourceCoordinatorSessionId',
+      );
+      if (!sourceSessionId.ok) {
+        return sourceSessionId;
+      }
+      const targetSessionId = requireString(
+        command['targetCoordinatorSessionId'],
+        'targetCoordinatorSessionId',
+      );
+      if (!targetSessionId.ok) {
+        return targetSessionId;
+      }
+      const phase = requireEnum(command['phase'], PLANNING_HANDOFF_PHASES, 'phase');
+      if (!phase.ok) {
+        return phase;
+      }
+      const mapRevision = requireCount(command['mapRevision'], 'mapRevision');
+      if (!mapRevision.ok) {
+        return mapRevision;
+      }
+      const planRevision = requireCount(command['planRevision'], 'planRevision');
+      if (!planRevision.ok) {
+        return planRevision;
+      }
+      const graphId = requireNullableString(command['graphId'], 'graphId');
+      if (!graphId.ok) {
+        return graphId;
+      }
+      const graphVersion = requireNullableCount(command['graphVersion'], 'graphVersion');
+      if (!graphVersion.ok) {
+        return graphVersion;
+      }
+      if ((graphId.value === null) !== (graphVersion.value === null)) {
+        return fail('graphId 与 graphVersion 必须同时存在或同时为空');
+      }
+      const capsuleRef = requireNullableString(command['capsuleRef'], 'capsuleRef');
+      if (!capsuleRef.ok) {
+        return capsuleRef;
+      }
+      const expectedProposalRevision = requireNullableCount(
+        command['expectedProposalRevision'],
+        'expectedProposalRevision',
+      );
+      if (!expectedProposalRevision.ok) {
+        return expectedProposalRevision;
+      }
+      return ok({
+        ...base,
+        kind: 'record-planning-handoff',
+        proposalId: proposalId.value,
+        sourceCoordinatorSessionId: sourceSessionId.value as CoordinatorSessionId,
+        targetCoordinatorSessionId: targetSessionId.value as CoordinatorSessionId,
+        phase: phase.value,
+        mapRevision: mapRevision.value,
+        planRevision: planRevision.value,
+        graphId: graphId.value as GraphId | null,
+        graphVersion: graphVersion.value === null ? null : (graphVersion.value as GraphVersion),
+        capsuleRef: capsuleRef.value,
+        expectedProposalRevision: expectedProposalRevision.value,
+      });
+    }
+    case 'transition-to-execution': {
+      const cycle = requireNullableString(command['planningCycleId'], 'planningCycleId');
+      if (!cycle.ok) {
+        return cycle;
+      }
+      const graphId = requireString(command['graphId'], 'graphId');
+      if (!graphId.ok) {
+        return graphId;
+      }
+      const graphVersion = requireCount(command['graphVersion'], 'graphVersion');
+      if (!graphVersion.ok || graphVersion.value === 0) {
+        return fail('graphVersion 必须是正的安全整数');
+      }
+      const authorizationId = requireString(command['authorizationId'], 'authorizationId');
+      if (!authorizationId.ok) {
+        return authorizationId;
+      }
+      const authorizationVersion = requireCount(command['authorizationVersion'], 'authorizationVersion');
+      if (!authorizationVersion.ok || authorizationVersion.value === 0) {
+        return fail('authorizationVersion 必须是正的安全整数');
+      }
+      return ok({
+        ...base,
+        kind: 'transition-to-execution',
+        planningCycleId: cycle.value as PlanningCycleId | null,
+        graphId: graphId.value as GraphId,
+        graphVersion: graphVersion.value as GraphVersion,
+        authorizationId: authorizationId.value,
+        authorizationVersion: authorizationVersion.value,
+      });
+    }
+    case 'advance-map-revision': {
+      const mapRevision = requireCount(command['mapRevision'], 'mapRevision');
+      if (!mapRevision.ok || mapRevision.value === 0) {
+        return fail('mapRevision 必须是正的安全整数');
+      }
+      return ok({ ...base, kind: 'advance-map-revision', mapRevision: mapRevision.value });
+    }
     default:
       return fail(`未登记的 command variant: ${kind.value}`);
   }
@@ -587,6 +977,7 @@ type ScopeRow = {
   readonly mode: string;
   readonly control_state: string;
   readonly planning_cycle_id: string | null;
+  readonly map_revision: number;
   readonly graph_id: string | null;
   readonly graph_version: number | null;
   readonly authorization_id: string | null;
@@ -671,6 +1062,138 @@ type WakeAdmissionRow = {
   readonly admitted_at: number;
 };
 
+type GraphVersionRow = {
+  readonly coordination_scope_id: string;
+  readonly graph_id: string;
+  readonly graph_version: number;
+  readonly graph_generation: number;
+  readonly record_kind: string;
+  readonly parent_version: number | null;
+  readonly map_revision: number;
+  readonly plan_revision: number;
+  readonly orca_run_id: string;
+  readonly graph_json: string;
+  readonly recorded_at: number;
+};
+
+type AuthorizationRow = {
+  readonly coordination_scope_id: string;
+  readonly authorization_id: string;
+  readonly authorization_version: number;
+  readonly manifest_version: number;
+  readonly fingerprint: string;
+  readonly approval_ref: string;
+  readonly manifest_json: string;
+  readonly approved_at: number;
+};
+
+type PlanningHandoffRow = {
+  readonly coordination_scope_id: string;
+  readonly proposal_id: string;
+  readonly source_coordinator_session_id: string;
+  readonly target_coordinator_session_id: string;
+  readonly phase: string;
+  readonly map_revision: number;
+  readonly plan_revision: number;
+  readonly graph_id: string | null;
+  readonly graph_version: number | null;
+  readonly capsule_ref: string | null;
+  readonly proposal_revision: number;
+  readonly created_at: number;
+  readonly updated_at: number;
+};
+
+type PlanningResponsibilityRow = {
+  readonly coordination_scope_id: string;
+  readonly coordinator_session_id: string;
+  readonly source_proposal_id: string | null;
+  readonly assigned_at: number;
+};
+
+function decodeGraphVersionRow(row: GraphVersionRow): Decoded<GraphVersionRecord> {
+  if (!isGraphVersionRecordKind(row.record_kind)) {
+    return fail(`graph_versions.record_kind 取值不受支持: ${row.record_kind}`);
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(row.graph_json);
+  } catch (error) {
+    return fail(`graph_versions.graph_json 不是合法 JSON: ${describeError(error)}`);
+  }
+  const graph = decodeExecutionGraph(raw, 'graph_versions.graph_json');
+  if (!graph.ok) {
+    return graph;
+  }
+  if (graph.value.graphId !== row.graph_id || graph.value.generation !== row.graph_generation) {
+    return fail('graph_versions 的索引列与 JSON 负载不一致');
+  }
+  return ok({
+    graphId: row.graph_id as GraphId,
+    generation: row.graph_generation as GraphGeneration,
+    version: row.graph_version as GraphVersion,
+    recordKind: row.record_kind,
+    parentVersion: row.parent_version === null ? null : (row.parent_version as GraphVersion),
+    mapRevision: row.map_revision,
+    planRevision: row.plan_revision,
+    orcaRunId: row.orca_run_id,
+    graph: graph.value,
+    recordedAt: row.recorded_at,
+  });
+}
+
+function decodeAuthorizationRow(row: AuthorizationRow): Decoded<ExecutionAuthorizationRecord> {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(row.manifest_json);
+  } catch (error) {
+    return fail(`execution_authorizations.manifest_json 不是合法 JSON: ${describeError(error)}`);
+  }
+  const manifest = decodeManifestInput(raw, 'execution_authorizations.manifest_json');
+  if (!manifest.ok) {
+    return manifest;
+  }
+  return ok({
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    authorizationId: row.authorization_id,
+    authorizationVersion: row.authorization_version,
+    manifestVersion: row.manifest_version,
+    fingerprint: row.fingerprint,
+    manifest: manifest.value,
+    approvedAt: row.approved_at,
+    approvalRef: row.approval_ref,
+  });
+}
+
+function decodePlanningHandoffRow(row: PlanningHandoffRow): Decoded<PlanningHandoffRecord> {
+  if (!(PLANNING_HANDOFF_PHASES as readonly string[]).includes(row.phase)) {
+    return fail(`planning_handoffs.phase 取值不受支持: ${row.phase}`);
+  }
+  return ok({
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    proposalId: row.proposal_id,
+    sourceCoordinatorSessionId: row.source_coordinator_session_id as CoordinatorSessionId,
+    targetCoordinatorSessionId: row.target_coordinator_session_id as CoordinatorSessionId,
+    phase: row.phase as PlanningHandoffPhase,
+    mapRevision: row.map_revision,
+    planRevision: row.plan_revision,
+    graphId: row.graph_id as GraphId | null,
+    graphVersion: row.graph_version === null ? null : (row.graph_version as GraphVersion),
+    capsuleRef: row.capsule_ref,
+    proposalRevision: row.proposal_revision,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+}
+
+function decodePlanningResponsibilityRow(row: PlanningResponsibilityRow): PlanningResponsibilityRecord {
+  return {
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    coordinatorSessionId: row.coordinator_session_id as CoordinatorSessionId,
+    sourceProposalId: row.source_proposal_id,
+    assignedAt: row.assigned_at,
+  };
+}
+
 function decodeScopeRow(row: ScopeRow): Decoded<ScopeRecord> {
   if (!isCoordinationMode(row.mode)) {
     return fail(`scope.mode 取值不受支持: ${row.mode}`);
@@ -683,6 +1206,7 @@ function decodeScopeRow(row: ScopeRow): Decoded<ScopeRecord> {
     mode: row.mode,
     controlState: row.control_state,
     planningCycleId: row.planning_cycle_id as PlanningCycleId | null,
+    mapRevision: row.map_revision,
     graphId: row.graph_id as GraphId | null,
     graphVersion: row.graph_version as GraphVersion | null,
     authorizationId: row.authorization_id,
@@ -1022,6 +1546,72 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
   const readLeases = (scopeId: string): Decoded<readonly LeaseRecord[]> =>
     decodeRows(readLeaseRows(scopeId), decodeLeaseRow);
 
+  const readGraphVersionRows = (scopeId: string, graphId: string): readonly GraphVersionRow[] =>
+    many<GraphVersionRow>(
+      db.prepare(
+        `SELECT * FROM graph_versions
+         WHERE coordination_scope_id = ? AND graph_id = ?
+         ORDER BY graph_version`,
+      ),
+      scopeId,
+      graphId,
+    );
+
+  const readGraphVersionRow = (
+    scopeId: string,
+    graphId: string,
+    graphVersion: number,
+  ): GraphVersionRow | undefined =>
+    one<GraphVersionRow>(
+      db.prepare(
+        `SELECT * FROM graph_versions
+         WHERE coordination_scope_id = ? AND graph_id = ? AND graph_version = ?`,
+      ),
+      scopeId,
+      graphId,
+      graphVersion,
+    );
+
+  const readAuthorizationRows = (scopeId: string): readonly AuthorizationRow[] =>
+    many<AuthorizationRow>(
+      db.prepare(
+        `SELECT * FROM execution_authorizations
+         WHERE coordination_scope_id = ? ORDER BY authorization_version`,
+      ),
+      scopeId,
+    );
+
+  const readAuthorizationRow = (scopeId: string, authorizationId: string): AuthorizationRow | undefined =>
+    one<AuthorizationRow>(
+      db.prepare(
+        'SELECT * FROM execution_authorizations WHERE coordination_scope_id = ? AND authorization_id = ?',
+      ),
+      scopeId,
+      authorizationId,
+    );
+
+  const readPlanningHandoffRows = (scopeId: string): readonly PlanningHandoffRow[] =>
+    many<PlanningHandoffRow>(
+      db.prepare(
+        `SELECT * FROM planning_handoffs
+         WHERE coordination_scope_id = ? ORDER BY created_at, proposal_id`,
+      ),
+      scopeId,
+    );
+
+  const readPlanningHandoffRow = (scopeId: string, proposalId: string): PlanningHandoffRow | undefined =>
+    one<PlanningHandoffRow>(
+      db.prepare('SELECT * FROM planning_handoffs WHERE coordination_scope_id = ? AND proposal_id = ?'),
+      scopeId,
+      proposalId,
+    );
+
+  const readPlanningResponsibilityRow = (scopeId: string): PlanningResponsibilityRow | undefined =>
+    one<PlanningResponsibilityRow>(
+      db.prepare('SELECT * FROM planning_responsibility WHERE coordination_scope_id = ?'),
+      scopeId,
+    );
+
   const buildSnapshot = (scopeId: string, scope: ScopeRecord): Decoded<CoordinationSnapshot> => {
     const leases = readLeases(scopeId);
     if (!leases.ok) {
@@ -1046,6 +1636,11 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
     if (!intents.ok) {
       return intents;
     }
+    const handoffs = decodeRows(readPlanningHandoffRows(scopeId), decodePlanningHandoffRow);
+    if (!handoffs.ok) {
+      return handoffs;
+    }
+    const responsibilityRow = readPlanningResponsibilityRow(scopeId);
     return ok({
       scope,
       sessions: sessions.value,
@@ -1055,6 +1650,9 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       ticketClaims: claims.value,
       pendingInteractions: interactions.value,
       unresolvedIntents: intents.value,
+      planningHandoffs: handoffs.value,
+      planningResponsibility:
+        responsibilityRow === undefined ? null : decodePlanningResponsibilityRow(responsibilityRow),
     });
   };
 
@@ -1147,6 +1745,67 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           }
           return { kind: 'wake-admissions', admissions: admissions.value };
         }
+        case 'graph-versions': {
+          const versions = decodeRows(readGraphVersionRows(scopeId, input.graphId), decodeGraphVersionRow);
+          if (!versions.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: versions.message };
+          }
+          return { kind: 'graph-versions', versions: versions.value };
+        }
+        case 'graph-version': {
+          const row = readGraphVersionRow(scopeId, input.graphId, input.graphVersion);
+          if (row === undefined) {
+            return { kind: 'graph-version', version: null };
+          }
+          const version = decodeGraphVersionRow(row);
+          if (!version.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: version.message };
+          }
+          return { kind: 'graph-version', version: version.value };
+        }
+        case 'authorizations': {
+          const authorizations = decodeRows(readAuthorizationRows(scopeId), decodeAuthorizationRow);
+          if (!authorizations.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: authorizations.message };
+          }
+          return { kind: 'authorizations', authorizations: authorizations.value };
+        }
+        case 'authorization': {
+          const row = readAuthorizationRow(scopeId, input.authorizationId);
+          if (row === undefined) {
+            return { kind: 'authorization', authorization: null };
+          }
+          const authorization = decodeAuthorizationRow(row);
+          if (!authorization.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: authorization.message };
+          }
+          return { kind: 'authorization', authorization: authorization.value };
+        }
+        case 'planning-handoffs': {
+          const handoffs = decodeRows(readPlanningHandoffRows(scopeId), decodePlanningHandoffRow);
+          if (!handoffs.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: handoffs.message };
+          }
+          return { kind: 'planning-handoffs', handoffs: handoffs.value };
+        }
+        case 'planning-handoff': {
+          const row = readPlanningHandoffRow(scopeId, input.proposalId);
+          if (row === undefined) {
+            return { kind: 'planning-handoff', handoff: null };
+          }
+          const handoff = decodePlanningHandoffRow(row);
+          if (!handoff.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: handoff.message };
+          }
+          return { kind: 'planning-handoff', handoff: handoff.value };
+        }
+        case 'planning-responsibility': {
+          const row = readPlanningResponsibilityRow(scopeId);
+          return {
+            kind: 'planning-responsibility',
+            responsibility: row === undefined ? null : decodePlanningResponsibilityRow(row),
+          };
+        }
         default:
           return { kind: 'rejected', code: 'invalid_query', message: '未登记的 query variant' };
       }
@@ -1175,6 +1834,255 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
     nextRevision: number,
   ): Decoded<null> => {
     switch (cmd.kind) {
+      case 'initialize-scope': {
+        db.prepare(
+          `INSERT INTO scope (
+             coordination_scope_id, mode, control_state, planning_cycle_id,
+             graph_id, graph_version, authorization_id, authorization_version, revision, updated_at
+           ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?)`,
+        ).run(cmd.coordinationScopeId, cmd.mode, cmd.controlState, cmd.planningCycleId, nextRevision, now);
+        db.prepare(
+          `INSERT INTO session_registry (
+             coordination_scope_id, coordinator_session_id, coordinator_model_configuration_ref,
+             lifecycle_state, registered_at
+           ) VALUES (?, ?, ?, 'registered', ?)`,
+        ).run(cmd.coordinationScopeId, cmd.coordinatorSessionId, cmd.coordinatorModelConfigurationRef, now);
+        db.prepare(
+          `INSERT INTO planning_responsibility (
+             coordination_scope_id, coordinator_session_id, source_proposal_id, assigned_at
+           ) VALUES (?, ?, NULL, ?)`,
+        ).run(cmd.coordinationScopeId, cmd.coordinatorSessionId, now);
+        return ok(null);
+      }
+      case 'record-graph-version': {
+        const head = db
+          .prepare(
+            `SELECT MAX(graph_version) AS head FROM graph_versions
+             WHERE coordination_scope_id = ? AND graph_id = ?`,
+          )
+          .get(cmd.coordinationScopeId, cmd.graphId) as { readonly head: number | null } | undefined;
+        const headVersion = head?.head ?? null;
+        if (cmd.recordKind === 'initial') {
+          if (headVersion !== null) {
+            return fail('该 GraphId 已有 GraphVersion，initial 只能追加一次', 'constraint');
+          }
+          if (cmd.graphVersion !== 1) {
+            return fail('initial GraphVersion 必须为 1', 'constraint');
+          }
+          if (cmd.parentVersion !== null) {
+            return fail('initial GraphVersion 不得带 parentVersion', 'constraint');
+          }
+        } else {
+          if (headVersion === null) {
+            return fail('accepted_revision 必须基于已存在的 GraphVersion', 'constraint');
+          }
+          if (cmd.parentVersion !== headVersion) {
+            return fail(`parentVersion 必须等于当前 head ${headVersion}`, 'constraint');
+          }
+          if (cmd.graphVersion !== headVersion + 1) {
+            return fail(`GraphVersion 必须连续追加，下一个为 ${headVersion + 1}`, 'constraint');
+          }
+        }
+        db.prepare(
+          `INSERT INTO graph_versions (
+             coordination_scope_id, graph_id, graph_version, graph_generation, record_kind, parent_version,
+             map_revision, plan_revision, orca_run_id, graph_json, recorded_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.graphId,
+          cmd.graphVersion,
+          cmd.generation,
+          cmd.recordKind,
+          cmd.parentVersion,
+          cmd.mapRevision,
+          cmd.planRevision,
+          cmd.orcaRunId,
+          JSON.stringify(cmd.graph),
+          now,
+        );
+        // 追加与「当前图」指针在同一事务里推进：图体永远只有一条权威记录，指针不可能指到不存在的版本。
+        db.prepare(
+          'UPDATE scope SET graph_id = ?, graph_version = ?, updated_at = ? WHERE coordination_scope_id = ?',
+        ).run(cmd.graphId, cmd.graphVersion, now, cmd.coordinationScopeId);
+        return ok(null);
+      }
+      case 'record-authorization': {
+        const head = db
+          .prepare(
+            `SELECT MAX(authorization_version) AS head FROM execution_authorizations
+             WHERE coordination_scope_id = ?`,
+          )
+          .get(cmd.coordinationScopeId) as { readonly head: number | null } | undefined;
+        const expected = (head?.head ?? 0) + 1;
+        if (cmd.authorizationVersion !== expected) {
+          return fail(`authorizationVersion 必须为 ${expected}`, 'constraint');
+        }
+        db.prepare(
+          `INSERT INTO execution_authorizations (
+             coordination_scope_id, authorization_id, authorization_version, manifest_version,
+             fingerprint, approval_ref, manifest_json, approved_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.authorizationId,
+          cmd.authorizationVersion,
+          cmd.manifestVersion,
+          cmd.fingerprint,
+          cmd.approvalRef,
+          JSON.stringify(cmd.manifest),
+          now,
+        );
+        // 授权记录与 Scope 指针同批推进：不存在「指针指向某份授权，而该授权不在历史里」的中间态。
+        db.prepare(
+          `UPDATE scope SET authorization_id = ?, authorization_version = ?, updated_at = ?
+           WHERE coordination_scope_id = ?`,
+        ).run(cmd.authorizationId, cmd.authorizationVersion, now, cmd.coordinationScopeId);
+        return ok(null);
+      }
+      case 'record-planning-handoff': {
+        const existing = readPlanningHandoffRow(cmd.coordinationScopeId, cmd.proposalId);
+        if (cmd.expectedProposalRevision === null) {
+          if (existing !== undefined) {
+            return fail(`交接提案 ${cmd.proposalId} 已存在`, 'constraint');
+          }
+          if (cmd.phase !== 'prepared') {
+            return fail('新提案必须以 prepared 阶段创建', 'invalid_state');
+          }
+          db.prepare(
+            `INSERT INTO planning_handoffs (
+               coordination_scope_id, proposal_id, source_coordinator_session_id, target_coordinator_session_id,
+               phase, map_revision, plan_revision, graph_id, graph_version, capsule_ref,
+               proposal_revision, created_at, updated_at
+             ) VALUES (?, ?, ?, ?, 'prepared', ?, ?, ?, ?, ?, 1, ?, ?)`,
+          ).run(
+            cmd.coordinationScopeId,
+            cmd.proposalId,
+            cmd.sourceCoordinatorSessionId,
+            cmd.targetCoordinatorSessionId,
+            cmd.mapRevision,
+            cmd.planRevision,
+            cmd.graphId,
+            cmd.graphVersion,
+            cmd.capsuleRef,
+            now,
+            now,
+          );
+          return ok(null);
+        }
+        if (existing === undefined) {
+          return fail(`交接提案 ${cmd.proposalId} 不存在`, 'invalid_state');
+        }
+        const current = decodePlanningHandoffRow(existing);
+        if (!current.ok) {
+          return current;
+        }
+        if (existing.proposal_revision !== cmd.expectedProposalRevision) {
+          return fail(
+            `交接提案 revision ${cmd.expectedProposalRevision} 已过期，当前为 ${existing.proposal_revision}`,
+            'constraint',
+          );
+        }
+        if (
+          cmd.sourceCoordinatorSessionId !== current.value.sourceCoordinatorSessionId ||
+          cmd.targetCoordinatorSessionId !== current.value.targetCoordinatorSessionId
+        ) {
+          return fail('交接提案的 Source/Target 在创建后不可更改', 'constraint');
+        }
+        if (!PLANNING_HANDOFF_TRANSITIONS[current.value.phase].includes(cmd.phase)) {
+          return fail(`不允许从 ${current.value.phase} 迁移到 ${cmd.phase}`, 'invalid_state');
+        }
+        db.prepare(
+          `UPDATE planning_handoffs SET
+             phase = ?, map_revision = ?, plan_revision = ?, graph_id = ?, graph_version = ?,
+             capsule_ref = ?, proposal_revision = proposal_revision + 1, updated_at = ?
+           WHERE coordination_scope_id = ? AND proposal_id = ?`,
+        ).run(
+          cmd.phase,
+          cmd.mapRevision,
+          cmd.planRevision,
+          cmd.graphId,
+          cmd.graphVersion,
+          cmd.capsuleRef,
+          now,
+          cmd.coordinationScopeId,
+          cmd.proposalId,
+        );
+        if (cmd.phase === 'cutover') {
+          db.prepare(
+            `INSERT INTO planning_responsibility (
+               coordination_scope_id, coordinator_session_id, source_proposal_id, assigned_at
+             ) VALUES (?, ?, ?, ?)
+             ON CONFLICT (coordination_scope_id) DO UPDATE SET
+               coordinator_session_id = excluded.coordinator_session_id,
+               source_proposal_id = excluded.source_proposal_id,
+               assigned_at = excluded.assigned_at`,
+          ).run(cmd.coordinationScopeId, cmd.targetCoordinatorSessionId, cmd.proposalId, now);
+        }
+        return ok(null);
+      }
+      case 'transition-to-execution': {
+        const active = db
+          .prepare(
+            `SELECT * FROM leases
+             WHERE coordination_scope_id = ? AND lease_kind = 'execution_coordination' AND released_at IS NULL`,
+          )
+          .get(cmd.coordinationScopeId) as LeaseRow | undefined;
+        if (active !== undefined && active.coordinator_session_id !== cmd.writer.coordinatorSessionId) {
+          return fail('Execution Coordination Lease 已由其它 Coordinator Session 持有', 'constraint');
+        }
+        db.prepare(
+          `UPDATE scope SET
+             mode = 'execution_coordination', planning_cycle_id = ?, graph_id = ?, graph_version = ?,
+             authorization_id = ?, authorization_version = ?, updated_at = ?
+           WHERE coordination_scope_id = ?`,
+        ).run(
+          cmd.planningCycleId,
+          cmd.graphId,
+          cmd.graphVersion,
+          cmd.authorizationId,
+          cmd.authorizationVersion,
+          now,
+          cmd.coordinationScopeId,
+        );
+        const maxRow = db
+          .prepare(
+            `SELECT MAX(fencing_generation) AS generation FROM leases
+             WHERE coordination_scope_id = ? AND lease_kind = 'execution_coordination'`,
+          )
+          .get(cmd.coordinationScopeId) as { readonly generation: number | null } | undefined;
+        db.prepare(
+          `INSERT INTO leases (
+             coordination_scope_id, lease_kind, coordinator_session_id, runtime_incarnation_id,
+             fencing_generation, acquired_at, expires_at, released_at
+           ) VALUES (?, 'execution_coordination', ?, ?, ?, ?, NULL, NULL)
+           ON CONFLICT (coordination_scope_id, lease_kind, coordinator_session_id) DO UPDATE SET
+             runtime_incarnation_id = excluded.runtime_incarnation_id,
+             fencing_generation = excluded.fencing_generation,
+             acquired_at = excluded.acquired_at,
+             expires_at = NULL,
+             released_at = NULL`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.writer.coordinatorSessionId,
+          cmd.writer.runtimeIncarnationId,
+          nextFencingGeneration(maxRow?.generation ?? null),
+          now,
+        );
+        return ok(null);
+      }
+      case 'advance-map-revision': {
+        const current = readScopeRow(cmd.coordinationScopeId)?.map_revision ?? 0;
+        if (cmd.mapRevision !== current + 1) {
+          return fail(`mapRevision 必须连续推进，下一个为 ${current + 1}`, 'constraint');
+        }
+        db.prepare('UPDATE scope SET map_revision = ?, updated_at = ? WHERE coordination_scope_id = ?').run(
+          cmd.mapRevision,
+          now,
+          cmd.coordinationScopeId,
+        );
+        return ok(null);
+      }
       case 'create-scope': {
         db.prepare(
           `INSERT INTO scope (
@@ -1564,7 +2472,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         };
       }
 
-      if (cmd.kind === 'create-scope') {
+      if (cmd.kind === 'create-scope' || cmd.kind === 'initialize-scope') {
         if (scopeRow !== undefined) {
           rollback();
           return rejected('constraint', `Scope ${cmd.coordinationScopeId} 已存在`);
@@ -1617,7 +2525,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         rollback();
         return rejected(applied.code, applied.message);
       }
-      if (advancesRevision && cmd.kind !== 'create-scope') {
+      if (advancesRevision && cmd.kind !== 'create-scope' && cmd.kind !== 'initialize-scope') {
         db.prepare('UPDATE scope SET revision = ?, updated_at = ? WHERE coordination_scope_id = ?').run(
           nextRevision,
           now,

@@ -123,7 +123,7 @@
 | 缺字段不提交批准 | IP-6 | `tests/domain/execution-authorization.test.ts` | 缺 baseline HEAD 或恢复上限的 Manifest | 拒绝进入待批准 | `pnpm exec vitest run tests/domain/execution-authorization.test.ts` |
 | 恢复上限显式绑定且取默认值 | IP-6 | 同上 | 未指定恢复上限的 Manifest | 写入默认值 1，无空值 | 同上 |
 | Manifest 与候选图严格对应 | IP-6 | 同上 | 引用不一致的 Manifest | 批准失败并报告不一致 | 同上 |
-| 初始化向导不询问恢复上限 | IP-6 | `tests/application/authorization-service.test.ts`、`tests/bootstrap/coordinator-runtime.test.ts` | Scope 初始化路径 | 向导不出现该字段询问 | `pnpm exec vitest run tests/application/authorization-service.test.ts tests/bootstrap/coordinator-runtime.test.ts` |
+| 初始化向导不询问恢复上限 | IP-6 | `tests/application/authorization-service.test.ts`、`tests/application/initialize-scope.test.ts` | Scope 初始化路径 | 初始化输入与持久化记录不含恢复上限；该值只在 Manifest 组装时补齐 | `pnpm exec vitest run tests/application/authorization-service.test.ts tests/application/initialize-scope.test.ts` |
 | 单次决定覆盖整份 Manifest | IP-6 | `tests/application/authorization-service.test.ts` | 完整 Manifest 与一次批准 | 授权覆盖全部字段并带版本 | 同上 |
 | 未获批准时不产生可执行授权 | IP-6 | 同上 | 未批准或拒绝 | 无有效授权，候选图惰性 | 同上 |
 | 策略内操作不再逐次审批 | IP-6 | 同上 | 已批准 Manifest | 策略内操作通过且受 revision 约束 | 同上 |
@@ -161,6 +161,7 @@
 - `src/domain/planning/graph-compiler.ts`
 - `src/domain/planning/budget-policy.ts`
 - `src/domain/planning/execution-authorization.ts`
+- `src/application/planning/scope-read.ts`（Scope 只读取回的单一 seam）
 - `src/application/planning/route-map-service.ts`
 - `src/application/planning/graph-generation.ts`
 - `src/application/planning/graph-history.ts`

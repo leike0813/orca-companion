@@ -10,9 +10,18 @@
  * 且内层重试已在 `resolveChatModel` 中关闭，避免次数相乘（D15）。
  */
 
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 import { END, START, StateGraph } from '@langchain/langgraph';
 
+import type { CoordinationMode } from '../../domain/coordination/mode.js';
+import {
+  planningToolset,
+  toBindableTools,
+  type PlanningToolDefinition,
+  type PlanningToolFacts,
+  type PlanningToolServices,
+} from './planning-tools.js';
 import {
   COORDINATOR_GRAPH_CHANNELS,
   type CoordinatorGraphState,
@@ -28,7 +37,46 @@ import {
 export type CoordinatorGraphDependencies = CoordinatorNodeDependencies & {
   /** 由 storage adapter 提供；图只消费它，不创建它。 */
   readonly checkpointer: BaseCheckpointSaver;
+  /**
+   * 本次组装要暴露的规划工具。
+   *
+   * 可见性已由 `planningToolset` 按模式与事实决定，图只做协议适配；不传表示不暴露任何工具，因此
+   * 「忘记配置」不会意外打开规划写入。
+   */
+  readonly planningTools?: readonly PlanningToolDefinition[];
 };
+
+/**
+ * 按模式注册规划工具。
+ *
+ * 模式门在图的组装处再判一次：即使调用方把工具集传错，非规划模式下也不会把规划工具绑到模型上。
+ */
+export function registerPlanningTools(input: {
+  readonly mode: CoordinationMode;
+  readonly facts: PlanningToolFacts;
+  readonly services: PlanningToolServices;
+}): readonly PlanningToolDefinition[] {
+  if (input.mode !== 'route_planning') {
+    return [];
+  }
+  return planningToolset({ ...input.facts, mode: input.mode }, input.services);
+}
+
+/**
+ * 把已过滤的规划工具绑定到模型上。
+ *
+ * 绑定后的对象仍是可 invoke 的模型：节点只依赖 `invoke`，因此这里在图的组装边界完成协议适配，
+ * 不在节点里引入工具体系。模型未实现 `bindTools` 时保持原样，不伪造工具能力。
+ */
+export function bindPlanningTools(
+  model: BaseChatModel,
+  definitions: readonly PlanningToolDefinition[],
+): BaseChatModel {
+  if (definitions.length === 0 || model.bindTools === undefined) {
+    return model;
+  }
+  return model.bindTools([...toBindableTools(definitions)]) as unknown as BaseChatModel;
+}
 
 /** 条件边：继续消费工作、结束于挂起，或直接结束（失速 / 阻塞由 Controller 处理）。 */
 export function routeAfterModel(state: CoordinatorGraphState): typeof MODEL_NODE | typeof SUSPEND_NODE | typeof END {
@@ -49,8 +97,9 @@ export function routeAtStart(state: CoordinatorGraphState): typeof MODEL_NODE | 
  * 调用方负责传入 checkpointer 与 chat model；这个函数不创建 provider、不打开数据库、不读时钟。
  */
 export function buildCoordinatorGraph(dependencies: CoordinatorGraphDependencies) {
+  const model = bindPlanningTools(dependencies.model, dependencies.planningTools ?? []);
   return new StateGraph(COORDINATOR_GRAPH_CHANNELS)
-    .addNode(MODEL_NODE, createModelNode(dependencies))
+    .addNode(MODEL_NODE, createModelNode({ ...dependencies, model }))
     .addNode(
       SUSPEND_NODE,
       createSuspendNode({

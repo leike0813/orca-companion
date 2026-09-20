@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -30,6 +30,10 @@ export const COORDINATION_TABLES: readonly string[] = [
   'operation_intents',
   'budget_counters',
   'wake_admissions',
+  'graph_versions',
+  'execution_authorizations',
+  'planning_handoffs',
+  'planning_responsibility',
 ];
 
 export type Migration = {
@@ -159,9 +163,80 @@ const MIGRATION_2: readonly string[] = [
    ) STRICT`,
 ];
 
+/**
+ * M3：Execution Graph 追加历史、版本化 Execution Authorization 与 Route Planning 交接记录。
+ *
+ * 图体只存在于 `graph_versions` 的追加记录里：`graph_id` 与 `graph_generation` 是索引列，与 JSON
+ * 负载中的同名字段在写入时校验一致，因此「当前图」永远是某一条确切 GraphVersion，而不是一个可被
+ * 就地改写的引用。授权记录只保存 Manifest 正文、版本与指纹，不保存批准过程的对话。
+ *
+ * `planning_handoffs` 上的部分唯一索引让一个 Scope 同时最多存在一个未终结提案；`planning_responsibility`
+ * 每 Scope 至多一行，因此不可能出现两个规划责任方。
+ */
+const MIGRATION_3: readonly string[] = [
+  // 地图 revision 是 Companion 自己的规划计数：tracker 只保存地图正文，本地记录「当前读到哪一版」，
+  // 候选图与未决交接提案据此判定过期。默认 0 表示尚未写入过地图。
+  `ALTER TABLE scope ADD COLUMN map_revision INTEGER NOT NULL DEFAULT 0`,
+  `CREATE TABLE IF NOT EXISTS graph_versions (
+     coordination_scope_id TEXT NOT NULL,
+     graph_id TEXT NOT NULL,
+     graph_version INTEGER NOT NULL,
+     graph_generation INTEGER NOT NULL,
+     record_kind TEXT NOT NULL,
+     parent_version INTEGER,
+     map_revision INTEGER NOT NULL,
+     plan_revision INTEGER NOT NULL,
+     orca_run_id TEXT NOT NULL,
+     graph_json TEXT NOT NULL,
+     recorded_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, graph_id, graph_version)
+   ) STRICT`,
+  `CREATE INDEX IF NOT EXISTS graph_versions_head
+     ON graph_versions (coordination_scope_id, graph_id, graph_version DESC)`,
+  `CREATE TABLE IF NOT EXISTS execution_authorizations (
+     coordination_scope_id TEXT NOT NULL,
+     authorization_id TEXT NOT NULL,
+     authorization_version INTEGER NOT NULL,
+     manifest_version INTEGER NOT NULL,
+     fingerprint TEXT NOT NULL,
+     approval_ref TEXT NOT NULL,
+     manifest_json TEXT NOT NULL,
+     approved_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, authorization_id)
+   ) STRICT`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS execution_authorizations_version
+     ON execution_authorizations (coordination_scope_id, authorization_version)`,
+  `CREATE TABLE IF NOT EXISTS planning_handoffs (
+     coordination_scope_id TEXT NOT NULL,
+     proposal_id TEXT NOT NULL,
+     source_coordinator_session_id TEXT NOT NULL,
+     target_coordinator_session_id TEXT NOT NULL,
+     phase TEXT NOT NULL,
+     map_revision INTEGER NOT NULL,
+     plan_revision INTEGER NOT NULL,
+     graph_id TEXT,
+     graph_version INTEGER,
+     capsule_ref TEXT,
+     proposal_revision INTEGER NOT NULL,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, proposal_id)
+   ) STRICT`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS planning_handoffs_single_open
+     ON planning_handoffs (coordination_scope_id)
+     WHERE phase IN ('prepared', 'reviewed')`,
+  `CREATE TABLE IF NOT EXISTS planning_responsibility (
+     coordination_scope_id TEXT PRIMARY KEY,
+     coordinator_session_id TEXT NOT NULL,
+     source_proposal_id TEXT,
+     assigned_at INTEGER NOT NULL
+   ) STRICT`,
+];
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, statements: MIGRATION_1 },
   { version: 2, statements: MIGRATION_2 },
+  { version: 3, statements: MIGRATION_3 },
 ];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {
