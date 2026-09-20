@@ -185,15 +185,15 @@ test('doctor 命令把机器输出写 stdout、诊断写 stderr，并用退出�
   expect(broken.stderr.join('')).toContain('doctor: hosts: capability-missing');
 });
 
-test('未提供或未知子命令时给出明确拒绝，不假装支持 TUI 与 status', async () => {
+test('未提供或未知子命令时给出明确拒绝，不假装支持 TUI', async () => {
   const noArgs = captureIO();
   expect(await main([], environment, noArgs.io, { createDoctorProbe: () => probe() })).toBe(2);
-  expect(noArgs.stderr.join('')).toContain('orca-companion 目前只提供 doctor');
+  expect(noArgs.stderr.join('')).toContain('orca-companion 目前只提供 doctor 与 status');
   expect(noArgs.stdout).toEqual([]);
 
   const unknown = captureIO();
-  expect(await main(['status', '--json'], environment, unknown.io, { createDoctorProbe: () => probe() })).toBe(2);
-  expect(unknown.stderr.join('')).toContain('未知或尚未提供的子命令: status');
+  expect(await main(['tui', '--json'], environment, unknown.io, { createDoctorProbe: () => probe() })).toBe(2);
+  expect(unknown.stderr.join('')).toContain('未知或尚未提供的子命令: tui');
 
   const help = captureIO();
   expect(await main(['--help'], environment, help.io, { createDoctorProbe: () => probe() })).toBe(0);

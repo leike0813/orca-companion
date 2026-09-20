@@ -81,11 +81,9 @@
 ## 已知缺口
 
 - `orca repo add` 不在 M0 登记的 26 个操作内，但隔离探针必须先把一次性仓库注册进 Orca 才能创建 worktree 与终端。探针把它当作夹具现场搭建，在 operation catalog 之外用同一受限进程边界直接调用；控制闭环本身全部经 `ExecutionBackend`。
-- Orca 没有公开的 `repo remove`。每次运行探针都会在 Orca 的 repo 列表中长期留下一个 `/tmp` 路径。
-- 探针按设计保留现场，需要用户授权后才能清理。截至 2026-09-20 的遗留对象：
-  - 一次性仓库：`/tmp/orca-companion-m0-probe.KYmCtX`（本次）、`.7L7n42`、`.05HtM7`、`.6sPaSO`、`.973gCw`、`.G7oFcE`，以及 2026-09-18 的 `.AAo1Yz`；
-  - 一次性 Run 与 Dispatch 各自保留 receipt 与 terminal archive；
-  - 每个已结算但未释放的 Worker 终端在 `worker-list` 中显示 `terminalState: reclaimable`。
+- Orca 没有公开的 `repo remove`，`worktree rm` 也会拒绝受保护的 main worktree（`Refusing to delete protected worktree path`）。回收一次性探针仓库只能走 `orca project setup-delete --setup <repoId>`，它同时清掉注册的 repo 兼容记录；Orca 不会删除磁盘目录。
+- 探针按设计保留现场，需要用户授权后才能清理。2026-09-20 已按授权回收全部 7 个一次性场景（2026-09-18 的 `.AAo1Yz`、本次五次运行，以及用户自跑的 `.KYmCtX`）：先 `worker-release` 结算 Worker，再 `terminal close --worktree <sel> --all`，再 `project setup-delete`，最后删除 `/tmp/orca-companion-m0-probe.*` 目录。repo、worktree、终端与磁盘目录均已归零，旧路径上的 `worktree show` 返回 `selector_not_found`。
+- Run / Task / Dispatch 记录属于 Orca 运行事实，公开 CLI 没有单条删除入口，6 条探针 Run 仍留在编排历史里。`orchestration reset` 是全局破坏性恢复口，不用于清理。已释放 Worker 的 terminal archive 仍可经 `worker-read --dispatch <id>` 读回，回收没有丢掉探针证据。
 
 ## 变更规则
 

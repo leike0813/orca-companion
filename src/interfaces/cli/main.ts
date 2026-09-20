@@ -1,8 +1,8 @@
 /**
  * IP-6 / MOD-05：`orca-companion` 顶层 CLI 入口。
  *
- * M0 只提供 `doctor`；TUI 与 `status` 分别属于 M2 与 M1，这里明确拒绝而不是假装支持。
- * 入口不要求 TTY、不加载 Ink/React、不直接调用 adapter（只消费 Bootstrap 注入的 `DoctorProbe`），
+ * 目前提供 `doctor` 与只读的 `status`；TUI 属于 M2，这里明确拒绝而不是假装支持。
+ * 入口不要求 TTY、不加载 Ink/React、不直接调用 adapter（只消费 Bootstrap 注入的能力），
  * 也不在查询时续租或对账。机器输出只写标准输出，诊断只写标准错误。
  */
 
@@ -10,11 +10,17 @@ import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { createOrcaDoctorProbe, type DoctorProbe } from '../../bootstrap/doctor.js';
+import {
+  openRepositoryCoordinationStore,
+  type CoordinationStoreOpenResult,
+} from '../../bootstrap/composition.js';
 import { defaultCliIO, runDoctorCommand, type CliIO } from './doctor-command.js';
+import { runStatus } from './status-command.js';
 
 export const USAGE = [
   '用法:',
-  '  orca-companion doctor    核验 Orca 环境与 M0 必需能力（无 TTY 可运行）',
+  '  orca-companion doctor                          核验 Orca 环境与 M0 必需能力（无 TTY 可运行）',
+  '  orca-companion status [--json]                 只读输出当前 Coordination Scope 状态',
 ].join('\n');
 
 export type CliEnvironment = {
@@ -25,6 +31,7 @@ export type CliEnvironment = {
 
 export type CliDependencies = {
   readonly createDoctorProbe?: (environment: CliEnvironment) => DoctorProbe;
+  readonly openCoordinationStore?: (environment: CliEnvironment) => Promise<CoordinationStoreOpenResult>;
 };
 
 /**
@@ -59,6 +66,23 @@ export async function main(
     const createProbe = dependencies.createDoctorProbe ?? createOrcaDoctorProbe;
     return await runDoctorCommand(createProbe(environment), io);
   }
+  if (command === 'status') {
+    const parsed = parseStatusArguments(argv.slice(1));
+    if (!parsed.ok) {
+      io.writeStderr(`${parsed.message}\n${USAGE}\n`);
+      return 2;
+    }
+    const openStore =
+      dependencies.openCoordinationStore ??
+      ((target: CliEnvironment) =>
+        // status 是只读操作：只读打开，不做 migration、不创建目录、不产生写入。
+        openRepositoryCoordinationStore({ repositoryPath: target.cwd, env: target.env, readOnly: true }));
+    return await runStatus({
+      openStore: () => openStore(environment),
+      json: parsed.json,
+      io,
+    });
+  }
   if (command === 'help' || command === '--help' || command === '-h') {
     io.writeStdout(`${USAGE}\n`);
     return 0;
@@ -69,10 +93,22 @@ export async function main(
   }
   io.writeStderr(
     command === undefined
-      ? `orca-companion 目前只提供 doctor；前台 TUI 属于 M2，status 属于 M1。\n${USAGE}\n`
+      ? `orca-companion 目前只提供 doctor 与 status；前台 TUI 属于 M2。\n${USAGE}\n`
       : `未知或尚未提供的子命令: ${command}\n${USAGE}\n`,
   );
   return 2;
+}
+
+type StatusArguments =
+  | { readonly ok: true; readonly json: boolean }
+  | { readonly ok: false; readonly message: string };
+
+function parseStatusArguments(argv: readonly string[]): StatusArguments {
+  const unsupported = argv.find((argument) => argument !== '--json');
+  if (unsupported !== undefined) {
+    return { ok: false, message: `status 不支持参数: ${unsupported}` };
+  }
+  return { ok: true, json: argv.includes('--json') };
 }
 
 function isDirectInvocation(): boolean {
