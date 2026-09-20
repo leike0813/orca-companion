@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -17,7 +17,8 @@ export const SCHEMA_VERSION_KEY = 'schema_version';
  * M1 持久化基线的最小表集。
  *
  * 刻意不包含会话消息、图位置或任何外部事实的镜像：那些事实属于 checkpointer、Orca 或 tracker，
- * 复制进本库只会产生第二份真值。
+ * 复制进本库只会产生第二份真值。`wake_admissions` 只记录「哪些 source revision 已经随哪个
+ * WakeBatchId 准入过」，不保存批内容——内容留在 checkpoint 里。
  */
 export const COORDINATION_TABLES: readonly string[] = [
   'meta',
@@ -28,6 +29,7 @@ export const COORDINATION_TABLES: readonly string[] = [
   'pending_interactions',
   'operation_intents',
   'budget_counters',
+  'wake_admissions',
 ];
 
 export type Migration = {
@@ -137,7 +139,30 @@ const MIGRATION_1: readonly string[] = [
    ) STRICT`,
 ];
 
-export const MIGRATIONS: readonly Migration[] = [{ version: 1, statements: MIGRATION_1 }];
+/**
+ * M2：Wake Batch 的 source admission。
+ *
+ * 唯一键是 Scope + Session + WakeBatchId，因此同一 batch 无论重放多少次都只有一条记录。
+ * 值只含 source revision 引用与 admission 状态：Wake Batch 的内容与已提交历史留在 checkpoint，
+ * 本库不保留副本。两个库之间没有跨库事务，所以这个表存在的意义是让恢复路径能按稳定 batch ID
+ * 判断「这份 Actionable Work 是否已经注入过」。
+ */
+const MIGRATION_2: readonly string[] = [
+  `CREATE TABLE IF NOT EXISTS wake_admissions (
+     coordination_scope_id TEXT NOT NULL,
+     coordinator_session_id TEXT NOT NULL,
+     wake_batch_id TEXT NOT NULL,
+     admission_state TEXT NOT NULL,
+     source_revisions TEXT NOT NULL,
+     admitted_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, coordinator_session_id, wake_batch_id)
+   ) STRICT`,
+];
+
+export const MIGRATIONS: readonly Migration[] = [
+  { version: 1, statements: MIGRATION_1 },
+  { version: 2, statements: MIGRATION_2 },
+];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {
   const exists = db

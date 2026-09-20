@@ -1,0 +1,5 @@
+allowBuilds:
+  # LangGraph 的 SqliteSaver 依赖 better-sqlite3；只放行它的 build script（预编译产物，无需本地编译）。
+  better-sqlite3: true
+minimumReleaseAgeExclude:
+  - '@langchain/core@1.2.12'

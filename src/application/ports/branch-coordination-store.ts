@@ -15,6 +15,7 @@
 
 import type { ControlState, CoordinationMode } from '../../domain/coordination/mode.js';
 import type { LeaseKind, LeaseRecord } from '../../domain/coordination/leases.js';
+import type { SourceRevisionRef } from '../../domain/coordinator/session-state.js';
 import type { IntentState, OperationIntent } from '../dto/operation-intent.js';
 import type {
   CoordinationScopeId,
@@ -91,6 +92,26 @@ export type BudgetCounterRecord = {
   readonly consumed: number;
 };
 
+/**
+ * Wake Batch 的 source admission 状态。
+ *
+ * `admitted` 是正常路径：checkpoint 已写入该 batch，随后按 source revision 记下准入。
+ * `repaired` 是跨库补齐路径：进程在「已写 checkpoint、未记 admission」之间中断，重启时以同一
+ * batch ID 回读 checkpoint 发现该 batch 已在历史里，于是补记准入而不是再次注入。
+ */
+export const WAKE_ADMISSION_STATES = ['admitted', 'repaired'] as const;
+
+export type WakeAdmissionState = (typeof WAKE_ADMISSION_STATES)[number];
+
+export type WakeAdmissionRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly coordinatorSessionId: CoordinatorSessionId;
+  readonly wakeBatchId: string;
+  readonly admissionState: WakeAdmissionState;
+  readonly sourceRevisions: readonly SourceRevisionRef[];
+  readonly admittedAt: number;
+};
+
 /** `status` 与启动对账用的单次只读投影；不触发续约、对账或任何写入。 */
 export type CoordinationSnapshot = {
   readonly scope: ScopeRecord;
@@ -114,7 +135,12 @@ export type CoordinationQuery =
       readonly intentState?: IntentState;
     }
   | { readonly kind: 'intent'; readonly coordinationScopeId: CoordinationScopeId; readonly operationId: OperationId }
-  | { readonly kind: 'budget-counters'; readonly coordinationScopeId: CoordinationScopeId };
+  | { readonly kind: 'budget-counters'; readonly coordinationScopeId: CoordinationScopeId }
+  | {
+      readonly kind: 'wake-admissions';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly coordinatorSessionId?: CoordinatorSessionId;
+    };
 
 export type CoordinationQueryRejectionCode = 'unreadable' | 'invalid_query';
 
@@ -131,6 +157,7 @@ export type CoordinationQueryResult =
   | { readonly kind: 'intents'; readonly intents: readonly OperationIntent[] }
   | { readonly kind: 'intent'; readonly intent: OperationIntent | null }
   | { readonly kind: 'budget-counters'; readonly counters: readonly BudgetCounterRecord[] }
+  | { readonly kind: 'wake-admissions'; readonly admissions: readonly WakeAdmissionRecord[] }
   | {
       readonly kind: 'rejected';
       readonly code: CoordinationQueryRejectionCode;
@@ -230,6 +257,12 @@ export type CoordinationCommand =
       readonly budgetKey: string;
       readonly approvedLimitRef: string;
       readonly amount: number;
+    })
+  | (CoordinationCommandBase & {
+      readonly kind: 'record-wake-admission';
+      readonly wakeBatchId: string;
+      readonly admissionState: WakeAdmissionState;
+      readonly sourceRevisions: readonly SourceRevisionRef[];
     });
 
 export type CoordinationRejectionCode =

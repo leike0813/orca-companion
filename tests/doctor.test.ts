@@ -14,6 +14,7 @@ import {
   type DoctorProbe,
   type DoctorReport,
 } from '../src/bootstrap/doctor.js';
+import { runDoctorCommand } from '../src/interfaces/cli/doctor-command.js';
 import { main, toChildEnvironment } from '../src/interfaces/cli/main.js';
 
 function probe(overrides: Partial<DoctorProbe> = {}): DoctorProbe {
@@ -262,3 +263,84 @@ test.skipIf(!existsSync(builtEntry))(
     expect(child.stdout).not.toContain('用法:');
   },
 );
+
+test('配置了 Coordinator 模型时，模型能力核验并入同一份 doctor 报告', async () => {
+  const report = await runDoctor(
+    probe({
+      readCoordinatorModel: () =>
+        Promise.resolve({
+          ok: true,
+          value: {
+            modelRef: 'coordinator-default',
+            missing: [],
+            details: ['text_generation: ok', 'streaming: ok', 'tool_calling: ok', 'cancellation: ok', 'usage: ok'],
+          },
+        }),
+    }),
+  );
+
+  expect(report.ok).toBe(true);
+  const model = report.checks.find((check) => check.id === 'coordinator-model');
+  expect(model?.status).toBe('ok');
+  expect(report.checks.map((check) => check.id)).toContain('public-commands');
+});
+
+test('模型缺少必需能力时 doctor 以非零结论结束并列出缺失能力', async () => {
+  const report = await runDoctor(
+    probe({
+      readCoordinatorModel: () =>
+        Promise.resolve({
+          ok: true,
+          value: { modelRef: 'coordinator-default', missing: ['tool_calling'], details: [] },
+        }),
+    }),
+  );
+
+  expect(report.ok).toBe(false);
+  const model = report.checks.find((check) => check.id === 'coordinator-model');
+  expect(model).toMatchObject({ status: 'capability-missing', missing: ['tool_calling'] });
+  expect(model?.detail).toContain('tool_calling');
+});
+
+test('模型核验不可达时结论非 ok，且不再继续后续检查', async () => {
+  const report = await runDoctor(
+    probe({
+      readCoordinatorModel: () => Promise.resolve({ ok: false, status: 'unreachable', detail: 'provider 不可达' }),
+    }),
+  );
+
+  expect(report.ok).toBe(false);
+  expect(report.checks[report.checks.length - 1]).toMatchObject({
+    id: 'coordinator-model',
+    status: 'unreachable',
+  });
+});
+
+test('未配置 Coordinator 模型时 doctor 不做模型核验，也不因此判定失败', async () => {
+  const report = await runDoctor(probe());
+
+  expect(report.ok).toBe(true);
+  expect(report.checks.map((check) => check.id)).not.toContain('coordinator-model');
+});
+
+test('doctor 命令把结构化缺失能力写进诊断行，退出码为非零', async () => {
+  const capture = captureIO();
+  const exitCode = await runDoctorCommand(
+    probe({
+      readCoordinatorModel: () =>
+        Promise.resolve({
+          ok: true,
+          value: { modelRef: 'coordinator-default', missing: ['tool_calling', 'usage'], details: [] },
+        }),
+    }),
+    capture.io,
+  );
+
+  expect(exitCode).toBe(1);
+  expect(capture.stderr.join('')).toContain('缺少：tool_calling, usage');
+  const report = JSON.parse(capture.stdout.join('')) as DoctorReport;
+  expect(report.checks.find((check) => check.id === 'coordinator-model')?.missing).toEqual([
+    'tool_calling',
+    'usage',
+  ]);
+});

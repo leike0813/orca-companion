@@ -16,12 +16,12 @@ _Avoid_: Current directory, commit, Worker worktree, ambient repository
 The coordination role run by Orca Companion. Multiple independent Coordinator Sessions may operate within one Coordination Scope, while each supervises workflow progress and delegates project work without acting as a project worker.
 _Avoid_: Planner, implementation agent, validator
 
-**Coordinator Profile**:
+**Coordinator Model Configuration**:
 A user-approved configuration that binds the Coordinator Agent to a provider adapter, model, model options, credential references, and execution limits.
 _Avoid_: Worker Profile, automatic routing, fallback model
 
 **Provider Adapter**:
-A LangChain chat-model integration that implements the common `BaseChatModel` interface and resolves one Coordinator Profile without proxying requests or owning credentials. Companion does not maintain a provider allowlist; availability follows installed integrations and verified runtime capabilities.
+A LangChain chat-model integration that implements the common `BaseChatModel` interface and resolves one Coordinator Model Configuration without proxying requests or owning credentials. Companion does not maintain a provider allowlist; availability follows installed integrations and verified runtime capabilities.
 _Avoid_: Companion-owned provider wrapper, provider gateway, bundled provider catalog, credential store
 
 **Coordinator Session**:
@@ -97,7 +97,7 @@ The versioned, JSON-serializable conversation and loop progress persisted by the
 _Avoid_: Workflow Snapshot, business state, provider object
 
 **Coordinator Session Recovery**:
-Restoration of the same Coordinator Profile, committed conversation and tool steps after interruption, followed by Runtime Lease acquisition and side-effect reconciliation before work resumes. A later Runtime Incarnation resumes the same Session; another Session requires explicit ownership transfer.
+Restoration of the same Coordinator Model Configuration, committed conversation and tool steps after interruption, followed by Runtime Lease acquisition and side-effect reconciliation before work resumes. A later Runtime Incarnation resumes the same Session; another Session requires explicit ownership transfer.
 _Avoid_: Byte-level stream continuation, provider session recovery, replay without reconciliation
 
 **Committed Model Step**:

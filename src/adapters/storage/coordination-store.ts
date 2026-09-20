@@ -38,6 +38,7 @@ import {
   type IntentState,
   type OperationIntent,
 } from '../../application/dto/operation-intent.js';
+import type { SourceRevisionRef } from '../../domain/coordinator/session-state.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
@@ -53,6 +54,7 @@ import {
   PENDING_INTERACTION_STATES,
   SESSION_LIFECYCLE_STATES,
   TICKET_CLAIM_STATES,
+  WAKE_ADMISSION_STATES,
   type BranchCoordinationStore,
   type BudgetCounterRecord,
   type CoordinationCommand,
@@ -70,6 +72,8 @@ import {
   type SessionLifecycleState,
   type TicketClaimRecord,
   type TicketClaimState,
+  type WakeAdmissionRecord,
+  type WakeAdmissionState,
 } from '../../application/ports/branch-coordination-store.js';
 import { SCHEMA_VERSION, describeError, migrate, readSchemaVersion } from './schema.js';
 
@@ -199,6 +203,43 @@ function decodeWriter(raw: unknown, field: string): Decoded<CoordinationCommand[
  * 边界校验：unknown variant、缺失字段与未声明枚举都在这里 fail closed。
  * 闭集的意义即在此——调用方无法用「再多一个字段」把可重建事实写进本库。
  */
+function decodeSourceRevisionRef(raw: unknown, field: string): Decoded<SourceRevisionRef> {
+  if (!isRecord(raw)) {
+    return fail(`${field} 必须是对象`);
+  }
+  const sourceKind = requireString(raw['sourceKind'], `${field}.sourceKind`);
+  if (!sourceKind.ok) {
+    return sourceKind;
+  }
+  const sourceId = requireString(raw['sourceId'], `${field}.sourceId`);
+  if (!sourceId.ok) {
+    return sourceId;
+  }
+  const revision = requireCount(raw['revision'], `${field}.revision`);
+  if (!revision.ok) {
+    return revision;
+  }
+  return {
+    ok: true,
+    value: { sourceKind: sourceKind.value, sourceId: sourceId.value, revision: revision.value },
+  };
+}
+
+function decodeSourceRevisionList(raw: unknown, field: string): Decoded<readonly SourceRevisionRef[]> {
+  if (!Array.isArray(raw)) {
+    return fail(`${field} 必须是数组`);
+  }
+  const values: SourceRevisionRef[] = [];
+  for (const [index, entry] of raw.entries()) {
+    const decoded = decodeSourceRevisionRef(entry, `${field}.${index}`);
+    if (!decoded.ok) {
+      return decoded;
+    }
+    values.push(decoded.value);
+  }
+  return ok(values);
+}
+
 function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
   if (!isRecord(command)) {
     return fail('command 必须是对象');
@@ -515,6 +556,27 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         amount: amount.value,
       });
     }
+    case 'record-wake-admission': {
+      const wakeBatchId = requireString(command['wakeBatchId'], 'wakeBatchId');
+      if (!wakeBatchId.ok) {
+        return wakeBatchId;
+      }
+      const admissionState = requireEnum(command['admissionState'], WAKE_ADMISSION_STATES, 'admissionState');
+      if (!admissionState.ok) {
+        return admissionState;
+      }
+      const sourceRevisions = decodeSourceRevisionList(command['sourceRevisions'], 'sourceRevisions');
+      if (!sourceRevisions.ok) {
+        return sourceRevisions;
+      }
+      return ok({
+        ...base,
+        kind: 'record-wake-admission',
+        wakeBatchId: wakeBatchId.value,
+        admissionState: admissionState.value,
+        sourceRevisions: sourceRevisions.value,
+      });
+    }
     default:
       return fail(`未登记的 command variant: ${kind.value}`);
   }
@@ -598,6 +660,15 @@ type BudgetRow = {
   readonly budget_key: string;
   readonly approved_limit_ref: string;
   readonly consumed: number;
+};
+
+type WakeAdmissionRow = {
+  readonly coordination_scope_id: string;
+  readonly coordinator_session_id: string;
+  readonly wake_batch_id: string;
+  readonly admission_state: string;
+  readonly source_revisions: string;
+  readonly admitted_at: number;
 };
 
 function decodeScopeRow(row: ScopeRow): Decoded<ScopeRecord> {
@@ -721,6 +792,30 @@ function decodeBudgetRow(row: BudgetRow): BudgetCounterRecord {
     approvedLimitRef: row.approved_limit_ref,
     consumed: row.consumed,
   };
+}
+
+function decodeWakeAdmissionRow(row: WakeAdmissionRow): Decoded<WakeAdmissionRecord> {
+  if (!(WAKE_ADMISSION_STATES as readonly string[]).includes(row.admission_state)) {
+    return fail(`wake_admissions.admission_state 取值不受支持: ${row.admission_state}`);
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(row.source_revisions);
+  } catch (error) {
+    return fail(`wake_admissions.source_revisions 不是合法 JSON: ${describeError(error)}`);
+  }
+  const sourceRevisions = decodeSourceRevisionList(raw, 'wake_admissions.source_revisions');
+  if (!sourceRevisions.ok) {
+    return sourceRevisions;
+  }
+  return ok({
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    coordinatorSessionId: row.coordinator_session_id as CoordinatorSessionId,
+    wakeBatchId: row.wake_batch_id,
+    admissionState: row.admission_state as WakeAdmissionState,
+    sourceRevisions: sourceRevisions.value,
+    admittedAt: row.admitted_at,
+  });
 }
 
 function decodeRows<R, T>(rows: readonly R[], decode: (row: R) => Decoded<T>): Decoded<readonly T[]> {
@@ -903,6 +998,27 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       scopeId,
     );
 
+  const readWakeAdmissionRows = (
+    scopeId: string,
+    sessionId: string | undefined,
+  ): readonly WakeAdmissionRow[] =>
+    sessionId === undefined
+      ? many<WakeAdmissionRow>(
+          db.prepare(
+            'SELECT * FROM wake_admissions WHERE coordination_scope_id = ? ORDER BY admitted_at, wake_batch_id',
+          ),
+          scopeId,
+        )
+      : many<WakeAdmissionRow>(
+          db.prepare(
+            `SELECT * FROM wake_admissions
+             WHERE coordination_scope_id = ? AND coordinator_session_id = ?
+             ORDER BY admitted_at, wake_batch_id`,
+          ),
+          scopeId,
+          sessionId,
+        );
+
   const readLeases = (scopeId: string): Decoded<readonly LeaseRecord[]> =>
     decodeRows(readLeaseRows(scopeId), decodeLeaseRow);
 
@@ -1021,6 +1137,16 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         }
         case 'budget-counters':
           return { kind: 'budget-counters', counters: readBudgetRows(scopeId).map(decodeBudgetRow) };
+        case 'wake-admissions': {
+          const admissions = decodeRows(
+            readWakeAdmissionRows(scopeId, input.coordinatorSessionId),
+            decodeWakeAdmissionRow,
+          );
+          if (!admissions.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: admissions.message };
+          }
+          return { kind: 'wake-admissions', admissions: admissions.value };
+        }
         default:
           return { kind: 'rejected', code: 'invalid_query', message: '未登记的 query variant' };
       }
@@ -1375,6 +1501,23 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
            VALUES (?, ?, ?, ?)
            ON CONFLICT (coordination_scope_id, budget_key) DO UPDATE SET consumed = consumed + excluded.consumed`,
         ).run(cmd.coordinationScopeId, cmd.budgetKey, cmd.approvedLimitRef, cmd.amount);
+        return ok(null);
+      }
+      case 'record-wake-admission': {
+        // 主键冲突由通用约束错误路径转成结构化拒绝；调用方按只读查询还原既有 admission。
+        db.prepare(
+          `INSERT INTO wake_admissions (
+             coordination_scope_id, coordinator_session_id, wake_batch_id,
+             admission_state, source_revisions, admitted_at
+           ) VALUES (?, ?, ?, ?, ?, ?)`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.writer.coordinatorSessionId,
+          cmd.wakeBatchId,
+          cmd.admissionState,
+          JSON.stringify(cmd.sourceRevisions),
+          now,
+        );
         return ok(null);
       }
       default:

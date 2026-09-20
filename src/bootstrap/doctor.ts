@@ -60,12 +60,15 @@ export type DoctorCheckId =
   | 'runtime-capabilities'
   | 'hosts'
   | 'coordinator-identity'
-  | 'public-commands';
+  | 'public-commands'
+  | 'coordinator-model';
 
 export type DoctorCheck = {
   readonly id: DoctorCheckId;
   readonly status: DoctorStatus;
   readonly detail: string;
+  /** 结构化缺失能力清单；只在能力缺失时有值，供机器消费者直接读取而不必解析文案。 */
+  readonly missing?: readonly string[];
 };
 
 export type DoctorReport = {
@@ -98,6 +101,20 @@ export type DoctorProbe = {
   readonly readHosts: () => Promise<DoctorProbeStep<readonly HostFacts[]>>;
   readonly readCoordinatorIdentity: () => Promise<DoctorProbeStep<string>>;
   readonly readPublicCommands: () => Promise<DoctorProbeStep<readonly string[]>>;
+  /**
+   * Coordinator 模型能力核验。
+   *
+   * 可选：只有在当前 Scope 已经配置了 Coordinator Model Configuration 时才探测。未配置时 doctor
+   * 不假装核验过，也不因此判定失败——模型核验是「配置了就必查」，而不是「没配置也必查」。
+   */
+  readonly readCoordinatorModel?: () => Promise<DoctorProbeStep<CoordinatorModelFacts>>;
+};
+
+/** 模型核验的事实：报告与缺失能力；doctor 只做投影，不重新判断能力。 */
+export type CoordinatorModelFacts = {
+  readonly modelRef: string;
+  readonly missing: readonly string[];
+  readonly details: readonly string[];
 };
 
 function parseVersion(value: string): readonly [number, number, number] | undefined {
@@ -241,6 +258,29 @@ export async function runDoctor(probe: DoctorProbe, options: DoctorOptions = {})
   const requiredCommandCount = Object.values(REQUIRED_CLI_COMMANDS).reduce((total, names) => total + names.length, 0);
   checks.push({ id: 'public-commands', status: 'ok', detail: `已核验 ${requiredCommandCount} 个 M0 必需公开命令` });
 
+  // 模型能力核验并入同一份报告：它是启动路径与 doctor 路径共用的唯一核验。
+  if (probe.readCoordinatorModel !== undefined) {
+    const model = await probe.readCoordinatorModel();
+    if (!model.ok) {
+      checks.push({ id: 'coordinator-model', status: model.status, detail: model.detail });
+      return finish(version.value);
+    }
+    if (model.value.missing.length > 0) {
+      checks.push({
+        id: 'coordinator-model',
+        status: 'capability-missing',
+        detail: `Coordinator 模型 ${model.value.modelRef} 缺少必需能力：${model.value.missing.join(', ')}`,
+        missing: model.value.missing,
+      });
+      return finish(version.value);
+    }
+    checks.push({
+      id: 'coordinator-model',
+      status: 'ok',
+      detail: `Coordinator 模型 ${model.value.modelRef} 已通过 ${model.value.details.length} 项能力核验`,
+    });
+  }
+
   return finish(version.value);
 }
 
@@ -250,6 +290,15 @@ export type OrcaDoctorProbeEnvironment = {
   readonly executable?: string;
   /** 显式指定的协调身份引用；缺省时使用刚核验过存活的活动终端句柄。 */
   readonly coordinatorIdentityRef?: string;
+  /**
+   * 已配置的 Coordinator 模型；缺省表示当前 Scope 还没配置，doctor 不做模型核验。
+   *
+   * `resolve` 由 Bootstrap 提供，doctor 不自己解析 provider 集成，也不保存凭据。
+   */
+  readonly coordinatorModel?: {
+    readonly configurationRef: string;
+    readonly resolve: () => Promise<DoctorProbeStep<CoordinatorModelFacts>>;
+  };
 };
 
 function stepFromRejection(code: string, message: string): DoctorProbeStep<never> {
@@ -391,5 +440,8 @@ export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): 
       }
       return { ok: true, value: commands };
     },
+    ...(environment.coordinatorModel === undefined
+      ? {}
+      : { readCoordinatorModel: environment.coordinatorModel.resolve }),
   };
 }

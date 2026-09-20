@@ -173,7 +173,7 @@ Graph Patch 采用原子的 `add + revise + retire`：
 不要保存第二份完整工作流状态机。权威归属固定为：
 
 - Route Map 与 Decision Ticket：issue tracker；
-- Worker/Coordinator Profiles、预算上限和长期策略：版本化项目配置；
+- Worker Profiles 与 Coordinator Model Configuration、预算上限和长期策略：版本化项目配置；
 - 代码、branch、HEAD、worktree 和 dirty paths：Git 与 Orca；
 - Run、Task、Dispatch、Worker、Delivery、receipt、Task Envelope 与 Accepted Worker Result：Orca；
 - Execution Graph：初始 Implementation Plan 与连续 Accepted Graph Patch Results 的追加历史；
@@ -183,7 +183,7 @@ Graph Patch 采用原子的 `add + revise + retire`：
 在 Git common dir 的 Companion 私有目录使用两个独立 SQLite store：
 
 - `coordination.sqlite` 保存模式、Planning Cycle、当前 graph/authorization 引用、Session 注册、Ticket Claim、Pending Interaction、Operation Intent、Runtime/Execution lease、fencing、共享预算状态和 CAS revision；
-- `checkpoints.sqlite` 由 LangGraph SqliteSaver 保存每个 Session 的已提交消息/tool step、图位置、Wake Batch、Context Capsule 和 Coordinator Profile binding。
+- `checkpoints.sqlite` 由 LangGraph SqliteSaver 保存每个 Session 的已提交消息/tool step、图位置、Wake Batch、Context Capsule 和 Coordinator Model Configuration binding。
 
 不同 Coordinator Session 不共享 checkpoint。同一 Session 同时只有一个 Runtime Incarnation；短 Runtime Lease 和递增 fencing generation 拒绝迟到进程写入。Execution Coordination 只有一个 Session 持有 Execution Coordination Lease。SQLite 事务保持短小，不使用项目级长期单写者锁。
 
@@ -201,7 +201,7 @@ LangGraph checkpoint、SQLite 和 Orca receipt 都不提供跨系统 exactly-onc
 
 发布命令为 `orca-companion`：
 
-- `orca-companion [repository-path]` 启动前台 TUI；Home 选择现有 Scope，或通过最小向导核验 repository、branch、canonical worktree、Coordinator Profile、tracker 和 Orca 能力后创建 Scope。
+- `orca-companion [repository-path]` 启动前台 TUI；Home 选择现有 Scope，或通过最小向导核验 repository、branch、canonical worktree、Coordinator Model Configuration、tracker 和 Orca 能力后创建 Scope。
 - `orca-companion status [--json]` 执行一次性只读查询。
 - `orca-companion doctor` 检查环境与能力。
 

@@ -27,7 +27,12 @@ export async function runDoctorCommand(probe: DoctorProbe, io: CliIO): Promise<n
   io.writeStdout(`${JSON.stringify(report, null, 2)}\n`);
   for (const check of report.checks) {
     if (check.status !== 'ok') {
-      io.writeStderr(`doctor: ${check.id}: ${check.status}: ${check.detail}\n`);
+      // 结构化缺失清单直接进入诊断行：调用方不必解析文案就能知道少了什么。
+      const suffix =
+        check.missing === undefined || check.missing.length === 0
+          ? ''
+          : `（缺少：${check.missing.join(', ')}）`;
+      io.writeStderr(`doctor: ${check.id}: ${check.status}: ${check.detail}${suffix}\n`);
     }
   }
   return report.ok ? 0 : 1;

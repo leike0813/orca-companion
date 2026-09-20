@@ -22,11 +22,20 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@langchain/anthropic": "1.5.10",
+    "@langchain/openai": "1.5.13",
     "@types/node": "^24.13.5",
     "eslint": "^10.10.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0",
     "vite": "^8.3.0",
     "vitest": "^5.0.1"
+  },
+  "dependencies": {
+    "@langchain/core": "1.2.12",
+    "@langchain/langgraph": "1.4.16",
+    "@langchain/langgraph-checkpoint": "1.1.5",
+    "@langchain/langgraph-checkpoint-sqlite": "1.0.4",
+    "zod": "^4.6.5"
   }
 }
