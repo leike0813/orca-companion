@@ -23,6 +23,10 @@ import type {
   WorktreeSummary,
 } from '../../application/ports/execution-backend.js';
 import type { OutputLimits } from './process-runner.js';
+import { readRequestShow } from './reconcile-query.js';
+import type { RequestShowResult } from './reconcile-query.js';
+
+export type { RequestShowResult, RequestState } from './reconcile-query.js';
 
 export type QueryOperation = ExecutionQuery['operation'];
 export type MutationOperation = ExecutionMutation['operation'];
@@ -161,14 +165,6 @@ export type RunSummary = {
 export type RunListResult = {
   readonly runs: readonly RunSummary[];
   readonly nextCursor: string | null;
-};
-
-export type RequestState = 'completed' | 'pending' | 'absent';
-
-export type RequestShowResult = {
-  readonly requestId: string;
-  readonly state: RequestState;
-  readonly interpretation: string | null;
 };
 
 export type WorkerShowResult = {
@@ -483,20 +479,12 @@ export function parseRunCurrent(result: unknown): OperationParse<{ readonly run:
   return parsed({ run });
 }
 
+/**
+ * `request-show` 的载荷映射在 `reconcile-query.ts`；这里只把它接到 catalog 的解析 seam 上，
+ * 保持既有导出名与失败消息不变。
+ */
 export function parseRequestShow(result: unknown): OperationParse<RequestShowResult> {
-  const record = requireRecord(result, 'request show');
-  if (isParseFailure(record)) {
-    return record;
-  }
-  const requestId = readString(record, 'requestId');
-  const state = readString(record, 'state');
-  if (requestId === null || state === null) {
-    return invalid('request show: 缺少 requestId 或 state');
-  }
-  if (state !== 'completed' && state !== 'pending' && state !== 'absent') {
-    return invalid(`request show: 未知 state ${state}`);
-  }
-  return parsed({ requestId, state, interpretation: readString(record, 'interpretation') });
+  return readRequestShow(result);
 }
 
 /**
@@ -930,6 +918,18 @@ export const ORCA_OPERATIONS = {
       pushFlag(args, '--command', input.command);
       return args;
     },
+  },
+  'terminal-close': {
+    mutating: true,
+    format: 'json',
+    identity: 'none',
+    buildArgv: (input) => ['terminal', 'close', '--terminal', input.terminal, '--json'],
+  },
+  'terminal-submit': {
+    mutating: true,
+    format: 'json',
+    identity: 'none',
+    buildArgv: (input) => ['terminal', 'send', '--terminal', input.terminal, '--enter', '--json'],
   },
   'run-create': {
     mutating: true,

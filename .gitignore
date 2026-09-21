@@ -24,3 +24,5 @@ Thumbs.db
 .opencode/
 .openviking/
 .pi/
+
+.playwright-mcp/

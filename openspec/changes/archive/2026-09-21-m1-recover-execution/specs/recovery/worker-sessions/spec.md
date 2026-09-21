@@ -68,7 +68,11 @@ Worker Session Recovery SHALL 是 Worker Harness session 中断后的唯一恢�
 
 ### Requirement: Recovery Capsule 必须由受限 Utility Worker 生成且按角色门判定
 
-Recovery Capsule SHALL 由一个受限 Utility Worker 通过 Task Envelope 从精确 transcript 提取产生，其结论 SHALL 为 complete 或 partial。partial Capsule SHALL 列出精确可读范围、缺口、最后一个完整事件、未闭合动作、逐项来源与 unknowns；当 transcript 不可用时，Recovery SHALL 以 transcript_unavailable 失败。Utility Worker MUST NOT 递归触发新的 Recovery，但在同一 Recovery Operation 内 MAY 被安全重派一次，再次失败则该 Recovery 失败。替代 Session 启动前 SHALL 通过角色门：Specification Planner 要求已落盘的 Specification Unit 不含隐藏决定；Implementation 要求 workspace、HEAD 与 dirty paths 可对账且无未知外部副作用；Validator 要求识别缺口后判断相关 Evidence 是否失效并重新验证；Finalizer MUST NOT 需要 Capsule，而 SHALL 从权威输入重跑只读检查。
+Recovery Capsule SHALL 由一个受限 Utility Worker 通过 Task Envelope 从精确 transcript 提取产生，其结论 SHALL 为 complete 或 partial。Worker Harness Adapter SHALL 提供与 Dispatch、Session Binding 绑定的可寻址 transcript 材料及读取覆盖证据；来源 MAY 是 Orca provider transcript，也 MAY 是 harness 自己证明的 transcript。`transcript_unavailable` SHALL 表示没有经证明的可寻址 transcript；partial SHALL 仅表示精确 transcript 中存在 Adapter 已定位并声明的读取缺口或解析失败。Utility Worker MUST NOT 仅凭读取到的文本自行把 Capsule 判为 partial。partial Capsule SHALL 列出精确可读范围、缺口、最后一个完整事件、未闭合动作、逐项来源与 unknowns；当 transcript 不可用时，Recovery SHALL 以 transcript_unavailable 失败。Utility Worker MUST NOT 递归触发新的 Recovery，但在同一 Recovery Operation 内 MAY 被安全重派一次，再次失败则该 Recovery 失败。替代 Session 启动前 SHALL 通过角色门：Specification Planner 要求已落盘的 Specification Unit 不含隐藏决定；Implementation 要求 workspace、HEAD 与 dirty paths 可对账且无未知外部副作用；Validator 要求识别缺口后判断相关 Evidence 是否失效并重新验证；Finalizer MUST NOT 需要 Capsule，而 SHALL 从权威输入重跑只读检查。
+
+对于 Codex Worker Harness，Adapter 只有在 SessionStart 报告于当前 Dispatch 时间窗内提供 provider session ID、Codex 状态根目录与 transcript 路径，且候选唯一、rollout 文件名中的 ID、首条 `session_meta.id`、上报 session ID 三者一致、`session_meta.cwd` 等于绑定 workspace 时，才 SHALL 签发 `transcriptRef`。任一事实缺失、冲突或出现多候选时 SHALL 返回 `transcript_unavailable`；MUST NOT 按 mtime、模糊 cwd 或“最新文件”降级匹配。
+
+Codex Worker 的状态根目录 SHALL 是位于该 Worker worktree 内、随 worktree 一并回收的隔离 `CODEX_HOME`。项目 trust SHALL 只写入该状态根的临时 `config.toml`；Companion 只有在核验 SessionStart hook 来源后才 MAY 把 hook trust bypass 固定进 Codex launcher。Worker Harness Adapter SHALL 以封闭的 prepared-terminal 策略准备 Codex，Application SHALL 等待该 terminal 可接管后调用 Orca `worker-start --terminal`；只有已读回非空 draft 时 MAY 以固定 Enter 补交一次，并仅在 Orca 读回 exact Worker 后把它视为正式 Dispatch。系统 MUST NOT 为此写入用户级 Codex `config.toml`、修改 Orca 全局 Agent 默认参数或环境、向调用方开放任意 shell/env/argv/文本输入，或把尚未被 Orca 接管的 terminal 当作 Worker。Companion 创建的 external terminal SHALL 在 Dispatch 结算后显式关闭；状态不明时 SHALL 阻塞而不是重复准备。
 
 #### Scenario: 完整 Capsule
 
@@ -77,13 +81,23 @@ Recovery Capsule SHALL 由一个受限 Utility Worker 通过 Task Envelope 从�
 
 #### Scenario: 部分 Capsule
 
-- **WHEN** Utility Worker 只能读取 transcript 的一部分
+- **WHEN** Adapter 已证明精确 transcript 存在可定位的读取缺口或解析失败，且 Utility Worker 只能读取其可用部分
 - **THEN** 系统生成 partial Capsule，列出精确可读范围、缺口、最后完整事件、未闭合动作、逐项来源与 unknowns，并仅在该缺口满足角色门时继续
+
+#### Scenario: Utility Worker 不能自行声明 partial
+
+- **WHEN** Utility Worker 报告 partial，但 Adapter 没有给出对应的读取边界或解析失败证据
+- **THEN** 系统拒绝该 Capsule，且不把 Worker 自报的缺口当作 transcript 事实
 
 #### Scenario: transcript 不可用
 
 - **WHEN** 中断的 Session Segment 缺少可用 transcript
 - **THEN** 系统以 transcript_unavailable 判定该 Recovery 失败并阻塞，而不是猜测上下文
+
+#### Scenario: prepared-terminal 无法形成可核验 Dispatch
+
+- **WHEN** Codex prepared-terminal 的准备、idle、Orca 接管、exact Worker 读回或后续清理任一环节无法核验
+- **THEN** 系统失败关闭并保留或阻塞对应资源 lane，不修改用户级 Codex 配置或 Orca 全局 Agent 默认值，不把未接管 terminal 当作 Worker，并保持真实 Recovery 验收未完成
 
 #### Scenario: Utility Worker 重派一次仍失败
 

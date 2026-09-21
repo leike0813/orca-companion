@@ -121,6 +121,9 @@ export type ExecutionMutation =
       readonly title?: string;
       readonly command?: string;
     }
+  | { readonly operation: 'terminal-close'; readonly terminal: string }
+  /** 只提交已由 Orca 写入的现有 draft；不承载任意文本。 */
+  | { readonly operation: 'terminal-submit'; readonly terminal: string }
   | { readonly operation: 'run-create'; readonly objective: string; readonly retryRequestId?: string }
   | { readonly operation: 'run-use'; readonly runId: string; readonly takeoverLegacy?: boolean }
   | {

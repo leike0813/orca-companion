@@ -295,6 +295,45 @@ test('身份无关的操作不因缺少句柄被拒，也不携带身份参数',
   expect(await queryBackend.query({ operation: 'version' })).toEqual({ kind: 'accepted', value: '1.4.198' });
 });
 
+test('terminal-close 只关闭指定 exact handle', async () => {
+  const transport = recordingTransport([okResult({ closed: true })]);
+  const backend = backendWith(transport.runner);
+
+  const outcome = await backend.mutate(
+    { operation: 'terminal-close', terminal: 'terminal-prepared-1' },
+    executionScope(),
+  );
+
+  expect(outcome.kind).toBe('accepted');
+  expect(transport.calls[0]?.args).toEqual([
+    'terminal',
+    'close',
+    '--terminal',
+    'terminal-prepared-1',
+    '--json',
+  ]);
+});
+
+test('terminal-submit 只提交现有 draft，不承载任意文本', async () => {
+  const transport = recordingTransport([okResult({ accepted: true })]);
+  const backend = backendWith(transport.runner);
+
+  const outcome = await backend.mutate(
+    { operation: 'terminal-submit', terminal: 'terminal-prepared-1' },
+    executionScope(),
+  );
+
+  expect(outcome.kind).toBe('accepted');
+  expect(transport.calls[0]?.args).toEqual([
+    'terminal',
+    'send',
+    '--terminal',
+    'terminal-prepared-1',
+    '--enter',
+    '--json',
+  ]);
+});
+
 test('确定失败仍然是 accepted，并保留原错误码与后端请求 id', async () => {
   const { runner } = recordingTransport([
     errorResult('task_not_startable', 'task is not startable', { requestId: 'req-start-1' }),

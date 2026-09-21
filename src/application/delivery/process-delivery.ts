@@ -24,6 +24,7 @@ import type {
   WorkerTaskId,
 } from '../dto/identity.js';
 import type { DeliveryBatch } from '../dto/operation-outcome.js';
+import { laneKeyOf } from '../dto/operation-intent.js';
 import type {
   BranchCoordinationStore,
   CoordinationWriter,
@@ -277,15 +278,45 @@ type MutationAttempt =
   | { readonly kind: 'already_settled' }
   | { readonly kind: 'failed'; readonly result: SettleDeliveryResult };
 
+/**
+ * Delivery 结算用到的两个 mutation lane 目标 kind。
+ *
+ * 这是这两个 lane 的**唯一**定义处：`runSettlementMutation` 登记 intent 时的 target，与启动恢复
+ * 回找原 OperationId 时用的 lane 键，都从这里派生。恢复路径不得再抄一份 target 映射——否则
+ * pipeline 改动 target kind 时，重放会静默退化成「为同一 lane 造一个新 OperationId」。
+ */
+const ACCEPT_RESULT_TARGET_KIND = 'task';
+const ACK_TARGET_KIND = 'delivery';
+
+function acceptResultTarget(orcaTaskId: string): { readonly kind: string; readonly id: string } {
+  return { kind: ACCEPT_RESULT_TARGET_KIND, id: orcaTaskId };
+}
+
+function ackTarget(deliveryId: string): { readonly kind: string; readonly id: string } {
+  return { kind: ACK_TARGET_KIND, id: deliveryId };
+}
+
+/** accept 结果的 mutation lane 键；与 `runSettlementMutation` 的 target 构造同源，改这里即改全部。 */
+export function acceptResultLaneKey(orcaTaskId: string): string {
+  return laneKeyOf(acceptResultTarget(orcaTaskId), ACCEPT_RESULT_TARGET_KIND);
+}
+
+/** Delivery ack 的 mutation lane 键；与 `runSettlementMutation` 的 target 构造同源。 */
+export function ackLaneKey(deliveryId: string): string {
+  return laneKeyOf(ackTarget(deliveryId), ACK_TARGET_KIND);
+}
+
 async function runSettlementMutation(
   input: SettleDeliveryInput,
   operationId: OperationId,
   target: { readonly kind: string; readonly id: string },
   mutation: ExecutionMutation,
 ): Promise<MutationAttempt> {
+  /** 本次 mutation 本来会用的 lane 键；没有 `beginIntent` 结果时也报它，绝不报裸 id。 */
+  const laneKey = laneKeyOf(target, target.kind);
   const revision = freshRevision(input);
   if (typeof revision !== 'number') {
-    return { kind: 'failed', result: { kind: 'blocked', laneKey: target.id, reason: revision.message } };
+    return { kind: 'failed', result: { kind: 'blocked', laneKey, reason: revision.message } };
   }
   const begun = beginIntent(input.store, {
     coordinationScopeId: input.coordinationScopeId,
@@ -308,7 +339,7 @@ async function runSettlementMutation(
     };
   }
   if (begun.kind === 'rejected') {
-    return { kind: 'failed', result: { kind: 'blocked', laneKey: target.id, reason: begun.rejection.message } };
+    return { kind: 'failed', result: { kind: 'blocked', laneKey, reason: begun.rejection.message } };
   }
   if (begun.kind === 'existing') {
     if (begun.intent.state !== 'settled' || begun.intent.outcomeClass !== 'accepted') {
@@ -349,7 +380,7 @@ async function runSettlementMutation(
 
   const settleRevision = freshRevision(input);
   if (typeof settleRevision !== 'number') {
-    return { kind: 'failed', result: { kind: 'blocked', laneKey: target.id, reason: settleRevision.message } };
+    return { kind: 'failed', result: { kind: 'blocked', laneKey, reason: settleRevision.message } };
   }
   const settled = settleIntent(input.store, {
     coordinationScopeId: input.coordinationScopeId,
@@ -359,7 +390,7 @@ async function runSettlementMutation(
     outcome,
   });
   if (settled.kind === 'rejected') {
-    return { kind: 'failed', result: { kind: 'blocked', laneKey: target.id, reason: settled.rejection.message } };
+    return { kind: 'failed', result: { kind: 'blocked', laneKey, reason: settled.rejection.message } };
   }
   if (outcome.kind === 'rejected') {
     return { kind: 'failed', result: { kind: 'rejected', failure: { code: outcome.code, message: outcome.message } } };
@@ -382,7 +413,7 @@ async function confirmDelivery(
   deliveryId: string,
   deliveryRunId: string | null,
 ): Promise<SettleDeliveryResult | null> {
-  const ack = await runSettlementMutation(input, input.operationIds.ack, { kind: 'delivery', id: deliveryId }, {
+  const ack = await runSettlementMutation(input, input.operationIds.ack, ackTarget(deliveryId), {
     operation: 'delivery-ack',
     deliveryId,
     ...(deliveryRunId === null ? {} : { runId: deliveryRunId }),
@@ -394,19 +425,21 @@ function readSettlement(
   input: SettleDeliveryInput,
   dedupeKey: string,
 ): { readonly kind: 'read'; readonly settlement: DeliverySettlementRecord | null } | SettleDeliveryResult {
+  /** 这些分支处理的都是 accept-result lane；报出它的真实键而不是裸 task id。 */
+  const laneKey = acceptResultLaneKey(input.orcaTaskId);
   const result = input.store.query({
     kind: 'delivery-settlements',
     coordinationScopeId: input.coordinationScopeId,
     dedupeKey,
   });
   if (result.kind === 'rejected') {
-    return { kind: 'blocked', laneKey: input.orcaTaskId, reason: result.message };
+    return { kind: 'blocked', laneKey, reason: result.message };
   }
   if (result.kind !== 'delivery-settlements') {
-    return { kind: 'blocked', laneKey: input.orcaTaskId, reason: 'Delivery 去重查询返回了错误的结果种类' };
+    return { kind: 'blocked', laneKey, reason: 'Delivery 去重查询返回了错误的结果种类' };
   }
   if (result.settlements.length > 1) {
-    return { kind: 'blocked', laneKey: input.orcaTaskId, reason: '同一去重键存在多条结算记录' };
+    return { kind: 'blocked', laneKey, reason: '同一去重键存在多条结算记录' };
   }
   return { kind: 'read', settlement: result.settlements[0] ?? null };
 }
@@ -417,6 +450,8 @@ function readSettlement(
  * 调用方提供已经读好的可信事实与稳定 OperationId；用例自身不生成 ID、不读时钟、不换 ID 重试。
  */
 export async function settleDelivery(input: SettleDeliveryInput): Promise<SettleDeliveryResult> {
+  /** accept-result lane 的真实键；所有回读/持久化失败分支都报它，而不是裸 task id。 */
+  const acceptLaneKey = acceptResultLaneKey(input.orcaTaskId);
   const current = readScope(input.store, input.coordinationScopeId);
   if (current.kind === 'rejected') {
     return { kind: 'rejected', failure: { code: current.code, message: current.message } };
@@ -498,7 +533,7 @@ export async function settleDelivery(input: SettleDeliveryInput): Promise<Settle
   if (existing.kind === 'read' && existing.settlement !== null) {
     const readback = await verifyResultReadback(input);
     if ('code' in readback) {
-      return { kind: 'blocked', laneKey: input.orcaTaskId, reason: readback.message };
+      return { kind: 'blocked', laneKey: acceptLaneKey, reason: readback.message };
     }
     const confirmed = await confirmDelivery(input, deliveryIdentity.deliveryId, deliveryIdentity.runId);
     return confirmed ?? { kind: 'replayed', settlement: existing.settlement };
@@ -508,7 +543,7 @@ export async function settleDelivery(input: SettleDeliveryInput): Promise<Settle
   const accepted = await runSettlementMutation(
     input,
     input.operationIds.acceptResult,
-    { kind: 'task', id: input.orcaTaskId },
+    acceptResultTarget(input.orcaTaskId),
     {
       operation: 'task-update',
       taskId: input.orcaTaskId,
@@ -521,13 +556,13 @@ export async function settleDelivery(input: SettleDeliveryInput): Promise<Settle
   }
   const readback = await verifyResultReadback(input);
   if ('code' in readback) {
-    return { kind: 'blocked', laneKey: input.orcaTaskId, reason: readback.message };
+    return { kind: 'blocked', laneKey: acceptLaneKey, reason: readback.message };
   }
 
   // 步骤 5：持久化去重键与结果引用并回读。本地只存引用，不存正文。
   const persistRevision = freshRevision(input);
   if (typeof persistRevision !== 'number') {
-    return { kind: 'blocked', laneKey: input.orcaTaskId, reason: persistRevision.message };
+    return { kind: 'blocked', laneKey: acceptLaneKey, reason: persistRevision.message };
   }
   const recorded = input.store.transact({
     kind: 'record-delivery-settlement',
@@ -546,18 +581,18 @@ export async function settleDelivery(input: SettleDeliveryInput): Promise<Settle
     orcaResultRef: readback.orcaResultRef,
   });
   if (recorded.kind === 'rejected') {
-    return { kind: 'blocked', laneKey: input.orcaTaskId, reason: recorded.message };
+    return { kind: 'blocked', laneKey: acceptLaneKey, reason: recorded.message };
   }
   const persisted = readSettlement(input, dedupeKey);
   if (!('kind' in persisted) || persisted.kind !== 'read' || persisted.settlement === null) {
     return {
       kind: 'blocked',
-      laneKey: input.orcaTaskId,
+      laneKey: acceptLaneKey,
       reason: '写入后无法回读 Delivery 去重键与结果引用',
     };
   }
   if (persisted.settlement.orcaResultRef !== readback.orcaResultRef) {
-    return { kind: 'blocked', laneKey: input.orcaTaskId, reason: '回读的结果引用与写入值不一致' };
+    return { kind: 'blocked', laneKey: acceptLaneKey, reason: '回读的结果引用与写入值不一致' };
   }
 
   // 步骤 6：最后确认。

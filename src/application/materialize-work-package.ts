@@ -37,6 +37,13 @@ import { beginIntent, blockLane, settleIntent } from './coordination/intent-serv
 import { readScope } from './planning/scope-read.js';
 import { parseTaskEnvelope } from './worker-report-dto.js';
 import {
+  activatePreparedWorker,
+  prepareWorkerLaunch,
+  verifyPreparedWorker,
+  type WorkerLaunchFailure,
+  type WorkerLaunchStrategy,
+} from './worker-launch.js';
+import {
   evaluateDispatchCandidate,
   type DispatchCandidateFacts,
   type DispatchCandidateRejection,
@@ -66,7 +73,9 @@ export function worktreeNameFor(workPackageId: WorkPackageId): string {
 export type MaterializeOperationIds = {
   readonly worktree: OperationId;
   readonly task: OperationId;
+  readonly workerPrepare: OperationId;
   readonly workerStart: OperationId;
+  readonly workerActivate: OperationId;
 };
 
 export type MaterializeCandidateContext = {
@@ -83,13 +92,8 @@ export type MaterializeCandidateContext = {
   readonly taskDependencies?: readonly string[];
   readonly taskTitle?: string;
   readonly displayName?: string;
-  /** Worker 启动参数；`agent` 与 `terminal` 二选一。 */
-  readonly worker: {
-    readonly agent?: string;
-    readonly terminal?: string;
-    readonly model?: string;
-    readonly effort?: string;
-  };
+  /** 可信 bootstrap 选择的封闭启动策略；prepared launcher 只能由 Harness Adapter 生成。 */
+  readonly workerLaunch: WorkerLaunchStrategy;
   readonly timeoutMs: number;
 };
 
@@ -453,20 +457,73 @@ export async function materializeWorkPackage(
     orcaTaskId = task.taskId;
   }
 
+  const launch = await prepareWorkerLaunch({
+    backend: input.backend,
+    strategy: candidate.workerLaunch,
+    worktreeId: worktree.worktreeId,
+    worktreePath: worktree.path,
+    timeoutMs: candidate.timeoutMs,
+    createTerminal: async (mutation) => {
+      const prepared = await runMutation(
+        input,
+        operationIds.workerPrepare,
+        'worker-terminal',
+        mutation,
+        () => ({ kind: 'terminal-created' as const }),
+      );
+      return prepared.kind === 'terminal-created'
+        ? { kind: 'accepted' as const }
+        : materializeLaunchFailure(prepared.result);
+    },
+  });
+  if (launch.kind !== 'ready') {
+    return materializeResultFromLaunchFailure(launch);
+  }
+
   const started = await runMutation(
     input,
     operationIds.workerStart,
-    'task',
+    'worker-start',
     {
       operation: 'worker-start',
       taskId: orcaTaskId,
       worktree: worktree.worktreeId,
-      ...candidate.worker,
+      ...launch.worker,
     },
     interpretWorkerStart,
+    async (value) => {
+      if (launch.preparedTerminal === null) {
+        return null;
+      }
+      if (value.dispatchId === null) {
+        return { code: 'worker_adoption_unverifiable', message: 'prepared worker-start 回执缺少 dispatch id' };
+      }
+      const verified = await verifyPreparedWorker(input.backend, value.dispatchId, launch.preparedTerminal);
+      return verified === null ? null : { code: verified.kind, message: 'message' in verified ? verified.message : verified.reason };
+    },
   );
   if (started.kind !== 'worker-started') {
     return started.result;
+  }
+
+  const activated = await activatePreparedWorker({
+    backend: input.backend,
+    terminal: launch.preparedTerminal,
+    submitTerminal: async (mutation) => {
+      const submitted = await runMutation(
+        input,
+        operationIds.workerActivate,
+        'worker-activate',
+        mutation,
+        () => ({ kind: 'worker-activated' as const }),
+      );
+      return submitted.kind === 'worker-activated'
+        ? { kind: 'accepted' as const }
+        : materializeLaunchFailure(submitted.result);
+    },
+  });
+  if (activated.kind !== 'accepted') {
+    return materializeResultFromLaunchFailure(activated);
   }
 
   return {
@@ -530,6 +587,22 @@ function interpretWorkerStart(
   return { kind: 'worker-started', dispatchId: dispatchIdFromReceipt(outcome.value) };
 }
 
+function materializeLaunchFailure(result: MaterializeWorkPackageResult): WorkerLaunchFailure {
+  if (result.kind === 'rejected') {
+    return { kind: 'rejected', code: result.failure.code, message: result.failure.message };
+  }
+  if (result.kind === 'unknown' || result.kind === 'blocked') {
+    return result;
+  }
+  return { kind: 'rejected', code: 'invalid_state', message: 'terminal-create 返回了意外的物化结果' };
+}
+
+function materializeResultFromLaunchFailure(failure: WorkerLaunchFailure): MaterializeWorkPackageResult {
+  return failure.kind === 'rejected'
+    ? { kind: 'rejected', failure: { code: failure.code, message: failure.message } }
+    : failure;
+}
+
 /** 一次 mutation 尝试的结果：要么成功，要么带着完整结果失败。 */
 type MutationAttempt<T> =
   | T
@@ -544,12 +617,15 @@ type MutationAttempt<T> =
 async function runMutation<T extends { readonly kind: string }>(
   input: MaterializeWorkPackageInput,
   operationId: OperationId,
-  targetKind: 'worktree' | 'task',
+  purpose: 'worktree' | 'task' | 'worker-terminal' | 'worker-start' | 'worker-activate',
   mutation: ExecutionMutation,
   interpret: (outcome: Extract<OperationOutcome<unknown>, { kind: 'accepted' }>) => T | MaterializationFailure,
   beforeSettle?: (value: T) => MaterializationFailure | null | Promise<MaterializationFailure | null>,
 ): Promise<MutationAttempt<T>> {
-  const target = { kind: targetKind, id: input.workPackageId };
+  const target = {
+    kind: purpose === 'worktree' ? 'worktree' : purpose === 'task' ? 'task' : 'worker-task',
+    id: input.workPackageId,
+  };
   /**
    * 每次写入前重新读取 revision。
    *
@@ -575,7 +651,7 @@ async function runMutation<T extends { readonly kind: string }>(
     coordinationScopeId: input.coordinationScopeId,
     operationId,
     target,
-    operationCategory: `materialize-${targetKind}`,
+    operationCategory: `materialize-${purpose}`,
     writer: input.context.candidate.writer,
     expectedRevision,
   });

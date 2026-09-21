@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -38,6 +38,8 @@ export const COORDINATION_TABLES: readonly string[] = [
   'materialization_bindings',
   'delivery_settlements',
   'delivery_verdicts',
+  'recoveries',
+  'execution_handoffs',
 ];
 
 export type Migration = {
@@ -328,6 +330,74 @@ const MIGRATION_6: readonly string[] = [
   `ALTER TABLE operation_intents ADD COLUMN expected_head TEXT`,
 ];
 
+/**
+ * M7：Worker Session Recovery 与 Execution Handoff。
+ *
+ * `recoveries` 只保存无法从 Orca、Git 或 transcript 重建的恢复事实：这次 Recovery 针对哪条中断
+ * Segment、替代派发与替代 Segment 是谁、消耗了多少 Recovery Budget。它不保存 Capsule 正文、
+ * transcript 内容或 Session 消息，`capsule_ref` 只是引用。
+ *
+ * 两个索引各对应一条不变式：
+ * - `(coordination_scope_id, source_segment_id)` 唯一：一条中断 Segment 只允许一个 Recovery，
+ *   RecoveryId 的稳定性由此由来源事实保证，重复写入不会产生第二行；
+ * - `(coordination_scope_id, business_attempt_id)`：按 Worker Attempt 求和已消耗额度，重启、恢复、
+ *   Patch 与重规划都只是新增行，不重置既有计数。
+ *
+ * `execution_handoffs` 保存执行责任转移的阶段与提案级 CAS。`handoff_revision` 独立于 Scope
+ * revision，避免交接提交强迫 Scope 全局串行；部分唯一索引让一个 Scope 同时至多存在一个未终结
+ * 交接，因此不可能出现两个责任方。Run、Task、Dispatch、Attempt、Worker、worktree、图与授权身份
+ * 都不在这里——本表不复制它们。
+ */
+const MIGRATION_7: readonly string[] = [
+  `CREATE TABLE IF NOT EXISTS recoveries (
+     coordination_scope_id TEXT NOT NULL,
+     recovery_id TEXT NOT NULL,
+     role TEXT NOT NULL,
+     work_package_id TEXT NOT NULL,
+     worker_task_id TEXT NOT NULL,
+     business_attempt_id TEXT NOT NULL,
+     source_segment_id TEXT NOT NULL,
+     source_dispatch_id TEXT NOT NULL,
+     replacement_dispatch_id TEXT,
+     replacement_segment_id TEXT,
+     replacement_session_binding_id TEXT,
+     superseded_segment_id TEXT,
+     status TEXT NOT NULL,
+     consumed_budget INTEGER NOT NULL,
+     capsule_ref TEXT,
+     prewrite_operation_id TEXT,
+     terminal_outcome TEXT,
+     blocking_reason TEXT,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, recovery_id)
+   ) STRICT`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS recoveries_source_segment
+     ON recoveries (coordination_scope_id, source_segment_id)`,
+  `CREATE INDEX IF NOT EXISTS recoveries_worker_attempt
+     ON recoveries (coordination_scope_id, business_attempt_id)`,
+  `CREATE TABLE IF NOT EXISTS execution_handoffs (
+     coordination_scope_id TEXT NOT NULL,
+     handoff_id TEXT NOT NULL,
+     source_session_id TEXT NOT NULL,
+     target_session_id TEXT NOT NULL,
+     graph_generation INTEGER NOT NULL,
+     responsibility_set TEXT NOT NULL,
+     phase TEXT NOT NULL,
+     expected_revision INTEGER NOT NULL,
+     coordinator_context_capsule_ref TEXT,
+     handoff_revision INTEGER NOT NULL,
+     blocking_reason TEXT,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, handoff_id)
+   ) STRICT`,
+  // 一个 Scope 同时至多一个未终结交接：Source 在 cutover 前始终是唯一 owner。
+  `CREATE UNIQUE INDEX IF NOT EXISTS execution_handoffs_single_open
+     ON execution_handoffs (coordination_scope_id)
+     WHERE phase IN ('prepared', 'reviewed', 'blocked')`,
+];
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, statements: MIGRATION_1 },
   { version: 2, statements: MIGRATION_2 },
@@ -335,6 +405,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 4, statements: MIGRATION_4 },
   { version: 5, statements: MIGRATION_5 },
   { version: 6, statements: MIGRATION_6 },
+  { version: 7, statements: MIGRATION_7 },
 ];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {

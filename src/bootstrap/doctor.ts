@@ -46,7 +46,7 @@ export const REQUIRED_CLI_COMMANDS: Readonly<Record<string, readonly string[]>> 
     'check',
     'request-show',
   ],
-  terminal: ['create', 'list', 'show', 'read', 'wait'],
+  terminal: ['create', 'list', 'show', 'read', 'wait', 'send', 'close'],
   host: ['list'],
   worktree: ['current'],
 };

@@ -25,6 +25,7 @@ import {
   isControlState,
   isCoordinationMode,
 } from '../../domain/coordination/mode.js';
+import { projectMutationLanes } from '../../domain/coordination/mutation-lane.js';
 import {
   ABSENT_SCOPE_REVISION,
   advanceRevision,
@@ -66,6 +67,7 @@ import type {
   InteractionId,
   OperationId,
   PlanningCycleId,
+  RecoveryId,
   RuntimeIncarnationId,
   SessionSegmentId,
   WorkerTaskId,
@@ -75,6 +77,12 @@ import {
   PENDING_INTERACTION_STATES,
   PLANNING_HANDOFF_PHASES,
   PLANNING_HANDOFF_TRANSITIONS,
+  EXECUTION_HANDOFF_PHASES,
+  EXECUTION_HANDOFF_TRANSITIONS,
+  HANDOFF_RESPONSIBILITIES,
+  RECOVERY_STATES,
+  RECOVERY_TERMINAL_OUTCOMES,
+  RECOVERY_TRANSITIONS,
   SESSION_LIFECYCLE_STATES,
   TICKET_CLAIM_STATES,
   WAKE_ADMISSION_STATES,
@@ -91,12 +99,19 @@ import {
   type CoordinatorSessionRegistration,
   type DeliverySettlementRecord,
   type DeliveryVerdictRecord,
+  type ExecutionHandoffPhase,
+  type ExecutionHandoffRecord,
+  type HandoffResponsibility,
   type MaterializationBindingRecord,
   type PendingInteractionRecord,
   type PendingInteractionState,
   type PlanningHandoffPhase,
   type PlanningHandoffRecord,
   type PlanningResponsibilityRecord,
+  type RecoveryRecord,
+  type RecoveryState,
+  type RecoveryTerminalOutcome,
+  type ReplacementSegmentInput,
   type ScopeRecord,
   type SessionLifecycleState,
   type SessionSegmentRecord,
@@ -280,6 +295,129 @@ function decodeSourceRevisionList(raw: unknown, field: string): Decoded<readonly
       return decoded;
     }
     values.push(decoded.value);
+  }
+  return ok(values);
+}
+
+/**
+ * 可选补丁字段的三态：`undefined` 表示保持原值，`null` 表示清空，给出值表示覆盖。
+ *
+ * `requireNullableString` 把 undefined 与 null 都读成清空，无法表达「保持原值」，因此这里单独建模。
+ */
+type OptionalPatch<T> = { readonly present: boolean; readonly value: T | null };
+
+function decodeStringPatch(raw: unknown, field: string): Decoded<OptionalPatch<string>> {
+  if (raw === undefined) {
+    return ok({ present: false, value: null });
+  }
+  if (raw === null) {
+    return ok({ present: true, value: null });
+  }
+  const parsed = requireString(raw, field);
+  return parsed.ok ? ok({ present: true, value: parsed.value }) : parsed;
+}
+
+function decodeEnumPatch<T extends string>(
+  raw: unknown,
+  allowed: readonly T[],
+  field: string,
+): Decoded<OptionalPatch<T>> {
+  if (raw === undefined) {
+    return ok({ present: false, value: null });
+  }
+  if (raw === null) {
+    return ok({ present: true, value: null });
+  }
+  const parsed = requireEnum(raw, allowed, field);
+  return parsed.ok ? ok({ present: true, value: parsed.value }) : parsed;
+}
+
+/**
+ * 替代 Session Segment 的边界校验：字段与 `record-session-segment` 完全一致，因此沿用同一套规则
+ * （`sessionBindingId` 必须给出字符串，空字符串表示无法证明身份这一事实本身）。
+ */
+function decodeReplacementSegment(raw: unknown, field: string): Decoded<ReplacementSegmentInput | null> {
+  if (raw === undefined || raw === null) {
+    return ok(null);
+  }
+  if (!isRecord(raw)) {
+    return fail(`${field} 必须是对象`);
+  }
+  const segmentId = requireString(raw['segmentId'], `${field}.segmentId`);
+  if (!segmentId.ok) {
+    return segmentId;
+  }
+  const workPackageId = requireString(raw['workPackageId'], `${field}.workPackageId`);
+  if (!workPackageId.ok) {
+    return workPackageId;
+  }
+  const role = requireEnum(raw['role'], WORKER_ROLES, `${field}.role`);
+  if (!role.ok) {
+    return role;
+  }
+  const workerTaskId = requireString(raw['workerTaskId'], `${field}.workerTaskId`);
+  if (!workerTaskId.ok) {
+    return workerTaskId;
+  }
+  const dispatchId = requireString(raw['dispatchId'], `${field}.dispatchId`);
+  if (!dispatchId.ok) {
+    return dispatchId;
+  }
+  const attemptId = requireString(raw['attemptId'], `${field}.attemptId`);
+  if (!attemptId.ok) {
+    return attemptId;
+  }
+  const sessionBindingId = requireNullableString(raw['sessionBindingId'], `${field}.sessionBindingId`);
+  if (!sessionBindingId.ok || sessionBindingId.value === null) {
+    return fail(`${field}.sessionBindingId 必须是字符串（空字符串表示无法证明身份）`);
+  }
+  const lastTranscriptRef = requireNullableString(raw['lastTranscriptRef'], `${field}.lastTranscriptRef`);
+  if (!lastTranscriptRef.ok) {
+    return lastTranscriptRef;
+  }
+  const terminalReceiptRef = requireNullableString(raw['terminalReceiptRef'], `${field}.terminalReceiptRef`);
+  if (!terminalReceiptRef.ok) {
+    return terminalReceiptRef;
+  }
+  if (typeof raw['transcriptReferenceable'] !== 'boolean') {
+    return fail(`${field}.transcriptReferenceable 必须是布尔值`);
+  }
+  if (typeof raw['verifiable'] !== 'boolean') {
+    return fail(`${field}.verifiable 必须是布尔值`);
+  }
+  return ok({
+    segmentId: segmentId.value as SessionSegmentId,
+    workPackageId: workPackageId.value as WorkPackageId,
+    role: role.value,
+    workerTaskId: workerTaskId.value as WorkerTaskId,
+    dispatchId: dispatchId.value as DispatchId,
+    attemptId: attemptId.value,
+    sessionBindingId: sessionBindingId.value,
+    lastTranscriptRef: lastTranscriptRef.value,
+    terminalReceiptRef: terminalReceiptRef.value,
+    transcriptReferenceable: raw['transcriptReferenceable'],
+    verifiable: raw['verifiable'],
+  });
+}
+
+/** cutover 责任集合的边界校验：闭集取值、非空，未知取值 fail closed。 */
+function decodeHandoffResponsibilitySet(
+  raw: unknown,
+  field: string,
+): Decoded<readonly HandoffResponsibility[]> {
+  if (!Array.isArray(raw)) {
+    return fail(`${field} 必须是数组`);
+  }
+  if (raw.length === 0) {
+    return fail(`${field} 不得为空`);
+  }
+  const values: HandoffResponsibility[] = [];
+  for (const [index, entry] of raw.entries()) {
+    const parsed = requireEnum(entry, HANDOFF_RESPONSIBILITIES, `${field}.${index}`);
+    if (!parsed.ok) {
+      return parsed;
+    }
+    values.push(parsed.value);
   }
   return ok(values);
 }
@@ -1146,6 +1284,246 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         sessionBindingRef: sessionBindingRef.value,
       });
     }
+    case 'record-recovery': {
+      const recoveryId = requireString(command['recoveryId'], 'recoveryId');
+      if (!recoveryId.ok) {
+        return recoveryId;
+      }
+      const role = requireEnum(command['role'], WORKER_ROLES, 'role');
+      if (!role.ok) {
+        return role;
+      }
+      const workPackageId = requireString(command['workPackageId'], 'workPackageId');
+      if (!workPackageId.ok) {
+        return workPackageId;
+      }
+      const workerTaskId = requireString(command['workerTaskId'], 'workerTaskId');
+      if (!workerTaskId.ok) {
+        return workerTaskId;
+      }
+      const businessAttemptId = requireString(command['businessAttemptId'], 'businessAttemptId');
+      if (!businessAttemptId.ok) {
+        return businessAttemptId;
+      }
+      const sourceSegmentId = requireString(command['sourceSegmentId'], 'sourceSegmentId');
+      if (!sourceSegmentId.ok) {
+        return sourceSegmentId;
+      }
+      const sourceDispatchId = requireString(command['sourceDispatchId'], 'sourceDispatchId');
+      if (!sourceDispatchId.ok) {
+        return sourceDispatchId;
+      }
+      return ok({
+        ...base,
+        kind: 'record-recovery',
+        recoveryId: recoveryId.value as RecoveryId,
+        role: role.value,
+        workPackageId: workPackageId.value as WorkPackageId,
+        workerTaskId: workerTaskId.value as WorkerTaskId,
+        businessAttemptId: businessAttemptId.value,
+        sourceSegmentId: sourceSegmentId.value as SessionSegmentId,
+        sourceDispatchId: sourceDispatchId.value as DispatchId,
+      });
+    }
+    case 'advance-recovery': {
+      const recoveryId = requireString(command['recoveryId'], 'recoveryId');
+      if (!recoveryId.ok) {
+        return recoveryId;
+      }
+      const status = requireEnum(command['status'], RECOVERY_STATES, 'status');
+      if (!status.ok) {
+        return status;
+      }
+      const replacementDispatchId = requireNullableString(
+        command['replacementDispatchId'],
+        'replacementDispatchId',
+      );
+      if (!replacementDispatchId.ok) {
+        return replacementDispatchId;
+      }
+      const replacementSegmentId = requireNullableString(
+        command['replacementSegmentId'],
+        'replacementSegmentId',
+      );
+      if (!replacementSegmentId.ok) {
+        return replacementSegmentId;
+      }
+      const replacementSessionBindingId = requireNullableString(
+        command['replacementSessionBindingId'],
+        'replacementSessionBindingId',
+      );
+      if (!replacementSessionBindingId.ok) {
+        return replacementSessionBindingId;
+      }
+      const supersededSegmentId = requireNullableString(
+        command['supersededSegmentId'],
+        'supersededSegmentId',
+      );
+      if (!supersededSegmentId.ok) {
+        return supersededSegmentId;
+      }
+      const capsuleRef = requireNullableString(command['capsuleRef'], 'capsuleRef');
+      if (!capsuleRef.ok) {
+        return capsuleRef;
+      }
+      const prewriteOperationId = requireNullableString(
+        command['prewriteOperationId'],
+        'prewriteOperationId',
+      );
+      if (!prewriteOperationId.ok) {
+        return prewriteOperationId;
+      }
+      const terminalOutcome = decodeEnumPatch(
+        command['terminalOutcome'],
+        RECOVERY_TERMINAL_OUTCOMES,
+        'terminalOutcome',
+      );
+      if (!terminalOutcome.ok) {
+        return terminalOutcome;
+      }
+      const blockingReason = decodeStringPatch(command['blockingReason'], 'blockingReason');
+      if (!blockingReason.ok) {
+        return blockingReason;
+      }
+      const consumedBudget = requireNullableCount(command['consumedBudget'], 'consumedBudget');
+      if (!consumedBudget.ok) {
+        return consumedBudget;
+      }
+      const replacementSegment = decodeReplacementSegment(command['replacementSegment'], 'replacementSegment');
+      if (!replacementSegment.ok) {
+        return replacementSegment;
+      }
+      // 替代 Segment 与 Recovery 收尾必须是同一次提交：只允许与 recovered 一起给出。
+      let effectiveReplacementSegmentId = replacementSegmentId.value;
+      if (replacementSegment.value !== null) {
+        if (status.value !== 'recovered') {
+          return fail('replacementSegment 只能与 recovered 状态在同一笔提交里给出');
+        }
+        if (
+          effectiveReplacementSegmentId !== null &&
+          effectiveReplacementSegmentId !== replacementSegment.value.segmentId
+        ) {
+          return fail('replacementSegmentId 与 replacementSegment.segmentId 不一致');
+        }
+        effectiveReplacementSegmentId = replacementSegment.value.segmentId;
+      }
+      return ok({
+        ...base,
+        kind: 'advance-recovery',
+        recoveryId: recoveryId.value as RecoveryId,
+        status: status.value,
+        ...(replacementDispatchId.value === null ? {} : { replacementDispatchId: replacementDispatchId.value }),
+        ...(effectiveReplacementSegmentId === null
+          ? {}
+          : { replacementSegmentId: effectiveReplacementSegmentId as SessionSegmentId }),
+        ...(replacementSessionBindingId.value === null
+          ? {}
+          : { replacementSessionBindingId: replacementSessionBindingId.value }),
+        ...(supersededSegmentId.value === null
+          ? {}
+          : { supersededSegmentId: supersededSegmentId.value as SessionSegmentId }),
+        ...(capsuleRef.value === null ? {} : { capsuleRef: capsuleRef.value }),
+        ...(prewriteOperationId.value === null
+          ? {}
+          : { prewriteOperationId: prewriteOperationId.value as OperationId }),
+        // 省略与显式 null 的语义不同：省略表示保持原值，null 表示清空。
+        ...(terminalOutcome.value.present ? { terminalOutcome: terminalOutcome.value.value } : {}),
+        ...(blockingReason.value.present ? { blockingReason: blockingReason.value.value } : {}),
+        ...(consumedBudget.value === null ? {} : { consumedBudget: consumedBudget.value }),
+        ...(replacementSegment.value === null ? {} : { replacementSegment: replacementSegment.value }),
+      });
+    }
+    case 'record-execution-handoff': {
+      const handoffId = requireString(command['handoffId'], 'handoffId');
+      if (!handoffId.ok) {
+        return handoffId;
+      }
+      const sourceSessionId = requireString(command['sourceSessionId'], 'sourceSessionId');
+      if (!sourceSessionId.ok) {
+        return sourceSessionId;
+      }
+      const targetSessionId = requireString(command['targetSessionId'], 'targetSessionId');
+      if (!targetSessionId.ok) {
+        return targetSessionId;
+      }
+      const graphGeneration = requireCount(command['graphGeneration'], 'graphGeneration');
+      if (!graphGeneration.ok) {
+        return graphGeneration;
+      }
+      const responsibilitySet = decodeHandoffResponsibilitySet(
+        command['responsibilitySet'],
+        'responsibilitySet',
+      );
+      if (!responsibilitySet.ok) {
+        return responsibilitySet;
+      }
+      const phase = requireEnum(command['phase'], EXECUTION_HANDOFF_PHASES, 'phase');
+      if (!phase.ok) {
+        return phase;
+      }
+      const capsuleRef = decodeStringPatch(
+        command['coordinatorContextCapsuleRef'],
+        'coordinatorContextCapsuleRef',
+      );
+      if (!capsuleRef.ok) {
+        return capsuleRef;
+      }
+      const blockingReason = decodeStringPatch(command['blockingReason'], 'blockingReason');
+      if (!blockingReason.ok) {
+        return blockingReason;
+      }
+      const expectedHandoffRevision = requireNullableCount(
+        command['expectedHandoffRevision'],
+        'expectedHandoffRevision',
+      );
+      if (!expectedHandoffRevision.ok) {
+        return expectedHandoffRevision;
+      }
+      return ok({
+        ...base,
+        kind: 'record-execution-handoff',
+        handoffId: handoffId.value,
+        sourceSessionId: sourceSessionId.value as CoordinatorSessionId,
+        targetSessionId: targetSessionId.value as CoordinatorSessionId,
+        graphGeneration: graphGeneration.value as GraphGeneration,
+        responsibilitySet: responsibilitySet.value,
+        phase: phase.value,
+        ...(capsuleRef.value.present
+          ? { coordinatorContextCapsuleRef: capsuleRef.value.value }
+          : {}),
+        ...(blockingReason.value.present ? { blockingReason: blockingReason.value.value } : {}),
+        expectedHandoffRevision: expectedHandoffRevision.value,
+      });
+    }
+    case 'advance-execution-handoff': {
+      const handoffId = requireString(command['handoffId'], 'handoffId');
+      if (!handoffId.ok) {
+        return handoffId;
+      }
+      const phase = requireEnum(command['phase'], EXECUTION_HANDOFF_PHASES, 'phase');
+      if (!phase.ok) {
+        return phase;
+      }
+      const expectedHandoffRevision = requireCount(
+        command['expectedHandoffRevision'],
+        'expectedHandoffRevision',
+      );
+      if (!expectedHandoffRevision.ok) {
+        return expectedHandoffRevision;
+      }
+      const blockingReason = decodeStringPatch(command['blockingReason'], 'blockingReason');
+      if (!blockingReason.ok) {
+        return blockingReason;
+      }
+      return ok({
+        ...base,
+        kind: 'advance-execution-handoff',
+        handoffId: handoffId.value,
+        phase: phase.value,
+        expectedHandoffRevision: expectedHandoffRevision.value,
+        ...(blockingReason.value.present ? { blockingReason: blockingReason.value.value } : {}),
+      });
+    }
     default:
       return fail(`未登记的 command variant: ${kind.value}`);
   }
@@ -1362,6 +1740,45 @@ type DeliveryVerdictRow = {
   readonly recorded_at: number;
 };
 
+type RecoveryRow = {
+  readonly coordination_scope_id: string;
+  readonly recovery_id: string;
+  readonly role: string;
+  readonly work_package_id: string;
+  readonly worker_task_id: string;
+  readonly business_attempt_id: string;
+  readonly source_segment_id: string;
+  readonly source_dispatch_id: string;
+  readonly replacement_dispatch_id: string | null;
+  readonly replacement_segment_id: string | null;
+  readonly replacement_session_binding_id: string | null;
+  readonly superseded_segment_id: string | null;
+  readonly status: string;
+  readonly consumed_budget: number;
+  readonly capsule_ref: string | null;
+  readonly prewrite_operation_id: string | null;
+  readonly terminal_outcome: string | null;
+  readonly blocking_reason: string | null;
+  readonly created_at: number;
+  readonly updated_at: number;
+};
+
+type ExecutionHandoffRow = {
+  readonly coordination_scope_id: string;
+  readonly handoff_id: string;
+  readonly source_session_id: string;
+  readonly target_session_id: string;
+  readonly graph_generation: number;
+  readonly responsibility_set: string;
+  readonly phase: string;
+  readonly expected_revision: number;
+  readonly coordinator_context_capsule_ref: string | null;
+  readonly handoff_revision: number;
+  readonly blocking_reason: string | null;
+  readonly created_at: number;
+  readonly updated_at: number;
+};
+
 function decodeGraphVersionRow(row: GraphVersionRow): Decoded<GraphVersionRecord> {
   if (!isGraphVersionRecordKind(row.record_kind)) {
     return fail(`graph_versions.record_kind 取值不受支持: ${row.record_kind}`);
@@ -1528,6 +1945,75 @@ function decodeDeliveryVerdictRow(row: DeliveryVerdictRow): Decoded<DeliveryVerd
     finalizerRole: 'finalizer',
     sessionBindingRef: row.session_binding_ref,
     recordedAt: row.recorded_at,
+  });
+}
+
+function decodeRecoveryRow(row: RecoveryRow): Decoded<RecoveryRecord> {
+  const role = decodeWorkerRole(row.role);
+  if (role === null) {
+    return fail(`recoveries.role 取值不受支持: ${row.role}`);
+  }
+  if (!(RECOVERY_STATES as readonly string[]).includes(row.status)) {
+    return fail(`recoveries.status 取值不受支持: ${row.status}`);
+  }
+  let terminalOutcome: RecoveryTerminalOutcome | null = null;
+  if (row.terminal_outcome !== null) {
+    if (!(RECOVERY_TERMINAL_OUTCOMES as readonly string[]).includes(row.terminal_outcome)) {
+      return fail(`recoveries.terminal_outcome 取值不受支持: ${row.terminal_outcome}`);
+    }
+    terminalOutcome = row.terminal_outcome as RecoveryTerminalOutcome;
+  }
+  return ok({
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    recoveryId: row.recovery_id as RecoveryId,
+    role,
+    workPackageId: row.work_package_id as WorkPackageId,
+    workerTaskId: row.worker_task_id as WorkerTaskId,
+    businessAttemptId: row.business_attempt_id,
+    sourceSegmentId: row.source_segment_id as SessionSegmentId,
+    sourceDispatchId: row.source_dispatch_id as DispatchId,
+    replacementDispatchId: row.replacement_dispatch_id,
+    replacementSegmentId: row.replacement_segment_id as SessionSegmentId | null,
+    replacementSessionBindingId: row.replacement_session_binding_id,
+    supersededSegmentId: row.superseded_segment_id as SessionSegmentId | null,
+    status: row.status as RecoveryState,
+    consumedBudget: row.consumed_budget,
+    capsuleRef: row.capsule_ref,
+    prewriteOperationId: row.prewrite_operation_id as OperationId | null,
+    terminalOutcome,
+    blockingReason: row.blocking_reason,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+}
+
+function decodeExecutionHandoffRow(row: ExecutionHandoffRow): Decoded<ExecutionHandoffRecord> {
+  if (!(EXECUTION_HANDOFF_PHASES as readonly string[]).includes(row.phase)) {
+    return fail(`execution_handoffs.phase 取值不受支持: ${row.phase}`);
+  }
+  const responsibilities = decodeStringArrayColumn(row.responsibility_set);
+  if (responsibilities === null) {
+    return fail('execution_handoffs.responsibility_set 不是字符串数组');
+  }
+  for (const value of responsibilities) {
+    if (!(HANDOFF_RESPONSIBILITIES as readonly string[]).includes(value)) {
+      return fail(`execution_handoffs.responsibility_set 取值不受支持: ${value}`);
+    }
+  }
+  return ok({
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    handoffId: row.handoff_id,
+    sourceSessionId: row.source_session_id as CoordinatorSessionId,
+    targetSessionId: row.target_session_id as CoordinatorSessionId,
+    graphGeneration: row.graph_generation as GraphGeneration,
+    responsibilitySet: responsibilities as readonly HandoffResponsibility[],
+    phase: row.phase as ExecutionHandoffPhase,
+    expectedRevision: row.expected_revision,
+    coordinatorContextCapsuleRef: row.coordinator_context_capsule_ref,
+    handoffRevision: row.handoff_revision,
+    blockingReason: row.blocking_reason,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   });
 }
 
@@ -1724,6 +2210,47 @@ function one<T>(statement: StatementSync, ...params: SQLInputValue[]): T | undef
 
 function many<T>(statement: StatementSync, ...params: SQLInputValue[]): readonly T[] {
   return statement.all(...params) as unknown as readonly T[];
+}
+
+/** Recovery 的终态不变量：终态结果与状态一一对应，避免「已恢复但没有结果」这类不可读记录。 */
+function recoveryTerminalViolation(
+  status: RecoveryState,
+  terminalOutcome: RecoveryTerminalOutcome | null,
+): string | null {
+  if (status === 'recovered') {
+    return terminalOutcome === 'replaced' || terminalOutcome === 'source_completed'
+      ? null
+      : 'recovered 必须以 replaced 或 source_completed 终结';
+  }
+  if (status === 'blocked') {
+    return terminalOutcome === null || terminalOutcome === 'failed'
+      ? null
+      : 'blocked 只能以 failed 终结或保持未终结';
+  }
+  return terminalOutcome === null ? null : `${status} 不得带 terminalOutcome`;
+}
+
+/** 责任集合按集合语义比较，避免调用方仅因顺序不同被拒绝。 */
+function sameResponsibilitySet(
+  left: readonly HandoffResponsibility[],
+  right: readonly HandoffResponsibility[],
+): boolean {
+  return left.length === right.length && left.every((value) => right.includes(value));
+}
+
+/**
+ * handoff 的 blockingReason 解析：显式给出时以它为准；否则 blocked 阶段保持原值，离开 blocked
+ * 时自动清空，避免旧的失败原因挂在一个已经推进的提案上。
+ */
+function resolveHandoffBlockingReason(
+  phase: ExecutionHandoffPhase,
+  provided: string | null | undefined,
+  current: string | null,
+): string | null {
+  if (provided !== undefined) {
+    return provided;
+  }
+  return phase === 'blocked' ? current : null;
 }
 
 function rejected(code: CoordinationCommandRejection['code'], message: string): CoordinationCommandRejection {
@@ -2035,6 +2562,51 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       scopeId,
     );
 
+  const readRecoveryRows = (
+    scopeId: string,
+    businessAttemptId: string | undefined,
+  ): readonly RecoveryRow[] =>
+    businessAttemptId === undefined
+      ? many<RecoveryRow>(
+          db.prepare(
+            `SELECT * FROM recoveries
+             WHERE coordination_scope_id = ? ORDER BY created_at, recovery_id`,
+          ),
+          scopeId,
+        )
+      : many<RecoveryRow>(
+          db.prepare(
+            `SELECT * FROM recoveries
+             WHERE coordination_scope_id = ? AND business_attempt_id = ?
+             ORDER BY created_at, recovery_id`,
+          ),
+          scopeId,
+          businessAttemptId,
+        );
+
+  const readRecoveryRow = (scopeId: string, recoveryId: string): RecoveryRow | undefined =>
+    one<RecoveryRow>(
+      db.prepare('SELECT * FROM recoveries WHERE coordination_scope_id = ? AND recovery_id = ?'),
+      scopeId,
+      recoveryId,
+    );
+
+  const readExecutionHandoffRows = (scopeId: string): readonly ExecutionHandoffRow[] =>
+    many<ExecutionHandoffRow>(
+      db.prepare(
+        `SELECT * FROM execution_handoffs
+         WHERE coordination_scope_id = ? ORDER BY created_at, handoff_id`,
+      ),
+      scopeId,
+    );
+
+  const readExecutionHandoffRow = (scopeId: string, handoffId: string): ExecutionHandoffRow | undefined =>
+    one<ExecutionHandoffRow>(
+      db.prepare('SELECT * FROM execution_handoffs WHERE coordination_scope_id = ? AND handoff_id = ?'),
+      scopeId,
+      handoffId,
+    );
+
   const buildSnapshot = (scopeId: string, scope: ScopeRecord): Decoded<CoordinationSnapshot> => {
     const leases = readLeases(scopeId);
     if (!leases.ok) {
@@ -2079,6 +2651,14 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
     if (!verdicts.ok) {
       return verdicts;
     }
+    const recoveries = decodeRows(readRecoveryRows(scopeId, undefined), decodeRecoveryRow);
+    if (!recoveries.ok) {
+      return recoveries;
+    }
+    const executionHandoffs = decodeRows(readExecutionHandoffRows(scopeId), decodeExecutionHandoffRow);
+    if (!executionHandoffs.ok) {
+      return executionHandoffs;
+    }
     return ok({
       scope,
       sessions: sessions.value,
@@ -2097,6 +2677,10 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       ),
       deliverySettlements: settlements.value,
       deliveryVerdicts: verdicts.value,
+      recoveries: recoveries.value,
+      executionHandoffs: executionHandoffs.value,
+      // lane 阻塞由未决 intent 派生：只覆盖确有未决 intent 的 lane，不构成全局锁。
+      mutationLanes: projectMutationLanes(intents.value),
     });
   };
 
@@ -2284,6 +2868,45 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           }
           return { kind: 'delivery-verdicts', verdicts: verdicts.value };
         }
+        case 'recoveries': {
+          const recoveries = decodeRows(
+            readRecoveryRows(scopeId, input.businessAttemptId),
+            decodeRecoveryRow,
+          );
+          if (!recoveries.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: recoveries.message };
+          }
+          return { kind: 'recoveries', recoveries: recoveries.value };
+        }
+        case 'recovery': {
+          const row = readRecoveryRow(scopeId, input.recoveryId);
+          if (row === undefined) {
+            return { kind: 'recovery', recovery: null };
+          }
+          const recovery = decodeRecoveryRow(row);
+          if (!recovery.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: recovery.message };
+          }
+          return { kind: 'recovery', recovery: recovery.value };
+        }
+        case 'execution-handoffs': {
+          const handoffs = decodeRows(readExecutionHandoffRows(scopeId), decodeExecutionHandoffRow);
+          if (!handoffs.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: handoffs.message };
+          }
+          return { kind: 'execution-handoffs', handoffs: handoffs.value };
+        }
+        case 'execution-handoff': {
+          const row = readExecutionHandoffRow(scopeId, input.handoffId);
+          if (row === undefined) {
+            return { kind: 'execution-handoff', handoff: null };
+          }
+          const handoff = decodeExecutionHandoffRow(row);
+          if (!handoff.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: handoff.message };
+          }
+          return { kind: 'execution-handoff', handoff: handoff.value };
+        }
         default:
           return { kind: 'rejected', code: 'invalid_query', message: '未登记的 query variant' };
       }
@@ -2306,9 +2929,130 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
     return ok(null);
   };
 
+  /**
+   * 与 Recovery 收尾同事务地写入替代 Session Segment。
+   *
+   * 幂等策略是刻意选择的：`segmentId` 已存在且**全部字段一致**时跳过插入、让推进继续（崩溃窗口
+   * 「Segment 已落盘、Recovery 未收尾」重启后必须能收尾）；已存在但内容不一致时按 `constraint`
+   * 拒绝，由调用方整笔回滚，不覆盖既有 Segment。
+   *
+   * 插入字段与 `record-session-segment` 完全一致：这是同一种事实，只是写入时机必须与预算消耗绑定。
+   */
+  const ensureReplacementSegment = (
+    scopeId: string,
+    segment: ReplacementSegmentInput,
+    now: number,
+  ): Decoded<null> => {
+    const existing = one<SessionSegmentRow>(
+      db.prepare(`SELECT * FROM session_segments WHERE coordination_scope_id = ? AND segment_id = ?`),
+      scopeId,
+      segment.segmentId,
+    );
+    if (existing !== undefined) {
+      const identical =
+        existing.work_package_id === segment.workPackageId &&
+        existing.role === segment.role &&
+        existing.worker_task_id === segment.workerTaskId &&
+        existing.dispatch_id === segment.dispatchId &&
+        existing.attempt_id === segment.attemptId &&
+        existing.session_binding_id === segment.sessionBindingId &&
+        existing.last_transcript_ref === segment.lastTranscriptRef &&
+        existing.terminal_receipt_ref === segment.terminalReceiptRef &&
+        (existing.transcript_referenceable === 1) === segment.transcriptReferenceable &&
+        (existing.verifiable === 1) === segment.verifiable;
+      return identical
+        ? ok(null)
+        : fail(`Session Segment ${segment.segmentId} 已存在但内容不一致，拒绝覆盖`, 'constraint');
+    }
+    db.prepare(
+      `INSERT INTO session_segments (
+         coordination_scope_id, segment_id, work_package_id, role, worker_task_id, dispatch_id,
+         attempt_id, session_binding_id, last_transcript_ref, terminal_receipt_ref,
+         transcript_referenceable, verifiable, recorded_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      scopeId,
+      segment.segmentId,
+      segment.workPackageId,
+      segment.role,
+      segment.workerTaskId,
+      segment.dispatchId,
+      segment.attemptId,
+      segment.sessionBindingId,
+      segment.lastTranscriptRef,
+      segment.terminalReceiptRef,
+      segment.transcriptReferenceable ? 1 : 0,
+      segment.verifiable ? 1 : 0,
+      now,
+    );
+    return ok(null);
+  };
+
+  /**
+   * cutover：在同一事务内把 Execution Coordination 责任从 Source 转给 Target。
+   *
+   * 调用者必须已经按**转移前**的状态确认写入者仍是 Source（见 `advance-execution-handoff`）：
+   * 这个函数一执行，租约就已经不在 Source 名下了，事后无法再判定它曾经是 holder。
+   *
+   * 责任对应关系：执行期「当前 Graph Generation 后续 Worker 生命周期事件责任」的承载者就是
+   * Execution Coordination Lease holder（Worker 事件只有 holder 能推进），因此释放 + 取得租约
+   * 这两行 lease 已经覆盖它，不需要第二份责任记录，也不复制任何 Run/Task/Dispatch 身份。
+   *
+   * `runtime_incarnation_id` 在执行租约上只作诊断（全仓判定只比较 `coordinator_session_id`）：
+   * Target 此刻尚未持有 Runtime Incarnation，因此这里保留执行转移的那次 incarnation。
+   *
+   * 顺序不可调换：`leases_single_execution_lease` 要求同一 Scope 同时至多一个未释放执行租约，
+   * 必须先释放 Source 再为 Target 取得；两者同事务，外部看不到中间态。
+   */
+  const transferExecutionResponsibility = (
+    scopeId: string,
+    fromSessionId: string,
+    toSessionId: string,
+    incarnationId: string,
+    now: number,
+  ): Decoded<null> => {
+    const released = db
+      .prepare(
+        `UPDATE leases SET released_at = ?
+         WHERE coordination_scope_id = ? AND lease_kind = 'execution_coordination'
+           AND coordinator_session_id = ? AND released_at IS NULL`,
+      )
+      .run(now, scopeId, fromSessionId);
+    if (Number(released.changes) === 0) {
+      return fail('Source 没有可转移的 Execution Coordination Lease', 'constraint');
+    }
+
+    const maxRow = db
+      .prepare(
+        `SELECT MAX(fencing_generation) AS generation FROM leases
+         WHERE coordination_scope_id = ? AND lease_kind = 'execution_coordination'`,
+      )
+      .get(scopeId) as { readonly generation: number | null } | undefined;
+    db.prepare(
+      `INSERT INTO leases (
+         coordination_scope_id, lease_kind, coordinator_session_id, runtime_incarnation_id,
+         fencing_generation, acquired_at, expires_at, released_at
+       ) VALUES (?, 'execution_coordination', ?, ?, ?, ?, NULL, NULL)
+       ON CONFLICT (coordination_scope_id, lease_kind, coordinator_session_id) DO UPDATE SET
+         runtime_incarnation_id = excluded.runtime_incarnation_id,
+         fencing_generation = excluded.fencing_generation,
+         acquired_at = excluded.acquired_at,
+         expires_at = NULL,
+         released_at = NULL`,
+    ).run(scopeId, toSessionId, incarnationId, nextFencingGeneration(maxRow?.generation ?? null), now);
+
+    // 相关 Pending Interaction 的责任随执行责任一起转移；已回答/已取消的历史不动。
+    db.prepare(
+      `UPDATE pending_interactions SET owner_coordinator_session_id = ?
+       WHERE coordination_scope_id = ? AND owner_coordinator_session_id = ? AND state = 'open'`,
+    ).run(toSessionId, scopeId, fromSessionId);
+    return ok(null);
+  };
+
   const applyCommand = (
     cmd: CoordinationCommand,
     now: number,
+    currentRevision: number,
     nextRevision: number,
   ): Decoded<null> => {
     switch (cmd.kind) {
@@ -2677,6 +3421,278 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           cmd.sessionBindingRef,
           now,
         );
+        return ok(null);
+      }
+      case 'record-recovery': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) {
+          return holder;
+        }
+        // 主键与 source segment 冲突都走通用约束路径：调用方回读既有记录，绝不产生第二行。
+        db.prepare(
+          `INSERT INTO recoveries (
+             coordination_scope_id, recovery_id, role, work_package_id, worker_task_id, business_attempt_id,
+             source_segment_id, source_dispatch_id, replacement_dispatch_id, replacement_segment_id,
+             replacement_session_binding_id, superseded_segment_id, status, consumed_budget, capsule_ref,
+             prewrite_operation_id, terminal_outcome, blocking_reason, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'pending', 0, NULL, NULL, NULL, NULL, ?, ?)`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.recoveryId,
+          cmd.role,
+          cmd.workPackageId,
+          cmd.workerTaskId,
+          cmd.businessAttemptId,
+          cmd.sourceSegmentId,
+          cmd.sourceDispatchId,
+          now,
+          now,
+        );
+        return ok(null);
+      }
+      case 'advance-recovery': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) {
+          return holder;
+        }
+        const row = readRecoveryRow(cmd.coordinationScopeId, cmd.recoveryId);
+        if (row === undefined) {
+          return fail(`未登记的 RecoveryId ${cmd.recoveryId}`);
+        }
+        const current = decodeRecoveryRow(row);
+        if (!current.ok) {
+          return current;
+        }
+        if (!RECOVERY_TRANSITIONS[current.value.status].includes(cmd.status)) {
+          return fail(`不允许从 ${current.value.status} 迁移到 ${cmd.status}`, 'invalid_state');
+        }
+        // 离开 blocked 表示上一次失败结论已被取代：未显式给出时清空终态结果与阻塞原因，避免
+        // 把旧的 failed 挂在一个正在继续的 Recovery 上。
+        const leavingBlocked = current.value.status === 'blocked' && cmd.status !== 'blocked';
+        const terminalOutcome =
+          cmd.terminalOutcome === undefined
+            ? leavingBlocked
+              ? null
+              : current.value.terminalOutcome
+            : cmd.terminalOutcome;
+        const terminalViolation = recoveryTerminalViolation(cmd.status, terminalOutcome);
+        if (terminalViolation !== null) {
+          return fail(terminalViolation, 'invalid_state');
+        }
+        const blockingReason =
+          cmd.blockingReason === undefined
+            ? leavingBlocked
+              ? null
+              : current.value.blockingReason
+            : cmd.blockingReason;
+        // 替代 Session Segment 与预算消耗必须落在同一事务：崩溃不允许留下「Segment 已落盘、
+        // consumedBudget 仍为 0」的半记录状态，否则按 Worker Attempt 求和会低估已消耗额度，
+        // 从而放行超出 maxRecoveriesPerWorkerAttempt 的又一次替代派发。
+        if (cmd.replacementSegment !== undefined) {
+          const segment = ensureReplacementSegment(cmd.coordinationScopeId, cmd.replacementSegment, now);
+          if (!segment.ok) {
+            return segment;
+          }
+        }
+        // 可选字段用 COALESCE 保持原值：省略即不覆盖，给出的值覆盖，绝不把未提供读成清空。
+        // `consumed_budget` 例外：它单调不减（MAX(已消耗, 传入值)），重放同值幂等，任何更小的值都
+        // 无法把已消耗的 Recovery Budget 调回去——与 consume-budget 的结构单调同向，但不累加，
+        // 因此续办同一 Recovery 不会重复消耗额度。
+        db.prepare(
+          `UPDATE recoveries SET
+             status = ?,
+             replacement_dispatch_id = COALESCE(?, replacement_dispatch_id),
+             replacement_segment_id = COALESCE(?, replacement_segment_id),
+             replacement_session_binding_id = COALESCE(?, replacement_session_binding_id),
+             superseded_segment_id = COALESCE(?, superseded_segment_id),
+             capsule_ref = COALESCE(?, capsule_ref),
+             prewrite_operation_id = COALESCE(?, prewrite_operation_id),
+             terminal_outcome = ?,
+             blocking_reason = ?,
+             consumed_budget = MAX(consumed_budget, COALESCE(?, consumed_budget)),
+             updated_at = ?
+           WHERE coordination_scope_id = ? AND recovery_id = ?`,
+        ).run(
+          cmd.status,
+          cmd.replacementDispatchId ?? null,
+          cmd.replacementSegmentId ?? null,
+          cmd.replacementSessionBindingId ?? null,
+          cmd.supersededSegmentId ?? null,
+          cmd.capsuleRef ?? null,
+          cmd.prewriteOperationId ?? null,
+          terminalOutcome,
+          blockingReason,
+          cmd.consumedBudget ?? null,
+          now,
+          cmd.coordinationScopeId,
+          cmd.recoveryId,
+        );
+        return ok(null);
+      }
+      case 'record-execution-handoff': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) {
+          return holder;
+        }
+        // cutover 必须走 `advance-execution-handoff`：只有那条路径会在同一事务内转移执行责任。
+        // 从这里写入 cutover 会得到一个「阶段说已转移、租约还在 Source」的假象。
+        if (cmd.phase === 'cutover') {
+          return fail('cutover 必须通过 advance-execution-handoff 的单次 CAS 完成', 'invalid_state');
+        }
+        const existing = readExecutionHandoffRow(cmd.coordinationScopeId, cmd.handoffId);
+        if (cmd.expectedHandoffRevision === null) {
+          if (existing !== undefined) {
+            return fail(`Execution Handoff ${cmd.handoffId} 已存在`, 'constraint');
+          }
+          if (cmd.phase !== 'prepared') {
+            return fail('新 Execution Handoff 必须以 prepared 阶段创建', 'invalid_state');
+          }
+          if (cmd.blockingReason !== undefined && cmd.blockingReason !== null) {
+            return fail('prepared 阶段不得带 blockingReason', 'invalid_state');
+          }
+          db.prepare(
+            `INSERT INTO execution_handoffs (
+               coordination_scope_id, handoff_id, source_session_id, target_session_id, graph_generation,
+               responsibility_set, phase, expected_revision, coordinator_context_capsule_ref,
+               handoff_revision, blocking_reason, created_at, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, 'prepared', ?, ?, 1, NULL, ?, ?)`,
+          ).run(
+            cmd.coordinationScopeId,
+            cmd.handoffId,
+            cmd.sourceSessionId,
+            cmd.targetSessionId,
+            cmd.graphGeneration,
+            JSON.stringify(cmd.responsibilitySet),
+            // 记录写下之后生效的执行态 revision，用于 cutover 的「review 之后没有其它写入」守卫。
+            nextRevision,
+            cmd.coordinatorContextCapsuleRef ?? null,
+            now,
+            now,
+          );
+          return ok(null);
+        }
+        if (existing === undefined) {
+          return fail(`Execution Handoff ${cmd.handoffId} 不存在`, 'invalid_state');
+        }
+        const current = decodeExecutionHandoffRow(existing);
+        if (!current.ok) {
+          return current;
+        }
+        if (existing.handoff_revision !== cmd.expectedHandoffRevision) {
+          return fail(
+            `Execution Handoff revision ${cmd.expectedHandoffRevision} 已过期，当前为 ${existing.handoff_revision}`,
+            'constraint',
+          );
+        }
+        if (
+          cmd.sourceSessionId !== current.value.sourceSessionId ||
+          cmd.targetSessionId !== current.value.targetSessionId
+        ) {
+          return fail('Execution Handoff 的 Source/Target 在创建后不可更改', 'constraint');
+        }
+        if (cmd.graphGeneration !== current.value.graphGeneration) {
+          return fail('Execution Handoff 的 graphGeneration 在创建后不可更改', 'constraint');
+        }
+        if (!sameResponsibilitySet(cmd.responsibilitySet, current.value.responsibilitySet)) {
+          return fail('Execution Handoff 的 responsibilitySet 在创建后不可更改', 'constraint');
+        }
+        if (!EXECUTION_HANDOFF_TRANSITIONS[current.value.phase].includes(cmd.phase)) {
+          return fail(`不允许从 ${current.value.phase} 迁移到 ${cmd.phase}`, 'invalid_state');
+        }
+        const capsuleRef =
+          cmd.coordinatorContextCapsuleRef === undefined
+            ? current.value.coordinatorContextCapsuleRef
+            : cmd.coordinatorContextCapsuleRef;
+        const blockingReason = resolveHandoffBlockingReason(
+          cmd.phase,
+          cmd.blockingReason,
+          current.value.blockingReason,
+        );
+        if (cmd.phase === 'blocked' && (blockingReason === null || blockingReason.length === 0)) {
+          return fail('blocked 阶段必须给出 blockingReason', 'invalid_state');
+        }
+        db.prepare(
+          `UPDATE execution_handoffs SET
+             phase = ?, expected_revision = ?, coordinator_context_capsule_ref = ?, blocking_reason = ?,
+             handoff_revision = handoff_revision + 1, updated_at = ?
+           WHERE coordination_scope_id = ? AND handoff_id = ?`,
+        ).run(
+          cmd.phase,
+          nextRevision,
+          capsuleRef,
+          blockingReason,
+          now,
+          cmd.coordinationScopeId,
+          cmd.handoffId,
+        );
+        return ok(null);
+      }
+      case 'advance-execution-handoff': {
+        // holder 校验按**转移前**的状态判定：此刻写入者仍是 Source，也就是当前 Execution
+        // Coordination Lease holder。下面的 cutover 转移会把租约从它名下释放，因此这一步必须在
+        // 转移之前完成，否则会把正在交接的 Source 误判成非 holder。
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) {
+          return holder;
+        }
+        const row = readExecutionHandoffRow(cmd.coordinationScopeId, cmd.handoffId);
+        if (row === undefined) {
+          return fail(`Execution Handoff ${cmd.handoffId} 不存在`, 'invalid_state');
+        }
+        const current = decodeExecutionHandoffRow(row);
+        if (!current.ok) {
+          return current;
+        }
+        if (row.handoff_revision !== cmd.expectedHandoffRevision) {
+          return fail(
+            `Execution Handoff revision ${cmd.expectedHandoffRevision} 已过期，当前为 ${row.handoff_revision}`,
+            'constraint',
+          );
+        }
+        // 只有 reviewed → cutover 是合法迁移（EXECUTION_HANDOFF_TRANSITIONS 已表达这一点）。
+        if (!EXECUTION_HANDOFF_TRANSITIONS[current.value.phase].includes(cmd.phase)) {
+          return fail(`不允许从 ${current.value.phase} 迁移到 ${cmd.phase}`, 'invalid_state');
+        }
+        const blockingReason = resolveHandoffBlockingReason(
+          cmd.phase,
+          cmd.blockingReason,
+          current.value.blockingReason,
+        );
+        if (cmd.phase === 'blocked' && (blockingReason === null || blockingReason.length === 0)) {
+          return fail('blocked 阶段必须给出 blockingReason', 'invalid_state');
+        }
+        if (cmd.phase === 'cutover') {
+          // 单次 CAS：守卫是「该记录最后一次写入之后，Scope 没有别的写入」。不变量是
+          // `expected_revision` 恒等于写入该记录后生效的 scope.revision（record/advance 两条路径
+          // 都同步它），因此这里比较它就等价于比较「最后一次交接写入之后的当前 revision」。
+          // 基础 CAS 只保证「调用方读到的 revision 没过期」，这一条才拦住 review 与 cutover 之间的
+          // 任何写入。
+          if (current.value.expectedRevision !== currentRevision) {
+            return fail(
+              `Execution Handoff expectedRevision ${current.value.expectedRevision} 与当前 revision ${currentRevision} 不一致`,
+              'constraint',
+            );
+          }
+          // 只转移 Source 自己持有的执行责任：写入者与提案 Source 必须一致。
+          if (current.value.sourceSessionId !== cmd.writer.coordinatorSessionId) {
+            return fail('只有 Execution Handoff 的 Source Session 可以执行 cutover', 'constraint');
+          }
+          const transferred = transferExecutionResponsibility(
+            cmd.coordinationScopeId,
+            current.value.sourceSessionId,
+            current.value.targetSessionId,
+            cmd.writer.runtimeIncarnationId,
+            now,
+          );
+          if (!transferred.ok) {
+            return transferred;
+          }
+        }
+        db.prepare(
+          `UPDATE execution_handoffs SET phase = ?, expected_revision = ?, blocking_reason = ?,
+             handoff_revision = handoff_revision + 1, updated_at = ?
+           WHERE coordination_scope_id = ? AND handoff_id = ?`,
+        ).run(cmd.phase, nextRevision, blockingReason, now, cmd.coordinationScopeId, cmd.handoffId);
         return ok(null);
       }
       case 'create-scope': {
@@ -3117,7 +4133,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
 
       const advancesRevision = cmd.kind !== 'renew-runtime-lease';
       const nextRevision = advancesRevision ? advanceRevision(currentRevision) : currentRevision;
-      const applied = applyCommand(cmd, now, nextRevision);
+      const applied = applyCommand(cmd, now, currentRevision, nextRevision);
       if (!applied.ok) {
         rollback();
         return rejected(applied.code, applied.message);

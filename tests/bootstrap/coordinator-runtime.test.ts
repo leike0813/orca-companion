@@ -3,11 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { AIMessage, type BaseMessage } from '@langchain/core/messages';
-import type { ChatResult } from '@langchain/core/outputs';
-import type { Runnable } from '@langchain/core/runnables';
 import { afterEach, beforeEach, expect, test } from 'vitest';
+
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 
 import { acquireIncarnation } from '../../src/application/coordinator/runtime-guard.js';
 import type { CoordinatorModelConfiguration } from '../../src/application/coordinator/model-config-switch.js';
@@ -30,51 +28,11 @@ import {
   COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
   type CoordinatorSessionState,
 } from '../../src/domain/coordinator/session-state.js';
+import { CapableChatModel, NoToolsChatModel } from '../support/fake-chat-model.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SESSION = 'session-a' as CoordinatorSessionId;
 const TTL_MS = 30_000;
-
-/** 全能力假模型：只用于让启动路径通过能力核验。 */
-class CapableChatModel extends BaseChatModel {
-  constructor() {
-    super({});
-  }
-
-  override _llmType(): string {
-    return 'capable';
-  }
-
-  override _generate(
-    _messages: BaseMessage[],
-    options: { readonly signal?: AbortSignal } | undefined,
-  ): Promise<ChatResult> {
-    if (options?.signal?.aborted === true) {
-      const aborted = new Error('调用已被取消');
-      aborted.name = 'AbortError';
-      return Promise.reject(aborted);
-    }
-    const message = new AIMessage('pong');
-    (message as { usage_metadata?: unknown }).usage_metadata = {
-      input_tokens: 1,
-      output_tokens: 1,
-      total_tokens: 2,
-    };
-    return Promise.resolve({ generations: [{ text: 'pong', message }] });
-  }
-
-  override bindTools(tools: readonly unknown[]): Runnable {
-    void tools;
-    return this;
-  }
-}
-
-/** 不支持工具调用的假模型：用于核验失败路径。 */
-class NoToolsChatModel extends CapableChatModel {
-  override bindTools(): Runnable {
-    return { invoke: (): Promise<never> => Promise.reject(new Error('不支持工具')) } as unknown as Runnable;
-  }
-}
 
 let directory = '';
 let gitCommonDir = '';

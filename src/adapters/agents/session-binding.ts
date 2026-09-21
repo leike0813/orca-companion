@@ -15,6 +15,10 @@ import type {
 } from '../../application/dto/identity.js';
 import type { WorkerRole } from '../../domain/planning/execution-authorization.js';
 import type { SessionBinding } from '../../domain/task-contract.js';
+import {
+  proveCodexTranscript,
+  type CodexSessionStartReport,
+} from './codex-transcript.js';
 
 /** Codex Worker Harness 的稳定标识；M1 只有这一个实现。 */
 export const CODEX_HARNESS_ID = 'codex';
@@ -38,6 +42,7 @@ export type SessionBindingFailureCode =
   | 'harness_mismatch'
   | 'session_not_reported'
   | 'transcript_not_reported'
+  | 'transcript_unavailable'
   | 'worker_identity_changed'
   | 'observation_window_missing';
 
@@ -96,6 +101,30 @@ export function bindCodexSession(
       observedAt: facts.observedAt,
     },
   };
+}
+
+/** 由 Codex SessionStart 报告证明 transcript 后，复用同一个 Session Binding 校验入口。 */
+export function bindCodexSessionFromStartReport(input: {
+  readonly facts: Omit<HarnessSessionFacts, 'providerSessionId' | 'transcriptRef' | 'observedAt'>;
+  readonly report: CodexSessionStartReport;
+  readonly workspace: string;
+  readonly dispatchStartedAt: string;
+  readonly bindingDeadlineAt: string;
+  readonly identityChanged?: boolean;
+}): SessionBindingResult {
+  const result = proveCodexTranscript(input);
+  if (result.kind === 'transcript_unavailable') {
+    return unavailable('transcript_unavailable', result.reason);
+  }
+  return bindCodexSession(
+    {
+      ...input.facts,
+      providerSessionId: result.proof.providerSessionId,
+      transcriptRef: result.proof.transcriptRef,
+      observedAt: result.proof.observedAt,
+    },
+    input.identityChanged === undefined ? {} : { identityChanged: input.identityChanged },
+  );
 }
 
 /** 四个主要角色都要求精确绑定；这里只表达「哪些角色必须绑定」，不复制角色的其他语义。 */

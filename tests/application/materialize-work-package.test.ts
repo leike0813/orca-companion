@@ -212,7 +212,14 @@ type MaterializeOverrides = {
   readonly controlState?: string;
 };
 
-function context(operationSuffix = '1'): MaterializeWorkPackageContext {
+function context(
+  operationSuffix = '1',
+  workerLaunch: MaterializeWorkPackageContext['candidate']['workerLaunch'] = {
+    kind: 'orca_managed',
+    agent: 'codex',
+    model: 'minimax-cn/MiniMax-M3',
+  },
+): MaterializeWorkPackageContext {
   return {
     candidate: {
       coordinationScopeId: SCOPE,
@@ -258,7 +265,7 @@ function context(operationSuffix = '1'): MaterializeWorkPackageContext {
         budget: { implementationAttempts: 2, validatorRepairs: 2, recoveries: 1 },
         expectedEvidence: [{ evidenceKind: 'command', coveredPaths: ['src/domain'] }],
       },
-      worker: { agent: 'codex', model: 'minimax-cn/MiniMax-M3' },
+      workerLaunch,
       timeoutMs: 5_000,
     },
     paths: {
@@ -270,7 +277,9 @@ function context(operationSuffix = '1'): MaterializeWorkPackageContext {
     operationIds: {
       worktree: `op-worktree-${operationSuffix}` as OperationId,
       task: `op-task-${operationSuffix}` as OperationId,
+      workerPrepare: `op-worker-prepare-${operationSuffix}` as OperationId,
       workerStart: `op-worker-${operationSuffix}` as OperationId,
+      workerActivate: `op-worker-activate-${operationSuffix}` as OperationId,
     },
     workPackage: {
       scopeEnvelope: { include: ['src/domain'], exclude: [] },
@@ -429,6 +438,93 @@ test('既有通过核验的 worktree 被复用，不重复建立', async () => {
   const mutations = calls.filter((call) => call.kind === 'mutate').map((call) => call.operation.operation);
   expect(mutations).not.toContain('worktree-create');
   expect(mutations).toEqual(['task-create', 'worker-start']);
+});
+
+test('prepared-terminal 先准备隔离 harness，再把 exact terminal 交给 Orca 接管', async () => {
+  let terminalCreated = false;
+  const { backend, calls } = fakeBackend({
+    worktrees: [isolatedWorktree()],
+    mutating: (_call, mutation) => {
+      if (mutation.operation === 'terminal-create') {
+        terminalCreated = true;
+      }
+      return undefined;
+    },
+    queryResult: (_call, query) => {
+      if (query.operation === 'terminal-list') {
+        return {
+          kind: 'accepted',
+          value: {
+            terminals: terminalCreated
+              ? [{
+                  handle: 'terminal-prepared-1',
+                  connected: true,
+                  writable: true,
+                  orphaned: false,
+                  executionHostId: 'local',
+                  worktreeId: 'wt-existing-1',
+                  branch: 'refs/heads/wp-1',
+                  title: 'companion:prepared:1',
+                }]
+              : [],
+            hostIds: ['local'],
+            omittedHostIds: [],
+            totalCount: terminalCreated ? 1 : 0,
+            truncated: false,
+          },
+        };
+      }
+      if (query.operation === 'terminal-wait') {
+        return { kind: 'accepted', value: { state: 'tui-idle' } };
+      }
+      if (query.operation === 'worker-show') {
+        return {
+          kind: 'accepted',
+          value: { dispatchId: 'dispatch-1', exactWorker: true, agentTerminalHandle: 'terminal-prepared-1' },
+        };
+      }
+      if (query.operation === 'terminal-read') {
+        return { kind: 'accepted', value: { terminal: { draft: '[Pasted Content]' } } };
+      }
+      return undefined;
+    },
+  });
+
+  const result = await materializeWorkPackage({
+    store,
+    backend,
+    coordinationScopeId: SCOPE,
+    workPackageId: WP,
+    context: context('prepared', {
+      kind: 'prepared_terminal',
+      harness: 'codex',
+      activation: 'submit_draft',
+      title: 'companion:prepared:1',
+      prepare: () => Promise.resolve({ title: 'companion:prepared:1', command: 'fixed-codex-launcher' }),
+    }),
+    facts: facts(),
+    expectedRevision: revision(),
+  });
+
+  expect(result.kind).toBe('materialized');
+  const mutations = calls.filter((call) => call.kind === 'mutate');
+  expect(mutations.map((call) => call.operation.operation)).toEqual([
+    'task-create',
+    'terminal-create',
+    'worker-start',
+    'terminal-submit',
+  ]);
+  expect(mutations.map((call) => call.scope.operationId)).toEqual([
+    'op-task-prepared',
+    'op-worker-prepare-prepared',
+    'op-worker-prepared',
+    'op-worker-activate-prepared',
+  ]);
+  const started = mutations.find((call) => call.operation.operation === 'worker-start');
+  expect(started?.operation).toMatchObject({
+    operation: 'worker-start',
+    terminal: 'terminal-prepared-1',
+  });
 });
 
 test('worktree 列举未覆盖全部执行主机时拒绝物化', async () => {

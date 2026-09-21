@@ -76,9 +76,25 @@ Recovery Capsule 只来自 Worker Harness transcript 的 salvage；Coordinator C
 
 理由：`AGENTS.md` 第 7 节区分 Revised Worker Task 与 Retry Attempt，并要求迟到结果只补历史。备选方案是让替代 Session 沿用原 Dispatch，被否，因为会破坏 Task/Dispatch/Attempt 的对账关系。
 
+**superseded Segment 迟到结果的保证边界**：`replaced` 子场景由正常 Delivery 路径**端到端**保证——trusted 事实里的 Dispatch 已是替代 Dispatch，自报原 Dispatch 的迟到结果在 `verifyWorkerResult` 处因 dispatchId 不匹配被判为 `stale_attempt`，`processDelivery` 只确认该 Delivery、写历史而不推进生命周期（证据：`tests/recovery/acceptance/late-results.test.ts`）。`source_completed` 子场景没有替代 Dispatch，trusted 事实里的 `dispatchId` 仍是原 Dispatch，因此它的非推进性**依赖 trusted 事实的生产者**把「该 Attempt / Segment 已不再当前」投影进 `TrustedExecutionFacts`；这条生产链路（生产 Delivery loop 与 Controller 投影）在 M1 尚未建立，owner 是构建它的前台 TUI/装配波次 change。本 change 内对该子场景可证的事实只有：`supersededSegmentId` 已持久化、迟到调用不新增 Recovery 或 Session Segment、零结算记录、终态不被改写。
+
 ### D8：Recovery Capsule 的内容契约与角色门
 
-Capsule 由受限 Utility Worker 经 Task Envelope 从精确 transcript 提取，结论为 `complete` 或 `partial`。`partial` 必须列出精确可读范围、缺口、最后一个完整事件、未闭合动作、逐项来源与 unknowns；transcript 不可用即 `transcript_unavailable` 失败。Utility Worker 不递归触发 Recovery，但在同一 Recovery Operation 内可安全重派一次，再失败即 Recovery 失败。替代 Session 启动前通过角色门：Planner 要求已落盘的 Specification Unit 无隐藏决定；Implementation 要求 workspace/HEAD/dirty paths 可对账且无未知外部副作用；Validator 要求缺口后判断相关 Evidence 是否失效并重验；Finalizer 不需要 Capsule，从权威输入重跑只读检查。
+Capsule 由受限 Utility Worker 经 Task Envelope 从精确 transcript 提取，结论为 `complete` 或 `partial`。Worker Harness Adapter 负责先提供与 Dispatch、Session Binding 绑定的可寻址 transcript 材料和读取覆盖证据；Orca provider transcript 是首选来源，harness 自己证明的 transcript 是同一合同的另一实现。`transcript_unavailable` 固定表示没有经证明的可寻址 transcript；`partial` 只表示精确 transcript 中存在 Adapter 已定位并声明的缺口或解析失败。Utility Worker 根据该证据生成 Capsule，不能仅凭读到的文本自行声称 `partial`。
+
+Codex Adapter 通过 SessionStart hook 取得 provider session ID、transcript 路径、workspace，并使用显式 `CODEX_HOME`。只有报告发生在当前 Dispatch 时间窗内、候选唯一、rollout 文件名 ID、首条 `session_meta.id` 与上报 ID 一致，且 `session_meta.cwd` 等于绑定 workspace 时，才签发本地 `transcriptRef`；任何字段缺失、冲突或多候选都返回 `transcript_unavailable`。Adapter 不使用 mtime、模糊 cwd 或“最新文件”匹配。
+
+Worker 启动统一表示为封闭的 Worker Launch Strategy：`orca_managed` 直接使用 `worker-start --agent`；`prepared_terminal` 由 Worker Harness Adapter 在目标 worktree 内准备固定 launcher 与 harness 状态，再由 Application 依次执行 `terminal create`、`terminal wait --for tui-idle` 和 `worker-start --terminal`。若 harness 在接收大段任务后仍留有非空 draft，Application 只允许执行一次固定 Enter 补交。这个 interface 不接受任意 shell、环境变量、argv 或文本输入；每个 harness 只实现自己登记的准备规则。terminal 只有在 `worker-start --terminal` 成功并读回 exact Worker 后才成为正式 Dispatch。
+
+Codex 使用 `prepared_terminal`：启动状态隔离到 Worker worktree 内的临时 `CODEX_HOME`，项目 trust 只写入该状态根的 `config.toml`，Adapter 核验 hook 来源后才把 `--dangerously-bypass-hook-trust` 固定进 launcher。用户级 `~/.codex/config.toml` 与 Orca 全局 Agent 默认参数/环境都不属于写入面。Application 在当前调用中保留 exact handle，并以 harness 签发的稳定 title + worktree 在崩溃后重定位，不额外持久化易变 handle。该 terminal 在 Orca 中归类为 external，Dispatch 结算并执行 `worker-release` 后仍须以独立 Operation Intent 显式 `terminal close`。
+
+Utility Codex 使用一个同样位于隔离 `CODEX_HOME` 内的封闭 permission profile：文件系统继承 `:read-only`，命令网络只用于投递 Orca 控制消息。当前 Linux 环境不允许 bubblewrap 建立 namespace，Adapter 固定选择 Codex 提供的 legacy Landlock 后端；若来源配置已定义 legacy sandbox 键而会覆盖 permission profile，启动直接失败关闭。
+
+prepared-terminal 的准备、接管或清理有任一步不可核验时均失败关闭：接管前的 terminal 不得当作 Worker；接管结果缺少 exact Worker 身份时不得签发 Session Binding；terminal 状态不明时不得重复准备。2026-09-21 的 Orca 1.4.198 / Codex 0.154.0 PoC 已证明此公共路径可行，共享启动策略已在物化、Recovery 与 Utility Worker 派发三个入口复用，不存在上游 capability blocker。
+
+`partial` 必须列出精确可读范围、缺口、最后一个完整事件、未闭合动作、逐项来源与 unknowns；transcript 不可用即 `transcript_unavailable` 失败。Utility Worker 不递归触发 Recovery，但在同一 Recovery Operation 内可安全重派一次，再失败即 Recovery 失败。替代 Session 启动前通过角色门：Planner 要求已落盘的 Specification Unit 无隐藏决定；Implementation 要求 workspace/HEAD/dirty paths 可对账且无未知外部副作用；Validator 要求缺口后判断相关 Evidence 是否失效并重验；Finalizer 不需要 Capsule，从权威输入重跑只读检查。
+
+沿用 `transcriptRef: string`。Codex Adapter 生成精确本地引用，Utility Worker 只读，Capsule 只保存稳定引用与结论；本 change 不新增通用 transcript 内容仓库、URI 服务或数据库。等第二个 Worker Harness 证明本地引用不够时再调整合同。
 
 理由：`AGENTS.md` 第 6 节要求由受限 Utility Worker 从精确 transcript 生成并阻塞不可用时；角色门把"能否安全接续"从通用检查改为按角色可判定。备选方案是只做一种通用 Capsule 校验，被否，因为四个角色的可对账事实不同。
 
@@ -102,9 +118,11 @@ Pause、Resume、Cancel、Exit 在领域层表达为与模式正交的控制状�
 
 ### D12：验收验证的伪造与真实分层
 
-恢复与控制的行为验证以 fake backend 与 fake model 为主，必须覆盖全部角色、预算边界、partial 与不可用 Capsule、迟到结果、重复启动与崩溃窗口；Execution Handoff 一律使用 fake model 与 fake backend，不消耗真实模型调用。真实 harness 只用于一个显式场景：以 MiniMax-M3 的 Validator 跑一次 partial-transcript Recovery，验证 Capsule 缺口与角色门在真实 transcript 下的行为。真实调用 MUST 只在显式选择的隔离项目与专用身份中运行，MUST NOT 触碰用户主项目、重启全局 Orca runtime 或修改上游。
+恢复与控制的行为验证以 fake backend 与 fake model 为主，必须覆盖全部角色、预算边界、partial 与不可用 Capsule、迟到结果、重复启动与崩溃窗口；Execution Handoff 一律使用 fake model 与 fake backend，不消耗真实模型调用。真实 harness 只用于一个显式场景：以 MiniMax-M3 的 Validator 跑一次真实中断 Recovery，验证 Codex Adapter 建立精确 transcript 来源、Utility Worker 按实际覆盖范围生成 Capsule 并通过角色门。真实来源完整时结论为 `complete`；`partial` 的六字段与缺口判定继续由 fake acceptance 覆盖。真实调用 MUST 只在显式选择的隔离项目与专用身份中运行，MUST NOT 触碰用户主项目、重启全局 Orca runtime 或修改上游。
 
-理由：恢复语义的分支数量大，fake 层可以穷举崩溃窗口与迟到路径，真实调用只回答"真实 transcript 能否产生可用 partial Capsule"这一个 fake 层无法证明的问题。备选方案是全部走真实 Orca，被否，因为不可枚举且违反 `AGENTS.md` 第 11 节的隔离要求。
+真实场景开始前先探测 prepared-terminal 路径的准备、idle、Orca 接管、SessionStart 与清理能力。任一环节缺失时真实验收保持未完成；fake acceptance 的通过不能替代这条真实证据。
+
+理由：恢复语义的分支数量大，fake 层可以穷举崩溃窗口、partial 缺口与迟到路径；真实调用只回答 Codex Adapter 能否为真实中断 Segment 建立精确来源并驱动实际 Capsule 这一问题。备选方案是全部走真实 Orca，被否，因为不可枚举且违反 `AGENTS.md` 第 11 节的隔离要求。
 
 ## Risks / Trade-offs
 
@@ -113,6 +131,7 @@ Pause、Resume、Cancel、Exit 在领域层表达为与模式正交的控制状�
 - `unverifiable` 会推迟派发，降低吞吐。这是对"不推断退出"的直接代价，按 `AGENTS.md` 第 6 节接受。
 - Capsule 的 `partial` 分支需要逐项来源与 unknowns，模板会比其他工件更长；收益是替代 Session 能判断哪些结论可信。
 - 每角色门增加四套判定；约束是四者共用同一 Capsule 契约，只在准入条件上分叉。
+- prepared-terminal 比 Orca 直接启动多一个 Companion-owned terminal 资源与清理意图；接受这项最小状态成本，以换取按 Worker 隔离配置且不污染用户或 Orca 全局设置。公共接口保持封闭，不建设通用进程启动器。
 
 ## Migration Plan
 
