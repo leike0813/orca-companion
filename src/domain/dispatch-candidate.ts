@@ -71,6 +71,13 @@ export type DispatchCandidateFacts = {
   readonly lifecycleStage: WorkPackageLifecycleStage;
   /** 选为当前 Dispatch Candidate 的 Work Package；`null` 表示这一轮没有选中任何候选。 */
   readonly selectedCandidateId: WorkPackageId | null;
+  /**
+   * 处于 revision pending 的 Work Package 集合（受影响节点与其未接受后代）。
+   *
+   * 这是一个**有界**集合：它只挡住被持有的节点，不改变其它节点的拓扑准入；并发上限为 1 是执行并发
+   * 上限，不是准入限制。
+   */
+  readonly revisionPending: readonly WorkPackageId[];
   /** 图依赖已通过的 Work Package 集合。 */
   readonly dependenciesSatisfied: readonly WorkPackageId[];
   readonly controlState: string;
@@ -88,6 +95,7 @@ export type DispatchRejectionCode =
   | 'control_state_not_active'
   | 'not_selected_candidate'
   | 'lifecycle_not_frontier'
+  | 'revision_pending'
   | 'graph_dependency_unsatisfied'
   | 'authorization_invalid'
   | 'role_not_authorized'
@@ -174,6 +182,12 @@ export function evaluateDispatchCandidate(facts: DispatchCandidateFacts): Dispat
     return rejection(
       'lifecycle_not_frontier',
       `Work Package ${facts.candidateWorkPackageId} 的生命周期阶段为 ${facts.lifecycleStage}，不在 Execution Frontier`,
+    );
+  }
+  if (facts.revisionPending.includes(facts.candidateWorkPackageId)) {
+    return rejection(
+      'revision_pending',
+      `Work Package ${facts.candidateWorkPackageId} 处于 revision pending，后续角色与依赖工作不得派发`,
     );
   }
   if (!facts.dependenciesSatisfied.includes(facts.candidateWorkPackageId)) {

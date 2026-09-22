@@ -41,6 +41,12 @@ import {
 } from '../../application/dto/operation-intent.js';
 import type { SourceRevisionRef } from '../../domain/coordinator/session-state.js';
 import type { DeliveryVerdict } from '../../domain/delivery-verdict.js';
+import {
+  DESCENDANT_DISPOSITIONS,
+  type PatchDescendantDisposition,
+  type PatchResponsibilityTakeover,
+} from '../../domain/execution/graph-patch.js';
+import { INHERITABLE_BUDGET_FIELDS } from '../../domain/execution/work-package-lineage.js';
 import type {
   ExecutionGraph,
   GraphVersionRecord,
@@ -74,6 +80,11 @@ import type {
   WorkPackageId,
 } from '../../application/dto/identity.js';
 import {
+  BASELINE_ADOPTION_KINDS,
+  BASELINE_ADOPTION_STATES,
+  BASELINE_RECONCILIATION_STATES,
+  GRAPH_GENERATION_STATUSES,
+  GRAPH_GENERATION_TRANSITIONS,
   PENDING_INTERACTION_STATES,
   PLANNING_HANDOFF_PHASES,
   PLANNING_HANDOFF_TRANSITIONS,
@@ -83,10 +94,15 @@ import {
   RECOVERY_STATES,
   RECOVERY_TERMINAL_OUTCOMES,
   RECOVERY_TRANSITIONS,
+  REVISION_HOLD_SOURCES,
+  REVISION_HOLD_STATES,
   SESSION_LIFECYCLE_STATES,
   TICKET_CLAIM_STATES,
   WAKE_ADMISSION_STATES,
+  type BaselineAdoptionRecord,
+  type BaselineReconciliationRecord,
   type BranchCoordinationStore,
+  type BudgetConsumptionInput,
   type BudgetCounterRecord,
   type CoordinationCommand,
   type CoordinationCommandBase,
@@ -101,7 +117,11 @@ import {
   type DeliveryVerdictRecord,
   type ExecutionHandoffPhase,
   type ExecutionHandoffRecord,
+  type GraphGenerationRecord,
+  type GraphPatchRecord,
+  type GraphVersionPatchInput,
   type HandoffResponsibility,
+  type InheritedBudgetEntry,
   type MaterializationBindingRecord,
   type PendingInteractionRecord,
   type PendingInteractionState,
@@ -112,6 +132,7 @@ import {
   type RecoveryState,
   type RecoveryTerminalOutcome,
   type ReplacementSegmentInput,
+  type RevisionHoldRecord,
   type ScopeRecord,
   type SessionLifecycleState,
   type SessionSegmentRecord,
@@ -119,6 +140,7 @@ import {
   type TicketClaimState,
   type WakeAdmissionRecord,
   type WakeAdmissionState,
+  type WorkPackageLineageRecord,
 } from '../../application/ports/branch-coordination-store.js';
 import { SCHEMA_VERSION, describeError, migrate, readSchemaVersion } from './schema.js';
 
@@ -428,6 +450,204 @@ function decodeHandoffResponsibilitySet(
  * 图在写入前已经过一次同样的校验，读取时再校验一次不是冗余：JSON 负载可能在旧实现、外部工具或
  * 手工修复下变形，而「读出一个字段缺失的图」比直接失败危险得多。
  */
+function requireBoolean(raw: unknown, field: string): Decoded<boolean> {
+  if (typeof raw !== 'boolean') {
+    return fail(`${field} 必须是布尔值`);
+  }
+  return ok(raw);
+}
+
+function decodeDescendantDispositions(
+  raw: unknown,
+  field: string,
+): Decoded<readonly PatchDescendantDisposition[]> {
+  if (!Array.isArray(raw)) {
+    return fail(`${field} 必须是数组`);
+  }
+  const values: PatchDescendantDisposition[] = [];
+  for (const [index, entry] of raw.entries()) {
+    if (!isRecord(entry)) {
+      return fail(`${field}.${index} 必须是对象`);
+    }
+    const workPackageId = requireString(entry['workPackageId'], `${field}.${index}.workPackageId`);
+    if (!workPackageId.ok) {
+      return workPackageId;
+    }
+    const disposition = requireEnum(
+      entry['disposition'],
+      DESCENDANT_DISPOSITIONS,
+      `${field}.${index}.disposition`,
+    );
+    if (!disposition.ok) {
+      return disposition;
+    }
+    values.push({ workPackageId: workPackageId.value as WorkPackageId, disposition: disposition.value });
+  }
+  return ok(values);
+}
+
+function decodeTakeovers(raw: unknown, field: string): Decoded<readonly PatchResponsibilityTakeover[]> {
+  if (!Array.isArray(raw)) {
+    return fail(`${field} 必须是数组`);
+  }
+  const values: PatchResponsibilityTakeover[] = [];
+  for (const [index, entry] of raw.entries()) {
+    if (!isRecord(entry)) {
+      return fail(`${field}.${index} 必须是对象`);
+    }
+    const workPackageId = requireString(entry['workPackageId'], `${field}.${index}.workPackageId`);
+    if (!workPackageId.ok) {
+      return workPackageId;
+    }
+    const takesOverByKey = requireString(entry['takesOverByKey'], `${field}.${index}.takesOverByKey`);
+    if (!takesOverByKey.ok) {
+      return takesOverByKey;
+    }
+    values.push({
+      workPackageId: workPackageId.value as WorkPackageId,
+      takesOverByKey: takesOverByKey.value,
+    });
+  }
+  return ok(values);
+}
+
+function decodeInheritedBudget(raw: unknown, field: string): Decoded<readonly InheritedBudgetEntry[]> {
+  if (!Array.isArray(raw)) {
+    return fail(`${field} 必须是数组`);
+  }
+  const values: InheritedBudgetEntry[] = [];
+  const seen = new Set<string>();
+  for (const [index, entry] of raw.entries()) {
+    if (!isRecord(entry)) {
+      return fail(`${field}.${index} 必须是对象`);
+    }
+    const fieldName = requireEnum(entry['field'], INHERITABLE_BUDGET_FIELDS, `${field}.${index}.field`);
+    if (!fieldName.ok) {
+      return fieldName;
+    }
+    if (seen.has(fieldName.value)) {
+      return fail(`${field} 中的 ${fieldName.value} 重复`);
+    }
+    seen.add(fieldName.value);
+    const consumed = requireCount(entry['consumed'], `${field}.${index}.consumed`);
+    if (!consumed.ok) {
+      return consumed;
+    }
+    values.push({ field: fieldName.value, consumed: consumed.value });
+  }
+  return ok(values);
+}
+
+/** 补丁元数据负载：图体不在其中，因此读取它不会产生第二份图。 */
+function decodeGraphPatchPayload(
+  raw: unknown,
+  field: string,
+): Decoded<Omit<GraphPatchRecord, 'coordinationScopeId' | 'graphId' | 'graphVersion'>> {
+  if (!isRecord(raw)) {
+    return fail(`${field} 必须是对象`);
+  }
+  const patchId = requireString(raw['patchId'], `${field}.patchId`);
+  if (!patchId.ok) {
+    return patchId;
+  }
+  const operationId = requireString(raw['operationId'], `${field}.operationId`);
+  if (!operationId.ok) {
+    return operationId;
+  }
+  const baseGraphVersion = requireCount(raw['baseGraphVersion'], `${field}.baseGraphVersion`);
+  if (!baseGraphVersion.ok) {
+    return baseGraphVersion;
+  }
+  const added = requireStringArray(raw['added'], `${field}.added`);
+  if (!added.ok) {
+    return added;
+  }
+  const revised = requireStringArray(raw['revised'], `${field}.revised`);
+  if (!revised.ok) {
+    return revised;
+  }
+  const retired = requireStringArray(raw['retired'], `${field}.retired`);
+  if (!retired.ok) {
+    return retired;
+  }
+  const descendants = decodeDescendantDispositions(raw['descendants'], `${field}.descendants`);
+  if (!descendants.ok) {
+    return descendants;
+  }
+  const takesOver = decodeTakeovers(raw['takesOver'], `${field}.takesOver`);
+  if (!takesOver.ok) {
+    return takesOver;
+  }
+  return ok({
+    patchId: patchId.value,
+    operationId: operationId.value as OperationId,
+    baseGraphVersion: baseGraphVersion.value as GraphVersion,
+    added: added.value.map((id) => id as WorkPackageId),
+    revised: revised.value.map((id) => id as WorkPackageId),
+    retired: retired.value.map((id) => id as WorkPackageId),
+    descendants: descendants.value,
+    takesOver: takesOver.value,
+  });
+}
+
+/** 写入前的补丁元数据校验：`initial` 不带补丁，`accepted_revision` 必须完整。 */
+function decodeGraphVersionPatchInput(raw: unknown, field: string): Decoded<GraphVersionPatchInput | null> {
+  if (raw === null || raw === undefined) {
+    return ok(null);
+  }
+  const payload = decodeGraphPatchPayload(raw, field);
+  if (!payload.ok) {
+    return payload;
+  }
+  const pending = requireStringArray(
+    isRecord(raw) ? raw['revisionPendingWorkPackageIds'] : undefined,
+    `${field}.revisionPendingWorkPackageIds`,
+  );
+  if (!pending.ok) {
+    return pending;
+  }
+  return ok({
+    ...payload.value,
+    revisionPendingWorkPackageIds: pending.value.map((id) => id as WorkPackageId),
+  });
+}
+
+/** 与追加同事务写入的预算扣减载荷；省略即不消耗。 */
+function decodeBudgetConsumptionInput(
+  raw: unknown,
+  field: string,
+): Decoded<readonly BudgetConsumptionInput[] | undefined> {
+  if (raw === undefined) {
+    return ok(undefined);
+  }
+  if (!Array.isArray(raw)) {
+    return fail(`${field} 必须是数组`);
+  }
+  const values: BudgetConsumptionInput[] = [];
+  for (const [index, entry] of raw.entries()) {
+    if (!isRecord(entry)) {
+      return fail(`${field}.${index} 必须是对象`);
+    }
+    const budgetKey = requireString(entry['budgetKey'], `${field}.${index}.budgetKey`);
+    if (!budgetKey.ok) {
+      return budgetKey;
+    }
+    const approvedLimitRef = requireString(entry['approvedLimitRef'], `${field}.${index}.approvedLimitRef`);
+    if (!approvedLimitRef.ok) {
+      return approvedLimitRef;
+    }
+    const amount = requireCount(entry['amount'], `${field}.${index}.amount`);
+    if (!amount.ok) {
+      return amount;
+    }
+    if (amount.value === 0) {
+      return fail(`${field}.${index}.amount 必须大于 0`);
+    }
+    values.push({ budgetKey: budgetKey.value, approvedLimitRef: approvedLimitRef.value, amount: amount.value });
+  }
+  return ok(values);
+}
+
 function decodeScopeEnvelope(raw: unknown, field: string): Decoded<ScopeEnvelope> {
   if (!isRecord(raw)) {
     return fail(`${field} 必须是对象`);
@@ -961,6 +1181,43 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (graph.value.graphId !== graphId.value || graph.value.generation !== generation.value) {
         return fail('graph 负载与 graphId/generation 不一致');
       }
+      const patch = decodeGraphVersionPatchInput(command['patch'], 'patch');
+      if (!patch.ok) {
+        return patch;
+      }
+      if (recordKind.value === 'initial' && patch.value !== null) {
+        return fail('initial GraphVersion 不得携带补丁元数据');
+      }
+      if (recordKind.value === 'accepted_revision' && patch.value === null) {
+        return fail('accepted_revision 必须携带补丁元数据');
+      }
+      const budgetConsumption = decodeBudgetConsumptionInput(command['budgetConsumption'], 'budgetConsumption');
+      if (!budgetConsumption.ok) {
+        return budgetConsumption;
+      }
+      const baselineRaw = command['baselineReconciliations'];
+      if (baselineRaw !== undefined && !Array.isArray(baselineRaw)) {
+        return fail('baselineReconciliations 必须是数组');
+      }
+      const baselineReconciliations: { reconciliationId: string; workPackageId: WorkPackageId; requiredBaselineHead: string }[] = [];
+      for (const entry of (baselineRaw as readonly unknown[] | undefined) ?? []) {
+        if (!isRecord(entry)) return fail('baselineReconciliations 项必须是对象');
+        const reconciliationId = requireString(entry['reconciliationId'], 'baselineReconciliations.reconciliationId');
+        const workPackageId = requireString(entry['workPackageId'], 'baselineReconciliations.workPackageId');
+        const requiredBaselineHead = requireString(entry['requiredBaselineHead'], 'baselineReconciliations.requiredBaselineHead');
+        if (!reconciliationId.ok) return reconciliationId;
+        if (!workPackageId.ok) return workPackageId;
+        if (!requiredBaselineHead.ok) return requiredBaselineHead;
+        baselineReconciliations.push({ reconciliationId: reconciliationId.value, workPackageId: workPackageId.value as WorkPackageId, requiredBaselineHead: requiredBaselineHead.value });
+      }
+      if (recordKind.value === 'initial' && baselineReconciliations.length > 0) {
+        return fail('initial GraphVersion 不得携带基线补救需求');
+      }
+      if (patch.value !== null && baselineReconciliations.some((entry) =>
+        !patch.value?.revisionPendingWorkPackageIds.includes(entry.workPackageId)
+      )) {
+        return fail('基线补救需求必须属于本次 revision pending 节点');
+      }
       return ok({
         ...base,
         kind: 'record-graph-version',
@@ -973,6 +1230,9 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         planRevision: planRevision.value,
         orcaRunId: orcaRunId.value,
         graph: graph.value,
+        patch: patch.value,
+        baselineReconciliations,
+        ...(budgetConsumption.value === undefined ? {} : { budgetConsumption: budgetConsumption.value }),
       });
     }
     case 'record-authorization': {
@@ -1524,6 +1784,323 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         ...(blockingReason.value.present ? { blockingReason: blockingReason.value.value } : {}),
       });
     }
+    case 'record-graph-generation': {
+      const graphId = requireString(command['graphId'], 'graphId');
+      if (!graphId.ok) {
+        return graphId;
+      }
+      const generation = requireCount(command['generation'], 'generation');
+      if (!generation.ok) {
+        return generation;
+      }
+      const planningCycleId = requireString(command['planningCycleId'], 'planningCycleId');
+      if (!planningCycleId.ok) {
+        return planningCycleId;
+      }
+      const orcaRunId = requireString(command['orcaRunId'], 'orcaRunId');
+      if (!orcaRunId.ok) {
+        return orcaRunId;
+      }
+      const predecessorGraphId = requireNullableString(command['predecessorGraphId'], 'predecessorGraphId');
+      if (!predecessorGraphId.ok) {
+        return predecessorGraphId;
+      }
+      const baselineHead = requireString(command['baselineHead'], 'baselineHead');
+      if (!baselineHead.ok) {
+        return baselineHead;
+      }
+      return ok({
+        ...base,
+        kind: 'record-graph-generation',
+        graphId: graphId.value as GraphId,
+        generation: generation.value as GraphGeneration,
+        planningCycleId: planningCycleId.value as PlanningCycleId,
+        orcaRunId: orcaRunId.value,
+        predecessorGraphId: predecessorGraphId.value === null ? null : (predecessorGraphId.value as GraphId),
+        baselineHead: baselineHead.value,
+      });
+    }
+    case 'advance-graph-generation': {
+      const graphId = requireString(command['graphId'], 'graphId');
+      if (!graphId.ok) {
+        return graphId;
+      }
+      const status = requireEnum(command['status'], GRAPH_GENERATION_STATUSES, 'status');
+      if (!status.ok) {
+        return status;
+      }
+      return ok({
+        ...base,
+        kind: 'advance-graph-generation',
+        graphId: graphId.value as GraphId,
+        status: status.value,
+      });
+    }
+    case 'record-revision-hold': {
+      const workPackageId = requireString(command['workPackageId'], 'workPackageId');
+      if (!workPackageId.ok) {
+        return workPackageId;
+      }
+      const source = requireEnum(command['source'], REVISION_HOLD_SOURCES, 'source');
+      if (!source.ok) {
+        return source;
+      }
+      const sourceRef = requireString(command['sourceRef'], 'sourceRef');
+      if (!sourceRef.ok) {
+        return sourceRef;
+      }
+      return ok({
+        ...base,
+        kind: 'record-revision-hold',
+        workPackageId: workPackageId.value as WorkPackageId,
+        source: source.value,
+        sourceRef: sourceRef.value,
+      });
+    }
+    case 'release-revision-hold': {
+      const workPackageId = requireString(command['workPackageId'], 'workPackageId');
+      if (!workPackageId.ok) {
+        return workPackageId;
+      }
+      const reason = requireString(command['reason'], 'reason');
+      if (!reason.ok) {
+        return reason;
+      }
+      const budgetConsumption = decodeBudgetConsumptionInput(command['budgetConsumption'], 'budgetConsumption');
+      if (!budgetConsumption.ok) {
+        return budgetConsumption;
+      }
+      const expectedSourceRef = decodeStringPatch(command['expectedSourceRef'], 'expectedSourceRef');
+      if (!expectedSourceRef.ok) {
+        return expectedSourceRef;
+      }
+      const sourceRef = expectedSourceRef.value.value;
+      return ok({
+        ...base,
+        kind: 'release-revision-hold',
+        workPackageId: workPackageId.value as WorkPackageId,
+        reason: reason.value,
+        ...(sourceRef === null ? {} : { expectedSourceRef: sourceRef }),
+        ...(budgetConsumption.value === undefined ? {} : { budgetConsumption: budgetConsumption.value }),
+      });
+    }
+    case 'record-baseline-reconciliation': {
+      const reconciliationId = requireString(command['reconciliationId'], 'reconciliationId');
+      if (!reconciliationId.ok) {
+        return reconciliationId;
+      }
+      const workPackageId = requireString(command['workPackageId'], 'workPackageId');
+      if (!workPackageId.ok) {
+        return workPackageId;
+      }
+      const requiredBaselineHead = requireString(command['requiredBaselineHead'], 'requiredBaselineHead');
+      if (!requiredBaselineHead.ok) {
+        return requiredBaselineHead;
+      }
+      return ok({
+        ...base,
+        kind: 'record-baseline-reconciliation',
+        reconciliationId: reconciliationId.value,
+        workPackageId: workPackageId.value as WorkPackageId,
+        requiredBaselineHead: requiredBaselineHead.value,
+      });
+    }
+    case 'bind-baseline-reconciliation-task': {
+      const reconciliationId = requireString(command['reconciliationId'], 'reconciliationId');
+      if (!reconciliationId.ok) return reconciliationId;
+      const orcaTaskId = requireString(command['orcaTaskId'], 'orcaTaskId');
+      if (!orcaTaskId.ok) return orcaTaskId;
+      const dispatchId = command['dispatchId'] === undefined
+        ? null
+        : requireString(command['dispatchId'], 'dispatchId');
+      if (dispatchId !== null && !dispatchId.ok) return dispatchId;
+      return ok({
+        ...base,
+        kind: 'bind-baseline-reconciliation-task',
+        reconciliationId: reconciliationId.value,
+        orcaTaskId: orcaTaskId.value,
+        ...(dispatchId === null ? {} : { dispatchId: dispatchId.value as DispatchId }),
+      });
+    }
+    case 'advance-baseline-reconciliation': {
+      const reconciliationId = requireString(command['reconciliationId'], 'reconciliationId');
+      if (!reconciliationId.ok) {
+        return reconciliationId;
+      }
+      const state = requireEnum(
+        command['state'],
+        ['verified', 'blocked'] as const,
+        'state',
+      );
+      if (!state.ok) {
+        return state;
+      }
+      const observedHead = decodeStringPatch(command['observedHead'], 'observedHead');
+      if (!observedHead.ok) {
+        return observedHead;
+      }
+      const blockerRef = decodeStringPatch(command['blockerRef'], 'blockerRef');
+      if (!blockerRef.ok) {
+        return blockerRef;
+      }
+      const flags: Record<string, boolean> = {};
+      for (const key of [
+        'ancestryVerified',
+        'targetHeadVerified',
+        'dirtyPathsReconciled',
+        'scopeReconciled',
+      ] as const) {
+        const raw = command[key];
+        if (raw === undefined) {
+          continue;
+        }
+        const parsed = requireBoolean(raw, key);
+        if (!parsed.ok) {
+          return parsed;
+        }
+        flags[key] = parsed.value;
+      }
+      return ok({
+        ...base,
+        kind: 'advance-baseline-reconciliation',
+        reconciliationId: reconciliationId.value,
+        state: state.value,
+        ...(observedHead.value.present ? { observedHead: observedHead.value.value } : {}),
+        ...(flags['ancestryVerified'] === undefined ? {} : { ancestryVerified: flags['ancestryVerified'] }),
+        ...(flags['targetHeadVerified'] === undefined ? {} : { targetHeadVerified: flags['targetHeadVerified'] }),
+        ...(flags['dirtyPathsReconciled'] === undefined
+          ? {}
+          : { dirtyPathsReconciled: flags['dirtyPathsReconciled'] }),
+        ...(flags['scopeReconciled'] === undefined ? {} : { scopeReconciled: flags['scopeReconciled'] }),
+        ...(blockerRef.value.present ? { blockerRef: blockerRef.value.value } : {}),
+      });
+    }
+    case 'record-work-package-lineage': {
+      const workPackageId = requireString(command['workPackageId'], 'workPackageId');
+      if (!workPackageId.ok) {
+        return workPackageId;
+      }
+      const priorWorkPackageId = requireString(command['priorWorkPackageId'], 'priorWorkPackageId');
+      if (!priorWorkPackageId.ok) {
+        return priorWorkPackageId;
+      }
+      const priorGraphId = requireString(command['priorGraphId'], 'priorGraphId');
+      if (!priorGraphId.ok) {
+        return priorGraphId;
+      }
+      if (workPackageId.value === priorWorkPackageId.value) {
+        return fail('Work Package 不能延续自身');
+      }
+      const inherited = decodeInheritedBudget(command['inherited'], 'inherited');
+      if (!inherited.ok) {
+        return inherited;
+      }
+      return ok({
+        ...base,
+        kind: 'record-work-package-lineage',
+        workPackageId: workPackageId.value as WorkPackageId,
+        priorWorkPackageId: priorWorkPackageId.value as WorkPackageId,
+        priorGraphId: priorGraphId.value as GraphId,
+        inherited: inherited.value,
+      });
+    }
+    case 'record-baseline-adoption': {
+      const adoptionId = requireString(command['adoptionId'], 'adoptionId');
+      if (!adoptionId.ok) {
+        return adoptionId;
+      }
+      const workPackageId = requireString(command['workPackageId'], 'workPackageId');
+      if (!workPackageId.ok) {
+        return workPackageId;
+      }
+      const adoptionKind = requireEnum(command['adoptionKind'], BASELINE_ADOPTION_KINDS, 'adoptionKind');
+      if (!adoptionKind.ok) {
+        return adoptionKind;
+      }
+      const adoptedResultRef = requireString(command['adoptedResultRef'], 'adoptedResultRef');
+      if (!adoptedResultRef.ok) {
+        return adoptedResultRef;
+      }
+      const baselineHead = requireString(command['baselineHead'], 'baselineHead');
+      if (!baselineHead.ok) {
+        return baselineHead;
+      }
+      const integrationRef = requireNullableString(command['integrationRef'], 'integrationRef');
+      if (!integrationRef.ok) {
+        return integrationRef;
+      }
+      const evidenceRefs = requireStringArray(command['evidenceRefs'], 'evidenceRefs');
+      if (!evidenceRefs.ok) {
+        return evidenceRefs;
+      }
+      const state = requireEnum(command['state'], BASELINE_ADOPTION_STATES, 'state');
+      if (!state.ok) {
+        return state;
+      }
+      const blockingReason = requireNullableString(command['blockingReason'], 'blockingReason');
+      if (!blockingReason.ok) {
+        return blockingReason;
+      }
+      return ok({
+        ...base,
+        kind: 'record-baseline-adoption',
+        adoptionId: adoptionId.value,
+        workPackageId: workPackageId.value as WorkPackageId,
+        adoptionKind: adoptionKind.value,
+        adoptedResultRef: adoptedResultRef.value,
+        baselineHead: baselineHead.value,
+        integrationRef: integrationRef.value,
+        evidenceRefs: evidenceRefs.value,
+        state: state.value,
+        blockingReason: blockingReason.value,
+      });
+    }
+    case 'commit-generation-cutover': {
+      const candidateGraphId = requireString(command['candidateGraphId'], 'candidateGraphId');
+      if (!candidateGraphId.ok) {
+        return candidateGraphId;
+      }
+      const candidateGraphVersion = requireCount(command['candidateGraphVersion'], 'candidateGraphVersion');
+      if (!candidateGraphVersion.ok || candidateGraphVersion.value === 0) {
+        return fail('candidateGraphVersion 必须是正的安全整数');
+      }
+      const planningCycleId = requireString(command['planningCycleId'], 'planningCycleId');
+      if (!planningCycleId.ok) {
+        return planningCycleId;
+      }
+      const authorizationId = requireString(command['authorizationId'], 'authorizationId');
+      if (!authorizationId.ok) {
+        return authorizationId;
+      }
+      const authorizationVersion = requireCount(command['authorizationVersion'], 'authorizationVersion');
+      if (!authorizationVersion.ok || authorizationVersion.value === 0) {
+        return fail('authorizationVersion 必须是正的安全整数');
+      }
+      const predecessorGraphId = requireNullableString(command['predecessorGraphId'], 'predecessorGraphId');
+      if (!predecessorGraphId.ok) {
+        return predecessorGraphId;
+      }
+      const candidateRunId = requireString(command['candidateRunId'], 'candidateRunId');
+      if (!candidateRunId.ok) {
+        return candidateRunId;
+      }
+      const baselineHead = requireString(command['baselineHead'], 'baselineHead');
+      if (!baselineHead.ok) {
+        return baselineHead;
+      }
+      return ok({
+        ...base,
+        kind: 'commit-generation-cutover',
+        candidateGraphId: candidateGraphId.value as GraphId,
+        candidateGraphVersion: candidateGraphVersion.value as GraphVersion,
+        planningCycleId: planningCycleId.value as PlanningCycleId,
+        authorizationId: authorizationId.value,
+        authorizationVersion: authorizationVersion.value,
+        predecessorGraphId: predecessorGraphId.value === null ? null : (predecessorGraphId.value as GraphId),
+        candidateRunId: candidateRunId.value,
+        baselineHead: baselineHead.value,
+      });
+    }
     default:
       return fail(`未登记的 command variant: ${kind.value}`);
   }
@@ -1653,6 +2230,74 @@ type GraphVersionRow = {
   readonly plan_revision: number;
   readonly orca_run_id: string;
   readonly graph_json: string;
+  readonly patch_id: string | null;
+  readonly patch_json: string | null;
+  readonly recorded_at: number;
+};
+
+type GraphGenerationRow = {
+  readonly coordination_scope_id: string;
+  readonly graph_id: string;
+  readonly graph_generation: number;
+  readonly planning_cycle_id: string;
+  readonly orca_run_id: string;
+  readonly predecessor_graph_id: string | null;
+  readonly baseline_head: string;
+  readonly status: string;
+  readonly created_at: number;
+  readonly updated_at: number;
+};
+
+type RevisionHoldRow = {
+  readonly coordination_scope_id: string;
+  readonly work_package_id: string;
+  readonly source: string;
+  readonly source_ref: string;
+  readonly state: string;
+  readonly created_at: number;
+  readonly released_at: number | null;
+  readonly release_reason: string | null;
+};
+
+type BaselineReconciliationRow = {
+  readonly coordination_scope_id: string;
+  readonly reconciliation_id: string;
+  readonly work_package_id: string;
+  readonly role: string;
+  readonly required_baseline_head: string;
+  readonly orca_task_id: string | null;
+  readonly dispatch_id: string | null;
+  readonly observed_head: string | null;
+  readonly ancestry_verified: number;
+  readonly target_head_verified: number;
+  readonly dirty_paths_reconciled: number;
+  readonly scope_reconciled: number;
+  readonly state: string;
+  readonly blocker_ref: string | null;
+  readonly created_at: number;
+  readonly updated_at: number;
+};
+
+type WorkPackageLineageRow = {
+  readonly coordination_scope_id: string;
+  readonly work_package_id: string;
+  readonly prior_work_package_id: string;
+  readonly prior_graph_id: string;
+  readonly inherited_json: string;
+  readonly recorded_at: number;
+};
+
+type BaselineAdoptionRow = {
+  readonly coordination_scope_id: string;
+  readonly adoption_id: string;
+  readonly work_package_id: string;
+  readonly adoption_kind: string;
+  readonly adopted_result_ref: string;
+  readonly baseline_head: string;
+  readonly integration_ref: string | null;
+  readonly evidence_refs: string;
+  readonly state: string;
+  readonly blocking_reason: string | null;
   readonly recorded_at: number;
 };
 
@@ -1802,10 +2447,134 @@ function decodeGraphVersionRow(row: GraphVersionRow): Decoded<GraphVersionRecord
     version: row.graph_version as GraphVersion,
     recordKind: row.record_kind,
     parentVersion: row.parent_version === null ? null : (row.parent_version as GraphVersion),
+    patchId: row.patch_id,
     mapRevision: row.map_revision,
     planRevision: row.plan_revision,
     orcaRunId: row.orca_run_id,
     graph: graph.value,
+    recordedAt: row.recorded_at,
+  });
+}
+
+function decodeGraphGenerationRow(row: GraphGenerationRow): Decoded<GraphGenerationRecord> {
+  const status = requireEnum(row.status, GRAPH_GENERATION_STATUSES, 'graph_generations.status');
+  if (!status.ok) {
+    return status;
+  }
+  return ok({
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    graphId: row.graph_id as GraphId,
+    generation: row.graph_generation as GraphGeneration,
+    planningCycleId: row.planning_cycle_id as PlanningCycleId,
+    orcaRunId: row.orca_run_id,
+    predecessorGraphId: row.predecessor_graph_id === null ? null : (row.predecessor_graph_id as GraphId),
+    baselineHead: row.baseline_head,
+    status: status.value,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+}
+
+function decodeRevisionHoldRow(row: RevisionHoldRow): Decoded<RevisionHoldRecord> {
+  const source = requireEnum(row.source, REVISION_HOLD_SOURCES, 'revision_holds.source');
+  if (!source.ok) {
+    return source;
+  }
+  const state = requireEnum(row.state, REVISION_HOLD_STATES, 'revision_holds.state');
+  if (!state.ok) {
+    return state;
+  }
+  return ok({
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    workPackageId: row.work_package_id as WorkPackageId,
+    source: source.value,
+    sourceRef: row.source_ref,
+    state: state.value,
+    createdAt: row.created_at,
+    releasedAt: row.released_at,
+    releaseReason: row.release_reason,
+  });
+}
+
+function decodeBaselineReconciliationRow(row: BaselineReconciliationRow): Decoded<BaselineReconciliationRecord> {
+  const state = requireEnum(row.state, BASELINE_RECONCILIATION_STATES, 'baseline_reconciliations.state');
+  if (!state.ok) {
+    return state;
+  }
+  if (row.role !== 'planner') {
+    return fail(`baseline_reconciliations.role 取值不受支持: ${row.role}`);
+  }
+  return ok({
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    reconciliationId: row.reconciliation_id,
+    workPackageId: row.work_package_id as WorkPackageId,
+    role: 'planner',
+    requiredBaselineHead: row.required_baseline_head,
+    orcaTaskId: row.orca_task_id,
+    dispatchId: row.dispatch_id as DispatchId | null,
+    observedHead: row.observed_head,
+    ancestryVerified: row.ancestry_verified === 1,
+    targetHeadVerified: row.target_head_verified === 1,
+    dirtyPathsReconciled: row.dirty_paths_reconciled === 1,
+    scopeReconciled: row.scope_reconciled === 1,
+    state: state.value,
+    blockerRef: row.blocker_ref,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+}
+
+function decodeWorkPackageLineageRow(row: WorkPackageLineageRow): Decoded<WorkPackageLineageRecord> {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(row.inherited_json);
+  } catch (error) {
+    return fail(`work_package_lineages.inherited_json 不是合法 JSON: ${describeError(error)}`);
+  }
+  const inherited = decodeInheritedBudget(raw, 'work_package_lineages.inherited_json');
+  if (!inherited.ok) {
+    return inherited;
+  }
+  return ok({
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    workPackageId: row.work_package_id as WorkPackageId,
+    priorWorkPackageId: row.prior_work_package_id as WorkPackageId,
+    priorGraphId: row.prior_graph_id as GraphId,
+    inherited: inherited.value,
+    recordedAt: row.recorded_at,
+  });
+}
+
+function decodeBaselineAdoptionRow(row: BaselineAdoptionRow): Decoded<BaselineAdoptionRecord> {
+  const kind = requireEnum(row.adoption_kind, BASELINE_ADOPTION_KINDS, 'baseline_adoptions.adoption_kind');
+  if (!kind.ok) {
+    return kind;
+  }
+  const state = requireEnum(row.state, BASELINE_ADOPTION_STATES, 'baseline_adoptions.state');
+  if (!state.ok) {
+    return state;
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(row.evidence_refs);
+  } catch (error) {
+    return fail(`baseline_adoptions.evidence_refs 不是合法 JSON: ${describeError(error)}`);
+  }
+  const evidenceRefs = requireStringArray(raw, 'baseline_adoptions.evidence_refs');
+  if (!evidenceRefs.ok) {
+    return evidenceRefs;
+  }
+  return ok({
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    adoptionId: row.adoption_id,
+    workPackageId: row.work_package_id as WorkPackageId,
+    kind: kind.value,
+    adoptedResultRef: row.adopted_result_ref,
+    baselineHead: row.baseline_head,
+    integrationRef: row.integration_ref,
+    evidenceRefs: evidenceRefs.value,
+    state: state.value,
+    blockingReason: row.blocking_reason,
     recordedAt: row.recorded_at,
   });
 }
@@ -2451,6 +3220,94 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       graphVersion,
     );
 
+  const readGraphGenerationRows = (scopeId: string): readonly GraphGenerationRow[] =>
+    many<GraphGenerationRow>(
+      db.prepare(
+        'SELECT * FROM graph_generations WHERE coordination_scope_id = ? ORDER BY graph_generation, graph_id',
+      ),
+      scopeId,
+    );
+
+  const readGraphGenerationRow = (scopeId: string, graphId: string): GraphGenerationRow | undefined =>
+    one<GraphGenerationRow>(
+      db.prepare('SELECT * FROM graph_generations WHERE coordination_scope_id = ? AND graph_id = ?'),
+      scopeId,
+      graphId,
+    );
+
+  const readRevisionHoldRows = (scopeId: string, workPackageId?: string): readonly RevisionHoldRow[] =>
+    workPackageId === undefined
+      ? many<RevisionHoldRow>(
+          db.prepare(
+            'SELECT * FROM revision_holds WHERE coordination_scope_id = ? ORDER BY work_package_id',
+          ),
+          scopeId,
+        )
+      : many<RevisionHoldRow>(
+          db.prepare(
+            'SELECT * FROM revision_holds WHERE coordination_scope_id = ? AND work_package_id = ?',
+          ),
+          scopeId,
+          workPackageId,
+        );
+
+  const readBaselineReconciliationRows = (
+    scopeId: string,
+    workPackageId?: string,
+  ): readonly BaselineReconciliationRow[] =>
+    workPackageId === undefined
+      ? many<BaselineReconciliationRow>(
+          db.prepare(
+            `SELECT * FROM baseline_reconciliations
+             WHERE coordination_scope_id = ? ORDER BY created_at, reconciliation_id`,
+          ),
+          scopeId,
+        )
+      : many<BaselineReconciliationRow>(
+          db.prepare(
+            `SELECT * FROM baseline_reconciliations
+             WHERE coordination_scope_id = ? AND work_package_id = ? ORDER BY created_at, reconciliation_id`,
+          ),
+          scopeId,
+          workPackageId,
+        );
+
+  const readWorkPackageLineageRows = (
+    scopeId: string,
+    workPackageId?: string,
+  ): readonly WorkPackageLineageRow[] =>
+    workPackageId === undefined
+      ? many<WorkPackageLineageRow>(
+          db.prepare(
+            'SELECT * FROM work_package_lineages WHERE coordination_scope_id = ? ORDER BY work_package_id',
+          ),
+          scopeId,
+        )
+      : many<WorkPackageLineageRow>(
+          db.prepare(
+            'SELECT * FROM work_package_lineages WHERE coordination_scope_id = ? AND work_package_id = ?',
+          ),
+          scopeId,
+          workPackageId,
+        );
+
+  const readBaselineAdoptionRows = (scopeId: string, workPackageId?: string): readonly BaselineAdoptionRow[] =>
+    workPackageId === undefined
+      ? many<BaselineAdoptionRow>(
+          db.prepare(
+            'SELECT * FROM baseline_adoptions WHERE coordination_scope_id = ? ORDER BY recorded_at, adoption_id',
+          ),
+          scopeId,
+        )
+      : many<BaselineAdoptionRow>(
+          db.prepare(
+            `SELECT * FROM baseline_adoptions
+             WHERE coordination_scope_id = ? AND work_package_id = ? ORDER BY recorded_at, adoption_id`,
+          ),
+          scopeId,
+          workPackageId,
+        );
+
   const readAuthorizationRows = (scopeId: string): readonly AuthorizationRow[] =>
     many<AuthorizationRow>(
       db.prepare(
@@ -2659,6 +3516,32 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
     if (!executionHandoffs.ok) {
       return executionHandoffs;
     }
+    const graphGenerations = decodeRows(readGraphGenerationRows(scopeId), decodeGraphGenerationRow);
+    if (!graphGenerations.ok) {
+      return graphGenerations;
+    }
+    const revisionHolds = decodeRows(readRevisionHoldRows(scopeId, undefined), decodeRevisionHoldRow);
+    if (!revisionHolds.ok) {
+      return revisionHolds;
+    }
+    const baselineReconciliations = decodeRows(
+      readBaselineReconciliationRows(scopeId, undefined),
+      decodeBaselineReconciliationRow,
+    );
+    if (!baselineReconciliations.ok) {
+      return baselineReconciliations;
+    }
+    const workPackageLineages = decodeRows(
+      readWorkPackageLineageRows(scopeId, undefined),
+      decodeWorkPackageLineageRow,
+    );
+    if (!workPackageLineages.ok) {
+      return workPackageLineages;
+    }
+    const baselineAdoptions = decodeRows(readBaselineAdoptionRows(scopeId, undefined), decodeBaselineAdoptionRow);
+    if (!baselineAdoptions.ok) {
+      return baselineAdoptions;
+    }
     return ok({
       scope,
       sessions: sessions.value,
@@ -2679,6 +3562,11 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       deliveryVerdicts: verdicts.value,
       recoveries: recoveries.value,
       executionHandoffs: executionHandoffs.value,
+      graphGenerations: graphGenerations.value,
+      revisionHolds: revisionHolds.value,
+      baselineReconciliations: baselineReconciliations.value,
+      workPackageLineages: workPackageLineages.value,
+      baselineAdoptions: baselineAdoptions.value,
       // lane 阻塞由未决 intent 派生：只覆盖确有未决 intent 的 lane，不构成全局锁。
       mutationLanes: projectMutationLanes(intents.value),
     });
@@ -2907,12 +3795,134 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           }
           return { kind: 'execution-handoff', handoff: handoff.value };
         }
+        case 'graph-generations': {
+          const generations = decodeRows(readGraphGenerationRows(scopeId), decodeGraphGenerationRow);
+          if (!generations.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: generations.message };
+          }
+          return { kind: 'graph-generations', generations: generations.value };
+        }
+        case 'graph-generation': {
+          const row = readGraphGenerationRow(scopeId, input.graphId);
+          if (row === undefined) {
+            return { kind: 'graph-generation', generation: null };
+          }
+          const generation = decodeGraphGenerationRow(row);
+          if (!generation.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: generation.message };
+          }
+          return { kind: 'graph-generation', generation: generation.value };
+        }
+        case 'graph-patch-record': {
+          const row = readGraphVersionRow(scopeId, input.graphId, input.graphVersion);
+          if (row === undefined || row.patch_json === null) {
+            return { kind: 'graph-patch-record', record: null };
+          }
+          let raw: unknown;
+          try {
+            raw = JSON.parse(row.patch_json);
+          } catch (error) {
+            return {
+              kind: 'rejected',
+              code: 'unreadable',
+              message: `graph_versions.patch_json 不是合法 JSON: ${describeError(error)}`,
+            };
+          }
+          const payload = decodeGraphPatchPayload(raw, 'graph_versions.patch_json');
+          if (!payload.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: payload.message };
+          }
+          return {
+            kind: 'graph-patch-record',
+            record: {
+              coordinationScopeId: scopeId,
+              graphId: input.graphId,
+              graphVersion: input.graphVersion,
+              ...payload.value,
+            },
+          };
+        }
+        case 'revision-holds': {
+          const holds = decodeRows(readRevisionHoldRows(scopeId, input.workPackageId), decodeRevisionHoldRow);
+          if (!holds.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: holds.message };
+          }
+          return { kind: 'revision-holds', holds: holds.value };
+        }
+        case 'baseline-reconciliations': {
+          const reconciliations = decodeRows(
+            readBaselineReconciliationRows(scopeId, input.workPackageId),
+            decodeBaselineReconciliationRow,
+          );
+          if (!reconciliations.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: reconciliations.message };
+          }
+          return { kind: 'baseline-reconciliations', reconciliations: reconciliations.value };
+        }
+        case 'work-package-lineages': {
+          const lineages = decodeRows(
+            readWorkPackageLineageRows(scopeId, input.workPackageId),
+            decodeWorkPackageLineageRow,
+          );
+          if (!lineages.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: lineages.message };
+          }
+          return { kind: 'work-package-lineages', lineages: lineages.value };
+        }
+        case 'baseline-adoptions': {
+          const adoptions = decodeRows(
+            readBaselineAdoptionRows(scopeId, input.workPackageId),
+            decodeBaselineAdoptionRow,
+          );
+          if (!adoptions.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: adoptions.message };
+          }
+          return { kind: 'baseline-adoptions', adoptions: adoptions.value };
+        }
         default:
           return { kind: 'rejected', code: 'invalid_query', message: '未登记的 query variant' };
       }
     } catch (error) {
       return { kind: 'rejected', code: 'unreadable', message: describeError(error) };
     }
+  };
+
+  /**
+   * 把 Execution Coordination Lease 交给给定写入者。
+   *
+   * 调用方负责先做「没有别的持有者」这一守卫；这里只做写入：释放该 Scope 下仍活跃的执行租约，再以
+   * 递增 fencing generation 为写入者建立租约。Transition 与 Generation Cutover 共用它，因此两条
+   * 路径不可能对「谁持有执行责任」给出不同的结果。
+   */
+  const handExecutionLease = (scopeId: string, writer: CoordinationCommand['writer'], now: number): void => {
+    db.prepare(
+      `UPDATE leases SET released_at = ?
+       WHERE coordination_scope_id = ? AND lease_kind = 'execution_coordination' AND released_at IS NULL`,
+    ).run(now, scopeId);
+    const maxRow = db
+      .prepare(
+        `SELECT MAX(fencing_generation) AS generation FROM leases
+         WHERE coordination_scope_id = ? AND lease_kind = 'execution_coordination'`,
+      )
+      .get(scopeId) as { readonly generation: number | null } | undefined;
+    db.prepare(
+      `INSERT INTO leases (
+         coordination_scope_id, lease_kind, coordinator_session_id, runtime_incarnation_id,
+         fencing_generation, acquired_at, expires_at, released_at
+       ) VALUES (?, 'execution_coordination', ?, ?, ?, ?, NULL, NULL)
+       ON CONFLICT (coordination_scope_id, lease_kind, coordinator_session_id) DO UPDATE SET
+         runtime_incarnation_id = excluded.runtime_incarnation_id,
+         fencing_generation = excluded.fencing_generation,
+         acquired_at = excluded.acquired_at,
+         expires_at = NULL,
+         released_at = NULL`,
+    ).run(
+      scopeId,
+      writer.coordinatorSessionId,
+      writer.runtimeIncarnationId,
+      nextFencingGeneration(maxRow?.generation ?? null),
+      now,
+    );
   };
 
   /** 执行权威：只有未释放的 Execution Coordination Lease 持有者可以推进执行事实。 */
@@ -3077,6 +4087,22 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         return ok(null);
       }
       case 'record-graph-version': {
+        /**
+         * 已接受的图修订只能由 Execution Coordination Lease 持有者推进。
+         *
+         * `initial` 不需要这道守卫：候选图在规划期内就该被记录（那时还没有执行租约）。修订则不同——
+         * 它改变正在执行的拓扑，必须来自当前唯一有权推进执行事实的那个 Session。
+         */
+        if (cmd.recordKind === 'accepted_revision') {
+          const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+          if (!holder.ok) {
+            return holder;
+          }
+          const scope = readScopeRow(cmd.coordinationScopeId);
+          if (scope?.control_state !== 'active' || scope.graph_id !== cmd.graphId) {
+            return fail('当前图不在可修订的执行状态', 'invalid_state');
+          }
+        }
         const head = db
           .prepare(
             `SELECT MAX(graph_version) AS head FROM graph_versions
@@ -3095,6 +4121,9 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
             return fail('initial GraphVersion 不得带 parentVersion', 'constraint');
           }
         } else {
+          if (cmd.patch === null) {
+            return fail('accepted_revision 必须携带补丁元数据', 'constraint');
+          }
           if (headVersion === null) {
             return fail('accepted_revision 必须基于已存在的 GraphVersion', 'constraint');
           }
@@ -3104,12 +4133,15 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           if (cmd.graphVersion !== headVersion + 1) {
             return fail(`GraphVersion 必须连续追加，下一个为 ${headVersion + 1}`, 'constraint');
           }
+          if (cmd.patch.baseGraphVersion !== headVersion) {
+            return fail(`补丁的 baseGraphVersion 必须等于当前 head ${headVersion}`, 'constraint');
+          }
         }
         db.prepare(
           `INSERT INTO graph_versions (
              coordination_scope_id, graph_id, graph_version, graph_generation, record_kind, parent_version,
-             map_revision, plan_revision, orca_run_id, graph_json, recorded_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             map_revision, plan_revision, orca_run_id, graph_json, patch_id, patch_json, recorded_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).run(
           cmd.coordinationScopeId,
           cmd.graphId,
@@ -3121,12 +4153,77 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           cmd.planRevision,
           cmd.orcaRunId,
           JSON.stringify(cmd.graph),
+          cmd.patch === null ? null : cmd.patch.patchId,
+          cmd.patch === null
+            ? null
+            : JSON.stringify({
+                patchId: cmd.patch.patchId,
+                operationId: cmd.patch.operationId,
+                baseGraphVersion: cmd.patch.baseGraphVersion,
+                added: cmd.patch.added,
+                revised: cmd.patch.revised,
+                retired: cmd.patch.retired,
+                descendants: cmd.patch.descendants,
+                takesOver: cmd.patch.takesOver,
+              }),
           now,
         );
+        // revision pending 与图版本同事务：不存在「图已经改了，但该冻结的节点仍可派发」的窗口。
+        for (const workPackageId of cmd.patch?.revisionPendingWorkPackageIds ?? []) {
+          db.prepare(
+            `INSERT INTO revision_holds (
+               coordination_scope_id, work_package_id, source, source_ref, state,
+               created_at, released_at, release_reason
+             ) VALUES (?, ?, 'graph_patch', ?, 'pending', ?, NULL, NULL)
+             ON CONFLICT (coordination_scope_id, work_package_id) DO UPDATE SET
+               source = excluded.source,
+               source_ref = excluded.source_ref,
+               state = 'pending',
+               released_at = NULL,
+               release_reason = NULL`,
+          ).run(cmd.coordinationScopeId, workPackageId, cmd.patch?.patchId ?? '', now);
+        }
+        for (const reconciliation of cmd.baselineReconciliations ?? []) {
+          const open = one<BaselineReconciliationRow>(
+            db.prepare(`SELECT * FROM baseline_reconciliations WHERE coordination_scope_id = ? AND work_package_id = ? AND state != 'verified'`),
+            cmd.coordinationScopeId,
+            reconciliation.workPackageId,
+          );
+          if (open !== undefined) return fail(`Work Package ${reconciliation.workPackageId} 已有未完成的基线补救`, 'constraint');
+          db.prepare(
+            `INSERT INTO baseline_reconciliations (
+               coordination_scope_id, reconciliation_id, work_package_id, role, required_baseline_head,
+               observed_head, ancestry_verified, target_head_verified, dirty_paths_reconciled,
+               scope_reconciled, state, blocker_ref, created_at, updated_at
+             ) VALUES (?, ?, ?, 'planner', ?, NULL, 0, 0, 0, 0, 'required', NULL, ?, ?)`,
+          ).run(cmd.coordinationScopeId, reconciliation.reconciliationId, reconciliation.workPackageId, reconciliation.requiredBaselineHead, now, now);
+        }
         // 追加与「当前图」指针在同一事务里推进：图体永远只有一条权威记录，指针不可能指到不存在的版本。
-        db.prepare(
-          'UPDATE scope SET graph_id = ?, graph_version = ?, updated_at = ? WHERE coordination_scope_id = ?',
-        ).run(cmd.graphId, cmd.graphVersion, now, cmd.coordinationScopeId);
+        const scope = readScopeRow(cmd.coordinationScopeId);
+        if (cmd.recordKind === 'accepted_revision' || scope?.graph_id === null) {
+          db.prepare(
+            'UPDATE scope SET graph_id = ?, graph_version = ?, updated_at = ? WHERE coordination_scope_id = ?',
+          ).run(cmd.graphId, cmd.graphVersion, now, cmd.coordinationScopeId);
+        }
+        // 修订额度与图变化原子记账：读—改—写都在这一笔事务内，因此不可能只发生一半。
+        for (const consumption of cmd.budgetConsumption ?? []) {
+          const existing = db
+            .prepare('SELECT * FROM budget_counters WHERE coordination_scope_id = ? AND budget_key = ?')
+            .get(cmd.coordinationScopeId, consumption.budgetKey) as BudgetRow | undefined;
+          if (existing !== undefined && existing.approved_limit_ref !== consumption.approvedLimitRef) {
+            return fail('已登记的预算授权上限引用与本次不一致，拒绝在同一计数上叠加', 'constraint');
+          }
+          db.prepare(
+            `INSERT INTO budget_counters (coordination_scope_id, budget_key, approved_limit_ref, consumed)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT (coordination_scope_id, budget_key) DO UPDATE SET consumed = consumed + excluded.consumed`,
+          ).run(
+            cmd.coordinationScopeId,
+            consumption.budgetKey,
+            consumption.approvedLimitRef,
+            consumption.amount,
+          );
+        }
         return ok(null);
       }
       case 'record-authorization': {
@@ -3156,10 +4253,13 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           now,
         );
         // 授权记录与 Scope 指针同批推进：不存在「指针指向某份授权，而该授权不在历史里」的中间态。
-        db.prepare(
-          `UPDATE scope SET authorization_id = ?, authorization_version = ?, updated_at = ?
-           WHERE coordination_scope_id = ?`,
-        ).run(cmd.authorizationId, cmd.authorizationVersion, now, cmd.coordinationScopeId);
+        const scope = readScopeRow(cmd.coordinationScopeId);
+        if (scope?.graph_id === cmd.manifest.graph.graphId) {
+          db.prepare(
+            `UPDATE scope SET authorization_id = ?, authorization_version = ?, updated_at = ?
+             WHERE coordination_scope_id = ?`,
+          ).run(cmd.authorizationId, cmd.authorizationVersion, now, cmd.coordinationScopeId);
+        }
         return ok(null);
       }
       case 'record-planning-handoff': {
@@ -3267,30 +4367,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           now,
           cmd.coordinationScopeId,
         );
-        const maxRow = db
-          .prepare(
-            `SELECT MAX(fencing_generation) AS generation FROM leases
-             WHERE coordination_scope_id = ? AND lease_kind = 'execution_coordination'`,
-          )
-          .get(cmd.coordinationScopeId) as { readonly generation: number | null } | undefined;
-        db.prepare(
-          `INSERT INTO leases (
-             coordination_scope_id, lease_kind, coordinator_session_id, runtime_incarnation_id,
-             fencing_generation, acquired_at, expires_at, released_at
-           ) VALUES (?, 'execution_coordination', ?, ?, ?, ?, NULL, NULL)
-           ON CONFLICT (coordination_scope_id, lease_kind, coordinator_session_id) DO UPDATE SET
-             runtime_incarnation_id = excluded.runtime_incarnation_id,
-             fencing_generation = excluded.fencing_generation,
-             acquired_at = excluded.acquired_at,
-             expires_at = NULL,
-             released_at = NULL`,
-        ).run(
-          cmd.coordinationScopeId,
-          cmd.writer.coordinatorSessionId,
-          cmd.writer.runtimeIncarnationId,
-          nextFencingGeneration(maxRow?.generation ?? null),
-          now,
-        );
+        handExecutionLease(cmd.coordinationScopeId, cmd.writer, now);
         return ok(null);
       }
       case 'advance-map-revision': {
@@ -4038,6 +5115,439 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           cmd.admissionState,
           JSON.stringify(cmd.sourceRevisions),
           now,
+        );
+        return ok(null);
+      }
+      case 'record-graph-generation': {
+        const existing = readGraphGenerationRow(cmd.coordinationScopeId, cmd.graphId);
+        if (existing !== undefined) {
+          return fail(`Graph ${cmd.graphId} 的世代记录已存在`, 'constraint');
+        }
+        db.prepare(
+          `INSERT INTO graph_generations (
+             coordination_scope_id, graph_id, graph_generation, planning_cycle_id, orca_run_id,
+             predecessor_graph_id, baseline_head, status, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?)`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.graphId,
+          cmd.generation,
+          cmd.planningCycleId,
+          cmd.orcaRunId,
+          cmd.predecessorGraphId,
+          cmd.baselineHead,
+          now,
+          now,
+        );
+        return ok(null);
+      }
+      case 'advance-graph-generation': {
+        const row = readGraphGenerationRow(cmd.coordinationScopeId, cmd.graphId);
+        if (row === undefined) {
+          return fail(`Graph ${cmd.graphId} 还没有世代记录`);
+        }
+        if (row.status === cmd.status) {
+          return ok(null);
+        }
+        const current = requireEnum(row.status, GRAPH_GENERATION_STATUSES, 'graph_generations.status');
+        if (!current.ok) {
+          return current;
+        }
+        if (!GRAPH_GENERATION_TRANSITIONS[current.value].includes(cmd.status)) {
+          return fail(`不允许把代际从 ${current.value} 迁移到 ${cmd.status}`);
+        }
+        db.prepare(
+          'UPDATE graph_generations SET status = ?, updated_at = ? WHERE coordination_scope_id = ? AND graph_id = ?',
+        ).run(cmd.status, now, cmd.coordinationScopeId, cmd.graphId);
+        return ok(null);
+      }
+      case 'record-revision-hold': {
+        db.prepare(
+          `INSERT INTO revision_holds (
+             coordination_scope_id, work_package_id, source, source_ref, state,
+             created_at, released_at, release_reason
+           ) VALUES (?, ?, ?, ?, 'pending', ?, NULL, NULL)
+           ON CONFLICT (coordination_scope_id, work_package_id) DO UPDATE SET
+             source = excluded.source,
+             source_ref = excluded.source_ref,
+             state = 'pending',
+             released_at = NULL,
+             release_reason = NULL`,
+        ).run(cmd.coordinationScopeId, cmd.workPackageId, cmd.source, cmd.sourceRef, now);
+        return ok(null);
+      }
+      case 'release-revision-hold': {
+        const existing = one<RevisionHoldRow>(
+          db.prepare('SELECT * FROM revision_holds WHERE coordination_scope_id = ? AND work_package_id = ?'),
+          cmd.coordinationScopeId,
+          cmd.workPackageId,
+        );
+        if (existing === undefined) {
+          return fail(`Work Package ${cmd.workPackageId} 没有 revision pending 持有`, 'constraint');
+        }
+        if (existing.state === 'released') {
+          return ok(null);
+        }
+        if (cmd.expectedSourceRef !== undefined && existing.source_ref !== cmd.expectedSourceRef) {
+          return fail(
+            `Work Package ${cmd.workPackageId} 的持有来自 ${existing.source_ref}，与本次收尾的 ${cmd.expectedSourceRef} 不一致`,
+            'constraint',
+          );
+        }
+        db.prepare(
+          `UPDATE revision_holds SET state = 'released', released_at = ?, release_reason = ?
+           WHERE coordination_scope_id = ? AND work_package_id = ?`,
+        ).run(now, cmd.reason, cmd.coordinationScopeId, cmd.workPackageId);
+        // 修订额度与解除持有同事务：重放已释放的持有在上面直接返回，因此不会重复扣减。
+        for (const consumption of cmd.budgetConsumption ?? []) {
+          const counter = db
+            .prepare('SELECT * FROM budget_counters WHERE coordination_scope_id = ? AND budget_key = ?')
+            .get(cmd.coordinationScopeId, consumption.budgetKey) as BudgetRow | undefined;
+          if (counter !== undefined && counter.approved_limit_ref !== consumption.approvedLimitRef) {
+            return fail('已登记的预算授权上限引用与本次不一致，拒绝在同一计数上叠加', 'constraint');
+          }
+          db.prepare(
+            `INSERT INTO budget_counters (coordination_scope_id, budget_key, approved_limit_ref, consumed)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT (coordination_scope_id, budget_key) DO UPDATE SET consumed = consumed + excluded.consumed`,
+          ).run(
+            cmd.coordinationScopeId,
+            consumption.budgetKey,
+            consumption.approvedLimitRef,
+            consumption.amount,
+          );
+        }
+        return ok(null);
+      }
+      case 'record-baseline-reconciliation': {
+        const existing = one<BaselineReconciliationRow>(
+          db.prepare(
+            'SELECT * FROM baseline_reconciliations WHERE coordination_scope_id = ? AND reconciliation_id = ?',
+          ),
+          cmd.coordinationScopeId,
+          cmd.reconciliationId,
+        );
+        if (existing !== undefined) {
+          return fail(`Baseline Reconciliation ${cmd.reconciliationId} 已存在`, 'constraint');
+        }
+        db.prepare(
+          `INSERT INTO baseline_reconciliations (
+             coordination_scope_id, reconciliation_id, work_package_id, role, required_baseline_head,
+             observed_head, ancestry_verified, target_head_verified, dirty_paths_reconciled,
+             scope_reconciled, state, blocker_ref, created_at, updated_at
+           ) VALUES (?, ?, ?, 'planner', ?, NULL, 0, 0, 0, 0, 'required', NULL, ?, ?)`,
+        ).run(cmd.coordinationScopeId, cmd.reconciliationId, cmd.workPackageId, cmd.requiredBaselineHead, now, now);
+        return ok(null);
+      }
+      case 'bind-baseline-reconciliation-task': {
+        const existing = one<BaselineReconciliationRow>(
+          db.prepare('SELECT * FROM baseline_reconciliations WHERE coordination_scope_id = ? AND reconciliation_id = ?'),
+          cmd.coordinationScopeId,
+          cmd.reconciliationId,
+        );
+        if (existing === undefined || existing.state !== 'required') {
+          return fail('Baseline Reconciliation 不存在或已收尾');
+        }
+        if (existing.orca_task_id !== null && existing.orca_task_id !== cmd.orcaTaskId) {
+          return fail('Baseline Reconciliation 已绑定另一 Orca Task');
+        }
+        if (cmd.dispatchId !== undefined && existing.dispatch_id !== null && existing.dispatch_id !== cmd.dispatchId) {
+          return fail('Baseline Reconciliation 已绑定另一 Dispatch');
+        }
+        db.prepare(
+          `UPDATE baseline_reconciliations SET orca_task_id = ?, dispatch_id = COALESCE(?, dispatch_id), updated_at = ?
+           WHERE coordination_scope_id = ? AND reconciliation_id = ?`,
+        ).run(cmd.orcaTaskId, cmd.dispatchId ?? null, now, cmd.coordinationScopeId, cmd.reconciliationId);
+        return ok(null);
+      }
+      case 'advance-baseline-reconciliation': {
+        const existing = one<BaselineReconciliationRow>(
+          db.prepare(
+            'SELECT * FROM baseline_reconciliations WHERE coordination_scope_id = ? AND reconciliation_id = ?',
+          ),
+          cmd.coordinationScopeId,
+          cmd.reconciliationId,
+        );
+        if (existing === undefined) {
+          return fail(`Baseline Reconciliation ${cmd.reconciliationId} 不存在`);
+        }
+        if (existing.state !== 'required') {
+          return fail(`Baseline Reconciliation ${cmd.reconciliationId} 已处于 ${existing.state}`);
+        }
+        const observedHead = cmd.observedHead ?? null;
+        if (cmd.state === 'verified') {
+          const flags = {
+            ancestryVerified: cmd.ancestryVerified === true,
+            targetHeadVerified: cmd.targetHeadVerified === true,
+            dirtyPathsReconciled: cmd.dirtyPathsReconciled === true,
+            scopeReconciled: cmd.scopeReconciled === true,
+          };
+          if (observedHead === null || observedHead.length === 0) {
+            return fail('verified 必须给出实际观察到的 HEAD');
+          }
+          if (observedHead !== existing.required_baseline_head) {
+            return fail('verified 的 HEAD 与目标基线不一致');
+          }
+          if (!Object.values(flags).every((flag) => flag)) {
+            return fail('verified 要求祖先关系、目标 HEAD、dirty paths 与 scope 全部核验通过');
+          }
+          if (existing.orca_task_id === null || existing.dispatch_id === null) {
+            return fail('verified 必须绑定独立 Planner Task 与 Dispatch');
+          }
+          const plannerResult = one<DeliverySettlementRow>(
+            db.prepare(
+              `SELECT * FROM delivery_settlements
+               WHERE coordination_scope_id = ? AND worker_task_id = ? AND dispatch_id = ?
+                 AND role = 'planner'
+               ORDER BY accepted_at DESC LIMIT 1`,
+            ),
+            cmd.coordinationScopeId,
+            cmd.reconciliationId,
+            existing.dispatch_id,
+          );
+          if (plannerResult === undefined || !plannerResult.orca_result_ref.startsWith(`${existing.orca_task_id}#`)) {
+            return fail('verified 必须关联独立 Planner Task 的 Accepted Worker Result');
+          }
+          db.prepare(
+            `UPDATE baseline_reconciliations SET
+               observed_head = ?, ancestry_verified = 1, target_head_verified = 1,
+               dirty_paths_reconciled = 1, scope_reconciled = 1, state = 'verified', blocker_ref = NULL,
+               updated_at = ?
+             WHERE coordination_scope_id = ? AND reconciliation_id = ?`,
+          ).run(observedHead, now, cmd.coordinationScopeId, cmd.reconciliationId);
+          return ok(null);
+        }
+        const blockerRef = cmd.blockerRef ?? null;
+        if (blockerRef === null || blockerRef.length === 0) {
+          return fail('blocked 必须给出阻塞引用');
+        }
+        db.prepare(
+          `UPDATE baseline_reconciliations SET
+             observed_head = ?, state = 'blocked', blocker_ref = ?, updated_at = ?
+           WHERE coordination_scope_id = ? AND reconciliation_id = ?`,
+        ).run(observedHead, blockerRef, now, cmd.coordinationScopeId, cmd.reconciliationId);
+        return ok(null);
+      }
+      case 'record-work-package-lineage': {
+        const existing = one<WorkPackageLineageRow>(
+          db.prepare('SELECT * FROM work_package_lineages WHERE coordination_scope_id = ? AND work_package_id = ?'),
+          cmd.coordinationScopeId,
+          cmd.workPackageId,
+        );
+        if (existing !== undefined) {
+          return fail(`Work Package ${cmd.workPackageId} 已记录 lineage`, 'constraint');
+        }
+        db.prepare(
+          `INSERT INTO work_package_lineages (
+             coordination_scope_id, work_package_id, prior_work_package_id, prior_graph_id,
+             inherited_json, recorded_at
+           ) VALUES (?, ?, ?, ?, ?, ?)`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.workPackageId,
+          cmd.priorWorkPackageId,
+          cmd.priorGraphId,
+          JSON.stringify(cmd.inherited),
+          now,
+        );
+        return ok(null);
+      }
+      case 'record-baseline-adoption': {
+        const existing = one<BaselineAdoptionRow>(
+          db.prepare('SELECT * FROM baseline_adoptions WHERE coordination_scope_id = ? AND adoption_id = ?'),
+          cmd.coordinationScopeId,
+          cmd.adoptionId,
+        );
+        if (existing !== undefined) {
+          return fail(`Baseline Adoption ${cmd.adoptionId} 已存在`, 'constraint');
+        }
+        if (cmd.state === 'recorded' && cmd.evidenceRefs.length === 0) {
+          return fail('recorded 采用必须给出仍然适用的证据引用', 'constraint');
+        }
+        if (cmd.state === 'recorded' && cmd.blockingReason !== null) {
+          return fail('recorded 采用不得携带阻塞原因', 'constraint');
+        }
+        if (cmd.state === 'blocked' && (cmd.blockingReason === null || cmd.blockingReason.length === 0)) {
+          return fail('blocked 采用必须给出矛盾事实', 'constraint');
+        }
+        db.prepare(
+          `INSERT INTO baseline_adoptions (
+             coordination_scope_id, adoption_id, work_package_id, adoption_kind, adopted_result_ref,
+             baseline_head, integration_ref, evidence_refs, state, blocking_reason, recorded_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.adoptionId,
+          cmd.workPackageId,
+          cmd.adoptionKind,
+          cmd.adoptedResultRef,
+          cmd.baselineHead,
+          cmd.integrationRef,
+          JSON.stringify(cmd.evidenceRefs),
+          cmd.state,
+          cmd.blockingReason,
+          now,
+        );
+        return ok(null);
+      }
+      case 'commit-generation-cutover': {
+        const scopeRow = readScopeRow(cmd.coordinationScopeId);
+        if (scopeRow === undefined) {
+          return fail(`Scope ${cmd.coordinationScopeId} 尚未创建`);
+        }
+        const candidate = readGraphGenerationRow(cmd.coordinationScopeId, cmd.candidateGraphId);
+        if (candidate === undefined) {
+          return fail(`候选代际 ${cmd.candidateGraphId} 未登记`);
+        }
+        // 幂等：候选代际已经是 active 时重复提交是成功空操作，不产生第二份代际事实。
+        // 不能用 Scope 的 graph 指针判定：候选图在规划期内就会被记录，而那时它还不是活动代际。
+        if (candidate.status === 'active') {
+          return scopeRow.graph_id === cmd.candidateGraphId &&
+            scopeRow.authorization_id === cmd.authorizationId &&
+            scopeRow.planning_cycle_id === cmd.planningCycleId
+            ? ok(null)
+            : fail('候选代际标记为 active，但 Scope 引用不一致', 'constraint');
+        }
+        if (candidate.status !== 'candidate') {
+          return fail(`候选代际 ${cmd.candidateGraphId} 的状态为 ${candidate.status}，只有 candidate 可以 cutover`);
+        }
+        if (scopeRow.mode !== 'route_planning' || scopeRow.control_state !== 'active') {
+          return fail('只有结清后的 Route Planning Scope 可以 cutover', 'invalid_state');
+        }
+        if (scopeRow.graph_id !== cmd.predecessorGraphId || candidate.predecessor_graph_id !== cmd.predecessorGraphId) {
+          return fail('候选代际的前代与当前 Scope 不一致', 'constraint');
+        }
+        if (candidate.planning_cycle_id !== cmd.planningCycleId) {
+          return fail('候选代际绑定的 Planning Cycle 与命令不一致', 'constraint');
+        }
+        // Run 与基线属于被整体切换的引用集合：它们必须与候选代际记录逐字相符，而不是另行生效。
+        if (candidate.orca_run_id !== cmd.candidateRunId) {
+          return fail(
+            `候选代际绑定的 Run 是 ${candidate.orca_run_id}，与命令声明的 ${cmd.candidateRunId} 不一致`,
+            'constraint',
+          );
+        }
+        if (candidate.baseline_head !== cmd.baselineHead) {
+          return fail(
+            `候选代际绑定的基线是 ${candidate.baseline_head}，与命令声明的 ${cmd.baselineHead} 不一致`,
+            'constraint',
+          );
+        }
+        const head = db
+          .prepare(
+            `SELECT MAX(graph_version) AS head FROM graph_versions
+             WHERE coordination_scope_id = ? AND graph_id = ?`,
+          )
+          .get(cmd.coordinationScopeId, cmd.candidateGraphId) as { readonly head: number | null } | undefined;
+        if ((head?.head ?? null) !== cmd.candidateGraphVersion) {
+          return fail(
+            `候选图 head 为 ${String(head?.head ?? null)}，与命令声明的 ${cmd.candidateGraphVersion} 不一致`,
+            'constraint',
+          );
+        }
+        const candidateVersionRow = readGraphVersionRow(cmd.coordinationScopeId, cmd.candidateGraphId, cmd.candidateGraphVersion);
+        if (candidateVersionRow === undefined) {
+          return fail('候选图版本不存在', 'constraint');
+        }
+        const candidateVersion = decodeGraphVersionRow(candidateVersionRow);
+        if (!candidateVersion.ok) {
+          return candidateVersion;
+        }
+        if (candidateVersion.value.generation !== candidate.graph_generation || candidateVersion.value.orcaRunId !== candidate.orca_run_id) {
+          return fail('候选图版本与代际身份不一致', 'constraint');
+        }
+        const priorGenerations = readGraphGenerationRows(cmd.coordinationScopeId)
+          .filter((generation) => generation.graph_id !== candidate.graph_id);
+        if (priorGenerations.some((generation) =>
+          generation.graph_generation >= candidate.graph_generation || generation.orca_run_id === candidate.orca_run_id
+        )) {
+          return fail('新代际必须使用更高世代与全新 Run', 'constraint');
+        }
+        const priorWorkPackageIds = new Set<string>();
+        for (const generation of priorGenerations) {
+          for (const versionRow of readGraphVersionRows(cmd.coordinationScopeId, generation.graph_id)) {
+            const version = decodeGraphVersionRow(versionRow);
+            if (!version.ok) return version;
+            for (const workPackage of version.value.graph.workPackages) {
+              priorWorkPackageIds.add(workPackage.workPackageId);
+            }
+          }
+        }
+        if (candidateVersion.value.graph.workPackages.some((workPackage) => priorWorkPackageIds.has(workPackage.workPackageId))) {
+          return fail('新代际不得复用前代 WorkPackageId', 'constraint');
+        }
+        const authorizationRow = readAuthorizationRow(cmd.coordinationScopeId, cmd.authorizationId);
+        if (authorizationRow === undefined) {
+          return fail(`Execution Authorization ${cmd.authorizationId} 不存在`);
+        }
+        if (authorizationRow.authorization_version !== cmd.authorizationVersion) {
+          return fail(
+            `授权版本 ${cmd.authorizationVersion} 已过期，当前为 ${authorizationRow.authorization_version}`,
+            'constraint',
+          );
+        }
+        const authorization = decodeAuthorizationRow(authorizationRow);
+        if (!authorization.ok) {
+          return authorization;
+        }
+        if (
+          authorization.value.manifest.graph.graphId !== cmd.candidateGraphId ||
+          authorization.value.manifest.graph.generation !== candidate.graph_generation ||
+          authorization.value.manifest.graph.version !== cmd.candidateGraphVersion ||
+          authorization.value.manifest.orcaRunId !== cmd.candidateRunId ||
+          authorization.value.manifest.baselineHead !== cmd.baselineHead ||
+          authorization.value.manifest.planningCycleId !== cmd.planningCycleId
+        ) {
+          return fail('Execution Authorization 绑定的不是候选代际', 'constraint');
+        }
+        const predecessorGraphId = cmd.predecessorGraphId ?? scopeRow.graph_id;
+        if (predecessorGraphId !== null && predecessorGraphId !== cmd.candidateGraphId) {
+          const predecessor = readGraphGenerationRow(cmd.coordinationScopeId, predecessorGraphId);
+          if (predecessor === undefined) {
+            return fail(`前代代际 ${predecessorGraphId} 未登记`);
+          }
+          // Cutover 替换的是**被挂起的**代际：前代仍处于 active 说明 Replanning Transition 尚未结清，
+          // 直接冻结会绕过结清与 Lease 释放。
+          if (predecessor.status !== 'frozen' && predecessor.status !== 'suspended') {
+            return fail(
+              `前代代际 ${predecessorGraphId} 的状态为 ${predecessor.status}，只有 suspended 的前代可以 cutover`,
+            );
+          }
+          if (predecessor.status === 'suspended') {
+            db.prepare(
+              `UPDATE graph_generations SET status = 'frozen', updated_at = ?
+               WHERE coordination_scope_id = ? AND graph_id = ?`,
+            ).run(now, cmd.coordinationScopeId, predecessorGraphId);
+          }
+        }
+        const activeLease = db
+          .prepare(
+            `SELECT * FROM leases
+             WHERE coordination_scope_id = ? AND lease_kind = 'execution_coordination' AND released_at IS NULL`,
+          )
+          .get(cmd.coordinationScopeId) as LeaseRow | undefined;
+        if (activeLease !== undefined && activeLease.coordinator_session_id !== cmd.writer.coordinatorSessionId) {
+          return fail('Execution Coordination Lease 已由其它 Coordinator Session 持有', 'constraint');
+        }
+        db.prepare(
+          `UPDATE graph_generations SET status = 'active', updated_at = ?
+           WHERE coordination_scope_id = ? AND graph_id = ?`,
+        ).run(now, cmd.coordinationScopeId, cmd.candidateGraphId);
+        handExecutionLease(cmd.coordinationScopeId, cmd.writer, now);
+        // 引用集合整体切换：不存在「新图配旧 Run」或「新 Run 配旧图」的中间态。
+        db.prepare(
+          `UPDATE scope SET
+             mode = 'execution_coordination', planning_cycle_id = ?, graph_id = ?, graph_version = ?,
+             authorization_id = ?, authorization_version = ?, updated_at = ?
+           WHERE coordination_scope_id = ?`,
+        ).run(
+          cmd.planningCycleId,
+          cmd.candidateGraphId,
+          cmd.candidateGraphVersion,
+          cmd.authorizationId,
+          cmd.authorizationVersion,
+          now,
+          cmd.coordinationScopeId,
         );
         return ok(null);
       }

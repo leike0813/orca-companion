@@ -294,6 +294,7 @@ function facts(overrides: MaterializeOverrides = {}) {
     candidateRole: 'implementation' as const,
     lifecycleStage: overrides.lifecycleStage ?? ('frontier' as const),
     selectedCandidateId: overrides.selectedCandidateId === undefined ? WP : overrides.selectedCandidateId,
+    revisionPending: [],
     dependenciesSatisfied: overrides.dependenciesSatisfied ?? [WP],
     controlState: overrides.controlState ?? 'active',
     authorization: {
@@ -574,6 +575,31 @@ test('未进入 Frontier 的 Work Package 不产生 worktree，也不产生任�
   expect(result.kind).toBe('rejected');
   expect(calls.filter((call) => call.kind === 'mutate')).toHaveLength(0);
   // 判定被拒绝时连 worktree 查询都不需要发生。
+  expect(calls).toHaveLength(0);
+});
+
+test('未完成的独立基线补救阻止普通角色派发', async () => {
+  const recorded = store.transact({
+    kind: 'record-baseline-reconciliation',
+    coordinationScopeId: SCOPE,
+    expectedRevision: revision(),
+    writer,
+    reconciliationId: 'baseline-test',
+    workPackageId: WP,
+    requiredBaselineHead: 'head-2',
+  });
+  expect(recorded.kind).toBe('committed');
+  const { backend, calls } = fakeBackend({});
+  const result = await materializeWorkPackage({
+    store,
+    backend,
+    coordinationScopeId: SCOPE,
+    workPackageId: WP,
+    context: context('baseline'),
+    facts: facts({}),
+    expectedRevision: revision(),
+  });
+  expect(result.kind === 'rejected' ? result.failure.code : null).toBe('baseline_reconciliation_pending');
   expect(calls).toHaveLength(0);
 });
 

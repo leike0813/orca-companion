@@ -23,6 +23,12 @@ import type { WorkerRole } from '../domain/planning/execution-authorization.js';
 import type { WorkerLiveness } from '../domain/worker-liveness.js';
 import type { ScopeControlAction } from '../domain/coordination/scope-control.js';
 import type {
+  CandidateGenerationRefs,
+  GraphGenerationStatus,
+  ReplanningClosureMode,
+  SettlementFacts,
+} from '../domain/execution/replanning.js';
+import type {
   CoordinationScopeId,
   CoordinatorSessionId,
   EntityRef,
@@ -30,17 +36,28 @@ import type {
   Revision,
 } from './dto/identity.js';
 import type {
+  BaselineAdoptionKind,
+  BaselineAdoptionState,
+  BaselineReconciliationState,
   BudgetCounterRecord,
   CoordinationSnapshot,
   CoordinationWriter,
   ExecutionHandoffPhase,
   ExecutionHandoffRecord,
+  GraphGenerationRecord,
   HandoffResponsibility,
+  InheritedBudgetEntry,
   PendingInteractionRecord,
   PendingInteractionState,
   RecoveryRecord,
   RecoveryState,
+  RevisionHoldRecord,
+  RevisionHoldSource,
+  RevisionHoldState,
   SessionLifecycleState,
+  WorkPackageLineageRecord,
+  BaselineAdoptionRecord,
+  BaselineReconciliationRecord,
 } from './ports/branch-coordination-store.js';
 import type { ExecutionHandoffReviewFacts } from './handoff/execution-handoff.js';
 import type { HandoffReviewFacts } from './planning/planning-handoff.js';
@@ -89,6 +106,8 @@ export const CONTROLLER_BLOCKER_SOURCES = [
   'mutation_lane',
   'handoff',
   'recovery',
+  'revision_pending',
+  'baseline_reconciliation',
   'injected',
 ] as const;
 
@@ -132,6 +151,58 @@ export type ControllerMaintenanceView = {
   readonly stopReason: string | null;
 };
 
+/* -------------------------------------------------------------------------- */
+/* 图演进投影                                                                  */
+/* -------------------------------------------------------------------------- */
+
+export type ControllerGraphGenerationView = {
+  readonly graphId: string;
+  readonly generation: number;
+  readonly status: GraphGenerationStatus;
+  readonly planningCycleId: string;
+  readonly orcaRunId: string;
+  readonly predecessorGraphId: string | null;
+  readonly baselineHead: string;
+};
+
+export type ControllerRevisionHoldView = {
+  readonly workPackageId: string;
+  readonly source: RevisionHoldSource;
+  readonly state: RevisionHoldState;
+};
+
+export type ControllerReconciliationView = {
+  readonly reconciliationId: string;
+  readonly workPackageId: string;
+  readonly state: BaselineReconciliationState;
+};
+
+export type ControllerLineageView = {
+  readonly workPackageId: string;
+  readonly priorWorkPackageId: string;
+  readonly inherited: readonly InheritedBudgetEntry[];
+};
+
+export type ControllerAdoptionView = {
+  readonly adoptionId: string;
+  readonly workPackageId: string;
+  readonly kind: BaselineAdoptionKind;
+  readonly state: BaselineAdoptionState;
+};
+
+/**
+ * 图演进的只读投影。
+ *
+ * 界面据此展示当前代际、revision pending、基线补救与 lineage，而不需要（也不允许）直接读 store。
+ */
+export type ControllerGraphEvolutionView = {
+  readonly generations: readonly ControllerGraphGenerationView[];
+  readonly revisionHolds: readonly ControllerRevisionHoldView[];
+  readonly reconciliations: readonly ControllerReconciliationView[];
+  readonly lineages: readonly ControllerLineageView[];
+  readonly adoptions: readonly ControllerAdoptionView[];
+};
+
 /**
  * 只读快照。
  *
@@ -157,6 +228,7 @@ export type ControllerSnapshot = {
   readonly interactions: readonly ControllerInteractionView[];
   readonly handoffs: readonly ControllerHandoffView[];
   readonly recoveries: readonly ControllerRecoveryView[];
+  readonly graphEvolution: ControllerGraphEvolutionView;
   readonly maintenance: ControllerMaintenanceView | null;
 };
 
@@ -298,6 +370,44 @@ export type InitializeScopeCommand = {
   readonly writer: CoordinationWriter;
 };
 
+/**
+ * 图演进意图。
+ *
+ * 界面只提交「开始/收尾/取消重规划」与「确认 Cutover」这些用户决定；引用集合、结清事实与对账结论都由
+ * 调用方从权威来源读好后随意图带上，façade 不推断也不补全它们。
+ */
+export type GraphEvolutionCommand = ControllerScopeFields &
+  (
+    | {
+        readonly kind: 'graph-evolution';
+        readonly action: 'begin-replanning';
+        readonly userRequestedReplanning: boolean;
+        readonly goalOrGlobalConstraintChanged: boolean;
+        readonly graphRevisionsExhausted: boolean;
+      }
+    | {
+        readonly kind: 'graph-evolution';
+        readonly action: 'complete-replanning';
+        readonly closure: ReplanningClosureMode;
+        readonly settlement: SettlementFacts;
+        readonly workerStopsConfirmed?: boolean;
+        readonly newPlanningCycleId: string;
+      }
+    | {
+        readonly kind: 'graph-evolution';
+        readonly action: 'cancel-replanning';
+        readonly suspendedGraphId: string;
+        readonly authorizationId: string;
+        readonly authorizationVersion: Revision;
+        readonly reconciliationResolved: boolean;
+      }
+    | {
+        readonly kind: 'graph-evolution';
+        readonly action: 'confirm-cutover';
+        readonly refs: CandidateGenerationRefs;
+      }
+  );
+
 export type ControllerCommand =
   | SendSessionMessageCommand
   | CompactSessionCommand
@@ -306,6 +416,7 @@ export type ControllerCommand =
   | ScopeControlCommand
   | AnswerPendingInteractionCommand
   | ExecutionHandoffCommand
+  | GraphEvolutionCommand
   | InitializeScopeCommand;
 
 export type ControllerCommandResult =
@@ -362,6 +473,31 @@ export type ControllerNotification =
       readonly kind: 'scope-control-changed';
       readonly coordinationScopeId: string;
       readonly controlState: ControlState;
+    }
+  | {
+      readonly kind: 'graph-version-appended';
+      readonly coordinationScopeId: string;
+      readonly graphId: string;
+      readonly graphVersion: number;
+      readonly patchId: string | null;
+    }
+  | {
+      readonly kind: 'revision-hold-changed';
+      readonly coordinationScopeId: string;
+      readonly workPackageId: string;
+      readonly state: RevisionHoldState;
+    }
+  | {
+      readonly kind: 'generation-status-changed';
+      readonly coordinationScopeId: string;
+      readonly graphId: string;
+      readonly status: GraphGenerationStatus;
+    }
+  | {
+      readonly kind: 'generation-cutover-committed';
+      readonly coordinationScopeId: string;
+      readonly predecessorGraphId: string;
+      readonly candidateGraphId: string;
     }
   | {
       readonly kind: 'blocked';
@@ -438,6 +574,7 @@ export type PlanningHandoffPort = (input: PlanningHandoffCommand) => Promise<Del
 export type ScopeControlPort = (input: ScopeControlCommand) => Promise<DelegatedOutcome>;
 export type PendingInteractionPort = (input: AnswerPendingInteractionCommand) => Promise<DelegatedOutcome>;
 export type ExecutionHandoffPort = (input: ExecutionHandoffCommand) => Promise<DelegatedOutcome>;
+export type GraphEvolutionPort = (input: GraphEvolutionCommand) => Promise<DelegatedOutcome>;
 export type ScopeInitializationPort = (input: InitializeScopeCommand) => Promise<DelegatedOutcome>;
 
 export type ControllerServiceDependencies = {
@@ -450,6 +587,7 @@ export type ControllerServiceDependencies = {
   readonly scopeControl: ScopeControlPort;
   readonly pendingInteractions: PendingInteractionPort;
   readonly executionHandoff: ExecutionHandoffPort;
+  readonly graphEvolution: GraphEvolutionPort;
   readonly scopeInitialization: ScopeInitializationPort;
   /** store / backend 侧通知源；省略时不发布事件。 */
   readonly events?: ControllerEventSource;
@@ -519,6 +657,47 @@ function projectBudget(budget: BudgetCounterRecord): ControllerBudgetView {
   };
 }
 
+function projectGeneration(generation: GraphGenerationRecord): ControllerGraphGenerationView {
+  return {
+    graphId: generation.graphId,
+    generation: generation.generation,
+    status: generation.status,
+    planningCycleId: generation.planningCycleId,
+    orcaRunId: generation.orcaRunId,
+    predecessorGraphId: generation.predecessorGraphId,
+    baselineHead: generation.baselineHead,
+  };
+}
+
+function projectRevisionHold(hold: RevisionHoldRecord): ControllerRevisionHoldView {
+  return { workPackageId: hold.workPackageId, source: hold.source, state: hold.state };
+}
+
+function projectReconciliation(reconciliation: BaselineReconciliationRecord): ControllerReconciliationView {
+  return {
+    reconciliationId: reconciliation.reconciliationId,
+    workPackageId: reconciliation.workPackageId,
+    state: reconciliation.state,
+  };
+}
+
+function projectLineage(lineage: WorkPackageLineageRecord): ControllerLineageView {
+  return {
+    workPackageId: lineage.workPackageId,
+    priorWorkPackageId: lineage.priorWorkPackageId,
+    inherited: lineage.inherited,
+  };
+}
+
+function projectAdoption(adoption: BaselineAdoptionRecord): ControllerAdoptionView {
+  return {
+    adoptionId: adoption.adoptionId,
+    workPackageId: adoption.workPackageId,
+    kind: adoption.kind,
+    state: adoption.state,
+  };
+}
+
 /**
  * 把 IC-03 快照与调用方注入的外部事实投影成 ControllerSnapshot。
  *
@@ -532,6 +711,10 @@ export function projectControllerSnapshot(facts: ControllerSnapshotFacts): Contr
     leases.filter((lease) => lease.kind === 'runtime' && lease.releasedAt === null).map((lease) => lease.coordinatorSessionId),
   );
   const planningResponsible = facts.snapshot.planningResponsibility?.coordinatorSessionId ?? null;
+  const pendingHolds = facts.snapshot.revisionHolds.filter((hold) => hold.state === 'pending');
+  const blockedReconciliations = facts.snapshot.baselineReconciliations.filter(
+    (reconciliation) => reconciliation.state === 'blocked',
+  );
 
   const blockers: ControllerBlockerEntry[] = [
     ...mutationLanes.map<ControllerBlockerEntry>((lane) => ({
@@ -553,6 +736,16 @@ export function projectControllerSnapshot(facts: ControllerSnapshotFacts): Contr
         code: recovery.status,
         message: recovery.blockingReason ?? `Recovery ${recovery.recoveryId} 已阻塞`,
       })),
+    ...pendingHolds.map<ControllerBlockerEntry>((hold) => ({
+      source: 'revision_pending',
+      code: hold.source,
+      message: `${hold.workPackageId} 处于 revision pending（来源 ${hold.sourceRef}）`,
+    })),
+    ...blockedReconciliations.map<ControllerBlockerEntry>((reconciliation) => ({
+      source: 'baseline_reconciliation',
+      code: reconciliation.state,
+      message: `Work Package ${reconciliation.workPackageId} 的基线核验未通过（${reconciliation.blockerRef ?? '未给出原因'}）`,
+    })),
     ...facts.extraBlockers,
   ];
 
@@ -593,6 +786,13 @@ export function projectControllerSnapshot(facts: ControllerSnapshotFacts): Contr
     interactions: pendingInteractions.map(projectInteraction),
     handoffs: facts.snapshot.executionHandoffs.map(projectHandoff),
     recoveries: facts.snapshot.recoveries.map(projectRecovery),
+    graphEvolution: {
+      generations: facts.snapshot.graphGenerations.map(projectGeneration),
+      revisionHolds: facts.snapshot.revisionHolds.map(projectRevisionHold),
+      reconciliations: facts.snapshot.baselineReconciliations.map(projectReconciliation),
+      lineages: facts.snapshot.workPackageLineages.map(projectLineage),
+      adoptions: facts.snapshot.baselineAdoptions.map(projectAdoption),
+    },
     maintenance: facts.maintenance,
   };
 }
@@ -657,6 +857,8 @@ export function createControllerService(dependencies: ControllerServiceDependenc
         return dependencies.pendingInteractions(input);
       case 'execution-handoff':
         return dependencies.executionHandoff(input);
+      case 'graph-evolution':
+        return dependencies.graphEvolution(input);
       case 'initialize-scope':
         return dependencies.scopeInitialization(input);
     }

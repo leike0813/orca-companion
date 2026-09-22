@@ -314,6 +314,20 @@ export async function materializeWorkPackage(
       },
     };
   }
+  const reconciliations = input.store.query({
+    kind: 'baseline-reconciliations',
+    coordinationScopeId: input.coordinationScopeId,
+    workPackageId: input.workPackageId,
+  });
+  if (reconciliations.kind === 'rejected') {
+    return { kind: 'rejected', failure: { code: reconciliations.code, message: reconciliations.message } };
+  }
+  if (reconciliations.kind !== 'baseline-reconciliations') {
+    return { kind: 'rejected', failure: { code: 'invalid_state', message: '无法读取基线补救状态' } };
+  }
+  if (reconciliations.reconciliations.some((entry) => entry.state !== 'verified')) {
+    return { kind: 'rejected', failure: { code: 'baseline_reconciliation_pending', message: '基线补救尚未核验通过' } };
+  }
   const decision = evaluateDispatchCandidate({
     ...input.facts,
     candidateWorkPackageId: input.workPackageId,

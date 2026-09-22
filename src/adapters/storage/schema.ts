@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 9;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -40,6 +40,11 @@ export const COORDINATION_TABLES: readonly string[] = [
   'delivery_verdicts',
   'recoveries',
   'execution_handoffs',
+  'graph_generations',
+  'revision_holds',
+  'baseline_reconciliations',
+  'work_package_lineages',
+  'baseline_adoptions',
 ];
 
 export type Migration = {
@@ -398,6 +403,104 @@ const MIGRATION_7: readonly string[] = [
      WHERE phase IN ('prepared', 'reviewed', 'blocked')`,
 ];
 
+/**
+ * M8：图演进、重规划与代际引用。
+ *
+ * `graph_versions` 增加补丁元数据：`patch_id` 是提交幂等键（同一 GraphId 内唯一），`patch_json` 记录
+ * 这次补丁做了什么（新增/重定义/退休、后代处置与接管关系）。图体本身仍只有这一个追加历史，因此
+ * 「当前图」依然不可能被就地改写。
+ *
+ * 其余四张表各自只保存无法从 Git、Orca 或既有图历史重建的共享事实：
+ * - `graph_generations` 保存代际身份与状态（candidate/active/suspended/frozen）以及它绑定的一生
+ *   Planning Cycle 与 Orca Run；代际之间的切换点是 Cutover，不是逐项迁移；
+ * - `revision_holds` 保存 revision pending 的调度持有，每个 Work Package 至多一行；
+ * - `baseline_reconciliations` 保存独立 Planner-profile 基线核验任务的结论；
+ * - `work_package_lineages` 保存新责任对旧责任的显式延续与继承额度；
+ * - `baseline_adoptions` 保存旧成果按三条规则之一的采用记录（含矛盾事实的阻塞结论）。
+ */
+const MIGRATION_8: readonly string[] = [
+  `ALTER TABLE graph_versions ADD COLUMN patch_id TEXT`,
+  `ALTER TABLE graph_versions ADD COLUMN patch_json TEXT`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS graph_versions_patch_unique
+     ON graph_versions (coordination_scope_id, graph_id, patch_id)
+     WHERE patch_id IS NOT NULL`,
+  `CREATE TABLE IF NOT EXISTS graph_generations (
+     coordination_scope_id TEXT NOT NULL,
+     graph_id TEXT NOT NULL,
+     graph_generation INTEGER NOT NULL,
+     planning_cycle_id TEXT NOT NULL,
+     orca_run_id TEXT NOT NULL,
+     predecessor_graph_id TEXT,
+     baseline_head TEXT NOT NULL,
+     status TEXT NOT NULL,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, graph_id)
+   ) STRICT`,
+  `CREATE INDEX IF NOT EXISTS graph_generations_status
+     ON graph_generations (coordination_scope_id, status)`,
+  `CREATE TABLE IF NOT EXISTS revision_holds (
+     coordination_scope_id TEXT NOT NULL,
+     work_package_id TEXT NOT NULL,
+     source TEXT NOT NULL,
+     source_ref TEXT NOT NULL,
+     state TEXT NOT NULL,
+     created_at INTEGER NOT NULL,
+     released_at INTEGER,
+     release_reason TEXT,
+     PRIMARY KEY (coordination_scope_id, work_package_id)
+   ) STRICT`,
+  `CREATE TABLE IF NOT EXISTS baseline_reconciliations (
+     coordination_scope_id TEXT NOT NULL,
+     reconciliation_id TEXT NOT NULL,
+     work_package_id TEXT NOT NULL,
+     role TEXT NOT NULL,
+     required_baseline_head TEXT NOT NULL,
+     observed_head TEXT,
+     ancestry_verified INTEGER NOT NULL,
+     target_head_verified INTEGER NOT NULL,
+     dirty_paths_reconciled INTEGER NOT NULL,
+     scope_reconciled INTEGER NOT NULL,
+     state TEXT NOT NULL,
+     blocker_ref TEXT,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, reconciliation_id)
+   ) STRICT`,
+  // 同一个 Work Package 同时至多一个未收尾的核验需求。
+  `CREATE UNIQUE INDEX IF NOT EXISTS baseline_reconciliations_single_open
+     ON baseline_reconciliations (coordination_scope_id, work_package_id)
+     WHERE state = 'required'`,
+  `CREATE TABLE IF NOT EXISTS work_package_lineages (
+     coordination_scope_id TEXT NOT NULL,
+     work_package_id TEXT NOT NULL,
+     prior_work_package_id TEXT NOT NULL,
+     prior_graph_id TEXT NOT NULL,
+     inherited_json TEXT NOT NULL,
+     recorded_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, work_package_id)
+   ) STRICT`,
+  `CREATE TABLE IF NOT EXISTS baseline_adoptions (
+     coordination_scope_id TEXT NOT NULL,
+     adoption_id TEXT NOT NULL,
+     work_package_id TEXT NOT NULL,
+     adoption_kind TEXT NOT NULL,
+     adopted_result_ref TEXT NOT NULL,
+     baseline_head TEXT NOT NULL,
+     integration_ref TEXT,
+     evidence_refs TEXT NOT NULL,
+     state TEXT NOT NULL,
+     blocking_reason TEXT,
+     recorded_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, adoption_id)
+   ) STRICT`,
+];
+
+const MIGRATION_9: readonly string[] = [
+  `ALTER TABLE baseline_reconciliations ADD COLUMN orca_task_id TEXT`,
+  `ALTER TABLE baseline_reconciliations ADD COLUMN dispatch_id TEXT`,
+];
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, statements: MIGRATION_1 },
   { version: 2, statements: MIGRATION_2 },
@@ -406,6 +509,8 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 5, statements: MIGRATION_5 },
   { version: 6, statements: MIGRATION_6 },
   { version: 7, statements: MIGRATION_7 },
+  { version: 8, statements: MIGRATION_8 },
+  { version: 9, statements: MIGRATION_9 },
 ];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {

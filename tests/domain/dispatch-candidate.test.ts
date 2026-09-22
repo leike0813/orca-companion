@@ -32,6 +32,7 @@ function facts(overrides: Partial<DispatchCandidateFacts> = {}): DispatchCandida
     candidateRole: 'implementation',
     lifecycleStage: 'frontier',
     selectedCandidateId: WP,
+    revisionPending: [],
     dependenciesSatisfied: [WP],
     controlState: 'active',
     authorization: {

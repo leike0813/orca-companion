@@ -18,6 +18,16 @@ import type { MutationLaneRecord } from '../../domain/coordination/mutation-lane
 import type { LeaseKind, LeaseRecord } from '../../domain/coordination/leases.js';
 import type { SourceRevisionRef } from '../../domain/coordinator/session-state.js';
 import type { DeliveryVerdict } from '../../domain/delivery-verdict.js';
+import type { InheritedBudgetUse } from '../../domain/execution/work-package-lineage.js';
+import type {
+  PatchDescendantDisposition,
+  PatchResponsibilityTakeover,
+} from '../../domain/execution/graph-patch.js';
+import {
+  GRAPH_GENERATION_STATUSES,
+  GRAPH_GENERATION_TRANSITIONS,
+  type GraphGenerationStatus,
+} from '../../domain/execution/replanning.js';
 import type { ExecutionGraph, GraphVersionRecord, GraphVersionRecordKind } from '../../domain/planning/execution-graph.js';
 import type { ExecutionAuthorizationManifest, ExecutionAuthorizationRecord, WorkerRole } from '../../domain/planning/execution-authorization.js';
 import { TICKET_CLAIM_STATES, type TicketClaimState } from '../../domain/planning/ticket-claim.js';
@@ -381,6 +391,165 @@ export type ExecutionHandoffRecord = {
   readonly updatedAt: number;
 };
 
+/**
+ * 一条 accepted revision 的补丁元数据（IC-10 Extend）。
+ *
+ * 它记录「这次补丁做了什么」，不复制图体（图体在 `GraphVersionRecord` 里）：新增/重定义/退休的
+ * WorkPackageId、后代处置与责任接管关系。`patchId` 是幂等键：同一 `(graphId, patchId)` 只允许一条
+ * 记录，因此重放不会写出第二份图。
+ */
+export type GraphPatchRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly graphId: GraphId;
+  readonly graphVersion: GraphVersion;
+  readonly patchId: string;
+  readonly operationId: OperationId;
+  readonly baseGraphVersion: GraphVersion;
+  readonly added: readonly WorkPackageId[];
+  readonly revised: readonly WorkPackageId[];
+  readonly retired: readonly WorkPackageId[];
+  readonly descendants: readonly PatchDescendantDisposition[];
+  readonly takesOver: readonly PatchResponsibilityTakeover[];
+};
+
+/** 提交一次 accepted revision 时随图一起写入的补丁元数据（写入前还没有 graphVersion）。 */
+export type GraphVersionPatchInput = Omit<GraphPatchRecord, 'coordinationScopeId' | 'graphId' | 'graphVersion'> & {
+  /** 应用后必须进入 revision pending 的 Work Package；与图版本在同一事务内写为持有。 */
+  readonly revisionPendingWorkPackageIds: readonly WorkPackageId[];
+};
+
+/**
+ * 一次与追加同事务完成的预算扣减。
+ *
+ * 修订额度（Graph Revision / Specification Revision）的「读—改—写」因此是原子的：不会出现图已经变了、
+ * 额度却没扣，或额度扣了、图没变的中间态。计数单调递增，任何更小的值都无法把已消耗量调回去。
+ */
+export type BudgetConsumptionInput = {
+  readonly budgetKey: string;
+  readonly approvedLimitRef: string;
+  readonly amount: number;
+};
+
+/**
+ * Graph Generation 的状态闭集与迁移。
+ *
+ * 词汇的 owner 是领域层（`domain/execution/replanning.ts`）；这里只把它并入 store 的读取投影，
+ * 避免出现第二份状态取值。
+ */
+export { GRAPH_GENERATION_STATUSES, GRAPH_GENERATION_TRANSITIONS };
+export type { GraphGenerationStatus };
+
+export type GraphGenerationRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly graphId: GraphId;
+  readonly generation: GraphGeneration;
+  readonly planningCycleId: PlanningCycleId;
+  readonly orcaRunId: string;
+  readonly predecessorGraphId: GraphId | null;
+  readonly baselineHead: string;
+  readonly status: GraphGenerationStatus;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+};
+
+/**
+ * revision pending 持有的来源闭集（IC-10 Extend）。
+ *
+ * 持有是调度事实，不是 Worker 取消：当前 Worker 仍运行至可核验终态，只是其后不再派发角色或依赖工作。
+ */
+export const REVISION_HOLD_SOURCES = ['graph_patch', 'specification_revision', 'retirement'] as const;
+
+export type RevisionHoldSource = (typeof REVISION_HOLD_SOURCES)[number];
+
+export const REVISION_HOLD_STATES = ['pending', 'released'] as const;
+
+export type RevisionHoldState = (typeof REVISION_HOLD_STATES)[number];
+
+export type RevisionHoldRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly workPackageId: WorkPackageId;
+  readonly source: RevisionHoldSource;
+  /** 触发这次持有的稳定引用（补丁标识或修订标识）。 */
+  readonly sourceRef: string;
+  readonly state: RevisionHoldState;
+  readonly createdAt: number;
+  readonly releasedAt: number | null;
+  readonly releaseReason: string | null;
+};
+
+/**
+ * Baseline Reconciliation 的状态闭集（IC-10 Extend）。
+ *
+ * `required` 表示基线落后、必须由独立 Planner-profile 任务核验；`verified` 只能在祖先关系、目标
+ * HEAD、dirty paths 与 scope 全部核验通过后写入；`blocked` 表示核验失败并给出阻塞引用。
+ */
+export const BASELINE_RECONCILIATION_STATES = ['required', 'verified', 'blocked'] as const;
+
+export type BaselineReconciliationState = (typeof BASELINE_RECONCILIATION_STATES)[number];
+
+export type BaselineReconciliationRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly reconciliationId: string;
+  readonly workPackageId: WorkPackageId;
+  /** 该任务的角色；Baseline Reconciliation 固定为 Planner-profile。 */
+  readonly role: 'planner';
+  readonly requiredBaselineHead: string;
+  readonly orcaTaskId: string | null;
+  readonly dispatchId: DispatchId | null;
+  readonly observedHead: string | null;
+  readonly ancestryVerified: boolean;
+  readonly targetHeadVerified: boolean;
+  readonly dirtyPathsReconciled: boolean;
+  readonly scopeReconciled: boolean;
+  readonly state: BaselineReconciliationState;
+  readonly blockerRef: string | null;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+};
+
+/** 一条被 lineage 继承的已消耗额度；形状与领域层的 `InheritedBudgetUse` 相同，只有一个事实源。 */
+export type InheritedBudgetEntry = InheritedBudgetUse;
+
+/**
+ * Work Package Lineage（IC-10 Extend）。
+ *
+ * 一个 Work Package 至多一条：当它明确延续一个未完成的旧责任时，旧责任已消耗的实现、修复、Graph
+ * Revision 与 Specification Revision 额度在这里被显式继承，而不是被重置为新值。
+ */
+export type WorkPackageLineageRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly workPackageId: WorkPackageId;
+  readonly priorWorkPackageId: WorkPackageId;
+  readonly priorGraphId: GraphId;
+  readonly inherited: readonly InheritedBudgetEntry[];
+  readonly recordedAt: number;
+};
+
+/** 旧成果进入新规划的三种采用方式（IC-10 Extend）；`planning_reference` 只作为规划输入。 */
+export const BASELINE_ADOPTION_KINDS = ['baseline_adoption', 'migration_material', 'planning_reference'] as const;
+
+export type BaselineAdoptionKind = (typeof BASELINE_ADOPTION_KINDS)[number];
+
+export const BASELINE_ADOPTION_STATES = ['recorded', 'blocked'] as const;
+
+export type BaselineAdoptionState = (typeof BASELINE_ADOPTION_STATES)[number];
+
+export type BaselineAdoptionRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly adoptionId: string;
+  readonly workPackageId: WorkPackageId;
+  readonly kind: BaselineAdoptionKind;
+  /** 被引用的旧代际 Accepted Worker Result 引用；正文留在 Orca。 */
+  readonly adoptedResultRef: string;
+  readonly baselineHead: string;
+  /** 集成状态引用；未集成时为 `null`。 */
+  readonly integrationRef: string | null;
+  readonly evidenceRefs: readonly string[];
+  readonly state: BaselineAdoptionState;
+  readonly blockingReason: string | null;
+  readonly recordedAt: number;
+};
+
 /** `status` 与启动对账用的单次只读投影；不触发续约、对账或任何写入。 */
 export type CoordinationSnapshot = {
   readonly scope: ScopeRecord;
@@ -398,6 +567,11 @@ export type CoordinationSnapshot = {
   readonly deliveryVerdicts: readonly DeliveryVerdictRecord[];
   readonly recoveries: readonly RecoveryRecord[];
   readonly executionHandoffs: readonly ExecutionHandoffRecord[];
+  readonly graphGenerations: readonly GraphGenerationRecord[];
+  readonly revisionHolds: readonly RevisionHoldRecord[];
+  readonly baselineReconciliations: readonly BaselineReconciliationRecord[];
+  readonly workPackageLineages: readonly WorkPackageLineageRecord[];
+  readonly baselineAdoptions: readonly BaselineAdoptionRecord[];
   /** 由未决 intent 派生的 lane 阻塞投影：阻塞对用户与 Coordinator Agent 可观测。 */
   readonly mutationLanes: readonly MutationLaneRecord[];
 };
@@ -473,6 +647,38 @@ export type CoordinationQuery =
       readonly kind: 'execution-handoff';
       readonly coordinationScopeId: CoordinationScopeId;
       readonly handoffId: string;
+    }
+  | { readonly kind: 'graph-generations'; readonly coordinationScopeId: CoordinationScopeId }
+  | {
+      readonly kind: 'graph-generation';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly graphId: GraphId;
+    }
+  | {
+      readonly kind: 'graph-patch-record';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly graphId: GraphId;
+      readonly graphVersion: GraphVersion;
+    }
+  | {
+      readonly kind: 'revision-holds';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly workPackageId?: WorkPackageId;
+    }
+  | {
+      readonly kind: 'baseline-reconciliations';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly workPackageId?: WorkPackageId;
+    }
+  | {
+      readonly kind: 'work-package-lineages';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly workPackageId?: WorkPackageId;
+    }
+  | {
+      readonly kind: 'baseline-adoptions';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly workPackageId?: WorkPackageId;
     };
 
 export type CoordinationQueryRejectionCode = 'unreadable' | 'invalid_query';
@@ -506,6 +712,16 @@ export type CoordinationQueryResult =
   | { readonly kind: 'recovery'; readonly recovery: RecoveryRecord | null }
   | { readonly kind: 'execution-handoffs'; readonly handoffs: readonly ExecutionHandoffRecord[] }
   | { readonly kind: 'execution-handoff'; readonly handoff: ExecutionHandoffRecord | null }
+  | { readonly kind: 'graph-generations'; readonly generations: readonly GraphGenerationRecord[] }
+  | { readonly kind: 'graph-generation'; readonly generation: GraphGenerationRecord | null }
+  | { readonly kind: 'graph-patch-record'; readonly record: GraphPatchRecord | null }
+  | { readonly kind: 'revision-holds'; readonly holds: readonly RevisionHoldRecord[] }
+  | {
+      readonly kind: 'baseline-reconciliations';
+      readonly reconciliations: readonly BaselineReconciliationRecord[];
+    }
+  | { readonly kind: 'work-package-lineages'; readonly lineages: readonly WorkPackageLineageRecord[] }
+  | { readonly kind: 'baseline-adoptions'; readonly adoptions: readonly BaselineAdoptionRecord[] }
   | {
       readonly kind: 'rejected';
       readonly code: CoordinationQueryRejectionCode;
@@ -632,6 +848,25 @@ export type CoordinationCommand =
       readonly planRevision: Revision;
       readonly orcaRunId: string;
       readonly graph: ExecutionGraph;
+      /**
+       * `initial` 必须为 `null`；`accepted_revision` 必须给出完整补丁元数据。
+       *
+       * 元数据与图版本、revision pending 持有在**同一事务**内写入：因此不存在「图已经变了，但没人
+       * 记得为什么变、也没人记得该冻结谁」的中间态。
+       */
+      readonly patch: GraphVersionPatchInput | null;
+      /** 与 Graph Revision 同事务登记的独立基线补救需求。 */
+      readonly baselineReconciliations?: readonly {
+        readonly reconciliationId: string;
+        readonly workPackageId: WorkPackageId;
+        readonly requiredBaselineHead: string;
+      }[];
+      /**
+       * 与追加同事务完成的预算扣减；省略表示本次追加不消耗预算。
+       *
+       * 修订额度必须与产生它的那次图变化原子地记账，否则崩溃窗口会留下「图已改、额度未扣」的欠账。
+       */
+      readonly budgetConsumption?: readonly BudgetConsumptionInput[];
     })
   | (CoordinationCommandBase & {
       readonly kind: 'record-authorization';
@@ -796,7 +1031,140 @@ export type CoordinationCommand =
       readonly phase: ExecutionHandoffPhase;
       readonly expectedHandoffRevision: Revision;
       readonly blockingReason?: string | null;
-    });
+    })
+  | (CoordinationCommandBase & {
+    /**
+     * 登记一个新 Graph Generation 的候选身份。
+     *
+     * 插入时状态固定为 `candidate`；同一 `graphId` 只允许一行，重复登记按约束拒绝，调用方回读既有记录。
+     */
+    readonly kind: 'record-graph-generation';
+    readonly graphId: GraphId;
+    readonly generation: GraphGeneration;
+    readonly planningCycleId: PlanningCycleId;
+    readonly orcaRunId: string;
+    readonly predecessorGraphId: GraphId | null;
+    readonly baselineHead: string;
+  })
+  | (CoordinationCommandBase & {
+    /**
+     * 推进 Graph Generation 状态。非法迁移在 store 边界拒绝；`frozen` 是终态。
+     *
+     * 这是代际级事实，不改变 Scope 指针：Scope 指向哪个代际只在 cutover 与取消路径上整体切换。
+     */
+    readonly kind: 'advance-graph-generation';
+    readonly graphId: GraphId;
+    readonly status: GraphGenerationStatus;
+  })
+  | (CoordinationCommandBase & {
+    /**
+     * 置入或重新置入一个 revision pending 持有。
+     *
+     * 幂等语义：重复置入不会产生第二行，而是把来源更新为最新的那一次需求；已释放的持有被重新打开。
+     * 持有只冻结该 Work Package 与未接受后代，当前 Worker 仍运行至可核验终态。
+     */
+    readonly kind: 'record-revision-hold';
+    readonly workPackageId: WorkPackageId;
+    readonly source: RevisionHoldSource;
+    readonly sourceRef: string;
+  })
+  | (CoordinationCommandBase & {
+    /**
+     * 释放持有；已释放时重复调用是幂等成功，没有持有记录时按约束拒绝。
+     *
+     * 可选的 `budgetConsumption` 与本次释放**同事务**记账：一次修订的「接受并消耗额度」与「解除持有」
+     * 因此是一个原子事实，重放已释放的持有不会把额度再扣一次。
+     *
+     * 给出 `expectedSourceRef` 时，只释放来源引用相符的持有：否则修订 A 的收尾会释放修订 B 的持有并把
+     * 额度记到它头上。
+     */
+    readonly kind: 'release-revision-hold';
+    readonly workPackageId: WorkPackageId;
+    readonly reason: string;
+    readonly expectedSourceRef?: string;
+    readonly budgetConsumption?: readonly BudgetConsumptionInput[];
+  })
+  | (CoordinationCommandBase & {
+    /** 建立一个独立的 Baseline Reconciliation 需求；插入时状态为 `required`。 */
+    readonly kind: 'record-baseline-reconciliation';
+    readonly reconciliationId: string;
+    readonly workPackageId: WorkPackageId;
+    readonly requiredBaselineHead: string;
+  })
+  | (CoordinationCommandBase & {
+    readonly kind: 'bind-baseline-reconciliation-task';
+    readonly reconciliationId: string;
+    readonly orcaTaskId: string;
+    readonly dispatchId?: DispatchId;
+  })
+  | (CoordinationCommandBase & {
+    /**
+     * 收尾一次 Baseline Reconciliation。
+     *
+     * `verified` 只在祖先关系、目标 HEAD、dirty paths 与 scope 全部核验为真时被接受，因此「核验过了」
+     * 不可能由一次不完整的观察写入；`blocked` 必须给出阻塞引用。
+     */
+    readonly kind: 'advance-baseline-reconciliation';
+    readonly reconciliationId: string;
+    readonly state: Exclude<BaselineReconciliationState, 'required'>;
+    readonly observedHead?: string | null;
+    readonly ancestryVerified?: boolean;
+    readonly targetHeadVerified?: boolean;
+    readonly dirtyPathsReconciled?: boolean;
+    readonly scopeReconciled?: boolean;
+    readonly blockerRef?: string | null;
+  })
+  | (CoordinationCommandBase & {
+    /** 记录一条 Work Package Lineage；一个 Work Package 至多一条。 */
+    readonly kind: 'record-work-package-lineage';
+    readonly workPackageId: WorkPackageId;
+    readonly priorWorkPackageId: WorkPackageId;
+    readonly priorGraphId: GraphId;
+    readonly inherited: readonly InheritedBudgetEntry[];
+  })
+  | (CoordinationCommandBase & {
+    /**
+     * 记录一次旧成果采用。
+     *
+     * `recorded` 只描述「被引用的接受记录、集成状态、版本与证据都仍在」，不复制旧完成状态；
+     * `blocked` 表示 Git、Orca 与旧图给出相互矛盾的结论，必须给出阻塞原因。
+     */
+    readonly kind: 'record-baseline-adoption';
+    readonly adoptionId: string;
+    readonly workPackageId: WorkPackageId;
+    readonly adoptionKind: BaselineAdoptionKind;
+    readonly adoptedResultRef: string;
+    readonly baselineHead: string;
+    readonly integrationRef: string | null;
+    readonly evidenceRefs: readonly string[];
+    readonly state: BaselineAdoptionState;
+    readonly blockingReason: string | null;
+  })
+  | (CoordinationCommandBase & {
+    /**
+     * Generation Cutover：一次写入把当前代际换成候选代际。
+     *
+     * 同一事务内完成四件事：候选代际转为 `active`、前代转为 `frozen`、Scope 的 Planning Cycle /
+     * Graph / Authorization 引用切到候选、Execution Coordination Lease 交给当前写入者。任一守卫失败
+     * 即整笔回滚，因此不存在「只换了一半引用」的代际。以目标 `graphId` 幂等：Scope 已指向候选时重复
+     * 提交是成功空操作。
+     */
+    readonly kind: 'commit-generation-cutover';
+    readonly candidateGraphId: GraphId;
+    readonly candidateGraphVersion: GraphVersion;
+    readonly planningCycleId: PlanningCycleId;
+    readonly authorizationId: string;
+    readonly authorizationVersion: Revision;
+    readonly predecessorGraphId: GraphId | null;
+    /**
+     * 候选代际绑定的 Orca Run 与基线。
+     *
+     * 它们必须与候选代际记录逐字相符：Cutover 的语义是「引用集合一起切换」，因此 Run 与基线不能只靠
+     * 登记时的写入生效，而要在这一笔事务里被核对。
+     */
+    readonly candidateRunId: string;
+    readonly baselineHead: string;
+  });
 
 export type CoordinationRejectionCode =
   | 'stale_revision'

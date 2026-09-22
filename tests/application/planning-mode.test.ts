@@ -120,6 +120,7 @@ function candidateFixture(): GraphVersionRecord {
     version: 1 as GraphVersion,
     recordKind: 'initial',
     parentVersion: null,
+    patchId: null,
     mapRevision: MAP_REVISION,
     planRevision: PLAN_REVISION,
     orcaRunId: 'run-1',

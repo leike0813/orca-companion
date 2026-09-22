@@ -157,30 +157,38 @@ export function recordApproval(input: RecordApprovalInput): RecordApprovalResult
   if (scope.kind === 'rejected') {
     return { kind: 'rejected', failure: { code: scope.code, message: scope.message } };
   }
-  if (scope.scope.graphId === null || scope.scope.graphVersion === null) {
-    return {
-      kind: 'rejected',
-      failure: { code: 'candidate_missing', message: '该 Scope 尚无候选图，不能批准 Manifest' },
-    };
-  }
   const parsedManifest = parseManifest(input.manifest);
   if (!parsedManifest.ok) {
     return { kind: 'rejected', failure: { code: parsedManifest.field, message: parsedManifest.message } };
   }
   const manifest = parsedManifest.value;
+  if (scope.scope.graphId !== null && manifest.graph.graphId !== scope.scope.graphId) {
+    const generation = input.store.query({
+      kind: 'graph-generation',
+      coordinationScopeId: input.coordinationScopeId,
+      graphId: manifest.graph.graphId,
+    });
+    if (
+      generation.kind !== 'graph-generation' ||
+      generation.generation?.status !== 'candidate' ||
+      generation.generation.planningCycleId !== scope.scope.planningCycleId
+    ) {
+      return { kind: 'rejected', failure: { code: 'candidate_mismatch', message: 'Manifest 未绑定当前 Planning Cycle 的候选代际' } };
+    }
+  }
   const candidate = input.store.query({
-    kind: 'graph-version',
+    kind: 'graph-versions',
     coordinationScopeId: input.coordinationScopeId,
-    graphId: scope.scope.graphId,
-    graphVersion: scope.scope.graphVersion,
+    graphId: manifest.graph.graphId,
   });
-  if (candidate.kind !== 'graph-version' || candidate.version === null) {
+  const head = candidate.kind === 'graph-versions' ? candidate.versions.at(-1) : undefined;
+  if (head === undefined || head.version !== manifest.graph.version) {
     return {
       kind: 'rejected',
       failure: { code: candidate.kind === 'rejected' ? candidate.code : 'candidate_missing', message: candidate.kind === 'rejected' ? candidate.message : '当前候选图无法读回' },
     };
   }
-  const mismatches = [...manifestCandidateMismatches(manifest, candidate.version)];
+  const mismatches = [...manifestCandidateMismatches(manifest, head)];
   if (manifest.coordinationScopeId !== input.coordinationScopeId) mismatches.push('coordinationScopeId');
   if (manifest.planningCycleId !== scope.scope.planningCycleId) mismatches.push('planningCycleId');
   if (manifest.routeMapRef.version !== scope.scope.mapRevision) mismatches.push('currentRouteMapRevision');
@@ -222,14 +230,15 @@ export function recordApproval(input: RecordApprovalInput): RecordApprovalResult
     return { kind: 'rejected', failure: { code: recorded.code, message: rejectionMessage(recorded) } };
   }
 
-  const read = activeAuthorization(input.store, input.coordinationScopeId);
-  if (read.kind === 'rejected') {
-    return { kind: 'rejected', failure: read.failure };
-  }
-  if (read.authorization === null) {
+  const read = input.store.query({
+    kind: 'authorization',
+    coordinationScopeId: input.coordinationScopeId,
+    authorizationId: input.authorizationId,
+  });
+  if (read.kind !== 'authorization' || read.authorization === null) {
     return {
       kind: 'rejected',
-      failure: { code: 'invalid_state', message: '授权记录写入后无法读回' },
+      failure: { code: read.kind === 'rejected' ? read.code : 'invalid_state', message: read.kind === 'rejected' ? read.message : '授权记录写入后无法读回' },
     };
   }
   return { kind: 'recorded', authorization: read.authorization };

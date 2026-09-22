@@ -192,7 +192,7 @@ test('未记录过的 GraphId 读回 absent', () => {
   expect(loadScopeGraph(store, SCOPE).kind).toBe('absent');
 });
 
-test('追加新世代不改写既有历史，当前图指针推进到最新一条', () => {
+test('追加候选世代不改写既有历史，Scope 图指针在 Cutover 前保持原代际', () => {
   const firstGraph = graphFor(graphIdFor(SCOPE, generation(1)), generation(1));
   const first = record(firstGraph, { mapRevision: 0, planRevision: 1, orcaRunId: 'run-1' });
   expect(first.kind).toBe('recorded');
@@ -216,7 +216,7 @@ test('追加新世代不改写既有历史，当前图指针推进到最新一�
   const scopeGraph = loadScopeGraph(store, SCOPE);
   expect(scopeGraph.kind).toBe('loaded');
   if (scopeGraph.kind === 'loaded') {
-    expect(scopeGraph.version.graphId).toBe(secondGraph.graphId);
+    expect(scopeGraph.version.graphId).toBe(firstGraph.graphId);
   }
 });
 

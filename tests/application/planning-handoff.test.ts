@@ -403,6 +403,7 @@ test('prepare 后候选图从无到有时提案过期', () => {
     version: 1 as GraphVersion,
     recordKind: 'initial' as const,
     parentVersion: null,
+    patchId: null,
     mapRevision: proposal.mapRevision,
     planRevision: proposal.planRevision,
     orcaRunId: 'run-new',

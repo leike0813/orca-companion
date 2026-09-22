@@ -80,6 +80,8 @@ export type GraphVersionRecord = {
   readonly version: GraphVersion;
   readonly recordKind: GraphVersionRecordKind;
   readonly parentVersion: GraphVersion | null;
+  /** `initial` 恒为 `null`；`accepted_revision` 是提交这次修订的补丁标识（幂等键）。 */
+  readonly patchId: string | null;
   readonly mapRevision: Revision;
   readonly planRevision: Revision;
   readonly orcaRunId: string;

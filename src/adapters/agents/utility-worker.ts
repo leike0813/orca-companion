@@ -4,8 +4,8 @@
  * Recovery Capsule 由一个受限 Utility Worker 从**精确 transcript**提取；本模块只负责把它按前驱
  * 已有的派发机制跑起来：同一个 `Task Envelope` 约定（`task-create` 的 `spec` 就是信封 JSON）、
  * 同一条 `worker-start` mutation、同一套 `beginIntent → mutate → settleIntent/blockLane` 顺序，
- * 以及 `session-binding.ts` 的精确绑定核验。它不另建派发流水线、不读 transcript、不解析 Capsule
- * 正文之外的任何东西，也不触发新的 Recovery。
+ * 以及 `session-binding.ts` 的精确绑定核验。共用的受控派发步骤也用于独立的基线补救 Planner Task；
+ * 本模块不读 transcript、不解析 Capsule 正文之外的任何东西，也不触发新的 Recovery。
  *
  * 权限在信封里显式固定为只读：Utility Worker 不可写代码、不可再派发 Worker、不可做 Git 操作；
  * 它没有递归恢复的能力。Capsule 正文经正常 Delivery 回到应用层，边界解析由
@@ -215,6 +215,20 @@ export type UtilityWorkerDispatchResult =
   | { readonly kind: 'unknown'; readonly operationId: OperationId; readonly reason: string }
   | { readonly kind: 'rejected'; readonly code: string; readonly message: string };
 
+/** 角色外独立 Task 的共用受控派发；调用方负责提供已校验的任务正文与持久绑定。 */
+export type ScopedWorkerDispatchInput = Omit<UtilityWorkerDispatchInput, 'envelope' | 'observeSession'> & {
+  readonly workPackageId: string;
+  readonly spec: string;
+  readonly existingOrcaTaskId?: string;
+  readonly observeSession: (dispatchId: string) => Promise<HarnessSessionFacts | null>;
+  readonly onTaskCreated?: (orcaTaskId: string) => { readonly code: string; readonly message: string } | null;
+  readonly onDispatchStarted?: (orcaTaskId: string, dispatchId: string) => { readonly code: string; readonly message: string } | null;
+};
+
+export type ScopedWorkerDispatchResult =
+  | Omit<Extract<UtilityWorkerDispatchResult, { readonly kind: 'dispatched' }>, 'envelope'>
+  | Exclude<UtilityWorkerDispatchResult, { readonly kind: 'dispatched' }>;
+
 function freshRevision(
   store: BranchCoordinationStore,
   coordinationScopeId: CoordinationScopeId,
@@ -224,7 +238,7 @@ function freshRevision(
 }
 
 function scopeOf(
-  input: UtilityWorkerDispatchInput,
+  input: Pick<ScopedWorkerDispatchInput, 'coordinationScopeId' | 'writer' | 'execution'>,
   operationId: OperationId,
   target: { readonly kind: string; readonly id: string },
   expectedRevision: number,
@@ -262,11 +276,12 @@ type ProtectedMutation =
  * OperationId 记下 backend request 引用并阻塞 lane，绝不换 ID 重试。
  */
 async function runProtected(
-  input: UtilityWorkerDispatchInput,
+  input: ScopedWorkerDispatchInput,
   operationId: OperationId,
   target: { readonly kind: string; readonly id: string },
   category: string,
   mutation: ExecutionMutation,
+  beforeSettle?: (value: unknown) => { readonly code: string; readonly message: string } | null,
 ): Promise<ProtectedMutation> {
   const revision = freshRevision(input.store, input.coordinationScopeId);
   if (revision === null) {
@@ -302,6 +317,22 @@ async function runProtected(
     mutation,
     scopeOf(input, operationId, target, revision),
   );
+  if (outcome.kind === 'accepted' && beforeSettle !== undefined) {
+    const failure = beforeSettle(outcome.value);
+    if (failure !== null) {
+      const blockRevision = freshRevision(input.store, input.coordinationScopeId);
+      if (blockRevision !== null) {
+        blockLane(input.store, {
+          coordinationScopeId: input.coordinationScopeId,
+          operationId,
+          writer: input.writer,
+          expectedRevision: blockRevision,
+          reason: failure.message,
+        });
+      }
+      return { kind: 'blocked', laneKey: category, reason: failure.message };
+    }
+  }
   const settled = settleIntent(input.store, {
     coordinationScopeId: input.coordinationScopeId,
     operationId,
@@ -323,7 +354,7 @@ async function runProtected(
         operationId,
         writer: input.writer,
         expectedRevision: blockRevision,
-        reason: '受限 Utility Worker 的调用结果未知，缺少副作用是否发生的证明',
+        reason: 'Worker 调用结果未知，缺少副作用是否发生的证明',
       });
     }
     const reconciled = await reconcileOperation(input.backend, outcome.operation);
@@ -342,28 +373,23 @@ async function runProtected(
  * 它复用前驱的 Task Envelope 约定与派发顺序：`task-create`（spec 是信封 JSON）→ `worker-start` →
  * 精确 Session Binding 核验。任一步不可核验即返回结构化失败，绝不猜 dispatch 或 session 身份。
  */
-export async function dispatchUtilityWorker(
-  input: UtilityWorkerDispatchInput,
-): Promise<UtilityWorkerDispatchResult> {
-  const taskTarget = { kind: 'work-package', id: input.envelope.workPackageId };
-  const created = await runProtected(input, input.operationIds.task, taskTarget, 'task-create', {
-    operation: 'task-create',
-    spec: JSON.stringify(input.envelope),
-    ...(input.taskTitle === undefined ? {} : { taskTitle: input.taskTitle }),
-    ...(input.displayName === undefined ? {} : { displayName: input.displayName }),
-  });
-  if (created.kind === 'blocked') {
-    return created;
-  }
-  if (created.kind === 'unknown') {
-    return created;
-  }
-  if (created.kind === 'rejected') {
-    return created;
-  }
-  const orcaTaskId = orcaTaskIdFromReceipt(created.value);
+export async function dispatchScopedWorker(input: ScopedWorkerDispatchInput): Promise<ScopedWorkerDispatchResult> {
+  const taskTarget = { kind: 'work-package', id: input.workPackageId };
+  let orcaTaskId = input.existingOrcaTaskId ?? null;
   if (orcaTaskId === null) {
-    return { kind: 'unknown', operationId: created.operationId, reason: 'task-create 回执缺少可核验的 task id' };
+    const created = await runProtected(input, input.operationIds.task, taskTarget, 'task-create', {
+      operation: 'task-create',
+      spec: input.spec,
+      ...(input.taskTitle === undefined ? {} : { taskTitle: input.taskTitle }),
+      ...(input.displayName === undefined ? {} : { displayName: input.displayName }),
+    }, (value) => {
+      const taskId = orcaTaskIdFromReceipt(value);
+      if (taskId === null) return { code: 'invalid_receipt', message: 'task-create 回执缺少可核验的 task id' };
+      return input.onTaskCreated?.(taskId) ?? null;
+    });
+    if (created.kind !== 'accepted') return created;
+    orcaTaskId = orcaTaskIdFromReceipt(created.value);
+    if (orcaTaskId === null) return { kind: 'unknown', operationId: created.operationId, reason: 'task-create 回执缺少可核验的 task id' };
   }
 
   const launch = await prepareWorkerLaunch({
@@ -392,6 +418,10 @@ export async function dispatchUtilityWorker(
     taskId: orcaTaskId,
     worktree: input.worktree,
     ...launch.worker,
+  }, (value) => {
+    const dispatchId = dispatchIdFromReceipt(value);
+    if (dispatchId === null) return { code: 'invalid_receipt', message: 'worker-start 回执缺少可核验的 dispatch id' };
+    return input.onDispatchStarted?.(orcaTaskId, dispatchId) ?? null;
   });
   if (started.kind === 'blocked') {
     return started;
@@ -434,7 +464,7 @@ export async function dispatchUtilityWorker(
     return adoption;
   }
 
-  const facts = await input.observeSession({ dispatchId, envelope: input.envelope });
+  const facts = await input.observeSession(dispatchId);
   if (facts === null) {
     return {
       kind: 'binding_unavailable',
@@ -446,7 +476,17 @@ export async function dispatchUtilityWorker(
   if (bound.kind === 'unavailable') {
     return { kind: 'binding_unavailable', code: bound.code, message: bound.message };
   }
-  return { kind: 'dispatched', envelope: input.envelope, orcaTaskId, dispatchId, binding: bound.binding };
+  return { kind: 'dispatched', orcaTaskId, dispatchId, binding: bound.binding };
+}
+
+export async function dispatchUtilityWorker(input: UtilityWorkerDispatchInput): Promise<UtilityWorkerDispatchResult> {
+  const result = await dispatchScopedWorker({
+    ...input,
+    workPackageId: input.envelope.workPackageId,
+    spec: JSON.stringify(input.envelope),
+    observeSession: (dispatchId) => input.observeSession({ dispatchId, envelope: input.envelope }),
+  });
+  return result.kind === 'dispatched' ? { ...result, envelope: input.envelope } : result;
 }
 
 function readStringArray(value: unknown, field: string): { readonly ok: true; readonly value: readonly string[] } | { readonly ok: false; readonly reason: string } {

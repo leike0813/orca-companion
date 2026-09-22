@@ -36,6 +36,7 @@ import {
   type ControllerTranscriptReaderInput,
   type DelegatedOutcome,
   type ExecutionHandoffCommand,
+  type GraphEvolutionCommand,
   type InitializeScopeCommand,
   type PlanningHandoffCommand,
   type ScopeControlCommand,
@@ -48,11 +49,14 @@ import type {
   CoordinatorSessionId,
   DispatchId,
   GraphGeneration,
+  GraphId,
+  GraphVersion,
   InteractionId,
   PlanningCycleId,
   Revision,
   RuntimeIncarnationId,
   WorkerTaskId,
+  WorkPackageId,
 } from '../../src/application/dto/identity.js';
 import type { ExecutionHandoffReviewFacts } from '../../src/application/handoff/execution-handoff.js';
 import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
@@ -158,6 +162,7 @@ type PortCalls = {
   readonly scopeControl: ScopeControlCommand[];
   readonly pendingInteractions: AnswerPendingInteractionCommand[];
   readonly executionHandoff: ExecutionHandoffCommand[];
+  readonly graphEvolution: GraphEvolutionCommand[];
   readonly scopeInitialization: InitializeScopeCommand[];
   readonly snapshots: ControllerSnapshotReaderInput[];
   readonly transcript: ControllerTranscriptReaderInput[];
@@ -172,6 +177,7 @@ function emptyCalls(): PortCalls {
     scopeControl: [],
     pendingInteractions: [],
     executionHandoff: [],
+    graphEvolution: [],
     scopeInitialization: [],
     snapshots: [],
     transcript: [],
@@ -321,6 +327,10 @@ function harness(options: { readonly realStoreUseCases: boolean }): {
     executionHandoff: (input) => {
       calls.executionHandoff.push(input);
       return Promise.resolve(accepted(`execution-${input.action}`));
+    },
+    graphEvolution: (input) => {
+      calls.graphEvolution.push(input);
+      return Promise.resolve(accepted(`graph-evolution-${input.action}`));
     },
     scopeInitialization: (input) => {
       calls.scopeInitialization.push(input);
@@ -590,6 +600,7 @@ test('订阅者只收到语义事件，取消订阅只移除 listener', () => {
     scopeControl: () => Promise.resolve(accepted('ok')),
     pendingInteractions: () => Promise.resolve(accepted('ok')),
     executionHandoff: () => Promise.resolve(accepted('ok')),
+    graphEvolution: () => Promise.resolve(accepted('ok')),
     scopeInitialization: () => Promise.resolve(accepted('ok')),
     events: events.source,
   });
@@ -725,6 +736,7 @@ test('快照只携带可投影字段：不含 receipt、结果正文、provider 
       'executionLeaseHolderSessionId',
       'frontier',
       'graph',
+      'graphEvolution',
       'handoffs',
       'interactions',
       'maintenance',
@@ -741,4 +753,225 @@ test('快照只携带可投影字段：不含 receipt、结果正文、provider 
   for (const forbidden of ['orcaResultRef', 'orca-result-secret-body', 'receipt', 'credential', 'provider']) {
     expect(serialized, forbidden).not.toContain(forbidden);
   }
+});
+
+/* -------------------------------------------------------------------------- */
+/* 图演进投影与意图                                                            */
+/* -------------------------------------------------------------------------- */
+
+/** 用当前 Runtime Lease 的 fencing generation 构造可用写入者；不猜测代际。 */
+function currentWriter(): CoordinationWriter {
+  const leases = store.query({ kind: 'leases', coordinationScopeId: SCOPE });
+  if (leases.kind !== 'leases') {
+    throw new Error('无法读取 leases');
+  }
+  const runtime = leases.leases.find(
+    (lease) => lease.kind === 'runtime' && lease.coordinatorSessionId === SESSION && lease.releasedAt === null,
+  );
+  if (runtime === undefined) {
+    throw new Error('测试 Scope 没有活跃 Runtime Lease');
+  }
+  return { coordinatorSessionId: SESSION, runtimeIncarnationId: INC, fencingGeneration: runtime.fencingGeneration };
+}
+
+function scopeRevisionNow(): number {
+  const read = store.query({ kind: 'scope', coordinationScopeId: SCOPE });
+  if (read.kind !== 'scope' || read.scope === null) {
+    throw new Error('无法读取 Scope');
+  }
+  return read.scope.revision;
+}
+
+function write(command: CoordinationCommand): void {
+  const result = store.transact(command);
+  if (result.kind === 'rejected') {
+    throw new Error(`测试写入被拒绝: ${result.message}`);
+  }
+}
+
+test('快照投影当前代际、revision pending、基线核验、lineage 与采用记录', () => {
+  const writer = currentWriter();
+  write({
+    kind: 'record-graph-generation',
+    coordinationScopeId: SCOPE,
+    expectedRevision: scopeRevisionNow(),
+    writer,
+    graphId: 'graph-1' as GraphId,
+    generation: 1 as GraphGeneration,
+    planningCycleId: CYCLE,
+    orcaRunId: 'run-1',
+    predecessorGraphId: null,
+    baselineHead: 'head-1',
+  });
+  write({
+    kind: 'record-revision-hold',
+    coordinationScopeId: SCOPE,
+    expectedRevision: scopeRevisionNow(),
+    writer,
+    workPackageId: 'wp-1' as WorkPackageId,
+    source: 'graph_patch',
+    sourceRef: 'patch-1',
+  });
+  write({
+    kind: 'record-baseline-reconciliation',
+    coordinationScopeId: SCOPE,
+    expectedRevision: scopeRevisionNow(),
+    writer,
+    reconciliationId: 'reconciliation-1',
+    workPackageId: 'wp-2' as WorkPackageId,
+    requiredBaselineHead: 'base-2',
+  });
+  write({
+    kind: 'advance-baseline-reconciliation',
+    coordinationScopeId: SCOPE,
+    expectedRevision: scopeRevisionNow(),
+    writer,
+    reconciliationId: 'reconciliation-1',
+    state: 'blocked',
+    blockerRef: 'git:diverged',
+  });
+  write({
+    kind: 'record-work-package-lineage',
+    coordinationScopeId: SCOPE,
+    expectedRevision: scopeRevisionNow(),
+    writer,
+    workPackageId: 'wp-3' as WorkPackageId,
+    priorWorkPackageId: 'wp-old' as WorkPackageId,
+    priorGraphId: 'graph-old' as GraphId,
+    inherited: [{ field: 'implementationAttempts', consumed: 1 }],
+  });
+  write({
+    kind: 'record-baseline-adoption',
+    coordinationScopeId: SCOPE,
+    expectedRevision: scopeRevisionNow(),
+    writer,
+    adoptionId: 'adoption-1',
+    workPackageId: 'wp-4' as WorkPackageId,
+    adoptionKind: 'baseline_adoption',
+    adoptedResultRef: 'result-1',
+    baselineHead: 'head-1',
+    integrationRef: 'commit-1',
+    evidenceRefs: ['evidence-1'],
+    state: 'recorded',
+    blockingReason: null,
+  });
+
+  const snapshot = snapshotOf(SCOPE);
+  expect(snapshot.graphEvolution.generations).toEqual([
+    expect.objectContaining({ graphId: 'graph-1', status: 'candidate', orcaRunId: 'run-1' }),
+  ]);
+  expect(snapshot.graphEvolution.revisionHolds).toEqual([
+    { workPackageId: 'wp-1', source: 'graph_patch', state: 'pending' },
+  ]);
+  expect(snapshot.graphEvolution.reconciliations).toEqual([
+    expect.objectContaining({ reconciliationId: 'reconciliation-1', workPackageId: 'wp-2', state: 'blocked' }),
+  ]);
+  expect(snapshot.graphEvolution.lineages).toEqual([
+    expect.objectContaining({
+      workPackageId: 'wp-3',
+      priorWorkPackageId: 'wp-old',
+      inherited: [{ field: 'implementationAttempts', consumed: 1 }],
+    }),
+  ]);
+  expect(snapshot.graphEvolution.adoptions).toEqual([
+    expect.objectContaining({ adoptionId: 'adoption-1', kind: 'baseline_adoption', state: 'recorded' }),
+  ]);
+
+  // 持有与失败的基线核验都是可观测 blocker，而不是只存在于日志里。
+  const sources = snapshot.blockers.map((blocker) => blocker.source);
+  expect(sources).toContain('revision_pending');
+  expect(sources).toContain('baseline_reconciliation');
+});
+
+test('graph-evolution 的每个动作只委派一次到图演进 port', async () => {
+  const { service, calls } = harness({ realStoreUseCases: false });
+  const commands: readonly GraphEvolutionCommand[] = [
+    {
+      kind: 'graph-evolution',
+      action: 'begin-replanning',
+      coordinationScopeId: SCOPE,
+      writer: WRITER,
+      userRequestedReplanning: true,
+      goalOrGlobalConstraintChanged: false,
+      graphRevisionsExhausted: false,
+    },
+    {
+      kind: 'graph-evolution',
+      action: 'complete-replanning',
+      coordinationScopeId: SCOPE,
+      writer: WRITER,
+      closure: 'drain',
+      settlement: { inFlightWorkers: 0, pendingDeliveries: 0, openInteractions: 0, unresolvedIntents: 0 },
+      newPlanningCycleId: 'cycle-2',
+    },
+    {
+      kind: 'graph-evolution',
+      action: 'cancel-replanning',
+      coordinationScopeId: SCOPE,
+      writer: WRITER,
+      suspendedGraphId: 'graph-1',
+      authorizationId: 'auth-1',
+      authorizationVersion: 1,
+      reconciliationResolved: true,
+    },
+    {
+      kind: 'graph-evolution',
+      action: 'confirm-cutover',
+      coordinationScopeId: SCOPE,
+      writer: WRITER,
+      refs: {
+        predecessorGraphId: 'graph-1' as GraphId,
+        candidateGraphId: 'graph-2' as GraphId,
+        candidateGeneration: 2 as GraphGeneration,
+        candidateGraphVersion: 1 as GraphVersion,
+        candidateRunId: 'run-2',
+        planningCycleId: 'cycle-2' as PlanningCycleId,
+        authorizationId: 'auth-2',
+        authorizationVersion: 1,
+        baselineHead: 'head-2',
+        expectedRevision: 3,
+      },
+    },
+  ];
+
+  for (const command of commands) {
+    const result = await service.execute(command);
+    expect(result.kind).toBe('accepted');
+  }
+  expect(calls.graphEvolution.map((command) => command.action)).toEqual([
+    'begin-replanning',
+    'complete-replanning',
+    'cancel-replanning',
+    'confirm-cutover',
+  ]);
+});
+
+test('图演进语义事件原样发布，噪声仍被丢弃', () => {
+  const notifications: ControllerNotification[] = [
+    {
+      kind: 'graph-version-appended',
+      coordinationScopeId: SCOPE,
+      graphId: 'graph-1',
+      graphVersion: 2,
+      patchId: 'patch-1',
+    },
+    { kind: 'revision-hold-changed', coordinationScopeId: SCOPE, workPackageId: 'wp-1', state: 'pending' },
+    { kind: 'generation-status-changed', coordinationScopeId: SCOPE, graphId: 'graph-1', status: 'suspended' },
+    {
+      kind: 'generation-cutover-committed',
+      coordinationScopeId: SCOPE,
+      predecessorGraphId: 'graph-1',
+      candidateGraphId: 'graph-2',
+    },
+    { kind: 'keepalive', at: 1 },
+    { kind: 'diagnostic', message: 'noise' },
+  ];
+  expect(notifications.map((notification) => toSemanticEvent(notification)?.kind ?? null)).toEqual([
+    'graph-version-appended',
+    'revision-hold-changed',
+    'generation-status-changed',
+    'generation-cutover-committed',
+    null,
+    null,
+  ]);
 });

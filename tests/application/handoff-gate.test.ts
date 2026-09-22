@@ -87,6 +87,7 @@ function candidateFor(
     version: version as GraphVersion,
     recordKind: 'initial',
     parentVersion: null,
+    patchId: null,
     mapRevision: overrides.mapRevision ?? MAP_REVISION,
     planRevision: overrides.planRevision ?? PLAN_REVISION,
     orcaRunId: 'run-1',

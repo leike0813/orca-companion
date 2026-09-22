@@ -7,7 +7,7 @@
  */
 
 import { parseRevision, type IdentityResult } from '../../application/dto/identity.js';
-import type { PlannedWorkPackage, WorkPackageBudget } from './execution-graph.js';
+import type { WorkPackageBudget } from './execution-graph.js';
 
 export type ExecutionLimits = {
   readonly maxActiveWorkPackages: number;
@@ -112,14 +112,27 @@ export type BudgetViolation = {
 };
 
 /**
+ * 一条待校验的预算需求。
+ *
+ * 只保留上限比较真正需要的两个字段，因此「初始编译的计划条目」与「Graph Patch 新增的节点」可以用
+ * 同一套上限判定，而不必互相伪造对方的结构。
+ */
+export type BudgetRequirement = {
+  readonly key: string;
+  readonly requestedBudget?: Partial<WorkPackageBudget>;
+};
+
+/**
  * 判断计划声明的预算需求是否全部落在上限内。
  *
  * 返回空数组表示通过；任何超限都逐项列出，不做截断也不放宽。缺少显式需求的 Work Package 只取
- * 配置上限，因此不会产生「未声明即无限」的解读。
+ * 配置上限，因此不会产生「未声明即无限」的解读。`activeWorkPackageCount` 表达变化生效后的节点总数：
+ * 追加补丁时它大于声明数量，判定因此看到的是新图的总量而不是本次增量。
  */
 export function assertWithinCaps(input: {
   readonly limits: ExecutionLimits;
-  readonly workPackages: readonly PlannedWorkPackage[];
+  readonly workPackages: readonly BudgetRequirement[];
+  readonly activeWorkPackageCount?: number;
 }): readonly BudgetViolation[] {
   const violations: BudgetViolation[] = [];
   if (!Number.isSafeInteger(input.limits.concurrencyLimit) || input.limits.concurrencyLimit <= 0) {
@@ -129,10 +142,11 @@ export function assertWithinCaps(input: {
       workPackageKey: null,
     });
   }
-  if (input.workPackages.length > input.limits.maxActiveWorkPackages) {
+  const activeCount = input.activeWorkPackageCount ?? input.workPackages.length;
+  if (activeCount > input.limits.maxActiveWorkPackages) {
     violations.push({
       code: 'active_work_packages_exceeded',
-      message: `Work Package 数量 ${input.workPackages.length} 超过上限 ${input.limits.maxActiveWorkPackages}`,
+      message: `Work Package 数量 ${activeCount} 超过上限 ${input.limits.maxActiveWorkPackages}`,
       workPackageKey: null,
     });
   }

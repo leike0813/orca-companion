@@ -89,7 +89,7 @@ function isValidEnvelopePath(path: string): boolean {
   return path.split('/').every((segment) => segment.length > 0 && segment !== '.' && segment !== '..');
 }
 
-function validateEnvelope(envelope: ScopeEnvelope): string | null {
+export function validateScopeEnvelope(envelope: ScopeEnvelope): string | null {
   if (envelope.include.length === 0) {
     return 'Scope Envelope 的 include 不得为空';
   }
@@ -115,7 +115,7 @@ function parsePathList(raw: unknown, field: string): IdentityResult<readonly str
   return { ok: true, value: values };
 }
 
-function parseScopeEnvelope(raw: unknown, field: string): IdentityResult<ScopeEnvelope> {
+export function parseScopeEnvelope(raw: unknown, field: string): IdentityResult<ScopeEnvelope> {
   if (!isRecord(raw)) {
     return { ok: false, field, message: '必须是对象' };
   }
@@ -138,7 +138,7 @@ const BUDGET_KEYS = [
   'maxRecoveriesPerWorkerAttempt',
 ] as const satisfies readonly (keyof WorkPackageBudget)[];
 
-function parseRequestedBudget(
+export function parseRequestedBudget(
   raw: unknown,
   field: string,
 ): IdentityResult<Partial<WorkPackageBudget>> {
@@ -238,7 +238,7 @@ export function parseImplementationPlan(raw: unknown, field = 'plan'): IdentityR
 }
 
 /** 检测依赖环；返回参与环的键，便于把结论直接呈现给用户。 */
-function findCycle(edges: ReadonlyMap<string, readonly string[]>): readonly string[] | null {
+export function findDependencyCycle(edges: ReadonlyMap<string, readonly string[]>): readonly string[] | null {
   const visiting = new Set<string>();
   const visited = new Set<string>();
   let cycle: readonly string[] | null = null;
@@ -319,14 +319,14 @@ export function compileExecutionGraph(input: GraphCompilationInput): Compilation
     }
     edges.set(planned.key, dependencies);
 
-    const envelopeError = validateEnvelope(planned.scopeEnvelope);
+    const envelopeError = validateScopeEnvelope(planned.scopeEnvelope);
     if (envelopeError !== null) {
       errors.push(error('invalid_scope_envelope', `Work Package ${planned.key}：${envelopeError}`, planned.key));
     }
   }
 
   if (errors.length === 0) {
-    const cycle = findCycle(edges);
+    const cycle = findDependencyCycle(edges);
     if (cycle !== null) {
       errors.push(error('cycle', `依赖存在环：${cycle.join(' -> ')}`, cycle[0] ?? null));
     }

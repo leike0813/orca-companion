@@ -10,6 +10,8 @@ import type {
   CoordinatorSessionId,
   DispatchId,
   GraphGeneration,
+  GraphId,
+  GraphVersion,
   InteractionId,
   OperationId,
   PlanningCycleId,
@@ -1432,4 +1434,538 @@ test('migration v6 → v7 保留既有数据并补齐新表', () => {
     .get() as unknown as { readonly value: string } | undefined;
   version.close();
   expect(Number.parseInt(row?.value ?? '', 10)).toBe(SCHEMA_VERSION);
+});
+
+/* -------------------------------------------------------------------------- */
+/* M8：图演进、重规划与代际记录                                                */
+/* -------------------------------------------------------------------------- */
+
+const GRAPH_ID = 'g1' as GraphId;
+
+function executionGraph(graphId: GraphId = GRAPH_ID) {
+  return {
+    graphId,
+    generation: 1 as GraphGeneration,
+    concurrencyLimit: 1,
+    workPackages: [
+      {
+        workPackageId: 'wp-1' as WorkPackageId,
+        title: '工作包',
+        dependsOn: [],
+        scopeEnvelope: { include: ['src'], exclude: [] },
+        budget: {
+          implementationAttempts: 2,
+          validatorRepairs: 2,
+          graphRevisions: 2,
+          specificationRevisions: 2,
+          maxRecoveriesPerWorkerAttempt: 1,
+        },
+      },
+    ],
+  };
+}
+
+function recordInitialGraph(graphId: GraphId = GRAPH_ID): CoordinationCommandResult {
+  return submit((expectedRevision) => ({
+    kind: 'record-graph-version',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    graphId,
+    generation: 1 as GraphGeneration,
+    graphVersion: 1 as GraphVersion,
+    recordKind: 'initial',
+    parentVersion: null,
+    mapRevision: 0,
+    planRevision: 1,
+    orcaRunId: 'run-1',
+    graph: executionGraph(graphId),
+    patch: null,
+  }));
+}
+
+function acceptedRevisionCommand(expectedRevision: number, overrides: Record<string, unknown> = {}): CoordinationCommand {
+  return {
+    kind: 'record-graph-version',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    graphId: GRAPH_ID,
+    generation: 1 as GraphGeneration,
+    graphVersion: 2 as GraphVersion,
+    recordKind: 'accepted_revision',
+    parentVersion: 1 as GraphVersion,
+    mapRevision: 0,
+    planRevision: 1,
+    orcaRunId: 'run-1',
+    graph: executionGraph(),
+    patch: {
+      patchId: 'patch-1',
+      operationId: 'op-1' as OperationId,
+      baseGraphVersion: 1 as GraphVersion,
+      added: [],
+      revised: ['wp-1' as WorkPackageId],
+      retired: [],
+      descendants: [],
+      takesOver: [],
+      revisionPendingWorkPackageIds: ['wp-1' as WorkPackageId],
+    },
+    ...overrides,
+  };
+}
+
+test('migration v7 → v8 保留既有数据并补齐图演进表', () => {
+  const databasePath = join(directory, 'coordination-v7.sqlite');
+
+  const legacy = new DatabaseSync(databasePath);
+  legacy.exec('BEGIN IMMEDIATE');
+  for (const migration of MIGRATIONS) {
+    if (migration.version > 7) {
+      continue;
+    }
+    for (const statement of migration.statements) {
+      legacy.exec(statement);
+    }
+  }
+  legacy
+    .prepare(
+      `INSERT INTO scope (
+         coordination_scope_id, mode, control_state, planning_cycle_id, graph_id, graph_version,
+         authorization_id, authorization_version, map_revision, revision, updated_at
+       ) VALUES (?, 'execution_coordination', 'active', 'cycle-1', 'g1', 1, 'auth-1', 1, 0, 7, 1)`,
+    )
+    .run('scope-migrated');
+  legacy
+    .prepare(
+      `INSERT INTO graph_versions (
+         coordination_scope_id, graph_id, graph_version, graph_generation, record_kind, parent_version,
+         map_revision, plan_revision, orca_run_id, graph_json, recorded_at
+       ) VALUES ('scope-migrated', 'g1', 1, 1, 'initial', NULL, 0, 1, 'run-1', ?, 1)`,
+    )
+    .run(JSON.stringify(executionGraph()));
+  legacy.prepare(`INSERT INTO meta (key, value) VALUES ('schema_version', '7')`).run();
+  legacy.exec('COMMIT');
+  legacy.close();
+
+  const migrated = openCoordinationStore({ databasePath, clock });
+  if (migrated.kind !== 'opened') {
+    throw new Error(migrated.message);
+  }
+  try {
+    const scopeId = 'scope-migrated' as CoordinationScopeId;
+    const versions = migrated.store.query({ kind: 'graph-versions', coordinationScopeId: scopeId, graphId: GRAPH_ID });
+    expect(versions.kind === 'graph-versions' ? versions.versions.length : -1).toBe(1);
+    expect(versions.kind === 'graph-versions' ? versions.versions[0]?.patchId : 'missing').toBeNull();
+
+    for (const query of ['graph-generations', 'revision-holds', 'baseline-reconciliations', 'work-package-lineages', 'baseline-adoptions'] as const) {
+      const result = migrated.store.query({ kind: query, coordinationScopeId: scopeId });
+      expect(result.kind, query).not.toBe('rejected');
+    }
+    const holds = migrated.store.query({ kind: 'revision-holds', coordinationScopeId: scopeId });
+    expect(holds.kind === 'revision-holds' ? holds.holds : null).toEqual([]);
+  } finally {
+    migrated.store.close();
+  }
+});
+
+test('initial GraphVersion 不得携带补丁，accepted_revision 必须携带补丁', () => {
+  createScope();
+  activateSession();
+
+  const withPatch = submit((expectedRevision) => ({
+    kind: 'record-graph-version',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    graphId: GRAPH_ID,
+    generation: 1 as GraphGeneration,
+    graphVersion: 1 as GraphVersion,
+    recordKind: 'initial',
+    parentVersion: null,
+    mapRevision: 0,
+    planRevision: 1,
+    orcaRunId: 'run-1',
+    graph: executionGraph(),
+    patch: {
+      patchId: 'patch-illegal',
+      operationId: 'op-1' as OperationId,
+      baseGraphVersion: 0 as GraphVersion,
+      added: [],
+      revised: [],
+      retired: [],
+      descendants: [],
+      takesOver: [],
+      revisionPendingWorkPackageIds: [],
+    },
+  }));
+  expect(withPatch.kind === 'rejected' ? withPatch.message : '').toContain('initial');
+
+  expect(recordInitialGraph().kind).toBe('committed');
+  const withoutPatch = submit((expectedRevision) => ({
+    ...(acceptedRevisionCommand(expectedRevision) as Record<string, unknown>),
+    patch: null,
+  }) as CoordinationCommand);
+  expect(withoutPatch.kind === 'rejected' ? withoutPatch.message : '').toContain('accepted_revision');
+});
+
+test('没有 Execution Coordination Lease 的写入者不能追加 accepted revision', () => {
+  createScope();
+  activateSession();
+  recordInitialGraph();
+
+  // 图修订改变正在执行的拓扑：只有当前执行权威可以推进它。
+  const rejected = submit((expectedRevision) => acceptedRevisionCommand(expectedRevision));
+  expect(rejected.kind).toBe('rejected');
+  if (rejected.kind === 'rejected') {
+    expect(rejected.code).toBe('constraint');
+    expect(rejected.message).toContain('Execution Coordination Lease');
+  }
+  const versions = store.query({ kind: 'graph-versions', coordinationScopeId: SCOPE, graphId: GRAPH_ID });
+  expect(versions.kind === 'graph-versions' ? versions.versions.length : -1).toBe(1);
+});
+
+test('accepted revision 与 revision pending 持有、预算扣减在同一事务内生效', () => {
+  createScope();
+  activateSession();
+  recordInitialGraph();
+  acquireExecutionLease();
+
+  const committed = submit((expectedRevision) =>
+    acceptedRevisionCommand(expectedRevision, {
+      budgetConsumption: [
+        { budgetKey: 'work-package:wp-1:graphRevisions', approvedLimitRef: 'auth-1', amount: 1 },
+      ],
+    }),
+  );
+  expect(committed.kind).toBe('committed');
+
+  const versions = store.query({ kind: 'graph-versions', coordinationScopeId: SCOPE, graphId: GRAPH_ID });
+  expect(versions.kind === 'graph-versions' ? versions.versions.map((entry) => entry.patchId) : null).toEqual([
+    null,
+    'patch-1',
+  ]);
+  const holds = store.query({ kind: 'revision-holds', coordinationScopeId: SCOPE });
+  expect(holds.kind === 'revision-holds' ? holds.holds : null).toEqual([
+    expect.objectContaining({ workPackageId: 'wp-1', source: 'graph_patch', state: 'pending' }),
+  ]);
+  const counters = store.query({ kind: 'budget-counters', coordinationScopeId: SCOPE });
+  expect(counters.kind === 'budget-counters' ? counters.counters : null).toEqual([
+    expect.objectContaining({ budgetKey: 'work-package:wp-1:graphRevisions', consumed: 1 }),
+  ]);
+
+  // 同一补丁标识只能提交一次：唯一索引把重放挡在库边界。
+  const replay = submit((expectedRevision) =>
+    acceptedRevisionCommand(expectedRevision, {
+      graphVersion: 3,
+      parentVersion: 2,
+    }),
+  );
+  expect(replay.kind).toBe('rejected');
+  if (replay.kind === 'rejected') {
+    expect(replay.code).toBe('constraint');
+  }
+});
+
+test('补丁基线必须等于当前 head，否则整笔拒绝', () => {
+  createScope();
+  activateSession();
+  recordInitialGraph();
+  acquireExecutionLease();
+
+  const mismatched = submit((expectedRevision) =>
+    acceptedRevisionCommand(expectedRevision, {
+      patch: {
+        patchId: 'patch-2',
+        operationId: 'op-2' as OperationId,
+        baseGraphVersion: 0 as GraphVersion,
+        added: [],
+        revised: [],
+        retired: [],
+        descendants: [],
+        takesOver: [],
+        revisionPendingWorkPackageIds: [],
+      },
+    }),
+  );
+  expect(mismatched.kind).toBe('rejected');
+  const versions = store.query({ kind: 'graph-versions', coordinationScopeId: SCOPE, graphId: GRAPH_ID });
+  expect(versions.kind === 'graph-versions' ? versions.versions.length : -1).toBe(1);
+});
+
+test('代际状态迁移受闭集约束，frozen 是终态', () => {
+  createScope();
+  activateSession();
+
+  expect(
+    submit((expectedRevision) => ({
+      kind: 'record-graph-generation',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      graphId: GRAPH_ID,
+      generation: 1 as GraphGeneration,
+      planningCycleId: 'cycle-1' as PlanningCycleId,
+      orcaRunId: 'run-1',
+      predecessorGraphId: null,
+      baselineHead: 'head-1',
+    })).kind,
+  ).toBe('committed');
+  expect(
+    submit((expectedRevision) => ({
+      kind: 'record-graph-generation',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      graphId: GRAPH_ID,
+      generation: 1 as GraphGeneration,
+      planningCycleId: 'cycle-1' as PlanningCycleId,
+      orcaRunId: 'run-1',
+      predecessorGraphId: null,
+      baselineHead: 'head-1',
+    })).kind,
+  ).toBe('rejected');
+
+  const advance = (status: 'active' | 'suspended' | 'frozen'): CoordinationCommandResult =>
+    submit((expectedRevision) => ({
+      kind: 'advance-graph-generation',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      graphId: GRAPH_ID,
+      status,
+    }));
+
+  expect(advance('active').kind).toBe('committed');
+  expect(advance('active').kind).toBe('committed');
+  expect(advance('suspended').kind).toBe('committed');
+  expect(advance('active').kind).toBe('committed');
+  expect(advance('frozen').kind).toBe('committed');
+  const terminal = advance('active');
+  expect(terminal.kind).toBe('rejected');
+  if (terminal.kind === 'rejected') {
+    expect(terminal.message).toContain('frozen');
+  }
+});
+
+test('释放持有是幂等的，重放不会把修订额度再扣一次', () => {
+  createScope();
+  activateSession();
+  recordInitialGraph();
+  acquireExecutionLease();
+  submit((expectedRevision) =>
+    acceptedRevisionCommand(expectedRevision, {
+      patch: {
+        patchId: 'patch-1',
+        operationId: 'op-1' as OperationId,
+        baseGraphVersion: 1 as GraphVersion,
+        added: [],
+        revised: ['wp-1' as WorkPackageId],
+        retired: [],
+        descendants: [],
+        takesOver: [],
+        revisionPendingWorkPackageIds: ['wp-1' as WorkPackageId],
+      },
+    }),
+  );
+
+  const release = (): CoordinationCommandResult =>
+    submit((expectedRevision) => ({
+      kind: 'release-revision-hold',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      workPackageId: 'wp-1' as WorkPackageId,
+      reason: 'specification revision 已重新准入',
+      budgetConsumption: [
+        { budgetKey: 'work-package:wp-1:specificationRevisions', approvedLimitRef: 'auth-1', amount: 1 },
+      ],
+    }));
+
+  expect(release().kind).toBe('committed');
+  expect(release().kind).toBe('committed');
+  const counters = store.query({ kind: 'budget-counters', coordinationScopeId: SCOPE });
+  expect(counters.kind === 'budget-counters' ? counters.counters : null).toEqual([
+    expect.objectContaining({ budgetKey: 'work-package:wp-1:specificationRevisions', consumed: 1 }),
+  ]);
+
+  const absent = submit((expectedRevision) => ({
+    kind: 'release-revision-hold',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    workPackageId: 'wp-unknown' as WorkPackageId,
+    reason: '不存在',
+  }));
+  expect(absent.kind).toBe('rejected');
+});
+
+test('Baseline Reconciliation 的 verified 要求四项核验齐全', () => {
+  createScope();
+  activateSession();
+  submit((expectedRevision) => ({
+    kind: 'record-baseline-reconciliation',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    reconciliationId: 'reconciliation-1',
+    workPackageId: 'wp-1' as WorkPackageId,
+    requiredBaselineHead: 'base-2',
+  }));
+
+  const incomplete = submit((expectedRevision) => ({
+    kind: 'advance-baseline-reconciliation',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    reconciliationId: 'reconciliation-1',
+    state: 'verified',
+    observedHead: 'base-2',
+    ancestryVerified: true,
+    targetHeadVerified: true,
+    dirtyPathsReconciled: true,
+    scopeReconciled: false,
+  }));
+  expect(incomplete.kind).toBe('rejected');
+
+  const blocked = submit((expectedRevision) => ({
+    kind: 'advance-baseline-reconciliation',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    reconciliationId: 'reconciliation-1',
+    state: 'blocked',
+    blockerRef: 'git:diverged',
+  }));
+  expect(blocked.kind).toBe('committed');
+  const records = store.query({ kind: 'baseline-reconciliations', coordinationScopeId: SCOPE });
+  expect(records.kind === 'baseline-reconciliations' ? records.reconciliations[0]?.state : null).toBe('blocked');
+});
+
+test('采用记录要求证据，阻塞结论必须给出矛盾事实', () => {
+  createScope();
+  activateSession();
+
+  const noEvidence = submit((expectedRevision) => ({
+    kind: 'record-baseline-adoption',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    adoptionId: 'adoption-1',
+    workPackageId: 'wp-1' as WorkPackageId,
+    adoptionKind: 'baseline_adoption',
+    adoptedResultRef: 'result-1',
+    baselineHead: 'head-1',
+    integrationRef: 'commit-1',
+    evidenceRefs: [],
+    state: 'recorded',
+    blockingReason: null,
+  }));
+  expect(noEvidence.kind).toBe('rejected');
+
+  const blockedWithoutReason = submit((expectedRevision) => ({
+    kind: 'record-baseline-adoption',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    adoptionId: 'adoption-2',
+    workPackageId: 'wp-1' as WorkPackageId,
+    adoptionKind: 'migration_material',
+    adoptedResultRef: 'result-1',
+    baselineHead: 'head-1',
+    integrationRef: null,
+    evidenceRefs: ['evidence-1'],
+    state: 'blocked',
+    blockingReason: null,
+  }));
+  expect(blockedWithoutReason.kind).toBe('rejected');
+});
+
+test('lineage 只接受可继承额度项，且一个 Work Package 至多一条', () => {
+  createScope();
+  activateSession();
+
+  const nonInheritable = submit((expectedRevision) => ({
+    kind: 'record-work-package-lineage',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    workPackageId: 'wp-1' as WorkPackageId,
+    priorWorkPackageId: 'wp-old' as WorkPackageId,
+    priorGraphId: 'g-old' as GraphId,
+    inherited: [{ field: 'maxRecoveriesPerWorkerAttempt', consumed: 1 } as never],
+  }));
+  expect(nonInheritable.kind).toBe('rejected');
+
+  const recorded = submit((expectedRevision) => ({
+    kind: 'record-work-package-lineage',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    workPackageId: 'wp-1' as WorkPackageId,
+    priorWorkPackageId: 'wp-old' as WorkPackageId,
+    priorGraphId: 'g-old' as GraphId,
+    inherited: [{ field: 'implementationAttempts', consumed: 1 }],
+  }));
+  expect(recorded.kind).toBe('committed');
+
+  const duplicate = submit((expectedRevision) => ({
+    kind: 'record-work-package-lineage',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    workPackageId: 'wp-1' as WorkPackageId,
+    priorWorkPackageId: 'wp-other' as WorkPackageId,
+    priorGraphId: 'g-old' as GraphId,
+    inherited: [],
+  }));
+  expect(duplicate.kind).toBe('rejected');
+
+  const lineages = store.query({ kind: 'work-package-lineages', coordinationScopeId: SCOPE });
+  const recordedLineage = lineages.kind === 'work-package-lineages' ? lineages.lineages[0] : undefined;
+  expect(recordedLineage?.workPackageId).toBe('wp-1');
+  expect(recordedLineage?.priorWorkPackageId).toBe('wp-old');
+  expect(typeof recordedLineage?.recordedAt).toBe('number');
+});
+
+test('代际引用只在 Cutover 时整体切换：候选未授权时整笔拒绝', () => {
+  createScope();
+  activateSession();
+  recordInitialGraph();
+
+  const candidate = submit((expectedRevision) => ({
+    kind: 'record-graph-generation',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    graphId: 'g2' as GraphId,
+    generation: 2 as GraphGeneration,
+    planningCycleId: 'cycle-2' as PlanningCycleId,
+    orcaRunId: 'run-2',
+    predecessorGraphId: GRAPH_ID,
+    baselineHead: 'head-2',
+  }));
+  expect(candidate.kind).toBe('committed');
+
+  const missingAuthorization = submit((expectedRevision) => ({
+    kind: 'commit-generation-cutover',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    candidateGraphId: 'g2' as GraphId,
+    candidateGraphVersion: 1 as GraphVersion,
+    planningCycleId: 'cycle-2' as PlanningCycleId,
+    authorizationId: 'auth-missing',
+    authorizationVersion: 1,
+    predecessorGraphId: GRAPH_ID,
+    candidateRunId: 'run-2',
+    baselineHead: 'head-2',
+  }));
+  expect(missingAuthorization.kind).toBe('rejected');
+
+  const scope = store.query({ kind: 'scope', coordinationScopeId: SCOPE });
+  expect(scope.kind === 'scope' ? scope.scope?.graphId : null).toBe(GRAPH_ID);
+  const generations = store.query({ kind: 'graph-generations', coordinationScopeId: SCOPE });
+  expect(generations.kind === 'graph-generations' ? generations.generations.map((entry) => entry.status) : null).toEqual([
+    'candidate',
+  ]);
 });
