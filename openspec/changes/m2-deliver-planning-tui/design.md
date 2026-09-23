@@ -1,6 +1,6 @@
 ## Context
 
-本 change 是 M2 的第一项，直接前驱为 `m1-evolve-execution-graph`，冻结接缝是前驱已归档的 Patch/Revision/Replanning/Cutover 语义与 Controller 的查询/命令契约。规划阶段所需的领域语义（Coordination Scope、Coordinator Session、Pending Interaction、Route Map 与 Execution Graph candidate）在 M1 已全部落地，本 change 只增加前台投影与意图提交。
+本 change 是 M2 的第一项，直接前驱为 `m1-wire-foreground-planning-runtime`，冻结接缝包括 Scope 注册绑定、已接线的前台 Session/工具 loop、Controller 查询/命令与事件归属。Patch/Revision/Replanning/Cutover 语义已由其前驱归档；本 change 只增加前台投影与意图提交。
 
 与实现直接相关的既有约束：`src/domain/` 不依赖 Ink 或进程；`src/interfaces/cli/` 与 `src/interfaces/tui/` 只消费快照和事件、提交用户意图，不推进状态、不调用 Orca、不恢复模型、不实现重试；Coordinator Session 与 Branch Coordination Store 是两个独立 SQLite store，TUI 不得写其中任何一个。终端约束来自 [docs/research/ink-react-terminal-constraints.md](../../../docs/research/ink-react-terminal-constraints.md)：无 TTY 时 `useInput` 会抛 raw-mode 错误而退出码仍为 0，因此 TTY 门禁必须前移到挂载 Ink 之前。
 
@@ -38,11 +38,21 @@ TUI 入口在 `src/bootstrap/` 先检查 `process.stdin.isTTY` 与 `process.stdo
 
 权威来源：进程级 TTY 状态。失败关闭：无 TTY 即拒绝，不尝试降级为非交互输出。
 
-### D2：Home 查找以 Git common dir 与完整 branch ref 为键
+### D2：Home 按登记的 Scope 身份精确解析
 
-Scope 恢复复用 M1 已建立的 Scope identity 语义：以 Git common dir 与完整 branch ref 定位唯一未归档 Scope。理由：canonical worktree 与 linked worktree 共享 Git common dir，而 linked worktree 或 detached HEAD 不是合法 Startup 位置，用完整 ref 而非当前目录可避免把用户导向错误的 Scope。备选是仅按仓库路径匹配，但同一仓库的多个 worktree 会产生歧义。
+Scope 恢复以 Git common dir 定位 Branch Coordination State，再按当前完整 branch ref 和用户登记的 canonical worktree 精确匹配：唯一匹配时恢复，无匹配时进入向导，旧未绑定记录要求用户明确选择并 Review 迁移。linked Worker worktree、detached HEAD 或冲突匹配均阻塞。理由：Coordination Scope 是固定 repository/ref/canonical worktree 组合；共享 store 只决定记录位置，不决定当前 Scope 身份。
 
-权威来源：Git 与 M1 的 Branch Coordination State。失败关闭：匹配到零个或实质多个候选时进入向导或显式要求用户选择，不自动创建。
+权威来源：Git 当前身份与 IC-03 不可变注册绑定。失败关闭：不猜测旧记录身份，不从非 canonical worktree 恢复。
+
+### D11：候选图拓扑与压缩状态是新增的只读投影，不是新权威
+
+Graph Inspector 需要节点、依赖与 Scope Envelope，压缩告警需要 `compaction_degraded`/`context_exhausted`，而 IC-11 原本只投影图指针与 frontier。本 change 在 IC-11 登记两个只读投影字段（`graphTopologies`、`compaction`），由调用方从权威来源（GraphVersion 记录、Session checkpoint 最近一次 `CompactionOutcome`）读好后注入 `ControllerSnapshotFacts`。理由：让 UI 直接读 GraphVersion 或 workflow 状态会破坏「组件不接触 store 与 workflow」的依赖方向；把派生放进投影函数则保持单一映射规则。
+
+权威来源：GraphVersion 记录与 Session checkpoint 的压缩结论。失败关闭：记录不可读或从未压缩时投影为空（`[]` / `null`），界面显示相应状态而不猜测。
+
+### D12：`/compact` 消费前驱的 Session 压缩用例
+
+`/compact` 复用前驱的 `CompactSessionCommand` 和 Session checkpoint 投影；界面只提交意图并展示结论。前驱能力意外缺失时入口以结构化 `compaction_unavailable` 拒绝并显示 blocker。`context_exhausted` 时界面禁用该 Session 的 composer 提交，宿主也拒绝新的模型调用。
 
 ### D3：初始化向导零持久化前置，确认后单事务提交
 
@@ -88,7 +98,7 @@ Sidebar 有完整、紧凑、折叠三态。终端宽度只决定允许的最高
 
 ### D10：压缩、模型配置与 Handoff 只做入口与状态展示
 
-`/compact`、Model Picker 与 Route Planning Handoff SHALL 复用既有主视图与 Command Palette，不新增页面。TUI 只提交意图并展示 Controller 已持久化的结果：`compaction_degraded`、`context_exhausted`、handoff review 与 `awaiting_user_prompt` 都是投影状态，界面不得自行判定或推进。Model Picker 在 Coordinator Session 非 suspended 或存在在途模型操作时不可提交；`compaction_degraded` 只提供 handoff 建议，不自动创建或切换 Session；Source checkpoint 不可恢复或无法生成可移植 Coordinator Context Capsule 时 Handoff fail closed，界面显示 Scope blocker。理由：`/compact`、模型切换与 Handoff 的准入、边界与 fail-closed 语义在 M1 已由 Controller 拥有，界面重复实现会产生第二权威源。备选是为 compaction 与 handoff 各建专用页面，但 M2 明确不新增页面，且前驱的分区与 Command Palette 已足够表达。
+`/compact`、Model Picker 与 Route Planning Handoff SHALL 复用既有主视图与 Command Palette，不新增页面。TUI 只提交意图并展示 Controller 投影的结果：`compaction_degraded`、`context_exhausted`、handoff review 与 `awaiting_user_prompt` 都是投影状态，界面不得自行判定或推进。Model Picker 在 Coordinator Session 非 suspended 或存在在途模型操作时不可提交；`compaction_degraded` 只提供 handoff 建议，不自动创建或切换 Session；Handoff 由用户选择 Target，Source checkpoint 不可恢复或无法生成可移植 Coordinator Context Capsule 时 fail closed，界面显示 Scope blocker。准入、压缩、切换与交接由前驱 Controller 用例拥有。
 
 权威来源：Controller 的 `CompactionOutcome`、模型切换结果与 `PlanningHandoffProposal`/Cutover CAS。失败关闭：准入条件不满足或步骤失败时不推进界面状态，显示 blocker。
 

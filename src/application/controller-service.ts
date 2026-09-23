@@ -28,6 +28,7 @@ import type {
   ReplanningClosureMode,
   SettlementFacts,
 } from '../domain/execution/replanning.js';
+import type { GraphVersionRecord } from '../domain/planning/execution-graph.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
@@ -49,6 +50,8 @@ import type {
   InheritedBudgetEntry,
   PendingInteractionRecord,
   PendingInteractionState,
+  PlanningHandoffPhase,
+  PlanningHandoffRecord,
   RecoveryRecord,
   RecoveryState,
   RevisionHoldRecord,
@@ -152,6 +155,66 @@ export type ControllerMaintenanceView = {
 };
 
 /* -------------------------------------------------------------------------- */
+/* planning TUI 只读投影（IC-11 Extend，Owner: `m2-deliver-planning-tui`）      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * 候选图的一个 Work Package 节点。
+ *
+ * Inspector 只读展示节点、依赖与 Scope Envelope；这里不投影预算，避免把执行策略带进规划界面。
+ */
+export type ControllerGraphNodeView = {
+  readonly workPackageId: string;
+  readonly title: string;
+  readonly dependsOn: readonly string[];
+  readonly scopeEnvelope: { readonly include: readonly string[]; readonly exclude: readonly string[] };
+};
+
+/** admission/authorization readiness：代际状态与「授权是否恰好绑定这张图」。 */
+export type ControllerGraphReadinessView = {
+  readonly generationStatus: GraphGenerationStatus | null;
+  readonly authorizationBound: boolean;
+};
+
+export type ControllerGraphTopologyView = {
+  readonly graphId: string;
+  readonly graphVersion: number;
+  readonly generation: number;
+  readonly nodes: readonly ControllerGraphNodeView[];
+  readonly readiness: ControllerGraphReadinessView;
+};
+
+/**
+ * 压缩结论的展示投影。
+ *
+ * 它是 Runtime 观察到的 `CompactionOutcome` 的扁平化视图，不是新的权威：本模块既不执行压缩，也不
+ * 持久化它；从未观察到时为 `null`，界面据此显示 blocker 而不是假设「未降级」。
+ */
+export type ControllerCompactionView = {
+  readonly status: 'not_needed' | 'compacted' | 'compaction_degraded' | 'context_exhausted';
+  readonly path: string | null;
+  readonly reason: string | null;
+  readonly stillOverBudget: number | null;
+};
+
+/**
+ * Route Planning Handoff 提案的展示投影。
+ *
+ * 提案的准入、CAS 与激活门都由应用用例拥有；界面只展示它、提交确认或取消。
+ */
+export type ControllerPlanningHandoffView = {
+  readonly proposalId: string;
+  readonly sourceSessionId: string;
+  readonly targetSessionId: string;
+  readonly phase: PlanningHandoffPhase;
+  readonly mapRevision: number;
+  readonly planRevision: number;
+  /** 可移植 Coordinator Context Capsule 的引用；`null` 表示尚未生成，界面据此显示 blocker。 */
+  readonly capsuleRef: string | null;
+  readonly proposalRevision: number;
+};
+
+/* -------------------------------------------------------------------------- */
 /* 图演进投影                                                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -230,6 +293,12 @@ export type ControllerSnapshot = {
   readonly recoveries: readonly ControllerRecoveryView[];
   readonly graphEvolution: ControllerGraphEvolutionView;
   readonly maintenance: ControllerMaintenanceView | null;
+  /** 调用方读到的 GraphVersion 记录投影；未提供记录时为空数组。 */
+  readonly graphTopologies: readonly ControllerGraphTopologyView[];
+  /** Runtime 最近一次观察到并交给调用方的压缩结论；从未观察到时为 `null`。 */
+  readonly compaction: ControllerCompactionView | null;
+  /** Route Planning Handoff 提案；界面据此展示 Review 与 cutover 入口。 */
+  readonly planningHandoffs: readonly ControllerPlanningHandoffView[];
 };
 
 export type ControllerTranscriptMessage = {
@@ -615,6 +684,20 @@ export type ControllerSnapshotFacts = {
   readonly extraBlockers: readonly ControllerBlockerEntry[];
   readonly maintenance: ControllerMaintenanceView | null;
   readonly selectedSessionId: CoordinatorSessionId | null;
+  /**
+   * 调用方读到的 GraphVersion 记录（IC-11 Extend）。
+   *
+   * 只读投影，不由本模块读取：记录不可读时调用方显式传空数组，界面显示 blocker 而不是猜测图内容。
+   */
+  readonly graphVersions: readonly GraphVersionRecord[];
+  /**
+   * 已批准 Execution Authorization 绑定的图引用（IC-11 Extend）。
+   *
+   * 仅用于判定 readiness；没有授权时为 `null`。
+   */
+  readonly authorizationGraphRef: { readonly graphId: string; readonly graphVersion: number } | null;
+  /** Runtime 观察到的最近一次压缩结论（IC-11 Extend）；从未观察到时为 `null`。 */
+  readonly compaction: ControllerCompactionView | null;
 };
 
 function projectInteraction(interaction: PendingInteractionRecord): ControllerInteractionView {
@@ -695,6 +778,47 @@ function projectAdoption(adoption: BaselineAdoptionRecord): ControllerAdoptionVi
     workPackageId: adoption.workPackageId,
     kind: adoption.kind,
     state: adoption.state,
+  };
+}
+
+function projectPlanningHandoff(handoff: PlanningHandoffRecord): ControllerPlanningHandoffView {
+  return {
+    proposalId: handoff.proposalId,
+    sourceSessionId: handoff.sourceCoordinatorSessionId,
+    targetSessionId: handoff.targetCoordinatorSessionId,
+    phase: handoff.phase,
+    mapRevision: handoff.mapRevision,
+    planRevision: handoff.planRevision,
+    capsuleRef: handoff.capsuleRef,
+    proposalRevision: handoff.proposalRevision,
+  };
+}
+
+function projectGraphTopology(
+  version: GraphVersionRecord,
+  facts: ControllerSnapshotFacts,
+): ControllerGraphTopologyView {
+  const generation = facts.snapshot.graphGenerations.find((entry) => entry.graphId === version.graphId);
+  return {
+    graphId: version.graphId,
+    graphVersion: version.version,
+    generation: version.generation,
+    nodes: version.graph.workPackages.map<ControllerGraphNodeView>((workPackage) => ({
+      workPackageId: workPackage.workPackageId,
+      title: workPackage.title,
+      dependsOn: [...workPackage.dependsOn],
+      scopeEnvelope: {
+        include: [...workPackage.scopeEnvelope.include],
+        exclude: [...workPackage.scopeEnvelope.exclude],
+      },
+    })),
+    readiness: {
+      generationStatus: generation?.status ?? null,
+      authorizationBound:
+        facts.authorizationGraphRef !== null &&
+        facts.authorizationGraphRef.graphId === version.graphId &&
+        facts.authorizationGraphRef.graphVersion === version.version,
+    },
   };
 }
 
@@ -794,6 +918,9 @@ export function projectControllerSnapshot(facts: ControllerSnapshotFacts): Contr
       adoptions: facts.snapshot.baselineAdoptions.map(projectAdoption),
     },
     maintenance: facts.maintenance,
+    graphTopologies: facts.graphVersions.map((version) => projectGraphTopology(version, facts)),
+    compaction: facts.compaction,
+    planningHandoffs: facts.snapshot.planningHandoffs.map(projectPlanningHandoff),
   };
 }
 

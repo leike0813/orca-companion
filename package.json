@@ -13,6 +13,7 @@
     "orca-companion": "./dist/src/interfaces/cli/main.js"
   },
   "scripts": {
+    "start": "node ./dist/src/interfaces/cli/main.js",
     "build": "tsc --noEmit false --outDir dist",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -25,7 +26,9 @@
     "@langchain/anthropic": "1.5.10",
     "@langchain/openai": "1.5.13",
     "@types/node": "^24.13.5",
+    "@types/react": "19.3.0",
     "eslint": "^10.10.0",
+    "ink-testing-library": "4.0.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0",
     "vite": "^8.3.0",
@@ -36,6 +39,8 @@
     "@langchain/langgraph": "1.4.16",
     "@langchain/langgraph-checkpoint": "1.1.5",
     "@langchain/langgraph-checkpoint-sqlite": "1.0.4",
+    "ink": "7.1.1",
+    "react": "19.3.0",
     "zod": "^4.6.5"
   }
 }

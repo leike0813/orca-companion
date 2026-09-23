@@ -10,16 +10,16 @@
 |---|---|---|---|
 | IC-01 | `m0-orca-control-baseline` | 无 | 全部后继 change |
 | IC-02 | `m0-orca-control-baseline` | Change 5 增加物化操作；Change 7 增加对账 query | 所有外部控制用例 |
-| IC-03 | `m1-persist-coordination-state` | Changes 3–8 增加各自最小记录与 query/command variant | Controller、status、recovery、TUI projection |
-| IC-04 | `m1-run-coordinator-sessions` | 无；后继只消费 | Planning、Recovery、ControllerService、TUI |
+| IC-03 | `m1-persist-coordination-state` | Changes 3–8 增加各自最小记录与 query/command variant；`m1-wire-foreground-planning-runtime` 增加 Scope 注册绑定与交互回答正文 | Controller、status、recovery、TUI projection |
+| IC-04 | `m1-run-coordinator-sessions` | `m1-wire-foreground-planning-runtime` 增加用户消息、工具结果与压缩结论 | Planning、Recovery、ControllerService、TUI |
 | IC-05 | `m1-plan-and-authorize-execution` | Change 8 只扩展 `ExecutionGraphHistory.appendAcceptedRevision` | Specification、Execution、Recovery、TUI |
 | IC-06 | `m1-admit-work-package-specifications` | Change 8 使用同一 provider 实施 Specification Revision | Execution、Recovery、Graph evolution |
 | IC-07 | `m1-admit-work-package-specifications` | 无；Recovery 创建替代 Dispatch/Segment 但不改合同 | Execution、Recovery、Graph evolution |
 | IC-08 | `m1-execute-and-validate-work-packages` | 无；Recovery 重放同一 pipeline | Recovery、Graph evolution、TUI |
 | IC-09 | `m1-recover-execution` | 无 | Graph evolution、TUI |
 | IC-10 | `m1-evolve-execution-graph` | 无 | ControllerService、TUI |
-| IC-11 | `m1-recover-execution` | Change 8 增加图演进 projection/commands | CLI、两个 TUI change |
-| IC-12 | `m0-orca-control-baseline` | `m2-deliver-planning-tui` 增加 planning 投影与组件；`m2-deliver-execution-tui` 增加执行态字段与组件 | CLI machine output、TUI React components |
+| IC-11 | `m1-recover-execution` | Change 8 增加图演进 projection/commands；`m1-wire-foreground-planning-runtime` 增加消息/回答字段与事件归属；`m2-deliver-planning-tui` 增加只读投影 | CLI、两个 TUI change |
+| IC-12 | `m0-orca-control-baseline` | `m1-wire-foreground-planning-runtime` 登记精确 Home 解析；`m2-deliver-planning-tui` 增加 planning 投影与组件；`m2-deliver-execution-tui` 增加执行态字段与组件 | CLI machine output、TUI React components |
 
 ## IC-01 Identity、revision 与引用字段族
 
@@ -126,7 +126,7 @@ interface ExecutionBackend {
 
 - **Owner (Create)**: `m1-persist-coordination-state`
 - **Canonical paths**: `src/application/ports/branch-coordination-store.ts`、`src/adapters/storage/coordination-store.ts`、`src/adapters/storage/schema.ts`
-- **Extenders (Extend)**: Changes 3–8 通过版本化 migration 增加各自最小记录和闭合 query/command variant
+- **Extenders (Extend)**: Changes 3–8 通过版本化 migration 增加各自最小记录和闭合 query/command variant；`m1-wire-foreground-planning-runtime` 追加 schema 10 的 Scope 注册绑定、交互回答正文与一次性绑定命令
 - **Consumers (Consume)**: Application services、status projection、startup reconciliation、ControllerService
 
 ```ts
@@ -152,16 +152,18 @@ type CoordinationCommandResult =
 
 | 记录族 | 必需字段与权威边界 |
 |---|---|
-| Scope | mode、orthogonal control state、Planning Cycle/current graph/current authorization refs、revision；不保存图体或 tracker 正文 |
+| Scope | 用户登记且不可原地改写的完整 branch ref/canonical worktree 绑定、mode、orthogonal control state、Planning Cycle/current graph/current authorization refs、revision；不保存 Git HEAD、工作树当前内容、图体或 tracker 正文 |
 | Session registry | Session ID、Coordinator Model Configuration ref、生命周期状态；不保存 provider credential/object |
 | Lease | lease kind、holder Session/Incarnation、expiry、fencing generation；Runtime expiry 不自动释放长期 claim/Execution Lease |
 | Ticket claim | ticket ref、Session、state；正文和 tracker assignee 仍归 tracker |
-| Pending Interaction | InteractionId、owner Session、scope ref、expected revision、state、answer ref；普通聊天不能满足 |
+| Pending Interaction | InteractionId、owner Session、scope ref、expected revision、state、answer ref；受控回答正文与状态在同一 CAS 事务写入，普通聊天不能满足 |
 | Operation Intent | OperationId、target、expected revision、state、outcome class、backend request ref；不复制 receipt 正文 |
 | Budget counters | budget key、approved limit ref、consumed count；重启/恢复/patch 不重置 |
 | 后继记录 | wake admission、graph/auth refs、bindings、dedupe refs、Recovery/Handoff/lineage；只存不可重建最小事实 |
 
 所有写入是短事务；唯一约束保护活跃 Runtime Lease、Execution Coordination Lease 和 Ticket Claim。`scope.revision` 只由成功共享事实写入推进；lease heartbeat 只更新 lease 行，不推进业务 revision。Schema version 高于实现时拒绝启动，低于实现时按可重入、单事务 migration 顺序升级。
+
+`m1-wire-foreground-planning-runtime` 把 schema 9 升为 10：新 Scope 必有完整 ref 与 canonical worktree，旧 Scope 的 nullable 绑定只可经用户确认、Git 身份核验及无存活 Runtime Lease 的一次性 CAS 命令补齐；不得从 cwd 猜测。当前 Git 身份始终由 Git 读取，注册绑定不是 Git 当前状态的镜像。
 
 - **错误/事务**：stale revision、fenced writer、唯一约束和非法状态结构化拒绝；不自动重试业务 command。
 - **测试 seam**：使用临时真实 SQLite adapter 测试事务、约束、migration 与重开；Application 用例可使用内存 fake，但不得测试一套不同状态机。
@@ -170,7 +172,7 @@ type CoordinationCommandResult =
 
 - **Owner (Create)**: `m1-run-coordinator-sessions`
 - **Canonical paths**: `src/domain/coordinator/session-state.ts`、`src/adapters/storage/checkpoint-store.ts`、`src/application/coordinator/{actionable-work,wake-admission,suspension}.ts`
-- **Extenders (Extend)**: 无；后继通过既有函数消费
+- **Extenders (Extend)**: `m1-wire-foreground-planning-runtime` 增加用户消息准入、tool-call 配对结果与最近压缩结论；后继通过同一路径消费
 - **Consumers (Consume)**: Planning、Recovery、ControllerService、TUI lifecycle
 
 ```ts
@@ -192,6 +194,8 @@ type CoordinatorSessionState = {
   contextMaterial?: ContextMaterial;
 };
 ```
+
+`m1-wire-foreground-planning-runtime` 将 Session payload 升为 v2：每条已提交消息有稳定 `entryId`；tool result 还包含配对的 `toolCallId` 与名称，assistant call 的可信 `OperationId` 在模型响应提交时由宿主分配；`lastCompactionOutcome` 是该 Session 最近一次维护结果。v1 读取只做可证明唯一的升级，失败阻塞且保留原 checkpoint。普通用户消息以 `submissionId` 与 WakeBatch 原子落盘后补记 source admission；交互回答正文属于 IC-03。
 
 | 字段 | 合同 |
 |---|---|
@@ -455,7 +459,7 @@ Replanning 停止新派发并结清在途/Delivery/Interaction/Intent，建立�
 
 - **Owner (Create)**: `m1-recover-execution`
 - **Canonical path**: `src/application/controller-service.ts`
-- **Extenders (Extend)**: `m1-evolve-execution-graph` 增加图 patch/replanning projection 与 command variants
+- **Extenders (Extend)**: `m1-evolve-execution-graph` 增加图 patch/replanning projection 与 command variants；`m1-wire-foreground-planning-runtime` 增加提交身份、回答正文与事件归属；`m2-deliver-planning-tui` 增加候选图拓扑、压缩状态与规划交接提案投影
 - **Consumers (Consume)**: CLI、planning TUI、execution TUI
 
 ```ts
@@ -480,9 +484,66 @@ type ControllerCommand =
   | GraphEvolutionCommand;
 ```
 
-`ControllerSnapshot` 只包含已验证的领域/控制投影和外部事实引用：Scope/mode/control/revision、Session summaries、budgets、graph/frontier、Worker/liveness、blockers、Pending Interactions、handoff/recovery/maintenance 状态。它不携带 receipt、Accepted Worker Result 正文、provider object、credential 或任意 adapter handle。
+`ControllerSnapshot` 只包含已验证的领域/控制投影和外部事实引用：Scope/mode/control/revision、Session summaries、budgets、graph/frontier、Worker/liveness、blockers、Pending Interactions、handoff/recovery/maintenance 状态，以及下面两项 planning TUI 只读投影。它不携带 receipt、Accepted Worker Result 正文、provider object、credential 或任意 adapter handle。
+
+`m2-deliver-planning-tui` 的 Extend 只增加三个投影字段，不改变任何既有字段的形状与语义：
+
+```ts
+type ControllerGraphNodeView = {
+  workPackageId: string;
+  title: string;
+  dependsOn: readonly string[];
+  scopeEnvelope: { include: readonly string[]; exclude: readonly string[] };
+};
+
+type ControllerGraphReadinessView = {
+  /** 该图所属代际的当前状态；没有登记代际时为 null。 */
+  generationStatus: GraphGenerationStatus | null;
+  /** 已批准的 Execution Authorization 是否恰好绑定这张图的 GraphId 与 GraphVersion。 */
+  authorizationBound: boolean;
+};
+
+type ControllerGraphTopologyView = {
+  graphId: string;
+  graphVersion: number;
+  generation: number;
+  nodes: readonly ControllerGraphNodeView[];
+  readiness: ControllerGraphReadinessView;
+};
+
+type ControllerCompactionView = {
+  status: 'not_needed' | 'compacted' | 'compaction_degraded' | 'context_exhausted';
+  path: string | null;
+  reason: string | null;
+  stillOverBudget: number | null;
+};
+
+type ControllerPlanningHandoffView = {
+  proposalId: string;
+  sourceSessionId: string;
+  targetSessionId: string;
+  phase: PlanningHandoffPhase;
+  mapRevision: number;
+  planRevision: number;
+  capsuleRef: string | null;
+  proposalRevision: number;
+};
+
+type ControllerSnapshotExtend = {
+  /** 调用方读到的 GraphVersion 记录投影；未提供记录时为空数组，界面据此显示 blocker 而不是猜测。 */
+  graphTopologies: readonly ControllerGraphTopologyView[];
+  /** Session checkpoint 中最近一次压缩结论的只读投影；从未压缩时为 null。 */
+  compaction: ControllerCompactionView | null;
+  /** Route Planning Handoff 提案投影；确认与取消仍走既有 PlanningHandoffCommand。 */
+  planningHandoffs: readonly ControllerPlanningHandoffView[];
+};
+```
+
+`graphTopologies` 与 `compaction` 都由调用方从权威来源读好后注入 `ControllerSnapshotFacts`；façade 不读 store、不推断、不补全。它们是**投影**而非新的权威状态：`/compact` 的准入、执行与终止仍属于 Coordinator Runtime，本 facade 不新增执行路径。
 
 `SemanticEvent` 是 UI 可投影的封闭联合；keepalive、stderr、poll timeout、无变化 reconciliation 和诊断日志不发布。`AnswerPendingInteraction` 必须含 InteractionId、expected revision 和 answer payload；普通 Session message 不满足 interaction。
+
+`m1-wire-foreground-planning-runtime` 的 Extend：`SendSessionMessage` 增加稳定 `submissionId`；`AnswerPendingInteraction` 以 `answer: string` 进入应用用例，由宿主/IC-03 生成稳定 answer ref 并原子存正文。语义事件统一携带 `eventId`、`coordinationScopeId` 与可空 `coordinatorSessionId`，只在对应权威事实已提交并读回后发布。TUI 只用归属 ID 设置未读标记，重启后依快照恢复。
 
 Service 只委派既有用例，不打开 store、不调用具体 adapter、不拥有状态转换。Scope 初始化继续使用 `initializeCoordinationScope`，不塞入 façade。
 
@@ -522,6 +583,12 @@ type StatusJson = {
 ```
 
 `projectTuiViewModel` 是从 IC-11 `ControllerSnapshot` 到展示 DTO 的纯函数；CLI `status --json` 复用同一公共投影规则但输出独立版本化 machine DTO。TUI 内部只保存选中 Session、scroll、sidebar 密度、overlay 和每 Session 草稿；业务状态来自 snapshot/event。
+
+`m2-deliver-planning-tui` 的 Extend 把 `TuiViewModel` 拆成可复用的纯展示 DTO（`ScopeView`、`SessionSummaryView`、`GraphView`、`WorkerView`、`BlockerView`、`BudgetView`、`InteractionView`、`MaintenanceView`、`CompactionView`、`TranscriptView`）并登记 Home 解析规则：
+
+- **Home 解析**：以 Git common dir 定位 Branch Coordination State，再以当前完整 branch ref 和登记的 canonical worktree 精确匹配 Scope。无匹配则进入初始化向导；旧未绑定记录须经显式迁移 Review；多条冲突匹配或 detached HEAD 阻塞。不得以 common dir 下 Scope 数量推断当前身份。
+- **Session 选择**：选中 Session 与 Sidebar 密度都是进程内展示态。重启后按「存在 Pending Interaction 的 Session 优先，否则最近活动」重新选择；M1 没有「上次选择」的持久来源，本 change 不新增表、文件或 migration。
+- **`StatusJson` 形状不变**：`schemaVersion` 仍为 1，字段与既有 machine DTO 一致；`status --json` 改为经同一 `ControllerSnapshot` 投影规则构造，不再自行从 store 记录逐字段映射。
 
 顶层 CLI 只识别 `[repository-path]`、`status [--json]`、`doctor`。启动 TUI 前同时检查 stdin/stdout TTY；无 TTY 在挂载 Ink 前非零退出。Exit/Ctrl+C 只退出进程，不隐式 Pause/Cancel。React render/effect/resize/remount 不调用 IC-11 command。
 

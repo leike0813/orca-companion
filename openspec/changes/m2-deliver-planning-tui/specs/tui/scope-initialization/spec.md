@@ -22,15 +22,23 @@
 
 ### Requirement: Home 的 Scope 恢复与查找
 
-Home SHALL 按 Git common dir 与完整 branch ref 查找当前仓库下唯一未归档的 Coordination Scope。存在匹配 Scope 时系统 SHALL 直接恢复该 Scope，MUST NOT 重复创建；不存在匹配 Scope 时系统 SHALL 进入初始化向导，MUST NOT 在启动过程中隐式创建 Scope。
+Home SHALL 以 Git common dir 定位当前仓库的 Branch Coordination State，并按当前完整 branch ref 与用户登记的 canonical worktree 精确匹配 Coordination Scope；唯一匹配时 SHALL 恢复，MUST NOT 重复创建；无匹配时 SHALL 进入初始化向导，MUST NOT 隐式创建 Scope；旧记录缺少绑定时 SHALL 要求用户显式确认迁移；冲突匹配或 detached HEAD 时 SHALL 阻塞，MUST NOT 按 Scope 数量猜测。
 
-#### Scenario: 存在匹配 Scope 时直接恢复
-- **WHEN** 用户在已有未归档 Scope 的仓库中启动 TUI
-- **THEN** 系统进入该 Scope 并恢复上次选中的 Coordinator Session，不创建新的 Scope
+#### Scenario: 存在唯一匹配 Scope 时直接恢复
+- **WHEN** 当前完整 branch ref 与 canonical worktree 精确匹配一个已登记 Scope
+- **THEN** 系统进入该 Scope 并恢复选中的 Coordinator Session，不创建新的 Scope
 
 #### Scenario: 无匹配 Scope 时进入向导
-- **WHEN** 用户在没有任何 Scope 的仓库中启动 TUI
+- **WHEN** 用户在当前 branch ref 与 canonical worktree 上没有匹配 Scope，即使同一 common dir 存在其他 Scope
 - **THEN** 系统展示初始化向导，且在用户最终确认前不写入任何持久化记录
+
+#### Scenario: 旧 Scope 缺少绑定
+- **WHEN** 用户选择的旧 Scope 没有完整 branch ref 与 canonical worktree 绑定
+- **THEN** 系统要求用户在 Review 中确认一次性迁移，未确认前不恢复该 Scope
+
+#### Scenario: 脱离 canonical worktree
+- **WHEN** 用户从 linked Worker worktree 或 detached HEAD 启动 TUI
+- **THEN** 系统拒绝恢复规划 Session，并指出 Scope 身份不匹配
 
 ### Requirement: 初始化向导的核验与原子创建
 

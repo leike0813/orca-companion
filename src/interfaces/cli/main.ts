@@ -1,9 +1,12 @@
 /**
  * IP-6 / MOD-05：`orca-companion` 顶层 CLI 入口。
  *
- * 目前提供 `doctor` 与只读的 `status`；TUI 属于 M2，这里明确拒绝而不是假装支持。
- * 入口不要求 TTY、不加载 Ink/React、不直接调用 adapter（只消费 Bootstrap 注入的能力），
- * 也不在查询时续租或对账。机器输出只写标准输出，诊断只写标准错误。
+ * 识别 `[repository-path]`（前台 TUI）、`status [--json]`、`doctor`；`run`/`resume`/`tui` 明确不存在。
+ * 入口不要求 TTY、不直接调用 adapter（只消费 Bootstrap 注入的能力），也不在查询时续租或对账。
+ * 机器输出只写标准输出，诊断只写标准错误。
+ *
+ * TUI 路径在 `src/bootstrap/tui-entry.ts` 里检查 TTY，并在通过后才动态加载 Ink：本模块不 import
+ * Ink/React，因此无 TTY 时 stdout 不会出现渲染帧。
  */
 
 import { realpathSync } from 'node:fs';
@@ -14,24 +17,28 @@ import {
   openRepositoryCoordinationStore,
   type CoordinationStoreOpenResult,
 } from '../../bootstrap/composition.js';
+import { runTuiEntry, type TuiEntryEnvironment } from '../../bootstrap/tui-entry.js';
+import { CLI_USAGE, parseCliArguments, renderRejection } from './argv.js';
 import { defaultCliIO, runDoctorCommand, type CliIO } from './doctor-command.js';
 import { runStatus } from './status-command.js';
 
-export const USAGE = [
-  '用法:',
-  '  orca-companion doctor                          核验 Orca 环境与 M0 必需能力（无 TTY 可运行）',
-  '  orca-companion status [--json]                 只读输出当前 Coordination Scope 状态',
-].join('\n');
+export const USAGE = CLI_USAGE;
 
 export type CliEnvironment = {
   readonly cwd: string;
   readonly env: Readonly<Record<string, string>>;
   readonly executable?: string;
+  /** 进程级 TTY 事实；缺省按「无 TTY」处理，避免在测试或 CI 里假装交互。 */
+  readonly stdinIsTty?: boolean;
+  readonly stdoutIsTty?: boolean;
+  readonly columns?: number;
 };
 
 export type CliDependencies = {
   readonly createDoctorProbe?: (environment: CliEnvironment) => DoctorProbe;
   readonly openCoordinationStore?: (environment: CliEnvironment) => Promise<CoordinationStoreOpenResult>;
+  /** 覆盖点：测试注入 fake 端口与渲染器；生产走 `runTuiEntry`。 */
+  readonly runTui?: (environment: TuiEntryEnvironment, io: CliIO) => Promise<number>;
 };
 
 /**
@@ -61,54 +68,47 @@ export async function main(
   io: CliIO = defaultCliIO,
   dependencies: CliDependencies = {},
 ): Promise<number> {
-  const [command] = argv;
-  if (command === 'doctor') {
-    const createProbe = dependencies.createDoctorProbe ?? createOrcaDoctorProbe;
-    return await runDoctorCommand(createProbe(environment), io);
-  }
-  if (command === 'status') {
-    const parsed = parseStatusArguments(argv.slice(1));
-    if (!parsed.ok) {
-      io.writeStderr(`${parsed.message}\n${USAGE}\n`);
-      return 2;
+  const invocation = parseCliArguments(argv);
+  switch (invocation.kind) {
+    case 'doctor': {
+      const createProbe = dependencies.createDoctorProbe ?? createOrcaDoctorProbe;
+      return await runDoctorCommand(createProbe(environment), io);
     }
-    const openStore =
-      dependencies.openCoordinationStore ??
-      ((target: CliEnvironment) =>
-        // status 是只读操作：只读打开，不做 migration、不创建目录、不产生写入。
-        openRepositoryCoordinationStore({ repositoryPath: target.cwd, env: target.env, readOnly: true }));
-    return await runStatus({
-      openStore: () => openStore(environment),
-      json: parsed.json,
-      io,
-    });
+    case 'status': {
+      const openStore =
+        dependencies.openCoordinationStore ??
+        ((target: CliEnvironment) =>
+          // status 是只读操作：只读打开，不做 migration、不创建目录、不产生写入。
+          openRepositoryCoordinationStore({ repositoryPath: target.cwd, env: target.env, readOnly: true }));
+      return await runStatus({
+        openStore: () => openStore(environment),
+        json: invocation.json,
+        io,
+      });
+    }
+    case 'help':
+      io.writeStdout(`${USAGE}\n`);
+      return 0;
+    case 'version':
+      io.writeStdout('0.0.0\n');
+      return 0;
+    case 'rejected':
+      io.writeStderr(renderRejection(invocation));
+      return 2;
+    case 'tui': {
+      const tuiEnvironment: TuiEntryEnvironment = {
+        cwd: invocation.repositoryPath ?? environment.cwd,
+        env: environment.env,
+        stdinIsTty: environment.stdinIsTty === true,
+        stdoutIsTty: environment.stdoutIsTty === true,
+        columns: environment.columns ?? 80,
+      };
+      if (dependencies.runTui !== undefined) {
+        return await dependencies.runTui(tuiEnvironment, io);
+      }
+      return await runTuiEntry(tuiEnvironment, io);
+    }
   }
-  if (command === 'help' || command === '--help' || command === '-h') {
-    io.writeStdout(`${USAGE}\n`);
-    return 0;
-  }
-  if (command === '--version') {
-    io.writeStdout('0.0.0\n');
-    return 0;
-  }
-  io.writeStderr(
-    command === undefined
-      ? `orca-companion 目前只提供 doctor 与 status；前台 TUI 属于 M2。\n${USAGE}\n`
-      : `未知或尚未提供的子命令: ${command}\n${USAGE}\n`,
-  );
-  return 2;
-}
-
-type StatusArguments =
-  | { readonly ok: true; readonly json: boolean }
-  | { readonly ok: false; readonly message: string };
-
-function parseStatusArguments(argv: readonly string[]): StatusArguments {
-  const unsupported = argv.find((argument) => argument !== '--json');
-  if (unsupported !== undefined) {
-    return { ok: false, message: `status 不支持参数: ${unsupported}` };
-  }
-  return { ok: true, json: argv.includes('--json') };
 }
 
 function isDirectInvocation(): boolean {
@@ -127,5 +127,8 @@ if (isDirectInvocation()) {
   process.exitCode = await main(process.argv.slice(2), {
     cwd: process.cwd(),
     env: toChildEnvironment(process.env),
+    stdinIsTty: process.stdin.isTTY === true,
+    stdoutIsTty: process.stdout.isTTY === true,
+    columns: process.stdout.columns ?? 80,
   });
 }

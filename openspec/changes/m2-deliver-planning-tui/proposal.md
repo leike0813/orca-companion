@@ -5,7 +5,7 @@ M1 完成后 Companion 已经具备可恢复的 Coordinator Session、受控工�
 ## What Changes
 
 - 新增前台入口：`orca-companion [repository-path]` 启动 TUI；保留 `status [--json]` 与 `doctor`；不提供 `run`、`resume`、`tui` 子命令。无 TTY 时在挂载 Ink 之前以非零状态明确拒绝。
-- Home 按 Git common dir 加完整 branch ref 查找唯一未归档 Coordination Scope，命中即恢复，未命中才进入初始化向导，不在启动时隐式创建。
+- Home 按 Git common dir、完整 branch ref 与登记的 canonical worktree 精确查找 Coordination Scope，命中即恢复，未命中才进入初始化向导；旧未绑定记录要求显式迁移，不在启动时隐式创建。
 - 初始化向导依次核验 repository 与 canonical worktree、Orca 能力与调用者身份、Coordinator Model Configuration 与 issue tracker；最终 Review 之前零持久化，确认后以单事务创建 Scope、初始 Planning Cycle 与首个 Coordinator Session，不创建 Orca Run、Task 或 worktree。向导不收集任何预算与权限，Worker Profiles、并发与尝试预算、依赖权限、Git 集成策略和 accepted risks 全部留给 Execution Authorization Manifest。
 - 主视图固定为顶栏、Coordinator transcript、composer 与状态行；工具调用默认折叠；普通消息模式与绑定 interaction ID 与 expected revision 的 Answer 模式严格分开。
 - Sidebar 提供完整、紧凑、折叠三态；宽度只规定允许的最高密度，任何状态变化都不得强制展开，终端过窄时必须折叠。
@@ -30,7 +30,7 @@ M1 完成后 Companion 已经具备可恢复的 Coordinator Session、受控工�
 
 ## Impact
 
-- 直接前驱：`m1-evolve-execution-graph`（Patch/Revision/Replanning/Cutover 已归档）。本 change 只投影这些语义，不实现图变更。
+- 直接前驱：`m1-wire-foreground-planning-runtime`（其前驱 `m1-evolve-execution-graph` 已归档）。本 change 消费已接线的前台规划 Runtime，只实现 TUI 投影与意图提交。
 - 承接的 M1 会话语义：#31 的 Context Compaction 与 `compaction_degraded`/`context_exhausted`、#32 的 Route Planning Handoff、#33 的 Coordinator Model Configuration 切换。TUI 只提供入口与状态展示，不实现压缩、切换或交接的领域逻辑。
 - 新增代码面：`src/interfaces/tui/`（组件、输入映射、视图模型）、`src/bootstrap/`（TTY 门禁与进程生命周期）、`src/interfaces/cli/`（保留 `status`/`doctor` 与 TUI 共用快照入口）、`src/application/`（TUI 消费的查询与意图端口接线）。
 - 依赖：新增 `ink@7.1.1`、`react@19.3.0`、`@types/react@19.3.0`，开发依赖新增 `ink-testing-library@4.0.0`。不引入第二套测试运行器。

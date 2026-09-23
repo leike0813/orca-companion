@@ -12,6 +12,13 @@ import type { ControlState, CoordinationMode } from '../../domain/coordination/m
 import type { CoordinationScopeId } from '../../application/dto/identity.js';
 import type { CoordinationStoreOpenResult } from '../../bootstrap/composition.js';
 import type { BranchCoordinationStore } from '../../application/ports/branch-coordination-store.js';
+import { projectControllerSnapshot } from '../../application/controller-service.js';
+import {
+  projectGraphPointerView,
+  projectScopeView,
+  projectSessionSummaryView,
+  type SessionSummaryView,
+} from '../../application/tui/view-model.js';
 import type { CliIO } from './doctor-command.js';
 
 export const STATUS_SCHEMA_VERSION = 1;
@@ -58,6 +65,7 @@ export type StatusSnapshot = {
   };
   readonly sessions: readonly StatusSession[];
   readonly graph?: { readonly id: string; readonly version: number };
+  /** machine DTO 的既有占位字段：本里程碑不填充 Worker 与 blocker。 */
   readonly workers: readonly [];
   readonly blockers: readonly [];
 };
@@ -66,6 +74,13 @@ export type StatusSnapshotResult =
   | { readonly kind: 'snapshot'; readonly snapshot: StatusSnapshot }
   | { readonly kind: 'failed'; readonly message: string };
 
+/**
+ * 把 store 快照投影成 machine DTO。
+ *
+ * 字段来自与 TUI 共用的 `ControllerSnapshot` 投影规则（IC-11/IC-12），只有 CLI 专有的
+ * `ticketClaims`、`leases` 与 `unresolvedIntentCount` 直接从协调快照读取——它们不是展示投影的一部分。
+ * 输出形状与 `StatusJson.schemaVersion` 1 保持一致：这里不新增、不改名任何字段。
+ */
 export function buildStatusSnapshot(
   store: BranchCoordinationStore,
   coordinationScopeId: CoordinationScopeId,
@@ -77,22 +92,39 @@ export function buildStatusSnapshot(
   if (result.kind !== 'snapshot') {
     return { kind: 'failed', message: 'snapshot 查询返回了非预期结果' };
   }
-  const { scope, sessions, leases, executionLease, ticketClaims, pendingInteractions, unresolvedIntents } =
-    result.snapshot;
+  const { leases, ticketClaims, unresolvedIntents } = result.snapshot;
+  const counters = store.query({ kind: 'budget-counters', coordinationScopeId });
+
+  const projected = projectControllerSnapshot({
+    snapshot: result.snapshot,
+    budgets: counters.kind === 'budget-counters' ? counters.counters : [],
+    graphGeneration: null,
+    frontier: [],
+    workers: [],
+    extraBlockers: [],
+    maintenance: null,
+    selectedSessionId: null,
+    graphVersions: [],
+    authorizationGraphRef: null,
+    compaction: null,
+  });
+  const scopeView = projectScopeView(projected);
+  const graph = projectGraphPointerView(projected);
+
   return {
     kind: 'snapshot',
     snapshot: {
       schemaVersion: STATUS_SCHEMA_VERSION,
-      snapshotRevision: scope.revision,
+      snapshotRevision: scopeView.revision,
       scope: {
-        coordinationScopeId: scope.coordinationScopeId,
-        mode: scope.mode,
-        controlState: scope.controlState,
-        planningCycleId: scope.planningCycleId,
+        coordinationScopeId: scopeView.coordinationScopeId,
+        mode: scopeView.mode,
+        controlState: scopeView.controlState,
+        planningCycleId: scopeView.planningCycleId,
         authorization:
-          scope.authorizationId === null || scope.authorizationVersion === null
+          scopeView.authorization === null
             ? null
-            : { id: scope.authorizationId, version: scope.authorizationVersion },
+            : { id: scopeView.authorization.authorizationId, version: scopeView.authorization.version },
         ticketClaims: ticketClaims
           .filter((claim) => claim.state === 'active')
           .map((claim) => ({
@@ -108,8 +140,8 @@ export function buildStatusSnapshot(
           fencingGeneration: lease.fencingGeneration,
           expiresAt: lease.expiresAt,
         })),
-        executionLeaseHolder: executionLease === null ? null : executionLease.coordinatorSessionId,
-        pendingInteractions: pendingInteractions
+        executionLeaseHolder: scopeView.executionLeaseHolderSessionId,
+        pendingInteractions: projected.interactions
           .filter((interaction) => interaction.state === 'open')
           .map((interaction) => ({
             interactionId: interaction.interactionId,
@@ -118,17 +150,24 @@ export function buildStatusSnapshot(
           })),
         unresolvedIntentCount: unresolvedIntents.length,
       },
-      sessions: sessions.map((session) => ({
-        coordinatorSessionId: session.coordinatorSessionId,
-        coordinatorModelConfigurationRef: session.coordinatorModelConfigurationRef,
-        lifecycleState: session.lifecycleState,
-      })),
-      ...(scope.graphId === null || scope.graphVersion === null
-        ? {}
-        : { graph: { id: scope.graphId, version: scope.graphVersion } }),
+      sessions: projected.sessions.map((session) =>
+        toStatusSession(
+          projectSessionSummaryView(session, { selectedSessionId: null, unreadSessionIds: [] }),
+        ),
+      ),
+      ...(graph === null ? {} : { graph }),
       workers: [],
       blockers: [],
     },
+  };
+}
+
+/** machine DTO 只输出三个已登记字段：展示态的未读与选中标记不属于 CLI 合同。 */
+function toStatusSession(session: SessionSummaryView): StatusSession {
+  return {
+    coordinatorSessionId: session.coordinatorSessionId,
+    coordinatorModelConfigurationRef: session.coordinatorModelConfigurationRef,
+    lifecycleState: session.lifecycleState,
   };
 }
 

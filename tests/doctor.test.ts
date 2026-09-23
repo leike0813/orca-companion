@@ -186,15 +186,20 @@ test('doctor 命令把机器输出写 stdout、诊断写 stderr，并用退出�
   expect(broken.stderr.join('')).toContain('doctor: hosts: capability-missing');
 });
 
-test('未提供或未知子命令时给出明确拒绝，不假装支持 TUI', async () => {
+test('无参数启动 TUI 在无 TTY 时被拒绝，未知子命令给出明确拒绝', async () => {
+  // `environment` 没有声明 TTY，因此按「无 TTY」处理：入口必须在挂载 Ink 之前拒绝。
   const noArgs = captureIO();
   expect(await main([], environment, noArgs.io, { createDoctorProbe: () => probe() })).toBe(2);
-  expect(noArgs.stderr.join('')).toContain('orca-companion 目前只提供 doctor 与 status');
+  expect(noArgs.stderr.join('')).toContain('前台 TUI 需要交互式终端');
   expect(noArgs.stdout).toEqual([]);
 
   const unknown = captureIO();
   expect(await main(['tui', '--json'], environment, unknown.io, { createDoctorProbe: () => probe() })).toBe(2);
-  expect(unknown.stderr.join('')).toContain('未知或尚未提供的子命令: tui');
+  expect(unknown.stderr.join('')).toContain('不受支持的子命令: tui');
+
+  const resume = captureIO();
+  expect(await main(['resume'], environment, resume.io, { createDoctorProbe: () => probe() })).toBe(2);
+  expect(resume.stderr.join('')).toContain('不受支持的子命令: resume');
 
   const help = captureIO();
   expect(await main(['--help'], environment, help.io, { createDoctorProbe: () => probe() })).toBe(0);
