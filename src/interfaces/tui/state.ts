@@ -9,15 +9,61 @@
  * 动作只有展示态变化，没有派发、恢复、重试或写入。
  */
 
-export type SidebarDensity = 'full' | 'compact' | 'collapsed';
+import type { WorkPackageExecutionState } from '../../application/execution/execution-view.js';
 
+export type SidebarDensity = 'full' | 'compact' | 'collapsed';
 export type OverlayKind =
   | 'command-palette'
   | 'graph-inspector'
   | 'session-picker'
   | 'event-drawer'
   | 'model-picker'
-  | 'handoff-review';
+  | 'handoff-review'
+  /** 执行阶段交接复用同一交互，但主题与记录是 `ExecutionHandoffState`。 */
+  | 'execution-handoff-review';
+
+/** 等待用户确认的动作（IP-05、IP-06）；`null` 表示没有待确认动作。 */
+export type PendingConfirmation = { readonly kind: 'cancel' } | { readonly kind: 'exit' } | null;
+
+/** 执行图过滤条件（状态集合）；空集合表示不过滤。 */
+export type ExecutionFilter = readonly WorkPackageExecutionState[];
+
+/**
+ * 过滤预设。
+ *
+ * 过滤只隐藏节点，不改变顺序或位置；预设是展示态，不是业务状态。
+ */
+export const EXECUTION_FILTER_PRESETS = [
+  { label: '全部', states: [] },
+  { label: 'attention', states: ['blocked', 'unknown'] },
+  {
+    label: '进行中',
+    states: ['admitting', 'specifying', 'implementing', 'validating', 'repairing', 'reconciling'],
+  },
+  { label: '待集成', states: ['waiting_integration'] },
+] as const satisfies readonly { label: string; states: ExecutionFilter }[];
+
+/** 轮换到下一个过滤预设；用于 Command Palette 的单一入口。 */
+export function nextExecutionFilter(current: ExecutionFilter): ExecutionFilter {
+  const index = EXECUTION_FILTER_PRESETS.findIndex(
+    (preset) =>
+      preset.states.length === current.length &&
+      preset.states.every((state) => current.includes(state)),
+  );
+  const next = EXECUTION_FILTER_PRESETS[(index + 1) % EXECUTION_FILTER_PRESETS.length];
+  return next?.states ?? [];
+}
+
+/** 当前过滤条件的可读标签。 */
+export function executionFilterLabel(filter: ExecutionFilter): string {
+  const preset = EXECUTION_FILTER_PRESETS.find(
+    (entry) => entry.states.length === filter.length && entry.states.every((state) => filter.includes(state)),
+  );
+  if (preset !== undefined) {
+    return preset.label;
+  }
+  return filter.length === 0 ? '全部' : filter.join(',');
+}
 
 /** composer 的两种严格分离模式；Answer 模式绑定 interaction ID 与 expected revision。 */
 export type ComposerMode =
@@ -42,6 +88,12 @@ export type TuiState = {
   readonly attention: boolean;
   /** Handoff cutover 后 Source transcript 只读。 */
   readonly readOnlySessionIds: readonly string[];
+  /** 等待确认的动作；危险态下的 Cancel 与 Exit 需要它，Pause 从不使用它。 */
+  readonly pendingConfirmation: PendingConfirmation;
+  /** 执行图过滤（展示态）：只隐藏节点。 */
+  readonly executionFilter: ExecutionFilter;
+  /** 正在审阅的 Execution Handoff 记录；`null` 表示没有。 */
+  readonly executionHandoffReviewId: string | null;
 };
 
 export const initialTuiState: TuiState = {
@@ -58,6 +110,9 @@ export const initialTuiState: TuiState = {
   notice: null,
   attention: false,
   readOnlySessionIds: [],
+  pendingConfirmation: null,
+  executionFilter: [],
+  executionHandoffReviewId: null,
 };
 
 export type TuiAction =
@@ -78,7 +133,11 @@ export type TuiAction =
   | { readonly kind: 'inspector-selected'; readonly workPackageId: string }
   | { readonly kind: 'notice'; readonly notice: string | null }
   | { readonly kind: 'attention-cleared' }
-  | { readonly kind: 'session-read-only'; readonly coordinatorSessionId: string };
+  | { readonly kind: 'session-read-only'; readonly coordinatorSessionId: string }
+  | { readonly kind: 'confirmation-requested'; readonly pending: Exclude<PendingConfirmation, null> }
+  | { readonly kind: 'confirmation-dismissed' }
+  | { readonly kind: 'execution-filter-changed'; readonly filter: ExecutionFilter }
+  | { readonly kind: 'execution-handoff-review'; readonly handoffId: string | null };
 
 /** 密度只允许在「宽度允许的上限」之内降级；任何动作都不会强制展开。 */
 function clampDensity(current: SidebarDensity, allowed: SidebarDensity): SidebarDensity {
@@ -172,6 +231,14 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
       return state.readOnlySessionIds.includes(action.coordinatorSessionId)
         ? state
         : { ...state, readOnlySessionIds: [...state.readOnlySessionIds, action.coordinatorSessionId] };
+    case 'confirmation-requested':
+      return { ...state, pendingConfirmation: action.pending };
+    case 'confirmation-dismissed':
+      return state.pendingConfirmation === null ? state : { ...state, pendingConfirmation: null };
+    case 'execution-filter-changed':
+      return { ...state, executionFilter: action.filter };
+    case 'execution-handoff-review':
+      return { ...state, executionHandoffReviewId: action.handoffId };
   }
 }
 

@@ -72,6 +72,12 @@
 - 预启动 terminal 在 Orca 中的 ownership 为 external；`worker-release` 不负责关闭它。Companion 必须保留精确资源绑定，并在 Dispatch 结算后显式 `terminal close`。探针已关闭全部 terminal、删除 4 条一次性 repo/setup 注册记录并回收磁盘目录。
 - 2026-09-21 的 6.5 真实验收以 `operator_close` 终止 exact Validator terminal，SessionStart 与唯一 rollout metadata 签发完整 transcript coverage；受限 Utility Worker 通过继承 `:read-only` 的隔离 Codex permission profile 读取该 rollout，并通过本机 Orca 控制通道投递 `complete` Capsule。当前 Linux 环境禁止 bubblewrap 所需的 namespace，因此 Adapter 在该封闭 profile 下固定使用 Codex `use_legacy_landlock`；这些设置只写工作树内隔离 `CODEX_HOME`。
 
+### 执行阶段只读查询（2026-09-23，`m2-deliver-execution-tui`）
+
+- 前台 TUI 在执行协调模式下只提交两个只读查询，且都不需要协调身份：`worktree-list --repo path:<canonical worktree> --limit 1000`（按 worktree `comment` 与 `src/application/materialize-work-package.ts` 的 `workPackageComment` 归属标记匹配出每个 Work Package 的隔离 worktree）与 `worker-list --run <graph generation 的 orcaRunId>`（`workers[]{dispatchId,taskId,workerState,terminalState,agentTerminalHandle}`）。
+- 两个查询的失败只记录为「不可用的观察」，不会被读成「没有 Worker 在运行」；`workerState` 未登记取值一律判为不可核验（fail closed）。
+- Companion 侧判定：`workerState` 属 `running|active|working|in_progress` → `live`；属 `succeeded|failed|cancelled|exited|abandoned|completed|done|timed_out` → `exited`；其余（含 `null`）→ `unverifiable`。执行主机未被列举时，只有在「可能有角色级 Worker」的阶段才给出 `unverifiable`。
+
 ## 尚未验证
 
 下列能力仍未核验，不能当作既成事实：
@@ -83,6 +89,9 @@
 - `--effort` 与其它 provider 模型 id；本次只验证了 `--model minimax-cn/MiniMax-M3`。
 - `terminal read` / `worker read` 的 `cursor`、`source_changed` 与 `fallbackReason` 语义。
 - Windows 11 上的进程调用、路径与终端行为。
+- **执行阶段的端到端闭环**：生产路径中没有任何东西调用 `materializeWorkPackage` / `processDelivery` / `runValidation` / `integrateWorkPackage` / `finalizeProject`，`foreground-planning-runtime` 也不派发 Worker。因此「授权 → 串行 Frontier 推进 → Validator repair → reconciliation → Finalizer → deliverable」未经真实运行验证；执行阶段 TUI 只投影持久记录与 Orca 只读事实，并将其余部分如实显示为未知或 blocker。
+- **`worker-stop` 的结果语义**：Companion 未解析 Orca 的 worker stop verdict，因此取消路径只落盘 `cancelling` 并如实报告停止结果为不可核验。`orchestration.worker-stop-verdict.v1` 已在本机能力列表中存在，但取词语义与错误路径未核验。
+- **执行期对账（Resume 前置）**：未接线，Resume 在对账不可用时被明确拒绝而非跳过。
 
 ## M0 门禁结论
 

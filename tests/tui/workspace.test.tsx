@@ -53,6 +53,8 @@ const NOOP_ACTIONS: WorkspaceActions = {
   selectModel: () => undefined,
   confirmHandoff: () => undefined,
   cancelHandoff: () => undefined,
+  confirmExecutionHandoff: () => undefined,
+  cancelExecutionHandoff: () => undefined,
   closeTopOverlay: () => undefined,
 };
 

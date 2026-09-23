@@ -11,15 +11,30 @@
  */
 
 import type { ControlState, CoordinationMode } from '../../domain/coordination/mode.js';
+import type { WorkerRole } from '../../domain/planning/execution-authorization.js';
+import type { WorkerLiveness } from '../../domain/worker-liveness.js';
+import {
+  controlHazards,
+  isActiveWorkPackageState,
+  type ControlHazardsView,
+  type ExecutionReconciliationGateView,
+  type FinalizerView,
+  type IntegrationView,
+  type ReconciliationSeverity,
+  type ValidationView,
+  type WorkPackageExecutionState,
+} from '../execution/execution-view.js';
 import type {
   ControllerBlockerEntry,
   ControllerBudgetView,
   ControllerCompactionView,
   ControllerFrontierEntry,
   ControllerGraphReadinessView,
+  ControllerHandoffView,
   ControllerInteractionView,
   ControllerMaintenanceView,
   ControllerPlanningHandoffView,
+  ControllerRecoveryView,
   ControllerSessionSummary,
   ControllerSnapshot,
   ControllerTranscriptPage,
@@ -62,13 +77,71 @@ export type SessionSummaryView = {
 
 export type BudgetView = ControllerBudgetView;
 
-export type GraphNodeView = {
+/**
+ * 执行图上单个 Work Package 节点。
+ *
+ * 节点位置由**编译后的稳定拓扑**给出（`position`），状态变化只更新标识，绝不重排；`hidden` 只由过滤
+ * 决定，被隐藏的节点仍保留原位置，因此「过滤只隐藏节点」是结构性的。
+ *
+ * 生命周期阶段（`state`）与 Worker liveness（`liveness`）是两个字段：不可核验的 Worker 不得被读成
+ * 已退出，因此不能把它们合并成一个取值。
+ */
+export type WorkPackageNodeView = {
   readonly workPackageId: string;
   readonly title: string;
   readonly dependsOn: readonly string[];
   readonly scopeEnvelope: { readonly include: readonly string[]; readonly exclude: readonly string[] };
-  /** 该节点在 Execution Frontier 上的状态；不在 frontier 时为 `null`。 */
-  readonly frontierStatus: string | null;
+  /** 稳定拓扑位置：编译顺序的索引，与状态无关。 */
+  readonly position: number;
+  /** 是否被当前过滤条件隐藏；隐藏不改变 `position`。 */
+  readonly hidden: boolean;
+  /** 紧凑态使用的短 key。 */
+  readonly shortKey: string;
+  readonly state: WorkPackageExecutionState;
+  /** 是否持有当前 Execution Frontier 位置（并发上限 1，因此最多一个节点为 `true`）。 */
+  readonly active: boolean;
+  readonly role: WorkerRole | null;
+  readonly attemptId: string | null;
+  readonly liveness: WorkerLiveness | null;
+  readonly worktreePath: string | null;
+  readonly baselineHead: string | null;
+  readonly validation: ValidationView | null;
+  readonly integration: IntegrationView | null;
+  readonly revisionHold: { readonly source: string } | null;
+  readonly reconciliation: {
+    readonly severity: ReconciliationSeverity;
+    readonly requiredBaselineHead: string;
+    readonly observedHead: string | null;
+    readonly blockerRef: string | null;
+  } | null;
+  readonly blockerRefs: readonly string[];
+  /** 推出该状态所依据的持久事实引用；用于把「未知」与「推断」区分开。 */
+  readonly derivedFrom: readonly string[];
+};
+
+/** 兼容既有调用点的别名：图节点现在就是执行投影。 */
+export type GraphNodeView = WorkPackageNodeView;
+
+/** 串行 integration queue 的一项；`position` 是队列顺序（拓扑顺序），不是图位置。 */
+export type IntegrationQueueEntryView = {
+  readonly workPackageId: string;
+  readonly position: number;
+  /** 当前正在集成的那一项；任一时刻最多一个。 */
+  readonly integrating: boolean;
+};
+
+/** 执行阶段整体投影：active 计数、串行 integration queue、Finalizer 与对账门。 */
+export type ExecutionProjectionView = {
+  readonly activeWorkPackageId: string | null;
+  /** 并发上限固定为 1，因此取值只可能是 0 或 1。 */
+  readonly activeWorkPackageCount: number;
+  readonly integrationQueue: readonly IntegrationQueueEntryView[];
+  readonly finalizer: FinalizerView;
+  readonly reconciliation: ExecutionReconciliationGateView;
+  readonly hazards: ControlHazardsView;
+  readonly recoveries: readonly ControllerRecoveryView[];
+  /** Execution Handoff 记录（与 Route Planning Handoff 分开）。 */
+  readonly handoffs: readonly ControllerHandoffView[];
 };
 
 export type GraphReadinessView = ControllerGraphReadinessView;
@@ -120,6 +193,7 @@ export type TuiViewModel = {
   readonly transcript: TranscriptView;
   readonly budgets: readonly BudgetView[];
   readonly graph: GraphView | null;
+  readonly execution: ExecutionProjectionView;
   readonly workers: readonly WorkerView[];
   readonly blockers: readonly BlockerView[];
   readonly interactions: readonly InteractionView[];
@@ -127,6 +201,9 @@ export type TuiViewModel = {
   readonly compaction: CompactionView | null;
   readonly planningHandoffs: readonly ControllerPlanningHandoffView[];
 };
+
+/** 节点过滤条件：空集合表示不过滤；过滤只隐藏节点，不改变顺序或位置。 */
+export type ExecutionFilter = readonly WorkPackageExecutionState[];
 
 /* -------------------------------------------------------------------------- */
 /* 纯投影                                                                      */
@@ -181,12 +258,31 @@ export function projectGraphPointerView(snapshot: ControllerSnapshot): GraphPoin
 }
 
 /**
+ * Work Package 节点的短 key。
+ *
+ * 只做展示压缩：相同前缀的 Work Package 必须仍能区分，因此保留尾部（编号或哈希后缀都在尾部）。
+ */
+export function workPackageShortKey(workPackageId: string): string {
+  const trimmed = workPackageId.replace(/^work-package[:-]/u, '');
+  return trimmed.length <= 8 ? trimmed : `…${trimmed.slice(-7)}`;
+}
+
+/** 该节点的过滤可见性；`filter` 为空表示不过滤。 */
+export function nodeVisible(state: WorkPackageExecutionState, filter: ExecutionFilter): boolean {
+  return filter.length === 0 || filter.includes(state);
+}
+
+/**
  * 当前 Scope 指向的图的拓扑投影。
  *
- * 调用方没有提供该 GraphVersion 记录（例如记录不可读）时返回 `null`，界面显示 blocker，而不是
- * 展示一张看起来完整但内容为空的白图。
+ * 节点位置直接用**编译顺序的索引**：状态变化不改变 `position`，`hidden` 只表达过滤结果。调用方没有
+ * 提供该 GraphVersion 记录（例如记录不可读）时返回 `null`，界面显示 blocker，而不是展示一张看起来
+ * 完整但内容为空的白图。
  */
-export function projectGraphView(snapshot: ControllerSnapshot): GraphView | null {
+export function projectGraphView(
+  snapshot: ControllerSnapshot,
+  filter: ExecutionFilter = [],
+): GraphView | null {
   if (snapshot.graph === null) {
     return null;
   }
@@ -197,22 +293,111 @@ export function projectGraphView(snapshot: ControllerSnapshot): GraphView | null
   if (topology === undefined) {
     return null;
   }
-  const frontierStatus = new Map(snapshot.frontier.map((entry) => [entry.workPackageId, entry.status]));
+  const execution = new Map(
+    snapshot.frontier.map((entry) => [entry.workPackageId, entry] as const),
+  );
+  const holds = new Map(
+    snapshot.graphEvolution.revisionHolds
+      .filter((hold) => hold.state === 'pending')
+      .map((hold) => [hold.workPackageId, hold] as const),
+  );
+  const reconciliations = new Map(
+    snapshot.graphEvolution.reconciliations.map(
+      (reconciliation) => [reconciliation.workPackageId, reconciliation] as const,
+    ),
+  );
+
   return {
     graphId: topology.graphId,
     graphVersion: topology.graphVersion,
     generation: snapshot.graph.generation,
-    nodes: topology.nodes.map<GraphNodeView>((node) => ({
-      ...node,
-      frontierStatus: frontierStatus.get(node.workPackageId) ?? null,
-    })),
+    nodes: topology.nodes.map<WorkPackageNodeView>((node, position) => {
+      const entry = execution.get(node.workPackageId) ?? null;
+      const reconciliation = reconciliations.get(node.workPackageId) ?? null;
+      const hold = holds.get(node.workPackageId) ?? null;
+      const state: WorkPackageExecutionState = entry?.state ?? 'unknown';
+      return {
+        ...node,
+        position,
+        hidden: !nodeVisible(state, filter),
+        shortKey: workPackageShortKey(node.workPackageId),
+        state,
+        active: entry !== null && isActiveWorkPackageState(entry.state),
+        role: entry?.role ?? null,
+        attemptId: entry?.attemptId ?? null,
+        liveness: entry?.liveness ?? null,
+        worktreePath: entry?.worktreePath ?? null,
+        baselineHead: entry?.baselineHead ?? null,
+        validation: entry?.validation ?? null,
+        integration: entry?.integration ?? null,
+        revisionHold: hold === null ? null : { source: hold.source },
+        reconciliation:
+          reconciliation === null
+            ? null
+            : {
+                severity: reconciliation.severity,
+                requiredBaselineHead: reconciliation.requiredBaselineHead,
+                observedHead: reconciliation.observedHead,
+                blockerRef: reconciliation.blockerRef,
+              },
+        blockerRefs: entry?.blockerRefs ?? [],
+        derivedFrom: entry?.derivedFrom ?? [],
+      };
+    }),
     readiness: topology.readiness,
     frontier: snapshot.frontier,
   };
 }
 
+/**
+ * active Work Package 与串行 integration queue。
+ *
+ * 并发上限固定为 1：即使上游给出了多个 active 节点，计数也只取 0 或 1（`activeWorkPackageId` 取拓扑顺序
+ * 最早的一个）；多余的 active 仍会以各自状态出现在图里，因此契约违规是可见的，而不是被悄悄抹平。
+ */
+export function projectExecutionProjection(
+  snapshot: ControllerSnapshot,
+  graph: GraphView | null,
+): ExecutionProjectionView {
+  const nodes = graph?.nodes ?? [];
+  const activeWorkPackageId = nodes.find((node) => node.active)?.workPackageId ?? null;
+  const integrationQueue = nodes
+    .filter(
+      (node) =>
+        node.state === 'waiting_integration' ||
+        (node.integration !== null && node.integration.state === 'integrating'),
+    )
+    .map<IntegrationQueueEntryView>((node, position) => ({
+      workPackageId: node.workPackageId,
+      position,
+      integrating: node.integration !== null && node.integration.state === 'integrating',
+    }));
+
+  return {
+    activeWorkPackageId,
+    activeWorkPackageCount: activeWorkPackageId === null ? 0 : 1,
+    integrationQueue,
+    finalizer: snapshot.finalizer,
+    reconciliation: snapshot.executionReconciliation,
+    hazards: controlHazards({
+      frontier: snapshot.frontier,
+      openInteractionCount: snapshot.interactions.filter(
+        (interaction) => interaction.state === 'open',
+      ).length,
+      unresolvedIntentCount: snapshot.executionReconciliation.unresolvedIntentCount,
+    }),
+    recoveries: snapshot.recoveries.map((recovery) => ({ ...recovery })),
+    handoffs: snapshot.handoffs.map((handoff) => ({ ...handoff })),
+  };
+}
+
 export function projectWorkerView(worker: ControllerWorkerEntry): WorkerView {
   return { ...worker };
+}
+
+/** Execution Frontier 的原始条目；供需要状态与派生依据的调用方（CLI machine DTO）复用。 */
+export function projectFrontierEntry(entry: ControllerFrontierEntry): ControllerFrontierEntry {
+  return { ...entry, derivedFrom: [...entry.derivedFrom], blockerRefs: [...entry.blockerRefs] };
 }
 
 export function projectPlanningHandoffView(
@@ -277,10 +462,13 @@ export type TuiViewModelInput = {
   readonly transcript: TranscriptView;
   readonly selectedSessionId: string | null;
   readonly unreadSessionIds: readonly string[];
+  /** 执行图过滤条件（进程内展示态）；只隐藏节点。 */
+  readonly executionFilter?: ExecutionFilter;
 };
 
 export function projectTuiViewModel(input: TuiViewModelInput): TuiViewModel {
   const { snapshot } = input;
+  const graph = projectGraphView(snapshot, input.executionFilter ?? []);
   return {
     scope: projectScopeView(snapshot),
     sessions: snapshot.sessions.map((session) =>
@@ -292,7 +480,8 @@ export function projectTuiViewModel(input: TuiViewModelInput): TuiViewModel {
     selectedSessionId: input.selectedSessionId,
     transcript: input.transcript,
     budgets: snapshot.budgets.map(projectBudgetView),
-    graph: projectGraphView(snapshot),
+    graph,
+    execution: projectExecutionProjection(snapshot, graph),
     workers: snapshot.workers.map(projectWorkerView),
     blockers: snapshot.blockers.map((blocker) => ({ ...blocker })),
     interactions: snapshot.interactions.map(projectInteractionView),

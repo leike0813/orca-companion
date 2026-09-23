@@ -10,12 +10,12 @@ context: |
   领域规则、应用用例、workflow、Orca/agent/storage adapters、CLI/TUI 和 bootstrap
   必须保持既定依赖方向。不得直接访问 Orca 数据库、私有 RPC 或上游私有源码。
 
-  当前规划包及补充的前序 change 可以同时达到 apply-ready；实际 apply、验证和
-  archive 必须按架构合同基线 → M0 控制基线 → M1 → M2 严格串行。架构合同基线使用
-  current-head；其余 change 使用 predecessor-contract，并在实施前核验直接前驱已归档、
-  主规格存在且冻结接缝仍成立。架构合同或 M0 控制基线失败时，所有后续 change 停止实施并回到规划。
-  已部分实施的 m2-deliver-planning-tui 暂停后续 apply，待 m1-wire-foreground-planning-runtime
-  实施、验证并归档后，再按更新后的直接前驱接缝继续。
+  change 可以同时规划，但默认按直接前驱已归档的依赖顺序 apply、验证和 archive。
+  架构合同基线使用 current-head；其余 change 使用 predecessor-contract，并在实施前核验
+  直接前驱已归档、主规格存在且冻结接缝仍成立。
+  m2-wire-execution-runtime 是 m2-deliver-execution-tui 的解阻塞并行项：两者可同时保持 active，
+  接线 change 可在执行 TUI change 尚未归档时 apply；须先固定现有 TUI 接缝并避免同时编辑同一文件。
+  接线 change 先完成执行闭环的验证与 archive，再验收执行 TUI change 的真实 PTY 任务并 archive。
 
   行为验证使用 Vitest。真实 Codex Worker Harness 集成测试使用 MiniMax-M3，并且只能在
   显式选择的隔离项目和专用身份中运行。普通检查不得构建 references/orca submodule。
@@ -43,7 +43,7 @@ rules:
 operations:
   apply:
     guidance:
-      - 只实施序列中第一个尚未归档的 change；apply-ready 不代表可越过前驱实施。
+      - 默认只实施依赖序列中第一个尚未归档的 change；m2-wire-execution-runtime 可在 m2-deliver-execution-tui 尚未归档时实施，前提是两者的直接已归档前驱及共享接缝均已核验，且同一文件不被两个 agent 同时编辑。
       - 开始编辑前执行 implementation-plan 的基线和前驱接缝检查；漂移时停止并回到规划。
       - 不在 apply 阶段创建 verification.md。
   archive:

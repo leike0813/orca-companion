@@ -52,12 +52,24 @@ export function GraphInspector(props: GraphInspectorProps) {
         <Box key={node.workPackageId} flexDirection="column">
           <Text>
             {truncateToDisplayWidth(
-              `${node.workPackageId === props.selectedWorkPackageId ? '>' : ' '} ${node.title} [${node.frontierStatus ?? 'not-frontier'}]`,
+              `${node.workPackageId === props.selectedWorkPackageId ? '>' : ' '} ${node.title} [${node.state}]${node.active ? ' *active' : ''}`,
               Math.max(1, props.availableWidth),
             )}
           </Text>
-          <Text dimColor>{`  dependsOn: ${node.dependsOn.join(', ') || 'none'}`}</Text>
-          <Text dimColor>{`  scope: +${node.scopeEnvelope.include.join(',') || 'none'} -${node.scopeEnvelope.exclude.join(',') || 'none'}`}</Text>
+          <Text dimColor>{`  dependsOn: ${node.dependsOn.join(', ') || 'none'} · scope: +${node.scopeEnvelope.include.join(',') || 'none'} -${node.scopeEnvelope.exclude.join(',') || 'none'}`}</Text>
+          <Text dimColor>{`  role=${node.role ?? 'unknown'} attempt=${node.attemptId ?? 'unknown'} liveness=${node.liveness ?? 'unknown'}`}</Text>
+          {node.validation === null ? null : (
+            <Text dimColor>{`  validation ${node.validation.state} evidence=${node.validation.evidenceRefs.join(',') || 'none'}`}</Text>
+          )}
+          {node.integration === null ? null : (
+            <Text dimColor>{`  integration ${node.integration.state} ref=${node.integration.ref ?? 'none'}`}</Text>
+          )}
+          {node.revisionHold === null ? null : (
+            <Text dimColor>{`  revision pending (${node.revisionHold.source})`}</Text>
+          )}
+          {node.blockerRefs.map((blocker) => (
+            <Text key={`${node.workPackageId}-${blocker}`}>{`  ! ${blocker}`}</Text>
+          ))}
         </Box>
       ))}
       <Text dimColor>{`upstream: ${upstream.join(', ') || 'none'}`}</Text>

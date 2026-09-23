@@ -28,6 +28,7 @@ import type {
   OperationId,
   PlanningCycleId,
   RuntimeIncarnationId,
+  WorkPackageId,
 } from '../application/dto/identity.js';
 import type { ProjectedActionableWorkItem } from '../application/coordinator/actionable-work.js';
 import { answerPendingInteraction } from '../application/coordination/pending-interaction.js';
@@ -64,7 +65,40 @@ import {
   type PlanningMutationResult,
 } from '../application/planning/route-map-service.js';
 import {
-  createControllerService,
+  deriveExecutionFacts,
+  deriveWorkerEntries,
+  noExecutionObservations,
+  type ExecutionObservationFacts,
+  type WorkerEntryView,
+  type WorkerObservation,
+} from '../application/execution/execution-view.js';
+import {
+  cancelExecutionHandoff,
+  cutoverExecutionHandoff,
+  prepareExecutionHandoff,
+  reviewExecutionHandoff,
+  type ExecutionHandoffResult,
+  type ExecutionHandoffReviewFacts,
+} from '../application/handoff/execution-handoff.js';
+
+/**
+ * 交接用例的结构化失败原因。
+ *
+ * 用例返回的是完整结果联合，因此这里只回答「失败原因是什么」：成功分支返回 `null`，调用方据此走
+ * 成功路径，而不是在联合类型上猜测属性存在。
+ */
+function executionHandoffFailure(
+  result: ExecutionHandoffResult,
+): { readonly code: string; readonly message: string } | null {
+  return result.kind === 'blocked' || result.kind === 'rejected' ? result.failure : null;
+}
+import {
+  createScopeControlService,
+  type ActiveWorkerListResult,
+  type ScopeControlResult,
+} from '../application/coordination/scope-control-service.js';
+import type { WorkerStopOutcome } from '../domain/coordination/scope-control.js';
+import { createControllerService,
   projectControllerSnapshot,
   toSemanticEvent,
   type ControllerCommandResult,
@@ -88,11 +122,15 @@ import type {
 import { threadIdFor } from '../domain/coordinator/session-state.js';
 import type {
   BranchCoordinationStore,
+  CoordinationSnapshot,
   CoordinationWriter,
   PendingInteractionRecord,
   ScopeRecord,
 } from '../application/ports/branch-coordination-store.js';
+import type { ExecutionBackend } from '../application/ports/execution-backend.js';
+import type { RoleAuthorities } from '../domain/planning/execution-authorization.js';
 import type {
+  ExecutionHandoffIntentPort,
   HomeResolution,
   ModelCatalog,
   ScopeSetupPort,
@@ -104,6 +142,9 @@ import type {
   WizardProposal,
 } from '../interfaces/tui/ports.js';
 import { openCheckpointStore, type CheckpointStore } from '../adapters/storage/checkpoint-store.js';
+import { createOrcaExecutionBackend } from '../adapters/orca-cli/orca-backend.js';
+import type { WorkerListResult } from '../adapters/orca-cli/operation-catalog.js';
+import { workPackageComment } from '../application/materialize-work-package.js';
 import { createGhTracker } from '../adapters/tracker/gh-tracker.js';
 import {
   createModuleIntegrationResolverAsync,
@@ -365,6 +406,64 @@ export async function createForegroundPlanningHost(
     }
     const result = current.query({ kind: 'scope', coordinationScopeId: scopeId });
     return result.kind === 'scope' ? result.scope : null;
+  };
+
+  /**
+   * 从某个 Session 的已提交历史派生（或复用）可移植 Coordinator Context Capsule。
+   *
+   * 没有可派生历史、历史无法安全归类或落盘失败都是**拒绝交接**的理由：交接必须携带可移植的上下文，
+   * 凭空给一个空引用会让 Target 接到的是一份来历不明的责任。规划交接与执行交接共用这一份语义。
+   */
+  const ensurePortableCapsule = (
+    coordinatorSessionId: CoordinatorSessionId,
+  ):
+    | { readonly kind: 'ok'; readonly capsuleId: string }
+    | { readonly kind: 'failed'; readonly reason: string } => {
+    const checkpoints = checkpointStoreForScope();
+    if (checkpoints === null) {
+      return { kind: 'failed', reason: 'checkpoint store 不可用，无法读取源 Session 的历史' };
+    }
+    const existing = checkpoints.loadPortableCapsule(coordinatorSessionId);
+    if (existing !== null) {
+      return { kind: 'ok', capsuleId: existing.capsuleId };
+    }
+    const read = checkpoints.loadCheckpoint(coordinatorSessionId);
+    if (read.kind !== 'recovered') {
+      return {
+        kind: 'failed',
+        reason:
+          read.kind === 'absent'
+            ? '源 Session 还没有可恢复的会话记录，无法派生可移植 Capsule'
+            : `源 Session 的会话记录不可恢复：${read.reason}`,
+      };
+    }
+    const first = read.state.committedModelSteps[0];
+    const last = read.state.committedModelSteps[read.state.committedModelSteps.length - 1];
+    if (first === undefined || last === undefined) {
+      return { kind: 'failed', reason: '源 Session 还没有可派生的已提交历史' };
+    }
+    try {
+      const capsule = deriveContextCapsule({
+        fromStepId: first.stepId,
+        toStepId: last.stepId,
+        steps: read.state.committedModelSteps.map((step) => ({
+          stepId: step.stepId,
+          messages: step.messages,
+        })),
+      });
+      const saved = checkpoints.savePortableCapsule(coordinatorSessionId, capsule);
+      if (saved.kind === 'failed') {
+        return { kind: 'failed', reason: `无法持久化派生的 Context Capsule：${saved.message}` };
+      }
+      return { kind: 'ok', capsuleId: capsule.capsuleId };
+    } catch (error) {
+      return {
+        kind: 'failed',
+        reason: `源 Session 的已提交历史无法生成可移植 Capsule：${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
   };
 
   /**
@@ -921,50 +1020,7 @@ export async function createForegroundPlanningHost(
     function ensureCapsule():
       | { readonly kind: 'ok'; readonly capsuleId: string }
       | { readonly kind: 'failed'; readonly reason: string } {
-      const checkpoints = checkpointStoreForScope();
-      if (checkpoints === null) {
-        return { kind: 'failed', reason: 'checkpoint store 不可用，无法读取源 Session 的历史' };
-      }
-      const existing = checkpoints.loadPortableCapsule(coordinatorSessionId);
-      if (existing !== null) {
-        return { kind: 'ok', capsuleId: existing.capsuleId };
-      }
-      const read = checkpoints.loadCheckpoint(coordinatorSessionId);
-      if (read.kind !== 'recovered') {
-        return {
-          kind: 'failed',
-          reason:
-            read.kind === 'absent'
-              ? '源 Session 还没有可恢复的会话记录，无法派生可移植 Capsule'
-              : `源 Session 的会话记录不可恢复：${read.reason}`,
-        };
-      }
-      const first = read.state.committedModelSteps[0];
-      const last = read.state.committedModelSteps[read.state.committedModelSteps.length - 1];
-      if (first === undefined || last === undefined) {
-        return { kind: 'failed', reason: '源 Session 还没有可派生的已提交历史' };
-      }
-      let capsuleId: string;
-      try {
-        const capsule = deriveContextCapsule({
-          fromStepId: first.stepId,
-          toStepId: last.stepId,
-          steps: read.state.committedModelSteps.map((step) => ({ stepId: step.stepId, messages: step.messages })),
-        });
-        const saved = checkpoints.savePortableCapsule(coordinatorSessionId, capsule);
-        if (saved.kind === 'failed') {
-          return { kind: 'failed', reason: `无法持久化派生的 Context Capsule：${saved.message}` };
-        }
-        capsuleId = capsule.capsuleId;
-      } catch (error) {
-        return {
-          kind: 'failed',
-          reason: `源 Session 的已提交历史无法生成可移植 Capsule：${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        };
-      }
-      return { kind: 'ok', capsuleId };
+      return ensurePortableCapsule(coordinatorSessionId);
     }
   };
 
@@ -1722,7 +1778,7 @@ export async function createForegroundPlanningHost(
   // 投影（snapshot / transcript）
   // ---------------------------------------------------------------------
 
-  const readSnapshot = (selectedSessionId: string | null): SnapshotLoad => {
+  const readSnapshot = async (selectedSessionId: string | null): Promise<SnapshotLoad> => {
     if (blocker !== null) {
       return { kind: 'failed', code: blocker.code, message: blocker.message };
     }
@@ -1755,17 +1811,44 @@ export async function createForegroundPlanningHost(
       selectedSessionId === null
         ? null
         : (checkpointStoreForScope()?.loadCheckpoint(selectedSessionId as CoordinatorSessionId) ?? null);
+    const graphVersions = versions.kind === 'graph-versions' ? versions.versions : [];
+    const currentVersion =
+      graphId === null
+        ? null
+        : (graphVersions.find((version) => version.version === snapshot.snapshot.scope.graphVersion) ??
+          graphVersions.at(-1) ??
+          null);
+    const generation =
+      snapshot.snapshot.graphGenerations.find((entry) => entry.graphId === graphId) ?? null;
+    const nodes =
+      currentVersion === null
+        ? []
+        : currentVersion.graph.workPackages.map((workPackage) => ({
+            workPackageId: workPackage.workPackageId,
+            dependsOn: [...workPackage.dependsOn],
+          }));
+    const observations = await executionObservations(snapshot.snapshot.scope, nodes);
+    const derived = executionDerivation({
+      snapshot: snapshot.snapshot,
+      scope: snapshot.snapshot.scope,
+      observations,
+      nodes,
+      baselineHead: generation?.baselineHead ?? null,
+      authority: authorization?.manifest.permissions ?? null,
+      recoveryBudgetLimit: authorization?.manifest.limits.maxRecoveriesPerWorkerAttempt ?? null,
+    });
     const projected: ControllerSnapshot = projectControllerSnapshot({
       snapshot: snapshot.snapshot,
       budgets: counters.kind === 'budget-counters' ? counters.counters : [],
-      graphGeneration:
-        snapshot.snapshot.graphGenerations.find((entry) => entry.graphId === graphId)?.generation ?? null,
-      frontier: [],
-      workers: [],
+      graphGeneration: generation?.generation ?? null,
+      frontier: derived.execution.frontier,
+      workers: derived.workers,
+      execution: derived.execution,
+      recoveryBudgetLimit: authorization?.manifest.limits.maxRecoveriesPerWorkerAttempt ?? null,
       extraBlockers: [],
       maintenance: null,
       selectedSessionId: selectedSessionId as CoordinatorSessionId | null,
-      graphVersions: versions.kind === 'graph-versions' ? versions.versions : [],
+      graphVersions,
       authorizationGraphRef:
         authorization === undefined
           ? null
@@ -2254,10 +2337,418 @@ export async function createForegroundPlanningHost(
     };
   };
 
+  // ---------------------------------------------------------------------
+  // 执行阶段（MOD-07 Extend，Owner: `m2-deliver-execution-tui`）
+  //
+  // 这一段只做两件事：把**读到的**执行事实交给自己已有的投影函数，以及把 Scope 级控制与 Execution
+  // Handoff 意图接到既有用例上。它不派发 Worker、不实现对账、不写执行状态——那些属于执行运行时。
+  // ---------------------------------------------------------------------
+
+  /** 只读执行查询使用的 Orca backend；按需创建，且只提交 `identity: 'none'` 的查询。 */
+  let executionBackend: ExecutionBackend | null = null;
+  const backendForExecution = (): ExecutionBackend | null => {
+    if (canonicalWorktreePath === null) {
+      return null;
+    }
+    executionBackend ??= createOrcaExecutionBackend({
+      cwd: canonicalWorktreePath,
+      env: options.env,
+    });
+    return executionBackend;
+  };
+
+  /**
+   * 执行阶段的外部观察。
+   *
+   * 只在 Execution Coordination 模式下读取，且只提交两个只读查询：`worktree-list`（按归属标记定位每个
+   * Work Package 的隔离 worktree）与 `worker-list`（当前 Graph Generation 的 Run）。任何一项不可用时
+   * 只记录原因，不把它读成「没有 Worker 在运行」。
+   */
+  const executionObservations = async (
+    scope: ScopeRecord,
+    nodes: readonly { readonly workPackageId: string }[],
+  ): Promise<ExecutionObservationFacts> => {
+    if (scope.mode !== 'execution_coordination') {
+      return noExecutionObservations('mode-not-execution');
+    }
+    const backend = backendForExecution();
+    if (backend === null) {
+      return noExecutionObservations('canonical-worktree-unresolved');
+    }
+    const unavailableReasons: string[] = [];
+    const worktreePaths = new Map<string, string>();
+
+    const listed = await backend.query({
+      operation: 'worktree-list',
+      repo: `path:${canonicalWorktreePath ?? options.repositoryPath}`,
+      limit: 1_000,
+    });
+    if (listed.kind === 'accepted') {
+      const value = listed.value as { readonly worktrees: readonly { readonly path: string; readonly comment: string | null }[] };
+      for (const node of nodes) {
+        const match = value.worktrees.find(
+          (worktree) => worktree.comment === workPackageComment(node.workPackageId as WorkPackageId),
+        );
+        if (match !== undefined) {
+          worktreePaths.set(node.workPackageId, match.path);
+        }
+      }
+    } else {
+      unavailableReasons.push(`worktree-list:${listed.code}`);
+    }
+
+    const snapshot = requireStore()?.query({
+      kind: 'snapshot',
+      coordinationScopeId: scope.coordinationScopeId,
+    });
+    const generation =
+      snapshot !== undefined && snapshot.kind === 'snapshot'
+        ? (snapshot.snapshot.graphGenerations.find((entry) => entry.graphId === scope.graphId) ?? null)
+        : null;
+    let workers: readonly WorkerObservation[] = [];
+    let workersEnumerated = false;
+    if (generation === null) {
+      unavailableReasons.push('no-graph-generation');
+    } else {
+      const workerList = await backend.query({ operation: 'worker-list', runId: generation.orcaRunId });
+      if (workerList.kind === 'accepted') {
+        const value = workerList.value as WorkerListResult;
+        workers = value.workers.map((worker) => ({
+          dispatchId: worker.dispatchId ?? '',
+          taskId: worker.taskId,
+          workerState: worker.workerState,
+          terminalState: worker.terminalState,
+        }));
+        workersEnumerated = true;
+      } else {
+        unavailableReasons.push(`worker-list:${workerList.code}`);
+      }
+    }
+
+    return {
+      workersEnumerated,
+      workers,
+      worktreePaths,
+      unavailableReasons,
+      finalizer: {
+        // Finalizer 的只读 Profile 核验与运行前后工作区没有生产者：如实标为未核验/未记录。
+        readOnlyProfile: 'unverified',
+        integrationFrozen: 'unknown',
+        worktreePath: canonicalWorktreePath,
+        workspace: null,
+        evidenceRefs: [],
+      },
+    };
+  };
+
+  const executionDerivation = (input: {
+    readonly snapshot: CoordinationSnapshot;
+    readonly scope: ScopeRecord;
+    readonly observations: ExecutionObservationFacts;
+    readonly nodes: readonly { readonly workPackageId: string; readonly dependsOn: readonly string[] }[];
+    readonly baselineHead: string | null;
+    readonly authority: RoleAuthorities | null;
+    readonly recoveryBudgetLimit: number | null;
+  }): {
+    readonly execution: ReturnType<typeof deriveExecutionFacts>;
+    readonly workers: readonly WorkerEntryView[];
+  } => ({
+    execution: deriveExecutionFacts({
+      snapshot: input.snapshot,
+      nodes: input.nodes,
+      baselineHead: input.baselineHead,
+      authority: input.authority,
+      observations: input.observations,
+    }),
+    workers: deriveWorkerEntries({ snapshot: input.snapshot, observations: input.observations }),
+  });
+
+  /**
+   * Scope 级控制的写入者。
+   *
+   * 控制事实必须由持有 Runtime Lease 的真实 Incarnation 写入，因此这里选择身份的顺序是固定的：
+   * Execution Coordination Lease 持有者 → 规划责任方 → 唯一的已登记 Session。身份、fencing 与租约
+   * 都由 store 判定，界面与模型都填不了它们。
+   */
+  const scopeControlSessionId = (): CoordinatorSessionId | null => {
+    const current = requireStore();
+    const scopeId = selectedScopeId;
+    if (current === null || scopeId === null) {
+      return null;
+    }
+    const snapshot = current.query({ kind: 'snapshot', coordinationScopeId: scopeId });
+    if (snapshot.kind !== 'snapshot') {
+      return null;
+    }
+    const executionLease = snapshot.snapshot.leases.find(
+      (lease) => lease.kind === 'execution_coordination' && lease.releasedAt === null,
+    );
+    if (executionLease !== undefined) {
+      return executionLease.coordinatorSessionId;
+    }
+    const responsible = snapshot.snapshot.planningResponsibility?.coordinatorSessionId ?? null;
+    if (responsible !== null) {
+      return responsible;
+    }
+    return snapshot.snapshot.sessions[0]?.coordinatorSessionId ?? null;
+  };
+
+  /** Scope 级控制：Pause 直接落盘；Resume 先对账（对账未接线即拒绝）；Cancel 先落盘再请求停止。 */
+  const scopeControlService = () => {
+    const current = requiredStore();
+    return createScopeControlService({
+      store: current,
+      reconciliation: () =>
+        Promise.resolve({
+          kind: 'rejected' as const,
+          code: 'reconciliation_unavailable',
+          message: '执行期对账尚未接线（属于执行运行时 change）：Resume 不会在没有对账的情况下恢复调度',
+        }),
+      workers: {
+        listActiveDispatches: (): Promise<ActiveWorkerListResult> =>
+          Promise.resolve({
+            kind: 'unavailable',
+            reason: 'Worker 停止请求尚未接线（属于执行运行时 change）：停止结果只能如实报告为不可核验',
+          }),
+        requestStop: (): Promise<WorkerStopOutcome> => Promise.resolve('unverifiable'),
+      },
+    });
+  };
+
+  const runScopeControl = async (
+    action: 'pause' | 'resume' | 'cancel' | 'exit',
+  ): Promise<ControllerCommandResult> => {
+    if (action === 'exit') {
+      // Exit 只结束前台进程：它不写控制状态，因此不接受经由控制通道提交。
+      return rejected(
+        'exit_is_foreground_lifecycle',
+        'Exit 只结束前台进程，不写 Scope 控制状态；请使用前台退出路径',
+      );
+    }
+    const current = requireStore();
+    const scopeId = selectedScopeId;
+    if (current === null || scopeId === null) {
+      return rejected('scope_unavailable', '当前没有可用的 Coordination Scope');
+    }
+    const sessionId = scopeControlSessionId();
+    if (sessionId === null) {
+      return rejected('no_active_incarnation', '当前没有可以写入控制状态的 Coordinator Session');
+    }
+    const ensured = await ensureLiveSession(sessionId);
+    if (ensured.kind === 'failed') {
+      return rejected(ensured.code, ensured.message);
+    }
+    const service = scopeControlService();
+    const request = {
+      coordinationScopeId: scopeId,
+      writer: writerFor(ensured.session.incarnation),
+    };
+    const result: ScopeControlResult =
+      action === 'pause' ? service.pause(request) : action === 'resume' ? await service.resume(request) : await service.cancel(request);
+
+    if (result.kind === 'rejected') {
+      return rejected(result.code, result.message);
+    }
+    if (result.kind === 'unchanged') {
+      return accepted(result.reason);
+    }
+    publish(null, {
+      kind: 'scope-control-changed',
+      coordinationScopeId: scopeId,
+      controlState: result.controlState,
+    });
+    return accepted(`Scope 控制状态：${result.controlState}`, null);
+  };
+
+  /** Execution Handoff：只投影并推进 `ExecutionHandoffState`，不改动任何运行身份。 */
+  const executionHandoffPort: ExecutionHandoffIntentPort = {
+    prepare: async (targetCoordinatorSessionId) => {
+      const current = requireStore();
+      const scopeId = selectedScopeId;
+      if (current === null || scopeId === null) {
+        return rejected('scope_unavailable', '当前没有可用的 Coordination Scope');
+      }
+      const scope = scopeRecord(scopeId);
+      if (scope === null) {
+        return rejected('scope_unavailable', `无法读取 Scope ${scopeId}`);
+      }
+      const snapshot = current.query({ kind: 'snapshot', coordinationScopeId: scopeId });
+      if (snapshot.kind !== 'snapshot') {
+        return rejected('invalid_state', 'snapshot 查询返回了非预期结果');
+      }
+      const generation = snapshot.snapshot.graphGenerations.find((entry) => entry.graphId === scope.graphId) ?? null;
+      if (generation === null) {
+        return rejected('invalid_state', '当前 Graph Generation 不存在：执行交接没有可绑定的代际');
+      }
+      const sourceId = scopeControlSessionId();
+      if (sourceId === null) {
+        return rejected('no_active_incarnation', '当前没有可以发起交接的 Session');
+      }
+      const ensured = await ensureLiveSession(sourceId);
+      if (ensured.kind === 'failed') {
+        return rejected(ensured.code, ensured.message);
+      }
+      const capsule = ensurePortableCapsule(sourceId);
+      if (capsule.kind === 'failed') {
+        return rejected('capsule_unavailable', capsule.reason);
+      }
+      const result = prepareExecutionHandoff({
+        store: current,
+        coordinationScopeId: scopeId,
+        writer: writerFor(ensured.session.incarnation),
+        handoffId: `execution-handoff:${newId()}`,
+        targetSessionId: targetCoordinatorSessionId as CoordinatorSessionId,
+        graphGeneration: generation.generation,
+        capsuleRef: capsule.capsuleId,
+      });
+      if (result.kind === 'prepared') {
+        return accepted(`已创建执行交接 ${result.record.handoffId}`);
+      }
+      const failure = executionHandoffFailure(result);
+      return failure === null
+        ? rejected('invalid_state', `执行交接 prepare 返回了非预期结果：${result.kind}`)
+        : rejected(failure.code, failure.message);
+    },
+    review: async (handoffId) => {
+      const current = requireStore();
+      const scopeId = selectedScopeId;
+      if (current === null || scopeId === null) {
+        return rejected('scope_unavailable', '当前没有可用的 Coordination Scope');
+      }
+      const scope = scopeRecord(scopeId);
+      const handoffRead = current.query({
+        kind: 'execution-handoff',
+        coordinationScopeId: scopeId,
+        handoffId,
+      });
+      if (scope === null || handoffRead.kind !== 'execution-handoff' || handoffRead.handoff === null) {
+        return rejected('not_found', `执行交接 ${handoffId} 不存在`);
+      }
+      const handoff = handoffRead.handoff;
+      const ensured = await ensureLiveSession(handoff.targetSessionId);
+      if (ensured.kind === 'failed') {
+        return rejected(ensured.code, ensured.message);
+      }
+      const snapshot = current.query({ kind: 'snapshot', coordinationScopeId: scopeId });
+      const generation =
+        snapshot.kind === 'snapshot'
+          ? (snapshot.snapshot.graphGenerations.find((entry) => entry.graphId === scope.graphId) ?? null)
+          : null;
+      const checkpoints = checkpointStoreForScope();
+      const sourceRead = checkpoints?.loadCheckpoint(handoff.sourceSessionId) ?? null;
+      const sourceCheckpoint: ExecutionHandoffReviewFacts['sourceCheckpoint'] =
+        sourceRead === null
+          ? 'unrecoverable'
+          : sourceRead.kind === 'recovered'
+            ? 'recoverable'
+            : sourceRead.kind === 'absent'
+              ? 'absent'
+              : 'unrecoverable';
+      const facts: ExecutionHandoffReviewFacts = {
+        scopeRevision: scope.revision,
+        currentGraphGeneration: generation?.generation ?? null,
+        targetLifecycleState:
+          snapshot.kind === 'snapshot'
+            ? (snapshot.snapshot.sessions.find(
+                (session) => session.coordinatorSessionId === handoff.targetSessionId,
+              )?.lifecycleState ?? null)
+            : null,
+        sourceCheckpoint,
+        capsulePortable:
+          handoff.coordinatorContextCapsuleRef !== null &&
+          checkpoints?.loadPortableCapsule(handoff.sourceSessionId) !== null,
+      };
+      const result = reviewExecutionHandoff({
+        store: current,
+        coordinationScopeId: scopeId,
+        writer: writerFor(ensured.session.incarnation),
+        handoffId,
+        facts,
+      });
+      if (result.kind === 'reviewed') {
+        return accepted(`已复核执行交接 ${handoffId}`);
+      }
+      const failure = executionHandoffFailure(result);
+      return failure === null
+        ? rejected('invalid_state', `执行交接 review 返回了非预期结果：${result.kind}`)
+        : rejected(failure.code, failure.message);
+    },
+    cutover: async (handoffId) => {
+      const current = requireStore();
+      const scopeId = selectedScopeId;
+      if (current === null || scopeId === null) {
+        return rejected('scope_unavailable', '当前没有可用的 Coordination Scope');
+      }
+      const handoffRead = current.query({
+        kind: 'execution-handoff',
+        coordinationScopeId: scopeId,
+        handoffId,
+      });
+      if (handoffRead.kind !== 'execution-handoff' || handoffRead.handoff === null) {
+        return rejected('not_found', `执行交接 ${handoffId} 不存在`);
+      }
+      const ensured = await ensureLiveSession(handoffRead.handoff.targetSessionId);
+      if (ensured.kind === 'failed') {
+        return rejected(ensured.code, ensured.message);
+      }
+      const result = cutoverExecutionHandoff({
+        store: current,
+        coordinationScopeId: scopeId,
+        writer: writerFor(ensured.session.incarnation),
+        handoffId,
+      });
+      if (result.kind !== 'cutover') {
+        const failure = executionHandoffFailure(result);
+        return failure === null
+          ? rejected('invalid_state', `执行交接 cutover 返回了非预期结果：${result.kind}`)
+          : rejected(failure.code, failure.message);
+      }
+      publish(result.record.targetSessionId, {
+        kind: 'handoff-phase-changed',
+        coordinationScopeId: scopeId,
+        handoffId,
+        phase: 'cutover',
+      });
+      return accepted(`已完成执行交接 cutover：${handoffId}`);
+    },
+    cancel: async (handoffId) => {
+      const current = requireStore();
+      const scopeId = selectedScopeId;
+      if (current === null || scopeId === null) {
+        return rejected('scope_unavailable', '当前没有可用的 Coordination Scope');
+      }
+      const handoffRead = current.query({
+        kind: 'execution-handoff',
+        coordinationScopeId: scopeId,
+        handoffId,
+      });
+      if (handoffRead.kind !== 'execution-handoff' || handoffRead.handoff === null) {
+        return rejected('not_found', `执行交接 ${handoffId} 不存在`);
+      }
+      const ensured = await ensureLiveSession(handoffRead.handoff.sourceSessionId);
+      if (ensured.kind === 'failed') {
+        return rejected(ensured.code, ensured.message);
+      }
+      const result = cancelExecutionHandoff({
+        store: current,
+        coordinationScopeId: scopeId,
+        writer: writerFor(ensured.session.incarnation),
+        handoffId,
+      });
+      if (result.kind === 'cancelled') {
+        return accepted(`已取消执行交接 ${handoffId}`);
+      }
+      const failure = executionHandoffFailure(result);
+      return failure === null
+        ? rejected('invalid_state', `执行交接 cancel 返回了非预期结果：${result.kind}`)
+        : rejected(failure.code, failure.message);
+    },
+  };
+
   const controller = createControllerService({
-    snapshots: ({ coordinationScopeId, selectedSessionId }) => {
+    snapshots: async ({ coordinationScopeId, selectedSessionId }) => {
       void coordinationScopeId;
-      const loaded = readSnapshot(selectedSessionId);
+      const loaded = await readSnapshot(selectedSessionId);
       if (loaded.kind !== 'snapshot') {
         throw new Error(loaded.message);
       }
@@ -2316,10 +2807,7 @@ export async function createForegroundPlanningHost(
         ? rejected(reviewed.failure.code, reviewed.failure.message)
         : accepted(`已复核交接提案 ${input.proposalId}`);
     },
-    scopeControl: () =>
-      Promise.resolve(
-        rejected('scope_control_unavailable', 'Scope 级 Pause/Resume/Cancel 属于 m2-deliver-execution-tui'),
-      ),
+    scopeControl: async (input) => await runScopeControl(input.action),
     pendingInteractions: async (input) => {
       const owner = interactionOwner(input.interactionId);
       if (owner === null) {
@@ -2332,12 +2820,25 @@ export async function createForegroundPlanningHost(
         ownerCoordinatorSessionId: owner,
       });
     },
-    executionHandoff: () =>
-      Promise.resolve(
-        rejected('execution_handoff_unavailable', '执行阶段交接属于 m2-deliver-execution-tui'),
-      ),
+    executionHandoff: async (input) => {
+      switch (input.action) {
+        case 'prepare':
+          return await executionHandoffPort.prepare(input.targetSessionId);
+        case 'review':
+          return await executionHandoffPort.review(input.handoffId);
+        case 'cutover':
+          return await executionHandoffPort.cutover(input.handoffId);
+        case 'cancel':
+          return await executionHandoffPort.cancel(input.handoffId);
+      }
+    },
     graphEvolution: () =>
-      Promise.resolve(rejected('graph_evolution_unavailable', '图演进意图由执行阶段入口提交')),
+      Promise.resolve(
+        rejected(
+          'graph_evolution_unavailable',
+          '图演进意图（begin/complete/cancel replanning 与 confirm cutover）没有界面入口：本 change 只交付执行阶段的投影与控制意图',
+        ),
+      ),
     scopeInitialization: async (input) =>
       await scopeSetup.initialize({
         coordinationScopeId: input.coordinationScopeId,
@@ -2352,7 +2853,7 @@ export async function createForegroundPlanningHost(
   });
 
   const ports: TuiPorts = {
-    snapshot: (selectedSessionId) => Promise.resolve(readSnapshot(selectedSessionId)),
+    snapshot: async (selectedSessionId) => await readSnapshot(selectedSessionId),
     transcript: (coordinatorSessionId) => Promise.resolve(readTranscript(coordinatorSessionId)),
     execute: async (intent) => await execute(intent),
     subscribe: (listener): Unsubscribe => {
@@ -2364,6 +2865,7 @@ export async function createForegroundPlanningHost(
     scopeSetup,
     modelCatalog: { load: () => Promise.resolve(modelCatalog()) },
     handoff,
+    executionHandoff: executionHandoffPort,
   };
 
   return {

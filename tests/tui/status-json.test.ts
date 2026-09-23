@@ -16,8 +16,10 @@ import { acquireExecutionLease, acquireRuntimeLease } from '../../src/applicatio
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
+  GraphGeneration,
   GraphId,
   GraphVersion,
+  WorkPackageId,
   InteractionId,
   PlanningCycleId,
   RuntimeIncarnationId,
@@ -29,7 +31,7 @@ import {
   type CoordinationStore,
   type OpenCoordinationStoreResult,
 } from '../../src/adapters/storage/coordination-store.js';
-import { runStatus, type StatusSnapshot } from '../../src/interfaces/cli/status-command.js';
+import { runStatus, STATUS_SCHEMA_VERSION, type StatusSnapshot } from '../../src/interfaces/cli/status-command.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SESSION = 'session-a' as CoordinatorSessionId;
@@ -191,7 +193,7 @@ describe('快照 DTO 与 CLI 复用（IP-03 前置）', () => {
     expect(stderr).toEqual([]);
     const snapshot = JSON.parse(raw) as StatusSnapshot;
 
-    expect(snapshot.schemaVersion).toBe(1);
+    expect(snapshot.schemaVersion).toBe(STATUS_SCHEMA_VERSION);
     expect(snapshot.snapshotRevision).toBe(revision);
     expect(snapshot.scope.coordinationScopeId).toBe(SCOPE);
     expect(snapshot.scope.mode).toBe('route_planning');
@@ -222,6 +224,107 @@ describe('快照 DTO 与 CLI 复用（IP-03 前置）', () => {
     expect(snapshot.graph).toEqual({ id: 'graph-1', version: 2 });
     expect(snapshot.workers).toEqual([]);
     expect(snapshot.blockers).toEqual([]);
+
+    // 执行快照分区：没有图版本记录时 Work Package 列表为空，但字段本身必须是可解析、可判定的。
+    expect(snapshot.execution.workPackages).toEqual([]);
+    expect(snapshot.execution.integrationQueue).toEqual([]);
+    expect(snapshot.execution.activeWorkPackageCount).toBe(0);
+    expect(snapshot.execution.activeWorkPackageId).toBeNull();
+    expect(snapshot.execution.finalizer.gate.ready).toBe(false);
+    // 没有未决操作也没有活跃 Worker：不需要先对账。
+    expect(snapshot.execution.executionReconciliation.pending).toBe(false);
+    expect(snapshot.execution.executionReconciliation.unresolvedIntentCount).toBe(0);
+    expect(snapshot.execution.executionReconciliation.activeWorkerCount).toBe(0);
+    // 原因里如实记录「CLI 不调用 Orca」这一事实，界面据此不显示任何 Worker 存活结论。
+    expect(snapshot.execution.executionReconciliation.reasons).toEqual(['cli-no-execution-observation']);
+  });
+
+  test('记录 GraphVersion 后 Work Package 执行快照可见且顺序等于编译顺序', async () => {
+    becomeExecutionHolder();
+    const graphId = 'graph-1' as GraphId;
+    expect(
+      store.transact({
+        kind: 'update-scope-refs',
+        coordinationScopeId: SCOPE,
+        expectedRevision: revisionOf(),
+        writer,
+        graphId,
+        graphVersion: 1 as GraphVersion,
+        authorizationId: 'auth-1',
+        authorizationVersion: 3,
+      }).kind,
+    ).toBe('committed');
+    expect(
+      store.transact({
+        kind: 'record-graph-version',
+        coordinationScopeId: SCOPE,
+        expectedRevision: revisionOf(),
+        writer,
+        graphId,
+        generation: 1 as GraphGeneration,
+        graphVersion: 1 as GraphVersion,
+        recordKind: 'initial',
+        parentVersion: null,
+        mapRevision: 0,
+        planRevision: 1,
+        orcaRunId: 'run-1',
+        graph: {
+          graphId,
+          generation: 1 as GraphGeneration,
+          concurrencyLimit: 1,
+          workPackages: [
+            {
+              workPackageId: 'wp-1' as WorkPackageId,
+              title: '第一个包',
+              dependsOn: [],
+              scopeEnvelope: { include: ['src/a.ts'], exclude: [] },
+              budget: {
+                implementationAttempts: 2,
+                validatorRepairs: 2,
+                graphRevisions: 2,
+                specificationRevisions: 2,
+                maxRecoveriesPerWorkerAttempt: 1,
+              },
+            },
+            {
+              workPackageId: 'wp-2' as WorkPackageId,
+              title: '第二个包',
+              dependsOn: ['wp-1' as WorkPackageId],
+              scopeEnvelope: { include: ['src/b.ts'], exclude: [] },
+              budget: {
+                implementationAttempts: 2,
+                validatorRepairs: 2,
+                graphRevisions: 2,
+                specificationRevisions: 2,
+                maxRecoveriesPerWorkerAttempt: 1,
+              },
+            },
+          ],
+        },
+        patch: null,
+      }).kind,
+    ).toBe('committed');
+
+    const { code, raw } = await readJsonSnapshot();
+    expect(code).toBe(0);
+    const snapshot = JSON.parse(raw) as StatusSnapshot;
+
+    // 顺序 = 编译顺序；没有任何执行事实时第一个包可准入（依赖已满足），第二个包仍在等待依赖。
+    expect(snapshot.execution.workPackages.map((entry) => entry.workPackageId)).toEqual(['wp-1', 'wp-2']);
+    expect(snapshot.execution.workPackages[0]?.state).toBe('admitting');
+    expect(snapshot.execution.workPackages[1]?.state).toBe('waiting');
+    // CLI 不调用 Orca：没有列举执行主机，因此存活结论只能是不可核验，而不是「已退出」。
+    expect(snapshot.execution.workPackages[0]?.liveness).toBeNull();
+    expect(snapshot.execution.activeWorkPackageCount).toBe(1);
+    expect(snapshot.execution.activeWorkPackageId).toBe('wp-1');
+    // 门禁：包尚未通过验证，因此不派发 Finalizer。
+    expect(snapshot.execution.finalizer.gate.ready).toBe(false);
+    expect(snapshot.execution.finalizer.gate.blockers.length).toBeGreaterThan(0);
+
+    // 只读查询不得写回。
+    const before = revisionOf();
+    await readJsonSnapshot();
+    expect(revisionOf()).toBe(before);
   });
 
   test('Scope 没有图指针时 JSON 不出现 graph 键', async () => {
@@ -230,7 +333,7 @@ describe('快照 DTO 与 CLI 复用（IP-03 前置）', () => {
     expect(stderr).toEqual([]);
 
     const snapshot = JSON.parse(raw) as Record<string, unknown>;
-    expect(snapshot['schemaVersion']).toBe(1);
+    expect(snapshot['schemaVersion']).toBe(STATUS_SCHEMA_VERSION);
     expect('graph' in snapshot).toBe(false);
     expect(snapshot['workers']).toEqual([]);
     expect(snapshot['blockers']).toEqual([]);

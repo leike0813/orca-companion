@@ -9,6 +9,10 @@ import { Box, Text } from 'ink';
 
 import { truncateToDisplayWidth } from '../render/width.js';
 
+/**
+ * 命令顺序沿用前驱已交付的排列，新命令追加在 `cancel` 之后：固定索引的既有测试与肌肉记忆不会被
+ * 打乱，`help` 仍是最后一项。
+ */
 export const COMMAND_IDS = [
   'compact',
   'model-picker',
@@ -20,6 +24,9 @@ export const COMMAND_IDS = [
   'pause',
   'resume',
   'cancel',
+  'execution-handoff',
+  'filter-execution',
+  'exit',
   'help',
 ] as const;
 
@@ -36,6 +43,8 @@ export const COMMAND_LABELS: Readonly<Record<CommandId, string>> = {
   compact: '/compact 手动压缩该 Session',
   'model-picker': 'Model Picker 切换 Coordinator Model Configuration',
   handoff: 'Route Planning Handoff（prepare → review → cutover）',
+  'execution-handoff': 'Execution Handoff（prepare → review → cutover，责任转移）',
+  'filter-execution': '切换执行图过滤（只隐藏节点）',
   'session-picker': 'Session Picker',
   'event-drawer': 'Event Drawer',
   'graph-inspector': 'Graph Inspector',
@@ -43,13 +52,15 @@ export const COMMAND_LABELS: Readonly<Record<CommandId, string>> = {
   pause: 'Pause 整个 Coordination Scope',
   resume: 'Resume 整个 Coordination Scope',
   cancel: 'Cancel 整个 Coordination Scope',
+  exit: 'Exit 前台进程（不暂停或取消 Scope）',
   help: 'Help',
 };
 
 export const HELP_LINES = [
   'Ctrl+P Command Palette · Ctrl+B Sidebar · Ctrl+G Graph Inspector',
   'Ctrl+T 展开/折叠最近一条工具记录 · Ctrl+A 进入回答模式',
-  'Esc 逐层关闭 · Ctrl+C 退出（不隐式 Pause/Cancel）',
+  'Esc 逐层关闭 · Ctrl+C 退出（不隐式 Pause/Cancel，危险态先确认）',
+  '执行图过滤只隐藏节点，不改变拓扑顺序',
   'Enter 提交 · Shift+Enter（或 Alt+Enter）换行',
 ];
 

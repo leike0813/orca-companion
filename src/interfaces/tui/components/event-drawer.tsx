@@ -15,6 +15,53 @@ export type EventDrawerProps = {
   readonly availableWidth: number;
 };
 
+/**
+ * 语义事件的分类。
+ *
+ * 分类只由事件 `kind` 决定（不做字符串匹配），因此「Task/Worker/Attempt/Recovery/Graph/控制/交互/
+ * 交接/blocker」这些分区不会因为 payload 文案变化而漂移。keepalive、stderr、poll timeout、重复
+ * delivery 与无变化对账在 IC-11 façade 已被过滤，结构上不可能到这里。
+ */
+export const SEMANTIC_EVENT_CATEGORIES = [
+  'task',
+  'worker',
+  'attempt',
+  'recovery',
+  'graph',
+  'control',
+  'interaction',
+  'handoff',
+  'blocker',
+] as const;
+
+export type SemanticEventCategory = (typeof SEMANTIC_EVENT_CATEGORIES)[number];
+
+export function semanticEventCategory(event: SemanticEvent): SemanticEventCategory {
+  switch (event.kind) {
+    case 'worker-liveness-changed':
+      return 'worker';
+    case 'recovery-status-changed':
+      return 'recovery';
+    case 'revision-hold-changed':
+      return 'attempt';
+    case 'graph-version-appended':
+    case 'generation-status-changed':
+    case 'generation-cutover-committed':
+      return 'graph';
+    case 'scope-control-changed':
+      return 'control';
+    case 'interaction-opened':
+    case 'interaction-resolved':
+      return 'interaction';
+    case 'handoff-phase-changed':
+      return 'handoff';
+    case 'blocked':
+      return 'blocker';
+    case 'state-changed':
+      return 'task';
+  }
+}
+
 /** 语义事件的可读摘要；未知变体按 kind 原样显示，不猜测含义。 */
 export function describeSemanticEvent(event: SemanticEvent): string {
   switch (event.kind) {
@@ -54,7 +101,10 @@ export function EventDrawer(props: EventDrawerProps) {
       ) : (
         props.events.map((event, index) => (
           <Text key={`${event.kind}-${String(index)}`}>
-            {truncateToDisplayWidth(describeSemanticEvent(event), Math.max(1, props.availableWidth))}
+            {truncateToDisplayWidth(
+              `[${semanticEventCategory(event)}] ${describeSemanticEvent(event)}`,
+              Math.max(1, props.availableWidth),
+            )}
           </Text>
         ))
       )}

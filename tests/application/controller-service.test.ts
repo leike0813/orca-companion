@@ -46,6 +46,10 @@ import {
   type SemanticEventEnvelope,
   type SwitchModelConfigurationCommand,
 } from '../../src/application/controller-service.js';
+import {
+  deriveExecutionFacts,
+  noExecutionObservations,
+} from '../../src/application/execution/execution-view.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
@@ -252,12 +256,22 @@ function snapshotOf(coordinationScopeId: CoordinationScopeId): ControllerSnapsho
     throw new Error('无法读取 snapshot');
   }
   const counters = store.query({ kind: 'budget-counters', coordinationScopeId });
+  // 执行投影由生产派生函数从同一份 store 快照算出，测试不手写一份平行的 fixture：投影与派生必须一致。
+  const execution = deriveExecutionFacts({
+    snapshot: result.snapshot,
+    nodes: [],
+    baselineHead: null,
+    authority: null,
+    observations: noExecutionObservations('controller-service-test'),
+  });
   return projectControllerSnapshot({
     snapshot: result.snapshot,
     budgets: counters.kind === 'budget-counters' ? counters.counters : [],
     graphGeneration: null,
-    frontier: [],
+    frontier: execution.frontier,
     workers: [],
+    execution,
+    recoveryBudgetLimit: null,
     extraBlockers: [],
     maintenance: null,
     selectedSessionId: null,
@@ -862,6 +876,8 @@ test('快照只携带可投影字段：不含 receipt、结果正文、provider 
       'coordinationScopeId',
       'compaction',
       'executionLeaseHolderSessionId',
+      'executionReconciliation',
+      'finalizer',
       'frontier',
       'graph',
       'graphEvolution',

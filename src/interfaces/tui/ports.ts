@@ -56,6 +56,7 @@ export type TuiPorts = {
   readonly scopeSetup: ScopeSetupPort;
   readonly modelCatalog: ModelCatalogPort;
   readonly handoff: HandoffIntentPort;
+  readonly executionHandoff: ExecutionHandoffIntentPort;
 };
 
 /** 仓库里已有的 Coordination Scope 摘要；Home 只用它列出候选，不推断身份。 */
@@ -155,4 +156,18 @@ export type HandoffIntentPort = {
   readonly prepareProposal: (targetCoordinatorSessionId: string) => Promise<ControllerCommandResult>;
   readonly cutover: (proposalId: string) => Promise<ControllerCommandResult>;
   readonly cancel: (proposalId: string) => Promise<ControllerCommandResult>;
+};
+
+/**
+ * Execution Handoff 的意图端口（IP-11）。
+ *
+ * 与 Route Planning Handoff 分开：这里推进的是 `ExecutionHandoffState`，`review` 所需的事实
+ * （Scope revision、当前 Graph Generation、Target 生命周期、Source checkpoint 与 Capsule 可移植性）
+ * 由宿主从权威来源读好后提交，界面不构造它们，也不复用 `PlanningHandoffProposal`。
+ */
+export type ExecutionHandoffIntentPort = {
+  readonly prepare: (targetCoordinatorSessionId: string) => Promise<ControllerCommandResult>;
+  readonly review: (handoffId: string) => Promise<ControllerCommandResult>;
+  readonly cutover: (handoffId: string) => Promise<ControllerCommandResult>;
+  readonly cancel: (handoffId: string) => Promise<ControllerCommandResult>;
 };

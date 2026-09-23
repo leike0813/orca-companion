@@ -13,12 +13,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { resolveGlobalAction } from './input/keymap.js';
 import { allowedSidebarDensity } from './render/width.js';
+import { requiresConfirmation } from './components/control-bar.js';
 import {
   draftFor,
+  executionFilterLabel,
   initialTuiState,
   isComposerReadOnly,
+  nextExecutionFilter,
   reduceTuiState,
   type OverlayKind,
+  type PendingConfirmation,
   type TuiAction,
   type TuiState,
 } from './state.js';
@@ -295,6 +299,7 @@ export function TuiApp(props: TuiAppProps) {
       }),
       selectedSessionId: state.selectedSessionId,
       unreadSessionIds: state.unreadSessionIds,
+      executionFilter: state.executionFilter,
     });
   }, [snapshot, state, transcript]);
   const viewModelRef = useRef<TuiViewModel | null>(null);
@@ -340,6 +345,71 @@ export function TuiApp(props: TuiAppProps) {
     }
     // 拒绝（含 stale revision）时保留输入内容，只提示重读。
   }, [dispatch, ports, reload]);
+
+  /** 提交一次 Scope 级控制意图；终态一律来自 Controller 已持久化的控制状态。 */
+  const applyScopeControl = useCallback(
+    async (action: 'pause' | 'resume' | 'cancel') => {
+      const result = await ports.execute({ kind: 'scope-control', action });
+      dispatch({ kind: 'notice', notice: resultNotice(result) });
+      await reload();
+    },
+    [dispatch, ports, reload],
+  );
+
+  /**
+   * Scope 级控制入口。
+   *
+   * Pause 从不要求确认；Cancel 只在危险态（活跃/不可核验 Worker、待答交互、未决操作）下要求一次确认。
+   * 确认本身不写任何控制状态，它只是提交一次与直接调用相同的意图。
+   */
+  const requestScopeControl = useCallback(
+    (action: 'pause' | 'resume' | 'cancel') => {
+      const view = viewModelRef.current;
+      if (action === 'cancel' && view === null && scopeIdRef.current !== null) {
+        // Scope 已确定但执行快照尚未落地：「未知」不能读作「没有危险态」。
+        dispatch({ kind: 'confirmation-requested', pending: { kind: 'cancel' } });
+        return;
+      }
+      if (view !== null && requiresConfirmation(action, view.execution.hazards)) {
+        dispatch({ kind: 'confirmation-requested', pending: { kind: 'cancel' } });
+        return;
+      }
+      void applyScopeControl(action);
+    },
+    [applyScopeControl, dispatch],
+  );
+
+  /**
+   * Exit / `Ctrl+C` 的入口。
+   *
+   * 退出只结束前台进程：不写控制状态、请求 Worker 停止或隐式 Pause/Cancel。存在活跃 Worker、待答交互
+   * 或未决操作时必须先确认。
+   */
+  const requestExit = useCallback(() => {
+    const view = viewModelRef.current;
+    if (view === null && scopeIdRef.current !== null) {
+      // Scope 已确定但执行快照尚未落地：无法排除活跃 Worker 或未决操作，因此先确认再退出。
+      dispatch({ kind: 'confirmation-requested', pending: { kind: 'exit' } });
+      return;
+    }
+    if (view !== null && requiresConfirmation('exit', view.execution.hazards)) {
+      dispatch({ kind: 'confirmation-requested', pending: { kind: 'exit' } });
+      return;
+    }
+    onExit();
+  }, [dispatch, onExit]);
+
+  /** 确认一次待确认动作；`exit` 只结束前台进程，`cancel` 提交取消意图。 */
+  const confirmPending = useCallback(
+    (pending: Exclude<PendingConfirmation, null>) => {
+      if (pending.kind === 'exit') {
+        onExit();
+        return;
+      }
+      void applyScopeControl('cancel');
+    },
+    [applyScopeControl, onExit],
+  );
 
   const runCommand = useCallback(
     async (command: CommandId) => {
@@ -420,15 +490,66 @@ export function TuiApp(props: TuiAppProps) {
           return;
         case 'pause':
         case 'resume':
-        case 'cancel': {
-          const result = await ports.execute({ kind: 'scope-control', action: command });
-          dispatch({ kind: 'notice', notice: resultNotice(result) });
-          await reload();
+        case 'cancel':
+          requestScopeControl(command);
+          return;
+        case 'execution-handoff': {
+          // 接收方必须由用户在 Session Picker 里明确选中；界面不替用户挑一个 Target。
+          const target = stateRef.current.selectedSessionId;
+          if (target === null) {
+            dispatch({ kind: 'notice', notice: '先在 Session Picker 里选中接收执行责任的 Session，再发起交接' });
+            return;
+          }
+          const prepared = await ports.executionHandoff.prepare(target);
+          dispatch({ kind: 'notice', notice: resultNotice(prepared) });
+          if (prepared.kind !== 'accepted') {
+            return;
+          }
+          const loaded = await ports.snapshot(stateRef.current.selectedSessionId);
+          if (loaded.kind !== 'snapshot') {
+            return;
+          }
+          setSnapshot(loaded.snapshot);
+          // 待审阅的记录优先取 prepared/reviewed；没有可推进的记录时把 blocked 记录也展示出来，
+          // 否则 fail closed 只留下「没有待审阅的记录」这句无信息量的提示。
+          const candidate =
+            loaded.snapshot.handoffs.find(
+              (handoff) => handoff.phase === 'prepared' || handoff.phase === 'reviewed',
+            ) ??
+            loaded.snapshot.handoffs.find((handoff) => handoff.phase === 'blocked') ??
+            null;
+          let record = candidate;
+          if (candidate !== null && candidate.phase === 'prepared') {
+            // 复核由宿主读好权威事实后提交；失败即写入 blocked，Source 保持唯一 owner。
+            const reviewed = await ports.executionHandoff.review(candidate.handoffId);
+            dispatch({ kind: 'notice', notice: resultNotice(reviewed) });
+            const after = await ports.snapshot(stateRef.current.selectedSessionId);
+            if (after.kind === 'snapshot') {
+              setSnapshot(after.snapshot);
+              record =
+                after.snapshot.handoffs.find((handoff) => handoff.handoffId === candidate.handoffId) ??
+                candidate;
+            }
+          }
+          dispatch({ kind: 'execution-handoff-review', handoffId: record?.handoffId ?? null });
+          dispatch({ kind: 'overlay-open', overlay: 'execution-handoff-review' });
           return;
         }
+        case 'filter-execution': {
+          const next = nextExecutionFilter(stateRef.current.executionFilter);
+          dispatch({ kind: 'execution-filter-changed', filter: next });
+          dispatch({
+            kind: 'notice',
+            notice: `执行图过滤：${executionFilterLabel(next)}（只隐藏节点，不改变顺序）`,
+          });
+          return;
+        }
+        case 'exit':
+          requestExit();
+          return;
       }
     },
-    [dispatch, ports, reload, terminalWidth],
+    [dispatch, ports, reload, requestExit, requestScopeControl, terminalWidth],
   );
 
   const confirmHandoff = useCallback(async () => {
@@ -449,6 +570,50 @@ export function TuiApp(props: TuiAppProps) {
       await reload();
     }
   }, [dispatch, handoffProposalId, ports, reload]);
+
+  /** Execution Handoff 的 cutover 确认；失败即 fail closed，Source 保持唯一 owner。 */
+  const confirmExecutionHandoff = useCallback(async () => {
+    const handoffId = stateRef.current.executionHandoffReviewId;
+    if (handoffId === null) {
+      dispatch({ kind: 'overlay-close-top' });
+      return;
+    }
+    const record =
+      viewModelRef.current?.execution.handoffs.find((handoff) => handoff.handoffId === handoffId) ?? null;
+    if (record !== null && record.phase !== 'reviewed') {
+      // 只有复核通过的记录才允许 cutover：fail closed 由界面与宿主两层一起保证。
+      dispatch({
+        kind: 'notice',
+        notice: `交接处于 ${record.phase}，不能 cutover（Source 仍是唯一 owner）`,
+      });
+      await reload();
+      return;
+    }
+    const result = await ports.executionHandoff.cutover(handoffId);
+    dispatch({ kind: 'notice', notice: resultNotice(result) });
+    if (result.kind !== 'accepted' || record === null) {
+      await reload();
+      return;
+    }
+    dispatch({ kind: 'overlay-close-top' });
+    dispatch({ kind: 'execution-handoff-review', handoffId: null });
+    // cutover 后 Source transcript 转为只读并自动选中 Target；Target 保持 awaiting_user_prompt。
+    dispatch({ kind: 'session-read-only', coordinatorSessionId: record.sourceSessionId });
+    dispatch({ kind: 'session-selected', coordinatorSessionId: record.targetSessionId });
+    dispatch({ kind: 'notice', notice: 'cutover 完成：Target 处于 awaiting_user_prompt' });
+    await reload();
+  }, [dispatch, ports, reload]);
+
+  const cancelExecutionHandoff = useCallback(async () => {
+    const handoffId = stateRef.current.executionHandoffReviewId;
+    if (handoffId !== null) {
+      const result = await ports.executionHandoff.cancel(handoffId);
+      dispatch({ kind: 'notice', notice: resultNotice(result) });
+    }
+    dispatch({ kind: 'overlay-close-top' });
+    dispatch({ kind: 'execution-handoff-review', handoffId: null });
+    await reload();
+  }, [dispatch, ports, reload]);
 
   const cancelHandoff = useCallback(async () => {
     if (handoffProposalId === null) {
@@ -555,13 +720,34 @@ export function TuiApp(props: TuiAppProps) {
     cancelHandoff: () => {
       void cancelHandoff();
     },
+    confirmExecutionHandoff: () => {
+      void confirmExecutionHandoff();
+    },
+    cancelExecutionHandoff: () => {
+      void cancelExecutionHandoff();
+    },
     closeTopOverlay: () => dispatch({ kind: 'overlay-close-top' }),
   };
 
   useInput((input, key) => {
+    // 待确认动作是唯一的模态输入：确认前 `y`/`n`/`Esc` 之外的内容被吞掉，不会落到 composer。
+    const pending = stateRef.current.pendingConfirmation;
+    if (pending !== null) {
+      if (input === 'y') {
+        dispatch({ kind: 'confirmation-dismissed' });
+        confirmPending(pending);
+        return;
+      }
+      if (input === 'n' || key.escape === true) {
+        dispatch({ kind: 'confirmation-dismissed' });
+        return;
+      }
+      return;
+    }
     const action = resolveGlobalAction(input, { ctrl: key.ctrl, escape: key.escape });
     if (action === 'exit') {
-      onExit();
+      // Exit 与 `Ctrl+C` 只结束前台进程；Scope 不因此进入暂停或取消。
+      requestExit();
       return;
     }
     if (action === 'escape') {
@@ -675,6 +861,9 @@ export function TuiApp(props: TuiAppProps) {
       // 其余 overlay 只支持 Esc（已在上面处理）与 Enter 的默认动作。
       if (key.return === true && topOverlay() === 'handoff-review') {
         void confirmHandoff();
+      }
+      if (key.return === true && topOverlay() === 'execution-handoff-review') {
+        void confirmExecutionHandoff();
       }
       return;
     }

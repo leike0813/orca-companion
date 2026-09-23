@@ -59,6 +59,8 @@ function noopActions(): WorkspaceActions {
     selectModel: vi.fn(),
     confirmHandoff: vi.fn(),
     cancelHandoff: vi.fn(),
+    confirmExecutionHandoff: vi.fn(),
+    cancelExecutionHandoff: vi.fn(),
     closeTopOverlay: vi.fn(),
   };
 }

@@ -23,6 +23,14 @@ import type { WorkerRole } from '../domain/planning/execution-authorization.js';
 import type { WorkerLiveness } from '../domain/worker-liveness.js';
 import type { ScopeControlAction } from '../domain/coordination/scope-control.js';
 import type {
+  DerivedExecutionFacts,
+  ExecutionReconciliationGateView,
+  FinalizerView,
+  ReconciliationView,
+  WorkerEntryView,
+  WorkPackageExecutionEntry,
+} from './execution/execution-view.js';
+import type {
   CandidateGenerationRefs,
   GraphGenerationStatus,
   ReplanningClosureMode,
@@ -39,8 +47,8 @@ import type {
 import type {
   BaselineAdoptionKind,
   BaselineAdoptionState,
-  BaselineReconciliationState,
   BudgetCounterRecord,
+  DeliverySettlementRecord,
   CoordinationSnapshot,
   CoordinationWriter,
   ExecutionHandoffPhase,
@@ -53,6 +61,7 @@ import type {
   PlanningHandoffPhase,
   PlanningHandoffRecord,
   RecoveryRecord,
+  RecoveryTerminalOutcome,
   RecoveryState,
   RevisionHoldRecord,
   RevisionHoldSource,
@@ -60,7 +69,6 @@ import type {
   SessionLifecycleState,
   WorkPackageLineageRecord,
   BaselineAdoptionRecord,
-  BaselineReconciliationRecord,
 } from './ports/branch-coordination-store.js';
 import type { ExecutionHandoffReviewFacts } from './handoff/execution-handoff.js';
 import type { HandoffReviewFacts } from './planning/planning-handoff.js';
@@ -92,18 +100,16 @@ export type ControllerBudgetView = {
   readonly consumed: number;
 };
 
-export type ControllerFrontierEntry = {
-  readonly workPackageId: string;
-  readonly status: string;
-};
+/**
+ * Execution Frontier 的单个 Work Package 投影（IC-11 Extend）。
+ *
+ * 生命周期阶段与 Worker liveness 是两个字段：把 liveness 并进状态取值会让「不可核验」被读成「已退出」。
+ * 取值与派生规则见 `src/application/execution/execution-view.ts`。
+ */
+export type ControllerFrontierEntry = WorkPackageExecutionEntry;
 
-export type ControllerWorkerEntry = {
-  readonly dispatchId: string;
-  readonly workerTaskId: string;
-  readonly workPackageId: string;
-  readonly role: WorkerRole;
-  readonly liveness: WorkerLiveness;
-};
+/** 一个已派发 Worker 的投影（IC-11 Extend）；定义与派生规则在 `execution/execution-view.ts`。 */
+export type ControllerWorkerEntry = WorkerEntryView;
 
 export const CONTROLLER_BLOCKER_SOURCES = [
   'mutation_lane',
@@ -140,12 +146,44 @@ export type ControllerHandoffView = {
   readonly responsibilitySet: readonly HandoffResponsibility[];
 };
 
+/**
+ * 一次 Worker Session Recovery 的只读投影（IC-11 Extend）。
+ *
+ * 它表达「替代 Session Segment、剩余 Recovery 预算、Capsule coverage、被 superseded 的原 Segment 与
+ * Accepted Worker Result 引用」；结果**正文**始终留在 Orca，这里只有引用。没有持久化生产者的事实
+ * （Capsule coverage、Recovery 上限）保持 `null`，界面据此显示未知，不显示为已恢复。
+ */
 export type ControllerRecoveryView = {
   readonly recoveryId: string;
   readonly workerTaskId: string;
+  readonly workPackageId: string;
+  /** 业务 Attempt 身份；Recovery 沿用原 Attempt，不新建业务尝试。 */
+  readonly businessAttemptId: string;
   readonly role: WorkerRole;
   readonly status: RecoveryState;
+  /** 这一条 Recovery 的消耗量。 */
   readonly consumedBudget: number;
+  /** 同一业务 Attempt 的全部 Recovery 消耗之和。 */
+  readonly consumedForAttempt: number;
+  /** 单个 Worker Attempt 的 Recovery 上限；没有批准 Manifest 时为 `null`。 */
+  readonly budgetLimit: number | null;
+  /** 剩余 Recovery 预算；上限未知时为 `null`（不显示为 0）。 */
+  readonly remainingBudget: number | null;
+  readonly sourceSegmentId: string;
+  readonly replacementSegmentId: string | null;
+  readonly supersededSegmentId: string | null;
+  /** 替代 Session Segment 的 harness 绑定；它与原 provider session 是不同的 Segment。 */
+  readonly replacementSessionBindingId: string | null;
+  readonly capsule: {
+    readonly ref: string;
+    /** `null` 表示 coverage 无法核验，不得显示为 `complete`。 */
+    readonly coverage: 'complete' | 'partial' | null;
+    readonly gaps: readonly string[];
+  } | null;
+  readonly terminalOutcome: RecoveryTerminalOutcome | null;
+  readonly blockingReason: string | null;
+  /** 替代 Dispatch 的 Accepted Worker Result 引用；未结算时为 `null`。 */
+  readonly acceptedResultRef: string | null;
 };
 
 export type ControllerMaintenanceView = {
@@ -234,11 +272,13 @@ export type ControllerRevisionHoldView = {
   readonly state: RevisionHoldState;
 };
 
-export type ControllerReconciliationView = {
-  readonly reconciliationId: string;
-  readonly workPackageId: string;
-  readonly state: BaselineReconciliationState;
-};
+/**
+ * 一次 Baseline Reconciliation 的只读投影（IC-11 Extend）。
+ *
+ * `severity` 把 canonical 前进、轻微核验与严重冲突分成三种可区分状态；取值与判定见
+ * `src/application/execution/execution-view.ts`。
+ */
+export type ControllerReconciliationView = ReconciliationView;
 
 export type ControllerLineageView = {
   readonly workPackageId: string;
@@ -285,8 +325,13 @@ export type ControllerSnapshot = {
   readonly selectedSessionId: string | null;
   readonly sessions: readonly ControllerSessionSummary[];
   readonly budgets: readonly ControllerBudgetView[];
+  /** Execution Frontier 投影；顺序与编译后的稳定拓扑一致。 */
   readonly frontier: readonly ControllerFrontierEntry[];
   readonly workers: readonly ControllerWorkerEntry[];
+  /** Finalizer 门禁、只读条件、工作区与最近一次被接受的 Delivery Verdict（IC-11 Extend）。 */
+  readonly finalizer: FinalizerView;
+  /** 「重启先对账」的门：对账完成前界面不显示任何可推进状态（IC-11 Extend）。 */
+  readonly executionReconciliation: ExecutionReconciliationGateView;
   readonly blockers: readonly ControllerBlockerEntry[];
   readonly interactions: readonly ControllerInteractionView[];
   readonly handoffs: readonly ControllerHandoffView[];
@@ -722,6 +767,15 @@ export type ControllerSnapshotFacts = {
   readonly graphGeneration: number | null;
   readonly frontier: readonly ControllerFrontierEntry[];
   readonly workers: readonly ControllerWorkerEntry[];
+  /**
+   * 执行阶段只读投影（IC-11 Extend）。
+   *
+   * 由调用方用 `deriveExecutionFacts` 从 IC-03 快照与它读到的 Orca 只读观察派生；本模块只做字段白名单
+   * 搬运，因此执行事实不会绕过 `ControllerService`，也不会在投影里被第二次推导。
+   */
+  readonly execution: DerivedExecutionFacts;
+  /** 单个 Worker Attempt 的 Recovery 上限；没有批准 Manifest 时为 `null`。 */
+  readonly recoveryBudgetLimit: number | null;
   /** 来自调用方的额外 blocker（例如 Scope 控制与服务层判定）。 */
   readonly extraBlockers: readonly ControllerBlockerEntry[];
   readonly maintenance: ControllerMaintenanceView | null;
@@ -764,13 +818,53 @@ function projectHandoff(handoff: ExecutionHandoffRecord): ControllerHandoffView 
   };
 }
 
-function projectRecovery(recovery: RecoveryRecord): ControllerRecoveryView {
+/**
+ * Recovery 投影。
+ *
+ * `consumedForAttempt` 由全部 Recovery 记录按 `businessAttemptId` 求和（这是唯一不会因重启、恢复或
+ * 重规划被覆盖的读法）；`acceptedResultRef` 通过替代 Dispatch 与已结算 Delivery 连接得到，仍然只是引用。
+ * Capsule coverage 目前没有持久化生产者，因此如实为 `null`，界面不得显示为 `complete`。
+ */
+function projectRecovery(
+  recovery: RecoveryRecord,
+  facts: {
+    readonly recoveries: readonly RecoveryRecord[];
+    readonly settlements: readonly DeliverySettlementRecord[];
+    readonly budgetLimit: number | null;
+  },
+): ControllerRecoveryView {
+  const consumedForAttempt = facts.recoveries
+    .filter((entry) => entry.businessAttemptId === recovery.businessAttemptId)
+    .reduce((total, entry) => total + entry.consumedBudget, 0);
+  const settlement =
+    recovery.replacementDispatchId === null
+      ? null
+      : (facts.settlements.find(
+          (entry) => entry.dispatchId === recovery.replacementDispatchId,
+        ) ?? null);
   return {
     recoveryId: recovery.recoveryId,
     workerTaskId: recovery.workerTaskId,
+    workPackageId: recovery.workPackageId,
+    businessAttemptId: recovery.businessAttemptId,
     role: recovery.role,
     status: recovery.status,
     consumedBudget: recovery.consumedBudget,
+    consumedForAttempt,
+    budgetLimit: facts.budgetLimit,
+    remainingBudget:
+      facts.budgetLimit === null ? null : Math.max(0, facts.budgetLimit - consumedForAttempt),
+    sourceSegmentId: recovery.sourceSegmentId,
+    replacementSegmentId: recovery.replacementSegmentId,
+    supersededSegmentId: recovery.supersededSegmentId,
+    replacementSessionBindingId: recovery.replacementSessionBindingId,
+    capsule:
+      recovery.capsuleRef === null
+        ? null
+        : { ref: recovery.capsuleRef, coverage: null, gaps: [] },
+    terminalOutcome: recovery.terminalOutcome,
+    blockingReason: recovery.blockingReason,
+    acceptedResultRef: settlement?.orcaResultRef ?? null,
   };
 }
 
@@ -796,14 +890,6 @@ function projectGeneration(generation: GraphGenerationRecord): ControllerGraphGe
 
 function projectRevisionHold(hold: RevisionHoldRecord): ControllerRevisionHoldView {
   return { workPackageId: hold.workPackageId, source: hold.source, state: hold.state };
-}
-
-function projectReconciliation(reconciliation: BaselineReconciliationRecord): ControllerReconciliationView {
-  return {
-    reconciliationId: reconciliation.reconciliationId,
-    workPackageId: reconciliation.workPackageId,
-    state: reconciliation.state,
-  };
 }
 
 function projectLineage(lineage: WorkPackageLineageRecord): ControllerLineageView {
@@ -946,16 +1032,36 @@ export function projectControllerSnapshot(facts: ControllerSnapshotFacts): Contr
       ).length,
     })),
     budgets: facts.budgets.map(projectBudget),
-    frontier: facts.frontier.map((entry) => ({ ...entry })),
+    frontier: facts.frontier.map((entry) => ({
+      ...entry,
+      derivedFrom: [...entry.derivedFrom],
+      blockerRefs: [...entry.blockerRefs],
+    })),
     workers: facts.workers.map((worker) => ({ ...worker })),
+    finalizer: {
+      ...facts.execution.finalizer,
+      gate: { ready: facts.execution.finalizer.gate.ready, blockers: [...facts.execution.finalizer.gate.blockers] },
+      coversWorkPackageIds: [...facts.execution.finalizer.coversWorkPackageIds],
+      evidenceRefs: [...facts.execution.finalizer.evidenceRefs],
+    },
+    executionReconciliation: {
+      ...facts.execution.executionReconciliation,
+      reasons: [...facts.execution.executionReconciliation.reasons],
+    },
     blockers,
     interactions: pendingInteractions.map(projectInteraction),
     handoffs: facts.snapshot.executionHandoffs.map(projectHandoff),
-    recoveries: facts.snapshot.recoveries.map(projectRecovery),
+    recoveries: facts.snapshot.recoveries.map((recovery) =>
+      projectRecovery(recovery, {
+        recoveries: facts.snapshot.recoveries,
+        settlements: facts.snapshot.deliverySettlements,
+        budgetLimit: facts.recoveryBudgetLimit,
+      }),
+    ),
     graphEvolution: {
       generations: facts.snapshot.graphGenerations.map(projectGeneration),
       revisionHolds: facts.snapshot.revisionHolds.map(projectRevisionHold),
-      reconciliations: facts.snapshot.baselineReconciliations.map(projectReconciliation),
+      reconciliations: facts.execution.reconciliations.map((reconciliation) => ({ ...reconciliation })),
       lineages: facts.snapshot.workPackageLineages.map(projectLineage),
       adoptions: facts.snapshot.baselineAdoptions.map(projectAdoption),
     },

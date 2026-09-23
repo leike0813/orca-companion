@@ -18,7 +18,7 @@
 | IC-08 | `m1-execute-and-validate-work-packages` | 无；Recovery 重放同一 pipeline | Recovery、Graph evolution、TUI |
 | IC-09 | `m1-recover-execution` | 无 | Graph evolution、TUI |
 | IC-10 | `m1-evolve-execution-graph` | 无 | ControllerService、TUI |
-| IC-11 | `m1-recover-execution` | Change 8 增加图演进 projection/commands；`m1-wire-foreground-planning-runtime` 增加消息/回答字段与事件归属；`m2-deliver-planning-tui` 增加只读投影 | CLI、两个 TUI change |
+| IC-11 | `m1-recover-execution` | Change 8 增加图演进 projection/commands；`m1-wire-foreground-planning-runtime` 增加消息/回答字段与事件归属；`m2-deliver-planning-tui` 增加只读投影；`m2-deliver-execution-tui` 增加执行投影、Finalizer 与执行交接投影 | CLI、两个 TUI change |
 | IC-12 | `m0-orca-control-baseline` | `m1-wire-foreground-planning-runtime` 登记精确 Home 解析；`m2-deliver-planning-tui` 增加 planning 投影与组件；`m2-deliver-execution-tui` 增加执行态字段与组件 | CLI machine output、TUI React components |
 
 ## IC-01 Identity、revision 与引用字段族
@@ -461,7 +461,7 @@ Replanning 停止新派发并结清在途/Delivery/Interaction/Intent，建立�
 
 - **Owner (Create)**: `m1-recover-execution`
 - **Canonical path**: `src/application/controller-service.ts`
-- **Extenders (Extend)**: `m1-evolve-execution-graph` 增加图 patch/replanning projection 与 command variants；`m1-wire-foreground-planning-runtime` 增加提交身份、回答正文与事件归属；`m2-deliver-planning-tui` 增加候选图拓扑、压缩状态与规划交接提案投影
+- **Extenders (Extend)**: `m1-evolve-execution-graph` 增加图 patch/replanning projection 与 command variants；`m1-wire-foreground-planning-runtime` 增加提交身份、回答正文与事件归属；`m2-deliver-planning-tui` 增加候选图拓扑、压缩状态与规划交接提案投影；`m2-deliver-execution-tui` 增加执行投影、Finalizer 与执行交接投影
 - **Consumers (Consume)**: CLI、planning TUI、execution TUI
 
 ```ts
@@ -543,6 +543,66 @@ type ControllerSnapshotExtend = {
 
 `graphTopologies` 与 `compaction` 都由调用方从权威来源读好后注入 `ControllerSnapshotFacts`；façade 不读 store、不推断、不补全。它们是**投影**而非新的权威状态：`/compact` 的准入、执行与终止仍属于 Coordinator Runtime，本 facade 不新增执行路径。
 
+`m2-deliver-execution-tui` 的 Extend 把执行阶段事实并入**同一** `ControllerSnapshot`，不新增第二份快照、也不新增事件通道：
+
+```ts
+/** 原为 { workPackageId, status: string }；现在承载完整执行投影。 */
+type ControllerFrontierEntry = {
+  workPackageId: string;
+  /** 闭集：waiting|admitting|specifying|implementing|validating|repairing|waiting_integration|
+   *  reconciling|revision_pending|blocked|unknown|accepted|retired|cancelled */
+  state: WorkPackageExecutionState;
+  role: WorkerRole | null;
+  attemptId: string | null;
+  /** 与生命周期分列：执行主机无法核验时是 'unverifiable'，绝不读作已退出。 */
+  liveness: WorkerLiveness | null;
+  worktreePath: string | null;
+  baselineHead: string | null;
+  validation: {
+    state: 'validating' | 'validated' | 'rejected' | 'blocked' | 'unknown';
+    acceptedResultRef: string | null;
+    evidenceRefs: readonly string[];
+  } | null;
+  integration: {
+    state: 'waiting' | 'integrating' | 'integrated' | 'blocked' | 'unknown';
+    ref: string | null;
+  } | null;
+  /** 推出该状态所依据的持久事实引用；为空数组表示没有可用依据。 */
+  derivedFrom: readonly string[];
+  blockerRefs: readonly string[];
+};
+
+type ControllerSnapshotExecutionExtend = {
+  finalizer: {
+    gate: { ready: boolean; blockers: readonly string[] };
+    coversWorkPackageIds: readonly string[];
+    worktreePath: string | null;
+    readOnlyProfile: 'enforced' | 'unenforceable' | 'unverified';
+    integrationFrozen: 'frozen' | 'unknown';
+    workspace: {
+      before: { head: string; indexRevision: string; dirtyPaths: readonly string[] };
+      after: { head: string; indexRevision: string; dirtyPaths: readonly string[] };
+    } | null;
+    evidenceRefs: readonly string[];
+    verdict: { verdictId: string; kind: 'deliverable' | 'blocked'; refs: readonly string[] } | null;
+  };
+  /** 「重启先对账」的门：pending 为真时界面不显示任何可推进状态。 */
+  executionReconciliation: {
+    pending: boolean;
+    unresolvedIntentCount: number;
+    activeWorkerCount: number;
+    reasons: readonly string[];
+  };
+  /** 扩展字段：workPackageId/businessAttemptId/consumedForAttempt/budgetLimit/remainingBudget/
+   *  capsule/supersededSegmentId/acceptedResultRef；仍只保存引用，正文留在 Orca。 */
+  recoveries: readonly ControllerRecoveryView[];
+};
+```
+
+派生规则是纯函数，canonical path 为 `src/application/execution/execution-view.ts`（Owner: `m2-deliver-execution-tui`）：输入是 IC-03 快照、当前 GraphVersion 的节点与调用方读到的 Orca 只读观察，输出上面的投影。每个状态都带 `derivedFrom`；推不出确定结论时停在 `unknown`；`finalizer.gate` 复用 `planFinalizerDispatch` 的判决，只有被接受的 Delivery Verdict 才呈现 deliverable。
+
+生产装配（`src/bootstrap/foreground-planning-runtime.ts`）在 Execution Coordination 模式下只提交两个只读 Orca 查询（`worktree-list` 按归属标记定位隔离 worktree、`worker-list` 读取当前 Graph Generation 的 Run）；它不派发 Worker、不实现执行期对账、不写执行状态。`ScopeControlCommand` 现在接到 `createScopeControlService`：Pause 直接落盘，Resume 在对账未接线时被拒绝，Cancel 先落盘取消意图、停止结果无法核验时保持 `cancelling`/`unverifiable`。`ExecutionHandoffCommand` 接到 `src/application/handoff/execution-handoff.ts` 的四个用例，不经过 `PlanningHandoffProposal`。
+
 `SemanticEvent` 是 UI 可投影的封闭联合；keepalive、stderr、poll timeout、无变化 reconciliation 和诊断日志不发布。`AnswerPendingInteraction` 必须含 InteractionId、expected revision 和 answer payload；普通 Session message 不满足 interaction。
 
 `m1-wire-foreground-planning-runtime` 的 Extend：`SendSessionMessage` 增加稳定 `submissionId`；`AnswerPendingInteraction` 以 `answer: string` 进入应用用例，由宿主/IC-03 生成稳定 answer ref 并原子存正文。语义事件统一携带 `eventId`、`coordinationScopeId` 与可空 `coordinatorSessionId`，只在对应权威事实已提交并读回后发布。TUI 只用归属 ID 设置未读标记，重启后依快照恢复。
@@ -581,6 +641,8 @@ type StatusJson = {
   graph?: GraphView;
   workers: readonly WorkerView[];
   blockers: readonly BlockerView[];
+  /** schemaVersion 2 增加：执行阶段只读分区（`m2-deliver-execution-tui`）。 */
+  execution?: ExecutionSnapshotView;
 };
 ```
 
@@ -591,6 +653,15 @@ type StatusJson = {
 - **Home 解析**：以 Git common dir 定位 Branch Coordination State，再以当前完整 branch ref 和登记的 canonical worktree 精确匹配 Scope。无匹配则进入初始化向导；旧未绑定记录须经显式迁移 Review（`bind-scope-identity` 一次性补齐绑定后本进程才登记当前 Scope）；linked worktree（git dir 不等于 common dir）或 detached HEAD 阻塞。不得以 common dir 下 Scope 数量推断当前身份。
 - **Session 选择**：选中 Session 与 Sidebar 密度都是进程内展示态。重启后按「存在 Pending Interaction 的 Session 优先，否则最近活动」重新选择；M1 没有「上次选择」的持久来源，本 change 不新增表、文件或 migration。
 - **`StatusJson` 形状不变**：`schemaVersion` 仍为 1，字段与既有 machine DTO 一致；`status --json` 改为经同一 `ControllerSnapshot` 投影规则构造，不再自行从 store 记录逐字段映射。
+
+`m2-deliver-execution-tui` 的 Extend 只增加执行态分区与相应组件，不新增页面、不新增键位、不改动 transcript/composer 主视图：
+
+- **`TuiViewModel.execution`**：`activeWorkPackageId`、`activeWorkPackageCount`（并发上限 1，因此只可能 0 或 1）、`integrationQueue`（串行队列，顺序取拓扑顺序）、`finalizer`、`reconciliation`（重启对账门）、`hazards`（危险态判定，含不可核验 Worker）、`recoveries`、`handoffs`。
+- **节点布局**：`WorkPackageNodeView.position` 是编译顺序的索引，状态变化只更新标识；`hidden` 只由过滤决定。依赖缩进与紧凑态文本在 `src/interfaces/tui/render/graph-layout.ts`。
+- **Scope 级控制**（`src/interfaces/tui/components/control-bar.tsx`）：组件没有 Work Package 参数，因此结构上不存在单包控制入口。Pause 永不确认；Cancel 与 Exit 在危险态下先确认，确认后仍只提交一次意图。`cancelling` 只能来自 Controller 已持久化的控制状态。
+- **Finalizer 面板**（`src/interfaces/tui/components/finalizer-panel.tsx`）：门禁不满足、只读未核验/无法强制或运行前后工作区变化时只显示 blocker；只有被接受的 Delivery Verdict 才显示 deliverable。
+- **Execution Handoff**：复用 `handoff-review.tsx`，但主题是 `ExecutionHandoffState`（overlay `execution-handoff-review`），不复用 `PlanningHandoffProposal`。
+- **`StatusJson`**：`schemaVersion` 升为 **2**，新增 `execution` 分区（`workPackages`/`integrationQueue`/`activeWorkPackageCount`/`activeWorkPackageId`/`reconciliations`/`finalizer`/`executionReconciliation`）并填充既有的 `workers`/`blockers`；既有字段名与语义未变。`status` 不调用 Orca，因此其中 Worker liveness 等外部事实保持不可核验。
 
 顶层 CLI 只识别 `[repository-path]`、`status [--json]`、`doctor`。启动 TUI 前同时检查 stdin/stdout TTY；无 TTY 在挂载 Ink 前非零退出。Exit/Ctrl+C 只退出进程，不隐式 Pause/Cancel。React render/effect/resize/remount 不调用 IC-11 command。
 

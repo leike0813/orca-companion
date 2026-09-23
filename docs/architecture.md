@@ -112,11 +112,11 @@ Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation
 
 | 项目 | 合同 |
 |---|---|
-| Canonical path | `src/interfaces/tui/` 与 `src/application/tui/view-model.ts` |
-| 职责 | Ink transcript、composer、sidebar、overlay、Graph Inspector、输入映射和纯展示 projection |
+| Canonical path | `src/interfaces/tui/`、`src/application/tui/view-model.ts` 与 `src/application/execution/execution-view.ts` |
+| 职责 | Ink transcript、composer、sidebar、overlay、Graph Inspector、输入映射，执行态/规划态纯展示 projection，以及执行阶段只读派生（`execution-view.ts`） |
 | 允许依赖 | `IC-11` Controller façade 和 `IC-12` view model；Ink/React |
 | Interface | 用户 intent、选中 Session、局部草稿/滚动/overlay 状态和渲染帧 |
-| 禁止 | 调用 Orca、打开 store、恢复模型、实现重试/准入/预算、从自由文本推断待答 interaction |
+| 禁止 | 调用 Orca、打开 store、恢复模型、实现重试/准入/预算、从自由文本推断待答 interaction；`execution-view.ts` 只从 IC-03 快照与调用方读到的只读观察派生，不派发、不写、不实现对账 |
 | 测试 seam | 组件经固定 view model 与 command callbacks 测试；PTY 单独验证 TTY/CJK/resize |
 
 React 组件只拥有展示与输入协调。render、effect、resize 和重挂载没有业务副作用；所有 Scope 级动作必须经 `ControllerService`。
@@ -126,7 +126,7 @@ React 组件只拥有展示与输入协调。render、effect、resize 和重挂�
 | 项目 | 合同 |
 |---|---|
 | Canonical path | `src/bootstrap/` |
-| 职责 | 配置、依赖注入、能力核验、启动顺序、信号和进程生命周期 |
+| 职责 | 配置、依赖注入、能力核验、启动顺序、信号和进程生命周期；前台宿主的执行阶段只读观察装配（`worktree-list`/`worker-list`）、Scope 控制与 Execution Handoff 意图接线 |
 | 允许依赖 | 所有 module 的公开 interface 以完成组合 |
 | Interface | core/CLI/TUI 启动入口与 `doctor` 组合报告 |
 | 禁止 | 持有领域规则、复制用例、在 import 时启动进程、让核心入口加载 UI 或数据库 |

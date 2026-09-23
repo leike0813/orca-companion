@@ -259,8 +259,10 @@ function frameGeometryProblems(lines: readonly string[], terminalWidth: number):
     if (measured > terminalWidth) {
       problems.push(`行宽 ${String(measured)} 超过终端 ${String(terminalWidth)}：${line}`);
     }
-    const trimmed = line.trim();
-    if (trimmed.includes('─') && !HORIZONTAL_RULE_LINE.test(trimmed)) {
+    // 只检查主视图那一列：横线属于 transcript 边框，Sidebar 在自己的列里显示文本是正确的并排渲染。
+    const [mainColumn] = line.split(SIDEBAR_BORDER);
+    const mainTrimmed = (mainColumn ?? '').trim();
+    if (mainTrimmed.includes('─') && !HORIZONTAL_RULE_LINE.test(mainTrimmed)) {
       problems.push(`横线行混入非边框字符：${line}`);
     }
   }
@@ -335,6 +337,17 @@ const snapshot = {
   budgets: [],
   frontier: [],
   workers: [],
+  finalizer: {
+    gate: { ready: false, blockers: ['no-work-packages'] },
+    coversWorkPackageIds: [],
+    worktreePath: null,
+    readOnlyProfile: 'unverified',
+    integrationFrozen: 'unknown',
+    workspace: null,
+    evidenceRefs: [],
+    verdict: null,
+  },
+  executionReconciliation: { pending: false, unresolvedIntentCount: 0, activeWorkerCount: 0, reasons: [] },
   blockers: [],
   interactions: [],
   handoffs: [],

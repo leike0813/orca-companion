@@ -14,6 +14,13 @@ import type { CoordinationStoreOpenResult } from '../../bootstrap/composition.js
 import type { BranchCoordinationStore } from '../../application/ports/branch-coordination-store.js';
 import { projectControllerSnapshot } from '../../application/controller-service.js';
 import {
+  deriveExecutionFacts,
+  deriveWorkerEntries,
+  noExecutionObservations,
+  type FinalizerView,
+  type WorkPackageExecutionEntry,
+} from '../../application/execution/execution-view.js';
+import {
   projectGraphPointerView,
   projectScopeView,
   projectSessionSummaryView,
@@ -21,7 +28,13 @@ import {
 } from '../../application/tui/view-model.js';
 import type { CliIO } from './doctor-command.js';
 
-export const STATUS_SCHEMA_VERSION = 1;
+/**
+ * machine DTO 的形状版本。
+ *
+ * `2` 增加了执行阶段快照分区（`workPackages` / `integrationQueue` / `finalizer` / `executionReconciliation`
+ * 与 `workers`/`blockers` 的真实填充）；既有字段的名字与语义未变。
+ */
+export const STATUS_SCHEMA_VERSION = 2;
 
 export type StatusSession = {
   readonly coordinatorSessionId: string;
@@ -65,9 +78,45 @@ export type StatusSnapshot = {
   };
   readonly sessions: readonly StatusSession[];
   readonly graph?: { readonly id: string; readonly version: number };
-  /** machine DTO 的既有占位字段：本里程碑不填充 Worker 与 blocker。 */
-  readonly workers: readonly [];
-  readonly blockers: readonly [];
+  /** Worker 投影：与 TUI 共用 `ControllerWorkerEntry` 字段。 */
+  readonly workers: readonly {
+    readonly dispatchId: string;
+    readonly workerTaskId: string;
+    readonly workPackageId: string;
+    readonly role: string;
+    readonly liveness: string;
+  }[];
+  readonly blockers: readonly {
+    readonly source: string;
+    readonly code: string;
+    readonly message: string;
+  }[];
+  /** 执行阶段快照分区：只读投影，`status` 不调用 Orca，因此 liveness 等外部事实保持 `null`。 */
+  readonly execution: {
+    readonly activeWorkPackageId: string | null;
+    readonly activeWorkPackageCount: number;
+    readonly workPackages: readonly WorkPackageExecutionEntry[];
+    readonly integrationQueue: readonly {
+      readonly workPackageId: string;
+      readonly position: number;
+      readonly integrating: boolean;
+    }[];
+    readonly reconciliations: readonly {
+      readonly reconciliationId: string;
+      readonly workPackageId: string;
+      readonly severity: string;
+      readonly requiredBaselineHead: string;
+      readonly observedHead: string | null;
+      readonly blockerRef: string | null;
+    }[];
+    readonly finalizer: FinalizerView;
+    readonly executionReconciliation: {
+      readonly pending: boolean;
+      readonly unresolvedIntentCount: number;
+      readonly activeWorkerCount: number;
+      readonly reasons: readonly string[];
+    };
+  };
 };
 
 export type StatusSnapshotResult =
@@ -94,17 +143,47 @@ export function buildStatusSnapshot(
   }
   const { leases, ticketClaims, unresolvedIntents } = result.snapshot;
   const counters = store.query({ kind: 'budget-counters', coordinationScopeId });
+  const scope = result.snapshot.scope;
+  const versions =
+    scope.graphId === null
+      ? ({ kind: 'graph-versions', versions: [] } as const)
+      : store.query({ kind: 'graph-versions', coordinationScopeId, graphId: scope.graphId });
+  const graphVersions = versions.kind === 'graph-versions' ? versions.versions : [];
+  const currentVersion =
+    graphVersions.find((version) => version.version === scope.graphVersion) ?? null;
+  // CLI 一次性命令不调用 Orca：没有列举执行主机，因此不产生任何 Worker 存活结论。
+  const observations = noExecutionObservations('cli-no-execution-observation');
+  const execution = deriveExecutionFacts({
+    snapshot: result.snapshot,
+    nodes:
+      currentVersion === null
+        ? []
+        : currentVersion.graph.workPackages.map((workPackage) => ({
+            workPackageId: workPackage.workPackageId,
+            dependsOn: [...workPackage.dependsOn],
+          })),
+    baselineHead:
+      result.snapshot.graphGenerations.find((entry) => entry.graphId === scope.graphId)?.baselineHead ??
+      null,
+    authority: null,
+    observations,
+  });
+  // 已持久化的 Dispatch（Session Segment / Delivery Settlement / Recovery 替代派发）仍要投影出来；
+  // 缺少执行主机观察时存活结论只能是不可核验，而不是「没有 Worker」。
+  const workers = deriveWorkerEntries({ snapshot: result.snapshot, observations });
 
   const projected = projectControllerSnapshot({
     snapshot: result.snapshot,
     budgets: counters.kind === 'budget-counters' ? counters.counters : [],
     graphGeneration: null,
-    frontier: [],
-    workers: [],
+    frontier: execution.frontier,
+    workers,
+    execution,
+    recoveryBudgetLimit: null,
     extraBlockers: [],
     maintenance: null,
     selectedSessionId: null,
-    graphVersions: [],
+    graphVersions,
     authorizationGraphRef: null,
     compaction: null,
   });
@@ -156,10 +235,58 @@ export function buildStatusSnapshot(
         ),
       ),
       ...(graph === null ? {} : { graph }),
-      workers: [],
-      blockers: [],
+      workers: projected.workers.map((worker) => ({
+        dispatchId: worker.dispatchId,
+        workerTaskId: worker.workerTaskId,
+        workPackageId: worker.workPackageId,
+        role: worker.role,
+        liveness: worker.liveness,
+      })),
+      blockers: projected.blockers.map((blocker) => ({
+        source: blocker.source,
+        code: blocker.code,
+        message: blocker.message,
+      })),
+      execution: {
+        activeWorkPackageId: projected.frontier.find((entry) => isActive(entry))?.workPackageId ?? null,
+        activeWorkPackageCount: projected.frontier.some((entry) => isActive(entry)) ? 1 : 0,
+        workPackages: projected.frontier.map(copyFrontierEntry),
+        integrationQueue: projected.frontier
+          .filter((entry) => entry.state === 'waiting_integration')
+          .map((entry, position) => ({
+            workPackageId: entry.workPackageId,
+            position,
+            integrating: entry.integration?.state === 'integrating',
+          })),
+        reconciliations: projected.graphEvolution.reconciliations.map((reconciliation) => ({
+          reconciliationId: reconciliation.reconciliationId,
+          workPackageId: reconciliation.workPackageId,
+          severity: reconciliation.severity,
+          requiredBaselineHead: reconciliation.requiredBaselineHead,
+          observedHead: reconciliation.observedHead,
+          blockerRef: reconciliation.blockerRef,
+        })),
+        finalizer: projected.finalizer,
+        executionReconciliation: projected.executionReconciliation,
+      },
     },
   };
+}
+
+function isActive(entry: WorkPackageExecutionEntry): boolean {
+  return (
+    entry.state === 'admitting' ||
+    entry.state === 'specifying' ||
+    entry.state === 'implementing' ||
+    entry.state === 'validating' ||
+    entry.state === 'repairing' ||
+    entry.state === 'reconciling'
+  );
+}
+
+/** frontier 条目的独立副本（含数组），machine DTO 不共享 façade 的数组实例。 */
+function copyFrontierEntry(entry: WorkPackageExecutionEntry): WorkPackageExecutionEntry {
+  return { ...entry, derivedFrom: [...entry.derivedFrom], blockerRefs: [...entry.blockerRefs] };
 }
 
 /** machine DTO 只输出三个已登记字段：展示态的未读与选中标记不属于 CLI 合同。 */
@@ -209,6 +336,10 @@ function renderText(snapshot: StatusSnapshot): string {
     `ticket-claims: ${scope.ticketClaims.length}`,
     `pending-interactions: ${scope.pendingInteractions.length}`,
     `unresolved-intents: ${scope.unresolvedIntentCount}`,
+    `work-packages: ${snapshot.execution.workPackages.length}`,
+    `active-work-packages: ${snapshot.execution.activeWorkPackageCount}`,
+    `integration-queue: ${snapshot.execution.integrationQueue.length}`,
+    `reconciling: ${snapshot.execution.executionReconciliation.pending ? 'yes' : 'no'}`,
   ].join('\n');
 }
 

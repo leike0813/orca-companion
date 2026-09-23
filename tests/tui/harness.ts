@@ -19,6 +19,7 @@ import type {
   SemanticEvent,
 } from '../../src/application/controller-service.js';
 import type {
+  ExecutionHandoffIntentPort,
   HomeResolution,
   ModelCatalog,
   ModelConfigurationOption,
@@ -30,6 +31,10 @@ import type {
   WizardCheck,
   WizardProposal,
 } from '../../src/interfaces/tui/ports.js';
+import type {
+  FinalizerView,
+  WorkPackageExecutionEntry,
+} from '../../src/application/execution/execution-view.js';
 import { WIZARD_CHECKS } from '../../src/interfaces/tui/ports.js';
 
 /* -------------------------------------------------------------------------- */
@@ -73,6 +78,13 @@ export function makeSnapshot(overrides: SnapshotOverrides = {}): ControllerSnaps
     budgets: [],
     frontier: [],
     workers: [],
+    finalizer: makeFinalizer(),
+    executionReconciliation: {
+      pending: false,
+      unresolvedIntentCount: 0,
+      activeWorkerCount: 0,
+      reasons: [],
+    },
     blockers: [],
     interactions: [],
     handoffs: [],
@@ -113,6 +125,85 @@ export function makeSnapshot(overrides: SnapshotOverrides = {}): ControllerSnaps
   };
 }
 
+/** 执行阶段 Work Package 投影的默认值；测试只需覆盖关心的字段。 */
+export function makeWorkPackageExecution(
+  workPackageId: string,
+  overrides: Partial<WorkPackageExecutionEntry> = {},
+): WorkPackageExecutionEntry {
+  return {
+    workPackageId,
+    state: 'waiting',
+    role: null,
+    attemptId: null,
+    liveness: null,
+    worktreePath: null,
+    baselineHead: null,
+    validation: null,
+    integration: null,
+    derivedFrom: [],
+    blockerRefs: [],
+    ...overrides,
+  };
+}
+
+/** Finalizer 投影的默认值：没有门禁通过、没有结论，因此界面不显示 deliverable。 */
+export function makeFinalizer(overrides: Partial<FinalizerView> = {}): FinalizerView {
+  return {
+    gate: { ready: false, blockers: ['no-work-packages'] },
+    coversWorkPackageIds: [],
+    worktreePath: null,
+    readOnlyProfile: 'unverified',
+    integrationFrozen: 'unknown',
+    workspace: null,
+    evidenceRefs: [],
+    verdict: null,
+    ...overrides,
+  };
+}
+
+/** 一次 Worker Session Recovery 的默认投影。 */
+export function makeRecovery(
+  overrides: Partial<ControllerSnapshot['recoveries'][number]> = {},
+): ControllerSnapshot['recoveries'][number] {
+  return {
+    recoveryId: 'recovery-1',
+    workerTaskId: 'task-1',
+    workPackageId: 'wp-1',
+    businessAttemptId: 'attempt-1',
+    role: 'validator',
+    status: 'recovered',
+    consumedBudget: 1,
+    consumedForAttempt: 1,
+    budgetLimit: 2,
+    remainingBudget: 1,
+    sourceSegmentId: 'segment-1',
+    replacementSegmentId: 'segment-2',
+    supersededSegmentId: 'segment-1',
+    replacementSessionBindingId: 'binding-2',
+    capsule: { ref: 'capsule-1', coverage: null, gaps: [] },
+    terminalOutcome: 'replaced',
+    blockingReason: null,
+    acceptedResultRef: null,
+    ...overrides,
+  };
+}
+
+/** Execution Handoff 记录（`ExecutionHandoffState`）的默认投影。 */
+export function makeExecutionHandoff(
+  overrides: Partial<ControllerSnapshot['handoffs'][number]> = {},
+): ControllerSnapshot['handoffs'][number] {
+  return {
+    handoffId: 'execution-handoff-1',
+    sourceSessionId: 'session-a',
+    targetSessionId: 'session-b',
+    graphGeneration: 1,
+    phase: 'reviewed',
+    expectedRevision: 7,
+    responsibilitySet: ['execution_coordination_lease', 'pending_interactions', 'worker_lifecycle_events'],
+    ...overrides,
+  };
+}
+
 export function makeTranscript(
   coordinatorSessionId = 'session-a',
   messages: ControllerTranscriptPage['messages'] = [
@@ -143,6 +234,8 @@ export type FakePortsOptions = {
   readonly executeResult?: ControllerCommandResult;
   readonly models?: readonly ModelConfigurationOption[];
   readonly modelCatalog?: Partial<ModelCatalog>;
+  /** Execution Handoff 各步骤的返回值；省略即 accepted。 */
+  readonly executionHandoff?: Partial<Record<'prepare' | 'review' | 'cutover' | 'cancel', ControllerCommandResult>>;
 };
 
 export type FakePorts = {
@@ -253,6 +346,7 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
         return Promise.resolve(accepted);
       },
     },
+    executionHandoff: createFakeExecutionHandoff(options, calls, accepted),
   };
 
   return {
@@ -266,6 +360,33 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
       }
     },
     executeCount: () => calls.filter((call) => call.name === 'execute').length,
+  };
+}
+
+function createFakeExecutionHandoff(
+  options: FakePortsOptions,
+  calls: PortCall[],
+  accepted: ControllerCommandResult,
+): ExecutionHandoffIntentPort {
+  const resultFor = (step: 'prepare' | 'review' | 'cutover' | 'cancel'): ControllerCommandResult =>
+    options.executionHandoff?.[step] ?? accepted;
+  return {
+    prepare: (targetCoordinatorSessionId) => {
+      calls.push({ name: 'execution-handoff.prepare', detail: targetCoordinatorSessionId });
+      return Promise.resolve(resultFor('prepare'));
+    },
+    review: (handoffId) => {
+      calls.push({ name: 'execution-handoff.review', detail: handoffId });
+      return Promise.resolve(resultFor('review'));
+    },
+    cutover: (handoffId) => {
+      calls.push({ name: 'execution-handoff.cutover', detail: handoffId });
+      return Promise.resolve(resultFor('cutover'));
+    },
+    cancel: (handoffId) => {
+      calls.push({ name: 'execution-handoff.cancel', detail: handoffId });
+      return Promise.resolve(resultFor('cancel'));
+    },
   };
 }
 

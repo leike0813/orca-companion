@@ -11,6 +11,7 @@ import type { ReactElement } from 'react';
 
 import { CommandPalette, type CommandId } from '../components/command-palette.js';
 import { Composer } from '../components/composer.js';
+import { ControlBar } from '../components/control-bar.js';
 import { EventDrawer } from '../components/event-drawer.js';
 import { GraphInspector } from '../components/graph-inspector.js';
 import { HandoffReview } from '../components/handoff-review.js';
@@ -23,7 +24,11 @@ import { TopBar } from '../components/top-bar.js';
 import { Transcript } from '../components/transcript.js';
 import { allowedSidebarDensity, sidebarWidthFor, truncateToDisplayWidth } from '../render/width.js';
 import type { ModelCatalog } from '../ports.js';
-import type { ControllerPlanningHandoffView, SemanticEvent } from '../../../application/controller-service.js';
+import type {
+  ControllerHandoffView,
+  ControllerPlanningHandoffView,
+  SemanticEvent,
+} from '../../../application/controller-service.js';
 import type { TuiViewModel } from '../../../application/tui/view-model.js';
 import type { OverlayKind, TuiAction, TuiState } from '../state.js';
 import { draftFor, isComposerReadOnly } from '../state.js';
@@ -39,6 +44,8 @@ export type WorkspaceActions = {
   readonly selectModel: (configurationRef: string) => void;
   readonly confirmHandoff: () => void;
   readonly cancelHandoff: () => void;
+  readonly confirmExecutionHandoff: () => void;
+  readonly cancelExecutionHandoff: () => void;
   readonly closeTopOverlay: () => void;
 };
 
@@ -87,6 +94,14 @@ export function Workspace(props: WorkspaceProps) {
         mode={view.scope.mode}
         controlState={view.scope.controlState}
         graphLabel={view.graph === null ? null : `${view.graph.graphId} v${String(view.graph.graphVersion)}`}
+        generation={view.graph === null ? null : view.graph.generation}
+        authorizationLabel={
+          view.scope.authorization === null
+            ? null
+            : `${view.scope.authorization.authorizationId} v${String(view.scope.authorization.version)}`
+        }
+        activeWorkPackageCount={view.execution.activeWorkPackageCount}
+        reconciling={view.execution.reconciliation.pending}
         availableWidth={props.terminalWidth}
       />
       {ui.sidebarDensity === 'collapsed' ? (
@@ -120,6 +135,12 @@ export function Workspace(props: WorkspaceProps) {
             newlineHint={props.newlineHint}
             availableWidth={width}
           />
+          <ControlBar
+            controlState={view.scope.controlState}
+            hazards={view.execution.hazards}
+            pending={ui.pendingConfirmation}
+            availableWidth={width}
+          />
           <StatusLine
             scope={view.scope}
             compaction={view.compaction}
@@ -127,6 +148,7 @@ export function Workspace(props: WorkspaceProps) {
             blockerCount={view.blockers.length}
             notice={ui.notice}
             sidebarDensity={ui.sidebarDensity}
+            execution={view.execution}
             availableWidth={width}
           />
         </Box>
@@ -207,7 +229,32 @@ function Overlay(props: {
           availableWidth={parent.terminalWidth}
         />
       );
+    case 'execution-handoff-review':
+      return (
+        <HandoffReview
+          proposal={null}
+          responsibleSessionId={null}
+          executionHandoff={executionHandoffUnderReview(parent)}
+          targetAwaitingUserPrompt
+          onConfirm={parent.actions.confirmExecutionHandoff}
+          onCancel={parent.actions.cancelExecutionHandoff}
+          availableWidth={parent.terminalWidth}
+        />
+      );
   }
+}
+
+/**
+ * 正在审阅的 Execution Handoff。
+ *
+ * 只按记录 id 从快照里取：界面不构造交接记录，也不从 Session 关系推断一个。
+ */
+export function executionHandoffUnderReview(props: WorkspaceProps): ControllerHandoffView | null {
+  const handoffId = props.ui.executionHandoffReviewId;
+  if (handoffId === null) {
+    return null;
+  }
+  return props.viewModel.execution.handoffs.find((handoff) => handoff.handoffId === handoffId) ?? null;
 }
 
 /** Help 文本按 overlay 之外的方式显示；它只是一次性提示，不是页面。 */
@@ -217,7 +264,7 @@ export function HelpNotice(): ReactElement {
       <Text>Help</Text>
       <Text>Ctrl+P Command Palette · Ctrl+B Sidebar · Ctrl+G Graph Inspector</Text>
       <Text>Ctrl+T 展开/折叠最近一条工具记录 · Ctrl+A 进入回答模式</Text>
-      <Text>Esc 逐层关闭 · Ctrl+C 退出</Text>
+      <Text>Esc 逐层关闭 · Ctrl+C 退出（危险态先确认）· Cancel 需确认</Text>
     </Box>
   );
 }
