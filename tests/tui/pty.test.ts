@@ -401,7 +401,9 @@ app = render(
       app.unmount();
     },
   }),
-  { exitOnCtrlC: false },
+  // 与 src/bootstrap/tui-entry.ts 一致：Ink 7 的自动交互判定会被环境里的 CI=true 关掉，
+  // 导致真 TTY 下也不绘制任何帧。PTY 用例必须在任何 CI 环境下都真实渲染。
+  { exitOnCtrlC: false, interactive: true },
 );
 await app.waitUntilExit();
 `;

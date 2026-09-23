@@ -99,8 +99,8 @@ describe('session-interactions / Session Picker 与焦点约束', () => {
       text: '正在输入',
     });
     const arrived = reduceTuiState(typing, {
-      kind: 'event-arrived',
-      coordinatorSessionId: 'session-b',
+      kind: 'events-arrived',
+      coordinatorSessionIds: ['session-b'],
     });
 
     // 焦点不变：选中 Session 与草稿保持，另一 Session 只增加未读标记。
@@ -121,9 +121,9 @@ describe('session-interactions / Session Picker 与焦点约束', () => {
     expect(projected.find((session) => session.selected)?.coordinatorSessionId).toBe('session-a');
 
     // 重复事件不重复标记；当前 Session 的事件只做一次性 attention。
-    const again = reduceTuiState(arrived, { kind: 'event-arrived', coordinatorSessionId: 'session-b' });
+    const again = reduceTuiState(arrived, { kind: 'events-arrived', coordinatorSessionIds: ['session-b'] });
     expect(again.unreadSessionIds).toEqual(['session-b']);
-    const current = reduceTuiState(typing, { kind: 'event-arrived', coordinatorSessionId: 'session-a' });
+    const current = reduceTuiState(typing, { kind: 'events-arrived', coordinatorSessionIds: ['session-a'] });
     expect(current.unreadSessionIds).toEqual([]);
     expect(current.attention).toBe(true);
   });

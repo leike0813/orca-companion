@@ -270,7 +270,7 @@ test('初始化用例原子写入用户登记的身份绑定', () => {
   expect(scope.scope.canonicalWorktreePath).toBe('/tmp/orca-worktree');
 });
 
-test('当前 Git 身份从现场读取：完整 ref 与 canonical worktree，detached HEAD 单独表达', async () => {
+test('当前 Git 身份从现场读取：完整 ref、canonical worktree 与 worktree 类型，detached HEAD 单独表达', async () => {
   const repository = join(directory, 'repo');
   mkdirSync(repository);
   const git = (...args: string[]): string =>
@@ -290,6 +290,21 @@ test('当前 Git 身份从现场读取：完整 ref 与 canonical worktree，det
     kind: 'resolved',
     fullBranchRef: 'refs/heads/main',
     canonicalWorktreePath: realpathSync(repository),
+    worktreeKind: 'main',
+  });
+
+  // 链接 worktree 是另一个工作区，必须被识别出来，而不是当成主 worktree。
+  const linked = join(directory, 'linked');
+  git('worktree', 'add', '-q', '-b', 'worker', linked);
+  const linkedIdentity = await resolveGitScopeIdentity({
+    repositoryPath: linked,
+    env: process.env as Record<string, string>,
+  });
+  expect(linkedIdentity).toMatchObject({
+    kind: 'resolved',
+    fullBranchRef: 'refs/heads/worker',
+    canonicalWorktreePath: realpathSync(linked),
+    worktreeKind: 'linked',
   });
 
   git('checkout', '-q', '--detach');
@@ -299,5 +314,5 @@ test('当前 Git 身份从现场读取：完整 ref 与 canonical worktree，det
     env: process.env as Record<string, string>,
   });
   expect(detached).toEqual({ kind: 'detached' });
-  // 该用例要真实 git init + commit + detach；并行全量套件下 5s 上限会被机器负载吃掉。
+  // 该用例要真实 git init + commit + worktree add + detach；并行全量套件下 5s 上限会被机器负载吃掉。
 }, 30_000);

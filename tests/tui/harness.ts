@@ -139,6 +139,7 @@ export type FakePortsOptions = {
   readonly checks?: readonly WizardCheck[];
   readonly proposal?: WizardProposal;
   readonly initializeResult?: ControllerCommandResult;
+  readonly bindLegacyResult?: ControllerCommandResult;
   readonly executeResult?: ControllerCommandResult;
   readonly models?: readonly ModelConfigurationOption[];
   readonly modelCatalog?: Partial<ModelCatalog>;
@@ -191,6 +192,10 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
     initialize: (input) => {
       calls.push({ name: 'initialize', detail: input });
       return Promise.resolve(options.initializeResult ?? accepted);
+    },
+    bindLegacyIdentity: (coordinationScopeId) => {
+      calls.push({ name: 'bindLegacyIdentity', detail: coordinationScopeId });
+      return Promise.resolve(options.bindLegacyResult ?? accepted);
     },
   };
 

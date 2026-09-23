@@ -70,6 +70,7 @@ describe('高频事件有界刷新', () => {
     const fake = createFakePorts();
     const rendered = renderTui(fake.ports);
     await settle();
+    const framesBefore = rendered.frames.length;
 
     for (let index = 0; index < 200; index += 1) {
       fake.emit({
@@ -81,7 +82,16 @@ describe('高频事件有界刷新', () => {
         reason: `r${String(index)}`,
       });
     }
+    fake.emit({
+      eventId: 'event-199',
+      coordinatorSessionId: 'session-b',
+      kind: 'state-changed',
+      coordinationScopeId: 'scope-1',
+      revision: 199,
+      reason: 'duplicate-delivery',
+    });
     await settle(2);
+    expect(rendered.frames.length - framesBefore).toBeLessThan(EVENT_WINDOW);
 
     // 事件只进展示态，绝不触发领域动作。
     expect(fake.executeCount()).toBe(0);
@@ -103,6 +113,7 @@ describe('高频事件有界刷新', () => {
     // 窗口保留的是最新事件，最旧的已被裁掉。
     expect(frame).toContain('(r199)');
     expect(frame).not.toContain('(r0)');
+    expect(frame).not.toContain('duplicate-delivery');
     expect(fake.executeCount()).toBe(0);
 
     rendered.unmount();

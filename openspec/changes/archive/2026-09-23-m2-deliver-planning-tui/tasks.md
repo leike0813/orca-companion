@@ -15,11 +15,11 @@
 - [x] 3.1 按 IP-07 实现 Session Picker 与 Event Drawer 投影；运行 `pnpm test -- tests/tui/session-picker.test.tsx tests/tui/event-drawer.test.tsx` 确认默认选中待答 Session、事件不抢焦点、切换保留草稿、保活不进入时间线
 - [x] 3.2 按 IP-08 实现只读 Graph Inspector 与 Pending Interaction 内联卡片；运行 `pnpm test -- tests/tui/graph-inspector.test.tsx tests/tui/interaction-card.test.tsx` 确认导航与展开零写入、普通消息不满足待答问题、stale revision 被拒绝
 - [x] 3.3 按 D10、IP-11 在既有主视图与 Command Palette 接入 `/compact`、Model Picker 与 Route Planning Handoff，只投影 `CompactionOutcome`、维护状态/有限 cycle 上限、`PlanningHandoffProposal` 与 `awaiting_user_prompt`；运行 `pnpm exec vitest run tests/tui/session-lifecycle.test.tsx` 确认降级告警可见、耗尽后不再发起模型调用、运行中切换不被接受、cutover 后选中 Target、Capsule 失败显示 Scope blocker
-- [ ] 3.4 按 D2、D12、IP-04、IP-11 将现有 TUI ports 接到已归档前驱的真实 Scope/Session/压缩/模型/交接/事件端口，并提供 Handoff Target 选择；运行 `pnpm exec vitest run tests/tui/home.test.tsx tests/tui/host-wiring.test.ts tests/tui/session-lifecycle.test.tsx` 验证不再以占位拒绝替代可用能力
+- [x] 3.4 按 D2、D12、IP-04、IP-11 将现有 TUI ports 接到已归档前驱的真实 Scope/Session/压缩/模型/交接/事件端口，并提供 Handoff Target 选择；运行 `pnpm exec vitest run tests/tui/home.test.tsx tests/tui/host-wiring.test.ts tests/tui/session-lifecycle.test.tsx` 验证不再以占位拒绝替代可用能力
 
 ## 4. 零副作用与终端验收
 
 - [x] 4.1 按 IP-09 补齐组件测试并验证重挂载、resize 与高频事件批次无业务副作用；运行 `pnpm test -- tests/tui/no-side-effect.test.tsx` 确认恢复、派发与写入计数为 0，折叠态不计算详情
 - [x] 4.2 按 IP-10 在 `script -qec` 提供的 PTY 中补齐 resize 与启动退出用例，并记录只支持当前 Ubuntu 本机；运行 `pnpm test -- tests/tui/pty.test.ts` 确认 resize 后边框对齐、退出后终端恢复
-- [ ] 4.3 按 IP-11 在显式选择的隔离项目与专用身份中运行真实 PTY 规划 Handoff，Coordinator 显式使用 `minimax-cn/MiniMax-M3`；运行 `pnpm test -- tests/tui/pty-handoff.test.ts` 确认完成一次规划 Handoff 且 cutover 后 Target 处于 `awaiting_user_prompt`
-- [ ] 4.4 按 IP-01～IP-11 与 design D9、D10 收口，运行全量门禁 `pnpm typecheck && pnpm lint && pnpm test && pnpm build && openspec validate m2-deliver-planning-tui --strict`，确认全部通过且未新增计划外文件
+- [x] 4.3 按 IP-11 在显式选择的隔离项目与专用身份中运行真实 PTY 规划 Handoff，Coordinator 显式使用 `minimax-cn/MiniMax-M3`；运行 `pnpm test -- tests/tui/pty-handoff.test.ts` 确认完成一次规划 Handoff 且 cutover 后 Target 处于 `awaiting_user_prompt`
+- [x] 4.4 按 IP-01～IP-11 与 design D9、D10 收口，运行全量门禁 `pnpm typecheck && pnpm lint && pnpm test && pnpm build && openspec validate m2-deliver-planning-tui --strict`，确认全部通过且未新增计划外文件

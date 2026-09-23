@@ -59,13 +59,17 @@ describe('Home 的 Scope 恢复与查找', () => {
     expect(initializeCalls(fake)).toBe(0);
   });
 
-  test('Scenario: 多个 Scope 时列出候选并要求显式选择，不自动绑定或创建', async () => {
+  test('Scenario: 旧未绑定记录要求显式确认一次性迁移，未确认前不进入', async () => {
     const candidates: readonly ScopeCandidate[] = [
       { coordinationScopeId: 'scope-1', mode: 'route_planning', controlState: 'active' },
       { coordinationScopeId: 'scope-2', mode: 'route_planning', controlState: 'paused' },
     ];
     const fake = createFakePorts({
-      home: { kind: 'choose', candidates },
+      home: {
+        kind: 'legacy',
+        candidates,
+        binding: { fullBranchRef: 'refs/heads/main', canonicalWorktreePath: '/tmp/repo' },
+      },
       snapshot: { coordinationScopeId: 'scope-2' },
     });
     const rendered = renderTui(fake.ports);
@@ -75,18 +79,58 @@ describe('Home 的 Scope 恢复与查找', () => {
     for (const candidate of candidates) {
       expect(frame).toContain(candidate.coordinationScopeId);
     }
-    // 未选择前不进入任何 Scope：既不加载快照，也不创建。
+    // 未确认前不进入任何 Scope：既不加载快照，也不写绑定，也不创建。
     expect(snapshotCalls(fake)).toBe(0);
     expect(initializeCalls(fake)).toBe(0);
+    expect(fake.calls.filter((call) => call.name === 'bindLegacyIdentity')).toHaveLength(0);
 
     rendered.stdin.write('\u001B[B');
     await settle(4);
+    // 选中 scope-2 后 Enter 只打开 Review，仍不写绑定、不进入 Scope。
+    rendered.stdin.write('\r');
+    await settle(6);
+
+    const review = rendered.lastFrame() ?? '';
+    expect(review).toContain('迁移 Review');
+    expect(review).toContain('refs/heads/main');
+    expect(snapshotCalls(fake)).toBe(0);
+    expect(fake.calls.filter((call) => call.name === 'bindLegacyIdentity')).toHaveLength(0);
+
+    // Review 内确认后才提交一次迁移，并把该 Scope 作为当前 Scope 加载。
     rendered.stdin.write('\r');
     await settle(12);
 
+    expect(fake.calls.filter((call) => call.name === 'bindLegacyIdentity').map((call) => call.detail)).toEqual([
+      'scope-2',
+    ]);
     expect(snapshotCalls(fake)).toBeGreaterThan(0);
     expect(initializeCalls(fake)).toBe(0);
     expect(rendered.lastFrame() ?? '').toContain('scope-2');
+  });
+
+  test('迁移被拒绝时停留在 Review 并显示结构化原因，不进入 Scope', async () => {
+    const fake = createFakePorts({
+      home: {
+        kind: 'legacy',
+        candidates: [{ coordinationScopeId: 'scope-1', mode: 'route_planning', controlState: 'active' }],
+        binding: { fullBranchRef: 'refs/heads/main', canonicalWorktreePath: '/tmp/repo' },
+      },
+      bindLegacyResult: {
+        kind: 'rejected',
+        code: 'constraint',
+        message: '该 Scope 已经使用过 Runtime Lease，不能补齐身份绑定',
+      },
+    });
+    const rendered = renderTui(fake.ports);
+    await settle(12);
+
+    rendered.stdin.write('\r');
+    await settle(4);
+    rendered.stdin.write('\r');
+    await settle(8);
+
+    expect(rendered.lastFrame() ?? '').toContain('constraint');
+    expect(snapshotCalls(fake)).toBe(0);
   });
 
   test('窄屏下候选仍逐条列出且身份可辨（直接渲染 Home 并显式传宽）', async () => {
@@ -96,8 +140,11 @@ describe('Home 的 Scope 恢复与查找', () => {
     ];
     const rendered = renderComponent(
       createElement(Home, {
-        resolution: { kind: 'choose', candidates },
-        onSelectScope: () => undefined,
+        resolution: {
+          kind: 'legacy',
+          candidates,
+          binding: { fullBranchRef: 'refs/heads/main', canonicalWorktreePath: '/tmp/repo' },
+        },
         onStartWizard: () => undefined,
         availableWidth: 12,
       }),

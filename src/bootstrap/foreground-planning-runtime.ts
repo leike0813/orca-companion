@@ -44,7 +44,7 @@ import {
 } from '../application/coordinator/runtime-guard.js';
 import { submitUserMessage } from '../application/coordinator/user-message.js';
 import { renewRuntimeLease } from '../application/coordination/lease-service.js';
-import { initializeCoordinationScope } from '../application/planning/initialize-scope.js';
+import { bindScopeIdentity, initializeCoordinationScope } from '../application/planning/initialize-scope.js';
 import {
   activationGate,
   cancelPlanningHandoff,
@@ -171,6 +171,7 @@ const PLANNING_MUTATION_CATEGORIES: ReadonlySet<string> = new Set([
 export type ForegroundPlanningFailureCode =
   | 'repository_unresolved'
   | 'detached_head'
+  | 'worktree_not_canonical'
   | 'config_unavailable'
   | 'store_unavailable'
   | 'scope_unavailable'
@@ -296,6 +297,13 @@ export async function createForegroundPlanningHost(
       };
     } else if (identity.kind === 'failed') {
       blocker = { code: 'repository_unresolved', message: identity.message };
+    } else if (identity.worktreeKind === 'linked') {
+      // Scope 身份是「repository + ref + canonical worktree」的组合：从 Worker worktree 恢复会拿到
+      // 另一个身份，因此这里拒绝而不是把链接 worktree 当成主 worktree。
+      blocker = {
+        code: 'worktree_not_canonical',
+        message: `当前目录是链接 worktree（${identity.canonicalWorktreePath}）：Scope 身份绑定在 canonical worktree 上，请从主工作区启动`,
+      };
     } else {
       fullBranchRef = identity.fullBranchRef;
       canonicalWorktreePath = identity.canonicalWorktreePath;
@@ -361,7 +369,7 @@ export async function createForegroundPlanningHost(
 
   /**
    * Home 解析：以 Git common dir 找到 store，再以**当前完整 ref 与登记的 canonical worktree**精确匹配。
-   * 没有匹配就进入向导；仍存在未绑定的旧记录时列出候选等待用户显式选择，绝不按数量推断身份。
+   * 没有匹配就进入向导；缺少绑定的旧记录要求用户先确认一次性迁移，绝不按数量推断身份。
    */
   const resolveHome = (): HomeResolution => {
     if (blocker !== null) {
@@ -371,6 +379,10 @@ export async function createForegroundPlanningHost(
     if (current === null) {
       return { kind: 'failed', code: 'store_unavailable', message: 'Branch Coordination State 不可用' };
     }
+    if (fullBranchRef === null || canonicalWorktreePath === null) {
+      // 没有可核验的 Git 身份时不做任何匹配：拿空值去比对等于猜身份。
+      return { kind: 'failed', code: 'repository_unresolved', message: '缺少可核验的 Git 身份' };
+    }
     const scopes = current.query({ kind: 'scopes' });
     if (scopes.kind !== 'scopes') {
       return {
@@ -379,12 +391,13 @@ export async function createForegroundPlanningHost(
         message: scopes.kind === 'rejected' ? scopes.message : '无法读取 Coordination Scope 列表',
       };
     }
+    const currentWorktree = canonicalPath(canonicalWorktreePath);
     const matches = scopes.scopes.filter(
       (scope) =>
         scope.fullBranchRef !== null &&
         scope.canonicalWorktreePath !== null &&
         scope.fullBranchRef === fullBranchRef &&
-        canonicalPath(scope.canonicalWorktreePath) === canonicalPath(canonicalWorktreePath ?? ''),
+        canonicalPath(scope.canonicalWorktreePath) === currentWorktree,
     );
     const matched = matches[0];
     if (matched !== undefined) {
@@ -393,13 +406,15 @@ export async function createForegroundPlanningHost(
     }
     const unbound = scopes.scopes.filter((scope) => scope.fullBranchRef === null);
     if (unbound.length > 0) {
+      // 旧记录缺少绑定：只列出候选并要求用户在 Review 里确认一次性迁移，这里不进入任何 Scope。
       return {
-        kind: 'choose',
+        kind: 'legacy',
         candidates: unbound.map((scope) => ({
           coordinationScopeId: scope.coordinationScopeId,
           mode: scope.mode,
           controlState: scope.controlState,
         })),
+        binding: { fullBranchRef, canonicalWorktreePath },
       };
     }
     return { kind: 'wizard' };
@@ -436,7 +451,11 @@ export async function createForegroundPlanningHost(
 
   const orcaProbe =
     options.orcaProbe ??
-    createOrcaDoctorProbe({ cwd: options.repositoryPath, env: options.env });
+    createOrcaDoctorProbe({
+      cwd: options.repositoryPath,
+      env: options.env,
+      identityWorktreePath: canonicalWorktreePath ?? options.repositoryPath,
+    });
 
   const trackerFor = (): IssueTrackerGateway | null =>
     trackerFactory({ cwd: canonicalWorktreePath ?? options.repositoryPath, env: options.env });
@@ -1873,6 +1892,53 @@ export async function createForegroundPlanningHost(
     },
     proposal: () => Promise.resolve(wizardProposal()),
     initialize: (proposal): Promise<ControllerCommandResult> => Promise.resolve(initializeScope(proposal)),
+    bindLegacyIdentity: (coordinationScopeId): Promise<ControllerCommandResult> =>
+      Promise.resolve(bindLegacyIdentity(coordinationScopeId)),
+  };
+
+  /**
+   * 旧 Scope 的一次性身份绑定。
+   *
+   * 只在用户于 Home 的 Review 里明确确认后调用：写入的绑定就是当前 Git 身份，`expectedRevision` 是刚读到的
+   * Scope revision，与库内不一致即按 stale 拒绝，不从 cwd 猜值。绑定成功后本进程才把该 Scope 登记为当前
+   * Scope——在这之前 Home 不会进入它。
+   */
+  const bindLegacyIdentity = (coordinationScopeId: string): ControllerCommandResult => {
+    if (blocker !== null) {
+      return rejected(blocker.code, blocker.message);
+    }
+    if (fullBranchRef === null || canonicalWorktreePath === null) {
+      return rejected('scope_unavailable', '缺少可核验的 Git 身份');
+    }
+    const current = requiredStore();
+    const scope = scopeRecord(coordinationScopeId as CoordinationScopeId);
+    if (scope === null) {
+      return rejected('not_found', `Coordination Scope ${coordinationScopeId} 不存在`);
+    }
+    const sessions = current.query({ kind: 'sessions', coordinationScopeId: scope.coordinationScopeId });
+    const session = sessions.kind === 'sessions' ? sessions.sessions[0] : undefined;
+    if (session === undefined) {
+      return rejected('invalid_state', `Coordination Scope ${coordinationScopeId} 没有可用的 Coordinator Session`);
+    }
+    const bound = bindScopeIdentity({
+      store: current,
+      coordinationScopeId: scope.coordinationScopeId,
+      coordinatorSessionId: session.coordinatorSessionId,
+      expectedRevision: scope.revision,
+      fullBranchRef,
+      canonicalWorktreePath,
+    });
+    if (bound.kind === 'rejected') {
+      return rejected(bound.code, bound.message);
+    }
+    selectedScopeId = scope.coordinationScopeId;
+    publish(null, {
+      kind: 'state-changed',
+      coordinationScopeId: scope.coordinationScopeId,
+      revision: bound.revision,
+      reason: 'scope-identity-bound',
+    });
+    return accepted(`已为旧记录 ${coordinationScopeId} 补齐身份绑定`, bound.revision);
   };
 
   /**

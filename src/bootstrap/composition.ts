@@ -123,12 +123,16 @@ export async function resolveGitCommonDir(options: ResolveGitCommonDirOptions): 
   };
 }
 
+/** 当前 worktree 的相对身份：`main` 是仓库主 worktree，`linked` 是 `git worktree add` 出来的链接 worktree。 */
+export type GitWorktreeKind = 'main' | 'linked';
+
 /** 当前 Git 身份的实时读取结果；`detached` 不是失败，而是「没有 branch ref 可登记」。 */
 export type GitScopeIdentity =
   | {
       readonly kind: 'resolved';
       readonly fullBranchRef: string;
       readonly canonicalWorktreePath: string;
+      readonly worktreeKind: GitWorktreeKind;
     }
   | { readonly kind: 'detached' }
   | { readonly kind: 'failed'; readonly message: string };
@@ -136,9 +140,10 @@ export type GitScopeIdentity =
 /**
  * 读取当前工作区的完整 branch ref 与 canonical worktree 路径。
  *
- * 两个事实都来自 Git：`symbolic-ref` 给出完整 ref（而不是 `git branch --show-current` 的短名），
- * `rev-parse --show-toplevel` 给出该 worktree 的根。detached HEAD 明确区分出来，因为此时没有任何
- * branch ref 可以被登记——猜一个「最近用过的分支」正是要避免的事。
+ * 三个事实都来自 Git：`symbolic-ref` 给出完整 ref（而不是 `git branch --show-current` 的短名），
+ * `rev-parse --show-toplevel` 给出该 worktree 的根，`--git-dir` 与 `--git-common-dir` 的差异给出
+ * 「这是不是仓库主 worktree」——linked worktree 的 git dir 位于 common dir 之外。detached HEAD 明确
+ * 区分出来，因为此时没有任何 branch ref 可以被登记——猜一个「最近用过的分支」正是要避免的事。
  */
 export async function resolveGitScopeIdentity(
   options: ResolveGitCommonDirOptions,
@@ -173,7 +178,34 @@ export async function resolveGitScopeIdentity(
     return { kind: 'failed', message: 'git rev-parse --show-toplevel 没有输出路径' };
   }
   const absolute = isAbsolute(reported) ? reported : resolve(options.repositoryPath, reported);
-  return { kind: 'resolved', fullBranchRef, canonicalWorktreePath: canonicalPath(absolute) };
+
+  // 主 worktree 与 linked worktree 的唯一结构性差别：git dir 是否就是 common dir。
+  const dirs = await runGit(options, ['rev-parse', '--git-dir', '--git-common-dir']);
+  if (dirs.kind === 'failed') {
+    return dirs;
+  }
+  if (dirs.exitCode !== 0) {
+    const detail = dirs.stderr.trim();
+    return {
+      kind: 'failed',
+      message: detail.length > 0 ? detail : `git rev-parse --git-dir --git-common-dir 退出码 ${dirs.exitCode}`,
+    };
+  }
+  const [gitDirReported, commonDirReported] = dirs.stdout.trim().split('\n');
+  if (gitDirReported === undefined || commonDirReported === undefined) {
+    return { kind: 'failed', message: 'git rev-parse --git-dir --git-common-dir 没有输出两个路径' };
+  }
+  const gitDir = canonicalPath(isAbsolute(gitDirReported) ? gitDirReported : resolve(options.repositoryPath, gitDirReported));
+  const commonDir = canonicalPath(
+    isAbsolute(commonDirReported) ? commonDirReported : resolve(options.repositoryPath, commonDirReported),
+  );
+
+  return {
+    kind: 'resolved',
+    fullBranchRef,
+    canonicalWorktreePath: canonicalPath(absolute),
+    worktreeKind: gitDir === commonDir ? 'main' : 'linked',
+  };
 }
 
 /** worktree 路径按符号链接解析后比较：同一个目录的不同写法必须命中同一个 Scope。 */

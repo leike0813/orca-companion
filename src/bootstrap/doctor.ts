@@ -288,6 +288,8 @@ export type OrcaDoctorProbeEnvironment = {
   readonly cwd: string;
   readonly env: Readonly<Record<string, string>>;
   readonly executable?: string;
+  /** 前台 Scope 的调用者身份只从该 canonical worktree 的终端中选择。 */
+  readonly identityWorktreePath?: string;
   /** 显式指定的协调身份引用；缺省时使用刚核验过存活的活动终端句柄。 */
   readonly coordinatorIdentityRef?: string;
   /**
@@ -364,7 +366,12 @@ export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): 
       return { ok: true, value: result.value as readonly HostFacts[] };
     },
     readCoordinatorIdentity: async () => {
-      const listed = await backend.query({ operation: 'terminal-list' });
+      const listed = await backend.query({
+        operation: 'terminal-list',
+        ...(environment.identityWorktreePath === undefined
+          ? {}
+          : { worktree: `path:${environment.identityWorktreePath}` }),
+      });
       if (listed.kind !== 'accepted') {
         return stepFromRejection(listed.code, listed.message);
       }

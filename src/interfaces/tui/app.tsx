@@ -13,7 +13,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { resolveGlobalAction } from './input/keymap.js';
 import { allowedSidebarDensity } from './render/width.js';
-import { draftFor, initialTuiState, isComposerReadOnly, reduceTuiState, type TuiAction, type TuiState } from './state.js';
+import {
+  draftFor,
+  initialTuiState,
+  isComposerReadOnly,
+  reduceTuiState,
+  type OverlayKind,
+  type TuiAction,
+  type TuiState,
+} from './state.js';
 import { Home } from './screens/home.js';
 import { Wizard, allChecksPassed } from './screens/wizard.js';
 import { Workspace, type WorkspaceActions } from './screens/workspace.js';
@@ -58,6 +66,37 @@ export type TuiAppProps = {
   readonly onExit: () => void;
 };
 
+/**
+ * 覆盖层的选择光标。
+ *
+ * `useState` 在一次渲染批次里读到的仍是旧值：同一批按键里的 `Down, Down` 会两次都基于同一个
+ * `paletteSelection` 计算，结果只移动一格。输入处理必须读同步事实源，因此这里用 ref 承载当前索引，
+ * state 只负责触发重渲染。
+ */
+export type SelectionCursor = {
+  readonly current: () => number;
+  /** 按方向键移动；`maximum` 是允许的最大索引（含）。 */
+  readonly move: (delta: number, maximum: number) => void;
+  readonly set: (index: number) => void;
+};
+
+function useSelectionCursor(initial = 0): SelectionCursor & { readonly value: number } {
+  const [value, setValue] = useState(initial);
+  const ref = useRef(initial);
+  const set = useCallback((index: number) => {
+    ref.current = index;
+    setValue(index);
+  }, []);
+  const move = useCallback(
+    (delta: number, maximum: number) => {
+      set(Math.min(Math.max(0, ref.current + delta), Math.max(0, maximum)));
+    },
+    [set],
+  );
+  const current = useCallback(() => ref.current, []);
+  return { value, current, move, set };
+}
+
 function resultNotice(result: ControllerCommandResult): string | null {
   switch (result.kind) {
     case 'accepted':
@@ -82,28 +121,39 @@ export function TuiApp(props: TuiAppProps) {
   const [transcript, setTranscript] = useState<ControllerTranscriptPage | null>(null);
   const [home, setHome] = useState<HomeResolution | null>(null);
   const [candidates, setCandidates] = useState<readonly ScopeCandidate[]>([]);
-  const [homeSelection, setHomeSelection] = useState(0);
+  const homeSelection = useSelectionCursor();
+  /** 迁移被拒绝时的结构化原因；Review 已由 `screen` 表达，这里只留展示文案。 */
+  const [legacyNotice, setLegacyNotice] = useState<string | null>(null);
   const [checks, setChecks] = useState<readonly WizardCheck[] | null>(null);
   const [proposal, setProposal] = useState<WizardProposal | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [blocker, setBlocker] = useState<string | null>(null);
   const [scopeId, setScopeId] = useState<string | null>(props.initialScopeId);
-  const [paletteSelection, setPaletteSelection] = useState(0);
-  const [sessionPickerSelection, setSessionPickerSelection] = useState(0);
-  const [modelSelection, setModelSelection] = useState(0);
+  const paletteSelection = useSelectionCursor();
+  const sessionPickerSelection = useSelectionCursor();
+  const modelSelection = useSelectionCursor();
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog>(EMPTY_MODEL_CATALOG);
   const [modelRejection, setModelRejection] = useState<string | null>(null);
   const [handoffProposalId, setHandoffProposalId] = useState<string | null>(null);
   /** 向导初始化的同步闩锁：初始化必须恰好一次，不能靠异步 state 挡重复确认。 */
   const wizardSubmittingRef = useRef(false);
 
-  const dispatch = useCallback((action: TuiAction) => {
-    setState((current) => reduceTuiState(current, action));
-  }, []);
-
   /** 最新的展示态镜像：输入回调与异步加载需要读取它，但不应因此重建监听器。 */
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  /**
+   * 展示态的唯一写入口。
+   *
+   * 同时把结果写回 `stateRef`：一次按键批次可能在同一帧里连续投递多个键（粘贴、连击、PTY 批量写入），
+   * 若只有 `setState`，下一次按键读到的仍是旧渲染里的状态——`Ctrl+P` 紧跟方向键就会把命令投给 composer。
+   */
+  const dispatch = useCallback((action: TuiAction) => {
+    const next = reduceTuiState(stateRef.current, action);
+    stateRef.current = next;
+    setState(next);
+  }, []);
+
   const scopeIdRef = useRef(scopeId);
   scopeIdRef.current = scopeId;
 
@@ -132,6 +182,10 @@ export function TuiApp(props: TuiAppProps) {
   // 挂载时解析 Home 并订阅事件；这两件事都只读，重挂载不会产生业务副作用。
   useEffect(() => {
     let cancelled = false;
+    let pendingEvents: SemanticEvent[] = [];
+    const pendingSessionIds = new Set<string | null>();
+    const seenEventIds = new Set<string>();
+    let flushScheduled = false;
     void (async () => {
       if (scopeIdRef.current !== null) {
         return;
@@ -144,15 +198,42 @@ export function TuiApp(props: TuiAppProps) {
       if (resolution.kind === 'restore') {
         setScopeId(resolution.coordinationScopeId);
       }
-      if (resolution.kind === 'choose') {
+      if (resolution.kind === 'legacy') {
         setCandidates(resolution.candidates);
       }
     })();
     const unsubscribe = ports.subscribe((event) => {
-      setEvents((current) => [...current, event].slice(-EVENT_WINDOW));
-      // 未读标记只作用于事件归属的那个 Session：Scope 级事件（归属为 null）不标记任何 Session，
-      // 也不会抢占当前 transcript 或 composer。
-      dispatch({ kind: 'event-arrived', coordinatorSessionId: event.coordinatorSessionId });
+      if (seenEventIds.has(event.eventId)) {
+        return;
+      }
+      seenEventIds.add(event.eventId);
+      // ponytail: 只去重最近 20 个窗口；若跨更长时段重放，改用来源游标。
+      if (seenEventIds.size > EVENT_WINDOW * 20) {
+        const oldest = seenEventIds.values().next().value;
+        if (oldest !== undefined) {
+          seenEventIds.delete(oldest);
+        }
+      }
+      pendingEvents.push(event);
+      pendingEvents = pendingEvents.slice(-EVENT_WINDOW);
+      pendingSessionIds.add(event.coordinatorSessionId);
+      if (flushScheduled) {
+        return;
+      }
+      flushScheduled = true;
+      queueMicrotask(() => {
+        if (cancelled) {
+          return;
+        }
+        // 同一轮投递只刷新一次；窗口与去重集合都保持有界。
+        const batch = pendingEvents;
+        const sessionIds = [...pendingSessionIds];
+        pendingEvents = [];
+        pendingSessionIds.clear();
+        flushScheduled = false;
+        setEvents((current) => [...current, ...batch].slice(-EVENT_WINDOW));
+        dispatch({ kind: 'events-arrived', coordinatorSessionIds: sessionIds });
+      });
     });
     return () => {
       cancelled = true;
@@ -315,7 +396,7 @@ export function TuiApp(props: TuiAppProps) {
           const current = sessions.findIndex(
             (session) => session.coordinatorSessionId === stateRef.current.selectedSessionId,
           );
-          setSessionPickerSelection(current < 0 ? 0 : current);
+          sessionPickerSelection.set(current < 0 ? 0 : current);
           dispatch({ kind: 'overlay-open', overlay: 'session-picker' });
           return;
         }
@@ -408,7 +489,26 @@ export function TuiApp(props: TuiAppProps) {
     setBlocker(resultNotice(result) ?? '初始化被拒绝');
   }, [checks, proposal, ports]);
 
-  const topOverlay = state.overlayStack.at(-1) ?? null;
+  /**
+   * 旧记录的一次性迁移：只有用户在 Review 里确认后才提交。成功时宿主已经写入绑定并把它登记为当前
+   * Scope，界面随后才切换到它；失败时停留在 Review 并显示结构化原因。
+   */
+  const confirmLegacyScope = useCallback(
+    async (coordinationScopeId: string) => {
+      const result = await ports.scopeSetup.bindLegacyIdentity(coordinationScopeId);
+      if (result.kind === 'accepted') {
+        setLegacyNotice(null);
+        setScopeId(coordinationScopeId);
+        return;
+      }
+      setLegacyNotice(resultNotice(result) ?? '迁移被拒绝');
+    },
+    [ports],
+  );
+
+  // 路由必须读**同步镜像**：同一批按键里 `Ctrl+P` 之后紧跟的方向键/Enter 不能等到下一次渲染才知道
+  // 覆盖层已经打开（那会把命令投给 composer）。渲染本身仍用下面 `state` 派生出的值。
+  const topOverlay = (): OverlayKind | null => stateRef.current.overlayStack.at(-1) ?? null;
   const workspaceActions: WorkspaceActions = {
     dispatch,
     composerChange: (text) => {
@@ -469,13 +569,13 @@ export function TuiApp(props: TuiAppProps) {
         dispatch({ kind: 'overlay-close-top' });
         return;
       }
-      if (stateRef.current.screen === 'wizard') {
+      if (stateRef.current.screen === 'wizard' || stateRef.current.screen === 'legacy-review') {
         dispatch({ kind: 'screen', screen: 'home' });
       }
       return;
     }
     if (action === 'command-palette') {
-      setPaletteSelection(0);
+      paletteSelection.set(0);
       dispatch({ kind: 'overlay-open', overlay: 'command-palette' });
       return;
     }
@@ -507,29 +607,46 @@ export function TuiApp(props: TuiAppProps) {
       return;
     }
 
+    if (stateRef.current.screen === 'legacy-review') {
+      // Review 屏只接受 Enter（确认迁移）；Esc 由上面的通用分支退回候选列表。
+      if (key.return === true) {
+        const candidate = candidates[homeSelection.current()];
+        if (candidate !== undefined) {
+          void confirmLegacyScope(candidate.coordinationScopeId);
+        }
+      }
+      return;
+    }
     if (stateRef.current.screen === 'home') {
-      handleHomeKey(input, key, { candidates, homeSelection, setHomeSelection, dispatch, setScopeId, onStartWizard: () => { dispatch({ kind: 'screen', screen: 'wizard' }); void runChecks(); } });
+      handleHomeKey(input, key, {
+        candidates,
+        cursor: homeSelection,
+        onOpenLegacyReview: () => dispatch({ kind: 'screen', screen: 'legacy-review' }),
+        onStartWizard: () => {
+          dispatch({ kind: 'screen', screen: 'wizard' });
+          void runChecks();
+        },
+      });
       return;
     }
     if (stateRef.current.screen === 'wizard') {
       handleWizardKey(input, key, { runChecks, confirmWizard });
       return;
     }
-    if (topOverlay === 'command-palette') {
-      handlePaletteKey(key, { commands: COMMAND_IDS, paletteSelection, setPaletteSelection, run: (command) => { void runCommand(command); } });
+    if (topOverlay() === 'command-palette') {
+      handlePaletteKey(key, { commands: COMMAND_IDS, cursor: paletteSelection, run: (command) => { void runCommand(command); } });
       return;
     }
-    if (topOverlay === 'model-picker') {
+    if (topOverlay() === 'model-picker') {
       handleModelKey(key, {
         options: modelCatalog.options,
-        selection: modelSelection,
-        setSelection: setModelSelection,
+        cursor: modelSelection,
         // 准入不满足时 Enter 不提交：界面不替 Controller 猜「也许可以」。
         select: modelSwitchAdmission(modelCatalog).allowed ? workspaceActions.selectModel : () => undefined,
       });
       return;
     }
-    if (topOverlay === 'graph-inspector') {
+    if (topOverlay() === 'graph-inspector') {
       handleInspectorKey(key, {
         nodes: viewModelRef.current?.graph?.nodes ?? [],
         selection: stateRef.current.inspectorSelection,
@@ -537,11 +654,10 @@ export function TuiApp(props: TuiAppProps) {
       });
       return;
     }
-    if (topOverlay === 'session-picker') {
+    if (topOverlay() === 'session-picker') {
       handleSessionPickerKey(key, {
         sessions: viewModelRef.current?.sessions.map((session) => session.coordinatorSessionId) ?? [],
-        selection: sessionPickerSelection,
-        setSelection: setSessionPickerSelection,
+        cursor: sessionPickerSelection,
         select: workspaceActions.selectSession,
       });
       return;
@@ -555,9 +671,9 @@ export function TuiApp(props: TuiAppProps) {
       dispatch({ kind: 'tool-toggled', entryId: lastTool.id });
       return;
     }
-    if (topOverlay !== null) {
+    if (topOverlay() !== null) {
       // 其余 overlay 只支持 Esc（已在上面处理）与 Enter 的默认动作。
-      if (key.return === true && topOverlay === 'handoff-review') {
+      if (key.return === true && topOverlay() === 'handoff-review') {
         void confirmHandoff();
       }
       return;
@@ -570,11 +686,13 @@ export function TuiApp(props: TuiAppProps) {
     });
   });
 
-  if (state.screen === 'home') {
+  if (state.screen === 'home' || state.screen === 'legacy-review') {
     return (
       <Home
         resolution={home}
-        onSelectScope={(id) => setScopeId(id)}
+        selectedIndex={homeSelection.value}
+        reviewingLegacy={state.screen === 'legacy-review'}
+        notice={legacyNotice}
         onStartWizard={() => {
           dispatch({ kind: 'screen', screen: 'wizard' });
           void runChecks();
@@ -621,8 +739,8 @@ export function TuiApp(props: TuiAppProps) {
       actions={workspaceActions}
       modelCatalog={modelCatalog}
       modelRejection={modelRejection}
-      paletteSelection={paletteSelection}
-      modelSelection={modelSelection}
+      paletteSelection={paletteSelection.value}
+      modelSelection={modelSelection.value}
       composerDisabledReason={
         viewModel.compaction?.status === 'context_exhausted'
           ? 'context_exhausted：已停止发起新的模型调用'
@@ -639,36 +757,40 @@ export function TuiApp(props: TuiAppProps) {
 
 type HomeKeyContext = {
   readonly candidates: readonly ScopeCandidate[];
-  readonly homeSelection: number;
-  readonly setHomeSelection: (index: number) => void;
-  readonly dispatch: (action: TuiAction) => void;
-  readonly setScopeId: (coordinationScopeId: string) => void;
+  readonly cursor: SelectionCursor;
+  readonly onOpenLegacyReview: () => void;
   readonly onStartWizard: () => void;
 };
 
+/**
+ * Home 的键位：候选列表只列出**缺少绑定的旧记录**，因此 Enter 一律先打开迁移 Review，
+ * 绝不直接进入某个 Scope。
+ */
 function handleHomeKey(
   input: string,
   key: { readonly upArrow?: boolean; readonly downArrow?: boolean; readonly return?: boolean },
   context: HomeKeyContext,
 ): void {
   if (key.upArrow === true) {
-    context.setHomeSelection(Math.max(0, context.homeSelection - 1));
+    context.cursor.move(-1, context.candidates.length - 1);
     return;
   }
   if (key.downArrow === true) {
-    context.setHomeSelection(Math.min(context.candidates.length - 1, context.homeSelection + 1));
+    context.cursor.move(1, context.candidates.length - 1);
     return;
   }
   if (input === 'n') {
     context.onStartWizard();
     return;
   }
-  if (key.return === true) {
-    const candidate = context.candidates[context.homeSelection];
-    if (candidate !== undefined) {
-      context.setScopeId(candidate.coordinationScopeId);
-    }
+  if (key.return !== true) {
+    return;
   }
+  if (context.candidates[context.cursor.current()] === undefined) {
+    return;
+  }
+  // 候选只列出缺少绑定的旧记录：Enter 一律先打开迁移 Review，绝不直接进入某个 Scope。
+  context.onOpenLegacyReview();
 }
 
 function handleWizardKey(
@@ -689,21 +811,20 @@ function handlePaletteKey(
   key: { readonly upArrow?: boolean; readonly downArrow?: boolean; readonly return?: boolean },
   context: {
     readonly commands: readonly CommandId[];
-    readonly paletteSelection: number;
-    readonly setPaletteSelection: (index: number) => void;
+    readonly cursor: SelectionCursor;
     readonly run: (command: CommandId) => void;
   },
 ): void {
   if (key.upArrow === true) {
-    context.setPaletteSelection(Math.max(0, context.paletteSelection - 1));
+    context.cursor.move(-1, context.commands.length - 1);
     return;
   }
   if (key.downArrow === true) {
-    context.setPaletteSelection(Math.min(context.commands.length - 1, context.paletteSelection + 1));
+    context.cursor.move(1, context.commands.length - 1);
     return;
   }
   if (key.return === true) {
-    const command = context.commands[context.paletteSelection];
+    const command = context.commands[context.cursor.current()];
     if (command !== undefined) {
       context.run(command);
     }
@@ -768,21 +889,20 @@ function handleSessionPickerKey(
   key: { readonly upArrow?: boolean; readonly downArrow?: boolean; readonly return?: boolean },
   context: {
     readonly sessions: readonly string[];
-    readonly selection: number;
-    readonly setSelection: (index: number) => void;
+    readonly cursor: SelectionCursor;
     readonly select: (coordinatorSessionId: string) => void;
   },
 ): void {
   if (key.upArrow === true) {
-    context.setSelection(Math.max(0, context.selection - 1));
+    context.cursor.move(-1, context.sessions.length - 1);
     return;
   }
   if (key.downArrow === true) {
-    context.setSelection(Math.min(context.sessions.length - 1, context.selection + 1));
+    context.cursor.move(1, context.sessions.length - 1);
     return;
   }
   if (key.return === true) {
-    const session = context.sessions[context.selection];
+    const session = context.sessions[context.cursor.current()];
     if (session !== undefined) {
       context.select(session);
     }
@@ -793,21 +913,20 @@ function handleModelKey(
   key: { readonly upArrow?: boolean; readonly downArrow?: boolean; readonly return?: boolean },
   context: {
     readonly options: readonly ModelCatalog['options'][number][];
-    readonly selection: number;
-    readonly setSelection: (index: number) => void;
+    readonly cursor: SelectionCursor;
     readonly select: (configurationRef: string) => void;
   },
 ): void {
   if (key.upArrow === true) {
-    context.setSelection(Math.max(0, context.selection - 1));
+    context.cursor.move(-1, context.options.length - 1);
     return;
   }
   if (key.downArrow === true) {
-    context.setSelection(Math.min(context.options.length - 1, context.selection + 1));
+    context.cursor.move(1, context.options.length - 1);
     return;
   }
   if (key.return === true) {
-    const option = context.options[context.selection];
+    const option = context.options[context.cursor.current()];
     if (option !== undefined) {
       context.select(option.configurationRef);
     }

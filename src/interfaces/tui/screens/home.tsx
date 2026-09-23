@@ -13,7 +13,12 @@ import type { HomeResolution } from '../ports.js';
 export type HomeProps = {
   /** `null` 表示解析尚未返回；界面显示载入态而不是假设「没有 Scope」。 */
   readonly resolution: HomeResolution | null;
-  readonly onSelectScope: (coordinationScopeId: string) => void;
+  /** 旧记录候选列表里的选中项；Review 只作用于它。 */
+  readonly selectedIndex?: number;
+  /** 是否已打开迁移 Review。未确认前界面不进入任何 Scope。 */
+  readonly reviewingLegacy?: boolean;
+  /** 迁移被拒绝时的结构化原因；Review 内展示。 */
+  readonly notice?: string | null;
   readonly onStartWizard: () => void;
   readonly availableWidth: number;
 };
@@ -36,20 +41,42 @@ export function Home(props: HomeProps) {
           <Text>{`恢复 Coordination Scope ${resolution.coordinationScopeId}`}</Text>
         </Box>
       );
-    case 'choose':
+    case 'legacy': {
+      const selected = resolution.candidates[Math.min(props.selectedIndex ?? 0, resolution.candidates.length - 1)];
+      if (props.reviewingLegacy === true && selected !== undefined) {
+        return (
+          <Box flexDirection="column">
+            <Text>旧 Coordination Scope 迁移 Review</Text>
+            <Text>{truncateToDisplayWidth(`Scope: ${selected.coordinationScopeId}`, width)}</Text>
+            <Text>{truncateToDisplayWidth(`full branch ref: ${resolution.binding.fullBranchRef}`, width)}</Text>
+            <Text>
+              {truncateToDisplayWidth(
+                `canonical worktree: ${resolution.binding.canonicalWorktreePath}`,
+                width,
+              )}
+            </Text>
+            <Text dimColor>确认后登记为不可改写的一次性绑定；未确认前不会进入该 Scope。</Text>
+            {props.notice === null || props.notice === undefined ? null : <Text>{`! ${props.notice}`}</Text>}
+            <Text>Enter 确认迁移 · Esc 返回候选列表</Text>
+          </Box>
+        );
+      }
       return (
         <Box flexDirection="column">
-          <Text>发现多个 Coordination Scope：请显式选择一个（不会自动创建）</Text>
-          {resolution.candidates.map((candidate) => (
+          <Text>发现缺少身份绑定的旧 Coordination Scope：需要你确认一次性迁移</Text>
+          {resolution.candidates.map((candidate, index) => (
             <Text key={candidate.coordinationScopeId}>
               {truncateToDisplayWidth(
-                `- ${candidate.coordinationScopeId} · ${candidate.mode} · ${candidate.controlState}`,
+                `${index === (props.selectedIndex ?? 0) ? '▸' : '-'} ${candidate.coordinationScopeId} · ${candidate.mode} · ${candidate.controlState}`,
                 width,
               )}
             </Text>
           ))}
+          <Text dimColor>↑↓ 选择 · Enter 打开迁移 Review · 未确认前不会进入任何 Scope</Text>
+          {props.notice === null || props.notice === undefined ? null : <Text>{`! ${props.notice}`}</Text>}
         </Box>
       );
+    }
     case 'wizard':
       return (
         <Box flexDirection="column">

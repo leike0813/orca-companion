@@ -65,9 +65,20 @@ export type ScopeCandidate = {
   readonly controlState: string;
 };
 
+/** 旧记录缺失的注册绑定；值来自当前 Git 身份，由宿主读取，界面不构造。 */
+export type LegacyScopeBinding = {
+  readonly fullBranchRef: string;
+  readonly canonicalWorktreePath: string;
+};
+
 export type HomeResolution =
   | { readonly kind: 'restore'; readonly coordinationScopeId: string }
-  | { readonly kind: 'choose'; readonly candidates: readonly ScopeCandidate[] }
+  /** 缺少注册绑定的旧记录：只列出候选，用户必须在 Review 里确认一次性迁移。 */
+  | {
+      readonly kind: 'legacy';
+      readonly candidates: readonly ScopeCandidate[];
+      readonly binding: LegacyScopeBinding;
+    }
   | { readonly kind: 'wizard' }
   | { readonly kind: 'failed'; readonly code: string; readonly message: string };
 
@@ -93,6 +104,11 @@ export type ScopeSetupPort = {
   readonly verify: () => Promise<readonly WizardCheck[]>;
   readonly proposal: () => Promise<WizardProposal>;
   readonly initialize: (proposal: WizardProposal) => Promise<ControllerCommandResult>;
+  /**
+   * 旧 Scope 的一次性身份绑定。只有用户在该记录的 Review 里确认后才调用；成功后宿主才把它登记为
+   * 当前 Scope，因此「未确认前不恢复」是结构性的，而不是靠界面自觉。
+   */
+  readonly bindLegacyIdentity: (coordinationScopeId: string) => Promise<ControllerCommandResult>;
 };
 
 /** Review 界面展示的提议值；全部由调用方准备，界面不生成身份。 */

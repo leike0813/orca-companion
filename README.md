@@ -86,6 +86,10 @@ M2 的规划 TUI 只做投影与意图提交。以下能力仍缺权威来源或
 已可用：Home 的精确 Scope 恢复与初始化向导、向 Coordinator 发送消息、回答 Pending Interaction、
 `/compact`、Model Picker 切换、Route Planning Handoff、只读快照 / transcript / Graph Inspector。
 
+Home 只按 Git 当前身份恢复：完整 branch ref 与登记的 canonical worktree 精确匹配才进入该 Scope；
+没有匹配才进入向导；缺少绑定的旧记录必须先在同一界面的迁移 Review 里确认一次性绑定；从链接
+worktree（`git worktree add` 出来的工作区）或 detached HEAD 启动会被拒绝并指出身份不匹配。
+
 ## 结构
 
 模块边界、工具契约与里程碑以 `AGENTS.md` 为准，此处不重复。`references/orca` 是只读上游源码（Git submodule），不参与构建、lint、测试与打包。

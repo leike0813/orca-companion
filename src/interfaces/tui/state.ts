@@ -24,7 +24,8 @@ export type ComposerMode =
   | { readonly kind: 'message' }
   | { readonly kind: 'answer'; readonly interactionId: string; readonly expectedRevision: number };
 
-export type TuiScreen = 'home' | 'wizard' | 'workspace';
+/** `legacy-review` 是 Home 之上的旧记录迁移确认屏：未确认前不进入任何 Scope。 */
+export type TuiScreen = 'home' | 'wizard' | 'legacy-review' | 'workspace';
 
 export type TuiState = {
   readonly screen: TuiScreen;
@@ -70,7 +71,7 @@ export type TuiAction =
   | { readonly kind: 'sessions-loaded'; readonly coordinatorSessionIds: readonly string[]; readonly preferred: string | null }
   | { readonly kind: 'draft-changed'; readonly coordinatorSessionId: string; readonly text: string }
   | { readonly kind: 'scroll-changed'; readonly coordinatorSessionId: string; readonly offset: number }
-  | { readonly kind: 'event-arrived'; readonly coordinatorSessionId: string | null }
+  | { readonly kind: 'events-arrived'; readonly coordinatorSessionIds: readonly (string | null)[] }
   | { readonly kind: 'answer-mode-entered'; readonly interactionId: string; readonly expectedRevision: number }
   | { readonly kind: 'composer-mode-reset' }
   | { readonly kind: 'tool-toggled'; readonly entryId: string }
@@ -126,20 +127,20 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         ...state,
         scrollOffsets: { ...state.scrollOffsets, [action.coordinatorSessionId]: action.offset },
       };
-    case 'event-arrived': {
-      // 事件只增加标记：不切换 transcript、不抢占 composer、不动 Scope 级图。
-      if (
-        action.coordinatorSessionId === null ||
-        action.coordinatorSessionId === state.selectedSessionId
-      ) {
-        return { ...state, attention: true };
+    case 'events-arrived': {
+      // 一批事件只更新一次展示态，不切换 transcript/composer，也不动 Scope 级图。
+      const unread = new Set(state.unreadSessionIds);
+      for (const id of action.coordinatorSessionIds) {
+        if (id !== null && id !== state.selectedSessionId) {
+          unread.add(id);
+        }
       }
-      if (state.unreadSessionIds.includes(action.coordinatorSessionId)) {
+      if (unread.size === state.unreadSessionIds.length && state.attention) {
         return state;
       }
       return {
         ...state,
-        unreadSessionIds: [...state.unreadSessionIds, action.coordinatorSessionId],
+        unreadSessionIds: [...unread],
         attention: true,
       };
     }

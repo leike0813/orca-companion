@@ -78,6 +78,35 @@ describe('容器输入路径', () => {
     rendered.unmount();
   });
 
+  test('同一批按键里的连续方向键各移动一格（选择光标读同步事实源）', async () => {
+    const fake = createFakePorts();
+    const rendered = renderTui(fake.ports);
+    await waitFor(rendered, (frame) => frame.includes('composer · 普通消息'));
+
+    await press(rendered, CTRL_P);
+    await waitFor(rendered, (frame) => frame.includes('Command Palette'));
+
+    // 两次 Down 之间不等待重渲染：按键处理必须读同步的选择索引，否则第二次 Down 会与第一次一样
+    // 基于同一个旧索引计算，两次只前进一格（落到 Model Picker）。
+    rendered.stdin.write(ARROW_DOWN);
+    rendered.stdin.write(ARROW_DOWN);
+    const moved = await waitFor(
+      rendered,
+      (frame) => frame.includes('> Route Planning Handoff') || frame.includes('> Model Picker'),
+    );
+    expect(moved).toContain('> Route Planning Handoff');
+
+    // 等这一帧的重渲染落地后再提交：`Command Palette` 里也有 "Model Picker" 字面量，因此
+    // 断言用覆盖层自身的页脚判断它是否还开着。
+    await press(rendered, ENTER);
+    const frame = await waitFor(rendered, (text) => text.includes('Handoff Review') || text.includes('Model Picker'));
+
+    expect(frame).toContain('Handoff Review');
+    // 覆盖层已经换掉：Command Palette 的页脚不再出现。
+    expect(frame).not.toContain('Enter 执行 · Esc 关闭');
+    rendered.unmount();
+  });
+
   test('Ctrl+A 在有待答交互时进入绑定 revision 的回答模式', async () => {
     const fake = createFakePorts({
       snapshot: {

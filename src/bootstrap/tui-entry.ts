@@ -33,7 +33,7 @@ export type RenderedAppLike = {
 
 export type RenderLike = (
   element: unknown,
-  options: { readonly exitOnCtrlC: boolean },
+  options: { readonly exitOnCtrlC: boolean; readonly interactive: boolean },
 ) => RenderedAppLike;
 
 /**
@@ -75,6 +75,10 @@ export async function runTuiEntry(
   const { TuiApp } = await import('../interfaces/tui/app.js');
 
   // `onExit` 只在渲染完成后被调用，因此闭包引用 `app` 不存在暂时性死区问题。
+  //
+  // `interactive: true` 必须显式给出：Ink 7 默认用 `!isInCi && stdout.isTTY` 判断，只要环境里有
+  // `CI=true`（用户 shell 里导出过也算），即使 stdin/stdout 都是真 TTY 也不会绘制任何帧，界面表现为
+  // 永久空白。交互性的真实前提已由上面的双 TTY 门禁核验，不由环境变量猜测。
   const app = renderElement(
     createElement(TuiApp, {
       ports,
@@ -84,7 +88,7 @@ export async function runTuiEntry(
         app.unmount();
       },
     }),
-    { exitOnCtrlC: false },
+    { exitOnCtrlC: false, interactive: true },
   );
   try {
     await app.waitUntilExit();
