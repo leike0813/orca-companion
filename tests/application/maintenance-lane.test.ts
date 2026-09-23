@@ -66,6 +66,8 @@ beforeEach(() => {
     mode: 'route_planning',
     controlState: 'active',
     planningCycleId: 'cycle-1' as PlanningCycleId,
+    fullBranchRef: 'refs/heads/main',
+    canonicalWorktreePath: '/tmp/orca-test-worktree',
   });
   if (created.kind !== 'committed') {
     throw new Error('无法创建测试 Scope');
@@ -146,6 +148,7 @@ function createCheckpoints(): { readonly port: WakeCheckpointPort; readonly batc
     graphPosition: 'suspend',
     committedModelSteps: [],
     wakeBatches: [...batches],
+    lastCompactionOutcome: null,
   });
   return {
     batches,

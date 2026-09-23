@@ -240,6 +240,8 @@ export function createRecoveryHarness(options: RecoveryHarnessOptions = {}): Rec
     coordinatorSessionId: RECOVERY_SESSION,
     coordinatorModelConfigurationRef: 'model-config-recovery',
     planningCycleId: RECOVERY_CYCLE,
+    fullBranchRef: `refs/heads/${RECOVERY_SCOPE}`,
+    canonicalWorktreePath: '/tmp/orca-recovery-worktree',
   });
   if (initialized.kind !== 'initialized') {
     throw new Error(`无法初始化 Scope: ${initialized.message}`);

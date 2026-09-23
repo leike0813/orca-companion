@@ -342,6 +342,13 @@ export type ControllerScopeFields = {
 export type SendSessionMessageCommand = ControllerScopeFields & {
   readonly kind: 'send-session-message';
   readonly coordinatorSessionId: CoordinatorSessionId;
+  /**
+   * 稳定提交身份：UI 在一次提交时生成，并在同一次重试中复用。
+   *
+   * 它让「这条消息」在崩溃补齐、重放与跨库修 admission 时都指同一条持久事实，因此同一提交只会
+   * 产生一条消息与一次模型恢复。
+   */
+  readonly submissionId: string;
   readonly content: string;
 };
 
@@ -397,14 +404,15 @@ export type ScopeControlCommand = ControllerScopeFields & {
 /**
  * Pending Interaction 回答。
  *
- * `interactionId` 与 `expectedRevision` 都是必填：revision 过期即拒绝且零副作用。普通 Session 消息
- * 没有这两个字段，因此结构上不可能被当成回答。
+ * `interactionId` 与 `expectedRevision` 都是必填：revision 过期即拒绝且零副作用。回答正文以
+ * `answer: string` 进入应用用例，由用例派生出稳定 `answerRef` 并与解决状态在同一事务写入；
+ * 普通 Session 消息没有这三个字段，因此结构上不可能被当成回答。
  */
 export type AnswerPendingInteractionCommand = ControllerScopeFields & {
   readonly kind: 'answer-pending-interaction';
   readonly interactionId: InteractionId;
   readonly expectedRevision: Revision;
-  readonly answerRef: EntityRef<string>;
+  readonly answer: string;
 };
 
 export type ExecutionHandoffCommand = ControllerScopeFields &
@@ -582,10 +590,44 @@ export type ControllerNotification =
 
 type ControllerNoiseKind = 'keepalive' | 'stderr' | 'poll-timeout' | 'unchanged-reconciliation' | 'diagnostic';
 
-/** UI 可投影的语义事件；噪声在 `toSemanticEvent` 里被丢弃。 */
-export type SemanticEvent = Exclude<ControllerNotification, { readonly kind: ControllerNoiseKind }>;
+export const CONTROLLER_NOISE_KINDS: readonly ControllerNoiseKind[] = [
+  'keepalive',
+  'stderr',
+  'poll-timeout',
+  'unchanged-reconciliation',
+  'diagnostic',
+];
 
-export function toSemanticEvent(notification: ControllerNotification): SemanticEvent | null {
+/**
+ * 语义事件的统一身份与归属。
+ *
+ * 由**发布者**（宿主）在权威事实提交并读回之后给出：`eventId` 让同一条事件可被去重与追踪，
+ * `coordinatorSessionId` 让界面只更新对应 Session 的未读状态；Scope 级事件用 `null`。
+ * 界面因此不需要（也不允许）从 payload 里推断归属。
+ */
+export type SemanticEventEnvelope = {
+  readonly eventId: string;
+  readonly coordinatorSessionId: string | null;
+};
+
+/** 发布者提交的一条候选通知：envelope 与 payload 一起到达，噪声在 façade 被丢弃。 */
+export type ControllerNotificationMessage = {
+  readonly envelope: SemanticEventEnvelope;
+  readonly notification: ControllerNotification;
+};
+
+/** UI 可投影的语义事件：通知 payload 加上统一 envelope。 */
+export type SemanticEvent = Exclude<ControllerNotification, { readonly kind: ControllerNoiseKind }> &
+  SemanticEventEnvelope;
+
+/**
+ * 把一条候选通知投影成语义事件。
+ *
+ * 噪声在这里被丢弃，因此界面事件流结构上不可能收到 keepalive 或诊断输出；非噪声事件必须带
+ * 归属（Scope 级为 `null`），但绝不伪造一个 Session 身份。
+ */
+export function toSemanticEvent(message: ControllerNotificationMessage): SemanticEvent | null {
+  const { notification, envelope } = message;
   switch (notification.kind) {
     case 'keepalive':
     case 'stderr':
@@ -594,14 +636,14 @@ export function toSemanticEvent(notification: ControllerNotification): SemanticE
     case 'diagnostic':
       return null;
     default:
-      return notification;
+      return { ...notification, ...envelope };
   }
 }
 
 export type Unsubscribe = () => void;
 
 export type ControllerEventSource = {
-  readonly subscribe: (listener: (notification: ControllerNotification) => void) => Unsubscribe;
+  readonly subscribe: (listener: (message: ControllerNotificationMessage) => void) => Unsubscribe;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -938,8 +980,8 @@ export function createControllerService(dependencies: ControllerServiceDependenc
   const listeners = new Set<(event: SemanticEvent) => void>();
 
   if (dependencies.events !== undefined) {
-    dependencies.events.subscribe((notification) => {
-      const event = toSemanticEvent(notification);
+    dependencies.events.subscribe((message) => {
+      const event = toSemanticEvent(message);
       if (event === null) {
         return;
       }

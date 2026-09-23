@@ -4,8 +4,13 @@ import type { CoordinatorSessionId } from '../../src/application/dto/identity.js
 import {
   CHECKPOINT_THREAD_PREFIX,
   COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
+  LEGACY_SESSION_STATE_SCHEMA_VERSION,
+  assistantEntryId,
   parseCoordinatorSessionState,
   threadIdFor,
+  toolOperationId,
+  userEntryId,
+  userStepId,
   type CommittedModelStep,
   type CoordinatorSessionState,
 } from '../../src/domain/coordinator/session-state.js';
@@ -15,8 +20,10 @@ const SESSION_B = 'session-b' as CoordinatorSessionId;
 
 const STEP: CommittedModelStep = {
   stepId: 'step-1',
+  entryId: assistantEntryId('step-1'),
   committedAt: 1_000,
   messages: [{ role: 'assistant', content: '已登记一条 Decision Ticket' }],
+  toolCalls: [],
   usage: { inputTokens: 120, outputTokens: 18, totalTokens: 138 },
 };
 
@@ -24,9 +31,43 @@ function baseState(overrides: Partial<Record<string, unknown>> = {}): Record<str
   return {
     schemaVersion: COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
     coordinatorSessionId: SESSION_A,
-    committedMessages: [{ role: 'user', content: '开始规划' }],
+    committedMessages: [
+      {
+        entryId: userEntryId('submission-1'),
+        stepId: userStepId('submission-1'),
+        role: 'user',
+        content: '开始规划',
+      },
+      {
+        entryId: assistantEntryId('step-1'),
+        stepId: 'step-1',
+        role: 'assistant',
+        content: '已登记一条 Decision Ticket',
+      },
+    ],
     graphPosition: 'model',
     committedModelSteps: [STEP],
+    wakeBatches: [],
+    lastCompactionOutcome: null,
+    ...overrides,
+  };
+}
+
+/** 前驱版本（v1）写下的 payload：消息与 step 严格一一对应，消息没有 entryId。 */
+function legacyState(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+  return {
+    schemaVersion: LEGACY_SESSION_STATE_SCHEMA_VERSION,
+    coordinatorSessionId: SESSION_A,
+    committedMessages: [{ role: 'assistant', content: '已登记一条 Decision Ticket' }],
+    graphPosition: 'model',
+    committedModelSteps: [
+      {
+        stepId: 'step-1',
+        committedAt: 1_000,
+        messages: [{ role: 'assistant', content: '已登记一条 Decision Ticket' }],
+        usage: null,
+      },
+    ],
     wakeBatches: [],
     ...overrides,
   };
@@ -67,9 +108,26 @@ test('凭据字段的候选状态被拒绝', () => {
     expect(withTopLevelCredential.field).toContain('apiKey');
   }
 
+  // 凭据藏在被原样保存的 tool args 里：闭集字段查不到它，序列化检查必须抓到。
   const nestedCredential = parseCoordinatorSessionState(
     baseState({
-      committedMessages: [{ role: 'system', providerCredential: { accessToken: 'x' } }],
+      committedMessages: [
+        {
+          entryId: assistantEntryId('step-1'),
+          stepId: 'step-1',
+          role: 'assistant',
+          content: '先读地图',
+          toolCalls: [
+            {
+              callId: 'call-1',
+              name: 'read_map',
+              args: { accessToken: 'x' },
+              operationId: 'op-1',
+              mapOperationId: null,
+            },
+          ],
+        },
+      ],
     }),
   );
   expect(nestedCredential.ok).toBe(false);
@@ -201,4 +259,96 @@ test('Capsule 缺少派生视图标记即拒绝，避免被当作业务权威', 
   );
 
   expect(parsed.ok).toBe(false);
+});
+
+test('v1 payload 升级到 v2：entry 与 step 一一对应，身份由 stepId 派生', () => {
+  const parsed = parseCoordinatorSessionState(legacyState());
+
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) {
+    return;
+  }
+  expect(parsed.value.schemaVersion).toBe(COORDINATOR_SESSION_STATE_SCHEMA_VERSION);
+  expect(parsed.value.lastCompactionOutcome).toBeNull();
+  expect(parsed.value.committedMessages).toHaveLength(1);
+  expect(parsed.value.committedModelSteps).toHaveLength(1);
+
+  const step = parsed.value.committedModelSteps[0];
+  const entry = parsed.value.committedMessages[0];
+  expect(entry?.role).toBe('assistant');
+  expect(entry?.stepId).toBe(step?.stepId);
+  expect(entry?.entryId).toBe(step?.entryId);
+  expect(step?.toolCalls).toEqual([]);
+});
+
+test('v1 升级保留全部历史：多条 step 各自的 entry 顺序不变', () => {
+  const parsed = parseCoordinatorSessionState(
+    legacyState({
+      committedMessages: [
+        { role: 'assistant', content: '第一步' },
+        { role: 'assistant', content: '第二步' },
+      ],
+      committedModelSteps: [
+        { stepId: 'step-1', committedAt: 1_000, messages: [{ role: 'assistant', content: '第一步' }], usage: null },
+        { stepId: 'step-2', committedAt: 2_000, messages: [{ role: 'assistant', content: '第二步' }], usage: null },
+      ],
+    }),
+  );
+
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok) {
+    expect(parsed.value.committedMessages.map((entry) => entry.stepId)).toEqual(['step-1', 'step-2']);
+    expect(parsed.value.committedMessages.map((entry) => entry.entryId)).toEqual([
+      assistantEntryId('step-1'),
+      assistantEntryId('step-2'),
+    ]);
+  }
+});
+
+test('v1 消息数与 step 数不一致时拒绝升级，而不是丢历史或猜顺序', () => {
+  const parsed = parseCoordinatorSessionState(
+    legacyState({
+      committedMessages: [
+        { role: 'assistant', content: '第一步' },
+        { role: 'assistant', content: '第二步' },
+      ],
+    }),
+  );
+
+  expect(parsed.ok).toBe(false);
+  if (!parsed.ok) {
+    expect(parsed.field).toBe('sessionState.committedMessages');
+  }
+});
+
+test('v1 assistant 消息上的 tool_calls 升级出确定性的 OperationId', () => {
+  const legacy = legacyState({
+    committedMessages: [
+      {
+        role: 'assistant',
+        content: '先读地图',
+        toolCalls: [{ id: 'call-1', name: 'read_map', args: { path: 'a' } }],
+      },
+    ],
+    committedModelSteps: [
+      { stepId: 'step-1', committedAt: 1_000, messages: [{ role: 'assistant', content: '先读地图' }], usage: null },
+    ],
+  });
+
+  const first = parseCoordinatorSessionState(legacy);
+  const second = parseCoordinatorSessionState(legacy);
+  expect(first.ok).toBe(true);
+  expect(second.ok).toBe(true);
+  if (!first.ok || !second.ok) {
+    return;
+  }
+
+  const call = first.value.committedModelSteps[0]?.toolCalls[0];
+  expect(call?.callId).toBe('call-1');
+  expect(call?.operationId).toBe(toolOperationId('step-1', 'call-1'));
+  // 从未发起过的 v1 调用没有第二次副作用记录需要沿用。
+  expect(call?.mapOperationId).toBeNull();
+  // 同一条记录重放两次得到同一组身份：升级本身必须确定。
+  expect(second.value.committedModelSteps[0]?.toolCalls).toEqual(first.value.committedModelSteps[0]?.toolCalls);
+  expect(second.value.committedMessages).toEqual(first.value.committedMessages);
 });

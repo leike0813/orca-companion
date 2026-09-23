@@ -157,10 +157,9 @@ function fromReadFailure(failure: {
 }
 
 /**
- * 一次 tracker 写入的完整纪律：落盘意图 → 外部写入 → 读回核验 → 收尾意图 → 推进地图 revision。
+ * 一次 tracker 写入的完整纪律：落盘意图 → 外部写入 → 读回核验 → 本地事实 → 收尾意图。
  *
- * 任一环节不能证明结果时保持意图未决并返回 `unknown`：地图 revision 不推进，因此「候选图是否
- * 过期」不会被一次结果不明的写入蒙混过去。
+ * accepted Intent 必须意味着本地事实已经写入；任何未决结果都禁止换 ID 重试。
  */
 async function runTrackerMutation(input: {
   readonly context: PlanningMutationContext;
@@ -168,6 +167,7 @@ async function runTrackerMutation(input: {
   readonly operationCategory: string;
   readonly perform: () => Promise<TrackerWriteOutcome>;
   readonly verify: () => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }>;
+  readonly afterVerify?: () => PlanningMutationResult | null;
 }): Promise<PlanningMutationResult> {
   const { context } = input;
   const begun = context.store.transact({
@@ -217,9 +217,9 @@ async function runTrackerMutation(input: {
     return { kind: 'unknown', reason: `读回核验失败：${verified.reason}` };
   }
 
-  const unsettled = settle('accepted', write.requestId);
-  if (unsettled !== null) {
-    return { kind: 'unknown', reason: unsettled };
+  const local = input.afterVerify?.();
+  if (local !== undefined && local !== null) {
+    return local;
   }
 
   const after = scopeOf(context);
@@ -236,7 +236,15 @@ async function runTrackerMutation(input: {
   if (advanced.kind === 'rejected') {
     return { kind: 'unknown', reason: `${rejectionMessage(advanced)}；地图 revision 未推进` };
   }
-  return { kind: 'accepted', revision: advanced.revision, mapRevision: after.scope.mapRevision + 1 };
+  const unsettled = settle('accepted', write.requestId);
+  if (unsettled !== null) {
+    return { kind: 'unknown', reason: unsettled };
+  }
+  const settledScope = scopeOf(context);
+  if (settledScope.kind === 'rejected') {
+    return { kind: 'unknown', reason: `意图已收尾但无法读取当前 Scope：${settledScope.message}` };
+  }
+  return { kind: 'accepted', revision: settledScope.scope.revision, mapRevision: after.scope.mapRevision + 1 };
 }
 
 async function readMapBody(
@@ -371,26 +379,24 @@ export async function claimTicket(input: ClaimTicketInput): Promise<PlanningMuta
         ? { ok: true }
         : { ok: false, reason: `assignee ${input.trackerAssignee} 未出现在票据上` };
     },
+    afterVerify: () => {
+      const current = scopeOf(input);
+      if (current.kind === 'rejected') {
+        return { kind: 'unknown', reason: `${current.message}；assignee 已写入但本地 claim 未登记` };
+      }
+      const recorded = input.store.transact({
+        kind: 'record-ticket-claim',
+        coordinationScopeId: input.coordinationScopeId,
+        expectedRevision: current.scope.revision,
+        writer: input.writer,
+        ticketRef: input.ticketRef,
+      });
+      return recorded.kind === 'rejected'
+        ? { kind: 'unknown', reason: `${rejectionMessage(recorded)}；assignee 已写入但本地 claim 未登记` }
+        : null;
+    },
   });
-  if (claimed.kind !== 'accepted') {
-    return claimed;
-  }
-
-  const current = scopeOf(input);
-  if (current.kind === 'rejected') {
-    return { kind: 'unknown', reason: `${current.message}；assignee 已写入但本地 claim 未登记` };
-  }
-  const recorded = input.store.transact({
-    kind: 'record-ticket-claim',
-    coordinationScopeId: input.coordinationScopeId,
-    expectedRevision: current.scope.revision,
-    writer: input.writer,
-    ticketRef: input.ticketRef,
-  });
-  if (recorded.kind === 'rejected') {
-    return { kind: 'unknown', reason: `${rejectionMessage(recorded)}；assignee 已写入但本地 claim 未登记` };
-  }
-  return { ...claimed, revision: recorded.revision };
+  return claimed;
 }
 
 export type ReleaseTicketInput = TicketMutationInput;
@@ -416,27 +422,25 @@ async function finishClaim(
       }
       return reread.issue.assignees.length === 0 ? { ok: true } : { ok: false, reason: 'assignee 未被清空' };
     },
+    afterVerify: () => {
+      const current = scopeOf(input);
+      if (current.kind === 'rejected') {
+        return { kind: 'unknown', reason: `${current.message}；assignee 已清空但本地 claim 未收尾` };
+      }
+      const finished = input.store.transact({
+        kind: 'release-ticket-claim',
+        coordinationScopeId: input.coordinationScopeId,
+        expectedRevision: current.scope.revision,
+        writer: input.writer,
+        ticketRef: input.ticketRef,
+        finalState,
+      });
+      return finished.kind === 'rejected'
+        ? { kind: 'unknown', reason: `${rejectionMessage(finished)}；assignee 已清空但本地 claim 未收尾` }
+        : null;
+    },
   });
-  if (released.kind !== 'accepted') {
-    return released;
-  }
-
-  const current = scopeOf(input);
-  if (current.kind === 'rejected') {
-    return { kind: 'unknown', reason: `${current.message}；assignee 已清空但本地 claim 未收尾` };
-  }
-  const finished = input.store.transact({
-    kind: 'release-ticket-claim',
-    coordinationScopeId: input.coordinationScopeId,
-    expectedRevision: current.scope.revision,
-    writer: input.writer,
-    ticketRef: input.ticketRef,
-    finalState,
-  });
-  if (finished.kind === 'rejected') {
-    return { kind: 'unknown', reason: `${rejectionMessage(finished)}；assignee 已清空但本地 claim 未收尾` };
-  }
-  return { ...released, revision: finished.revision };
+  return released;
 }
 
 export type ResolveTicketInput = TicketMutationInput & {
@@ -467,10 +471,18 @@ export async function resolveTicket(input: ResolveTicketInput): Promise<Planning
     return releasedResult;
   }
 
+  return await writeResolvedTicketMap(input, releasedResult.revision);
+}
+
+/** 释放阶段已确认后，只执行地图阶段；恢复时仍使用原 mapOperationId。 */
+export async function writeResolvedTicketMap(
+  input: ResolveTicketInput,
+  expectedRevision: Revision,
+): Promise<PlanningMutationResult> {
   let nextBody: string | null = null;
 
   return await runTrackerMutation({
-    context: { ...input, operationId: input.mapOperationId, expectedRevision: releasedResult.revision },
+    context: { ...input, operationId: input.mapOperationId, expectedRevision },
     target: input.routeMapRef,
     operationCategory: 'route-map-section-update',
     perform: async () => {

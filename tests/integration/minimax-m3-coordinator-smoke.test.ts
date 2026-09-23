@@ -586,6 +586,8 @@ async function createProfileFixture(
     mode: 'route_planning',
     controlState: 'active',
     planningCycleId: `cycle-${plan.identity}` as PlanningCycleId,
+    fullBranchRef: `refs/heads/${plan.identity}`,
+    canonicalWorktreePath: '/tmp/orca-smoke-worktree',
   });
   if (created.kind !== 'committed') {
     throw new Error(`无法创建冒烟 Scope：${created.message}`);
@@ -610,6 +612,7 @@ async function createProfileFixture(
     graphPosition: 'start',
     committedModelSteps: [],
     wakeBatches: [],
+    lastCompactionOutcome: null,
   };
   const seeded = checkpointOpen.store.saveCheckpoint(empty);
   if (seeded.kind !== 'saved') {

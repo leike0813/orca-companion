@@ -14,6 +14,9 @@ import {
 } from '../../src/adapters/storage/checkpoint-store.js';
 import {
   COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
+  assistantEntryId,
+  userEntryId,
+  userStepId,
   type CommittedModelStep,
   type CoordinatorSessionState,
   type WakeBatch,
@@ -58,8 +61,10 @@ function open(): CheckpointStore {
 function step(stepId: string, content: string, at: number): CommittedModelStep {
   return {
     stepId,
+    entryId: assistantEntryId(stepId),
     committedAt: at,
     messages: [{ role: 'assistant', content }],
+    toolCalls: [],
     usage: null,
   };
 }
@@ -72,13 +77,30 @@ function sessionState(
     schemaVersion: COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
     coordinatorSessionId,
     committedMessages: [
-      { role: 'user', content: '开始规划' },
-      { role: 'assistant', content: '先读地图' },
+      {
+        entryId: userEntryId('submission-1'),
+        stepId: userStepId('submission-1'),
+        role: 'user',
+        content: '开始规划',
+      },
+      { entryId: assistantEntryId('step-1'), stepId: 'step-1', role: 'assistant', content: '先读地图' },
     ],
     graphPosition: 'model',
     committedModelSteps: [step('step-1', '先读地图', 1_000)],
     wakeBatches: [],
+    lastCompactionOutcome: null,
     ...overrides,
+  };
+}
+
+/** 一条携带 source revision 的最小 Wake Batch：会话状态要求它至少引用一项外部事实。 */
+function wakeBatch(wakeBatchId: string, coordinatorSessionId: CoordinatorSessionId): WakeBatch {
+  return {
+    wakeBatchId,
+    coordinationScopeId: 'scope-1',
+    coordinatorSessionId,
+    sourceRevisions: [{ sourceKind: 'delivery', sourceId: 'delivery-1', revision: 2 }],
+    actionableWork: [{ workKind: 'worker_question', workId: 'dispatch-1', summary: '问题' }],
   };
 }
 
@@ -89,7 +111,15 @@ function rawDatabase(): DatabaseSync {
 test('两个 Session 各自读回自己的会话状态，互不影响', () => {
   expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
   expect(store.saveCheckpoint(sessionState(SESSION_B, {
-    committedMessages: [{ role: 'user', content: '另一个 Session 的对话' }],
+    committedMessages: [
+      {
+        entryId: userEntryId('submission-b'),
+        stepId: userStepId('submission-b'),
+        role: 'user',
+        content: '另一个 Session 的对话',
+      },
+    ],
+    committedModelSteps: [],
     graphPosition: 'suspend',
   })).kind).toBe('saved');
 
@@ -133,9 +163,9 @@ test('被 Capsule 取代的区间仍能读回原始已提交消息', () => {
   const state = sessionState(SESSION_A, {
     committedModelSteps: [step('step-1', '第一步', 1_000), step('step-2', '第二步', 2_000), step('step-3', '第三步', 3_000)],
     committedMessages: [
-      { role: 'assistant', content: '第一步' },
-      { role: 'assistant', content: '第二步' },
-      { role: 'assistant', content: '第三步' },
+      { entryId: assistantEntryId('step-1'), stepId: 'step-1', role: 'assistant', content: '第一步' },
+      { entryId: assistantEntryId('step-2'), stepId: 'step-2', role: 'assistant', content: '第二步' },
+      { entryId: assistantEntryId('step-3'), stepId: 'step-3', role: 'assistant', content: '第三步' },
     ],
   });
   expect(store.saveCheckpoint(state).kind).toBe('saved');
@@ -162,8 +192,8 @@ test('被 Capsule 取代的区间仍能读回原始已提交消息', () => {
     replacedFromStepId: 'step-1',
     replacedToStepId: 'step-2',
   })).toEqual([
-    { role: 'assistant', content: '第一步' },
-    { role: 'assistant', content: '第二步' },
+    { entryId: assistantEntryId('step-1'), stepId: 'step-1', role: 'assistant', content: '第一步' },
+    { entryId: assistantEntryId('step-2'), stepId: 'step-2', role: 'assistant', content: '第二步' },
   ]);
 });
 
@@ -240,13 +270,7 @@ test('含凭据的候选会话状态被拒绝，库内不留记录', () => {
 });
 
 test('同一 WakeBatchId 只追加一次会话历史', () => {
-  const batch: WakeBatch = {
-    wakeBatchId: 'wake-1',
-    coordinationScopeId: 'scope-1',
-    coordinatorSessionId: SESSION_A,
-    sourceRevisions: [{ sourceKind: 'delivery', sourceId: 'delivery-1', revision: 2 }],
-    actionableWork: [{ workKind: 'worker_question', workId: 'dispatch-1', summary: '问题' }],
-  };
+  const batch = wakeBatch('wake-1', SESSION_A);
 
   const first = store.commitWakeBatch(batch);
   expect(first.kind).toBe('committed');
@@ -257,6 +281,118 @@ test('同一 WakeBatchId 只追加一次会话历史', () => {
   expect(read.kind).toBe('recovered');
   if (read.kind === 'recovered') {
     expect(read.state.wakeBatches).toHaveLength(1);
+    expect(read.state.lastCompactionOutcome).toBeNull();
+  }
+});
+
+test('用户消息与它的 Wake Batch 在同一次写入落盘，并从零建立初始会话', () => {
+  const result = store.commitUserMessage({
+    coordinatorSessionId: SESSION_A,
+    submissionId: 'submission-1',
+    content: '开始规划',
+    wakeBatch: wakeBatch('wake-1', SESSION_A),
+  });
+
+  expect(result.kind).toBe('committed');
+  if (result.kind !== 'committed') {
+    return;
+  }
+  expect(result.state.graphPosition).toBe('suspend');
+  expect(result.state.committedModelSteps).toEqual([]);
+  expect(result.state.lastCompactionOutcome).toBeNull();
+  expect(result.state.committedMessages).toEqual([
+    {
+      entryId: userEntryId('submission-1'),
+      stepId: userStepId('submission-1'),
+      role: 'user',
+      content: '开始规划',
+    },
+  ]);
+  expect(result.state.wakeBatches).toHaveLength(1);
+
+  // 读回与写入结果一致：消息与 batch 是同一条记录的两面。
+  const read = store.loadCheckpoint(SESSION_A);
+  expect(read.kind).toBe('recovered');
+  if (read.kind === 'recovered') {
+    expect(read.state.committedMessages).toEqual(result.state.committedMessages);
+    expect(read.state.wakeBatches).toEqual(result.state.wakeBatches);
+  }
+});
+
+test('同一 submissionId 重放不会留下第二条消息或第二个 batch', () => {
+  const input = {
+    coordinatorSessionId: SESSION_A,
+    submissionId: 'submission-1',
+    content: '开始规划',
+    wakeBatch: wakeBatch('wake-1', SESSION_A),
+  };
+  expect(store.commitUserMessage(input).kind).toBe('committed');
+
+  const replay = store.commitUserMessage(input);
+  expect(replay.kind).toBe('already-committed');
+  if (replay.kind === 'already-committed') {
+    expect(replay.contentMatches).toBe(true);
+    expect(replay.state.committedMessages).toHaveLength(1);
+    expect(replay.state.wakeBatches).toHaveLength(1);
+  }
+
+  // 内容不同的重放同样是 already-committed，但明确报告不逐字相同：由调用方决定是否拒绝。
+  const changed = store.commitUserMessage({ ...input, content: '改过的内容' });
+  expect(changed.kind).toBe('already-committed');
+  if (changed.kind === 'already-committed') {
+    expect(changed.contentMatches).toBe(false);
+    expect(changed.state.committedMessages).toHaveLength(1);
+  }
+});
+
+test('用户消息追加到既有会话历史，已提交 step 不受影响', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
+
+  const result = store.commitUserMessage({
+    coordinatorSessionId: SESSION_A,
+    submissionId: 'submission-2',
+    content: '继续',
+    wakeBatch: wakeBatch('wake-2', SESSION_A),
+  });
+
+  expect(result.kind).toBe('committed');
+  if (result.kind !== 'committed') {
+    return;
+  }
+  expect(result.state.committedMessages.map((entry) => entry.entryId)).toEqual([
+    userEntryId('submission-1'),
+    assistantEntryId('step-1'),
+    userEntryId('submission-2'),
+  ]);
+  expect(result.state.committedModelSteps.map((entry) => entry.stepId)).toEqual(['step-1']);
+  expect(result.state.graphPosition).toBe('model');
+});
+
+test('Wake Batch 指向别的 Session 时整次提交失败，库内不留半条记录', () => {
+  const result = store.commitUserMessage({
+    coordinatorSessionId: SESSION_A,
+    submissionId: 'submission-1',
+    content: '开始规划',
+    wakeBatch: wakeBatch('wake-1', SESSION_B),
+  });
+
+  expect(result.kind).toBe('unrecoverable');
+  expect(store.loadCheckpoint(SESSION_A)).toEqual({ kind: 'absent' });
+});
+
+test('最近一次压缩结论属于核心记录，随会话状态一起读回', () => {
+  const outcome = {
+    kind: 'compacted',
+    path: 'context_capsule',
+    compactedTokens: 812,
+    note: '把前两步压成 Capsule',
+  } as const;
+  expect(store.saveCheckpoint(sessionState(SESSION_A, { lastCompactionOutcome: outcome })).kind).toBe('saved');
+
+  const read = store.loadCheckpoint(SESSION_A);
+  expect(read.kind).toBe('recovered');
+  if (read.kind === 'recovered') {
+    expect(read.state.lastCompactionOutcome).toEqual(outcome);
   }
 });
 

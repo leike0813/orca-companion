@@ -498,7 +498,7 @@ describe.skipIf(!build.ok)(SUITE_NAME, () => {
         const command = [process.execPath, BUILT_ENTRY].map(quoteArgument).join(' ');
         expect(startSession(socket, session, 120, 40, command, { cwd: REPOSITORY_ROOT }).status).toBe(0);
 
-        const frame = pollPane(socket, session, (text) => /Coordination Scope|初始化向导|Orca Companion/u.test(text));
+        const frame = pollPane(socket, session, (text) => /Coordination Scope|初始化向导|Orca Companion|config_unavailable/u.test(text));
         expect(frame.ok, `5s 内未出现界面语义片段，最后帧：\n${frame.text}`).toBe(true);
         expect(paneState(socket, session).dead).toBe(false);
 

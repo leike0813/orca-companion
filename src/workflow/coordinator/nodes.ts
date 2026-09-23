@@ -21,8 +21,16 @@ import type {
   FencingAssertion,
 } from '../../application/coordinator/runtime-guard.js';
 import type { CoordinatorSessionId } from '../../application/dto/identity.js';
-import type { CommittedModelStep, CoordinatorSessionState, ModelUsageObservation } from '../../domain/coordinator/session-state.js';
-import { toDurableMessage } from './context.js';
+import {
+  assistantEntryId,
+  toolMapOperationId,
+  toolOperationId,
+  type CommittedModelStep,
+  type CoordinatorSessionState,
+  type ModelUsageObservation,
+} from '../../domain/coordinator/session-state.js';
+import { entryFromResponse, parseModelToolCalls } from './context.js';
+import type { PlanningToolDefinition } from './planning-tools.js';
 import type { CoordinatorGraphState, CoordinatorGraphUpdate } from './state.js';
 
 export const MODEL_NODE = 'model';
@@ -122,6 +130,13 @@ export type CoordinatorNodeDependencies = {
     readonly note: string;
   }>;
   readonly newStepId: () => string;
+  /**
+   * 已注册的受控工具集，与绑定到模型的那一份是同一个列表。
+   *
+   * 模型只能申请这里注册的名字；执行则只发生在 tools 节点。不传表示不暴露任何工具，因此
+   * 「忘记配置」不会意外打开规划写入。
+   */
+  readonly tools?: readonly PlanningToolDefinition[];
   readonly clock?: () => number;
   /** 退避等待由宿主注入，便于在测试与紧耦合宿主中不真实等待。 */
   readonly sleep?: (ms: number) => Promise<void>;
@@ -218,12 +233,29 @@ export function createModelNode(dependencies: CoordinatorNodeDependencies) {
     }
     const response = call.response;
 
+    const stepId = dependencies.newStepId();
+    const entryId = assistantEntryId(stepId);
+    const allowedNames = (dependencies.tools ?? []).map((definition) => definition.name);
+    const parsed = parseModelToolCalls(response, allowedNames, (callId) => ({
+      operationId: toolOperationId(stepId, callId),
+      mapOperationId: toolMapOperationId(stepId, callId),
+    }));
+    // 无法受控执行的调用绝不是「没有调用」：先完整提交这次响应，再以 blocked 停下并说明原因，
+    // 不猜参数、不跳过、不换一个名字继续。
+    const blockedNote = parsed.ok
+      ? null
+      : `模型响应包含无法受控执行的 tool call：${parsed.reason}；响应已提交为 ${stepId}`;
+    const toolCalls = parsed.ok ? parsed.calls : [];
+
+    const entry = entryFromResponse(response, { stepId, entryId, toolCalls });
     const step: CommittedModelStep = {
-      stepId: dependencies.newStepId(),
+      stepId,
+      entryId,
       committedAt: clock(),
       // 只有完整返回的响应才会走到这里，并且落盘的是 Companion 自己的持久化形状：
       // 直接存 provider 对象在重开后会丢失角色，历史就再也读不出来了。
-      messages: [toDurableMessage(response)],
+      messages: [entry],
+      toolCalls,
       usage: usageOf(response),
     };
     const beforeWrite = assertWritable(dependencies.assertFencing);
@@ -233,23 +265,38 @@ export function createModelNode(dependencies: CoordinatorNodeDependencies) {
     const next: CoordinatorSessionState = {
       ...read.state,
       graphPosition: 'model',
-      committedMessages: [...read.state.committedMessages, toDurableMessage(response)],
+      committedMessages: [...read.state.committedMessages, entry],
       committedModelSteps: [...read.state.committedModelSteps, step],
     };
     const written = dependencies.sessionRecords.saveCheckpoint(next);
     if (written.kind === 'failed') {
       return blocked(`无法提交 Committed Model Step：${written.message}`);
     }
+    if (blockedNote !== null) {
+      return blocked(blockedNote);
+    }
+
+    if (toolCalls.length > 0) {
+      // 有未决 tool call 时不消费工作：这次响应只是请求调用，工作仍由它的最终响应处理。
+      return {
+        status: 'running',
+        graphPosition: 'model',
+        pendingToolCalls: toolCalls.length,
+        remainingWork: state.remainingWork,
+        note: `已提交 ${stepId}，待执行 ${String(toolCalls.length)} 个受控工具调用`,
+      };
+    }
 
     const [consumed, ...remaining] = state.remainingWork;
     return {
       status: 'running',
       graphPosition: 'model',
+      pendingToolCalls: 0,
       remainingWork: remaining,
       note:
         consumed === undefined
-          ? `已提交 ${step.stepId}`
-          : `已提交 ${step.stepId}，处理 ${consumed.source.sourceId}`,
+          ? `已提交 ${stepId}`
+          : `已提交 ${stepId}，处理 ${consumed.source.sourceId}`,
     };
   };
 }

@@ -13,12 +13,8 @@
  * ```
  *
  * 未显式开启时整个文件只留一条 skip 记录：不解析身份、不调用 Orca、不打开数据库。隔离项目必须已经
- * 初始化过一个 Coordination Scope 且至少注册两个 Coordinator Session（Source 与 Target）。
- *
- * 已知前置缺口（实施记录，不在测试里绕过）：`src/bootstrap/tui-composition.ts` 对 planning handoff
- * 一律返回 `<capability>_unavailable` 的结构化拒绝（`ANCHORED_CAPABILITY_GAPS.planning_handoff`），
- * 因此当前实现下这条用例无法通过 TUI 真正完成 cutover。测试在这条缺口存在时 skip 并写明原因，而不是
- * 伪造通过；缺口消失后同一用例即可运行。
+ * 初始化过一个 Coordination Scope 且至少注册两个 Coordinator Session（Source 与 Target），并且
+ * Target 必须由用户在 Session Picker 里显式选中——交接的接收方从不由宿主或测试推断。
  */
 
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
@@ -37,7 +33,6 @@ import {
   resolveGitCommonDir,
 } from '../../src/bootstrap/composition.js';
 import { checkpointDatabasePath } from '../../src/bootstrap/coordinator-runtime.js';
-import { ANCHORED_CAPABILITY_GAPS } from '../../src/bootstrap/tui-capability-gaps.js';
 import { toChildEnvironment } from '../../src/interfaces/cli/main.js';
 import { COMMAND_IDS } from '../../src/interfaces/tui/components/command-palette.js';
 
@@ -223,15 +218,9 @@ if (gate.kind === 'skip') {
   test.skip(`真实 PTY 规划 Handoff 未运行：${gate.reason}`, () => {});
 } else {
   const pty = probePty();
-  const handoffGap: string = ANCHORED_CAPABILITY_GAPS.planning_handoff;
 
   if (!pty.ok) {
     test.skip(`真实 PTY 规划 Handoff 未运行：${pty.reason}`, () => {});
-  } else if (handoffGap.length > 0) {
-    test.skip(
-      `真实 PTY 规划 Handoff 未运行：TUI 装配层对 planning handoff fail closed（src/bootstrap/tui-composition.ts:325-332；${handoffGap}）`,
-      () => {},
-    );
   } else {
     test(
       '真实 PTY 中完成 Route Planning Handoff，cutover 后 Target 处于 awaiting_user_prompt',
@@ -255,6 +244,20 @@ if (gate.kind === 'skip') {
 
           const workspace = pollPane(socket, session, (text) => text.includes('composer ·'));
           expect(workspace.ok, `TUI 未在隔离项目中进入 workspace：\n${workspace.text}`).toBe(true);
+
+          // 先在 Session Picker 里把接收方选为当前 Session：交接的 Target 只能由用户明确选择，
+          // 宿主不会替用户挑一个接收方（Source 与 Target 相同会被拒绝）。
+          tmux(socket, ['send-keys', '-t', session, 'C-p']);
+          expect(pollPane(socket, session, (text) => text.includes('Command Palette')).ok).toBe(true);
+          const pickerIndex = COMMAND_IDS.indexOf('session-picker');
+          expect(pickerIndex).toBeGreaterThanOrEqual(0);
+          for (let index = 0; index < pickerIndex; index += 1) {
+            tmux(socket, ['send-keys', '-t', session, 'Down']);
+          }
+          tmux(socket, ['send-keys', '-t', session, 'Enter']);
+          expect(pollPane(socket, session, (text) => text.includes('Session')).ok).toBe(true);
+          tmux(socket, ['send-keys', '-t', session, 'Down']);
+          tmux(socket, ['send-keys', '-t', session, 'Enter']);
 
           // Ctrl+P → 选中 `/handoff` → Enter prepare（Review 由 Controller 提案驱动）。
           tmux(socket, ['send-keys', '-t', session, 'C-p']);

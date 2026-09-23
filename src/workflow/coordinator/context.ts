@@ -13,12 +13,17 @@
  */
 
 import type { BaseMessage } from '@langchain/core/messages';
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 
-import type {
-  NativeCompactedWindowOwner,
-  NativeWindowItemRef,
-  PortableContextCapsule,
+import type { OperationId } from '../../application/dto/identity.js';
+import {
+  DURABLE_MESSAGE_ROLES,
+  type CommittedMessageEntry,
+  type CommittedToolCall,
+  type DurableMessageRole,
+  type NativeCompactedWindowOwner,
+  type NativeWindowItemRef,
+  type PortableContextCapsule,
 } from '../../domain/coordinator/session-state.js';
 import { compactWithNativeFirst, type CompactionResult } from './compaction.js';
 import {
@@ -47,15 +52,13 @@ export class ContextMaintenanceError extends Error {
 /**
  * 会话历史里消息的持久化角色闭集。
  *
- * 这是 Companion 自己拥有的词表：provider 与 LangChain 的拼写不同（`ai` 与 `assistant`、
- * `human` 与 `user`），如果直接把 provider 对象存进 checkpoint，重开之后就再也读不出角色。
- * 因此所有进入历史的响应都先归一化成这个形状。
+ * 词表由 `src/domain/coordinator/session-state.js` 拥有：workflow 侧只消费它，不再定义第二份，
+ * 否则「checkpoint 能存什么角色」会有两个事实源。
  */
-export const DURABLE_MESSAGE_ROLES = ['system', 'user', 'assistant', 'tool'] as const;
+export { DURABLE_MESSAGE_ROLES };
+export type { DurableMessageRole };
 
-export type DurableMessageRole = (typeof DURABLE_MESSAGE_ROLES)[number];
-
-/** 一条可持久化的会话消息；`CoordinatorSessionState.committedMessages` 由它组成。 */
+/** 一条可持久化的会话消息；它是 `CommittedMessageEntry` 去掉稳定身份后的形状。 */
 export type DurableMessage = {
   readonly role: DurableMessageRole;
   readonly content: string;
@@ -167,15 +170,134 @@ export function fromDurableMessage(value: unknown): BaseMessage {
     case 'assistant':
       return new AIMessage({
         content,
-        ...(toolCalls === undefined ? {} : { tool_calls: toolCalls as never }),
+        ...(toolCalls === undefined ? {} : { tool_calls: langchainToolCalls(toolCalls) as never }),
       });
     case 'tool':
-      // tool 结果的精确归属（tool_call_id 配对）属于后续 change 的工具契约；这里只保留内容，
-      // 不伪造调用标识。
-      return new HumanMessage(`[tool result] ${content}`);
+      return toolMessageFrom(value, content);
     case 'user':
       return new HumanMessage(content);
   }
+}
+
+/**
+ * 已提交的 tool call 还原成 LangChain 的 `tool_calls` 形状。
+ *
+ * 身份取自持久化的 `callId`——它就是 provider 的 call ID，所以模型看到的调用与它自己的请求是
+ * 同一个；v1 升级或 `toDurableMessage` 留下的 provider 形状（`{id, name, args}`）本身就是权威
+ * 形状，原样透传。
+ */
+function langchainToolCalls(calls: readonly unknown[]): readonly unknown[] {
+  return calls.map((call) => {
+    if (!isRecord(call)) {
+      return call;
+    }
+    const callId = call['callId'];
+    return typeof callId === 'string' && callId.length > 0
+      ? { id: callId, name: call['name'], args: call['args'], type: 'tool_call' }
+      : call;
+  });
+}
+
+/** tool entry 还原成真正的 `ToolMessage`：配对身份必须来自持久化记录，而不是推断。 */
+function toolMessageFrom(value: unknown, content: string): ToolMessage {
+  const toolCallId = isRecord(value) ? value['toolCallId'] : undefined;
+  const toolName = isRecord(value) ? value['toolName'] : undefined;
+  if (typeof toolCallId !== 'string' || toolCallId.length === 0) {
+    throw new ContextMaintenanceError('历史中的 tool 消息缺少被回答的 call 身份，无法与调用配对');
+  }
+  if (typeof toolName !== 'string' || toolName.length === 0) {
+    throw new ContextMaintenanceError('历史中的 tool 消息缺少工具名，无法与调用配对');
+  }
+  return new ToolMessage({ content, tool_call_id: toolCallId, name: toolName });
+}
+
+/**
+ * 把一次完整模型响应归一化成一条带稳定身份的 durable entry。
+ *
+ * 复用 `toDurableMessage` 的角色与内容归一化规则；调用清单必须由调用方校验后传入——模型响应的
+ * 原始 `tool_calls` 不是可信身份，它只是「模型想做什么」。
+ */
+export function entryFromResponse(
+  value: unknown,
+  input: {
+    readonly stepId: string;
+    readonly entryId: string;
+    readonly toolCalls: readonly CommittedToolCall[];
+  },
+): CommittedMessageEntry {
+  const durable = toDurableMessage(value);
+  const base = {
+    entryId: input.entryId,
+    stepId: input.stepId,
+    role: durable.role,
+    content: durable.content,
+  };
+  if (durable.role === 'assistant') {
+    return input.toolCalls.length === 0 ? base : { ...base, toolCalls: input.toolCalls };
+  }
+  if (durable.role === 'tool') {
+    // 模型响应里出现 tool 角色时，配对身份只接受持久化的字段名，不猜 provider 的拼写。
+    const toolCallId = isRecord(value) ? value['toolCallId'] : undefined;
+    const toolName = isRecord(value) ? value['toolName'] : undefined;
+    if (typeof toolCallId !== 'string' || toolCallId.length === 0 || typeof toolName !== 'string') {
+      throw new ContextMaintenanceError('tool 角色的响应缺少 toolCallId 或 toolName，无法与调用配对');
+    }
+    return { ...base, toolCallId, toolName };
+  }
+  return base;
+}
+
+/**
+ * 从模型响应里读并校验受支持的 tool calls，并为每个 call 派生可信身份。
+ *
+ * 缺失或不合法时返回拒绝理由而不是补一个默认值：调用清单是「模型请求了什么」的唯一记录，
+ * 猜一个 call ID 就等于允许重复副作用。`mapOperationId` 只对 `resolve_ticket` 有意义，其它工具
+ * 一律为 `null`（它们只发起一次副作用）。
+ */
+export function parseModelToolCalls(
+  value: unknown,
+  allowedNames: readonly string[],
+  derive: (callId: string) => { readonly operationId: OperationId; readonly mapOperationId: OperationId | null },
+):
+  | { readonly ok: true; readonly calls: readonly CommittedToolCall[] }
+  | { readonly ok: false; readonly reason: string } {
+  const raw = isRecord(value) ? value['tool_calls'] : undefined;
+  if (raw === undefined || raw === null) {
+    return { ok: true, calls: [] };
+  }
+  if (!Array.isArray(raw)) {
+    return { ok: false, reason: 'tool_calls 不是数组' };
+  }
+  const calls: CommittedToolCall[] = [];
+  for (const [index, entry] of raw.entries()) {
+    if (!isRecord(entry)) {
+      return { ok: false, reason: `第 ${String(index + 1)} 个 tool call 不是对象` };
+    }
+    const callId = entry['callId'] ?? entry['id'];
+    if (typeof callId !== 'string' || callId.length === 0) {
+      return { ok: false, reason: `第 ${String(index + 1)} 个 tool call 缺少非空 callId` };
+    }
+    const name = entry['name'];
+    if (typeof name !== 'string' || !allowedNames.includes(name)) {
+      return {
+        ok: false,
+        reason: `第 ${String(index + 1)} 个 tool call 请求了未注册的工具 ${String(name)}`,
+      };
+    }
+    const args = entry['args'];
+    if (!isRecord(args)) {
+      return { ok: false, reason: `第 ${String(index + 1)} 个 tool call 的 args 不是对象` };
+    }
+    const identity = derive(callId);
+    calls.push({
+      callId,
+      name,
+      args,
+      operationId: identity.operationId,
+      mapOperationId: name === 'resolve_ticket' ? identity.mapOperationId : null,
+    });
+  }
+  return { ok: true, calls };
 }
 
 function classify(message: unknown, stepId: string): DurableMessage {

@@ -10,7 +10,7 @@
 |---|---|---|---|
 | IC-01 | `m0-orca-control-baseline` | 无 | 全部后继 change |
 | IC-02 | `m0-orca-control-baseline` | Change 5 增加物化操作；Change 7 增加对账 query | 所有外部控制用例 |
-| IC-03 | `m1-persist-coordination-state` | Changes 3–8 增加各自最小记录与 query/command variant；`m1-wire-foreground-planning-runtime` 增加 Scope 注册绑定与交互回答正文 | Controller、status、recovery、TUI projection |
+| IC-03 | `m1-persist-coordination-state` | Changes 3–8 增加各自最小记录与 query/command variant；`m1-wire-foreground-planning-runtime` 增加 Scope 注册绑定、交互回答正文与 Session 模型绑定更新 | Controller、status、recovery、TUI projection |
 | IC-04 | `m1-run-coordinator-sessions` | `m1-wire-foreground-planning-runtime` 增加用户消息、工具结果与压缩结论 | Planning、Recovery、ControllerService、TUI |
 | IC-05 | `m1-plan-and-authorize-execution` | Change 8 只扩展 `ExecutionGraphHistory.appendAcceptedRevision` | Specification、Execution、Recovery、TUI |
 | IC-06 | `m1-admit-work-package-specifications` | Change 8 使用同一 provider 实施 Specification Revision | Execution、Recovery、Graph evolution |
@@ -126,7 +126,7 @@ interface ExecutionBackend {
 
 - **Owner (Create)**: `m1-persist-coordination-state`
 - **Canonical paths**: `src/application/ports/branch-coordination-store.ts`、`src/adapters/storage/coordination-store.ts`、`src/adapters/storage/schema.ts`
-- **Extenders (Extend)**: Changes 3–8 通过版本化 migration 增加各自最小记录和闭合 query/command variant；`m1-wire-foreground-planning-runtime` 追加 schema 10 的 Scope 注册绑定、交互回答正文与一次性绑定命令
+- **Extenders (Extend)**: Changes 3–8 通过版本化 migration 增加各自最小记录和闭合 query/command variant；`m1-wire-foreground-planning-runtime` 追加 schema 10 的 Scope 注册绑定、交互回答正文、一次性绑定命令与 Session 的 Coordinator Model Configuration 绑定更新
 - **Consumers (Consume)**: Application services、status projection、startup reconciliation、ControllerService
 
 ```ts
@@ -163,7 +163,9 @@ type CoordinationCommandResult =
 
 所有写入是短事务；唯一约束保护活跃 Runtime Lease、Execution Coordination Lease 和 Ticket Claim。`scope.revision` 只由成功共享事实写入推进；lease heartbeat 只更新 lease 行，不推进业务 revision。Schema version 高于实现时拒绝启动，低于实现时按可重入、单事务 migration 顺序升级。
 
-`m1-wire-foreground-planning-runtime` 把 schema 9 升为 10：新 Scope 必有完整 ref 与 canonical worktree，旧 Scope 的 nullable 绑定只可经用户确认、Git 身份核验及无存活 Runtime Lease 的一次性 CAS 命令补齐；不得从 cwd 猜测。当前 Git 身份始终由 Git 读取，注册绑定不是 Git 当前状态的镜像。
+`m1-wire-foreground-planning-runtime` 把 schema 9 升为 10：新 Scope 必有完整 ref 与 canonical worktree，旧 Scope 的 nullable 绑定只可经用户确认、Git 身份核验及无存活 Runtime Lease 的一次性 CAS 命令（`bind-scope-identity`）补齐；不得从 cwd 猜测。当前 Git 身份始终由 Git 读取，注册绑定不是 Git 当前状态的镜像。同一 common dir 内一个完整 branch ref 至多属于一个 Scope。
+
+模型切换的持久化同样落在本合同的现有记录上：`update-session-model-configuration` 只按 CAS 更新 `session_registry.coordinator_model_configuration_ref`，不改写身份字段，也不创建第二份配置记录；项目配置仍是可用配置集合的唯一来源。
 
 - **错误/事务**：stale revision、fenced writer、唯一约束和非法状态结构化拒绝；不自动重试业务 command。
 - **测试 seam**：使用临时真实 SQLite adapter 测试事务、约束、migration 与重开；Application 用例可使用内存 fake，但不得测试一套不同状态机。

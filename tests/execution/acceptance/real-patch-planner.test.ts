@@ -535,6 +535,8 @@ if (resolved.kind === 'skip') {
           coordinatorSessionId: sessionId,
           coordinatorModelConfigurationRef: `${resolved.integration}#${resolved.model}`,
           planningCycleId: `${resolved.identity}:cycle-1` as PlanningCycleId,
+          fullBranchRef: `refs/heads/${resolved.identity}`,
+          canonicalWorktreePath: '/tmp/orca-real-worktree',
         });
         if (initialized.kind !== 'initialized') {
           throw new Error(`无法初始化 Scope：${initialized.code} ${initialized.message}`);

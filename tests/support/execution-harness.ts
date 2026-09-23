@@ -196,6 +196,8 @@ export function createExecutionScopeHarness(options?: {
     coordinatorSessionId: EXECUTION_SESSION,
     coordinatorModelConfigurationRef: 'model-config-1',
     planningCycleId: EXECUTION_CYCLE,
+    fullBranchRef: `refs/heads/${EXECUTION_SCOPE}`,
+    canonicalWorktreePath: '/tmp/orca-execution-worktree',
   });
   if (initialized.kind !== 'initialized') {
     throw new Error('测试基座无法创建 Scope');

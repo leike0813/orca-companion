@@ -13,7 +13,16 @@
 import { Annotation } from '@langchain/langgraph';
 
 import type { ProjectedActionableWorkItem } from '../../application/coordinator/actionable-work.js';
-import type { NativeWindowItemRef } from '../../domain/coordinator/session-state.js';
+import {
+  COMPACTION_PATHS,
+  toolResultEntryId,
+  type CommittedMessageEntry,
+  type CommittedModelStep,
+  type CompactionOutcome,
+  type CompactionPath,
+  type CoordinatorSessionState,
+  type NativeWindowItemRef,
+} from '../../domain/coordinator/session-state.js';
 
 /**
  * D1：图状态在每个 super-step 边界同步提交。
@@ -56,10 +65,12 @@ export type HistorySegment =
       readonly items: readonly NativeWindowItemRef[];
     };
 
-/** 压缩路径的封闭取值；`none` 表示本次没有压缩。 */
-export const COMPACTION_PATHS = ['none', 'provider_native', 'context_capsule', 'mechanical_shake'] as const;
-
-export type CompactionPath = (typeof COMPACTION_PATHS)[number];
+/**
+ * 压缩路径与压缩结果由 `src/domain/coordinator/session-state.js` 拥有（它们是 checkpoint 里
+ * `lastCompactionOutcome` 的取值形状）；workflow 侧只消费它们，不再定义第二份。
+ */
+export { COMPACTION_PATHS };
+export type { CompactionOutcome, CompactionPath };
 
 /**
  * 一次 Capsule 派生的结果：新的 Capsule 片段，以及它取代了多少个前导 `messages` 片段。
@@ -70,23 +81,6 @@ export type CapsuleDerivation = {
   readonly segment: Extract<HistorySegment, { kind: 'capsule' }>;
   readonly replacedCount: number;
 };
-
-/**
- * 压缩结果（D9）。
- *
- * `compaction_degraded` 与 `context_exhausted` 都是显式终态：前者表示某条路径可用但没有取得
- * 新进展，后者表示所有路径都已尝试而输入仍然超预算。两者都不得被读成「已完成压缩」。
- */
-export type CompactionOutcome =
-  | { readonly kind: 'not_needed'; readonly path: 'none'; readonly note: string }
-  | {
-      readonly kind: 'compacted';
-      readonly path: Exclude<CompactionPath, 'none'>;
-      readonly compactedTokens: number;
-      readonly note: string;
-    }
-  | { readonly kind: 'compaction_degraded'; readonly path: CompactionPath; readonly reason: string }
-  | { readonly kind: 'context_exhausted'; readonly reason: string; readonly stillOverBudget: number };
 
 /** provider-native 压缩的可用性。 */
 export type NativeCompactionAvailability =
@@ -123,11 +117,39 @@ export const COORDINATOR_GRAPH_CHANNELS = Annotation.Root({
     reducer: (_left: number, right: number) => right,
     default: () => 0,
   }),
+  /**
+   * 已提交但还没有配对结果的受控 tool call 数。
+   *
+   * 非零即表示必须先进 tools 节点：重启后的第一次 invoke 由宿主用 `pendingToolCallsIn` 播种这个
+   * 值，因此「响应已落盘、结果还没写」的崩溃点会被补齐，而不是被当成最终响应消费掉工作。
+   */
+  pendingToolCalls: Annotation<number>({
+    reducer: (_left: number, right: number) => right,
+    default: () => 0,
+  }),
   note: Annotation<string>({
     reducer: (_left: string, right: string) => right,
     default: () => '',
   }),
 });
+
+/**
+ * 从已提交会话记录派生「还有多少个待执行的受控调用」。
+ *
+ * 只看最后一个 Committed Model Step：更早的 step 要么已经有结果，要么已被后续响应取代。
+ * 宿主重启后据此决定是否让图先进 tools 节点。
+ */
+export function pendingToolCallsIn(
+  state: Pick<CoordinatorSessionState, 'committedMessages' | 'committedModelSteps'>,
+): number {
+  const step: CommittedModelStep | undefined =
+    state.committedModelSteps[state.committedModelSteps.length - 1];
+  if (step === undefined) {
+    return 0;
+  }
+  const answered = new Set(state.committedMessages.map((entry: CommittedMessageEntry) => entry.entryId));
+  return step.toolCalls.filter((call) => !answered.has(toolResultEntryId(step.stepId, call.callId))).length;
+}
 
 /**
  * 本次 invoke 的结局。

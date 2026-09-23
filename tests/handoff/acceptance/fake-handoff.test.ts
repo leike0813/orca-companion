@@ -220,6 +220,7 @@ async function createHandoffFixture(): Promise<HandoffFixture> {
     graphPosition: 'suspend',
     committedModelSteps: [],
     wakeBatches: [],
+    lastCompactionOutcome: null,
   });
   checkpoint.store.close();
   if (saved.kind !== 'saved') {

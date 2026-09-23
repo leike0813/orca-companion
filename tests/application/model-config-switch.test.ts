@@ -18,6 +18,7 @@ import type { CoordinatorSessionId } from '../../src/application/dto/identity.js
 import { openCheckpointStore, type CheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
 import {
   COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
+  assistantEntryId,
   type CommittedModelStep,
   type CoordinatorSessionState,
   type PortableContextCapsule,
@@ -65,8 +66,10 @@ function configuration(overrides: Partial<CoordinatorModelConfiguration> = {}): 
 function step(stepId: string, content: string): CommittedModelStep {
   return {
     stepId,
+    entryId: assistantEntryId(stepId),
     committedAt: 1_000,
     messages: [{ role: 'assistant', content }],
+    toolCalls: [],
     usage: null,
   };
 }
@@ -75,10 +78,13 @@ function seed(state: Partial<CoordinatorSessionState> = {}): void {
   const saved = store.saveCheckpoint({
     schemaVersion: COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
     coordinatorSessionId: SESSION,
-    committedMessages: [{ role: 'assistant', content: '先读地图' }],
+    committedMessages: [
+      { entryId: assistantEntryId('step-1'), stepId: 'step-1', role: 'assistant', content: '先读地图' },
+    ],
     graphPosition: SUSPENSION_GRAPH_POSITION,
     committedModelSteps: [step('step-1', '先读地图')],
     wakeBatches: [],
+    lastCompactionOutcome: null,
     ...state,
   });
   if (saved.kind !== 'saved') {
@@ -167,6 +173,7 @@ test('切换成功时先持久化 checkpoint，再清空旧 cache 与维护计�
           return store.saveCheckpoint(state);
         },
         readCommittedMessages: (sessionId) => store.readCommittedMessages(sessionId),
+        commitUserMessage: (input) => store.commitUserMessage(input),
       },
       clearDerivedCaches: () => {
         order.push('cache:clear');
@@ -210,7 +217,9 @@ test('不兼容的 native window 先迁移为 Capsule，迁移成功才继续', 
   // 原生项已清除，Capsule 成为该区间的表示；底层原始消息仍可读回。
   expect(store.loadNativeWindowOwner(SESSION)).toBeNull();
   expect(store.loadPortableCapsule(SESSION)?.replacedFromStepId).toBe('step-1');
-  expect(store.readCommittedMessages(SESSION)).toEqual([{ role: 'assistant', content: '先读地图' }]);
+  expect(store.readCommittedMessages(SESSION)).toEqual([
+    { entryId: assistantEntryId('step-1'), stepId: 'step-1', role: 'assistant', content: '先读地图' },
+  ]);
 });
 
 test('迁移失败时保持原配置并保持 suspended 或 blocked', async () => {
@@ -327,6 +336,7 @@ test('migrateNativeWindowToCapsule 在没有原生项时不动作', () => {
       graphPosition: 'start',
       committedModelSteps: [],
       wakeBatches: [],
+      lastCompactionOutcome: null,
     },
     deriveCapsule,
     checkpoints: store,
@@ -346,6 +356,7 @@ test('没有已提交历史时无法迁移，保持阻塞而不是丢弃原生�
       graphPosition: 'start',
       committedModelSteps: [],
       wakeBatches: [],
+      lastCompactionOutcome: null,
     },
     deriveCapsule,
     checkpoints: store,

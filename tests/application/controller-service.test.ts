@@ -31,6 +31,7 @@ import {
   type ControllerCommandResult,
   type ControllerEventSource,
   type ControllerNotification,
+  type ControllerNotificationMessage,
   type ControllerSnapshot,
   type ControllerSnapshotReaderInput,
   type ControllerTranscriptReaderInput,
@@ -42,6 +43,7 @@ import {
   type ScopeControlCommand,
   type SendSessionMessageCommand,
   type SemanticEvent,
+  type SemanticEventEnvelope,
   type SwitchModelConfigurationCommand,
 } from '../../src/application/controller-service.js';
 import type {
@@ -188,13 +190,19 @@ function accepted(summary: string): DelegatedOutcome {
   return { kind: 'accepted', revision: 5, summary };
 }
 
+/**
+ * 可控事件源：发布者按 `ControllerNotificationMessage` 提交 `{ envelope, notification }`。
+ *
+ * `emit` 省略 envelope 时补一个默认归属（当前 Session），这样只关心装配的用例不必反复写它。
+ */
 function fakeEventSource(): {
   readonly source: ControllerEventSource;
-  emit(notification: ControllerNotification): void;
+  emit(notification: ControllerNotification, envelope?: SemanticEventEnvelope): void;
   unsubscribed(): number;
 } {
-  const listeners = new Set<(notification: ControllerNotification) => void>();
+  const listeners = new Set<(message: ControllerNotificationMessage) => void>();
   let unsubscribes = 0;
+  let emitted = 0;
   return {
     source: {
       subscribe: (listener) => {
@@ -205,12 +213,28 @@ function fakeEventSource(): {
         };
       },
     },
-    emit: (notification) => {
+    emit: (notification, envelope) => {
+      emitted += 1;
+      const message: ControllerNotificationMessage = {
+        envelope: envelope ?? { eventId: `event-${String(emitted)}`, coordinatorSessionId: SESSION },
+        notification,
+      };
       for (const listener of [...listeners]) {
-        listener(notification);
+        listener(message);
       }
     },
     unsubscribed: () => unsubscribes,
+  };
+}
+
+/** 构造一条候选通知：身份用例自己写 envelope，只关心过滤的用例用默认归属。 */
+function message(
+  notification: ControllerNotification,
+  coordinatorSessionId: string | null = SESSION,
+): ControllerNotificationMessage {
+  return {
+    envelope: { eventId: `message-${notification.kind}`, coordinatorSessionId },
+    notification,
   };
 }
 
@@ -319,7 +343,7 @@ function harness(options: { readonly realStoreUseCases: boolean }): {
         writer: input.writer,
         interactionId: input.interactionId,
         expectedRevision: input.expectedRevision,
-        answerRef: input.answerRef,
+        answer: input.answer,
       });
       return Promise.resolve(
         result.kind === 'answered'
@@ -343,6 +367,9 @@ function harness(options: { readonly realStoreUseCases: boolean }): {
         coordinatorSessionId: input.coordinatorSessionId,
         coordinatorModelConfigurationRef: input.coordinatorModelConfigurationRef,
         planningCycleId: input.planningCycleId as PlanningCycleId,
+        // 注册绑定是唯一的：同一个库里两个 Scope 不能登记同一个 branch ref。
+        fullBranchRef: 'refs/heads/second',
+        canonicalWorktreePath: '/tmp/orca-test-worktree',
       });
       return Promise.resolve(
         result.kind === 'initialized'
@@ -370,6 +397,8 @@ beforeEach(() => {
     coordinatorSessionId: SESSION,
     coordinatorModelConfigurationRef: 'model-config-a',
     planningCycleId: CYCLE,
+    fullBranchRef: 'refs/heads/main',
+    canonicalWorktreePath: '/tmp/orca-test-worktree',
   });
   if (initialized.kind !== 'initialized') {
     throw new Error('无法创建测试 Scope');
@@ -393,7 +422,14 @@ afterEach(() => {
 test('每个 command variant 只委派一次到对应用例，并原样透传结果', async () => {
   const commands: readonly { readonly command: ControllerCommand; readonly expected: string }[] = [
     {
-      command: { kind: 'send-session-message', coordinationScopeId: SCOPE, writer: WRITER, coordinatorSessionId: SESSION, content: '你好' },
+      command: {
+        kind: 'send-session-message',
+        coordinationScopeId: SCOPE,
+        writer: WRITER,
+        coordinatorSessionId: SESSION,
+        submissionId: 'submission-1',
+        content: '你好',
+      },
       expected: 'sessionMessages',
     },
     {
@@ -541,7 +577,7 @@ test('过期的 Pending Interaction 回答被拒绝：零副作用、交互保�
     interactionId: 'interaction-1' as InteractionId,
     // 过期的回答绑定的是提问之前的 revision。
     expectedRevision: binding - 1,
-    answerRef: { kind: 'answer', id: 'answer-1' },
+    answer: '过期的回答正文',
   });
 
   expect(result.kind).toBe('rejected');
@@ -556,6 +592,57 @@ test('过期的 Pending Interaction 回答被拒绝：零副作用、交互保�
       ? snapshot.snapshot.pendingInteractions.find((entry) => entry.interactionId === ('interaction-1' as InteractionId))
       : undefined;
   expect(interaction?.state).toBe('open');
+  // 零副作用也要覆盖回答正文：过期回答不留下任何正文或引用。
+  expect(interaction?.answerText).toBeNull();
+  expect(interaction?.answerRef).toBeNull();
+});
+
+test('回答正文进入应用用例：派生稳定 answerRef，并与解决状态一起写入', async () => {
+  const { service, calls, counting } = harness({ realStoreUseCases: true });
+  store.transact({
+    kind: 'record-pending-interaction',
+    coordinationScopeId: SCOPE,
+    expectedRevision: readScopeRevision(),
+    writer: WRITER,
+    interactionId: 'interaction-3' as InteractionId,
+    ownerCoordinatorSessionId: SESSION,
+    subjectRef: { kind: 'worker-question', id: 'question-3' },
+  });
+  const recorded = store.query({ kind: 'snapshot', coordinationScopeId: SCOPE });
+  const binding =
+    recorded.kind === 'snapshot'
+      ? recorded.snapshot.pendingInteractions.find(
+          (entry) => entry.interactionId === ('interaction-3' as InteractionId),
+        )?.expectedRevision
+      : undefined;
+  if (binding === undefined) {
+    throw new Error('无法读回交互绑定');
+  }
+
+  const result = await service.execute({
+    kind: 'answer-pending-interaction',
+    coordinationScopeId: SCOPE,
+    writer: WRITER,
+    interactionId: 'interaction-3' as InteractionId,
+    expectedRevision: binding,
+    answer: '按方案 B 执行',
+  });
+
+  expect(result.kind).toBe('accepted');
+  // façade 只搬运正文：answerRef 由用例派生，界面不构造它。
+  expect(calls.pendingInteractions).toHaveLength(1);
+  expect(calls.pendingInteractions[0]?.answer).toBe('按方案 B 执行');
+  expect(counting.commands.filter((command) => command.kind === 'resolve-pending-interaction')).toHaveLength(1);
+  const snapshot = store.query({ kind: 'snapshot', coordinationScopeId: SCOPE });
+  const interaction =
+    snapshot.kind === 'snapshot'
+      ? snapshot.snapshot.pendingInteractions.find(
+          (entry) => entry.interactionId === ('interaction-3' as InteractionId),
+        )
+      : undefined;
+  expect(interaction?.state).toBe('answered');
+  expect(interaction?.answerRef).toEqual({ kind: 'interaction-answer', id: 'interaction-3' });
+  expect(interaction?.answerText).toBe('按方案 B 执行');
 });
 
 test('普通 Session 消息不满足 Pending Interaction', async () => {
@@ -575,6 +662,7 @@ test('普通 Session 消息不满足 Pending Interaction', async () => {
     coordinationScopeId: SCOPE,
     writer: WRITER,
     coordinatorSessionId: SESSION,
+    submissionId: 'submission-2',
     content: '这就是回答？',
   });
 
@@ -616,42 +704,78 @@ test('订阅者只收到语义事件，取消订阅只移除 listener', () => {
   events.emit({ kind: 'poll-timeout', source: 'worker-read' });
   events.emit({ kind: 'unchanged-reconciliation', at: now });
   events.emit({ kind: 'diagnostic', message: 'noise' });
-  events.emit({ kind: 'state-changed', coordinationScopeId: SCOPE, revision: 1, reason: 'committed' });
-  events.emit({
-    kind: 'interaction-opened',
-    coordinationScopeId: SCOPE,
-    interactionId: 'interaction-1',
-    expectedRevision: 1,
-  });
+  events.emit(
+    { kind: 'state-changed', coordinationScopeId: SCOPE, revision: 1, reason: 'committed' },
+    { eventId: 'event-1', coordinatorSessionId: SESSION },
+  );
+  events.emit(
+    {
+      kind: 'interaction-opened',
+      coordinationScopeId: SCOPE,
+      interactionId: 'interaction-1',
+      expectedRevision: 1,
+    },
+    { eventId: 'event-2', coordinatorSessionId: OTHER_SESSION },
+  );
+  events.emit(
+    { kind: 'scope-control-changed', coordinationScopeId: SCOPE, controlState: 'paused' },
+    { eventId: 'event-3', coordinatorSessionId: null },
+  );
 
-  expect(received.map((event) => event.kind)).toEqual(['state-changed', 'interaction-opened']);
-  expect(other).toHaveLength(2);
+  expect(received.map((event) => event.kind)).toEqual([
+    'state-changed',
+    'interaction-opened',
+    'scope-control-changed',
+  ]);
+  // envelope 原样透传：eventId 逐条不同，归属照搬（Scope 级事件是 null，不伪造 Session）。
+  expect(received.map((event) => event.eventId)).toEqual(['event-1', 'event-2', 'event-3']);
+  expect(received.map((event) => event.coordinatorSessionId)).toEqual([SESSION, OTHER_SESSION, null]);
+  expect(other).toHaveLength(3);
 
   unsubscribe();
-  events.emit({ kind: 'state-changed', coordinationScopeId: SCOPE, revision: 2, reason: 'committed' });
+  events.emit(
+    { kind: 'state-changed', coordinationScopeId: SCOPE, revision: 2, reason: 'committed' },
+    { eventId: 'event-4', coordinatorSessionId: SESSION },
+  );
 
   // 取消订阅只移除该 listener：另一个订阅者仍然收到事件，事件源没有被取消订阅。
-  expect(received).toHaveLength(2);
-  expect(other).toHaveLength(3);
+  expect(received).toHaveLength(3);
+  expect(other).toHaveLength(4);
   expect(events.unsubscribed()).toBe(0);
 });
 
 test('噪声通知在 toSemanticEvent 处被丢弃', () => {
-  expect(toSemanticEvent({ kind: 'keepalive', at: 1 })).toBeNull();
-  expect(toSemanticEvent({ kind: 'stderr', line: 'x' })).toBeNull();
-  expect(toSemanticEvent({ kind: 'poll-timeout', source: 'x' })).toBeNull();
-  expect(toSemanticEvent({ kind: 'unchanged-reconciliation', at: 1 })).toBeNull();
-  expect(toSemanticEvent({ kind: 'diagnostic', message: 'x' })).toBeNull();
+  expect(toSemanticEvent(message({ kind: 'keepalive', at: 1 }))).toBeNull();
+  expect(toSemanticEvent(message({ kind: 'stderr', line: 'x' }))).toBeNull();
+  expect(toSemanticEvent(message({ kind: 'poll-timeout', source: 'x' }))).toBeNull();
+  expect(toSemanticEvent(message({ kind: 'unchanged-reconciliation', at: 1 }))).toBeNull();
+  expect(toSemanticEvent(message({ kind: 'diagnostic', message: 'x' }))).toBeNull();
+  const semantic = toSemanticEvent(
+    message({ kind: 'state-changed', coordinationScopeId: SCOPE, revision: 1, reason: 'x' }, OTHER_SESSION),
+  );
+  expect(semantic?.kind).toBe('state-changed');
+  // 语义事件带发布者给的身份与归属；Scope 级事件的归属是 null，不被伪造。
+  expect(semantic?.eventId).toBe('message-state-changed');
+  expect(semantic?.coordinatorSessionId).toBe(OTHER_SESSION);
   expect(
-    toSemanticEvent({ kind: 'state-changed', coordinationScopeId: SCOPE, revision: 1, reason: 'x' })?.kind,
-  ).toBe('state-changed');
+    toSemanticEvent(
+      message({ kind: 'scope-control-changed', coordinationScopeId: SCOPE, controlState: 'paused' }, null),
+    )?.coordinatorSessionId,
+  ).toBeNull();
 });
 
 test('façade 不直连 store 或 Orca adapter：委派入口不触碰它们，走真实用例时才触碰', async () => {
   const { service, counting, backend } = harness({ realStoreUseCases: true });
 
   for (const command of [
-    { kind: 'send-session-message', coordinationScopeId: SCOPE, writer: WRITER, coordinatorSessionId: SESSION, content: 'hi' },
+    {
+      kind: 'send-session-message',
+      coordinationScopeId: SCOPE,
+      writer: WRITER,
+      coordinatorSessionId: SESSION,
+      submissionId: 'submission-3',
+      content: 'hi',
+    },
     { kind: 'compact-session', coordinationScopeId: SCOPE, writer: WRITER, coordinatorSessionId: SESSION, reason: 'manual' },
     { kind: 'switch-model-configuration', coordinationScopeId: SCOPE, writer: WRITER, coordinatorSessionId: SESSION, nextConfigurationRef: 'config-b' },
     { kind: 'execution-handoff', action: 'cancel', coordinationScopeId: SCOPE, writer: WRITER, handoffId: 'handoff-1' },
@@ -972,7 +1096,9 @@ test('图演进语义事件原样发布，噪声仍被丢弃', () => {
     { kind: 'keepalive', at: 1 },
     { kind: 'diagnostic', message: 'noise' },
   ];
-  expect(notifications.map((notification) => toSemanticEvent(notification)?.kind ?? null)).toEqual([
+  expect(
+    notifications.map((notification) => toSemanticEvent(message(notification, 'session-b'))?.kind ?? null),
+  ).toEqual([
     'graph-version-appended',
     'revision-hold-changed',
     'generation-status-changed',

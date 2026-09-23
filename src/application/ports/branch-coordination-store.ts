@@ -66,6 +66,14 @@ export type PendingInteractionState = (typeof PENDING_INTERACTION_STATES)[number
 
 export type ScopeRecord = {
   readonly coordinationScopeId: CoordinationScopeId;
+  /**
+   * 用户登记的完整 branch ref 与 canonical worktree 绑定。
+   *
+   * 它是**不可原地改写**的注册事实，不是 Git 当前状态的镜像：Git 仍然提供实时 HEAD 与 worktree，
+   * 这里只保存「用户当初确认过哪一个」。旧记录可能尚未绑定，此时为 `null`，只可经一次性受控绑定补齐。
+   */
+  readonly fullBranchRef: string | null;
+  readonly canonicalWorktreePath: string | null;
   readonly mode: CoordinationMode;
   readonly controlState: ControlState;
   readonly planningCycleId: PlanningCycleId | null;
@@ -102,6 +110,8 @@ export type PendingInteractionRecord = {
   readonly expectedRevision: Revision;
   readonly state: PendingInteractionState;
   readonly answerRef: EntityRef<string> | null;
+  /** 受控回答正文；与解决状态在同一 CAS 事务写入，`null` 表示没有正文。 */
+  readonly answerText: string | null;
   readonly createdAt: number;
   readonly resolvedAt: number | null;
 };
@@ -747,6 +757,9 @@ export type CoordinationCommand =
       readonly mode: CoordinationMode;
       readonly controlState: ControlState;
       readonly planningCycleId: PlanningCycleId | null;
+      /** 新 Scope 必须带上用户登记的完整 branch ref 与 canonical worktree。 */
+      readonly fullBranchRef: string;
+      readonly canonicalWorktreePath: string;
     })
   | (CoordinationCommandBase & {
       readonly kind: 'update-scope-mode';
@@ -770,6 +783,12 @@ export type CoordinationCommand =
       readonly coordinatorModelConfigurationRef: string;
       readonly lifecycleState: SessionLifecycleState;
     })
+  | (CoordinationCommandBase & {
+      readonly kind: 'update-session-model-configuration';
+      readonly coordinatorSessionId: CoordinatorSessionId;
+      /** 目标配置引用；必须已由调用方用项目配置核验过存在与可用。 */
+      readonly coordinatorModelConfigurationRef: string;
+    })
   | (CoordinationCommandBase & { readonly kind: 'record-ticket-claim'; readonly ticketRef: EntityRef<string> })
   | (CoordinationCommandBase & {
       readonly kind: 'release-ticket-claim';
@@ -787,6 +806,8 @@ export type CoordinationCommand =
       readonly interactionId: InteractionId;
       readonly state: Exclude<PendingInteractionState, 'open'>;
       readonly answerRef: EntityRef<string> | null;
+      /** 受控回答正文；与状态在同一事务写入，普通 Session 消息不经过这里。 */
+      readonly answerText: string | null;
     })
   | (CoordinationCommandBase & {
       readonly kind: 'begin-intent';
@@ -836,6 +857,20 @@ export type CoordinationCommand =
       readonly planningCycleId: PlanningCycleId | null;
       readonly coordinatorSessionId: CoordinatorSessionId;
       readonly coordinatorModelConfigurationRef: string;
+      readonly fullBranchRef: string;
+      readonly canonicalWorktreePath: string;
+    })
+  | (CoordinationCommandBase & {
+      /**
+       * 为缺少绑定的既有 Scope 补齐一次不可变注册绑定。
+       *
+       * 这是**受控一次性**命令：只在当前绑定为空且该 Scope 没有任何 Runtime Lease 行时被接受，
+       * 因此它不可能被用来改写已有绑定，也不可能在运行时抢占一个正在被使用的 Scope。它不推进
+       * mode、control state 或图引用，只补齐身份。
+       */
+      readonly kind: 'bind-scope-identity';
+      readonly fullBranchRef: string;
+      readonly canonicalWorktreePath: string;
     })
   | (CoordinationCommandBase & {
       readonly kind: 'record-graph-version';

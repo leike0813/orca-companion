@@ -132,10 +132,11 @@ export type ModelCatalogPort = {
  * Route Planning Handoff 的意图端口。
  *
  * `prepareProposal` 由宿主从权威来源读好 map/plan revision、Target 与 Capsule 引用后提交一次
- * `planning-handoff: prepare`；界面只触发它并展示结果，不构造这些引用。
+ * `planning-handoff: prepare`；界面只触发它并展示结果，不构造这些引用。`targetCoordinatorSessionId`
+ * 必须来自用户在选择界面里的明确选择：宿主不会替用户挑一个接收方。
  */
 export type HandoffIntentPort = {
-  readonly prepareProposal: () => Promise<ControllerCommandResult>;
+  readonly prepareProposal: (targetCoordinatorSessionId: string) => Promise<ControllerCommandResult>;
   readonly cutover: (proposalId: string) => Promise<ControllerCommandResult>;
   readonly cancel: (proposalId: string) => Promise<ControllerCommandResult>;
 };

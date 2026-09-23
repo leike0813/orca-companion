@@ -164,4 +164,45 @@ describe('session-interactions / Session Picker 与焦点约束', () => {
     expect(draftFor(state, 'session-b')).toBe('B 的草稿');
     expect(state.scrollOffsets['session-b']).toBe(3);
   });
+
+  test('Scenario: 另一个 Session 的事件只标记未读，不抢占焦点（容器）', async () => {
+    // 容器按快照默认选中待答的 session-b；事件归属 session-a 时只增加未读标记。
+    const fake = createFakePorts();
+    const rendered = renderTui(fake.ports);
+    await settle(12);
+    expect(fake.calls.filter((call) => call.name === 'transcript').map((call) => call.detail)).toEqual(['session-b']);
+
+    fake.emit({
+      eventId: 'event-session-a',
+      coordinatorSessionId: 'session-a',
+      kind: 'state-changed',
+      coordinationScopeId: 'scope-1',
+      revision: 5,
+      reason: 'committed',
+    });
+    await settle(2);
+
+    // transcript 不切换：没有新的加载，也没有任何写入意图。
+    expect(fake.calls.filter((call) => call.name === 'transcript').map((call) => call.detail)).toEqual(['session-b']);
+    expect(fake.executeCount()).toBe(0);
+
+    // 打开 Session Picker：未读标记落在 session-a 上，选中标记仍在 session-b 上。
+    rendered.stdin.write('\u0010'); // ctrl+p 打开 Command Palette
+    await settle(2);
+    for (let index = 0; index < 3; index += 1) {
+      rendered.stdin.write('\u001b[B'); // 下移到 Session Picker
+      await settle(2);
+    }
+    rendered.stdin.write('\r');
+    await settle(2);
+
+    const lines = (rendered.lastFrame() ?? '').split('\n');
+    const unreadLine = lines.find((line) => line.includes('session-a')) ?? '';
+    const selectedLine = lines.find((line) => line.includes('session-b')) ?? '';
+    expect(unreadLine).toContain('*');
+    expect(selectedLine.indexOf('>')).toBeGreaterThanOrEqual(0);
+    expect(selectedLine).not.toContain('*');
+
+    rendered.unmount();
+  });
 });

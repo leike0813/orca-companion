@@ -73,6 +73,8 @@ beforeEach(() => {
     coordinatorSessionId: SESSION_A,
     coordinatorModelConfigurationRef: 'model-config-1',
     planningCycleId: CYCLE,
+    fullBranchRef: 'refs/heads/main',
+    canonicalWorktreePath: '/tmp/orca-test-worktree',
   });
   if (initialized.kind !== 'initialized') {
     throw new Error('无法创建测试 Scope');
@@ -507,6 +509,8 @@ test('候选图缺失时批准被拒绝', () => {
     coordinatorSessionId: otherSession,
     coordinatorModelConfigurationRef: 'model-config-2',
     planningCycleId: 'cycle-2' as PlanningCycleId,
+    fullBranchRef: 'refs/heads/other',
+    canonicalWorktreePath: '/tmp/orca-test-worktree-other',
   });
   expect(initialized.kind).toBe('initialized');
 

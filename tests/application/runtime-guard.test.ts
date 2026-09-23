@@ -23,6 +23,8 @@ import { openCoordinationStore, type CoordinationStore } from '../../src/adapter
 import {
   COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
   threadIdFor,
+  userEntryId,
+  userStepId,
   type CoordinatorSessionState,
 } from '../../src/domain/coordinator/session-state.js';
 
@@ -54,6 +56,8 @@ beforeEach(() => {
     mode: 'route_planning',
     controlState: 'active',
     planningCycleId: 'cycle-1' as PlanningCycleId,
+    fullBranchRef: 'refs/heads/main',
+    canonicalWorktreePath: '/tmp/orca-test-worktree',
   });
   if (created.kind !== 'committed') {
     throw new Error('无法创建测试 Scope');
@@ -155,10 +159,18 @@ function sessionState(overrides: Partial<CoordinatorSessionState> = {}): Coordin
   return {
     schemaVersion: COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
     coordinatorSessionId: SESSION_A,
-    committedMessages: [{ role: 'user', content: '继续' }],
+    committedMessages: [
+      {
+        entryId: userEntryId('submission-1'),
+        stepId: userStepId('submission-1'),
+        role: 'user',
+        content: '继续',
+      },
+    ],
     graphPosition: 'model',
     committedModelSteps: [],
     wakeBatches: [],
+    lastCompactionOutcome: null,
     ...overrides,
   };
 }

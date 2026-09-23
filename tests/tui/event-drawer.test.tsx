@@ -44,9 +44,14 @@ const NOISE: readonly ControllerNotification[] = [
 
 describe('planning-workspace / 信息分层', () => {
   test('Scenario: 维护噪声不进入用户时间线', async () => {
-    // 噪声在 façade 就被过滤：界面的语义事件流里根本没有它们。
-    for (const notification of NOISE) {
-      expect(toSemanticEvent(notification)).toBeNull();
+    // 噪声在 façade 就被过滤：即使带着 envelope 发进来，界面的语义事件流里也没有它们。
+    for (const [index, notification] of NOISE.entries()) {
+      expect(
+        toSemanticEvent({
+          envelope: { eventId: `noise-${String(index)}`, coordinatorSessionId: null },
+          notification,
+        }),
+      ).toBeNull();
     }
 
     // 抽屉只渲染传入的语义事件，保活/超时/对账没有对应条目。
@@ -68,27 +73,42 @@ describe('planning-workspace / 信息分层', () => {
 
   test('Scenario: 语义事件进入 Event Drawer', async () => {
     // Worker 生命周期、验证、授权、暂停与恢复都是语义事件；验证接受由 state-changed 的 reason 承载。
+    // envelope 携带发布者给出的身份与归属：Session 事件归自己，Scope 级事件归 null。
     const semantic: readonly SemanticEvent[] = [
       {
+        eventId: 'event-1',
+        coordinatorSessionId: 'session-x',
         kind: 'state-changed',
         coordinationScopeId: 'scope-1',
         revision: 9,
         reason: 'worker-task-verified-accepted',
       },
       {
+        eventId: 'event-2',
+        coordinatorSessionId: 'session-x',
         kind: 'worker-liveness-changed',
         coordinationScopeId: 'scope-1',
         dispatchId: 'dispatch-1',
         liveness: 'exited',
       },
       {
+        eventId: 'event-3',
+        coordinatorSessionId: 'session-x',
         kind: 'recovery-status-changed',
         coordinationScopeId: 'scope-1',
         recoveryId: 'recovery-1',
         status: 'blocked',
       },
-      { kind: 'scope-control-changed', coordinationScopeId: 'scope-1', controlState: 'paused' },
       {
+        eventId: 'event-4',
+        coordinatorSessionId: null,
+        kind: 'scope-control-changed',
+        coordinationScopeId: 'scope-1',
+        controlState: 'paused',
+      },
+      {
+        eventId: 'event-5',
+        coordinatorSessionId: 'session-x',
         kind: 'generation-status-changed',
         coordinationScopeId: 'scope-1',
         graphId: 'graph-1',
@@ -99,6 +119,7 @@ describe('planning-workspace / 信息分层', () => {
     const drawer = renderDrawer(semantic);
     await settle(2);
     const drawerFrame = drawer.lastFrame() ?? '';
+    // 抽屉逐条渲染：归属不参与过滤，Scope 级事件（coordinatorSessionId 为 null）也会出现在这里。
     for (const event of semantic) {
       expect(drawerFrame).toContain(describeSemanticEvent(event));
     }

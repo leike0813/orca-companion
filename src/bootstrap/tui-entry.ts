@@ -7,7 +7,7 @@
  */
 
 import type { CliIO } from '../interfaces/cli/doctor-command.js';
-import type { TuiPorts } from '../interfaces/tui/ports.js';
+import type { ComposedTuiPorts } from './tui-composition.js';
 
 export const TUI_NO_TTY_CODE = 2;
 
@@ -22,7 +22,7 @@ export type TuiEntryEnvironment = {
 
 export type TuiEntryDependencies = {
   /** 覆盖点：测试注入 fake 端口与渲染器；生产不替换。 */
-  readonly createPorts?: (environment: TuiEntryEnvironment) => Promise<TuiPorts> | TuiPorts;
+  readonly createPorts?: (environment: TuiEntryEnvironment) => Promise<ComposedTuiPorts> | ComposedTuiPorts;
   readonly render?: RenderLike;
 };
 
@@ -66,7 +66,8 @@ export async function runTuiEntry(
     return TUI_NO_TTY_CODE;
   }
 
-  const ports = await (dependencies.createPorts ?? createDefaultPorts)(environment);
+  const composed = await (dependencies.createPorts ?? createDefaultPorts)(environment);
+  const ports = composed.ports;
   const renderElement: RenderLike =
     dependencies.render ??
     (await import('ink')).render.bind(undefined) as unknown as RenderLike;
@@ -85,11 +86,16 @@ export async function runTuiEntry(
     }),
     { exitOnCtrlC: false },
   );
-  await app.waitUntilExit();
+  try {
+    await app.waitUntilExit();
+  } finally {
+    // 退出只清理本进程资源：不隐式 Pause/Cancel 任何 Scope 或 Session。
+    composed.close();
+  }
   return 0;
 }
 
-async function createDefaultPorts(environment: TuiEntryEnvironment): Promise<TuiPorts> {
+async function createDefaultPorts(environment: TuiEntryEnvironment): Promise<ComposedTuiPorts> {
   const { createTuiPorts } = await import('./tui-composition.js');
-  return createTuiPorts(environment);
+  return await createTuiPorts(environment);
 }

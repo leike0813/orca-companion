@@ -15,6 +15,7 @@ import type {
   CoordinationScopeId,
   CoordinatorSessionId,
   EntityRef,
+  OperationId,
   Revision,
 } from '../../application/dto/identity.js';
 import type { ControlState, CoordinationMode } from '../../domain/coordination/mode.js';
@@ -59,6 +60,26 @@ export type PlanningToolOutcome =
   | { readonly kind: 'unknown'; readonly reason: string };
 
 /**
+ * 一次受控调用的可信身份。
+ *
+ * 它由宿主在提交模型响应时分配并随 call 一起持久化，模型不可填写：工具 handler 只把它转发给
+ * 用例，因此「用新身份重试一个已发起的副作用」在结构上不可能发生。只读工具忽略它。
+ */
+export type PlanningCallContext = {
+  /** 主操作的 OperationId。 */
+  readonly operationId: OperationId;
+  /** 该 call 触发的第二次独立副作用（`resolve_ticket` 的地图写入）；没有时为 `null`。 */
+  readonly mapOperationId: OperationId | null;
+};
+
+/** 模型侧绑定用的结构化拒绝：绑定到模型的包装器只做 schema 广告，从不执行副作用。 */
+export const TOOL_NOT_EXECUTABLE: PlanningToolOutcome = {
+  kind: 'rejected',
+  code: 'not_executable',
+  message: '工具由受控 tools 节点执行，模型侧的绑定包装器不产生副作用',
+};
+
+/**
  * 工具 handler 依赖的用例集合。
  *
  * 工具层只做准入与归一化；读写顺序、Operation Intent 与读回核验都在应用用例里，不在这里复制。
@@ -66,32 +87,44 @@ export type PlanningToolOutcome =
 export type PlanningToolServices = {
   /** 重新读取当前事实；每次调用都调用它，因此准入判断不会建立在旧快照上。 */
   readonly readFacts: () => PlanningToolFacts;
+  /** 对已存在的 Operation Intent 先按原 ID 对账；null 表示这是新调用。 */
+  readonly replayMutation?: (operationId: OperationId) => PlanningMutationResult | null;
   readonly readRouteMap: () => Promise<PlanningToolOutcome>;
   readonly readFrontier: () => Promise<PlanningToolOutcome>;
   readonly updateRouteMapSection: (input: {
     readonly section: RouteMapSection;
     readonly content: string;
     readonly expectedRevision: Revision;
+    readonly operationId: OperationId;
   }) => Promise<PlanningMutationResult>;
   readonly claimTicket: (input: {
     readonly ticketRef: EntityRef<'decision-ticket'>;
     readonly expectedRevision: Revision;
+    readonly operationId: OperationId;
   }) => Promise<PlanningMutationResult>;
   readonly releaseTicket: (input: {
     readonly ticketRef: EntityRef<'decision-ticket'>;
     readonly expectedRevision: Revision;
+    readonly operationId: OperationId;
   }) => Promise<PlanningMutationResult>;
   readonly resolveTicket: (input: {
     readonly ticketRef: EntityRef<'decision-ticket'>;
     readonly resolution: string;
     readonly expectedRevision: Revision;
+    readonly operationId: OperationId;
+    /** 地图写入是同一 call 的第二次独立副作用，因此有独立身份。 */
+    readonly mapOperationId: OperationId | null;
   }) => Promise<PlanningMutationResult>;
   readonly preparePlanningHandoff: (input: {
     readonly proposalId: string;
     readonly targetCoordinatorSessionId: CoordinatorSessionId;
     readonly capsuleRef: string | null;
+    readonly operationId: OperationId;
   }) => Promise<PlanningHandoffResult>;
-  readonly reviewPlanningHandoff: (input: { readonly proposalId: string }) => Promise<PlanningHandoffResult>;
+  readonly reviewPlanningHandoff: (input: {
+    readonly proposalId: string;
+    readonly operationId: OperationId;
+  }) => Promise<PlanningHandoffResult>;
 };
 
 export type PlanningToolDefinition = {
@@ -100,7 +133,8 @@ export type PlanningToolDefinition = {
   readonly mutating: boolean;
   /** 输入 schema 是 JSON Schema：工具层不引入第二套类型系统。 */
   readonly inputSchema: Record<string, unknown>;
-  readonly invoke: (input: unknown) => Promise<PlanningToolOutcome>;
+  /** 执行只发生在受控 tools 节点；身份取自调用上下文，不取自模型输入。 */
+  readonly invoke: (input: unknown, context: PlanningCallContext) => Promise<PlanningToolOutcome>;
 };
 
 type Admission =
@@ -281,7 +315,7 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
         },
         ['section', 'content', 'expectedRevision'],
       ),
-      invoke: async (input) => {
+      invoke: async (input, context) => {
         const fields = asRecord(input);
         if (fields === null) {
           return { kind: 'rejected', code: 'invalid_argument', message: '工具输入必须是对象' };
@@ -295,6 +329,8 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
         ) {
           return { kind: 'rejected', code: 'invalid_argument', message: 'section 与 content 必须是字符串' };
         }
+        const replay = services.replayMutation?.(context.operationId);
+        if (replay !== undefined && replay !== null) return fromMutation(replay);
         const admission = admit({
           initial: facts,
           services,
@@ -309,6 +345,7 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
             section: section as RouteMapSection,
             content,
             expectedRevision: admission.facts.scopeRevision,
+            operationId: context.operationId,
           }),
         );
       },
@@ -321,12 +358,14 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
         'ticketId',
         'expectedRevision',
       ]),
-      invoke: async (input) => {
+      invoke: async (input, context) => {
         const fields = asRecord(input);
         const ticketRef = fields === null ? null : readTicketRef(fields);
         if (fields === null || ticketRef === null) {
           return { kind: 'rejected', code: 'invalid_argument', message: 'ticketId 必须是非空字符串' };
         }
+        const replay = services.replayMutation?.(context.operationId);
+        if (replay !== undefined && replay !== null) return fromMutation(replay);
         const admission = admit({
           initial: facts,
           services,
@@ -336,7 +375,13 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
         if (admission.kind === 'rejected') {
           return admission;
         }
-        return fromMutation(await services.claimTicket({ ticketRef, expectedRevision: admission.facts.scopeRevision }));
+        return fromMutation(
+          await services.claimTicket({
+            ticketRef,
+            expectedRevision: admission.facts.scopeRevision,
+            operationId: context.operationId,
+          }),
+        );
       },
     }),
     release_ticket: ({ services, facts }) => ({
@@ -347,12 +392,14 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
         'ticketId',
         'expectedRevision',
       ]),
-      invoke: async (input) => {
+      invoke: async (input, context) => {
         const fields = asRecord(input);
         const ticketRef = fields === null ? null : readTicketRef(fields);
         if (fields === null || ticketRef === null) {
           return { kind: 'rejected', code: 'invalid_argument', message: 'ticketId 必须是非空字符串' };
         }
+        const replay = services.replayMutation?.(context.operationId);
+        if (replay !== undefined && replay !== null) return fromMutation(replay);
         const admission = admit({
           initial: facts,
           services,
@@ -362,7 +409,13 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
         if (admission.kind === 'rejected') {
           return admission;
         }
-        return fromMutation(await services.releaseTicket({ ticketRef, expectedRevision: admission.facts.scopeRevision }));
+        return fromMutation(
+          await services.releaseTicket({
+            ticketRef,
+            expectedRevision: admission.facts.scopeRevision,
+            operationId: context.operationId,
+          }),
+        );
       },
     }),
     resolve_ticket: ({ services, facts }) => ({
@@ -377,7 +430,7 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
         },
         ['ticketId', 'resolution', 'expectedRevision'],
       ),
-      invoke: async (input) => {
+      invoke: async (input, context) => {
         const fields = asRecord(input);
         const ticketRef = fields === null ? null : readTicketRef(fields);
         const resolution = fields?.['resolution'];
@@ -387,6 +440,21 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
             code: 'invalid_argument',
             message: 'ticketId 与 resolution 必须是非空字符串',
           };
+        }
+        const replay = services.replayMutation?.(context.operationId);
+        if (replay !== undefined && replay !== null) {
+          if (replay.kind !== 'accepted') return fromMutation(replay);
+          const expectedRevision = fields['expectedRevision'];
+          if (typeof expectedRevision !== 'number' || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+            return { kind: 'rejected', code: 'invalid_argument', message: 'expectedRevision 必须是非负整数' };
+          }
+          return fromMutation(await services.resolveTicket({
+            ticketRef,
+            resolution,
+            expectedRevision,
+            operationId: context.operationId,
+            mapOperationId: context.mapOperationId,
+          }));
         }
         const admission = admit({
           initial: facts,
@@ -398,7 +466,13 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
           return admission;
         }
         return fromMutation(
-          await services.resolveTicket({ ticketRef, resolution, expectedRevision: admission.facts.scopeRevision }),
+          await services.resolveTicket({
+            ticketRef,
+            resolution,
+            expectedRevision: admission.facts.scopeRevision,
+            operationId: context.operationId,
+            mapOperationId: context.mapOperationId,
+          }),
         );
       },
     }),
@@ -415,7 +489,7 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
         },
         ['proposalId', 'targetCoordinatorSessionId', 'expectedRevision'],
       ),
-      invoke: async (input) => {
+      invoke: async (input, context) => {
         const fields = asRecord(input);
         const proposalId = fields?.['proposalId'];
         const target = fields?.['targetCoordinatorSessionId'];
@@ -445,6 +519,7 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
             proposalId,
             targetCoordinatorSessionId: target as CoordinatorSessionId,
             capsuleRef,
+            operationId: context.operationId,
           }),
         );
       },
@@ -457,7 +532,7 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
         'proposalId',
         'expectedRevision',
       ]),
-      invoke: async (input) => {
+      invoke: async (input, context) => {
         const fields = asRecord(input);
         const proposalId = fields?.['proposalId'];
         if (typeof proposalId !== 'string' || proposalId.trim().length === 0) {
@@ -473,7 +548,9 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
         if (admission.kind === 'rejected') {
           return admission;
         }
-        return fromHandoff(await services.reviewPlanningHandoff({ proposalId }));
+        return fromHandoff(
+          await services.reviewPlanningHandoff({ proposalId, operationId: context.operationId }),
+        );
       },
     }),
   };
@@ -491,21 +568,25 @@ export function planningToolset(facts: PlanningToolFacts, services: PlanningTool
   return visibleToolNames(facts).map((name) => DEFINITIONS[name]({ services, facts }));
 }
 
+/** 只供已提交 call 的恢复执行使用；handler 仍按当前事实重新准入。 */
+export function planningRecoveryToolset(facts: PlanningToolFacts, services: PlanningToolServices): readonly PlanningToolDefinition[] {
+  return PLANNING_TOOL_NAMES.map((name) => DEFINITIONS[name]({ services, facts }));
+}
+
 /**
  * 把工具定义转换成可绑定的 LangChain 工具。
  *
- * 转换只做协议适配：入参经 JSON Schema 声明，返回值是结构化结果的 JSON 文本，业务判断仍在
- * handler 里。
+ * 绑定给模型的包装器**只做 schema 广告**，不执行任何副作用：执行只发生在受控 tools 节点，那里
+ * 才有可信的 OperationId、准入重验与逐 call 结果落盘。模型因此只能申请一个调用，得不到副作用。
+ *
+ * 返回类型由 `tool()` 的载荷决定（包装器只声明 schema），消费方只把它交给 `bindTools`。
  */
 export function toBindableTools(
   definitions: readonly PlanningToolDefinition[],
 ): readonly ReturnType<typeof tool>[] {
   return definitions.map((definition) =>
     tool(
-      async (input: unknown): Promise<string> => {
-        const outcome = await definition.invoke(input);
-        return JSON.stringify(outcome);
-      },
+      (): string => JSON.stringify(TOOL_NOT_EXECUTABLE),
       {
         name: definition.name,
         description: definition.description,

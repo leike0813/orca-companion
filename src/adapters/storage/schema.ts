@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -501,6 +501,26 @@ const MIGRATION_9: readonly string[] = [
   `ALTER TABLE baseline_reconciliations ADD COLUMN dispatch_id TEXT`,
 ];
 
+/**
+ * M10：Scope 注册绑定与交互回答正文。
+ *
+ * 两列都只保存无法从 Git 重建的事实：完整 branch ref 与 canonical worktree 是**用户登记**的身份，
+ * Git 仍然提供实时 HEAD 与 worktree 路径，注册绑定不是它的镜像。旧行保持 `NULL`——迁移不猜测旧值，
+ * 补齐只允许经一次受控 CAS 命令。
+ *
+ * `pending_interactions.answer_text` 让受控回答正文与解决状态落在同一 CAS 事务里：正文属于本次回答
+ * 这个已提交事实，拆到别处就会产生「已解决但没有正文」的中间态。普通 Session 消息不经这一列。
+ */
+const MIGRATION_10: readonly string[] = [
+  `ALTER TABLE scope ADD COLUMN full_branch_ref TEXT`,
+  `ALTER TABLE scope ADD COLUMN canonical_worktree_path TEXT`,
+  // 同一个 common dir 内一个 branch ref 至多属于一个 Scope：否则恢复时会接错协调状态。
+  `CREATE UNIQUE INDEX IF NOT EXISTS scope_branch_ref_unique
+     ON scope (full_branch_ref)
+     WHERE full_branch_ref IS NOT NULL`,
+  `ALTER TABLE pending_interactions ADD COLUMN answer_text TEXT`,
+];
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, statements: MIGRATION_1 },
   { version: 2, statements: MIGRATION_2 },
@@ -511,6 +531,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 7, statements: MIGRATION_7 },
   { version: 8, statements: MIGRATION_8 },
   { version: 9, statements: MIGRATION_9 },
+  { version: 10, statements: MIGRATION_10 },
 ];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {

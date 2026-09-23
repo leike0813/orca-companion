@@ -361,6 +361,8 @@ async function createFixture(plan: Extract<SmokePlan, { kind: 'run' }>, profile:
     coordinatorSessionId: sessionA,
     coordinatorModelConfigurationRef: `${profile.integration}#${profile.model}`,
     planningCycleId: `${plan.identity}:cycle-1` as PlanningCycleId,
+    fullBranchRef: `refs/heads/${plan.identity}`,
+    canonicalWorktreePath: '/tmp/orca-smoke-worktree',
   });
   if (initialized.kind !== 'initialized') {
     dispose();

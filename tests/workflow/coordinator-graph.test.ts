@@ -45,6 +45,7 @@ function seedSession(): void {
     graphPosition: 'start',
     committedModelSteps: [],
     wakeBatches: [],
+    lastCompactionOutcome: null,
   };
   const saved = store.saveCheckpoint(state);
   if (saved.kind !== 'saved') {
@@ -100,9 +101,15 @@ test('模型响应被原子接受为 Committed Model Step，图位置前进到 m
   if (read.kind === 'recovered') {
     expect(read.state.committedModelSteps).toHaveLength(1);
     expect(read.state.committedModelSteps[0]?.messages).toEqual([
-      { role: 'assistant', content: '先读地图' },
+      {
+        entryId: 'entry:assistant:step-1',
+        stepId: 'step-1',
+        role: 'assistant',
+        content: '先读地图',
+      },
     ]);
     expect(read.state.committedMessages).toHaveLength(1);
+    expect(read.state.committedModelSteps[0]?.toolCalls).toEqual([]);
     // 图停在挂起节点，而不是被记为完成或取消。
     expect(read.state.graphPosition).toBe('suspend');
   }
@@ -217,6 +224,7 @@ test('无 Actionable Work 时不调用模型，直接挂起', async () => {
     status: 'suspended',
     remainingWork: [],
     deferredWork: 0,
+    pendingToolCalls: 0,
     note: '',
   };
   expect(routeAtStart(suspendedState)).toBe('suspend');

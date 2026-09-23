@@ -142,6 +142,7 @@ export function createCompanionStartupFixture(
       graphPosition: 'suspend',
       committedModelSteps: [],
       wakeBatches: [...(options.wakeBatches ?? [])],
+      lastCompactionOutcome: null,
     });
     opened.store.close();
     if (saved.kind !== 'saved') {

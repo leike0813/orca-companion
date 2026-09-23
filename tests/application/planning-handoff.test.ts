@@ -109,6 +109,8 @@ beforeEach(() => {
     coordinatorSessionId: SESSION_A,
     coordinatorModelConfigurationRef: 'model-config-a',
     planningCycleId: CYCLE,
+    fullBranchRef: 'refs/heads/main',
+    canonicalWorktreePath: '/tmp/orca-test-worktree',
   });
   if (initialized.kind !== 'initialized') {
     throw new Error('无法创建测试 Scope');

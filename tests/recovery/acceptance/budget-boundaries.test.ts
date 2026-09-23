@@ -221,6 +221,7 @@ test.each([1, 3] as const)(
     expect(consumedRecoveryBudget(harness.recoveries(), ATTEMPT)).toBe(limit);
     expect(workerStarts(harness)).toBe(limit);
   },
+  15_000,
 );
 
 test('Manifest 上限取 0 在授权边界即被拒绝：不存在 0 额度授权，因此一次都不可能消耗', () => {

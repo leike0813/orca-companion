@@ -31,6 +31,43 @@
 
 不存在 `run`、`resume`、`tui` 子命令；传入它们会以非零状态被拒绝并指出受支持入口。
 
+### 项目配置：`orca-companion.json`
+
+前台规划 Runtime 从 canonical worktree 根目录读取用户维护、纳入版本控制的 `orca-companion.json`。
+它只保存**凭据引用**，不保存任何密钥值：出现已知密钥字段名时整份配置被拒绝。
+
+```json
+{
+  "schemaVersion": 1,
+  "coordinatorModels": [
+    {
+      "configurationRef": "planning-default",
+      "providerIntegration": "@langchain/openai#ChatOpenAI",
+      "model": "gpt-4.1-mini",
+      "modelOptions": { "temperature": 0 },
+      "credentialRefs": ["openai-default"],
+      "nativeWindowOwnerRef": null
+    }
+  ],
+  "defaultCoordinatorModelRef": "planning-default",
+  "tracker": { "kind": "github", "routeMapIssueNumber": 42 },
+  "planning": { "maxMutations": 3 },
+  "context": { "maxInputTokens": 120000 }
+}
+```
+
+- `coordinatorModels` / `defaultCoordinatorModelRef`：可切换的 Coordinator 模型配置闭集与默认引用；
+  默认引用必须存在于集合中，且 `configurationRef` 唯一。`providerIntegration` 形如 `<module>#<export>`，
+  由用户已安装的 provider 集成提供，Companion 不维护 allowlist、不自动 fallback。
+- `tracker`：Route Map 所在的 GitHub issue；正文与票据仍是 tracker 的事实。
+- `planning.maxMutations`：本 Scope 允许的规划写入次数上限，`0` 表示只读规划。已用次数由
+  Companion 的 Operation Intent 记录派生，重启与重规划都不清零。
+- `context.maxInputTokens`：一次模型输入的上下文预算；超出时按 provider 原生 → Context Capsule →
+  机械 Shake 的固定顺序压缩，无法收敛即显式 `context_exhausted`。
+
+配置缺失、schema 无效、默认模型引用不存在或 tracker 不可达时，初始化与模型恢复都会明确拒绝，
+不会选择任意已安装模型，也不会隐式创建 Scope。
+
 ### 前台 TUI 键位与分区
 
 - `Ctrl+P` Command Palette、`Ctrl+B` 切换 Sidebar 密度、`Ctrl+G` Graph Inspector、`Esc` 逐层关闭、`Ctrl+C` 退出（不隐式 Pause/Cancel）。
@@ -40,15 +77,14 @@
 
 ### 当前未接线的能力（fail closed）
 
-M2 的规划 TUI 只做投影与意图提交。以下能力在 M1 还没有权威来源或用例，因此界面会显示结构化 blocker，而不是假装成功：
+M2 的规划 TUI 只做投影与意图提交。以下能力仍缺权威来源或用例，因此界面会显示结构化 blocker，
+而不是假装成功：
 
-- 向 Coordinator 发送消息（M1 没有「用户消息进入模型循环」的用例，也没有前台 Runtime Incarnation 装配）；
-- 回答 Pending Interaction（需要合法 `CoordinationWriter`）；
-- `/compact`（没有面向 Session 的压缩请求用例）；
-- Model Picker 切换（没有项目级 Coordinator Model Configuration 来源）；
-- Route Planning Handoff 与 Scope 初始化（分别需要 Capsule 生成与合法 writer）。
+- Scope 级 Pause/Resume/Cancel（需要前台对账 runner 与 Worker 停止端口，属执行阶段 TUI）；
+- 执行阶段的 Handoff 与图演进意图（需要执行期 ledger 与 Run/Task 事实）。
 
-只读部分（Home 解析、快照、transcript、向导核验、Graph Inspector）已可用。
+已可用：Home 的精确 Scope 恢复与初始化向导、向 Coordinator 发送消息、回答 Pending Interaction、
+`/compact`、Model Picker 切换、Route Planning Handoff、只读快照 / transcript / Graph Inspector。
 
 ## 结构
 

@@ -16,7 +16,7 @@ import {
   type FenceViolationCode,
   type LeaseRecord,
 } from '../../domain/coordination/leases.js';
-import type { CoordinatorSessionState } from '../../domain/coordinator/session-state.js';
+import type { CoordinatorSessionState, WakeBatch } from '../../domain/coordinator/session-state.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
@@ -83,17 +83,46 @@ export type CheckpointWriteResult =
   | { readonly kind: 'saved' }
   | { readonly kind: 'failed'; readonly message: string };
 
+/** 一次普通用户消息的持久提交（IC-04 的 checkpoint 侧 seam）。 */
+export type UserMessageCommitInput = {
+  readonly coordinatorSessionId: CoordinatorSessionId;
+  readonly submissionId: string;
+  readonly content: string;
+  /** 与消息同事务写入的 Wake Batch：内容与准入身份因此不可能是两条独立事实。 */
+  readonly wakeBatch: WakeBatch;
+};
+
+/**
+ * 用户消息的提交结果。
+ *
+ * `already-committed` 覆盖稳定重放：同 `submissionId` 再提交一次不会产生第二条消息，`contentMatches`
+ * 说明这次提交的内容是否与原内容逐字相同；内容不同必须由调用方按拒绝处理，而不是静默改写历史。
+ */
+export type UserMessageCommitResult =
+  | { readonly kind: 'committed'; readonly state: CoordinatorSessionState }
+  | {
+      readonly kind: 'already-committed';
+      readonly state: CoordinatorSessionState;
+      readonly contentMatches: boolean;
+    }
+  | { readonly kind: 'unrecoverable'; readonly reason: string };
+
+export type UserMessageCommitPort = {
+  readonly commitUserMessage: (input: UserMessageCommitInput) => UserMessageCommitResult;
+};
+
 /**
  * 图节点需要的会话记录读写 seam。
  *
  * 声明在 Application 层，让 Workflow 只依赖这个 port 而不依赖具体 storage adapter；storage
  * adapter 以结构相容的方式实现它，两边都不需要互相 import。
  */
-export type CoordinatorSessionRecordPort = CheckpointRecoveryPort & {
-  readonly saveCheckpoint: (state: CoordinatorSessionState) => CheckpointWriteResult;
-  /** 读回底层完整已提交消息；Capsule 是派生视图，不覆盖它们。 */
-  readonly readCommittedMessages: (coordinatorSessionId: CoordinatorSessionId) => readonly unknown[];
-};
+export type CoordinatorSessionRecordPort = CheckpointRecoveryPort &
+  UserMessageCommitPort & {
+    readonly saveCheckpoint: (state: CoordinatorSessionState) => CheckpointWriteResult;
+    /** 读回底层完整已提交消息条目；Capsule 是派生视图，不覆盖它们。 */
+    readonly readCommittedMessages: (coordinatorSessionId: CoordinatorSessionId) => readonly unknown[];
+  };
 
 export type ResumeIncarnationRequest = IncarnationRequest & {
   readonly checkpoints: CheckpointRecoveryPort;

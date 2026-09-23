@@ -26,6 +26,7 @@ import { COMPANION_STATE_DIRECTORY } from '../../src/bootstrap/composition.js';
 import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
 import {
   COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
+  assistantEntryId,
   type CoordinatorSessionState,
 } from '../../src/domain/coordinator/session-state.js';
 import { CapableChatModel, NoToolsChatModel } from '../support/fake-chat-model.js';
@@ -62,6 +63,8 @@ beforeEach(() => {
     mode: 'route_planning',
     controlState: 'active',
     planningCycleId: 'cycle-1' as PlanningCycleId,
+    fullBranchRef: 'refs/heads/main',
+    canonicalWorktreePath: '/tmp/orca-test-worktree',
   });
   if (created.kind !== 'committed') {
     throw new Error('无法创建测试 Scope');
@@ -213,10 +216,13 @@ test('已有会话记录时恢复同一 Session，不创建新身份', async () 
   const state: CoordinatorSessionState = {
     schemaVersion: COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
     coordinatorSessionId: SESSION,
-    committedMessages: [{ role: 'assistant', content: '先读地图' }],
+    committedMessages: [
+      { entryId: assistantEntryId('step-1'), stepId: 'step-1', role: 'assistant', content: '先读地图' },
+    ],
     graphPosition: 'suspend',
     committedModelSteps: [],
     wakeBatches: [],
+    lastCompactionOutcome: null,
   };
   expect(opened.store.saveCheckpoint(state).kind).toBe('saved');
   opened.store.close();
@@ -267,6 +273,7 @@ test('会话库损坏时拒绝启动，不创建替代 Session', async () => {
     graphPosition: 'start',
     committedModelSteps: [],
     wakeBatches: [],
+    lastCompactionOutcome: null,
   });
   opened.store.close();
 
@@ -327,6 +334,7 @@ test('启动把未决 Operation Intent 原样交给调用方，不代替它做�
     graphPosition: 'suspend',
     committedModelSteps: [],
     wakeBatches: [],
+    lastCompactionOutcome: null,
   }).kind).toBe('saved');
   opened.store.close();
   now += TTL_MS + 1;

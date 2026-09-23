@@ -63,6 +63,8 @@ beforeEach(() => {
       mode: 'route_planning',
       controlState: 'active',
       planningCycleId: 'cycle-1' as PlanningCycleId,
+      fullBranchRef: 'refs/heads/main',
+      canonicalWorktreePath: '/tmp/orca-test-worktree',
     }).kind,
   ).toBe('committed');
   expect(

@@ -150,7 +150,9 @@ export function TuiApp(props: TuiAppProps) {
     })();
     const unsubscribe = ports.subscribe((event) => {
       setEvents((current) => [...current, event].slice(-EVENT_WINDOW));
-      dispatch({ kind: 'event-arrived', coordinatorSessionId: null });
+      // 未读标记只作用于事件归属的那个 Session：Scope 级事件（归属为 null）不标记任何 Session，
+      // 也不会抢占当前 transcript 或 composer。
+      dispatch({ kind: 'event-arrived', coordinatorSessionId: event.coordinatorSessionId });
     });
     return () => {
       cancelled = true;
@@ -285,7 +287,14 @@ export function TuiApp(props: TuiAppProps) {
           return;
         }
         case 'handoff': {
-          const result = await ports.handoff.prepareProposal();
+          // Target 必须由用户明确选择：这里用 Session Picker 里当前选中的 Session 作为接收方，
+          // 不替用户挑一个（宿主会拒绝 Source 与 Target 相同的提案）。
+          const target = stateRef.current.selectedSessionId;
+          if (target === null) {
+            dispatch({ kind: 'notice', notice: '先在 Session Picker 里选中接收规划责任的 Session，再发起交接' });
+            return;
+          }
+          const result = await ports.handoff.prepareProposal(target);
           dispatch({ kind: 'notice', notice: resultNotice(result) });
           if (result.kind === 'accepted') {
             const loaded = await ports.snapshot(stateRef.current.selectedSessionId);

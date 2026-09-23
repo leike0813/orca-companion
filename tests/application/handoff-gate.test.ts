@@ -240,6 +240,8 @@ beforeEach(() => {
     coordinatorSessionId: SESSION_A,
     coordinatorModelConfigurationRef: 'model-config-1',
     planningCycleId: CYCLE,
+    fullBranchRef: 'refs/heads/main',
+    canonicalWorktreePath: '/tmp/orca-test-worktree',
   });
   if (initialized.kind !== 'initialized') {
     throw new Error('无法创建测试 Scope');
@@ -411,6 +413,7 @@ test('handoffGateFacts 只计入 open 交互，并把未完成 intent 计为 mut
     interactionId: 'interaction-1' as InteractionId,
     state: 'answered',
     answerRef: { kind: 'decision-ticket', id: 'ticket-1' },
+    answerText: '按 A 方案推进',
   });
   expect(answered.kind).toBe('committed');
   expect(projection().unresolvedInteractions).toBe(0);

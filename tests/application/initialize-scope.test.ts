@@ -67,6 +67,8 @@ function initialize(sessionId: CoordinatorSessionId) {
     coordinatorSessionId: sessionId,
     coordinatorModelConfigurationRef: `model-config-${sessionId}`,
     planningCycleId: CYCLE,
+    fullBranchRef: 'refs/heads/main',
+    canonicalWorktreePath: '/tmp/orca-test-worktree',
   });
 }
 

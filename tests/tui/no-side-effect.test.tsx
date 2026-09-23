@@ -73,6 +73,8 @@ describe('高频事件有界刷新', () => {
 
     for (let index = 0; index < 200; index += 1) {
       fake.emit({
+        eventId: `event-${String(index)}`,
+        coordinatorSessionId: 'session-a',
         kind: 'state-changed',
         coordinationScopeId: 'scope-1',
         revision: index,

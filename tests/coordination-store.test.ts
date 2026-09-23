@@ -100,6 +100,8 @@ function createScope(scopeId: CoordinationScopeId = SCOPE): CoordinationCommandR
     mode: 'route_planning',
     controlState: 'active',
     planningCycleId: 'cycle-1' as PlanningCycleId,
+    fullBranchRef: `refs/heads/${scopeId}`,
+    canonicalWorktreePath: `/tmp/orca-test-worktree/${scopeId}`,
   });
 }
 
@@ -1011,6 +1013,7 @@ function answerInteraction(interactionId: string): void {
     interactionId: interactionId as InteractionId,
     state: 'answered',
     answerRef: { kind: 'user_answer', id: 'answer-1' },
+    answerText: '继续',
   }));
   if (resolved.kind !== 'committed') {
     throw new Error(`无法回答 Pending Interaction: ${resolved.message}`);

@@ -241,8 +241,18 @@ describe('planning-workspace / 常驻 transcript 与 composer 主视图', () => 
 describe('planning-workspace / 信息分层', () => {
   test('Scenario: 维护噪声不进入用户时间线', async () => {
     // 噪声在 façade 就被丢弃，界面语义事件流里根本没有它们。
-    expect(toSemanticEvent({ kind: 'keepalive', at: 1 })).toBeNull();
-    expect(toSemanticEvent({ kind: 'unchanged-reconciliation', at: 2 })).toBeNull();
+    expect(
+      toSemanticEvent({
+        envelope: { eventId: 'noise-1', coordinatorSessionId: null },
+        notification: { kind: 'keepalive', at: 1 },
+      }),
+    ).toBeNull();
+    expect(
+      toSemanticEvent({
+        envelope: { eventId: 'noise-2', coordinatorSessionId: null },
+        notification: { kind: 'unchanged-reconciliation', at: 2 },
+      }),
+    ).toBeNull();
 
     const ui = uiState({ overlayStack: ['event-drawer'] });
     const rendered = renderWorkspace({ ui, events: [] });
@@ -261,6 +271,8 @@ describe('planning-workspace / 信息分层', () => {
   test('Scenario: 语义事件进入 Event Drawer', async () => {
     // 「Worker Task 完成验证并被接受」由语义事件层的 state-changed reason 承载。
     const verified: SemanticEvent = {
+      eventId: 'event-verified',
+      coordinatorSessionId: 'session-a',
       kind: 'state-changed',
       coordinationScopeId: 'scope-1',
       revision: 9,

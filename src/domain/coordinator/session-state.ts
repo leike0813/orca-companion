@@ -1,11 +1,14 @@
 /**
  * IC-04：Coordinator Session State 的领域类型与边界校验
- * （Owner: `m1-run-coordinator-sessions`）。
+ * （Owner: `m1-run-coordinator-sessions`；`m1-wire-foreground-planning-runtime` 升为 v2）。
  *
- * 这个模块只描述一个 Session 自己拥有的会话事实：已提交的消息与 model step、图位置、
- * 已注入的 Wake Batch，以及两类上下文压缩产物。它刻意不携带任何可从别处重建的内容——
- * provider 凭据属于用户配置，Orca 运行事实属于 Orca，Route Map 属于 tracker，把它们复制进
+ * 这个模块只描述一个 Session 自己拥有的会话事实：已提交的消息条目与 model step、图位置、
+ * 已注入的 Wake Batch、两类上下文压缩产物，以及最近一次维护结论。它刻意不携带任何可从别处重建的
+ * 内容——provider 凭据属于用户配置，Orca 运行事实属于 Orca，Route Map 属于 tracker，把它们复制进
  * checkpoint 只会产生第二份真值（`CONTEXT.md`「Coordinator Session State」）。
+ *
+ * v2 增加的是「每条已提交消息有稳定 entryId 与所属 step」这一层：只有它才能让工具调用与结果按原
+ * call 身份配对、让上下文片段按 step 边界重组，也才能让 v1 历史在不丢消息的前提下升级。
  *
  * 校验是闭集：顶层与各嵌套记录的字段集合固定，未声明字段一律拒绝。这样「不含凭据与外部事实」
  * 不需要靠字段名黑名单来猜——凭据根本没有落脚的位置。
@@ -15,12 +18,16 @@ import {
   parseStableId,
   type CoordinatorSessionId,
   type IdentityResult,
+  type OperationId,
 } from '../../application/dto/identity.js';
 
 export type { CoordinatorSessionId };
 
 /** Session 状态的 schema 版本；读取时版本不符即拒绝，不猜测旧形状。 */
-export const COORDINATOR_SESSION_STATE_SCHEMA_VERSION = 1;
+export const COORDINATOR_SESSION_STATE_SCHEMA_VERSION = 2;
+
+/** 前驱版本写入的 payload 版本；读取时按可证明唯一的规则升级到 v2。 */
+export const LEGACY_SESSION_STATE_SCHEMA_VERSION = 1;
 
 /** checkpoint thread 前缀：让 Session ID 到 `thread_id` 的映射显式且不可与其它用途混用。 */
 export const CHECKPOINT_THREAD_PREFIX = 'coordinator-session:';
@@ -33,15 +40,62 @@ export type ModelUsageObservation = {
 };
 
 /**
+ * 会话历史里消息的持久化角色闭集。
+ *
+ * 这是 Companion 自己拥有的词表：provider 与 LangChain 的拼写不同（`ai` 与 `assistant`、
+ * `human` 与 `user`），如果直接把 provider 对象存进 checkpoint，重开之后就再也读不出角色。
+ */
+export const DURABLE_MESSAGE_ROLES = ['system', 'user', 'assistant', 'tool'] as const;
+
+export type DurableMessageRole = (typeof DURABLE_MESSAGE_ROLES)[number];
+
+/**
+ * 一次受控工具调用的可信身份。
+ *
+ * `operationId`（以及 `resolve_ticket` 的 `mapOperationId`）由宿主在提交模型响应时分配，模型不可
+ * 填写：它是「这次外部副作用是否已经发起过」的唯一凭据，换一个 ID 重试就等于允许重复副作用。
+ */
+export type CommittedToolCall = {
+  readonly callId: string;
+  readonly name: string;
+  readonly args: unknown;
+  /** 主操作的 OperationId。 */
+  readonly operationId: OperationId;
+  /** 该 call 触发的第二次独立副作用（`resolve_ticket` 的地图写入）；没有时为 `null`。 */
+  readonly mapOperationId: OperationId | null;
+};
+
+/**
+ * 一条已提交的会话消息。
+ *
+ * `entryId` 让「同一条消息」在任何进程、任何重放下都有稳定身份；`stepId` 让工具结果与产生它的
+ * 模型响应归到同一个片段，上下文维护因此可以按 step 边界重组而不必猜消息属于哪一回合。
+ */
+export type CommittedMessageEntry = {
+  readonly entryId: string;
+  readonly stepId: string;
+  readonly role: DurableMessageRole;
+  readonly content: string;
+  /** 仅 assistant：已校验并带可信 operation 身份的 tool calls。 */
+  readonly toolCalls?: readonly CommittedToolCall[];
+  /** 仅 tool：被回答的 call 身份与工具名。 */
+  readonly toolCallId?: string;
+  readonly toolName?: string;
+};
+
+/**
  * 一次原子接受的 Coordinator Agent 响应（`CONTEXT.md`「Committed Model Step」）。
  *
- * `messages` 是完整响应（含 tool calls）；流式草稿永远不构造这个值，因此「未完整提交的响应」
- * 在类型上就没有进入历史的入口。
+ * `messages` 是完整响应；`toolCalls` 是它的标准化调用清单。流式草稿永远不构造这个值，因此
+ * 「未完整提交的响应」在类型上就没有进入历史的入口。
  */
 export type CommittedModelStep = {
   readonly stepId: string;
+  /** 该响应在 `committedMessages` 中的条目身份。 */
+  readonly entryId: string;
   readonly committedAt: number;
   readonly messages: readonly unknown[];
+  readonly toolCalls: readonly CommittedToolCall[];
   readonly usage: ModelUsageObservation | null;
 };
 
@@ -104,15 +158,39 @@ export type ContextMaterial = {
   readonly capsule: PortableContextCapsule | null;
 };
 
+/** 压缩路径的封闭取值；`none` 表示本次没有压缩。 */
+export const COMPACTION_PATHS = ['none', 'provider_native', 'context_capsule', 'mechanical_shake'] as const;
+
+export type CompactionPath = (typeof COMPACTION_PATHS)[number];
+
+/**
+ * 压缩结果。
+ *
+ * `compaction_degraded` 与 `context_exhausted` 都是显式终态：前者表示某条路径可用但没有取得
+ * 新进展，后者表示所有路径都已尝试而输入仍然超预算。两者都不得被读成「已完成压缩」。
+ */
+export type CompactionOutcome =
+  | { readonly kind: 'not_needed'; readonly path: 'none'; readonly note: string }
+  | {
+      readonly kind: 'compacted';
+      readonly path: Exclude<CompactionPath, 'none'>;
+      readonly compactedTokens: number;
+      readonly note: string;
+    }
+  | { readonly kind: 'compaction_degraded'; readonly path: CompactionPath; readonly reason: string }
+  | { readonly kind: 'context_exhausted'; readonly reason: string; readonly stillOverBudget: number };
+
 /** 一个 Session 的完整会话状态；可 JSON 序列化，不含凭据与外部权威事实。 */
 export type CoordinatorSessionState = {
   readonly schemaVersion: number;
   readonly coordinatorSessionId: CoordinatorSessionId;
-  readonly committedMessages: readonly unknown[];
+  readonly committedMessages: readonly CommittedMessageEntry[];
   readonly graphPosition: string;
   readonly committedModelSteps: readonly CommittedModelStep[];
   readonly wakeBatches: readonly WakeBatch[];
   readonly contextMaterial?: ContextMaterial;
+  /** 最近一次上下文维护（自动或手动）的结论；从未维护过时为 `null`。 */
+  readonly lastCompactionOutcome: CompactionOutcome | null;
 };
 
 /**
@@ -125,7 +203,48 @@ export function threadIdFor(coordinatorSessionId: CoordinatorSessionId): string 
   return `${CHECKPOINT_THREAD_PREFIX}${coordinatorSessionId}`;
 }
 
+/**
+ * 用户提交消息的稳定身份派生。
+ *
+ * 三条派生规则（entry、step、tool operation）都只依赖已持久化的稳定身份，因此重放、重启与
+ * 崩溃补齐得到的是同一组 ID，而不是「看起来一样的新记录」。
+ */
+export function userEntryId(submissionId: string): string {
+  return `entry:user:${submissionId}`;
+}
+
+export function userStepId(submissionId: string): string {
+  return `step:user:${submissionId}`;
+}
+
+export function assistantEntryId(stepId: string): string {
+  return `entry:assistant:${stepId}`;
+}
+
+export function toolResultEntryId(stepId: string, callId: string): string {
+  return `entry:tool:${stepId}:${callId}`;
+}
+
+export function toolOperationId(stepId: string, callId: string): OperationId {
+  return `op:${stepId}:${callId}` as OperationId;
+}
+
+export function toolMapOperationId(stepId: string, callId: string): OperationId {
+  return `map:${stepId}:${callId}` as OperationId;
+}
+
 const SESSION_STATE_FIELDS: readonly string[] = [
+  'schemaVersion',
+  'coordinatorSessionId',
+  'committedMessages',
+  'graphPosition',
+  'committedModelSteps',
+  'wakeBatches',
+  'contextMaterial',
+  'lastCompactionOutcome',
+];
+
+const LEGACY_SESSION_STATE_FIELDS: readonly string[] = [
   'schemaVersion',
   'coordinatorSessionId',
   'committedMessages',
@@ -135,12 +254,30 @@ const SESSION_STATE_FIELDS: readonly string[] = [
   'contextMaterial',
 ];
 
-const COMMITTED_MODEL_STEP_FIELDS: readonly string[] = [
+const COMPACTED_STEP_FIELDS: readonly string[] = [
   'stepId',
+  'entryId',
   'committedAt',
   'messages',
+  'toolCalls',
   'usage',
 ];
+
+const LEGACY_COMMITTED_STEP_FIELDS: readonly string[] = ['stepId', 'committedAt', 'messages', 'usage'];
+
+const TOOL_CALL_FIELDS: readonly string[] = ['callId', 'name', 'args', 'operationId', 'mapOperationId'];
+
+const MESSAGE_ENTRY_FIELDS: readonly string[] = [
+  'entryId',
+  'stepId',
+  'role',
+  'content',
+  'toolCalls',
+  'toolCallId',
+  'toolName',
+];
+
+const LEGACY_MESSAGE_FIELDS: readonly string[] = ['role', 'content', 'toolCalls'];
 
 const USAGE_FIELDS: readonly string[] = ['inputTokens', 'outputTokens', 'totalTokens'];
 
@@ -172,13 +309,21 @@ const PORTABLE_CAPSULE_FIELDS: readonly string[] = [
 
 const CAPSULE_KIND = 'derived_context_capsule';
 
+const COMPACTION_OUTCOME_KINDS = [
+  'not_needed',
+  'compacted',
+  'compaction_degraded',
+  'context_exhausted',
+] as const;
+
 /**
  * 明确承载凭据的字段名。
  *
  * 顶层闭集已经排除了凭据的落脚点，这一层只处理一个现实风险：凭据被塞进消息或压缩产物里随
  * checkpoint 落盘。这是一份刻意保持封闭的安全边界，不是语义推断——未列出的字段名不会被拒绝。
+ * 项目配置以同一个集合拒绝密钥字段，因此这里是这条规则的唯一事实源。
  */
-const CREDENTIAL_BEARING_FIELDS: ReadonlySet<string> = new Set([
+export const CREDENTIAL_BEARING_FIELD_NAMES: ReadonlySet<string> = new Set([
   'apikey',
   'apikeyid',
   'accesstoken',
@@ -281,7 +426,7 @@ function findSerializabilityViolation(
     return null;
   }
   for (const [key, entry] of Object.entries(object)) {
-    if (CREDENTIAL_BEARING_FIELDS.has(key.toLowerCase())) {
+    if (CREDENTIAL_BEARING_FIELD_NAMES.has(key.toLowerCase())) {
       return { field: `${path}.${key}`, message: '会话状态不接受凭据字段' };
     }
     const violation = findSerializabilityViolation(entry, `${path}.${key}`, nested);
@@ -293,7 +438,7 @@ function findSerializabilityViolation(
 }
 
 function parseUsage(raw: unknown, field: string): IdentityResult<ModelUsageObservation | null> {
-  if (raw === null) {
+  if (raw === null || raw === undefined) {
     return { ok: true, value: null };
   }
   if (!isRecord(raw)) {
@@ -326,17 +471,132 @@ function parseUsage(raw: unknown, field: string): IdentityResult<ModelUsageObser
   };
 }
 
-function parseCommittedModelStep(raw: unknown, field: string): IdentityResult<CommittedModelStep> {
+function parseToolCall(raw: unknown, field: string): IdentityResult<CommittedToolCall> {
   if (!isRecord(raw)) {
     return fail(field, '必须是对象');
   }
-  const closed = requireClosedFields(raw, COMMITTED_MODEL_STEP_FIELDS, field);
+  const closed = requireClosedFields(raw, TOOL_CALL_FIELDS, field);
+  if (!closed.ok) {
+    return closed;
+  }
+  const callId = requireNonEmptyString(raw['callId'], `${field}.callId`);
+  if (!callId.ok) {
+    return callId;
+  }
+  const name = requireNonEmptyString(raw['name'], `${field}.name`);
+  if (!name.ok) {
+    return name;
+  }
+  if (raw['args'] === undefined) {
+    return fail(`${field}.args`, '工具参数必须保存，不能缺失');
+  }
+  const operationId = requireNonEmptyString(raw['operationId'], `${field}.operationId`);
+  if (!operationId.ok) {
+    return operationId;
+  }
+  const mapRaw = raw['mapOperationId'];
+  const mapOperationId =
+    mapRaw === null || mapRaw === undefined
+      ? { ok: true, value: null } as IdentityResult<string | null>
+      : requireNonEmptyString(mapRaw, `${field}.mapOperationId`);
+  if (!mapOperationId.ok) {
+    return mapOperationId;
+  }
+  return {
+    ok: true,
+    value: {
+      callId: callId.value,
+      name: name.value,
+      args: raw['args'],
+      operationId: operationId.value as OperationId,
+      mapOperationId: mapOperationId.value as OperationId | null,
+    },
+  };
+}
+
+function parseMessageEntry(raw: unknown, field: string): IdentityResult<CommittedMessageEntry> {
+  if (!isRecord(raw)) {
+    return fail(field, '必须是对象');
+  }
+  const closed = requireClosedFields(raw, MESSAGE_ENTRY_FIELDS, field);
+  if (!closed.ok) {
+    return closed;
+  }
+  const entryId = requireNonEmptyString(raw['entryId'], `${field}.entryId`);
+  if (!entryId.ok) {
+    return entryId;
+  }
+  const stepId = requireNonEmptyString(raw['stepId'], `${field}.stepId`);
+  if (!stepId.ok) {
+    return stepId;
+  }
+  const role = raw['role'];
+  if (typeof role !== 'string' || !(DURABLE_MESSAGE_ROLES as readonly string[]).includes(role)) {
+    return fail(`${field}.role`, `角色必须是 ${DURABLE_MESSAGE_ROLES.join(' / ')} 之一`);
+  }
+  if (typeof raw['content'] !== 'string') {
+    return fail(`${field}.content`, '必须是字符串');
+  }
+  const base = {
+    entryId: entryId.value,
+    stepId: stepId.value,
+    role: role as DurableMessageRole,
+    content: raw['content'],
+  };
+
+  if (role === 'assistant') {
+    const callsRaw = raw['toolCalls'];
+    if (callsRaw === undefined) {
+      return { ok: true, value: base };
+    }
+    const calls = requireArray(callsRaw, `${field}.toolCalls`);
+    if (!calls.ok) {
+      return calls;
+    }
+    const parsed: CommittedToolCall[] = [];
+    for (const [index, entry] of calls.value.entries()) {
+      const call = parseToolCall(entry, `${field}.toolCalls.${index}`);
+      if (!call.ok) {
+        return call;
+      }
+      parsed.push(call.value);
+    }
+    return parsed.length === 0 ? { ok: true, value: base } : { ok: true, value: { ...base, toolCalls: parsed } };
+  }
+
+  if (role === 'tool') {
+    const toolCallId = requireNonEmptyString(raw['toolCallId'], `${field}.toolCallId`);
+    if (!toolCallId.ok) {
+      return toolCallId;
+    }
+    const toolName = requireNonEmptyString(raw['toolName'], `${field}.toolName`);
+    if (!toolName.ok) {
+      return toolName;
+    }
+    return { ok: true, value: { ...base, toolCallId: toolCallId.value, toolName: toolName.value } };
+  }
+
+  if (raw['toolCalls'] !== undefined || raw['toolCallId'] !== undefined || raw['toolName'] !== undefined) {
+    return fail(field, `${role} 消息不接受工具配对字段`);
+  }
+  return { ok: true, value: base };
+}
+
+function parseStep(raw: unknown, field: string): IdentityResult<CommittedModelStep> {
+  if (!isRecord(raw)) {
+    return fail(field, '必须是对象');
+  }
+  const closed = requireClosedFields(raw, COMPACTED_STEP_FIELDS, field);
   if (!closed.ok) {
     return closed;
   }
   const stepId = requireNonEmptyString(raw['stepId'], `${field}.stepId`);
   if (!stepId.ok) {
     return stepId;
+  }
+  const entryId = requireNonEmptyString(raw['entryId'], `${field}.entryId`);
+  if (!entryId.ok) {
+    return entryId;
   }
   const committedAt = requireNonNegativeInteger(raw['committedAt'], `${field}.committedAt`);
   if (!committedAt.ok) {
@@ -349,6 +609,18 @@ function parseCommittedModelStep(raw: unknown, field: string): IdentityResult<Co
   if (messages.value.length === 0) {
     return fail(`${field}.messages`, '已提交的 model step 必须包含至少一条完整响应消息');
   }
+  const callsRaw = requireArray(raw['toolCalls'], `${field}.toolCalls`);
+  if (!callsRaw.ok) {
+    return callsRaw;
+  }
+  const toolCalls: CommittedToolCall[] = [];
+  for (const [index, entry] of callsRaw.value.entries()) {
+    const call = parseToolCall(entry, `${field}.toolCalls.${index}`);
+    if (!call.ok) {
+      return call;
+    }
+    toolCalls.push(call.value);
+  }
   const usage = parseUsage(raw['usage'], `${field}.usage`);
   if (!usage.ok) {
     return usage;
@@ -357,11 +629,98 @@ function parseCommittedModelStep(raw: unknown, field: string): IdentityResult<Co
     ok: true,
     value: {
       stepId: stepId.value,
+      entryId: entryId.value,
       committedAt: committedAt.value,
       messages: messages.value,
+      toolCalls,
       usage: usage.value,
     },
   };
+}
+
+function parseCompactionOutcome(raw: unknown, field: string): IdentityResult<CompactionOutcome | null> {
+  if (raw === null || raw === undefined) {
+    return { ok: true, value: null };
+  }
+  if (!isRecord(raw)) {
+    return fail(field, '必须是对象或 null');
+  }
+  const kind = raw['kind'];
+  if (typeof kind !== 'string' || !(COMPACTION_OUTCOME_KINDS as readonly string[]).includes(kind)) {
+    return fail(`${field}.kind`, `取值必须是 ${COMPACTION_OUTCOME_KINDS.join(' / ')} 之一`);
+  }
+  switch (kind) {
+    case 'not_needed': {
+      const closed = requireClosedFields(raw, ['kind', 'path', 'note'], field);
+      if (!closed.ok) {
+        return closed;
+      }
+      if (raw['path'] !== 'none' || typeof raw['note'] !== 'string') {
+        return fail(field, 'not_needed 必须带 path=none 与 note');
+      }
+      return { ok: true, value: { kind: 'not_needed', path: 'none', note: raw['note'] } };
+    }
+    case 'compacted': {
+      const closed = requireClosedFields(raw, ['kind', 'path', 'compactedTokens', 'note'], field);
+      if (!closed.ok) {
+        return closed;
+      }
+      const path = raw['path'];
+      if (typeof path !== 'string' || path === 'none' || !(COMPACTION_PATHS as readonly string[]).includes(path)) {
+        return fail(`${field}.path`, 'compacted 必须给出实际使用的压缩路径');
+      }
+      const tokens = requireNonNegativeInteger(raw['compactedTokens'], `${field}.compactedTokens`);
+      if (!tokens.ok) {
+        return tokens;
+      }
+      if (typeof raw['note'] !== 'string') {
+        return fail(`${field}.note`, '必须是字符串');
+      }
+      return {
+        ok: true,
+        value: {
+          kind: 'compacted',
+          path: path as Exclude<CompactionPath, 'none'>,
+          compactedTokens: tokens.value,
+          note: raw['note'],
+        },
+      };
+    }
+    case 'compaction_degraded': {
+      const closed = requireClosedFields(raw, ['kind', 'path', 'reason'], field);
+      if (!closed.ok) {
+        return closed;
+      }
+      const path = raw['path'];
+      if (typeof path !== 'string' || !(COMPACTION_PATHS as readonly string[]).includes(path)) {
+        return fail(`${field}.path`, '取值必须是已知压缩路径');
+      }
+      if (typeof raw['reason'] !== 'string') {
+        return fail(`${field}.reason`, '必须是字符串');
+      }
+      return {
+        ok: true,
+        value: { kind: 'compaction_degraded', path: path as CompactionPath, reason: raw['reason'] },
+      };
+    }
+    default: {
+      const closed = requireClosedFields(raw, ['kind', 'reason', 'stillOverBudget'], field);
+      if (!closed.ok) {
+        return closed;
+      }
+      const over = requireNonNegativeInteger(raw['stillOverBudget'], `${field}.stillOverBudget`);
+      if (!over.ok) {
+        return over;
+      }
+      if (typeof raw['reason'] !== 'string') {
+        return fail(`${field}.reason`, '必须是字符串');
+      }
+      return {
+        ok: true,
+        value: { kind: 'context_exhausted', reason: raw['reason'], stillOverBudget: over.value },
+      };
+    }
+  }
 }
 
 function parseSourceRevisionRef(raw: unknown, field: string): IdentityResult<SourceRevisionRef> {
@@ -598,28 +957,28 @@ function parseContextMaterial(raw: unknown, field: string): IdentityResult<Conte
   return { ok: true, value: { nativeWindowOwner: owner.value, capsule: capsule.value } };
 }
 
-/**
- * 校验一个候选 Coordinator Session State。
- *
- * 拒绝理由始终指向具体字段：调用方要么修好它，要么把 Session 标记为阻塞，不做「尽力恢复」。
- */
-export function parseCoordinatorSessionState(raw: unknown): IdentityResult<CoordinatorSessionState> {
-  if (!isRecord(raw)) {
-    return fail('sessionState', '必须是对象');
-  }
-  const closed = requireClosedFields(raw, SESSION_STATE_FIELDS, 'sessionState');
+type SessionStateFields = {
+  readonly schemaVersion: number;
+  readonly coordinatorSessionId: CoordinatorSessionId;
+  readonly committedMessages: readonly unknown[];
+  readonly graphPosition: string;
+  readonly committedModelSteps: readonly unknown[];
+  readonly wakeBatches: readonly unknown[];
+  readonly contextMaterial?: ContextMaterial;
+};
+
+type CommonRead =
+  | { readonly ok: true; readonly value: SessionStateFields }
+  | { readonly ok: false; readonly field: string; readonly message: string };
+
+function readCommonFields(raw: Record<string, unknown>, allowed: readonly string[]): CommonRead {
+  const closed = requireClosedFields(raw, allowed, 'sessionState');
   if (!closed.ok) {
     return closed;
   }
-  const schemaVersion = requireNonNegativeInteger(raw['schemaVersion'], 'sessionState.schemaVersion');
-  if (!schemaVersion.ok) {
-    return schemaVersion;
-  }
-  if (schemaVersion.value !== COORDINATOR_SESSION_STATE_SCHEMA_VERSION) {
-    return fail(
-      'sessionState.schemaVersion',
-      `期望 ${COORDINATOR_SESSION_STATE_SCHEMA_VERSION}，实际为 ${schemaVersion.value}`,
-    );
+  const schemaVersion = raw['schemaVersion'];
+  if (typeof schemaVersion !== 'number' || !Number.isSafeInteger(schemaVersion) || schemaVersion < 0) {
+    return fail('sessionState.schemaVersion', '必须是非负整数');
   }
   const sessionId = requireNonEmptyString(raw['coordinatorSessionId'], 'sessionState.coordinatorSessionId');
   if (!sessionId.ok) {
@@ -637,25 +996,36 @@ export function parseCoordinatorSessionState(raw: unknown): IdentityResult<Coord
   if (!steps.ok) {
     return steps;
   }
-  const committedModelSteps: CommittedModelStep[] = [];
-  for (const [index, entry] of steps.value.entries()) {
-    const parsed = parseCommittedModelStep(entry, `sessionState.committedModelSteps.${index}`);
-    if (!parsed.ok) {
-      return parsed;
-    }
-    committedModelSteps.push(parsed.value);
-  }
   const batches = requireArray(raw['wakeBatches'], 'sessionState.wakeBatches');
   if (!batches.ok) {
     return batches;
   }
+  const base = {
+    schemaVersion: schemaVersion,
+    coordinatorSessionId: sessionId.value as CoordinatorSessionId,
+    committedMessages: committedMessages.value,
+    graphPosition: graphPosition.value,
+    committedModelSteps: steps.value,
+    wakeBatches: batches.value,
+  };
+  if (raw['contextMaterial'] === undefined) {
+    return { ok: true, value: base };
+  }
+  const material = parseContextMaterial(raw['contextMaterial'], 'sessionState.contextMaterial');
+  return material.ok ? { ok: true, value: { ...base, contextMaterial: material.value } } : material;
+}
+
+function parseWakeBatches(
+  raw: readonly unknown[],
+  sessionId: string,
+): IdentityResult<readonly WakeBatch[]> {
   const wakeBatches: WakeBatch[] = [];
-  for (const [index, entry] of batches.value.entries()) {
+  for (const [index, entry] of raw.entries()) {
     const parsed = parseWakeBatch(entry, `sessionState.wakeBatches.${index}`);
     if (!parsed.ok) {
       return parsed;
     }
-    if (parsed.value.coordinatorSessionId !== sessionId.value) {
+    if (parsed.value.coordinatorSessionId !== sessionId) {
       return fail(
         `sessionState.wakeBatches.${index}.coordinatorSessionId`,
         'Wake Batch 的目标 Session 与会话状态不一致',
@@ -667,27 +1037,257 @@ export function parseCoordinatorSessionState(raw: unknown): IdentityResult<Coord
   if (batchesById.size !== wakeBatches.length) {
     return fail('sessionState.wakeBatches', '同一个 WakeBatchId 不能在会话历史中出现两次');
   }
+  return { ok: true, value: wakeBatches };
+}
 
-  const base = {
-    schemaVersion: schemaVersion.value,
-    coordinatorSessionId: sessionId.value as CoordinatorSessionId,
-    committedMessages: committedMessages.value,
-    graphPosition: graphPosition.value,
-    committedModelSteps,
-    wakeBatches,
-  };
-  let state: CoordinatorSessionState = base;
-  if (raw['contextMaterial'] !== undefined) {
-    const material = parseContextMaterial(raw['contextMaterial'], 'sessionState.contextMaterial');
-    if (!material.ok) {
-      return material;
-    }
-    state = { ...base, contextMaterial: material.value };
-  }
-
+function finish(state: CoordinatorSessionState): IdentityResult<CoordinatorSessionState> {
   const violation = findSerializabilityViolation(state, 'sessionState', new Set());
-  if (violation !== null) {
-    return fail(violation.field, violation.message);
+  return violation === null ? { ok: true, value: state } : fail(violation.field, violation.message);
+}
+
+/**
+ * v1 → v2 升级。
+ *
+ * v1 的 `committedMessages` 与 `committedModelSteps` 严格一一对应（当时的 model node 在同一次写入
+ * 里各追加一条），因此 entry 顺序可以唯一还原：第 i 条消息属于第 i 个 step。两者数量不一致时说明
+ * 这份历史无法唯一对应，按不可恢复处理并保留原记录，绝不猜一个顺序。
+ *
+ * v1 的 assistant 消息可能带 `tool_calls`：v1 的图没有 tools 节点，这些调用从未被发起过，因此
+ * 也不存在对应的 Operation Intent。为它们派生确定性 OperationId（`op:<stepId>:<callId>`）是安全的：
+ * 没有已发起副作用的记录需要沿用，而这正是 OperationId 要防止重复的东西。
+ */
+function upgradeFromV1(fields: SessionStateFields): IdentityResult<CoordinatorSessionState> {
+  if (fields.committedMessages.length !== fields.committedModelSteps.length) {
+    return fail(
+      'sessionState.committedMessages',
+      `v1 历史无法唯一升级：消息 ${String(fields.committedMessages.length)} 条与 model step ${String(
+        fields.committedModelSteps.length,
+      )} 个数量不一致`,
+    );
   }
-  return { ok: true, value: state };
+
+  const entries: CommittedMessageEntry[] = [];
+  const steps: CommittedModelStep[] = [];
+  for (const [index, rawStep] of fields.committedModelSteps.entries()) {
+    if (!isRecord(rawStep)) {
+      return fail(`sessionState.committedModelSteps.${index}`, '必须是对象');
+    }
+    const closed = requireClosedFields(rawStep, LEGACY_COMMITTED_STEP_FIELDS, `sessionState.committedModelSteps.${index}`);
+    if (!closed.ok) {
+      return closed;
+    }
+    const stepId = requireNonEmptyString(rawStep['stepId'], `sessionState.committedModelSteps.${index}.stepId`);
+    if (!stepId.ok) {
+      return stepId;
+    }
+    const committedAt = requireNonNegativeInteger(
+      rawStep['committedAt'],
+      `sessionState.committedModelSteps.${index}.committedAt`,
+    );
+    if (!committedAt.ok) {
+      return committedAt;
+    }
+    const messages = requireArray(rawStep['messages'], `sessionState.committedModelSteps.${index}.messages`);
+    if (!messages.ok) {
+      return messages;
+    }
+    const usage = parseUsage(rawStep['usage'], `sessionState.committedModelSteps.${index}.usage`);
+    if (!usage.ok) {
+      return usage;
+    }
+
+    const rawMessage = fields.committedMessages[index];
+    if (!isRecord(rawMessage)) {
+      return fail(`sessionState.committedMessages.${index}`, '必须是对象');
+    }
+    const messageClosed = requireClosedFields(rawMessage, LEGACY_MESSAGE_FIELDS, `sessionState.committedMessages.${index}`);
+    if (!messageClosed.ok) {
+      return messageClosed;
+    }
+    const role = rawMessage['role'];
+    if (role !== 'assistant') {
+      return fail(
+        `sessionState.committedMessages.${index}.role`,
+        'v1 的已提交消息只能由 model step 产生，且必须是 assistant',
+      );
+    }
+    if (typeof rawMessage['content'] !== 'string') {
+      return fail(`sessionState.committedMessages.${index}.content`, '必须是字符串');
+    }
+    const rawCalls = rawMessage['toolCalls'];
+    const toolCalls: CommittedToolCall[] = [];
+    if (rawCalls !== undefined) {
+      const calls = requireArray(rawCalls, `sessionState.committedMessages.${index}.toolCalls`);
+      if (!calls.ok) {
+        return calls;
+      }
+      for (const [callIndex, entry] of calls.value.entries()) {
+        const call = parseLegacyToolCall(entry, stepId.value, `sessionState.committedMessages.${index}.toolCalls.${callIndex}`);
+        if (!call.ok) {
+          return call;
+        }
+        toolCalls.push(call.value);
+      }
+    }
+
+    const entryId = assistantEntryId(stepId.value);
+    entries.push(
+      toolCalls.length === 0
+        ? {
+            entryId,
+            stepId: stepId.value,
+            role: 'assistant',
+            content: rawMessage['content'],
+          }
+        : {
+            entryId,
+            stepId: stepId.value,
+            role: 'assistant',
+            content: rawMessage['content'],
+            toolCalls,
+          },
+    );
+    steps.push({
+      stepId: stepId.value,
+      entryId,
+      committedAt: committedAt.value,
+      messages: messages.value,
+      toolCalls,
+      usage: usage.value,
+    });
+  }
+
+  const wakeBatches = parseWakeBatches(fields.wakeBatches, fields.coordinatorSessionId);
+  if (!wakeBatches.ok) {
+    return wakeBatches;
+  }
+  const base: CoordinatorSessionState = {
+    schemaVersion: COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
+    coordinatorSessionId: fields.coordinatorSessionId,
+    committedMessages: entries,
+    graphPosition: fields.graphPosition,
+    committedModelSteps: steps,
+    wakeBatches: wakeBatches.value,
+    lastCompactionOutcome: null,
+  };
+  const state = fields.contextMaterial === undefined ? base : { ...base, contextMaterial: fields.contextMaterial };
+  return finish(state);
+}
+
+/** v1 消息里的 provider 形状 tool call：`{id, name, args}`。 */
+function parseLegacyToolCall(raw: unknown, stepId: string, field: string): IdentityResult<CommittedToolCall> {
+  if (!isRecord(raw)) {
+    return fail(field, '必须是对象');
+  }
+  const callId = requireNonEmptyString(raw['id'], `${field}.id`);
+  if (!callId.ok) {
+    return callId;
+  }
+  const name = requireNonEmptyString(raw['name'], `${field}.name`);
+  if (!name.ok) {
+    return name;
+  }
+  if (raw['args'] === undefined) {
+    return fail(`${field}.args`, '工具参数必须保存，不能缺失');
+  }
+  return {
+    ok: true,
+    value: {
+      callId: callId.value,
+      name: name.value,
+      args: raw['args'],
+      operationId: toolOperationId(stepId, callId.value),
+      mapOperationId: null,
+    },
+  };
+}
+
+/**
+ * 校验一个候选 Coordinator Session State。
+ *
+ * v1 与 v2 都从这里进入：v1 先按上面的规则升级，v2 直接校验。拒绝理由始终指向具体字段：调用方
+ * 要么修好它，要么把 Session 标记为阻塞，不做「尽力恢复」。
+ */
+export function parseCoordinatorSessionState(raw: unknown): IdentityResult<CoordinatorSessionState> {
+  if (!isRecord(raw)) {
+    return fail('sessionState', '必须是对象');
+  }
+  const version = raw['schemaVersion'];
+  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 0) {
+    return fail('sessionState.schemaVersion', '必须是非负整数');
+  }
+  if (version === LEGACY_SESSION_STATE_SCHEMA_VERSION) {
+    const common = readCommonFields(raw, LEGACY_SESSION_STATE_FIELDS);
+    return common.ok ? upgradeFromV1(common.value) : common;
+  }
+  if (version !== COORDINATOR_SESSION_STATE_SCHEMA_VERSION) {
+    return fail(
+      'sessionState.schemaVersion',
+      `期望 ${String(COORDINATOR_SESSION_STATE_SCHEMA_VERSION)}（或可升级的 ${String(
+        LEGACY_SESSION_STATE_SCHEMA_VERSION,
+      )}），实际为 ${String(version)}`,
+    );
+  }
+
+  const common = readCommonFields(raw, SESSION_STATE_FIELDS);
+  if (!common.ok) {
+    return common;
+  }
+  const fields = common.value;
+
+  const entries: CommittedMessageEntry[] = [];
+  const entriesById = new Set<string>();
+  for (const [index, entry] of fields.committedMessages.entries()) {
+    const parsed = parseMessageEntry(entry, `sessionState.committedMessages.${index}`);
+    if (!parsed.ok) {
+      return parsed;
+    }
+    if (entriesById.has(parsed.value.entryId)) {
+      return fail('sessionState.committedMessages', `entryId ${parsed.value.entryId} 出现了两次`);
+    }
+    entriesById.add(parsed.value.entryId);
+    entries.push(parsed.value);
+  }
+
+  const steps: CommittedModelStep[] = [];
+  const stepIds: string[] = [];
+  for (const [index, entry] of fields.committedModelSteps.entries()) {
+    const parsed = parseStep(entry, `sessionState.committedModelSteps.${index}`);
+    if (!parsed.ok) {
+      return parsed;
+    }
+    if (!entriesById.has(parsed.value.entryId)) {
+      return fail(
+        `sessionState.committedModelSteps.${index}.entryId`,
+        `该 entryId ${parsed.value.entryId} 在 committedMessages 中不存在`,
+      );
+    }
+    stepIds.push(parsed.value.stepId);
+    steps.push(parsed.value);
+  }
+
+  const wakeBatches = parseWakeBatches(fields.wakeBatches, fields.coordinatorSessionId);
+  if (!wakeBatches.ok) {
+    return wakeBatches;
+  }
+
+  const outcome = parseCompactionOutcome(
+    raw['lastCompactionOutcome'] === undefined ? null : raw['lastCompactionOutcome'],
+    'sessionState.lastCompactionOutcome',
+  );
+  if (!outcome.ok) {
+    return outcome;
+  }
+
+  const base: CoordinatorSessionState = {
+    schemaVersion: fields.schemaVersion,
+    coordinatorSessionId: fields.coordinatorSessionId,
+    committedMessages: entries,
+    graphPosition: fields.graphPosition,
+    committedModelSteps: steps,
+    wakeBatches: wakeBatches.value,
+    lastCompactionOutcome: outcome.value,
+  };
+  const state = fields.contextMaterial === undefined ? base : { ...base, contextMaterial: fields.contextMaterial };
+  return finish(state);
 }

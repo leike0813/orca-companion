@@ -62,6 +62,8 @@ beforeEach(() => {
       mode: 'route_planning',
       controlState: 'active',
       planningCycleId: 'cycle-1' as PlanningCycleId,
+      fullBranchRef: 'refs/heads/main',
+      canonicalWorktreePath: '/tmp/orca-test-worktree',
     }).kind,
   ).toBe('committed');
   expect(
@@ -225,6 +227,7 @@ test('status 只投影仍然 open 的 Pending Interaction', async () => {
       interactionId: 'interaction-1' as InteractionId,
       state: 'answered',
       answerRef: { kind: 'answer', id: 'answer-1' },
+      answerText: '已确认',
     }).kind,
   ).toBe('committed');
 
@@ -317,6 +320,8 @@ test('存在多个 Scope 时明确失败，不提供未登记的选择参数', a
       mode: 'route_planning',
       controlState: 'active',
       planningCycleId: null,
+      fullBranchRef: 'refs/heads/second',
+      canonicalWorktreePath: '/tmp/orca-test-worktree-second',
     }).kind,
   ).toBe('committed');
 
@@ -373,6 +378,8 @@ test('未注入依赖时 status 从仓库的 Git common dir 只读读取快照',
         mode: 'route_planning',
         controlState: 'paused',
         planningCycleId: 'cycle-1' as PlanningCycleId,
+        fullBranchRef: 'refs/heads/paused',
+        canonicalWorktreePath: '/tmp/orca-test-worktree-paused',
       }).kind,
     ).toBe('committed');
     seeded.store.close();

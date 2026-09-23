@@ -74,7 +74,13 @@ test('只有普通进度、keepalive、长轮询超时与无变化对账时不�
 test('每个分类都被显式判定过是否可行动', () => {
   const actionable = SOURCE_OBSERVATION_CLASSES.filter((value) => isActionableObservationClass(value));
 
-  expect(actionable).toEqual(['worker_question', 'worker_escalation', 'pending_interaction', 'unattributed_drift']);
+  expect(actionable).toEqual([
+    'worker_question',
+    'worker_escalation',
+    'pending_interaction',
+    'user_message',
+    'unattributed_drift',
+  ]);
 });
 
 test('需要判断的事实被投影成 Actionable Work', () => {

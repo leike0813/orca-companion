@@ -14,7 +14,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
 import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
@@ -34,6 +34,7 @@ import {
   releaseTicket,
   resolveTicket,
   updateRouteMapSection,
+  writeResolvedTicketMap,
   type IssueTrackerGateway,
   type PlanningMutationContext,
   type TrackerReadOutcome,
@@ -100,6 +101,8 @@ beforeEach(() => {
     coordinatorSessionId: SESSION_A,
     coordinatorModelConfigurationRef: 'model-config-1',
     planningCycleId: CYCLE,
+    fullBranchRef: 'refs/heads/main',
+    canonicalWorktreePath: '/tmp/orca-test-worktree',
   });
   if (initialized.kind !== 'initialized') {
     throw new Error('无法创建测试 Scope');
@@ -451,6 +454,28 @@ test('调用 tracker 之前意图已经落盘，成功收尾后意图为 settled
   expect(listed?.outcomeClass).toBe('accepted');
 });
 
+test('accepted 意图出现时地图 revision 与票据 claim 已经持久化', async () => {
+  const tracker = mapAndTicketTracker();
+  const transact = store.transact.bind(store);
+  const observed: { mapRevision: number; activeClaims: number }[] = [];
+  vi.spyOn(store, 'transact').mockImplementation((command) => {
+    const result = transact(command);
+    if (command.kind === 'settle-intent' && command.outcomeClass === 'accepted') {
+      observed.push({
+        mapRevision: mapRevision(),
+        activeClaims: ticketClaims().filter((claim) => claim.state === 'active').length,
+      });
+    }
+    return result;
+  });
+
+  const claimed = await claimTicket({
+    ...mutationContext('op-claim-1'), tracker, ticketRef: TICKET, trackerAssignee: 'alice',
+  });
+  expect(claimed.kind).toBe('accepted');
+  expect(observed).toEqual([{ mapRevision: 1, activeClaims: 1 }]);
+});
+
 test('tracker 明确拒绝时意图收尾为 rejected，地图 revision 不推进', async () => {
   const tracker = mapTracker();
   tracker.writeOutcome = { kind: 'rejected', code: 'tracker_conflict', message: '正文冲突' };
@@ -656,4 +681,29 @@ test('解决票据写入结论、移出开放票据、收尾 claim，并用独�
   expect(claimIntent?.state).toBe('settled');
   expect(mapIntent?.state).toBe('settled');
   expect(mapIntent?.operationCategory).not.toBe(claimIntent?.operationCategory);
+});
+
+test('释放阶段完成后可用原地图 OperationId 继续，且不再次清空 assignee', async () => {
+  const tracker = mapAndTicketTracker();
+  await claimTicket({
+    ...mutationContext('op-claim-1'), tracker, ticketRef: TICKET, trackerAssignee: 'alice',
+  });
+  const released = await releaseTicket({
+    ...mutationContext('op-release-1'), tracker, ticketRef: TICKET,
+  });
+  expect(released.kind).toBe('accepted');
+  const writesBefore = tracker.writeCalls().length;
+  const input = {
+    ...mutationContext('op-release-1'),
+    tracker,
+    ticketRef: TICKET,
+    resolution: '选择方案 A',
+    mapOperationId: 'op-map-resolve-1' as OperationId,
+  };
+
+  const completed = await writeResolvedTicketMap(input, scopeRecord().revision);
+
+  expect(completed.kind).toBe('accepted');
+  expect(tracker.writeCalls().slice(writesBefore).map((call) => call.method)).toEqual(['update-body']);
+  expect(intentOf(input.mapOperationId)?.outcomeClass).toBe('accepted');
 });

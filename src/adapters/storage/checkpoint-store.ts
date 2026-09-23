@@ -26,11 +26,17 @@ import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
 import type {
   CoordinatorSessionId,
 } from '../../application/dto/identity.js';
-import type { CheckpointRecoveryRead, CheckpointWriteResult } from '../../application/coordinator/runtime-guard.js';
+import type {
+  CheckpointRecoveryRead,
+  CheckpointWriteResult,
+  UserMessageCommitInput,
+  UserMessageCommitResult,
+} from '../../application/coordinator/runtime-guard.js';
 import type { WakeCheckpointCommit } from '../../application/coordinator/wake-admission.js';
 import type {
   NativeCompactedWindowOwner,
   PortableContextCapsule,
+  CommittedMessageEntry,
   CommittedModelStep,
   CoordinatorSessionState,
   WakeBatch,
@@ -38,6 +44,8 @@ import type {
 import {
   COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
   parseCoordinatorSessionState,
+  userEntryId,
+  userStepId,
 } from '../../domain/coordinator/session-state.js';
 import { describeError } from './schema.js';
 
@@ -110,7 +118,7 @@ export type CheckpointStore = {
   saveCheckpoint(state: CoordinatorSessionState): CheckpointWriteResult;
   loadCheckpoint(coordinatorSessionId: CoordinatorSessionId): CheckpointRecoveryRead;
   /**
-   * 读回底层完整已提交消息。
+   * 读回底层完整已提交消息**条目**。
    *
    * 给定区间时只返回被 Capsule 取代的那段原始消息——Capsule 是派生视图，永远不覆盖原始对话，
    * 所以被取代的区间始终可以读回。
@@ -118,7 +126,7 @@ export type CheckpointStore = {
   readCommittedMessages(
     coordinatorSessionId: CoordinatorSessionId,
     range?: CommittedMessageRange,
-  ): readonly unknown[];
+  ): readonly CommittedMessageEntry[];
 
   saveNativeWindowOwner(
     coordinatorSessionId: CoordinatorSessionId,
@@ -139,6 +147,14 @@ export type CheckpointStore = {
    * 同一 WakeBatchId 不会被写入两次：已存在时以 `already-committed` 报告，让调用方走补齐路径。
    */
   commitWakeBatch(batch: WakeBatch): WakeCheckpointCommit;
+
+  /**
+   * 同步提交一条普通用户消息（IC-04 的 checkpoint 侧 seam）。
+   *
+   * 消息与随它一起准入的 Wake Batch 是同一次写入：两者要么都在，要么都不在。同一 `submissionId`
+   * 再提交一次不会留下第二条消息。
+   */
+  commitUserMessage(input: UserMessageCommitInput): UserMessageCommitResult;
 
   close(): void;
 };
@@ -169,6 +185,7 @@ function coreOf(state: CoordinatorSessionState): SessionCore {
     graphPosition: state.graphPosition,
     committedModelSteps: state.committedModelSteps,
     wakeBatches: state.wakeBatches,
+    lastCompactionOutcome: state.lastCompactionOutcome,
   };
 }
 
@@ -424,9 +441,11 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
       if (from === undefined || to === undefined || from > to) {
         return [];
       }
-      return read.state.committedModelSteps
-        .slice(from, to + 1)
-        .flatMap((step) => step.messages);
+      // 被取代区间按 step 界定；条目按 committedMessages 原序返回，翻译回上下文时不重排历史。
+      const replacedSteps = new Set(
+        read.state.committedModelSteps.slice(from, to + 1).map((step) => step.stepId),
+      );
+      return read.state.committedMessages.filter((entry) => replacedSteps.has(entry.stepId));
     },
     loadNativeWindowOwner,
     saveNativeWindowOwner(coordinatorSessionId, owner) {
@@ -496,6 +515,7 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
           graphPosition: 'suspend',
           committedModelSteps: [],
           wakeBatches: [],
+          lastCompactionOutcome: null,
         };
       } else {
         core = coreOf(current.state);
@@ -515,6 +535,62 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
       const reloaded = loadCheckpoint(sessionId);
       if (reloaded.kind !== 'recovered') {
         return { kind: 'unrecoverable', reason: 'Wake Batch 写入后无法读回会话状态' };
+      }
+      return { kind: 'committed', state: reloaded.state };
+    },
+    commitUserMessage(input) {
+      const sessionId = input.coordinatorSessionId;
+      const entryId = userEntryId(input.submissionId);
+      const current = loadCheckpoint(sessionId);
+      if (current.kind === 'unrecoverable') {
+        return { kind: 'unrecoverable', reason: current.reason };
+      }
+      let core: SessionCore;
+      if (current.kind === 'absent') {
+        core = {
+          schemaVersion: COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
+          coordinatorSessionId: sessionId,
+          committedMessages: [],
+          graphPosition: 'suspend',
+          committedModelSteps: [],
+          wakeBatches: [],
+          lastCompactionOutcome: null,
+        };
+      } else {
+        core = coreOf(current.state);
+        // 稳定重放：同一 submissionId 已有条目时不再追加消息或 batch，只报告内容是否逐字一致。
+        const existing = core.committedMessages.find((entry) => entry.entryId === entryId);
+        if (existing !== undefined) {
+          return {
+            kind: 'already-committed',
+            state: current.state,
+            contentMatches: existing.content === input.content,
+          };
+        }
+      }
+      const entry: CommittedMessageEntry = {
+        entryId,
+        stepId: userStepId(input.submissionId),
+        role: 'user',
+        content: input.content,
+      };
+      // 消息与 Wake Batch 是同一次写入：两者不可能成为两条独立事实。
+      const next: CoordinatorSessionState = {
+        ...core,
+        committedMessages: [...core.committedMessages, entry],
+        wakeBatches: [...core.wakeBatches, input.wakeBatch],
+      };
+      const parsed = parseCoordinatorSessionState(next);
+      if (!parsed.ok) {
+        return { kind: 'unrecoverable', reason: `${parsed.field}: ${parsed.message}` };
+      }
+      const written = saveCore(parsed.value);
+      if (written.kind === 'failed') {
+        return { kind: 'unrecoverable', reason: written.message };
+      }
+      const reloaded = loadCheckpoint(sessionId);
+      if (reloaded.kind !== 'recovered') {
+        return { kind: 'unrecoverable', reason: '用户消息写入后无法读回会话状态' };
       }
       return { kind: 'committed', state: reloaded.state };
     },

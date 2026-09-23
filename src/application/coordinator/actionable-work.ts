@@ -26,6 +26,7 @@ export const SOURCE_OBSERVATION_CLASSES = [
   'worker_question',
   'worker_escalation',
   'pending_interaction',
+  'user_message',
   'unattributed_drift',
   'routine_progress',
   'keepalive',
@@ -40,6 +41,7 @@ const ACTIONABLE_OBSERVATION_CLASSES: ReadonlySet<SourceObservationClass> = new 
   'worker_question',
   'worker_escalation',
   'pending_interaction',
+  'user_message',
   'unattributed_drift',
 ]);
 

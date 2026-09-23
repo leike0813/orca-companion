@@ -13,12 +13,14 @@ import { expect, test } from 'vitest';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
+  OperationId,
 } from '../../src/application/dto/identity.js';
 import type { HandoffActivation, PlanningHandoffResult } from '../../src/application/planning/planning-handoff.js';
 import type { PlanningMutationResult } from '../../src/application/planning/route-map-service.js';
 import {
   PLANNING_TOOL_NAMES,
   planningToolset,
+  planningRecoveryToolset,
   planningToolsForMode,
   toBindableTools,
   type PlanningToolFacts,
@@ -33,6 +35,12 @@ import {
 const SCOPE = 'scope-tools' as CoordinationScopeId;
 const SESSION_A = 'session-a' as CoordinatorSessionId;
 const SESSION_B = 'session-b' as CoordinatorSessionId;
+
+/** 宿主在提交模型响应时分配的可信身份；工具 handler 只能转发它，模型不能填写。 */
+const CALL_CONTEXT = {
+  operationId: 'op:step-1:call-1' as OperationId,
+  mapOperationId: 'map:step-1:call-1' as OperationId,
+};
 
 const READ_TOOLS = ['read_route_map', 'read_frontier'] as const;
 
@@ -61,6 +69,13 @@ type Calls = {
   readFrontier: number;
 };
 
+/** handler 转发给用例的可信身份，按调用顺序记录。 */
+type Forwarded = {
+  readonly name: string;
+  readonly operationId: OperationId;
+  readonly mapOperationId: OperationId | null;
+};
+
 function fakeServices(facts: PlanningToolFacts, mutation: PlanningMutationResult = accepted()) {
   const calls: Calls = {
     updateRouteMapSection: 0,
@@ -72,6 +87,7 @@ function fakeServices(facts: PlanningToolFacts, mutation: PlanningMutationResult
     readRouteMap: 0,
     readFrontier: 0,
   };
+  const forwarded: Forwarded[] = [];
   let current = facts;
   const services: PlanningToolServices = {
     readFacts: () => current,
@@ -83,33 +99,48 @@ function fakeServices(facts: PlanningToolFacts, mutation: PlanningMutationResult
       calls.readFrontier += 1;
       return Promise.resolve({ kind: 'ok', value: [] } as PlanningToolOutcome);
     },
-    updateRouteMapSection: () => {
+    updateRouteMapSection: (input) => {
       calls.updateRouteMapSection += 1;
+      forwarded.push({ name: 'update_route_map_section', operationId: input.operationId, mapOperationId: null });
       return Promise.resolve(mutation);
     },
-    claimTicket: () => {
+    claimTicket: (input) => {
       calls.claimTicket += 1;
+      forwarded.push({ name: 'claim_ticket', operationId: input.operationId, mapOperationId: null });
       return Promise.resolve(mutation);
     },
-    releaseTicket: () => {
+    releaseTicket: (input) => {
       calls.releaseTicket += 1;
+      forwarded.push({ name: 'release_ticket', operationId: input.operationId, mapOperationId: null });
       return Promise.resolve(mutation);
     },
-    resolveTicket: () => {
+    resolveTicket: (input) => {
       calls.resolveTicket += 1;
+      forwarded.push({
+        name: 'resolve_ticket',
+        operationId: input.operationId,
+        mapOperationId: input.mapOperationId,
+      });
       return Promise.resolve(mutation);
     },
-    preparePlanningHandoff: () => {
+    preparePlanningHandoff: (input) => {
       calls.preparePlanningHandoff += 1;
+      forwarded.push({
+        name: 'prepare_planning_handoff',
+        operationId: input.operationId,
+        mapOperationId: null,
+      });
       return Promise.resolve(handoffAccepted());
     },
-    reviewPlanningHandoff: () => {
+    reviewPlanningHandoff: (input) => {
       calls.reviewPlanningHandoff += 1;
+      forwarded.push({ name: 'review_planning_handoff', operationId: input.operationId, mapOperationId: null });
       return Promise.resolve(handoffAccepted());
     },
   };
   return {
     calls,
+    forwarded,
     services,
     setFacts: (next: PlanningToolFacts) => {
       current = next;
@@ -158,7 +189,7 @@ async function invoke(
   if (definition === undefined) {
     throw new Error(`工具 ${name} 在当前事实下不可见`);
   }
-  return await definition.invoke(input);
+  return await definition.invoke(input, CALL_CONTEXT);
 }
 
 test('规划模式与事实齐全时暴露完整的规划工具集', () => {
@@ -203,7 +234,7 @@ test('只读工具不需要 expectedRevision，也不消耗写入预算', async 
     (candidate) => candidate.name === 'read_route_map',
   );
   expect(definition).toBeDefined();
-  const outcome = await definition?.invoke({});
+  const outcome = await definition?.invoke({}, CALL_CONTEXT);
   expect(outcome?.kind).toBe('ok');
   expect(harness.calls.readRouteMap).toBe(1);
 });
@@ -286,11 +317,14 @@ test('写入成功时把用例结果归一化并带上新的 revision 与地图 
   const definition = planningToolset(harness.services.readFacts(), harness.services).find(
     (candidate) => candidate.name === 'update_route_map_section',
   );
-  const outcome = await definition?.invoke({
-    section: 'resolved_decisions',
-    content: '- ticket-1: 采用方案 A',
-    expectedRevision: 7,
-  });
+  const outcome = await definition?.invoke(
+    {
+      section: 'resolved_decisions',
+      content: '- ticket-1: 采用方案 A',
+      expectedRevision: 7,
+    },
+    CALL_CONTEXT,
+  );
   expect(outcome).toEqual({ kind: 'ok', value: { scopeRevision: 8, mapRevision: 2 } });
   expect(harness.calls.updateRouteMapSection).toBe(1);
 });
@@ -301,11 +335,14 @@ test('用例返回 unknown 时工具如实透传，不伪装成拒绝', async ()
   const definition = planningToolset(facts, harness.services).find(
     (candidate) => candidate.name === 'resolve_ticket',
   );
-  const outcome = await definition?.invoke({
-    ticketId: 'ticket-1',
-    resolution: '采用方案 A',
-    expectedRevision: 7,
-  });
+  const outcome = await definition?.invoke(
+    {
+      ticketId: 'ticket-1',
+      resolution: '采用方案 A',
+      expectedRevision: 7,
+    },
+    CALL_CONTEXT,
+  );
   expect(outcome?.kind).toBe('unknown');
 });
 
@@ -323,6 +360,74 @@ test('prepare 与 review 交接工具走同一套准入并归一化阶段', asyn
     expectedRevision: 7,
   });
   expect(reviewed.kind).toBe('ok');
+});
+
+test('写入工具把可信身份转发给用例：resolve_ticket 另带地图写入身份', async () => {
+  const facts = baseFacts();
+  const harness = fakeServices(facts);
+  const definitions = planningToolset(facts, harness.services);
+  await definitions
+    .find((definition) => definition.name === 'claim_ticket')
+    ?.invoke({ ticketId: 'ticket-1', expectedRevision: 7 }, CALL_CONTEXT);
+  await definitions
+    .find((definition) => definition.name === 'resolve_ticket')
+    ?.invoke({ ticketId: 'ticket-1', resolution: '采用方案 A', expectedRevision: 7 }, CALL_CONTEXT);
+
+  expect(harness.forwarded).toEqual([
+    { name: 'claim_ticket', operationId: CALL_CONTEXT.operationId, mapOperationId: null },
+    {
+      name: 'resolve_ticket',
+      operationId: CALL_CONTEXT.operationId,
+      mapOperationId: CALL_CONTEXT.mapOperationId,
+    },
+  ]);
+});
+
+test('resolve_ticket 已完成释放阶段时仍沿用原地图身份完成剩余阶段', async () => {
+  const current = { ...baseFacts(), scopeRevision: 9, budget: { remainingMutations: 0 } };
+  const harness = fakeServices(current);
+  const services = {
+    ...harness.services,
+    replayMutation: () => accepted(),
+  };
+  expect(planningToolset(current, services).some((definition) => definition.name === 'resolve_ticket')).toBe(false);
+  const tool = planningRecoveryToolset(current, services).find((definition) => definition.name === 'resolve_ticket');
+  if (tool === undefined) throw new Error('缺少 resolve_ticket');
+
+  const result = await tool.invoke(
+    { ticketId: 'ticket-1', resolution: '方案 A', expectedRevision: 7 },
+    CALL_CONTEXT,
+  );
+
+  expect(result.kind).toBe('ok');
+  expect(harness.calls.resolveTicket).toBe(1);
+  expect(harness.forwarded.at(-1)).toMatchObject({
+    operationId: CALL_CONTEXT.operationId,
+    mapOperationId: CALL_CONTEXT.mapOperationId,
+  });
+});
+
+test('绑定给模型的包装器只做 schema 广告，调用它不产生任何副作用', async () => {
+  const facts = baseFacts();
+  const harness = fakeServices(facts);
+  const bindable = toBindableTools(planningToolset(facts, harness.services));
+  const claim = bindable.find((entry) => entry.name === 'claim_ticket');
+  if (claim === undefined) {
+    throw new Error('claim_ticket 没有被绑定');
+  }
+  // 绑定的工具是 schema 广告：这里只关心「调用它会发生什么」，不关心它的载荷类型。
+  const invokeBoundTool = claim as unknown as { invoke: (input: unknown) => Promise<unknown> };
+  const outcome: unknown = JSON.parse(
+    String(await invokeBoundTool.invoke({ ticketId: 'ticket-1', expectedRevision: 7 })),
+  );
+
+  expect(outcome).toEqual({
+    kind: 'rejected',
+    code: 'not_executable',
+    message: '工具由受控 tools 节点执行，模型侧的绑定包装器不产生副作用',
+  });
+  expect(harness.calls.claimTicket).toBe(0);
+  expect(harness.forwarded).toEqual([]);
 });
 
 test('planningToolsForMode 与 planningToolset 对同一事实给出相同工具集', () => {

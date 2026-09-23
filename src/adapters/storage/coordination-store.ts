@@ -805,12 +805,22 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (!cycle.ok) {
         return cycle;
       }
+      const fullBranchRef = requireString(command['fullBranchRef'], 'fullBranchRef');
+      if (!fullBranchRef.ok) {
+        return fullBranchRef;
+      }
+      const canonicalWorktreePath = requireString(command['canonicalWorktreePath'], 'canonicalWorktreePath');
+      if (!canonicalWorktreePath.ok) {
+        return canonicalWorktreePath;
+      }
       return ok({
         ...base,
         kind: 'create-scope',
         mode: mode.value,
         controlState: control.value,
         planningCycleId: cycle.value as PlanningCycleId | null,
+        fullBranchRef: fullBranchRef.value,
+        canonicalWorktreePath: canonicalWorktreePath.value,
       });
     }
     case 'update-scope-mode': {
@@ -892,6 +902,25 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         lifecycleState: lifecycle.value,
       });
     }
+    case 'update-session-model-configuration': {
+      const sessionId = requireString(command['coordinatorSessionId'], 'coordinatorSessionId');
+      if (!sessionId.ok) {
+        return sessionId;
+      }
+      const configurationRef = requireString(
+        command['coordinatorModelConfigurationRef'],
+        'coordinatorModelConfigurationRef',
+      );
+      if (!configurationRef.ok) {
+        return configurationRef;
+      }
+      return ok({
+        ...base,
+        kind: 'update-session-model-configuration',
+        coordinatorSessionId: sessionId.value as CoordinatorSessionId,
+        coordinatorModelConfigurationRef: configurationRef.value,
+      });
+    }
     case 'record-ticket-claim': {
       const ticketRef = requireEntityRef(command['ticketRef'], 'ticketRef');
       if (!ticketRef.ok) {
@@ -949,12 +978,17 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (state.value === 'answered' && answerRef.value === null) {
         return fail('answered 状态必须给出 answerRef');
       }
+      const answerText = requireNullableString(command['answerText'], 'answerText');
+      if (!answerText.ok) {
+        return answerText;
+      }
       return ok({
         ...base,
         kind: 'resolve-pending-interaction',
         interactionId: interactionId.value as InteractionId,
         state: state.value,
         answerRef: answerRef.value,
+        answerText: answerText.value,
       });
     }
     case 'begin-intent': {
@@ -1131,6 +1165,14 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (!configurationRef.ok) {
         return configurationRef;
       }
+      const fullBranchRef = requireString(command['fullBranchRef'], 'fullBranchRef');
+      if (!fullBranchRef.ok) {
+        return fullBranchRef;
+      }
+      const canonicalWorktreePath = requireString(command['canonicalWorktreePath'], 'canonicalWorktreePath');
+      if (!canonicalWorktreePath.ok) {
+        return canonicalWorktreePath;
+      }
       return ok({
         ...base,
         kind: 'initialize-scope',
@@ -1139,6 +1181,24 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         planningCycleId: cycle.value as PlanningCycleId | null,
         coordinatorSessionId: sessionId.value as CoordinatorSessionId,
         coordinatorModelConfigurationRef: configurationRef.value,
+        fullBranchRef: fullBranchRef.value,
+        canonicalWorktreePath: canonicalWorktreePath.value,
+      });
+    }
+    case 'bind-scope-identity': {
+      const fullBranchRef = requireString(command['fullBranchRef'], 'fullBranchRef');
+      if (!fullBranchRef.ok) {
+        return fullBranchRef;
+      }
+      const canonicalWorktreePath = requireString(command['canonicalWorktreePath'], 'canonicalWorktreePath');
+      if (!canonicalWorktreePath.ok) {
+        return canonicalWorktreePath;
+      }
+      return ok({
+        ...base,
+        kind: 'bind-scope-identity',
+        fullBranchRef: fullBranchRef.value,
+        canonicalWorktreePath: canonicalWorktreePath.value,
       });
     }
     case 'record-graph-version': {
@@ -2130,6 +2190,8 @@ function decodeDeliveryVerdict(raw: unknown): Decoded<DeliveryVerdict> {
 
 type ScopeRow = {
   readonly coordination_scope_id: string;
+  readonly full_branch_ref: string | null;
+  readonly canonical_worktree_path: string | null;
   readonly mode: string;
   readonly control_state: string;
   readonly planning_cycle_id: string | null;
@@ -2180,6 +2242,7 @@ type InteractionRow = {
   readonly state: string;
   readonly answer_kind: string | null;
   readonly answer_id: string | null;
+  readonly answer_text: string | null;
   readonly created_at: number;
   readonly resolved_at: number | null;
 };
@@ -2809,6 +2872,8 @@ function decodeScopeRow(row: ScopeRow): Decoded<ScopeRecord> {
   }
   return ok({
     coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    fullBranchRef: row.full_branch_ref,
+    canonicalWorktreePath: row.canonical_worktree_path,
     mode: row.mode,
     controlState: row.control_state,
     planningCycleId: row.planning_cycle_id as PlanningCycleId | null,
@@ -2879,6 +2944,7 @@ function decodeInteractionRow(row: InteractionRow): Decoded<PendingInteractionRe
     expectedRevision: row.expected_revision,
     state: row.state as PendingInteractionState,
     answerRef,
+    answerText: row.answer_text,
     createdAt: row.created_at,
     resolvedAt: row.resolved_at,
   });
@@ -4069,10 +4135,20 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       case 'initialize-scope': {
         db.prepare(
           `INSERT INTO scope (
-             coordination_scope_id, mode, control_state, planning_cycle_id,
+             coordination_scope_id, full_branch_ref, canonical_worktree_path,
+             mode, control_state, planning_cycle_id,
              graph_id, graph_version, authorization_id, authorization_version, revision, updated_at
-           ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?)`,
-        ).run(cmd.coordinationScopeId, cmd.mode, cmd.controlState, cmd.planningCycleId, nextRevision, now);
+           ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?)`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.fullBranchRef,
+          cmd.canonicalWorktreePath,
+          cmd.mode,
+          cmd.controlState,
+          cmd.planningCycleId,
+          nextRevision,
+          now,
+        );
         db.prepare(
           `INSERT INTO session_registry (
              coordination_scope_id, coordinator_session_id, coordinator_model_configuration_ref,
@@ -4775,10 +4851,43 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       case 'create-scope': {
         db.prepare(
           `INSERT INTO scope (
-             coordination_scope_id, mode, control_state, planning_cycle_id,
+             coordination_scope_id, full_branch_ref, canonical_worktree_path,
+             mode, control_state, planning_cycle_id,
              graph_id, graph_version, authorization_id, authorization_version, revision, updated_at
-           ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?)`,
-        ).run(cmd.coordinationScopeId, cmd.mode, cmd.controlState, cmd.planningCycleId, nextRevision, now);
+           ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?)`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.fullBranchRef,
+          cmd.canonicalWorktreePath,
+          cmd.mode,
+          cmd.controlState,
+          cmd.planningCycleId,
+          nextRevision,
+          now,
+        );
+        return ok(null);
+      }
+      /**
+       * 一次性身份补齐：只在当前绑定为空、且该 Scope 没有任何 Runtime Lease 行时成立。
+       *
+       * 「没有 lease 行」是硬条件而不是提示：一旦某个 incarnation 曾为该 Scope 取得过租约，它就可能
+       * 持有 checkpoint 与未决意图，此时改写身份绑定会把后续恢复接到错误的 Scope 上。
+       */
+      case 'bind-scope-identity': {
+        const existing = readScopeRow(cmd.coordinationScopeId);
+        if (existing === undefined) {
+          return fail(`Scope ${cmd.coordinationScopeId} 尚未创建`);
+        }
+        if (existing.full_branch_ref !== null || existing.canonical_worktree_path !== null) {
+          return fail('Scope 注册绑定已存在，不可原地改写', 'constraint');
+        }
+        if (readLeaseRows(cmd.coordinationScopeId).length > 0) {
+          return fail('该 Scope 已经使用过 Runtime Lease，不能补齐身份绑定', 'constraint');
+        }
+        db.prepare(
+          `UPDATE scope SET full_branch_ref = ?, canonical_worktree_path = ?, updated_at = ?
+           WHERE coordination_scope_id = ?`,
+        ).run(cmd.fullBranchRef, cmd.canonicalWorktreePath, now, cmd.coordinationScopeId);
         return ok(null);
       }
       case 'update-scope-mode': {
@@ -4831,6 +4940,18 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         );
         return ok(null);
       }
+      case 'update-session-model-configuration': {
+        const info = db
+          .prepare(
+            `UPDATE session_registry SET coordinator_model_configuration_ref = ?
+             WHERE coordination_scope_id = ? AND coordinator_session_id = ?`,
+          )
+          .run(cmd.coordinatorModelConfigurationRef, cmd.coordinationScopeId, cmd.coordinatorSessionId);
+        if (Number(info.changes) === 0) {
+          return fail(`Session ${cmd.coordinatorSessionId} 未注册到本 Scope`);
+        }
+        return ok(null);
+      }
       case 'record-ticket-claim': {
         db.prepare(
           `INSERT INTO ticket_claims (
@@ -4877,13 +4998,14 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       case 'resolve-pending-interaction': {
         const info = db
           .prepare(
-            `UPDATE pending_interactions SET state = ?, answer_kind = ?, answer_id = ?, resolved_at = ?
+            `UPDATE pending_interactions SET state = ?, answer_kind = ?, answer_id = ?, answer_text = ?, resolved_at = ?
              WHERE coordination_scope_id = ? AND interaction_id = ? AND state = 'open'`,
           )
           .run(
             cmd.state,
             cmd.answerRef === null ? null : cmd.answerRef.kind,
             cmd.answerRef === null ? null : cmd.answerRef.id,
+            cmd.answerText,
             now,
             cmd.coordinationScopeId,
             cmd.interactionId,
@@ -5613,7 +5735,10 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
             cmd.kind === 'register-session' &&
             cmd.coordinatorSessionId === cmd.writer.coordinatorSessionId &&
             readLeaseRows(cmd.coordinationScopeId).every((row) => row.lease_kind !== 'runtime');
-          if (runtimeLeaseRow === undefined && !bootstrapRegistration) {
+          // 一次性身份补齐同样只能在「该 Scope 从未使用过 Runtime Lease」时发生；那时不存在任何
+          // 活跃 incarnation 可以派发这个写入，因此它和初始化一样由 bootstrap 写入者执行。
+          const bootstrapScopeBinding = cmd.kind === 'bind-scope-identity';
+          if (runtimeLeaseRow === undefined && !bootstrapRegistration && !bootstrapScopeBinding) {
             rollback();
             return rejected('fenced', '写入者没有活跃 Runtime Lease');
           }
