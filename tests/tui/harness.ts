@@ -19,6 +19,9 @@ import type {
   SemanticEvent,
 } from '../../src/application/controller-service.js';
 import type {
+  ExecutionAuthorizationIntentPort,
+  ExecutionAuthorizationLoad,
+  ExecutionAuthorizationView,
   ExecutionHandoffIntentPort,
   HomeResolution,
   ModelCatalog,
@@ -236,6 +239,9 @@ export type FakePortsOptions = {
   readonly modelCatalog?: Partial<ModelCatalog>;
   /** Execution Handoff 各步骤的返回值；省略即 accepted。 */
   readonly executionHandoff?: Partial<Record<'prepare' | 'review' | 'cutover' | 'cancel', ControllerCommandResult>>;
+  /** Execution Authorization 的审阅结果与批准结果；省略即一份门禁通过的完整 Manifest。 */
+  readonly authorizationReview?: ExecutionAuthorizationLoad;
+  readonly authorizationApprove?: ControllerCommandResult;
 };
 
 export type FakePorts = {
@@ -347,6 +353,7 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
       },
     },
     executionHandoff: createFakeExecutionHandoff(options, calls, accepted),
+    executionAuthorization: createFakeExecutionAuthorization(options, calls, accepted),
   };
 
   return {
@@ -386,6 +393,55 @@ function createFakeExecutionHandoff(
     cancel: (handoffId) => {
       calls.push({ name: 'execution-handoff.cancel', detail: handoffId });
       return Promise.resolve(resultFor('cancel'));
+    },
+  };
+}
+
+/**
+ * Execution Authorization 的 fake。
+ *
+ * `review` 记录调用并返回审阅结果；`approve` 只记录界面回传的指纹与 revision——断言「界面不构造
+ * 身份」就落在这两个值上。
+ */
+function createFakeExecutionAuthorization(
+  options: FakePortsOptions,
+  calls: PortCall[],
+  accepted: ControllerCommandResult,
+): ExecutionAuthorizationIntentPort {
+  return {
+    review: () => {
+      calls.push({ name: 'authorization.review', detail: null });
+      return Promise.resolve(options.authorizationReview ?? makeAuthorizationReview());
+    },
+    approve: (input) => {
+      calls.push({ name: 'authorization.approve', detail: input });
+      return Promise.resolve(options.authorizationApprove ?? accepted);
+    },
+  };
+}
+
+/** 一份门禁通过、可批准的完整 Manifest 投影；测试可覆盖任意字段。 */
+export function makeAuthorizationReview(
+  overrides: Partial<ExecutionAuthorizationView> = {},
+): ExecutionAuthorizationLoad {
+  return {
+    kind: 'review',
+    review: {
+      fingerprint: 'fingerprint-1',
+      scopeRevision: 7,
+      candidate: {
+        graphId: 'graph-1',
+        generation: 1,
+        version: 2,
+        baselineHead: 'head-1',
+        workPackageCount: 2,
+      },
+      manifestRows: [
+        { label: 'Coordination Scope', value: 'scope-1' },
+        { label: 'Git Policy', value: 'main remotes=[origin] refs=[refs/heads/main]' },
+      ],
+      gate: { ready: true, blockers: [] },
+      ...overrides,
     },
   };
 }

@@ -87,6 +87,7 @@ function sessionMeta(value: unknown): { readonly id: string; readonly cwd: strin
 export function proveCodexTranscript(input: {
   readonly report: CodexSessionStartReport;
   readonly workspace: string;
+  readonly expectedCodexHome: string;
   readonly dispatchStartedAt: string;
   readonly bindingDeadlineAt: string;
 }): CodexTranscriptProofResult {
@@ -121,8 +122,8 @@ export function proveCodexTranscript(input: {
     const sessionsRoot = realpathSync(`${codexHome}/sessions`);
     const transcriptPath = realpathSync(report.transcriptPath);
     const workspace = realpathSync(input.workspace);
-    if (!isInside(workspace, codexHome)) {
-      return unavailable('CODEX_HOME 不在绑定 workspace 内');
+    if (codexHome !== realpathSync(input.expectedCodexHome)) {
+      return unavailable('CODEX_HOME 与本次派发的状态根不一致');
     }
     if (!isInside(sessionsRoot, transcriptPath)) {
       return unavailable('transcript path 不在已上报 CODEX_HOME 的 sessions 目录内');
@@ -160,6 +161,32 @@ export function proveCodexTranscript(input: {
     };
   } catch (error) {
     return unavailable(error instanceof Error ? error.message : 'Codex transcript 证明失败');
+  }
+}
+
+/**
+ * 重新观察一次已签发的 transcript：读出 provider session 身份，并核验它仍属于同一个 workspace。
+ *
+ * 这是 Recovery 的「当前观察到的绑定」来源：记录里保存的是派生后的 Session Binding ID，provider
+ * session 身份本身在重启后只能从精确 transcript 重新读回。路径、`session_meta.id`、`session_meta.cwd`
+ * 任一不一致都返回 `transcript_unavailable`，绝不按 mtime 或「最近一次输出」降级匹配。
+ */
+export function readCodexTranscriptIdentity(input: {
+  readonly transcriptRef: string;
+  readonly workspace: string;
+}): { readonly providerSessionId: string } | { readonly kind: 'transcript_unavailable'; readonly reason: string } {
+  try {
+    const transcriptPath = realpathSync(input.transcriptRef);
+    const meta = sessionMeta(firstRecord(transcriptPath));
+    if (meta === null) {
+      return unavailable('transcript 首条记录不是可核验的 session_meta');
+    }
+    if (realpathSync(meta.cwd) !== realpathSync(input.workspace)) {
+      return unavailable('transcript 的 session_meta.cwd 与绑定 workspace 不一致');
+    }
+    return { providerSessionId: meta.id };
+  } catch (error) {
+    return unavailable(error instanceof Error ? error.message : 'Codex transcript 重新观察失败');
   }
 }
 

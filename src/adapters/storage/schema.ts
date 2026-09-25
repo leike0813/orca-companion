@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 12;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -251,8 +251,8 @@ const MIGRATION_3: readonly string[] = [
  * 最后可引用的 transcript 位置与终态收据引用。它刻意不含 Recovery Budget 计数、Capsule 或替代
  * Session——那些属于恢复 change，记录在这里只会制造第二份状态。
  *
- * `materialization_bindings` 只保存 `WorkPackageId → OrcaTaskId` 与创建它的 OperationId；worktree
- * 路径与 Orca Task 状态都属于外部权威，复制进来就会变成第二份真值。
+ * `materialization_bindings` 在 M4 只保存 `WorkPackageId → OrcaTaskId` 与创建它的 OperationId；
+ * schema 11 把这一个指针换成按角色/Attempt 的派发身份历史（见 `MIGRATION_11`）。
  */
 const MIGRATION_4: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS session_segments (
@@ -516,9 +516,66 @@ const MIGRATION_10: readonly string[] = [
   `ALTER TABLE scope ADD COLUMN canonical_worktree_path TEXT`,
   // 同一个 common dir 内一个 branch ref 至多属于一个 Scope：否则恢复时会接错协调状态。
   `CREATE UNIQUE INDEX IF NOT EXISTS scope_branch_ref_unique
-     ON scope (full_branch_ref)
-     WHERE full_branch_ref IS NOT NULL`,
+    ON scope (full_branch_ref)
+    WHERE full_branch_ref IS NOT NULL`,
   `ALTER TABLE pending_interactions ADD COLUMN answer_text TEXT`,
+];
+
+/**
+ * M11：物化绑定由「Work Package 当前指针」改为按角色/Attempt 的派发身份历史。
+ *
+ * M4 的主键是 `(scope, work_package)`，因此一个 Work Package 只能有一行：换角色、重试或 Graph Patch
+ * 都会覆盖上一次派发的身份，结算时再也无法重建「这条 Delivery 属于哪次角色派发」。新主键是
+ * `(scope, work_package, creation_operation_id)`——创建 Task 的那次 OperationId 天然唯一——并加
+ * `(scope, work_package, role, attempt_id)` 唯一约束阻止同一角色同一 Attempt 被派发两次。
+ *
+ * 旧行不迁移身份，只保留：M4 的行没有任何可以证明角色或 Attempt 的事实，猜测角色会把历史 Delivery
+ * 接到错误的派发上。旧行的身份列一律为 `NULL`，读取方按 `identity = 'legacy'` 显式阻塞。SQLite 不
+ * 支持放宽主键的 ALTER，因此这里在单事务内重建表并按列名搬移数据；迁移在既有事务包装内执行。
+ */
+const MIGRATION_11: readonly string[] = [
+  `ALTER TABLE materialization_bindings RENAME TO materialization_bindings_v10`,
+  `CREATE TABLE materialization_bindings (
+     coordination_scope_id TEXT NOT NULL,
+     work_package_id TEXT NOT NULL,
+     creation_operation_id TEXT NOT NULL,
+     role TEXT,
+     worker_task_id TEXT,
+     dispatch_id TEXT,
+     attempt_id TEXT,
+     worktree_id TEXT,
+     spec_binding_json TEXT,
+     specification_unit_path TEXT,
+     orca_task_id TEXT NOT NULL,
+     created_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, work_package_id, creation_operation_id)
+   ) STRICT`,
+  `INSERT INTO materialization_bindings (
+     coordination_scope_id, work_package_id, creation_operation_id, role, worker_task_id, dispatch_id,
+     attempt_id, worktree_id, spec_binding_json, specification_unit_path, orca_task_id, created_at
+   )
+   SELECT coordination_scope_id, work_package_id, creation_operation_id, NULL, NULL, NULL,
+          NULL, NULL, NULL, NULL, orca_task_id, created_at
+   FROM materialization_bindings_v10`,
+  `DROP TABLE materialization_bindings_v10`,
+  // 同一角色同一 Attempt 至多一行：重复派发在约束处失败，而不是覆盖既有身份。
+  `CREATE UNIQUE INDEX IF NOT EXISTS materialization_bindings_role_attempt
+     ON materialization_bindings (coordination_scope_id, work_package_id, role, attempt_id)
+     WHERE role IS NOT NULL AND attempt_id IS NOT NULL`,
+];
+
+/**
+ * M12：物化绑定记录这次派发使用的 Worker launch 身份。
+ *
+ * 「已派发但未绑定」的角色要在后续触发里补记 Session Segment（派发窗口内没读到 Codex SessionStart
+ * 报告时，否则这条派发的 Delivery 永远无法归因）。补记必须用**同一个** launch 身份去定位报告文件，
+ * 而 launchId 由 Scope/图/角色/contract revision/Attempt 派生：重建它需要复刻派生编码，等于把内部
+ * 编码变成契约。这里直接把派发时已知的 launchId 记成事实，补记只读事实，不猜。
+ *
+ * 旧行没有这项事实，一律为 `NULL`：读取方在需要补记时按「不可补记」阻塞，不回头重建。
+ */
+const MIGRATION_12: readonly string[] = [
+  `ALTER TABLE materialization_bindings ADD COLUMN launch_id TEXT`,
 ];
 
 export const MIGRATIONS: readonly Migration[] = [
@@ -532,6 +589,8 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 8, statements: MIGRATION_8 },
   { version: 9, statements: MIGRATION_9 },
   { version: 10, statements: MIGRATION_10 },
+  { version: 11, statements: MIGRATION_11 },
+  { version: 12, statements: MIGRATION_12 },
 ];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {

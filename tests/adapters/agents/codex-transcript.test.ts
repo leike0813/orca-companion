@@ -20,7 +20,7 @@ afterEach(() => {
   }
 });
 
-function fixture(): {
+function fixture(homeOutsideWorkspace = false): {
   readonly root: string;
   readonly codexHome: string;
   readonly workspace: string;
@@ -31,7 +31,8 @@ function fixture(): {
   const root = mkdtempSync(join(tmpdir(), 'orca-codex-transcript.'));
   roots.push(root);
   const workspace = join(root, 'workspace');
-  const codexHome = join(workspace, '.codex');
+  const codexHome = homeOutsideWorkspace ? join(root, 'private-codex') : join(workspace, '.codex');
+  mkdirSync(workspace, { recursive: true });
   const sessions = join(codexHome, 'sessions', '2026', '09', '21');
   const sessionId = '01a0c283-e05a-7671-a3f9-2d2aceac3400';
   const transcriptPath = join(sessions, `rollout-2026-09-21T13-50-17-${sessionId}.jsonl`);
@@ -61,6 +62,7 @@ function prove(created: ReturnType<typeof fixture>, report: CodexSessionStartRep
   return proveCodexTranscript({
     report,
     workspace: created.workspace,
+    expectedCodexHome: created.codexHome,
     dispatchStartedAt: '2026-09-21T05:50:00.000Z',
     bindingDeadlineAt: '2026-09-21T05:51:00.000Z',
   });
@@ -86,10 +88,23 @@ test('唯一 rollout 的文件名、session_meta、workspace 与 Dispatch 时间
     },
     report: created.report,
     workspace: created.workspace,
+    expectedCodexHome: created.codexHome,
     dispatchStartedAt: '2026-09-21T05:50:00.000Z',
     bindingDeadlineAt: '2026-09-21T05:51:00.000Z',
   });
   expect(binding.kind).toBe('bound');
+});
+
+test('Git 私有目录中的 CODEX_HOME 只在匹配宿主指定路径时绑定', () => {
+  const created = fixture(true);
+  expect(prove(created).kind).toBe('proven');
+  expect(proveCodexTranscript({
+    report: created.report,
+    workspace: created.workspace,
+    expectedCodexHome: created.workspace,
+    dispatchStartedAt: '2026-09-21T05:50:00.000Z',
+    bindingDeadlineAt: '2026-09-21T05:51:00.000Z',
+  }).kind).toBe('transcript_unavailable');
 });
 
 test('缺字段、时间窗外、metadata 冲突、workspace 冲突或多候选都返回 transcript_unavailable', () => {

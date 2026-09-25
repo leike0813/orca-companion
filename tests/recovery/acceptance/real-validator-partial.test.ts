@@ -1193,7 +1193,7 @@ describe.skipIf(PLAN.kind !== 'run')('真实隔离 MiniMax-M3 Validator Recovery
       { operation: 'worker-stop', dispatchId },
       current.scopeFor(`${PLAN.identity}:worker-stop`, { kind: 'worker-dispatch', id: dispatchId }),
     );
-    // `worker-stop` 缺失的登记 parser 让它只回原始结果；三值结论照实记录，不用它推断中断成立。
+    // `worker-stop` 现在有登记的 parser；这里仍只用回执的三值与 `alreadySettled`，不据它推断中断成立。
     const stopOutcome =
       stopped.kind === 'accepted'
         ? { outcome: 'accepted' as const, alreadySettled: readRecord(stopped.value)?.['alreadySettled'] ?? null }
@@ -1227,6 +1227,7 @@ describe.skipIf(PLAN.kind !== 'run')('真实隔离 MiniMax-M3 Validator Recovery
     const proof = proveCodexTranscript({
       report: sessionStart.report,
       workspace: current.projectDir,
+      expectedCodexHome: sessionStart.report.codexHome ?? '',
       dispatchStartedAt,
       bindingDeadlineAt: sessionStart.bindingDeadlineAt,
     });

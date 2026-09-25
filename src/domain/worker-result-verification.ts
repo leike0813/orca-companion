@@ -13,6 +13,7 @@ import type { DispatchId, WorkerTaskId } from '../application/dto/identity.js';
 import type { RoleAuthorities, WorkerRole } from './planning/execution-authorization.js';
 import type { ScopeEnvelope } from './planning/execution-graph.js';
 import { pathInsideScopeEnvelope } from './repair-scope.js';
+import { SPECIFICATION_ROOT_DIRECTORY } from './task-contract.js';
 import type { SpecBinding } from './task-contract.js';
 
 /** 载荷声称的归属；缺失字段一律是 `null`，空字符串被边界解析拒绝，因此这里不出现。 */
@@ -131,6 +132,9 @@ export function verifyWorkerResult(
 ): WorkerResultVerification {
   const missing: string[] = [];
   for (const field of REQUIRED_FIELDS) {
+    if (field === 'specBinding' && trusted.role === 'planner') {
+      continue;
+    }
     if (claimed[field] === null) {
       missing.push(field);
     }
@@ -213,7 +217,10 @@ export function verifyWorkerResult(
       message: `Execution Authorization 不允许 ${trusted.role} 角色提交结果`,
     };
   }
-  if (claimed.specBinding === null || !specBindingMatches(claimed.specBinding, trusted.specBinding)) {
+  if (
+    (trusted.role !== 'planner' && claimed.specBinding === null) ||
+    (claimed.specBinding !== null && !specBindingMatches(claimed.specBinding, trusted.specBinding))
+  ) {
     return {
       kind: 'rejected',
       code: 'spec_binding_mismatch',
@@ -230,8 +237,11 @@ export function verifyWorkerResult(
     };
   }
 
-  const changedPaths = trusted.changedPaths;
-  const outside = changedPaths.filter((path) => !pathInsideScopeEnvelope(trusted.scopeEnvelope, path));
+  const changedPaths = projectChangedPaths(trusted.changedPaths);
+  // 流程目录（Specification Unit 与其归档）不属于项目范围，因此不参与越界判定。
+  const outside = envelopeCheckedPaths(trusted.changedPaths).filter(
+    (path) => !pathInsideScopeEnvelope(trusted.scopeEnvelope, path),
+  );
   if (outside.length > 0) {
     return {
       kind: 'rejected',
@@ -253,6 +263,43 @@ export function verifyWorkerResult(
       changedPaths,
     },
   };
+}
+
+/**
+ * Worker Harness 与 agent 工具在工作区内维护的状态目录（技能、报告、会话材料）。
+ *
+ * 它们不是项目内容：这些文件由工具自己写，既不属于任何 Work Package 的实现范围，也不能被当作越界证据
+ * 或「工作区已变化」。项目文件仍然必须落在 Scope Envelope 内。
+ */
+export const AGENT_TOOLING_STATE_DIRECTORIES = ['.agents', '.codex'] as const;
+
+/**
+ * Specification Pipeline 自己维护的目录（工具原生规格树的根：change 单元、归档、主规格与工具配置）。
+ *
+ * 它们是流程工件，不是被实现的项目内容：Planner 必须把单元写在这里，后续角色要在同处勾选任务，工具
+ * 自己也会更新该目录下的配置，因此它们不受 Work Package 的 Scope Envelope 约束。单元的身份仍由内容
+ * 摘要与 Spec Binding 约束，越界判定只排除这一层流程目录。
+ */
+export const SPECIFICATION_PIPELINE_DIRECTORIES = [SPECIFICATION_ROOT_DIRECTORY] as const;
+
+/** Scope Envelope 真正约束的项目路径：项目改动去掉流程目录本身。 */
+export function envelopeCheckedPaths(paths: readonly string[]): readonly string[] {
+  return projectChangedPaths(paths).filter(
+    (path) =>
+      !SPECIFICATION_PIPELINE_DIRECTORIES.some(
+        (directory) => path === directory || path.startsWith(`${directory}/`),
+      ),
+  );
+}
+
+/** 从 Git 的 dirty paths 中只保留代表项目改动的路径；越界判定与工作区比较都走这一条规则。 */
+export function projectChangedPaths(paths: readonly string[]): readonly string[] {
+  return paths.filter(
+    (path) =>
+      !AGENT_TOOLING_STATE_DIRECTORIES.some(
+        (directory) => path === directory || path.startsWith(`${directory}/`),
+      ),
+  );
 }
 
 /** 只有 `accepted` 允许推进生命周期；两种 stale 只允许写历史与确认。 */

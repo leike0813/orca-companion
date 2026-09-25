@@ -104,6 +104,39 @@ export function deriveReplacementSegmentId(recoveryId: RecoveryId): SessionSegme
   return `segment:${recoveryId}:replacement` as SessionSegmentId;
 }
 
+/**
+ * Recovery 环境事实的最小业务身份。
+ *
+ * 这些字段全部来自中断的 Session Segment 或既有的 `RecoveryRecord`，因此「为一条中断装配事实」与
+ * 「续办一条已登记 Recovery」用的是同一组身份；`RecoveryRecord` 是它的超集，可直接传参。
+ */
+export type RecoveryFactSubject = {
+  readonly recoveryId: RecoveryId;
+  readonly role: WorkerRole;
+  readonly workPackageId: WorkPackageId;
+  readonly workerTaskId: WorkerTaskId;
+  /** 业务 Attempt 身份；Recovery 沿用原 Attempt。 */
+  readonly businessAttemptId: string;
+  readonly sourceSegmentId: SessionSegmentId;
+  readonly sourceDispatchId: DispatchId;
+};
+
+/** 由中断 Segment 派生事实主体：RecoveryId 与业务身份都由该 Segment 的已记录事实确定性推出。 */
+export function recoverySubjectOf(
+  coordinationScopeId: CoordinationScopeId,
+  segment: SessionSegmentRecord,
+): RecoveryFactSubject {
+  return {
+    recoveryId: deriveRecoveryId(coordinationScopeId, segment.segmentId),
+    role: segment.role,
+    workPackageId: segment.workPackageId,
+    workerTaskId: segment.workerTaskId,
+    businessAttemptId: segment.attemptId,
+    sourceSegmentId: segment.segmentId,
+    sourceDispatchId: segment.dispatchId,
+  };
+}
+
 /** workspace 对账事实：丢失与无法对账都失败并阻塞，绝不新建 worktree。 */
 export type WorkspaceReconciliation =
   | { readonly kind: 'reconciled'; readonly worktreeId: string; readonly head: string }
@@ -142,9 +175,14 @@ export type ReplacementSessionReceipt = {
   readonly transcriptRef: string;
 };
 
+/**
+ * 回执解释是异步的：Orca `worker-start` 的回执只给出 Dispatch 身份，精确 Session Binding 必须由
+ * Worker Harness Adapter 在接管之后独立观察（Codex 走 SessionStart 报告 + transcript proof），
+ * 因此这个 seam 不能是同步函数，否则装配方只能凭回执字段伪造绑定。
+ */
 export type ReplacementDispatchInterpreter = (
   outcome: Extract<OperationOutcome<unknown>, { readonly kind: 'accepted' }>,
-) => ReplacementSessionReceipt | { readonly failure: string };
+) => Promise<ReplacementSessionReceipt | { readonly failure: string }>;
 
 /** Worker Profile 选择：默认复用该角色原 Profile；切换必须显式带上授权引用。 */
 export type ReplacementProfileSelection =
@@ -450,6 +488,13 @@ function blockRecovery(
       terminalOutcome: 'failed',
       blockingReason: reason,
     });
+  } else if (recovery.status === 'blocked' && recovery.blockingReason !== reason) {
+    // 已经阻塞、但这次的原因不同：只更新原因（同状态 + 只改原因是存储层允许的窄口写入）。
+    // 不写终态结果，避免把「已证明的失败」重复当成新结论；不更新会让界面一直显示第一次的原因。
+    transactRecovery(input.store, input.coordinationScopeId, input.writer, recovery.recoveryId, {
+      status: 'blocked',
+      blockingReason: reason,
+    });
   }
   return { kind: 'blocked', recoveryId: recovery.recoveryId, code, reason };
 }
@@ -503,13 +548,38 @@ function markUnprovableRecoveryBlocked(
   input: RecoverWorkerSessionInput,
   recovery: RecoveryRecord,
   reason: string,
+  options?: { readonly terminalOutcome?: RecoveryTerminalOutcome | undefined },
 ): void {
   if (recovery.status !== 'pending' && recovery.status !== 'recovering') {
     return;
   }
   transactRecovery(input.store, input.coordinationScopeId, input.writer, recovery.recoveryId, {
     status: 'blocked',
-    terminalOutcome: 'failed',
+    // 无法核验的保持不主张终态：只有「已证明的失败」才写 `failed`，否则终态留空。
+    ...(options?.terminalOutcome === undefined ? {} : { terminalOutcome: options.terminalOutcome }),
+    blockingReason: reason,
+  });
+}
+
+/**
+ * 把「无法核验所以保持未决」的原因写成可读事实，**不改变状态**。
+ *
+ * 主规格要求这类 Recovery 保持未决（不推断退出、不重复派发），但界面必须能显示原因；原因只能从这条
+ * 记录读回，所以用「同状态 + 只改原因」的元数据写入。同一原因重复写入不产生新的 revision。
+ */
+function recordUnverifiableHold(
+  input: RecoverWorkerSessionInput,
+  recovery: RecoveryRecord,
+  reason: string,
+): void {
+  if (recovery.status !== 'pending' && recovery.status !== 'recovering') {
+    return;
+  }
+  if (recovery.blockingReason === reason) {
+    return;
+  }
+  transactRecovery(input.store, input.coordinationScopeId, input.writer, recovery.recoveryId, {
+    status: recovery.status,
     blockingReason: reason,
   });
 }
@@ -771,16 +841,28 @@ function launchFailureReason(failure: WorkerLaunchFailure): string {
   return failure.kind === 'rejected' ? `${failure.code}: ${failure.message}` : failure.reason;
 }
 
+/**
+ * 替代派发要落在**同一次角色级派发**的 Orca Task 上。
+ *
+ * 物化绑定自 schema 11 起按角色/Attempt 保存多行历史，因此不能只看「这个 Work Package 只有一行」；
+ * 只有 `role` 与 `businessAttemptId` 都对上的那行才证明原 Task 身份，缺行即阻塞。
+ */
 function readOrcaTaskId(input: RecoverWorkerSessionInput): string | null {
   const result = input.store.query({
     kind: 'materialization-bindings',
     coordinationScopeId: input.coordinationScopeId,
     workPackageId: input.workPackageId,
   });
-  if (result.kind !== 'materialization-bindings' || result.bindings.length !== 1) {
+  if (result.kind !== 'materialization-bindings') {
     return null;
   }
-  return result.bindings[0]?.orcaTaskId ?? null;
+  const binding = result.bindings.find(
+    (entry) =>
+      entry.identity === 'issued' &&
+      entry.role === input.role &&
+      entry.attemptId === input.businessAttemptId,
+  );
+  return binding?.orcaTaskId ?? null;
 }
 
 type SettleOutcome = { readonly kind: 'settled' } | { readonly kind: 'failed'; readonly message: string };
@@ -975,7 +1057,7 @@ async function attemptAlternateSession(
     return blockRecovery(input, recovery, 'dispatch_unconfirmed', `替代派发被拒绝：${outcome.message}`);
   }
 
-  const receipt = input.replacement.interpretReceipt(outcome);
+  const receipt = await input.replacement.interpretReceipt(outcome);
   if ('failure' in receipt) {
     settleAccepted(input, prewrite.operationId, outcome);
     return blockRecovery(input, recovery, 'dispatch_unconfirmed', receipt.failure);
@@ -1113,7 +1195,7 @@ export async function recoverWorkerSession(
         `Worker Attempt ${input.businessAttemptId} 的已消耗 Recovery Budget 不可证明：` +
         `Recovery ${unprovable.recovery.recoveryId} 的替代派发意图 ${unprovable.operationId} 已按 accepted 收尾，` +
         '但没有替代 Session Segment。事实补齐前不新建 Recovery、也不派发替代 Session';
-      markUnprovableRecoveryBlocked(input, unprovable.recovery, reason);
+      markUnprovableRecoveryBlocked(input, unprovable.recovery, reason, { terminalOutcome: 'failed' });
       return {
         kind: 'blocked',
         recoveryId: unprovable.recovery.recoveryId,
@@ -1155,7 +1237,9 @@ export async function recoverWorkerSession(
     return { kind: 'not_worker_recovery', reason: entry.reason };
   }
   if (entry.kind === 'unverifiable') {
-    // 保持未决：Recovery 留在 pending，不推断退出、不派发、不消耗额度。
+    // 保持未决：不推断退出、不派发、不消耗额度；但把「恢复被阻止」与原因写成可见的阻塞，
+    // 否则投影只能看到一个没有原因的挂起 Recovery（规格要求 lane 与原因可见）。
+    recordUnverifiableHold(input, recovery, entry.reason);
     return {
       kind: 'unverifiable_hold',
       recoveryId: recovery.recoveryId,
@@ -1189,6 +1273,7 @@ export async function recoverWorkerSession(
       };
     }
     if (outcome.kind === 'unverifiable') {
+      recordUnverifiableHold(input, recovery, outcome.reason);
       return {
         kind: 'unverifiable_hold',
         recoveryId: recovery.recoveryId,

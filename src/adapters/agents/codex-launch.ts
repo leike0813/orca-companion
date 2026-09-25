@@ -14,6 +14,25 @@ export type PreparedCodexTerminal = {
   readonly stateRoot: string;
 };
 
+/** 安装由宿主控制的 SessionStart reporter；报告仍须经 transcript proof 核验。 */
+export function installCodexSessionStartReporter(paths: { readonly reporterPath: string; readonly reportPath: string }): void {
+  mkdirSync(join(paths.reporterPath, '..'), { recursive: true });
+  const source = [
+      "import { appendFileSync } from 'node:fs';",
+      "let input = '';",
+      'for await (const chunk of process.stdin) input += chunk;',
+      'const event = JSON.parse(input);',
+      `appendFileSync(${JSON.stringify(paths.reportPath)}, JSON.stringify({`,
+      'sessionId: event.session_id ?? null, transcriptPath: event.transcript_path ?? null,',
+      'codexHome: process.env.CODEX_HOME ?? null, cwd: event.cwd ?? null,',
+      'observedAt: new Date().toISOString() }) + "\\n");',
+      'process.stdout.write("{}\\n");',
+    ].join('\n');
+  if (!existsSync(paths.reporterPath) || readFileSync(paths.reporterPath, 'utf8') !== source) {
+    writeFileSync(paths.reporterPath, source, 'utf8');
+  }
+}
+
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
@@ -29,10 +48,23 @@ function assertInsideWorktree(worktreePath: string, candidate: string): void {
 export function createCodexWorkerLaunch(input: {
   readonly launchId: string;
   readonly model: string;
-  readonly sandboxMode: 'read-only' | 'workspace-write' | 'read-only-local-control';
+  readonly sandboxMode: 'read-only' | 'workspace-write' | 'danger-full-access' | 'read-only-local-control';
   readonly sourceCodexHome?: string;
-  /** Adapter 自己安装的 SessionStart reporter；必须位于当前 Worker worktree 内。 */
+  /**
+   * Adapter 自己安装的 SessionStart reporter；由可信宿主提供的绝对路径。
+   *
+   * 隔离 worktree 里的 Worker 把 reporter 放在自己的 worktree 内；只读 Finalizer 在 canonical
+   * worktree 中运行，它的 reporter 与状态根都必须落在 Git common dir 的 Companion 私有目录，否则会
+   * 污染被只读检查的工作区。
+   */
   readonly sessionStartReporterPath?: string;
+  /**
+   * 状态根的父目录；省略时放在 Worker worktree 内的 `.companion/codex/`。
+   *
+   * Finalizer 必须显式给出 Git common dir 下的 Companion 私有目录：它要在 canonical worktree 中
+   * 只读检查项目，任何写进该 worktree 的状态文件都会同时污染工作区观察与只读约束。
+   */
+  readonly stateRoot?: string;
 }): PreparedTerminalStrategy<PreparedCodexTerminal> {
   if (input.launchId.length === 0 || input.model.length === 0) {
     throw new Error('Codex launchId 与 model 必须是非空字符串');
@@ -48,8 +80,16 @@ export function createCodexWorkerLaunch(input: {
       if (!isAbsolute(worktreePath)) {
         throw new Error(`Codex Worker worktree 必须是绝对路径：${worktreePath}`);
       }
-      const stateRoot = join(worktreePath, '.companion', 'codex', digest);
-      assertInsideWorktree(worktreePath, stateRoot);
+      if (input.stateRoot !== undefined && !isAbsolute(input.stateRoot)) {
+        throw new Error(`Codex 状态根必须是绝对路径：${input.stateRoot}`);
+      }
+      const stateRoot =
+        input.stateRoot === undefined
+          ? join(worktreePath, '.companion', 'codex', digest)
+          : join(input.stateRoot, digest);
+      if (input.stateRoot === undefined) {
+        assertInsideWorktree(worktreePath, stateRoot);
+      }
       mkdirSync(stateRoot, { recursive: true });
 
       const sourceHome = resolve(input.sourceCodexHome ?? process.env['CODEX_HOME'] ?? join(homedir(), '.codex'));
@@ -84,7 +124,8 @@ export function createCodexWorkerLaunch(input: {
         if (!isAbsolute(input.sessionStartReporterPath)) {
           throw new Error(`SessionStart reporter 必须是绝对路径：${input.sessionStartReporterPath}`);
         }
-        assertInsideWorktree(worktreePath, input.sessionStartReporterPath);
+        // reporter 路径只由可信宿主提供（模型与 Worker 都填不了它），因此不要求它位于 worktree 内：
+        // 只读 Finalizer 的 reporter 必须留在 Git common dir 的 Companion 私有目录。
         writeFileSync(
           join(stateRoot, 'hooks.json'),
           JSON.stringify({

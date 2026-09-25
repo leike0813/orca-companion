@@ -12,7 +12,7 @@
  * - 质量门开启时派发独立审查，关闭时零额外派发。
  */
 
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -35,6 +35,7 @@ import {
   countRequirements,
   resolveWithinWorktree,
 } from '../../src/adapters/specification/openspec/provider.js';
+import { specificationUnitNameFor } from '../../src/domain/task-contract.js';
 import { workPackageBudgetKey } from '../../src/domain/dispatch-candidate.js';
 import type { RoleAuthorities } from '../../src/domain/planning/execution-authorization.js';
 import type { ScopeEnvelope } from '../../src/domain/planning/execution-graph.js';
@@ -143,6 +144,66 @@ test('worktree 内的 OpenSpec change 被接纳并记录内容摘要绑定', asy
   expect(result.specBinding.providerVersion).toBe('1');
   expect(result.specBinding.contractRevision).toBeGreaterThan(0);
   expect(result.specBinding.trackingRevision).toBeGreaterThan(0);
+});
+
+test('Planner 按 OpenSpec 惯例归档后，固定路径仍解析到同一 Specification Unit', async () => {
+  const root = makeWorktree();
+  const provider = providerFor({ [WORKTREE_ID]: root });
+  const active = await admitSpecification(admissionInput({ provider }));
+
+  // OpenSpec 的归档只改变位置：`changes/archive/<date>-<name>` 仍是同一个单元。
+  const changeDir = join(root, 'openspec', 'changes', CHANGE);
+  const archivedDir = join(root, 'openspec', 'changes', 'archive', `2026-09-24-${CHANGE}`);
+  mkdirSync(join(root, 'openspec', 'changes', 'archive'), { recursive: true });
+  renameSync(changeDir, archivedDir);
+
+  const archived = await admitSpecification(admissionInput({ provider }));
+
+  expect(active.kind).toBe('admitted');
+  expect(archived.kind).toBe('admitted');
+  if (active.kind !== 'admitted' || archived.kind !== 'admitted') {
+    return;
+  }
+  expect(archived.specBinding.relativePath).toBe(`openspec/changes/${CHANGE}`);
+  expect(archived.specBinding.contentDigest).toBe(active.specBinding.contentDigest);
+});
+
+test('归档内同名 change 不唯一时拒绝，而不是选一个', async () => {
+  const root = makeWorktree();
+  const provider = providerFor({ [WORKTREE_ID]: root });
+  const archiveRoot = join(root, 'openspec', 'changes', 'archive');
+  mkdirSync(archiveRoot, { recursive: true });
+  renameSync(join(root, 'openspec', 'changes', CHANGE), join(archiveRoot, `2026-09-24-${CHANGE}`));
+  mkdirSync(join(archiveRoot, `2026-09-25-${CHANGE}`), { recursive: true });
+
+  const read = await provider.readUnit({
+    worktreeId: WORKTREE_ID,
+    relativePath: `openspec/changes/${CHANGE}`,
+  });
+  const result = await admitSpecification(admissionInput({ provider }));
+
+  expect(read.kind === 'rejected' && read.failure.code).toBe('unit_ambiguous');
+  expect(result.kind).toBe('rejected');
+});
+
+test('角色转换按 Work Package 固定路径读取，归档后仍然就绪', async () => {
+  // 固定路径的名字由宿主派生（文件系统安全的 slug + 内容哈希后缀），测试从同一处读取而不是自己拼。
+  const unitName = specificationUnitNameFor(WP);
+  const root = makeWorktree({ changeName: unitName });
+  const provider = providerFor({ [WORKTREE_ID]: root });
+  const query = { role: 'implementation' as const, workPackageId: WP, worktreeId: WORKTREE_ID };
+
+  const active = await provider.readRoleTransition(query);
+  mkdirSync(join(root, 'openspec', 'changes', 'archive'), { recursive: true });
+  renameSync(
+    join(root, 'openspec', 'changes', unitName),
+    join(root, 'openspec', 'changes', 'archive', `2026-09-24-${unitName}`),
+  );
+  const archived = await provider.readRoleTransition(query);
+
+  expect(active.kind === 'read' && active.value.ready).toBe(true);
+  expect(archived.kind === 'read' && archived.value.ready).toBe(true);
+  expect(archived.kind === 'read' && archived.value.artifactKind).toBe('openspec-tasks');
 });
 
 test('worktree 之外的规格被拒绝，Work Package 留在未接纳状态', async () => {

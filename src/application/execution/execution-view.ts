@@ -21,7 +21,7 @@
  * 更细的 `repairing`、`retired`、`cancelled` 与部分 `unknown` 由权威事实经同一 DTO 提供。
  */
 
-import type { WorkerTaskId, WorkPackageId } from '../dto/identity.js';
+import type { WorkPackageId } from '../dto/identity.js';
 import type { RoleAuthorities, WorkerRole } from '../../domain/planning/execution-authorization.js';
 import type { WorkerLiveness } from '../../domain/worker-liveness.js';
 import {
@@ -358,14 +358,24 @@ const EXITED_WORKER_STATES: ReadonlySet<string> = new Set([
   'timed_out',
 ]);
 
-function livenessOf(observation: WorkerObservation): WorkerLiveness {
-  if (observation.workerState !== null && RUNNING_WORKER_STATES.has(observation.workerState)) {
+/**
+ * Orca `workerState` → 三值存活。
+ *
+ * Recovery 与实际执行投影必须给出同一个结论，因此映射只在这里实现一次：未登记的状态（含 `null`）
+ * 一律不可核验，绝不读成「已退出」。
+ */
+export function workerStateLiveness(workerState: string | null): WorkerLiveness {
+  if (workerState !== null && RUNNING_WORKER_STATES.has(workerState)) {
     return 'live';
   }
-  if (observation.workerState !== null && EXITED_WORKER_STATES.has(observation.workerState)) {
+  if (workerState !== null && EXITED_WORKER_STATES.has(workerState)) {
     return 'exited';
   }
   return 'unverifiable';
+}
+
+function livenessOf(observation: WorkerObservation): WorkerLiveness {
+  return workerStateLiveness(observation.workerState);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -379,7 +389,7 @@ type WorkPackageWorkflowFacts = {
   readonly adoption: CoordinationSnapshot['baselineAdoptions'][number] | null;
   readonly settlements: readonly DeliverySettlementRecord[];
   readonly segments: readonly CoordinationSnapshot['sessionSegments'][number][];
-  readonly binding: CoordinationSnapshot['materializationBindings'][number] | null;
+  readonly bindings: readonly CoordinationSnapshot['materializationBindings'][number][];
 };
 
 type Phase = {
@@ -469,11 +479,14 @@ function deriveWorkPackage(
   /** 可核验的 Worker 观察：只在列举过执行主机时才存在。 */
   const observed = observations.workersEnumerated
     ? observations.workers
-        .filter((entry) => known.has(entry.dispatchId))
-        .map((entry) => ({
-          dispatch: known.get(entry.dispatchId) as { readonly role: WorkerRole; readonly attemptId: string },
-          liveness: livenessOf(entry),
-        }))
+        .flatMap((entry) => {
+          const issued = workflow.bindings.find((binding) =>
+            binding.identity === 'issued' && binding.orcaTaskId === entry.taskId,
+          );
+          const dispatch = known.get(entry.dispatchId) ??
+            (issued?.role === null || issued === undefined ? undefined : { role: issued.role, attemptId: issued.attemptId });
+          return dispatch === undefined ? [] : [{ dispatch, liveness: livenessOf(entry) }];
+        })
     : [];
   const running = observed.filter((entry) => entry.liveness === 'live');
 
@@ -504,8 +517,11 @@ function deriveWorkPackage(
     };
   }
 
-  // 3. 阻塞的 Recovery / Baseline Adoption 是明确 blocker，不再猜阶段。
-  const blockedRecovery = workflow.recoveries.find((recovery) => recovery.status === 'blocked');
+  // 3. 阻塞的 Recovery / Baseline Adoption 是明确 blocker，不再猜阶段。`pending` 但已记下原因的
+  // Recovery（unverifiable 保持未决）同样要把原因显示出来：当前派发保持阻塞，界面不得只剩「未知」。
+  const blockedRecovery = workflow.recoveries.find(
+    (recovery) => recovery.status === 'blocked' || recovery.blockingReason !== null,
+  );
   if (blockedRecovery !== undefined) {
     return {
       ...phase('blocked', {
@@ -600,8 +616,8 @@ function deriveWorkPackage(
       ? 'live'
       : observed.length > 0
         ? (observed.at(-1)?.liveness ?? null)
-        : WORKER_EXPECTED_STATES.has(state) &&
-            (workflow.binding !== null || workflow.segments.length > 0)
+        : !observations.workersEnumerated && WORKER_EXPECTED_STATES.has(state) &&
+            (workflow.segments.length > 0 || workflow.bindings.some((binding) => binding.identity === 'issued'))
           ? // 该阶段可能有角色级 Worker，但执行主机没有列举：唯一诚实的存活结论是不可核验。
             'unverifiable'
           : null;
@@ -623,14 +639,7 @@ function deriveWorkPackage(
     };
   }
 
-  // 7. 已有角色级 Orca Task（物化绑定）但还没有任何已接受结果：规格阶段。
-  if (current.state === 'waiting' && workflow.binding !== null) {
-    current = phase('specifying', {
-      derivedFrom: [`materialization:${workflow.binding.orcaTaskId}`],
-    });
-  }
-
-  // 8. 依赖已满足、尚无任何执行事实：可以成为 Dispatch Candidate；否则仍在等待依赖。
+  // 7. Task 创建本身不证明 Worker 已启动；只有 Worker 观察或 Session Segment 才能推进角色阶段。
   if (current.state === 'waiting') {
     current = phase(dependenciesSatisfied ? 'admitting' : 'waiting');
   }
@@ -712,14 +721,13 @@ function settlementsFor(
   snapshot: CoordinationSnapshot,
   node: ExecutionNodeFacts,
 ): readonly DeliverySettlementRecord[] {
-  const binding = snapshot.materializationBindings.find(
-    (entry) => entry.workPackageId === node.workPackageId,
+  const bindings = snapshot.materializationBindings.filter(
+    (entry) => entry.workPackageId === node.workPackageId && entry.identity === 'issued',
   );
-  if (binding === undefined) {
-    return [];
-  }
   return snapshot.deliverySettlements.filter(
-    (settlement) => settlement.workerTaskId === (binding.orcaTaskId as WorkerTaskId),
+    (settlement) => bindings.some((binding) =>
+      settlement.workerTaskId === binding.workerTaskId && binding.role === settlement.role,
+    ),
   );
 }
 
@@ -769,10 +777,7 @@ export function deriveExecutionFacts(input: DeriveExecutionFactsInput): DerivedE
         segments: snapshot.sessionSegments.filter(
           (segment) => segment.workPackageId === node.workPackageId,
         ),
-        binding:
-          snapshot.materializationBindings.find(
-            (binding) => binding.workPackageId === node.workPackageId,
-          ) ?? null,
+        bindings: snapshot.materializationBindings.filter((binding) => binding.workPackageId === node.workPackageId),
       },
       dependenciesSatisfied,
     );
@@ -902,8 +907,13 @@ export function deriveWorkerEntries(input: {
     });
   }
   for (const binding of input.snapshot.materializationBindings) {
+    if (binding.identity !== 'issued') {
+      continue;
+    }
     for (const settlement of input.snapshot.deliverySettlements) {
-      if (settlement.workerTaskId !== (binding.orcaTaskId as WorkerTaskId)) {
+      if (
+        settlement.workerTaskId !== binding.workerTaskId || binding.role !== settlement.role
+      ) {
         continue;
       }
       entries.set(settlement.dispatchId, {

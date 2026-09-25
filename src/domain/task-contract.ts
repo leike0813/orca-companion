@@ -9,6 +9,8 @@
  * 本模块不读时钟、不接触存储、不派发任何东西；Task Envelope 由 Controller 组装后单向交给 Worker。
  */
 
+import { createHash } from 'node:crypto';
+
 import type {
   DispatchId,
   WorkPackageId,
@@ -21,6 +23,38 @@ import type { ScopeEnvelope, WorkPackageBudget } from './planning/execution-grap
 export const TASK_CONTRACT_SCHEMA_VERSION = 1;
 
 export const TASK_ENVELOPE_SCHEMA_VERSION = 1;
+
+/**
+ * 工具原生规格树的根目录。
+ *
+ * 它是 Specification Pipeline 自己的工作区（change 单元、同步后的主规格、以及工具自己的配置），不是被
+ * 实现的项目内容：因此不参与 Work Package 的 Scope Envelope 越界判定。单元身份仍由内容摘要与 Spec
+ * Binding 约束。
+ */
+export const SPECIFICATION_ROOT_DIRECTORY = 'openspec';
+
+/** Planner 的目标路径在规格产生前就由宿主固定，供后续 Admission 原样读回。 */
+export const SPECIFICATION_UNIT_DIRECTORY = `${SPECIFICATION_ROOT_DIRECTORY}/changes`;
+
+/**
+ * Work Package 身份 → 文件系统安全的 change 目录名。
+ *
+ * 目录名要同时满足三件事：跨平台可写（不能出现 `:` 之类 NTFS 不允许的字符）、人能照着写、以及不同
+ * Work Package 不会撞到同一个名字。因此把身份里的其它字符折成 `-`，再接一段内容哈希后缀保证单射。
+ * 百分号编码不是可选项：`%23`/`%3A` 这种拼写既不是工具惯例，Worker 会自然写成解码后的形式。
+ */
+export function specificationUnitNameFor(workPackageId: WorkPackageId): string {
+  const slug = String(workPackageId)
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const digest = createHash('sha256').update(String(workPackageId)).digest('hex').slice(0, 8);
+  return `${slug.length === 0 ? 'work-package' : slug}-${digest}`;
+}
+
+export function specificationUnitPathFor(workPackageId: WorkPackageId): string {
+  return `${SPECIFICATION_UNIT_DIRECTORY}/${specificationUnitNameFor(workPackageId)}`;
+}
 
 /** 工具原生 Specification Unit 的标识；路径必须是 worktree 相对路径，不记录绝对路径或 mtime。 */
 export type SpecificationUnitLocator = {
@@ -124,12 +158,38 @@ export type TaskEnvelope = {
   readonly attemptId: string;
   readonly role: WorkerRole;
   readonly taskContract: TaskContract;
-  readonly specBinding: SpecBinding;
+  /** Planner 首次创建规格时为 null；后续角色必须使用已接纳的内容绑定。 */
+  readonly specBinding: SpecBinding | null;
+  /** Planner 创建规格的固定 worktree 相对路径。 */
+  readonly specificationUnitPath?: string;
+  /**
+   * 宿主对这次派发的直接指令（面向 Worker 的正文，不是可选建议）。
+   *
+   * Worker 只读：它由 Controller 按角色与模式写出，进入 Orca Task 的 `spec`，不参与任何身份判定，也
+   * 不接受回传覆盖。角色没有额外指令时是空数组。
+   */
+  readonly instructions: readonly string[];
   readonly workspace: WorkspaceBinding;
   readonly authority: RoleAuthorities;
   readonly budget: WorkerBudget;
   readonly expectedEvidence: readonly EvidenceRequirement[];
 };
+
+/**
+ * Specification Planner 的产出纪律。
+ *
+ * 真实运行里 Planner 两次把单元写在自选名字的目录、或漏掉 `specs/`，Admission 只能 fail closed——那是
+ * 宿主该说清楚的话，而不是让 Worker 猜：位置由 Envelope 固定，结构由 OpenSpec 决定，归档属于交付之后
+ * 的动作，都不在这次派发范围内。
+ */
+export function plannerSpecificationInstructions(specificationUnitPath: string): readonly string[] {
+  return [
+    `Specification Unit 必须写在 ${specificationUnitPath}（worktree 相对路径），不得改名或另建目录。`,
+    '该 change 必须包含 OpenSpec 的 specs/ 增量规格与 tasks.md；结构不完整的单元不会被接纳。',
+    '本次派发只负责编写规格：不得执行 `openspec archive` 或把 change 移入 archive/。',
+    'proposal.md 的 `## Impact` 段落只能引用本 Work Package Scope Envelope 内的路径：声明信封外的文件会被 Admission 以 `scope_envelope_exceeded` 拒绝。',
+  ];
+}
 
 /**
  * 一次 Worker Dispatch 与真实 harness session 的精确绑定。

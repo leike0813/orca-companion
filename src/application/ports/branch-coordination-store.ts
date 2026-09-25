@@ -19,6 +19,7 @@ import type { LeaseKind, LeaseRecord } from '../../domain/coordination/leases.js
 import type { SourceRevisionRef } from '../../domain/coordinator/session-state.js';
 import type { DeliveryVerdict } from '../../domain/delivery-verdict.js';
 import type { InheritedBudgetUse } from '../../domain/execution/work-package-lineage.js';
+import type { SpecBinding } from '../../domain/task-contract.js';
 import type {
   PatchDescendantDisposition,
   PatchResponsibilityTakeover,
@@ -213,12 +214,52 @@ export type SessionSegmentRecord = {
   readonly recordedAt: number;
 };
 
-/** 最小物化绑定：只回答「这个 Work Package 的当前角色级 Orca Task 是哪一个」。 */
+
+/**
+ * 一条物化绑定的身份完整度。
+ *
+ * `issued` 是 schema 11 起由受控命令写入的行：Task Envelope 身份、worktree 与 Spec Binding 都在。
+ * `legacy` 是 schema 11 之前的旧行：那时每个 Work Package 只保存一个 Orca Task 指针，没有任何可以
+ * 证明角色或 Attempt 的事实。旧行的身份字段一律为 `null`，读取方必须显式阻塞，不得推断角色。
+ */
+export const MATERIALIZATION_BINDING_IDENTITIES = ['issued', 'legacy'] as const;
+
+export type MaterializationBindingIdentity = (typeof MATERIALIZATION_BINDING_IDENTITIES)[number];
+
+/**
+ * 一次角色级派发的物化绑定（IC-03 Extend；schema 11）。
+ *
+ * 一行回答「某个 Work Package 的某个角色的第几次 Attempt 被派发成了哪个 Orca Task」。因为按
+ * role + attempt 保存，同一 Work Package 可以有多行历史；它不是「当前指针」，也不是 Orca Task 状态的
+ * 副本。`worktreeId` 只保存 Orca 不透明身份，绝对路径与 Git HEAD 仍归 Git 与 Orca。
+ *
+ * `dispatchId` 是**逻辑** Task Envelope 的派发身份，与 Orca `worker-start` 回执里的 dispatch 不是
+ * 同一件事。`attemptId` 在同一 Work Package 与角色内必须唯一，唯一约束据此阻止重复派发。
+ */
 export type MaterializationBindingRecord = {
   readonly coordinationScopeId: CoordinationScopeId;
   readonly workPackageId: WorkPackageId;
+  readonly identity: MaterializationBindingIdentity;
+  /** `legacy` 行为 `null`；`issued` 行必有角色。 */
+  readonly role: WorkerRole | null;
+  readonly workerTaskId: WorkerTaskId | null;
+  /** 逻辑 Task Envelope 的派发身份；`legacy` 行为 `null`。 */
+  readonly dispatchId: DispatchId | null;
+  readonly attemptId: string | null;
+  readonly worktreeId: string | null;
+  /** Planner 首次创建规格时为 `null`；其它角色必须是已接纳的内容绑定。 */
+  readonly specBinding: SpecBinding | null;
+  /** Planner 的固定目标路径；其它角色与 `legacy` 行为 `null`。 */
+  readonly specificationUnitPath: string | null;
   readonly orcaTaskId: string;
   readonly creationOperationId: OperationId;
+  /**
+   * 这次派发使用的 Worker launch 身份（IC-07）。
+   *
+   * 它是补记 Session Binding 的唯一定位事实：报告文件按 launchId 派生。`legacy` 行与 schema 11 之前
+   * 写入的行没有它（`null`），读取方在需要补记时按不可补记处之，不重建派生编码。
+   */
+  readonly launchId: string | null;
   readonly createdAt: number;
 };
 
@@ -956,7 +997,19 @@ export type CoordinationCommand =
   | (CoordinationCommandBase & {
       readonly kind: 'record-materialization-binding';
       readonly workPackageId: WorkPackageId;
+      readonly role: WorkerRole;
+      readonly workerTaskId: WorkerTaskId;
+      /** 逻辑 Task Envelope 的派发身份；不是 Orca `worker-start` 回执里的 dispatch。 */
+      readonly dispatchId: DispatchId;
+      readonly attemptId: string;
+      readonly worktreeId: string;
+      /** Implementation/Validator 用已接纳的绑定；Planner 为 `null`。 */
+      readonly specBinding: SpecBinding | null;
+      /** 必须与角色匹配：Planner 必填固定目标路径，其它角色必须为 `null`。 */
+      readonly specificationUnitPath: string | null;
       readonly orcaTaskId: string;
+      /** 本次派发使用的 Worker launch 身份；补记 Session Binding 时据此定位报告。 */
+      readonly launchId: string;
       readonly creationOperationId: OperationId;
     })
   | (CoordinationCommandBase & {

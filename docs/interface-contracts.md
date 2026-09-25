@@ -10,13 +10,13 @@
 |---|---|---|---|
 | IC-01 | `m0-orca-control-baseline` | 无 | 全部后继 change |
 | IC-02 | `m0-orca-control-baseline` | Change 5 增加物化操作；Change 7 增加对账 query | 所有外部控制用例 |
-| IC-03 | `m1-persist-coordination-state` | Changes 3–8 增加各自最小记录与 query/command variant；`m1-wire-foreground-planning-runtime` 增加 Scope 注册绑定、交互回答正文与 Session 模型绑定更新 | Controller、status、recovery、TUI projection |
+| IC-03 | `m1-persist-coordination-state` | Changes 3–8 增加各自最小记录与 query/command variant；`m1-wire-foreground-planning-runtime` 增加 Scope 注册绑定、交互回答正文与 Session 模型绑定更新；`m2-wire-execution-runtime` 将物化绑定扩展为角色/Attempt 历史 | Controller、status、recovery、TUI projection |
 | IC-04 | `m1-run-coordinator-sessions` | `m1-wire-foreground-planning-runtime` 增加用户消息、工具结果与压缩结论 | Planning、Recovery、ControllerService、TUI |
 | IC-05 | `m1-plan-and-authorize-execution` | Change 8 只扩展 `ExecutionGraphHistory.appendAcceptedRevision` | Specification、Execution、Recovery、TUI |
 | IC-06 | `m1-admit-work-package-specifications` | Change 8 使用同一 provider 实施 Specification Revision | Execution、Recovery、Graph evolution |
-| IC-07 | `m1-admit-work-package-specifications` | 无；Recovery 创建替代 Dispatch/Segment 但不改合同 | Execution、Recovery、Graph evolution |
+| IC-07 | `m1-admit-work-package-specifications` | `m2-wire-execution-runtime` 增加 Planner 的固定规格目标路径；Recovery 创建替代 Dispatch/Segment | Execution、Recovery、Graph evolution |
 | IC-08 | `m1-execute-and-validate-work-packages` | 无；Recovery 重放同一 pipeline | Recovery、Graph evolution、TUI |
-| IC-09 | `m1-recover-execution` | 无 | Graph evolution、TUI |
+| IC-09 | `m1-recover-execution` | `m2-wire-execution-runtime` 接通前台宿主的 Recovery 事实装配（workspace / 原终态 / 存活 / 绑定 / 替代派发）与回执解释的异步 seam | Graph evolution、TUI |
 | IC-10 | `m1-evolve-execution-graph` | 无 | ControllerService、TUI |
 | IC-11 | `m1-recover-execution` | Change 8 增加图演进 projection/commands；`m1-wire-foreground-planning-runtime` 增加消息/回答字段与事件归属；`m2-deliver-planning-tui` 增加只读投影；`m2-deliver-execution-tui` 增加执行投影、Finalizer 与执行交接投影 | CLI、两个 TUI change |
 | IC-12 | `m0-orca-control-baseline` | `m1-wire-foreground-planning-runtime` 登记精确 Home 解析；`m2-deliver-planning-tui` 增加 planning 投影与组件；`m2-deliver-execution-tui` 增加执行态字段与组件 | CLI machine output、TUI React components |
@@ -160,6 +160,10 @@ type CoordinationCommandResult =
 | Operation Intent | OperationId、target、expected revision、state、outcome class、backend request ref；不复制 receipt 正文 |
 | Budget counters | budget key、approved limit ref、consumed count；重启/恢复/patch 不重置 |
 | 后继记录 | wake admission、graph/auth refs、bindings、dedupe refs、Recovery/Handoff/lineage；只存不可重建最小事实 |
+
+`m2-wire-execution-runtime` 的 schema 11 将 Materialization Binding 按 Scope、Work Package、角色和 Attempt 留存。每条新记录绑定一个 Orca Task、创建 OperationId、Task Envelope 的 WorkerTaskId/DispatchId/AttemptId、真实 worktreeId，以及已接纳的 Spec Binding；Planner 首次创建规格时改存固定 `specificationUnitPath`，Spec Binding 为空。Delivery 用这条持久绑定和精确 Session Segment 核验可信归属，不能从 Worker 自报 payload 补全。迁移前旧行保留但新增身份字段为空，读取时阻塞，不作猜测。
+
+schema 12 起每条物化绑定还记录这次派发使用的 **Worker launch 身份**（`launchId`）：它是补记 Session Binding 的唯一定位事实（报告文件按 launchId 派生）。Session Binding 的建立分两处，共用同一份签发实现：派发路径在 `bindingWindowMs` 窗口内读 Codex SessionStart 报告；每次执行触发在推进之前对「物化绑定已 issued 且有 launchId、但图内还没有对应 Session Segment」的角色再读一次同一路径的报告（Orca Dispatch 身份按已记录的 Orca Task 从列举事实匹配，不猜），校验通过才补记 Segment，读不到就什么都不做（保持 fail-closed：Delivery 结算会以 `dispatch_record_missing` 呈现）。补记不派发新 Worker、不改 Attempt、不消耗预算。schema 12 之前写入的行没有 `launchId`：读取方在需要补记时按不可补记处理，绝不重建派生编码。
 
 所有写入是短事务；唯一约束保护活跃 Runtime Lease、Execution Coordination Lease 和 Ticket Claim。`scope.revision` 只由成功共享事实写入推进；lease heartbeat 只更新 lease 行，不推进业务 revision。Schema version 高于实现时拒绝启动，低于实现时按可重入、单事务 migration 顺序升级。
 
@@ -309,7 +313,10 @@ type TaskEnvelope = {
   attemptId: string;
   role: WorkerRole;
   taskContract: TaskContract;
-  specBinding: SpecBinding;
+  specBinding: SpecBinding | null;
+  specificationUnitPath?: string;
+  /** 宿主写出的角色指令（Worker 只读，不参与身份判定）；没有额外指令时为空数组。 */
+  instructions: readonly string[];
   workspace: WorkspaceBinding;
   authority: RoleAuthorities;
   budget: WorkerBudget;
@@ -331,7 +338,7 @@ type WorkerLiveness = 'live' | 'exited' | 'unverifiable';
 type WorkerReport = WorkerResult | WorkerQuestion | WorkerEscalation;
 ```
 
-Task Envelope 中的 scope、Run、consumer generation、OperationId 与协调身份由 Controller/adapter 注入，不接受 Worker 回传值覆盖。Session Binding 必须来自精确 harness 能力；terminal 输出、cwd、mtime 和“最新 transcript”不能作为绑定。Worker report 是候选载荷，边界 parser 先做 schema/role/version 校验。
+Planner 首次派发固定 `specificationUnitPath` 并将 `specBinding` 置空：路径名由 Work Package 身份派生为**文件系统安全**的 slug（非字母数字字符折成 `-`）加 8 位内容哈希后缀，因此跨平台可写、人能照着写、不同 Work Package 不会撞名；百分号编码不可用（Worker 会自然写成解码后的形式，真实运行里正因此错过了固定路径）。Envelope 的 `instructions` 由宿主按角色写出，Planner 必须收到三条产出纪律（写在固定路径、单元必须含 `specs/`、不得自行归档或改名）——真实运行里 Planner 两次自选路径或漏写 `specs/`，Admission 只能 fail closed，因此位置与结构必须由 Envelope 明示而不是留给 Worker 猜。指令是正文，不是身份：回传的镜像不参与任何判定。其完成后宿主用精确 Session Binding 和该路径执行 Specification Admission。Implementation/Validator 的 `specBinding` 必须是 Admission 接纳的内容身份。`SpecificationProvider` 按工具原生布局解析该路径：change 仍活跃时读活跃目录，被工具按自身惯例归档（OpenSpec 的 `changes/archive/<date>-<name>`）后读同名归档目录，同名匹配不唯一或不存在即拒绝，绝不挑选。定位变化不改变单元身份——身份仍是内容摘要与两个 revision，Binding 记录宿主声明的规范路径。角色工件转换状态同样按该固定路径读取，不按「worktree 内唯一活跃 change」猜测。可选的独立规格质量门只在明确启用时增加审阅 Worker。Task Envelope 中的 scope、Run、consumer generation、OperationId 与协调身份由 Controller/adapter 注入，不接受 Worker 回传值覆盖。Session Binding 必须来自精确 harness 能力；terminal 输出、cwd、mtime 和“最新 transcript”不能作为绑定。Worker report 是候选载荷，边界 parser 先做 schema/role/version 校验。
 
 Session Segment 记录角色、Task、Dispatch、Attempt、Binding、最后 transcript 位置与可核验终态。信息不足时 liveness 为 `unverifiable`，不能推断退出或触发重复派发。
 
@@ -341,7 +348,7 @@ Session Segment 记录角色、Task、Dispatch、Attempt、Binding、最后 tran
 
 - **Owner (Create)**: `m1-execute-and-validate-work-packages`
 - **Canonical paths**: `src/application/delivery/process-delivery.ts`、`record-worker-result.ts`、`src/application/validation/`、`src/application/finalization/`
-- **Extenders (Extend)**: 无；`m1-recover-execution` 启动时调用同一 pipeline 重放
+- **Extenders (Extend)**: `m2-wire-execution-runtime` 增加 Delivery 载荷的两条入口形状（Companion 形状与 Orca 规范形状）；`m1-recover-execution` 启动时调用同一 pipeline 重放
 - **Consumers (Consume)**: Recovery、Graph evolution、ControllerService/TUI
 
 ```ts
@@ -369,16 +376,55 @@ type DeliveryVerdict =
 
 正常 pipeline 固定为 FLOW-03：read without ack → identity/version validation → dedupe → Orca accept/readback → local dedupe/ref/readback → ack。旧 generation/attempt 只补历史引用，不能推进当前 lifecycle。Accepted Worker Result 正文只归 Orca；本地不保存正文。
 
+Delivery 消息的载荷有两条登记形状，归属的**唯一**权威都是 Companion 自己的记录：
+
+- **Companion 形状**：载荷带 `result` 正文与全套归属字段（`workerTaskId`/`dispatchId`/`attemptId`/`role`/`runId`/`consumerGeneration`/`graphGeneration`/`authorizationId`/`specBinding`/`worktreeId`），逐项与已记录的 Session Segment / 物化绑定核对。
+- **Orca 规范形状**（真实 Codex Worker 实际投递的 `worker_done` 载荷）：只带 `taskId`/`dispatchId`/`outcome`/`filesModified`，叙述在消息 `body`。这种消息只作为 **locator**：`materialization_bindings.orcaTaskId` 定位 Orca Task 与角色，Session Segment 按 Orca Dispatch 定位同一次派发，两者必须逐项一致（Work Package / 角色 / Attempt / Task），任一不一致或定位不到即阻塞。归属字段由解析出的记录重建，结果正文归一化为 `{ outcome, filesModified, summary }` 后写回 Orca Task 并回读核验——不要求 Worker 回显 Companion 身份。
+
 Validator 在同一 Validation Attempt/真实 Session 内验证、范围内修复、复验；代码变化使受影响 Evidence Record 失效。Finalizer 使用新只读项目级 Session，从权威输入重跑并给出 Delivery Verdict。
 
 - **失败/幂等**：任何持久化或回读 unknown 都不 ack；重放同一 DeliveryIdentity 不产生第二正文或生命周期推进。
 - **测试 seam**：fake transport + fake Orca result store 覆盖每个崩溃窗口；真实隔离闭环验证 transport 契约而非故障注入。
 
+受控 Git 集成是同一 Owner 的副作用 pipeline：`GitIntegrationPort` 只接受固定三步，生产实现（`src/adapters/git/integration.ts`）只以 argv 数组与显式 cwd 调用 `git`，不经 shell，不 force-push、不 reset、不 rewrite 历史。
+
+```ts
+type GitStepRequest = {
+  step: GitIntegrationStep;
+  workPackageId: WorkPackageId;
+  sourceWorktreePath: string;   // 精确 Worker worktree
+  branch: string;
+  remote: string | null;
+  ref: string | null;
+  expectedHead: string;
+  commitMessage: string | null;
+};
+
+type GitReadbackTarget =
+  | { kind: 'source'; worktreePath: string }
+  | { kind: 'canonical' }
+  | { kind: 'remote'; remote: string; ref: string };
+
+type GitIntegrationPort = {
+  run(request, scope: ExecutionScope): Promise<GitStepOutcome>;
+  reconcile(request, scope: ExecutionScope): Promise<GitStepOutcome>;  // 只按同一 OperationId 对账，不创建新操作
+  readHead(target: GitReadbackTarget): Promise<GitHeadRead>;           // 只读回读指定目标的 HEAD
+};
+
+type IntegrationWorkspace = { canonicalWorktreePath: string; workPackageWorktreePath: string };
+```
+
+分目标读回：每步只核验自己的目标——`commit` 在 `sourceWorktreePath` 核验并回读 source HEAD，`integrate_canonical` 在 canonical worktree 核验并回读 canonical HEAD，`push` 核验 canonical HEAD 后回读获批 `{ remote, ref }` 的目标 commit。回读不可用或与步骤自报 HEAD 不一致时阻塞该 lane；步骤 `unknown` 保持原 OperationId 对账，不换 ID 重试、不继续后续步骤。`commit` 步接受**真实 Worker 已自行提交交接成果**的情形：source HEAD 不等于所记录 expected HEAD 时，只在能证明它是 expected HEAD 的后继（`merge-base --is-ancestor`）时才按「已经提交」继续，否则仍以 `source_head_mismatch` 拒绝——历史被替换或改写过的 HEAD 不会进入集成。Finalizer 的运行前后工作区事实（HEAD、index revision、dirty paths）由 `readWorkspaceFacts` 从目标 worktree 只读产出。
+
+`openspec/changes/**`（工具原生 Specification Unit 及其归档）是**流程目录**：Planner 必须把单元写在这里、后续角色在同处勾选任务，因此它们不参与 Scope Envelope 越界判定（`envelopeCheckedPaths`）；单元身份仍由内容摘要与 Spec Binding 约束。
+
+`dirtyPaths` 里属于 Worker Harness / agent 工具状态目录（`.agents/`、`.codex/` 等）的路径不是项目改动：它们既不构成 Scope Envelope 越界证据，也不让 canonical 工作区被算作「不干净」，更不参与 Finalizer 的运行前后比较——工具自己写技能、报告与会话材料是正常行为。项目路径仍然必须落在 Scope Envelope 内。该规则只有一处实现（`projectChangedPaths`），越界判定、canonical 干净性与 Finalizer 比较都走它。
+
 ## IC-09 Recovery、Scope control 与 Execution Handoff
 
 - **Owner (Create)**: `m1-recover-execution`
 - **Canonical paths**: `src/application/recovery/`、`src/domain/recovery/`、`src/application/coordination/scope-control-service.ts`、`src/application/handoff/execution-handoff.ts`
-- **Extenders (Extend)**: 无
+- **Extenders (Extend)**: `m2-wire-execution-runtime`（前台宿主的 Recovery 事实装配与回执解释的异步 seam）
 - **Consumers (Consume)**: Graph evolution、ControllerService、execution TUI
 
 ```ts
@@ -418,10 +464,16 @@ type ExecutionHandoffState = {
 
 Worker Session Recovery 先尝试精确恢复原 session；仅确认不可恢复后才创建替代 Dispatch/Binding/Segment，并保留 Worker Task、contract/revision 和业务 Attempt。Recovery Budget 按 Worker Attempt 创建替代 Segment 时消费，重启不重置。`salvage` 只指 Utility Worker 从精确 Worker transcript 提取 Recovery Capsule 的动作；它不是生命周期或角色。
 
+前台宿主的 Recovery 事实来源固定为：中断归属由精确 transcript 的 `session_meta` 重新读出（provider session 身份不从 `worker-show` 猜），存活由 `worker-list` + `terminal-list` 的列举判定，workspace 由 `worktree-list` 的归属注释 + `readWorkspaceFacts` 的真实 HEAD 对账，原会话终态只认已结算的 Orca 结果，替代派发复用 Codex prepared-terminal 策略并要求 `worker-start` 回执 + SessionStart 报告共同证明精确 Binding（回执解释因此是异步 seam）。任何一项读不到都返回结构化 `unavailable` 并保持未决，不把「没读到」读成「已退出」或「已恢复」。Recovery Capsule 的正文只能由受限 Utility Worker 经 IC-08 Delivery pipeline 回到应用层，该路径未接线前需要 Capsule 的角色以 `transcript_unavailable` 阻塞。
+
+Session Binding 的补记（schema 12 的 `launchId` + 每次触发对「已派发未绑定」角色的重读）在 Recovery 判定之前执行：只有绑定成立之后，「这条会话有没有结果」才有可判定的归属。
+
+「会话丢失」必须由事实证明，只有两条入口可以启动或续办 Recovery：**未确认 Delivery 里没有这条 Dispatch 的结果**（结果还挂在 Orca 的 Delivery 上时会话并没有丢，结算那条 Delivery 才是它的正常完成路径；未确认 Delivery 读不到时不启动），且**同角色同业务 Attempt 还没有已接受结果**。反过来说，一条非终结的 Recovery 在原会话结果已结算后前提即不成立：续办路径 SHALL 以 `recovered` + `source_completed` 收口并 supersede 原 Segment，而不是为一条已经交付的会话再派 Utility Worker，也不占住替代派发 lane。
+
 Recovery Capsule 与 Coordinator Context Capsule 不相同。Finalizer 不依赖 Recovery Capsule，而从权威输入重跑。Pause/Resume/Cancel/Exit 是 Scope 正交控制状态。Execution Handoff 遵循 FLOW-04，不复用 PlanningHandoffProposal，也不把 suspend/Wake 当作责任转移。
 
 - **失败**：transcript 不可用、预算耗尽、角色门失败或 cutover CAS 失败时保持 blocker/Source owner；不伪称原 session 连续恢复。
-- **测试 seam**：fake Utility Worker、fake backend 与临时 stores 覆盖 complete/partial/unavailable、迟到结果和 cutover 崩溃；真实隔离测试只验证一次 partial transcript Recovery。
+- **测试 seam**：fake Utility Worker、fake backend 与临时 stores 覆盖 complete/partial/unavailable、迟到结果和 cutover 崩溃；生产事实装配用脚本化只读查询 + 一次性 Git 仓库 + 真实 rollout 文件验证（`tests/bootstrap/execution-delivery.test.ts`），真实隔离测试只验证一次 partial transcript Recovery。
 
 ## IC-10 Graph evolution、Replanning 与 Generation Cutover
 
@@ -461,7 +513,7 @@ Replanning 停止新派发并结清在途/Delivery/Interaction/Intent，建立�
 
 - **Owner (Create)**: `m1-recover-execution`
 - **Canonical path**: `src/application/controller-service.ts`
-- **Extenders (Extend)**: `m1-evolve-execution-graph` 增加图 patch/replanning projection 与 command variants；`m1-wire-foreground-planning-runtime` 增加提交身份、回答正文与事件归属；`m2-deliver-planning-tui` 增加候选图拓扑、压缩状态与规划交接提案投影；`m2-deliver-execution-tui` 增加执行投影、Finalizer 与执行交接投影
+- **Extenders (Extend)**: `m1-evolve-execution-graph` 增加图 patch/replanning projection 与 command variants；`m1-wire-foreground-planning-runtime` 增加提交身份、回答正文与事件归属；`m2-deliver-planning-tui` 增加候选图拓扑、压缩状态与规划交接提案投影；`m2-deliver-execution-tui` 增加执行投影、Finalizer 与执行交接投影；`m2-wire-execution-runtime` 增加有界的 Execution Authorization 命令（propose-graph / review / approve），不新增快照字段
 - **Consumers (Consume)**: CLI、planning TUI、execution TUI
 
 ```ts
@@ -601,7 +653,28 @@ type ControllerSnapshotExecutionExtend = {
 
 派生规则是纯函数，canonical path 为 `src/application/execution/execution-view.ts`（Owner: `m2-deliver-execution-tui`）：输入是 IC-03 快照、当前 GraphVersion 的节点与调用方读到的 Orca 只读观察，输出上面的投影。每个状态都带 `derivedFrom`；推不出确定结论时停在 `unknown`；`finalizer.gate` 复用 `planFinalizerDispatch` 的判决，只有被接受的 Delivery Verdict 才呈现 deliverable。
 
-生产装配（`src/bootstrap/foreground-planning-runtime.ts`）在 Execution Coordination 模式下只提交两个只读 Orca 查询（`worktree-list` 按归属标记定位隔离 worktree、`worker-list` 读取当前 Graph Generation 的 Run）；它不派发 Worker、不实现执行期对账、不写执行状态。`ScopeControlCommand` 现在接到 `createScopeControlService`：Pause 直接落盘，Resume 在对账未接线时被拒绝，Cancel 先落盘取消意图、停止结果无法核验时保持 `cancelling`/`unverifiable`。`ExecutionHandoffCommand` 接到 `src/application/handoff/execution-handoff.ts` 的四个用例，不经过 `PlanningHandoffProposal`。
+生产装配（`src/bootstrap/foreground-planning-runtime.ts`）在 Execution Coordination 模式下读取当前 Run 的 worktree、Worker 与 Delivery 事实，执行启动对账，并按受控工具意图单步推进 Frontier。Task 物化、Worker 派发、Delivery 结算、集成与 Finalizer 由各自应用用例执行；UI 只读投影和提交用户意图。`ScopeControlCommand` 接到 `createScopeControlService`：Pause 落盘，Resume 先对账再恢复，Cancel 保存意图并按 exact Worker stop verdict 决定已停止或不可核验。`ExecutionHandoffCommand` 接到 `src/application/handoff/execution-handoff.ts` 的四个用例，不经过 `PlanningHandoffProposal`。
+
+`m2-wire-execution-runtime` 的 Extend 增加一条有界的授权命令与对应端口，不新增快照字段、不改既有命令语义：
+
+```ts
+/** ControllerScopeFields = { coordinationScopeId, writer }；scope 与写入者由宿主补齐。 */
+type ExecutionAuthorizationCommand = ControllerScopeFields &
+  (
+    | { kind: 'execution-authorization'; action: 'propose-graph'; plan: unknown }
+    | { kind: 'execution-authorization'; action: 'review' }
+    | {
+        kind: 'execution-authorization';
+        action: 'approve';
+        fingerprint: string;
+        expectedRevision: Revision;
+      }
+  );
+```
+
+`propose-graph` 只接受 Coordinator 提出的结构化 Implementation Plan：世代、空 Orca Run、OperationId 与预算上限由宿主从权威事实补齐——`run-create` 先落 Operation Intent，再按专用协调身份读回 Run，结果不可判定时保持未决并沿用同一 OperationId 对账。`review` 是只读的：宿主从 Scope、候选图记录、世代记录、Git 身份与版本化项目配置组装完整 Manifest，返回 Manifest 正文、内容指纹、候选图引用、Scope revision 与门禁判决。`approve` 只携带该指纹与用户看到的 Scope revision：宿主重读全部权威输入、比对指纹、写入批准记录、以刚写入的授权重判门禁后同事务切换；指纹不符时零写入且不派发。这三条命令都不接受调用方提供的 scope、Run、consumer generation 或 operation identity。
+
+Execution Authorization Manifest 的长期字段（Worker Profile、角色权限、预算上限、Git 与 Dependency Policy、accepted risks）来自版本化项目配置的 `execution` 段（`src/bootstrap/project-config.ts`，见 README）；Manifest 仍是唯一的授权事实，配置只提供待批准的候选值，批准是用户对完整 Manifest 的一次决定。`execution.codexSandbox` 只影响角色级 Session 的 Codex 沙箱模式：设为 `danger-full-access` 时审阅要求 `acceptedRisks` 含 `codex-sandbox-danger-full-access`（并把该模式显示为 `Worker Sandbox` 一行），角色级派发与替代 Session 还要求**已批准 Manifest** 携带同一风险；Finalizer 始终以 `read-only` 运行。
 
 `SemanticEvent` 是 UI 可投影的封闭联合；keepalive、stderr、poll timeout、无变化 reconciliation 和诊断日志不发布。`AnswerPendingInteraction` 必须含 InteractionId、expected revision 和 answer payload；普通 Session message 不满足 interaction。
 
@@ -616,7 +689,7 @@ Service 只委派既有用例，不打开 store、不调用具体 adapter、不�
 
 - **Owner (Create)**: `m0-orca-control-baseline`
 - **Canonical paths**: `src/application/tui/view-model.ts`、`src/interfaces/cli/`、`src/interfaces/tui/`
-- **Extenders (Extend)**: `m2-deliver-planning-tui` 在同一合同内实现 planning 投影与 TUI；`m2-deliver-execution-tui` 增加执行态分区
+- **Extenders (Extend)**: `m2-deliver-planning-tui` 在同一合同内实现 planning 投影与 TUI；`m2-deliver-execution-tui` 增加执行态分区；`m2-wire-execution-runtime` 增加 Execution Authorization 审阅 overlay 与 `authorize-execution` 命令，不新增页面或键位
 - **Consumers (Consume)**: CLI machine users、React components、PTY tests
 
 ```ts
@@ -646,7 +719,7 @@ type StatusJson = {
 };
 ```
 
-`projectTuiViewModel` 是从 IC-11 `ControllerSnapshot` 到展示 DTO 的纯函数；CLI `status --json` 复用同一公共投影规则但输出独立版本化 machine DTO。TUI 内部只保存选中 Session、scroll、sidebar 密度、overlay 和每 Session 草稿；业务状态来自 snapshot/event。
+`projectTuiViewModel` 是从 IC-11 `ControllerSnapshot` 到展示 DTO 的纯函数；CLI `status --json` 复用同一公共投影规则但输出独立版本化 machine DTO。CLI 的 `projection` 字段声明该投影覆盖的事实范围：`scope: 'store-only'` 与 `missing: ['execution-blockers', 'worker-liveness', 'delivery-intake']` 表示它不调用 Orca，执行期 blocker（例如 `repo_not_found`、Delivery 无法归因）与 Worker 存活只有宿主自己的快照能看到——不要把这里缺少 blocker 读成「没有阻塞」。TUI 内部只保存选中 Session、scroll、sidebar 密度、overlay 和每 Session 草稿；业务状态来自 snapshot/event。
 
 `m2-deliver-planning-tui` 的 Extend 把 `TuiViewModel` 拆成可复用的纯展示 DTO（`ScopeView`、`SessionSummaryView`、`GraphView`、`WorkerView`、`BlockerView`、`BudgetView`、`InteractionView`、`MaintenanceView`、`CompactionView`、`TranscriptView`）并登记 Home 解析规则：
 
@@ -661,6 +734,7 @@ type StatusJson = {
 - **Scope 级控制**（`src/interfaces/tui/components/control-bar.tsx`）：组件没有 Work Package 参数，因此结构上不存在单包控制入口。Pause 永不确认；Cancel 与 Exit 在危险态下先确认，确认后仍只提交一次意图。`cancelling` 只能来自 Controller 已持久化的控制状态。
 - **Finalizer 面板**（`src/interfaces/tui/components/finalizer-panel.tsx`）：门禁不满足、只读未核验/无法强制或运行前后工作区变化时只显示 blocker；只有被接受的 Delivery Verdict 才显示 deliverable。
 - **Execution Handoff**：复用 `handoff-review.tsx`，但主题是 `ExecutionHandoffState`（overlay `execution-handoff-review`），不复用 `PlanningHandoffProposal`。
+- **Execution Authorization Review**（`m2-wire-execution-runtime` 的 Extend，`src/interfaces/tui/components/authorization-review.tsx`，overlay `authorization-review`，Command Palette 的 `authorize-execution`）：界面只显示宿主读好的完整 Manifest 展示行、候选图引用、Scope revision、指纹与门禁判决。它不组装 Manifest、不计算指纹，也不把自由文本解释成批准；批准只回传用户看到的那份内容的指纹与 revision，门禁未通过或事实不可读时不提供批准入口。推进仍走 `execution-authorization` 命令，不新增页面与控制粒度。
 - **`StatusJson`**：`schemaVersion` 升为 **2**，新增 `execution` 分区（`workPackages`/`integrationQueue`/`activeWorkPackageCount`/`activeWorkPackageId`/`reconciliations`/`finalizer`/`executionReconciliation`）并填充既有的 `workers`/`blockers`；既有字段名与语义未变。`status` 不调用 Orca，因此其中 Worker liveness 等外部事实保持不可核验。
 
 顶层 CLI 只识别 `[repository-path]`、`status [--json]`、`doctor`。启动 TUI 前同时检查 stdin/stdout TTY；无 TTY 在挂载 Ink 前非零退出。Exit/Ctrl+C 只退出进程，不隐式 Pause/Cancel。React render/effect/resize/remount 不调用 IC-11 command。

@@ -16,6 +16,10 @@
  * 失败并阻塞，绝不猜测上下文。
  */
 
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+
 import type {
   CoordinationScopeId,
   SessionSegmentId,
@@ -137,6 +141,62 @@ export function validateTranscriptCoverage(
 /** Capsule 正文不进 coordination store；记录里只保存这个稳定引用。 */
 export function capsuleRefOf(recoveryId: string): string {
   return `recovery-capsule:${recoveryId}`;
+}
+
+/**
+ * 正文的确定性落点：Companion 私有状态根下按引用派生的路径。
+ *
+ * 引用里含 `:`、`%` 等字符，不能直接当文件名，因此用引用的摘要做文件名：同一引用永远映射到同一路径，
+ * 重放与重启都能读回同一份正文，也不需要在记录里保存路径本身。
+ */
+export function recoveryCapsuleBodyPath(stateRoot: string, capsuleRef: string): string {
+  const digest = createHash('sha256').update(capsuleRef).digest('hex');
+  return join(stateRoot, 'recovery-capsules', `${digest}.json`);
+}
+
+export type CapsuleBodyWrite = { readonly ok: true; readonly path: string } | { readonly ok: false; readonly reason: string };
+
+/**
+ * 写回 Capsule 正文。
+ *
+ * 先写临时文件再改名：崩溃时要么没有文件、要么是完整正文，绝不会把半截正文留给接续的 Session。
+ * 正文本身不落任何表，`capsuleRef` 是它的唯一身份。
+ */
+export function writeRecoveryCapsuleBody(input: {
+  readonly stateRoot: string;
+  readonly capsuleRef: string;
+  readonly capsule: RecoveryCapsule;
+}): CapsuleBodyWrite {
+  const path = recoveryCapsuleBodyPath(input.stateRoot, input.capsuleRef);
+  const temporary = `${path}.tmp`;
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(temporary, `${JSON.stringify(input.capsule)}\n`, 'utf8');
+    renameSync(temporary, path);
+  } catch (error) {
+    return { ok: false, reason: `Recovery Capsule 正文无法落盘：${error instanceof Error ? error.message : String(error)}` };
+  }
+  return { ok: true, path };
+}
+
+/** 按引用读回正文；缺失或损坏都返回 `null`，由调用方按不可读处理。 */
+export function readRecoveryCapsuleBody(input: {
+  readonly stateRoot: string;
+  readonly capsuleRef: string;
+}): RecoveryCapsule | null {
+  const path = recoveryCapsuleBodyPath(input.stateRoot, input.capsuleRef);
+  let raw: string;
+  try {
+    raw = readFileSync(path, 'utf8');
+  } catch {
+    return null;
+  }
+  try {
+    const decoded = JSON.parse(raw) as RecoveryCapsule;
+    return validateRecoveryCapsule(decoded).ok ? decoded : null;
+  } catch {
+    return null;
+  }
 }
 
 export type CapsuleExtractionRequest = {

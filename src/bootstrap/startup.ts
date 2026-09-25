@@ -44,6 +44,7 @@ import type { TerminalLivenessFacts } from '../domain/worker-liveness.js';
 import { writerFor } from '../application/coordinator/runtime-guard.js';
 import type { CoordinationScopeId, RecoveryId } from '../application/dto/identity.js';
 import { laneKeyOf } from '../application/dto/operation-intent.js';
+import { ackConsumedDelivery } from '../application/delivery/process-delivery.js';
 import type { SettleDeliveryInput, SettleDeliveryResult } from '../application/delivery/process-delivery.js';
 import {
   createScopeControlService,
@@ -73,10 +74,12 @@ import {
 } from '../application/reconciliation/replay-deliveries.js';
 import type { RecoveryCapsuleExtractor } from '../application/recovery/recovery-capsule.js';
 import {
+  concludeWorkerSessionRecovery,
   recoverWorkerSession,
   type ExactRecoveryAttempt,
   type RecoverWorkerSessionResult,
   type RecoveryExecutionContext,
+  type RecoveryFactSubject,
   type ReplacementDispatch,
   type SourceTerminalObservation,
   type WorkspaceReconciliation,
@@ -122,9 +125,36 @@ export type StartupObserver = {
  *
  * 读取本身（Orca `delivery-read` 加身份/代际核验）发生在真实装配里；这里只接收已核验的
  * `PendingDelivery` 或一个显式拒绝，不用空数组冒充「没有读取到」。
+ *
+ * 三种结果各有严格分工：
+ * - `rejected`：**读取本身**失败（Orca 不可达、批次结构不完整、有消息但没有稳定 Delivery 身份）。
+ *   这时整个启动停在该步骤，因为「有没有未确认 Delivery」这件事本身无法回答；
+ * - `read.pending`：已经核验、可以交给前驱 pipeline 重放的 Delivery；
+ * - `read.blocked`：读到了消息，但装机所需的事实（归属、物化绑定、Git 事实）无法证明。这时**不**
+ *   编造 `PendingDelivery`，而是把对应的可派发 lane 阻塞并给出可观察原因。
  */
+export type StartupPendingDeliveryBlock = {
+  readonly code: string;
+  readonly message: string;
+  /** 受影响的可派发 lane；定位不到时是 `null`，此时只作诊断信息展示。 */
+  readonly laneKey: string | null;
+};
+
+/** 只带进度消息（无结果正文）的未确认批次：必须确认，结果消息才会成为当前批次。 */
+export type ProgressOnlyDelivery = {
+  readonly deliveryId: string;
+  readonly runId: string | null;
+};
+
 export type PendingDeliveryRead =
-  | { readonly kind: 'read'; readonly pending: readonly PendingDelivery[] }
+  | {
+      readonly kind: 'read';
+      readonly pending: readonly PendingDelivery[];
+      /** 已读到但无法证明事实的 Delivery；它们不会进入重放 pipeline。 */
+      readonly blocked?: readonly StartupPendingDeliveryBlock[];
+      /** 只承载进度消息的批次：没有任何可落盘的结果，确认它们只是让 Orca 推进到结果消息。 */
+      readonly progressAcks?: readonly ProgressOnlyDelivery[];
+    }
   | { readonly kind: 'rejected'; readonly code: string; readonly message: string };
 
 /** Delivery 重放需要的执行事实；全部来自已批准 Manifest、当前图与 Orca Run。 */
@@ -142,25 +172,47 @@ export type StartupDeliveryFacts = {
 };
 
 /**
+ * 本 Incarnation 读不到的恢复期环境事实。
+ *
+ * 它存在的唯一目的是让「读不到」与「已经证明」在类型上不可混淆：`Orca worker-show` 不报告 provider
+ * session 身份、执行主机未被列举、Worker Harness Adapter 未接线时，装配方**只能**给出这个值。
+ * 收到它的 Recovery 一律按未决阻塞（`unverifiable_hold`）处理：不调用 `recoverWorkerSession`、
+ * 不派发替代 Session、不写任何终态，也绝不把「不可读」读成「已恢复」或「已退出」。
+ */
+export type RecoveryFactUnavailable = {
+  readonly kind: 'unavailable';
+  readonly code: string;
+  readonly message: string;
+};
+
+/**
  * 续办一条 Recovery 所需的环境事实。
  *
  * `RecoverWorkerSessionInput` 里除了业务身份（全部来自 `RecoveryRecord`）之外，还有一批只能从
  * Orca `worker-show` / `worker-read`、Git 状态、已批准 Manifest 与 Worker Harness Adapter 得到的事实。
  * 本模块不构造它们，也不伪造 Orca 身份，因此把它们表达为这个窄 provider：按 `RecoveryRecord` 逐项返回。
+ *
+ * 每一项都允许显式返回 `RecoveryFactUnavailable`：真实装配能证明多少就证明多少，证明不了的那一项
+ * 必须以结构化 blocker 呈现，而不是用一个看起来合法的默认值顶替。
  */
 export type StartupRecoveryFacts = {
-  /** 当前观察到的 harness 绑定；缺字段即无法证明归属。 */
-  readonly observationFor: (recovery: RecoveryRecord) => RecoveryBindingObservation;
+  /**
+   * 当前观察到的 harness 绑定；缺字段即无法证明归属。
+   *
+   * 生产实现要读精确 transcript / Orca 事实，因此这些都是异步 seam：同步 seam 会迫使装配方在
+   * 「异步读到的真实事实」与「当场编一个值」之间二选一。
+   */
+  readonly observationFor: (subject: RecoveryFactSubject) => Promise<RecoveryBindingObservation | RecoveryFactUnavailable>;
   /** 复用 IC-07 的三值存活事实。 */
-  readonly livenessFor: (recovery: RecoveryRecord) => TerminalLivenessFacts;
+  readonly livenessFor: (subject: RecoveryFactSubject) => Promise<TerminalLivenessFacts | RecoveryFactUnavailable>;
   /** 精确恢复原会话的执行 seam。 */
   readonly resumeExact: ExactRecoveryAttempt;
-  readonly workspaceFor: (recovery: RecoveryRecord) => WorkspaceReconciliation;
-  readonly sourceTerminalFor: (recovery: RecoveryRecord) => SourceTerminalObservation;
-  readonly roleGateFor: (recovery: RecoveryRecord) => RoleGateFacts;
+  readonly workspaceFor: (subject: RecoveryFactSubject) => Promise<WorkspaceReconciliation | RecoveryFactUnavailable>;
+  readonly sourceTerminalFor: (subject: RecoveryFactSubject) => Promise<SourceTerminalObservation | RecoveryFactUnavailable>;
+  readonly roleGateFor: (subject: RecoveryFactSubject) => Promise<RoleGateFacts | RecoveryFactUnavailable>;
   readonly extractCapsule: RecoveryCapsuleExtractor;
-  readonly execution: RecoveryExecutionContext;
-  readonly replacementFor: (recovery: RecoveryRecord) => ReplacementDispatch;
+  readonly execution: RecoveryExecutionContext | RecoveryFactUnavailable;
+  readonly replacementFor: (subject: RecoveryFactSubject) => ReplacementDispatch | RecoveryFactUnavailable;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -243,9 +295,26 @@ export function evaluateStartupReadiness(input: StartupReadinessInput): StartupD
 /* 请求与结果                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * 步骤 1 的两种形态（design D4：一个 Scope 一个 Incarnation，只取一次 Runtime Lease）。
+ *
+ * 裸 `StartCoordinatorRuntimeOptions` 表示「本模块自己启动」；`already-started` 表示前台宿主已经用
+ * 同一个 `StartedCoordinatorRuntime` 取得了 Runtime Lease，启动序列必须复用那份 incarnation 与
+ * fencing generation，而不是再取第二份租约。两种形态下步骤 2..7 完全相同。
+ */
+export type StartupRuntimeSeam =
+  | StartCoordinatorRuntimeOptions
+  | {
+      readonly kind: 'already-started';
+      /** 已启动的 Runtime：模型、incarnation、checkpoint 与 fencing 都由它给出。 */
+      readonly runtime: StartedCoordinatorRuntime;
+      readonly coordinationStore: BranchCoordinationStore;
+      readonly coordinationScopeId: CoordinationScopeId;
+    };
+
 export type CompanionStartupRequest = {
-  /** 步骤 1 的完整选项；`coordinationStore` 同时是本模块对 Scope 的读取入口。 */
-  readonly runtime: StartCoordinatorRuntimeOptions;
+  /** 步骤 1 的装配形态；`coordinationStore` 同时是本模块对 Scope 的读取入口。 */
+  readonly runtime: StartupRuntimeSeam;
   readonly backend: ExecutionBackend;
   readonly clock: () => number;
   readonly deliveries: StartupDeliveryFacts;
@@ -353,6 +422,72 @@ function snapshotForStep(
   return result.snapshot;
 }
 
+/** `RecoveryFactUnavailable` 与真实事实的判别：只有显式标记 `kind: 'unavailable'` 的值算读不到。 */
+function isUnavailableFact<T>(fact: T | RecoveryFactUnavailable): fact is RecoveryFactUnavailable {
+  return typeof fact === 'object' && fact !== null && 'kind' in fact && fact.kind === 'unavailable';
+}
+
+function unavailableFact(field: string, reason: RecoveryFactUnavailable): RecoveryFactUnavailable {
+  return {
+    kind: 'unavailable',
+    code: `${field}_unreadable`,
+    message: `${field} 不可读（${reason.code}）：${reason.message}`,
+  };
+}
+
+type GatheredRecoveryFacts = {
+  readonly kind: 'ready';
+  readonly observation: RecoveryBindingObservation;
+  readonly liveness: TerminalLivenessFacts;
+  readonly workspace: WorkspaceReconciliation;
+  readonly sourceTerminal: SourceTerminalObservation;
+  readonly roleGate: RoleGateFacts;
+  readonly execution: RecoveryExecutionContext;
+  readonly replacement: ReplacementDispatch;
+};
+
+/**
+ * 按固定顺序逐项装配一条 Recovery 需要的事实。
+ *
+ * 任何一项读不到就整体返回 `unavailable`：**不**调用 `recoverWorkerSession`，因此不可能派发替代
+ * Session、不可能消耗 Recovery Budget，也不可能写入任何终态。调用方把它翻成 `unverifiable_hold`，
+ * 于是原因以结构化 blocker 出现在启动结果与界面上，而不是被读成「已恢复」。
+ */
+async function gatherRecoveryFacts(
+  subject: RecoveryFactSubject,
+  facts: StartupRecoveryFacts,
+): Promise<GatheredRecoveryFacts | RecoveryFactUnavailable> {
+  const observation = await facts.observationFor(subject);
+  if (isUnavailableFact(observation)) {
+    return unavailableFact('harnessBindingObservation', observation);
+  }
+  const liveness = await facts.livenessFor(subject);
+  if (isUnavailableFact(liveness)) {
+    return unavailableFact('workerLiveness', liveness);
+  }
+  const workspace = await facts.workspaceFor(subject);
+  if (isUnavailableFact(workspace)) {
+    return unavailableFact('workspaceReconciliation', workspace);
+  }
+  const sourceTerminal = await facts.sourceTerminalFor(subject);
+  if (isUnavailableFact(sourceTerminal)) {
+    return unavailableFact('sourceTerminalObservation', sourceTerminal);
+  }
+  const roleGate = await facts.roleGateFor(subject);
+  if (isUnavailableFact(roleGate)) {
+    return unavailableFact('roleGateFacts', roleGate);
+  }
+  const execution = facts.execution;
+  if (isUnavailableFact(execution)) {
+    return unavailableFact('executionContext', execution);
+  }
+  const replacement = facts.replacementFor(subject);
+  if (isUnavailableFact(replacement)) {
+    return unavailableFact('replacementDispatch', replacement);
+  }
+  return { kind: 'ready', observation, liveness, workspace, sourceTerminal, roleGate, execution, replacement };
+}
+
 /**
  * 步骤 5：以同一 RecoveryId 续办全部未终结 Recovery。
  *
@@ -363,6 +498,9 @@ function snapshotForStep(
  * 单条 Recovery 的失败**不**拒绝整次启动：失败只针对这条 Recovery 与它的替代派发 lane，因此记录为
  * 可观测 blocker 并继续其余步骤；该 Recovery 也不被本模块写入终态（`recoverWorkerSession` 自己决定
  * 是否落盘它允许的状态）。只有整个对账序列无法完成才停止启动。
+ *
+ * 环境事实读不到时连 `recoverWorkerSession` 都不调用：结论是 `unverifiable_hold`（保持未决、拦住
+ * 替代派发 lane），而不是任何形式的「已恢复」。
  */
 async function continueRecoveries(input: {
   readonly store: BranchCoordinationStore;
@@ -377,41 +515,143 @@ async function continueRecoveries(input: {
   );
   const continued: RecoveryContinuation[] = [];
   for (const recovery of unfinished) {
-    const result = await recoverWorkerSession({
-      store: input.store,
-      backend: input.backend,
-      writer: input.writer,
-      coordinationScopeId: input.coordinationScopeId,
-      subject: 'worker_session',
-      role: recovery.role,
-      workPackageId: recovery.workPackageId,
-      workerTaskId: recovery.workerTaskId,
-      businessAttemptId: recovery.businessAttemptId,
-      sourceSegmentId: recovery.sourceSegmentId,
-      sourceDispatchId: recovery.sourceDispatchId,
-      observation: input.facts.observationFor(recovery),
-      liveness: input.facts.livenessFor(recovery),
-      resumeExact: input.facts.resumeExact,
-      workspace: input.facts.workspaceFor(recovery),
-      sourceTerminal: input.facts.sourceTerminalFor(recovery),
-      roleGate: input.facts.roleGateFor(recovery),
-      extractCapsule: input.facts.extractCapsule,
-      execution: input.facts.execution,
-      replacement: input.facts.replacementFor(recovery),
-    });
-    continued.push({
-      recoveryId: recovery.recoveryId,
-      previousStatus: recovery.status,
-      dispatchLaneKey: workerDispatchLaneKey(recovery),
-      result,
-    });
+    // 原会话其实已经交付（同角色同 Attempt 的结果已结算）时，Recovery 的前提已经不成立：以
+    // `source_completed` 收口并 supersede 原 Segment，而不是为一条已经交付的会话再派 Utility Worker。
+    const settlement = input.snapshot.deliverySettlements.find(
+      (entry) => entry.role === recovery.role && entry.attemptId === recovery.businessAttemptId,
+    );
+    if (settlement !== undefined) {
+      continued.push(concludeSupersededRecovery(input, recovery, settlement.orcaResultRef));
+      continue;
+    }
+    continued.push(
+      await continueWorkerSessionRecovery({
+        store: input.store,
+        backend: input.backend,
+        writer: input.writer,
+        coordinationScopeId: input.coordinationScopeId,
+        subject: recovery,
+        facts: input.facts,
+      }),
+    );
   }
   return continued;
 }
 
+/** 已由 Delivery 结算证明完成的原会话：Recovery 以 `source_completed` 收口，不消耗任何恢复预算。 */
+function concludeSupersededRecovery(
+  input: {
+    readonly store: BranchCoordinationStore;
+    readonly writer: CoordinationWriter;
+    readonly coordinationScopeId: CoordinationScopeId;
+  },
+  recovery: RecoveryRecord,
+  terminalReceiptRef: string,
+): RecoveryContinuation {
+  const concluded = concludeWorkerSessionRecovery({
+    store: input.store,
+    writer: input.writer,
+    coordinationScopeId: input.coordinationScopeId,
+    recoveryId: recovery.recoveryId,
+    outcome: { kind: 'source_completed', terminalReceiptRef },
+  });
+  const result: RecoverWorkerSessionResult =
+    concluded.kind === 'concluded'
+      ? {
+          kind: 'source_completed',
+          recoveryId: recovery.recoveryId,
+          phase: 'superseded',
+          supersededSegmentId: recovery.sourceSegmentId,
+          terminalReceiptRef,
+        }
+      : {
+          kind: 'rejected',
+          code: concluded.code,
+          message: concluded.message,
+        };
+  return {
+    recoveryId: recovery.recoveryId,
+    previousStatus: recovery.status,
+    dispatchLaneKey: workerDispatchLaneKey(recovery),
+    result,
+  };
+}
+
+/**
+ * 续办一条 Worker Session Recovery：装配环境事实，再以同一业务身份调用恢复用例。
+ *
+ * 这是「续办一条已登记 Recovery」与「对一条刚确认中断的 Segment 启动 Recovery」共用的唯一入口：
+ * 事实装配顺序、`unavailable` → `unverifiable_hold` 的 fail-closed 规则、以及写入所用的身份都只在这里
+ * 实现一次。`subject` 可以是已持久化的 `RecoveryRecord`，也可以由中断 Segment 派生（两者字段同源）。
+ */
+export async function continueWorkerSessionRecovery(input: {
+  readonly store: BranchCoordinationStore;
+  readonly backend: ExecutionBackend;
+  readonly writer: CoordinationWriter;
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly subject: RecoveryFactSubject;
+  readonly facts: StartupRecoveryFacts;
+}): Promise<RecoveryContinuation> {
+  const subject = input.subject;
+  // 续办前的状态必须**先**读：续办本身会改写它，读晚了就不是「之前的」状态了。
+  const previousStatus = recoveryStatusOf(input.store, input.coordinationScopeId, subject.recoveryId);
+  const gathered = await gatherRecoveryFacts(subject, input.facts);
+  if (gathered.kind === 'unavailable') {
+    return {
+      recoveryId: subject.recoveryId,
+      previousStatus,
+      dispatchLaneKey: workerDispatchLaneKey(subject),
+      result: {
+        kind: 'unverifiable_hold',
+        recoveryId: subject.recoveryId,
+        phase: 'unverifiable',
+        reason: `环境事实无法装配：${gathered.message}`,
+      },
+    };
+  }
+  const result = await recoverWorkerSession({
+    store: input.store,
+    backend: input.backend,
+    writer: input.writer,
+    coordinationScopeId: input.coordinationScopeId,
+    subject: 'worker_session',
+    role: subject.role,
+    workPackageId: subject.workPackageId,
+    workerTaskId: subject.workerTaskId,
+    businessAttemptId: subject.businessAttemptId,
+    sourceSegmentId: subject.sourceSegmentId,
+    sourceDispatchId: subject.sourceDispatchId,
+    observation: gathered.observation,
+    liveness: gathered.liveness,
+    resumeExact: input.facts.resumeExact,
+    workspace: gathered.workspace,
+    sourceTerminal: gathered.sourceTerminal,
+    roleGate: gathered.roleGate,
+    extractCapsule: input.facts.extractCapsule,
+    execution: gathered.execution,
+    replacement: gathered.replacement,
+  });
+  return {
+    recoveryId: subject.recoveryId,
+    previousStatus,
+    dispatchLaneKey: workerDispatchLaneKey(subject),
+    result,
+  };
+}
+
+/** 续办前读到的持久状态；尚未登记时按 `pending`（正是 `recoverWorkerSession` 会写下的状态）。 */
+function recoveryStatusOf(
+  store: BranchCoordinationStore,
+  coordinationScopeId: CoordinationScopeId,
+  recoveryId: RecoveryId,
+): RecoveryState {
+  const read = store.query({ kind: 'recovery', coordinationScopeId, recoveryId });
+  return read.kind === 'recovery' && read.recovery !== null ? read.recovery.status : 'pending';
+}
+
 /** 某条 Recovery 的替代派发 lane；与 `recoverWorkerSession` 预写 intent 时的 target/category 同源。 */
-function workerDispatchLaneKey(recovery: RecoveryRecord): string {
-  return laneKeyOf({ kind: 'worker-task', id: recovery.workerTaskId }, 'worker-dispatch');
+function workerDispatchLaneKey(subject: RecoveryFactSubject): string {
+  return laneKeyOf({ kind: 'worker-task', id: subject.workerTaskId }, 'worker-dispatch');
 }
 
 /** 该 Recovery 的续办结论是否要求「停下这条 lane」：失败、无法核验或领域阻塞都算。 */
@@ -420,7 +660,12 @@ function continuationHoldsDispatch(continuation: RecoveryContinuation): boolean 
   return kind === 'rejected' || kind === 'unverifiable_hold' || kind === 'blocked';
 }
 
-function recoveryBlocker(continuation: RecoveryContinuation): StartupBlocker | null {
+/**
+ * 一次 Recovery 续办结论 → 可观测 blocker。
+ *
+ * 启动序列与前台执行触发点共用它：同一条结论在两个入口必须呈现同一个原因与 lane，不各自解释一遍。
+ */
+export function recoveryBlockerOf(continuation: RecoveryContinuation): StartupBlocker | null {
   const { recoveryId, result, dispatchLaneKey } = continuation;
   if (result.kind === 'rejected') {
     return {
@@ -469,6 +714,90 @@ function deliveryBlockers(
 }
 
 /**
+ * 未确认 Delivery 的唯一重放入口。
+ *
+ * 启动序列与 Resume 都用它：读取（`readPending`）→ 前驱唯一 pipeline（`replayDeliveries`）→
+ * 显式拒绝或「已重放 + 无法装配的那些」。**不**第二套读取、去重或结算路径。
+ */
+async function replayPendingDeliveries(input: {
+  readonly store: BranchCoordinationStore;
+  readonly backend: ExecutionBackend;
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly writer: CoordinationWriter;
+  readonly deliveries: StartupDeliveryFacts;
+}): Promise<
+  | {
+      readonly kind: 'replayed';
+      readonly replayed: Extract<ReplayDeliveriesResult, { readonly kind: 'replayed' }>;
+      readonly unreadable: readonly StartupPendingDeliveryBlock[];
+    }
+  | { readonly kind: 'rejected'; readonly code: string; readonly message: string }
+> {
+  const facts = input.deliveries;
+  const read = await facts.readPending();
+  if (read.kind !== 'read') {
+    return { kind: 'rejected', code: read.code, message: read.message };
+  }
+  // 只带进度消息的批次必须确认，否则真实结果消息不会被 Orca 推进为当前批次（进度消息不承载结果，
+  // 也没有要落盘的权威事实）。确认失败按可读性阻塞上报，绝不推断「没有新工作」。
+  const progressFailures: StartupPendingDeliveryBlock[] = [];
+  for (const progress of read.progressAcks ?? []) {
+    const acked = await ackConsumedDelivery({
+      store: input.store,
+      backend: input.backend,
+      writer: input.writer,
+      coordinationScopeId: input.coordinationScopeId,
+      backendIdentityRef: facts.backendIdentityRef,
+      graphGeneration: facts.graphGeneration,
+      authorizationId: facts.authorizationId,
+      runId: facts.runId,
+      consumerGeneration: facts.consumerGeneration,
+      timeoutMs: facts.timeoutMs,
+      deliveryId: progress.deliveryId,
+      deliveryRunId: progress.runId,
+    });
+    if (acked.kind === 'blocked') {
+      progressFailures.push({
+        code: acked.code,
+        message: `只含进度消息的 Delivery ${progress.deliveryId} 无法确认：${acked.message}`,
+        laneKey: acked.laneKey,
+      });
+    }
+  }
+  const replayed = await replayDeliveries({
+    store: input.store,
+    backend: input.backend,
+    coordinationScopeId: input.coordinationScopeId,
+    writer: input.writer,
+    backendIdentityRef: facts.backendIdentityRef,
+    graphGeneration: facts.graphGeneration,
+    authorizationId: facts.authorizationId,
+    runId: facts.runId,
+    consumerGeneration: facts.consumerGeneration,
+    timeoutMs: facts.timeoutMs,
+    pending: read.pending,
+    ...(facts.settle === undefined ? {} : { settle: facts.settle }),
+  });
+  if (replayed.kind !== 'replayed') {
+    return { kind: 'rejected', code: replayed.code, message: replayed.message };
+  }
+  return { kind: 'replayed', replayed, unreadable: [...(read.blocked ?? []), ...progressFailures] };
+}
+
+/** 读到了消息、但事实证明不了的 Delivery：不作 blocker 记录，只把 lane 报给调用方。 */
+function unreadableDeliveryBlockers(
+  blocked: readonly StartupPendingDeliveryBlock[],
+): readonly StartupBlocker[] {
+  return blocked.map<StartupBlocker>((block) => ({
+    source: 'delivery',
+    code: block.code,
+    message: `Delivery 无法装配：${block.message}`,
+    laneKey: block.laneKey,
+    recoveryId: null,
+  }));
+}
+
+/**
  * 装配一个 Runtime Incarnation 的启动序列。
  *
  * 失败一律是 `{ kind: 'rejected', step, code, message }`：调用方据此知道停在哪一步、为什么停，
@@ -477,8 +806,9 @@ function deliveryBlockers(
 export async function startCompanionStartup(
   request: CompanionStartupRequest,
 ): Promise<CompanionStartupResult> {
-  const store = request.runtime.coordinationStore;
-  const coordinationScopeId = request.runtime.coordinationScopeId;
+  const seam = request.runtime;
+  const store = seam.coordinationStore;
+  const coordinationScopeId = seam.coordinationScopeId;
   const observe = (step: StartupStep): void => {
     request.observer?.onStep(step);
   };
@@ -486,11 +816,25 @@ export async function startCompanionStartup(
     request.provenNoSideEffect === undefined ? {} : { provenNoSideEffect: request.provenNoSideEffect };
 
   // 步骤 1：加载配置与 Scope、取得 Runtime Lease。内部次序由 startCoordinatorRuntime 固定，这里不重做。
-  const started = await startCoordinatorRuntime(request.runtime);
-  if (started.kind !== 'started') {
-    return { kind: 'rejected', step: 'runtime_started', code: started.code, message: started.message };
+  // 复用形态下这个 Incarnation 已经启动过（前台宿主已经取过租约）：不再启动第二次，也不关闭它。
+  const reused = 'kind' in seam;
+  let started: StartedCoordinatorRuntime;
+  if (reused) {
+    started = seam.runtime;
+  } else {
+    const launched = await startCoordinatorRuntime(seam);
+    if (launched.kind !== 'started') {
+      return { kind: 'rejected', step: 'runtime_started', code: launched.code, message: launched.message };
+    }
+    started = launched;
   }
   const writer = writerFor(started.incarnation);
+  // 复用形态下 checkpoint store 属于前台宿主（它还要用它读会话历史），本模块不能替它关闭。
+  const closeRuntime = (): void => {
+    if (!reused) {
+      started.close();
+    }
+  };
 
   const run = async (): Promise<StartedCompanionStartup> => {
     observe('runtime_started');
@@ -519,36 +863,30 @@ export async function startCompanionStartup(
     observe('lanes_projected');
 
     // 步骤 4：把未确认 Delivery 交给前驱唯一 pipeline。
-    const read = await request.deliveries.readPending();
-    if (read.kind !== 'read') {
-      throw new StartupAbort('deliveries_replayed', read.code, read.message);
-    }
-    const deliveries = await replayDeliveries({
+    const replay = await replayPendingDeliveries({
       store,
       backend: request.backend,
       coordinationScopeId,
       writer,
-      backendIdentityRef: request.deliveries.backendIdentityRef,
-      graphGeneration: request.deliveries.graphGeneration,
-      authorizationId: request.deliveries.authorizationId,
-      runId: request.deliveries.runId,
-      consumerGeneration: request.deliveries.consumerGeneration,
-      timeoutMs: request.deliveries.timeoutMs,
-      pending: read.pending,
-      ...(request.deliveries.settle === undefined ? {} : { settle: request.deliveries.settle }),
+      deliveries: request.deliveries,
     });
-    if (deliveries.kind !== 'replayed') {
-      throw new StartupAbort('deliveries_replayed', deliveries.code, deliveries.message);
+    if (replay.kind !== 'replayed') {
+      throw new StartupAbort('deliveries_replayed', replay.code, replay.message);
     }
+    const deliveries = replay.replayed;
+    // 读到了消息、但事实证明不了的 Delivery：不进入重放，按 blocker 落在它自己的可派发 lane 上。
+    const unreadableDeliveries = unreadableDeliveryBlockers(replay.unreadable);
     observe('deliveries_replayed');
 
     // 步骤 5：续办未完成的 Recovery（同一 RecoveryId，不新建、不重复消耗额度）。
+    // 这里读的是**重放之后**的快照：步骤 4 刚结算的 Delivery 可能已经让某些 Recovery 的前提消失
+    // （原会话其实交付了），同一次启动就应该把它们收口，而不是留到下一次重启。
     const continued = await continueRecoveries({
       store,
       backend: request.backend,
       writer,
       coordinationScopeId,
-      snapshot: projected,
+      snapshot: snapshotForStep(store, coordinationScopeId, 'recoveries_continued'),
       facts: request.recovery,
     });
     observe('recoveries_continued');
@@ -564,12 +902,46 @@ export async function startCompanionStartup(
         clock: request.clock,
         ...proven,
       });
-      return result.kind === 'rejected'
-        ? { kind: 'rejected', code: result.code, message: result.message }
-        : {
-            kind: 'reconciled',
-            summary: { revision: result.revision, unresolvedLaneKeys: result.unresolvedLaneKeys },
-          };
+      if (result.kind === 'rejected') {
+        return { kind: 'rejected', code: result.code, message: result.message };
+      }
+      // Resume 与启动用的是同一件事：先对账，再重放未确认 Delivery，然后才恢复调度。
+      const replay = await replayPendingDeliveries({
+        store,
+        backend: request.backend,
+        coordinationScopeId: input.coordinationScopeId,
+        writer: input.writer,
+        deliveries: request.deliveries,
+      });
+      if (replay.kind !== 'replayed') {
+        return {
+          kind: 'rejected',
+          code: replay.code,
+          message: `恢复前重放未确认 Delivery 失败：${replay.message}`,
+        };
+      }
+      // 重放可能写 store，因此恢复调度前必须重读 revision（它是控制状态写入的 CAS 基准）。
+      const revision = currentScopeRevision(store, input.coordinationScopeId);
+      if (revision === null) {
+        return {
+          kind: 'rejected',
+          code: 'invalid_state',
+          message: `Scope ${input.coordinationScopeId} 在重放后不可读`,
+        };
+      }
+      const replayBlockedLaneKeys = [
+        ...replay.replayed.blockedLaneKeys,
+        ...replay.unreadable.flatMap((block) => (block.laneKey === null ? [] : [block.laneKey])),
+      ];
+      return {
+        kind: 'reconciled',
+        summary: {
+          revision,
+          unresolvedLaneKeys: [
+            ...new Set([...result.unresolvedLaneKeys, ...replayBlockedLaneKeys]),
+          ],
+        },
+      };
     };
     const scopeControl = createScopeControlService({
       store,
@@ -587,7 +959,7 @@ export async function startCompanionStartup(
 
     // 单条 Recovery / Delivery 的失败落到它们各自的 lane 上，不升级成全局停摆。
     const recoveryBlockers = continued
-      .map(recoveryBlocker)
+      .map(recoveryBlockerOf)
       .filter((blocker): blocker is StartupBlocker => blocker !== null);
     const blockers: readonly StartupBlocker[] = [
       ...finalSnapshot.mutationLanes.map<StartupBlocker>((lane) => ({
@@ -598,6 +970,7 @@ export async function startCompanionStartup(
         recoveryId: null,
       })),
       ...deliveryBlockers(deliveries),
+      ...unreadableDeliveries,
       ...recoveryBlockers,
     ];
     const additionalBlockedLaneKeys = [
@@ -634,19 +1007,17 @@ export async function startCompanionStartup(
       scopeControl,
       endProcess: () => {
         const verdict = scopeControl.exit();
-        started.close();
+        closeRuntime();
         return verdict;
       },
-      close: () => {
-        started.close();
-      },
+      close: closeRuntime,
     };
   };
 
   try {
     return await run();
   } catch (error) {
-    started.close();
+    closeRuntime();
     if (error instanceof StartupAbort) {
       return { kind: 'rejected', step: error.step, code: error.code, message: error.message };
     }

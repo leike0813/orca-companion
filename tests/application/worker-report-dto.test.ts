@@ -141,6 +141,20 @@ test('Task Envelope 运行时边界使用 Controller 归属并拒绝不完整结
   expect(invalid.kind).toBe('rejected');
 });
 
+test('Planner 可持固定规格目标路径等待 Admission，后继角色不能缺 Spec Binding', () => {
+  const base = controllerEnvelope();
+  const planner = parseTaskEnvelope(
+    { ...base, role: 'planner', specBinding: null, specificationUnitPath: 'openspec/changes/wp-1' },
+    { ...attribution, role: 'planner' },
+  );
+  expect(planner.kind).toBe('parsed');
+  const implementation = parseTaskEnvelope(
+    { ...base, specBinding: null, specificationUnitPath: 'openspec/changes/wp-1' },
+    attribution,
+  );
+  expect(implementation).toMatchObject({ kind: 'rejected', field: 'specificationUnitPath' });
+});
+
 test('派发携带的 Task Envelope 字段全部由 Controller 填定，且不含 Worker 可填的身份位', () => {
   const envelope = controllerEnvelope();
 

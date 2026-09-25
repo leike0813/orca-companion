@@ -15,6 +15,7 @@ import { ControlBar } from '../components/control-bar.js';
 import { EventDrawer } from '../components/event-drawer.js';
 import { GraphInspector } from '../components/graph-inspector.js';
 import { HandoffReview } from '../components/handoff-review.js';
+import { AuthorizationReview } from '../components/authorization-review.js';
 import { InteractionCard } from '../components/interaction-card.js';
 import { ModelPicker } from '../components/model-picker.js';
 import { SessionPicker } from '../components/session-picker.js';
@@ -23,7 +24,7 @@ import { StatusLine } from '../components/status-line.js';
 import { TopBar } from '../components/top-bar.js';
 import { Transcript } from '../components/transcript.js';
 import { allowedSidebarDensity, sidebarWidthFor, truncateToDisplayWidth } from '../render/width.js';
-import type { ModelCatalog } from '../ports.js';
+import type { ExecutionAuthorizationLoad, ModelCatalog } from '../ports.js';
 import type {
   ControllerHandoffView,
   ControllerPlanningHandoffView,
@@ -46,6 +47,8 @@ export type WorkspaceActions = {
   readonly cancelHandoff: () => void;
   readonly confirmExecutionHandoff: () => void;
   readonly cancelExecutionHandoff: () => void;
+  readonly confirmAuthorization: () => void;
+  readonly cancelAuthorization: () => void;
   readonly closeTopOverlay: () => void;
 };
 
@@ -53,6 +56,7 @@ export type WorkspaceProps = {
   readonly viewModel: TuiViewModel;
   readonly ui: TuiState;
   readonly terminalWidth: number;
+  readonly terminalHeight?: number;
   readonly events: readonly SemanticEvent[];
   readonly actions: WorkspaceActions;
   readonly modelCatalog: ModelCatalog;
@@ -62,6 +66,7 @@ export type WorkspaceProps = {
   readonly composerDisabledReason: string | null;
   readonly newlineHint: string;
   readonly handoffProposal: ControllerPlanningHandoffView | null;
+  readonly authorizationReview: ExecutionAuthorizationLoad | null;
   readonly commands: readonly CommandId[];
 };
 
@@ -114,6 +119,7 @@ export function Workspace(props: WorkspaceProps) {
             expandedToolIds={ui.expandedToolIds}
             onToggleTool={props.actions.toggleTool}
             availableWidth={width}
+            maxLines={Math.max(1, (props.terminalHeight ?? 60) - 12 - interactions.length * 5)}
           />
           {interactions.map((interaction) => (
             <InteractionCard
@@ -238,6 +244,15 @@ function Overlay(props: {
           targetAwaitingUserPrompt
           onConfirm={parent.actions.confirmExecutionHandoff}
           onCancel={parent.actions.cancelExecutionHandoff}
+          availableWidth={parent.terminalWidth}
+        />
+      );
+    case 'authorization-review':
+      return (
+        <AuthorizationReview
+          review={parent.authorizationReview}
+          onConfirm={parent.actions.confirmAuthorization}
+          onCancel={parent.actions.cancelAuthorization}
           availableWidth={parent.terminalWidth}
         />
       );

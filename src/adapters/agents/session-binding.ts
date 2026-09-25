@@ -23,6 +23,16 @@ import {
 /** Codex Worker Harness 的稳定标识；M1 只有这一个实现。 */
 export const CODEX_HARNESS_ID = 'codex';
 
+/**
+ * Session Binding 的稳定标识：由「哪个 Dispatch」与「provider 报告的 session 身份」确定性派生。
+ *
+ * 它是可重放的身份函数而不是随机 ID，因此重启、恢复重放与重新观察同一条会话都会得到同一个值；
+ * 装配方不得用 mtime、terminal 输出或「最近一次汇报」替代它的输入。
+ */
+export function sessionBindingIdOf(dispatchId: string, providerSessionId: string): string {
+  return `session-binding:${encodeURIComponent(dispatchId)}:${encodeURIComponent(providerSessionId)}`;
+}
+
 /** harness 报告的原始事实；字段缺失是常态，缺失即不可用。 */
 export type HarnessSessionFacts = {
   readonly harness: string;
@@ -108,6 +118,7 @@ export function bindCodexSessionFromStartReport(input: {
   readonly facts: Omit<HarnessSessionFacts, 'providerSessionId' | 'transcriptRef' | 'observedAt'>;
   readonly report: CodexSessionStartReport;
   readonly workspace: string;
+  readonly expectedCodexHome: string;
   readonly dispatchStartedAt: string;
   readonly bindingDeadlineAt: string;
   readonly identityChanged?: boolean;

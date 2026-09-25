@@ -42,7 +42,7 @@
 
 ### D7. 恢复证据与事件只引用权威来源
 
-Recovery Capsule 的正文留在精确 Worker transcript/Orca 结果，IC-03 仅保存已有 `capsuleRef`；前台从该引用核验 `complete`/`partial` coverage 后投影，无法读取则保持 unknown。语义事件在被接受的角色结果、集成或 Finalizer verdict 落盘并回读后发布，重复 Delivery/keepalive 不发布。TUI、CLI 继续消费 IC-11/12 快照；生产事实缺失时继续显示 blocker/unknown。优先沿用现有 DTO，不加表和 migration；若某事实确实无法从权威源恢复，先更新合同再增加最小记录。
+Recovery Capsule 的正文留在精确 Worker transcript/Orca 结果，IC-03 仅保存已有 `capsuleRef`；前台从该引用核验 `complete`/`partial` coverage 后投影，无法读取则保持 unknown。语义事件在被接受的角色结果、集成或 Finalizer verdict 落盘并回读后发布，重复 Delivery/keepalive 不发布。TUI、CLI 继续消费 IC-11/12 快照；生产事实缺失时继续显示 blocker/unknown。角色级 Task 的原始 Envelope 在 Orca，但已完成 Task 的列表不再保留 Dispatch 身份；IC-03 因此保存按角色和 Attempt 追加的最小派发绑定。Planner 的 Envelope 固定目标规格路径，完成后由精确 Session Binding 触发 Specification Admission；Implementation 和 Validator 只接收已接纳的 Spec Binding。
 
 ### D8. 真实验收只用隔离身份
 
@@ -60,4 +60,4 @@ Recovery Capsule 的正文留在精确 Worker transcript/Orca 结果，IC-03 仅
 
 ## Migration Plan
 
-无需预设 SQLite migration。`openspec/config.yaml` 对这两个具名 change 允许解阻塞顺序：`m2-wire-execution-runtime` 以已归档的 planning TUI 为直接前驱，在执行 TUI 仍 active 时实施；先验收并归档接线，再执行原 M2 的 5.2/5.3 与归档。实施前核对当前未提交 UI 变更和 IC-05/07/08/09/11 接缝；既有未决 intent、Recovery 与 Delivery 必须按原身份对账。
+Schema 11 将 `materialization_bindings` 改为按角色/Attempt 保存 Task Envelope 身份、worktree 身份与 Spec Binding，并保留已有行；旧行没有这些事实，读取时明确阻塞，不推断角色或补造 Binding。迁移在单个 SQLite 事务内完成，重复打开只执行一次；新行必须由 Task 创建的同一 OperationId 写入。`openspec/config.yaml` 对这两个具名 change 允许解阻塞顺序：`m2-wire-execution-runtime` 以已归档的 planning TUI 为直接前驱，在执行 TUI 仍 active 时实施；先验收并归档接线，再执行原 M2 的 5.2/5.3 与归档。实施前核对当前未提交 UI 变更和 IC-05/07/08/09/11 接缝；既有未决 intent、Recovery 与 Delivery 必须按原身份对账。

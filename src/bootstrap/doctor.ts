@@ -320,7 +320,11 @@ function stepFromRejection(code: string, message: string): DoctorProbeStep<never
  * 这里的身份解析是受限直通：只接受本次 `terminal list` 观察到的活动句柄，且 handle 不进入任何应用层 DTO。
  */
 export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): DoctorProbe {
-  const observedHandles = new Set<string>();
+  // 显式给出的协调身份与 `terminal list` 观察到的句柄同权：否则探测会先宣布「身份可用」，
+  // 随后每个带身份的查询都因解析不到这个句柄而失败。
+  const observedHandles = new Set<string>(
+    environment.coordinatorIdentityRef === undefined ? [] : [environment.coordinatorIdentityRef],
+  );
   const backend = createOrcaExecutionBackend({
     ...(environment.executable === undefined ? {} : { executable: environment.executable }),
     cwd: environment.cwd,
@@ -366,6 +370,16 @@ export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): 
       return { ok: true, value: result.value as readonly HostFacts[] };
     },
     readCoordinatorIdentity: async () => {
+      const explicit = environment.coordinatorIdentityRef;
+      if (explicit !== undefined) {
+        // 显式声明的协调身份直接生效：不再依赖 terminal 列举，因此新项目（路径还没被 Orca 登记成
+        // worktree、`terminal-list --worktree` 会以 selector_not_found 失败）也能取到身份。
+        const explicitBinding = await backend.query({ operation: 'run-current', backendIdentityRef: explicit });
+        if (explicitBinding.kind !== 'accepted') {
+          return stepFromRejection(explicitBinding.code, explicitBinding.message);
+        }
+        return { ok: true, value: explicit };
+      }
       const listed = await backend.query({
         operation: 'terminal-list',
         ...(environment.identityWorktreePath === undefined
@@ -396,9 +410,7 @@ export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): 
           observedHandles.add(terminal.handle);
         }
       }
-      const explicit = environment.coordinatorIdentityRef;
-      const handle =
-        explicit ?? terminals.terminals.find((terminal) => observedHandles.has(terminal.handle))?.handle;
+      const handle = terminals.terminals.find((terminal) => observedHandles.has(terminal.handle))?.handle;
       if (handle === undefined) {
         return {
           ok: false,
@@ -412,10 +424,7 @@ export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): 
       }
       return {
         ok: true,
-        value:
-          explicit === undefined
-            ? '绑定型查询接受一个刚核验存活的活动终端句柄'
-            : '绑定型查询接受指定的协调身份引用',
+        value: handle,
       };
     },
     readPublicCommands: async () => {

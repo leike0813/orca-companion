@@ -105,12 +105,14 @@ test('worktree 建立与列举都登记在封闭 operation 目录内', () => {
 test('worktree 建立的 argv 与回执解析可核验', async () => {
   const { runner, calls } = recordingTransport([
     okResult({
-      id: 'wt-1',
-      path: '/tmp/worktrees/wp-1',
-      branch: 'refs/heads/docs/wp-1',
-      head: 'abcdef0123456789abcdef0123456789abcdef01',
-      isMainWorktree: false,
-      displayName: 'wp-1',
+      worktree: {
+        id: 'wt-1',
+        path: '/tmp/worktrees/wp-1',
+        branch: 'refs/heads/docs/wp-1',
+        head: 'abcdef0123456789abcdef0123456789abcdef01',
+        isMainWorktree: false,
+        displayName: 'wp-1',
+      },
     }),
   ]);
   const backend = backendWith(runner);
@@ -270,10 +272,11 @@ test('worktree 建立回执缺 id 时按 unknown 处理，不猜身份', async (
 });
 
 test('worktree 回执解析器拒绝缺 id 或非对象的负载', () => {
-  expect(parseWorktreeCreation({ id: '' }).ok).toBe(false);
+  expect(parseWorktreeCreation({ worktree: { id: '' } }).ok).toBe(false);
   expect(parseWorktreeCreation({}).ok).toBe(false);
   expect(parseWorktreeCreation('nope').ok).toBe(false);
-  expect(parseWorktreeCreation({ id: 'wt-1' })).toEqual({ ok: true, value: { worktreeId: 'wt-1' } });
+  expect(parseWorktreeCreation({ id: 'wt-1' }).ok).toBe(false);
+  expect(parseWorktreeCreation({ worktree: { id: 'wt-1' } })).toEqual({ ok: true, value: { worktreeId: 'wt-1' } });
 
   expect(parseWorktreeList({}).ok).toBe(false);
   expect(parseWorktreeList({ worktrees: 'nope' }).ok).toBe(false);

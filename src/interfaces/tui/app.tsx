@@ -44,6 +44,7 @@ import type {
   SemanticEvent,
 } from '../../application/controller-service.js';
 import type {
+  ExecutionAuthorizationLoad,
   HomeResolution,
   ModelCatalog,
   ScopeCandidate,
@@ -139,6 +140,13 @@ export function TuiApp(props: TuiAppProps) {
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog>(EMPTY_MODEL_CATALOG);
   const [modelRejection, setModelRejection] = useState<string | null>(null);
   const [handoffProposalId, setHandoffProposalId] = useState<string | null>(null);
+  /**
+   * 正在审阅的完整 Manifest。
+   *
+   * 它不由快照派生：审阅事实由宿主在用户打开审阅时读一次，含指纹与门禁；因此它保存在组件内，而不是
+   * 塞进展示态 reducer，也不会随事件批次被改写。
+   */
+  const [authorizationReview, setAuthorizationReview] = useState<ExecutionAuthorizationLoad | null>(null);
   /** 向导初始化的同步闩锁：初始化必须恰好一次，不能靠异步 state 挡重复确认。 */
   const wizardSubmittingRef = useRef(false);
 
@@ -535,6 +543,16 @@ export function TuiApp(props: TuiAppProps) {
           dispatch({ kind: 'overlay-open', overlay: 'execution-handoff-review' });
           return;
         }
+        case 'authorize-execution': {
+          // 审阅事实由宿主现读现算：界面只显示它、只回传指纹，不组装也不缓存第二份 Manifest。
+          const loaded = await ports.executionAuthorization.review();
+          setAuthorizationReview(loaded);
+          if (loaded.kind !== 'review') {
+            dispatch({ kind: 'notice', notice: `${loaded.code}: ${loaded.message}` });
+          }
+          dispatch({ kind: 'overlay-open', overlay: 'authorization-review' });
+          return;
+        }
         case 'filter-execution': {
           const next = nextExecutionFilter(stateRef.current.executionFilter);
           dispatch({ kind: 'execution-filter-changed', filter: next });
@@ -614,6 +632,38 @@ export function TuiApp(props: TuiAppProps) {
     dispatch({ kind: 'execution-handoff-review', handoffId: null });
     await reload();
   }, [dispatch, ports, reload]);
+
+  /**
+   * 批准 Execution Authorization 并原子切换到 Execution Coordination。
+   *
+   * 只回传用户在审阅里看到的指纹与 Scope revision：宿主重读全部权威输入后才写入批准与切换，因此
+   * 界面无法把「旧内容」当成批准对象，也无法跳过门禁。
+   */
+  const confirmAuthorization = useCallback(async () => {
+    const load = authorizationReview;
+    if (load === null || load.kind !== 'review' || !load.review.gate.ready) {
+      dispatch({ kind: 'notice', notice: '当前没有可批准的完整 Manifest（门禁未通过或事实不可读）' });
+      return;
+    }
+    const result = await ports.executionAuthorization.approve({
+      fingerprint: load.review.fingerprint,
+      expectedRevision: load.review.scopeRevision,
+    });
+    dispatch({ kind: 'notice', notice: resultNotice(result) });
+    if (result.kind === 'accepted') {
+      dispatch({ kind: 'overlay-close-top' });
+      setAuthorizationReview(null);
+      await reload();
+      return;
+    }
+    // 拒绝或阻塞时重读审阅事实：规划引用可能已经变化，用户需要看到新指纹再决定。
+    setAuthorizationReview(await ports.executionAuthorization.review());
+  }, [authorizationReview, dispatch, ports, reload]);
+
+  const cancelAuthorization = useCallback(() => {
+    dispatch({ kind: 'overlay-close-top' });
+    setAuthorizationReview(null);
+  }, [dispatch]);
 
   const cancelHandoff = useCallback(async () => {
     if (handoffProposalId === null) {
@@ -725,6 +775,12 @@ export function TuiApp(props: TuiAppProps) {
     },
     cancelExecutionHandoff: () => {
       void cancelExecutionHandoff();
+    },
+    confirmAuthorization: () => {
+      void confirmAuthorization();
+    },
+    cancelAuthorization: () => {
+      cancelAuthorization();
     },
     closeTopOverlay: () => dispatch({ kind: 'overlay-close-top' }),
   };
@@ -865,6 +921,9 @@ export function TuiApp(props: TuiAppProps) {
       if (key.return === true && topOverlay() === 'execution-handoff-review') {
         void confirmExecutionHandoff();
       }
+      if (key.return === true && topOverlay() === 'authorization-review') {
+        void confirmAuthorization();
+      }
       return;
     }
     handleComposerKey(input, key, {
@@ -924,6 +983,7 @@ export function TuiApp(props: TuiAppProps) {
       viewModel={viewModel}
       ui={state}
       terminalWidth={terminalWidth}
+      terminalHeight={windowSize.rows ?? process.stdout.rows ?? 24}
       events={events}
       actions={workspaceActions}
       modelCatalog={modelCatalog}
@@ -939,6 +999,7 @@ export function TuiApp(props: TuiAppProps) {
       handoffProposal={
         viewModel.planningHandoffs.find((entry) => entry.proposalId === handoffProposalId) ?? null
       }
+      authorizationReview={authorizationReview}
       commands={COMMAND_IDS}
     />
   );

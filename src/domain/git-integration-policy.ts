@@ -32,8 +32,10 @@ export type GitIntegrationRequest = {
   readonly remote: string | null;
   /** 目标 ref；`null` 表示该形态不涉及 ref。 */
   readonly ref: string | null;
-  /** 要集成的分支；必须与 Manifest 的 canonical branch 一致。 */
+  /** 获批的 canonical 分支；必须与 Manifest 的 canonical branch 一致。 */
   readonly branch: string;
+  /** 要合并/推送的源分支（Work Package 自己的分支）；Policy 不要求它等于 canonical。 */
+  readonly sourceBranch: string;
 };
 
 export type GitIntegrationDenialCode =

@@ -126,7 +126,7 @@ React 组件只拥有展示与输入协调。render、effect、resize 和重挂�
 | 项目 | 合同 |
 |---|---|
 | Canonical path | `src/bootstrap/` |
-| 职责 | 配置、依赖注入、能力核验、启动顺序、信号和进程生命周期；前台宿主的执行阶段只读观察装配（`worktree-list`/`worker-list`）、Scope 控制与 Execution Handoff 意图接线 |
+| 职责 | 配置、依赖注入、能力核验、启动顺序、信号和进程生命周期；前台宿主的执行阶段装配：启动对账与 Resume 门、Execution Authorization 授权切换、单步 Frontier 推进（`advanceExecution`）、Delivery 结算与 Recovery 续办、受控 Git 集成、只读 Finalizer 派发，以及 Scope 控制与 Execution Handoff 意图接线 |
 | 允许依赖 | 所有 module 的公开 interface 以完成组合 |
 | Interface | core/CLI/TUI 启动入口与 `doctor` 组合报告 |
 | 禁止 | 持有领域规则、复制用例、在 import 时启动进程、让核心入口加载 UI 或数据库 |
@@ -263,6 +263,36 @@ sequenceDiagram
 ```
 
 prepare 和 review 不转移责任。cutover 失败或 Capsule 不可移植时 Source 仍是唯一 owner；Target 在用户下一条普通 Prompt 前不自动恢复模型。普通 suspend/Wake 不构成交接。详见 `IC-09`、`IC-11`。
+
+### FLOW-05 前台执行闭环
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant B as Bootstrap foreground host
+  participant S as BranchCoordinationStore
+  participant O as Orca Runtime
+  participant W as Worker Harness
+
+  Note over B: 启动：复用同一 Runtime Incarnation 跑一次对账序列
+  B->>S: reconcileOperations（原 OperationId）→ lane 投影
+  B->>O: 读取未确认 Delivery 并按同一 pipeline 重放（不先 ack）
+  B->>S: 续办未终结 Recovery（同一 RecoveryId，缺事实即 blocker）
+  U->>B: Execution Authorization review → approve
+  B->>S: recordApproval → transitionToExecution（同事务取得 Execution Lease）
+  B->>O: run-create（先落 intent，再按专用身份读回 Run）
+  B->>B: 已确认退出的 Session Segment → Recovery（原身份续办；unverifiable 不触发）
+  B->>B: advanceExecution（单步：候选 → 门禁 → 稳定身份 → 物化）
+  B->>O: worktree-create → task-create → worker-start
+  W-->>O: Delivery（角色结果）
+  B->>S: 结算 → Accepted Worker Result 引用 → ack
+  B->>O: Validator 同 Session 验证/修复/复验
+  B->>O: 受控 Git 集成（source → canonical → 获批 remote/ref，分目标读回）
+  B->>O: 只读 Finalizer Session（canonical worktree，运行前后工作区比较）
+  B->>S: finalizeProject 接受 Delivery Verdict
+```
+
+推进权只属于当前 Execution Coordination Lease 持有者，且每次调用最多推进一个需要外部副作用的阶段；Pause/Cancel、失去租约或未决 mutation 都阻止新的派发。任何 `unknown` 保留原 OperationId 并阻塞对应 lane，重启与 Resume 只按原身份对账。详见 `IC-03`、`IC-05`、`IC-08`、`IC-09`、`IC-11`。
 
 ## 合同导航
 

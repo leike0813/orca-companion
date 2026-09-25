@@ -15,6 +15,7 @@ export type TranscriptProps = {
   readonly expandedToolIds: readonly string[];
   readonly onToggleTool: (entryId: string) => void;
   readonly availableWidth: number;
+  readonly maxLines?: number;
 };
 
 /** 折叠记号；不是颜色，因此状态不依赖终端配色。 */
@@ -28,43 +29,29 @@ export function toolToggleLabel(entry: { readonly id: string; readonly name: str
 
 export function Transcript(props: TranscriptProps) {
   const width = Math.max(1, props.availableWidth);
+  const lines = props.transcript.entries.flatMap((entry) => {
+    switch (entry.kind) {
+      case 'user':
+        return [{ key: `${entry.id}-heading`, text: '你', bold: true },
+          ...wrapByDisplayWidth(entry.text, width).map((text, index) => ({ key: `${entry.id}-${String(index)}`, text, bold: false }))];
+      case 'agent':
+        return [{ key: `${entry.id}-heading`, text: 'Coordinator', bold: true },
+          ...wrapByDisplayWidth(entry.text, width).map((text, index) => ({ key: `${entry.id}-${String(index)}`, text, bold: false }))];
+      case 'tool': {
+        const expanded = props.expandedToolIds.includes(entry.id);
+        return [{ key: entry.id, text: toolToggleLabel(entry, expanded), bold: false },
+          ...(expanded
+            ? wrapByDisplayWidth(entry.detail, width).map((text, index) => ({
+                key: `${entry.id}-detail-${String(index)}`, text: `  ${text}`, bold: false,
+              }))
+            : [])];
+      }
+    }
+  });
+  const visible = props.maxLines === undefined ? lines : lines.slice(-Math.max(1, props.maxLines));
   return (
     <Box flexDirection="column">
-      {props.transcript.entries.map((entry) => {
-        switch (entry.kind) {
-          case 'user':
-            return (
-              <Box key={entry.id} flexDirection="column">
-                <Text bold>你</Text>
-                {wrapByDisplayWidth(entry.text, width).map((line, index) => (
-                  <Text key={`${entry.id}-${String(index)}`}>{line}</Text>
-                ))}
-              </Box>
-            );
-          case 'agent':
-            return (
-              <Box key={entry.id} flexDirection="column">
-                <Text bold>Coordinator</Text>
-                {wrapByDisplayWidth(entry.text, width).map((line, index) => (
-                  <Text key={`${entry.id}-${String(index)}`}>{line}</Text>
-                ))}
-              </Box>
-            );
-          case 'tool': {
-            const expanded = props.expandedToolIds.includes(entry.id);
-            return (
-              <Box key={entry.id} flexDirection="column">
-                <Text>{toolToggleLabel(entry, expanded)}</Text>
-                {expanded
-                  ? wrapByDisplayWidth(entry.detail, width).map((line, index) => (
-                      <Text key={`${entry.id}-detail-${String(index)}`}>{`  ${line}`}</Text>
-                    ))
-                  : null}
-              </Box>
-            );
-          }
-        }
-      })}
+      {visible.map((line) => <Text key={line.key} bold={line.bold}>{line.text}</Text>)}
     </Box>
   );
 }

@@ -15,6 +15,8 @@
  * 阻塞，绝不用新 ID 重试，也绝不创建第二个 Task。
  */
 
+import { createHash } from 'node:crypto';
+
 import type { CoordinationScopeId, OperationId, WorkPackageId } from './dto/identity.js';
 import type {
   ExecutionQueryResult,
@@ -22,6 +24,7 @@ import type {
 } from './dto/operation-outcome.js';
 import type {
   BranchCoordinationStore,
+  CoordinationCommandResult,
   CoordinationWriter,
   MaterializationBindingRecord,
 } from './ports/branch-coordination-store.js';
@@ -32,7 +35,11 @@ import type {
   WorktreeListResult,
   WorktreeSummary,
 } from './ports/execution-backend.js';
-import { reconcileOperation } from './ports/execution-backend.js';
+import {
+  orcaDispatchIdFromReceipt,
+  orcaTaskIdFromReceipt,
+  reconcileOperation,
+} from './ports/execution-backend.js';
 import { beginIntent, blockLane, settleIntent } from './coordination/intent-service.js';
 import { readScope } from './planning/scope-read.js';
 import { parseTaskEnvelope } from './worker-report-dto.js';
@@ -60,7 +67,7 @@ export function workPackageComment(workPackageId: WorkPackageId): string {
 
 /** Orca worktree 名称是短标识，不承担身份语义；归属由 comment 表达。 */
 export function worktreeNameFor(workPackageId: WorkPackageId): string {
-  return `wp-${workPackageId}`.slice(0, 128);
+  return `wp-${createHash('sha256').update(workPackageId).digest('hex')}`;
 }
 
 /**
@@ -94,6 +101,13 @@ export type MaterializeCandidateContext = {
   readonly displayName?: string;
   /** 可信 bootstrap 选择的封闭启动策略；prepared launcher 只能由 Harness Adapter 生成。 */
   readonly workerLaunch: WorkerLaunchStrategy;
+  /**
+   * 本次派发的 Worker launch 身份（与 `workerLaunch` 用同一个值构造）。
+   *
+   * 物化绑定把它记成事实，使「派发窗口内没读到 SessionStart 报告」的派发能在后续触发里按同一身份
+   * 补记 Session Binding——否则重建它就得复刻派生编码。
+   */
+  readonly launchId: string;
   readonly timeoutMs: number;
 };
 
@@ -149,34 +163,6 @@ export type MaterializeWorkPackageResult =
   | { readonly kind: 'unknown'; readonly operationId: OperationId; readonly reason: string }
   | { readonly kind: 'blocked'; readonly laneKey: string; readonly reason: string };
 
-function taskIdFromReceipt(value: unknown): string | null {
-  if (typeof value !== 'object' || value === null) {
-    return null;
-  }
-  const record = value as Record<string, unknown>;
-  for (const key of ['id', 'taskId', 'task_id']) {
-    const candidate = record[key];
-    if (typeof candidate === 'string' && candidate.length > 0) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
-function dispatchIdFromReceipt(value: unknown): string | null {
-  if (typeof value !== 'object' || value === null) {
-    return null;
-  }
-  const record = value as Record<string, unknown>;
-  for (const key of ['dispatchId', 'dispatch_id']) {
-    const candidate = record[key];
-    if (typeof candidate === 'string' && candidate.length > 0) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
 type WorktreeListing =
   | { readonly kind: 'listed'; readonly worktrees: readonly WorktreeSummary[] }
   | { readonly kind: 'failed'; readonly failure: MaterializationFailure };
@@ -225,13 +211,23 @@ function readMaterializationBinding(input: MaterializeWorkPackageInput): Materia
       failure: { code: 'invalid_state', message: '物化绑定查询返回了错误的结果种类' },
     };
   }
-  if (result.bindings.length > 1) {
+  const legacy = result.bindings.find((entry) => entry.role === null);
+  if (legacy !== undefined) {
     return {
       kind: 'failed',
-      failure: { code: 'invalid_state', message: '同一 Work Package 存在多个物化绑定' },
+      failure: { code: 'legacy_materialization_unverifiable', message: '旧物化绑定缺少角色和 Attempt 身份，不能据此复用或创建角色 Task' },
     };
   }
-  return { kind: 'read', binding: result.bindings[0] ?? null };
+  const matches = result.bindings.filter((entry) =>
+    entry.role === input.context.candidate.role &&
+    entry.workerTaskId === input.context.candidate.taskEnvelope.workerTaskId &&
+    entry.dispatchId === input.context.candidate.taskEnvelope.dispatchId &&
+    entry.attemptId === input.context.candidate.taskEnvelope.attemptId,
+  );
+  if (matches.length > 1) {
+    return { kind: 'failed', failure: { code: 'invalid_state', message: '同一角色 Attempt 存在多个物化绑定' } };
+  }
+  return { kind: 'read', binding: matches[0] ?? null };
 }
 
 /**
@@ -463,7 +459,7 @@ export async function materializeWorkPackage(
         ...(candidate.displayName === undefined ? {} : { displayName: candidate.displayName }),
       },
       interpretTaskCreation,
-      (value) => recordMaterializationBinding(input, value.taskId, operationIds.task),
+      (value) => recordMaterializationBinding(input, value.taskId, operationIds.task, finalEnvelope.envelope, worktree.worktreeId),
     );
     if (task.kind !== 'task-created') {
       return task.result;
@@ -515,6 +511,41 @@ export async function materializeWorkPackage(
       const verified = await verifyPreparedWorker(input.backend, value.dispatchId, launch.preparedTerminal);
       return verified === null ? null : { code: verified.kind, message: 'message' in verified ? verified.message : verified.reason };
     },
+    // 结果未知时的按事实对账：Orca 列举里已经出现这个 Task 的 Worker，就说明 worker-start 发生过。
+    async () => {
+      const listed = await input.backend.query({
+        operation: 'worker-list',
+        runId: input.context.candidate.runId,
+      });
+      if (listed.kind !== 'accepted') {
+        return { kind: 'unobserved' };
+      }
+      const value: unknown = listed.value;
+      if (typeof value !== 'object' || value === null) {
+        return { kind: 'unobserved' };
+      }
+      const workers = (value as { readonly workers?: unknown }).workers;
+      if (!Array.isArray(workers)) {
+        return { kind: 'unobserved' };
+      }
+      let dispatchId: string | null = null;
+      for (const worker of workers) {
+        if (typeof worker !== 'object' || worker === null) {
+          continue;
+        }
+        const record = worker as Record<string, unknown>;
+        if (record['taskId'] !== orcaTaskId) {
+          continue;
+        }
+        const candidate = record['dispatchId'];
+        dispatchId = typeof candidate === 'string' && candidate.length > 0 ? candidate : null;
+        break;
+      }
+      if (typeof dispatchId !== 'string' || dispatchId.length === 0) {
+        return { kind: 'unobserved' };
+      }
+      return { kind: 'observed', value: { dispatchId } };
+    },
   );
   if (started.kind !== 'worker-started') {
     return started.result;
@@ -553,23 +584,60 @@ function recordMaterializationBinding(
   input: MaterializeWorkPackageInput,
   orcaTaskId: string,
   creationOperationId: OperationId,
+  envelope: TaskEnvelope,
+  worktreeId: string,
 ): MaterializationFailure | null {
   const current = readScope(input.store, input.coordinationScopeId);
   if (current.kind === 'rejected') {
     return { code: current.code, message: current.message };
   }
-  const recorded = input.store.transact({
-    kind: 'record-materialization-binding',
-    coordinationScopeId: input.coordinationScopeId,
-    expectedRevision: current.scope.revision,
-    writer: input.context.candidate.writer,
-    workPackageId: input.workPackageId,
+  // 绑定写入同样受心跳推进 revision 的影响：并发冲突时重读 revision 再写，绝不丢已经发生的 Task。
+  const recorded = writeBinding(input, {
     orcaTaskId,
     creationOperationId,
+    envelope,
+    worktreeId,
   });
   return recorded.kind === 'rejected'
     ? { code: recorded.code, message: recorded.message }
     : null;
+}
+
+/** 绑定写入本体；`casWrite` 负责在 stale revision 上重读重试。 */
+function writeBinding(
+  input: MaterializeWorkPackageInput,
+  payload: {
+    readonly orcaTaskId: string;
+    readonly creationOperationId: OperationId;
+    readonly envelope: TaskEnvelope;
+    readonly worktreeId: string;
+  },
+): CoordinationCommandResult {
+  return casWrite<CoordinationCommandResult>(
+    () => {
+      const read = readScope(input.store, input.coordinationScopeId);
+      return read.kind === 'rejected' ? { code: read.code, message: read.message } : read.scope.revision;
+    },
+    intentWriteStale,
+    (revision) =>
+      input.store.transact({
+        kind: 'record-materialization-binding',
+        coordinationScopeId: input.coordinationScopeId,
+        expectedRevision: revision,
+        writer: input.context.candidate.writer,
+        workPackageId: input.workPackageId,
+        orcaTaskId: payload.orcaTaskId,
+        creationOperationId: payload.creationOperationId,
+        role: payload.envelope.role,
+        workerTaskId: payload.envelope.workerTaskId,
+        dispatchId: payload.envelope.dispatchId,
+        attemptId: payload.envelope.attemptId,
+        worktreeId: payload.worktreeId,
+        specBinding: payload.envelope.specBinding,
+        specificationUnitPath: payload.envelope.specificationUnitPath ?? null,
+        launchId: input.context.candidate.launchId,
+      }),
+  ) as CoordinationCommandResult;
 }
 
 /**
@@ -588,7 +656,7 @@ function interpretWorktreeCreation(
 function interpretTaskCreation(
   outcome: Extract<OperationOutcome<unknown>, { kind: 'accepted' }>,
 ): { readonly kind: 'task-created'; readonly taskId: string } | MaterializationFailure {
-  const taskId = taskIdFromReceipt(outcome.value);
+  const taskId = orcaTaskIdFromReceipt(outcome.value);
   if (taskId === null || taskId.length === 0) {
     return { code: 'unknown', message: 'task-create 回执缺少可核验的 task id' };
   }
@@ -598,7 +666,7 @@ function interpretTaskCreation(
 function interpretWorkerStart(
   outcome: Extract<OperationOutcome<unknown>, { kind: 'accepted' }>,
 ): { readonly kind: 'worker-started'; readonly dispatchId: string | null } | MaterializationFailure {
-  return { kind: 'worker-started', dispatchId: dispatchIdFromReceipt(outcome.value) };
+  return { kind: 'worker-started', dispatchId: orcaDispatchIdFromReceipt(outcome.value) };
 }
 
 function materializeLaunchFailure(result: MaterializeWorkPackageResult): WorkerLaunchFailure {
@@ -623,6 +691,44 @@ type MutationAttempt<T> =
   | { readonly kind: 'failed'; readonly result: MaterializeWorkPackageResult };
 
 /**
+ * 受 CAS 保护的写入：`stale_revision` 时重读 revision 再写（有界重试）。
+ *
+ * 身份由 OperationId 表达，`expectedRevision` 只是写入护栏；Runtime Lease 心跳每 10s 续租一次并推进
+ * Scope revision，因此「读 revision → 写」之间被内部心跳命中是正常并发，而不是「事实已变」。按计划
+ * §5「CAS 冲突重读事实重新决策」在本地重读重写：重试只重发**本地** intent 写入，绝不重发任何外部
+ * 副作用。仍冲突时返回最后一次结果，由调用方按既有路径阻塞。
+ */
+function casWrite<T extends { readonly kind: string }>(
+  readRevision: () => number | MaterializationFailure,
+  isStale: (value: T) => boolean,
+  write: (expectedRevision: number) => T,
+  attempts = 5,
+): T | MaterializationFailure {
+  let last: T | null = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const revision = readRevision();
+    if (typeof revision !== 'number') {
+      return revision;
+    }
+    const result = write(revision);
+    if (!isStale(result)) {
+      return result;
+    }
+    last = result;
+  }
+  return last as T;
+}
+
+/** intent 写入是否因并发写入（stale revision）被拒：这是可重试的本地冲突，不是业务结论。 */
+function intentWriteStale(result: { readonly kind: string }): boolean {
+  return (
+    result.kind === 'rejected' &&
+    'rejection' in result &&
+    (result as { readonly rejection: { readonly code: string } }).rejection.code === 'stale_revision'
+  );
+}
+
+/**
  * 执行一次受 Intent 保护的 mutation。
  *
  * 顺序固定：begin intent → 调用 backend → settle/block intent。`unknown` 只做一次原 OperationId 对账，
@@ -635,6 +741,14 @@ async function runMutation<T extends { readonly kind: string }>(
   mutation: ExecutionMutation,
   interpret: (outcome: Extract<OperationOutcome<unknown>, { kind: 'accepted' }>) => T | MaterializationFailure,
   beforeSettle?: (value: T) => MaterializationFailure | null | Promise<MaterializationFailure | null>,
+  /**
+   * 结果未知时的**事实对账**：用 Orca 的列举事实判断这次 mutation 是否已经发生。
+   *
+   * `request-show` 只能证明「请求被记录过」，拿不回资源身份；`worker-start` 这类 mutation 一旦没有
+   * backend request id，光靠它就会把 lane 永久阻塞。这里让调用方给出「按事实找资源」的读取，读到就按
+   * `accepted` 收尾（附带资源身份），读不到再走原来的阻塞路径。
+   */
+  reconcileFacts?: () => Promise<{ readonly kind: 'observed'; readonly value: unknown } | { readonly kind: 'unobserved' }>,
 ): Promise<MutationAttempt<T>> {
   const target = {
     kind: purpose === 'worktree' ? 'worktree' : purpose === 'task' ? 'task' : 'worker-task',
@@ -661,14 +775,25 @@ async function runMutation<T extends { readonly kind: string }>(
     };
   }
   const expectedRevision = firstRevision;
-  const begun = beginIntent(input.store, {
-    coordinationScopeId: input.coordinationScopeId,
-    operationId,
-    target,
-    operationCategory: `materialize-${purpose}`,
-    writer: input.context.candidate.writer,
-    expectedRevision,
-  });
+  const begun = casWrite(
+    freshRevision,
+    intentWriteStale,
+    (revision) =>
+      beginIntent(input.store, {
+        coordinationScopeId: input.coordinationScopeId,
+        operationId,
+        target,
+        operationCategory: `materialize-${purpose}`,
+        writer: input.context.candidate.writer,
+        expectedRevision: revision,
+      }),
+  );
+  if ('code' in begun) {
+    return {
+      kind: 'failed',
+      result: { kind: 'blocked', laneKey: input.workPackageId, reason: begun.message },
+    };
+  }
   if (begun.kind === 'lane_blocked') {
     return {
       kind: 'failed',
@@ -694,6 +819,30 @@ async function runMutation<T extends { readonly kind: string }>(
   );
   if (outcome.kind === 'unknown') {
     const reconciled = await reconcileOperation(input.backend, outcome.operation);
+    const facts: { readonly kind: 'observed'; readonly value: unknown } | { readonly kind: 'unobserved' } =
+      reconcileFacts === undefined ? { kind: 'unobserved' } : await reconcileFacts();
+    if (facts.kind === 'observed') {
+      const interpreted = interpret({ kind: 'accepted', operation: outcome.operation, value: facts.value });
+      const factsRevision = freshRevision();
+      if (!('code' in interpreted) && typeof factsRevision === 'number') {
+        const factsOutcome: OperationOutcome<unknown> = {
+          kind: 'accepted',
+          operation: outcome.operation,
+          value: facts.value,
+        };
+        const settledByFacts = settleIntent(input.store, {
+          coordinationScopeId: input.coordinationScopeId,
+          operationId,
+          writer: input.context.candidate.writer,
+          expectedRevision: factsRevision,
+          outcome: factsOutcome,
+        });
+        if (settledByFacts.kind === 'settled') {
+          // 事实已证明这次 mutation 发生过：按同一条成功路径收尾，不再把 lane 阻塞在原地。
+          return interpreted;
+        }
+      }
+    }
     const reconcileRevision = freshRevision();
     if (typeof reconcileRevision !== 'number') {
       return {
@@ -704,13 +853,24 @@ async function runMutation<T extends { readonly kind: string }>(
     const reason = reconciled.kind === 'settled'
       ? `${reconciled.statement}；缺少可恢复的资源结果`
       : `对账结果 ${reconciled.reason} 不构成副作用是否发生的证明`;
-    const blocked = blockLane(input.store, {
-      coordinationScopeId: input.coordinationScopeId,
-      operationId,
-      writer: input.context.candidate.writer,
-      expectedRevision: reconcileRevision,
-      reason,
-    });
+    const blocked = casWrite(
+      freshRevision,
+      intentWriteStale,
+      (revision) =>
+        blockLane(input.store, {
+          coordinationScopeId: input.coordinationScopeId,
+          operationId,
+          writer: input.context.candidate.writer,
+          expectedRevision: revision,
+          reason,
+        }),
+    );
+    if ('code' in blocked) {
+      return {
+        kind: 'failed',
+        result: { kind: 'blocked', laneKey: input.workPackageId, reason: blocked.message },
+      };
+    }
     if (blocked.kind === 'rejected') {
       return {
         kind: 'failed',
@@ -728,30 +888,34 @@ async function runMutation<T extends { readonly kind: string }>(
     if (definite === null) {
       const interpreted = interpret(outcome);
       if ('code' in interpreted) {
-        const blockedRevision = freshRevision();
-        if (typeof blockedRevision === 'number') {
-          blockLane(input.store, {
-            coordinationScopeId: input.coordinationScopeId,
-            operationId,
-            writer: input.context.candidate.writer,
-            expectedRevision: blockedRevision,
-            reason: interpreted.message,
-          });
-        }
+        casWrite(
+          freshRevision,
+          intentWriteStale,
+          (revision) =>
+            blockLane(input.store, {
+              coordinationScopeId: input.coordinationScopeId,
+              operationId,
+              writer: input.context.candidate.writer,
+              expectedRevision: revision,
+              reason: interpreted.message,
+            }),
+        );
         return { kind: 'failed', result: { kind: 'unknown', operationId, reason: interpreted.message } };
       }
       const preSettlementFailure = await beforeSettle?.(interpreted);
       if (preSettlementFailure != null) {
-        const blockedRevision = freshRevision();
-        if (typeof blockedRevision === 'number') {
-          blockLane(input.store, {
-            coordinationScopeId: input.coordinationScopeId,
-            operationId,
-            writer: input.context.candidate.writer,
-            expectedRevision: blockedRevision,
-            reason: preSettlementFailure.message,
-          });
-        }
+        casWrite(
+          freshRevision,
+          intentWriteStale,
+          (revision) =>
+            blockLane(input.store, {
+              coordinationScopeId: input.coordinationScopeId,
+              operationId,
+              writer: input.context.candidate.writer,
+              expectedRevision: revision,
+              reason: preSettlementFailure.message,
+            }),
+        );
         return {
           kind: 'failed',
           result: { kind: 'unknown', operationId, reason: preSettlementFailure.message },
@@ -760,20 +924,24 @@ async function runMutation<T extends { readonly kind: string }>(
     }
   }
 
-  const settleRevision = freshRevision();
-  if (typeof settleRevision !== 'number') {
+  const settled = casWrite(
+    freshRevision,
+    intentWriteStale,
+    (revision) =>
+      settleIntent(input.store, {
+        coordinationScopeId: input.coordinationScopeId,
+        operationId,
+        writer: input.context.candidate.writer,
+        expectedRevision: revision,
+        outcome,
+      }),
+  );
+  if ('code' in settled) {
     return {
       kind: 'failed',
-      result: { kind: 'blocked', laneKey: input.workPackageId, reason: settleRevision.message },
+      result: { kind: 'blocked', laneKey: input.workPackageId, reason: settled.message },
     };
   }
-  const settled = settleIntent(input.store, {
-    coordinationScopeId: input.coordinationScopeId,
-    operationId,
-    writer: input.context.candidate.writer,
-    expectedRevision: settleRevision,
-    outcome,
-  });
   if (settled.kind === 'rejected') {
     return {
       kind: 'failed',

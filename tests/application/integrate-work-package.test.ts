@@ -26,6 +26,7 @@ import type {
 import {
   integrateWorkPackage,
   type GitIntegrationPort,
+  type GitReadbackTarget,
   type GitStepOutcome,
   type GitStepRequest,
   type IntegrateWorkPackageInput,
@@ -71,28 +72,38 @@ let writer: CoordinationWriter;
 
 const clock = (): number => 1_000;
 
-/** 记录型 fake Git 端口：按步骤推进 HEAD，并可按步骤注入拒绝或 unknown。 */
+/** 记录型 fake Git 端口：按目标推进 HEAD，并可按步骤注入拒绝或 unknown。 */
 function fakePort(script: {
   readonly mutating?: (step: GitStepRequest) => 'rejected' | 'unknown' | undefined;
   readonly headFor?: (step: GitStepRequest) => string;
-  /** 回读值可以与步骤报告不同，用来模拟「回读与报告不一致」。 */
-  readonly readHead?: string;
-  readonly readUnavailable?: boolean;
+  /** 各目标在用例开始时的 HEAD；重放用例用它表达「副作用已经发生」。 */
+  readonly initialHeads?: {
+    readonly source?: string;
+    readonly canonical?: string;
+    readonly remote?: string;
+  };
+  /** 回读值可以与步骤报告不同，用来模拟「回读与报告不一致」，按目标区分。 */
+  readonly readHead?: (target: GitReadbackTarget) => string | undefined;
+  readonly readUnavailable?: (target: GitReadbackTarget) => boolean;
   readonly reconcileAs?: (step: GitStepRequest) => GitStepOutcome;
 } = {}): {
   readonly port: GitIntegrationPort;
   readonly requests: readonly GitStepRequest[];
   readonly scopes: readonly ExecutionScope[];
-  readonly heads: readonly string[];
+  readonly reads: readonly GitReadbackTarget[];
 } {
   const requests: GitStepRequest[] = [];
   const scopes: ExecutionScope[] = [];
+  const reads: GitReadbackTarget[] = [];
   const unknown = (request: GitStepRequest): GitStepOutcome => ({
     kind: 'unknown',
     reason: `无法对账 ${request.step}`,
   });
-  const heads: string[] = [];
-  let head = BASELINE;
+  const heads: Record<'source' | 'canonical' | 'remote', string> = {
+    source: script.initialHeads?.source ?? BASELINE,
+    canonical: script.initialHeads?.canonical ?? BASELINE,
+    remote: script.initialHeads?.remote ?? BASELINE,
+  };
   const port: GitIntegrationPort = {
     run: (request, scope) => {
       requests.push(request);
@@ -104,32 +115,36 @@ function fakePort(script: {
       if (injected === 'unknown') {
         return Promise.resolve({ kind: 'unknown', reason: 'transport' });
       }
-      head = script.headFor?.(request) ?? (request.step === 'commit' ? COMMIT_HEAD : INTEGRATED_HEAD);
+      const head = script.headFor?.(request) ?? (request.step === 'commit' ? COMMIT_HEAD : INTEGRATED_HEAD);
       if (request.step === 'push') {
+        heads.remote = head;
         return Promise.resolve({ kind: 'pushed', remote: request.remote ?? 'origin', ref: request.ref ?? 'refs/heads/main', head });
       }
-      return Promise.resolve(
-        request.step === 'commit' ? { kind: 'committed', head } : { kind: 'integrated', head },
-      );
+      if (request.step === 'commit') {
+        heads.source = head;
+        return Promise.resolve({ kind: 'committed', head });
+      }
+      heads.canonical = head;
+      return Promise.resolve({ kind: 'integrated', head });
     },
     reconcile: (request, scope) => {
       scopes.push(scope);
       const result = script.reconcileAs?.(request) ?? unknown(request);
-      if (result.kind === 'committed' || result.kind === 'integrated' || result.kind === 'pushed') {
-        head = result.head;
-      }
+      if (result.kind === 'committed') heads.source = result.head;
+      if (result.kind === 'integrated') heads.canonical = result.head;
+      if (result.kind === 'pushed') heads.remote = result.head;
       return Promise.resolve(result);
     },
-    readCanonicalHead: () => {
-      if (script.readUnavailable === true) {
+    readHead: (target) => {
+      reads.push(target);
+      if (script.readUnavailable?.(target) === true) {
         return Promise.resolve({ kind: 'unavailable', reason: 'git unavailable' });
       }
-      const observed = script.readHead ?? head;
-      heads.push(observed);
+      const observed = script.readHead?.(target) ?? heads[target.kind];
       return Promise.resolve({ kind: 'read', head: observed });
     },
   };
-  return { port, requests, scopes, heads };
+  return { port, requests, scopes, reads };
 }
 
 function validatedStatus(): WorkPackageStatus {
@@ -166,7 +181,8 @@ function input(port: GitIntegrationPort, overrides: Partial<IntegrateWorkPackage
     executionLeaseHeldByCurrentSession: true,
     authority: AUTHORITY,
     policy: POLICY,
-    request: { kind: 'integrate_canonical', remote: 'origin', ref: 'refs/heads/main', branch: 'main' },
+    request: { kind: 'integrate_canonical', remote: 'origin', ref: 'refs/heads/main', branch: 'main', sourceBranch: 'wp-1' },
+    workspace: { canonicalWorktreePath: '/tmp/orca-canonical', workPackageWorktreePath: '/tmp/orca-wp-1' },
     baselineHead: BASELINE,
     commitMessage: 'feat: wp-1',
     operationIds: {
@@ -250,7 +266,7 @@ test('越界的 remote 请求被拒绝且不产生副作用', async () => {
   const { port, requests } = fakePort();
 
   const result = await integrateWorkPackage(
-    input(port, { request: { kind: 'integrate_canonical', remote: 'upstream', ref: 'refs/heads/main', branch: 'main' } }),
+    input(port, { request: { kind: 'integrate_canonical', remote: 'upstream', ref: 'refs/heads/main', branch: 'main', sourceBranch: 'wp-1' } }),
   );
 
   expect(result).toMatchObject({ kind: 'rejected', failure: { code: 'remote_not_approved' } });
@@ -261,30 +277,39 @@ test('force-push 请求在用例入口被拒绝且不产生副作用', async () 
   const { port, requests } = fakePort();
 
   const result = await integrateWorkPackage(
-    input(port, { request: { kind: 'force_push', remote: 'origin', ref: 'refs/heads/main', branch: 'main' } }),
+    input(port, { request: { kind: 'force_push', remote: 'origin', ref: 'refs/heads/main', branch: 'main', sourceBranch: 'wp-1' } }),
   );
 
   expect(result).toMatchObject({ kind: 'rejected', failure: { code: 'force_push_not_permitted' } });
   expect(requests).toHaveLength(0);
 });
 
-test('授权内的普通集成按固定顺序执行并核验 expected HEAD', async () => {
-  const { port, requests, scopes, heads } = fakePort();
+test('授权内的普通集成按固定顺序执行，且每步只回读自己的目标 HEAD', async () => {
+  const { port, requests, scopes, reads } = fakePort();
 
   const result = await integrateWorkPackage(input(port));
 
   expect(result).toEqual({ kind: 'integrated', head: INTEGRATED_HEAD, steps: ['commit', 'integrate_canonical', 'push'] });
   expect(requests.map((request) => request.step)).toEqual(['commit', 'integrate_canonical', 'push']);
-  expect(requests.map((request) => request.expectedHead)).toEqual([BASELINE, COMMIT_HEAD, INTEGRATED_HEAD]);
+  // 每步核验自己的目标：integrate 的基准是 canonical HEAD（提交前读到的那个），而不是 commit 步之后
+  // 已经前移的 source HEAD——拿 source HEAD 去核验 canonical 会必然不符。
+  expect(requests.map((request) => request.expectedHead)).toEqual([BASELINE, BASELINE, INTEGRATED_HEAD]);
+  expect(requests.every((request) => request.sourceWorktreePath === '/tmp/orca-wp-1')).toBe(true);
   expect(requests[0]?.commitMessage).toBe('feat: wp-1');
   expect(requests[1]?.commitMessage).toBeNull();
-  expect(heads).toEqual([COMMIT_HEAD, INTEGRATED_HEAD, INTEGRATED_HEAD]);
+  // 任何 mutation 之前先读到 canonical 的核验基准；随后三步分别回读 source、canonical、获批 remote/ref。
+  expect(reads).toEqual([
+    { kind: 'canonical' },
+    { kind: 'source', worktreePath: '/tmp/orca-wp-1' },
+    { kind: 'canonical' },
+    { kind: 'remote', remote: 'origin', ref: 'refs/heads/main' },
+  ]);
   expect(scopes.map((scope) => scope.operationId)).toEqual(['op-commit', 'op-integrate', 'op-push']);
   expect(scopes.every((scope) => scope.target.kind === 'work-package' && scope.target.id === WP)).toBe(true);
   const intents = store.query({ kind: 'intents', coordinationScopeId: SCOPE });
   expect(intents.kind === 'intents' ? intents.intents.map((intent) => intent.expectedHead) : []).toEqual([
     BASELINE,
-    COMMIT_HEAD,
+    BASELINE,
     INTEGRATED_HEAD,
   ]);
 });
@@ -324,8 +349,8 @@ test('unknown 经同一 OperationId 对账为确定结果后继续', async () =>
   expect(scopes.filter((scope) => scope.operationId === 'op-integrate')).toHaveLength(2);
 });
 
-test('回读 HEAD 与步骤报告不一致时判定为无法归属并阻塞', async () => {
-  const { port } = fakePort({ readHead: BASELINE });
+test('integrate 步回读 canonical HEAD 与步骤报告不一致时判定为无法归属并阻塞', async () => {
+  const { port } = fakePort({ readHead: (target) => (target.kind === 'canonical' ? BASELINE : undefined) });
 
   const result = await integrateWorkPackage(input(port));
 
@@ -333,15 +358,28 @@ test('回读 HEAD 与步骤报告不一致时判定为无法归属并阻塞', as
   if (result.kind !== 'blocked') {
     return;
   }
-  expect(result.reason).toContain('回读 HEAD');
+  expect(result.reason).toContain('步骤 integrate_canonical 后回读 canonical HEAD');
 });
 
-test('回读 HEAD 不可用时不完成 intent', async () => {
-  const { port, requests } = fakePort({ readUnavailable: true });
+test('push 步回读 remote ref 与步骤报告不一致时判定为无法归属并阻塞', async () => {
+  const { port } = fakePort({ readHead: (target) => (target.kind === 'remote' ? BASELINE : undefined) });
 
   const result = await integrateWorkPackage(input(port));
 
   expect(result).toMatchObject({ kind: 'blocked' });
+  if (result.kind !== 'blocked') {
+    return;
+  }
+  expect(result.reason).toContain('步骤 push 后回读 remote origin refs/heads/main 的 HEAD');
+});
+
+test('回读 HEAD 不可用时不完成 intent', async () => {
+  const { port, requests } = fakePort({ readUnavailable: (target) => target.kind === 'source' });
+
+  const result = await integrateWorkPackage(input(port));
+
+  expect(result).toMatchObject({ kind: 'blocked' });
+  expect(result.kind === 'blocked' ? result.reason : '').toContain('无法回读 source HEAD');
   expect(requests.map((request) => request.step)).toEqual(['commit']);
 });
 
@@ -349,11 +387,20 @@ test('相同 OperationId 已结算时不重复执行 Git 副作用', async () =>
   const first = fakePort();
   expect((await integrateWorkPackage(input(first.port))).kind).toBe('integrated');
 
-  const replay = fakePort();
+  const replay = fakePort({
+    initialHeads: { source: COMMIT_HEAD, canonical: INTEGRATED_HEAD, remote: INTEGRATED_HEAD },
+  });
   const result = await integrateWorkPackage(input(replay.port));
 
-  expect(result.kind).toBe('integrated');
+  expect(result).toEqual({ kind: 'integrated', head: INTEGRATED_HEAD, steps: ['commit', 'integrate_canonical', 'push'] });
   expect(replay.requests).toHaveLength(0);
+  // 重放路径同样按目标读回（含 mutation 之前的 canonical 基准），而不是统一读 canonical。
+  expect(replay.reads).toEqual([
+    { kind: 'canonical' },
+    { kind: 'source', worktreePath: '/tmp/orca-wp-1' },
+    { kind: 'canonical' },
+    { kind: 'remote', remote: 'origin', ref: 'refs/heads/main' },
+  ]);
 });
 
 test('相同 OperationId 仍为 pending 时不重复执行 Git 副作用', async () => {

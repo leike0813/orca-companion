@@ -1,5 +1,5 @@
 /**
- * `m1-wire-foreground-planning-runtime` D2 的行为测试：Scope 注册绑定与 schema 10。
+ * `m1-wire-foreground-planning-runtime` D2 的行为测试：Scope 注册绑定与旧库迁移。
  *
  * 固定四件可观察事实：schema 9 的旧库升级后旧 Scope 保留未绑定状态（迁移不猜旧值）；新 Scope 必须
  * 带完整 branch ref 与 canonical worktree；同一个 common dir 内一个 branch ref 至多属于一个 Scope；
@@ -15,7 +15,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 
 import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
-import { MIGRATIONS, SCHEMA_VERSION, SCHEMA_VERSION_KEY } from '../../src/adapters/storage/schema.js';
+import { MIGRATIONS, SCHEMA_VERSION_KEY } from '../../src/adapters/storage/schema.js';
 import { resolveGitScopeIdentity } from '../../src/bootstrap/composition.js';
 import type {
   CoordinationScopeId,
@@ -108,14 +108,13 @@ function createScope(scopeId: CoordinationScopeId, ref: string): CoordinationCom
   });
 }
 
-test('schema 9 的旧库升级到 10，旧 Scope 保留未绑定状态', () => {
+test('schema 9 的旧库升级后，旧 Scope 保留未绑定状态', () => {
   store.close();
   const databasePath = join(directory, 'legacy.sqlite');
   createLegacyDatabase(databasePath);
 
   store = openAt(databasePath);
 
-  expect(SCHEMA_VERSION).toBe(10);
   const scope = store.query({ kind: 'scope', coordinationScopeId: SCOPE });
   expect(scope.kind).toBe('scope');
   if (scope.kind !== 'scope' || scope.scope === null) {

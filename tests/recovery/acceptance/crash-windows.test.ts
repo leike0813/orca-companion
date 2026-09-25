@@ -465,7 +465,7 @@ test('[fail-closed] 存在已 accepted 收尾但无替代 Segment 的派发时�
   // 合法路径不受影响：另一个 Worker Attempt 的新 Recovery 照常完成替代派发。
   const otherPackage = 'wp-recovery-guard-2' as WorkPackageId;
   const otherTask = 'task-recovery-guard-2' as WorkerTaskId;
-  created.recordMaterializationBinding(otherPackage, 'orca-task-guard-2');
+  created.recordMaterializationBinding(otherPackage, 'orca-task-guard-2', 'attempt-other-1');
   created.recordSourceSegment({
     segmentId: 'segment-other-1',
     dispatchId: 'dispatch-other-1',

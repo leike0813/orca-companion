@@ -366,8 +366,16 @@ beforeEach(() => {
     expectedRevision: scopeRevision(),
     writer: writerA,
     workPackageId: WORK_PACKAGE,
+    role: 'planner',
+    workerTaskId: WORKER_TASK,
+    dispatchId: DISPATCH,
+    attemptId: 'attempt-1',
+    worktreeId: 'worktree-1',
+    specBinding: null,
+    specificationUnitPath: 'openspec/changes/wp-1',
     orcaTaskId: 'orca-task-1',
     creationOperationId: 'operation-1' as OperationId,
+    launchId: 'launch-1',
   });
   if (binding.kind !== 'committed') {
     throw new Error('无法记录物化绑定');

@@ -55,6 +55,7 @@ import type {
   WorkPackageBudget,
 } from '../../domain/planning/execution-graph.js';
 import { GRAPH_VERSION_RECORD_KINDS, isGraphVersionRecordKind } from '../../domain/planning/execution-graph.js';
+import type { SpecBinding } from '../../domain/task-contract.js';
 import {
   parseManifest,
   WORKER_ROLES,
@@ -337,6 +338,46 @@ function decodeStringPatch(raw: unknown, field: string): Decoded<OptionalPatch<s
   }
   const parsed = requireString(raw, field);
   return parsed.ok ? ok({ present: true, value: parsed.value }) : parsed;
+}
+
+/**
+ * `record-materialization-binding` 的 Spec Binding 字段：必须是对象或 `null`，字段齐全才接受。
+ *
+ * 这里不做「尽量读回来」的宽容解析：身份字段缺失就拒绝，避免把半个绑定写进档案。
+ */
+function decodeSpecBindingPatch(raw: unknown, field: string): Decoded<SpecBinding | null> {
+  if (raw === null || raw === undefined) {
+    return ok(null);
+  }
+  const decoded = decodeSpecBindingValue(raw);
+  return decoded === null ? fail(`${field} 不是合法的 Spec Binding`) : ok(decoded);
+}
+
+function decodeSpecBindingValue(raw: unknown): SpecBinding | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return null;
+  }
+  const { provider, relativePath, contentDigest, providerVersion, contractRevision, trackingRevision } =
+    raw as Record<string, unknown>;
+  if (
+    typeof provider !== 'string' ||
+    provider.length === 0 ||
+    typeof relativePath !== 'string' ||
+    relativePath.length === 0 ||
+    typeof contentDigest !== 'string' ||
+    contentDigest.length === 0 ||
+    typeof providerVersion !== 'string' ||
+    providerVersion.length === 0 ||
+    !isNonNegativeInteger(contractRevision) ||
+    !isNonNegativeInteger(trackingRevision)
+  ) {
+    return null;
+  }
+  return { provider, relativePath, contentDigest, providerVersion, contractRevision, trackingRevision };
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
 function decodeEnumPatch<T extends string>(
@@ -1507,6 +1548,43 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (!workPackageId.ok) {
         return workPackageId;
       }
+      const role = requireEnum(command['role'], WORKER_ROLES, 'role');
+      if (!role.ok) {
+        return role;
+      }
+      const workerTaskId = requireString(command['workerTaskId'], 'workerTaskId');
+      if (!workerTaskId.ok) {
+        return workerTaskId;
+      }
+      const dispatchId = requireString(command['dispatchId'], 'dispatchId');
+      if (!dispatchId.ok) {
+        return dispatchId;
+      }
+      const attemptId = requireString(command['attemptId'], 'attemptId');
+      if (!attemptId.ok) {
+        return attemptId;
+      }
+      const worktreeId = requireString(command['worktreeId'], 'worktreeId');
+      if (!worktreeId.ok) {
+        return worktreeId;
+      }
+      const specBinding = decodeSpecBindingPatch(command['specBinding'], 'specBinding');
+      if (!specBinding.ok) {
+        return specBinding;
+      }
+      const specificationUnitPath = command['specificationUnitPath'] === null
+        ? null
+        : requireString(command['specificationUnitPath'], 'specificationUnitPath');
+      if (specificationUnitPath !== null && !specificationUnitPath.ok) {
+        return specificationUnitPath;
+      }
+      // Planner 在规格产生前派发：固定目标路径必有，内容绑定必无。其它角色恰好相反。
+      if (role.value === 'planner' && (specBinding.value !== null || specificationUnitPath === null)) {
+        return fail('planner 的物化绑定必须带 specificationUnitPath 且 specBinding 为 null');
+      }
+      if (role.value !== 'planner' && (specBinding.value === null || specificationUnitPath !== null)) {
+        return fail(`${role.value} 的物化绑定必须携带 specBinding 且 specificationUnitPath 为 null`);
+      }
       const orcaTaskId = requireString(command['orcaTaskId'], 'orcaTaskId');
       if (!orcaTaskId.ok) {
         return orcaTaskId;
@@ -1515,11 +1593,23 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (!creationOperationId.ok) {
         return creationOperationId;
       }
+      const launchId = requireString(command['launchId'], 'launchId');
+      if (!launchId.ok) {
+        return launchId;
+      }
       return ok({
         ...base,
         kind: 'record-materialization-binding',
         workPackageId: workPackageId.value as WorkPackageId,
+        role: role.value,
+        workerTaskId: workerTaskId.value as WorkerTaskId,
+        dispatchId: dispatchId.value as DispatchId,
+        attemptId: attemptId.value,
+        worktreeId: worktreeId.value,
+        specBinding: specBinding.value,
+        specificationUnitPath: specificationUnitPath === null ? null : specificationUnitPath.value,
         orcaTaskId: orcaTaskId.value,
+        launchId: launchId.value,
         creationOperationId: creationOperationId.value as OperationId,
       });
     }
@@ -2417,8 +2507,16 @@ type SessionSegmentRow = {
 type MaterializationBindingRow = {
   readonly coordination_scope_id: string;
   readonly work_package_id: string;
-  readonly orca_task_id: string;
   readonly creation_operation_id: string;
+  readonly role: string | null;
+  readonly worker_task_id: string | null;
+  readonly dispatch_id: string | null;
+  readonly attempt_id: string | null;
+  readonly worktree_id: string | null;
+  readonly spec_binding_json: string | null;
+  readonly specification_unit_path: string | null;
+  readonly orca_task_id: string;
+  readonly launch_id: string | null;
   readonly created_at: number;
 };
 
@@ -2721,14 +2819,86 @@ function decodeSessionSegmentRow(row: SessionSegmentRow): Decoded<SessionSegment
   });
 }
 
-function decodeMaterializationBindingRow(row: MaterializationBindingRow): MaterializationBindingRecord {
-  return {
+/** `spec_binding_json` 文本列的解码；形状不合法时返回 `null`，由调用方转成结构化拒绝。 */
+function decodeSpecBindingColumn(raw: string): SpecBinding | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  return decodeSpecBindingValue(parsed);
+}
+
+/**
+ * 一条物化绑定的读取。
+ *
+ * 身份列只由 schema 11 起的受控命令写入；整组身份列要么齐全（`issued`），要么全为 `NULL`
+ * （`legacy`）。半套身份既是无意义状态，也会让调用方看到角色却看不到 Attempt，因此这里整行拒绝。
+ */
+function decodeMaterializationBindingRow(row: MaterializationBindingRow): Decoded<MaterializationBindingRecord> {
+  const base = {
     coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
     workPackageId: row.work_package_id as WorkPackageId,
     orcaTaskId: row.orca_task_id,
     creationOperationId: row.creation_operation_id as OperationId,
     createdAt: row.created_at,
   };
+  const identityColumns = [
+    row.role,
+    row.worker_task_id,
+    row.dispatch_id,
+    row.attempt_id,
+    row.worktree_id,
+  ];
+  const present = identityColumns.filter((value) => value !== null).length;
+  if (present === 0) {
+    return ok({
+      ...base,
+      identity: 'legacy',
+      role: null,
+      workerTaskId: null,
+      dispatchId: null,
+      attemptId: null,
+      worktreeId: null,
+      specBinding: null,
+      specificationUnitPath: null,
+      launchId: row.launch_id,
+    });
+  }
+  if (present !== identityColumns.length) {
+    return fail(
+      `materialization_bindings 的身份列不完整（Work Package ${row.work_package_id}）：不推断缺失的角色或 Attempt`,
+    );
+  }
+  const role = decodeWorkerRole(row.role as string);
+  if (role === null) {
+    return fail(`materialization_bindings.role 取值不受支持: ${row.role}`);
+  }
+  const specBinding = row.spec_binding_json === null ? null : decodeSpecBindingColumn(row.spec_binding_json);
+  if (row.spec_binding_json !== null && specBinding === null) {
+    return fail('materialization_bindings.spec_binding_json 不是合法的 Spec Binding');
+  }
+  // Planner 在规格产生前派发，因此没有内容绑定但必须带固定目标路径；其它角色的对偶约束相同。
+  if (role === 'planner') {
+    if (specBinding !== null || row.specification_unit_path === null) {
+      return fail('Planner 的物化绑定必须带固定规格目标路径且不携带 Spec Binding');
+    }
+  } else if (specBinding === null || row.specification_unit_path !== null) {
+    return fail(`${role} 的物化绑定必须携带已接纳的 Spec Binding`);
+  }
+  return ok({
+    ...base,
+    identity: 'issued',
+    role,
+    workerTaskId: row.worker_task_id as WorkerTaskId,
+    dispatchId: row.dispatch_id as DispatchId,
+    attemptId: row.attempt_id,
+    worktreeId: row.worktree_id,
+    specBinding,
+    specificationUnitPath: row.specification_unit_path,
+    launchId: row.launch_id,
+  });
 }
 
 function decodeDeliverySettlementRow(row: DeliverySettlementRow): Decoded<DeliverySettlementRecord> {
@@ -3443,14 +3613,16 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       ? many<MaterializationBindingRow>(
           db.prepare(
             `SELECT * FROM materialization_bindings
-             WHERE coordination_scope_id = ? ORDER BY created_at, work_package_id`,
+             WHERE coordination_scope_id = ?
+             ORDER BY created_at, work_package_id, creation_operation_id`,
           ),
           scopeId,
         )
       : many<MaterializationBindingRow>(
           db.prepare(
             `SELECT * FROM materialization_bindings
-             WHERE coordination_scope_id = ? AND work_package_id = ?`,
+             WHERE coordination_scope_id = ? AND work_package_id = ?
+             ORDER BY created_at, creation_operation_id`,
           ),
           scopeId,
           workPackageId,
@@ -3608,6 +3780,13 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
     if (!baselineAdoptions.ok) {
       return baselineAdoptions;
     }
+    const materializationBindings = decodeRows(
+      readMaterializationBindingRows(scopeId, undefined),
+      decodeMaterializationBindingRow,
+    );
+    if (!materializationBindings.ok) {
+      return materializationBindings;
+    }
     return ok({
       scope,
       sessions: sessions.value,
@@ -3621,9 +3800,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       planningResponsibility:
         responsibilityRow === undefined ? null : decodePlanningResponsibilityRow(responsibilityRow),
       sessionSegments: segments.value,
-      materializationBindings: readMaterializationBindingRows(scopeId, undefined).map(
-        decodeMaterializationBindingRow,
-      ),
+      materializationBindings: materializationBindings.value,
       deliverySettlements: settlements.value,
       deliveryVerdicts: verdicts.value,
       recoveries: recoveries.value,
@@ -3798,13 +3975,16 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           }
           return { kind: 'session-segments', segments: segments.value };
         }
-        case 'materialization-bindings':
-          return {
-            kind: 'materialization-bindings',
-            bindings: readMaterializationBindingRows(scopeId, input.workPackageId).map(
-              decodeMaterializationBindingRow,
-            ),
-          };
+        case 'materialization-bindings': {
+          const bindings = decodeRows(
+            readMaterializationBindingRows(scopeId, input.workPackageId),
+            decodeMaterializationBindingRow,
+          );
+          if (!bindings.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: bindings.message };
+          }
+          return { kind: 'materialization-bindings', bindings: bindings.value };
+        }
         case 'delivery-settlements': {
           const settlements = decodeRows(
             readDeliverySettlementRows(scopeId, input.dedupeKey),
@@ -4501,19 +4681,54 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         if (!holder.ok) {
           return holder;
         }
+        // 幂等只对「同一内容」成立：主键是创建 Task 的 OperationId，因此重放同一操作得到同一行。
+        // 内容不同意味着两次不同派发共用一个 OperationId——那是身份错误，必须失败而不是覆盖。
+        const existing = one<MaterializationBindingRow>(
+          db.prepare(
+            `SELECT * FROM materialization_bindings
+             WHERE coordination_scope_id = ? AND work_package_id = ? AND creation_operation_id = ?`,
+          ),
+          cmd.coordinationScopeId,
+          cmd.workPackageId,
+          cmd.creationOperationId,
+        );
+        if (existing !== undefined) {
+          const identical =
+            existing.role === cmd.role &&
+            existing.worker_task_id === cmd.workerTaskId &&
+            existing.dispatch_id === cmd.dispatchId &&
+            existing.attempt_id === cmd.attemptId &&
+            existing.worktree_id === cmd.worktreeId &&
+            existing.spec_binding_json === (cmd.specBinding === null ? null : JSON.stringify(cmd.specBinding)) &&
+            existing.specification_unit_path === cmd.specificationUnitPath &&
+            existing.orca_task_id === cmd.orcaTaskId &&
+            existing.launch_id === cmd.launchId;
+          return identical
+            ? ok(null)
+            : fail(
+                `Operation ${cmd.creationOperationId} 已绑定到另一组物化身份：拒绝覆盖既有派发记录`,
+                'constraint',
+              );
+        }
         db.prepare(
           `INSERT INTO materialization_bindings (
-             coordination_scope_id, work_package_id, orca_task_id, creation_operation_id, created_at
-           ) VALUES (?, ?, ?, ?, ?)
-           ON CONFLICT (coordination_scope_id, work_package_id) DO UPDATE SET
-             orca_task_id = excluded.orca_task_id,
-             creation_operation_id = excluded.creation_operation_id,
-             created_at = excluded.created_at`,
+             coordination_scope_id, work_package_id, creation_operation_id, role, worker_task_id,
+             dispatch_id, attempt_id, worktree_id, spec_binding_json, specification_unit_path,
+             orca_task_id, launch_id, created_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).run(
           cmd.coordinationScopeId,
           cmd.workPackageId,
-          cmd.orcaTaskId,
           cmd.creationOperationId,
+          cmd.role,
+          cmd.workerTaskId,
+          cmd.dispatchId,
+          cmd.attemptId,
+          cmd.worktreeId,
+          cmd.specBinding === null ? null : JSON.stringify(cmd.specBinding),
+          cmd.specificationUnitPath,
+          cmd.orcaTaskId,
+          cmd.launchId,
           now,
         );
         return ok(null);
@@ -4616,7 +4831,21 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         if (!current.ok) {
           return current;
         }
-        if (!RECOVERY_TRANSITIONS[current.value.status].includes(cmd.status)) {
+        // 同状态且只改阻塞原因 = 元数据更新，不是状态迁移：`unverifiable` 的 Recovery 必须保持
+        // `pending`（不推断退出），但「恢复被阻止」的原因要让界面读得到，因此允许这种窄口写入。
+        const reasonOnlyUpdate =
+          cmd.status === current.value.status &&
+          cmd.blockingReason !== undefined &&
+          cmd.terminalOutcome === undefined &&
+          cmd.replacementSegment === undefined &&
+          cmd.replacementDispatchId === undefined &&
+          cmd.replacementSegmentId === undefined &&
+          cmd.replacementSessionBindingId === undefined &&
+          cmd.supersededSegmentId === undefined &&
+          cmd.capsuleRef === undefined &&
+          cmd.prewriteOperationId === undefined &&
+          cmd.consumedBudget === undefined;
+        if (!reasonOnlyUpdate && !RECOVERY_TRANSITIONS[current.value.status].includes(cmd.status)) {
           return fail(`不允许从 ${current.value.status} 迁移到 ${cmd.status}`, 'invalid_state');
         }
         // 离开 blocked 表示上一次失败结论已被取代：未显式给出时清空终态结果与阻塞原因，避免

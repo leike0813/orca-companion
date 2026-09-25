@@ -447,6 +447,25 @@ export type ScopeControlCommand = ControllerScopeFields & {
 };
 
 /**
+ * 规划 → 执行的授权意图。
+ *
+ * `propose-graph` 携带 Coordinator 提出的结构化 Implementation Plan；世代、Run、OperationId 与配置
+ * 上限由宿主补齐，因此这里没有可填写的身份字段。`approve` 只携带用户在审阅里看到的指纹与 Scope
+ * revision：宿主重读全部权威输入后才写入批准并切换，指纹不符即拒绝且零副作用。
+ */
+export type ExecutionAuthorizationCommand = ControllerScopeFields &
+  (
+    | { readonly kind: 'execution-authorization'; readonly action: 'propose-graph'; readonly plan: unknown }
+    | { readonly kind: 'execution-authorization'; readonly action: 'review' }
+    | {
+        readonly kind: 'execution-authorization';
+        readonly action: 'approve';
+        readonly fingerprint: string;
+        readonly expectedRevision: Revision;
+      }
+  );
+
+/**
  * Pending Interaction 回答。
  *
  * `interactionId` 与 `expectedRevision` 都是必填：revision 过期即拒绝且零副作用。回答正文以
@@ -538,6 +557,7 @@ export type ControllerCommand =
   | ScopeControlCommand
   | AnswerPendingInteractionCommand
   | ExecutionHandoffCommand
+  | ExecutionAuthorizationCommand
   | GraphEvolutionCommand
   | InitializeScopeCommand;
 
@@ -730,6 +750,9 @@ export type PlanningHandoffPort = (input: PlanningHandoffCommand) => Promise<Del
 export type ScopeControlPort = (input: ScopeControlCommand) => Promise<DelegatedOutcome>;
 export type PendingInteractionPort = (input: AnswerPendingInteractionCommand) => Promise<DelegatedOutcome>;
 export type ExecutionHandoffPort = (input: ExecutionHandoffCommand) => Promise<DelegatedOutcome>;
+export type ExecutionAuthorizationPort = (
+  input: ExecutionAuthorizationCommand,
+) => Promise<DelegatedOutcome>;
 export type GraphEvolutionPort = (input: GraphEvolutionCommand) => Promise<DelegatedOutcome>;
 export type ScopeInitializationPort = (input: InitializeScopeCommand) => Promise<DelegatedOutcome>;
 
@@ -743,6 +766,7 @@ export type ControllerServiceDependencies = {
   readonly scopeControl: ScopeControlPort;
   readonly pendingInteractions: PendingInteractionPort;
   readonly executionHandoff: ExecutionHandoffPort;
+  readonly executionAuthorization: ExecutionAuthorizationPort;
   readonly graphEvolution: GraphEvolutionPort;
   readonly scopeInitialization: ScopeInitializationPort;
   /** store / backend 侧通知源；省略时不发布事件。 */
@@ -1132,6 +1156,8 @@ export function createControllerService(dependencies: ControllerServiceDependenc
         return dependencies.pendingInteractions(input);
       case 'execution-handoff':
         return dependencies.executionHandoff(input);
+      case 'execution-authorization':
+        return dependencies.executionAuthorization(input);
       case 'graph-evolution':
         return dependencies.graphEvolution(input);
       case 'initialize-scope':

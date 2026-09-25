@@ -102,18 +102,30 @@ export type FakeRecoveryBackend = {
   readonly mutations: () => readonly ExecutionMutation[];
 };
 
-/** 记录型 fake backend：默认接受替代派发，可按调用注入拒绝或 unknown。 */
+/** 记录型 fake backend：默认接受替代派发，可按调用注入拒绝、unknown 或只读查询结果。 */
 export function fakeRecoveryBackend(script?: {
   readonly workerStart?: (
     call: number,
     mutation: Extract<ExecutionMutation, { readonly operation: 'worker-start' }>,
   ) => OperationOutcome<unknown>;
+  /**
+   * 只读查询的脚本钩子；返回 `undefined` 表示沿用缺省「接受但不给字段」。
+   *
+   * 生产事实装配会从这些查询读取 worktree/worker/terminal 事实，因此需要能逐项给出登记的载荷形状。
+   */
+  readonly query?: (input: ExecutionQuery) => ExecutionQueryResult | undefined;
+  /** 通用 mutation 钩子；返回 `undefined` 表示沿用缺省行为（缺省只对 `worker-start` 给回执）。 */
+  readonly mutate?: (input: ExecutionMutation, scope: ExecutionScope) => OperationOutcome<unknown> | undefined;
 }): FakeRecoveryBackend {
   const calls: BackendCall[] = [];
   let workerStarts = 0;
   const backend: ExecutionBackend = {
     query: (input: ExecutionQuery): Promise<ExecutionQueryResult> => {
       calls.push({ kind: 'query', operation: input });
+      const scripted = script?.query?.(input);
+      if (scripted !== undefined) {
+        return Promise.resolve(scripted);
+      }
       if (input.operation === 'request-show') {
         return Promise.resolve({ kind: 'accepted', value: { requestId: input.requestId, state: 'pending' } });
       }
@@ -121,6 +133,10 @@ export function fakeRecoveryBackend(script?: {
     },
     mutate: (input: ExecutionMutation, scope: ExecutionScope): Promise<OperationOutcome<unknown>> => {
       calls.push({ kind: 'mutate', operation: input, scope });
+      const scriptedMutation = script?.mutate?.(input, scope);
+      if (scriptedMutation !== undefined) {
+        return Promise.resolve(scriptedMutation);
+      }
       if (input.operation === 'worker-start') {
         workerStarts += 1;
         const injected = script?.workerStart?.(workerStarts, input);
@@ -158,24 +174,24 @@ export function fakeRecoveryBackend(script?: {
 /** 替代派发回执的解释器：只接受可核验的 Dispatch / Binding / transcript 三项身份。 */
 export function readReplacementReceipt(
   outcome: Extract<OperationOutcome<unknown>, { readonly kind: 'accepted' }>,
-): ReplacementSessionReceipt | { readonly failure: string } {
+): Promise<ReplacementSessionReceipt | { readonly failure: string }> {
   const value = outcome.value as
     | { readonly dispatchId?: unknown; readonly sessionBindingId?: unknown; readonly transcriptRef?: unknown }
     | null;
   if (value === null) {
-    return { failure: '替代派发回执不是对象' };
+    return Promise.resolve({ failure: '替代派发回执不是对象' });
   }
   const { dispatchId, sessionBindingId, transcriptRef } = value;
   if (typeof dispatchId !== 'string' || dispatchId.length === 0) {
-    return { failure: '替代派发回执缺少 dispatch id' };
+    return Promise.resolve({ failure: '替代派发回执缺少 dispatch id' });
   }
   if (typeof sessionBindingId !== 'string' || sessionBindingId.length === 0) {
-    return { failure: '替代派发回执缺少 session binding' };
+    return Promise.resolve({ failure: '替代派发回执缺少 session binding' });
   }
   if (typeof transcriptRef !== 'string' || transcriptRef.length === 0) {
-    return { failure: '替代派发回执缺少 transcript 引用' };
+    return Promise.resolve({ failure: '替代派发回执缺少 transcript 引用' });
   }
-  return { dispatchId, sessionBindingId, transcriptRef };
+  return Promise.resolve({ dispatchId, sessionBindingId, transcriptRef });
 }
 
 export type SourceSegmentInput = {
@@ -200,7 +216,7 @@ export type RecoveryHarness = {
   reopen: () => void;
   close: () => void;
   recordSourceSegment: (input: SourceSegmentInput) => SessionSegmentRecord;
-  recordMaterializationBinding: (workPackageId: WorkPackageId, orcaTaskId: string) => void;
+  recordMaterializationBinding: (workPackageId: WorkPackageId, orcaTaskId: string, attemptId?: string) => void;
   /**
    * 显式释放 Runtime Lease，让后续 `startCoordinatorRuntime` 能取得新的 incarnation。
    *
@@ -221,6 +237,8 @@ export type RecoveryHarness = {
 export type RecoveryHarnessOptions = {
   readonly maxRecoveriesPerWorkerAttempt?: number;
   readonly role?: WorkerRole;
+  /** 只读查询脚本：生产事实装配（worktree/worker/terminal 列举）需要给出登记的载荷形状。 */
+  readonly query?: (input: ExecutionQuery) => ExecutionQueryResult | undefined;
 };
 
 export function createRecoveryHarness(options: RecoveryHarnessOptions = {}): RecoveryHarness {
@@ -381,7 +399,7 @@ export function createRecoveryHarness(options: RecoveryHarnessOptions = {}): Rec
     throw new Error(`无法更新 Scope 引用: ${refs.message}`);
   }
 
-  const backend = fakeRecoveryBackend();
+  const backend = fakeRecoveryBackend(options.query === undefined ? {} : { query: options.query });
 
   const recordSourceSegment = (segment: SourceSegmentInput): SessionSegmentRecord => {
     const recorded = store.transact({
@@ -419,15 +437,37 @@ export function createRecoveryHarness(options: RecoveryHarnessOptions = {}): Rec
     return found;
   };
 
-  const recordMaterializationBinding = (workPackageId: WorkPackageId, orcaTaskId: string): void => {
+  const recordMaterializationBinding = (
+    workPackageId: WorkPackageId,
+    orcaTaskId: string,
+    attemptId = 'attempt-1',
+  ): void => {
     const recorded = store.transact({
       kind: 'record-materialization-binding',
       coordinationScopeId: RECOVERY_SCOPE,
       expectedRevision: revisionOf(),
       writer,
       workPackageId,
+      role: options.role ?? 'validator',
+      workerTaskId: RECOVERY_WORKER_TASK,
+      dispatchId: `dispatch:${orcaTaskId}` as DispatchId,
+      // 与中断 Segment 记录的业务 Attempt 同一身份：角色级物化绑定按 role + attempt 定位。
+      attemptId,
+      worktreeId: `worktree:${workPackageId}`,
+      specBinding: (options.role ?? 'validator') === 'planner' ? null : {
+        provider: 'openspec',
+        relativePath: `openspec/changes/${workPackageId}`,
+        contentDigest: `digest:${workPackageId}`,
+        providerVersion: '0.4.0',
+        contractRevision: 1,
+        trackingRevision: 1,
+      },
+      specificationUnitPath: (options.role ?? 'validator') === 'planner'
+        ? `openspec/changes/${workPackageId}`
+        : null,
       orcaTaskId,
       creationOperationId: `op:${orcaTaskId}:create` as OperationId,
+      launchId: `launch:${orcaTaskId}`,
     });
     if (recorded.kind === 'rejected') {
       throw new Error(`无法记录物化绑定: ${recorded.message}`);

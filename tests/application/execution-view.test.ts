@@ -161,12 +161,28 @@ function makeReconciliation(input: {
   };
 }
 
-function makeBinding(workPackageId: string, orcaTaskId: string): MaterializationBindingRecord {
+function makeBinding(workPackageId: string, orcaTaskId: string, role: WorkerRole = 'validator'): MaterializationBindingRecord {
   return {
     coordinationScopeId: SCOPE,
     workPackageId: workPackageId as WorkPackageId,
+    identity: 'issued',
+    role,
+    workerTaskId: orcaTaskId as WorkerTaskId,
+    dispatchId: `logical-${orcaTaskId}` as DispatchId,
+    attemptId: `attempt-${orcaTaskId}`,
+    worktreeId: `worktree-${workPackageId}`,
+    specBinding: role === 'planner' ? null : {
+      provider: 'openspec',
+      relativePath: `openspec/changes/${workPackageId}`,
+      contentDigest: `digest-${workPackageId}`,
+      providerVersion: '1',
+      contractRevision: 1,
+      trackingRevision: 1,
+    },
+    specificationUnitPath: role === 'planner' ? `openspec/changes/${workPackageId}` : null,
     orcaTaskId,
     creationOperationId: `op-materialize-${workPackageId}` as OperationId,
+    launchId: `launch-${workPackageId}`,
     createdAt: 10,
   };
 }
@@ -486,7 +502,7 @@ describe('deriveExecutionFacts：Frontier 阶段只由持久事实推出', () =>
         materializationBindings: [
           makeBinding(WP_A, 'orca-task-a'),
           makeBinding(WP_B, 'orca-task-b'),
-          makeBinding(WP_C, 'orca-task-c'),
+          makeBinding(WP_C, 'orca-task-c', 'implementation'),
         ],
         deliverySettlements: [
           makeSettlement({
@@ -567,19 +583,43 @@ describe('deriveExecutionFacts：Frontier 阶段只由持久事实推出', () =>
     expect(entry.blockerRefs).toEqual([]);
   });
 
-  test('Scenario liveness 与生命周期分别显示：没有列举执行主机时已开始的 Work Package 只能是 unverifiable', () => {
+  test('只有 Task 绑定时仍可派发，不能把它当成已启动的 Worker', () => {
     const facts = derive({
       snapshot: snapshot({ materializationBindings: [makeBinding(WP_A, 'orca-task-a')] }),
-      observations: observations({ worktreePaths: new Map([[WP_A, '/tmp/orca-canonical/.worktrees/wp-a']]) }),
+      observations: observations({
+        workersEnumerated: true,
+        worktreePaths: new Map([[WP_A, '/tmp/orca-canonical/.worktrees/wp-a']]),
+      }),
     });
 
     const entry = frontierEntry(facts, WP_A);
-    // 已有角色级 Orca Task，但还没有任何已接受结果：规格阶段。
-    expect(entry.state).toBe('specifying');
-    expect(entry.derivedFrom).toContain('materialization:orca-task-a');
-    // 已经从物化绑定开始执行，但执行主机没有列举：唯一诚实的存活结论是不可核验。
-    expect(entry.liveness).toBe('unverifiable');
+    expect(entry.state).toBe('admitting');
+    expect(entry.liveness).toBeNull();
     expect(entry.worktreePath).toBe('/tmp/orca-canonical/.worktrees/wp-a');
+  });
+
+  test('Task 已物化但执行主机未列举时，存活状态保持不可核验', () => {
+    const facts = derive({
+      snapshot: snapshot({ materializationBindings: [makeBinding(WP_A, 'orca-task-a')] }),
+      observations: observations(),
+    });
+    const entry = frontierEntry(facts, WP_A);
+    expect(entry.state).toBe('admitting');
+    expect(entry.liveness).toBe('unverifiable');
+  });
+
+  test('Worker 已启动但 Session Segment 尚未写入时，按 Orca Task 归属识别活跃角色', () => {
+    const facts = derive({
+      snapshot: snapshot({ materializationBindings: [makeBinding(WP_A, 'orca-task-a', 'planner')] }),
+      observations: observations({
+        workersEnumerated: true,
+        workers: [{ dispatchId: 'orca-dispatch-a', taskId: 'orca-task-a', workerState: 'running', terminalState: null }],
+      }),
+    });
+    const entry = frontierEntry(facts, WP_A);
+    expect(entry.state).toBe('specifying');
+    expect(entry.role).toBe('planner');
+    expect(entry.liveness).toBe('live');
   });
 
   test('列举执行主机后，运行中的 Worker 把阶段推进到它的角色', () => {
@@ -636,6 +676,25 @@ describe('deriveExecutionFacts：Frontier 阶段只由持久事实推出', () =>
 
     // 记录里没有原因时必须给出稳定引用，不能呈现为「没有 blocker」。
     expect(frontierEntry(facts, WP_B).blockerRefs).toEqual(['recovery:recovery-wp-b-planner']);
+
+    // unverifiable 的 Recovery 保持未决（pending）但必须带上原因：投影同样显示为阻塞与原因，
+    // 否则界面只能看到一个没有理由的挂起 Recovery。
+    const heldFacts = derive({
+      snapshot: snapshot({
+        recoveries: [
+          makeRecovery({
+            workPackageId: WP_B,
+            role: 'planner',
+            status: 'pending',
+            blockingReason: 'provider-session-unverifiable',
+          }),
+        ],
+      }),
+      nodes: [{ workPackageId: WP_B, dependsOn: [] }],
+    });
+    const held = frontierEntry(heldFacts, WP_B);
+    expect(held.state).toBe('blocked');
+    expect(held.blockerRefs).toEqual(['provider-session-unverifiable']);
   });
 
   test('Scenario 单包验证通过不等于可交付：Finalizer 门禁只在全部通过验证且没有未决事实时才 ready', () => {
@@ -767,13 +826,12 @@ describe('deriveExecutionFacts：Frontier 阶段只由持久事实推出', () =>
     expect(withIntent.executionReconciliation.unresolvedIntentCount).toBe(1);
     expect(withIntent.executionReconciliation.reasons).toContain('unresolved-intents:1');
 
-    // 已开始执行但没有列举执行主机：结论不可核验，因此同样不算已对账。
+    // 已有 Task 且执行主机未列举时，对账门保留未知；不能宣称没有活跃 Worker。
     const unverifiable = derive({
       snapshot: snapshot({ materializationBindings: [makeBinding(WP_A, 'orca-task-a')] }),
     });
     expect(unverifiable.executionReconciliation.pending).toBe(true);
     expect(unverifiable.executionReconciliation.activeWorkerCount).toBe(1);
-    expect(unverifiable.executionReconciliation.reasons).toContain('active-workers:1');
 
     // 对账完成、没有未决事实时门是关的；无法取得的外部事实仍然如实列出。
     const clean = derive({
@@ -853,7 +911,7 @@ describe('deriveWorkerEntries：Worker 名单来自持久记录，存活结论�
       sessionSegments: [
         makeSegment({ workPackageId: WP_A, role: 'planner', dispatchId: 'dispatch-running' }),
       ],
-      materializationBindings: [makeBinding(WP_B, 'orca-task-b'), makeBinding(WP_D, 'orca-task-d')],
+      materializationBindings: [makeBinding(WP_B, 'orca-task-b'), makeBinding(WP_D, 'orca-task-d', 'implementation')],
       deliverySettlements: [
         makeSettlement({
           workPackageId: WP_B,

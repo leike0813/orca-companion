@@ -25,12 +25,14 @@ import type {
   CoordinationCommand,
   CoordinationCommandResult,
   ExecutionHandoffPhase,
+  MaterializationBindingRecord,
   RecoveryRecord,
   RecoveryState,
   RecoveryTerminalOutcome,
   ReplacementSegmentInput,
   SessionSegmentRecord,
 } from '../src/application/ports/branch-coordination-store.js';
+import type { SpecBinding } from '../src/domain/task-contract.js';
 import { openCoordinationStore, type CoordinationStore } from '../src/adapters/storage/coordination-store.js';
 import { COORDINATION_TABLES, MIGRATIONS, SCHEMA_VERSION } from '../src/adapters/storage/schema.js';
 
@@ -490,7 +492,7 @@ test('Session Segment 在重启后仍可读取，且不带恢复副作用', () =
   });
 });
 
-test('Materialization Binding 可按 Work Package 读回，并只保存最小索引', () => {
+test('Materialization Binding 按角色与 Attempt 读回完整派发身份，且不复制 worktree 路径或 Task 状态', () => {
   createScope();
   activateSession();
   acquireExecutionLease();
@@ -501,7 +503,15 @@ test('Materialization Binding 可按 Work Package 读回，并只保存最小索
     expectedRevision,
     writer: writer(SESSION_A),
     workPackageId: 'wp-1' as WorkPackageId,
+    role: 'implementation',
+    workerTaskId: 'worker-task-1' as WorkerTaskId,
+    dispatchId: 'dispatch-1' as DispatchId,
+    attemptId: 'attempt-1',
+    worktreeId: 'worktree-1',
+    specBinding: SPEC_BINDING,
+    specificationUnitPath: null,
     orcaTaskId: 'task-1',
+    launchId: 'launch-1',
     creationOperationId: 'op-1' as OperationId,
   }));
   expect(recorded.kind).toBe('committed');
@@ -516,11 +526,148 @@ test('Materialization Binding 可按 Work Package 读回，并只保存最小索
     return;
   }
   expect(read.bindings).toHaveLength(1);
+  expect(read.bindings[0]?.identity).toBe('issued');
+  expect(read.bindings[0]?.role).toBe('implementation');
+  expect(read.bindings[0]?.workerTaskId).toBe('worker-task-1');
+  expect(read.bindings[0]?.dispatchId).toBe('dispatch-1');
+  expect(read.bindings[0]?.attemptId).toBe('attempt-1');
+  expect(read.bindings[0]?.worktreeId).toBe('worktree-1');
+  expect(read.bindings[0]?.specBinding?.contentDigest).toBe(SPEC_BINDING.contentDigest);
+  expect(read.bindings[0]?.specificationUnitPath).toBeNull();
   expect(read.bindings[0]?.orcaTaskId).toBe('task-1');
   expect(read.bindings[0]?.creationOperationId).toBe('op-1');
   // 不复制 worktree 路径或 Orca Task 状态：绑定只保存最小索引。
   expect(Object.keys(read.bindings[0] ?? {})).not.toContain('worktreePath');
   expect(Object.keys(read.bindings[0] ?? {})).not.toContain('taskStatus');
+  // 同一 OperationId 重放同一内容幂等，不产生第二行。
+  expect(
+    submit((expectedRevision) => ({
+      kind: 'record-materialization-binding',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(SESSION_A),
+      workPackageId: 'wp-1' as WorkPackageId,
+      role: 'implementation',
+      workerTaskId: 'worker-task-1' as WorkerTaskId,
+      dispatchId: 'dispatch-1' as DispatchId,
+      attemptId: 'attempt-1',
+      worktreeId: 'worktree-1',
+      specBinding: SPEC_BINDING,
+      specificationUnitPath: null,
+      orcaTaskId: 'task-1',
+      launchId: 'launch-1',
+      creationOperationId: 'op-1' as OperationId,
+    })).kind,
+  ).toBe('committed');
+  expect(bindingsOf()).toHaveLength(1);
+});
+
+test('同一角色同一 Attempt 的第二次派发被唯一约束拒绝，不同 Attempt 追加为新行', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+
+  const bind = (
+    attemptId: string,
+    creationOperationId: string,
+    orcaTaskId: string,
+    overrides: Record<string, unknown> = {},
+  ): CoordinationCommandResult =>
+    submit((expectedRevision) => ({
+      kind: 'record-materialization-binding',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(SESSION_A),
+      workPackageId: 'wp-1' as WorkPackageId,
+      role: 'validator',
+      workerTaskId: 'worker-task-1' as WorkerTaskId,
+      dispatchId: `dispatch-${attemptId}` as DispatchId,
+      attemptId,
+      worktreeId: 'worktree-1',
+      specBinding: SPEC_BINDING,
+      specificationUnitPath: null,
+      orcaTaskId,
+      launchId: `launch-${attemptId}`,
+      creationOperationId: creationOperationId as OperationId,
+      ...overrides,
+    }));
+
+  expect(bind('attempt-1', 'op-1', 'task-1').kind).toBe('committed');
+  // 同一角色同一 Attempt 换一个 Task：这是重复派发，约束拒绝而不是覆盖既有身份。
+  expect(bind('attempt-1', 'op-2', 'task-2').kind).toBe('rejected');
+  expect(bindingsOf()).toHaveLength(1);
+  // 同一 OperationId 指向另一组内容：身份冲突，同样拒绝。
+  expect(bind('attempt-2', 'op-1', 'task-1').kind).toBe('rejected');
+  expect(bindingsOf()).toHaveLength(1);
+  expect(bind('attempt-2', 'op-3', 'task-3').kind).toBe('committed');
+  expect(bindingsOf().map((binding) => binding.attemptId)).toEqual(['attempt-1', 'attempt-2']);
+});
+
+test('Planner 绑定只带固定规格目标路径，其它角色必须带 Spec Binding', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+
+  const plannerWithoutPath = submit((expectedRevision) => ({
+    kind: 'record-materialization-binding',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(SESSION_A),
+    workPackageId: 'wp-1' as WorkPackageId,
+    role: 'planner',
+    workerTaskId: 'worker-task-1' as WorkerTaskId,
+    dispatchId: 'dispatch-1' as DispatchId,
+    attemptId: 'attempt-1',
+    worktreeId: 'worktree-1',
+    specBinding: null,
+    specificationUnitPath: null,
+    orcaTaskId: 'task-1',
+    launchId: 'launch-1',
+    creationOperationId: 'op-1' as OperationId,
+  }));
+  expect(plannerWithoutPath.kind).toBe('rejected');
+
+  const implementationWithoutBinding = submit((expectedRevision) => ({
+    kind: 'record-materialization-binding',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(SESSION_A),
+    workPackageId: 'wp-1' as WorkPackageId,
+    role: 'implementation',
+    workerTaskId: 'worker-task-1' as WorkerTaskId,
+    dispatchId: 'dispatch-1' as DispatchId,
+    attemptId: 'attempt-1',
+    worktreeId: 'worktree-1',
+    specBinding: null,
+    specificationUnitPath: 'openspec/changes/wp-1',
+    orcaTaskId: 'task-1',
+    launchId: 'launch-1',
+    creationOperationId: 'op-1' as OperationId,
+  }));
+  expect(implementationWithoutBinding.kind).toBe('rejected');
+  expect(bindingsOf()).toEqual([]);
+
+  expect(
+    submit((expectedRevision) => ({
+      kind: 'record-materialization-binding',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(SESSION_A),
+      workPackageId: 'wp-1' as WorkPackageId,
+      role: 'planner',
+      workerTaskId: 'worker-task-1' as WorkerTaskId,
+      dispatchId: 'dispatch-1' as DispatchId,
+      attemptId: 'attempt-1',
+      worktreeId: 'worktree-1',
+      specBinding: null,
+      specificationUnitPath: 'openspec/changes/wp-1',
+      orcaTaskId: 'task-1',
+      launchId: 'launch-1',
+      creationOperationId: 'op-1' as OperationId,
+    })).kind,
+  ).toBe('committed');
+  expect(bindingsOf()[0]?.specificationUnitPath).toBe('openspec/changes/wp-1');
+  expect(bindingsOf()[0]?.specBinding).toBeNull();
 });
 
 test('Delivery 结算记录只保存去重键与结果引用，重放不产生第二行', () => {
@@ -1206,6 +1353,20 @@ function segmentsOf(): readonly SessionSegmentRecord[] {
   return result.kind === 'session-segments' ? result.segments : [];
 }
 
+const SPEC_BINDING = {
+  provider: 'openspec',
+  relativePath: 'openspec/changes/wp-1',
+  contentDigest: 'digest-1',
+  providerVersion: '1',
+  contractRevision: 1,
+  trackingRevision: 1,
+} satisfies SpecBinding;
+
+function bindingsOf(): readonly MaterializationBindingRecord[] {
+  const result = store.query({ kind: 'materialization-bindings', coordinationScopeId: SCOPE });
+  return result.kind === 'materialization-bindings' ? result.bindings : [];
+}
+
 /** 替代 Session Segment：保留原 Worker Task、业务 Attempt 与角色，只换 Dispatch/Binding/Segment。 */
 const REPLACEMENT_SEGMENT = {
   segmentId: 'segment-2' as SessionSegmentId,
@@ -1365,6 +1526,127 @@ test('带 replacementSegment 但目标状态不是 recovered 时拒绝且零副�
   expect(recovery?.consumedBudget).toBe(0);
   expect(recovery?.replacementSegmentId).toBeNull();
   expect(segmentsOf()).toHaveLength(0);
+});
+
+test('migration v10 → v11 保留旧物化绑定并只在缺身份时标为 legacy', () => {
+  const databasePath = join(directory, 'coordination-v10.sqlite');
+
+  // 只用 v10 及更早的 migration 建库：那时每个 Work Package 只有一行 Orca Task 指针。
+  const legacy = new DatabaseSync(databasePath);
+  legacy.exec('BEGIN IMMEDIATE');
+  for (const migration of MIGRATIONS) {
+    if (migration.version > 10) {
+      continue;
+    }
+    for (const statement of migration.statements) {
+      legacy.exec(statement);
+    }
+  }
+  legacy
+    .prepare(
+      `INSERT INTO scope (
+         coordination_scope_id, mode, control_state, planning_cycle_id, graph_id, graph_version,
+         authorization_id, authorization_version, map_revision, revision, updated_at,
+         full_branch_ref, canonical_worktree_path
+       ) VALUES (?, 'execution_coordination', 'active', 'cycle-1', 'g1', 1, 'auth-1', 1, 0, 3, 1, ?, ?)`,
+    )
+    .run('scope-migrated', 'refs/heads/migrated', '/tmp/orca-migrated');
+  legacy
+    .prepare(
+      `INSERT INTO materialization_bindings (
+         coordination_scope_id, work_package_id, orca_task_id, creation_operation_id, created_at
+       ) VALUES ('scope-migrated', 'wp-1', 'orca-task-legacy', 'op-legacy', 1)`,
+    )
+    .run();
+  // 迁移后的追加写入必须是受控写入者：先放进一个活跃的 Runtime Lease 与 Execution Lease。
+  legacy
+    .prepare(
+      `INSERT INTO leases (
+         coordination_scope_id, lease_kind, coordinator_session_id, runtime_incarnation_id,
+         fencing_generation, acquired_at, expires_at, released_at
+       ) VALUES ('scope-migrated', 'runtime', 'session-a', 'inc-a', 1, 1, NULL, NULL)`,
+    )
+    .run();
+  legacy
+    .prepare(
+      `INSERT INTO leases (
+         coordination_scope_id, lease_kind, coordinator_session_id, runtime_incarnation_id,
+         fencing_generation, acquired_at, expires_at, released_at
+       ) VALUES ('scope-migrated', 'execution_coordination', 'session-a', 'inc-a', 1, 1, NULL, NULL)`,
+    )
+    .run();
+  legacy.prepare(`INSERT INTO meta (key, value) VALUES ('schema_version', '10')`).run();
+  legacy.exec('COMMIT');
+  legacy.close();
+
+  const migrated = openCoordinationStore({ databasePath, clock });
+  if (migrated.kind !== 'opened') {
+    throw new Error(migrated.message);
+  }
+  try {
+    const scopeId = 'scope-migrated' as CoordinationScopeId;
+    const result = migrated.store.query({
+      kind: 'materialization-bindings',
+      coordinationScopeId: scopeId,
+      workPackageId: 'wp-1' as WorkPackageId,
+    });
+    expect(result.kind).toBe('materialization-bindings');
+    if (result.kind !== 'materialization-bindings') {
+      return;
+    }
+    // 旧行保留原来的 Orca Task 与创建 OperationId。
+    expect(result.bindings).toHaveLength(1);
+    expect(result.bindings[0]?.orcaTaskId).toBe('orca-task-legacy');
+    expect(result.bindings[0]?.creationOperationId).toBe('op-legacy');
+    // 新增身份列一律为空，并被显式标成 legacy：读取方不得据此推断角色。
+    expect(result.bindings[0]?.identity).toBe('legacy');
+    expect(result.bindings[0]?.role).toBeNull();
+    expect(result.bindings[0]?.workerTaskId).toBeNull();
+    expect(result.bindings[0]?.dispatchId).toBeNull();
+    expect(result.bindings[0]?.attemptId).toBeNull();
+    expect(result.bindings[0]?.worktreeId).toBeNull();
+    expect(result.bindings[0]?.specBinding).toBeNull();
+    expect(result.bindings[0]?.specificationUnitPath).toBeNull();
+    expect(result.bindings[0]?.launchId).toBeNull();
+
+    // 新主键允许同一 Work Package 追加第二个角色的派发身份，旧行不被覆盖。
+    const appended = migrated.store.transact({
+      kind: 'record-materialization-binding',
+      coordinationScopeId: scopeId,
+      expectedRevision: 3,
+      writer: {
+        coordinatorSessionId: 'session-a' as CoordinatorSessionId,
+        runtimeIncarnationId: 'inc-a' as RuntimeIncarnationId,
+        fencingGeneration: 1,
+      },
+      workPackageId: 'wp-1' as WorkPackageId,
+      role: 'implementation',
+      workerTaskId: 'worker-task-1' as WorkerTaskId,
+      dispatchId: 'dispatch-1' as DispatchId,
+      attemptId: 'attempt-1',
+      worktreeId: 'worktree-1',
+      specBinding: SPEC_BINDING,
+      specificationUnitPath: null,
+      orcaTaskId: 'orca-task-1',
+      launchId: 'launch-1',
+      creationOperationId: 'op-1' as OperationId,
+    });
+    expect(appended.kind).toBe('committed');
+    const after = migrated.store.query({
+      kind: 'materialization-bindings',
+      coordinationScopeId: scopeId,
+    });
+    expect(after.kind === 'materialization-bindings' ? after.bindings.length : -1).toBe(2);
+  } finally {
+    migrated.store.close();
+  }
+
+  const version = new DatabaseSync(databasePath, { readOnly: true });
+  const row = version
+    .prepare(`SELECT value FROM meta WHERE key = 'schema_version'`)
+    .get() as unknown as { readonly value: string } | undefined;
+  version.close();
+  expect(Number.parseInt(row?.value ?? '', 10)).toBe(SCHEMA_VERSION);
 });
 
 test('migration v6 → v7 保留既有数据并补齐新表', () => {

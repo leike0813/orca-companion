@@ -25,6 +25,7 @@ import type {
 import type { OutputLimits } from './process-runner.js';
 import { readRequestShow } from './reconcile-query.js';
 import type { RequestShowResult } from './reconcile-query.js';
+import { parseWorkerStopReceipt } from './worker-stop.js';
 
 export type { RequestShowResult, RequestState } from './reconcile-query.js';
 
@@ -389,7 +390,8 @@ export function parseWorktreeCreation(result: unknown): OperationParse<WorktreeC
   if (isParseFailure(record)) {
     return record;
   }
-  const worktreeId = readString(record, 'id');
+  const worktree = readRecordField(record, 'worktree');
+  const worktreeId = worktree === undefined ? null : readString(worktree, 'id');
   if (worktreeId === null || worktreeId.length === 0) {
     return invalid('worktree create: 回执缺少 worktree id');
   }
@@ -1021,6 +1023,7 @@ export const ORCA_OPERATIONS = {
     format: 'json',
     identity: 'none',
     buildArgv: (input) => ['orchestration', 'worker-stop', '--dispatch', input.dispatchId, '--json'],
+    parseResult: parseWorkerStopReceipt,
   },
   'worker-abandon': {
     mutating: true,

@@ -11,6 +11,7 @@
  * 全部通过 fake `ExecutionBackend` 验证：这些路径本就是故障与拒绝路径，不需要真实 Orca。
  */
 
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -34,7 +35,10 @@ import {
   worktreeNameFor,
   type MaterializeWorkPackageContext,
 } from '../../src/application/materialize-work-package.js';
-import type { CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
+import type {
+  BranchCoordinationStore,
+  CoordinationWriter,
+} from '../../src/application/ports/branch-coordination-store.js';
 import type {
   ExecutionBackend,
   ExecutionMutation,
@@ -47,11 +51,18 @@ import type { WorkPackageBudgetField } from '../../src/domain/dispatch-candidate
 import { DEFAULT_EXECUTION_LIMITS, budgetFromLimits } from '../../src/domain/planning/budget-policy.js';
 import type { RoleAuthorities } from '../../src/domain/planning/execution-authorization.js';
 import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
+import { orcaDispatchIdFromReceipt, orcaTaskIdFromReceipt } from '../../src/application/ports/execution-backend.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SESSION_A = 'session-a' as CoordinatorSessionId;
 const CYCLE = 'cycle-1' as PlanningCycleId;
 const WP = 'wp-1' as WorkPackageId;
+
+test('Work Package 身份可作为 Orca worktree 的 Git 分支名', () => {
+  const name = worktreeNameFor('scope#g1:readme' as WorkPackageId);
+  expect(execFileSync('git', ['check-ref-format', '--branch', name], { encoding: 'utf8' }).trim()).toBe(name);
+  expect(worktreeNameFor('scope#g1:other' as WorkPackageId)).not.toBe(name);
+});
 
 const AUTHORITIES: RoleAuthorities = {
   planner: true,
@@ -77,7 +88,11 @@ function fakeBackend(script: {
   readonly worktrees?: readonly WorktreeSummary[];
   readonly createdWorktreeId?: string;
   readonly createdHead?: string;
-  readonly mutating?: (call: number, mutation: ExecutionMutation) => OperationOutcome<unknown> | undefined;
+  readonly mutating?: (
+    call: number,
+    mutation: ExecutionMutation,
+    scope: ExecutionScope,
+  ) => OperationOutcome<unknown> | undefined;
   readonly queryResult?: (call: number, query: ExecutionQuery) => ExecutionQueryResult | undefined;
 }): { readonly backend: ExecutionBackend; readonly calls: readonly Call[] } {
   const calls: Call[] = [];
@@ -107,7 +122,7 @@ function fakeBackend(script: {
     mutate: (input, scope) => {
       calls.push({ kind: 'mutate', operation: input, scope });
       mutations += 1;
-      const injected = script.mutating?.(mutations, input);
+      const injected = script.mutating?.(mutations, input, scope);
       if (injected !== undefined) {
         return Promise.resolve(injected);
       }
@@ -135,7 +150,7 @@ function fakeBackend(script: {
         return Promise.resolve({
           kind: 'accepted',
           operation: { operationId: scope.operationId, target: scope.target },
-          value: { id: 'orca-task-1', spec: input.spec },
+          value: { task: { id: 'orca-task-1', status: 'ready' }, spec: input.spec },
         });
       }
       if (input.operation === 'worker-start') {
@@ -230,6 +245,7 @@ function context(
       runId: 'run-1',
       consumerGeneration: 1,
       backendIdentityRef: 'identity-ref',
+      launchId: 'worker-launch-1',
       taskEnvelope: {
         schemaVersion: 1,
         workerTaskId: 'worker-task-1' as never,
@@ -248,6 +264,7 @@ function context(
           acceptanceEvidence: [{ evidenceKind: 'command', coveredPaths: ['src/domain'] }],
           resultSchemaVersion: 1,
         },
+        instructions: [],
         specBinding: {
           provider: 'openspec',
           relativePath: 'openspec/changes/wp-1',
@@ -898,4 +915,141 @@ test('Orca 记录的确定失败被透传为拒绝，且不产生绑定', async 
   }
   const bindings = store.query({ kind: 'materialization-bindings', coordinationScopeId: SCOPE });
   expect(bindings.kind === 'materialization-bindings' ? bindings.bindings : []).toHaveLength(0);
+});
+
+test('并发写入在「读 revision → 写」之间推进 revision 时，物化仍按最新 revision 完成', async () => {
+  const { backend } = fakeBackend({ createdWorktreeId: 'wt-created-1' });
+  // 精确模拟并发写入（Runtime Lease 心跳续租就是这么写的）：它在物化进行中推进一次 Scope revision。
+  const racing: BranchCoordinationStore = {
+    ...store,
+    transact: (command) => {
+      if (command.kind === 'settle-intent') {
+        const current = store.query({ kind: 'scope', coordinationScopeId: SCOPE });
+        if (current.kind === 'scope' && current.scope !== null) {
+          store.transact({
+            kind: 'begin-intent',
+            coordinationScopeId: SCOPE,
+            expectedRevision: current.scope.revision,
+            writer,
+            operationId: 'op-concurrent-heartbeat' as OperationId,
+            target: { kind: 'task', id: 'concurrent-heartbeat' },
+            operationCategory: 'runtime-heartbeat',
+          });
+        }
+      }
+      return store.transact(command);
+    },
+  };
+
+  const result = await materializeWorkPackage({
+    store: racing,
+    backend,
+    coordinationScopeId: SCOPE,
+    workPackageId: WP,
+    context: context(),
+    facts: facts(),
+    expectedRevision: revision(),
+  });
+
+  // 外部副作用已经发生（Task 已建立）：并发的心跳写入不能把它变成永久阻塞。
+  expect(result.kind).toBe('materialized');
+  const intents = store.query({ kind: 'intents', coordinationScopeId: SCOPE });
+  const taskIntent = intents.kind === 'intents'
+    ? intents.intents.find((intent) => intent.operationCategory === 'materialize-task')
+    : undefined;
+  expect(taskIntent?.state).toBe('settled');
+  expect(taskIntent?.outcomeClass).toBe('accepted');
+  const bindings = store.query({ kind: 'materialization-bindings', coordinationScopeId: SCOPE });
+  expect(bindings.kind === 'materialization-bindings' ? bindings.bindings : []).toHaveLength(1);
+});
+
+test('task-create / worker-start 回执身份只有一处解析：嵌套与平铺两种真实形态都认', () => {
+  // 真实 Orca 把 Task 包在 `task` 下、Dispatch 包在 `dispatch` 下；只认平铺字段会让「创建成功但
+  // 判定不可核验」，正是 Finalizer 派发在真实运行里卡住的原因。
+  expect(orcaTaskIdFromReceipt({ task: { id: 'task-1' } })).toBe('task-1');
+  expect(orcaDispatchIdFromReceipt({ dispatch: { id: 'dispatch-1' } })).toBe('dispatch-1');
+  expect(orcaTaskIdFromReceipt({ taskId: 'task-2' })).toBe('task-2');
+  expect(orcaTaskIdFromReceipt({ task_id: 'task-3' })).toBe('task-3');
+  expect(orcaDispatchIdFromReceipt({ dispatch_id: 'dispatch-2' })).toBe('dispatch-2');
+  // 缺失或形态不符一律不可核验，绝不猜。
+  expect(orcaTaskIdFromReceipt({ task: { id: 42 } })).toBeNull();
+  expect(orcaTaskIdFromReceipt(null)).toBeNull();
+  expect(orcaDispatchIdFromReceipt({})).toBeNull();
+});
+
+test('worker-start 结果未知但 Orca 列举里已有该 Task 的 Worker：按事实收尾，不再阻塞 lane', async () => {
+  const execution = fakeBackend({
+    worktrees: [isolatedWorktree()],
+    mutating: (_call, mutation, scope) =>
+      mutation.operation === 'worker-start'
+        ? {
+            kind: 'unknown',
+            operation: {
+              // 真实 adapter 会回显请求的 OperationId；这里同样回显，只是没有 backendRequestId。
+              operationId: scope.operationId,
+              target: { kind: 'worker-task', id: WP },
+            },
+            reason: 'response_lost',
+          }
+        : undefined,
+    queryResult: (_call, query) =>
+      query.operation === 'worker-list'
+        ? {
+            kind: 'accepted',
+            value: { workers: [{ dispatchId: 'ctx-observed-1', taskId: 'orca-task-1', workerState: 'running' }] },
+          }
+        : undefined,
+  });
+
+  const result = await materializeWorkPackage({
+    store,
+    backend: execution.backend,
+    coordinationScopeId: SCOPE,
+    workPackageId: WP,
+    context: context('facts-observed'),
+    facts: facts(),
+    expectedRevision: revision(),
+  });
+
+  // 事实证明 worker-start 发生过：物化按成功路径继续，不再把 lane 阻塞在原地。
+  expect(result.kind).toBe('materialized');
+  const intents = store.query({ kind: 'intents', coordinationScopeId: SCOPE });
+  const started = (intents.kind === 'intents' ? intents.intents : []).filter(
+    (entry) => entry.operationCategory === 'materialize-worker-start',
+  );
+  expect(started.map((entry) => entry.state)).toEqual(['settled']);
+  expect(started[0]?.outcomeClass).toBe('accepted');
+});
+
+test('worker-start 结果未知且 Orca 列举里没有该 Task：保持 lane 阻塞', async () => {
+  const execution = fakeBackend({
+    worktrees: [isolatedWorktree()],
+    mutating: (_call, mutation, scope) =>
+      mutation.operation === 'worker-start'
+        ? {
+            kind: 'unknown',
+            operation: {
+              operationId: scope.operationId,
+              target: { kind: 'worker-task', id: WP },
+            },
+            reason: 'response_lost',
+          }
+        : undefined,
+    queryResult: (_call, query) =>
+      query.operation === 'worker-list'
+        ? { kind: 'accepted', value: { workers: [] } }
+        : undefined,
+  });
+
+  const result = await materializeWorkPackage({
+    store,
+    backend: execution.backend,
+    coordinationScopeId: SCOPE,
+    workPackageId: WP,
+    context: context('facts-absent'),
+    facts: facts(),
+    expectedRevision: revision(),
+  });
+
+  expect(result.kind).toBe('unknown');
 });

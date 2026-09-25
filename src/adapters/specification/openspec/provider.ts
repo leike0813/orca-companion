@@ -24,6 +24,7 @@ import type {
   SpecificationUnitScopeEntry,
   SpecificationUnitSnapshot,
 } from '../../../domain/task-contract.js';
+import { SPECIFICATION_UNIT_DIRECTORY, specificationUnitPathFor } from '../../../domain/task-contract.js';
 
 export const OPENSPEC_PROVIDER_ID = 'openspec';
 
@@ -34,7 +35,7 @@ export const OPENSPEC_PROVIDER_VERSION = '1';
 export const OPENSPEC_STRUCTURE_VERSION = 1;
 
 /** OpenSpec change 的工件目录；与 OpenSpec 自身的布局一致。 */
-export const OPENSPEC_CHANGES_DIR = 'openspec/changes';
+export const OPENSPEC_CHANGES_DIR = SPECIFICATION_UNIT_DIRECTORY;
 
 const CONTRACT_ARTIFACTS = ['proposal.md', 'design.md', 'implementation-plan.md'] as const;
 
@@ -187,6 +188,36 @@ function revisionFromContents(contents: readonly string[]): number {
   );
 }
 
+type ArchivedMatch =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'unique'; readonly directory: string }
+  | { readonly kind: 'ambiguous'; readonly count: number };
+
+/**
+ * OpenSpec 把已完成变更归档为 `changes/archive/<date>-<name>`。
+ *
+ * 归档只改变位置，不改变单元身份：同名 change 仍对应同一个 Specification Unit。Planner 按 OpenSpec
+ * 惯例归档后，宿主按固定路径读取仍必须解析到同一单元；同名匹配不唯一时不做选择。
+ */
+function locateArchivedChange(changesDir: string, changeName: string): ArchivedMatch {
+  const archiveDir = resolve(changesDir, 'archive');
+  if (!existsSync(archiveDir)) {
+    return { kind: 'none' };
+  }
+  const matches = readdirSync(archiveDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((name) => name === changeName || name.endsWith(`-${changeName}`))
+    .sort();
+  if (matches.length === 0) {
+    return { kind: 'none' };
+  }
+  if (matches.length > 1) {
+    return { kind: 'ambiguous', count: matches.length };
+  }
+  return { kind: 'unique', directory: resolve(archiveDir, matches[0] as string) };
+}
+
 function locateChange(
   worktreeRoot: string,
   locator: SpecificationUnitLocator,
@@ -208,7 +239,17 @@ function locateChange(
     }
     const candidate = resolve(changesDir, normalized);
     if (!existsSync(candidate)) {
-      return failure('unit_absent', `未找到 ${relative} 对应的 OpenSpec change`);
+      const archived = locateArchivedChange(changesDir, normalized);
+      if (archived.kind === 'none') {
+        return failure('unit_absent', `未找到 ${relative} 对应的 OpenSpec change`);
+      }
+      if (archived.kind === 'ambiguous') {
+        return failure(
+          'unit_ambiguous',
+          `archive 内有 ${archived.count} 个与 ${normalized} 同名的 OpenSpec change，无法确定 Specification Unit`,
+        );
+      }
+      return { changeDir: archived.directory, changeName: normalized };
     }
     if (!statSync(candidate).isDirectory()) {
       return failure('unit_not_a_change', `${relative} 不是 OpenSpec change 目录`);
@@ -323,8 +364,28 @@ function readTransitionState(
   }
   const located = locateChange(worktreeRoot, {
     worktreeId: query.worktreeId,
-    relativePath: OPENSPEC_CHANGES_DIR,
+    relativePath: specificationUnitPathFor(query.workPackageId),
   });
+  if ('code' in located && located.code === 'unit_absent') {
+    // 规范路径不在时按工具惯例回退：同一 Work Package 的 change 目录名在历史上可能是另一种拼写
+    // （schema 12 之前是百分号编码）。只接受「该 worktree 内恰好一个活跃 change」，不挑最近的。
+    const fallback = locateChange(worktreeRoot, { worktreeId: query.worktreeId, relativePath: OPENSPEC_CHANGES_DIR });
+    if (!('code' in fallback)) {
+      const files = listFilesOrNull(fallback.changeDir) ?? [];
+      const missing = spec.requires.filter(
+        (required) => !files.some((file) => file === required || file.startsWith(`${required}/`)),
+      );
+      return {
+        kind: 'read',
+        value: {
+          role: query.role,
+          ready: missing.length === 0,
+          artifactKind: spec.artifactKind,
+          detail: missing.length === 0 ? null : `缺少 ${missing.join('、')}`,
+        },
+      };
+    }
+  }
   if ('code' in located) {
     return {
       kind: 'read',

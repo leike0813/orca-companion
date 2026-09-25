@@ -52,7 +52,17 @@
   "defaultCoordinatorModelRef": "planning-default",
   "tracker": { "kind": "github", "routeMapIssueNumber": 42 },
   "planning": { "maxMutations": 3 },
-  "context": { "maxInputTokens": 120000 }
+  "context": { "maxInputTokens": 120000 },
+  "execution": {
+    "harness": "codex",
+    "workerModel": "minimax-cn/MiniMax-M3",
+    "codexSandbox": "workspace-write",
+    "permissions": { "gitIntegration": true, "dependencyChanges": false },
+    "limits": { "maxActiveWorkPackages": 8, "concurrencyLimit": 1 },
+    "git": { "remotes": ["origin"], "refs": ["refs/heads/main"] },
+    "dependency": { "allowDependencyChanges": false, "registry": null },
+    "acceptedRisks": []
+  }
 }
 ```
 
@@ -64,6 +74,17 @@
   Companion 的 Operation Intent 记录派生，重启与重规划都不清零。
 - `context.maxInputTokens`：一次模型输入的上下文预算；超出时按 provider 原生 → Context Capsule →
   机械 Shake 的固定顺序压缩，无法收敛即显式 `context_exhausted`。
+- `execution`（可选）：执行授权的长期策略。`harness` 与 `workerModel` 决定 Worker 角色用哪个 harness
+  与模型；`codexSandbox` 决定角色级 Session 的 Codex 沙箱模式（默认 `workspace-write`，只允许写隔离
+  worktree）；`permissions`、`limits`、`git`、`dependency`、`acceptedRisks` 是 Execution Authorization
+  Manifest 被审阅与批准的候选值。缺省的字段取有限默认值（`limits` 走 `budget-policy.ts` 的默认上限，
+  权限默认放行四个角色），但**配置本身不是授权**：只有用户在 Execution Authorization Review 里批准的
+  完整 Manifest 才产生授权，且 `git.remotes`/`git.refs` 为空时受控 Git 集成永远被拒绝。
+  修改这些值会让下一份 Manifest 的内容与指纹变化，因此必须重新审阅与批准。
+
+  把 `codexSandbox` 设为 `danger-full-access` 只有在 `acceptedRisks` 里同时存在
+  `codex-sandbox-danger-full-access` 时才可能通过审阅：审阅会把它作为已接受风险显示，未接受时授权被
+  拒绝。Finalizer 的只读模式不受该字段影响（它始终以 `read-only` 运行，只读无法证明时交付保持 blocker）。
 
 配置缺失、schema 无效、默认模型引用不存在或 tracker 不可达时，初始化与模型恢复都会明确拒绝，
 不会选择任意已安装模型，也不会隐式创建 Scope。
@@ -76,6 +97,17 @@
 - 中文与中英文混排按显示宽度换行与裁切；过窄终端下 `Ctrl+G` 只提示扩宽，不用 overlay 遮挡主视图。
 
 ### 执行阶段视图
+
+规划交接进入 Execution Coordination 之前，先由 Execution Authorization 完成一次显式批准。
+
+- Command Palette 的 **Execution Authorization** 打开完整 Manifest 审阅：界面显示宿主从 Scope、候选图
+  记录、世代记录（baseline HEAD 与空 Orca Run）、Git 身份与项目配置 `execution` 段组装出的全部字段、
+  当前指纹与门禁判决。`Enter` 批准并原子进入 Execution Coordination，`Esc` 关闭。
+- 批准只回传你在审阅里看到的那份内容的指纹与 Scope revision；宿主会重读全部权威输入再写入批准。规划
+  引用（地图、计划、候选图）在审阅之后发生变化时批准被拒绝且零写入，旧批准也不会触发任何派发。
+- 候选图由 Coordinator 提出的正式 Implementation Plan 编译（分配新的 Graph Generation 与空 Orca Run）；
+  世代、Run、OperationId 与预算上限都由宿主补齐，模型只能提供计划正文。门禁未通过（开放票据、fog、未决
+  交互或未结算 mutation）时批准不会进入执行模式。
 
 授权进入 Execution Coordination 后不切换页面：顶栏与 Sidebar 换成执行投影，transcript 与 composer
 保持原内容与焦点。
@@ -100,21 +132,27 @@
 
 ### 当前未接线的能力（fail closed）
 
-这一轮只交付执行阶段的**投影与控制意图**，不交付执行运行时。以下能力仍缺权威来源或用例，界面会显示
-结构化 blocker 或如实显示为未知，而不是假装成功：
+执行运行时已接线：授权、串行 Frontier 推进、Delivery 结算、Validator（由角色 Worker 在自己的 harness
+session 内完成）、受控 Git 集成与只读 Finalizer 都在生产路径上，Scope 级 Pause/Resume/Cancel 也会真实
+落盘（Resume 先对账再恢复调度）。以下事实仍缺权威来源，界面会显示结构化 blocker 或如实显示为未知，
+而不是假装成功：
 
-- 执行期对账（Resume 前置）——Resume 在未接线时被明确拒绝，不会在没有对账的情况下恢复调度；
-- Worker 停止请求——Cancel 仍先落盘取消意图，但停止结果只能如实报告为不可核验（保持 `cancelling`/`unverifiable`）；
-- 派发与集成本身：生产路径没有任何东西物化 Task、派发 Worker、运行 Validator、集成或收尾，因此执行图
-  会如实显示 `waiting`/`unknown`，`integration queue` 可能为空；Finalizer 的门禁无法满足，因此不会出现
-  deliverable；
-- Capsule coverage 与 Finalizer 运行前后工作区——没有持久化生产者，界面显示「未知」而不是 `complete`。
-
-因此 `tests/tui/pty-execution.test.ts` 的真实 PTY 执行端到端在当前代码下不可达（文件默认跳过并写明原因）。
+- schema 11 已保存角色级 Task Envelope 身份、worktree 与 Spec Binding；旧 schema 的物化记录缺少这些
+  事实时仍以 `spec_binding_unreadable` 阻塞对应的 Delivery lane；
+- Worker Session Recovery 的 binding、workspace 对账与原会话终态大部分不可读（`worker-show` 不报告
+  provider session），未终结 Recovery 以 `unverifiable_hold` 阻塞其派发 lane，不伪造续接；
+- Planner 的规格路径由宿主在 Task Envelope 中固定；SessionStart 精确绑定后才尝试 Specification Admission，
+  规格缺失或结构无效时按接纳失败码阻塞；
+- Validator 的 in-host 步骤通道：验证链由角色 Worker 在其 harness session 内完成，宿主没有可证明的
+  step 通道，因此不接线；
+- 集成要求 Manifest 恰好一个获批 remote 与一个 ref，多个目标时不替用户挑一个；
+- 完整闭环尚未在真实 Orca + Worker 上通过：隔离项目已实测到 Planner 派发，但当前主机的 Codex
+  受限沙箱无法执行 shell；真实 PTY 与前台集成冒烟已运行。详情见 `docs/orca-compatibility.md`。
 
 已可用：Home 的精确 Scope 恢复与初始化向导、向 Coordinator 发送消息、回答 Pending Interaction、
-`/compact`、Model Picker 切换、Route Planning Handoff、Execution Handoff 的意图链路、Scope 级
-Pause/Resume/Cancel 与 Exit、只读快照 / transcript / Graph Inspector / 执行图与 Finalizer 投影。
+`/compact`、Model Picker 切换、Route Planning Handoff、Execution Handoff 的意图链路、Execution
+Authorization 审阅与批准、Scope 级 Pause/Resume/Cancel 与 Exit、只读快照 / transcript / Graph Inspector /
+执行图与 Finalizer 投影，以及带结构化 blocker 的执行推进入口。
 
 Home 只按 Git 当前身份恢复：完整 branch ref 与登记的 canonical worktree 精确匹配才进入该 Scope；
 没有匹配才进入向导；缺少绑定的旧记录必须先在同一界面的迁移 Review 里确认一次性绑定；从链接

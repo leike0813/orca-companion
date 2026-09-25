@@ -13,6 +13,7 @@ import type { RoleAuthorities, WorkerRole } from '../../src/domain/planning/exec
 import type { ScopeEnvelope } from '../../src/domain/planning/execution-graph.js';
 import type { SpecBinding } from '../../src/domain/task-contract.js';
 import {
+  projectChangedPaths,
   resultAdvancesLifecycle,
   verifyWorkerResult,
   type ClaimedResultAttribution,
@@ -95,6 +96,13 @@ test('当前代际的报告通过核验', () => {
   expect(resultAdvancesLifecycle(verification)).toBe(true);
 });
 
+test('Planner 的规格在报告后接纳：报告可不携带尚未存在的 Binding', () => {
+  expect(verifyWorkerResult(
+    claimed({ role: 'planner', specBinding: null }),
+    trusted({ role: 'planner' }),
+  ).kind).toBe('accepted');
+});
+
 test('上一代际 Run 的报告降级为 stale，不推进当前流程', () => {
   const verification = verifyWorkerResult(claimed({ runId: 'run-0' }), trusted());
 
@@ -155,4 +163,60 @@ test('改动越出 Scope Envelope 的报告被拒绝', () => {
     'docs/x.md',
     'src/generated/b.ts',
   ]);
+});
+
+test('工具状态目录里的报告不算项目改动，也不构成越界', () => {
+  const verification = verifyWorkerResult(
+    claimed(),
+    trusted({
+      changedPaths: ['src/domain/a.ts', '.agents/validator-report.md', '.codex/sessions/rollout.jsonl'],
+    }),
+  );
+
+  expect(verification.kind).toBe('accepted');
+  expect(verification.kind === 'accepted' ? verification.attribution.changedPaths : []).toEqual([
+    'src/domain/a.ts',
+  ]);
+});
+
+test('projectChangedPaths 只排除完整目录前缀，不吞掉同名前缀的项目路径', () => {
+  expect(
+    projectChangedPaths([
+      '.agents/skills/openspec-x/SKILL.md',
+      '.agents',
+      '.codex/sessions/a.jsonl',
+      '.agentsx/keep.ts',
+      'src/domain/a.ts',
+    ]),
+  ).toEqual(['.agentsx/keep.ts', 'src/domain/a.ts']);
+});
+
+test('Specification Pipeline 的规格树不受 Scope Envelope 约束', () => {
+  // Planner 必须把单元写在 openspec/changes/…，而 Work Package 的范围通常是项目源码：流程工件不算越界。
+  const verification = verifyWorkerResult(
+    claimed(),
+    trusted({
+      changedPaths: [
+        'src/domain/a.ts',
+        'openspec/changes/e2e-scope-g1-ticket-c0e65d23/proposal.md',
+        'openspec/changes/e2e-scope-g1-ticket-c0e65d23/specs/execution/spec.md',
+        'openspec/changes/archive/2026-09-24-e2e-scope-g1-ticket-c0e65d23/tasks.md',
+        // 工具自己维护的配置与同步后的主规格同属流程目录。
+        'openspec/config.yaml',
+        'openspec/specs/execution/spec.md',
+      ],
+    }),
+  );
+
+  expect(verification.kind).toBe('accepted');
+});
+
+test('流程目录之外的项目改动仍然越界', () => {
+  const verification = verifyWorkerResult(
+    claimed(),
+    trusted({ changedPaths: ['src/domain/a.ts', 'openspec/changes/x/tasks.md', 'docs/out-of-scope.md'] }),
+  );
+
+  expect(verification).toMatchObject({ kind: 'rejected', code: 'scope_envelope_violation' });
+  expect(verification.kind === 'rejected' ? verification.mismatches : []).toEqual(['docs/out-of-scope.md']);
 });

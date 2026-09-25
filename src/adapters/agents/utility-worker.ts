@@ -21,7 +21,12 @@ import type {
 } from '../../application/dto/identity.js';
 import type { BranchCoordinationStore, CoordinationWriter } from '../../application/ports/branch-coordination-store.js';
 import type { ExecutionBackend, ExecutionMutation, ExecutionScope } from '../../application/ports/execution-backend.js';
-import { buildExecutionScope, reconcileOperation } from '../../application/ports/execution-backend.js';
+import {
+  buildExecutionScope,
+  orcaDispatchIdFromReceipt,
+  orcaTaskIdFromReceipt,
+  reconcileOperation,
+} from '../../application/ports/execution-backend.js';
 import {
   activatePreparedWorker,
   prepareWorkerLaunch,
@@ -29,6 +34,8 @@ import {
   type WorkerLaunchStrategy,
 } from '../../application/worker-launch.js';
 import { beginIntent, blockLane, settleIntent } from '../../application/coordination/intent-service.js';
+import { readDeliveryBatch } from '../orca-cli/delivery-reader.js';
+import type { DeliveryMessage } from '../../application/dto/operation-outcome.js';
 import type { RecoveryCapsule } from '../../application/recovery/recovery-capsule.js';
 import type { TranscriptCoverageEvidence } from '../../application/recovery/recovery-capsule.js';
 import {
@@ -138,30 +145,6 @@ export function bindUtilityWorkerSession(
       observedAt: bound.binding.observedAt,
     },
   };
-}
-
-function readRecordField(value: unknown, keys: readonly string[]): string | null {
-  if (typeof value !== 'object' || value === null) {
-    return null;
-  }
-  const record = value as Record<string, unknown>;
-  for (const key of keys) {
-    const candidate = record[key];
-    if (typeof candidate === 'string' && candidate.length > 0) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
-/** `task-create` 回执里可核验的 Orca Task 身份；缺失即不可核验。 */
-export function orcaTaskIdFromReceipt(value: unknown): string | null {
-  return readRecordField(value, ['id', 'taskId', 'task_id']);
-}
-
-/** `worker-start` 回执里可核验的 Dispatch 身份；缺失即不可核验。 */
-export function dispatchIdFromReceipt(value: unknown): string | null {
-  return readRecordField(value, ['dispatchId', 'dispatch_id']);
 }
 
 /** 精确 Session Binding 的观察 seam；真实实现读 Orca `worker-show`，测试注入 fake。 */
@@ -282,6 +265,13 @@ async function runProtected(
   category: string,
   mutation: ExecutionMutation,
   beforeSettle?: (value: unknown) => { readonly code: string; readonly message: string } | null,
+  /**
+   * 结果未知时的**事实对账**：用 Orca 列举事实判断这次 mutation 是否已经发生。
+   *
+   * `request-show` 只能证明「请求被记录过」，拿不回资源身份；没有 backend request id 时它就把 lane 永久
+   * 阻塞。读到事实就按 `accepted` 收尾（附资源身份），读不到才落回原来的阻塞路径。
+   */
+  reconcileFacts?: () => Promise<{ readonly kind: 'observed'; readonly value: unknown } | { readonly kind: 'unobserved' }>,
 ): Promise<ProtectedMutation> {
   const revision = freshRevision(input.store, input.coordinationScopeId);
   if (revision === null) {
@@ -312,7 +302,6 @@ async function runProtected(
   if (begun.kind === 'rejected') {
     return { kind: 'blocked', laneKey: category, reason: begun.rejection.message };
   }
-
   const outcome = await input.backend.mutate(
     mutation,
     scopeOf(input, operationId, target, revision),
@@ -347,6 +336,20 @@ async function runProtected(
     return { kind: 'rejected', code: outcome.code, message: outcome.message };
   }
   if (outcome.kind === 'unknown') {
+    const facts: { readonly kind: 'observed'; readonly value: unknown } | { readonly kind: 'unobserved' } =
+      reconcileFacts === undefined ? { kind: 'unobserved' } : await reconcileFacts();
+    if (facts.kind === 'observed') {
+      const settledByFacts = settleIntent(input.store, {
+        coordinationScopeId: input.coordinationScopeId,
+        operationId,
+        writer: input.writer,
+        expectedRevision: freshRevision(input.store, input.coordinationScopeId) ?? revision,
+        outcome: { kind: 'accepted', operation: outcome.operation, value: facts.value },
+      });
+      if (settledByFacts.kind === 'settled') {
+        return { kind: 'accepted', value: facts.value, operationId };
+      }
+    }
     const blockRevision = freshRevision(input.store, input.coordinationScopeId);
     if (blockRevision !== null) {
       blockLane(input.store, {
@@ -419,9 +422,37 @@ export async function dispatchScopedWorker(input: ScopedWorkerDispatchInput): Pr
     worktree: input.worktree,
     ...launch.worker,
   }, (value) => {
-    const dispatchId = dispatchIdFromReceipt(value);
+    const dispatchId = orcaDispatchIdFromReceipt(value);
     if (dispatchId === null) return { code: 'invalid_receipt', message: 'worker-start 回执缺少可核验的 dispatch id' };
     return input.onDispatchStarted?.(orcaTaskId, dispatchId) ?? null;
+  }, async () => {
+    // 结果未知时按 Orca 事实对账：列举里已经出现这个 Task 的 Worker，就说明 worker-start 发生过。
+    const listed = await input.backend.query({ operation: 'worker-list', runId: input.execution.runId });
+    if (listed.kind !== 'accepted') {
+      return { kind: 'unobserved' };
+    }
+    const value: unknown = listed.value;
+    if (typeof value !== 'object' || value === null) {
+      return { kind: 'unobserved' };
+    }
+    const workers = (value as { readonly workers?: unknown }).workers;
+    if (!Array.isArray(workers)) {
+      return { kind: 'unobserved' };
+    }
+    for (const worker of workers) {
+      if (typeof worker !== 'object' || worker === null) {
+        continue;
+      }
+      const record = worker as Record<string, unknown>;
+      if (record['taskId'] !== orcaTaskId) {
+        continue;
+      }
+      const dispatchId = record['dispatchId'];
+      if (typeof dispatchId === 'string' && dispatchId.length > 0) {
+        return { kind: 'observed', value: { dispatchId } };
+      }
+    }
+    return { kind: 'unobserved' };
   });
   if (started.kind === 'blocked') {
     return started;
@@ -432,7 +463,7 @@ export async function dispatchScopedWorker(input: ScopedWorkerDispatchInput): Pr
   if (started.kind === 'rejected') {
     return started;
   }
-  const dispatchId = dispatchIdFromReceipt(started.value);
+  const dispatchId = orcaDispatchIdFromReceipt(started.value);
   if (dispatchId === null) {
     return {
       kind: 'unknown',
@@ -477,6 +508,283 @@ export async function dispatchScopedWorker(input: ScopedWorkerDispatchInput): Pr
     return { kind: 'binding_unavailable', code: bound.code, message: bound.message };
   }
   return { kind: 'dispatched', orcaTaskId, dispatchId, binding: bound.binding };
+}
+
+/**
+ * 受限 Utility Worker 的 Capsule 报告读回输入。
+ *
+ * 报告走既有 Delivery 通道（读 + 确认的传输原语），不做角色结算：Capsule 不是角色结果，它的权威
+ * 事实由 `parseRecoveryCapsuleReport` 按 host 侧的 transcript 读取证据校验。
+ */
+export type CapsuleDispatchInput = {
+  readonly store: BranchCoordinationStore;
+  readonly backend: ExecutionBackend;
+  readonly writer: CoordinationWriter;
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly envelope: UtilityWorkerEnvelope;
+  readonly execution: UtilityWorkerDispatchInput['execution'];
+  readonly workerLaunch: WorkerLaunchStrategy;
+  readonly worktree: string;
+  readonly operationIds: UtilityWorkerDispatchInput['operationIds'];
+  readonly observeSession: UtilityWorkerDispatchInput['observeSession'];
+  /** host 侧独立读到的 transcript 覆盖证据；Worker 报告的 coverage 必须逐项等于它。 */
+  readonly evidence: TranscriptCoverageEvidence;
+  /** 等待 Capsule 报告的上界；超时按失败返回，由同一 Recovery 内的一次安全重派兜底。 */
+  readonly reportTimeoutMs: number;
+};
+
+/** 消息是否属于本次派发：按 Orca 的 Task / Dispatch 身份配对，不按文本猜。 */
+function messageFromDispatch(message: DeliveryMessage, orcaTaskId: string, dispatchId: string): boolean {
+  if (message.payload === null) {
+    return false;
+  }
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(message.payload) as unknown;
+  } catch {
+    return false;
+  }
+  const record = readRecord(decoded, 'payload');
+  if (!record.ok) {
+    return false;
+  }
+  return record.value['taskId'] === orcaTaskId || record.value['dispatchId'] === dispatchId;
+}
+
+/** 报告的正文位置不固定：结构化载荷优先，其次从消息 body 里取第一段 JSON 对象。 */
+function capsuleReportCandidate(message: DeliveryMessage): unknown {
+  if (message.payload !== null) {
+    try {
+      return JSON.parse(message.payload) as unknown;
+    } catch {
+      // 载荷不是 JSON：退回 body。
+    }
+  }
+  const body = message.body ?? '';
+  const start = body.indexOf('{');
+  const end = body.lastIndexOf('}');
+  if (start === -1 || end <= start) {
+    return null;
+  }
+  try {
+    return JSON.parse(body.slice(start, end + 1)) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+export type CapsuleDispatchOutcome =
+  | {
+      readonly kind: 'extracted';
+      readonly capsule: RecoveryCapsule;
+      /** 报告所在的 Delivery 身份；整批都属于本次派发时给出，由调用方落盘后再确认。 */
+      readonly delivery: { readonly deliveryId: string; readonly runId: string | null } | null;
+    }
+  | { readonly kind: 'failed'; readonly reason: string };
+
+/**
+ * 派发受限 Utility Worker 并读回它的 Recovery Capsule 报告。
+ *
+ * 只做三件事：按信封派发、按 Orca 身份从当前未确认批次里找出它的报告、把报告按 host 证据校验成
+ * Capsule。确认只发生在「整批都属于本次派发」时——批里混着角色结果时留给常规 Delivery 流程，
+ * 绝不代它确认。
+ */
+/** Orca Task 列举里的最小事实；字段缺失即视为不可读（fail closed，不猜身份）。 */
+type ListedTask = { readonly id: string; readonly spec: string | null };
+
+function listedTasksOf(value: unknown): readonly ListedTask[] | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const raw = (value as { readonly tasks?: unknown }).tasks;
+  if (!Array.isArray(raw)) {
+    return null;
+  }
+  const tasks: ListedTask[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null) {
+      continue;
+    }
+    const record = entry as Record<string, unknown>;
+    const id = record['id'];
+    if (typeof id !== 'string' || id.length === 0) {
+      continue;
+    }
+    const spec = record['spec'];
+    tasks.push({ id, spec: typeof spec === 'string' ? spec : null });
+  }
+  return tasks;
+}
+
+/** Task 的 spec 是否就是这次信封派发的内容：按信封身份逐项比对，不按标题或时间猜。 */
+function specMatchesEnvelope(spec: string | null, envelope: UtilityWorkerEnvelope): boolean {
+  if (spec === null) {
+    return false;
+  }
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(spec) as unknown;
+  } catch {
+    return false;
+  }
+  const record = readRecord(decoded, 'spec');
+  if (!record.ok) {
+    return false;
+  }
+  return (
+    record.value['taskKind'] === envelope.taskKind &&
+    record.value['workPackageId'] === envelope.workPackageId &&
+    record.value['sourceSegmentId'] === envelope.sourceSegmentId
+  );
+}
+
+/**
+ * 回读**已经派发过**的同一个 Utility Worker。
+ *
+ * 重放与重启后 OperationId 已收尾、回执也不在了，因此身份必须从 Orca 的列举事实回读：先按信封内容
+ * 找到那次 Task，再按 Task 找到它的 Dispatch。读不到就返回 `null`（调用方照常派发，绝不凭猜测续办）。
+ */
+export async function findDispatchedUtilityWorker(input: {
+  readonly backend: ExecutionBackend;
+  readonly backendIdentityRef: string;
+  readonly runId: string;
+  readonly envelope: UtilityWorkerEnvelope;
+}): Promise<{ readonly orcaTaskId: string; readonly dispatchId: string } | null> {
+  const listed = await input.backend.query({
+    operation: 'task-list',
+    backendIdentityRef: input.backendIdentityRef,
+    runId: input.runId,
+  });
+  if (listed.kind !== 'accepted') {
+    return null;
+  }
+  const tasks = listedTasksOf(listed.value);
+  if (tasks === null) {
+    return null;
+  }
+  const mine = tasks.filter((task) => specMatchesEnvelope(task.spec, input.envelope));
+  if (mine.length === 0) {
+    return null;
+  }
+  const workers = await input.backend.query({ operation: 'worker-list', runId: input.runId });
+  if (workers.kind !== 'accepted') {
+    return null;
+  }
+  const raw = (workers.value as { readonly workers?: unknown }).workers;
+  if (!Array.isArray(raw)) {
+    return null;
+  }
+  // 后创建的 Task 优先：它才是当前有效的报告来源。
+  for (const task of [...mine].reverse()) {
+    for (const worker of raw) {
+      if (typeof worker !== 'object' || worker === null) {
+        continue;
+      }
+      const record = worker as Record<string, unknown>;
+      const dispatchId = record['dispatchId'];
+      if (record['taskId'] === task.id && typeof dispatchId === 'string' && dispatchId.length > 0) {
+        return { orcaTaskId: task.id, dispatchId };
+      }
+    }
+  }
+  return null;
+}
+
+export async function dispatchCapsuleWorker(input: CapsuleDispatchInput): Promise<CapsuleDispatchOutcome> {
+  // 重放/重启后同一个 OperationId 已经收尾过：身份只能从 Orca 列举事实回读，读到就继续读它的报告，
+  // 读不到才新建派发（同一 OperationId 也不会被重发，见 `runProtected` 的 `existing` 分支）。
+  const existing = await findDispatchedUtilityWorker({
+    backend: input.backend,
+    backendIdentityRef: input.execution.backendIdentityRef,
+    runId: input.execution.runId,
+    envelope: input.envelope,
+  });
+  let dispatched: { readonly orcaTaskId: string; readonly dispatchId: string };
+  if (existing !== null) {
+    dispatched = existing;
+  } else {
+    const created = await dispatchUtilityWorker({
+      store: input.store,
+      backend: input.backend,
+      writer: input.writer,
+      coordinationScopeId: input.coordinationScopeId,
+      envelope: input.envelope,
+      execution: input.execution,
+      workerLaunch: input.workerLaunch,
+      worktree: input.worktree,
+      taskTitle: 'Recovery Capsule 提取（只读受限 Utility Worker）',
+      operationIds: input.operationIds,
+      observeSession: input.observeSession,
+    });
+    if (created.kind !== 'dispatched') {
+      const reason =
+        created.kind === 'blocked' || created.kind === 'unknown'
+          ? `Capsule Utility Worker 派发未取得确定结论：${created.reason}`
+          : `${created.code}: ${created.message}`;
+      return { kind: 'failed', reason };
+    }
+    dispatched = { orcaTaskId: created.orcaTaskId, dispatchId: created.dispatchId };
+  }
+
+  const deadline = Date.now() + input.reportTimeoutMs;
+  for (;;) {
+    const batchRead = await readDeliveryBatch(input.backend, {
+      backendIdentityRef: input.execution.backendIdentityRef,
+      runId: input.execution.runId,
+      types: ['worker_done'],
+      timeoutMs: input.execution.timeoutMs,
+    });
+    if (batchRead.kind !== 'accepted') {
+      return { kind: 'failed', reason: `Capsule 报告读取失败：${batchRead.message}` };
+    }
+    const batch = batchRead.value;
+    const mine = batch.messages.filter((message) =>
+      messageFromDispatch(message, dispatched.orcaTaskId, dispatched.dispatchId),
+    );
+    if (mine.length > 0) {
+      const parsed = parseCapsuleReport(mine, input.evidence);
+      if (!parsed.ok) {
+        return { kind: 'failed', reason: parsed.reason };
+      }
+      const onlyMine = batch.messages.every((message) =>
+        messageFromDispatch(message, dispatched.orcaTaskId, dispatched.dispatchId),
+      );
+      return {
+        kind: 'extracted',
+        capsule: parsed.capsule,
+        // 批里混着别的 Worker 结果时不报告 Delivery 身份：那一批留给常规 Delivery 流程。
+        delivery: onlyMine && batch.delivery !== null
+          ? { deliveryId: batch.delivery.deliveryId, runId: batch.delivery.runId }
+          : null,
+      };
+    }
+    if (Date.now() >= deadline) {
+      return {
+        kind: 'failed',
+        reason: `等待 Capsule 报告超时（Dispatch ${dispatched.dispatchId}）：不确定它是否还会报告，因此不重读同一批`,
+      };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
+function parseCapsuleReport(
+  messages: readonly DeliveryMessage[],
+  evidence: TranscriptCoverageEvidence,
+): RecoveryCapsuleReportParse {
+  let lastReason = 'Capsule 报告不可读';
+  for (const message of messages) {
+    const candidate = capsuleReportCandidate(message);
+    if (candidate === null) {
+      continue;
+    }
+    const parsed = parseRecoveryCapsuleReport(candidate, evidence);
+    if (parsed.ok) {
+      return parsed;
+    }
+    lastReason = parsed.reason;
+  }
+  return { ok: false, reason: lastReason };
 }
 
 export async function dispatchUtilityWorker(input: UtilityWorkerDispatchInput): Promise<UtilityWorkerDispatchResult> {

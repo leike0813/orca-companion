@@ -45,11 +45,11 @@
 
 ## 5. Schema、状态与持久化落实
 
-- **数据库**：计划不新增 IC-03 表或第二 SQLite store。现有 GraphHistory、Authorization、Operation Intent、DeliverySettlement、Recovery、Verdict 只存自身事实/引用。Finalizer 前状态在 Orca Task Envelope，Capsule 正文留在 Orca/精确 transcript；若实测不能可靠回读，先回设计修订公共合同，不私增缓存。
+- **数据库**：Schema 11 将现有 `materialization_bindings` 从 Work Package 当前指针改为角色/Attempt 历史，保存 Task Envelope 可信身份、worktree、Spec Binding 或 Planner 规格目标路径。旧行保留且标为身份不完整，相关 Delivery 阻塞；不借旧行推断角色。GraphHistory、Authorization、Operation Intent、DeliverySettlement、Recovery、Verdict 仍只存自身事实/引用。Finalizer 前状态在 Orca Task Envelope，Capsule 正文留在 Orca/精确 transcript。
 - **身份/幂等**：OperationId 由可信执行驱动按 Scope/generation/Work Package/role/contract revision/Attempt/步骤稳定构造；已有 lane 的原 ID 优先。不同副作用不共用 ID。写入用 expected revision 与 writer fencing；CAS 冲突重读事实重新决策。不能从 `Date.now()` 或 UI render 生成派发身份。
 - **权限**：Manifest 限定 Worker Profile、Git policy、预算与 workspace；Execution Lease 限定唯一推进者。Finalizer 要求真实只读 Profile。Git 端口只允许 commit/integrate/push，必须明确源、目标、remote/ref；不通过 shell 拼接命令。
 - **错误/观察**：`accepted` 只代表确定记录；`rejected` 需证明无副作用；`unknown` 以原 intent 对账，不能换 ID 重试。`live`/`exited`/`unverifiable` 保持三值。只有已提交并回读的语义变化发事件；重启靠快照恢复显示。`status --json` 与现有 IC-12 schemaVersion 2 兼容。
-- **版本/迁移**：无预设 schema migration 或依赖变更。IC-08 分目标 Git 合同和 IC-11 有界授权 intent 是明确的合同扩展，先更新文档与相关行为测试。若本 change 需要新增持久字段，则先更新本设计、接口合同与 migration 计划。
+- **版本/迁移**：Schema 11 在短事务内重建 `materialization_bindings`，主键包含稳定创建 OperationId，并以 Scope/Work Package/角色/Attempt 唯一约束阻止重复派发；旧行新增身份列为 null，必须 fail closed。IC-03/07 的字段扩展和 IC-08 分目标 Git 合同、IC-11 有界授权 intent 先更新文档与行为测试，不增加依赖。
 
 ## 6. 验收证据矩阵
 
@@ -62,7 +62,7 @@
 | Cancel：stop verdict 不确定 | IP-07 | `tests/adapters/worker-stop.test.ts`、`tests/coordination/scope-control.test.ts` | accepted/unknown/transport failure | 先落 cancelling、未知不报 stopped、重启原 ID | `pnpm exec vitest run tests/adapters/worker-stop.test.ts tests/coordination/scope-control.test.ts` |
 | 集成：结果不确定 | IP-05 | `tests/application/integrate-work-package.test.ts`、`tests/adapters/git-integration.test.ts` | source/canonical/remote 三目标，超时与冲突 | 每步核验正确目标、原 intent 阻塞、不继续 Finalizer | `pnpm exec vitest run tests/application/integrate-work-package.test.ts tests/adapters/git-integration.test.ts` |
 | Finalizer：集成成功、只读/工作区无法核验 | IP-06 | `tests/bootstrap/execution-finalizer.test.ts`、`tests/application/finalize-project.test.ts` | 新只读 Session、前后 Git 状态 | accepted verdict 才 deliverable；变化/不可强制只读为 blocker | `pnpm exec vitest run tests/bootstrap/execution-finalizer.test.ts tests/application/finalize-project.test.ts` |
-| 真实闭环与 M2 PTY 前提 | IP-08 | `tests/integration/foreground-execution-runtime.test.ts`；M2 的 `tests/tui/pty-execution.test.ts` | 显式一次性 Git 项目、专用 Orca 身份、MiniMax-M3 | 授权→串行角色→修复→集成→Finalizer→重启不重派；Recovery 或 blocker | `ORCA_COMPANION_E2E_REPO=<isolated-path> ORCA_COMPANION_E2E_IDENTITY=<dedicated-id> pnpm exec vitest run tests/integration/foreground-execution-runtime.test.ts` |
+| 真实闭环与 M2 PTY 前提 | IP-08 | `tests/integration/foreground-execution-runtime.test.ts`；M2 的 `tests/tui/pty-execution.test.ts` | 显式一次性 Git 项目、专用 Orca 身份、MiniMax-M3；闭环用例还需要尚无 Scope 的项目与已接受 `codex-sandbox-danger-full-access` 风险（见 `docs/orca-compatibility.md`） | 授权→串行角色→修复→集成→Finalizer→重启不重派；Recovery 或 blocker | `ORCA_COMPANION_E2E_REPO=<isolated-path> ORCA_COMPANION_E2E_IDENTITY=<dedicated-id> ORCA_COMPANION_E2E_LOOP=1 pnpm exec vitest run tests/integration/foreground-execution-runtime.test.ts --no-file-parallelism` |
 | 全量门禁 | IP-01–08 | 全部 | 不含真实 Worker 的默认检查 | 类型/lint/test/build/OpenSpec strict valid | `pnpm typecheck && pnpm lint && pnpm test && pnpm build && openspec validate m2-wire-execution-runtime --strict` |
 
 ## 7. 文件清单与升级条件

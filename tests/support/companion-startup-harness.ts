@@ -70,8 +70,15 @@ export type CompanionStartupFixtureOptions = {
   readonly role?: WorkerRole;
   /** 第一次启动前写入会话 checkpoint 的 Wake Batch；缺省为空历史。 */
   readonly wakeBatches?: readonly WakeBatch[];
-  /** 覆盖 Recovery 事实 provider（未覆盖项沿用「原会话可精确恢复」缺省）。 */
-  readonly recovery?: Partial<StartupRecoveryFacts>;
+  /**
+   * 覆盖 Recovery 事实 provider（未覆盖项沿用「原会话可精确恢复」缺省）。
+   *
+   * 生产装配需要本 fixture 自己创建的真实 store 与 fake backend，因此也接受一个按 harness 组装的
+   * 函数：没有它就只能注入已被核验的常量事实，无法覆盖「生产装配读不到事实」这条路径。
+   */
+  readonly recovery?:
+    | Partial<StartupRecoveryFacts>
+    | ((harness: RecoveryHarness) => Partial<StartupRecoveryFacts>);
   readonly deliveries?: Partial<StartupDeliveryFacts>;
 };
 
@@ -152,23 +159,26 @@ export function createCompanionStartupFixture(
   };
 
   const defaultRecovery: StartupRecoveryFacts = {
-    observationFor: () => ({
-      sessionBindingId: 'binding-source-1',
-      providerSessionId: 'provider-session-1',
-      identityChanged: false,
-    }),
+    observationFor: () =>
+      Promise.resolve({
+        sessionBindingId: 'binding-source-1',
+        providerSessionId: 'provider-session-1',
+        identityChanged: false,
+      }),
     // 宿主报告 worker 仍在运行：先尝试精确恢复，不进入替代路径，也不重复派发。
-    livenessFor: (recovery) => ({
-      dispatchId: recovery.sourceDispatchId,
-      workerRunning: true,
-      terminalHandle: 'terminal-1',
-      host: { kind: 'enumerated', terminalHandles: ['terminal-1'] },
-    }),
+    livenessFor: (recovery) =>
+      Promise.resolve({
+        dispatchId: recovery.sourceDispatchId,
+        workerRunning: true,
+        terminalHandle: 'terminal-1',
+        host: { kind: 'enumerated' as const, terminalHandles: ['terminal-1'] },
+      }),
     resumeExact: (request) =>
       Promise.resolve({ kind: 'resumed', sessionBindingId: request.sessionBindingId }),
-    workspaceFor: () => ({ kind: 'reconciled', worktreeId: 'worktree-recovery-1', head: 'head-recovery' }),
-    sourceTerminalFor: () => ({ kind: 'not_reached' }),
-    roleGateFor: () => roleGateFactsFor(options.role ?? 'validator'),
+    workspaceFor: () =>
+      Promise.resolve({ kind: 'reconciled' as const, worktreeId: 'worktree-recovery-1', head: 'head-recovery' }),
+    sourceTerminalFor: () => Promise.resolve({ kind: 'not_reached' as const }),
+    roleGateFor: () => Promise.resolve(roleGateFactsFor(options.role ?? 'validator')),
     extractCapsule: () => Promise.resolve({ kind: 'transcript_unavailable', reason: '测试不生成 Capsule' }),
     execution: {
       backendIdentityRef: 'backend-identity-recovery',
@@ -225,7 +235,10 @@ export function createCompanionStartupFixture(
         backend: harness.backend.backend,
         clock,
         deliveries: { ...defaultDeliveries, ...options.deliveries },
-        recovery: { ...defaultRecovery, ...options.recovery },
+        recovery: {
+          ...defaultRecovery,
+          ...(typeof options.recovery === 'function' ? options.recovery(harness) : options.recovery),
+        },
         workers: idleWorkers(),
         observer: { onStep: (step) => steps.push(step) },
       };

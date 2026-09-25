@@ -233,6 +233,48 @@ export function buildExecutionScope(fields: ExecutionScopeFields): ExecutionScop
   };
 }
 
+/**
+ * Orca mutation 回执里可核验的资源身份。
+ *
+ * 这是 port 对 Orca typed RPC 结果字段的唯一镜像：真实 `task-create` 把 Task 放在 `task` 下，
+ * `worker-start` 把 Dispatch 放在 `dispatch` 下，同时兼容平铺写法。任何调用方都从这里读，
+ * 不再各自实现一份——两份解析必然会漂移成「一边能创建、一边判定不可核验」。
+ */
+function readNestedReceiptField(
+  value: unknown,
+  container: string,
+  keys: readonly string[],
+): string | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const nested = record[container];
+  if (typeof nested === 'object' && nested !== null) {
+    const nestedId = (nested as Record<string, unknown>)['id'];
+    if (typeof nestedId === 'string' && nestedId.length > 0) {
+      return nestedId;
+    }
+  }
+  for (const key of keys) {
+    const candidate = record[key];
+    if (typeof candidate === 'string' && candidate.length > 0) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/** `task-create` 回执里的 Task 身份；缺失或形态不符即不可核验。 */
+export function orcaTaskIdFromReceipt(value: unknown): string | null {
+  return readNestedReceiptField(value, 'task', ['id', 'taskId', 'task_id']);
+}
+
+/** `worker-start` 回执里的 Dispatch 身份；缺失或形态不符即不可核验。 */
+export function orcaDispatchIdFromReceipt(value: unknown): string | null {
+  return readNestedReceiptField(value, 'dispatch', ['dispatchId', 'dispatch_id', 'id']);
+}
+
 /** 按原 OperationId 做一次只读对账；没有可恢复资源结果时继续阻塞。 */
 export async function reconcileOperation(
   backend: ExecutionBackend,

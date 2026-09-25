@@ -230,7 +230,11 @@ export function parseTaskEnvelope(
   ) {
     return reject('invalid_payload', 'taskContract', 'Task Contract 结构无效', dropped);
   }
-  if (
+  if (specBinding === null) {
+    if (attribution.role !== 'planner' || readNonEmptyString(raw, 'specificationUnitPath') === null) {
+      return reject('invalid_payload', 'specificationUnitPath', 'Planner 必须声明规格目标路径', dropped);
+    }
+  } else if (
     !isRecord(specBinding) ||
     ['provider', 'relativePath', 'contentDigest', 'providerVersion'].some(
       (field) => readNonEmptyString(specBinding, field) === null,
@@ -250,7 +254,8 @@ export function parseTaskEnvelope(
     !['implementationAttempts', 'validatorRepairs', 'recoveries'].every((field) =>
       nonNegativeInteger(budget[field]),
     ) ||
-    !validEvidenceRequirements(expectedEvidence)
+    !validEvidenceRequirements(expectedEvidence) ||
+    (raw['instructions'] !== undefined && readStringArray(raw, 'instructions') === null)
   ) {
     return reject('invalid_payload', 'taskEnvelope', 'Task Envelope 字段结构无效', dropped);
   }
@@ -267,6 +272,11 @@ export function parseTaskEnvelope(
       role: attribution.role,
       taskContract: taskContract as TaskEnvelope['taskContract'],
       specBinding: specBinding as TaskEnvelope['specBinding'],
+      ...(readNonEmptyString(raw, 'specificationUnitPath') === null
+        ? {}
+        : { specificationUnitPath: readNonEmptyString(raw, 'specificationUnitPath')! }),
+      // 指令是宿主写出的正文：这里原样带回（缺省为空），不参与任何身份判定。
+      instructions: readStringArray(raw, 'instructions') ?? [],
       workspace: workspace as TaskEnvelope['workspace'],
       authority: authority as TaskEnvelope['authority'],
       budget: budget as TaskEnvelope['budget'],

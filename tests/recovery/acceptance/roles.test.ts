@@ -129,7 +129,7 @@ function setup(created: RecoveryHarness, c: RoleCase): void {
     sessionBindingId: c.binding,
     role: c.role,
   });
-  created.recordMaterializationBinding(RECOVERY_WORK_PACKAGE, ORCA_TASK);
+  created.recordMaterializationBinding(RECOVERY_WORK_PACKAGE, ORCA_TASK, c.attemptId);
 }
 
 function inputFor(

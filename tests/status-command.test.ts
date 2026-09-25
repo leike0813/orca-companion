@@ -217,6 +217,18 @@ test('存在未决意图时快照如实反映，且只读查询不改变状态',
   }
 });
 
+test('status --json 声明投影范围：执行期 blocker 与 Worker 存活需要宿主观察', async () => {
+  const capture = captureIO();
+  const code = await runStatus({ openStore: () => Promise.resolve(openReadOnly()), json: true, io: capture.io });
+
+  expect(code).toBe(0);
+  const snapshot = JSON.parse(capture.stdout.join('')) as StatusSnapshot;
+  // 一次性只读命令不调用 Orca：这里必须明确说明看不到哪些事实，而不是假装没有阻塞。
+  expect(snapshot.projection.scope).toBe('store-only');
+  expect(snapshot.projection.missing).toContain('execution-blockers');
+  expect(snapshot.projection.missing).toContain('worker-liveness');
+});
+
 test('status 只投影仍然 open 的 Pending Interaction', async () => {
   expect(
     store.transact({

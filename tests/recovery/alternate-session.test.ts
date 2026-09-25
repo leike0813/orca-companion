@@ -305,7 +305,7 @@ test('替代派发回执无法核验身份时阻塞，重试不重复派发', as
   const unverifiableReceipt = {
     profile: { kind: 'reuse', profileRef: 'profile-validator' } as const,
     workerLaunch: { kind: 'orca_managed' as const, agent: 'codex' },
-    interpretReceipt: () => ({ failure: '回执缺少可核验的 Session Binding' }),
+    interpretReceipt: () => Promise.resolve({ failure: '回执缺少可核验的 Session Binding' }),
   };
 
   const first = await recoverWorkerSession(recoveryInput(harness, { replacement: unverifiableReceipt }));
@@ -348,7 +348,7 @@ test('原 Task 未物化时不准备 prepared terminal', async () => {
             return Promise.resolve({ title: 'prepared-without-task', command: 'codex' });
           },
         },
-        interpretReceipt: () => ({ failure: '本用例不应派发' }),
+        interpretReceipt: () => Promise.resolve({ failure: '本用例不应派发' }),
       },
     }),
   );

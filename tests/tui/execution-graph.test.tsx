@@ -77,6 +77,8 @@ const NOOP_ACTIONS: WorkspaceActions = {
   cancelHandoff: () => undefined,
   confirmExecutionHandoff: () => undefined,
   cancelExecutionHandoff: () => undefined,
+  confirmAuthorization: () => undefined,
+  cancelAuthorization: () => undefined,
   closeTopOverlay: () => undefined,
 };
 
@@ -144,6 +146,7 @@ function renderWorkspace(snapshot: ControllerSnapshot, filter: ExecutionFilter =
       composerDisabledReason={null}
       newlineHint="Shift+Enter 换行"
       handoffProposal={null}
+      authorizationReview={null}
       commands={COMMAND_IDS}
     />,
   );

@@ -369,6 +369,8 @@ function harness(options: { readonly realStoreUseCases: boolean }): {
       calls.executionHandoff.push(input);
       return Promise.resolve(accepted(`execution-${input.action}`));
     },
+    executionAuthorization: (input) =>
+      Promise.resolve(accepted(`execution-authorization-${input.action}`)),
     graphEvolution: (input) => {
       calls.graphEvolution.push(input);
       return Promise.resolve(accepted(`graph-evolution-${input.action}`));
@@ -705,6 +707,7 @@ test('订阅者只收到语义事件，取消订阅只移除 listener', () => {
     scopeControl: () => Promise.resolve(accepted('ok')),
     pendingInteractions: () => Promise.resolve(accepted('ok')),
     executionHandoff: () => Promise.resolve(accepted('ok')),
+    executionAuthorization: () => Promise.resolve(accepted('ok')),
     graphEvolution: () => Promise.resolve(accepted('ok')),
     scopeInitialization: () => Promise.resolve(accepted('ok')),
     events: events.source,

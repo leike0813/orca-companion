@@ -11,7 +11,12 @@
 
 import { afterEach, expect, test } from 'vitest';
 
-import { RECOVERY_WORKER_TASK, createRecoveryHarness, type RecoveryHarness } from '../support/recovery-harness.js';
+import {
+  RECOVERY_SCOPE,
+  RECOVERY_WORKER_TASK,
+  createRecoveryHarness,
+  type RecoveryHarness,
+} from '../support/recovery-harness.js';
 import type { DispatchId, SessionSegmentId } from '../../src/application/dto/identity.js';
 import type { TerminalLivenessFacts } from '../../src/domain/worker-liveness.js';
 import type { RoleAuthorities } from '../../src/domain/planning/execution-authorization.js';
@@ -137,6 +142,12 @@ test('可精确绑定的中断先尝试精确恢复原会话，不创建替代 S
   expect(harness.backend.mutations()).toEqual([]);
 });
 
+/** 读 Scope revision：用来证明「同一原因重复记录」不制造状态变更。 */
+function scopeRevision(harness: RecoveryHarness): number {
+  const read = harness.store.query({ kind: 'scope', coordinationScopeId: RECOVERY_SCOPE });
+  return read.kind === 'scope' && read.scope !== null ? read.scope.revision : -1;
+}
+
 test('存活不可判定时保持未决：不推断退出、不重新派发，重启续办仍用同一 RecoveryId', async () => {
   harness = createRecoveryHarness();
   recordSource(harness);
@@ -169,6 +180,9 @@ test('存活不可判定时保持未决：不推断退出、不重新派发，�
   expect(held[0]?.status).toBe('pending');
   expect(held[0]?.terminalOutcome).toBeNull();
   expect(held[0]?.replacementDispatchId).toBeNull();
+  // 保持未决的同时，原因必须是可读事实：界面要显示「恢复被阻止」的理由，而不是只看到一个挂起的 Recovery。
+  expect(held[0]?.blockingReason ?? '').not.toBe('');
+  const revisionAfterHold = scopeRevision(harness);
 
   // 重启后以同一条未完成 Recovery 续办：同一 RecoveryId、同一行、仍不派发。
   harness.reopen();
@@ -186,6 +200,8 @@ test('存活不可判定时保持未决：不推断退出、不重新派发，�
   }
   expect(harness.recoveries()).toHaveLength(1);
   expect(harness.backend.mutations()).toEqual([]);
+  // 同一原因重复记录不推进 revision：续办不制造无意义的状态变更。
+  expect(scopeRevision(harness)).toBe(revisionAfterHold);
 });
 
 test('Coordinator Session 中断不产生 RecoveryId、Session Segment 或 Recovery Capsule', async () => {

@@ -20,7 +20,9 @@ export type OverlayKind =
   | 'model-picker'
   | 'handoff-review'
   /** 执行阶段交接复用同一交互，但主题与记录是 `ExecutionHandoffState`。 */
-  | 'execution-handoff-review';
+  | 'execution-handoff-review'
+  /** 规划 → 执行的完整 Manifest 审阅；只读展示 + 一次显式批准。 */
+  | 'authorization-review';
 
 /** 等待用户确认的动作（IP-05、IP-06）；`null` 表示没有待确认动作。 */
 export type PendingConfirmation = { readonly kind: 'cancel' } | { readonly kind: 'exit' } | null;

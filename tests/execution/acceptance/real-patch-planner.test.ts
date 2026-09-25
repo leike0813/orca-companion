@@ -457,7 +457,7 @@ async function runGraphPatchPlannerWorker(
   }
   if (report === null) throw new Error('Planner SessionStart 没有上报 exact transcript');
   const proof = proveCodexTranscript({
-    report, workspace, dispatchStartedAt, bindingDeadlineAt: new Date().toISOString(),
+    report, workspace, expectedCodexHome: report.codexHome ?? '', dispatchStartedAt, bindingDeadlineAt: new Date().toISOString(),
   });
   if (proof.kind !== 'proven') throw new Error(`Planner Session Binding 无法证明：${proof.reason}`);
 

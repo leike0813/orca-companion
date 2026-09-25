@@ -22,6 +22,14 @@ import type { ControlState, CoordinationMode } from '../../domain/coordination/m
 import { ROUTE_MAP_SECTIONS, type RouteMapSection } from '../../domain/planning/route-map.js';
 import type { HandoffActivation, PlanningHandoffResult } from '../../application/planning/planning-handoff.js';
 import type { PlanningMutationResult } from '../../application/planning/route-map-service.js';
+import { asRecord, toolInputSchema } from './tool-definition.js';
+import type {
+  CoordinatorToolCallContext,
+  CoordinatorToolDefinition,
+  CoordinatorToolOutcome,
+} from './tool-definition.js';
+
+export type { CoordinatorToolCallContext, CoordinatorToolDefinition, CoordinatorToolOutcome };
 
 export const PLANNING_TOOL_NAMES = [
   'read_route_map',
@@ -54,23 +62,16 @@ export type PlanningToolFacts = {
   };
 };
 
-export type PlanningToolOutcome =
-  | { readonly kind: 'ok'; readonly value: unknown }
-  | { readonly kind: 'rejected'; readonly code: string; readonly message: string }
-  | { readonly kind: 'unknown'; readonly reason: string };
+/** 规划工具的三值结果；闭集由 `CoordinatorToolOutcome` 拥有，两个工具族共用它。 */
+export type PlanningToolOutcome = CoordinatorToolOutcome;
 
 /**
- * 一次受控调用的可信身份。
+ * 一次受控调用的可信身份（`CoordinatorToolCallContext` 的规划侧名字）。
  *
  * 它由宿主在提交模型响应时分配并随 call 一起持久化，模型不可填写：工具 handler 只把它转发给
  * 用例，因此「用新身份重试一个已发起的副作用」在结构上不可能发生。只读工具忽略它。
  */
-export type PlanningCallContext = {
-  /** 主操作的 OperationId。 */
-  readonly operationId: OperationId;
-  /** 该 call 触发的第二次独立副作用（`resolve_ticket` 的地图写入）；没有时为 `null`。 */
-  readonly mapOperationId: OperationId | null;
-};
+export type PlanningCallContext = CoordinatorToolCallContext;
 
 /** 模型侧绑定用的结构化拒绝：绑定到模型的包装器只做 schema 广告，从不执行副作用。 */
 export const TOOL_NOT_EXECUTABLE: PlanningToolOutcome = {
@@ -127,25 +128,17 @@ export type PlanningToolServices = {
   }) => Promise<PlanningHandoffResult>;
 };
 
-export type PlanningToolDefinition = {
-  readonly name: PlanningToolName;
-  readonly description: string;
-  readonly mutating: boolean;
-  /** 输入 schema 是 JSON Schema：工具层不引入第二套类型系统。 */
-  readonly inputSchema: Record<string, unknown>;
-  /** 执行只发生在受控 tools 节点；身份取自调用上下文，不取自模型输入。 */
-  readonly invoke: (input: unknown, context: PlanningCallContext) => Promise<PlanningToolOutcome>;
-};
+/**
+ * 一个规划工具定义。
+ *
+ * `name` 是 `PlanningToolName` 的封闭联合（组装与恢复时判定），形状本身与执行工具共用
+ * `CoordinatorToolDefinition`——受控 tools 节点因此只有一个协议。
+ */
+export type PlanningToolDefinition = CoordinatorToolDefinition;
 
 type Admission =
   | { readonly kind: 'admitted'; readonly facts: PlanningToolFacts }
   | { readonly kind: 'rejected'; readonly code: string; readonly message: string };
-
-function asRecord(input: unknown): Record<string, unknown> | null {
-  return typeof input === 'object' && input !== null && !Array.isArray(input)
-    ? (input as Record<string, unknown>)
-    : null;
-}
 
 function readTicketRef(input: Record<string, unknown>): EntityRef<'decision-ticket'> | null {
   const id = input['ticketId'];
@@ -245,10 +238,6 @@ const TICKET_ID_PROPERTY = {
   description: 'Decision Ticket 的 tracker 标识',
 } as const;
 
-function schema(properties: Record<string, unknown>, required: readonly string[]): Record<string, unknown> {
-  return { type: 'object', properties, required, additionalProperties: false };
-}
-
 /** 只读与写入工具的可见性由同一组事实决定，因此不会出现「读得到、写不了」之外的第三种组合。 */
 function visibleToolNames(facts: PlanningToolFacts): readonly PlanningToolName[] {
   const reads: readonly PlanningToolName[] = ['read_route_map', 'read_frontier'];
@@ -289,14 +278,14 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
       name: 'read_route_map',
       description: '读取 Route Map 的固定章节（正文来自 tracker，本地不保存副本）。',
       mutating: false,
-      inputSchema: schema({}, []),
+      inputSchema: toolInputSchema({}, []),
       invoke: async () => await services.readRouteMap(),
     }),
     read_frontier: ({ services }) => ({
       name: 'read_frontier',
       description: '读取当前 Frontier：开放、未阻塞、未被认领的 Decision Ticket。',
       mutating: false,
-      inputSchema: schema({}, []),
+      inputSchema: toolInputSchema({}, []),
       invoke: async () => await services.readFrontier(),
     }),
     update_route_map_section: ({ services, facts }) => ({
@@ -304,7 +293,7 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
       description:
         '把 Route Map 的某个固定章节整体替换为给定正文；创建票据与设置依赖都写在这里，不新建章节结构。',
       mutating: true,
-      inputSchema: schema(
+      inputSchema: toolInputSchema(
         {
           section: {
             type: 'string',
@@ -354,7 +343,7 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
       name: 'claim_ticket',
       description: '认领一张 Decision Ticket：写入 tracker assignee 并登记本地 Session claim。',
       mutating: true,
-      inputSchema: schema({ ticketId: TICKET_ID_PROPERTY, expectedRevision: EXPECTED_REVISION_PROPERTY }, [
+      inputSchema: toolInputSchema({ ticketId: TICKET_ID_PROPERTY, expectedRevision: EXPECTED_REVISION_PROPERTY }, [
         'ticketId',
         'expectedRevision',
       ]),
@@ -388,7 +377,7 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
       name: 'release_ticket',
       description: '释放一张 Decision Ticket 的认领，但不记录决策结论。',
       mutating: true,
-      inputSchema: schema({ ticketId: TICKET_ID_PROPERTY, expectedRevision: EXPECTED_REVISION_PROPERTY }, [
+      inputSchema: toolInputSchema({ ticketId: TICKET_ID_PROPERTY, expectedRevision: EXPECTED_REVISION_PROPERTY }, [
         'ticketId',
         'expectedRevision',
       ]),
@@ -422,7 +411,7 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
       name: 'resolve_ticket',
       description: '解决一张 Decision Ticket：写入 resolved decisions 章节、从开放票据移除并收尾 claim。',
       mutating: true,
-      inputSchema: schema(
+      inputSchema: toolInputSchema(
         {
           ticketId: TICKET_ID_PROPERTY,
           resolution: { type: 'string', description: '已解决决策的结论' },
@@ -480,7 +469,7 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
       name: 'prepare_planning_handoff',
       description: '发起 Route Planning 责任交接的 prepare 阶段：落盘提案，但责任仍属本 Session。',
       mutating: true,
-      inputSchema: schema(
+      inputSchema: toolInputSchema(
         {
           proposalId: { type: 'string' },
           targetCoordinatorSessionId: { type: 'string', description: '接收责任的 Coordinator Session' },
@@ -528,7 +517,7 @@ function buildDefinitions(): Readonly<Record<PlanningToolName, (context: Plannin
       name: 'review_planning_handoff',
       description: '接收 Session 复核一份 prepare 阶段的交接提案。',
       mutating: true,
-      inputSchema: schema({ proposalId: { type: 'string' }, expectedRevision: EXPECTED_REVISION_PROPERTY }, [
+      inputSchema: toolInputSchema({ proposalId: { type: 'string' }, expectedRevision: EXPECTED_REVISION_PROPERTY }, [
         'proposalId',
         'expectedRevision',
       ]),

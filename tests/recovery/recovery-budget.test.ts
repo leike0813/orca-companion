@@ -178,8 +178,8 @@ test('Recovery Budget 按 Worker Attempt 独立计数', async () => {
   const secondPackage = 'wp-recovery-2' as WorkPackageId;
   const firstTask = RECOVERY_WORKER_TASK;
   const secondTask = 'task-recovery-2' as WorkerTaskId;
-  harness.recordMaterializationBinding(firstPackage, 'orca-task-1');
-  harness.recordMaterializationBinding(secondPackage, 'orca-task-2');
+  harness.recordMaterializationBinding(firstPackage, 'orca-task-1', 'attempt-1');
+  harness.recordMaterializationBinding(secondPackage, 'orca-task-2', 'attempt-2');
 
   const segmentA = sourceSegment({
     segmentId: SOURCE_SEGMENT,

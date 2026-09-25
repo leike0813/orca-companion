@@ -117,6 +117,17 @@ export type StatusSnapshot = {
       readonly reasons: readonly string[];
     };
   };
+  /**
+   * 本投影覆盖的事实范围。
+   *
+   * `status` 是一次性只读查询，不调用 Orca：执行期 blocker（例如 `repo_not_found`、Delivery 无法归因）
+   * 与 Worker 存活只存在于宿主自己的快照里。`scope: 'store-only'` 明确说明这一点，`missing` 列出看不到
+   * 的事实类别——否则消费者会把「这里没有 blocker」误读成「没有阻塞」。
+   */
+  readonly projection: {
+    readonly scope: 'store-only' | 'full';
+    readonly missing: readonly string[];
+  };
 };
 
 export type StatusSnapshotResult =
@@ -195,6 +206,7 @@ export function buildStatusSnapshot(
     snapshot: {
       schemaVersion: STATUS_SCHEMA_VERSION,
       snapshotRevision: scopeView.revision,
+      projection: { scope: 'store-only', missing: ['execution-blockers', 'worker-liveness', 'delivery-intake'] },
       scope: {
         coordinationScopeId: scopeView.coordinationScopeId,
         mode: scopeView.mode,

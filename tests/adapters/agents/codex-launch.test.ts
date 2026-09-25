@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,9 +8,33 @@ import { afterEach, expect, test } from 'vitest';
 import {
   CODEX_UTILITY_PERMISSION_PROFILE,
   createCodexWorkerLaunch,
+  installCodexSessionStartReporter,
 } from '../../../src/adapters/agents/codex-launch.js';
 
 const roots: string[] = [];
+
+test('SessionStart reporter 可执行并写出完整的一行身份报告', () => {
+  const root = mkdtempSync(join(tmpdir(), 'companion-codex-reporter-'));
+  roots.push(root);
+  const reporterPath = join(root, 'reporter.mjs');
+  const reportPath = join(root, 'report.jsonl');
+  installCodexSessionStartReporter({ reporterPath, reportPath });
+  const event = { session_id: 'session-1', transcript_path: '/tmp/session-1.jsonl', cwd: '/tmp/worktree' };
+  const stdout = execFileSync(process.execPath, [reporterPath], {
+    input: JSON.stringify(event),
+    encoding: 'utf8',
+    env: { ...process.env, CODEX_HOME: '/tmp/codex-home' },
+  });
+  expect(JSON.parse(stdout)).toEqual({});
+  const report = JSON.parse(readFileSync(reportPath, 'utf8').trim()) as Record<string, unknown>;
+  expect(report).toMatchObject({
+    sessionId: event.session_id,
+    transcriptPath: event.transcript_path,
+    codexHome: '/tmp/codex-home',
+    cwd: event.cwd,
+  });
+  expect(Number.isFinite(Date.parse(String(report['observedAt'])))).toBe(true);
+});
 
 afterEach(() => {
   for (const root of roots.splice(0)) {
@@ -81,4 +106,44 @@ test('Utility Codex 使用只读文件系统与本机控制通道 profile', asyn
   expect(profile).toContain('extends = ":read-only"');
   expect(profile).toContain('[permissions.utility-readonly-local-control.network]');
   expect(profile).toContain('enabled = true');
+});
+
+test('只读 Finalizer 的状态根与 reporter 留在 canonical worktree 之外', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'companion-codex-finalizer-launch-'));
+  roots.push(root);
+  const sourceHome = join(root, 'source-codex-home');
+  const worktree = join(root, 'worktree');
+  const privateState = join(root, 'git-common-dir', 'companion');
+  mkdirSync(sourceHome, { recursive: true });
+  mkdirSync(worktree, { recursive: true });
+  writeFileSync(join(sourceHome, 'config.toml'), 'model = "minimax-cn/MiniMax-M3"\n', 'utf8');
+  const reporter = join(privateState, 'session-start.mjs');
+  mkdirSync(privateState, { recursive: true });
+  writeFileSync(reporter, '', 'utf8');
+
+  const strategy = createCodexWorkerLaunch({
+    launchId: 'finalizer:delivery-1',
+    model: 'minimax-cn/MiniMax-M3',
+    sandboxMode: 'read-only',
+    sourceCodexHome: sourceHome,
+    sessionStartReporterPath: reporter,
+    stateRoot: privateState,
+  });
+  const prepared = await strategy.prepare({ worktreePath: worktree });
+
+  expect(prepared.stateRoot.startsWith(privateState)).toBe(true);
+  expect(prepared.command).toContain('--sandbox read-only');
+  expect(readFileSync(join(prepared.stateRoot, 'hooks.json'), 'utf8')).toContain(reporter);
+  // 只读检查的工作区里不得出现任何 Companion 状态：否则前后工作区比较会把自己的状态当成变化。
+  expect(existsSync(join(worktree, '.companion'))).toBe(false);
+});
+
+test('状态根必须是绝对路径', () => {
+  const strategy = createCodexWorkerLaunch({
+    launchId: 'finalizer:delivery-1',
+    model: 'minimax-cn/MiniMax-M3',
+    sandboxMode: 'read-only',
+    stateRoot: './relative-companion',
+  });
+  expect(() => strategy.prepare({ worktreePath: '/tmp/worktree' })).toThrow(/绝对路径/u);
 });

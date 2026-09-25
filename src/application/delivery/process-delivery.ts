@@ -408,6 +408,25 @@ async function runSettlementMutation(
 }
 
 /** 确认 Delivery；未确认是默认行为，只有这里能推进它。 */
+/**
+ * 事实对账：这条 Delivery 已经不在未确认批次里了吗？
+ *
+ * `delivery-ack` 的结果未知且没有 backend request id 时，`request-show` 帮不上忙；但 Orca 自己的读取就是
+ * 证据：未确认批次里不再有这条 Delivery（空批次或已换成下一条），说明确认发生过。读不到批次不算证据。
+ */
+async function deliveryAlreadyAcked(input: SettleDeliveryInput, deliveryId: string): Promise<boolean> {
+  const again = await input.backend.query({
+    operation: 'delivery-read',
+    backendIdentityRef: input.backendIdentityRef,
+    runId: input.runId,
+    types: ['worker_done'],
+  });
+  if (again.kind !== 'accepted' || !isDeliveryBatchValue(again.value)) {
+    return false;
+  }
+  return again.value.delivery?.deliveryId !== deliveryId;
+}
+
 async function confirmDelivery(
   input: SettleDeliveryInput,
   deliveryId: string,
@@ -418,7 +437,27 @@ async function confirmDelivery(
     deliveryId,
     ...(deliveryRunId === null ? {} : { runId: deliveryRunId }),
   });
-  return ack.kind === 'failed' ? ack.result : null;
+  if (ack.kind !== 'failed') {
+    return null;
+  }
+  // 结果未知时先按事实判断：已经不在未确认批次里就等于确认成功，否则保持原来的阻塞结论。
+  if (ack.result.kind === 'blocked' && (await deliveryAlreadyAcked(input, deliveryId))) {
+    const settled = settleIntent(input.store, {
+      coordinationScopeId: input.coordinationScopeId,
+      operationId: input.operationIds.ack,
+      writer: input.writer,
+      expectedRevision: input.expectedRevision,
+      outcome: {
+        kind: 'accepted',
+        operation: { operationId: input.operationIds.ack, target: ackTarget(deliveryId) },
+        value: null,
+      },
+    });
+    if (settled.kind === 'settled') {
+      return null;
+    }
+  }
+  return ack.result;
 }
 
 function readSettlement(
@@ -449,6 +488,142 @@ function readSettlement(
  *
  * 调用方提供已经读好的可信事实与稳定 OperationId；用例自身不生成 ID、不读时钟、不换 ID 重试。
  */
+/**
+ * 确认一条**已由本地用例消费**的未确认批次（进度消息，或经 Utility Worker 读回的 Capsule 报告）。
+ *
+ * 这类批次不承载角色结果，因此这里不写结算记录，只按既有顺序（intent → mutation → 结算）确认它。
+ * 必须确认：Orca 的当前批次会停在进度消息上，真实结果消息（`worker_done`）在它被确认之后才会成为
+ * 当前批次。
+ */
+export type AckConsumedDeliveryInput = {
+  readonly store: BranchCoordinationStore;
+  readonly backend: ExecutionBackend;
+  readonly writer: CoordinationWriter;
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly backendIdentityRef: string;
+  readonly graphGeneration: number;
+  readonly authorizationId: string;
+  readonly runId: string;
+  readonly consumerGeneration: number;
+  readonly timeoutMs: number;
+  readonly deliveryId: string;
+  readonly deliveryRunId: string | null;
+};
+
+export type AckConsumedDeliveryResult =
+  | { readonly kind: 'acked'; readonly deliveryId: string }
+  | { readonly kind: 'blocked'; readonly code: string; readonly message: string; readonly laneKey: string };
+
+/** 未确认批次是否已经推进到别的 Delivery：Orca 自己的读取就是确认是否发生的证据。 */
+async function deliveryBatchAdvanced(input: AckConsumedDeliveryInput): Promise<boolean> {
+  const again = await input.backend.query({
+    operation: 'delivery-read',
+    backendIdentityRef: input.backendIdentityRef,
+    runId: input.runId,
+    types: ['worker_done'],
+  });
+  if (again.kind !== 'accepted' || !isDeliveryBatchValue(again.value)) {
+    return false;
+  }
+  return again.value.delivery?.deliveryId !== input.deliveryId;
+}
+
+export async function ackConsumedDelivery(
+  input: AckConsumedDeliveryInput,
+): Promise<AckConsumedDeliveryResult> {
+  const target = ackTarget(input.deliveryId);
+  const laneKey = ackLaneKey(input.deliveryId);
+  const operationId = `delivery-ack:${input.deliveryId}` as OperationId;
+  const revisionRead = readScope(input.store, input.coordinationScopeId);
+  if (revisionRead.kind === 'rejected') {
+    return { kind: 'blocked', code: revisionRead.code, message: revisionRead.message, laneKey };
+  }
+  const begun = beginIntent(input.store, {
+    coordinationScopeId: input.coordinationScopeId,
+    operationId,
+    target,
+    operationCategory: ACK_TARGET_KIND,
+    writer: input.writer,
+    expectedRevision: revisionRead.scope.revision,
+  });
+  if (begun.kind === 'lane_blocked' || begun.kind === 'lane_busy' || begun.kind === 'rejected') {
+    const message =
+      begun.kind === 'rejected'
+        ? begun.rejection.message
+        : begun.kind === 'lane_blocked'
+          ? `lane 已被未决意图 ${begun.blockingIntent.operationId} 阻塞`
+          : `lane 上已有未决意图 ${begun.activeIntent.operationId}`;
+    return { kind: 'blocked', code: 'lane_blocked', message, laneKey };
+  }
+  if (begun.kind === 'existing') {
+    return begun.intent.state === 'settled' && begun.intent.outcomeClass === 'accepted'
+      ? { kind: 'acked', deliveryId: input.deliveryId }
+      : {
+          kind: 'blocked',
+          code: 'lane_blocked',
+          message: `意图 ${operationId} 尚无已接受的确定结果（${begun.intent.state}）`,
+          laneKey: begun.intent.laneKey,
+        };
+  }
+
+  const scope = buildExecutionScope({
+    coordinationScopeId: input.coordinationScopeId,
+    coordinatorSessionId: input.writer.coordinatorSessionId,
+    runtimeIncarnationId: input.writer.runtimeIncarnationId,
+    fencingGeneration: input.writer.fencingGeneration,
+    backendIdentityRef: input.backendIdentityRef,
+    operationId,
+    target,
+    expectedRevision: revisionRead.scope.revision,
+    timeoutMs: input.timeoutMs,
+    authority: {
+      kind: 'execution_coordination',
+      graphGeneration: input.graphGeneration,
+      authorizationId: input.authorizationId,
+      runId: input.runId,
+      consumerGeneration: input.consumerGeneration,
+    },
+  });
+  const outcome = await input.backend.mutate(
+    {
+      operation: 'delivery-ack',
+      deliveryId: input.deliveryId,
+      ...(input.deliveryRunId === null ? {} : { runId: input.deliveryRunId }),
+    },
+    scope,
+  );
+  const effective =
+    outcome.kind === 'unknown' && (await deliveryBatchAdvanced(input))
+      ? ({ kind: 'accepted', operation: outcome.operation, value: null } as const)
+      : outcome;
+  const settleRevision = readScope(input.store, input.coordinationScopeId);
+  if (settleRevision.kind === 'rejected') {
+    return { kind: 'blocked', code: settleRevision.code, message: settleRevision.message, laneKey };
+  }
+  const settled = settleIntent(input.store, {
+    coordinationScopeId: input.coordinationScopeId,
+    operationId,
+    writer: input.writer,
+    expectedRevision: settleRevision.scope.revision,
+    outcome: effective,
+  });
+  if (settled.kind === 'rejected') {
+    return { kind: 'blocked', code: 'invalid_state', message: settled.rejection.message, laneKey };
+  }
+  if (effective.kind === 'rejected') {
+    return { kind: 'blocked', code: effective.code, message: effective.message, laneKey };
+  }
+  if (effective.kind === 'unknown') {
+    return {
+      kind: 'blocked',
+      code: 'ack_unknown',
+      message: `确认结果未知且事实不支持「已确认」：${effective.reason}`,
+      laneKey,
+    };
+  }
+  return { kind: 'acked', deliveryId: input.deliveryId };
+}
+
 export async function settleDelivery(input: SettleDeliveryInput): Promise<SettleDeliveryResult> {
   /** accept-result lane 的真实键；所有回读/持久化失败分支都报它，而不是裸 task id。 */
   const acceptLaneKey = acceptResultLaneKey(input.orcaTaskId);

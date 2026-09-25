@@ -31,7 +31,14 @@ const AUTHORITY: RoleAuthorities = {
 };
 
 function request(overrides: Partial<GitIntegrationRequest> = {}): GitIntegrationRequest {
-  return { kind: 'integrate_canonical', remote: 'origin', ref: 'refs/heads/main', branch: 'main', ...overrides };
+  return {
+    kind: 'integrate_canonical',
+    remote: 'origin',
+    ref: 'refs/heads/main',
+    branch: 'main',
+    sourceBranch: 'wp-1',
+    ...overrides,
+  };
 }
 
 function evaluate(

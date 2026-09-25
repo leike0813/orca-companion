@@ -61,6 +61,8 @@ function noopActions(): WorkspaceActions {
     cancelHandoff: vi.fn(),
     confirmExecutionHandoff: vi.fn(),
     cancelExecutionHandoff: vi.fn(),
+    confirmAuthorization: vi.fn(),
+    cancelAuthorization: vi.fn(),
     closeTopOverlay: vi.fn(),
   };
 }
@@ -146,6 +148,7 @@ describe('Pending Interaction 内联卡片', () => {
         composerDisabledReason: null,
         newlineHint: 'Shift+Enter 换行',
         handoffProposal: null,
+        authorizationReview: null,
         commands: COMMAND_IDS,
       }),
     );

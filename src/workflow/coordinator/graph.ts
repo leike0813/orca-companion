@@ -18,10 +18,10 @@ import type { CoordinationMode } from '../../domain/coordination/mode.js';
 import {
   planningToolset,
   toBindableTools,
-  type PlanningToolDefinition,
   type PlanningToolFacts,
   type PlanningToolServices,
 } from './planning-tools.js';
+import type { CoordinatorToolDefinition } from './tool-definition.js';
 import {
   COORDINATOR_GRAPH_CHANNELS,
   type CoordinatorGraphState,
@@ -44,9 +44,17 @@ export type CoordinatorGraphDependencies = CoordinatorNodeDependencies & {
    * 可见性已由 `planningToolset` 按模式与事实决定，图只做协议适配；不传表示不暴露任何工具，因此
    * 「忘记配置」不会意外打开规划写入。
    */
-  readonly planningTools?: readonly PlanningToolDefinition[];
+  readonly planningTools?: readonly CoordinatorToolDefinition[];
   /** 已提交调用使用完整注册表恢复，模型仍只看到 planningTools。 */
-  readonly recoveryTools?: readonly PlanningToolDefinition[];
+  readonly recoveryTools?: readonly CoordinatorToolDefinition[];
+  /**
+   * 本次组装要暴露的执行态工具（`executionToolsForMode` 已按模式过滤）。
+   *
+   * 它们同时进入 tools 节点的注册表：已提交的 `advance_execution` 调用必须能在重启后被找到并按当前
+   * 事实重新准入执行，否则会退化成「未注册 = unknown」，把一个可恢复的调用变成阻塞。绑定给模型的
+   * 是同一份列表，因此模型能申请的名字与节点能执行的名字始终一致。
+   */
+  readonly executionTools?: readonly CoordinatorToolDefinition[];
 };
 
 /**
@@ -58,7 +66,7 @@ export function registerPlanningTools(input: {
   readonly mode: CoordinationMode;
   readonly facts: PlanningToolFacts;
   readonly services: PlanningToolServices;
-}): readonly PlanningToolDefinition[] {
+}): readonly CoordinatorToolDefinition[] {
   if (input.mode !== 'route_planning') {
     return [];
   }
@@ -66,14 +74,16 @@ export function registerPlanningTools(input: {
 }
 
 /**
- * 把已过滤的规划工具绑定到模型上。
+ * 把已过滤的工具绑定到模型上。
+ *
+ * 规划与执行两个族共用这一份绑定：绑定只做 schema 广告，执行永远发生在受控 tools 节点。
  *
  * 绑定后的对象仍是可 invoke 的模型：节点只依赖 `invoke`，因此这里在图的组装边界完成协议适配，
  * 不在节点里引入工具体系。模型未实现 `bindTools` 时保持原样，不伪造工具能力。
  */
 export function bindPlanningTools(
   model: BaseChatModel,
-  definitions: readonly PlanningToolDefinition[],
+  definitions: readonly CoordinatorToolDefinition[],
 ): BaseChatModel {
   if (definitions.length === 0 || model.bindTools === undefined) {
     return model;
@@ -121,15 +131,19 @@ export function routeAfterTools(state: CoordinatorGraphState): typeof MODEL_NODE
  */
 export function buildCoordinatorGraph(dependencies: CoordinatorGraphDependencies) {
   const tools = dependencies.planningTools ?? [];
-  const model = bindPlanningTools(dependencies.model, tools);
+  const executionTools = dependencies.executionTools ?? [];
+  // 模型能申请的名字与 tools 节点能执行的名字是同一份列表：两份不一致会让一次合法调用退化成
+  // 「未注册 = unknown」。
+  const registered = [...tools, ...executionTools];
+  const model = bindPlanningTools(dependencies.model, registered);
   return new StateGraph(COORDINATOR_GRAPH_CHANNELS)
-    .addNode(MODEL_NODE, createModelNode({ ...dependencies, model, tools }))
+    .addNode(MODEL_NODE, createModelNode({ ...dependencies, model, tools: registered }))
     .addNode(
       TOOLS_NODE,
       createToolsNode({
         sessionRecords: dependencies.sessionRecords,
         assertFencing: dependencies.assertFencing,
-        tools: dependencies.recoveryTools ?? tools,
+        tools: [...(dependencies.recoveryTools ?? tools), ...executionTools],
       }),
     )
     .addNode(

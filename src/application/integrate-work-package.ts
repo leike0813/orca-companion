@@ -9,7 +9,8 @@
  * 2. 核验 Git Integration Policy；
  * 3. 每个步骤先持久化 Operation Intent 与 expected HEAD，再执行该步骤；
  * 4. 执行 commit → 集成 canonical 分支 → 推送唯一获批 remote/ref；
- * 5. 回读核验 HEAD，完成 Intent。
+ * 5. 按步骤自己的目标回读核验 HEAD（commit 核验 source worktree、integrate 核验 canonical、
+ *    push 核验获批 remote/ref），完成 Intent。
  *
  * 任一步 `unknown` 时以同一 OperationId 对账，不换 ID 重试，也不继续后续步骤。这里不使用 shell：
  * 副作用由注入的 `GitIntegrationPort` 完成，本模块只拥有顺序、准入与对账规则。
@@ -41,12 +42,32 @@ export type GitIntegrationStep = (typeof GIT_INTEGRATION_STEPS)[number];
 export type GitStepRequest = {
   readonly step: GitIntegrationStep;
   readonly workPackageId: WorkPackageId;
+  /** 精确 Worker worktree：commit 步的 cwd 与 source 读回目标。 */
+  readonly sourceWorktreePath: string;
+  /** 获批的 canonical 分支：Policy 的核验目标，不是要合并进来的源。 */
   readonly branch: string;
+  /**
+   * 要合并/推送的**源**分支：Work Package 隔离 worktree 自己的分支。
+   *
+   * 它与 `branch` 必须分开：canonical 分支也是「分支」，但把它当源会让 `merge --ff-only` 变成自我合并，
+   * 报告成功而什么都没集成。
+   */
+  readonly sourceBranch: string;
   readonly remote: string | null;
   readonly ref: string | null;
   readonly expectedHead: string;
   readonly commitMessage: string | null;
 };
+
+/** 读回目标闭集：每一步只核验自己的目标。 */
+export type GitReadbackTarget =
+  | { readonly kind: 'source'; readonly worktreePath: string }
+  | { readonly kind: 'canonical' }
+  | { readonly kind: 'remote'; readonly remote: string; readonly ref: string };
+
+export type GitHeadRead =
+  | { readonly kind: 'read'; readonly head: string }
+  | { readonly kind: 'unavailable'; readonly reason: string };
 
 export type GitStepOutcome =
   | { readonly kind: 'committed'; readonly head: string }
@@ -65,10 +86,14 @@ export type GitIntegrationPort = {
   readonly run: (request: GitStepRequest, scope: ExecutionScope) => Promise<GitStepOutcome>;
   /** 只按同一 OperationId 对账，不得创建新的 Git 操作。 */
   readonly reconcile: (request: GitStepRequest, scope: ExecutionScope) => Promise<GitStepOutcome>;
-  /** 只读回读 canonical HEAD，用于按 expected HEAD 核验结果。 */
-  readonly readCanonicalHead: () => Promise<
-    { readonly kind: 'read'; readonly head: string } | { readonly kind: 'unavailable'; readonly reason: string }
-  >;
+  /** 只读回读指定目标的 HEAD。 */
+  readonly readHead: (target: GitReadbackTarget) => Promise<GitHeadRead>;
+};
+
+/** 集成涉及的两个精确 worktree；canonical 路径只用于构造 adapter。 */
+export type IntegrationWorkspace = {
+  readonly canonicalWorktreePath: string;
+  readonly workPackageWorktreePath: string;
 };
 
 export type IntegrationOperationIds = {
@@ -97,6 +122,8 @@ export type IntegrateWorkPackageInput = {
   readonly policy: GitIntegrationPolicy;
   /** 授权范围内的目标；remote/ref 只在 push 与 integrate 步骤使用。 */
   readonly request: GitIntegrationRequest;
+  /** 两个精确 worktree：canonical 集成目标与 Worker source。 */
+  readonly workspace: IntegrationWorkspace;
   readonly baselineHead: string;
   readonly commitMessage: string;
   readonly operationIds: IntegrationOperationIds;
@@ -146,6 +173,13 @@ function headOf(outcome: GitStepOutcome): string | null {
   return outcome.kind === 'committed' || outcome.kind === 'integrated' || outcome.kind === 'pushed'
     ? outcome.head
     : null;
+}
+
+/** 读回目标的诊断名；blocked reason 必须指名是哪个目标。 */
+function readbackLabel(target: GitReadbackTarget): string {
+  if (target.kind === 'source') return 'source HEAD';
+  if (target.kind === 'canonical') return 'canonical HEAD';
+  return `remote ${target.remote} ${target.ref} 的 HEAD`;
 }
 
 function executionScope(
@@ -210,7 +244,9 @@ export async function integrateWorkPackage(
   if (input.request.kind !== 'integrate_canonical') {
     return rejection('unsupported_integration_request', `完整集成只接受 integrate_canonical 请求，实际为 ${input.request.kind}`);
   }
-  if (input.request.remote === null || input.request.ref === null) {
+  const approvedRemote = input.request.remote;
+  const approvedRef = input.request.ref;
+  if (approvedRemote === null || approvedRef === null) {
     return rejection('missing_remote_or_ref', '集成与推送必须指定获批的 remote 与 ref');
   }
 
@@ -232,7 +268,43 @@ export async function integrateWorkPackage(
     push: input.operationIds.push,
   };
 
-  let expectedHead = input.baselineHead;
+  /** 步骤 → 读回目标；intent 重放与正常路径共用同一映射。 */
+  const readbackFor = (step: GitIntegrationStep): GitReadbackTarget => {
+    if (step === 'commit') {
+      return { kind: 'source', worktreePath: input.workspace.workPackageWorktreePath };
+    }
+    if (step === 'integrate_canonical') {
+      return { kind: 'canonical' };
+    }
+    return { kind: 'remote', remote: approvedRemote, ref: approvedRef };
+  };
+
+  // 每步只核验自己的目标：commit 核验 source worktree，integrate/push 核验 canonical。因此这里按目标
+  // 分别记录 expected HEAD，而不是把上一步的回读值顺延给下一步——commit 后 source HEAD 已经前移，
+  // 拿它去核验 canonical 会必然不符。
+  let sourceExpectedHead = input.baselineHead;
+  let canonicalExpectedHead: string | null = null;
+  const expectedHeadFor = (step: GitIntegrationStep): string =>
+    step === 'commit' ? sourceExpectedHead : (canonicalExpectedHead ?? sourceExpectedHead);
+  const recordExpectedHead = (step: GitIntegrationStep, head: string): void => {
+    if (step === 'commit') {
+      sourceExpectedHead = head;
+      return;
+    }
+    canonicalExpectedHead = head;
+  };
+
+  // canonical 的核验基准必须在任何 mutation 之前读到：读不到就不进入集成。
+  const canonicalBefore = await input.port.readHead({ kind: 'canonical' });
+  if (canonicalBefore.kind === 'unavailable') {
+    return {
+      kind: 'blocked',
+      laneKey: input.workPackageId,
+      reason: `无法在集成前回读 canonical HEAD：${canonicalBefore.reason}`,
+    };
+  }
+  canonicalExpectedHead = canonicalBefore.head;
+
   const completed: GitIntegrationStep[] = [];
 
   for (const step of GIT_INTEGRATION_STEPS) {
@@ -245,7 +317,7 @@ export async function integrateWorkPackage(
     const persistedExpectedHead =
       priorIntent.kind === 'intent' && priorIntent.intent !== null
         ? priorIntent.intent.expectedHead
-        : expectedHead;
+        : expectedHeadFor(step);
     const revision = readScope(input.store, input.coordinationScopeId);
     if (revision.kind === 'rejected') {
       return rejection(revision.code, revision.message);
@@ -255,7 +327,7 @@ export async function integrateWorkPackage(
       operationId,
       target,
       operationCategory: 'git-integration',
-      expectedHead: persistedExpectedHead ?? expectedHead,
+      expectedHead: persistedExpectedHead ?? expectedHeadFor(step),
       writer: input.writer,
       expectedRevision: revision.scope.revision,
     });
@@ -270,7 +342,10 @@ export async function integrateWorkPackage(
     }
 
     if (begun.kind === 'existing') {
-      if (begun.intent.expectedHead === null || (step === 'commit' && begun.intent.expectedHead !== expectedHead)) {
+      if (
+        begun.intent.expectedHead === null ||
+        (step === 'commit' && begun.intent.expectedHead !== expectedHeadFor(step))
+      ) {
         return {
           kind: 'blocked',
           laneKey: begun.intent.laneKey,
@@ -284,11 +359,16 @@ export async function integrateWorkPackage(
           reason: `意图 ${operationId} 尚无已接受的确定结果（${begun.intent.state}）`,
         };
       }
-      const read = await input.port.readCanonicalHead();
+      const replayReadback = readbackFor(step);
+      const read = await input.port.readHead(replayReadback);
       if (read.kind === 'unavailable') {
-        return { kind: 'blocked', laneKey: target.id, reason: `无法回读 canonical HEAD：${read.reason}` };
+        return {
+          kind: 'blocked',
+          laneKey: target.id,
+          reason: `无法回读 ${readbackLabel(replayReadback)}：${read.reason}`,
+        };
       }
-      expectedHead = read.head;
+      recordExpectedHead(step, read.head);
       completed.push(step);
       continue;
     }
@@ -296,10 +376,12 @@ export async function integrateWorkPackage(
     const request: GitStepRequest = {
       step,
       workPackageId: input.workPackageId,
+      sourceWorktreePath: input.workspace.workPackageWorktreePath,
       branch: input.request.branch,
-      remote: input.request.remote,
-      ref: input.request.ref,
-      expectedHead,
+      sourceBranch: input.request.sourceBranch,
+      remote: approvedRemote,
+      ref: approvedRef,
+      expectedHead: expectedHeadFor(step),
       commitMessage: step === 'commit' ? input.commitMessage : null,
     };
     const scope = executionScope(input, operationId, target, revision.scope.revision);
@@ -341,8 +423,9 @@ export async function integrateWorkPackage(
       return rejection(outcome.code, outcome.message);
     }
 
-    // 步骤 5：按 expected HEAD 回读核验，然后才完成该步骤的 Intent。
-    const read = await input.port.readCanonicalHead();
+    // 步骤 5：按该步骤自己的目标回读核验，然后才完成该步骤的 Intent。
+    const readback = readbackFor(step);
+    const read = await input.port.readHead(readback);
     const settledRevision = readScope(input.store, input.coordinationScopeId);
     if (settledRevision.kind === 'rejected') {
       return rejection(settledRevision.code, settledRevision.message);
@@ -353,9 +436,9 @@ export async function integrateWorkPackage(
         operationId,
         writer: input.writer,
         expectedRevision: settledRevision.scope.revision,
-        reason: `步骤 ${step} 后无法回读 canonical HEAD：${read.reason}`,
+        reason: `步骤 ${step} 后无法回读 ${readbackLabel(readback)}：${read.reason}`,
       });
-      return { kind: 'blocked', laneKey: target.id, reason: `步骤 ${step} 后无法回读 canonical HEAD` };
+      return { kind: 'blocked', laneKey: target.id, reason: `步骤 ${step} 后无法回读 ${readbackLabel(readback)}` };
     }
     if (headOf(outcome) !== null && read.head !== headOf(outcome)) {
       blockLane(input.store, {
@@ -363,12 +446,12 @@ export async function integrateWorkPackage(
         operationId,
         writer: input.writer,
         expectedRevision: settledRevision.scope.revision,
-        reason: `步骤 ${step} 后回读 HEAD ${read.head} 与步骤报告不一致`,
+        reason: `步骤 ${step} 后回读 ${readbackLabel(readback)} ${read.head} 与步骤报告不一致`,
       });
       return {
         kind: 'blocked',
         laneKey: target.id,
-        reason: `步骤 ${step} 后回读 HEAD 与步骤报告不一致，无法归属该变化`,
+        reason: `步骤 ${step} 后回读 ${readbackLabel(readback)} 与步骤报告不一致，无法归属该变化`,
       };
     }
     const settled = settleIntent(input.store, {
@@ -381,9 +464,9 @@ export async function integrateWorkPackage(
     if (settled.kind === 'rejected') {
       return { kind: 'blocked', laneKey: target.id, reason: settled.rejection.message };
     }
-    expectedHead = read.head;
+    recordExpectedHead(step, read.head);
     completed.push(step);
   }
 
-  return { kind: 'integrated', head: expectedHead, steps: completed };
+  return { kind: 'integrated', head: canonicalExpectedHead ?? sourceExpectedHead, steps: completed };
 }

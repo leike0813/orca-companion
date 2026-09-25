@@ -23,6 +23,7 @@ import { afterEach, expect, test } from 'vitest';
 import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
 import { beginIntent, settleIntent } from '../../src/application/coordination/intent-service.js';
 import type { RoleAuthorities } from '../../src/domain/planning/execution-authorization.js';
+import type { RoleGateFacts } from '../../src/domain/recovery/role-gate.js';
 import type { SpecBinding } from '../../src/domain/task-contract.js';
 import type {
   ClaimedResultAttribution,
@@ -44,6 +45,7 @@ import type {
   BranchCoordinationStore,
   CoordinationCommand,
   CoordinationWriter,
+  LeaseRecord,
 } from '../../src/application/ports/branch-coordination-store.js';
 import {
   deriveRecoveryId,
@@ -51,7 +53,12 @@ import {
   type ExactRecoveryAttemptRequest,
 } from '../../src/application/recovery/worker-session-recovery-service.js';
 import type { PendingDelivery } from '../../src/application/reconciliation/replay-deliveries.js';
-import { checkpointDatabasePath } from '../../src/bootstrap/coordinator-runtime.js';
+import {
+  checkpointDatabasePath,
+  startCoordinatorRuntime,
+  type StartCoordinatorRuntimeOptions,
+} from '../../src/bootstrap/coordinator-runtime.js';
+import { renewRuntimeLease } from '../../src/application/coordination/lease-service.js';
 import {
   evaluateStartupReadiness,
   startCompanionStartup,
@@ -146,6 +153,12 @@ function expectStarted(result: CompanionStartupResult): StartedCompanionStartup 
   return result;
 }
 
+/** 该 Scope 的全部 Runtime Lease 记录（含已释放的历史）。 */
+function runtimeLeases(store: BranchCoordinationStore): readonly LeaseRecord[] {
+  const read = store.query({ kind: 'leases', coordinationScopeId: RECOVERY_SCOPE });
+  return read.kind === 'leases' ? read.leases.filter((lease) => lease.kind === 'runtime') : [];
+}
+
 function scopeRevision(store: BranchCoordinationStore): number {
   const read = store.query({ kind: 'scope', coordinationScopeId: RECOVERY_SCOPE });
   if (read.kind !== 'scope' || read.scope === null) {
@@ -235,6 +248,8 @@ type Fixture = {
   readonly harness: RecoveryHarness;
   readonly observed: ObservingStore;
   readonly request: CompanionStartupRequest;
+  /** 裸启动形态的运行时选项；复用测试用它自己先启动一次 Runtime。 */
+  readonly runtimeOptions: StartCoordinatorRuntimeOptions;
   readonly steps: StartupStep[];
   readonly settleCalls: SettleDeliveryInput[];
   readonly resumeExactCalls: ExactRecoveryAttemptRequest[];
@@ -375,28 +390,32 @@ function createFixture(
   const deliveryId = 'delivery-b';
 
   const recoveryFacts: StartupRecoveryFacts = {
-    observationFor: () => ({
-      sessionBindingId: 'binding-source-1',
-      providerSessionId: 'provider-session-1',
-      identityChanged: false,
-    }),
+    observationFor: () =>
+      Promise.resolve({
+        sessionBindingId: 'binding-source-1',
+        providerSessionId: 'provider-session-1',
+        identityChanged: false,
+      }),
     // 宿主明确报告 worker 仍在运行：先尝试精确恢复，不进入替代路径。
-    livenessFor: (recovery) => ({
-      dispatchId: recovery.sourceDispatchId,
-      workerRunning: true,
-      terminalHandle: 'terminal-1',
-      host: { kind: 'not-enumerated' },
-    }),
+    livenessFor: (recovery) =>
+      Promise.resolve({
+        dispatchId: recovery.sourceDispatchId,
+        workerRunning: true,
+        terminalHandle: 'terminal-1',
+        host: { kind: 'not-enumerated' },
+      }),
     resumeExact: (request) => {
       resumeExactCalls.push(request);
       return Promise.resolve({ kind: 'resumed', sessionBindingId: request.sessionBindingId });
     },
-    workspaceFor: () => ({ kind: 'reconciled', worktreeId: 'worktree-recovery-1', head: 'head-recovery' }),
-    sourceTerminalFor: () => ({ kind: 'not_reached' }),
-    roleGateFor: () => ({
-      role: 'validator',
-      validator: { identifiedGaps: [], invalidatedEvidenceIds: [], reverifiedEvidenceIds: [] },
-    }),
+    workspaceFor: () =>
+      Promise.resolve({ kind: 'reconciled', worktreeId: 'worktree-recovery-1', head: 'head-recovery' }),
+    sourceTerminalFor: () => Promise.resolve({ kind: 'not_reached' }),
+    roleGateFor: () =>
+      Promise.resolve({
+        role: 'validator',
+        validator: { identifiedGaps: [], invalidatedEvidenceIds: [], reverifiedEvidenceIds: [] },
+      } satisfies RoleGateFacts),
     extractCapsule: () => Promise.resolve({ kind: 'transcript_unavailable', reason: '测试不生成 Capsule' }),
     execution: {
       backendIdentityRef: 'backend-identity-recovery',
@@ -413,26 +432,27 @@ function createFixture(
     }),
   };
 
-  const request: CompanionStartupRequest = {
-    runtime: {
-      coordinationScopeId: RECOVERY_SCOPE,
-      coordinatorSessionId: RECOVERY_SESSION,
-      runtimeIncarnationId: STARTUP_INCARNATION,
-      configuration: {
-        configurationRef: 'model-config-recovery',
-        providerIntegration: '@langchain/openai#ChatOpenAI',
-        model: 'MiniMax-M3',
-        modelOptions: {},
-        credentialRefs: [],
-        nativeWindowOwnerRef: null,
-      },
-      resolveModel: () => Promise.resolve({ kind: 'resolved', model: new CapableChatModel() }),
-      gitCommonDir: fixture.directory,
-      coordinationStore: observed.store,
-      ttlMs: 30_000,
-      clock,
-      probeTimeoutMs: 2_000,
+  const runtimeOptions: StartCoordinatorRuntimeOptions = {
+    coordinationScopeId: RECOVERY_SCOPE,
+    coordinatorSessionId: RECOVERY_SESSION,
+    runtimeIncarnationId: STARTUP_INCARNATION,
+    configuration: {
+      configurationRef: 'model-config-recovery',
+      providerIntegration: '@langchain/openai#ChatOpenAI',
+      model: 'MiniMax-M3',
+      modelOptions: {},
+      credentialRefs: [],
+      nativeWindowOwnerRef: null,
     },
+    resolveModel: () => Promise.resolve({ kind: 'resolved', model: new CapableChatModel() }),
+    gitCommonDir: fixture.directory,
+    coordinationStore: observed.store,
+    ttlMs: 30_000,
+    clock,
+    probeTimeoutMs: 2_000,
+  };
+  const request: CompanionStartupRequest = {
+    runtime: runtimeOptions,
     backend: fixture.backend.backend,
     clock,
     deliveries: {
@@ -457,6 +477,7 @@ function createFixture(
     harness: fixture,
     observed,
     request,
+    runtimeOptions,
     steps,
     settleCalls,
     resumeExactCalls,
@@ -569,12 +590,13 @@ test('未完成的 Recovery 以同一 RecoveryId 续办，不重复派发也不�
       ...fixture.request,
       recovery: {
         ...fixture.request.recovery,
-        livenessFor: (recovery) => ({
-          dispatchId: recovery.sourceDispatchId,
-          workerRunning: false,
-          terminalHandle: 'terminal-1',
-          host: { kind: 'enumerated', terminalHandles: [] },
-        }),
+        livenessFor: (recovery) =>
+          Promise.resolve({
+            dispatchId: recovery.sourceDispatchId,
+            workerRunning: false,
+            terminalHandle: 'terminal-1',
+            host: { kind: 'enumerated' as const, terminalHandles: [] },
+          }),
       },
     }),
   );
@@ -600,6 +622,47 @@ test('未完成的 Recovery 以同一 RecoveryId 续办，不重复派发也不�
   expect(result.readiness.mayUseLane(fixture.cleanLaneKey)).toBe(true);
   expect(result.readiness.mayResumeModel).toBe(true);
   expect(result.blockers.some((blocker) => blocker.recoveryId === fixture.recoveryId)).toBe(true);
+
+  result.close();
+});
+
+test('原会话的结果已结算时，未完成的 Recovery 以 source_completed 收口，不再续办', async () => {
+  const fixture = createFixture({ releaseRuntimeLease: false });
+
+  // 同角色、同业务 Attempt 的结果已经由 Delivery 结算：这条 Recovery 的前提（会话丢了）已不成立。
+  const settled = fixture.harness.store.transact({
+    kind: 'record-delivery-settlement',
+    coordinationScopeId: RECOVERY_SCOPE,
+    expectedRevision: scopeRevision(fixture.harness.store),
+    writer: fixture.harness.writer,
+    dedupeKey: 'delivery-dedupe-1',
+    deliveryId: fixture.deliveryId,
+    runId: 'run-recovery',
+    consumerGeneration: 1,
+    workerTaskId: RECOVERY_WORKER_TASK,
+    dispatchId: 'dispatch-source-1' as DispatchId,
+    attemptId: 'attempt-1',
+    role: 'validator',
+    contractRevision: 1,
+    orcaResultRef: 'task-settled#digest-1',
+  });
+  expect(settled.kind).toBe('committed');
+  fixture.harness.releaseRuntimeLease();
+
+  const result = expectStarted(await startCompanionStartup(fixture.request));
+
+  expect(result.recoveries.map((entry) => entry.result.kind)).toEqual(['source_completed']);
+  const recoveries = fixture.harness.recoveries();
+  expect(recoveries).toHaveLength(1);
+  expect(recoveries[0]?.status).toBe('recovered');
+  expect(recoveries[0]?.terminalOutcome).toBe('source_completed');
+  // 不再为一条已经交付的会话派 Utility Worker，也不再占住替代派发 lane。
+  expect(fixture.harness.backend.mutations().filter((mutation) => mutation.operation === 'worker-start')).toEqual([]);
+  expect(result.unfinishedRecoveryIds).not.toContain(fixture.recoveryId);
+  expect(result.dispatchHoldingRecoveryIds).not.toContain(fixture.recoveryId);
+  const recoveryLaneKey = laneKeyOf({ kind: 'worker-task', id: RECOVERY_WORKER_TASK }, 'worker-dispatch');
+  expect(result.readiness.mayUseLane(recoveryLaneKey)).toBe(true);
+  expect(result.blockers.some((blocker) => blocker.recoveryId === fixture.recoveryId)).toBe(false);
 
   result.close();
 });
@@ -688,6 +751,7 @@ test('Resume 先对账再恢复调度；Exit 不写任何控制状态', async ()
   const queriesBefore = fixture.harness.backend.calls.filter(
     (call) => call.kind === 'query' && call.operation.operation === 'request-show',
   ).length;
+  const settleCallsBefore = fixture.settleCalls.length;
   const resumed = await result.scopeControl.resume({ coordinationScopeId: RECOVERY_SCOPE, writer: result.writer });
   const queriesAfter = fixture.harness.backend.calls.filter(
     (call) => call.kind === 'query' && call.operation.operation === 'request-show',
@@ -698,6 +762,10 @@ test('Resume 先对账再恢复调度；Exit 不写任何控制状态', async ()
   if (resumed.kind === 'applied') {
     expect(resumed.reconciliation).not.toBeNull();
     expect(resumed.controlState).toBe('active');
+    // Resume 与启动共用同一条 Delivery 重放路径：未确认的 Delivery 在恢复调度之前又被重放了一次。
+    expect(fixture.settleCalls.length).toBeGreaterThan(settleCallsBefore);
+    // 仍未确认的 Delivery 的 lane 出现在 Resume 的摘要里：恢复调度之后它依然不可派发。
+    expect(resumed.reconciliation?.unresolvedLaneKeys).toContain(fixture.laneBKey);
   }
   expect(queriesAfter).toBeGreaterThan(queriesBefore);
   expect(controlStateOf(fixture.harness.store)).toBe('active');
@@ -769,4 +837,79 @@ test('未确认 Delivery 读取失败时启动显式停在该步骤，不静默�
   // 对账已经发生并留下可观测结论，但没有任何恢复期派发。
   expect(intentStateOf(fixture.harness.store, fixture.laneAOperation)?.state).toBe('blocked');
   expect(fixture.harness.backend.mutations().filter((mutation) => mutation.operation === 'worker-start')).toEqual([]);
+});
+
+test('复用已启动的 Runtime Incarnation：同一 incarnation、零第二次租约、不关闭他人的 store', async () => {
+  const fixture = createFixture();
+
+  // 前台宿主路径：先按真实装配启动 Runtime（这一步取得唯一一份 Runtime Lease）。
+  const started = await startCoordinatorRuntime(fixture.runtimeOptions);
+  expect(started.kind).toBe('started');
+  if (started.kind !== 'started') {
+    return;
+  }
+  const leasesBefore = runtimeLeases(fixture.harness.store);
+  expect(leasesBefore.filter((lease) => lease.releasedAt === null)).toHaveLength(1);
+
+  const result = expectStarted(
+    await startCompanionStartup({
+      ...fixture.request,
+      runtime: {
+        kind: 'already-started',
+        runtime: started,
+        coordinationStore: fixture.harness.store,
+        coordinationScopeId: RECOVERY_SCOPE,
+      },
+    }),
+  );
+
+  // 同一条 incarnation：没有换 runtime incarnation id，也没有换 fencing generation。
+  expect(result.runtime).toBe(started);
+  expect(result.runtime.incarnation).toEqual(started.incarnation);
+  expect(result.writer.runtimeIncarnationId).toBe(started.incarnation.runtimeIncarnationId);
+  expect(fixture.steps).toEqual([...STARTUP_STEPS]);
+
+  // 零第二次租约：租约行数不变，且唯一的未释放租约仍是刚取得的那一条。
+  const leasesAfter = runtimeLeases(fixture.harness.store);
+  expect(leasesAfter).toHaveLength(leasesBefore.length);
+  const held = leasesAfter.filter((lease) => lease.releasedAt === null);
+  expect(held).toHaveLength(1);
+  expect(held[0]?.runtimeIncarnationId).toBe(started.incarnation.runtimeIncarnationId);
+
+  // 复用形态下 `close` 不关闭属于前台宿主的 checkpoint store：租约仍可续约。
+  result.close();
+  const renewed = renewRuntimeLease(fixture.harness.store, {
+    coordinationScopeId: RECOVERY_SCOPE,
+    coordinatorSessionId: RECOVERY_SESSION,
+    runtimeIncarnationId: started.incarnation.runtimeIncarnationId,
+    fencingGeneration: started.incarnation.fencingGeneration,
+    ttlMs: 30_000,
+  });
+  expect(renewed.kind).toBe('renewed');
+  started.close();
+});
+
+test('复用已启动的 Runtime 时，步骤 1 不会重复启动（不会出现第二份处于未释放状态的租约）', async () => {
+  const fixture = createFixture();
+  const started = await startCoordinatorRuntime(fixture.runtimeOptions);
+  if (started.kind !== 'started') {
+    throw new Error(started.message);
+  }
+  const result = expectStarted(
+    await startCompanionStartup({
+      ...fixture.request,
+      runtime: {
+        kind: 'already-started',
+        runtime: started,
+        coordinationStore: fixture.harness.store,
+        coordinationScopeId: RECOVERY_SCOPE,
+      },
+    }),
+  );
+  // 同一个 Scope 的 Runtime Lease 只有一条未释放记录；复用形态没有产生第二次启动。
+  const held = runtimeLeases(fixture.harness.store).filter((lease) => lease.releasedAt === null);
+  expect(held.map((lease) => lease.runtimeIncarnationId)).toEqual([started.incarnation.runtimeIncarnationId]);
+  expect(result.readiness.startupSequenceCompleted).toBe(true);
+  result.close();
+  started.close();
 });

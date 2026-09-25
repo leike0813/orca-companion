@@ -13,6 +13,7 @@ import { toSemanticEvent, type SemanticEvent } from '../../src/application/contr
 import {
   projectTranscriptPage,
   projectTuiViewModel,
+  type TranscriptEntry,
   type TuiViewModel,
 } from '../../src/application/tui/view-model.js';
 import { handleComposerKey } from '../../src/interfaces/tui/app.js';
@@ -55,6 +56,8 @@ const NOOP_ACTIONS: WorkspaceActions = {
   cancelHandoff: () => undefined,
   confirmExecutionHandoff: () => undefined,
   cancelExecutionHandoff: () => undefined,
+  confirmAuthorization: () => undefined,
+  cancelAuthorization: () => undefined,
   closeTopOverlay: () => undefined,
 };
 
@@ -76,17 +79,24 @@ function workspaceView(snapshot: SnapshotOverrides = {}, selectedSessionId: stri
 function renderWorkspace(
   options: {
     readonly terminalWidth?: number;
+    readonly terminalHeight?: number;
+    readonly transcriptEntries?: readonly TranscriptEntry[];
     readonly ui?: TuiState;
     readonly snapshot?: SnapshotOverrides;
     readonly events?: readonly SemanticEvent[];
   } = {},
 ): RenderedTui {
   const ui = options.ui ?? uiState();
+  const view = workspaceView(options.snapshot ?? {}, ui.selectedSessionId);
   return renderComponent(
     <Workspace
-      viewModel={workspaceView(options.snapshot ?? {}, ui.selectedSessionId)}
+      viewModel={options.transcriptEntries === undefined ? view : {
+        ...view,
+        transcript: { ...view.transcript, entries: options.transcriptEntries },
+      }}
       ui={ui}
       terminalWidth={options.terminalWidth ?? 100}
+      terminalHeight={options.terminalHeight ?? 60}
       events={options.events ?? []}
       actions={NOOP_ACTIONS}
       modelCatalog={MODEL_CATALOG}
@@ -96,12 +106,26 @@ function renderWorkspace(
       composerDisabledReason={null}
       newlineHint="Shift+Enter 换行"
       handoffProposal={null}
+      authorizationReview={null}
       commands={COMMAND_IDS}
     />,
   );
 }
 
 describe('planning-workspace / 常驻 transcript 与 composer 主视图', () => {
+  test('长会话保留最新消息与固定状态区域', async () => {
+    const transcriptEntries: TranscriptEntry[] = Array.from({ length: 40 }, (_, index) => ({
+      kind: 'agent', id: `message-${String(index)}`, text: `消息 ${String(index)}`,
+    }));
+    const rendered = renderWorkspace({ terminalHeight: 24, transcriptEntries });
+    await settle(2);
+    const frame = rendered.lastFrame() ?? '';
+    expect(frame).toContain('消息 39');
+    expect(frame).not.toContain('消息 0');
+    expect(frame).toContain('composer ·');
+    expect(frame).toContain('sidebar full');
+  });
+
   test('Scenario: 窄屏下主视图保持可见', async () => {
     // 任何宽度下 transcript 与 composer 都常驻；宽度只决定 Sidebar 密度。
     for (const width of [40, 70, 120]) {

@@ -54,6 +54,7 @@ function fakeDependencies(events: ControllerEventSource): {
       scopeControl: forbidden('scopeControl'),
       pendingInteractions: forbidden('pendingInteractions'),
       executionHandoff: forbidden('executionHandoff'),
+      executionAuthorization: forbidden('executionAuthorization'),
       graphEvolution: forbidden('graphEvolution'),
       scopeInitialization: forbidden('scopeInitialization'),
     },

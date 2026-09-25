@@ -43,7 +43,13 @@ export type TuiIntent =
       readonly coordinatorSessionId: string;
       readonly nextConfigurationRef: string;
     }
-  | { readonly kind: 'scope-control'; readonly action: 'pause' | 'resume' | 'cancel' };
+  | { readonly kind: 'scope-control'; readonly action: 'pause' | 'resume' | 'cancel' }
+  | { readonly kind: 'authorization-review' }
+  | {
+      readonly kind: 'authorization-approve';
+      readonly fingerprint: string;
+      readonly expectedRevision: number;
+    };
 
 export type TuiPorts = {
   readonly snapshot: (selectedSessionId: string | null) => Promise<SnapshotLoad>;
@@ -57,6 +63,46 @@ export type TuiPorts = {
   readonly modelCatalog: ModelCatalogPort;
   readonly handoff: HandoffIntentPort;
   readonly executionHandoff: ExecutionHandoffIntentPort;
+  readonly executionAuthorization: ExecutionAuthorizationIntentPort;
+};
+
+/**
+ * Execution Authorization 的审阅结果。
+ *
+ * 界面只显示宿主读好的完整 Manifest 与门禁判决：它不组装 Manifest、不计算指纹，也不替用户判断
+ * 「也许可以批准」。`manifestRows` 已由宿主投影成展示行，因此界面不需要、也无法接触领域字段。
+ */
+export type ExecutionAuthorizationView = {
+  readonly fingerprint: string;
+  readonly scopeRevision: number;
+  readonly candidate: {
+    readonly graphId: string;
+    readonly generation: number;
+    readonly version: number;
+    readonly baselineHead: string;
+    readonly workPackageCount: number;
+  };
+  readonly manifestRows: readonly { readonly label: string; readonly value: string }[];
+  readonly gate: { readonly ready: boolean; readonly blockers: readonly string[] };
+};
+
+export type ExecutionAuthorizationLoad =
+  | { readonly kind: 'review'; readonly review: ExecutionAuthorizationView }
+  | { readonly kind: 'blocked'; readonly code: string; readonly message: string }
+  | { readonly kind: 'rejected'; readonly code: string; readonly message: string };
+
+/**
+ * 规划 → 执行的授权意图端口（IP-01）。
+ *
+ * `review` 是只读的：它只读当前规划产物与配置，返回完整 Manifest 与指纹。`approve` 只携带该指纹与
+ * 用户看到的 Scope revision，宿主重读全部权威输入后才写入批准并原子切换；界面填不了任何身份。
+ */
+export type ExecutionAuthorizationIntentPort = {
+  readonly review: () => Promise<ExecutionAuthorizationLoad>;
+  readonly approve: (input: {
+    readonly fingerprint: string;
+    readonly expectedRevision: number;
+  }) => Promise<ControllerCommandResult>;
 };
 
 /** 仓库里已有的 Coordination Scope 摘要；Home 只用它列出候选，不推断身份。 */

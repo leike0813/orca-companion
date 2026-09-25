@@ -18,25 +18,21 @@
  * 有 60 行高，帧高于它时 Ink 会把顶栏裁到可见区域之外。终端的列宽也要足够（本文件用 `-x 220 -y 60`），
  * 否则顶栏与 Sidebar 会被按宽度裁切。
  *
- * ## 当前状态：本 change 只交付执行阶段的 TUI 投影与控制意图，执行运行时尚未接线
+ * ## 当前状态：执行运行时已在生产路径接线，真实 PTY 验收仍需显式隔离环境
  *
- * 生产路径里**没有任何东西**调用执行用例，因此「授权 → 串行 Frontier 推进 → Validator repair →
- * reconciliation → Finalizer → deliverable」在真实 PTY 中当前**不可达**。可核验的证据：
+ * `m2-wire-execution-runtime` 已把执行用例接进前台宿主，可核验的证据：
  *
- * - `src/application/materialize-work-package.ts:299`（`materializeWorkPackage`）、
- *   `src/application/delivery/process-delivery.ts:452`（`settleDelivery`）、
- *   `src/application/run-validation.ts:174`、`src/application/integrate-work-package.ts:183`、
- *   `src/application/finalize-project.ts:142` 只有定义，`src/` 内没有任何生产调用点（只有 `tests/`）；
- * - `src/bootstrap/foreground-planning-runtime.ts` 不派发 Worker，其唯一的执行相关引用是
- *   `workPackageComment` 这个纯格式化 helper；
- * - 授权同样不可由产品产生：`src/application/planning/authorization-service.ts:96`（`proposeManifest`）
- *   与 `:155`（`recordApproval`）也没有生产调用点；
- * - `src/bootstrap/foreground-planning-runtime.ts:2171` 对 `scope-control` 意图直接返回
- *   `scope_control_unavailable`，因此界面上的 Pause / Resume / Cancel 当前不会落盘；
- * - 没有任何生产路径写 Operation Intent，因此重启时不会出现「未决操作」，界面也读不到 `reconciling`。
+ * - `src/bootstrap/foreground-planning-runtime.ts` 在启动对账完成后复用同一 Runtime Incarnation 跑一次
+ *   对账序列，并在启动 / 授权切换 / Resume / 用户命令上触发单步 `advanceExecution`
+ *   （`materializeWorkPackage` → Task → Worker）；
+ * - 授权的生产来源是 Execution Authorization Review（`proposeManifest` + `recordApproval` +
+ *   `transitionToExecution`），由审查界面触发、宿主补齐身份；
+ * - Delivery 结算、Worker Session Recovery 续办、受控 Git 集成与只读 Finalizer
+ *   （`finalizeProject`）都在生产路径上；`scope-control` 意图真实落盘（Resume 先对账再恢复调度）。
  *
- * 依赖这些事实的用例用 `EXECUTION_RUNTIME_WIRED` 显式声明不可达，只在接线后才运行；本文件在被显式
- * 开启前不会伪造通过，也不会把不可达写成通过。
+ * 显式提供隔离项目与专用身份后，本文件检查真实 PTY、Scope 控制与持久事实。完整 Worker 闭环的用例
+ * 仍单独跳过；当前主机的 Codex 受限沙箱不可用，见 `docs/orca-compatibility.md`。默认未设置
+ * `ORCA_COMPANION_REAL_*` 时不打开真实项目。
  *
  * 用例会真实改变隔离项目的状态（Pause / Resume 一旦接线即写控制状态）。退出前台进程不会释放 Runtime
  * Lease（产品语义），重启类断言因此要等租约过期；重复运行同样请等 TTL 或换一个隔离项目。
@@ -68,10 +64,10 @@ const REQUIRED_COORDINATOR_MODEL = 'minimax-cn/MiniMax-M3';
 /**
  * 执行运行时是否已在生产路径接线。
  *
- * 当前为 `false`，依据见文件头部「当前状态」。接线后把它改成 `true`，被 `skipIf` 跳开的用例就会开始
- * 运行；在这之前它们必须保持跳过，不允许用界面上的投影伪造出「执行已经推进」的通过。
+ * 已接线（依据见文件头部「当前状态」）。用例仍然只在同时显式开启 `ORCA_COMPANION_REAL_HARNESS` 并给出
+ * 隔离项目与专用身份时才运行，因此默认检查不会启动真实 Worker，也不会修改用户主项目。
  */
-const EXECUTION_RUNTIME_WIRED: boolean = false;
+const EXECUTION_RUNTIME_WIRED: boolean = true;
 
 type Gate =
   | { readonly kind: 'run'; readonly workspace: string; readonly identity: string }
@@ -233,7 +229,7 @@ function noticeOf(pane: string): string | null {
 const EXECUTION_SUMMARY_PATTERN = /^active [01](?: ·|$)/u;
 
 function executionSummaryLine(pane: string): string {
-  return pane.split('\n').find((line) => EXECUTION_SUMMARY_PATTERN.test(line)) ?? '';
+  return pane.split('\n').map((line) => line.trim()).find((line) => EXECUTION_SUMMARY_PATTERN.test(line)) ?? '';
 }
 
 /** 控制条 `scope control · <state>`；未渲染控制条时为 `null`。 */
@@ -354,14 +350,16 @@ if (gate.kind === 'skip') {
       command: CommandId,
       baselineControlState: string,
     ): Promise<IntentOutcome> {
+      const initialNotice = noticeOf(capturePane(SOCKET, SESSION));
       runPaletteCommand(command);
       const deadline = Date.now() + 15_000;
       for (;;) {
         const pane = capturePane(SOCKET, SESSION);
         const changed = displayedControlStateOrNull(pane) !== baselineControlState;
         const notice = noticeOf(pane);
-        if (changed || notice !== null || Date.now() >= deadline) {
-          return { pane, status: await readStatus(workspace), observed: changed || notice !== null };
+        const newNotice = notice !== null && notice !== initialNotice;
+        if (changed || newNotice || Date.now() >= deadline) {
+          return { pane, status: await readStatus(workspace), observed: changed || newNotice };
         }
         sleepSync(100);
       }
@@ -461,7 +459,7 @@ if (gate.kind === 'skip') {
         const before = await readStatus(workspace);
 
         const paused = await submitControl('pause', before.scope.controlState);
-        expect(paused.status.scope.controlState).toBe('paused');
+        expect(paused.status.scope.controlState, `Pause 未落盘；PTY: ${paused.pane}`).toBe('paused');
         expect(displayedControlState(paused.pane)).toBe('paused');
 
         const resumed = await submitControl('resume', 'paused');
@@ -472,7 +470,7 @@ if (gate.kind === 'skip') {
     );
 
     test.skip(
-      '④ 退出重启后界面先显示 reconciling（Scenario: 重启先对账）：执行运行时未接线，当前不可达',
+      '④ 退出重启后界面先显示 reconciling（Scenario: 重启先对账）：需要可控的在途操作',
       () => {
         // 不可达：没有任何生产路径写 Operation Intent，也没有 Worker 会被派发，因此隔离项目里不可能
         // 存在「活跃 Worker 或未决操作」，界面不会进入 reconciling。见文件头部「当前状态」。
@@ -487,7 +485,7 @@ if (gate.kind === 'skip') {
         const before = await readStatus(workspace);
 
         restartTui(workspace);
-        const pane = ensureTuiPane();
+        ensureTuiPane();
         const after = await readStatus(workspace);
 
         // 重启只读回已持久化的事实：图、授权、控制状态与 Frontier 计数都不变。
@@ -512,10 +510,11 @@ if (gate.kind === 'skip') {
         expect(after.blockers.length).toBe(before.blockers.length);
 
         // 「先对账」只在存在未对账事实时可见；两种状态下界面都必须与持久事实一致。
-        const summary = executionSummaryLine(pane);
-        expect(summary, `未在界面上找到执行摘要行：\n${pane}`).not.toBe('');
-        expect(summary.includes('reconciling')).toBe(after.execution.executionReconciliation.pending);
-        expect(displayedControlState(pane)).toBe(after.scope.controlState);
+        const rendered = pollPane(SOCKET, SESSION, (text) =>
+          executionSummaryLine(text).startsWith(`active ${String(after.execution.activeWorkPackageCount)}`) &&
+          displayedControlStateOrNull(text) === after.scope.controlState,
+        10_000);
+        expect(rendered.ok, `界面未跟上持久事实：\n${rendered.text}`).toBe(true);
       },
       240_000,
     );
@@ -539,7 +538,7 @@ if (gate.kind === 'skip') {
     );
 
     test.skip(
-      '⑤ 串行 Frontier 推进、Validator repair、reconciliation 与 Finalizer deliverable：执行运行时未接线，当前不可达',
+      '⑤ 串行 Frontier 推进、Validator repair、reconciliation 与 Finalizer deliverable：当前主机受限沙箱不可用',
       () => {},
     );
 
@@ -548,8 +547,13 @@ if (gate.kind === 'skip') {
       async () => {
         ensureTuiPane();
         const before = await readStatus(workspace);
-        // 非危险态下 Ctrl+C 不要求确认；需要确认时进程会停在提示上等 y，pane 不会消失。
+        // 不可核验 Worker 属于危险态；确认后仍只退出前台，不修改 Scope。
         tmux(SOCKET, ['send-keys', '-t', SESSION, 'C-c']);
+        const prompted = pollPane(SOCKET, SESSION, (text) =>
+          text.includes('确认退出前台进程') || !text.includes('composer ·'), 5_000);
+        if (prompted.text.includes('确认退出前台进程')) {
+          tmux(SOCKET, ['send-keys', '-t', SESSION, 'y']);
+        }
         const gone = pollPane(SOCKET, SESSION, (text) => !text.includes('composer ·'), 30_000);
         expect(
           gone.ok,
