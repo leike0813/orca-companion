@@ -317,7 +317,14 @@ export type CompanionStartupRequest = {
   readonly runtime: StartupRuntimeSeam;
   readonly backend: ExecutionBackend;
   readonly clock: () => number;
-  readonly deliveries: StartupDeliveryFacts;
+  /**
+   * Delivery 事实的**读取入口**，不是启动时的快照值。
+   *
+   * 启动序列与 Resume 各自读一次：Scope 可以在同一个进程里从 route_planning 授权切换到
+   * execution_coordination（授权批准就发生在前台进程内），启动时那份「本 Scope 没有 Run」的结论会立刻
+   * 过期。冻结它会让这个进程此后永远读不到未确认 Delivery，Delivery 结算在同一个前台会话里不可能发生。
+   */
+  readonly readDeliveries: () => Promise<StartupDeliveryFacts>;
   readonly recovery: StartupRecoveryFacts;
   readonly workers: WorkerStopPort;
   /** 调用方已证实的「未产生副作用」事实，透传给对账与 Resume 的对账。 */
@@ -868,7 +875,7 @@ export async function startCompanionStartup(
       backend: request.backend,
       coordinationScopeId,
       writer,
-      deliveries: request.deliveries,
+      deliveries: await request.readDeliveries(),
     });
     if (replay.kind !== 'replayed') {
       throw new StartupAbort('deliveries_replayed', replay.code, replay.message);
@@ -906,12 +913,13 @@ export async function startCompanionStartup(
         return { kind: 'rejected', code: result.code, message: result.message };
       }
       // Resume 与启动用的是同一件事：先对账，再重放未确认 Delivery，然后才恢复调度。
+      // 每次 Resume 重新读取读取范围：授权切换后启动时那份「没有 Run」的结论已经过期。
       const replay = await replayPendingDeliveries({
         store,
         backend: request.backend,
         coordinationScopeId: input.coordinationScopeId,
         writer: input.writer,
-        deliveries: request.deliveries,
+        deliveries: await request.readDeliveries(),
       });
       if (replay.kind !== 'replayed') {
         return {

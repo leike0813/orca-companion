@@ -77,6 +77,27 @@
 - 前台 TUI 在执行协调模式下只提交两个只读查询，且都不需要协调身份：`worktree-list --repo path:<canonical worktree> --limit 1000`（按 worktree `comment` 与 `src/application/materialize-work-package.ts` 的 `workPackageComment` 归属标记匹配出每个 Work Package 的隔离 worktree）与 `worker-list --run <graph generation 的 orcaRunId>`（`workers[]{dispatchId,taskId,workerState,terminalState,agentTerminalHandle}`）。
 - 两个查询的失败只记录为「不可用的观察」，不会被读成「没有 Worker 在运行」；`workerState` 未登记取值一律判为不可核验（fail closed）。
 - Companion 侧判定：`workerState` 属 `running|active|working|in_progress` → `live`；属 `succeeded|failed|cancelled|exited|abandoned|completed|done|timed_out` → `exited`；其余（含 `null`）→ `unverifiable`。执行主机未被列举时，只有在「可能有角色级 Worker」的阶段才给出 `unverifiable`。
+- **运行中的 prepared-terminal Worker 在 `worker-list` 里是 `ready`**（2026-09-25 实测，Orca 1.4.198）：真实 Codex 会话正在跑、dispatch 尚未收尾时，`workerState` 为 `ready`、`dispatchStatus` 为 `dispatched`；收尾后才变成 `succeeded`/`failed`。按上面的闭集，`ready` 落在「其余」分支，因此 Companion 会把**正在真实运行的 Worker** 判为 `unverifiable` 而不是 `live`。这是既有的 fail-closed 选择（不推断存活、不推断退出、不据此重复派发），代价是执行期间界面无法把这类 Worker 显示为 live。
+- 推论（对外部观察者与驱动同样成立）：判断「这个派发是否已经收尾」必须用未收尾取值闭集 `starting|ready|start_unknown|stopping|stop_unknown`，只按 `live` 集合判断会在 Worker 仍在运行时把它当成「没有 Worker」；真实 Codex 会话的时长由模型决定，没有固定上限。
+
+### 只读 Worker 会话在本机不可用（2026-09-25 实测）
+
+- **受限（`:read-only`）Codex 会话在本机无法执行任何命令。** 用与生产相同的启动方式（隔离 `CODEX_HOME`、permission profile `utility-readonly-local-control` 继承 `:read-only`、`--enable use_legacy_landlock`、`--ask-for-approval never`）执行 `codex exec --json` 让模型跑 `cat README.md`，`exec_command` 直接 panic：
+  ```
+  thread 'main' panicked at linux-sandbox/src/linux_run_main.rs:410:9:
+  filesystem-restricted execution requires bubblewrap to isolate app-server sockets
+  ```
+  `launch` 的 shell 因此永远到不了 `cat`，模型只能向人求援。
+- 真实运行旁证（隔离项目 `orca-companion-e2e22`）：执行态中断触发的 Recovery 派出了受限 Capsule Utility Worker（`ctx_430f7d027fdc`），它在自己的 transcript 里请求「把审批策略从 `never` 改掉，或由人把 transcript 内容贴给我」；宿主按设计在 `CAPSULE_REPORT_TIMEOUT_MS = 120_000` 后把该 Recovery 收尾为 `blocked`（`consumed_budget = 0`，原因 `等待 Capsule 报告超时`）。
+- 影响面：**Recovery 的 Capsule 提取、Graph Patch Planner 与只读 Finalizer** 都走这条路径，因此在本机上（a）只要运行里真发生一次执行态中断，Work Package 就只能停在 Recovery blocker；（b）图变化请求无法取得真实 Graph Patch Planner 草案；（c）即使门禁满足，Finalizer 也拿不到交付结论。只读语义是规格要求，本机现状是能证明 blocker，尚不能证明这些只读角色的完成结果。
+- 与既有记录的关系：先前的 bwrap uid map 与 btrfs socket mount isolation 是同一条受限路径的不同失败点；`workspace-write` / `danger-full-access` 的普通角色派发不受影响，因此规格 Planner、Implementation、Validator 与替代 Session 仍是真实可跑的。
+- 处置：`m2-repair-read-only-worker-sandbox` 记录该缺陷、证据与候选修法（含需要 root 或上游修改的部分）；`m2-deliver-execution-tui` 的 5.2「最终 deliverable」按环境阻断收口，5.3 的「明确的 Recovery blocker」已在本机真实取得。
+
+### 未确认 Delivery 的读取与批次推进（2026-09-25 实测）
+
+- `orchestration check --json --terminal <identity> --run <runId> --types worker_done` 在默认（非 `--peek`）模式下返回 `{ deliveryId, messages[], count, timedOut, cancelled }`；`--peek` 只返回未读消息、**不带 `deliveryId`**。只读探测因此必须用默认模式读身份，否则拿到了消息却拿不到可确认的 Delivery 身份。
+- 结果消息要等**进度批次被确认**之后才成为当前批次：真实 Planner 的 `worker_done` 在 `heartbeat` 批次被 `delivery-ack` 确认之前不出现在当前批次里。因此「一次触发能不能结算 Delivery」取决于进度批次是否已经被确认，驱动与验收必须容忍「这一轮只推进批次、没有结算」。
+- 读取范围绑定在**协调终端当前绑定的 Run**（`run-current`）上。Scope 在同一个前台进程里从 `route_planning` 授权切换到 `execution_coordination` 时 Run 才建立：启动时读到的「本 Scope 没有 Run」会立刻过期，读取范围必须每次读取时重新解析，不能在进程启动时冻结（Companion 侧已按此修复：`src/bootstrap/startup.ts` 的 `readDeliveries` 与 `src/bootstrap/foreground-planning-runtime.ts` 的 `currentDeliveryFacts`）。
 
 ### 项目必须先登记进 Orca（2026-09-24 实测）
 

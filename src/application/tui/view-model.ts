@@ -282,6 +282,7 @@ export function nodeVisible(state: WorkPackageExecutionState, filter: ExecutionF
 export function projectGraphView(
   snapshot: ControllerSnapshot,
   filter: ExecutionFilter = [],
+  includeNodes = true,
 ): GraphView | null {
   if (snapshot.graph === null) {
     return null;
@@ -292,6 +293,16 @@ export function projectGraphView(
   );
   if (topology === undefined) {
     return null;
+  }
+  if (!includeNodes) {
+    return {
+      graphId: topology.graphId,
+      graphVersion: topology.graphVersion,
+      generation: snapshot.graph.generation,
+      nodes: [],
+      readiness: topology.readiness,
+      frontier: snapshot.frontier,
+    };
   }
   const execution = new Map(
     snapshot.frontier.map((entry) => [entry.workPackageId, entry] as const),
@@ -359,9 +370,19 @@ export function projectExecutionProjection(
   snapshot: ControllerSnapshot,
   graph: GraphView | null,
 ): ExecutionProjectionView {
-  const nodes = graph?.nodes ?? [];
-  const activeWorkPackageId = nodes.find((node) => node.active)?.workPackageId ?? null;
-  const integrationQueue = nodes
+  const frontierById = new Map(snapshot.frontier.map((entry) => [entry.workPackageId, entry] as const));
+  const entries = graph === null
+    ? []
+    : graph.nodes.length > 0
+      ? graph.nodes
+      : (snapshot.graphTopologies.find(
+          (topology) => topology.graphId === graph.graphId && topology.graphVersion === graph.graphVersion,
+        )?.nodes.flatMap((node) => {
+          const entry = frontierById.get(node.workPackageId);
+          return entry === undefined ? [] : [entry];
+        }) ?? []);
+  const activeWorkPackageId = entries.find((entry) => isActiveWorkPackageState(entry.state))?.workPackageId ?? null;
+  const integrationQueue = entries
     .filter(
       (node) =>
         node.state === 'waiting_integration' ||
@@ -464,11 +485,13 @@ export type TuiViewModelInput = {
   readonly unreadSessionIds: readonly string[];
   /** 执行图过滤条件（进程内展示态）；只隐藏节点。 */
   readonly executionFilter?: ExecutionFilter;
+  /** 折叠态可省略节点详情；Graph Inspector 打开时仍需要完整图。 */
+  readonly includeGraphNodes?: boolean;
 };
 
 export function projectTuiViewModel(input: TuiViewModelInput): TuiViewModel {
   const { snapshot } = input;
-  const graph = projectGraphView(snapshot, input.executionFilter ?? []);
+  const graph = projectGraphView(snapshot, input.executionFilter ?? [], input.includeGraphNodes ?? true);
   return {
     scope: projectScopeView(snapshot),
     sessions: snapshot.sessions.map((session) =>

@@ -15,6 +15,11 @@
  * - **身份不由模型提供**：`advance_execution` 只提交一次委托，真正的分步骤 OperationId 由执行驱动
  *   按 Scope/Generation/Work Package/角色/契约 revision/Attempt/步骤稳定签发，模型填不出身份。
  *
+ * `request_graph_patch` 与 `advance_execution` 共用同一套写入准入，差别只在委托内容：它提交一份九字段
+ * 的图变化声明，分类、Planner 派发、Admission 与提交都在应用用例里。是否还剩下图修订额度由 Admission
+ * 按 Manifest 判定，因此它不受 `advance_execution` 那份推进预算的影响——那份预算是未验收 Work Package
+ * 的推进上界，全部验收完成后它归零，而图变化请求仍可能合法。
+ *
  * 工具本身不实现业务规则：它们把请求翻译成对执行驱动或宿主编译回调的调用，并把结果归一化成
  * accepted / rejected / unknown 三值，供 Coordinator 消费。
  */
@@ -24,15 +29,22 @@ import type {
   CoordinatorSessionId,
   OperationId,
   Revision,
+  WorkPackageId,
 } from '../../application/dto/identity.js';
 import type { AdvanceExecutionResult } from '../../application/execution/advance-execution.js';
 import type { ControlState, CoordinationMode } from '../../domain/coordination/mode.js';
+import {
+  CHANGE_CLAIMS,
+  type ChangeClaim,
+  type GraphChangeRequest,
+} from '../../domain/execution/change-routing.js';
 import { asRecord, toolInputSchema } from './tool-definition.js';
 import type { CoordinatorToolDefinition, CoordinatorToolOutcome } from './tool-definition.js';
 
 export const EXECUTION_TOOL_NAMES = [
   'read_execution_status',
   'advance_execution',
+  'request_graph_patch',
   'propose_execution_graph',
 ] as const;
 
@@ -85,6 +97,17 @@ export type ExecutionToolServices = {
    * 自己签发，因此「模型换一个 ID 重试已发起的副作用」在结构上不可能发生。
    */
   readonly advanceExecution: (input: { readonly operationId: OperationId }) => Promise<ExecutionToolOutcome>;
+  /**
+   * 受控：提交一份结构化的图变化声明。
+   *
+   * 只接收模型能声明的九个字段与本次调用的身份；Scope、Graph、GraphVersion、patchId 与 Planner 派发
+   * 身份都由应用用例从当前事实补齐。分类未要求派发时用例不产生任何副作用，`rejected` 只表示这次请求
+   * 未被接受，不表示图被改坏。
+   */
+  readonly requestGraphPatch: (input: {
+    readonly request: GraphChangeRequest;
+    readonly operationId: OperationId;
+  }) => Promise<ExecutionToolOutcome>;
   /** 受控：把模型提出的结构化 Implementation Plan 交给宿主编译回调。 */
   readonly proposeExecutionGraph: (input: {
     readonly plan: unknown;
@@ -112,6 +135,13 @@ function admit(input: {
   readonly services: ExecutionToolServices;
   readonly requireWrite: boolean;
   readonly mode?: CoordinationMode;
+  /**
+   * 跳过 `advance_execution` 的推进预算。
+   *
+   * `remainingMutations` 是未验收 Work Package 的推进上界，全部验收后归零，而图变化请求那时仍可能
+   * 合法；真正的图修订额度由 Admission 按 Manifest 判定。只有 `request_graph_patch` 使用它。
+   */
+  readonly skipAdvanceBudget?: boolean;
 }): Admission {
   const mode = input.mode ?? 'execution_coordination';
   if (input.initial.mode !== mode) {
@@ -149,7 +179,7 @@ function admit(input: {
   if (!facts.permissions.allowExecutionWrites) {
     return { kind: 'rejected', code: 'not_permitted', message: '当前配置不允许执行写入' };
   }
-  if (facts.budget.remainingMutations <= 0) {
+  if (input.skipAdvanceBudget !== true && facts.budget.remainingMutations <= 0) {
     return { kind: 'rejected', code: 'budget_exhausted', message: '本轮执行推进预算已耗尽' };
   }
   if (facts.authorization.authorizationId === null || facts.authorization.authorizationVersion === null) {
@@ -221,6 +251,88 @@ type ExecutionToolContext = {
   readonly facts: ExecutionToolFacts;
 };
 
+const CHANGE_CLAIM_PROPERTY = { type: 'string', enum: [...CHANGE_CLAIMS] } as const;
+
+/**
+ * 模型能声明的九个字段。
+
+ * 这里刻意不出现 `workPackageId` 以外的任何身份字段——Scope、Graph、GraphVersion、patchId 与
+ * Planner 派发身份都不在 schema 里，因此模型无法把一次请求指向另一张图或另一个版本。
+ */
+const CHANGE_REQUEST_PROPERTY = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    workPackageId: {
+      type: ['string', 'null'],
+      description: '请求针对的 Work Package；目标级或全局变化为 null',
+    },
+    infrastructureFailure: CHANGE_CLAIM_PROPERTY,
+    changesDependencies: CHANGE_CLAIM_PROPERTY,
+    changesScopeEnvelope: CHANGE_CLAIM_PROPERTY,
+    changesObjective: CHANGE_CLAIM_PROPERTY,
+    contractContentOnly: CHANGE_CLAIM_PROPERTY,
+    goalOrGlobalConstraintChanged: CHANGE_CLAIM_PROPERTY,
+    userRequestedReplanning: CHANGE_CLAIM_PROPERTY,
+    requiresUserChoice: CHANGE_CLAIM_PROPERTY,
+  },
+  required: [
+    'workPackageId',
+    'infrastructureFailure',
+    'changesDependencies',
+    'changesScopeEnvelope',
+    'changesObjective',
+    'contractContentOnly',
+    'goalOrGlobalConstraintChanged',
+    'userRequestedReplanning',
+    'requiresUserChoice',
+  ],
+} as const;
+
+/** 八个声明字段；`workPackageId` 单独解析，因为它是唯一允许为 null 的字段。 */
+const CHANGE_CLAIM_FIELDS = [
+  'infrastructureFailure',
+  'changesDependencies',
+  'changesScopeEnvelope',
+  'changesObjective',
+  'contractContentOnly',
+  'goalOrGlobalConstraintChanged',
+  'userRequestedReplanning',
+  'requiresUserChoice',
+] as const satisfies readonly (keyof GraphChangeRequest)[];
+
+/**
+ * 运行时解析模型提交的变化声明。
+
+ * Schema 已声明字段闭集，但 handler 不能把「模型侧绑定」当成校验：这里按字段逐个复验类型与三值取值，
+ * 未知字段、缺字段与未知声明一律拒绝，不做猜测性转换。
+ */
+function parseChangeRequest(raw: unknown): GraphChangeRequest | null {
+  const fields = asRecord(raw);
+  if (fields === null) {
+    return null;
+  }
+  if (Object.keys(fields).length !== CHANGE_CLAIM_FIELDS.length + 1) {
+    return null;
+  }
+  const workPackageId = fields['workPackageId'];
+  if (workPackageId !== null && (typeof workPackageId !== 'string' || workPackageId.length === 0)) {
+    return null;
+  }
+  const claims: Partial<Record<(typeof CHANGE_CLAIM_FIELDS)[number], ChangeClaim>> = {};
+  for (const field of CHANGE_CLAIM_FIELDS) {
+    const value = fields[field];
+    if (typeof value !== 'string' || !(CHANGE_CLAIMS as readonly string[]).includes(value)) {
+      return null;
+    }
+    claims[field] = value as ChangeClaim;
+  }
+  return {
+    workPackageId: workPackageId === null ? null : (workPackageId as WorkPackageId),
+    ...claims,
+  } as GraphChangeRequest;
+}
+
 function buildDefinitions(): Readonly<
   Record<ExecutionToolName, (context: ExecutionToolContext) => ExecutionToolDefinition>
 > {
@@ -263,6 +375,31 @@ function buildDefinitions(): Readonly<
         return await services.advanceExecution({ operationId: context.operationId });
       },
     }),
+    request_graph_patch: ({ services, facts }) => ({
+      name: 'request_graph_patch',
+      description:
+        '提交一份结构化的图变化声明：分类、Planner 派发、Admission 与图版本追加都由执行运行时按当前事实完成。' +
+        '本工具只提交声明，不指定 Scope、Graph 版本或补丁标识；是否仍需图修订额度由授权判定。',
+      mutating: true,
+      inputSchema: toolInputSchema({ request: CHANGE_REQUEST_PROPERTY }, ['request']),
+      invoke: async (input, context) => {
+        const fields = asRecord(input);
+        const request = fields === null ? null : parseChangeRequest(fields['request']);
+        if (request === null) {
+          return { kind: 'rejected', code: 'invalid_argument', message: 'request 必须是完整且字段合法的图变化声明' };
+        }
+        const admission = admit({
+          initial: facts,
+          services,
+          requireWrite: true,
+          skipAdvanceBudget: true,
+        });
+        if (admission.kind === 'rejected') {
+          return admission;
+        }
+        return await services.requestGraphPatch({ request, operationId: context.operationId });
+      },
+    }),
     propose_execution_graph: ({ services, facts }) => ({
       name: 'propose_execution_graph',
       description:
@@ -300,7 +437,7 @@ const DEFINITIONS = buildDefinitions();
 /**
  * 当前模式下可见的执行工具集。
  *
- * 可见性与事实解耦（见文件头）：执行模式下三个工具都可申请，能不能推进由每次调用的准入与执行驱动
+ * 可见性与事实解耦（见文件头）：执行模式下全部执行工具都可申请，能不能推进由每次调用的准入与执行驱动
  * 决定。因此注册表在重启后总能重建，已提交的执行工具调用不会因为「当时的事实」而找不到注册项。
  */
 export function executionToolset(
@@ -311,7 +448,11 @@ export function executionToolset(
     return [DEFINITIONS.propose_execution_graph({ services, facts })];
   }
   if (facts.mode === 'execution_coordination') {
-    return [DEFINITIONS.read_execution_status({ services, facts }), DEFINITIONS.advance_execution({ services, facts })];
+    return [
+      DEFINITIONS.read_execution_status({ services, facts }),
+      DEFINITIONS.advance_execution({ services, facts }),
+      DEFINITIONS.request_graph_patch({ services, facts }),
+    ];
   }
   return [];
 }

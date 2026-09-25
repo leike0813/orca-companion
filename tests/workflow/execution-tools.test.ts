@@ -4,7 +4,7 @@
  *
  * 覆盖三件事：
  * - 工具按模式暴露：非 `execution_coordination` 模式没有任何执行工具，`route_planning` 模式因此也
- *   拿不到 `advance_execution`；
+ *   拿不到 `advance_execution` 与 `request_graph_patch`；
  * - handler 每次调用都重验模式、Scope/Session 身份、控制状态、Execution Lease、授权、写权限、预算与
  *   revision，模型填不出身份也绕不过准入；
  * - 图挂载与恢复执行：已提交的 `advance_execution` 调用由受控 tools 节点按持久化身份执行一次，结果
@@ -24,6 +24,7 @@ import type {
   CoordinationScopeId,
   CoordinatorSessionId,
   OperationId,
+  WorkPackageId,
 } from '../../src/application/dto/identity.js';
 import { openCheckpointStore, type CheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
 import {
@@ -43,6 +44,7 @@ import {
   type ExecutionToolServices,
 } from '../../src/workflow/coordinator/execution-tools.js';
 import { PLANNING_TOOL_NAMES } from '../../src/workflow/coordinator/planning-tools.js';
+import type { GraphChangeRequest } from '../../src/domain/execution/change-routing.js';
 import { FakeToolModel } from '../support/fake-tool-model.js';
 
 const SCOPE = 'scope-execution-tools' as CoordinationScopeId;
@@ -74,10 +76,11 @@ type Forwarded = {
   readonly name: string;
   readonly operationId: OperationId;
   readonly plan?: unknown;
+  readonly request?: GraphChangeRequest;
 };
 
 function fakeServices(facts: ExecutionToolFacts) {
-  const calls = { readExecutionStatus: 0, advanceExecution: 0, proposeExecutionGraph: 0 };
+  const calls = { readExecutionStatus: 0, advanceExecution: 0, requestGraphPatch: 0, proposeExecutionGraph: 0 };
   const forwarded: Forwarded[] = [];
   let current = facts;
   const services: ExecutionToolServices = {
@@ -101,6 +104,11 @@ function fakeServices(facts: ExecutionToolFacts) {
       calls.proposeExecutionGraph += 1;
       forwarded.push({ name: 'propose_execution_graph', operationId: input.operationId, plan: input.plan });
       return Promise.resolve({ kind: 'ok', value: { graphId: 'graph-2' } } as ExecutionToolOutcome);
+    },
+    requestGraphPatch: (input) => {
+      calls.requestGraphPatch += 1;
+      forwarded.push({ name: 'request_graph_patch', operationId: input.operationId, request: input.request });
+      return Promise.resolve({ kind: 'ok', value: { kind: 'routed', route: 'graph_patch' } } as ExecutionToolOutcome);
     },
   };
   return {
@@ -133,6 +141,22 @@ async function invoke(
   return { outcome: await definition.invoke(input, CALL_CONTEXT), harness };
 }
 
+/** 一个完整的九字段变化声明；测试只改其中一两个字段来观察行为的差别。 */
+function changeRequest(overrides: Partial<GraphChangeRequest> = {}): GraphChangeRequest {
+  return {
+    workPackageId: 'wp-a' as WorkPackageId,
+    infrastructureFailure: 'no',
+    changesDependencies: 'yes',
+    changesScopeEnvelope: 'no',
+    changesObjective: 'no',
+    contractContentOnly: 'no',
+    goalOrGlobalConstraintChanged: 'no',
+    userRequestedReplanning: 'no',
+    requiresUserChoice: 'no',
+    ...overrides,
+  };
+}
+
 /* -------------------------------------------------------------------------- */
 /* 暴露                                                                        */
 /* -------------------------------------------------------------------------- */
@@ -141,6 +165,7 @@ test('规划模式暴露候选图工具，执行模式暴露状态与推进工�
   expect(toolNames(baseFacts())).toEqual([
     'read_execution_status',
     'advance_execution',
+    'request_graph_patch',
   ]);
   // 暂停、缺授权或预算耗尽都不改变可见性：可见性与事实解耦，准入在每次调用时判定。
   for (const facts of [
@@ -150,7 +175,7 @@ test('规划模式暴露候选图工具，执行模式暴露状态与推进工�
     baseFacts({ permissions: { allowExecutionWrites: false } }),
     baseFacts({ budget: { remainingMutations: 0 } }),
   ]) {
-    expect(toolNames(facts)).toEqual(['read_execution_status', 'advance_execution']);
+    expect(toolNames(facts)).toEqual(['read_execution_status', 'advance_execution', 'request_graph_patch']);
   }
   expect(toolNames(baseFacts({ mode: 'route_planning' }))).toEqual(['propose_execution_graph']);
   expect(executionToolsForMode({ mode: 'route_planning', facts: baseFacts(), services: fakeServices(baseFacts()).services }).map((definition) => definition.name)).toEqual(['propose_execution_graph']);
@@ -160,8 +185,9 @@ test('规划模式暴露候选图工具，执行模式暴露状态与推进工�
       facts: baseFacts(),
       services: fakeServices(baseFacts()).services,
     }).map((definition) => definition.name),
-  ).toEqual(['read_execution_status', 'advance_execution']);
+  ).toEqual(['read_execution_status', 'advance_execution', 'request_graph_patch']);
   expect(isExecutionToolName('advance_execution')).toBe(true);
+  expect(isExecutionToolName('request_graph_patch')).toBe(true);
   expect(isExecutionToolName('update_route_map_section')).toBe(false);
 });
 
@@ -185,8 +211,10 @@ test('执行工具与规划工具同形，且身份不进入输入 schema', () =
   const byName = new Map([...execution, ...executionToolset(baseFacts({ mode: 'route_planning' }), fakeServices(baseFacts()).services)].map((definition) => [definition.name, definition] as const));
   expect(byName.get('read_execution_status')?.mutating).toBe(false);
   expect(byName.get('advance_execution')?.mutating).toBe(true);
+  expect(byName.get('request_graph_patch')?.mutating).toBe(true);
   expect(byName.get('propose_execution_graph')?.mutating).toBe(true);
   expect(byName.get('advance_execution')?.inputSchema['required']).toEqual([]);
+  expect(byName.get('request_graph_patch')?.inputSchema['required']).toEqual(['request']);
   expect(byName.get('propose_execution_graph')?.inputSchema['required']).toEqual(['plan']);
 });
 
@@ -285,6 +313,117 @@ test('propose_execution_graph 只做 schema 与准入，编译交给宿主回调
 });
 
 /* -------------------------------------------------------------------------- */
+/* 图变化请求                                                                  */
+/* -------------------------------------------------------------------------- */
+
+test('request_graph_patch 重验写入准入，但不以 advance 预算拒绝对图变化的请求', async () => {
+  const scenarios: readonly {
+    readonly facts: Partial<ExecutionToolFacts>;
+    readonly code: string;
+  }[] = [
+    { facts: { controlState: 'paused' }, code: 'control_state' },
+    { facts: { executionLeaseHeld: false }, code: 'not_lease_holder' },
+    { facts: { permissions: { allowExecutionWrites: false } }, code: 'not_permitted' },
+    { facts: { authorization: { authorizationId: null, authorizationVersion: null } }, code: 'authorization_missing' },
+  ];
+
+  for (const scenario of scenarios) {
+    const { outcome, harness } = await invoke(baseFacts(scenario.facts), 'request_graph_patch', {
+      request: changeRequest(),
+    });
+    expect(outcome.kind).toBe('rejected');
+    if (outcome.kind === 'rejected') {
+      expect(outcome.code).toBe(scenario.code);
+    }
+    expect(harness.forwarded).toHaveLength(0);
+  }
+
+  // 全部 Work Package 验收后推进预算归零，但图变化请求仍可能合法：图修订额度由应用用例判定。
+  const noAdvanceBudget = await invoke(
+    baseFacts({ budget: { remainingMutations: 0 } }),
+    'request_graph_patch',
+    { request: changeRequest() },
+  );
+  expect(noAdvanceBudget.outcome.kind).toBe('ok');
+  expect(noAdvanceBudget.harness.calls.requestGraphPatch).toBe(1);
+
+  // 而 advance_execution 在同一事实下仍然被预算挡住。
+  const advance = await invoke(baseFacts({ budget: { remainingMutations: 0 } }), 'advance_execution', {});
+  expect(advance.outcome.kind).toBe('rejected');
+  if (advance.outcome.kind === 'rejected') {
+    expect(advance.outcome.code).toBe('budget_exhausted');
+  }
+});
+
+test('request_graph_patch 只转发持久化 call 身份与九个声明字段', async () => {
+  const request = changeRequest({ workPackageId: null, changesObjective: 'unknown' });
+  const { outcome, harness } = await invoke(baseFacts(), 'request_graph_patch', {
+    request,
+    operationId: 'model-supplied',
+    baseGraphVersion: 99,
+    patchId: 'model-supplied',
+  });
+  expect(outcome.kind).toBe('ok');
+  expect(harness.forwarded).toEqual([
+    { name: 'request_graph_patch', operationId: CALL_CONTEXT.operationId, request },
+  ]);
+});
+
+test('request_graph_patch 拒绝不完整或越界的变化声明，且不触达用例', async () => {
+  const invalid: readonly unknown[] = [
+    '整体变化',
+    null,
+    [],
+    {}, // 缺字段
+    { ...changeRequest(), extra: 'yes' }, // 未登记字段
+    { ...changeRequest(), workPackageId: '' },
+    { ...changeRequest(), workPackageId: 7 },
+    { ...changeRequest(), changesDependencies: 'maybe' },
+    { ...changeRequest(), changesObjective: true },
+  ];
+
+  for (const request of invalid) {
+    const { outcome, harness } = await invoke(baseFacts(), 'request_graph_patch', { request });
+    expect(outcome.kind).toBe('rejected');
+    if (outcome.kind === 'rejected') {
+      expect(outcome.code).toBe('invalid_argument');
+    }
+    expect(harness.calls.requestGraphPatch).toBe(0);
+  }
+
+  const missingRequest = await invoke(baseFacts(), 'request_graph_patch', {});
+  expect(missingRequest.outcome.kind).toBe('rejected');
+  expect(missingRequest.harness.calls.requestGraphPatch).toBe(0);
+});
+
+test('request_graph_patch 的 schema 只暴露九个声明字段，不含图身份', () => {
+  const facts = baseFacts();
+  const definition = executionToolset(facts, fakeServices(facts).services).find(
+    (candidate) => candidate.name === 'request_graph_patch',
+  );
+  expect(definition).toBeDefined();
+  const properties = definition?.inputSchema['properties'] as Record<string, unknown>;
+  expect(Object.keys(properties)).toEqual(['request']);
+  const request = properties['request'] as Record<string, unknown>;
+  expect(request['additionalProperties']).toBe(false);
+  const requestFields = Object.keys(request['properties'] as Record<string, unknown>);
+  expect(requestFields).toEqual([
+    'workPackageId',
+    'infrastructureFailure',
+    'changesDependencies',
+    'changesScopeEnvelope',
+    'changesObjective',
+    'contractContentOnly',
+    'goalOrGlobalConstraintChanged',
+    'userRequestedReplanning',
+    'requiresUserChoice',
+  ]);
+  for (const forbidden of ['operationId', 'graphId', 'graphVersion', 'baseGraphVersion', 'patchId', 'coordinationScopeId']) {
+    expect(requestFields).not.toContain(forbidden);
+  }
+});
+
+/* -------------------------------------------------------------------------- */
 /* 图挂载与已提交调用恢复                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -341,7 +480,11 @@ test('执行工具被注册进图：已提交调用由 tools 节点按持久化�
 
   const harness = fakeServices(baseFacts());
   const executionTools = executionToolset(harness.services.readFacts(), harness.services);
-  expect(executionTools.map((definition) => definition.name)).toEqual(['read_execution_status', 'advance_execution']);
+  expect(executionTools.map((definition) => definition.name)).toEqual([
+    'read_execution_status',
+    'advance_execution',
+    'request_graph_patch',
+  ]);
 
   const model = new FakeToolModel([
     {

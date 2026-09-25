@@ -308,6 +308,7 @@ export function TuiApp(props: TuiAppProps) {
       selectedSessionId: state.selectedSessionId,
       unreadSessionIds: state.unreadSessionIds,
       executionFilter: state.executionFilter,
+      includeGraphNodes: state.sidebarDensity !== 'collapsed' || state.overlayStack.at(-1) === 'graph-inspector',
     });
   }, [snapshot, state, transcript]);
   const viewModelRef = useRef<TuiViewModel | null>(null);

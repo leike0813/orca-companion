@@ -105,13 +105,14 @@ function graphSnapshot(frontier: readonly ControllerFrontierEntry[]): Controller
   });
 }
 
-function viewFor(snapshot: ControllerSnapshot, filter: ExecutionFilter = []): TuiViewModel {
+function viewFor(snapshot: ControllerSnapshot, filter: ExecutionFilter = [], includeGraphNodes = true): TuiViewModel {
   return projectTuiViewModel({
     snapshot,
     transcript: projectTranscriptPage(makeTranscript('session-a'), { coordinatorSessionId: 'session-a' }),
     selectedSessionId: 'session-a',
     unreadSessionIds: [],
     executionFilter: filter,
+    includeGraphNodes,
   });
 }
 
@@ -121,7 +122,7 @@ function renderSidebar(
   filter: ExecutionFilter = [],
 ): RenderedTui {
   return renderComponent(
-    <Sidebar density={density} viewModel={viewFor(snapshot, filter)} terminalWidth={100} />,
+    <Sidebar density={density} viewModel={viewFor(snapshot, filter, density !== 'collapsed')} terminalWidth={100} />,
   );
 }
 
@@ -255,6 +256,31 @@ describe('execution-monitoring / 执行图与 Frontier 投影', () => {
   });
 
   test('Scenario: 折叠态不计算详情', async () => {
+    let detailReads = 0;
+    const tracked = makeWorkPackageExecution('wp-1', { state: 'implementing' });
+    Object.defineProperty(tracked, 'worktreePath', {
+      get: () => {
+        detailReads += 1;
+        return '/tmp/worktrees/wp-1';
+      },
+    });
+    const trackedSnapshot = graphSnapshot([tracked]);
+    const foldedView = viewFor(trackedSnapshot, [], false);
+    expect(detailReads).toBe(0);
+    expect(foldedView.graph?.nodes).toEqual([]);
+    expect(foldedView.graph?.graphId).toBe('graph-1');
+    expect(foldedView.execution.activeWorkPackageCount).toBe(1);
+    viewFor(trackedSnapshot);
+    expect(detailReads).toBeGreaterThan(0);
+    const queued = graphSnapshot([
+      makeWorkPackageExecution('wp-2', { state: 'waiting_integration' }),
+      makeWorkPackageExecution('wp-1', { state: 'waiting_integration' }),
+    ]);
+    expect(viewFor(queued, [], false).execution.integrationQueue.map((entry) => entry.workPackageId)).toEqual([
+      'wp-1',
+      'wp-2',
+    ]);
+
     const snapshot = graphSnapshot([
       makeWorkPackageExecution('wp-1', {
         state: 'implementing',

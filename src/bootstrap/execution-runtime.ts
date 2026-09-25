@@ -1384,6 +1384,14 @@ export async function readPendingDeliveries(
       });
       continue;
     }
+    // 独立基线 Planner 有自己的持久 Task/Dispatch 绑定与结算 driver；它不属于图上的角色物化绑定。
+    // 留给该 driver 按原身份结算，通用角色 Delivery 重放不把它误报为缺失的普通 Worker。
+    if (intake.kind === 'locator' && snapshot.snapshot.baselineReconciliations.some((record) =>
+      record.state === 'required' && record.orcaTaskId === intake.locator.orcaTaskId &&
+      record.dispatchId === intake.locator.orcaDispatchId,
+    )) {
+      continue;
+    }
     const facts = await readDeliveryTrustedFacts({
       input,
       segments: snapshot.snapshot.sessionSegments,

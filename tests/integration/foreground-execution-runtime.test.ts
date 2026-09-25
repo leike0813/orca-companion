@@ -31,28 +31,15 @@ import { describe, expect, test } from 'vitest';
 
 import { runProcess } from '../../src/adapters/orca-cli/process-runner.js';
 import { createOrcaExecutionBackend } from '../../src/adapters/orca-cli/orca-backend.js';
-import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
-import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
-import type {
-  CoordinationScopeId,
-  CoordinatorSessionId,
-  PlanningCycleId,
-  RuntimeIncarnationId,
-} from '../../src/application/dto/identity.js';
-import type { CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
-import { DEFAULT_EXECUTION_LIMITS } from '../../src/domain/planning/budget-policy.js';
 import { CODEX_FULL_ACCESS_RISK } from '../../src/bootstrap/project-config.js';
-import { openRepositoryCoordinationStore, resolveGitCommonDir } from '../../src/bootstrap/composition.js';
-import { checkpointDatabasePath } from '../../src/bootstrap/coordinator-runtime.js';
-import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
-import { COORDINATOR_SESSION_STATE_SCHEMA_VERSION } from '../../src/domain/coordinator/session-state.js';
+import { openRepositoryCoordinationStore } from '../../src/bootstrap/composition.js';
 import {
   createForegroundPlanningHost,
   type ForegroundPlanningHost,
 } from '../../src/bootstrap/foreground-planning-runtime.js';
-import { proposeExecutionGraph } from '../../src/bootstrap/execution-runtime.js';
 import { runStatus, type StatusSnapshot } from '../../src/interfaces/cli/status-command.js';
 import { toChildEnvironment } from '../../src/interfaces/cli/main.js';
+import { seedRealExecutionScope } from '../support/real-execution-scope.js';
 
 const REPO_VAR = 'ORCA_COMPANION_E2E_REPO';
 const IDENTITY_VAR = 'ORCA_COMPANION_E2E_IDENTITY';
@@ -168,19 +155,7 @@ describe.skipIf(!enabled)('前台执行运行时的真实集成冒烟', () => {
 /* 真实执行闭环（ORCA_COMPANION_E2E_LOOP=1）                                     */
 /* -------------------------------------------------------------------------- */
 
-/** 闭环用的工作包：目标是 Route Map 的 Destination——只在 README.md 里落一行标题与一句说明。 */
-const LOOP_PLAN = {
-  planRevision: 1,
-  destinationRef: { kind: 'destination', id: 'destination-e2e', version: 1 },
-  workPackages: [
-    {
-      key: 'readme-banner',
-      title: 'README 标题与说明',
-      dependsOn: [],
-      scopeEnvelope: { include: ['README.md'], exclude: [] },
-    },
-  ],
-};
+/** 闭环用的工作包与 PTY 验收共用同一份定义（`tests/support/real-execution-scope.ts`）。 */
 
 /**
  * 轮询到条件成立或超时。
@@ -266,124 +241,20 @@ describe.skipIf(!loopEnabled)('真实执行闭环（一次性项目）', () => {
       // 风险，因此这条风险必须真的写在项目配置里，而不是测试替它放宽。
       expect(policyOf(config)).toContain(CODEX_FULL_ACCESS_RISK);
 
-      // ---- 播种：Scope + Runtime Lease + 候选图与 Run（与宿主工具路径同一个用例） ----
+      // ---- 播种：Scope + Runtime Lease + 候选图与 Run（与 PTY 验收共用同一份夹具） ----
+      const seededScope = await seedRealExecutionScope({
+        workspace: isolatedRepo,
+        identity: dedicatedIdentity,
+        objective: 'm2-wire-execution-runtime 真实执行闭环',
+        env,
+      });
+      const seededRunId = seededScope.orcaRunId;
       const backend = createOrcaExecutionBackend({
         cwd: isolatedRepo,
         env,
         // 与宿主同一约定：只接受显式声明的专用身份，不从终端的其它句柄里挑一个。
         resolveIdentityHandle: (ref) => Promise.resolve(ref === dedicatedIdentity ? ref : undefined),
       });
-      const opened = await openRepositoryCoordinationStore({ repositoryPath: isolatedRepo, env });
-      expect(opened.kind, `无法打开协调状态：${JSON.stringify(opened)}`).toBe('opened');
-      if (opened.kind !== 'opened') {
-        return;
-      }
-      const seedingStore = opened.store;
-      // 本组用例只对全新项目有效：已有 Scope 时不覆盖既有状态。
-      const scopes = seedingStore.query({ kind: 'scopes' });
-      expect(scopes.kind).toBe('scopes');
-      expect(scopes.kind === 'scopes' ? scopes.scopes.length : -1, '闭环需要尚无 Scope 的隔离项目').toBe(0);
-      const scopeId = 'e2e-loop-scope' as CoordinationScopeId;
-      const sessionId = 'e2e-loop-session' as CoordinatorSessionId;
-      const cycleId = 'e2e-loop-cycle' as PlanningCycleId;
-      // Scope 身份绑定 (repository, ref, canonical worktree)：分支名从 Git 读，不写死在用例里。
-      const branchProbe = await runProcess({
-        executable: 'git',
-        args: ['symbolic-ref', 'HEAD'],
-        cwd: isolatedRepo,
-        env,
-        timeoutMs: 60_000,
-      });
-      expect(branchProbe.kind).toBe('completed');
-      const fullBranchRef = branchProbe.kind === 'completed' ? branchProbe.stdout.text.trim() : '';
-      expect(fullBranchRef.startsWith('refs/heads/')).toBe(true);
-      const initialized = initializeCoordinationScope({
-        store: seedingStore,
-        coordinationScopeId: scopeId,
-        coordinatorSessionId: sessionId,
-        coordinatorModelConfigurationRef: 'planning-default',
-        planningCycleId: cycleId,
-        fullBranchRef,
-        canonicalWorktreePath: isolatedRepo,
-      });
-      expect(initialized.kind).toBe('initialized');
-      const lease = acquireRuntimeLease(seedingStore, {
-        coordinationScopeId: scopeId,
-        coordinatorSessionId: sessionId,
-        runtimeIncarnationId: 'e2e-loop-incarnation' as RuntimeIncarnationId,
-        fencingGeneration: 0,
-      });
-      expect(lease.kind).toBe('acquired');
-      if (lease.kind !== 'acquired') {
-        opened.close();
-        return;
-      }
-      const seedWriter: CoordinationWriter = {
-        coordinatorSessionId: sessionId,
-        runtimeIncarnationId: 'e2e-loop-incarnation' as RuntimeIncarnationId,
-        fencingGeneration: lease.lease.fencingGeneration,
-      };
-      const head = await runProcess({
-        executable: 'git',
-        args: ['rev-parse', 'HEAD'],
-        cwd: isolatedRepo,
-        env,
-        timeoutMs: 60_000,
-      });
-      expect(head.kind).toBe('completed');
-      const baselineHead = head.kind === 'completed' ? head.stdout.text.trim() : '';
-      const seeded = await proposeExecutionGraph({
-        store: seedingStore,
-        backend,
-        coordinationScopeId: scopeId,
-        writer: seedWriter,
-        backendIdentityRef: dedicatedIdentity,
-        timeoutMs: 60_000,
-        authority: { kind: 'route_planning' },
-        plan: LOOP_PLAN,
-        limits: DEFAULT_EXECUTION_LIMITS,
-        baselineHead,
-        objective: 'm2-wire-execution-runtime 真实执行闭环',
-      });
-      expect(seeded.kind, `播种候选图失败：${JSON.stringify(seeded)}`).toBe('recorded');
-      // 驱动需要按 Run 读 Worker 存活：runId 来自世代记录（与宿主同一来源）。
-      const generations = seedingStore.query({ kind: 'graph-generations', coordinationScopeId: scopeId });
-      expect(generations.kind).toBe('graph-generations');
-      const seededRunId =
-        generations.kind === 'graph-generations' ? (generations.generations[0]?.orcaRunId ?? '') : '';
-      expect(seededRunId.length).toBeGreaterThan(0);
-      // 让出 Runtime Lease：宿主启动时会取得新的 fencing generation。
-      const revision = seedingStore.query({ kind: 'scope', coordinationScopeId: scopeId });
-      if (revision.kind === 'scope' && revision.scope !== null) {
-        seedingStore.transact({
-          kind: 'release-runtime-lease',
-          coordinationScopeId: scopeId,
-          expectedRevision: revision.scope.revision,
-          writer: seedWriter,
-        });
-      }
-      opened.close();
-      // 播种用的 Session 已经持有过 Runtime Lease：补写一份空 checkpoint，否则宿主启动时会把
-      // 「取过租约但读不到 checkpoint」判成不可恢复（`runtime-guard` 的既有规则）。
-      const commonDir = await resolveGitCommonDir({ repositoryPath: isolatedRepo, env });
-      expect(commonDir.kind).toBe('resolved');
-      if (commonDir.kind === 'resolved') {
-        const checkpoints = openCheckpointStore({ databasePath: checkpointDatabasePath(commonDir.path) });
-        expect(checkpoints.kind).toBe('opened');
-        if (checkpoints.kind === 'opened') {
-          const saved = checkpoints.store.saveCheckpoint({
-            schemaVersion: COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
-            coordinatorSessionId: sessionId,
-            committedMessages: [],
-            graphPosition: 'suspend',
-            committedModelSteps: [],
-            wakeBatches: [],
-            lastCompactionOutcome: null,
-          });
-          expect(saved.kind).toBe('saved');
-          checkpoints.store.close();
-        }
-      }
 
       // ---- 宿主：启动对账 → 授权审阅 → 批准 ----
       let host: ForegroundPlanningHost = await createForegroundPlanningHost({ repositoryPath: isolatedRepo, env });

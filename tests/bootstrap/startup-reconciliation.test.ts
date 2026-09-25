@@ -455,19 +455,20 @@ function createFixture(
     runtime: runtimeOptions,
     backend: fixture.backend.backend,
     clock,
-    deliveries: {
-      backendIdentityRef: 'backend-identity-recovery',
-      graphGeneration: 1,
-      authorizationId: RECOVERY_AUTHORIZATION,
-      runId: 'run-recovery',
-      consumerGeneration: 1,
-      timeoutMs: 60_000,
-      readPending: () => Promise.resolve({ kind: 'read', pending: [pendingDelivery('orca-task-b', deliveryId)] }),
-      settle: (input) => {
-        settleCalls.push(input);
-        return Promise.resolve({ kind: 'unknown', operationId: laneBOperation, reason: 'response_lost' });
-      },
-    },
+    readDeliveries: () =>
+      Promise.resolve({
+        backendIdentityRef: 'backend-identity-recovery',
+        graphGeneration: 1,
+        authorizationId: RECOVERY_AUTHORIZATION,
+        runId: 'run-recovery',
+        consumerGeneration: 1,
+        timeoutMs: 60_000,
+        readPending: () => Promise.resolve({ kind: 'read', pending: [pendingDelivery('orca-task-b', deliveryId)] }),
+        settle: (input) => {
+          settleCalls.push(input);
+          return Promise.resolve({ kind: 'unknown', operationId: laneBOperation, reason: 'response_lost' });
+        },
+      }),
     recovery: recoveryFacts,
     workers: fakeWorkers(),
     observer: { onStep: (step) => steps.push(step) },
@@ -823,10 +824,10 @@ test('未确认 Delivery 读取失败时启动显式停在该步骤，不静默�
   const fixture = createFixture();
   const result = await startCompanionStartup({
     ...fixture.request,
-    deliveries: {
-      ...fixture.request.deliveries,
+    readDeliveries: async () => ({
+      ...(await fixture.request.readDeliveries()),
       readPending: () => Promise.resolve({ kind: 'rejected', code: 'unavailable', message: 'Orca 不可达' }),
-    },
+    }),
   });
 
   expect(result.kind).toBe('rejected');
@@ -911,5 +912,53 @@ test('复用已启动的 Runtime 时，步骤 1 不会重复启动（不会出�
   expect(held.map((lease) => lease.runtimeIncarnationId)).toEqual([started.incarnation.runtimeIncarnationId]);
   expect(result.readiness.startupSequenceCompleted).toBe(true);
   result.close();
+  started.close();
+});
+
+test('Resume 每次重新读取 Delivery 事实：进程内授权切换后按当前读取范围收尾', async () => {
+  const fixture = createFixture();
+
+  // 启动时 Scope 还没有 Run（仍是 route_planning、未授权）：空读取范围是当时的忠实回答。
+  let scopeAuthorized = false;
+  const started = expectStarted(
+    await startCompanionStartup({
+      ...fixture.request,
+      readDeliveries: async () => {
+        const base = await fixture.request.readDeliveries();
+        return scopeAuthorized
+          ? {
+              ...base,
+              graphGeneration: 1,
+              authorizationId: RECOVERY_AUTHORIZATION,
+              runId: 'run-recovery',
+              consumerGeneration: 1,
+              readPending: () =>
+                Promise.resolve({ kind: 'rejected', code: 'run_unreadable', message: 'Orca 不可达' }),
+            }
+          : {
+              ...base,
+              graphGeneration: 0,
+              authorizationId: '',
+              runId: '',
+              consumerGeneration: 0,
+              readPending: () => Promise.resolve({ kind: 'read', pending: [] }),
+            };
+      },
+    }),
+  );
+
+  // 同一次启动内授权切换到 execution_coordination：读取范围随之变化，Resume 必须按**新**范围收尾。
+  scopeAuthorized = true;
+  const resumed = await started.scopeControl.resume({
+    coordinationScopeId: RECOVERY_SCOPE,
+    writer: started.writer,
+  });
+
+  // 冻结启动时那份空读取范围（旧行为）会把这次 Resume 当成「没有未确认 Delivery」而放行；真实读取范围
+  // 读不到就必须明确 rejected，绝不静默跳过重放。
+  expect(resumed.kind).toBe('rejected');
+  if (resumed.kind === 'rejected') {
+    expect(resumed.code).toBe('run_unreadable');
+  }
   started.close();
 });

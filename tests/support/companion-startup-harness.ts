@@ -234,7 +234,7 @@ export function createCompanionStartupFixture(
         },
         backend: harness.backend.backend,
         clock,
-        deliveries: { ...defaultDeliveries, ...options.deliveries },
+        readDeliveries: () => Promise.resolve({ ...defaultDeliveries, ...options.deliveries }),
         recovery: {
           ...defaultRecovery,
           ...(typeof options.recovery === 'function' ? options.recovery(harness) : options.recovery),

@@ -84,6 +84,8 @@ import {
   type WorkerObservation,
 } from '../application/execution/execution-view.js';
 import { activeAuthorization } from '../application/planning/authorization-service.js';
+import { requestGraphPatch, type GraphPatchBaselineObservation } from '../application/execution/request-graph-patch.js';
+import type { GraphChangeRequest } from '../domain/execution/change-routing.js';
 import { admitSpecification, type SpecificationAdmissionResult } from '../application/specification-admission.js';
 import type { SpecificationProvider as SpecificationProviderPort } from '../application/ports/specification-provider.js';
 import type { ScopeEnvelope as ScopeEnvelopeShape } from '../domain/planning/execution-graph.js';
@@ -139,7 +141,7 @@ import type {
   WorkerRole,
 } from '../domain/planning/execution-authorization.js';
 import type { CanonicalHeadFacts } from '../domain/git-integration-policy.js';
-import { workPackageBudgetKey, type WorkPackageBudgetField } from '../domain/dispatch-candidate.js';
+import { WORK_PACKAGE_BUDGET_FIELDS, workPackageBudgetKey, type WorkPackageBudgetField } from '../domain/dispatch-candidate.js';
 import {
   TASK_CONTRACT_SCHEMA_VERSION,
   TASK_ENVELOPE_SCHEMA_VERSION,
@@ -228,7 +230,9 @@ import {
 import { openCheckpointStore, type CheckpointStore } from '../adapters/storage/checkpoint-store.js';
 import { createOrcaExecutionBackend } from '../adapters/orca-cli/orca-backend.js';
 import { readDeliveryBatch } from '../adapters/orca-cli/delivery-reader.js';
-import { readWorkspaceFacts } from '../adapters/git/baseline-observer.js';
+import { readBaselineGitObservations, readWorkspaceFacts } from '../adapters/git/baseline-observer.js';
+import { runGraphPatchPlannerWorker } from './graph-patch-worker.js';
+import { createBaselineReconciliationDriver } from './baseline-reconciliation-runtime.js';
 import type { RunSummary, WorkerListResult } from '../adapters/orca-cli/operation-catalog.js';
 import { workPackageComment } from '../application/materialize-work-package.js';
 import { createGhTracker } from '../adapters/tracker/gh-tracker.js';
@@ -405,7 +409,7 @@ type LiveSession = {
   configuration: CoordinatorModelConfiguration;
   model: BaseChatModel;
   checkpoints: CheckpointStore;
-  readonly graph: ReturnType<typeof buildCoordinatorGraph> | null;
+  graph: ReturnType<typeof buildCoordinatorGraph> | null;
   heartbeat: ReturnType<typeof setInterval> | null;
   fencingLost: boolean;
   loopRunning: boolean;
@@ -1556,7 +1560,7 @@ export async function createForegroundPlanningHost(
         read.kind === 'absent' ? '该 Session 还没有可恢复的会话记录' : `会话记录不可恢复：${read.reason}`,
       );
     }
-    const tools = registeredToolsFor(session);
+    const tools = [...registeredToolsFor(session), ...executionToolsFor(session.coordinatorSessionId)];
     const input = buildBoundedModelInput({
       segments: segmentsFromState(read.state),
       estimate: estimatorInput,
@@ -1615,6 +1619,21 @@ export async function createForegroundPlanningHost(
     const services = planningServices(session.coordinatorSessionId);
     return facts === null || services === null ? [] : planningRecoveryToolset(facts, services);
   };
+
+  /** 模式切换后重建工具注册表，保留同一个模型、checkpoint 与 Runtime Incarnation。 */
+  const graphForSession = (session: LiveSession): ReturnType<typeof buildCoordinatorGraph> =>
+    buildCoordinatorGraph({
+      model: session.model,
+      checkpointer: session.checkpoints.checkpointer,
+      sessionRecords: session.checkpoints,
+      assertFencing: () => assertFencingGeneration(requiredStore(), session.incarnation, { clock }),
+      buildMessages: buildMessagesFor(session),
+      newStepId: () => `${session.coordinatorSessionId}:step:${newId()}`,
+      clock,
+      planningTools: registeredToolsFor(session),
+      recoveryTools: recoveryToolsFor(session),
+      executionTools: executionToolsFor(session.coordinatorSessionId),
+    });
 
   // ---------------------------------------------------------------------
   // Live Session 生命周期
@@ -1774,18 +1793,7 @@ export async function createForegroundPlanningHost(
     };
     const withGraph: LiveSession = {
       ...session,
-      graph: buildCoordinatorGraph({
-        model: started.model,
-        checkpointer: started.checkpointer,
-        sessionRecords: started.checkpoints,
-        assertFencing: () => assertFencingGeneration(requiredStore(), started.incarnation, { clock }),
-        buildMessages: buildMessagesFor(session),
-        newStepId: () => `${coordinatorSessionId}:step:${newId()}`,
-        clock,
-        planningTools: registeredToolsFor(session),
-        recoveryTools: recoveryToolsFor(session),
-        executionTools: executionToolsFor(coordinatorSessionId),
-      }),
+      graph: graphForSession(session),
     };
     liveSessions.set(coordinatorSessionId, withGraph);
     startHeartbeat(withGraph);
@@ -2064,7 +2072,7 @@ export async function createForegroundPlanningHost(
       inFlightModelOperations: session.inFlightModelOperations,
       clock,
       compact: (state) => {
-        const tools = registeredToolsFor(session);
+        const tools = [...registeredToolsFor(session), ...executionToolsFor(session.coordinatorSessionId)];
         const built = buildBoundedModelInput({
           segments: segmentsFromState(state),
           estimate: estimatorInput,
@@ -2187,19 +2195,9 @@ export async function createForegroundPlanningHost(
       ...session,
       configuration: result.configuration,
       model: resolved.model,
-      graph: buildCoordinatorGraph({
-        model: resolved.model,
-        checkpointer: session.checkpoints.checkpointer,
-        sessionRecords: session.checkpoints,
-        assertFencing: () => assertFencingGeneration(requiredStore(), session.incarnation, { clock }),
-        buildMessages: buildMessagesFor({ ...session, configuration: result.configuration }),
-        newStepId: () => `${input.coordinatorSessionId}:step:${newId()}`,
-        clock,
-        planningTools: registeredToolsFor({ ...session, configuration: result.configuration }),
-        recoveryTools: recoveryToolsFor({ ...session, configuration: result.configuration }),
-        executionTools: executionToolsFor(input.coordinatorSessionId),
-      }),
+      graph: null,
     };
+    replacement.graph = graphForSession(replacement);
     liveSessions.set(input.coordinatorSessionId, replacement);
     publish(input.coordinatorSessionId, {
       kind: 'state-changed',
@@ -3124,6 +3122,42 @@ export async function createForegroundPlanningHost(
   };
 
   /**
+   * 当前 Scope 的 Delivery 读取事实（每次调用重新解析）。
+   *
+   * 启动序列与 Resume 用的是同一件事，但**读取范围必须现读**：Scope 会在同一个前台进程里从
+   * route_planning 授权切换到 execution_coordination，启动时那份「本 Scope 没有 Run」的结论随即过期。
+   * 冻结它会让这个进程此后永远读不到未确认 Delivery —— Delivery 结算在同一个 TUI 会话里不可能发生，
+   * 只有重启进程才恢复（真实 PTY 验收里就是这样暴露出来的）。
+   */
+  const currentDeliveryFacts = async (
+    coordinationScopeId: CoordinationScopeId,
+  ): Promise<StartupDeliveryFacts> => {
+    const store = requireStore();
+    const scope = store === null ? null : scopeRecord(coordinationScopeId);
+    if (store === null || scope === null) {
+      return {
+        backendIdentityRef: '',
+        graphGeneration: 0,
+        authorizationId: '',
+        runId: '',
+        consumerGeneration: 0,
+        timeoutMs: MUTATION_TIMEOUT_MS,
+        readPending: () =>
+          Promise.resolve({
+            kind: 'rejected',
+            code: 'scope_unavailable',
+            message: `无法读取 Scope ${coordinationScopeId}：未确认 Delivery 的读取范围无从确定`,
+          }),
+      };
+    }
+    const generation = graphGenerationOf(scope);
+    const backend = backendForExecution();
+    const identity = generation === null ? null : await readCoordinatorIdentityRef();
+    const run = await readScopeRunScope({ scope, generation, backend, identity });
+    return startupDeliveriesFor({ scope, generation, backend, identity, run });
+  };
+
+  /**
    * 启动序列的 Delivery 事实。
    *
    * 读取范围是**当前 Graph Generation 的 Run**：`no-run` 时「没有未确认 Delivery」是对这个读取范围的
@@ -3299,7 +3333,7 @@ export async function createForegroundPlanningHost(
       },
       backend,
       clock,
-      deliveries: startupDeliveriesFor({ scope, generation, backend, identity, run }),
+      readDeliveries: () => currentDeliveryFacts(scopeId),
       recovery: createExecutionRecoveryFacts({
         // store 懒取：与其它装配一样按需要读，避免把「已经关闭的 store」捕获进长期 seam。
         store: () => {
@@ -4318,6 +4352,181 @@ export async function createForegroundPlanningHost(
     };
   };
 
+  /** 图变化只从当前图、授权、Git 与 Orca 事实组装；模型只能提交变化声明。 */
+  const requestGraphPatchForSession = async (
+    session: LiveSession,
+    request: GraphChangeRequest,
+    operationId: OperationId,
+  ): Promise<ExecutionToolOutcome> => {
+    // 用户消息可能同时触发一次 Frontier 推进与模型工具调用；先等那次受控推进结清。
+    await executionTriggerInFlight.get(session.coordinatorSessionId);
+    const scopeId = session.incarnation.coordinationScopeId;
+    const current = requireStore();
+    const scope = scopeRecord(scopeId);
+    const backend = backendForExecution();
+    const identity = await readCoordinatorIdentityRef();
+    const generation = scope === null ? null : graphGenerationOf(scope);
+    const run = scope === null || generation === null || backend === null || identity === null
+      ? null
+      : await readScopeRunScope({ scope, generation, backend, identity });
+    if (current === null || scope === null || backend === null || identity === null ||
+        run === null || run.kind !== 'read' || canonicalWorktreePath === null || commonDirPath === null ||
+        config === null || config.execution.harness !== 'codex' || config.execution.workerModel === null ||
+        scope.graphId === null || scope.graphVersion === null) {
+      return { kind: 'rejected', code: 'execution_unavailable', message: '图、Run、Codex 或 canonical 工作区不可核验' };
+    }
+    if (graphPatchPlannerInFlight.has(session.coordinatorSessionId)) {
+      return { kind: 'rejected', code: 'planner_in_flight', message: '同一 Session 已有 Graph Patch Planner 请求在途' };
+    }
+    const graphRead = current.query({
+      kind: 'graph-version', coordinationScopeId: scopeId,
+      graphId: scope.graphId, graphVersion: scope.graphVersion,
+    });
+    const authorizationRead = activeAuthorization(current, scopeId);
+    const snapshotRead = current.query({ kind: 'snapshot', coordinationScopeId: scopeId });
+    const budgetsRead = current.query({ kind: 'budget-counters', coordinationScopeId: scopeId });
+    if (graphRead.kind !== 'graph-version' || graphRead.version === null ||
+        authorizationRead.kind !== 'read' || authorizationRead.authorization === null ||
+        snapshotRead.kind !== 'snapshot' || budgetsRead.kind !== 'budget-counters') {
+      return { kind: 'rejected', code: 'execution_unavailable', message: '图、授权、快照或预算事实不可读' };
+    }
+    const graph = graphRead.version.graph;
+    const observations = await executionObservations(scope, graph.workPackages);
+    if (observations.unavailableReasons.length > 0 || !observations.workersEnumerated) {
+      return { kind: 'rejected', code: 'execution_observation_unavailable', message: observations.unavailableReasons.join('；') };
+    }
+    const acceptedWorkPackageIds = graph.workPackages
+      .filter((workPackage) => snapshotRead.snapshot.deliverySettlements.some((settlement) =>
+        settlement.role === 'validator' && snapshotRead.snapshot.materializationBindings.some((binding) =>
+          binding.workPackageId === workPackage.workPackageId && binding.workerTaskId === settlement.workerTaskId,
+        ),
+      ))
+      .map((workPackage) => workPackage.workPackageId);
+    const dispatchedWorkPackageIds = [...new Set(snapshotRead.snapshot.materializationBindings.map((binding) => binding.workPackageId))];
+    const consumedRevisions = graph.workPackages.flatMap((workPackage) =>
+      WORK_PACKAGE_BUDGET_FIELDS.map((field) => ({
+        workPackageId: workPackage.workPackageId,
+        field,
+        consumed: budgetsRead.counters.find((counter) =>
+          counter.budgetKey === workPackageBudgetKey(workPackage.workPackageId, field),
+        )?.consumed ?? 0,
+      })),
+    );
+    const execution = {
+      backendIdentityRef: identity,
+      graphGeneration: graph.generation,
+      authorizationId: authorizationRead.authorization.authorizationId,
+      runId: run.runId,
+      consumerGeneration: run.consumerGeneration,
+      timeoutMs: MUTATION_TIMEOUT_MS,
+    };
+    const patchId = derivedKey('graph-patch', [scopeId, graph.graphId, String(graphRead.version.version), operationId]);
+    graphPatchPlannerInFlight.add(session.coordinatorSessionId);
+    let graphApplied = false;
+    try {
+      const result = await requestGraphPatch({
+        store: current,
+        coordinationScopeId: scopeId,
+        writer: writerFor(session.incarnation),
+        operationId,
+        patchId,
+        changeRequest: request,
+        authorization: authorizationRead.authorization,
+        limits: authorizationRead.authorization.manifest.limits,
+        acceptedWorkPackageIds,
+        dispatchedWorkPackageIds,
+        consumedRevisions,
+        expectedGraphVersion: graphRead.version.version,
+        baselines: async (revision) => {
+          const latest = await executionObservations(scope, graph.workPackages);
+          if (latest.unavailableReasons.length > 0 || !latest.workersEnumerated) {
+            throw new Error(`基线补救前执行事实不可读：${latest.unavailableReasons.join('；')}`);
+          }
+          const canonical = await readWorkspaceFacts({ worktreePath: canonicalWorktreePath, env: options.env });
+          if (canonical.kind !== 'observed') throw new Error(`canonical 不可读：${canonical.reason}`);
+          const latestSnapshot = current.query({ kind: 'snapshot', coordinationScopeId: scopeId });
+          if (latestSnapshot.kind !== 'snapshot') throw new Error('最新物化绑定不可读');
+          const baselines = new Map<WorkPackageId, GraphPatchBaselineObservation | null>();
+          for (const workPackageId of new Set([
+            ...revision.revisedWorkPackageIds,
+            ...revision.specificationRevisionRequiredWorkPackageIds,
+          ])) {
+            const worktreePath = latest.worktreePaths.get(workPackageId);
+            if (worktreePath === undefined) {
+              if (latestSnapshot.snapshot.materializationBindings.some((binding) => binding.workPackageId === workPackageId)) {
+                throw new Error(`${workPackageId} 已物化但 worktree 不可读`);
+              }
+              baselines.set(workPackageId, null);
+              continue;
+            }
+            const observed = await readBaselineGitObservations({
+              worktreePath, requiredBaselineHead: canonical.facts.head,
+            });
+            if (observed.kind !== 'observed') throw new Error(`${workPackageId}: ${observed.reason}`);
+            baselines.set(workPackageId, {
+              requiredBaselineHead: canonical.facts.head,
+              worktreeBaseHead: observed.git.observedHead,
+              relation: observed.git.observedHead === canonical.facts.head
+                ? 'equal'
+                : observed.git.descendantOfRequiredBaseline ? 'ahead' : 'behind',
+            });
+          }
+          return baselines;
+        },
+        planner: async (plannerRequest) => await runGraphPatchPlannerWorker({
+          store: current,
+          backend,
+          writer: writerFor(session.incarnation),
+          request: plannerRequest,
+          execution,
+          canonicalWorktreePath,
+          companionStateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY),
+          workerModel: config.execution.workerModel!,
+          bindingWindowMs,
+          reportTimeoutMs: 15 * 60_000,
+        }),
+        baselineReconciliation: createBaselineReconciliationDriver({
+          store: current,
+          backend,
+          writer: writerFor(session.incarnation),
+          coordinationScopeId: scopeId,
+          execution,
+          canonicalWorktreePath,
+          repoSelector: `path:${canonicalWorktreePath}`,
+          worktreePaths: observations.worktreePaths,
+          workerModel: config.execution.workerModel,
+          codexSandboxMode: codexSandboxForDispatch(approvedRisksFor(scopeId)),
+          companionStateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY),
+          bindingWindowMs,
+        }),
+      });
+      if (result.kind === 'applied') {
+        graphApplied = true;
+        clearExecutionBlocker(scopeId, 'graph-patch');
+        publish(session.coordinatorSessionId, {
+          kind: 'graph-version-appended', coordinationScopeId: scopeId,
+          graphId: result.version.graphId, graphVersion: result.version.version, patchId: result.patchId,
+        });
+        return { kind: 'ok', value: {
+          graphVersion: result.version.version,
+          patchId: result.patchId,
+          baselineProgress: result.baselineProgress ?? [],
+        } };
+      }
+      if (result.kind === 'routed') {
+        return { kind: 'ok', value: { route: result.decision.route, reason: result.decision.reason } };
+      }
+      const message = result.kind === 'unknown' ? result.reason : result.message;
+      recordExecutionBlocker(scopeId, 'graph-patch', result.kind === 'unknown' ? 'graph_patch_unknown' : result.code, message);
+      return result.kind === 'unknown'
+        ? { kind: 'unknown', reason: `${result.operationId}: ${message}` }
+        : { kind: 'rejected', code: result.code, message };
+    } finally {
+      graphPatchPlannerInFlight.delete(session.coordinatorSessionId);
+      if (graphApplied) triggerExecution(session);
+    }
+  };
+
   const executionServicesFor = (coordinatorSessionId: CoordinatorSessionId): ExecutionToolServices | null => {
     if (selectedScopeId === null) {
       return null;
@@ -4401,6 +4610,13 @@ export async function createForegroundPlanningHost(
           return { kind: 'rejected', code: 'session_unavailable', message: '该 Session 不在本进程中运行' };
         }
         return executionOutcomeOf(await advanceExecutionOnce(session));
+      },
+      requestGraphPatch: async ({ request, operationId }) => {
+        const session = sessionOf();
+        if (session === null) {
+          return { kind: 'rejected', code: 'session_unavailable', message: '该 Session 不在本进程中运行' };
+        }
+        return await requestGraphPatchForSession(session, request, operationId);
       },
       proposeExecutionGraph: async ({ plan }) => {
         // 编译入口是宿主已有的受控命令：模型只能提出计划正文，图身份与 Run 由宿主补齐。
@@ -5473,11 +5689,91 @@ export async function createForegroundPlanningHost(
    * `advanceExecution` 内部，本函数不复制它。
    */
   const runExecutionTrigger = async (session: LiveSession): Promise<void> => {
-    if (closed || session.fencingLost) {
+    if (closed || session.fencingLost || graphPatchPlannerInFlight.has(session.coordinatorSessionId)) {
       return;
     }
     // 补记错过的 Session Binding：它是这条派发之后所有归属（Delivery、Recovery、Validator 结果）的前提。
     await reconcileUnboundRoleSessions(session);
+    const scopeId = session.incarnation.coordinationScopeId;
+    const current = requireStore();
+    const snapshot = current?.query({ kind: 'snapshot', coordinationScopeId: scopeId });
+    const scope = scopeRecord(scopeId);
+    const graph = current !== null && scope?.graphId !== null && scope?.graphId !== undefined &&
+      scope.graphVersion !== null
+      ? current.query({
+          kind: 'graph-version', coordinationScopeId: scopeId,
+          graphId: scope.graphId, graphVersion: scope.graphVersion,
+        }) : null;
+    const currentIds = graph?.kind === 'graph-version' && graph.version !== null
+      ? new Set(graph.version.graph.workPackages.map((workPackage) => workPackage.workPackageId)) : null;
+    const pendingBaselines = snapshot?.kind === 'snapshot'
+      ? snapshot.snapshot.baselineReconciliations.filter((record) =>
+          record.state === 'required' && (currentIds === null || currentIds.has(record.workPackageId))) : [];
+    if (pendingBaselines.length > 0) {
+      const backend = backendForExecution();
+      const identity = await readCoordinatorIdentityRef();
+      const generation = scope === null ? null : graphGenerationOf(scope);
+      const run = scope === null || generation === null || backend === null || identity === null
+        ? null : await readScopeRunScope({ scope, generation, backend, identity });
+      if (current === null || scope === null || backend === null || identity === null || generation === null ||
+          run?.kind !== 'read' || canonicalWorktreePath === null || commonDirPath === null ||
+          config?.execution.harness !== 'codex' || config.execution.workerModel === null ||
+          scope.graphId === null || scope.graphVersion === null || scope.authorizationId === null ||
+          graph?.kind !== 'graph-version' || graph.version === null) {
+        recordExecutionBlocker(scopeId, 'baseline-reconciliation', 'baseline_facts_unavailable',
+          '基线补救所需的 Scope、Run、Codex 或 canonical 工作区不可核验');
+        return;
+      }
+      const observations = await executionObservations(scope, graph.version.graph.workPackages);
+      if (observations.unavailableReasons.length > 0 || !observations.workersEnumerated) {
+        recordExecutionBlocker(scopeId, 'baseline-reconciliation', 'baseline_facts_unavailable',
+          observations.unavailableReasons.join('；'));
+        return;
+      }
+      const driver = createBaselineReconciliationDriver({
+        store: current, backend, writer: writerFor(session.incarnation), coordinationScopeId: scopeId,
+        execution: {
+          backendIdentityRef: identity, graphGeneration: generation.generation,
+          authorizationId: scope.authorizationId, runId: run.runId,
+          consumerGeneration: run.consumerGeneration, timeoutMs: MUTATION_TIMEOUT_MS,
+        },
+        canonicalWorktreePath, repoSelector: `path:${canonicalWorktreePath}`,
+        worktreePaths: observations.worktreePaths,
+        workerModel: config.execution.workerModel,
+        codexSandboxMode: codexSandboxForDispatch(approvedRisksFor(scopeId)),
+        companionStateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY), bindingWindowMs,
+      });
+      for (const record of pendingBaselines) {
+        const path = observations.worktreePaths.get(record.workPackageId);
+        if (path === undefined) {
+          recordExecutionBlocker(scopeId, 'baseline-reconciliation', 'worktree_unverifiable',
+            `${record.workPackageId} 的隔离 worktree 不可读`);
+          return;
+        }
+        const observed = await readWorkspaceFacts({ worktreePath: path, env: options.env });
+        if (observed.kind !== 'observed') {
+          recordExecutionBlocker(scopeId, 'baseline-reconciliation', 'worktree_unverifiable', observed.reason);
+          return;
+        }
+        const progress = await driver({
+          reconciliationId: record.reconciliationId, workPackageId: record.workPackageId,
+          requiredBaselineHead: record.requiredBaselineHead, observedBaseHead: observed.facts.head,
+          role: 'planner', independentFromImplementation: true,
+        });
+        if (progress.kind !== 'verified') {
+          if (progress.kind === 'blocked') {
+            recordExecutionBlocker(scopeId, 'baseline-reconciliation', 'baseline_blocked', progress.reason);
+          }
+          return;
+        }
+        publish(session.coordinatorSessionId, {
+          kind: 'state-changed', coordinationScopeId: scopeId,
+          revision: scopeRecord(scopeId)?.revision ?? 0,
+          reason: `baseline-reconciled:${record.reconciliationId}`,
+        });
+      }
+      clearExecutionBlocker(scopeId, 'baseline-reconciliation');
+    }
     // 确认中断的 Session 先续办：它是「这个 Work Package 当前该做什么」的前提。
     if (await recoverLostWorkerSession(session)) {
       return;
@@ -5494,6 +5790,8 @@ export async function createForegroundPlanningHost(
    * 两次推进互相穿插；跳过的那一次由下一个触发点接上，因此不会丢工作。
    */
   const executionTriggerInFlight = new Map<string, Promise<void>>();
+  /** Graph Patch Planner 与普通 Frontier 派发共享并发上限；它的受控工具调用期间不交错推进。 */
+  const graphPatchPlannerInFlight = new Set<string>();
   const triggerExecution = (session: LiveSession): void => {
     if (executionTriggerInFlight.has(session.coordinatorSessionId)) {
       return;
@@ -5889,6 +6187,8 @@ export async function createForegroundPlanningHost(
       revision: result.revision,
       reason: `execution-authorization:${result.authorizationId}`,
     });
+    // 图在 Session 打开时按规划模式装配；授权切换后立即注册执行工具，供同一 TUI 会话使用。
+    ensured.session.graph = graphForSession(ensured.session);
     // 授权切换成功是 D1 的触发点之一：切换完成后立刻按新事实推进一次，而不是等用户再发一条消息。
     triggerExecution(ensured.session);
     return accepted(

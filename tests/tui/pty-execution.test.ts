@@ -13,44 +13,75 @@
  * pnpm exec vitest run tests/tui/pty-execution.test.ts --no-file-parallelism
  * ```
  *
- * 未显式开启时整个文件只留一条 skip 记录：不解析身份、不调用 Orca、不打开数据库。隔离项目必须已经
- * 初始化过一个 Coordination Scope 且至少注册一个 Coordinator Session；Session 历史应当很短——pane
- * 有 60 行高，帧高于它时 Ink 会把顶栏裁到可见区域之外。终端的列宽也要足够（本文件用 `-x 220 -y 60`），
- * 否则顶栏与 Sidebar 会被按宽度裁切。
+ * 未显式开启时整个文件只留一条 skip 记录：不解析身份、不调用 Orca、不打开数据库。隔离项目必须由本文件
+ * 自己播种（见下），并且**尚无 Coordination Scope**；Session 历史应当很短——pane 有 60 行高，帧高于它时
+ * Ink 会把顶栏裁到可见区域之外。终端的列宽也要足够（本文件用 `-x 220 -y 60`），否则顶栏与 Sidebar 会被
+ * 按宽度裁切。
  *
- * ## 当前状态：执行运行时已在生产路径接线，真实 PTY 验收仍需显式隔离环境
+ * ## 覆盖范围
  *
- * `m2-wire-execution-runtime` 已把执行用例接进前台宿主，可核验的证据：
+ * 用例顺序即阶段顺序，共用一个前台进程与一个 tmux server：
  *
- * - `src/bootstrap/foreground-planning-runtime.ts` 在启动对账完成后复用同一 Runtime Incarnation 跑一次
- *   对账序列，并在启动 / 授权切换 / Resume / 用户命令上触发单步 `advanceExecution`
- *   （`materializeWorkPackage` → Task → Worker）；
- * - 授权的生产来源是 Execution Authorization Review（`proposeManifest` + `recordApproval` +
- *   `transitionToExecution`），由审查界面触发、宿主补齐身份；
- * - Delivery 结算、Worker Session Recovery 续办、受控 Git 集成与只读 Finalizer
- *   （`finalizeProject`）都在生产路径上；`scope-control` 意图真实落盘（Resume 先对账再恢复调度）。
+ * 1. 播种（`beforeAll`）：用 `tests/support/real-execution-scope.ts` 把全新隔离项目推到
+ *    「route_planning + 候选图与 Run」，与进程内的执行闭环用例共用同一份夹具；
+ * 2. ①②③ 启动、顶栏与 Scope 控制的投影必须等于持久事实；
+ * 3. ⑤ 在 TUI 里完成授权，再用 `Pause`/`Resume` 单步驱动真实串行 Frontier：真实 Planner、
+ *    Implementation、Validator、受控 Git 集成与只读 Finalizer 都在生产路径上运行；期间**真实关闭一次
+ *    Implementation Worker 的 agent 终端**制造执行态 Session 中断，核对 Recovery 的界面事实；
+ * 4. ④ 退出重启：读回同一批 `(workPackageId, state, attemptId)`，不产生新的派发或集成；
+ * 5. ⑤b 与 ⑥ Finalizer 终态投影与 `Ctrl+C` 前台退出。
  *
- * 显式提供隔离项目与专用身份后，本文件检查真实 PTY、Scope 控制与持久事实。完整 Worker 闭环的用例
- * 仍单独跳过；当前主机的 Codex 受限沙箱不可用，见 `docs/orca-compatibility.md`。默认未设置
- * `ORCA_COMPANION_REAL_*` 时不打开真实项目。
+ * 所有角色共用一个模型来源（项目配置 `execution.workerModel`），因此验收要求它显式等于
+ * `minimax-cn/MiniMax-M3`，并在真实 Codex Session 记录里逐角色核对。
  *
- * 用例会真实改变隔离项目的状态（Pause / Resume 一旦接线即写控制状态）。退出前台进程不会释放 Runtime
- * Lease（产品语义），重启类断言因此要等租约过期；重复运行同样请等 TTL 或换一个隔离项目。
+ * 本文件的现有单包场景不触发图修订；Graph Patch Planner 与 baseline reconciliation 的生产入口
+ * 已由执行运行时接线，独立路径有行为测试。真实 PTY 同链路证据仍需隔离项目中增补该场景。
+ *
+ * ## 两种运行模式
+ *
+ * 本机只读沙箱不能执行命令（见同上的 compatibility 记录），因此受限会话（Capsule Utility Worker、
+ * 只读 Finalizer）跑不动，一次运行无法同时覆盖「Recovery 的界面事实」与「Finalizer 的独立结论」：
+ *
+ * - 默认（制造一次执行态中断）：覆盖授权、真实 Planner/Implementation、同一会话内结算 Delivery、
+ *   Recovery 的 blocker 与界面事实；
+ * - `ORCA_COMPANION_PTY_RECOVERY_INTERRUPT=0`（不中断）：链路一路走到 validate → 受控集成
+ *   （canonical 被真实推进）→ Finalizer 派发，覆盖 Finalizer 的门禁与终态投影。
+ *
+ * 两种模式都断言同一条不变量：没有可核验的只读结论就不得显示 deliverable。
+ *
+ * 用例会真实改变隔离项目的状态。退出前台进程不会释放 Runtime Lease（产品语义），重启类断言因此要等
+ * 租约过期；重复运行请换一个隔离项目。
  */
 
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { afterAll, expect, test } from 'vitest';
+import { afterAll, beforeAll, expect, test } from 'vitest';
 
 import { createOrcaExecutionBackend } from '../../src/adapters/orca-cli/orca-backend.js';
+import type {
+  CoordinationScopeId,
+  CoordinatorSessionId,
+  RuntimeIncarnationId,
+} from '../../src/application/dto/identity.js';
+import { buildExecutionScope } from '../../src/application/ports/execution-backend.js';
 import { DEFAULT_RUNTIME_LEASE_TTL_MS } from '../../src/application/coordination/lease-service.js';
-import { openRepositoryCoordinationStore } from '../../src/bootstrap/composition.js';
+import {
+  createCoordinationStore,
+  openRepositoryCoordinationStore,
+  resolveGitCommonDir,
+} from '../../src/bootstrap/composition.js';
 import { toChildEnvironment } from '../../src/interfaces/cli/main.js';
 import { runStatus, type StatusSnapshot } from '../../src/interfaces/cli/status-command.js';
 import { COMMAND_IDS, type CommandId } from '../../src/interfaces/tui/components/command-palette.js';
+import {
+  mergeRealEnvFileIntoProcess,
+  REAL_ENV_FILE_VAR,
+} from '../support/real-env.js';
+import { seedRealExecutionScope } from '../support/real-execution-scope.js';
 
 const COMPANION_REPOSITORY = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const BUILT_ENTRY = join(COMPANION_REPOSITORY, 'dist', 'src', 'interfaces', 'cli', 'main.js');
@@ -58,16 +89,19 @@ const REAL_SWITCH = 'ORCA_COMPANION_REAL_HARNESS';
 const WORKSPACE_VAR = 'ORCA_COMPANION_REAL_REPO';
 const IDENTITY_VAR = 'ORCA_COMPANION_REAL_IDENTITY';
 const MODEL_VAR = 'ORCA_COMPANION_COORDINATOR_MODEL';
+/**
+ * 是否制造一次执行态 Worker Session 中断（默认制造）。
+ *
+ * 设为 `0` 时不中断：本机只读沙箱不可用（Capsule Utility Worker 与 Finalizer 都跑不了命令），中断会让
+ * 唯一的 Work Package 停在 Recovery blocker 上，Finalizer 之间没有独立结论。因此两种模式各跑一次：
+ * 默认模式覆盖 Recovery 的界面事实，`0` 模式覆盖 Finalizer 的门禁与终态投影。
+ */
+const RECOVERY_INTERRUPT_VAR = 'ORCA_COMPANION_PTY_RECOVERY_INTERRUPT';
+
+/** provider 凭据的装载位置；与其它真实验收共用同一个 env 文件。 */
+const DEFAULT_ENV_FILE = join(COMPANION_REPOSITORY, '.env.smoke');
 /** 计划要求的 Coordinator 模型；凭据只留在 provider 环境变量里，本文件不读也不打印。 */
 const REQUIRED_COORDINATOR_MODEL = 'minimax-cn/MiniMax-M3';
-
-/**
- * 执行运行时是否已在生产路径接线。
- *
- * 已接线（依据见文件头部「当前状态」）。用例仍然只在同时显式开启 `ORCA_COMPANION_REAL_HARNESS` 并给出
- * 隔离项目与专用身份时才运行，因此默认检查不会启动真实 Worker，也不会修改用户主项目。
- */
-const EXECUTION_RUNTIME_WIRED: boolean = true;
 
 type Gate =
   | { readonly kind: 'run'; readonly workspace: string; readonly identity: string }
@@ -100,6 +134,17 @@ function evaluateGate(): Gate {
   }
   if (!existsSync(BUILT_ENTRY)) {
     return { kind: 'skip', reason: '先运行 pnpm build：用例启动的是 dist 里的前台入口' };
+  }
+  // 真实调用需要 provider 凭据：装载 env 文件（已存在的环境变量优先），缺凭据时明确跳过而不是让宿主
+  // 在能力核验处失败。宿主与 Worker 都从这个进程继承环境。
+  const envLoad = mergeRealEnvFileIntoProcess(
+    process.env[REAL_ENV_FILE_VAR] ?? DEFAULT_ENV_FILE,
+  );
+  if (!envLoad.hasProviderCredential) {
+    return {
+      kind: 'skip',
+      reason: `缺少 provider 凭据：请设置 OPENAI_API_KEY，或填充 ${envLoad.path}（或经 ${REAL_ENV_FILE_VAR} 指定）`,
+    };
   }
   return { kind: 'run', workspace: resolve(workspace), identity };
 }
@@ -225,8 +270,13 @@ function noticeOf(pane: string): string | null {
   return prefix.length === 0 ? null : prefix;
 }
 
-/** 状态行的执行摘要（第二行）：`active 0[ · reconciling]…`。 */
-const EXECUTION_SUMMARY_PATTERN = /^active [01](?: ·|$)/u;
+/**
+ * 状态行的执行摘要（第二行）：`active 0[ · reconciling]…`。
+ *
+ * 同一行右侧是 Sidebar 的内容（两者在同一个终端行里拼接），因此这里只认行首的 `active 0|1` 词边界，
+ * 不对行尾作任何假设。
+ */
+const EXECUTION_SUMMARY_PATTERN = /^active [01]\b/u;
 
 function executionSummaryLine(pane: string): string {
   return pane.split('\n').map((line) => line.trim()).find((line) => EXECUTION_SUMMARY_PATTERN.test(line)) ?? '';
@@ -249,6 +299,10 @@ function displayedControlState(pane: string): string {
 
 const SOCKET = `orca-companion-execution-${String(process.pid)}`;
 const SESSION = 'execution';
+/** 一轮开始前等宿主静止的窗口：外部派发与结算都要走完。 */
+const QUIESCENCE_WINDOW_MS = 10 * 60_000;
+/** 在途真实 Worker 的收尾窗口：超时不再硬失败，而是把链路停在可诊断的位置。 */
+const IN_FLIGHT_WINDOW_MS = 12 * 60_000;
 /** 顶栏与 Sidebar 都按终端宽度裁切；窄屏会让本文件的顶栏断言失去意义。 */
 const PANE_WIDTH = '220';
 const PANE_HEIGHT = '60';
@@ -314,6 +368,8 @@ if (gate.kind === 'skip') {
   test.skip(`真实 PTY 执行阶段验收未运行：${gate.reason}`, () => {});
 } else {
   const workspace = gate.workspace;
+  // TypeScript 不会把外层的窄化带进嵌套函数：专用身份在这里显式取出，后续一律用它。
+  const dedicatedIdentity = gate.identity;
   const pty = probePty();
 
   if (!pty.ok) {
@@ -365,6 +421,471 @@ if (gate.kind === 'skip') {
       }
     }
 
+    /* ---------------------------------------------------------------------- */
+    /* 真实执行闭环的夹具与事实读取                                             */
+    /* ---------------------------------------------------------------------- */
+
+    /** 播种得到的 Orca Run：驱动按它读 Worker 存活（`worker-list` 必须带 `--run`）。 */
+    let seededRunId = '';
+
+    /** 本次运行是否制造执行态中断（见文件头部：两种模式各覆盖一半）。 */
+    const interruptRecovery = process.env[RECOVERY_INTERRUPT_VAR] !== '0';
+
+    /** 播种时 canonical 的 HEAD：集成必须把它推进，验收据此用 Git 事实核验集成。 */
+    let seededBaselineHead = '';
+
+    /**
+     * 把全新隔离项目推到「route_planning + 候选图与 Run」。
+     *
+     * 与进程内的执行闭环用例共用同一个夹具函数（`tests/support/real-execution-scope.ts`），因此两者
+     * 验证的是同一条生产路径，而不是各自拼一套事实。已有 Scope 的项目会在这里直接失败。
+     */
+    beforeAll(async () => {
+      const seeded = await seedRealExecutionScope({
+        workspace,
+        identity: dedicatedIdentity,
+        objective: 'm2-deliver-execution-tui 真实 PTY 执行验收',
+        env: process.env as Record<string, string>,
+      });
+      seededRunId = seeded.orcaRunId;
+      seededBaselineHead = seeded.baselineHead;
+    }, 300_000);
+
+    /** 与前台宿主同一个后端：同一条身份约定、同一个 transport。 */
+    const backend = createOrcaExecutionBackend({
+      cwd: workspace,
+      env: toChildEnvironment(process.env),
+      resolveIdentityHandle: (ref) => Promise.resolve(ref === dedicatedIdentity ? ref : undefined),
+    });
+
+    /**
+     * 轮询到条件成立。
+     *
+     * 真实 Worker 的完成时间只能由外部事实回答，因此等待的是**条件**，不是猜的固定时长。
+     */
+    async function pollUntil(
+      check: () => Promise<boolean>,
+      intervalMs: number,
+      timeoutMs: number,
+    ): Promise<boolean> {
+      const deadline = Date.now() + timeoutMs;
+      for (;;) {
+        if (await check()) {
+          return true;
+        }
+        if (Date.now() >= deadline) {
+          return false;
+        }
+        sleepSync(intervalMs);
+      }
+    }
+
+    /** 一次 Run 下的真实 Worker 事实。读不到 `worker-list` 时返回空数组——宿主也不把它读成「没有 Worker」。 */
+    type RunWorkerFacts = {
+      readonly dispatchId: string;
+      readonly taskId: string | null;
+      readonly workerState: string | null;
+      readonly agentTerminalHandle: string | null;
+    };
+
+    async function listRunWorkers(): Promise<readonly RunWorkerFacts[]> {
+      const listed = await backend.query({ operation: 'worker-list', runId: seededRunId });
+      if (listed.kind !== 'accepted') {
+        return [];
+      }
+      const workers =
+        (listed.value as { readonly workers?: readonly Record<string, unknown>[] }).workers ?? [];
+      return workers.map((worker) => ({
+        dispatchId: typeof worker['dispatchId'] === 'string' ? worker['dispatchId'] : '',
+        taskId: typeof worker['taskId'] === 'string' ? worker['taskId'] : null,
+        workerState: typeof worker['workerState'] === 'string' ? worker['workerState'] : null,
+        agentTerminalHandle:
+          typeof worker['agentTerminalHandle'] === 'string' ? worker['agentTerminalHandle'] : null,
+      }));
+    }
+
+    /**
+     * 「这次派发还没收尾」的取值闭集。
+     *
+     * 生产侧的存活判据（`execution-view.ts`）把 `ready`/`starting`/`stopping` 一类取值判为**不可核验**，
+     * 因此它们不算 `live`（fail closed，不得读成「没有 Worker」）。但对驱动来说这些取值意味着派发仍在
+     * 进行：prepared terminal 上的真实 Codex 会话running期间正是 `ready`。驱动必须据此等待，否则会在
+     * Worker 还在跑时就把链路判成停住。
+     */
+    const IN_FLIGHT_WORKER_STATES = new Set([
+      'running',
+      'active',
+      'working',
+      'in_progress',
+      'starting',
+      'ready',
+      'start_unknown',
+      'stopping',
+      'stop_unknown',
+    ]);
+
+    async function inFlightWorkers(): Promise<readonly RunWorkerFacts[]> {
+      return (await listRunWorkers()).filter(
+        (worker) => worker.workerState !== null && IN_FLIGHT_WORKER_STATES.has(worker.workerState),
+      );
+    }
+
+    async function inFlightWorkerCount(): Promise<number> {
+      return (await inFlightWorkers()).length;
+    }
+
+    /** 只读读取本次验收关心的持久事实：Recovery 记录与逐角色的物化绑定（含 launchId）。 */
+    type ExecutionFacts = {
+      readonly recoveries: readonly {
+        readonly recoveryId: string;
+        readonly role: string;
+        readonly status: string;
+        readonly capsuleRef: string | null;
+        readonly replacementSegmentId: string | null;
+        readonly supersededSegmentId: string | null;
+        readonly blockingReason: string | null;
+        readonly terminalOutcome: string | null;
+      }[];
+      readonly roleLaunches: readonly {
+        readonly role: string;
+        readonly launchId: string;
+        readonly orcaTaskId: string;
+      }[];
+      /** 已经有 Session Segment（可核验会话）的 Dispatch：中断必须落在真实会话上。 */
+      readonly sessionBoundDispatchIds: readonly string[];
+      readonly coordinationScopeId: string;
+      readonly gitCommonDir: string;
+      /** 当前 Graph Generation 与它在 Orca 侧的 consumer generation：中断操作的 authority 需要它们。 */
+      readonly graphGeneration: number;
+      readonly consumerGeneration: number;
+    };
+
+    async function readExecutionFacts(): Promise<ExecutionFacts> {
+      const commonDir = await resolveGitCommonDir({
+        repositoryPath: workspace,
+        env: toChildEnvironment(process.env),
+      });
+      if (commonDir.kind !== 'resolved') {
+        throw new Error(`无法解析 Git common dir：${commonDir.message}`);
+      }
+      const opened = createCoordinationStore({
+        gitCommonDir: commonDir.path,
+        readOnly: true,
+      });
+      if (opened.kind !== 'opened') {
+        throw new Error(`无法只读打开协调库：${opened.message}`);
+      }
+      try {
+        const scopes = opened.store.query({ kind: 'scopes' });
+        const coordinationScopeId =
+          scopes.kind === 'scopes' ? (scopes.scopes[0]?.coordinationScopeId ?? '') : '';
+        if (coordinationScopeId.length === 0) {
+          throw new Error('隔离项目没有 Coordination Scope');
+        }
+        const recoveries = opened.store.query({
+          kind: 'recoveries',
+          coordinationScopeId: coordinationScopeId as CoordinationScopeId,
+        });
+        const bindings = opened.store.query({
+          kind: 'materialization-bindings',
+          coordinationScopeId: coordinationScopeId as CoordinationScopeId,
+        });
+        const segments = opened.store.query({
+          kind: 'session-segments',
+          coordinationScopeId: coordinationScopeId as CoordinationScopeId,
+        });
+        const generations = opened.store.query({
+          kind: 'graph-generations',
+          coordinationScopeId: coordinationScopeId as CoordinationScopeId,
+        });
+        const settlements = opened.store.query({
+          kind: 'delivery-settlements',
+          coordinationScopeId: coordinationScopeId as CoordinationScopeId,
+        });
+        const currentGeneration =
+          generations.kind === 'graph-generations' ? generations.generations[0] : undefined;
+        // consumer generation 是 Orca 在绑定消费者时给出的代际：播种建立的第一个 Run 为 1，其后以已结算
+        // Delivery 记录里的取值为准（那是 Orca 自己写回的权威值）。
+        const consumerGeneration =
+          settlements.kind === 'delivery-settlements' && settlements.settlements.length > 0
+            ? Math.max(...settlements.settlements.map((entry) => entry.consumerGeneration))
+            : 1;
+        return {
+          coordinationScopeId,
+          gitCommonDir: commonDir.path,
+          sessionBoundDispatchIds:
+            segments.kind === 'session-segments'
+              ? segments.segments.map((segment) => segment.dispatchId)
+              : [],
+          graphGeneration: currentGeneration?.generation ?? 1,
+          consumerGeneration,
+          recoveries:
+            recoveries.kind === 'recoveries'
+              ? recoveries.recoveries.map((recovery) => ({
+                  recoveryId: recovery.recoveryId,
+                  role: recovery.role,
+                  status: recovery.status,
+                  capsuleRef: recovery.capsuleRef,
+                  replacementSegmentId: recovery.replacementSegmentId,
+                  supersededSegmentId: recovery.supersededSegmentId,
+                  blockingReason: recovery.blockingReason,
+                  terminalOutcome: recovery.terminalOutcome,
+                }))
+              : [],
+          roleLaunches:
+            bindings.kind === 'materialization-bindings'
+              ? bindings.bindings.flatMap((binding) =>
+                  binding.role !== null && binding.launchId !== null
+                    ? [{ role: binding.role, launchId: binding.launchId, orcaTaskId: binding.orcaTaskId }]
+                    : [],
+                )
+              : [],
+        };
+      } finally {
+        opened.close();
+      }
+    }
+
+    /**
+     * 逐角色核对真实 Codex Session 记录里的模型。
+     *
+     * 角色的状态根名字是 `sha256(launchId)` 的前 20 位（`createCodexWorkerLaunch` 派生），因此可以从
+     * 物化绑定把状态根映射回角色；Finalizer 没有物化绑定（它由宿主直接派发），但它在 canonical worktree
+     * 里运行，用 rollout 的 `cwd` 认它。会话记录里出现的模型名是这次派发真正使用的模型绑定，不是配置回显。
+     */
+    function roleSessionModels(facts: ExecutionFacts): ReadonlyMap<string, readonly string[]> {
+      const stateRoot = join(facts.gitCommonDir, 'orca-companion', 'codex');
+      const models = new Map<string, string[]>();
+      if (!existsSync(stateRoot)) {
+        return models;
+      }
+      const roleOfDigest = new Map<string, string>();
+      for (const entry of facts.roleLaunches) {
+        roleOfDigest.set(createHash('sha256').update(entry.launchId).digest('hex').slice(0, 20), entry.role);
+      }
+      for (const dirent of readdirSync(stateRoot, { withFileTypes: true, encoding: 'utf8' })) {
+        if (!dirent.isDirectory()) {
+          continue;
+        }
+        const sessions = join(stateRoot, dirent.name, 'sessions');
+        if (!existsSync(sessions)) {
+          continue;
+        }
+        const rollouts = readdirSync(sessions, { recursive: true, encoding: 'utf8' })
+          .filter((name) => /rollout-.*\.jsonl$/u.test(name))
+          .map((name) => join(sessions, name));
+        for (const rollout of rollouts) {
+          const first = readFileSync(rollout, 'utf8').split('\n').find((line) => line.length > 0);
+          if (first === undefined) {
+            continue;
+          }
+          const parsed = JSON.parse(first) as {
+            readonly payload?: {
+              readonly cwd?: unknown;
+              readonly base_instructions?: { readonly text?: unknown };
+            };
+          };
+          const text = parsed.payload?.base_instructions?.text;
+          const matched = typeof text === 'string' ? /MiniMax-[A-Za-z0-9.-]+/u.exec(text)?.[0] : undefined;
+          if (matched === undefined) {
+            continue;
+          }
+          const role =
+            roleOfDigest.get(dirent.name) ??
+            (parsed.payload?.cwd === workspace ? 'finalizer' : dirent.name);
+          const list = models.get(role) ?? [];
+          list.push(matched);
+          models.set(role, list);
+        }
+      }
+      return models;
+    }
+
+    /** 轮询到持久事实满足条件；失败信息带上是哪一条事实没到。 */
+    async function pollStatus(
+      predicate: (status: StatusSnapshot) => boolean,
+      timeoutMs: number,
+      what: string,
+    ): Promise<StatusSnapshot> {
+      const deadline = Date.now() + timeoutMs;
+      let status = await readStatus(workspace);
+      while (!predicate(status) && Date.now() < deadline) {
+        sleepSync(1_000);
+        status = await readStatus(workspace);
+      }
+      expect(predicate(status), `${what}：${describeStatus(status)}`).toBe(true);
+      return status;
+    }
+
+    function describeStatus(status: StatusSnapshot): string {
+      return JSON.stringify({
+        mode: status.scope.mode,
+        controlState: status.scope.controlState,
+        active: status.execution.activeWorkPackageCount,
+        workPackages: status.execution.workPackages.map((entry) => [
+          entry.workPackageId,
+          entry.state,
+          entry.role,
+          entry.attemptId,
+        ]),
+        verdict: status.execution.finalizer.verdict?.kind ?? null,
+        blockers: status.blockers.map((blocker) => `${blocker.source}:${blocker.code}`),
+      });
+    }
+
+    /**
+     * Orca Task → 角色。
+     *
+     * Scope 快照里的 `role` 是**物化时**记下的角色，真实派发之后还会滞后一轮投影，因此不能用它判断
+     * 「此刻在跑的是谁」；Orca 的 Task 身份才是这次派发的当前事实。
+     */
+    function roleOfTask(facts: ExecutionFacts, taskId: string | null): string | null {
+      if (taskId === null) {
+        return null;
+      }
+      return facts.roleLaunches.find((entry) => entry.orcaTaskId === taskId)?.role ?? null;
+    }
+
+    /** 与生产同一份已退出判据（`execution-view.ts` 的 `EXITED_WORKER_STATES`）。 */
+    const EXITED_WORKER_STATES = new Set([
+      'succeeded',
+      'failed',
+      'cancelled',
+      'canceled',
+      'exited',
+      'abandoned',
+      'completed',
+      'done',
+      'timed_out',
+    ]);
+
+    /**
+     * 真实制造一次执行态 Worker Session 中断。
+     *
+     * 关闭该 Dispatch 的 agent 终端会被 Orca 记成 operator_close（workerState `failed`，属于已退出），
+     * 而 `worker-stop` 只停在 `stopped`——它不在已退出集合里，宿主因此不会把它认成中断。副作用经生产
+     * transport（`ExecutionBackend.mutate`）发出，不绕过 adapter。
+     */
+    async function interruptWorkerSession(
+      facts: ExecutionFacts,
+      worker: RunWorkerFacts,
+    ): Promise<void> {
+      const status = await readStatus(workspace);
+      const authorization = status.scope.authorization;
+      expect(authorization, '中断必须发生在已授权进入 Execution Coordination 之后').not.toBeNull();
+      const handle = worker.agentTerminalHandle;
+      expect(handle, '被中断的 Worker 必须有可关闭的 exact terminal').not.toBeNull();
+      const scope = buildExecutionScope({
+        coordinationScopeId: facts.coordinationScopeId as CoordinationScopeId,
+        coordinatorSessionId: 'e2e-loop-session' as CoordinatorSessionId,
+        runtimeIncarnationId: 'pty-execution-interrupt' as RuntimeIncarnationId,
+        fencingGeneration: 0,
+        backendIdentityRef: dedicatedIdentity,
+        operationId: `pty-execution-interrupt:${worker.dispatchId}`,
+        target: { kind: 'worker-dispatch', id: worker.dispatchId },
+        expectedRevision: status.snapshotRevision,
+        timeoutMs: 60_000,
+        authority: {
+          kind: 'execution_coordination',
+          graphGeneration: facts.graphGeneration,
+          authorizationId: authorization?.id ?? '',
+          runId: seededRunId,
+          consumerGeneration: facts.consumerGeneration,
+        },
+      });
+      const closed = await backend.mutate(
+        { operation: 'terminal-close', terminal: handle ?? '' },
+        scope,
+      );
+      expect(closed.kind, `关闭 Worker agent 终端失败：${JSON.stringify(closed)}`).toBe('accepted');
+    }
+
+    /**
+     * 同一终端行里左面板与 Sidebar 用 `│` 分隔：Sidebar 单元格是最后一个分隔符之后的内容。
+     *
+     * 不能直接对整行 trim 后比较分区标题——左边距会把 `│recovery` 一起带进来。
+     */
+    function sidebarCell(line: string): string {
+      const index = line.lastIndexOf('│');
+      return (index < 0 ? line : line.slice(index + 1)).trim();
+    }
+
+    /** Sidebar 的 recovery 分区行；没有该分区时为空数组。 */
+    function recoveryRows(pane: string): readonly string[] {
+      const cells = pane.split('\n').map(sidebarCell);
+      const headers = new Set([
+        '预算',
+        'execution graph',
+        'integration queue (串行)',
+        'recovery',
+        'workers',
+        'blockers',
+        'finalizer',
+      ]);
+      const start = cells.indexOf('recovery');
+      if (start < 0) {
+        return [];
+      }
+      const rows: string[] = [];
+      for (const cell of cells.slice(start + 1)) {
+        if (headers.has(cell)) {
+          break;
+        }
+        if (cell.length > 0) {
+          rows.push(cell);
+        }
+      }
+      return rows;
+    }
+
+    /**
+     * 等到宿主静止：没有未收尾的真实 Worker，也没有未决 mutation intent。
+     *
+     * 宿主的触发是 fire-and-forget 的：上一轮 Resume 触发的推进还在派发时按 Pause，会让这次派发在
+     * 「控制状态不是 active」下被拒绝，而随后的 Resume 又会因为未决 mutation 而**先对账后拒绝恢复**
+     * （D4 的既有语义，界面显示 reconciling）。驱动必须先等它收尾。
+     */
+    async function waitForQuiescence(timeoutMs: number): Promise<boolean> {
+      return pollUntil(async () => {
+        if ((await inFlightWorkerCount()) > 0) {
+          return false;
+        }
+        const status = await readStatus(workspace);
+        return (
+          status.scope.unresolvedIntentCount === 0 &&
+          status.execution.executionReconciliation.unresolvedIntentCount === 0
+        );
+      }, 5_000, timeoutMs);
+    }
+
+    /**
+     * Pause → Resume 一次，让宿主做一次触发（只有 Resume 会触发）。
+     *
+     * 不要求宿主静止：真实 Worker 正在跑时也要用它——补记在途派发的 Session Binding 只发生在触发点上。
+     */
+    async function pokeTrigger(): Promise<boolean> {
+      const before = await readStatus(workspace);
+      if (before.scope.controlState !== 'paused') {
+        const paused = await submitControl('pause', before.scope.controlState);
+        if (paused.status.scope.controlState !== 'paused') {
+          return false;
+        }
+      }
+      const resumed = await submitControl('resume', 'paused');
+      return resumed.status.scope.controlState === 'active';
+    }
+
+    /**
+     * 提交一次推进轮次：先等宿主静止，再 Pause → Resume。
+     *
+     * 返回这次轮次是否真的落到 `active`：被拒绝时不把它读成成功——拒绝本身是界面上的可观察事实
+     * （状态行提示或 reconciling），由调用方按「无变化」处理。
+     */
+    async function triggerRound(): Promise<boolean> {
+      await waitForQuiescence(QUIESCENCE_WINDOW_MS);
+      return pokeTrigger();
+    }
+
     test(
       '① 前台 TUI 在隔离项目中启动并通过双 TTY 门禁',
       async () => {
@@ -398,7 +919,7 @@ if (gate.kind === 'skip') {
           terminal.connected && terminal.writable && !terminal.orphaned &&
           terminal.executionHostId !== null && terminals.hostIds.includes(terminal.executionHostId),
         )?.handle;
-        expect(selectedIdentity, '前台宿主将采用的身份必须是显式选择的专用身份').toBe(gate.identity);
+        expect(selectedIdentity, '前台宿主将采用的身份必须是显式选择的专用身份').toBe(dedicatedIdentity);
 
         const pane = ensureTuiPane();
         // 双 TTY 门禁在挂载 Ink 之前判决：没有 TTY 时进程只会留下拒绝提示，不会渲染 workspace。
@@ -452,8 +973,8 @@ if (gate.kind === 'skip') {
       90_000,
     );
 
-    test.skipIf(!EXECUTION_RUNTIME_WIRED)(
-      '③ 接线后：Pause 落盘为 paused 且 status --json 可读，Resume 先对账再恢复 active',
+    test(
+      '③ 接线：Pause 落盘为 paused 且 status --json 可读，Resume 先对账再恢复 active',
       async () => {
         ensureTuiPane();
         const before = await readStatus(workspace);
@@ -469,11 +990,270 @@ if (gate.kind === 'skip') {
       120_000,
     );
 
+    test(
+      '⑤ 授权 → 串行 Frontier → 执行态 Recovery → Finalizer（Scenario: 授权切换 / 串行推进 / Recovery 可观察 / Finalizer 终态）',
+      async () => {
+        expect(seededRunId.length, '播种必须给出候选图的 Orca Run').toBeGreaterThan(0);
+        const config = JSON.parse(readFileSync(join(workspace, 'orca-companion.json'), 'utf8')) as {
+          readonly execution?: { readonly workerModel?: unknown };
+        };
+        // 所有角色共用一个模型来源（项目配置），因此验收先钉住它，再由真实 Session 记录逐角色核对。
+        expect(config.execution?.workerModel, 'Worker 模型必须由项目配置显式给出').toBe(
+          REQUIRED_COORDINATOR_MODEL,
+        );
+
+        // ---- 授权：在 TUI 里打开审阅并批准 ----
+        const seeded = await readStatus(workspace);
+        expect(seeded.scope.mode).toBe('route_planning');
+        runPaletteCommand('authorize-execution');
+        const review = pollPane(
+          SOCKET,
+          SESSION,
+          (text) => text.includes('Execution Authorization Review'),
+          60_000,
+        );
+        expect(review.ok, `授权审阅未打开（${paneStatus(SOCKET, SESSION)}）：\n${review.text}`).toBe(true);
+        // 放宽沙箱必须真的写在项目配置里并被审阅显示出来，批准才是有意为之。
+        expect(review.text, '审阅必须显示 Worker Sandbox').toContain('danger-full-access');
+        expect(review.text, '门禁通过才允许批准').toContain('门禁: 通过');
+        tmux(SOCKET, ['send-keys', '-t', SESSION, 'Enter']);
+        const authorized = await pollStatus(
+          (status) => status.scope.mode === 'execution_coordination',
+          120_000,
+          '授权未进入 Execution Coordination',
+        );
+        expect(authorized.scope.authorization).not.toBeNull();
+        expect(authorized.scope.executionLeaseHolder).not.toBeNull();
+        // 授权不重置工作区：顶栏出现授权，composer 仍在。
+        const authorizedPane = pollPane(SOCKET, SESSION, (text) => /auth=(?!none)\S+/u.test(text), 30_000);
+        expect(authorizedPane.ok, `顶栏未显示授权：\n${authorizedPane.text}`).toBe(true);
+        expect(authorizedPane.text, '授权不重置工作区').toContain('composer ·');
+
+        // ---- 驱动：一次触发最多推进一个阶段，因此用 Pause→Resume 轮次推进真实 Frontier ----
+        const fingerprintOf = (status: StatusSnapshot): string =>
+          status.execution.workPackages
+            .map((entry) => `${entry.workPackageId}:${entry.state}:${entry.role ?? '-'}:${entry.attemptId ?? '-'}`)
+            .join('|');
+        /**
+         * 终态判据：Finalizer 给出独立结论，或某个 Work Package 阻塞且**没有仍在续办的 Recovery**。
+         *
+         * 后者是必要的区分：Recovery 未决时 Work Package 也显示为阻塞，但它还在推进，不能当终态。
+         */
+        const terminalReached = (status: StatusSnapshot, facts: ExecutionFacts): boolean =>
+          status.execution.finalizer.verdict !== null ||
+          (status.execution.workPackages.some((entry) => entry.state === 'blocked') &&
+            facts.recoveries.every(
+              (recovery) =>
+                recovery.status === 'recovered' ||
+                recovery.status === 'blocked' ||
+                // 带原因的未决 Recovery 表示 lane 已被占住：它在界面上就是 blocker，不会自愈。
+                recovery.blockingReason !== null,
+            ));
+        // 制造中断时链路会停在 Recovery blocker（还要等 Capsule 的同步窗口）；不制造中断时要一路推到
+        // 集成与 Finalizer 派发，再给独立结论留一段有界的等待窗口。
+        const deadline = Date.now() + (interruptRecovery ? 60 : 40) * 60_000;
+        /** 一轮触发后等待可观察变化的窗口：有真实 Worker 在跑时要等它收尾，没有 Worker 时不必空等。 */
+        const WORKER_WINDOW_MS = 15 * 60_000;
+        const NO_WORKER_WINDOW_MS = 90_000;
+        /** 容忍的连续无变化轮次：结果消息要等进度批次被确认后才成为当前批次，一轮可能只推进消息。 */
+        const MAX_NO_CHANGE_ROUNDS = 4;
+        let snapshot = authorized;
+        let loopFacts = await readExecutionFacts();
+        let rounds = 0;
+        let interrupted: string | null = null;
+        let noChangeRounds = 0;
+        while (Date.now() < deadline && !terminalReached(snapshot, loopFacts)) {
+          const inFlight = await inFlightWorkers();
+          if (inFlight.length > 0) {
+            const target = inFlight.length === 1 ? inFlight[0] : undefined;
+            const targetRole = target === undefined ? null : roleOfTask(loopFacts, target.taskId);
+            // 只中断 Implementation 或 Validator：Planner 的产出是 Specification Admission 的确定性
+            // 门禁，不动它才能让本条链路走完；替代 Session 由 Recovery 在同一次 Attempt 内续办。
+            const interruptible =
+              interruptRecovery &&
+              target !== undefined &&
+              (targetRole === 'implementation' || targetRole === 'validator');
+            if (interrupted === null && interruptible && target !== undefined) {
+              if (!loopFacts.sessionBoundDispatchIds.includes(target.dispatchId)) {
+                // 会话还没被绑定：在 SessionStart 之前关掉终端只会留下一个不可观察的派发（宿主 blocker
+                // `awaiting-observation`，没有 Session 可恢复）。先触发一轮让宿主补记 Session Binding。
+                await pokeTrigger();
+                rounds += 1;
+                loopFacts = await readExecutionFacts();
+                snapshot = await readStatus(workspace);
+                continue;
+              }
+              await interruptWorkerSession(await readExecutionFacts(), target);
+              const exited = await pollUntil(async () => {
+                const after = (await listRunWorkers()).find((worker) => worker.dispatchId === target.dispatchId);
+                return (
+                  after !== undefined &&
+                  after.workerState !== null &&
+                  EXITED_WORKER_STATES.has(after.workerState)
+                );
+              }, 2_000, 120_000);
+              expect(exited, '关闭终端后 Orca 必须把该 Dispatch 记为已退出').toBe(true);
+              interrupted = target.dispatchId;
+            }
+            const idle = await pollUntil(
+              async () => (await inFlightWorkerCount()) === 0,
+              5_000,
+              IN_FLIGHT_WINDOW_MS,
+            );
+            if (!idle) {
+              // 真实 Worker 长时间不收尾：本机只读沙箱会让受限会话（Capsule Utility、Finalizer）卡在
+              // 自己的第一轮命令上。它既没有退出、也没有结果，不能读成任何一种终态，因此停在这里，
+              // 由结论断言回答「链路停在哪儿、有没有 deliverable」。
+              const stalled = await readStatus(workspace);
+              console.warn(
+                `[pty-execution] 在途 Worker 未在窗口内收尾，停止驱动：${describeStatus(stalled)}`,
+              );
+              break;
+            }
+            continue;
+          }
+          const beforeFingerprint = fingerprintOf(snapshot);
+          const roundApplied = await triggerRound();
+          rounds += 1;
+          const workerDeadline = Date.now() + WORKER_WINDOW_MS;
+          const noWorkerDeadline = Date.now() + NO_WORKER_WINDOW_MS;
+          let sawInFlightWorker = (await inFlightWorkerCount()) > 0;
+          let advanced = false;
+          for (;;) {
+            const live = await inFlightWorkerCount();
+            const wasLive = sawInFlightWorker;
+            sawInFlightWorker = sawInFlightWorker || live > 0;
+            const current = await readStatus(workspace);
+            if (
+              fingerprintOf(current) !== beforeFingerprint ||
+              current.execution.finalizer.verdict !== null ||
+              current.blockers.length > 0 ||
+              // 刚结束的真实 Worker：交付要走下一次触发才结算，因此这里就返回。
+              (wasLive && live === 0)
+            ) {
+              advanced = true;
+              break;
+            }
+            if (Date.now() >= (sawInFlightWorker ? workerDeadline : noWorkerDeadline)) {
+              break;
+            }
+            sleepSync(5_000);
+          }
+          snapshot = await readStatus(workspace);
+          loopFacts = await readExecutionFacts();
+          console.warn(`[pty-execution] round=${String(rounds)} advanced=${String(advanced)} ${describeStatus(snapshot)}`);
+          // 并发上限固定为 1：任一时刻最多一个 Work Package 处于非终态。
+          expect(snapshot.execution.activeWorkPackageCount, '并发上限为 1').toBeLessThanOrEqual(1);
+          noChangeRounds = advanced && roundApplied ? 0 : noChangeRounds + 1;
+          if (noChangeRounds >= MAX_NO_CHANGE_ROUNDS) {
+            break;
+          }
+        }
+        expect(rounds, '闭环没有产生任何推进').toBeGreaterThan(0);
+        const observed = await readStatus(workspace);
+        const facts = await readExecutionFacts();
+        console.warn(`[pty-execution] rounds=${String(rounds)} ${describeStatus(observed)}`);
+
+        // ---- 界面先重读一次快照：只是为了让 Sidebar 画出已持久化的 Recovery / Finalizer 事实 ----
+        await waitForQuiescence(QUIESCENCE_WINDOW_MS);
+        await submitControl('pause', (await readStatus(workspace)).scope.controlState);
+        const refreshed = pollPane(
+          SOCKET,
+          SESSION,
+          (text) => text.includes('finalizer'),
+          15_000,
+        );
+        expect(refreshed.ok, `Sidebar 未渲染 finalizer 分区：\n${refreshed.text}`).toBe(true);
+
+        if (interruptRecovery) {
+          // ---- 执行态 Worker Session Recovery：真实中断必须留下可核验的 Recovery，并在界面如实可见 ----
+          expect(
+            facts.recoveries.length,
+            '本次验收必须覆盖至少一次执行态 Worker Session Recovery',
+          ).toBeGreaterThan(0);
+          const recovery = facts.recoveries[0];
+          expect(recovery, 'Recovery 记录必须可读').toBeDefined();
+          const recovered = recovery?.replacementSegmentId !== null || recovery?.status === 'recovered';
+          const blocked = recovery?.blockingReason !== null || recovery?.status === 'blocked';
+          expect(
+            recovered || blocked,
+            `Recovery 既没有替代 Segment 也不是明确 blocker：${JSON.stringify(facts.recoveries)}`,
+          ).toBe(true);
+          const rows = recoveryRows(refreshed.text);
+          expect(rows.length, `Sidebar 未渲染 recovery 分区：\n${refreshed.text}`).toBeGreaterThan(0);
+          const rowsText = rows.join('\n');
+          expect(rowsText, 'recovery 行必须点名角色与状态').toContain(recovery?.role ?? '');
+          if (blocked) {
+            expect(rowsText, `blocked Recovery 必须在界面上带原因：\n${rowsText}`).toMatch(/^! .+/mu);
+          }
+          if (recovered) {
+            expect(rowsText, 'recovered 必须显示替代 Segment').toMatch(/segment \S+ -> (?!none)\S+/u);
+          }
+        } else {
+          // 未制造中断时不该凭空出现 Recovery：Record 只能由真实中断产生。
+          expect(facts.recoveries).toEqual([]);
+        }
+
+        // ---- 集成：两个 Work Package 都被接受时用 Git 事实核验 canonical 真的前进了 ----
+        if (observed.execution.workPackages.every((entry) => entry.state === 'accepted')) {
+          const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' });
+          expect(head.status).toBe(0);
+          expect(head.stdout.trim(), 'canonical 必须已被受控集成推进').not.toBe(seededBaselineHead);
+          expect(observed.execution.integrationQueue, '集成完成后队列应为空').toEqual([]);
+        }
+
+        // ---- Finalizer：只有被接受的只读结论才显示 deliverable ----
+        //
+        // 本机只读沙箱不可用（见 docs/orca-compatibility.md）：只读 Session 不能执行命令，因此 Finalizer
+        // 既可能给出 `blocked` 结论，也可能根本没有结论。这里断言的是**不变量**（结论与只读事实一致、没有
+        // 结论时不显示 deliverable），而不是把本机限制写死成期望值。
+        const verdict = observed.execution.finalizer.verdict;
+        if (verdict === null) {
+          expect(
+            refreshed.text,
+            `没有独立结论时不得显示 deliverable：\n${refreshed.text}`,
+          ).toContain('verdict 未返回（不显示 deliverable）');
+          expect(refreshed.text).not.toContain('verdict deliverable');
+          // 没有结论的运行必须能解释自己停在哪儿：门禁不满足，或阻塞的 Work Package / Recovery。
+          const explained =
+            !observed.execution.finalizer.gate.ready ||
+            observed.execution.workPackages.some((entry) => entry.state === 'blocked');
+          expect(explained, `没有结论时必须有明确的阻塞事实：${describeStatus(observed)}`).toBe(true);
+        } else {
+          expect(
+            refreshed.text,
+            `Finalizer 结论必须在界面上如实呈现：\n${refreshed.text}`,
+          ).toContain(verdict.kind === 'deliverable' ? 'verdict deliverable' : 'verdict blocked');
+          if (verdict.kind === 'deliverable') {
+            expect(observed.execution.finalizer.readOnlyProfile).toBe('enforced');
+          }
+        }
+
+        // ---- 逐角色核对真实 Codex Session 的模型绑定 ----
+        const models = roleSessionModels(facts);
+        // 每个真的跑起来的角色都必须落在配置声明的模型上：模型来自唯一来源（项目配置），这里是逐角色的
+        // 真实会话证据。Planner 与 Implementation 在两种模式下都会出现，因此必须读到。
+        for (const role of ['planner', 'implementation', ...models.keys()]) {
+          const seen = models.get(role) ?? [];
+          expect(
+            seen.length,
+            `没有读到 ${role} 的真实 Codex Session 记录：${[...models.keys()].join(',')}`,
+          ).toBeGreaterThan(0);
+          expect(
+            seen.every((model) => model.includes('MiniMax-M3')),
+            `${role} 的 Session 记录模型不符：${seen.join(',')}`,
+          ).toBe(true);
+        }
+      },
+      // 与循环的 60 分钟截止一致：进度由真实 Worker 决定，vitest 只在链路真的卡死时才兜底。
+      3_600_000,
+    );
+
     test.skip(
       '④ 退出重启后界面先显示 reconciling（Scenario: 重启先对账）：需要可控的在途操作',
       () => {
-        // 不可达：没有任何生产路径写 Operation Intent，也没有 Worker 会被派发，因此隔离项目里不可能
-        // 存在「活跃 Worker 或未决操作」，界面不会进入 reconciling。见文件头部「当前状态」。
+        // 不可达：真实闭环里每个阶段都会收尾（Worker 退出、Delivery 结算、集成完成），重启时不存在
+        // 「活跃 Worker 或未决操作」，界面因此不会进入 reconciling。见文件头部「覆盖范围」。
         // 可达的替代断言在下面：「重启后界面恢复同一持久事实，且不产生新的派发或集成」。
       },
     );
@@ -514,7 +1294,11 @@ if (gate.kind === 'skip') {
           executionSummaryLine(text).startsWith(`active ${String(after.execution.activeWorkPackageCount)}`) &&
           displayedControlStateOrNull(text) === after.scope.controlState,
         10_000);
-        expect(rendered.ok, `界面未跟上持久事实：\n${rendered.text}`).toBe(true);
+        expect(
+          rendered.ok,
+          `界面未跟上持久事实（期望 active=${String(after.execution.activeWorkPackageCount)} control=${after.scope.controlState}；` +
+            `界面 active=${executionSummaryLine(rendered.text)} control=${String(displayedControlStateOrNull(rendered.text))}）：\n${rendered.text}`,
+        ).toBe(true);
       },
       240_000,
     );
@@ -535,11 +1319,6 @@ if (gate.kind === 'skip') {
         expect(pane).toContain(verdict.kind === 'deliverable' ? 'verdict deliverable' : 'verdict blocked');
       },
       60_000,
-    );
-
-    test.skip(
-      '⑤ 串行 Frontier 推进、Validator repair、reconciliation 与 Finalizer deliverable：当前主机受限沙箱不可用',
-      () => {},
     );
 
     test(
