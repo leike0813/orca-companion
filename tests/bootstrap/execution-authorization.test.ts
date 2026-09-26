@@ -12,13 +12,14 @@
  * `proposeManifest` → `recordApproval` → `transitionToExecution`），只有 Orca 后端与 tracker 是 fake。
  */
 
-import { mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, expect, test } from 'vitest';
-
 import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
+import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
 import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
 import type {
   CoordinationScopeId,
@@ -56,6 +57,18 @@ import {
   reviewExecutionAuthorization,
   type ExecutionAuthorizationFacts,
 } from '../../src/bootstrap/execution-runtime.js';
+import { canonicalPath, coordinationDatabasePath } from '../../src/bootstrap/composition.js';
+import { checkpointDatabasePath } from '../../src/bootstrap/coordinator-runtime.js';
+import { COORDINATOR_SESSION_STATE_SCHEMA_VERSION } from '../../src/domain/coordinator/session-state.js';
+import { createForegroundPlanningHost } from '../../src/bootstrap/foreground-planning-runtime.js';
+import type { DoctorProbe } from '../../src/bootstrap/doctor.js';
+import type { ExecutionQueryResult } from '../../src/application/dto/operation-outcome.js';
+import type { ReadOnlyWorkerProbeResult } from '../../src/adapters/agents/codex-read-only-probe.js';
+import { CapableChatModel } from '../support/fake-chat-model.js';
+import {
+  READ_ONLY_WORKER_AVAILABLE,
+  READ_ONLY_WORKER_UNAVAILABLE,
+} from '../support/read-only-worker-probe.js';
 
 const SCOPE = 'scope-authorization' as CoordinationScopeId;
 const SESSION = 'session-authorization' as CoordinatorSessionId;
@@ -469,4 +482,352 @@ test('门禁未通过时批准被拒绝：开放票据与 fog 会同时出现在
   expect(authorizations()).toBe(1);
   expect(scopeRecord().mode).toBe('route_planning');
   expect(unreleasedExecutionLeases()).toBe(0);
+});
+
+/* -------------------------------------------------------------------------- */
+/* 授权审阅的只读 Worker 能力（change: `m2-repair-read-only-worker-sandbox`）      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * 授权依赖 Capsule Utility Worker 与只读 Finalizer 两个角色，因此宿主必须在审阅与批准两处核验本机
+ * 只读 Worker 能力。这里用真实前台宿主验证这条接线：审阅显示两个角色的只读配置与本次探针结论，能力
+ * 不可用时批准被拒且零授权写入，环境恢复后同一 Scope 可以重新审阅并继续。
+ */
+
+/** 只读受限命令跑不起来的本机现状；探针结论由用例在两次审阅之间切换。 */
+type Capability = { value: ReadOnlyWorkerProbeResult };
+
+/** 宿主启动与对账会发起多种只读查询；空事实也要是**合法形状**，否则投影会把它们读成可读错误。 */
+function permissiveHostBackend(): ExecutionBackend {
+  return {
+    query: (input: ExecutionQuery): Promise<ExecutionQueryResult> => {
+      switch (input.operation) {
+        case 'run-current':
+          return Promise.resolve({ kind: 'accepted', value: { run: { runId: 'run-1', consumerGeneration: 1 } } });
+        case 'worktree-list':
+          return Promise.resolve({
+            kind: 'accepted',
+            value: { worktrees: [], totalCount: 0, truncated: false, hostScope: null },
+          });
+        case 'worker-list':
+          return Promise.resolve({ kind: 'accepted', value: { workers: [] } });
+        case 'terminal-list':
+          return Promise.resolve({
+            kind: 'accepted',
+            value: { terminals: [], omittedHostIds: [], truncated: false },
+          });
+        case 'delivery-read':
+          return Promise.resolve({
+            kind: 'accepted',
+            value: { delivery: null, messages: [], timedOut: false, cancelled: false },
+          });
+        case 'request-show':
+          return Promise.resolve({ kind: 'accepted', value: { requestId: input.requestId, state: 'pending' } });
+        default:
+          return Promise.resolve({ kind: 'accepted', value: {} });
+      }
+    },
+    mutate: (input: ExecutionMutation, scope) => {
+      if (input.operation === 'run-create') {
+        return Promise.resolve({
+          kind: 'accepted',
+          operation: { operationId: scope.operationId, target: scope.target },
+          value: { run: { runId: 'run-1' } },
+        });
+      }
+      return Promise.resolve({ kind: 'rejected', code: 'unregistered_fake_mutation', message: input.operation });
+    },
+  };
+}
+
+function hostProbe(): DoctorProbe {
+  return {
+    readOrcaVersion: () => Promise.resolve({ ok: true, value: '1.4.198' }),
+    readRuntime: () => Promise.resolve({ ok: true, value: { state: 'running', reachable: true, capabilities: [] } }),
+    readHosts: () => Promise.resolve({ ok: true, value: [] }),
+    readCoordinatorIdentity: () => Promise.resolve({ ok: true, value: 'coordinator@test' }),
+    readPublicCommands: () => Promise.resolve({ ok: true, value: [] }),
+  };
+}
+
+function hostTracker(): IssueTrackerGateway {
+  return {
+    readIssue: () =>
+      Promise.resolve({
+        kind: 'read',
+        issue: {
+          ref: { kind: 'route-map', id: '7' },
+          title: 'Route Map',
+          // Destination 与「无开放票据、无 fog」是门禁通过的地图事实。
+          body: '## Destination\n目的地\n## Open Decision Tickets\n## Fog\n',
+          state: 'open',
+          assignees: [],
+        },
+      }),
+    updateIssueBody: () => Promise.resolve({ kind: 'accepted' }),
+    assignIssue: () => Promise.resolve({ kind: 'accepted' }),
+  };
+}
+
+type AuthorizationHostHarness = {
+  readonly host: Awaited<ReturnType<typeof createForegroundPlanningHost>>;
+  readonly repository: string;
+  readonly capability: Capability;
+  readonly probeCalls: { value: number };
+  readonly dispose: () => void;
+};
+
+/** 一次性仓库 + 未授权的 route_planning Scope（候选图与 Run 已绑定）。 */
+async function openAuthorizationHost(directory: string): Promise<AuthorizationHostHarness> {
+  const repository = join(directory, 'repo');
+  mkdirSync(repository);
+  const git = (...args: string[]): string =>
+    execFileSync('git', args, { cwd: repository, encoding: 'utf8' }).trim();
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.name', 'Verification');
+  git('config', 'user.email', 'verification@example.invalid');
+  writeFileSync(join(repository, 'README.md'), '# repo\n', 'utf8');
+  writeFileSync(
+    join(repository, 'orca-companion.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      coordinatorModels: [
+        {
+          configurationRef: 'planning-default',
+          providerIntegration: '@fake/provider#CapableChatModel',
+          model: 'fake-coordinator',
+          modelOptions: {},
+          credentialRefs: ['fake'],
+          nativeWindowOwnerRef: null,
+        },
+      ],
+      defaultCoordinatorModelRef: 'planning-default',
+      tracker: { kind: 'github', routeMapIssueNumber: 7 },
+      planning: { maxMutations: 2 },
+      context: { maxInputTokens: 20_000 },
+      execution: {
+        harness: 'codex',
+        workerModel: 'minimax-cn/MiniMax-M3',
+        permissions: {
+          planner: true,
+          implementation: true,
+          validator: true,
+          finalizer: true,
+          gitIntegration: true,
+          dependencyChanges: false,
+        },
+        git: { remotes: ['origin'], refs: ['refs/heads/main'] },
+      },
+    }),
+    'utf8',
+  );
+  git('add', '.');
+  git('commit', '-qm', 'fixture');
+  const head = git('rev-parse', 'HEAD');
+
+  const opened = openCoordinationStore({ databasePath: coordinationDatabasePath(join(repository, '.git')), clock });
+  if (opened.kind !== 'opened') {
+    throw new Error(opened.message);
+  }
+  const seedStore: CoordinationStore = opened.store;
+  try {
+    const initialized = initializeCoordinationScope({
+      store: seedStore,
+      coordinationScopeId: SCOPE,
+      coordinatorSessionId: SESSION,
+      coordinatorModelConfigurationRef: 'planning-default',
+      planningCycleId: CYCLE,
+      fullBranchRef: 'refs/heads/main',
+      canonicalWorktreePath: canonicalPath(repository),
+    });
+    if (initialized.kind !== 'initialized') {
+      throw new Error(`无法初始化 Scope：${initialized.message}`);
+    }
+    const acquired = acquireRuntimeLease(seedStore, {
+      coordinationScopeId: SCOPE,
+      coordinatorSessionId: SESSION,
+      runtimeIncarnationId: INCARNATION,
+      fencingGeneration: 0,
+    });
+    if (acquired.kind !== 'acquired') {
+      throw new Error('无法取得 Runtime Lease');
+    }
+    const seedWriter: CoordinationWriter = {
+      coordinatorSessionId: SESSION,
+      runtimeIncarnationId: INCARNATION,
+      fencingGeneration: acquired.lease.fencingGeneration,
+    };
+    const recorded = await proposeExecutionGraph({
+      store: seedStore,
+      backend: permissiveHostBackend(),
+      coordinationScopeId: SCOPE,
+      writer: seedWriter,
+      backendIdentityRef: 'identity-ref',
+      timeoutMs: 1_000,
+      authority: { kind: 'route_planning' },
+      plan: plan(),
+      limits: DEFAULT_EXECUTION_LIMITS,
+      baselineHead: head,
+      objective: 'compile candidate',
+    });
+    if (recorded.kind !== 'recorded') {
+      throw new Error(`无法记录候选图：${JSON.stringify(recorded)}`);
+    }
+    const revision = (): number => {
+      const read = seedStore.query({ kind: 'scope', coordinationScopeId: SCOPE });
+      if (read.kind !== 'scope' || read.scope === null) {
+        throw new Error('Scope 不存在');
+      }
+      return read.scope.revision;
+    };
+    // 上一个 Incarnation 结束：宿主会取得自己的 Runtime Lease；Session 可恢复需要一份 checkpoint。
+    const checkpoints = openCheckpointStore({
+      databasePath: checkpointDatabasePath(join(repository, '.git')),
+      clock,
+    });
+    if (checkpoints.kind !== 'opened') {
+      throw new Error(checkpoints.message);
+    }
+    const saved = checkpoints.store.saveCheckpoint({
+      schemaVersion: COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
+      coordinatorSessionId: SESSION,
+      committedMessages: [],
+      graphPosition: 'suspend',
+      committedModelSteps: [],
+      wakeBatches: [],
+      lastCompactionOutcome: null,
+    });
+    checkpoints.store.close();
+    if (saved.kind !== 'saved') {
+      throw new Error('无法写入 Session checkpoint');
+    }
+    const released = seedStore.transact({
+      kind: 'release-runtime-lease',
+      coordinationScopeId: SCOPE,
+      expectedRevision: revision(),
+      writer: seedWriter,
+    });
+    if (released.kind === 'rejected') {
+      throw new Error(`无法释放 Runtime Lease：${released.message}`);
+    }
+  } finally {
+    seedStore.close();
+  }
+
+  const capability: Capability = { value: READ_ONLY_WORKER_AVAILABLE };
+  const probeCalls = { value: 0 };
+  const host = await createForegroundPlanningHost({
+    repositoryPath: repository,
+    env: process.env as Record<string, string>,
+    clock,
+    newId: (() => {
+      let counter = 0;
+      return () => `id-${String((counter += 1))}`;
+    })(),
+    heartbeatIntervalMs: 1_000,
+    leaseTtlMs: 60_000,
+    orcaProbe: hostProbe(),
+    trackerFactory: hostTracker,
+    loadIntegration: () => Promise.resolve({ CapableChatModel }),
+    executionBackend: permissiveHostBackend(),
+    readOnlyWorkerProbe: () => {
+      probeCalls.value += 1;
+      return Promise.resolve(capability.value);
+    },
+  });
+  let disposed = false;
+  return {
+    host,
+    repository,
+    capability,
+    probeCalls,
+    dispose: () => {
+      if (!disposed) {
+        disposed = true;
+        host.close();
+      }
+    },
+  };
+}
+
+/** 读回真实持久化事实：授权条数与 Scope 模式都只从存储读取。 */
+function persistedFacts(repository: string): { readonly authorizations: number; readonly mode: string } {
+  const read = openCoordinationStore({
+    databasePath: coordinationDatabasePath(join(repository, '.git')),
+    clock,
+    readOnly: true,
+  });
+  if (read.kind !== 'opened') {
+    throw new Error(read.message);
+  }
+  try {
+    const authorizations = read.store.query({ kind: 'authorizations', coordinationScopeId: SCOPE });
+    const scope = read.store.query({ kind: 'scope', coordinationScopeId: SCOPE });
+    return {
+      authorizations: authorizations.kind === 'authorizations' ? authorizations.authorizations.length : 0,
+      mode: scope.kind === 'scope' && scope.scope !== null ? scope.scope.mode : 'unreadable',
+    };
+  } finally {
+    read.store.close();
+  }
+}
+
+function manifestRow(
+  load: Awaited<ReturnType<AuthorizationHostHarness['host']['ports']['executionAuthorization']['review']>>,
+  label: string,
+): string {
+  if (load.kind !== 'review') {
+    return '';
+  }
+  return load.review.manifestRows.find((row) => row.label === label)?.value ?? '';
+}
+
+test('审阅与批准各自核验只读 Worker 能力：不可用不写授权，环境恢复后可重审', { timeout: 60_000 }, async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'orca-authorization-host-'));
+  const harness = await openAuthorizationHost(directory);
+  try {
+    expect(await harness.host.ports.scopeSetup.resolveHome()).toEqual({ kind: 'restore', coordinationScopeId: SCOPE });
+
+    // 1. 本机只读受限命令跑不起来：审阅仍可读（Route Planning 不受影响），门禁不允许批准。
+    harness.capability.value = READ_ONLY_WORKER_UNAVAILABLE;
+    const blocked = await harness.host.ports.executionAuthorization.review();
+    expect(blocked.kind).toBe('review');
+    if (blocked.kind !== 'review') {
+      return;
+    }
+    expect(blocked.review.gate.ready).toBe(false);
+    expect(blocked.review.gate.blockers.join(' ')).toContain('read_only_worker_unavailable');
+    // Capsule 与 Finalizer 的实际只读配置与本次结论都在审阅里可见。
+    expect(manifestRow(blocked, 'Worker Sandbox')).toContain('capsule=utility-readonly-local-control');
+    expect(manifestRow(blocked, 'Worker Sandbox')).toContain('finalizer=utility-readonly-local-control');
+    expect(manifestRow(blocked, 'Read-only Workers')).toContain('sandbox-read');
+
+    const refused = await harness.host.ports.executionAuthorization.approve({
+      fingerprint: blocked.review.fingerprint,
+      expectedRevision: blocked.review.scopeRevision,
+    });
+    expect(refused).toMatchObject({ kind: 'rejected', code: 'read_only_worker_unavailable' });
+    expect(persistedFacts(harness.repository)).toEqual({ authorizations: 0, mode: 'route_planning' });
+
+    // 2. 环境恢复后同一 Scope 重新审阅：之前的失败结论不锁死它，批准此时才落盘。
+    harness.capability.value = READ_ONLY_WORKER_AVAILABLE;
+    const ready = await harness.host.ports.executionAuthorization.review();
+    expect(ready.kind).toBe('review');
+    if (ready.kind !== 'review') {
+      return;
+    }
+    expect(ready.review.gate.ready).toBe(true);
+    expect(manifestRow(ready, 'Read-only Workers')).toContain('可用');
+    const approved = await harness.host.ports.executionAuthorization.approve({
+      fingerprint: ready.review.fingerprint,
+      expectedRevision: ready.review.scopeRevision,
+    });
+    expect(approved.kind).toBe('accepted');
+    expect(persistedFacts(harness.repository)).toEqual({ authorizations: 1, mode: 'execution_coordination' });
+    // 审阅与批准各自探测：结论不缓存，旧成功不会替代本次检查。
+    expect(harness.probeCalls.value).toBeGreaterThanOrEqual(3);
+  } finally {
+    harness.dispose();
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

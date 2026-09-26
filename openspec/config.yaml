@@ -16,6 +16,9 @@ context: |
   m2-wire-execution-runtime 是 m2-deliver-execution-tui 的解阻塞并行项：两者可同时保持 active，
   接线 change 可在执行 TUI change 尚未归档时 apply；须先固定现有 TUI 接缝并避免同时编辑同一文件。
   接线 change 先完成执行闭环的验证与 archive，再验收执行 TUI change 的真实 PTY 任务并 archive。
+  m2-repair-read-only-worker-sandbox 同样是执行 TUI 的解阻塞并行项，以已归档的
+  m2-wire-execution-runtime 为直接前驱，并固定当前执行 TUI 接缝。它可在执行 TUI 未归档时
+  apply、验证和 archive；随后执行 TUI 补齐自身剩余真实验收再归档。
 
   行为验证使用 Vitest。真实 Codex Worker Harness 集成测试使用 MiniMax-M3，并且只能在
   显式选择的隔离项目和专用身份中运行。普通检查不得构建 references/orca submodule。
@@ -43,7 +46,7 @@ rules:
 operations:
   apply:
     guidance:
-      - 默认只实施依赖序列中第一个尚未归档的 change；m2-wire-execution-runtime 可在 m2-deliver-execution-tui 尚未归档时实施，前提是两者的直接已归档前驱及共享接缝均已核验，且同一文件不被两个 agent 同时编辑。
+      - 默认只实施依赖序列中第一个尚未归档的 change；m2-wire-execution-runtime 与 m2-repair-read-only-worker-sandbox 可作为解阻塞并行项在 m2-deliver-execution-tui 尚未归档时实施，前提是各自的直接已归档前驱及共享接缝均已核验，且同一文件不被两个 agent 同时编辑。
       - 开始编辑前执行 implementation-plan 的基线和前驱接缝检查；漂移时停止并回到规划。
       - 不在 apply 阶段创建 verification.md。
   archive:

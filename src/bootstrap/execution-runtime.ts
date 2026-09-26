@@ -60,8 +60,13 @@ import {
 } from '../adapters/orca-cli/operation-catalog.js';
 import { createCodexWorkerLaunch, installCodexSessionStartReporter } from '../adapters/agents/codex-launch.js';
 import {
+  readOnlyWorkerUnavailableReason,
+  type ReadOnlyWorkerProbe,
+} from '../adapters/agents/codex-read-only-probe.js';
+import {
   buildUtilityWorkerEnvelope,
   dispatchCapsuleWorker,
+  findDispatchedUtilityWorker,
   type UtilityWorkerDispatchInput,
 } from '../adapters/agents/utility-worker.js';
 import {
@@ -1461,6 +1466,26 @@ function capsuleOperationIdsOf(segmentId: SessionSegmentId): UtilityWorkerDispat
   };
 }
 
+/**
+ * 该 Segment 是否已经留下 Capsule 派发意图。
+ *
+ * 有意图就说明这次不是全新派发：无论它已收尾还是未决，都必须按原 OperationId 对账，探针结论不能改写
+ * 既有事实。意图读不回来时同样按「有进行中的派发」处理——派发路径自己会以 lane 阻塞收尾，不会新建
+ * mutation，也不会用能力缺失覆盖掉那份不确定。
+ */
+function capsuleIntentExists(
+  store: BranchCoordinationStore,
+  coordinationScopeId: CoordinationScopeId,
+  operationIds: UtilityWorkerDispatchInput['operationIds'],
+): boolean {
+  const intents = store.query({ kind: 'intents', coordinationScopeId });
+  if (intents.kind !== 'intents') {
+    return true;
+  }
+  const mine = new Set<string>(Object.values(operationIds));
+  return intents.intents.some((intent) => mine.has(intent.operationId));
+}
+
 /** 等待 Capsule 报告的上界：契约上的提取 seam 是同步的，因此必须有界，超时按失败上报。 */
 const CAPSULE_REPORT_TIMEOUT_MS = 120_000;
 
@@ -1487,6 +1512,13 @@ export type ExecutionRecoveryFactsInput = {
   readonly codexSandbox: CodexSandboxMode | null;
   /** Companion 私有的状态根（Git common dir 下）；缺失即无法证明 Codex Session。 */
   readonly companionStateRoot: string | null;
+  /**
+   * 本机只读 Codex Worker 能力探针。
+   *
+   * Capsule 提取要派发只读 Utility Worker，因此新派发之前必须知道本机能不能运行受限命令。测试注入
+   * 固定结论；生产用真实受限命令探针。
+   */
+  readonly readOnlyWorkerProbe: ReadOnlyWorkerProbe;
   /**
    * 协调写入者。Capsule 提取要派发受限 Utility Worker，而派发是受 Intent 保护的 mutation，因此需要
    * 可信身份；缺失时不派发（fail closed），其余 Recovery 事实仍照常装配。
@@ -1799,6 +1831,27 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
 
       const launchId = capsuleLaunchIdOf(request.segmentId);
       const paths = codexSessionPathsUnder(input.companionStateRoot, launchId);
+      const envelope = buildUtilityWorkerEnvelope({
+        workPackageId: request.workPackageId,
+        sourceWorkerTaskId: request.workerTaskId,
+        sourceSegmentId: request.segmentId,
+        transcriptRef: request.transcriptRef,
+      });
+      const operationIds = capsuleOperationIdsOf(request.segmentId);
+      // 已有派发或既有意图都按原身份对账：只有确认这次会是全新派发时，能力缺失才允许阻断它。
+      const priorDispatch = await findDispatchedUtilityWorker({
+        backend: input.backend,
+        backendIdentityRef: execution.backendIdentityRef,
+        runId: execution.runId,
+        envelope,
+      });
+      if (priorDispatch === null && !capsuleIntentExists(input.store(), scopeId, operationIds)) {
+        const readOnlyBlocker = readOnlyWorkerUnavailableReason(await input.readOnlyWorkerProbe());
+        if (readOnlyBlocker !== null) {
+          // 不进入报告等待、不建 Task/Dispatch、不消耗 Recovery 预算：只留下可诊断的能力 blocker。
+          return { kind: 'failed', reason: readOnlyBlocker };
+        }
+      }
       installCodexSessionStartReporter(paths);
       const expectedCodexHome = join(paths.stateRoot, createHash('sha256').update(launchId).digest('hex').slice(0, 20));
       const dispatchStartedAt = new Date(input.clock()).toISOString();
@@ -1807,26 +1860,19 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
         backend: input.backend,
         writer: input.writer,
         coordinationScopeId: scopeId,
-        envelope: buildUtilityWorkerEnvelope({
-          workPackageId: request.workPackageId,
-          sourceWorkerTaskId: request.workerTaskId,
-          sourceSegmentId: request.segmentId,
-          transcriptRef: request.transcriptRef,
-        }),
+        envelope,
         execution,
         workerLaunch: createCodexWorkerLaunch({
           launchId,
           model: input.workerModel,
-          // Capsule 提取只读 transcript：权限仍是 `:read-only`（信封 `authority.write=false`），但环境
-          // 需要走 landlock 而不是 bwrap——`read-only-local-control` profile 继承 `:read-only`、开启本机
-          // 控制通道所需网络，并在 bwrap 不可用的主机上仍能建立受限会话。真实运行里普通 `read-only`
-          // 在本机会以 `error building bubblewrap command: …` 失败，受限 Worker 因此什么都做不了。
+          // Capsule 提取只读 transcript：权限是共享的 `read-only-local-control` profile（继承
+          // `:read-only`，只为本机控制通道开启网络），信封 `authority.write=false`。
           sandboxMode: 'read-only-local-control',
           stateRoot: paths.stateRoot,
           sessionStartReporterPath: paths.reporterPath,
         }),
         worktree: `path:${worktree.path}`,
-        operationIds: capsuleOperationIdsOf(request.segmentId),
+        operationIds,
         observeSession: async ({ dispatchId }) => {
           const deadline = input.clock() + input.bindingWindowMs;
           const maxAttempts = Math.max(1, Math.ceil(input.bindingWindowMs / 250) + 1);

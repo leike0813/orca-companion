@@ -10,7 +10,7 @@
  * - 正文：按 `capsuleRef` 确定性落点写入 Companion 私有状态根，能回读、能识别损坏。
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -27,7 +27,13 @@ import {
 import {
   capsuleLaunchIdOf,
   codexSessionPathsUnder,
+  createExecutionRecoveryFacts,
 } from '../../src/bootstrap/execution-runtime.js';
+import { workPackageComment } from '../../src/application/materialize-work-package.js';
+import {
+  READ_ONLY_WORKER_UNAVAILABLE,
+} from '../support/read-only-worker-probe.js';
+import type { ReadOnlyWorkerProbe } from '../../src/adapters/agents/codex-read-only-probe.js';
 import {
   capsuleRefOf,
   readRecoveryCapsuleBody,
@@ -35,7 +41,8 @@ import {
   type RecoveryCapsule,
   type TranscriptCoverageEvidence,
 } from '../../src/application/recovery/recovery-capsule.js';
-import type { ExecutionScope } from '../../src/application/ports/execution-backend.js';
+import { beginIntent } from '../../src/application/coordination/intent-service.js';
+import type { ExecutionBackend, ExecutionScope } from '../../src/application/ports/execution-backend.js';
 import type { OperationOutcome } from '../../src/application/dto/operation-outcome.js';
 import {
   RECOVERY_AUTHORIZATION,
@@ -118,7 +125,7 @@ function prepareCodexSession(input: {
   return { reportPath: paths.reportPath, transcriptPath, codexHome };
 }
 
-test('Capsule 提取：受限 Utility Worker 派发、按 Orca 身份读回报告并交回 Delivery 身份', { timeout: 30_000 }, async () => {
+test.each(['payload', 'body'] as const)('Capsule 提取：受限派发、按 Orca 身份读回 %s 报告并交回 Delivery 身份', { timeout: 30_000 }, async (location) => {
   harness = createRecoveryHarness();
   harness.recordSourceSegment({
     segmentId: SEGMENT,
@@ -209,9 +216,12 @@ test('Capsule 提取：受限 Utility Worker 派发、按 Orca 身份读回报�
                 type: 'worker_done',
                 subject: 'Recovery Capsule',
                 priority: null,
-                body: 'capsule 见 payload',
-                // 报告在载荷顶层：Capsule 字段与 Orca 身份同层，解析器按字段名读取。
-                payload: JSON.stringify({ taskId: CAPSULE_TASK, dispatchId: CAPSULE_DISPATCH, ...CAPSULE }),
+                body: location === 'body' ? JSON.stringify(CAPSULE) : 'capsule 见 payload',
+                payload: JSON.stringify({
+                  taskId: CAPSULE_TASK,
+                  dispatchId: CAPSULE_DISPATCH,
+                  ...(location === 'payload' ? CAPSULE : { outcome: 'succeeded' }),
+                }),
               },
             ],
             timedOut: false,
@@ -285,12 +295,22 @@ test('Capsule 提取：受限 Utility Worker 派发、按 Orca 身份读回报�
   const created = backend.calls.find(
     (call) => call.kind === 'mutate' && call.operation.operation === 'task-create',
   );
-  expect(created?.kind === 'mutate' && created.operation.operation === 'task-create' ? created.operation.spec : '').toContain(
-    'recovery-capsule-extraction',
-  );
+  // 生产 spec 根身份不变（`specMatchesEnvelope` 的对账字段），并携带含可信 coverage 证据的可读指令。
+  const spec = created?.kind === 'mutate' && created.operation.operation === 'task-create'
+    ? (JSON.parse(created.operation.spec) as {
+        readonly taskKind?: string;
+        readonly workPackageId?: string;
+        readonly sourceSegmentId?: string;
+        readonly instructions?: readonly string[];
+      })
+    : {};
+  expect(spec.taskKind).toBe('recovery-capsule-extraction');
+  expect(spec.workPackageId).toBe(RECOVERY_WORK_PACKAGE);
+  expect(spec.sourceSegmentId).toBe(SEGMENT);
+  expect(spec.instructions?.join('\n')).toContain(JSON.stringify(EVIDENCE));
 });
 
-test('Capsule 报告无法解析时返回失败，不把不完整结论当 Capsule', { timeout: 30_000 }, async () => {
+test.each(['coverage', 'task', 'dispatch'] as const)('Capsule 的 %s 不匹配时拒绝接纳', { timeout: 30_000 }, async (mismatch) => {
   harness = createRecoveryHarness();
   harness.recordSourceSegment({
     segmentId: SEGMENT,
@@ -366,8 +386,11 @@ test('Capsule 报告无法解析时返回失败，不把不完整结论当 Capsu
                 subject: 'Recovery Capsule',
                 priority: null,
                 // coverage 与 host 证据不一致：必须拒绝，不能降级。
-                body: JSON.stringify({ ...CAPSULE, coverage: 'partial' }),
-                payload: JSON.stringify({ taskId: CAPSULE_TASK, dispatchId: CAPSULE_DISPATCH }),
+                body: JSON.stringify(mismatch === 'coverage' ? { ...CAPSULE, coverage: 'partial' } : CAPSULE),
+                payload: JSON.stringify({
+                  taskId: mismatch === 'task' ? 'other-task' : CAPSULE_TASK,
+                  dispatchId: mismatch === 'dispatch' ? 'old-dispatch' : CAPSULE_DISPATCH,
+                }),
               },
             ],
             timedOut: false,
@@ -414,7 +437,7 @@ test('Capsule 报告无法解析时返回失败，不把不完整结论当 Capsu
     },
     observeSession: () => Promise.resolve(null),
     evidence: EVIDENCE,
-    reportTimeoutMs: 5_000,
+    reportTimeoutMs: 0,
   });
 
   expect(outcome.kind).toBe('failed');
@@ -542,4 +565,299 @@ test('重启后续办：按信封内容回读已派发的 Worker，不再新建 
   expect(outcome.delivery).toEqual({ deliveryId: 'delivery-capsule', runId: 'run-capsule' });
   // 关键：没有新建任何 Task / Worker —— 续办复用 Orca 里已经存在的那次派发。
   expect(backend.mutations()).toEqual([]);
+});
+
+test('已有未决意图时先按原身份对账：能力结论不改写 lane 的未知状态', { timeout: 30_000 }, async () => {
+  harness = createRecoveryHarness();
+  harness.recordSourceSegment({
+    segmentId: SEGMENT,
+    dispatchId: 'ctx-capsule-source',
+    attemptId: 'attempt-capsule-1',
+    sessionBindingId: 'binding-capsule-1',
+    lastTranscriptRef: TRANSCRIPT,
+    transcriptReferenceable: true,
+    verifiable: true,
+  });
+  scratch = mkdtempSync(join(tmpdir(), 'capsule-gate-'));
+  const worktree = join(scratch, 'worktree');
+  mkdirSync(worktree, { recursive: true });
+  const transcript = writeOrdinalTranscript(scratch);
+  const scope = harness.store.query({ kind: 'scope', coordinationScopeId: RECOVERY_SCOPE });
+  if (scope.kind !== 'scope' || scope.scope === null) {
+    throw new Error('Scope 不存在');
+  }
+  // 上一次派发留下的未决意图：它的对账结论只能来自原来的 OperationId 与 Orca 事实。
+  const begun = beginIntent(harness.store, {
+    coordinationScopeId: RECOVERY_SCOPE,
+    operationId: `op:capsule:${encodeURIComponent(SEGMENT)}:task` as OperationId,
+    target: { kind: 'worker-task', id: RECOVERY_WORKER_TASK },
+    operationCategory: 'worker-dispatch',
+    writer: harness.writer,
+    expectedRevision: scope.scope.revision,
+  });
+  expect(begun.kind).toBe('registered');
+  let probeCalls = 0;
+  const backend = fakeRecoveryBackend({
+    query: (input) => {
+      if (input.operation === 'worktree-list') {
+        return {
+          kind: 'accepted',
+          value: {
+            worktrees: [
+              { worktreeId: 'worktree-capsule', path: worktree, comment: workPackageComment(RECOVERY_WORK_PACKAGE) },
+            ],
+            totalCount: 1,
+            truncated: false,
+            hostScope: { hostIds: ['host-1'], omittedHostIds: [] },
+          },
+        };
+      }
+      if (input.operation === 'task-list') {
+        return { kind: 'accepted', value: { tasks: [] } };
+      }
+      return undefined;
+    },
+  });
+
+  const outcome = await capsuleFacts({
+    backend: backend.backend,
+    companionStateRoot: join(scratch, 'state'),
+    probe: () => {
+      probeCalls += 1;
+      return Promise.resolve(READ_ONLY_WORKER_UNAVAILABLE);
+    },
+  }).extractCapsule(extractRequest(transcript.path));
+
+  // 意图存在即不是「全新派发」：不探测能力，也不新建 mutation，结论停在原 lane 的阻塞上。
+  expect(probeCalls).toBe(0);
+  expect(outcome.kind).toBe('failed');
+  if (outcome.kind === 'failed') {
+    expect(outcome.reason).not.toContain('read_only_worker_unavailable');
+  }
+  expect(backend.mutations()).toEqual([]);
+});
+
+/* -------------------------------------------------------------------------- */
+/* 只读能力不可用时的 Capsule 失败关闭（change: `m2-repair-read-only-worker-sandbox`） */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * 宿主装配的 Capsule 提取（`createExecutionRecoveryFacts` → `extractCapsule`）在**新派发**之前核验
+ * 本机只读 Worker 能力：不可用时不进入报告等待、不建 Task/Dispatch、不消耗 Recovery 预算；已经有派发
+ * 或意图时按原身份继续对账，能力结论不改写既有事实。
+ */
+
+/** 一份可被 host 读出完整 coverage 的 rollout：事件引用按 `ordinal` 派生。 */
+function writeOrdinalTranscript(directory: string): { readonly path: string; readonly ref: () => string } {
+  const path = join(directory, 'rollout-ordinal.jsonl');
+  writeFileSync(
+    path,
+    [1, 2, 3]
+      .map((ordinal) => `${JSON.stringify({ ordinal, type: 'event', payload: { ordinal } })}\n`)
+      .join(''),
+    'utf8',
+  );
+  // 宿主自己会对同一个路径做 realpath：报告里的 transcriptRef 必须与它逐字节相同。
+  return { path, ref: () => realpathSync(path) };
+}
+
+function capsuleFacts(input: {
+  readonly backend: ExecutionBackend;
+  readonly companionStateRoot: string;
+  readonly probe: ReadOnlyWorkerProbe;
+}) {
+  return createExecutionRecoveryFacts({
+    store: () => harness!.store,
+    backend: input.backend,
+    coordinationScopeId: RECOVERY_SCOPE,
+    canonicalWorktree: harness!.directory,
+    execution: {
+      backendIdentityRef: 'identity-capsule',
+      graphGeneration: 1,
+      authorizationId: RECOVERY_AUTHORIZATION,
+      runId: 'run-capsule',
+      consumerGeneration: 1,
+      timeoutMs: 1_000,
+    },
+    workerHarness: 'codex',
+    workerModel: 'worker-model',
+    codexSandbox: 'workspace-write',
+    companionStateRoot: input.companionStateRoot,
+    writer: harness!.writer,
+    env: {},
+    clock: () => Date.now(),
+    bindingWindowMs: 50,
+    readOnlyWorkerProbe: input.probe,
+  });
+}
+
+function extractRequest(transcriptRef: string) {
+  return {
+    coordinationScopeId: RECOVERY_SCOPE,
+    role: 'implementation' as const,
+    workPackageId: RECOVERY_WORK_PACKAGE,
+    workerTaskId: RECOVERY_WORKER_TASK,
+    attemptId: 'attempt-capsule-1',
+    segmentId: SEGMENT,
+    transcriptRef,
+  };
+}
+
+test('Capsule 派发前能力不可用：零 Orca mutation、不消耗恢复预算，只留可诊断 blocker', { timeout: 30_000 }, async () => {
+  harness = createRecoveryHarness();
+  harness.recordSourceSegment({
+    segmentId: SEGMENT,
+    dispatchId: 'ctx-capsule-source',
+    attemptId: 'attempt-capsule-1',
+    sessionBindingId: 'binding-capsule-1',
+    lastTranscriptRef: TRANSCRIPT,
+    transcriptReferenceable: true,
+    verifiable: true,
+  });
+  scratch = mkdtempSync(join(tmpdir(), 'capsule-gate-'));
+  const worktree = join(scratch, 'worktree');
+  mkdirSync(worktree, { recursive: true });
+  const transcript = writeOrdinalTranscript(scratch);
+  let probeCalls = 0;
+  const backend = fakeRecoveryBackend({
+    query: (input) => {
+      if (input.operation === 'worktree-list') {
+        return {
+          kind: 'accepted',
+          value: {
+            worktrees: [
+              { worktreeId: 'worktree-capsule', path: worktree, comment: workPackageComment(RECOVERY_WORK_PACKAGE) },
+            ],
+            totalCount: 1,
+            truncated: false,
+            hostScope: { hostIds: ['host-1'], omittedHostIds: [] },
+          },
+        };
+      }
+      if (input.operation === 'task-list') {
+        return { kind: 'accepted', value: { tasks: [] } };
+      }
+      return undefined;
+    },
+  });
+
+  const outcome = await capsuleFacts({
+    backend: backend.backend,
+    companionStateRoot: join(scratch, 'state'),
+    probe: () => {
+      probeCalls += 1;
+      return Promise.resolve(READ_ONLY_WORKER_UNAVAILABLE);
+    },
+  }).extractCapsule(extractRequest(transcript.path));
+
+  expect(probeCalls).toBe(1);
+  expect(outcome.kind).toBe('failed');
+  if (outcome.kind !== 'failed') {
+    return;
+  }
+  // 失败原因是稳定的能力 token 与阶段，而不是 120 秒报告超时。
+  expect(outcome.reason).toContain('read_only_worker_unavailable');
+  expect(outcome.reason).toContain('sandbox-read');
+  expect(outcome.reason).not.toContain('超时');
+  // 零新派发：没有建 Task、没有启 Worker、没有确认任何 Delivery。
+  expect(backend.mutations()).toEqual([]);
+});
+
+test('已有派发时能力结论不改写身份：按原 Dispatch 读回 Capsule，不重复探测', { timeout: 30_000 }, async () => {
+  harness = createRecoveryHarness();
+  harness.recordSourceSegment({
+    segmentId: SEGMENT,
+    dispatchId: 'ctx-capsule-source',
+    attemptId: 'attempt-capsule-1',
+    sessionBindingId: 'binding-capsule-1',
+    lastTranscriptRef: TRANSCRIPT,
+    transcriptReferenceable: true,
+    verifiable: true,
+  });
+  scratch = mkdtempSync(join(tmpdir(), 'capsule-gate-'));
+  const worktree = join(scratch, 'worktree');
+  mkdirSync(worktree, { recursive: true });
+  const transcript = writeOrdinalTranscript(scratch);
+  const existing = buildUtilityWorkerEnvelope({
+    workPackageId: RECOVERY_WORK_PACKAGE,
+    sourceWorkerTaskId: RECOVERY_WORKER_TASK,
+    sourceSegmentId: SEGMENT,
+    transcriptRef: TRANSCRIPT,
+  });
+  let probeCalls = 0;
+  const backend = fakeRecoveryBackend({
+    query: (input) => {
+      if (input.operation === 'worktree-list') {
+        return {
+          kind: 'accepted',
+          value: {
+            worktrees: [
+              { worktreeId: 'worktree-capsule', path: worktree, comment: workPackageComment(RECOVERY_WORK_PACKAGE) },
+            ],
+            totalCount: 1,
+            truncated: false,
+            hostScope: { hostIds: ['host-1'], omittedHostIds: [] },
+          },
+        };
+      }
+      if (input.operation === 'task-list') {
+        return { kind: 'accepted', value: { tasks: [{ id: CAPSULE_TASK, spec: JSON.stringify(existing) }] } };
+      }
+      if (input.operation === 'worker-list') {
+        return {
+          kind: 'accepted',
+          value: { workers: [{ taskId: CAPSULE_TASK, dispatchId: CAPSULE_DISPATCH, workerState: 'succeeded' }] },
+        };
+      }
+      if (input.operation === 'delivery-read') {
+        return {
+          kind: 'accepted',
+          value: {
+            delivery: { deliveryId: 'delivery-capsule', runId: 'run-capsule' },
+            messages: [
+              {
+                messageId: 'message-capsule',
+                runId: 'run-capsule',
+                deliveryContract: 'current_delivery',
+                fromHandle: 'terminal-capsule',
+                toHandle: 'coordinator',
+                type: 'worker_done',
+                subject: 'Recovery Capsule',
+                priority: null,
+                body: 'capsule 见 payload',
+                payload: JSON.stringify({
+                  taskId: CAPSULE_TASK,
+                  dispatchId: CAPSULE_DISPATCH,
+                  coverage: 'complete',
+                  readableRange: { transcriptRef: transcript.ref(), fromEventRef: 'ordinal:1', toEventRef: 'ordinal:3' },
+                  gaps: [],
+                  lastCompleteEventRef: 'ordinal:3',
+                  openActions: [],
+                  sourceRefs: [],
+                  unknowns: [],
+                }),
+              },
+            ],
+            timedOut: false,
+            cancelled: false,
+          },
+        };
+      }
+      return undefined;
+    },
+  });
+
+  const outcome = await capsuleFacts({
+    backend: backend.backend,
+    companionStateRoot: join(scratch, 'state'),
+    probe: () => {
+      probeCalls += 1;
+      return Promise.resolve(READ_ONLY_WORKER_UNAVAILABLE);
+    },
+  }).extractCapsule(extractRequest(transcript.path));
+
+  // 既有派发就是权威事实：不探测、不新建，结论仍从原 Dispatch 的报告读出。
+  expect(probeCalls).toBe(0);
+  expect(outcome.kind).toBe('extracted');
+  expect(backend.mutations().filter((mutation) => mutation.operation === 'task-create')).toEqual([]);
 });

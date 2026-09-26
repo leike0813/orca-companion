@@ -28,6 +28,7 @@ import {
 } from '../../src/application/recovery/recovery-capsule.js';
 import { recoverWorkerSession } from '../../src/application/recovery/worker-session-recovery-service.js';
 import {
+  RECOVERY_CAPSULE_REPORT_SHAPE,
   buildUtilityWorkerEnvelope,
   parseRecoveryCapsuleReport,
 } from '../../src/adapters/agents/utility-worker.js';
@@ -323,6 +324,16 @@ test('Utility Worker 报告在边界被严格解析，partial 缺缺口即拒绝
     transcriptRef: 'transcript:source-1',
   });
   expect(envelope.authority).toEqual({ write: false, dispatch: false, git: false });
+  // 形状样例必须能被真正的边界 parser 接纳：样例与 parser 是同一份稳定契约，形状漂移即失败。
+  const shape = JSON.parse(RECOVERY_CAPSULE_REPORT_SHAPE) as RecoveryCapsule;
+  expect(
+    parseRecoveryCapsuleReport(shape, {
+      coverage: shape.coverage,
+      readableRange: shape.readableRange,
+      gaps: shape.gaps,
+      lastCompleteEventRef: shape.lastCompleteEventRef,
+    }).ok,
+  ).toBe(true);
 
   const complete = parseRecoveryCapsuleReport(COMPLETE, COMPLETE_EVIDENCE);
   expect(complete.ok).toBe(true);

@@ -349,3 +349,66 @@ test('doctor 命令把结构化缺失能力写进诊断行，退出码为非零'
     'usage',
   ]);
 });
+
+test('本机只读 Worker 不可用时 doctor 报独立检查项并以非零结束', async () => {
+  const report = await runDoctor(
+    probe({
+      readReadOnlyWorker: () =>
+        Promise.resolve({
+          ok: true,
+          value: { capability: 'unavailable', detail: '不可用（阶段 sandbox-read，codex 0.156.1，profile utility-readonly-local-control）' },
+        }),
+    }),
+  );
+
+  expect(report.ok).toBe(false);
+  const check = report.checks[report.checks.length - 1];
+  expect(check).toMatchObject({ id: 'read-only-worker', status: 'capability-missing' });
+  // 失败阶段与原因必须留在结论里，调用方不必等到真实派发才看见。
+  expect(check?.detail).toContain('sandbox-read');
+  expect(check?.detail).toContain('utility-readonly-local-control');
+
+  const unknown = await runDoctor(
+    probe({
+      readReadOnlyWorker: () => Promise.resolve({ ok: true, value: { capability: 'unknown', detail: '未知（阶段 sandbox-write）' } }),
+    }),
+  );
+  expect(unknown.ok).toBe(false);
+  expect(unknown.checks[unknown.checks.length - 1]).toMatchObject({
+    id: 'read-only-worker',
+    status: 'capability-missing',
+  });
+});
+
+test('只读 Worker 能力可用时 doctor 结论为 ok，且该检查项独立可见', async () => {
+  const report = await runDoctor(
+    probe({
+      readReadOnlyWorker: () =>
+        Promise.resolve({ ok: true, value: { capability: 'available', detail: '可用（codex 0.156.1，profile utility-readonly-local-control）' } }),
+    }),
+  );
+
+  expect(report.ok).toBe(true);
+  expect(report.checks[report.checks.length - 1]).toMatchObject({ id: 'read-only-worker', status: 'ok' });
+});
+
+test('未提供只读 Worker 探针时 doctor 不报告该项结论', async () => {
+  const report = await runDoctor(probe());
+
+  expect(report.checks.map((check) => check.id)).not.toContain('read-only-worker');
+});
+
+test('doctor 命令把只读 Worker 能力缺失写进诊断行', async () => {
+  const capture = captureIO();
+  const exitCode = await runDoctorCommand(
+    probe({
+      readReadOnlyWorker: () =>
+        Promise.resolve({ ok: true, value: { capability: 'unavailable', detail: '不可用（阶段 sandbox-read）：cannot establish app-server socket mount isolation' } }),
+    }),
+    capture.io,
+  );
+
+  expect(exitCode).toBe(1);
+  expect(capture.stderr.join('')).toContain('doctor: read-only-worker: capability-missing');
+  expect(capture.stderr.join('')).toContain('cannot establish app-server socket mount isolation');
+});

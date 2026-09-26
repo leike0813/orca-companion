@@ -57,7 +57,7 @@ Recovery 的 Capsule 派发前与 Finalizer 的新派发前各运行 D1 检查�
 
 ## Migration Plan
 
-实施前核验直接前驱 `m2-deliver-execution-tui` 已归档、主规格已同步、现有未提交改动已保留。先落共享只读 profile 与探针，再接 `doctor`/授权/运行期门禁，最后更新 compatibility 文档。没有持久数据迁移。旧执行中的受限 Dispatch 按原事实对账；新派发使用当前检查。系统环境修复作为独立运维步骤，在显式选择的隔离项目中验收，不隐式修改宿主。
+实施前核验直接前驱 `m2-wire-execution-runtime` 已归档、主规格已同步，并固定并行项 `m2-deliver-execution-tui` 的当前接缝，保留现有未提交改动。本 change 为执行 TUI 解阻塞，可先验收与归档；执行 TUI 随后补齐自身剩余真实场景。先落共享只读 profile 与探针，再接 `doctor`/授权/运行期门禁，最后更新 compatibility 文档。没有持久数据迁移。旧执行中的受限 Dispatch 按原事实对账；新派发使用当前检查。系统环境修复作为独立运维步骤，在显式选择的隔离项目中验收，不隐式修改宿主。
 
 ## Open Questions
 

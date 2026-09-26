@@ -39,15 +39,14 @@
  *
  * ## 两种运行模式
  *
- * 本机只读沙箱不能执行命令（见同上的 compatibility 记录），因此受限会话（Capsule Utility Worker、
- * 只读 Finalizer）跑不动，一次运行无法同时覆盖「Recovery 的界面事实」与「Finalizer 的独立结论」：
+ * 两种模式分别验证 Session 中断续办与完整交付；使用的 Codex 必须通过真实只读能力探针：
  *
  * - 默认（制造一次执行态中断）：覆盖授权、真实 Planner/Implementation、同一会话内结算 Delivery、
- *   Recovery 的 blocker 与界面事实；
+ *   真实 Capsule、替代 Session 与界面事实；
  * - `ORCA_COMPANION_PTY_RECOVERY_INTERRUPT=0`（不中断）：链路一路走到 validate → 受控集成
  *   （canonical 被真实推进）→ Finalizer 派发，覆盖 Finalizer 的门禁与终态投影。
  *
- * 两种模式都断言同一条不变量：没有可核验的只读结论就不得显示 deliverable。
+ * 能力可用时必须取得独立 Finalizer 结论，不中断模式必须 deliverable；能力缺失只能接受点名该缺口的 blocker。
  *
  * 用例会真实改变隔离项目的状态。退出前台进程不会释放 Runtime Lease（产品语义），重启类断言因此要等
  * 租约过期；重复运行请换一个隔离项目。
@@ -92,9 +91,7 @@ const MODEL_VAR = 'ORCA_COMPANION_COORDINATOR_MODEL';
 /**
  * 是否制造一次执行态 Worker Session 中断（默认制造）。
  *
- * 设为 `0` 时不中断：本机只读沙箱不可用（Capsule Utility Worker 与 Finalizer 都跑不了命令），中断会让
- * 唯一的 Work Package 停在 Recovery blocker 上，Finalizer 之间没有独立结论。因此两种模式各跑一次：
- * 默认模式覆盖 Recovery 的界面事实，`0` 模式覆盖 Finalizer 的门禁与终态投影。
+ * 默认覆盖真实 Capsule 与替代 Session；设为 `0` 验证不中断的完整交付。两种模式各用全新隔离项目。
  */
 const RECOVERY_INTERRUPT_VAR = 'ORCA_COMPANION_PTY_RECOVERY_INTERRUPT';
 
@@ -102,6 +99,8 @@ const RECOVERY_INTERRUPT_VAR = 'ORCA_COMPANION_PTY_RECOVERY_INTERRUPT';
 const DEFAULT_ENV_FILE = join(COMPANION_REPOSITORY, '.env.smoke');
 /** 计划要求的 Coordinator 模型；凭据只留在 provider 环境变量里，本文件不读也不打印。 */
 const REQUIRED_COORDINATOR_MODEL = 'minimax-cn/MiniMax-M3';
+/** 只读 Worker 能力缺口的稳定 token：探针与 blocker 原因共用它（`codex-read-only-probe.ts`）。 */
+const READ_ONLY_WORKER_BLOCKER = 'read_only_worker_unavailable';
 
 type Gate =
   | { readonly kind: 'run'; readonly workspace: string; readonly identity: string }
@@ -734,6 +733,26 @@ if (gate.kind === 'skip') {
     }
 
     /**
+     * 本次运行是不是被「本机只读 Worker 能力缺口」解释的。
+     *
+     * 这是唯一允许「没有真实 Capsule / 没有 deliverable」的环境原因：探针结论在 blocker 里点名
+     * `read_only_worker_unavailable`（见 `docs/orca-compatibility.md`）。没有这个 token 时，只读能力
+     * 就已经被证明可用，链路必须真的取得 Capsule 与交付结论——宽松接受任何 blocker 会让环境恢复后
+     * 的失败被静默吞掉。
+     */
+    function readOnlyCapabilityGap(input: {
+      readonly blockers: StatusSnapshot['blockers'];
+      readonly recoveries: ExecutionFacts['recoveries'];
+    }): boolean {
+      return (
+        input.blockers.some(
+          (blocker) => blocker.code.includes('read_only_worker') || blocker.message.includes(READ_ONLY_WORKER_BLOCKER),
+        ) ||
+        input.recoveries.some((recovery) => (recovery.blockingReason ?? '').includes(READ_ONLY_WORKER_BLOCKER))
+      );
+    }
+
+    /**
      * Orca Task → 角色。
      *
      * Scope 快照里的 `role` 是**物化时**记下的角色，真实派发之后还会滞后一轮投影，因此不能用它判断
@@ -1165,6 +1184,7 @@ if (gate.kind === 'skip') {
         );
         expect(refreshed.ok, `Sidebar 未渲染 finalizer 分区：\n${refreshed.text}`).toBe(true);
 
+        const capabilityGap = readOnlyCapabilityGap({ blockers: observed.blockers, recoveries: facts.recoveries });
         if (interruptRecovery) {
           // ---- 执行态 Worker Session Recovery：真实中断必须留下可核验的 Recovery，并在界面如实可见 ----
           expect(
@@ -1173,59 +1193,77 @@ if (gate.kind === 'skip') {
           ).toBeGreaterThan(0);
           const recovery = facts.recoveries[0];
           expect(recovery, 'Recovery 记录必须可读').toBeDefined();
-          const recovered = recovery?.replacementSegmentId !== null || recovery?.status === 'recovered';
-          const blocked = recovery?.blockingReason !== null || recovery?.status === 'blocked';
-          expect(
-            recovered || blocked,
-            `Recovery 既没有替代 Segment 也不是明确 blocker：${JSON.stringify(facts.recoveries)}`,
-          ).toBe(true);
+          const recovered = typeof recovery?.replacementSegmentId === 'string' || recovery?.status === 'recovered';
+          if (capabilityGap) {
+            // 只读受限命令跑不起来时 Capsule 无法投递：此时只接受点名能力缺口的 blocker。
+            expect(recovery?.status, `能力缺口必须停在 blocker：${JSON.stringify(facts.recoveries)}`).toBe('blocked');
+            expect(
+              recovery?.blockingReason ?? '',
+              `能力缺口的 blocker 必须可诊断：${JSON.stringify(facts.recoveries)}`,
+            ).toContain(READ_ONLY_WORKER_BLOCKER);
+          } else {
+            // 能力可用：中断必须被真实 Capsule 续办，替代 Session 是唯一可接受的终态。
+            expect(recovered, `本机只读能力可用时必须取得真实 Capsule：${JSON.stringify(facts.recoveries)}`).toBe(true);
+          }
           const rows = recoveryRows(refreshed.text);
           expect(rows.length, `Sidebar 未渲染 recovery 分区：\n${refreshed.text}`).toBeGreaterThan(0);
           const rowsText = rows.join('\n');
           expect(rowsText, 'recovery 行必须点名角色与状态').toContain(recovery?.role ?? '');
-          if (blocked) {
+          if (!recovered) {
             expect(rowsText, `blocked Recovery 必须在界面上带原因：\n${rowsText}`).toMatch(/^! .+/mu);
           }
           if (recovered) {
-            expect(rowsText, 'recovered 必须显示替代 Segment').toMatch(/segment \S+ -> (?!none)\S+/u);
+            expect(recovery?.capsuleRef, '续办必须绑定真实 Capsule').toEqual(expect.any(String));
+            expect(recovery?.replacementSegmentId, '续办必须绑定替代 Segment').toEqual(expect.any(String));
+            // Sidebar 会裁切长身份；身份取持久事实，界面核验状态与对应行。
+            expect(rowsText).toContain('recovered');
+            expect(rowsText).toMatch(/^segment \S+/mu);
           }
         } else {
           // 未制造中断时不该凭空出现 Recovery：Record 只能由真实中断产生。
           expect(facts.recoveries).toEqual([]);
         }
 
-        // ---- 集成：两个 Work Package 都被接受时用 Git 事实核验 canonical 真的前进了 ----
-        if (observed.execution.workPackages.every((entry) => entry.state === 'accepted')) {
+        // ---- 集成：取得交付结论后，用 Git 事实核验 canonical 真的前进了 ----
+        if (observed.execution.finalizer.verdict?.kind === 'deliverable') {
           const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' });
           expect(head.status).toBe(0);
           expect(head.stdout.trim(), 'canonical 必须已被受控集成推进').not.toBe(seededBaselineHead);
-          expect(observed.execution.integrationQueue, '集成完成后队列应为空').toEqual([]);
+          const remote = spawnSync('git', ['ls-remote', 'origin', 'refs/heads/main'], {
+            cwd: workspace,
+            encoding: 'utf8',
+          });
+          expect(remote.status).toBe(0);
+          expect(remote.stdout.split(/\s+/u)[0], '获批 remote 必须包含集成后的 HEAD').toBe(head.stdout.trim());
         }
 
         // ---- Finalizer：只有被接受的只读结论才显示 deliverable ----
         //
-        // 本机只读沙箱不可用（见 docs/orca-compatibility.md）：只读 Session 不能执行命令，因此 Finalizer
-        // 既可能给出 `blocked` 结论，也可能根本没有结论。这里断言的是**不变量**（结论与只读事实一致、没有
-        // 结论时不显示 deliverable），而不是把本机限制写死成期望值。
+        // 能力不可用时（见 docs/orca-compatibility.md）界面只能呈现「不显示
+        // deliverable」，且 blocker 必须点名能力缺口；能力可用时链路必须真的取得交付结论，本次运行
+        // 的交付物（deliverable）是必达项，不再接受任何其他 blocker 作为替代。
         const verdict = observed.execution.finalizer.verdict;
-        if (verdict === null) {
+        if (capabilityGap) {
+          expect(verdict, '只读能力不可用时不接受任何交付结论').toBeNull();
           expect(
             refreshed.text,
             `没有独立结论时不得显示 deliverable：\n${refreshed.text}`,
           ).toContain('verdict 未返回（不显示 deliverable）');
           expect(refreshed.text).not.toContain('verdict deliverable');
-          // 没有结论的运行必须能解释自己停在哪儿：门禁不满足，或阻塞的 Work Package / Recovery。
-          const explained =
-            !observed.execution.finalizer.gate.ready ||
-            observed.execution.workPackages.some((entry) => entry.state === 'blocked');
-          expect(explained, `没有结论时必须有明确的阻塞事实：${describeStatus(observed)}`).toBe(true);
         } else {
+          expect(
+            verdict,
+            `本机只读能力可用时必须取得独立交付结论：${describeStatus(observed)}`,
+          ).not.toBeNull();
           expect(
             refreshed.text,
             `Finalizer 结论必须在界面上如实呈现：\n${refreshed.text}`,
-          ).toContain(verdict.kind === 'deliverable' ? 'verdict deliverable' : 'verdict blocked');
-          if (verdict.kind === 'deliverable') {
-            expect(observed.execution.finalizer.readOnlyProfile).toBe('enforced');
+          ).toContain(verdict?.kind === 'deliverable' ? 'verdict deliverable' : 'verdict blocked');
+          if (!interruptRecovery) {
+            // 不制造中断的那次验收以 deliverable 为必达项：只读角色能跑通就应该走完整条链路。
+            expect(verdict?.kind, `不中断模式必须取得 deliverable：${describeStatus(observed)}`).toBe('deliverable');
+            // 只读观察属于运行中的宿主；独立 status 查询只有持久事实，无法提供该观察。
+            expect(refreshed.text).toContain('read-only enforced');
           }
         }
 
@@ -1263,10 +1301,12 @@ if (gate.kind === 'skip') {
       async () => {
         ensureTuiPane();
         const before = await readStatus(workspace);
+        const dispatchesBefore = (await listRunWorkers()).map((worker) => worker.dispatchId).sort();
 
         restartTui(workspace);
         ensureTuiPane();
         const after = await readStatus(workspace);
+        expect((await listRunWorkers()).map((worker) => worker.dispatchId).sort()).toEqual(dispatchesBefore);
 
         // 重启只读回已持久化的事实：图、授权、控制状态与 Frontier 计数都不变。
         expect(after.graph ?? null).toEqual(before.graph ?? null);
@@ -1308,12 +1348,17 @@ if (gate.kind === 'skip') {
       async () => {
         const pane = ensureTuiPane();
         const status = await readStatus(workspace);
+        const facts = await readExecutionFacts();
         const verdict = status.execution.finalizer.verdict;
         expect(pane, `Sidebar 未渲染 finalizer 分区：\n${pane}`).toContain('finalizer');
         if (verdict === null) {
-          // 没有独立结论时只能呈现「不显示 deliverable」。
+          // 没有独立结论时只能呈现「不显示 deliverable」，而且必须由本机只读能力缺口解释。
           expect(pane).toContain('不显示 deliverable');
           expect(pane).not.toContain('verdict deliverable');
+          expect(
+            readOnlyCapabilityGap({ blockers: status.blockers, recoveries: facts.recoveries }),
+            `没有结论必须能被只读能力缺口解释：${describeStatus(status)}`,
+          ).toBe(true);
           return;
         }
         expect(pane).toContain(verdict.kind === 'deliverable' ? 'verdict deliverable' : 'verdict blocked');

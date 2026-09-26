@@ -9,7 +9,9 @@
 
 ## 结论
 
-**BLOCKED**。代码层面的 Graph Patch Planner 派发与 baseline reconciliation 接线已补齐，常规门禁通过。真实 PTY 同链路仍未取得这两个角色的运行证据和最终 `deliverable`：本机只读 Codex 会话无法执行命令，现有单包 PTY 场景也没有触发图修订。5.2 保持未完成。
+**BLOCKED**。代码层面的 Graph Patch Planner 派发与 baseline reconciliation 接线已补齐，常规门禁通过；5.2 仍缺这两个角色的真实同链路证据。
+
+**2026-09-26 更新**：并行解阻塞项 `m2-repair-read-only-worker-sandbox` 已在隔离 Codex `0.159.0-alpha.3` 下完成真实 Capsule、替代 Session、只读 Finalizer、`deliverable` 与重启无重复派发验证。两组 PTY 均为 8 passed / 1 skipped，Run 分别为 `run_5eff0872e5ac`、`run_cbbd604ac768`；完整证据见该 change 的 `verification.md`。沙箱修复可先收口，本 change 再补齐剩余场景，两者不互为归档前置。下文保留前次验收记录，旧环境阻断已由上述新证据更新。
 
 ## 核验与修复证据
 
@@ -32,5 +34,4 @@
 
 ## 后续注意事项
 
-- `tasks.md` 5.2 仍未完成；现有 PTY 用例只覆盖单包路径，尚未用真实同一会话观察 Graph Patch Planner、reconciliation 与最终 `deliverable`。
-- 本机只读 Worker 修复由独立变更 `m2-repair-read-only-worker-sandbox` 规划；修复后需在新的显式隔离项目增补图修订场景并重跑真实 PTY 验收。
+- `tasks.md` 5.2 仍未完成；现有 PTY 用例已取得单包 `deliverable`，仍需在新的显式隔离项目补齐 Graph Patch Planner 与 baseline reconciliation 的同链路验收。

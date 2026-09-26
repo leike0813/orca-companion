@@ -9,6 +9,11 @@
 import { failureCategoryOf } from '../adapters/orca-cli/error-classification.js';
 import { createOrcaExecutionBackend } from '../adapters/orca-cli/orca-backend.js';
 import { runProcess } from '../adapters/orca-cli/process-runner.js';
+import {
+  describeReadOnlyWorkerCapability,
+  probeReadOnlyWorker,
+  type ReadOnlyWorkerProbeResult,
+} from '../adapters/agents/codex-read-only-probe.js';
 
 export const DOCTOR_SCHEMA_VERSION = 1;
 
@@ -61,7 +66,8 @@ export type DoctorCheckId =
   | 'hosts'
   | 'coordinator-identity'
   | 'public-commands'
-  | 'coordinator-model';
+  | 'coordinator-model'
+  | 'read-only-worker';
 
 export type DoctorCheck = {
   readonly id: DoctorCheckId;
@@ -108,6 +114,23 @@ export type DoctorProbe = {
    * 不假装核验过，也不因此判定失败——模型核验是「配置了就必查」，而不是「没配置也必查」。
    */
   readonly readCoordinatorModel?: () => Promise<DoctorProbeStep<CoordinatorModelFacts>>;
+  /**
+   * 本机只读 Codex Worker 能力核验（Capsule Utility Worker 与只读 Finalizer 都走这条路径）。
+   *
+   * 可选：未提供时不报告该项结论，而不是默认通过。它与 Route Planning 的启动门无关，只影响
+   * `doctor` 的结论与依赖这两个角色的执行授权。
+   */
+  readonly readReadOnlyWorker?: () => Promise<DoctorProbeStep<ReadOnlyWorkerFacts>>;
+};
+
+/**
+ * 只读 Worker 能力事实：三态结论加上一段可读结论（阶段、Codex 版本、profile 与诊断）。
+ *
+ * doctor 只做投影，不重新判断能力：失败时以既有 `capability-missing` 表达，不新增 doctor 状态。
+ */
+export type ReadOnlyWorkerFacts = {
+  readonly capability: ReadOnlyWorkerProbeResult['kind'];
+  readonly detail: string;
 };
 
 /** 模型核验的事实：报告与缺失能力；doctor 只做投影，不重新判断能力。 */
@@ -279,6 +302,25 @@ export async function runDoctor(probe: DoctorProbe, options: DoctorOptions = {})
       status: 'ok',
       detail: `Coordinator 模型 ${model.value.modelRef} 已通过 ${model.value.details.length} 项能力核验`,
     });
+  }
+
+  // 只读 Worker 是本机的一条独立能力：它在既有前置换完成后单独核验，不参与 Route Planning 启动门。
+  if (probe.readReadOnlyWorker !== undefined) {
+    const readOnly = await probe.readReadOnlyWorker();
+    if (!readOnly.ok) {
+      checks.push({ id: 'read-only-worker', status: readOnly.status, detail: readOnly.detail });
+      return finish(version.value);
+    }
+    if (readOnly.value.capability === 'available') {
+      checks.push({ id: 'read-only-worker', status: 'ok', detail: `只读 Worker 能力${readOnly.value.detail}` });
+    } else {
+      checks.push({
+        id: 'read-only-worker',
+        status: 'capability-missing',
+        detail: `只读 Worker 能力${readOnly.value.detail}`,
+      });
+      return finish(version.value);
+    }
   }
 
   return finish(version.value);
@@ -459,5 +501,18 @@ export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): 
     ...(environment.coordinatorModel === undefined
       ? {}
       : { readCoordinatorModel: environment.coordinatorModel.resolve }),
+    readReadOnlyWorker: async (): Promise<DoctorProbeStep<ReadOnlyWorkerFacts>> => {
+      try {
+        const result = await probeReadOnlyWorker({ env: environment.env });
+        return { ok: true, value: { capability: result.kind, detail: describeReadOnlyWorkerCapability(result) } };
+      } catch (error) {
+        // 探针连跑都跑不起来时不能说「能力可用」：这是能力缺失，而不是通过。
+        return {
+          ok: false,
+          status: 'capability-missing',
+          detail: `只读 Worker 能力探针无法运行：${error instanceof Error ? error.message : String(error)}`,
+        };
+      }
+    },
   };
 }

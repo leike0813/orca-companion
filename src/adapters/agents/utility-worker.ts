@@ -54,6 +54,45 @@ export const UTILITY_WORKER_ENVELOPE_SCHEMA_VERSION = 1;
 /** 唯一登记的受限 Utility 任务类别：从精确 transcript 生成 Recovery Capsule。 */
 export const RECOVERY_CAPSULE_TASK_KIND = 'recovery-capsule-extraction';
 
+/**
+ * Capsule 报告的字段形状。
+ *
+ * 这是一段**可解析的样例**：值是占位字符串，形状必须与 `parseRecoveryCapsuleReport` 的校验逐字一致。
+ * 它是产出正文的唯一形状说明，生产 Task spec 的 instructions 与验收 spec 都引用它。
+ */
+export const RECOVERY_CAPSULE_REPORT_SHAPE = JSON.stringify({
+  coverage: 'partial',
+  readableRange: { transcriptRef: '<精确 transcript 路径>', fromEventRef: 'ordinal:1', toEventRef: 'ordinal:9' },
+  gaps: [{ fromEventRef: 'ordinal:10', toEventRef: null, reason: '<缺口原因>' }],
+  lastCompleteEventRef: 'ordinal:9',
+  openActions: [{ actionRef: '<动作引用>', description: '<未闭合动作>', sourceRef: 'ordinal:8' }],
+  sourceRefs: ['ordinal:9'],
+  unknowns: ['<未知项>'],
+});
+
+/**
+ * Capsule Utility Worker 的 Task spec 指令正文。
+ *
+ * 生产派发与验收 spec 共用这一份说明：读哪份 transcript、事件引用规则、有界读法、产出形状与交付方式
+ * 都在里面，Worker 不靠猜。
+ */
+export function recoveryCapsuleInstructions(
+  transcriptRef: string,
+  evidence: TranscriptCoverageEvidence,
+): readonly string[] {
+  return [
+    '你是只读 Utility Worker，从一份精确的 Codex JSONL transcript 提取 Recovery Capsule。',
+    '不得改文件、跑 git、再派发 Worker、装依赖或访问外部网络；本机 Orca 控制通道是唯一允许的网络用途。',
+    `只读这一份 transcript：${transcriptRef}`,
+    `宿主已独立读出的可信 coverage 证据是：${JSON.stringify(evidence)}`,
+    '用一个 Node 脚本一次读完所有非空行并 JSON.parse 每一行，只按脚本输出结论；不要倾泻正文或重复读取同一段。',
+    '事件引用规则：记录自带 ordinal 字段时用 ordinal:<值>；否则有非空 timestamp 时用 timestamp:<值>；都没有时用 line:<行号>（行号从 1 起）。',
+    `产出只有一个 JSON 对象，形状与解析器逐字一致的可解析样例是：${RECOVERY_CAPSULE_REPORT_SHAPE}`,
+    'coverage、readableRange、gaps、lastCompleteEventRef 必须逐项等于上面的可信证据；openActions 的每个元素都是含 actionRef/description/sourceRef 三个非空字符串的对象，sourceRefs 与 unknowns 都是字符串数组，没有结论时写 []。',
+    'lastCompleteEventRef 非空时必须出现在 sourceRefs 里。把该 JSON 作为 worker_done 正文提交（outcome succeeded），不要只打印它。',
+  ];
+}
+
 export type UtilityWorkerOutputContract = {
   readonly kind: 'recovery-capsule';
   readonly schemaVersion: number;
@@ -179,6 +218,13 @@ export type UtilityWorkerDispatchInput = {
     readonly workerActivate: OperationId;
   };
   readonly observeSession: UtilityWorkerSessionObserver;
+  /**
+   * 追加进 Task spec 根的可读指令（正文，不参与身份判定）。
+   *
+   * 生产 Capsule 派发用它在同一个 spec 里说清「读哪份 transcript、事件引用规则、有界读法、产出形状、
+   * 交付方式」；信封标识字段保持不变，`specMatchesEnvelope` 的根身份对账不受影响。
+   */
+  readonly instructions?: readonly string[];
 };
 
 export type UtilityWorkerDispatchResult =
@@ -548,14 +594,18 @@ function messageFromDispatch(message: DeliveryMessage, orcaTaskId: string, dispa
   if (!record.ok) {
     return false;
   }
-  return record.value['taskId'] === orcaTaskId || record.value['dispatchId'] === dispatchId;
+  return record.value['taskId'] === orcaTaskId && record.value['dispatchId'] === dispatchId;
 }
 
 /** 报告的正文位置不固定：结构化载荷优先，其次从消息 body 里取第一段 JSON 对象。 */
 function capsuleReportCandidate(message: DeliveryMessage): unknown {
   if (message.payload !== null) {
     try {
-      return JSON.parse(message.payload) as unknown;
+      const payload: unknown = JSON.parse(message.payload);
+      if (typeof payload === 'object' && payload !== null && Object.hasOwn(payload, 'coverage')) {
+        return payload;
+      }
+      // Orca 原生 payload 只有 Task/Dispatch 等传输身份，Capsule 正文在 body。
     } catch {
       // 载荷不是 JSON：退回 body。
     }
@@ -715,6 +765,7 @@ export async function dispatchCapsuleWorker(input: CapsuleDispatchInput): Promis
       taskTitle: 'Recovery Capsule 提取（只读受限 Utility Worker）',
       operationIds: input.operationIds,
       observeSession: input.observeSession,
+      instructions: recoveryCapsuleInstructions(input.envelope.transcriptRef, input.evidence),
     });
     if (created.kind !== 'dispatched') {
       const reason =
@@ -788,10 +839,15 @@ function parseCapsuleReport(
 }
 
 export async function dispatchUtilityWorker(input: UtilityWorkerDispatchInput): Promise<UtilityWorkerDispatchResult> {
+  // 指令是 spec 根的可读正文：身份字段仍是信封原值，`specMatchesEnvelope` 的根身份对账不变。
+  const spec =
+    input.instructions === undefined || input.instructions.length === 0
+      ? JSON.stringify(input.envelope)
+      : JSON.stringify({ ...input.envelope, instructions: input.instructions });
   const result = await dispatchScopedWorker({
     ...input,
     workPackageId: input.envelope.workPackageId,
-    spec: JSON.stringify(input.envelope),
+    spec,
     observeSession: (dispatchId) => input.observeSession({ dispatchId, envelope: input.envelope }),
   });
   return result.kind === 'dispatched' ? { ...result, envelope: input.envelope } : result;

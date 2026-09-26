@@ -201,6 +201,7 @@ import {
   codexSessionPathsUnder,
   createExecutionRecoveryFacts,
   parseDeliveryClaimedPayload,
+  parseOrcaWorkerDoneLocator,
   proposeExecutionGraph,
   readPendingDeliveries,
   reviewExecutionAuthorization,
@@ -218,7 +219,17 @@ import {
 } from './startup.js';
 import { recoverySubjectOf } from '../application/recovery/worker-session-recovery-service.js';
 import { createOrcaWorkerStopPort } from '../adapters/orca-cli/worker-stop.js';
-import { createCodexWorkerLaunch, installCodexSessionStartReporter } from '../adapters/agents/codex-launch.js';
+import {
+  CODEX_UTILITY_PERMISSION_PROFILE,
+  createCodexWorkerLaunch,
+  installCodexSessionStartReporter,
+} from '../adapters/agents/codex-launch.js';
+import {
+  describeReadOnlyWorkerCapability,
+  probeReadOnlyWorker,
+  readOnlyWorkerUnavailableReason,
+  type ReadOnlyWorkerProbe,
+} from '../adapters/agents/codex-read-only-probe.js';
 import { dispatchScopedWorker } from '../adapters/agents/utility-worker.js';
 import { bindCodexSessionFromStartReport, sessionBindingIdOf } from '../adapters/agents/session-binding.js';
 import type { CodexSessionStartReport } from '../adapters/agents/codex-transcript.js';
@@ -234,6 +245,7 @@ import { readBaselineGitObservations, readWorkspaceFacts } from '../adapters/git
 import { runGraphPatchPlannerWorker } from './graph-patch-worker.js';
 import { createBaselineReconciliationDriver } from './baseline-reconciliation-runtime.js';
 import type { RunSummary, WorkerListResult } from '../adapters/orca-cli/operation-catalog.js';
+import type { DeliveryMessage } from '../application/dto/operation-outcome.js';
 import { workPackageComment } from '../application/materialize-work-package.js';
 import { createGhTracker } from '../adapters/tracker/gh-tracker.js';
 import {
@@ -383,6 +395,13 @@ export type ForegroundPlanningHostOptions = {
    * Delivery 读取都走它，因此不启动真实 Orca 也能验证接线的行为。
    */
   readonly executionBackend?: ExecutionBackend;
+  /**
+   * 测试注入点：本机只读 Codex Worker 能力探针。
+   *
+   * 生产直接运行真实受限命令；注入时授权审阅/批准、Capsule 提取与 Finalizer 派发都消费同一个结论，
+   * 因此不必为了验证失败关闭而真的把主机弄坏。
+   */
+  readonly readOnlyWorkerProbe?: ReadOnlyWorkerProbe;
 };
 
 export type ForegroundPlanningHost = {
@@ -957,6 +976,14 @@ export async function createForegroundPlanningHost(
       env: options.env,
       identityWorktreePath: canonicalWorktreePath ?? options.repositoryPath,
     });
+
+  /**
+   * 只读 Worker 能力的唯一来源：每次调用都重新探测，结论不写入 Manifest、存储或缓存。
+   *
+   * 主机挂载、Codex 版本或配置随时可能变化，持久化的「上次可用」会正好在派发时过期。
+   */
+  const readOnlyWorkerProbe: ReadOnlyWorkerProbe =
+    options.readOnlyWorkerProbe ?? (() => probeReadOnlyWorker({ env: options.env }));
 
   const trackerFor = (): IssueTrackerGateway | null =>
     trackerFactory({ cwd: canonicalWorktreePath ?? options.repositoryPath, env: options.env });
@@ -3355,6 +3382,7 @@ export async function createForegroundPlanningHost(
         env: options.env,
         clock,
         bindingWindowMs,
+        readOnlyWorkerProbe,
       }),
       workers: workerStopPortFor(scopeId),
     });
@@ -4997,6 +5025,8 @@ export async function createForegroundPlanningHost(
   /** 本进程读到的 Finalizer 派发事实；重启后不存在，因此重启期间无法证明只读（见下）。 */
   type FinalizerRun = {
     readonly workerTaskId: WorkerTaskId;
+    /** 本次派发在 Orca 里取得的 Task 身份；结论读回时按它配对，不用 Finalizer 自报身份。 */
+    readonly orcaTaskId: string;
     readonly dispatchId: string;
     readonly attemptId: string;
     readonly sessionBindingId: string;
@@ -5140,13 +5170,20 @@ export async function createForegroundPlanningHost(
       if (prior.kind === 'intent' && prior.intent !== null) {
         recordExecutionBlocker(
           scopeId,
-        'finalizer',
+          'finalizer',
           'finalizer_read_only_unprovable',
           '该 Finalizer 派发发生在本进程之前：没有可核验的只读 Session 证明，交付保持 blocker',
         );
         return;
       }
-    installCodexSessionStartReporter(paths);
+      // 确认没有既有派发/意图之后才探测：能力不可用时零新 Task/Dispatch，交付保持 blocker。
+      const readOnlyWorker = await readOnlyWorkerProbe();
+      const readOnlyBlocker = readOnlyWorkerUnavailableReason(readOnlyWorker);
+      if (readOnlyBlocker !== null) {
+        recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_read_only_unavailable', readOnlyBlocker);
+        return;
+      }
+      installCodexSessionStartReporter(paths);
       const dispatchStartedAt = new Date().toISOString();
       const dispatched = await dispatchScopedWorker({
         store: current,
@@ -5167,6 +5204,14 @@ export async function createForegroundPlanningHost(
           expectedWorkPackageIds: statuses.map((status) => status.workPackageId),
           // 运行前的工作区事实是这次 Finalizer 检查的固定输入：Worker 只能核对，不能改写。
           workspaceBefore: before.facts,
+          // 结论只有一种可接受形状：只输出一个 JSON 对象，作为 worker_done 正文提交，不要写成叙述。
+          instructions: [
+            '你是项目级只读 Finalizer。完成只读检查后，只输出一个 JSON 对象（不要 Markdown、代码围栏或叙述文字），并把它作为 worker_done 正文提交。',
+            'JSON 形状固定为：{"coveredWorkPackageIds":[...],"verdict":{"kind":"deliverable","evidenceRefs":[...]}} 或 {"coveredWorkPackageIds":[...],"verdict":{"kind":"blocked","blockerRefs":[...]}}。',
+            `coveredWorkPackageIds 必须覆盖全部待验证 Work Package：${JSON.stringify(statuses.map((status) => status.workPackageId))}。`,
+            'deliverable 的 evidenceRefs 只能引用下面这些既有权威结果引用，不得自造其它字符串；任一项无法核对时改用 blocked。',
+            `既有权威结果引用：${JSON.stringify(authoritativeRefsForScope(run.runId) ?? [])}`,
+          ],
         }),
         execution: {
           backendIdentityRef: identity,
@@ -5179,8 +5224,7 @@ export async function createForegroundPlanningHost(
         workerLaunch: createCodexWorkerLaunch({
           launchId: operationIds.launchId,
           model: config.execution.workerModel,
-          // Finalizer 仍是只读（profile 继承 `:read-only`），但需要本机控制通道回报结论，且本机无法
-          // 建立 bwrap 会话：用既有的 `read-only-local-control`（landlock 后端 + 控制通道网络）。
+          // Finalizer 只读（profile 继承 `:read-only`），只为本机控制通道回报结论而开启该通道网络。
           sandboxMode: 'read-only-local-control',
           stateRoot: paths.stateRoot,
           sessionStartReporterPath: paths.reporterPath,
@@ -5244,6 +5288,7 @@ export async function createForegroundPlanningHost(
       if (dispatched.kind === 'dispatched') {
         finalizerRuns.set(scopeId, {
           workerTaskId: operationIds.workerTaskId,
+          orcaTaskId: dispatched.orcaTaskId,
           dispatchId: dispatched.dispatchId,
           attemptId: operationIds.attemptId,
           sessionBindingId: dispatched.binding.providerSessionId,
@@ -5280,6 +5325,8 @@ export async function createForegroundPlanningHost(
       backendIdentityRef: identity,
       runId: run.runId,
       workerTaskId: existing.workerTaskId,
+      orcaTaskId: existing.orcaTaskId,
+      dispatchId: existing.dispatchId,
     });
     if (report.kind === 'pending') {
       return;
@@ -5396,12 +5443,71 @@ export async function createForegroundPlanningHost(
     finalizerObservations.set(scopeId, observation);
   };
 
-  /** 读回 Finalizer 的结论；读不到就是读不到，不用 Finalizer 自报以外的任何东西补位。 */
+  /**
+   * 一条 Delivery 消息里可核验的 Finalizer 结论来源。
+   *
+   * 身份只取宿主可核验的字段：claimed 形状取 payload 的 `workerTaskId`，Orca 原生形状取 Task/Dispatch。
+   * 正文：claimed 取 payload 的 `result`；原生只有传输身份，结论 JSON 在 `body`。
+   *
+   * 身份匹配与正文可读是两件事：原生消息的身份成立但 `body` 不是 JSON、或 outcome 非 succeeded 时，
+   * 仍作为**已匹配**的来源保留（`verdict` 为 `undefined`），由调用方报 blocker——绝不静默退回 `pending`，
+   * 否则「Worker 已用叙述回报」会永久挂住交付。
+   */
+  type FinalizerVerdictSource =
+    | { readonly kind: 'claimed'; readonly workerTaskId: WorkerTaskId; readonly verdict: unknown }
+    | { readonly kind: 'native'; readonly orcaTaskId: string; readonly dispatchId: string; readonly verdict: unknown };
+
+  /** `body` 里唯一 JSON 对象；不是对象、不是 JSON、或 outcome 非 succeeded 时返回 undefined。 */
+  const verdictFromBody = (message: DeliveryMessage, outcome: string | null): unknown => {
+    if (outcome !== 'succeeded' || message.body === null) {
+      return undefined;
+    }
+    try {
+      const decoded: unknown = JSON.parse(message.body.trim());
+      return typeof decoded === 'object' && decoded !== null && !Array.isArray(decoded) ? decoded : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  const finalizerVerdictPayloads = (
+    messages: readonly DeliveryMessage[],
+  ): readonly FinalizerVerdictSource[] => {
+    const sources: FinalizerVerdictSource[] = [];
+    for (const message of messages) {
+      const claimed = parseDeliveryClaimedPayload(message.payload);
+      if (claimed.kind === 'parsed') {
+        if (claimed.payload.claimed.workerTaskId !== null) {
+          sources.push({
+            kind: 'claimed',
+            workerTaskId: claimed.payload.claimed.workerTaskId,
+            verdict: claimed.payload.acceptedResult,
+          });
+        }
+        continue;
+      }
+      const locator = parseOrcaWorkerDoneLocator(message.payload, message.body);
+      if (locator === null) {
+        continue;
+      }
+      sources.push({
+        kind: 'native',
+        orcaTaskId: locator.orcaTaskId,
+        dispatchId: locator.orcaDispatchId,
+        verdict: verdictFromBody(message, locator.outcome),
+      });
+    }
+    return sources;
+  };
+
+  /** 原生消息按 Orca Task/Dispatch 配对；claimed 消息沿既有 WorkerTaskId 配对。 */
   const readFinalizerReport = async (input: {
     readonly backend: ExecutionBackend;
     readonly backendIdentityRef: string;
     readonly runId: string;
     readonly workerTaskId: WorkerTaskId;
+    readonly orcaTaskId: string;
+    readonly dispatchId: string;
   }): Promise<
     | { readonly kind: 'pending' }
     | { readonly kind: 'blocked'; readonly code: string; readonly message: string }
@@ -5425,22 +5531,16 @@ export async function createForegroundPlanningHost(
         message: `无法读取 Finalizer 的 Delivery：${batch.code} ${batch.message}`,
       };
     }
-    const message = batch.value.messages.find((entry) => {
-      const parsed = parseDeliveryClaimedPayload(entry.payload);
-      return parsed.kind === 'parsed' && parsed.payload.claimed.workerTaskId === input.workerTaskId;
-    });
-    if (message === undefined) {
+    // 本批里可能混着别的 Worker 的载体消息；只挑属于**本次派发**的那一条。
+    const raw = finalizerVerdictPayloads(batch.value.messages).find((candidate) =>
+      candidate.kind === 'native'
+        ? candidate.orcaTaskId === input.orcaTaskId && candidate.dispatchId === input.dispatchId
+        : candidate.workerTaskId === input.workerTaskId,
+    );
+    if (raw === undefined) {
       return { kind: 'pending' };
     }
-    const parsed = parseDeliveryClaimedPayload(message.payload);
-    if (parsed.kind === 'rejected') {
-      return {
-        kind: 'blocked',
-        code: 'finalizer_report_unreadable',
-        message: `Finalizer 的 Delivery 载荷无法解析：${parsed.code} ${parsed.message}`,
-      };
-    }
-    const read = readFinalizerVerdict(parsed.payload.acceptedResult);
+    const read = readFinalizerVerdict(raw.verdict);
     if (read === null) {
       return {
         kind: 'blocked',
@@ -5466,6 +5566,13 @@ export async function createForegroundPlanningHost(
 
   /**
    * Finalizer 结论的边界解析。
+   *
+   * 结论来源有两种载体，各自的身份与正文位置不同：
+   * - Companion claimed 形状：payload 带 `workerTaskId` 与 `result`；
+   * - Orca 原生 `worker_done` 形状：payload 只有 `taskId`/`dispatchId`，结论 JSON 在 `body`。
+   *
+   * 身份一律取宿主可核验的字段（claimed 的 workerTaskId、原生的 Orca Task/Dispatch），不采用 Worker 自报
+   * 的任何身份；两者都取不到时该消息不参与配对。
    *
    * 只接受登记的形状：`verdict` 与 `coveredWorkPackageIds` 缺一即返回 `null`，由调用方报 blocker，
    * 不补造结论、不把不可读读成可交付。
@@ -5656,6 +5763,7 @@ export async function createForegroundPlanningHost(
         env: options.env,
         clock,
         bindingWindowMs,
+        readOnlyWorkerProbe,
       }),
     });
     const blocker = recoveryBlockerOf(continuation);
@@ -6039,6 +6147,7 @@ export async function createForegroundPlanningHost(
   /** 完整 Manifest 的展示投影；界面只消费这些行，因此领域字段不会流进组件。 */
   const authorizationManifestRows = (
     review: ExecutionAuthorizationReview,
+    readOnlyWorker: string,
   ): readonly { readonly label: string; readonly value: string }[] => {
     const manifest = review.manifest;
     const limits = manifest.limits;
@@ -6066,8 +6175,13 @@ export async function createForegroundPlanningHost(
       },
       {
         // 沙箱模式必须在审阅里可见：它是「Worker 能写什么」的直接约束，放宽与否只能由用户看到后批准。
+        // Capsule Utility Worker 与 Finalizer 走同一条只读 profile，且本机能否运行它由本次探针回答。
         label: 'Worker Sandbox',
-        value: `codex=${config?.execution.codexSandbox ?? DEFAULT_PROJECT_EXECUTION.codexSandbox} finalizer=read-only`,
+        value: `codex=${config?.execution.codexSandbox ?? DEFAULT_PROJECT_EXECUTION.codexSandbox} capsule=${CODEX_UTILITY_PERMISSION_PROFILE} finalizer=${CODEX_UTILITY_PERMISSION_PROFILE}`,
+      },
+      {
+        label: 'Read-only Workers',
+        value: readOnlyWorker,
       },
       {
         label: 'Permissions',
@@ -6099,6 +6213,9 @@ export async function createForegroundPlanningHost(
     if (read.kind !== 'ok') {
       return { kind: 'blocked', code: read.code, message: read.message };
     }
+    // 审阅每次重新探测：授权依赖 Capsule 与 Finalizer 两个只读角色，环境变了就不能沿用上一次的结论。
+    const readOnlyWorker = await readOnlyWorkerProbe();
+    const readOnlyBlocker = readOnlyWorkerUnavailableReason(readOnlyWorker);
     const reviewed = reviewExecutionAuthorization(read.facts);
     if (reviewed.kind === 'blocked') {
       return {
@@ -6111,6 +6228,10 @@ export async function createForegroundPlanningHost(
       return { kind: 'rejected', code: reviewed.code, message: reviewed.message };
     }
     const gate = reviewed.review.gate;
+    const gateBlockers = [
+      ...(gate.kind === 'allowed' ? [] : gate.blockers.map((blocker) => `${blocker.code}: ${blocker.message}`)),
+      ...(readOnlyBlocker === null ? [] : [readOnlyBlocker]),
+    ];
     return {
       kind: 'review',
       review: {
@@ -6123,11 +6244,8 @@ export async function createForegroundPlanningHost(
           baselineHead: reviewed.review.candidate.baselineHead,
           workPackageCount: reviewed.review.candidate.workPackageCount,
         },
-        manifestRows: authorizationManifestRows(reviewed.review),
-        gate: {
-          ready: gate.kind === 'allowed',
-          blockers: gate.kind === 'allowed' ? [] : gate.blockers.map((blocker) => `${blocker.code}: ${blocker.message}`),
-        },
+        manifestRows: authorizationManifestRows(reviewed.review, describeReadOnlyWorkerCapability(readOnlyWorker)),
+        gate: { ready: gateBlockers.length === 0, blockers: gateBlockers },
       },
     };
   };
@@ -6163,6 +6281,11 @@ export async function createForegroundPlanningHost(
     const revision = scopeRecord(refreshed.facts.coordinationScopeId)?.revision;
     if (revision === undefined) {
       return rejected('scope_unavailable', '无法读取授权提交前的 Scope revision');
+    }
+    // 批准前重查能力：审阅时的成功结论不构成本次批准的许可，环境可能在两次检查之间变化。
+    const readOnlyBlocker = readOnlyWorkerUnavailableReason(await readOnlyWorkerProbe());
+    if (readOnlyBlocker !== null) {
+      return rejected('read_only_worker_unavailable', readOnlyBlocker);
     }
     const result = approveExecutionAuthorization({
       ...refreshed.facts,

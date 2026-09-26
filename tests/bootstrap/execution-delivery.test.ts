@@ -86,6 +86,7 @@ import type { ExecutionGraph, ScopeEnvelope } from '../../src/domain/planning/ex
 import type { SessionBinding, SpecBinding } from '../../src/domain/task-contract.js';
 import type { EvidenceRecord } from '../../src/domain/worker-report.js';
 import { createCompanionStartupFixture, type CompanionStartupFixture } from '../support/companion-startup-harness.js';
+import { fixedReadOnlyWorkerProbe } from '../support/read-only-worker-probe.js';
 import {
   RECOVERY_SCOPE,
   RECOVERY_WORK_PACKAGE,
@@ -986,6 +987,7 @@ test('生产事实装配读不到归属时：以结构化 blocker 呈现，不�
         env: {},
         clock: () => CLOCK_MS,
         bindingWindowMs: 100,
+        readOnlyWorkerProbe: fixedReadOnlyWorkerProbe(),
       }),
   });
   recoveryFixture = fixture;
@@ -1134,6 +1136,7 @@ function factsFor(input: {
     env: {},
     clock,
     bindingWindowMs: 50,
+    readOnlyWorkerProbe: fixedReadOnlyWorkerProbe(),
   });
 }
 
@@ -1494,6 +1497,7 @@ test('生产替代派发：只复用原 Worker Profile，SessionStart 报告读�
       env: {},
       clock,
       bindingWindowMs: 10,
+      readOnlyWorkerProbe: fixedReadOnlyWorkerProbe(),
     });
     expect(modeless.replacementFor(fixture.subject)).toMatchObject({ kind: 'unavailable' });
   } finally {

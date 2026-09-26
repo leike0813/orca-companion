@@ -21,6 +21,8 @@
 
 ## 5. 端到端验收
 
+**当前状态（2026-09-26）**：解阻塞并行项 `m2-repair-read-only-worker-sandbox` 已用隔离 alpha 取得真实 Capsule、只读 Finalizer 与 `deliverable`，两组 PTY 各 8 passed / 1 skipped，重启无重复派发。其验收和归档不以本 change 先归档为前提。本节下文为 09-25 的历史证据；5.2 目前仍缺 Graph Patch Planner 与 baseline reconciliation 的真实同链路场景，因此保持未勾选。
+
 5.2 的现有 PTY 链路与 5.3 的 Recovery 场景已在本机运行（2026-09-25）：生产执行路径由已归档的 `m2-wire-execution-runtime` 接通，真实 PTY 验收在显式选择的隔离项目与专用身份中进行，分离线项目两次覆盖（是否制造执行态中断）。5.2 仍缺同链路 Graph Patch Planner、reconciliation 与最终 deliverable 证据，详见 `verification.md`。验收期间定位并修复了一处生产接线缺陷：**未确认 Delivery 的读取范围不能冻结在进程启动时刻**——Scope 会在同一个前台进程里从 `route_planning` 授权切换到 `execution_coordination`，启动时那份「本 Scope 没有 Run」的结论随即过期，冻结它会让该进程此后永远读不到任何未确认 Delivery，Delivery 结算在同一个 TUI 会话里不可能发生（真实运行里表现为链路停在 Planner 交付之后）。修复：`src/bootstrap/startup.ts` 的 `readDeliveries` 改为每次重放时现读，`src/bootstrap/foreground-planning-runtime.ts` 新增 `currentDeliveryFacts`；回归用例 `tests/bootstrap/startup-reconciliation.test.ts` 的「Resume 每次重新读取 Delivery 事实」在修复前失败、修复后通过。
 
 - [x] 5.1 按 IP-09 补齐自动测试与 `tests/tui/harness.ts` 共用夹具；运行 `pnpm test -- tests/tui/` 确认串行 Frontier 推进、单 active Work Package、控制竞态、旧 generation 事件与 Finalizer 门禁全部覆盖

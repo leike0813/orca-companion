@@ -35,7 +35,7 @@
 
 ## Impact
 
-- 直接前驱：`m2-deliver-execution-tui`（其 5.2 的 `deliverable` 验收在本机被本问题阻断，已按环境阻断收口）。
+- 直接前驱：已归档的 `m2-wire-execution-runtime`。本 change 是 `m2-deliver-execution-tui` 的解阻塞并行项，消费其已固定的执行态投影与 PTY 接缝；本 change 先验收、归档，再补齐执行 TUI 的剩余真实验收。两者可同时 active，不要求执行 TUI 先归档。
 - 受影响代码面（规划阶段确认）：`src/adapters/agents/codex-launch.ts`（只读 profile 与 `--enable use_legacy_landlock` 的启动参数）、`src/bootstrap/doctor.ts`（能力核验）、`src/bootstrap/execution-runtime.ts`（Capsule 提取的等待与归因）、`src/bootstrap/foreground-planning-runtime.ts`（Finalizer 派发与 gate）。
 - 可能超出仓库边界：若根因只能在 Codex 侧修（`linux-sandbox/src/linux_run_main.rs` 对 app-server socket 目录的设备判定），本 change 只能把它收敛成显式的能力缺口与可诊断结论，并记录上游依赖；需要时可向上游提交最小复现。
 - 环境前置：本机 `/tmp` 位于 btrfs，daemon socket 目录固定取 `canonicalize("/tmp")/codex-daemon-<uid>`，`check_mounts` 的设备比较因此失败。规划时没有已验证的无 root 修法；嵌套 namespace 探针已被 AppArmor 拒绝。实施验收依赖独立的主机环境调整或经实测修复的上游版本；本 change 不自动修改 mount 或系统权限。

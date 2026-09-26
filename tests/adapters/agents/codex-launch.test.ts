@@ -7,6 +7,7 @@ import { afterEach, expect, test } from 'vitest';
 
 import {
   CODEX_UTILITY_PERMISSION_PROFILE,
+  CODEX_UTILITY_PROFILE_CONFIG_TOML,
   createCodexWorkerLaunch,
   installCodexSessionStartReporter,
 } from '../../../src/adapters/agents/codex-launch.js';
@@ -101,11 +102,32 @@ test('Utility Codex 使用只读文件系统与本机控制通道 profile', asyn
   );
 
   expect(prepared.command).toContain(`--profile ${CODEX_UTILITY_PERMISSION_PROFILE}`);
-  expect(prepared.command).toContain('--enable use_legacy_landlock');
+  // 只读语义由 profile 保证；Landlock 不是只读的退路，启动参数不再带它。
+  expect(prepared.command).not.toContain('use_legacy_landlock');
   expect(prepared.command).not.toContain('--sandbox read-only');
+  expect(profile).toBe(CODEX_UTILITY_PROFILE_CONFIG_TOML);
   expect(profile).toContain('extends = ":read-only"');
   expect(profile).toContain('[permissions.utility-readonly-local-control.network]');
   expect(profile).toContain('enabled = true');
+});
+
+test('来源配置的 legacy sandbox 键与只读 profile 混用时启动失败关闭', () => {
+  const root = mkdtempSync(join(tmpdir(), 'companion-codex-utility-conflict-'));
+  roots.push(root);
+  const sourceHome = join(root, 'source-codex-home');
+  const worktree = join(root, 'worktree');
+  mkdirSync(sourceHome, { recursive: true });
+  mkdirSync(worktree, { recursive: true });
+  writeFileSync(join(sourceHome, 'config.toml'), 'sandbox_mode = "workspace-write"\n', 'utf8');
+
+  const strategy = createCodexWorkerLaunch({
+    launchId: 'utility:attempt-conflict',
+    model: 'minimax-cn/MiniMax-M3',
+    sandboxMode: 'read-only-local-control',
+    sourceCodexHome: sourceHome,
+  });
+
+  expect(() => strategy.prepare({ worktreePath: worktree })).toThrow(/legacy sandbox/u);
 });
 
 test('只读 Finalizer 的状态根与 reporter 留在 canonical worktree 之外', async () => {

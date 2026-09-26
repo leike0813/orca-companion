@@ -63,6 +63,12 @@ import { DEFAULT_EXECUTION_LIMITS } from '../../src/domain/planning/budget-polic
 import type { ExecutionAuthorizationManifest } from '../../src/domain/planning/execution-authorization.js';
 import type { ExecutionGraph } from '../../src/domain/planning/execution-graph.js';
 import { CapableChatModel } from '../support/fake-chat-model.js';
+import {
+  fixedReadOnlyWorkerProbe,
+  READ_ONLY_WORKER_AVAILABLE,
+  READ_ONLY_WORKER_UNAVAILABLE,
+} from '../support/read-only-worker-probe.js';
+import type { ReadOnlyWorkerProbe } from '../../src/adapters/agents/codex-read-only-probe.js';
 
 const SCOPE = 'scope-finalizer' as CoordinationScopeId;
 const SESSION = 'session-finalizer' as CoordinatorSessionId;
@@ -139,25 +145,48 @@ function fakeOrca(options?: { readonly workerStartUnknown?: boolean | undefined 
           case 'delivery-read':
             return Promise.resolve({
               kind: 'accepted' as const,
-              value:
-                verdict.value === null
-                  ? { delivery: null, messages: [], timedOut: false, cancelled: false }
-                  : {
-                      delivery: { deliveryId: 'delivery-finalizer', runId: RUN_ID },
-                      messages: [
-                        {
-                          messageId: 'message-finalizer',
-                          fromHandle: dispatchId,
-                          runId: null,
-                          payload: JSON.stringify({
-                            workerTaskId: envelope.workerTaskId,
-                            result: verdict.value,
-                          }),
-                        },
-                      ],
-                      timedOut: false,
-                      cancelled: false,
+              value: (() => {
+                if (verdict.value === null) {
+                  return { delivery: null, messages: [], timedOut: false, cancelled: false };
+                }
+                // 字符串结论＝真实 Codex Worker 的 Orca 原生形状：payload 只有传输身份，正文在 body。
+                if (typeof verdict.value === 'string') {
+                  return {
+                    delivery: { deliveryId: 'delivery-finalizer', runId: RUN_ID },
+                    messages: [
+                      {
+                        messageId: 'message-finalizer',
+                        fromHandle: dispatchId,
+                        runId: null,
+                        payload: JSON.stringify({
+                          taskId: FINALIZER_TASK,
+                          dispatchId,
+                          outcome: 'succeeded',
+                        }),
+                        body: verdict.value,
+                      },
+                    ],
+                    timedOut: false,
+                    cancelled: false,
+                  };
+                }
+                return {
+                  delivery: { deliveryId: 'delivery-finalizer', runId: RUN_ID },
+                  messages: [
+                    {
+                      messageId: 'message-finalizer',
+                      fromHandle: dispatchId,
+                      runId: null,
+                      payload: JSON.stringify({
+                        workerTaskId: envelope.workerTaskId,
+                        result: verdict.value,
+                      }),
                     },
+                  ],
+                  timedOut: false,
+                  cancelled: false,
+                };
+              })(),
             });
           case 'terminal-list':
             return Promise.resolve({
@@ -638,6 +667,8 @@ async function openHarness(options?: {
   readonly sessionBindingWindowMs?: number;
   /** 让 worker-start 只返回 unknown，验证宿主用 Orca 事实而不是回执完成对账。 */
   readonly workerStartUnknown?: boolean | undefined;
+  /** 本机只读 Worker 能力；默认「可用」，与实际受限命令无关的用例因此不依赖主机沙箱。 */
+  readonly readOnlyWorkerProbe?: ReadOnlyWorkerProbe;
 }): Promise<Harness> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-finalizer-'));
   const { repository, head } = prepareRepository(directory);
@@ -675,6 +706,7 @@ async function openHarness(options?: {
     trackerFactory: fakeTracker,
     loadIntegration: () => Promise.resolve({ CapableChatModel }),
     executionBackend: fake.backend,
+    readOnlyWorkerProbe: options?.readOnlyWorkerProbe ?? fixedReadOnlyWorkerProbe(),
   });
   expect(await host.ports.scopeSetup.resolveHome()).toEqual({ kind: 'restore', coordinationScopeId: SCOPE });
   let disposed = false;
@@ -778,9 +810,9 @@ test('门禁满足时：以新的只读 Session 在 canonical worktree 派发，
   expect(spec.includes('workspaceBefore')).toBe(true);
   const terminal = harness.fake.mutations.find((mutation) => mutation.operation === 'terminal-create');
   const command = terminal?.operation === 'terminal-create' ? (terminal.command ?? '') : '';
-  // 只读语义由 profile 保证（继承 `:read-only`），后端用 landlock 以便本机控制通道可用。
+  // 只读语义由 profile 保证（继承 `:read-only`）；启动参数不再带任何沙箱后端开关。
   expect(command.includes('--profile utility-readonly-local-control')).toBe(true);
-  expect(command.includes('--enable use_legacy_landlock')).toBe(true);
+  expect(command.includes('use_legacy_landlock')).toBe(false);
 
   // 完成路径由下一个触发点接上：读回结论 → 读运行后工作区 → 比较 → 接受 verdict。
   await sendMessage(harness, '继续');
@@ -799,6 +831,43 @@ test('门禁满足时：以新的只读 Session 在 canonical worktree 派发，
   });
   // 只派发一次：第二个触发点只读回结论，不产生第二次 Task。
   expect(harness.fake.mutations.filter((mutation) => mutation.operation === 'task-create')).toHaveLength(1);
+});
+
+test('真实 Orca 原生载荷：结论在 body 的 JSON 被接受，交付可呈现', { timeout: TEST_TIMEOUT_MS }, async () => {
+  // 真实 Codex Worker 的 worker_done 只有传输身份，结论 JSON 在 body：宿主必须按宿主签发的
+  // Orca Task/Dispatch 配对本体，而不是只看 Companion claimed 形状。
+  const harness = await openHarness({ verdict: JSON.stringify(DELIVERABLE_VERDICT) });
+  await sendMessage(harness, '开始收尾');
+  await waitFor(() => expect(workerStarts(harness)).toBe(1));
+  await sendMessage(harness, '继续');
+
+  const snapshot = await waitForSnapshot(harness, (loaded) => {
+    expect(loaded.kind === 'snapshot' ? loaded.snapshot.finalizer.verdict?.kind : null).toBe('deliverable');
+  });
+  if (snapshot.kind !== 'snapshot') {
+    throw new Error('快照应当可读');
+  }
+  expect(snapshot.snapshot.blockers.map((blocker) => blocker.code)).not.toContain('finalizer_report_invalid');
+});
+
+test('真实 Orca 原生载荷：身份匹配但 body 不是 JSON 时报结论不可读，不静默 pending', { timeout: TEST_TIMEOUT_MS }, async () => {
+  // 模型用叙述回报（例如 VERDICT ship）：身份成立但结论不可读，必须 fail closed 报 blocker，
+  // 否则这条交付会永远停在 pending。
+  const harness = await openHarness({ verdict: 'VERDICT: ship' });
+  await sendMessage(harness, '开始收尾');
+  await waitFor(() => expect(workerStarts(harness)).toBe(1));
+  await sendMessage(harness, '继续');
+  await sendMessage(harness, '再继续');
+
+  const snapshot = await waitForSnapshot(harness, (loaded) => {
+    expect(
+      loaded.kind === 'snapshot' ? loaded.snapshot.blockers.map((blocker) => blocker.code) : [],
+    ).toContain('finalizer_report_invalid');
+  });
+  if (snapshot.kind !== 'snapshot') {
+    throw new Error('快照应当可读');
+  }
+  expect(snapshot.snapshot.finalizer.verdict).toBeNull();
 });
 
 test('只读无法证明：停在 blocker，不呈现 deliverable', { timeout: TEST_TIMEOUT_MS }, async () => {
@@ -859,4 +928,54 @@ test('Finalizer 结论读不回：停在 blocker，且不重复派发', { timeou
     throw new Error('快照应当可读');
   }
   expect(snapshot.snapshot.finalizer.verdict).toBeNull();
+});
+
+test('只读 Worker 能力不可用：不派发 Finalizer、不呈现 deliverable，只留能力 blocker', { timeout: TEST_TIMEOUT_MS }, async () => {
+  // 门禁满足但本机受限命令跑不起来：这正是交付拿不到结论的现实形态。
+  const harness = await openHarness({
+    verdict: DELIVERABLE_VERDICT,
+    readOnlyWorkerProbe: () => Promise.resolve(READ_ONLY_WORKER_UNAVAILABLE),
+  });
+  await sendMessage(harness, '开始收尾');
+
+  const snapshot = await waitForSnapshot(harness, (loaded) => {
+    expect(
+      loaded.kind === 'snapshot' ? loaded.snapshot.blockers.map((blocker) => blocker.code) : [],
+    ).toContain('finalizer_read_only_unavailable');
+  });
+  // 零新派发：没有 Task、没有终端的只读会话，因此也不会有任何结论可被接受。
+  expect(harness.fake.mutations.filter((mutation) => mutation.operation === 'worker-start')).toHaveLength(0);
+  expect(harness.fake.mutations.filter((mutation) => mutation.operation === 'task-create')).toHaveLength(0);
+  const blocker = snapshot.kind === 'snapshot'
+    ? snapshot.snapshot.blockers.find((entry) => entry.code === 'finalizer_read_only_unavailable')
+    : undefined;
+  // 原因必须能诊断到阶段与真实失败，而不是一句「不可用」。
+  expect(blocker?.message ?? '').toContain('sandbox-read');
+  expect(blocker?.message ?? '').toContain('cannot establish app-server socket mount isolation');
+  if (snapshot.kind !== 'snapshot') {
+    throw new Error('快照应当可读');
+  }
+  expect(snapshot.snapshot.finalizer.verdict).toBeNull();
+  expect(snapshot.snapshot.finalizer.readOnlyProfile).not.toBe('enforced');
+});
+
+test('能力变化不改写已派发的 Finalizer：环境随后不可用也不重复派发', { timeout: TEST_TIMEOUT_MS }, async () => {
+  // 派发之后再让能力检查失败：既有派发按原身份对账，探针结论不能伪造第二次派发或失败结论。
+  const capability = { value: READ_ONLY_WORKER_UNAVAILABLE };
+  const harness = await openHarness({
+    verdict: DELIVERABLE_VERDICT,
+    readOnlyWorkerProbe: () => Promise.resolve(capability.value),
+  });
+  capability.value = READ_ONLY_WORKER_AVAILABLE;
+  await sendMessage(harness, '开始收尾');
+  await waitFor(() => expect(workerStarts(harness)).toBe(1));
+
+  capability.value = READ_ONLY_WORKER_UNAVAILABLE;
+  await sendMessage(harness, '继续');
+
+  const snapshot = await waitForSnapshot(harness, (loaded) => {
+    expect(loaded.kind === 'snapshot' ? loaded.snapshot.finalizer.verdict?.kind : null).toBe('deliverable');
+  });
+  expect(snapshot.kind === 'snapshot' ? snapshot.snapshot.finalizer.readOnlyProfile : null).toBe('enforced');
+  expect(harness.fake.mutations.filter((mutation) => mutation.operation === 'worker-start')).toHaveLength(1);
 });

@@ -51,7 +51,10 @@ import {
   proveCodexTranscript,
   type CodexSessionStartReport,
 } from '../../../src/adapters/agents/codex-transcript.js';
-import { parseRecoveryCapsuleReport } from '../../../src/adapters/agents/utility-worker.js';
+import {
+  parseRecoveryCapsuleReport,
+  recoveryCapsuleInstructions,
+} from '../../../src/adapters/agents/utility-worker.js';
 import { ackDelivery, readDeliveryBatch } from '../../../src/adapters/orca-cli/delivery-reader.js';
 import { readRecord } from '../../../src/adapters/orca-cli/operation-catalog.js';
 import { createOrcaExecutionBackend } from '../../../src/adapters/orca-cli/orca-backend.js';
@@ -986,19 +989,8 @@ function payloadOf(message: DeliveryMessage): Record<string, unknown> {
 }
 
 function utilitySpec(transcriptRef: string, evidence: TranscriptCoverageEvidence): string {
-  return [
-    'You are a read-only Utility Worker extracting a Recovery Capsule from one exact Codex JSONL transcript.',
-    'Do not modify files, run git, dispatch workers, install dependencies, or use external network access.',
-    `Read and parse every non-empty JSONL line from this exact path: ${transcriptRef}`,
-    `The trusted Adapter coverage evidence is: ${JSON.stringify(evidence)}`,
-    'Confirm the transcript is readable and the event bounds agree with that evidence.',
-    'Build exactly one JSON object and no markdown or commentary.',
-    'Copy coverage, readableRange, gaps, and lastCompleteEventRef exactly from the trusted evidence.',
-    'Add openActions, sourceRefs, and unknowns. Use [] when the complete transcript supports no such conclusion.',
-    'When lastCompleteEventRef is non-null, include it in sourceRefs.',
-    'Then follow the injected Orca dispatch preamble and send that JSON as the worker_done body with outcome succeeded.',
-    'The local Orca control channel is the only permitted network use. Do not merely print the JSON and stop.',
-  ].join(' ');
+  // 复用生产 Task spec 的同一份指令：验收跑的就是生产提示，不各写一份。
+  return recoveryCapsuleInstructions(transcriptRef, evidence).join(' ');
 }
 
 async function waitForUtilityCapsule(input: {

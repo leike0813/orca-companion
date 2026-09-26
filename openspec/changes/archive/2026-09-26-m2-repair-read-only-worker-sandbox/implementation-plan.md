@@ -2,11 +2,11 @@
 
 ## 1. 实施基线与权威来源
 
-**模式：`predecessor-contract`。** 直接前驱 `m2-deliver-execution-tui`；规划时 HEAD `d2ea092d936841e803d933792d75dc5f7eedbb64`。规划时前驱仍在 active change 中，且 `docs/orca-compatibility.md`、`src/bootstrap/foreground-planning-runtime.ts` 等文件存在未提交修改；不得把这些修改覆盖为规划时的 HEAD 版本。
+**模式：`predecessor-contract`。** 直接前驱为已归档的 `m2-wire-execution-runtime`；`m2-deliver-execution-tui` 为并行项，本 change 消费其已固定接缝，为其真实验收解阻塞。本 change 先验收、归档，执行 TUI 随后补齐剩余真实场景。原规划 HEAD 为 `d2ea092d936841e803d933792d75dc5f7eedbb64`，本次核验基线为 `1fb068caa41b536c21fd02419ee5fd822fb20c22` 加已审查的未提交实现。保留当前修改，不覆盖回规划时版本。
 
-冻结接缝：前驱的执行态 Finalizer 投影、`readOnlyProfile` blocker、授权审阅 `manifestRows`/`gate`、真实 PTY 的隔离项目入口；已归档 `m2-wire-execution-runtime` 的 Capsule/Finalizer 派发与 Operation Intent/Delivery 对账。权威按 proposal、[新 capability spec](specs/orchestration/read-only-worker-execution/spec.md)、[design D1–D6](design.md)、`CONTEXT.md`、`docs/architecture.md`、`docs/interface-contracts.md` 和实际代码依次核对。
+冻结接缝：执行 TUI 并行项的 Finalizer 投影、`readOnlyProfile` blocker、授权审阅 `manifestRows`/`gate`、真实 PTY 隔离项目入口；已归档前驱的 Capsule/Finalizer 派发与 Operation Intent/Delivery 对账。权威按 proposal、[新 capability spec](specs/orchestration/read-only-worker-execution/spec.md)、[design D1–D6](design.md)、`CONTEXT.md`、`docs/architecture.md`、`docs/interface-contracts.md` 和实际代码依次核对。
 
-**实施前门禁：** 先确认前驱已 archive、对应主规格存在；重读前驱与本 change 的 artifacts，比较实际 `createCodexWorkerLaunch`、`runDoctor`、`reviewAuthorizationForDisplay`/`approveAuthorization`、Capsule 与 Finalizer 派发入口及相关测试。若这些接缝漂移，返回规划，不按旧路径硬套。保留所有用户未提交修改。环境修复与系统权限不是 apply 的隐式许可。
+**实施前门禁：** 确认 `m2-wire-execution-runtime` 已 archive，`coordinator/foreground-execution-runtime`、`execution/project-finalization` 与 `recovery/worker-sessions` 主规格存在；重读前驱、执行 TUI 并行项与本 change 的 artifacts，比较实际 `createCodexWorkerLaunch`、`runDoctor`、`reviewAuthorizationForDisplay`/`approveAuthorization`、Capsule 与 Finalizer 派发入口及相关测试。固定共享接缝并避免两个 agent 同时编辑同一文件。若接缝漂移，返回规划，不按旧路径硬套。保留用户未提交修改。环境修复与系统权限不是 apply 的隐式许可。
 
 ## 2. 复用与接缝
 

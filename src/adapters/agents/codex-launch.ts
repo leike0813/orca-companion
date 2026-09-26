@@ -8,6 +8,42 @@ import type { PreparedTerminalStrategy } from '../../application/worker-launch.j
 export const CODEX_HOOK_TRUST_BYPASS_ARG = '--dangerously-bypass-hook-trust';
 export const CODEX_UTILITY_PERMISSION_PROFILE = 'utility-readonly-local-control';
 
+/**
+ * Capsule Utility Worker 与只读 Finalizer 共用的唯一权限 profile 正文。
+ *
+ * 权限事实只能有一份：能力探针与生产启动必须生成同一段文本、同一个启动参数，否则「探针通过」就不再
+ * 说明真实会话能不能跑。文件系统继承 `:read-only`，网络只为本机 Orca 控制通道开启。
+ */
+export const CODEX_UTILITY_PROFILE_CONFIG_TOML = [
+  `default_permissions = ${JSON.stringify(CODEX_UTILITY_PERMISSION_PROFILE)}`,
+  '',
+  `[permissions.${CODEX_UTILITY_PERMISSION_PROFILE}]`,
+  'extends = ":read-only"',
+  '',
+  `[permissions.${CODEX_UTILITY_PERMISSION_PROFILE}.network]`,
+  'enabled = true',
+  '',
+].join('\n');
+
+/** Codex 按 `$CODEX_HOME/<name>.config.toml` 分层加载 profile，因此文件名也是共享事实。 */
+export const CODEX_UTILITY_PROFILE_CONFIG_FILE = `${CODEX_UTILITY_PERMISSION_PROFILE}.config.toml`;
+
+/** 只读 profile 的启动参数；不含任何沙箱后端开关：文件系统受限策略由 Codex 自己选择可用实现。 */
+export const CODEX_UTILITY_PROFILE_ARGS: readonly string[] = ['--profile', CODEX_UTILITY_PERMISSION_PROFILE];
+
+/**
+ * 来源配置里的 legacy sandbox 键会覆盖 permission profile 的只读声明，两者不能混用：混用时启动失败
+ * 关闭，绝不静默退回更宽的沙箱。
+ */
+export function assertUtilityProfileConfigCompatible(sourceConfigText: string): void {
+  if (
+    /^\s*sandbox_mode\s*=/mu.test(sourceConfigText) ||
+    /^\s*\[sandbox_workspace_write\]\s*$/mu.test(sourceConfigText)
+  ) {
+    throw new Error('Utility read-only permission profile 不能与来源配置的 legacy sandbox 设置混用');
+  }
+}
+
 export type PreparedCodexTerminal = {
   readonly title: string;
   readonly command: string;
@@ -146,24 +182,9 @@ export function createCodexWorkerLaunch(input: {
 
       const sandboxArguments = input.sandboxMode === 'read-only-local-control'
         ? (() => {
-            if (/^\s*sandbox_mode\s*=/mu.test(sourceConfigText) || /^\s*\[sandbox_workspace_write\]\s*$/mu.test(sourceConfigText)) {
-              throw new Error('Utility read-only permission profile 不能与来源配置的 legacy sandbox 设置混用');
-            }
-            writeFileSync(
-              join(stateRoot, `${CODEX_UTILITY_PERMISSION_PROFILE}.config.toml`),
-              [
-                `default_permissions = ${JSON.stringify(CODEX_UTILITY_PERMISSION_PROFILE)}`,
-                '',
-                `[permissions.${CODEX_UTILITY_PERMISSION_PROFILE}]`,
-                'extends = ":read-only"',
-                '',
-                `[permissions.${CODEX_UTILITY_PERMISSION_PROFILE}.network]`,
-                'enabled = true',
-                '',
-              ].join('\n'),
-              'utf8',
-            );
-            return ['--profile', CODEX_UTILITY_PERMISSION_PROFILE, '--enable', 'use_legacy_landlock'];
+            assertUtilityProfileConfigCompatible(sourceConfigText);
+            writeFileSync(join(stateRoot, CODEX_UTILITY_PROFILE_CONFIG_FILE), CODEX_UTILITY_PROFILE_CONFIG_TOML, 'utf8');
+            return [...CODEX_UTILITY_PROFILE_ARGS];
           })()
         : ['--sandbox', input.sandboxMode];
 
