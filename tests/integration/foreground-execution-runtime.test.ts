@@ -39,7 +39,7 @@ import {
 } from '../../src/bootstrap/foreground-planning-runtime.js';
 import { runStatus, type StatusSnapshot } from '../../src/interfaces/cli/status-command.js';
 import { toChildEnvironment } from '../../src/interfaces/cli/main.js';
-import { seedRealExecutionScope } from '../support/real-execution-scope.js';
+import { REAL_LOOP_SINGLE_PLAN, seedRealExecutionScope } from '../support/real-execution-scope.js';
 
 const REPO_VAR = 'ORCA_COMPANION_E2E_REPO';
 const IDENTITY_VAR = 'ORCA_COMPANION_E2E_IDENTITY';
@@ -246,6 +246,8 @@ describe.skipIf(!loopEnabled)('真实执行闭环（一次性项目）', () => {
         workspace: isolatedRepo,
         identity: dedicatedIdentity,
         objective: 'm2-wire-execution-runtime 真实执行闭环',
+        // 进程内冒烟只跑一条干净的角色链：图修订与基线补救由 PTY 验收（双包计划）覆盖。
+        plan: REAL_LOOP_SINGLE_PLAN,
         env,
       });
       const seededRunId = seededScope.orcaRunId;

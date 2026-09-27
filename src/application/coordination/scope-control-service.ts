@@ -109,6 +109,13 @@ export interface ScopeControlService {
   resume(input: ScopeControlRequest): Promise<ScopeControlResult>;
   cancel(input: ScopeControlRequest): Promise<ScopeControlResult>;
   exit(): ScopeExitResult;
+  /**
+   * 只对账、不改变控制状态：以原 OperationId 对账未决 intent，并用同一 pipeline 重放未确认 Delivery。
+   *
+   * Resume 的「先对账」用的就是它。需要「Run 静止且 Delivery 已结清」的受控操作（例如图修订请求要派发
+   * Graph Patch Planner）在等待期间调用它，而不是另建一套重放或提前改控制状态。
+   */
+  reconcile(input: ScopeControlRequest): Promise<ReconciliationRunResult>;
 }
 
 type ControlStateRead =
@@ -184,6 +191,18 @@ function stopOutcomesFor(
 
 export function createScopeControlService(dependencies: ScopeControlDependencies): ScopeControlService {
   const { store, reconciliation, workers } = dependencies;
+
+  const reconcile = async (input: ScopeControlRequest): Promise<ReconciliationRunResult> => {
+    const read = readControlState(store, input.coordinationScopeId);
+    if (read.kind === 'rejected') {
+      return { kind: 'rejected', code: read.code, message: read.message };
+    }
+    return await reconciliation({
+      coordinationScopeId: input.coordinationScopeId,
+      writer: input.writer,
+      expectedRevision: read.revision,
+    });
+  };
 
   const pause = (input: ScopeControlRequest): ScopeControlResult => {
     const verdict = evaluateScopeControl('pause');
@@ -358,5 +377,5 @@ export function createScopeControlService(dependencies: ScopeControlDependencies
     controlStateWritten: null,
   });
 
-  return { pause, resume, cancel, exit };
+  return { pause, resume, cancel, exit, reconcile };
 }

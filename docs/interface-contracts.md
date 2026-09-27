@@ -653,7 +653,7 @@ type ControllerSnapshotExecutionExtend = {
 
 派生规则是纯函数，canonical path 为 `src/application/execution/execution-view.ts`（Owner: `m2-deliver-execution-tui`）：输入是 IC-03 快照、当前 GraphVersion 的节点与调用方读到的 Orca 只读观察，输出上面的投影。每个状态都带 `derivedFrom`；推不出确定结论时停在 `unknown`；`finalizer.gate` 复用 `planFinalizerDispatch` 的判决，只有被接受的 Delivery Verdict 才呈现 deliverable。
 
-生产装配（`src/bootstrap/foreground-planning-runtime.ts`）在 Execution Coordination 模式下读取当前 Run 的 worktree、Worker 与 Delivery 事实，执行启动对账，并按受控工具意图单步推进 Frontier。Task 物化、Worker 派发、Delivery 结算、集成与 Finalizer 由各自应用用例执行；UI 只读投影和提交用户意图。`ScopeControlCommand` 接到 `createScopeControlService`：Pause 落盘，Resume 先对账再恢复，Cancel 保存意图并按 exact Worker stop verdict 决定已停止或不可核验。`ExecutionHandoffCommand` 接到 `src/application/handoff/execution-handoff.ts` 的四个用例，不经过 `PlanningHandoffProposal`。
+生产装配（`src/bootstrap/foreground-planning-runtime.ts`）在 Execution Coordination 模式下读取当前 Run 的 worktree、Worker 与 Delivery 事实，执行启动对账，并按受控工具意图单步推进 Frontier。Task 物化、Worker 派发、Delivery 结算、集成与 Finalizer 由各自应用用例执行；UI 只读投影和提交用户意图。`ScopeControlCommand` 接到 `createScopeControlService`：Pause 落盘，Resume 先对账再恢复，Cancel 保存意图并按 exact Worker stop verdict 决定已停止或不可核验；同一服务的 `reconcile` 只对账并重放未确认 Delivery、不改变控制状态，供需要「Run 静止且 Delivery 已结清」的受控操作（图修订请求）在等待期复用同一个对账用例。`ExecutionHandoffCommand` 接到 `src/application/handoff/execution-handoff.ts` 的四个用例，不经过 `PlanningHandoffProposal`。
 
 `m2-wire-execution-runtime` 的 Extend 增加一条有界的授权命令与对应端口，不新增快照字段、不改既有命令语义：
 

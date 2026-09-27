@@ -135,28 +135,51 @@ export function acquireRuntimeLease(
   };
 }
 
+/**
+ * 续约的乐观并发重试上限。
+ *
+ * 续约先读 scope revision 再以它做 CAS，而续约本身不推进 revision：读与提交之间只要夹进任意一次共享
+ * 写入（对账、Delivery 结算、预算消耗……），CAS 就会以 `stale_revision` 落空。那是良性的读-改-写竞争，
+ * 重读再提交即可；把它当成失去租约会让一个健康的 Session 在高写入期被误判为 fencing 失败并永久停摆。
+ */
+const RENEW_REVISION_RETRY_LIMIT = 5;
+
 export function renewRuntimeLease(
   store: BranchCoordinationStore,
   request: AcquireRuntimeLeaseRequest,
 ): RenewRuntimeLeaseResult {
-  const revision = readScopeRevision(store, request.coordinationScopeId);
-  if (revision.kind === 'rejected') {
-    return { kind: 'rejected', rejection: revision.rejection };
+  for (let attempt = 0; ; attempt += 1) {
+    const revision = readScopeRevision(store, request.coordinationScopeId);
+    if (revision.kind === 'rejected') {
+      return { kind: 'rejected', rejection: revision.rejection };
+    }
+    const result = store.transact({
+      kind: 'renew-runtime-lease',
+      coordinationScopeId: request.coordinationScopeId,
+      expectedRevision: revision.revision,
+      writer: {
+        coordinatorSessionId: request.coordinatorSessionId,
+        runtimeIncarnationId: request.runtimeIncarnationId,
+        fencingGeneration: request.fencingGeneration,
+      },
+      ttlMs: request.ttlMs ?? DEFAULT_RUNTIME_LEASE_TTL_MS,
+    });
+    if (result.kind === 'rejected') {
+      // 只有 revision 竞争可重试；fencing、无租约、账本损坏都必须如实上报给调用方。
+      if (result.code === 'stale_revision' && attempt < RENEW_REVISION_RETRY_LIMIT) {
+        continue;
+      }
+      return { kind: 'rejected', rejection: result };
+    }
+    return renewedLease(store, request, result.revision);
   }
-  const result = store.transact({
-    kind: 'renew-runtime-lease',
-    coordinationScopeId: request.coordinationScopeId,
-    expectedRevision: revision.revision,
-    writer: {
-      coordinatorSessionId: request.coordinatorSessionId,
-      runtimeIncarnationId: request.runtimeIncarnationId,
-      fencingGeneration: request.fencingGeneration,
-    },
-    ttlMs: request.ttlMs ?? DEFAULT_RUNTIME_LEASE_TTL_MS,
-  });
-  if (result.kind === 'rejected') {
-    return { kind: 'rejected', rejection: result };
-  }
+}
+
+function renewedLease(
+  store: BranchCoordinationStore,
+  request: AcquireRuntimeLeaseRequest,
+  revision: number,
+): RenewRuntimeLeaseResult {
   const lease = runtimeLeaseOf(readLeases(store, request.coordinationScopeId), request.coordinatorSessionId);
   if (lease === null) {
     return {
@@ -164,7 +187,7 @@ export function renewRuntimeLease(
       rejection: { kind: 'rejected', code: 'invalid_state', message: '续约后无法读回 lease' },
     };
   }
-  return { kind: 'renewed', lease, revision: result.revision };
+  return { kind: 'renewed', lease, revision };
 }
 
 export function acquireExecutionLease(
@@ -228,4 +251,54 @@ export function releaseExecutionLease(
     return { kind: 'rejected', rejection: result };
   }
   return { kind: 'released', revision: result.revision };
+}
+
+export type RepointExecutionLeaseResult =
+  | { readonly kind: 'repointed'; readonly lease: LeaseRecord }
+  | { readonly kind: 'unchanged'; readonly lease: LeaseRecord | null }
+  | { readonly kind: 'held_by_other'; readonly lease: LeaseRecord }
+  | { readonly kind: 'rejected'; readonly rejection: CoordinationCommandRejection };
+
+/**
+ * 把已由本 Session 持有的 Execution Coordination Lease 重指到当前 Incarnation。
+ *
+ * 租约按 Session 归属（并发上限的判定只看 Session），但记录里的 incarnation 与 fencing 会被协调级写入
+ * 用来拒绝陈旧进程（`request_graph_patch` 等用例的 `stale_lease_identity`）。Incarnation 在每次进程
+ * 启动或同一 Session 重新取得 Runtime Lease 时会拿到更大的 fencing generation，因此**不重指**就会让
+ * 同一个 Session 在接管之后永久写不进协调事实：模型请求图修订只会拿到 `stale_lease_identity`，而派发
+ * 路径（只比对 Session）看起来一切正常。
+ *
+ * 只有当前持有者可以重指（别人的租约在这里是 `held_by_other`，绝不覆盖）；身份已经一致时不写任何东西。
+ */
+export function repointExecutionLease(input: {
+  readonly store: BranchCoordinationStore;
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly coordinatorSessionId: CoordinatorSessionId;
+  readonly runtimeIncarnationId: RuntimeIncarnationId;
+  readonly fencingGeneration: number;
+}): RepointExecutionLeaseResult {
+  const held = executionLeaseOf(readLeases(input.store, input.coordinationScopeId));
+  if (held === null) {
+    return { kind: 'unchanged', lease: null };
+  }
+  if (held.coordinatorSessionId !== input.coordinatorSessionId) {
+    return { kind: 'held_by_other', lease: held };
+  }
+  if (
+    held.runtimeIncarnationId === input.runtimeIncarnationId &&
+    held.fencingGeneration === input.fencingGeneration
+  ) {
+    return { kind: 'unchanged', lease: held };
+  }
+  const acquired = acquireExecutionLease(input.store, {
+    coordinationScopeId: input.coordinationScopeId,
+    coordinatorSessionId: input.coordinatorSessionId,
+    runtimeIncarnationId: input.runtimeIncarnationId,
+    fencingGeneration: input.fencingGeneration,
+  });
+  return acquired.kind === 'acquired'
+    ? { kind: 'repointed', lease: acquired.lease }
+    : acquired.kind === 'held_by_other'
+      ? { kind: 'held_by_other', lease: acquired.lease }
+      : { kind: 'rejected', rejection: acquired.rejection };
 }

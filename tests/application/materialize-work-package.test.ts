@@ -288,7 +288,6 @@ function context(
     paths: {
       repoSelector: 'path:/work/repo',
       canonicalWorktree: '/work/repo',
-      baseBranch: 'main',
       baselineHead: 'abcdef0123456789abcdef0123456789abcdef01',
     },
     operationIds: {
@@ -619,7 +618,11 @@ test('未完成的独立基线补救阻止普通角色派发', async () => {
     expectedRevision: revision(),
   });
   expect(result.kind === 'rejected' ? result.failure.code : null).toBe('baseline_reconciliation_pending');
-  expect(calls).toHaveLength(0);
+  // worktree 步骤允许先发生：基线补救需要一个已存在的隔离 worktree 才能把它对齐到目标基线。被挡住的是
+  // 角色 Task 与 Worker——它们必须在核验通过之后才出现。
+  const mutations = calls.filter((call) => call.kind === 'mutate').map((call) => call.operation.operation);
+  expect(mutations).not.toContain('task-create');
+  expect(mutations).not.toContain('worker-start');
 });
 
 test('授权失效或预算耗尽时拒绝物化且零副作用', async () => {

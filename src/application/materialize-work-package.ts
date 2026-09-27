@@ -116,9 +116,12 @@ export type MaterializeWorktreePaths = {
   readonly repoSelector: string;
   /** canonical worktree 的绝对路径；只用于核验，不落盘。 */
   readonly canonicalWorktree: string;
-  /** 当前 Authorization 绑定的 canonical branch。 */
-  readonly baseBranch: string;
-  /** 当前 Authorization 绑定的 exact baseline HEAD。 */
+  /**
+   * 当前 Authorization 绑定的 exact baseline HEAD；worktree 必须建立在它上面并在建立后核验回它。
+   *
+   * 不能拿 canonical 分支当 base：分支会随每次受控集成前移，而每个 Work Package 的 base 与基线补救
+   * 判定都以授权 baseline 为准（`integrateWorkPackage` 的 commit 步同样按它核验来源 HEAD）。
+   */
   readonly baselineHead: string;
 };
 
@@ -310,20 +313,6 @@ export async function materializeWorkPackage(
       },
     };
   }
-  const reconciliations = input.store.query({
-    kind: 'baseline-reconciliations',
-    coordinationScopeId: input.coordinationScopeId,
-    workPackageId: input.workPackageId,
-  });
-  if (reconciliations.kind === 'rejected') {
-    return { kind: 'rejected', failure: { code: reconciliations.code, message: reconciliations.message } };
-  }
-  if (reconciliations.kind !== 'baseline-reconciliations') {
-    return { kind: 'rejected', failure: { code: 'invalid_state', message: '无法读取基线补救状态' } };
-  }
-  if (reconciliations.reconciliations.some((entry) => entry.state !== 'verified')) {
-    return { kind: 'rejected', failure: { code: 'baseline_reconciliation_pending', message: '基线补救尚未核验通过' } };
-  }
   const decision = evaluateDispatchCandidate({
     ...input.facts,
     candidateWorkPackageId: input.workPackageId,
@@ -381,7 +370,9 @@ export async function materializeWorkPackage(
         repo: paths.repoSelector,
         name: worktreeNameFor(input.workPackageId),
         comment: workPackageComment(input.workPackageId),
-        baseBranch: paths.baseBranch,
+        // Orca 的 `--base-branch` 接受 ref 或 commit：这里传授权 baseline 的 exact commit，worktree
+        // 因而始终建立在授权基线上，而不是当前（可能已被集成推进的）canonical 分支尖端。
+        baseBranch: paths.baselineHead,
       },
       interpretWorktreeCreation,
       async (value) => {
@@ -438,6 +429,28 @@ export async function materializeWorkPackage(
   );
   if (finalEnvelope.kind === 'rejected') {
     return { kind: 'rejected', failure: { code: finalEnvelope.code, message: finalEnvelope.message } };
+  }
+
+  /**
+   * 基线补救门禁：核验通过之前**不派发角色 Task**。
+   *
+   * 它放在 worktree 步骤之后是有意的：落后基线的 Work Package 需要一个已经存在的隔离 worktree 才能被
+   * 对齐（`verifyBaselineWorker` 要求 worktree 唯一可定位且 HEAD 精确等于目标基线）。因此这里允许先把
+   * worktree 建出来（或复用），只把角色 Task 与 Worker 挡住——否则「先补救再派发」在结构上无法成立。
+   */
+  const reconciliations = input.store.query({
+    kind: 'baseline-reconciliations',
+    coordinationScopeId: input.coordinationScopeId,
+    workPackageId: input.workPackageId,
+  });
+  if (reconciliations.kind === 'rejected') {
+    return { kind: 'rejected', failure: { code: reconciliations.code, message: reconciliations.message } };
+  }
+  if (reconciliations.kind !== 'baseline-reconciliations') {
+    return { kind: 'rejected', failure: { code: 'invalid_state', message: '无法读取基线补救状态' } };
+  }
+  if (reconciliations.reconciliations.some((entry) => entry.state !== 'verified')) {
+    return { kind: 'rejected', failure: { code: 'baseline_reconciliation_pending', message: '基线补救尚未核验通过' } };
   }
 
   // 步骤 4-6：先复用已记录的 Task；没有绑定时才创建，并在 intent 结算前记录绑定。

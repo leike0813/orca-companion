@@ -55,6 +55,8 @@ import {
 
 const WP = 'wp-a' as WorkPackageId;
 const BASELINE_HEAD = 'head-1';
+/** Authorization Manifest 里的 canonical 分支名（`executionManifest()`）。 */
+const CANONICAL_BRANCH = 'main';
 const AUTHORITIES: ExecutionAuthorizationManifest['permissions'] = {
   planner: true,
   implementation: true,
@@ -99,6 +101,14 @@ type Call =
 /** 记录型 fake backend：默认成功，可按调用序号注入拒绝或 unknown；建立出的 worktree 绑定 baseline。 */
 function fakeBackend(script: {
   readonly worktrees?: readonly WorktreeSummary[];
+  /**
+   * canonical 分支当前的尖端。
+   *
+   * Orca 的 `--base-branch` 接受 ref 或 commit：传分支名时新 worktree 落在该分支尖端，传 commit 时
+   * 落在那个 commit。fake 照这个语义推导 head，因此「拿 canonical 分支当 base」在集成前移之后必然
+   * 核验失败，而按授权 baseline 建立则始终通过。
+   */
+  readonly canonicalBranchHead?: string;
   readonly mutating?: (call: number, mutation: ExecutionMutation) => OperationOutcome<unknown> | undefined;
   readonly queryResult?: (call: number, query: unknown) => ExecutionQueryResult | undefined;
 }): { readonly backend: ExecutionBackend; readonly calls: readonly Call[] } {
@@ -141,7 +151,9 @@ function fakeBackend(script: {
             worktreeId: 'wt-created-1',
             path: '/tmp/worktrees/wp-a',
             branch: 'refs/heads/wp-a',
-            head: BASELINE_HEAD,
+            head: (input.baseBranch ?? 'main') === CANONICAL_BRANCH
+              ? (script.canonicalBranchHead ?? BASELINE_HEAD)
+              : input.baseBranch ?? BASELINE_HEAD,
             displayName: worktreeNameFor(WP),
             comment: input.comment ?? null,
             isMainWorktree: false,
@@ -574,6 +586,66 @@ test('Worker 列举不可用时不创建第二个角色资源', async () => {
   expect(result.kind).toBe('idle');
   if (result.kind === 'idle') expect(result.blockers).toContain('worker-list:unverifiable');
   expect(mutationsOf(execution.calls)).toHaveLength(0);
+});
+
+/* -------------------------------------------------------------------------- */
+/* worktree base                                                               */
+/* -------------------------------------------------------------------------- */
+
+test('canonical 被已归属的集成推进后，新 Work Package 仍建立在授权 baseline 上', async () => {
+  const harness = scenario({ workPackages: [executionWorkPackage('wp-a')] });
+  // canonical 分支尖端已经前移到 head-2（与最近一条已完成集成一致），而授权 baseline 仍是 head-1。
+  const execution = fakeBackend({ canonicalBranchHead: 'head-2' });
+  const result = await advanceExecution({
+    ...advanceInput(harness, {
+      roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-1' }) },
+      canonicalHead: {
+        canonicalHead: 'head-2',
+        authorizedBaselineHead: BASELINE_HEAD,
+        canonicalWorktreeDirty: false,
+        lastIntegrationExpectedHead: 'head-2',
+      },
+    }),
+    backend: execution.backend,
+  });
+
+  // 拿 canonical 分支当 base 会让新 worktree 落在 head-2，与授权 baseline 的核验必然不符，物化会停在
+  // unknown；按授权 baseline 建立则通过核验，worktree 建出来、角色 Task 等基线补救核验通过后再派发。
+  expect(result.kind).toBe('idle');
+  expect(result.kind === 'idle' ? result.blockers : []).toEqual(['rejection:baseline_reconciliation_pending']);
+  const worktreeCreates = mutationsOf(execution.calls).filter((mutation) => mutation.operation === 'worktree-create');
+  expect(worktreeCreates[0]?.operation === 'worktree-create' ? worktreeCreates[0].baseBranch : null).toBe(
+    BASELINE_HEAD,
+  );
+  // 建立在授权 baseline 上的 worktree 落后于当前 canonical：worktree 先建出来（基线补救需要它），
+  // 但角色 Task 在核验通过前不派发——否则成果既无法 fast-forward 集成，也无法在之后再对齐。
+  expect(mutationsOf(execution.calls).filter((mutation) => mutation.operation === 'task-create')).toHaveLength(0);
+  const reconciliations = harness.store.query({
+    kind: 'baseline-reconciliations',
+    coordinationScopeId: harness.scopeId,
+  });
+  expect(
+    reconciliations.kind === 'baseline-reconciliations' ? reconciliations.reconciliations : [],
+  ).toMatchObject([{ workPackageId: WP, state: 'required', requiredBaselineHead: 'head-2' }]);
+});
+
+test('canonical 仍等于授权 baseline 时不登记基线补救，角色 Task 照常派发', async () => {
+  const harness = scenario({ workPackages: [executionWorkPackage('wp-a')] });
+  const execution = fakeBackend({});
+  const result = await advanceExecution({
+    ...advanceInput(harness, { roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-1' }) } }),
+    backend: execution.backend,
+  });
+
+  expect(result.kind).toBe('progressed');
+  const reconciliations = harness.store.query({
+    kind: 'baseline-reconciliations',
+    coordinationScopeId: harness.scopeId,
+  });
+  expect(
+    reconciliations.kind === 'baseline-reconciliations' ? reconciliations.reconciliations : [],
+  ).toEqual([]);
+  expect(mutationsOf(execution.calls).filter((mutation) => mutation.operation === 'task-create')).toHaveLength(1);
 });
 
 /* -------------------------------------------------------------------------- */

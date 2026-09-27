@@ -519,8 +519,16 @@ function deriveWorkPackage(
 
   // 3. 阻塞的 Recovery / Baseline Adoption 是明确 blocker，不再猜阶段。`pending` 但已记下原因的
   // Recovery（unverifiable 保持未决）同样要把原因显示出来：当前派发保持阻塞，界面不得只剩「未知」。
+  //
+  // 已终结的 Recovery（`recovered` / `cancelled`）不是阻塞：`recovered` 记录会保留中断当时的 hold 原因
+  // 作为历史（store 的终态迁移不再允许写入，因此原因不会被清掉），据它阻塞会让已经续办的 Work Package
+  // 永久停在 blocked——既挡住派生阶段，也挡住后续派发。
   const blockedRecovery = workflow.recoveries.find(
-    (recovery) => recovery.status === 'blocked' || recovery.blockingReason !== null,
+    (recovery) =>
+      recovery.status === 'blocked' ||
+      (recovery.blockingReason !== null &&
+        recovery.status !== 'recovered' &&
+        recovery.status !== 'cancelled'),
   );
   if (blockedRecovery !== undefined) {
     return {

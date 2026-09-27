@@ -53,6 +53,11 @@ import { activeAuthorization } from '../planning/authorization-service.js';
 import { readScope } from '../planning/scope-read.js';
 import { guardDispatchCandidate } from '../dispatch-guard.js';
 import {
+  planBaselineReconciliation,
+  recordBaselineReconciliation,
+  reconciliationIdFor,
+} from './baseline-reconciliation.js';
+import {
   materializeWorkPackage,
   type MaterializeOperationIds,
   type MaterializeWorkPackageResult,
@@ -668,6 +673,62 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
     );
   }
 
+  /**
+   * canonical 已经前移到 Authorization baseline 之外时，先为这个 Work Package 登记 Baseline Reconciliation。
+   *
+   * Work Package 的 worktree 一律建立在 Authorization 绑定的 baseline 上（物化核验与集成的 commit 步都按
+   * 它判定），而 canonical 会随每次受控集成前移。落后基线的 worktree 无法 fast-forward 集成，也不能在
+   * 角色工作开始之后再对齐（重置会丢掉该角色的产出）。因此这里在派发**之前**登记需求：物化会先把
+   * worktree 建出来，角色 Task 由 `baseline_reconciliation_pending` 门禁挡住，直到宿主用独立 Planner
+   * Worker 把 worktree 对齐到当前基线并核验通过。
+   *
+   * 幂等：(Work Package, 目标基线) 已有记录（未终结或已核验）时不重复登记。
+   */
+  const requiredBaselineHead = input.canonicalHead.canonicalHead;
+  if (requiredBaselineHead !== authorization.manifest.baselineHead) {
+    const existing = input.store.query({
+      kind: 'baseline-reconciliations',
+      coordinationScopeId: input.coordinationScopeId,
+      workPackageId: workPackage.workPackageId,
+    });
+    if (existing.kind === 'rejected') {
+      return blocked(input.coordinationScopeId, existing.code, existing.message);
+    }
+    const reconciliationId = reconciliationIdFor(workPackage.workPackageId, requiredBaselineHead);
+    const known =
+      existing.kind === 'baseline-reconciliations' &&
+      existing.reconciliations.some((entry) => entry.reconciliationId === reconciliationId);
+    if (!known) {
+      const planned = planBaselineReconciliation({
+        workPackageId: workPackage.workPackageId,
+        requiredBaselineHead,
+        worktreeBaseHead: authorization.manifest.baselineHead,
+        // 祖先关系由随后的核验按真实 Git 事实判定；这里只登记「不是当前基线」这一需求。
+        relation: 'behind',
+      });
+      if (planned.kind === 'required') {
+        const recorded = recordBaselineReconciliation({
+          store: input.store,
+          coordinationScopeId: input.coordinationScopeId,
+          writer: input.writer,
+          plan: planned.plan,
+        });
+        if (recorded.kind === 'rejected') {
+          return blocked(input.coordinationScopeId, recorded.failure.code, recorded.failure.message);
+        }
+      }
+    }
+  }
+
+  /**
+   * 登记基线补救会推进 Scope revision（本地 CAS）：物化的期望 revision 必须取登记之后的读值，
+   * 否则这一步会以 `stale_revision` 停在门口而不是把 worktree 建出来。
+   */
+  const afterRegistration = readScope(input.store, input.coordinationScopeId);
+  if (afterRegistration.kind === 'rejected') {
+    return blocked(input.coordinationScopeId, afterRegistration.code, afterRegistration.message);
+  }
+
   const canonicalWorktree = authorization.manifest.workspacePolicy.canonicalWorktree;
   const materialized = await materializeWorkPackage({
     store: input.store,
@@ -695,7 +756,6 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
       paths: {
         repoSelector: `path:${canonicalWorktree}`,
         canonicalWorktree,
-        baseBranch: authorization.manifest.gitPolicy.canonicalBranch,
         baselineHead: authorization.manifest.baselineHead,
       },
       operationIds,
@@ -703,7 +763,7 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
     },
     facts,
     // 物化用例自己会再读一次 revision；这里给的是同一同步块里读到的值（本用例在此之前没有任何写入）。
-    expectedRevision: scope.revision,
+    expectedRevision: afterRegistration.scope.revision,
   });
 
   return advanceResultOf(materialized, workPackage.workPackageId, role);

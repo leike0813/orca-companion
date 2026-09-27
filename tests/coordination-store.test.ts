@@ -1951,6 +1951,60 @@ test('accepted revision 与 revision pending 持有、预算扣减在同一事�
   }
 });
 
+test('图修订退场的节点与图版本同事务释放修订持有，仍在图里的持有保持 pending', () => {
+  createScope();
+  activateSession();
+  recordInitialGraph();
+  acquireExecutionLease();
+
+  // 先给图里两个节点各落一个 pending 持有：带基数语义的那种「修正在途节点」。
+  for (const workPackageId of ['wp-1', 'wp-2'] as WorkPackageId[]) {
+    const recorded = submit((expectedRevision) => ({
+      kind: 'record-revision-hold',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      workPackageId,
+      source: 'graph_patch',
+      sourceRef: 'graph-patch:setup',
+    }));
+    expect(recorded.kind).toBe('committed');
+  }
+
+  // 接受一份把 wp-1 退场、保留 wp-2 的版本：退场节点的持有必须在同一事务里释放，否则整个 Scope 会
+  // 永久停在 revision_pending（真实运行里 Git 侧早已集成成功，Finalizer 门禁却再也不满足）。
+  const retired = submit((expectedRevision) =>
+    acceptedRevisionCommand(expectedRevision, {
+      graphVersion: 2 as GraphVersion,
+      parentVersion: 1 as GraphVersion,
+      graph: {
+        ...executionGraph(),
+        workPackages: [
+          { ...executionGraph().workPackages[0], workPackageId: 'wp-2' as WorkPackageId },
+        ],
+      },
+      patch: {
+        patchId: 'patch-2',
+        operationId: 'op-2' as OperationId,
+        baseGraphVersion: 1 as GraphVersion,
+        added: [],
+        revised: [],
+        retired: ['wp-1' as WorkPackageId],
+        descendants: [],
+        takesOver: [],
+        revisionPendingWorkPackageIds: [],
+      },
+    }),
+  );
+  expect(retired.kind).toBe('committed');
+
+  const holds = store.query({ kind: 'revision-holds', coordinationScopeId: SCOPE });
+  expect(holds.kind === 'revision-holds' ? holds.holds : null).toEqual([
+    expect.objectContaining({ workPackageId: 'wp-1', state: 'released' }),
+    expect.objectContaining({ workPackageId: 'wp-2', state: 'pending' }),
+  ]);
+});
+
 test('补丁基线必须等于当前 head，否则整笔拒绝', () => {
   createScope();
   activateSession();

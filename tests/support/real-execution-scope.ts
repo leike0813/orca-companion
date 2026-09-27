@@ -31,19 +31,54 @@ import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store
 import { COORDINATOR_SESSION_STATE_SCHEMA_VERSION } from '../../src/domain/coordinator/session-state.js';
 import { proposeExecutionGraph } from '../../src/bootstrap/execution-runtime.js';
 
-/** 执行闭环用的工作包：目标是 Route Map 的 Destination——只在 README.md 里落一行标题与一句说明。 */
-export const REAL_LOOP_PLAN = {
-  planRevision: 1,
-  destinationRef: { kind: 'destination', id: 'destination-e2e', version: 1 },
-  workPackages: [
-    {
-      key: 'readme-banner',
-      title: 'README 标题与说明',
-      dependsOn: [],
-      scopeEnvelope: { include: ['README.md'], exclude: [] },
-    },
-  ],
+/** 夹具接受的计划形状：调用方可以只取其中一部分 Work Package。 */
+export type RealLoopPlan = {
+  readonly planRevision: number;
+  readonly destinationRef: { readonly kind: 'destination'; readonly id: string; readonly version: number };
+  readonly workPackages: readonly {
+    readonly key: string;
+    readonly title: string;
+    readonly dependsOn: readonly string[];
+    readonly scopeEnvelope: { readonly include: readonly string[]; readonly exclude: readonly string[] };
+  }[];
+};
+
+/** 目标是一个 README 落点：只在 README.md 里落一行标题与一句说明。 */
+const README_BANNER = {
+  key: 'readme-banner',
+  title: 'README 标题与说明',
+  dependsOn: [],
+  scopeEnvelope: { include: ['README.md'], exclude: [] },
 } as const;
+
+/** 第二个落点是独立文件：它与 README 互不依赖，因此在串行 Frontier 里排在后面。 */
+const NOTES_BASICS = {
+  key: 'notes-basics',
+  title: 'NOTES 基础说明',
+  dependsOn: [],
+  scopeEnvelope: { include: ['NOTES.md'], exclude: [] },
+} as const;
+
+const DESTINATION = { kind: 'destination', id: 'destination-e2e', version: 1 } as const;
+
+/** 单包计划：一条干净的角色链，不需要图修订与基线补救。 */
+export const REAL_LOOP_SINGLE_PLAN: RealLoopPlan = {
+  planRevision: 1,
+  destinationRef: DESTINATION,
+  workPackages: [README_BANNER],
+};
+
+/**
+ * 双包计划（PTY 验收用）：两个互不依赖的 Work Package 是**串行 Frontier 的最小可观测形状**。
+ *
+ * 第一个集成之后 canonical 会前移，第二个的隔离 worktree 仍建立在授权 baseline 上（因此落后于
+ * canonical），图修订因此能在同一条链路上取到「worktree base 落后于所需基线」这一真实场景。
+ */
+export const REAL_LOOP_PLAN: RealLoopPlan = {
+  planRevision: 1,
+  destinationRef: DESTINATION,
+  workPackages: [README_BANNER, NOTES_BASICS],
+};
 
 export type SeededRealExecutionScope = {
   readonly coordinationScopeId: CoordinationScopeId;
@@ -59,7 +94,7 @@ export type SeedRealExecutionScopeInput = {
   readonly identity: string;
   readonly objective: string;
   readonly env: Record<string, string>;
-  readonly plan?: typeof REAL_LOOP_PLAN;
+  readonly plan?: RealLoopPlan;
 };
 
 function requireCompleted(result: Awaited<ReturnType<typeof runProcess>>, what: string): string {

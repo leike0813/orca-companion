@@ -697,6 +697,38 @@ describe('deriveExecutionFacts：Frontier 阶段只由持久事实推出', () =>
     expect(held.blockerRefs).toEqual(['provider-session-unverifiable']);
   });
 
+  test('Scenario 已终结的 Recovery 不再阻塞：保留的 hold 原因只是历史，节点必须继续其后继阶段', () => {
+    const facts = derive({
+      snapshot: snapshot({
+        materializationBindings: [makeBinding(WP_A, 'orca-task-a', 'implementation')],
+        deliverySettlements: [
+          makeSettlement({
+            workPackageId: WP_A,
+            orcaTaskId: 'orca-task-a',
+            role: 'implementation',
+            dispatchId: 'dispatch-impl',
+            attemptId: 'attempt-impl',
+          }),
+        ],
+        recoveries: [
+          makeRecovery({
+            workPackageId: WP_A,
+            role: 'implementation',
+            status: 'recovered',
+            blockingReason: '终端仍在已列举主机上存在',
+          }),
+        ],
+      }),
+      nodes: [{ workPackageId: WP_A, dependsOn: [] }],
+    });
+
+    // 已接受 Implementation 之后的下一个阶段必须照样派生出来：中断当时记下的 hold 原因不会再挡派发。
+    const entry = frontierEntry(facts, WP_A);
+    expect(entry.state).toBe('validating');
+    expect(entry.role).toBe('implementation');
+    expect(entry.blockerRefs).toEqual([]);
+  });
+
   test('Scenario 单包验证通过不等于可交付：Finalizer 门禁只在全部通过验证且没有未决事实时才 ready', () => {
     const readySnapshot = snapshot({
       materializationBindings: [makeBinding(WP_A, 'orca-task-a')],

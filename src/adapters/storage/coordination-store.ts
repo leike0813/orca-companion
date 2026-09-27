@@ -4439,6 +4439,26 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
                release_reason = NULL`,
           ).run(cmd.coordinationScopeId, workPackageId, cmd.patch?.patchId ?? '', now);
         }
+        // 退休在与图版本同一事务里结清：节点已经不在新图中，不可能再有后续角色或依赖工作，
+        // 留下的 pending 持有只会把整个 Scope 永久钉在 revision_pending（真实运行实测：Finalizer 门禁
+        // 再也不满足，Git 侧却早已集成成功）。持有仍然按规格登记——这里只是紧接着把「退休已生效」记成释放。
+        const liveWorkPackageIds = new Set(
+          cmd.graph.workPackages.map((workPackage) => workPackage.workPackageId),
+        );
+        for (const hold of db
+          .prepare(
+            `SELECT work_package_id FROM revision_holds
+             WHERE coordination_scope_id = ? AND state = 'pending'`,
+          )
+          .all(cmd.coordinationScopeId) as { readonly work_package_id: WorkPackageId }[]) {
+          if (liveWorkPackageIds.has(hold.work_package_id)) {
+            continue;
+          }
+          db.prepare(
+            `UPDATE revision_holds SET state = 'released', released_at = ?, release_reason = ?
+             WHERE coordination_scope_id = ? AND work_package_id = ?`,
+          ).run(now, '节点已由图修订退场，不会有后续角色或依赖工作', cmd.coordinationScopeId, hold.work_package_id);
+        }
         for (const reconciliation of cmd.baselineReconciliations ?? []) {
           const open = one<BaselineReconciliationRow>(
             db.prepare(`SELECT * FROM baseline_reconciliations WHERE coordination_scope_id = ? AND work_package_id = ? AND state != 'verified'`),

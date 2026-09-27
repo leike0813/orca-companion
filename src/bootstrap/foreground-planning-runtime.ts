@@ -52,7 +52,7 @@ import {
   type CoordinatorIncarnation,
 } from '../application/coordinator/runtime-guard.js';
 import { submitUserMessage } from '../application/coordinator/user-message.js';
-import { renewRuntimeLease } from '../application/coordination/lease-service.js';
+import { renewRuntimeLease, repointExecutionLease } from '../application/coordination/lease-service.js';
 import { bindScopeIdentity, initializeCoordinationScope } from '../application/planning/initialize-scope.js';
 import {
   activationGate,
@@ -91,6 +91,7 @@ import type { SpecificationProvider as SpecificationProviderPort } from '../appl
 import type { ScopeEnvelope as ScopeEnvelopeShape } from '../domain/planning/execution-graph.js';
 import { planFinalizerDispatch, finalizeProject, type FinalizerGateFacts } from '../application/finalize-project.js';
 import { integrateWorkPackage, type GitIntegrationPort } from '../application/integrate-work-package.js';
+import { settleRetiredRevision } from '../application/execution/revision-service.js';
 import type { OperationIntent } from '../application/dto/operation-intent.js';
 import {
   cancelExecutionHandoff,
@@ -314,6 +315,15 @@ export const RESUME_IN_FLIGHT_WAIT_MS = 300_000;
 
 /** 单次受控 Orca mutation 的超时；它只限制一次调用，不构成重试策略。 */
 const MUTATION_TIMEOUT_MS = 60_000;
+
+/**
+ * 图修订请求等待 Run 静止的上限与轮询间隔。
+ *
+ * Graph Patch Planner 是一个角色级 Worker（并发上限 1），派发前必须等当前角色收尾；等待有界，超时后
+ * 仍以结构化拒绝回答，模型可以稍后再请求。
+ */
+const GRAPH_PATCH_QUIET_WAIT_MS = 10 * 60_000;
+const GRAPH_PATCH_QUIET_POLL_MS = 5_000;
 
 /**
  * 等待 Codex SessionStart 报告的时间窗。
@@ -1754,18 +1764,48 @@ export async function createForegroundPlanningHost(
     }
   };
 
+  /**
+   * 把 Execution Coordination Lease 重指到当前存活的 Runtime Incarnation。
+   *
+   * 策略本身属于应用层的租约用例（`repointExecutionLease`）；这里只负责发布重指失败的可观察事实：
+   * 失败意味着本 Session 的协调级写入仍会被判成陈旧身份，界面必须看到原因。
+   */
+  const repointExecutionLeaseFor = (session: LiveSession): void => {
+    const current = requireStore();
+    if (current === null) {
+      return;
+    }
+    const result = repointExecutionLease({
+      store: current,
+      coordinationScopeId: session.incarnation.coordinationScopeId,
+      coordinatorSessionId: session.coordinatorSessionId,
+      runtimeIncarnationId: session.incarnation.runtimeIncarnationId,
+      fencingGeneration: session.incarnation.fencingGeneration,
+    });
+    if (result.kind === 'rejected') {
+      publish(session.coordinatorSessionId, {
+        kind: 'blocked',
+        coordinationScopeId: session.incarnation.coordinationScopeId,
+        code: 'execution_lease_repoint_failed',
+        message: `无法把 Execution Coordination Lease 重指到当前 Incarnation：${result.rejection.message}`,
+      });
+    }
+  };
+
   const ensureLiveSession = async (
     coordinatorSessionId: CoordinatorSessionId,
   ): Promise<EnsureSessionResult> => {
     const existing = liveSessions.get(coordinatorSessionId);
     if (existing !== undefined) {
-      return existing.fencingLost
-        ? {
-            kind: 'failed',
-            code: 'fencing_lost',
-            message: '该 Session 的 Runtime Lease 续约已失败：请重启前台进程后重新核验',
-          }
-        : { kind: 'live', session: existing };
+      if (existing.fencingLost) {
+        return {
+          kind: 'failed',
+          code: 'fencing_lost',
+          message: '该 Session 的 Runtime Lease 续约已失败：请重启前台进程后重新核验',
+        };
+      }
+      repointExecutionLeaseFor(existing);
+      return { kind: 'live', session: existing };
     }
     if (blocker !== null) {
       return { kind: 'failed', code: blocker.code, message: blocker.message };
@@ -1824,6 +1864,9 @@ export async function createForegroundPlanningHost(
     };
     liveSessions.set(coordinatorSessionId, withGraph);
     startHeartbeat(withGraph);
+    // 同一 Session 的新 Incarnation 接管之后立刻把 Execution Coordination Lease 重指到它：租约的
+    // incarnation/fencing 是协调级写入用来拒绝陈旧进程的依据，重启后必须与新 Incarnation 一致。
+    repointExecutionLeaseFor(withGraph);
     // 启动对账序列：复用刚刚取得的 Runtime Incarnation，一个 Scope 恰好一次。
     const startup = await runStartupForScope(withGraph);
     if (startup.kind === 'rejected') {
@@ -4381,6 +4424,88 @@ export async function createForegroundPlanningHost(
   };
 
   /** 图变化只从当前图、授权、Git 与 Orca 事实组装；模型只能提交变化声明。 */
+  /**
+   * 等待一个静止的 Run，并在此期间结清未确认 Delivery。
+   *
+   * Graph Patch Planner 自己就是一个 Worker（并发上限 1），它的派发门禁要求整个 Run 静止且没有未确认
+   * Delivery；而携带图变化声明的用户消息本身就是触发点（`sessionMessages` 先推进 Frontier 再唤醒模型），
+   * 因此消息一到往往就有角色在跑。这里按同一个对账用例（Scope 控制服务的 `reconcile`：对账 + 重放未确认
+   * Delivery）有界等待，而不是把请求直接拒掉——否则用户的图修订请求在健康链路里永远无法生效。
+   *
+   * 等待期间每轮都做一次对账：Delivery 只在启动 / Resume 的重放里结算，真实运行里一次请求重试时，上一次
+   * Planner 收尾留下的未确认批次让门禁只回 `delivery_pending`，而那时已经没有任何角色在跑。
+   */
+  const waitForQuietRunForGraphPatch = async (session: LiveSession): Promise<boolean> => {
+    const deadline = Date.now() + GRAPH_PATCH_QUIET_WAIT_MS;
+    const scopeId = session.incarnation.coordinationScopeId;
+    for (;;) {
+      if (closed || session.fencingLost) {
+        return false;
+      }
+      const current = requireStore();
+      const scope = scopeRecord(scopeId);
+      // 每轮都先结算可结算的 Delivery：门禁要求它与「Run 静止」同时成立，且结算是幂等的。
+      const service = scopeControlService();
+      const reconciled = service === null
+        ? null
+        : await service.reconcile({
+            coordinationScopeId: scopeId,
+            writer: writerFor(session.incarnation),
+          });
+      const graphNow = current === null || scope === null || scope.graphId === null || scope.graphVersion === null
+        ? null
+        : current.query({
+            kind: 'graph-version',
+            coordinationScopeId: scopeId,
+            graphId: scope.graphId,
+            graphVersion: scope.graphVersion,
+          });
+      const quiet =
+        scope !== null && current !== null && graphNow !== null &&
+        graphNow.kind === 'graph-version' && graphNow.version !== null &&
+        await runIsQuietForGraphPatch(scope, graphNow.version.graph.workPackages);
+      if (quiet && reconciled !== null && reconciled.kind === 'reconciled') {
+        // 对账会写 store 并可能改变观察：确认仍然静止才算满足门禁。
+        const after = requireStore();
+        const scopeAfter = scopeRecord(scopeId);
+        const graphAfter = after === null || scopeAfter === null || scopeAfter.graphId === null || scopeAfter.graphVersion === null
+          ? null
+          : after.query({
+              kind: 'graph-version',
+              coordinationScopeId: scopeId,
+              graphId: scopeAfter.graphId,
+              graphVersion: scopeAfter.graphVersion,
+            });
+        if (
+          scopeAfter !== null && after !== null && graphAfter !== null &&
+          graphAfter.kind === 'graph-version' && graphAfter.version !== null &&
+          await runIsQuietForGraphPatch(scopeAfter, graphAfter.version.graph.workPackages)
+        ) {
+          return true;
+        }
+      }
+      if (Date.now() >= deadline) {
+        return false;
+      }
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, GRAPH_PATCH_QUIET_POLL_MS);
+      });
+    }
+  };
+
+  /** Run 静止 = 每个 Worker 的存活结论都是已退出；列举不可用或未知取值都不算静止。 */
+  const runIsQuietForGraphPatch = async (
+    scope: ScopeRecord,
+    nodes: readonly { readonly workPackageId: string }[],
+  ): Promise<boolean> => {
+    const observations = await executionObservations(scope, nodes);
+    return (
+      observations.workersEnumerated &&
+      observations.unavailableReasons.length === 0 &&
+      observations.workers.every((worker) => workerStateLiveness(worker.workerState) === 'exited')
+    );
+  };
+
   const requestGraphPatchForSession = async (
     session: LiveSession,
     request: GraphChangeRequest,
@@ -4405,6 +4530,14 @@ export async function createForegroundPlanningHost(
     }
     if (graphPatchPlannerInFlight.has(session.coordinatorSessionId)) {
       return { kind: 'rejected', code: 'planner_in_flight', message: '同一 Session 已有 Graph Patch Planner 请求在途' };
+    }
+    // 先等到 Run 静止并结清未确认 Delivery：Planner 的派发门禁要求两者同时成立。
+    if (!(await waitForQuietRunForGraphPatch(session))) {
+      return {
+        kind: 'rejected',
+        code: 'worker_in_flight',
+        message: `等待 Run 静止超时（${String(GRAPH_PATCH_QUIET_WAIT_MS)}ms）：图修订需要一个没有在跑 Worker、且 Delivery 已结清的 Run`,
+      };
     }
     const graphRead = current.query({
       kind: 'graph-version', coordinationScopeId: scopeId,
@@ -4544,7 +4677,16 @@ export async function createForegroundPlanningHost(
       if (result.kind === 'routed') {
         return { kind: 'ok', value: { route: result.decision.route, reason: result.decision.reason } };
       }
-      const message = result.kind === 'unknown' ? result.reason : result.message;
+      // Admission 的拒绝必须带上它逐条给出的编译错误：只回一句「未通过编译校验」时，模型只能盲目重试
+      // （真实运行里连续两次重提完全相同的补丁），而这条拒绝本来就是它能自行修正的确定性反馈。
+      const details =
+        result.kind === 'rejected' && result.code === 'admission_rejected' && result.errors !== undefined &&
+        result.errors.length > 0
+          ? `：${result.errors.map((error) =>
+              `${error.code}${error.workPackageId === null ? '' : `@${error.workPackageId}`}（${error.message}）`,
+            ).join('；')}`
+          : '';
+      const message = result.kind === 'unknown' ? result.reason : `${result.message}${details}`;
       recordExecutionBlocker(scopeId, 'graph-patch', result.kind === 'unknown' ? 'graph_patch_unknown' : result.code, message);
       return result.kind === 'unknown'
         ? { kind: 'unknown', reason: `${result.operationId}: ${message}` }
@@ -4800,6 +4942,68 @@ export async function createForegroundPlanningHost(
       integrate: derivedKey('git-integration-integrate', segments) as OperationId,
       push: derivedKey('git-integration-push', segments) as OperationId,
     };
+  };
+
+  /**
+   * 结算「退休」留下的修订持有。
+   *
+   * 规格要求：修订或退休需求在 Worker 已派发时被报告，受影响节点置 revision pending，其当前 Worker 必须先
+   * 运行至可核验终态。规格修订由重新准入解除持有；**退休的节点不会再被重新准入**，所以必须在这里解除，
+   * 否则持有永久 pending、整个 Scope 钉在 revision_pending，Finalizer 门禁永不满足（真实运行实测）。
+   *
+   * 判定 fail closed：该节点还有未结算结果的 Dispatch 时保持持有，等下一次触发点（结算本身就是「运行至
+   * 可核验终态」的持久证据，因此判定只读 store，不依赖 Worker 列举是否可用）。
+   */
+  const settleRetiredRevisionHolds = (session: LiveSession): void => {
+    const scopeId = session.incarnation.coordinationScopeId;
+    const current = requireStore();
+    const scope = scopeRecord(scopeId);
+    if (current === null || scope === null || scope.mode !== 'execution_coordination' || scope.controlState !== 'active') {
+      return;
+    }
+    if (scope.graphId === null || scope.graphVersion === null) {
+      return;
+    }
+    const graphRead = current.query({
+      kind: 'graph-version',
+      coordinationScopeId: scopeId,
+      graphId: scope.graphId,
+      graphVersion: scope.graphVersion,
+    });
+    const snapshotRead = current.query({ kind: 'snapshot', coordinationScopeId: scopeId });
+    if (graphRead.kind !== 'graph-version' || graphRead.version === null || snapshotRead.kind !== 'snapshot') {
+      return;
+    }
+    const graph = graphRead.version.graph;
+    const graphWorkPackageIds = graph.workPackages.map((workPackage) => workPackage.workPackageId);
+    const pending = snapshotRead.snapshot.revisionHolds.filter((hold) => hold.state === 'pending');
+    if (pending.length === 0) {
+      return;
+    }
+    for (const hold of pending) {
+      if (graphWorkPackageIds.includes(hold.workPackageId)) {
+        continue;
+      }
+      const settled = settleRetiredRevision({
+        store: current,
+        coordinationScopeId: scopeId,
+        writer: writerFor(session.incarnation),
+        workPackageId: hold.workPackageId,
+        currentGraphWorkPackageIds: graphWorkPackageIds,
+      });
+      if (settled.kind === 'released') {
+        publish(session.coordinatorSessionId, {
+          kind: 'state-changed',
+          coordinationScopeId: scopeId,
+          revision: scopeRecord(scopeId)?.revision ?? 0,
+          reason: `retired-revision-settled:${hold.workPackageId}`,
+        });
+        continue;
+      }
+      if (settled.kind === 'rejected') {
+        recordExecutionBlocker(scopeId, 'revision-settlement', settled.code, settled.message);
+      }
+    }
   };
 
   /**
@@ -5886,6 +6090,7 @@ export async function createForegroundPlanningHost(
     if (await recoverLostWorkerSession(session)) {
       return;
     }
+    settleRetiredRevisionHolds(session);
     await integrateAcceptedWorkPackage(session);
     await runFinalizerForScope(session);
     await advanceExecutionOnce(session);

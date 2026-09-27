@@ -320,6 +320,23 @@ test('恢复：先对账再恢复调度，且不重置已消耗的预算、claim
   expect(workers.stops).toEqual([]);
 });
 
+test('只对账：走同一套对账用例，但不改控制状态、不请求停止 Worker', async () => {
+  const revisionsBefore = scopeRevision();
+  const workers = fakeWorkers({ kind: 'listed', dispatchIds: ['dispatch-1'] }, {});
+  const reconciliation = reconciliationProbe();
+  const control = service({ workers: workers.port, reconciliation: reconciliation.runner });
+
+  const reconciled = await control.reconcile({ coordinationScopeId: SCOPE, writer });
+
+  expect(reconciled.kind).toBe('reconciled');
+  expect(reconciliation.calls).toHaveLength(1);
+  // 与 Resume 用的是同一个用例与同一个 revision 基准，但控制状态保持不变（图修订请求的等待期用它结清
+  // 未确认 Delivery，不能顺手把 Scope 切到 active）。
+  expect(reconciliation.calls[0]?.expectedRevision).toBe(revisionsBefore);
+  expect(controlState()).toBe('active');
+  expect(workers.stops).toEqual([]);
+});
+
 test('恢复：对账失败时保持 paused，不进入 active', async () => {
   const workers = fakeWorkers({ kind: 'listed', dispatchIds: [] }, {});
   const reconciliation = reconciliationProbe({

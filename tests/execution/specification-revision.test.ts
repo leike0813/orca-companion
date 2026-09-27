@@ -18,6 +18,7 @@ import {
 import { decideWorkerResultRecording } from '../../src/application/record-worker-result.js';
 import {
   beginSpecificationRevision,
+  settleRetiredRevision,
   settleSpecificationRevision,
 } from '../../src/application/execution/revision-service.js';
 import {
@@ -494,4 +495,39 @@ test('重启后额度从已消耗值继续计数', () => {
   }
   expect(DEFAULT_EXECUTION_LIMITS.specificationRevisions).toBe(2);
   expect(EXECUTION_ACCEPTED).toEqual([WP_A]);
+});
+
+test('退休结算：节点已退场即释放持有，仍在图里则保持 pending', () => {
+  const recorded = harness.store.transact({
+    kind: 'record-revision-hold',
+    coordinationScopeId: harness.scopeId,
+    expectedRevision: harness.revision(),
+    writer: harness.writer,
+    workPackageId: WP_A,
+    source: 'graph_patch',
+    sourceRef: 'graph-patch:test',
+  });
+  expect(recorded.kind).toBe('committed');
+  const holds = () => {
+    const queried = harness.store.query({ kind: 'revision-holds', coordinationScopeId: harness.scopeId });
+    return queried.kind === 'revision-holds' ? queried.holds : [];
+  };
+  expect(holds()).toEqual([expect.objectContaining({ workPackageId: WP_A, state: 'pending' })]);
+
+  const settle = (workPackageIds: readonly WorkPackageId[]) =>
+    settleRetiredRevision({
+      store: harness.store,
+      coordinationScopeId: harness.scopeId,
+      writer: harness.writer,
+      workPackageId: WP_A,
+      currentGraphWorkPackageIds: workPackageIds,
+    });
+
+  // 仍在图里的节点不属于退休：保持持有，等规格重新准入解除。
+  expect(settle([WP_A, WP_B]).kind).toBe('kept_pending');
+  expect(holds()).toEqual([expect.objectContaining({ workPackageId: WP_A, state: 'pending' })]);
+
+  // 节点已退场：退休已生效，释放持有（兜底修复历史遗留行，不消耗修订额度）。
+  expect(settle([WP_B]).kind).toBe('released');
+  expect(holds()).toEqual([expect.objectContaining({ workPackageId: WP_A, state: 'released' })]);
 });

@@ -14,8 +14,8 @@
  * ```
  *
  * 未显式开启时整个文件只留一条 skip 记录：不解析身份、不调用 Orca、不打开数据库。隔离项目必须由本文件
- * 自己播种（见下），并且**尚无 Coordination Scope**；Session 历史应当很短——pane 有 60 行高，帧高于它时
- * Ink 会把顶栏裁到可见区域之外。终端的列宽也要足够（本文件用 `-x 220 -y 60`），否则顶栏与 Sidebar 会被
+ * 自己播种（见下），并且**尚无 Coordination Scope**；Session 历史应当很短——pane 有 80 行高，帧高于它时
+ * Ink 会把顶栏裁到可见区域之外。终端的列宽也要足够（本文件用 `-x 220 -y 80`），否则顶栏与 Sidebar 会被
  * 按宽度裁切。
  *
  * ## 覆盖范围
@@ -25,17 +25,24 @@
  * 1. 播种（`beforeAll`）：用 `tests/support/real-execution-scope.ts` 把全新隔离项目推到
  *    「route_planning + 候选图与 Run」，与进程内的执行闭环用例共用同一份夹具；
  * 2. ①②③ 启动、顶栏与 Scope 控制的投影必须等于持久事实；
- * 3. ⑤ 在 TUI 里完成授权，再用 `Pause`/`Resume` 单步驱动真实串行 Frontier：真实 Planner、
- *    Implementation、Validator、受控 Git 集成与只读 Finalizer 都在生产路径上运行；期间**真实关闭一次
- *    Implementation Worker 的 agent 终端**制造执行态 Session 中断，核对 Recovery 的界面事实；
+ * 3. ⑤ 在 TUI 里完成授权，再用 `Pause`/`Resume` 单步驱动真实串行 Frontier：两个 Work Package 的
+ *    Planner、Implementation、Validator、受控 Git 集成、Graph Patch Planner、Baseline Reconciliation 与
+ *    只读 Finalizer 都在生产路径上运行；默认模式**真实关闭一次 Implementation Worker 的 agent 终端**
+ *    制造执行态 Session 中断，核对 Recovery 的界面事实；
  * 4. ④ 退出重启：读回同一批 `(workPackageId, state, attemptId)`，不产生新的派发或集成；
  * 5. ⑤b 与 ⑥ Finalizer 终态投影与 `Ctrl+C` 前台退出。
  *
  * 所有角色共用一个模型来源（项目配置 `execution.workerModel`），因此验收要求它显式等于
  * `minimax-cn/MiniMax-M3`，并在真实 Codex Session 记录里逐角色核对。
  *
- * 本文件的现有单包场景不触发图修订；Graph Patch Planner 与 baseline reconciliation 的生产入口
- * 已由执行运行时接线，独立路径有行为测试。真实 PTY 同链路证据仍需隔离项目中增补该场景。
+ * ## 图修订与基线补救的同链路覆盖
+ *
+ * 夹具是两个互不依赖的 Work Package：第一个集成让 canonical 前移之后，第二个包的 worktree 仍建立在授权
+ * baseline 上，于是链路必须真的走一次 **Baseline Reconciliation**（`advanceExecution` 在派发前登记需求，
+ * 物化只把 worktree 建出来、角色 Task 由门禁挡到核验通过）才能继续。第一个包被接受之后、第二个包仍未被
+ * 接受时，用例经 composer 提交一次含糊变化声明：真实 Coordinator 调用 `request_graph_patch`，工具内部
+ * 有界等待 Run 静止并结清未确认 Delivery，然后真实 Graph Patch Planner 产出补丁、Admission 追加
+ * GraphVersion，修订后的 worktree 由独立 Planner Task 对齐并核验。
  *
  * ## 两种运行模式
  *
@@ -80,7 +87,7 @@ import {
   mergeRealEnvFileIntoProcess,
   REAL_ENV_FILE_VAR,
 } from '../support/real-env.js';
-import { seedRealExecutionScope } from '../support/real-execution-scope.js';
+import { REAL_LOOP_PLAN, seedRealExecutionScope } from '../support/real-execution-scope.js';
 
 const COMPANION_REPOSITORY = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const BUILT_ENTRY = join(COMPANION_REPOSITORY, 'dist', 'src', 'interfaces', 'cli', 'main.js');
@@ -262,6 +269,21 @@ function statusLine(pane: string): string {
   return pane.split('\n').find((line) => STATUS_LINE_PATTERN.test(line)) ?? '';
 }
 
+/**
+ * 界面上的 blocker 行（Sidebar 的 `blockers` 分区以 `! ` 开头）。
+ *
+ * 宿主的执行期 blocker 只存在于宿主自己的快照里，`status --json` 读不到；链路停住时这一行是唯一能
+ * 说明「宿主到底卡在哪条门禁上」的可观察事实，因此每轮把它记进日志。
+ */
+function blockerLines(pane: string): string {
+  return pane
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('! '))
+    .slice(0, 3)
+    .join(' / ');
+}
+
 /** 状态行上的一次性提示（拒绝原因、unknown 提示）；没有提示时为 `null`。 */
 function noticeOf(pane: string): string | null {
   const matched = STATUS_LINE_PATTERN.exec(statusLine(pane));
@@ -301,10 +323,17 @@ const SESSION = 'execution';
 /** 一轮开始前等宿主静止的窗口：外部派发与结算都要走完。 */
 const QUIESCENCE_WINDOW_MS = 10 * 60_000;
 /** 在途真实 Worker 的收尾窗口：超时不再硬失败，而是把链路停在可诊断的位置。 */
-const IN_FLIGHT_WINDOW_MS = 12 * 60_000;
+/**
+ * 在途 Worker 收尾的等待上限。
+ *
+ * 必须比一轮的 Worker 观察窗口（`WORKER_WINDOW_MS = 15 分钟`）更宽：真实 Codex 会话的时长由模型决定，
+ * 没有固定上限，窗口太短会在**健康但慢**的会话上放弃整条链路（实测第 3 轮就停在一个刚起步的 Planner 上）。
+ */
+const IN_FLIGHT_WINDOW_MS = 30 * 60_000;
 /** 顶栏与 Sidebar 都按终端宽度裁切；窄屏会让本文件的顶栏断言失去意义。 */
 const PANE_WIDTH = '220';
-const PANE_HEIGHT = '60';
+/** 两个 Work Package 的 Sidebar（图、integration queue、reconcile 行与 finalizer）需要更高的 pane。 */
+const PANE_HEIGHT = '80';
 
 function startTui(workspace: string): void {
   const env: NodeJS.ProcessEnv = { ...process.env };
@@ -345,6 +374,61 @@ type IntentOutcome = {
   /** 界面是否给出了可核验结果：控制状态变化，或状态行上出现一次性提示。 */
   readonly observed: boolean;
 };
+
+/**
+ * 经 composer 提交一条用户消息（= 用户真的敲进输入行再回车）。
+ *
+ * `send-keys -l` 逐字符写入，回车提交；消息本身不得包含换行——composer 的单行输入不接受换行。单行输入
+ * 会按光标位置滚动，因此只能断言**尾部**出现在帧里（头部可能已被滚出可见区）。
+ */
+function submitComposerMessage(content: string): void {
+  const tail = content.slice(-12);
+  tmux(SOCKET, ['send-keys', '-t', SESSION, '-l', content]);
+  const typed = pollPane(SOCKET, SESSION, (text) => text.includes(tail), 10_000);
+  expect(typed.ok, `composer 未收到消息文本：\n${typed.text}`).toBe(true);
+  tmux(SOCKET, ['send-keys', '-t', SESSION, 'Enter']);
+  // 提交后草稿会离开输入行，但同一条消息也会作为用户发言出现在 transcript 里（宽行会被折行），因此
+  // 「草稿消失」只等一小会儿、不作为断言：真正的可观察结果是模型是否因此调用了受控工具。
+  pollPane(SOCKET, SESSION, (text) => !text.includes(tail), 3_000);
+}
+
+/**
+ * 一次含糊的图变化声明：分类结论必须落到「派发 Graph Patch Planner」那一支。
+ *
+ * 九字段里不能出现结构性 `yes`（那会路由到无副作用的 `graph_patch`），也不能全是 `no`（那是 `no_change`）；
+ * 依赖、Scope Envelope、objective 与基础设施都明确声明为「不成立」，只有「是否仅属 contract 内容」无法
+ * 判定，于是声明不足以分类、只能交给 Graph Patch Planner 起草补丁。
+ */
+function graphChangeInstruction(workPackageId: string): string {
+  // 声明按**字面 JSON**给出：九字段的分类路由是确定性的，而「哪些字段留 unknown」决定这次请求会不会
+  // 真的交给 Graph Patch Planner。用散文描述九个字段时模型可能自行改写（实测把 `unknown` 读成 `no`，
+  // 于是全部声明事实都「已核验不成立」→ 路由成 `no_change`，一次补丁都不会起草）。
+  //
+  // 两个 `unknown` 是刻意留的：分类器只在「声明事实不足以判定」时才派 Planner，而
+  // `infrastructureFailure` 与 `contractContentOnly` 同时为 `unknown`、结构性字段全为 `no` 时，
+  // 既不会命中 `no_change`、`graph_patch`（结构性 yes）、`specification_revision`、`retry_attempt`，
+  // 也不会命中 `blocked`（基础设施 yes 与语义 yes 不能同时成立），必然落到「派发 Planner」那一支。
+  // 单行给出：composer 是单行输入，长行按光标位置横向滚动，多行消息会让「草稿是否已提交」无从判断。
+  const request = JSON.stringify({
+    workPackageId,
+    infrastructureFailure: 'unknown',
+    changesDependencies: 'no',
+    changesScopeEnvelope: 'no',
+    changesObjective: 'no',
+    contractContentOnly: 'unknown',
+    goalOrGlobalConstraintChanged: 'no',
+    userRequestedReplanning: 'no',
+    requiresUserChoice: 'no',
+  });
+  return (
+    `执行期间发现变化：Work Package ${workPackageId} 的验收条件需要更新。` +
+    `请立即调用一次 request_graph_patch，request 参数按此 JSON 原样提交（不要改写取值、不要增删字段）：${request}` +
+    // 补丁只会经由确定性 Admission 编译校验：把变化限定在该 Work Package 已有的 contract 内容上，
+    // 不去新增或改动其它文件与 Scope Envelope（真实运行里 Planner 的初稿曾因此被判 `admission_rejected`）。
+    '补丁只应调整该 Work Package 已有的 contract 内容（requirements、design 或验收条件），' +
+    '不要新增或改动其它文件、依赖与 Scope Envelope。除这一次工具调用外不要做其它事。'
+  );
+}
 
 /**
  * 退出前台进程后重启。
@@ -444,6 +528,9 @@ if (gate.kind === 'skip') {
         workspace,
         identity: dedicatedIdentity,
         objective: 'm2-deliver-execution-tui 真实 PTY 执行验收',
+        // 双包计划：第一个包集成推进 canonical 之后，第二个包的 worktree 仍建立在授权 baseline 上，
+        // 因此需要真实的 Baseline Reconciliation 才能继续（见 `advanceExecution` 的登记路径）。
+        plan: REAL_LOOP_PLAN,
         env: process.env as Record<string, string>,
       });
       seededRunId = seeded.orcaRunId;
@@ -549,6 +636,7 @@ if (gate.kind === 'skip') {
         readonly role: string;
         readonly launchId: string;
         readonly orcaTaskId: string;
+        readonly workPackageId: string;
       }[];
       /** 已经有 Session Segment（可核验会话）的 Dispatch：中断必须落在真实会话上。 */
       readonly sessionBoundDispatchIds: readonly string[];
@@ -557,6 +645,18 @@ if (gate.kind === 'skip') {
       /** 当前 Graph Generation 与它在 Orca 侧的 consumer generation：中断操作的 authority 需要它们。 */
       readonly graphGeneration: number;
       readonly consumerGeneration: number;
+      /** 当前图的全部已提交版本（含图修订）；`patchId` 为 `null` 表示初始编译版本。 */
+      readonly graphVersions: readonly { readonly version: number; readonly patchId: string | null }[];
+      /** 基线补救记录：图修订或 canonical 前移让 worktree base 落后时必须出现的那一条。 */
+      readonly baselineReconciliations: readonly {
+        readonly reconciliationId: string;
+        readonly workPackageId: string;
+        readonly state: string;
+        readonly requiredBaselineHead: string;
+        readonly observedHead: string | null;
+        readonly orcaTaskId: string | null;
+        readonly dispatchId: string | null;
+      }[];
     };
 
     async function readExecutionFacts(): Promise<ExecutionFacts> {
@@ -601,6 +701,22 @@ if (gate.kind === 'skip') {
           kind: 'delivery-settlements',
           coordinationScopeId: coordinationScopeId as CoordinationScopeId,
         });
+        const scopeRead = opened.store.query({
+          kind: 'scope',
+          coordinationScopeId: coordinationScopeId as CoordinationScopeId,
+        });
+        const graphId = scopeRead.kind === 'scope' ? (scopeRead.scope?.graphId ?? null) : null;
+        const versions = graphId === null
+          ? null
+          : opened.store.query({
+              kind: 'graph-versions',
+              coordinationScopeId: coordinationScopeId as CoordinationScopeId,
+              graphId,
+            });
+        const reconciliations = opened.store.query({
+          kind: 'baseline-reconciliations',
+          coordinationScopeId: coordinationScopeId as CoordinationScopeId,
+        });
         const currentGeneration =
           generations.kind === 'graph-generations' ? generations.generations[0] : undefined;
         // consumer generation 是 Orca 在绑定消费者时给出的代际：播种建立的第一个 Run 为 1，其后以已结算
@@ -618,6 +734,22 @@ if (gate.kind === 'skip') {
               : [],
           graphGeneration: currentGeneration?.generation ?? 1,
           consumerGeneration,
+          graphVersions:
+            versions?.kind === 'graph-versions'
+              ? versions.versions.map((entry) => ({ version: entry.version, patchId: entry.patchId }))
+              : [],
+          baselineReconciliations:
+            reconciliations.kind === 'baseline-reconciliations'
+              ? reconciliations.reconciliations.map((entry) => ({
+                  reconciliationId: entry.reconciliationId,
+                  workPackageId: entry.workPackageId,
+                  state: entry.state,
+                  requiredBaselineHead: entry.requiredBaselineHead,
+                  observedHead: entry.observedHead,
+                  orcaTaskId: entry.orcaTaskId,
+                  dispatchId: entry.dispatchId,
+                }))
+              : [],
           recoveries:
             recoveries.kind === 'recoveries'
               ? recoveries.recoveries.map((recovery) => ({
@@ -635,7 +767,12 @@ if (gate.kind === 'skip') {
             bindings.kind === 'materialization-bindings'
               ? bindings.bindings.flatMap((binding) =>
                   binding.role !== null && binding.launchId !== null
-                    ? [{ role: binding.role, launchId: binding.launchId, orcaTaskId: binding.orcaTaskId }]
+                    ? [{
+                        role: binding.role,
+                        launchId: binding.launchId,
+                        orcaTaskId: binding.orcaTaskId,
+                        workPackageId: binding.workPackageId,
+                      }]
                     : [],
                 )
               : [],
@@ -1014,7 +1151,10 @@ if (gate.kind === 'skip') {
       async () => {
         expect(seededRunId.length, '播种必须给出候选图的 Orca Run').toBeGreaterThan(0);
         const config = JSON.parse(readFileSync(join(workspace, 'orca-companion.json'), 'utf8')) as {
-          readonly execution?: { readonly workerModel?: unknown };
+          readonly execution?: {
+            readonly workerModel?: unknown;
+            readonly git?: { readonly remotes?: readonly string[]; readonly refs?: readonly string[] };
+          };
         };
         // 所有角色共用一个模型来源（项目配置），因此验收先钉住它，再由真实 Session 记录逐角色核对。
         expect(config.execution?.workerModel, 'Worker 模型必须由项目配置显式给出').toBe(
@@ -1049,10 +1189,22 @@ if (gate.kind === 'skip') {
         expect(authorizedPane.text, '授权不重置工作区').toContain('composer ·');
 
         // ---- 驱动：一次触发最多推进一个阶段，因此用 Pause→Resume 轮次推进真实 Frontier ----
+        /**
+         * 一轮是否有可观察变化。
+         *
+         * 除了每个 Work Package 的状态身份，还要包含 Graph Version 与 Baseline Reconciliation：图修订与
+         * 基线核验都由独立的真实 Worker 推进，未必改变任何 Work Package 的生命周期字段。
+         */
         const fingerprintOf = (status: StatusSnapshot): string =>
-          status.execution.workPackages
-            .map((entry) => `${entry.workPackageId}:${entry.state}:${entry.role ?? '-'}:${entry.attemptId ?? '-'}`)
-            .join('|');
+          [
+            status.execution.workPackages
+              .map((entry) => `${entry.workPackageId}:${entry.state}:${entry.role ?? '-'}:${entry.attemptId ?? '-'}`)
+              .join('|'),
+            `graph:${String(status.graph?.version ?? 0)}`,
+            status.execution.reconciliations
+              .map((entry) => `${entry.workPackageId}:${entry.severity}`)
+              .join(','),
+          ].join('#');
         /**
          * 终态判据：Finalizer 给出独立结论，或某个 Work Package 阻塞且**没有仍在续办的 Recovery**。
          *
@@ -1070,19 +1222,117 @@ if (gate.kind === 'skip') {
             ));
         // 制造中断时链路会停在 Recovery blocker（还要等 Capsule 的同步窗口）；不制造中断时要一路推到
         // 集成与 Finalizer 派发，再给独立结论留一段有界的等待窗口。
-        const deadline = Date.now() + (interruptRecovery ? 60 : 40) * 60_000;
+        // 真实链路现在还要容纳一次图修订（Planner 起草 + Admission + 受影响 Work Package 重跑）与
+        // 基线补救，因此截止放宽；vitest 的单测超时同步放宽，只有链路真的卡死时才由它兜底。
+        const deadline = Date.now() + (interruptRecovery ? 120 : 100) * 60_000;
         /** 一轮触发后等待可观察变化的窗口：有真实 Worker 在跑时要等它收尾，没有 Worker 时不必空等。 */
         const WORKER_WINDOW_MS = 15 * 60_000;
         const NO_WORKER_WINDOW_MS = 90_000;
         /** 容忍的连续无变化轮次：结果消息要等进度批次被确认后才成为当前批次，一轮可能只推进消息。 */
-        const MAX_NO_CHANGE_ROUNDS = 4;
+        const MAX_NO_CHANGE_ROUNDS = 6;
+        /** 同一轮内允许的触发次数：一次触发被 CAS/门禁拒绝时立刻重试，不浪费整轮等待。 */
+        const TRIGGER_ATTEMPTS = 4;
+        /**
+         * 重试的观察窗口。
+         *
+         * 一次触发的结论（`stale_revision`、门禁拒绝或真的派出 Worker）通常在十几秒内就能读到
+         * （实测一次推进的装配约 9.7s：Runtime Lease 心跳每 10s 推进一次 Scope revision，CAS 窗口因此
+         * 常常跨过心跳）；重试不需要为空等留满 90s。
+         */
+        const RETRY_WINDOW_MS = 30_000;
         let snapshot = authorized;
         let loopFacts = await readExecutionFacts();
         let rounds = 0;
         let interrupted: string | null = null;
         let noChangeRounds = 0;
+        /**
+         * 图变化声明的目标：当前**已物化且尚未被接受**的那个 Work Package。
+         *
+         * 不写死 key：Frontier 的候选顺序不保证与计划顺序一致，而修订必须先落在「还在跑」的节点上——
+         * 已接受的节点不允许被补丁重定义，提交给它只会得到 `accepted_node_mutation`。它的 worktree 建立在
+         * 授权 baseline 上，而 canonical 已被前一个 Work Package 的集成推进，因此这次修订必然取到
+         * 「worktree base 落后于所需基线」。
+         */
+        const graphChangeTargetOf = (status: StatusSnapshot, current: ExecutionFacts): string | null => {
+          const materialized = new Set(current.roleLaunches.map((entry) => entry.workPackageId));
+          const candidate = status.execution.workPackages.find(
+            (entry) =>
+              materialized.has(entry.workPackageId) &&
+              entry.state !== 'accepted' &&
+              entry.state !== 'waiting_integration' &&
+              entry.state !== 'retired',
+          );
+          return candidate?.workPackageId ?? null;
+        };
+        let graphChangeTarget: string | null = null;
+        /**
+         * 声明的提交次数。
+         *
+         * 声明本身是确定性的路由输入，但「读九字段再把它们原样交给工具」由模型完成：实测它会自行改写
+         * 取值（把 `unknown` 读成 `no`），于是这次请求被路由成 `no_change` 而一次补丁都不起草。驱动的
+         * 职责是提出请求，因此允许有界重试——**断言仍然要求真实 Graph Patch Planner 追加一个
+         * GraphVersion**，重试不放宽结论，只保证请求真的被送达一次。
+         */
+        const GRAPH_CHANGE_ATTEMPTS = 3;
+        /** 两次提交之间的间隔：给模型一轮时间把上一次请求交给工具，而不是阻塞驱动循环。 */
+        const GRAPH_CHANGE_INTERVAL_MS = 4 * 60_000;
+        /**
+         * 提交后保持 Scope active 的时长。
+         *
+         * 驱动靠 Pause → Resume「单步」推进 Frontier，但 `request_graph_patch` 在 Scope 处于
+         * `paused` 时以 `control_state` 拒绝（实测：模型忠实照抄了声明，两次都在提交后几秒内落进
+         * 驱动制造的 paused 窗口里）。因此提交之后要先留出一段不制造 paused 的窗口，让这次工具调用
+         * 真的进得来；工具内部还会为静止的 Run 等待，所以窗口要比一次模型调用宽。
+         */
+        const GRAPH_CHANGE_HOLD_MS = 3 * 60_000;
+        let graphChangeAttempts = 0;
+        let graphChangeNextAttemptAt = 0;
+        let graphChangeHoldUntil = 0;
+        /** 提交声明后界面上出现过的 reconcile 行：只在真的需要核验的时刻采集。 */
+        let reconcilingPane: string | null = null;
+        const canonicalHead = (): string =>
+          spawnSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).stdout.trim();
         while (Date.now() < deadline && !terminalReached(snapshot, loopFacts)) {
           const inFlight = await inFlightWorkers();
+          // ---- 图变化声明：canonical 已被受控集成推进，同时还有未被接受的 Work Package ----
+          const candidateTarget = graphChangeTargetOf(snapshot, loopFacts);
+          // ---- 图变化声明：canonical 已被受控集成推进，同时还有未被接受的 Work Package ----
+          //
+          // 提交后不阻塞驱动循环：请求由模型交给工具，工具自己会在需要时等待 Run 静止；循环本身每一轮
+          // 都要等真实 Worker 收尾，用它的等待换取补丁出现即可。补丁一旦落到图上就停止重试。
+          const patchApplied = loopFacts.graphVersions.some((entry) => entry.patchId !== null);
+          if (patchApplied) {
+            graphChangeAttempts = GRAPH_CHANGE_ATTEMPTS;
+            graphChangeHoldUntil = 0;
+            if (reconcilingPane === null) {
+              // 基线补救期间 Sidebar 必须把该节点显示为 reconcile（严重性由持久记录给出）。
+              const reconciling = pollPane(SOCKET, SESSION, (text) => text.includes('reconcile'), 60_000);
+              reconcilingPane = reconciling.ok ? reconciling.text : null;
+            }
+          } else if (
+            canonicalHead() !== seededBaselineHead &&
+            candidateTarget !== null &&
+            graphChangeAttempts < GRAPH_CHANGE_ATTEMPTS &&
+            Date.now() >= graphChangeNextAttemptAt
+          ) {
+            graphChangeAttempts += 1;
+            graphChangeNextAttemptAt = Date.now() + GRAPH_CHANGE_INTERVAL_MS;
+            graphChangeHoldUntil = Date.now() + GRAPH_CHANGE_HOLD_MS;
+            graphChangeTarget = graphChangeTarget ?? candidateTarget;
+            // 提交那一刻目标节点一定还在图上，Sidebar 也就一定还在渲染它的 reconcile 行：补丁可能把它
+            // retire 掉（真实 Planner 起草时会），那时再找就找不到了。这里先采，补丁落地后再兜底采一次。
+            if (reconcilingPane === null) {
+              const reconcilingNow = pollPane(SOCKET, SESSION, (text) => text.includes('reconcile'), 30_000);
+              reconcilingPane = reconcilingNow.ok ? reconcilingNow.text : null;
+            }
+            submitComposerMessage(graphChangeInstruction(candidateTarget));
+            console.warn(
+              `[pty-execution] 图变化声明第 ${String(graphChangeAttempts)} 次提交 ${describeStatus(snapshot)}`,
+            );
+            loopFacts = await readExecutionFacts();
+            snapshot = await readStatus(workspace);
+            continue;
+          }
           if (inFlight.length > 0) {
             const target = inFlight.length === 1 ? inFlight[0] : undefined;
             const targetRole = target === undefined ? null : roleOfTask(loopFacts, target.taskId);
@@ -1132,38 +1382,77 @@ if (gate.kind === 'skip') {
             continue;
           }
           const beforeFingerprint = fingerprintOf(snapshot);
-          const roundApplied = await triggerRound();
-          rounds += 1;
-          const workerDeadline = Date.now() + WORKER_WINDOW_MS;
-          const noWorkerDeadline = Date.now() + NO_WORKER_WINDOW_MS;
-          let sawInFlightWorker = (await inFlightWorkerCount()) > 0;
+          let roundApplied = false;
           let advanced = false;
-          for (;;) {
-            const live = await inFlightWorkerCount();
-            const wasLive = sawInFlightWorker;
-            sawInFlightWorker = sawInFlightWorker || live > 0;
-            const current = await readStatus(workspace);
-            if (
-              fingerprintOf(current) !== beforeFingerprint ||
-              current.execution.finalizer.verdict !== null ||
-              current.blockers.length > 0 ||
-              // 刚结束的真实 Worker：交付要走下一次触发才结算，因此这里就返回。
-              (wasLive && live === 0)
-            ) {
-              advanced = true;
-              break;
+          /**
+           * 图修订请求在途时不制造 paused 窗口：只确保 Scope 回到 active，让模型的受控工具调用能被受理。
+           *
+           * 代价是这一轮不推进 Frontier；真实 Worker 仍在自己跑，窗口结束后照常继续推进。
+           */
+          if (Date.now() < graphChangeHoldUntil) {
+            const held = await readStatus(workspace);
+            if (held.scope.controlState === 'paused') {
+              await submitControl('resume', 'paused');
             }
-            if (Date.now() >= (sawInFlightWorker ? workerDeadline : noWorkerDeadline)) {
-              break;
+            loopFacts = await readExecutionFacts();
+            snapshot = await readStatus(workspace);
+            continue;
+          }
+          let sawInFlightWorker = (await inFlightWorkerCount()) > 0;
+          /**
+           * 一次触发可能什么都没推进：宿主可能正好把这次推进判成 `stale_revision`（Runtime Lease 心跳
+           * 每 10s 推进一次 Scope revision，而重新读取事实也要花时间，两者同相时 CAS 必然冲突），也可能被
+           * 门禁拒绝。界面上的用户会再按一次 Resume，因此这里同样有界地重试，而不是空等一整轮。
+           */
+          for (let attempt = 0; attempt < TRIGGER_ATTEMPTS && !advanced; attempt += 1) {
+            roundApplied = await triggerRound();
+            rounds += 1;
+            sawInFlightWorker = sawInFlightWorker || (await inFlightWorkerCount()) > 0;
+            const deadlineForThisAttempt =
+              Date.now() +
+              (sawInFlightWorker ? WORKER_WINDOW_MS : attempt === 0 ? NO_WORKER_WINDOW_MS : RETRY_WINDOW_MS);
+            for (;;) {
+              const live = await inFlightWorkerCount();
+              const wasLive = sawInFlightWorker;
+              sawInFlightWorker = sawInFlightWorker || live > 0;
+              const current = await readStatus(workspace);
+              if (
+                fingerprintOf(current) !== beforeFingerprint ||
+                current.execution.finalizer.verdict !== null ||
+                current.blockers.length > 0 ||
+                // 刚结束的真实 Worker：交付要走下一次触发才结算，因此这里就返回。
+                (wasLive && live === 0)
+              ) {
+                advanced = true;
+                break;
+              }
+              if (Date.now() >= deadlineForThisAttempt) {
+                break;
+              }
+              sleepSync(5_000);
             }
-            sleepSync(5_000);
+            if (!advanced && attempt + 1 < TRIGGER_ATTEMPTS) {
+              console.warn(
+                `[pty-execution] 第 ${String(attempt + 1)} 次触发没有推进，重试：` +
+                  `in-flight=${String(await inFlightWorkerCount())}`,
+              );
+              await waitForQuiescence(QUIESCENCE_WINDOW_MS);
+            }
           }
           snapshot = await readStatus(workspace);
           loopFacts = await readExecutionFacts();
-          console.warn(`[pty-execution] round=${String(rounds)} advanced=${String(advanced)} ${describeStatus(snapshot)}`);
-          // 并发上限固定为 1：任一时刻最多一个 Work Package 处于非终态。
+          console.warn(
+            `[pty-execution] round=${String(rounds)} advanced=${String(advanced)} ` +
+              `pane-blockers=${blockerLines(capturePane(SOCKET, SESSION)) || 'none'} ${describeStatus(snapshot)}`,
+          );
+          // 并发上限固定为 1：投影里的 active 计数只可能是 0 或 1，且任一时刻最多一个真实 Worker 在跑。
           expect(snapshot.execution.activeWorkPackageCount, '并发上限为 1').toBeLessThanOrEqual(1);
-          noChangeRounds = advanced && roundApplied ? 0 : noChangeRounds + 1;
+          expect(await inFlightWorkerCount(), '并发上限为 1：最多一个真实 Worker 在跑').toBeLessThanOrEqual(1);
+          // 「这一轮没有推进」只在**确实没有角色在跑**时才算无进展：并发上限为 1 时，一个真实 Worker
+          // 在途期间宿主本来就没有可推进的对象（尤其中断模式还要跑 Capsule 与替代 Session），把这种等待
+          // 计成无进展会让驱动在健康链路上提前收手。
+          noChangeRounds =
+            (advanced && roundApplied) || sawInFlightWorker ? 0 : noChangeRounds + 1;
           if (noChangeRounds >= MAX_NO_CHANGE_ROUNDS) {
             break;
           }
@@ -1183,6 +1472,55 @@ if (gate.kind === 'skip') {
           15_000,
         );
         expect(refreshed.ok, `Sidebar 未渲染 finalizer 分区：\n${refreshed.text}`).toBe(true);
+
+        // ---- 图修订与基线补救：含糊变化声明必须走完真实 Graph Patch Planner 与独立核验 ----
+        expect(graphChangeTarget, '本次验收必须真的提交过一次图变化声明').not.toBeNull();
+        const target = graphChangeTarget ?? '';
+        expect(
+          facts.graphVersions.filter((version) => version.patchId !== null).length,
+          `本次验收必须经真实 Graph Patch Planner 追加一个 GraphVersion：${JSON.stringify(facts.graphVersions)}`,
+        ).toBeGreaterThan(0);
+        expect(observed.graph?.version ?? 1).toBeGreaterThan(1);
+        const reconciliation = facts.baselineReconciliations.find((entry) => entry.workPackageId === target);
+        expect(
+          reconciliation,
+          `图修订后必须为落后基线的 ${target} 登记独立补救：${JSON.stringify(facts.baselineReconciliations)}`,
+        ).toBeDefined();
+        expect(reconciliation?.orcaTaskId, '基线补救必须是独立 Planner Task').toEqual(expect.any(String));
+        expect(reconciliation?.dispatchId, '基线补救必须绑定真实 Dispatch').toEqual(expect.any(String));
+        expect(
+          reconciliation?.state,
+          `基线补救必须由真实 Worker 核验通过：${JSON.stringify(reconciliation)}`,
+        ).toBe('verified');
+        expect(
+          observed.execution.reconciliations.find((entry) => entry.workPackageId === target)?.severity,
+          'canonical 前进必须以 `canonical_advance` 呈现，而不是停留在待核验或冲突升级',
+        ).toBe('canonical_advance');
+        expect(
+          reconcilingPane,
+          `Sidebar 必须把核验中的基线显示为 reconcile 行：\n${refreshed.text}`,
+        ).toContain(target);
+        // Sidebar 按宽度裁切长值（`required=…`），因此这里只断言渲染出来的部分；两个基线的**精确值**
+        // 由上面的持久事实断言负责，不靠界面文本。
+        expect(reconcilingPane ?? '', 'Sidebar 的 reconcile 行必须带严重性').toMatch(
+          /reconcile canonical_advance required=/u,
+        );
+        // 每个**留在图里并已集成**的 Work Package 都必须真的在 canonical 留下集成提交。被图修订 retire 的
+        // 节点不在这个集合里：它按设计不再集成（补丁已经把它移出图），要求它提交只会把正确的行为判成失败。
+        const subjects = spawnSync('git', ['log', '--format=%s'], { cwd: workspace, encoding: 'utf8' });
+        expect(subjects.status).toBe(0);
+        const integrated = observed.execution.workPackages.filter(
+          (entry) => entry.state === 'accepted' || entry.integration?.state === 'integrated',
+        );
+        expect(integrated.length, `至少有一个 Work Package 集成完成：${describeStatus(observed)}`).toBeGreaterThan(0);
+        for (const entry of integrated) {
+          expect(subjects.stdout, `${entry.workPackageId} 必须留下受控集成提交`).toContain(entry.workPackageId);
+        }
+        // 没有 Work Package 可以停在阻塞：多包代际必须整体收口。
+        expect(
+          observed.execution.workPackages.filter((entry) => entry.state === 'blocked').length,
+          `没有 Work Package 可以停在阻塞：${describeStatus(observed)}`,
+        ).toBe(0);
 
         const capabilityGap = readOnlyCapabilityGap({ blockers: observed.blockers, recoveries: facts.recoveries });
         if (interruptRecovery) {
@@ -1229,7 +1567,15 @@ if (gate.kind === 'skip') {
           const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' });
           expect(head.status).toBe(0);
           expect(head.stdout.trim(), 'canonical 必须已被受控集成推进').not.toBe(seededBaselineHead);
-          const remote = spawnSync('git', ['ls-remote', 'origin', 'refs/heads/main'], {
+          // 获批的 remote 与 ref 来自项目配置（夹具写的是 `<name>-integration` 这种专用分支，不是 main）：
+          // 断言必须按 Manifest 里真正获批的目标校验，否则会去比一条从来没被推过的引用。
+          const approvedRemote = config.execution?.git?.remotes?.[0] ?? 'origin';
+          const approvedRef = config.execution?.git?.refs?.[0];
+          expect(approvedRef, '项目配置必须给出获批的集成 ref').toEqual(expect.any(String));
+          if (approvedRef === undefined) {
+            return;
+          }
+          const remote = spawnSync('git', ['ls-remote', approvedRemote, approvedRef], {
             cwd: workspace,
             encoding: 'utf8',
           });
@@ -1283,8 +1629,9 @@ if (gate.kind === 'skip') {
           ).toBe(true);
         }
       },
-      // 与循环的 60 分钟截止一致：进度由真实 Worker 决定，vitest 只在链路真的卡死时才兜底。
-      3_600_000,
+      // 与循环的截止一致（串行角色 + 集成 + Finalizer 都是真实会话）：
+      // 进度由真实 Worker 决定，vitest 只在链路真的卡死时才兜底。
+      9_000_000,
     );
 
     test.skip(

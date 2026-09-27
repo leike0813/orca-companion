@@ -223,3 +223,55 @@ export function settleSpecificationRevision(
   }
   return { kind: 'accepted', nextRole: 'implementation', consumedBudgetKey: budgetKey };
 }
+
+export type SettleRetiredRevisionInput = {
+  readonly store: BranchCoordinationStore;
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly writer: CoordinationWriter;
+  readonly workPackageId: WorkPackageId;
+  /** 当前图里的 Work Package：仍在图里说明本次不是退休，持有留给规格重新准入去解除。 */
+  readonly currentGraphWorkPackageIds: readonly WorkPackageId[];
+};
+
+export type SettleRetiredRevisionResult =
+  | { readonly kind: 'released' }
+  | { readonly kind: 'kept_pending'; readonly reason: string }
+  | { readonly kind: 'rejected'; readonly code: string; readonly message: string };
+
+/**
+ * 结算一次「退休」造成的修订持有。
+ *
+ * 规格要求：修订或退休需求在 Worker 已派发时被报告，受影响节点进入 revision pending，其当前 Worker 必须
+ * 先运行至可核验终态。规格修订由重新准入解除持有；**退休的节点不会再被重新准入**——它已经不在图里——
+ * 因此必须由这里在「节点已退场且没有未收尾 Worker」时解除。缺了这条路径，持有会永久 pending，整个 Scope
+ * 钉在 revision_pending 上（真实运行里 Finalizer 门禁因此永不满足，虽然没有 Worker 在跑）。
+ *
+ * 判定只读 store：节点仍在当前图里就不属于退休（持有留给规格重新准入结算）；已经不在图里则退休已生效——
+ * 它不可能再有角色或依赖工作，持有继续 pending 只会把整个 Scope 钉在 revision_pending。规格要求的「当前
+ * Worker 先运行至可核验终态」并不因此被违反：工作不会被打断，只是它的旧结果无法越过一个已退场的节点推进。
+ *
+ * 事务内的正规路径在存储层（`record-graph-version` 与图版本同事务释放）；这里兜底修复历史遗留的悬挂持有。
+ */
+export function settleRetiredRevision(
+  input: SettleRetiredRevisionInput,
+): SettleRetiredRevisionResult {
+  if (input.currentGraphWorkPackageIds.includes(input.workPackageId)) {
+    return { kind: 'kept_pending', reason: '节点仍在当前图中：退休未生效，持有留给规格重新准入结算' };
+  }
+  const scope = readScope(input.store, input.coordinationScopeId);
+  if (scope.kind === 'rejected') {
+    return { kind: 'rejected', code: scope.code, message: scope.message };
+  }
+  const released = input.store.transact({
+    kind: 'release-revision-hold',
+    coordinationScopeId: input.coordinationScopeId,
+    expectedRevision: scope.scope.revision,
+    writer: input.writer,
+    workPackageId: input.workPackageId,
+    reason: '节点已由图修订退场，不会有后续角色或依赖工作',
+  });
+  if (released.kind === 'rejected') {
+    return { kind: 'rejected', code: released.code, message: released.message };
+  }
+  return { kind: 'released' };
+}

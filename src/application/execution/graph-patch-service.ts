@@ -146,11 +146,20 @@ export function applyGraphRevision(input: ApplyGraphRevisionInput): ApplyGraphRe
       },
     };
   }
+  // 已被本次修订退场的节点不在新图里：它不会再有角色，也没有规格会重新准入，因此不为它规划基线补救
+  // （那会白跑一次真实对齐 Worker）。修订持有的登记规则不受影响——规格要求退休同样进入 revision pending，
+  // 那条持有由宿主的退休结算在 Worker 全部收尾后释放。
+  const liveWorkPackageIds = new Set(
+    revision.graph.workPackages.map((workPackage) => workPackage.workPackageId),
+  );
   const baselineReconciliations: BaselineReconciliationPlan[] = [];
   for (const workPackageId of new Set([
     ...revision.revisedWorkPackageIds,
     ...revision.specificationRevisionRequiredWorkPackageIds,
   ])) {
+    if (!liveWorkPackageIds.has(workPackageId)) {
+      continue;
+    }
     if (!input.baselines.has(workPackageId)) {
       return { kind: 'rejected', failure: { code: 'baseline_unverified', message: `缺少 ${workPackageId} 的基线观察` } };
     }
@@ -168,6 +177,9 @@ export function applyGraphRevision(input: ApplyGraphRevisionInput): ApplyGraphRe
     approvedLimitRef: input.authorizationId,
     amount: 1,
   }));
+  // 退休的目标同样进入 revision pending：规格要求「修订**或退休**需求在 Worker 已派发时被报告」都把
+  // 受影响节点置为持有，其当前 Worker 先运行至可核验终态。退场节点不会被规格重新准入，因此那条持有由
+  // 宿主的退休结算（`settleRetiredRevision`）在 Worker 全部收尾后释放——登记规则与释放路径各管一段。
   const revisionPendingWorkPackageIds = [
     ...new Set([...revision.revisionPendingWorkPackageIds, ...baselineReconciliations.map((plan) => plan.workPackageId)]),
   ];

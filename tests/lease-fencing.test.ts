@@ -21,6 +21,7 @@ import {
   acquireRuntimeLease,
   releaseExecutionLease,
   renewRuntimeLease,
+  repointExecutionLease,
 } from '../src/application/coordination/lease-service.js';
 import { openCoordinationStore, type CoordinationStore } from '../src/adapters/storage/coordination-store.js';
 
@@ -175,6 +176,44 @@ test('心跳续约推进到期时间，但不推进 scope.revision', () => {
     expect(renewed.revision).toBe(revisionBefore);
   }
   expect(revisionOf()).toBe(revisionBefore);
+});
+
+test('续约与并发写入相撞时重读 revision 重试，不把良性竞争报告为失去租约', () => {
+  const writer = bootstrapSession(SESSION_A, 'inc-1');
+  // 在「读 revision」与「CAS 提交」之间插入一次共享写入：这正是高写入期（对账、Delivery 结算）里续约
+  // 会遇到的良性竞争。旧行为把它当成 fencing 失败并永久停掉该 Session 的模型调用与写入。
+  let raced = false;
+  const racing: CoordinationStore = {
+    ...store,
+    transact: (command) => {
+      if (command.kind === 'renew-runtime-lease' && !raced) {
+        raced = true;
+        const racedWrite = store.transact({
+          kind: 'record-ticket-claim',
+          coordinationScopeId: SCOPE,
+          expectedRevision: revisionOf(),
+          writer,
+          ticketRef: { kind: 'decision-ticket', id: 'ticket-race' },
+        });
+        expect(racedWrite.kind).toBe('committed');
+      }
+      return store.transact(command);
+    },
+  };
+
+  const renewed = renewRuntimeLease(racing, {
+    coordinationScopeId: SCOPE,
+    coordinatorSessionId: writer.coordinatorSessionId,
+    runtimeIncarnationId: writer.runtimeIncarnationId,
+    fencingGeneration: writer.fencingGeneration,
+    ttlMs: TTL_MS,
+  });
+
+  expect(raced).toBe(true);
+  expect(renewed.kind).toBe('renewed');
+  if (renewed.kind === 'renewed') {
+    expect(renewed.lease.expiresAt).toBe(now + TTL_MS);
+  }
 });
 
 test('过期租约由新的 Runtime Incarnation 接管并获得更大的 generation', () => {
@@ -510,4 +549,103 @@ test('非持有者不能释放别人的 Execution Coordination Lease', () => {
   if (snapshot.kind === 'snapshot') {
     expect(snapshot.snapshot.executionLease?.coordinatorSessionId).toBe(SESSION_A);
   }
+});
+
+const EXECUTION_LEASE_ERROR = '执行租约不存在';
+
+function executionLeaseOf(): { readonly coordinatorSessionId: string; readonly runtimeIncarnationId: string; readonly fencingGeneration: number } {
+  const leases = store.query({ kind: 'leases', coordinationScopeId: SCOPE });
+  if (leases.kind !== 'leases') {
+    throw new Error('无法读取 leases');
+  }
+  const lease = leases.leases.find((candidate) => candidate.kind === 'execution_coordination');
+  if (lease === undefined) {
+    throw new Error(EXECUTION_LEASE_ERROR);
+  }
+  return lease;
+}
+
+test('同一 Session 的新 Incarnation 接管 Runtime Lease 后，Execution Coordination Lease 重指到它', () => {
+  const first = bootstrapSession(SESSION_A, 'inc-1');
+  const acquired = acquireExecutionLease(store, {
+    coordinationScopeId: SCOPE,
+    coordinatorSessionId: first.coordinatorSessionId,
+    runtimeIncarnationId: first.runtimeIncarnationId,
+    fencingGeneration: first.fencingGeneration,
+  });
+  expect(acquired.kind).toBe('acquired');
+
+  // 身份已经一致：不写任何东西。
+  const unchanged = repointExecutionLease({
+    store,
+    coordinationScopeId: SCOPE,
+    coordinatorSessionId: first.coordinatorSessionId,
+    runtimeIncarnationId: first.runtimeIncarnationId,
+    fencingGeneration: first.fencingGeneration,
+  });
+  expect(unchanged.kind).toBe('unchanged');
+
+  // 接管：新的 Runtime Incarnation 取得更大的 generation 之后，执行租约必须跟着重指，否则协调级写入
+  // （例如 request_graph_patch）会一直以「陈旧身份」被拒。
+  now += TTL_MS + 1;
+  const takeover = acquireRuntimeLease(store, {
+    coordinationScopeId: SCOPE,
+    coordinatorSessionId: SESSION_A,
+    runtimeIncarnationId: incarnation('inc-2'),
+    fencingGeneration: first.fencingGeneration,
+    ttlMs: TTL_MS,
+  });
+  expect(takeover.kind).toBe('acquired');
+  if (takeover.kind !== 'acquired') {
+    return;
+  }
+
+  const repointed = repointExecutionLease({
+    store,
+    coordinationScopeId: SCOPE,
+    coordinatorSessionId: SESSION_A,
+    runtimeIncarnationId: incarnation('inc-2'),
+    fencingGeneration: takeover.lease.fencingGeneration,
+  });
+  expect(repointed.kind).toBe('repointed');
+  expect(executionLeaseOf()).toMatchObject({
+    coordinatorSessionId: SESSION_A,
+    runtimeIncarnationId: 'inc-2',
+    fencingGeneration: takeover.lease.fencingGeneration,
+  });
+
+  // 重指之后不再需要写入。
+  expect(
+    repointExecutionLease({
+      store,
+      coordinationScopeId: SCOPE,
+      coordinatorSessionId: SESSION_A,
+      runtimeIncarnationId: incarnation('inc-2'),
+      fencingGeneration: takeover.lease.fencingGeneration,
+    }).kind,
+  ).toBe('unchanged');
+});
+
+test('Execution Coordination Lease 属于别的 Session 时绝不重指', () => {
+  const holder = bootstrapSession(SESSION_A, 'inc-1');
+  acquireExecutionLease(store, {
+    coordinationScopeId: SCOPE,
+    coordinatorSessionId: holder.coordinatorSessionId,
+    runtimeIncarnationId: holder.runtimeIncarnationId,
+    fencingGeneration: holder.fencingGeneration,
+  });
+
+  const foreign = repointExecutionLease({
+    store,
+    coordinationScopeId: SCOPE,
+    coordinatorSessionId: SESSION_B,
+    runtimeIncarnationId: incarnation('inc-b'),
+    fencingGeneration: holder.fencingGeneration,
+  });
+
+  expect(foreign.kind).toBe('held_by_other');
+  expect(executionLeaseOf()).toMatchObject({
+    coordinatorSessionId: SESSION_A,
+    runtimeIncarnationId: holder.runtimeIncarnationId,
+  });
 });

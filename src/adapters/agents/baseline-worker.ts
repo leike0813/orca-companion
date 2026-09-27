@@ -119,7 +119,11 @@ export async function dispatchBaselineWorker(input: BaselineWorkerDispatchInput)
     observedBaseHead: plan.observedBaseHead,
     worktreeId: worktree.worktreeId,
     scopeEnvelope: workPackage.scopeEnvelope,
-    instruction: '在此 worktree 内对齐目标基线；报告祖先关系、实际 HEAD、dirty paths 和 scope 证据。不要执行实现角色工作。完成后按 Orca Dispatch 指令提交 worker_done。',
+    instruction:
+      '把该 worktree 的 HEAD 精确对齐到 requiredBaselineHead（`git reset --hard <requiredBaselineHead>` 即满足；' +
+      '不要新建合并提交，也不要离开本 Work Package 的分支）。宿主在派发后按 Git 事实核验祖先关系、目标 HEAD、' +
+      'dirty paths 与 scope：任何与 requiredBaselineHead 不等的 HEAD 都会被判为未对账。不要执行实现角色工作。' +
+      '完成后按 Orca Dispatch 指令提交 worker_done。',
   });
   return dispatchScopedWorker({
     ...input,
