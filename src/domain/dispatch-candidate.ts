@@ -65,6 +65,25 @@ export type DispatchAuthorizationState = {
   readonly reason: string | null;
 };
 
+/**
+ * 受限的修订 Planner 许可：在途修订节点上允许的一次 Specification Planner 派发的唯一凭据。
+ *
+ * 它由持有记录本身派生（见 `revisionPlannerFacts`），因此 `sourceRef` 与冻结该节点的 pending 持有来源
+ * 逐项一致。持有本身仍然是持有：许可只放开 planner 这一次派发，节点仍显示 revision_pending，后代、
+ * 其它角色、旧结果与 Git 集成继续被挡住。
+ */
+export type RevisionPlannerPermit = {
+  readonly workPackageId: WorkPackageId;
+  /** 触发这次修订的持有来源：当前图中的补丁标识。 */
+  readonly sourceRef: string;
+  /**
+   * 持有已记录的、被替换的内容版本；`null` 表示准备阶段还没有发生。
+   *
+   * 它是许可携带的事实，不是许可的条件：调用方据此只准备一次，而不是每次触发都重复写同一件事。
+   */
+  readonly priorContractRevision: number | null;
+};
+
 export type DispatchCandidateFacts = {
   readonly candidateWorkPackageId: WorkPackageId;
   readonly candidateRole: WorkerRole;
@@ -75,9 +94,11 @@ export type DispatchCandidateFacts = {
    * 处于 revision pending 的 Work Package 集合（受影响节点与其未接受后代）。
    *
    * 这是一个**有界**集合：它只挡住被持有的节点，不改变其它节点的拓扑准入；并发上限为 1 是执行并发
-   * 上限，不是准入限制。
+   * 上限，不是准入限制。唯一的例外是带匹配 `revisionPlanner` 许可的 Specification Planner 派发。
    */
   readonly revisionPending: readonly WorkPackageId[];
+  /** 本次候选的受限修订 Planner 许可；`null` 表示没有。它只对本节点的 planner 派发有效。 */
+  readonly revisionPlanner: RevisionPlannerPermit | null;
   /** 图依赖已通过的 Work Package 集合。 */
   readonly dependenciesSatisfied: readonly WorkPackageId[];
   readonly controlState: string;
@@ -184,7 +205,11 @@ export function evaluateDispatchCandidate(facts: DispatchCandidateFacts): Dispat
       `Work Package ${facts.candidateWorkPackageId} 的生命周期阶段为 ${facts.lifecycleStage}，不在 Execution Frontier`,
     );
   }
-  if (facts.revisionPending.includes(facts.candidateWorkPackageId)) {
+  // 持有只对「带匹配许可的 Specification Planner」例外：其余角色、其它来源与后代一律继续被挡住。
+  const permittedPlanner =
+    facts.candidateRole === 'planner' &&
+    facts.revisionPlanner?.workPackageId === facts.candidateWorkPackageId;
+  if (facts.revisionPending.includes(facts.candidateWorkPackageId) && !permittedPlanner) {
     return rejection(
       'revision_pending',
       `Work Package ${facts.candidateWorkPackageId} 处于 revision pending，后续角色与依赖工作不得派发`,

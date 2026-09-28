@@ -21,26 +21,26 @@
 
 | IP-ID | Task | Requirement/Scenario | 文件与符号 | 精确变化 | 不得改变 |
 |---|---|---|---|---|---|
-| IP-01 | 持久契约与迁移 | 新规格准入并结算；重启后继续同一次修订；旧 Validator 已通过 | `src/application/ports/branch-coordination-store.ts`、`src/adapters/storage/schema.ts`、`src/adapters/storage/coordination-store.ts`、`tests/coordination-store.test.ts`、`docs/interface-contracts.md` | `RevisionHoldRecord` 加 `priorContractRevision`/`admittedContractRevision: number|null`；新增同源准备旧版本命令，`release-revision-hold` 加可选的接纳版本和授权上限，匹配来源且版本不同时同事务释放/记录版本/计额，幂等重放先核对来源与版本；schema 13 migration、严格解码，重新置入持有清空两列；IC-03 更新字段与原子语义 | 退场支的图版本事务、旧库数据、预算所有权 |
-| IP-02 | 修订用例 | 旧派发结清后重跑 Planner；准入失败或修订额度耗尽；新规格准入并结算 | `src/application/execution/revision-service.ts`、`tests/execution/specification-revision.test.ts` | begin 增加已接受 Graph Patch + 同源持有分支，从当前图、精确 Spec Binding 与 Provider 当前 Unit 核验旧内容版本，冲突/不可读则阻塞；经 IP-01 原子准备后复用额度/基线判定并返回续办计划；不调用纯内容修订的 `planSpecificationRevision`，不改写持有来源；settle 接收 WorkPackageId/补丁来源/接纳版本与 Manifest 上限，准入失败零写入，来源不符或版本未变拒绝，成功调用 IP-01 原子命令 | 新的图补丁写入路径 |
+| IP-01 | 持久契约与迁移 | 新规格准入并结算；重启后继续同一次修订；旧 Validator 已通过 | `src/application/ports/branch-coordination-store.ts`、`src/adapters/storage/schema.ts`、`src/adapters/storage/coordination-store.ts`、`tests/coordination-store.test.ts`、`docs/interface-contracts.md` | `RevisionHoldRecord` 加 `priorContractRevision`/`admittedContractRevision: number|null`；新增同源准备旧版本命令，`release-revision-hold` 加可选的接纳版本和授权上限，匹配来源且交付晚于持有登记时同事务释放/记录版本/计额，幂等重放先核对来源与版本；schema 13 migration、严格解码，重新置入持有清空两列并刷新登记时刻；IC-03 更新字段与原子语义 | 退场支的图版本事务、旧库数据、预算所有权 |
+| IP-02 | 修订用例 | 旧派发结清后重跑 Planner；准入失败或修订额度耗尽；新规格准入并结算 | `src/application/execution/revision-service.ts`、`tests/execution/specification-revision.test.ts` | begin 增加已接受 Graph Patch + 同源持有分支，从当前图、精确 Spec Binding 与 Provider 当前 Unit 核验旧内容版本，冲突/不可读则阻塞；经 IP-01 原子准备后复用额度/基线判定并返回续办计划；不调用纯内容修订的 `planSpecificationRevision`，不改写持有来源；settle 接收 WorkPackageId/补丁来源/接纳版本与 Manifest 上限，准入失败零写入，来源不符或交付不晚于持有登记则拒绝（内容版本是否变化不作条件），成功调用 IP-01 原子命令 | 新的图补丁写入路径 |
 | IP-03 | 有界角色推进与宿主接线 | 旧 Worker 仍在途；旧派发结清后重跑 Planner；新规格准入并结算；重启后继续同一次修订 | `src/domain/dispatch-candidate.ts`、`src/application/execution/advance-execution.ts`、`src/application/materialize-work-package.ts`、`src/bootstrap/foreground-planning-runtime.ts`、`tests/application/advance-execution.test.ts`、`tests/application/materialize-work-package.test.ts`、`tests/integration/foreground-execution-runtime.test.ts` | 单一只读修订 Planner 许可检查全部已签发旧绑定的结算、当前观察/基线/额度/授权/hold 来源；宿主与推进器共用下一角色判定；物化门只允许匹配补丁的 planner，复用 worktree 并以已签发绑定计稳定 Attempt；最新精确 Planner Segment/Unit 路径经过 Admission，再调 IP-02 settle；拒绝保留 blocker，成功回读后发布事件 | 对其它角色/后代的持有门禁、Orca 私有接口 |
-| IP-04 | 当前契约证据 | 已被替换的角色结果不得完成新修订／旧 Validator 已通过、新角色链完成 | `src/application/execution/execution-view.ts`、`src/bootstrap/foreground-planning-runtime.ts`、`tests/application/execution-view.test.ts`、`tests/integration/foreground-execution-runtime.test.ts`、`docs/interface-contracts.md` | 提取按 IP-01 接纳版本匹配的结算选择，供只读 Frontier、宿主集成资格与 Finalizer 门禁共用；pending 持有仍显示 revision_pending，released 后仅新版本可推进；IC-11 补充规则 | `baselineAdoptions` 与本 change 无关的旧集成投影修复 |
+| IP-04 | 当前契约证据 | 已被替换的角色结果不得完成新修订／旧 Validator 已通过、新角色链完成 | `src/application/execution/execution-view.ts`、`src/bootstrap/foreground-planning-runtime.ts`、`tests/application/execution-view.test.ts`、`tests/integration/foreground-execution-runtime.test.ts`、`docs/interface-contracts.md` | 提取按「本次持有登记之后签发的绑定」匹配的结算选择，供只读 Frontier、宿主集成资格与 Finalizer 门禁共用；pending 持有仍显示 revision_pending，released 后仅本次持有之后的结果可推进（内容版本是否变化不影响；`admittedContractRevision` 仅作记录）；IC-11 补充规则 | `baselineAdoptions` 与本 change 无关的旧集成投影修复 |
 | IP-05 | 完成验证与记录 | 全部新增 Scenario，尤其重启与交付 | `tests/tui/pty-execution.test.ts`、`docs/orca-compatibility.md` | 复用隔离夹具分别验证 revise 与 retire；记录真实 Task/Dispatch/GraphVersion/持有/预算/集成/verdict 的事实及命令；更新兼容性结论 | 用户主项目、全局 Orca runtime、已归档规格 |
 
 ## 4. 调用与副作用顺序
 
 1. 前台执行触发先完成现有 Delivery/Session 对账与 Baseline Reconciliation；从当前 Scope/GraphVersion、授权、快照、Orca 观察和预算读全量事实。只读许可拒绝缺失、旧派发未结算、live/unverifiable Worker、stale hold、未核验基线或额度不足。
 2. 对符合条件的当前图节点，`beginSpecificationRevision` 验证原 `graph_patch` `sourceRef`、精确旧 Spec Binding 与 Provider Unit，先在原持有上原子准备旧内容版本，再返回 Planner 计划；保留 pending 持有。候选与物化门只给这一次 Planner 许可。OperationId、Attempt、launch 与 Task Envelope 从稳定补丁身份和已签发绑定派生；未决 intent 必须沿原 ID 对账。
-3. 新 Planner 的 Delivery 结算、精确 Session Segment、Unit 路径与 Admission 依旧走现有用例。Admission 拒绝只记 blocker；通过时核对新内容版本与旧版本不同、Scope/GraphVersion/补丁来源未变，再以原持有来源调用 `settleSpecificationRevision`。
+3. 新 Planner 的 Delivery 结算、精确 Session Segment、Unit 路径与 Admission 依旧走现有用例。Admission 拒绝只记 blocker；通过时核对该交付晚于本次持有登记、Scope/GraphVersion/补丁来源未变，再以原持有来源调用 `settleSpecificationRevision`。
 4. store 在同一事务内核对来源/版本/额度与授权引用，释放持有、记录接纳版本、计一次额度；重放仅在来源和版本均一致时幂等成功。调用方回读持有与预算后发布 `state-changed`。任何未知或读回失败保持对应 lane 阻塞，不换 ID 重试。
-5. 后续 Frontier、Git 集成和 Finalizer 只用当前接纳版本的角色结果；旧版本结算保留审计历史但不产生推进权。退场支沿用现有事务释放。
+5. 后续 Frontier、Git 集成和 Finalizer 只用**本次持有登记之后签发**的角色结果；被替换版本与本次之前的结算保留审计历史但不产生推进权。退场支沿用现有事务释放。
 
 ## 5. Schema、状态与持久化落实
 
-- schema 13 仅在 `revision_holds` 新增 nullable `prior_contract_revision` 与 `admitted_contract_revision`；新 pending 行两列为 null，准备后旧版本可为 0，已结算的修订持有保存正安全整数；历史 released 允许 null。新旧内容版本相等或来源不符 fail closed；重新登记新补丁清空两列。store 仍以 `(scope, workPackageId)` 唯一记录当前持有。
+- schema 13 仅在 `revision_holds` 新增 nullable `prior_contract_revision` 与 `admitted_contract_revision`；新 pending 行两列为 null，准备后旧版本可为 0，已结算的修订持有保存非负安全整数（**允许与被替换版本相等**）；历史 released 允许 null。来源不符、交付早于持有登记或预算/授权校验失败 fail closed；重新登记新补丁清空两列并刷新登记时刻。store 仍以 `(scope, workPackageId)` 唯一记录当前持有。
 - IC-03 命令入参增加当前 Manifest `approvedLimit`，事务拒绝 `consumed + 1 > approvedLimit`、授权 ID 不符、版本无效或来源不符；原子预算不随重启重置。必须保留 graph version 事务对 retire 的现有行为。
 - `revision_pending` 仍是受影响节点的显示阶段。新 Planner 许可只是限定一次物化，不改变 hold 本身；后代只有在新规格被接受且旧结果隔离后才解除冻结。
-- 新角色链的真值是 DeliverySettlement 的 `contractRevision` 与持有记录的 `admittedContractRevision`；未产生新版本结果时，状态不能从旧结果推断。Schema 变更后旧进程只读打开拒绝，正常可写打开迁移；无需外部数据迁移。
+- 新角色链的真值是「本次持有登记之后签发的物化绑定所产生的 DeliverySettlement」；`admittedContractRevision` 只记录本次接纳的内容版本，内容版本未变时状态同样不能从旧结果推断。Schema 变更后旧进程只读打开拒绝，正常可写打开迁移；无需外部数据迁移。
 - 不改变模型工具 schema、Worker Task Envelope、Orca CLI 或 Git policy；执行权限、lease/fencing、Operation Intent 与预算都按既有边界复核。
 
 ## 6. 验收证据矩阵

@@ -165,6 +165,15 @@ type CoordinationCommandResult =
 
 schema 12 起每条物化绑定还记录这次派发使用的 **Worker launch 身份**（`launchId`）：它是补记 Session Binding 的唯一定位事实（报告文件按 launchId 派生）。Session Binding 的建立分两处，共用同一份签发实现：派发路径在 `bindingWindowMs` 窗口内读 Codex SessionStart 报告；每次执行触发在推进之前对「物化绑定已 issued 且有 launchId、但图内还没有对应 Session Segment」的角色再读一次同一路径的报告（Orca Dispatch 身份按已记录的 Orca Task 从列举事实匹配，不猜），校验通过才补记 Segment，读不到就什么都不做（保持 fail-closed：Delivery 结算会以 `dispatch_record_missing` 呈现）。补记不派发新 Worker、不改 Attempt、不消耗预算。schema 12 之前写入的行没有 `launchId`：读取方在需要补记时按不可补记处理，绝不重建派生编码。
 
+schema 13 给修订持有（`revision_holds`）加上内容版本边界：`prior_contract_revision` 是被替换掉的契约内容版本，`admitted_contract_revision` 是重新准入接纳的版本，两者都可为空（旧行与尚未准备/结算的行）。它们回答两个此前只能靠时间戳猜的问题——「内容是否真的变了」与「修订完成前与完成后的角色结果如何区分」。两条命令与图版本事务共同维护这一边界：
+
+- `prepare-revision-hold` 只在来源与当前 pending 持有逐项一致的持有上写旧版本（没有既有 Specification Unit 时记 0）；同源重放读回同一个值，值不同即拒绝——版本边界不因重放而漂移。
+- `release-revision-hold` 可携带 `expectedSourceRef`、`admittedContractRevision` 与成对给出的 `budgetConsumption` + `approvedLimit`：同一事务里核对来源、拒绝 `consumed + amount > approvedLimit`，然后记录接纳版本、释放持有并计一次额度。接纳版本与被替换版本**允许相同**（只改契约的修订、或 Planner 原样交付同一份内容），因此不能用内容版本当释放条件。已释放持有的重放只在来源与接纳版本都一致时幂等成功。
+- 重新登记持有（`record-revision-hold` 与 `record-graph-version` 内联的同源写入）清空两列并**刷新 `created_at`**：新来源替换掉了哪一版内容、后来接纳了什么，都还没有事实；而 `created_at` 是「当前这次持有」的登记时刻，`released_at` 随释放写入。修订 Planner 的派发与它的先后关系靠这一对时刻判定（被替换版本的 Planner 派发一定早于持有，修订 Planner 一定晚于它），因此派发门禁只在「持有登记**之后**还没有**已结算**的 Planner 交付」时给出许可；这样的交付已经存在时再派一次，会让「旧派发是否已结算」与「持有是否该结算」两个判定互相锁死——真实运行 `orca-companion-e2e56` 就是这样永久停在 `revision_pending` 的。
+- 新旧角色结果的边界是**持有登记时刻**而不是内容版本：`revision_holds.created_at` 记录「当前这次持有」的登记时刻（重新登记时刷新），released 之后只有在该时刻**之后签发**的物化绑定所产生的结算才算数。Graph Patch 可以只改该 Work Package 的契约（例如依赖），修订 Planner 也可能交付与旧版相同的内容——两种情况下角色链都必须重跑，而内容版本分不出「之前」与「之后」，因此 `admitted_contract_revision` 只作记录，不再充当边界。
+
+**当前有效角色结果**的边界是持有登记时刻（见 IC-11 的派生规则）；持有仍 pending 时该节点的旧结果不构成任何推进证据，released 之后只认登记之后签发的绑定所产生的结算。旧库（schema ≤ 12）在可写打开时按可重入 migration 升级，已 released 的历史行没有登记边界时沿用原有投影规则。
+
 所有写入是短事务；唯一约束保护活跃 Runtime Lease、Execution Coordination Lease 和 Ticket Claim。`scope.revision` 只由成功共享事实写入推进；lease heartbeat 只更新 lease 行，不推进业务 revision。Schema version 高于实现时拒绝启动，低于实现时按可重入、单事务 migration 顺序升级。
 
 `m1-wire-foreground-planning-runtime` 把 schema 9 升为 10：新 Scope 必有完整 ref 与 canonical worktree，旧 Scope 的 nullable 绑定只可经用户确认、Git 身份核验及无存活 Runtime Lease 的一次性 CAS 命令（`bind-scope-identity`）补齐；不得从 cwd 猜测。当前 Git 身份始终由 Git 读取，注册绑定不是 Git 当前状态的镜像。同一 common dir 内一个完整 branch ref 至多属于一个 Scope。
@@ -254,7 +263,7 @@ type ExecutionAuthorizationManifest = {
 
 `PlanningHandoffProposal` 持有 proposal ID、Source/Target Session、地图/计划/候选图 revision、责任集合、phase、expected revision 和可移植 Coordinator Context Capsule ref。prepare/review 不转移责任，cutover 才 CAS；它不触碰在途 Worker 或 Execution Coordination Lease。
 
-- **权威/版本**：图拓扑只经 `ExecutionGraphHistory` 追加；历史 GraphVersion 不改写。Manifest 内容变化产生新版本与新批准。
+- **权威/版本**：图拓扑只经 `ExecutionGraphHistory` 追加；历史 GraphVersion 不改写。Manifest 内容变化产生新版本与新批准。Manifest 对图的绑定是**批准时刻的那张图**：GraphId 与 Generation 必须与当前图相同，绑定时刻的 GraphVersion 必须仍在当前图的追加链上（`graphVersionChain`）。图会随 accepted revision 前移，因此**不要求**绑定版本等于当前版本——要求相等会让每一次合法的图修订之后的所有派发都不成立；派发门禁（`advance-execution.ts`）、图修订请求（`request-graph-patch.ts`）与界面 readiness 投影（`controller-service.ts`）共用这一条规则。
 - **测试 seam**：纯 Graph Compiler 使用表格 fixture；history 使用 IC-03 adapter；tracker 使用 fake gateway 和显式真实隔离 smoke。
 
 ## IC-06 SpecificationProvider、Task Contract 与 Admission
@@ -553,7 +562,7 @@ type ControllerGraphNodeView = {
 type ControllerGraphReadinessView = {
   /** 该图所属代际的当前状态；没有登记代际时为 null。 */
   generationStatus: GraphGenerationStatus | null;
-  /** 已批准的 Execution Authorization 是否恰好绑定这张图的 GraphId 与 GraphVersion。 */
+  /** 已批准的 Execution Authorization 是否仍覆盖这张图（同一 GraphId，且绑定版本仍在追加链上）。 */
   authorizationBound: boolean;
 };
 
@@ -652,6 +661,8 @@ type ControllerSnapshotExecutionExtend = {
 ```
 
 派生规则是纯函数，canonical path 为 `src/application/execution/execution-view.ts`（Owner: `m2-deliver-execution-tui`）：输入是 IC-03 快照、当前 GraphVersion 的节点与调用方读到的 Orca 只读观察，输出上面的投影。每个状态都带 `derivedFrom`；推不出确定结论时停在 `unknown`；`finalizer.gate` 复用 `planFinalizerDispatch` 的判决，只有被接受的 Delivery Verdict 才呈现 deliverable。
+
+修订会换掉这份契约，因此「哪些角色结果还算数」由修订持有决定，规则只有一处实现（同一 canonical path 的 `currentContractSettlements`），只读 Frontier、宿主的 Git 集成资格与 Finalizer 门禁共用它：持有仍 `pending` 时该节点的角色结果不构成任何推进证据（集成与 Finalizer 门禁因此不成立，节点显示 `revision_pending`）；持有已 `released` 时只认**本次持有登记之后签发**的物化绑定所产生的结算——边界取登记时刻而不是内容版本，因为只改契约的修订（例如依赖）与 Planner 原样交付的内容在版本上与旧链无法区分，却同样要求角色链重跑；`admitted_contract_revision` 仅记录本次接纳的内容版本。被替换版本与本次之前的结算保留为历史但不再是证据——旧 Validator 的通过不得冒充新修订已完成。从未有过持有的节点不设边界，沿用全部结算。`src/domain/dispatch-candidate.ts` 的 `DispatchCandidateFacts.revisionPlanner` 是这条冻结上唯一的例外：在途修订节点在满足 `revisionPlannerFacts` 的全部条件后允许**一次** Specification Planner 派发（许可携带匹配的持有来源），其余角色与后代继续被挡住。
 
 生产装配（`src/bootstrap/foreground-planning-runtime.ts`）在 Execution Coordination 模式下读取当前 Run 的 worktree、Worker 与 Delivery 事实，执行启动对账，并按受控工具意图单步推进 Frontier。Task 物化、Worker 派发、Delivery 结算、集成与 Finalizer 由各自应用用例执行；UI 只读投影和提交用户意图。`ScopeControlCommand` 接到 `createScopeControlService`：Pause 落盘，Resume 先对账再恢复，Cancel 保存意图并按 exact Worker stop verdict 决定已停止或不可核验；同一服务的 `reconcile` 只对账并重放未确认 Delivery、不改变控制状态，供需要「Run 静止且 Delivery 已结清」的受控操作（图修订请求）在等待期复用同一个对账用例。`ExecutionHandoffCommand` 接到 `src/application/handoff/execution-handoff.ts` 的四个用例，不经过 `PlanningHandoffProposal`。
 

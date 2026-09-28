@@ -119,6 +119,8 @@ function makeRevisionHold(input: {
   readonly workPackageId: string;
   readonly sourceRef: string;
   readonly state?: 'pending' | 'released';
+  readonly priorContractRevision?: number | null;
+  readonly admittedContractRevision?: number | null;
 }): RevisionHoldRecord {
   return {
     coordinationScopeId: SCOPE,
@@ -126,6 +128,8 @@ function makeRevisionHold(input: {
     source: 'graph_patch',
     sourceRef: input.sourceRef,
     state: input.state ?? 'pending',
+    priorContractRevision: input.priorContractRevision ?? null,
+    admittedContractRevision: input.admittedContractRevision ?? null,
     createdAt: 10,
     releasedAt: input.state === 'released' ? 20 : null,
     releaseReason: null,
@@ -161,7 +165,14 @@ function makeReconciliation(input: {
   };
 }
 
-function makeBinding(workPackageId: string, orcaTaskId: string, role: WorkerRole = 'validator'): MaterializationBindingRecord {
+function makeBinding(
+  workPackageId: string,
+  orcaTaskId: string,
+  role: WorkerRole = 'validator',
+  // 默认落在持有登记（`makeRevisionHold` 用 10）之后：修订后的新链由「本次持有登记之后签发的绑定」
+  // 界定，需要扮演「修订前的结果」的用例显式传更早的值。
+  createdAt = 20,
+): MaterializationBindingRecord {
   return {
     coordinationScopeId: SCOPE,
     workPackageId: workPackageId as WorkPackageId,
@@ -183,7 +194,7 @@ function makeBinding(workPackageId: string, orcaTaskId: string, role: WorkerRole
     orcaTaskId,
     creationOperationId: `op-materialize-${workPackageId}` as OperationId,
     launchId: `launch-${workPackageId}`,
-    createdAt: 10,
+    createdAt,
   };
 }
 
@@ -194,6 +205,7 @@ function makeSettlement(input: {
   readonly dispatchId?: string;
   readonly attemptId?: string;
   readonly acceptedAt?: number;
+  readonly contractRevision?: number;
 }): DeliverySettlementRecord {
   const dispatchId = input.dispatchId ?? `dispatch-${input.workPackageId}-${input.role}`;
   return {
@@ -206,7 +218,7 @@ function makeSettlement(input: {
     dispatchId: dispatchId as DispatchId,
     attemptId: input.attemptId ?? `attempt-${dispatchId}`,
     role: input.role,
-    contractRevision: 1,
+    contractRevision: input.contractRevision ?? 1,
     orcaResultRef: `orca-result-${dispatchId}`,
     acceptedAt: input.acceptedAt ?? 100,
   };
@@ -1061,3 +1073,167 @@ function severityOf(facts: DerivedExecutionFacts, workPackageId: string): string
   }
   return view.severity;
 }
+
+/* -------------------------------------------------------------------------- */
+/* IC-10 / IC-11：修订接纳后的契约版本边界                                     */
+/* -------------------------------------------------------------------------- */
+
+test('修订已接纳后只认本次持有登记之后的角色结果：旧 Validator 的通过不再是完成证据', () => {
+  const facts = derive({
+    snapshot: snapshot({
+      revisionHolds: [
+        makeRevisionHold({
+          workPackageId: WP_A,
+          sourceRef: 'patch-1',
+          state: 'released',
+          priorContractRevision: 1,
+          admittedContractRevision: 2,
+        }),
+      ],
+      materializationBindings: [
+        // 修订前的角色链：绑定早于持有登记，结算保留在历史里，但不再构成证据。
+        makeBinding(WP_A, 'task-planner-1', 'planner', 5),
+        makeBinding(WP_A, 'task-impl-1', 'implementation', 5),
+        makeBinding(WP_A, 'task-validator-1', 'validator', 5),
+        // 本次修订后的 Planner：晚于持有登记。
+        makeBinding(WP_A, 'task-planner-2', 'planner'),
+      ],
+      deliverySettlements: [
+        makeSettlement({ workPackageId: WP_A, orcaTaskId: 'task-planner-1', role: 'planner' }),
+        makeSettlement({ workPackageId: WP_A, orcaTaskId: 'task-impl-1', role: 'implementation' }),
+        makeSettlement({ workPackageId: WP_A, orcaTaskId: 'task-validator-1', role: 'validator' }),
+        makeSettlement({
+          workPackageId: WP_A,
+          orcaTaskId: 'task-planner-2',
+          role: 'planner',
+          contractRevision: 2,
+        }),
+      ],
+    }),
+    nodes: [{ workPackageId: WP_A, dependsOn: [] }],
+  });
+
+  const entry = frontierEntry(facts, WP_A);
+  // 新接纳契约只跑到 planner：旧 Validator 的通过不能把它推成「验证通过、等待集成」。
+  expect(entry.state).toBe('implementing');
+  expect(entry.role).toBe('planner');
+  expect(facts.finalizer.gate.ready).toBe(false);
+});
+
+test('内容版本未变的修订（接纳版本等于被替换版本）同样按登记边界隔离', () => {
+  const facts = derive({
+    snapshot: snapshot({
+      revisionHolds: [
+        makeRevisionHold({
+          workPackageId: WP_A,
+          sourceRef: 'patch-1',
+          state: 'released',
+          // 只改依赖的补丁：修订 Planner 原样交付，内容版本没有变化。
+          priorContractRevision: 2,
+          admittedContractRevision: 2,
+        }),
+      ],
+      materializationBindings: [
+        // 旧链的 implementation/validator 与新链同属一个内容版本，唯一能区分它们的事实是绑定签发时刻。
+        makeBinding(WP_A, 'task-impl-1', 'implementation', 5),
+        makeBinding(WP_A, 'task-validator-1', 'validator', 5),
+        makeBinding(WP_A, 'task-planner-2', 'planner'),
+      ],
+      deliverySettlements: [
+        makeSettlement({
+          workPackageId: WP_A,
+          orcaTaskId: 'task-impl-1',
+          role: 'implementation',
+          contractRevision: 2,
+        }),
+        makeSettlement({
+          workPackageId: WP_A,
+          orcaTaskId: 'task-validator-1',
+          role: 'validator',
+          contractRevision: 2,
+        }),
+        makeSettlement({
+          workPackageId: WP_A,
+          orcaTaskId: 'task-planner-2',
+          role: 'planner',
+          contractRevision: 2,
+        }),
+      ],
+    }),
+    nodes: [{ workPackageId: WP_A, dependsOn: [] }],
+  });
+
+  const entry = frontierEntry(facts, WP_A);
+  // 旧链虽然内容版本相同、而且已经验证通过，仍然只是历史：只有晚于持有登记的新链 Planner 构成证据。
+  expect(entry.state).toBe('implementing');
+  expect(entry.role).toBe('planner');
+  expect(facts.finalizer.gate.ready).toBe(false);
+});
+
+test('修订在途（持有 pending）时旧 Validator 的通过不推进，也不打开 Finalizer 门禁', () => {
+  const facts = derive({
+    snapshot: snapshot({
+      revisionHolds: [
+        makeRevisionHold({
+          workPackageId: WP_A,
+          sourceRef: 'patch-1',
+          state: 'pending',
+          priorContractRevision: 1,
+        }),
+      ],
+      materializationBindings: [
+        makeBinding(WP_A, 'task-impl-1', 'implementation'),
+        makeBinding(WP_A, 'task-validator-1', 'validator'),
+      ],
+      deliverySettlements: [
+        makeSettlement({ workPackageId: WP_A, orcaTaskId: 'task-impl-1', role: 'implementation' }),
+        makeSettlement({ workPackageId: WP_A, orcaTaskId: 'task-validator-1', role: 'validator' }),
+      ],
+    }),
+    nodes: [{ workPackageId: WP_A, dependsOn: [] }],
+  });
+
+  expect(frontierEntry(facts, WP_A).state).toBe('revision_pending');
+  expect(facts.finalizer.gate.ready).toBe(false);
+});
+
+test('新接纳契约的角色链全部通过后才前进到集成阶段', () => {
+  const facts = derive({
+    snapshot: snapshot({
+      revisionHolds: [
+        makeRevisionHold({
+          workPackageId: WP_A,
+          sourceRef: 'patch-1',
+          state: 'released',
+          priorContractRevision: 1,
+          admittedContractRevision: 2,
+        }),
+      ],
+      materializationBindings: [
+        makeBinding(WP_A, 'task-validator-1', 'validator', 5),
+        makeBinding(WP_A, 'task-impl-2', 'implementation'),
+        makeBinding(WP_A, 'task-validator-2', 'validator'),
+      ],
+      deliverySettlements: [
+        makeSettlement({ workPackageId: WP_A, orcaTaskId: 'task-validator-1', role: 'validator' }),
+        makeSettlement({
+          workPackageId: WP_A,
+          orcaTaskId: 'task-impl-2',
+          role: 'implementation',
+          contractRevision: 2,
+        }),
+        makeSettlement({
+          workPackageId: WP_A,
+          orcaTaskId: 'task-validator-2',
+          role: 'validator',
+          contractRevision: 2,
+        }),
+      ],
+    }),
+    nodes: [{ workPackageId: WP_A, dependsOn: [] }],
+  });
+
+  const entry = frontierEntry(facts, WP_A);
+  expect(entry.state).toBe('waiting_integration');
+  expect(entry.validation?.state).toBe('validated');
+});

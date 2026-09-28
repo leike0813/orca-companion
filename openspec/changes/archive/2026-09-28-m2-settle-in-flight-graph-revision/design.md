@@ -18,17 +18,19 @@
 
 Planner 的稳定身份由 Scope、Graph Generation、WorkPackageId、`sourceRef`（补丁 ID）、角色及本节点已签发的 Planner Attempt 序号组成；编号从**已签发绑定**而非仅已接受结算确定。现有同身份绑定或未决 Operation Intent 走核验/对账，不签新 ID。新 Planner 复用原 worktree 和 `specificationUnitPath`；读取精确的最新 Planner Session Segment，拒绝按 cwd/时间猜会话。`beginSpecificationRevision` 增加“已接受 Graph Patch + 匹配持有”的输入分支：从当前 GraphVersion 的 WorkPackage、已有精确 Spec Binding 与 Specification Provider 可核验的当前 Unit 取得旧内容版本；来源冲突或不可读即阻塞。首次准备以匹配补丁来源的事务把旧版本记在持有上（没有既有 Unit 时记 0），同源重放读回相同值；新 Planner 不预猜目标版本。该分支复用额度/基线判定，不调用只适用于纯内容修订的 `planSpecificationRevision`，也不把 `graph_patch` 持有重写成 `specification_revision`。新 Planner 的准入拒绝保留原持有并显示失败项。替代“补丁应用时立即结算”会违反既有持有规格，不采用。
 
-### D3. Admission 通过后同事务结算并记录契约边界
+### D3. Revision Planner 交付后同事务结算并记录契约边界
 
-`settleSpecificationRevision` 收敛入参为 `workPackageId`、`sourceRef`、已核验的 Admission `SpecBinding.contractRevision`、授权 ID 与可信 writer。只有与当前 pending 持有的 `sourceRef` 相同、该节点仍在当前图、Planner 精确身份可核验且新内容版本**不同于持有记录的旧版本**时才调用；拒绝不写库。扩展 `release-revision-hold`：同一事务校验来源与版本差异、将持有改为 released、记录 `admitted_contract_revision` 并消耗一次 `specificationRevisions` 额度；重复结算同一来源幂等且不重复扣额，来源不符拒绝。成功后回读事实并发布一次 `state-changed`。额度上限仍由已批准 Manifest 和现有预算用例判定；store 对事务内计数做上限/授权引用校验，避免 admission 与结算间的竞争。
+`settleSpecificationRevision` 收敛入参为 `workPackageId`、`sourceRef`、已核验的 Admission `SpecBinding.contractRevision`、授权 ID 与可信 writer。只有与当前 pending 持有的 `sourceRef` 相同、该节点仍在当前图、Planner 精确身份可核验、且**该 Planner 交付是在这次持有登记之后签发并已结算**时才调用；拒绝不写库。扩展 `release-revision-hold`：同一事务校验来源与「交付晚于持有登记」、将持有改为 released、记录 `admitted_contract_revision` 并消耗一次 `specificationRevisions` 额度；重复结算同一来源幂等且不重复扣额，来源不符拒绝。成功后回读事实并发布一次 `state-changed`。额度上限仍由已批准 Manifest 和现有预算用例判定；store 对事务内计数做上限/授权引用校验，避免 admission 与结算间的竞争。
 
-### D4. 旧角色证据按已接纳的契约版本隔离
+**不要求接纳版本与被替换版本不同**：Graph Patch 可以只改该 Work Package 的*契约*（例如依赖），修订 Planner 也可能原样交付同一份内容——两种情况下节点仍然必须重跑角色链，用内容版本当释放条件会让这类修订**永远无法结算**（实现比 delta 规格更严）。接纳版本仍作为事实记录，但不再充当隔离边界（见 D4）。
 
-`revision_holds.admitted_contract_revision` 是本节点当前接纳内容的 durable 版本标识；pending 期间仍冻结，released 后 `execution-view.ts` 的角色结算只匹配该版本，未修订节点维持原规则。该过滤规则作为一个应用层纯函数被执行投影、宿主 `establishedStatusOf`、Git 集成候选和 Finalizer 门禁复用；不复制完整生命周期状态机。新 Planner 结算与 Admission 版本不符时阻塞。旧的 `acceptedAt` 时间戳不用于判断版本，避免同毫秒或重放导致串版。
+### D4. 旧角色证据按「本次持有登记」隔离
+
+新旧结果的边界是**持有登记时刻**（`revision_holds.created_at`，重新登记时刷新）：pending 期间该节点的角色结果一律不构成推进证据；released 之后只认**在本次持有登记之后签发的物化绑定**所产生的角色结算，未修订节点维持原规则。这条边界随补丁变化，因此内容版本是否变化都不影响判定——这正是「只改契约、不改内容」的修订也能重跑角色链的原因。`admitted_contract_revision` 仍被记录（本次接纳的是哪一版内容），但不再充当隔离边界。该过滤规则作为一个应用层纯函数被执行投影、宿主 `establishedStatusOf`、Git 集成候选和 Finalizer 门禁复用；不复制完整生命周期状态机。判据只用 store 里两个已登记事件的先后（持有登记、绑定签发），不拿结果时间戳去猜版本，也不复制 Orca 事实。
 
 ### D5. 迁移与异常记录失败关闭
 
-在 `src/adapters/storage/schema.ts` 追加 schema 13 migration，为 `revision_holds` 增加 nullable `prior_contract_revision` 与 `admitted_contract_revision`；已存在的 pending 持有保持 null，可在恢复时准备旧版本后走同一链路，已 released 的旧记录没有版本边界时沿既有投影规则。重新登记新补丁持有时清空两列，直到准备与新 Admission 结算。解码器验证 nullable 非负安全整数；未知枚举、旧库只读版本不匹配与损坏记录继续拒绝。需修改 IC-03 的字段合同和 IC-11 的派生规则说明，不建立第二个 store 或复制 Orca 结果。
+在 `src/adapters/storage/schema.ts` 追加 schema 13 migration，为 `revision_holds` 增加 nullable `prior_contract_revision` 与 `admitted_contract_revision`；已存在的 pending 持有保持 null，可在恢复时准备旧版本后走同一链路，已 released 的旧记录没有版本边界时沿既有投影规则。重新登记新补丁持有（`record-revision-hold`，以及 `record-graph-version` 内联的同源写入）清空两列并**刷新 `created_at`**：它记录的是「当前这次持有」的登记时刻，也是 D4 的隔离边界。解码器验证 nullable 非负安全整数；未知枚举、旧库只读版本不匹配与损坏记录继续拒绝。需修改 IC-03 的字段合同和 IC-11 的派生规则说明，不建立第二个 store 或复制 Orca 结果。
 
 ### D6. 验收以合同事实为准
 

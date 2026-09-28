@@ -33,7 +33,7 @@ import type { BudgetConsumption } from '../../domain/dispatch-candidate.js';
 import type { ExecutionLimits } from '../../domain/planning/budget-policy.js';
 import type { ExecutionAuthorizationRecord } from '../../domain/planning/execution-authorization.js';
 import { authorizeOperation } from '../../domain/planning/execution-authorization.js';
-import type { GraphVersionRecord } from '../../domain/planning/execution-graph.js';
+import { graphVersionChain, type GraphVersionRecord } from '../../domain/planning/execution-graph.js';
 import {
   routeGraphChange,
   type ChangeRoutingDecision,
@@ -183,20 +183,6 @@ function affectedWorkPackageIdsOf(request: GraphChangeRequest): readonly WorkPac
  * 沿记录里的 parentVersion 回溯而不是比较版本号大小：历史只追加，链上的每一条都是这张图真正经历过的
  * 版本，因此授权绑定的那个版本是否仍有效可以直接从链上读出。
  */
-function versionChainOf(
-  versions: readonly GraphVersionRecord[],
-  current: GraphVersionRecord,
-): ReadonlySet<GraphVersion> {
-  const byVersion = new Map(versions.map((version) => [version.version, version] as const));
-  const chain = new Set<GraphVersion>();
-  let cursor: GraphVersion | null = current.version;
-  while (cursor !== null && !chain.has(cursor)) {
-    chain.add(cursor);
-    cursor = byVersion.get(cursor)?.parentVersion ?? null;
-  }
-  return chain;
-}
-
 /**
  * 编排一次图变化请求。
  *
@@ -322,7 +308,7 @@ export async function requestGraphPatch(input: RequestGraphPatchInput): Promise<
       `Execution Authorization 绑定的代际、Run、地图或计划与当前图不一致：${stableMismatches.join('、')}`,
     );
   }
-  if (!versionChainOf(history.versions, current).has(manifest.graph.version)) {
+  if (!graphVersionChain(history.versions, current).has(manifest.graph.version)) {
     return reject(
       input,
       'authorization_graph_mismatch',

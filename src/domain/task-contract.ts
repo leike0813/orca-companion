@@ -182,7 +182,9 @@ export type TaskEnvelope = {
  * 宿主该说清楚的话，而不是让 Worker 猜：位置由 Envelope 固定，结构由 OpenSpec 决定，归档属于交付之后
  * 的动作，都不在这次派发范围内。
  */
-export function plannerSpecificationInstructions(specificationUnitPath: string): readonly string[] {
+export function plannerSpecificationInstructions(
+  specificationUnitPath: string,
+): readonly string[] {
   return [
     `Specification Unit 必须写在 ${specificationUnitPath}（worktree 相对路径），不得改名或另建目录。`,
     '该 change 必须包含 OpenSpec 的 specs/ 增量规格与 tasks.md；结构不完整的单元不会被接纳。',

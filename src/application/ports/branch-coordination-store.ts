@@ -523,6 +523,14 @@ export type RevisionHoldRecord = {
   /** 触发这次持有的稳定引用（补丁标识或修订标识）。 */
   readonly sourceRef: string;
   readonly state: RevisionHoldState;
+  /**
+   * 本次修订替换掉的契约内容版本；`null` 表示还没有记录版本边界（尚未准备，或旧行）。
+   *
+   * 没有既有 Specification Unit 的节点记 0：它与任何被接纳的内容版本都不同，因此「版本确实变了」仍可判定。
+   */
+  readonly priorContractRevision: number | null;
+  /** 重新准入时接纳的契约内容版本；`null` 表示尚未结算。它是该节点当前有效角色结果的版本边界。 */
+  readonly admittedContractRevision: number | null;
   readonly createdAt: number;
   readonly releasedAt: number | null;
   readonly releaseReason: string | null;
@@ -1150,11 +1158,26 @@ export type CoordinationCommand =
      *
      * 幂等语义：重复置入不会产生第二行，而是把来源更新为最新的那一次需求；已释放的持有被重新打开。
      * 持有只冻结该 Work Package 与未接受后代，当前 Worker 仍运行至可核验终态。
+     *
+     * 重新置入同时清空内容版本边界：新来源替换掉的是哪个内容版本、以及它后来接纳了什么，都还没有事实。
      */
     readonly kind: 'record-revision-hold';
     readonly workPackageId: WorkPackageId;
     readonly source: RevisionHoldSource;
     readonly sourceRef: string;
+  })
+  | (CoordinationCommandBase & {
+    /**
+     * 在匹配来源的 pending 持有上记下被替换的契约内容版本。
+     *
+     * 这是「这次修订替换掉的是哪一版内容」的唯一 durable 记录；只有在写完之后，本次修订的 Planner 才能
+     * 被派发（派发许可要求持有已准备）。重复准备同一来源是幂等成功，值不同则拒绝：版本边界不因重放而漂移。
+     */
+    readonly kind: 'prepare-revision-hold';
+    readonly workPackageId: WorkPackageId;
+    readonly sourceRef: string;
+    /** 被替换的内容版本；`null` 表示该节点还没有既有 Specification Unit，按 0 记录。 */
+    readonly priorContractRevision: number | null;
   })
   | (CoordinationCommandBase & {
     /**
@@ -1165,12 +1188,23 @@ export type CoordinationCommand =
      *
      * 给出 `expectedSourceRef` 时，只释放来源引用相符的持有：否则修订 A 的收尾会释放修订 B 的持有并把
      * 额度记到它头上。
+     *
+     * 给出 `admittedContractRevision` 时（重新准入结算），同一事务还要求：来源确实相符、该持有已准备好
+     * 被替换的版本，并把接纳版本记为持有的事实。接纳版本与被替换版本**允许相同**：只改契约（例如依赖）
+     * 的修订、或 Planner 原样交付同一份内容，都不改变「角色链必须重跑」这件事，新旧结果的边界由持有
+     * 登记时刻与绑定签发时刻的先后给出。已释放的重放只在来源与版本都一致时幂等成功——否则「同一来源」
+     * 的另一次结算会悄悄改写记录。
+     *
+     * `approvedLimit` 与 `budgetConsumption` 成对给出：它来自已批准的 Manifest，store 据此拒绝越界消费，
+     * 避免准入判定与结算之间的竞争把额度记过上限。
      */
     readonly kind: 'release-revision-hold';
     readonly workPackageId: WorkPackageId;
     readonly reason: string;
     readonly expectedSourceRef?: string;
+    readonly admittedContractRevision?: number;
     readonly budgetConsumption?: readonly BudgetConsumptionInput[];
+    readonly approvedLimit?: number;
   })
   | (CoordinationCommandBase & {
     /** 建立一个独立的 Baseline Reconciliation 需求；插入时状态为 `required`。 */

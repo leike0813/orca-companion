@@ -417,6 +417,48 @@ function phase(
   };
 }
 
+/**
+ * 该 Work Package 当前有效的角色结算。
+ *
+ * 修订会换掉这份契约，因此「哪些结果还算数」由持有记录决定，只有一份实现（只读投影、宿主集成资格与
+ * Finalizer 门禁共用）：
+ *
+ * - 持有还 pending：该节点正处于修订中，旧结果不构成任何推进证据——不满足集成或 Finalizer 门禁；
+ * - 持有已 released：只认**本次持有登记之后签发**的物化绑定所产生的结算。边界取「持有登记」而不是
+ *   内容版本：Graph Patch 可以只改该 Work Package 的契约（例如依赖），修订 Planner 也可能交付与旧版
+ *   相同的内容，两种情况下角色链都必须重跑，而内容版本分不出「之前」与「之后」；
+ * - 从未有过持有（或旧行没有版本边界）：不设边界，沿用全部结算。
+ *
+ * 调用方只负责按归属（物化绑定的 Orca Task 身份）筛出属于自己的结算，不重复实现这条规则。
+ */
+export function currentContractSettlements(input: {
+  readonly snapshot: CoordinationSnapshot;
+  readonly workPackageId: string;
+  readonly settlements: readonly DeliverySettlementRecord[];
+}): readonly DeliverySettlementRecord[] {
+  const hold = input.snapshot.revisionHolds.find(
+    (entry) => entry.workPackageId === input.workPackageId,
+  );
+  if (hold === undefined) {
+    return input.settlements;
+  }
+  if (hold.state === 'pending') {
+    return [];
+  }
+  if (hold.admittedContractRevision === null) {
+    return input.settlements;
+  }
+  const bindings = input.snapshot.materializationBindings.filter(
+    (binding) => binding.workPackageId === input.workPackageId,
+  );
+  return input.settlements.filter((settlement) =>
+    bindings.some(
+      (binding) =>
+        binding.workerTaskId === settlement.workerTaskId && binding.createdAt > hold.createdAt,
+    ),
+  );
+}
+
 /** 该 Work Package 已接受的最远角色；没有任何已接受结果时为 `null`。 */
 function furthestAcceptedRole(settlements: readonly DeliverySettlementRecord[]): WorkerRole | null {
   let furthest: WorkerRole | null = null;
@@ -724,7 +766,11 @@ function workspaceChanged(workspace: {
   );
 }
 
-/** 一个已结算 Delivery 是否属于该节点：两边都是 Orca Task 身份，经物化绑定对齐。 */
+/**
+ * 一个已结算 Delivery 是否属于该节点：两边都是 Orca Task 身份，经物化绑定对齐。
+ *
+ * 归属之后再过当前契约规则：修订中的节点没有可用的结果，修订已接纳的节点只认接纳版本的结果。
+ */
 function settlementsFor(
   snapshot: CoordinationSnapshot,
   node: ExecutionNodeFacts,
@@ -732,11 +778,15 @@ function settlementsFor(
   const bindings = snapshot.materializationBindings.filter(
     (entry) => entry.workPackageId === node.workPackageId && entry.identity === 'issued',
   );
-  return snapshot.deliverySettlements.filter(
-    (settlement) => bindings.some((binding) =>
-      settlement.workerTaskId === binding.workerTaskId && binding.role === settlement.role,
+  return currentContractSettlements({
+    snapshot,
+    workPackageId: node.workPackageId,
+    settlements: snapshot.deliverySettlements.filter(
+      (settlement) => bindings.some((binding) =>
+        settlement.workerTaskId === binding.workerTaskId && binding.role === settlement.role,
+      ),
     ),
-  );
+  });
 }
 
 /**

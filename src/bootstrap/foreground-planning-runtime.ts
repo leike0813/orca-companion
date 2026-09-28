@@ -36,6 +36,11 @@ import type {
 import type { ProjectedActionableWorkItem } from '../application/coordinator/actionable-work.js';
 import {
   advanceExecution,
+  consumedBudgetForWorkPackage,
+  nextAdvanceRoleOf,
+  revisionPlannerFacts,
+  frontierBlockersOf,
+  plannerDeliveryAfterHold,
   type AdvanceExecutionResult,
   type AdvanceRoleDispatch,
 } from '../application/execution/advance-execution.js';
@@ -73,6 +78,7 @@ import {
   type PlanningMutationResult,
 } from '../application/planning/route-map-service.js';
 import {
+  currentContractSettlements,
   deriveExecutionFacts,
   deriveWorkerEntries,
   noExecutionObservations,
@@ -82,6 +88,7 @@ import {
   type FinalizerWorkspaceFacts,
   type WorkerEntryView,
   type WorkerObservation,
+  type WorkPackageExecutionState,
 } from '../application/execution/execution-view.js';
 import { activeAuthorization } from '../application/planning/authorization-service.js';
 import { requestGraphPatch, type GraphPatchBaselineObservation } from '../application/execution/request-graph-patch.js';
@@ -91,7 +98,11 @@ import type { SpecificationProvider as SpecificationProviderPort } from '../appl
 import type { ScopeEnvelope as ScopeEnvelopeShape } from '../domain/planning/execution-graph.js';
 import { planFinalizerDispatch, finalizeProject, type FinalizerGateFacts } from '../application/finalize-project.js';
 import { integrateWorkPackage, type GitIntegrationPort } from '../application/integrate-work-package.js';
-import { settleRetiredRevision } from '../application/execution/revision-service.js';
+import {
+  beginSpecificationRevision,
+  settleRetiredRevision,
+  settleSpecificationRevision,
+} from '../application/execution/revision-service.js';
 import type { OperationIntent } from '../application/dto/operation-intent.js';
 import {
   cancelExecutionHandoff,
@@ -142,7 +153,12 @@ import type {
   WorkerRole,
 } from '../domain/planning/execution-authorization.js';
 import type { CanonicalHeadFacts } from '../domain/git-integration-policy.js';
-import { WORK_PACKAGE_BUDGET_FIELDS, workPackageBudgetKey, type WorkPackageBudgetField } from '../domain/dispatch-candidate.js';
+import {
+  WORK_PACKAGE_BUDGET_FIELDS,
+  workPackageBudgetKey,
+  type RevisionPlannerPermit,
+  type WorkPackageBudgetField,
+} from '../domain/dispatch-candidate.js';
 import {
   TASK_CONTRACT_SCHEMA_VERSION,
   TASK_ENVELOPE_SCHEMA_VERSION,
@@ -315,6 +331,13 @@ export const RESUME_IN_FLIGHT_WAIT_MS = 300_000;
 
 /** 单次受控 Orca mutation 的超时；它只限制一次调用，不构成重试策略。 */
 const MUTATION_TIMEOUT_MS = 60_000;
+/**
+ * 在途执行推进多久没结束就要在界面上说明。
+ *
+ * 取在最长合法推进（含 Session Binding 窗口与 Recovery 替代会话）之上：它不是错误判据，而是让「还在
+ * 跑」与「已经卡住」在界面上可区分——真实运行里两种情况的界面曾经完全一样。
+ */
+const TRIGGER_STALL_REPORT_MS = 300_000;
 
 /**
  * 图修订请求等待 Run 静止的上限与轮询间隔。
@@ -3649,6 +3672,12 @@ export async function createForegroundPlanningHost(
    *
    * Attempt 只由已提交的结算事实推出：同一候尊重启、重放都得到同一个序号，因此派发身份稳定；
    * 归属经物化绑定（Orca Task 身份）对齐，不接受调用方传入的计数。
+   *
+   * 刻意**不**按「已签发的绑定数」计数：派发窗口内崩溃时绑定已经写下、结算还没有，按绑定计数会算出
+   * 一个更大的 Attempt，于是重启后签出一组全新的身份并再派一次 Worker——那正是「已派发但未结算」要
+   * 靠同身份对账、而不是换身份重试的场景。按已接受结算计数时，重启得到同一个 Attempt，物化会复用既有
+   * 绑定与 Orca Task，未决 lane 继续阻塞到对账完成。修订重跑也成立：被替换的那次 Planner 结算已接受，
+   * 因此修订 Planner 天然拿到 `attempt…:planner:0:2` 而不是与它相同的身份。
    */
   const attemptIndexOf = (
     snapshot: CoordinationSnapshot,
@@ -3781,9 +3810,10 @@ export async function createForegroundPlanningHost(
     let specBinding: SpecBinding | null = null;
     if (input.role !== 'planner') {
       if (input.role === 'validator') {
-        specBinding = input.snapshot.materializationBindings.find(
-          (entry) => entry.workPackageId === input.workPackage.workPackageId && entry.role === 'implementation',
-        )?.specBinding ?? null;
+        // 验证必须针对**最近一次**实现的已接纳内容：修订后同角色会有更早的绑定，取第一条会验证旧契约。
+        specBinding =
+          newestBindingFor(input.snapshot, input.workPackage.workPackageId, 'implementation')
+            ?.specBinding ?? null;
         if (specBinding === null) {
           return { kind: 'blocked', code: 'spec_binding_missing', message: 'Implementation 的已接纳 Spec Binding 不可读' };
         }
@@ -3827,9 +3857,8 @@ export async function createForegroundPlanningHost(
           )?.consumed ?? 0,
           specificationRevisionLimit: input.workPackage.budget.specificationRevisions,
           recordedPath:
-            input.snapshot.materializationBindings.find(
-              (entry) => entry.workPackageId === input.workPackage.workPackageId && entry.role === 'planner',
-            )?.specificationUnitPath ?? null,
+            newestBindingFor(input.snapshot, input.workPackage.workPackageId, 'planner')
+              ?.specificationUnitPath ?? null,
         });
         if (admission.kind === 'rejected') {
           return {
@@ -3888,7 +3917,10 @@ export async function createForegroundPlanningHost(
         specBinding,
         ...(role === 'planner' ? { specificationUnitPath } : {}),
         // 指令是宿主写出的正文：Planner 的产出位置与结构由 Envelope 说清，不留给 Worker 猜。
-        instructions: role === 'planner' ? plannerSpecificationInstructions(specificationUnitPath) : [],
+        instructions:
+          role === 'planner'
+            ? plannerSpecificationInstructions(specificationUnitPath)
+            : [],
         // worktree 身份由物化阶段按实际建立的隔离 worktree 绑定，这里不预填路径。
         workspace: { worktreeId: 'unbound', canonicalWorktree: input.canonicalWorktree, relativePath: '.' },
         authority: input.manifest.permissions,
@@ -3922,26 +3954,172 @@ export async function createForegroundPlanningHost(
   };
 
   /**
-   * 下一个该推进的角色；`null` 表示此刻没有可推进的候选。
+   * 该节点某角色最新的已签发物化绑定。
    *
-   * 与 `advance-execution.ts` 的角色序映射同规则（那个函数不导出）：派生输入相同（同一图、同一观察
-   * 事实），因此这里的候选与执行驱动的候选一致；不一致时执行驱动以 `dispatch-mismatch` 返回 idle，
-   * 不产生任何副作用。
+   * 「最新」由创建时间给出：绑定按追加写入，因此最后一条就是该角色最近一次派发。修订会把同一角色链
+   * 再跑一遍，于是所有按角色取绑定身份的地方都必须取最新的一条——用更早的绑定会把上一版契约的
+   * Spec Binding 或内容版本带进新的派发与结算。
    */
-  const nextAdvanceRole = (entry: {
-    readonly state: string;
-    readonly role: WorkerRole | null;
-  }): AdvanceRole | null => {
-    switch (entry.state) {
-      case 'admitting':
-        return 'planner';
-      case 'implementing':
-        return entry.role === 'planner' ? 'implementation' : null;
-      case 'validating':
-        return entry.role === 'implementation' ? 'validator' : null;
-      default:
-        return null;
+  const newestBindingFor = (
+    snapshot: CoordinationSnapshot,
+    workPackageId: WorkPackageId,
+    role: WorkerRole,
+  ): MaterializationBindingRecord | null =>
+    snapshot.materializationBindings
+      .filter(
+        (binding) =>
+          binding.workPackageId === workPackageId &&
+          binding.role === role &&
+          binding.identity === 'issued',
+      )
+      .reduce<MaterializationBindingRecord | null>(
+        (latest, candidate) =>
+          latest === null || candidate.createdAt >= latest.createdAt ? candidate : latest,
+        null,
+      );
+
+  /**
+   * 该节点当前已接纳的契约内容版本：由最近一次**已结算**的 Planner 准入给出，`0` 表示还没有既有的
+   * Specification Unit。
+   *
+   * Planner 的物化绑定按约定不带 Spec Binding（内容由它自己的 Admission 产出），因此内容版本只能从
+   * 它的 Delivery 结算读取；这也是修订「被替换的版本」的权威来源——用绑定去读会永远得到「没有内容」。
+   */
+  const settledContractRevisionOf = (
+    snapshot: CoordinationSnapshot,
+    workPackageId: WorkPackageId,
+  ): number => {
+    let latest: { readonly acceptedAt: number; readonly contractRevision: number } | null = null;
+    for (const binding of snapshot.materializationBindings) {
+      if (
+        binding.workPackageId !== workPackageId ||
+        binding.role !== 'planner' ||
+        binding.identity !== 'issued' ||
+        binding.workerTaskId === null
+      ) {
+        continue;
+      }
+      const settlement = snapshot.deliverySettlements.find(
+        (candidate) =>
+          candidate.role === 'planner' && candidate.workerTaskId === binding.workerTaskId,
+      );
+      if (settlement === undefined) {
+        continue;
+      }
+      if (latest === null || settlement.acceptedAt >= latest.acceptedAt) {
+        latest = { acceptedAt: settlement.acceptedAt, contractRevision: settlement.contractRevision };
+      }
     }
+    return latest?.contractRevision ?? 0;
+  };
+
+  /**
+   * 续办一次在途 Graph Patch 修订：核验被替换的内容版本，并在原持有上原子准备它。
+   *
+   * 「被替换的版本」取既有 Planner Spec Binding 的 `contractRevision`（该节点还没有既有 Unit 时记 0）：
+   * 它是已经接纳过的 durable 版本，不随 worktree 的当前内容漂移。worktree 里当前的 Unit 只用来核验这份
+   * 绑定仍然成立——摘要或版本不一致说明规格在准入之外被改写，此时阻塞，而不是把漂移后的内容当成修订
+   * 起点。
+   *
+   * 返回 `null` 表示修订已可按补丁身份续办；实际派发仍由执行驱动按同一份许可与物化门禁判定。
+   */
+  const prepareInFlightRevision = async (input: {
+    readonly scopeId: CoordinationScopeId;
+    readonly snapshot: CoordinationSnapshot;
+    readonly workPackage: WorkPackage;
+    readonly manifest: ExecutionAuthorizationManifest;
+    readonly permit: RevisionPlannerPermit;
+    readonly canonicalWorktree: string;
+    readonly canonicalHead: string;
+    readonly writer: CoordinationWriter;
+  }): Promise<{ readonly code: string; readonly message: string } | null> => {
+    const plannerBinding = newestBindingFor(input.snapshot, input.permit.workPackageId, 'planner');
+    const priorContractRevision = settledContractRevisionOf(input.snapshot, input.permit.workPackageId);
+    if (priorContractRevision > 0) {
+      // 该节点已经有既有 Specification Unit：worktree 里当前的 Unit 必须仍是这一版。provider 的
+      // `contractRevision` 由内容摘要得到，因此版本一致即内容一致；读不到或不一致都说明规格在准入之外
+      // 被改写，此时阻塞，而不是把漂移后的内容当成修订起点。
+      const backend = backendForExecution();
+      if (backend === null) {
+        return { code: 'backend_unavailable', message: '无法建立 Orca ExecutionBackend：修订起点无法核验' };
+      }
+      const listed = await backend.query({
+        operation: 'worktree-list',
+        repo: `path:${input.canonicalWorktree}`,
+        limit: 1_000,
+      });
+      if (listed.kind !== 'accepted') {
+        return { code: listed.code, message: listed.message };
+      }
+      const summaries = listed.value as WorktreeListResult;
+      if (summaries.truncated || summaries.hostScope === null || summaries.hostScope.omittedHostIds.length > 0) {
+        return { code: 'worktree_scope_unverifiable', message: '修订节点的 worktree 列举不完整' };
+      }
+      const worktree = summaries.worktrees.find(
+        (entry) => entry.comment === workPackageComment(input.permit.workPackageId),
+      );
+      if (worktree === undefined) {
+        return { code: 'worktree_not_found', message: '修订节点的隔离 worktree 不可读' };
+      }
+      const provider = createOpenSpecProvider({
+        resolveWorktreeRoot: (id) => (id === worktree.worktreeId ? worktree.path : null),
+      });
+      const unit = await provider.readUnit({
+        worktreeId: worktree.worktreeId,
+        relativePath:
+          plannerBinding?.specificationUnitPath ??
+          specificationUnitPathFor(input.permit.workPackageId),
+      });
+      if (unit.kind === 'rejected') {
+        return { code: unit.failure.code, message: unit.failure.message };
+      }
+      if (unit.value.contractRevision !== priorContractRevision) {
+        return {
+          code: 'specification_unit_conflict',
+          message: `worktree 里的 Specification Unit 内容版本为 ${String(unit.value.contractRevision)}，与已接纳的 ${String(priorContractRevision)} 不一致：修订起点无法核验`,
+        };
+      }
+    }
+    const consumption = consumedBudgetForWorkPackage(
+      requiredStore(),
+      input.scopeId,
+      input.permit.workPackageId,
+    );
+    if (consumption === null) {
+      return { code: 'budget_unreadable', message: '规格修订预算不可读' };
+    }
+    const begun = beginSpecificationRevision({
+      store: requiredStore(),
+      coordinationScopeId: input.scopeId,
+      writer: input.writer,
+      request: {
+        kind: 'in_flight_graph_patch',
+        workPackageId: input.permit.workPackageId,
+        sourceRef: input.permit.sourceRef,
+        priorContractRevision,
+      },
+      manifest: input.manifest,
+      consumption,
+      // canonical 已经前移到授权基线之外时先登记补救需求：核验通过之前不派发修订 Planner。
+      baseline: {
+        requiredBaselineHead: input.canonicalHead,
+        worktreeBaseHead: input.manifest.baselineHead,
+        relation: input.canonicalHead === input.manifest.baselineHead ? 'equal' : 'behind',
+      },
+    });
+    if (begun.kind === 'started') {
+      return null;
+    }
+    if (begun.kind === 'exhausted') {
+      return { code: 'specification_revision_exhausted', message: begun.reason };
+    }
+    if (begun.kind === 'baseline_reconciliation_required') {
+      return {
+        code: 'baseline_reconciliation_pending',
+        message: `已登记基线补救 ${begun.reconciliation.reconciliationId}：核验通过后才续办修订`,
+      };
+    }
+    return { code: begun.code, message: begun.message };
   };
 
   type AdvanceInputAssembly =
@@ -4047,9 +4225,49 @@ export async function createForegroundPlanningHost(
       recoveryBudgetLimit: authorization.manifest.limits.maxRecoveriesPerWorkerAttempt,
     });
     publishLivenessChanges(scopeId, derived.workers);
-    const entry = derived.execution.frontier.find((candidate) => nextAdvanceRole(candidate) !== null);
+    // 受限修订 Planner 许可与执行驱动同源：两侧都调同一个纯函数，因此候选不可能出现两种说法。
+    const revisionPlanner = revisionPlannerFacts({
+      graph,
+      snapshot,
+      observations,
+      consumptionOf: (workPackageId) =>
+        consumedBudgetForWorkPackage(current, scopeId, workPackageId),
+    });
+    const permitOf = (workPackageId: string) =>
+      revisionPlanner.permits.find((permit) => permit.workPackageId === workPackageId) ?? null;
+    const roleOf = (candidate: {
+      readonly workPackageId: string;
+      readonly state: WorkPackageExecutionState;
+      readonly role: WorkerRole | null;
+    }): AdvanceRole | null => {
+      const next = nextAdvanceRoleOf({
+        state: candidate.state,
+        role: candidate.role,
+        revisionPlanner: permitOf(candidate.workPackageId),
+      });
+      // 项目级 Finalizer 不属于 Frontier 角色：它由独立的只读派发路径拥有。
+      return next === 'finalizer' ? null : next;
+    };
+    const entry = derived.execution.frontier.find((candidate) => roleOf(candidate) !== null);
     if (entry === undefined) {
-      return { kind: 'idle', reason: 'Frontier 中没有可推进的候选', blockers: [] };
+      /**
+       * 「没有候选」必须带上原因才能被诊断：Frontier 的现状与受限修订 Planner 的拒绝理由都如实列出。
+       * 执行驱动的同名分支用同一份投影与同一个纯函数，因此这里不会出现第二种说法。
+       */
+      return {
+        kind: 'idle',
+        reason: 'Frontier 中没有可推进的候选',
+        blockers: [
+          ...frontierBlockersOf(derived.execution.frontier),
+          ...revisionPlanner.denials.map(
+            (denial) => `revision-planner:${denial.workPackageId}:${denial.reason}`,
+          ),
+        ],
+      };
+    }
+    const role = roleOf(entry);
+    if (role === null) {
+      return { kind: 'blocked', code: 'invalid_state', message: '候选的下一角色在装配期间不可读' };
     }
     const workPackage = graph.workPackages.find(
       (candidate) => candidate.workPackageId === entry.workPackageId,
@@ -4061,6 +4279,7 @@ export async function createForegroundPlanningHost(
         message: `Graph Version ${String(scope.graphVersion)} 不含 Work Package ${entry.workPackageId}`,
       };
     }
+    const revisionPermit = permitOf(workPackage.workPackageId);
     const head = await readCanonicalHeadFacts({
       scopeId,
       baselineHead: authorization.manifest.baselineHead,
@@ -4068,12 +4287,31 @@ export async function createForegroundPlanningHost(
     if (head.kind === 'blocked') {
       return head;
     }
+    /**
+     * 在途修订节点先续办修订本身：核验被替换的内容版本并原子准备持有，之后才允许派发新的 Planner。
+     * 准备失败（来源不符、额度耗尽、基线未核验、Unit 与既有 Spec Binding 冲突）一律阻塞，不派 Worker。
+     */
+    if (revisionPermit !== null && revisionPermit.priorContractRevision === null) {
+      const preparation = await prepareInFlightRevision({
+        scopeId,
+        snapshot,
+        workPackage,
+        manifest: authorization.manifest,
+        permit: revisionPermit,
+        canonicalWorktree: canonicalWorktreePath,
+        canonicalHead: head.facts.canonicalHead,
+        writer: writerFor(session.incarnation),
+      });
+      if (preparation !== null) {
+        return { kind: 'blocked', code: preparation.code, message: preparation.message };
+      }
+    }
     const dispatches = await roleDispatchesFor({
       scopeId,
       graph,
       manifest: authorization.manifest,
       workPackage,
-      role: nextAdvanceRole(entry)!,
+      role,
       snapshot,
       run,
       backendIdentityRef: identity,
@@ -4081,6 +4319,15 @@ export async function createForegroundPlanningHost(
     });
     if (dispatches.kind === 'blocked') {
       return dispatches;
+    }
+    /**
+     * 准备阶段可能已经写过共享事实（准备旧内容版本、登记基线补救），本 Scope 的 CAS 计数随之推进：
+     * 交给执行驱动的期望 revision 必须是**那之后**读到的值，否则这一步会以 `stale_revision` 停在门口，
+     * 而事实其实已经生效。
+     */
+    const afterPreparation = scopeRecord(scopeId);
+    if (afterPreparation === null) {
+      return { kind: 'blocked', code: 'scope_unavailable', message: `无法读取 Scope ${scopeId}` };
     }
     return {
       kind: 'ready',
@@ -4091,7 +4338,7 @@ export async function createForegroundPlanningHost(
         backend,
         coordinationScopeId: scopeId,
         writer: writerFor(session.incarnation),
-        expectedRevision: scope.revision,
+        expectedRevision: afterPreparation.revision,
         canonicalHead: head.facts,
         observations,
         roles: dispatches.roles,
@@ -4313,7 +4560,13 @@ export async function createForegroundPlanningHost(
     const scopeId = session.incarnation.coordinationScopeId;
     const assembled = await advanceInputFor(session);
     if (assembled.kind === 'idle') {
-      clearExecutionBlocker(scopeId, 'advance');
+      // 装配阶段的空闲同样必须可观察：只清掉 blocker 会留下「一片静止且没有原因」，届时分不清是在等
+      // Worker、等依赖还是被修订许可挡住。带上原因时按同一约定记录，无原因时才是真的没有可说的。
+      if (assembled.blockers.length > 0) {
+        recordExecutionBlocker(scopeId, 'advance', assembled.blockers[0]!, assembled.reason);
+      } else {
+        clearExecutionBlocker(scopeId, 'advance');
+      }
       return { kind: 'idle', reason: assembled.reason, blockers: assembled.blockers };
     }
     if (assembled.kind === 'blocked') {
@@ -4512,7 +4765,7 @@ export async function createForegroundPlanningHost(
     operationId: OperationId,
   ): Promise<ExecutionToolOutcome> => {
     // 用户消息可能同时触发一次 Frontier 推进与模型工具调用；先等那次受控推进结清。
-    await executionTriggerInFlight.get(session.coordinatorSessionId);
+    await executionTriggerInFlight.get(session.coordinatorSessionId)?.promise;
     const scopeId = session.incarnation.coordinationScopeId;
     const current = requireStore();
     const scope = scopeRecord(scopeId);
@@ -4758,6 +5011,13 @@ export async function createForegroundPlanningHost(
           authority: null,
           recoveryBudgetLimit: null,
         });
+        const revisionPlanner = revisionPlannerFacts({
+          graph,
+          snapshot: snapshot.snapshot,
+          observations,
+          consumptionOf: (workPackageId) =>
+            consumedBudgetForWorkPackage(current, scopeId, workPackageId),
+        });
         return {
           kind: 'ok',
           value: {
@@ -4767,7 +5027,14 @@ export async function createForegroundPlanningHost(
               state: entry.state,
               role: entry.role,
               liveness: entry.liveness,
-              nextRole: nextAdvanceRole(entry),
+              nextRole: nextAdvanceRoleOf({
+                state: entry.state,
+                role: entry.role,
+                revisionPlanner:
+                  revisionPlanner.permits.find(
+                    (permit) => permit.workPackageId === entry.workPackageId,
+                  ) ?? null,
+              }),
             })),
             blockers: executionBlockersFor(scopeId),
           },
@@ -4866,8 +5133,10 @@ export async function createForegroundPlanningHost(
   /**
    * 一个 Work Package 的三个已确立事实。
    *
-   * 与 `execution-view.ts` 的投影同源同规则（那个函数不导出）：结算按角色取最新一条，归属经物化绑定
-   * 的 Orca Task 身份对齐。这里只回答「能不能集成」，因此不派生生命周期阶段。
+   * 与 `execution-view.ts` 的投影同源同规则：结算按角色取最新一条，归属经物化绑定的 Orca Task 身份
+   * 对齐；修订中的节点没有可用的结果，修订已接纳的节点只认接纳契约版本的结算（共用
+   * `currentContractSettlements`），因此旧 Validator 的通过不会被读成新修订已完成，修订期间也不会
+   * 凭旧结果进入集成。这里只回答「能不能集成」，不派生生命周期阶段。
    */
   const establishedStatusOf = (
     snapshot: CoordinationSnapshot,
@@ -4878,8 +5147,13 @@ export async function createForegroundPlanningHost(
     if (bindings.length === 0) {
       return status;
     }
+    const settlements = currentContractSettlements({
+      snapshot,
+      workPackageId,
+      settlements: snapshot.deliverySettlements,
+    });
     const latestOf = (role: WorkerRole) =>
-      snapshot.deliverySettlements
+      settlements
         .filter((settlement) => settlement.role === role && bindings.some((binding) =>
           binding.role === role && binding.workerTaskId === settlement.workerTaskId,
         ))
@@ -4997,6 +5271,94 @@ export async function createForegroundPlanningHost(
           coordinationScopeId: scopeId,
           revision: scopeRecord(scopeId)?.revision ?? 0,
           reason: `retired-revision-settled:${hold.workPackageId}`,
+        });
+        continue;
+      }
+      if (settled.kind === 'rejected') {
+        recordExecutionBlocker(scopeId, 'revision-settlement', settled.code, settled.message);
+      }
+    }
+  };
+
+  /**
+   * 结算「已重新准入」的在途修订持有。
+   *
+   * 规格要求：在途节点的修订由「规格重新准入」解除持有。重新准入的 durable 证据是持有登记之后
+   * 签发并已结算的 Planner 派发；其 `contractRevision` 是 Admission 接纳的内容版本。判定只读 store，
+   * 因此重启、崩溃或换一个 Incarnation 都能续上；准入还没通过时什么都不做（持有保持 pending，节点继续
+   * 显示 revision_pending）。
+   *
+   * 结算本身在 store 的事务里核对来源、接纳版本与额度上限；拒绝只在原身份上如实呈现，不换 ID 重试。
+   */
+  const settleAdmittedRevisionHolds = (session: LiveSession): void => {
+    const scopeId = session.incarnation.coordinationScopeId;
+    const current = requireStore();
+    const scope = scopeRecord(scopeId);
+    if (
+      current === null ||
+      scope === null ||
+      scope.mode !== 'execution_coordination' ||
+      scope.controlState !== 'active' ||
+      scope.graphId === null ||
+      scope.graphVersion === null
+    ) {
+      return;
+    }
+    const graphRead = current.query({
+      kind: 'graph-version',
+      coordinationScopeId: scopeId,
+      graphId: scope.graphId,
+      graphVersion: scope.graphVersion,
+    });
+    const snapshotRead = current.query({ kind: 'snapshot', coordinationScopeId: scopeId });
+    const authorizationRead = activeAuthorization(current, scopeId);
+    if (graphRead.kind !== 'graph-version' || graphRead.version === null || snapshotRead.kind !== 'snapshot') {
+      return;
+    }
+    if (authorizationRead.kind === 'rejected' || authorizationRead.authorization === null) {
+      return;
+    }
+    const snapshot = snapshotRead.snapshot;
+    const graphWorkPackageIds = new Set(
+      graphRead.version.graph.workPackages.map((workPackage) => workPackage.workPackageId),
+    );
+    for (const hold of snapshot.revisionHolds.filter(
+      (entry) => entry.state === 'pending' && entry.source === 'graph_patch',
+    )) {
+      // 退场节点由退休路径释放持有；这里只结算仍在当前图中的节点。
+      if (!graphWorkPackageIds.has(hold.workPackageId) || hold.priorContractRevision === null) {
+        continue;
+      }
+      /**
+       * 只认「持有登记之后**已结算**的 Planner 交付」：后发的、可能已经丢失会话（因而永远没有结算）
+       * 的派发不能遮掉这条事实。此前取「最新绑定」的写法会让两个判定互相锁死：持有结算看不到它，
+       * 派发门禁又因为那条未结算的派发始终拒绝，整条链路永久停在 `revision_pending`
+       * （真实运行 `orca-companion-e2e56` 实测）。
+       */
+      const admitted = plannerDeliveryAfterHold(snapshot, hold);
+      if (admitted === null) {
+        continue;
+      }
+      // 接纳版本与被替换版本允许相同：只改契约（例如依赖）的修订、或 Planner 原样交付同一份内容，
+      // 都不改变「角色链必须重跑」。新旧结果的边界由持有登记时刻给出（见 `currentContractSettlements`），
+      // 因此这里不再要求内容版本发生变化。
+      const settled = settleSpecificationRevision({
+        store: current,
+        coordinationScopeId: scopeId,
+        writer: writerFor(session.incarnation),
+        workPackageId: hold.workPackageId,
+        sourceRef: hold.sourceRef,
+        admittedContractRevision: admitted.contractRevision,
+        authorizationId: authorizationRead.authorization.authorizationId,
+        approvedLimit: authorizationRead.authorization.manifest.limits.specificationRevisions,
+        admission: { kind: 'admitted' },
+      });
+      if (settled.kind === 'accepted') {
+        publish(session.coordinatorSessionId, {
+          kind: 'state-changed',
+          coordinationScopeId: scopeId,
+          revision: scopeRecord(scopeId)?.revision ?? 0,
+          reason: `specification-revision-settled:${hold.workPackageId}`,
         });
         continue;
       }
@@ -6001,7 +6363,27 @@ export async function createForegroundPlanningHost(
    * `advanceExecution` 内部，本函数不复制它。
    */
   const runExecutionTrigger = async (session: LiveSession): Promise<void> => {
-    if (closed || session.fencingLost || graphPatchPlannerInFlight.has(session.coordinatorSessionId)) {
+    if (closed) {
+      return;
+    }
+    if (session.fencingLost) {
+      recordExecutionBlocker(
+        session.incarnation.coordinationScopeId,
+        'advance',
+        'fencing_lost',
+        '本 Session 已失去 Runtime Lease 的 fencing：不推进执行',
+      );
+      return;
+    }
+    if (graphPatchPlannerInFlight.has(session.coordinatorSessionId)) {
+      // Graph Patch Planner 在途时执行推进要等它收尾——这个「等」本身必须写在界面上，否则静止的
+      // Scope 只能显示结果，显示不出原因。
+      recordExecutionBlocker(
+        session.incarnation.coordinationScopeId,
+        'advance',
+        'graph_patch_planner_in_flight',
+        'Graph Patch Planner 在途：本轮不推进执行',
+      );
       return;
     }
     // 补记错过的 Session Binding：它是这条派发之后所有归属（Delivery、Recovery、Validator 结果）的前提。
@@ -6091,28 +6473,61 @@ export async function createForegroundPlanningHost(
       return;
     }
     settleRetiredRevisionHolds(session);
+    // 重新准入通过的在途修订先结算持有：它是后续角色、集成与 Finalizer 门禁的前提。
+    settleAdmittedRevisionHolds(session);
     await integrateAcceptedWorkPackage(session);
     await runFinalizerForScope(session);
     await advanceExecutionOnce(session);
   };
 
   /**
-   * 触发点的串行化：同一个 Session 上同时在跑一次执行推进时，后来的一次直接跳过。
+   * 触发点的串行化：同一个 Session 上同时在跑一次执行推进时，后来的一次排在它收尾之后。
    *
    * 执行驱动自己的并发上限判定（读到的 Worker 观察 + store 的 lane 唯一性）仍然成立，这里只是不让
-   * 两次推进互相穿插；跳过的那一次由下一个触发点接上，因此不会丢工作。
+   * 两次推进互相穿插。**被跳过的那一次必须真的被接上**：修订 Planner、集成与 Finalizer 这类工作在
+   * Scope 静默时没有下一个触发点（没有 Delivery、没有用户消息、也没有已运行 Worker），只记一句「稍后
+   * 再说」会让整条链路永久停在原地——真实运行里图补丁落地后正是这样停住的。
    */
-  const executionTriggerInFlight = new Map<string, Promise<void>>();
+  const executionTriggerInFlight = new Map<string, { readonly promise: Promise<void>; readonly startedAt: number }>();
+  /** 在途推进期间到达的触发请求：收尾后按一次收尾补齐，不丢工作也不并发。 */
+  const pendingTriggerReruns = new Set<string>();
   /** Graph Patch Planner 与普通 Frontier 派发共享并发上限；它的受控工具调用期间不交错推进。 */
   const graphPatchPlannerInFlight = new Set<string>();
   const triggerExecution = (session: LiveSession): void => {
-    if (executionTriggerInFlight.has(session.coordinatorSessionId)) {
+    const sessionKey = session.coordinatorSessionId;
+    if (executionTriggerInFlight.has(sessionKey)) {
+      pendingTriggerReruns.add(sessionKey);
+      // 在途推进长期不结束时也要说出来：否则界面上只剩一片静止，看不出是「还在跑」还是「已经卡住」。
+      const existing = executionTriggerInFlight.get(sessionKey);
+      const elapsedMs = existing === undefined ? 0 : Date.now() - existing.startedAt;
+      if (elapsedMs >= TRIGGER_STALL_REPORT_MS) {
+        recordExecutionBlocker(
+          session.incarnation.coordinationScopeId,
+          'advance',
+          'advance_trigger_stalled',
+          `上一次执行推进已运行 ${String(Math.round(elapsedMs / 1000))}s 仍未结束：本轮触发排在它之后`,
+        );
+      }
       return;
     }
-    const running = runExecutionTrigger(session).finally(() => {
-      executionTriggerInFlight.delete(session.coordinatorSessionId);
-    });
-    executionTriggerInFlight.set(session.coordinatorSessionId, running);
+    const running = runExecutionTrigger(session)
+      .catch((error: unknown) => {
+        // 抛出的推进不能只留在被丢弃的 promise 里：记录成 blocker，界面与对账都看得见。
+        const message = error instanceof Error ? error.message : String(error);
+        recordExecutionBlocker(
+          session.incarnation.coordinationScopeId,
+          'advance',
+          'advance_trigger_failed',
+          `执行推进抛出异常：${message}`,
+        );
+      })
+      .finally(() => {
+        executionTriggerInFlight.delete(sessionKey);
+        if (pendingTriggerReruns.delete(sessionKey)) {
+          triggerExecution(session);
+        }
+      });
+    executionTriggerInFlight.set(sessionKey, { promise: running, startedAt: Date.now() });
   };
 
   /**
@@ -6248,7 +6663,7 @@ export async function createForegroundPlanningHost(
       if (inFlight !== undefined) {
         const { promise, resolve } = Promise.withResolvers<'settled' | 'timeout'>();
         const timer = setTimeout(() => resolve('timeout'), RESUME_IN_FLIGHT_WAIT_MS);
-        void inFlight.finally(() => {
+        void inFlight.promise.finally(() => {
           clearTimeout(timer);
           resolve('settled');
         });

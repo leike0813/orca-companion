@@ -2007,6 +2007,27 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         sourceRef: sourceRef.value,
       });
     }
+    case 'prepare-revision-hold': {
+      const workPackageId = requireString(command['workPackageId'], 'workPackageId');
+      if (!workPackageId.ok) {
+        return workPackageId;
+      }
+      const sourceRef = requireString(command['sourceRef'], 'sourceRef');
+      if (!sourceRef.ok) {
+        return sourceRef;
+      }
+      const prior = requireNullableCount(command['priorContractRevision'], 'priorContractRevision');
+      if (!prior.ok) {
+        return prior;
+      }
+      return ok({
+        ...base,
+        kind: 'prepare-revision-hold',
+        workPackageId: workPackageId.value as WorkPackageId,
+        sourceRef: sourceRef.value,
+        priorContractRevision: prior.value,
+      });
+    }
     case 'release-revision-hold': {
       const workPackageId = requireString(command['workPackageId'], 'workPackageId');
       if (!workPackageId.ok) {
@@ -2024,6 +2045,20 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (!expectedSourceRef.ok) {
         return expectedSourceRef;
       }
+      const admitted = requireNullableCount(command['admittedContractRevision'], 'admittedContractRevision');
+      if (!admitted.ok) {
+        return admitted;
+      }
+      const approvedLimit = requireNullableCount(command['approvedLimit'], 'approvedLimit');
+      if (!approvedLimit.ok) {
+        return approvedLimit;
+      }
+      if (admitted.value !== null && expectedSourceRef.value.value === null) {
+        return fail('给出 admittedContractRevision 时必须同时给出 expectedSourceRef');
+      }
+      if ((budgetConsumption.value === undefined) !== (approvedLimit.value === null)) {
+        return fail('budgetConsumption 与 approvedLimit 必须成对给出');
+      }
       const sourceRef = expectedSourceRef.value.value;
       return ok({
         ...base,
@@ -2031,7 +2066,9 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         workPackageId: workPackageId.value as WorkPackageId,
         reason: reason.value,
         ...(sourceRef === null ? {} : { expectedSourceRef: sourceRef }),
+        ...(admitted.value === null ? {} : { admittedContractRevision: admitted.value }),
         ...(budgetConsumption.value === undefined ? {} : { budgetConsumption: budgetConsumption.value }),
+        ...(approvedLimit.value === null ? {} : { approvedLimit: approvedLimit.value }),
       });
     }
     case 'record-baseline-reconciliation': {
@@ -2407,6 +2444,8 @@ type RevisionHoldRow = {
   readonly source: string;
   readonly source_ref: string;
   readonly state: string;
+  readonly prior_contract_revision: number | null;
+  readonly admitted_contract_revision: number | null;
   readonly created_at: number;
   readonly released_at: number | null;
   readonly release_reason: string | null;
@@ -2645,12 +2684,29 @@ function decodeRevisionHoldRow(row: RevisionHoldRow): Decoded<RevisionHoldRecord
   if (!state.ok) {
     return state;
   }
+  // 未准备 / 未结算的行保持 `NULL`（包括 schema 13 之前写下的历史行）；非空值必须是安全非负整数。
+  const priorContractRevision = requireNullableCount(
+    row.prior_contract_revision,
+    'revision_holds.prior_contract_revision',
+  );
+  if (!priorContractRevision.ok) {
+    return priorContractRevision;
+  }
+  const admittedContractRevision = requireNullableCount(
+    row.admitted_contract_revision,
+    'revision_holds.admitted_contract_revision',
+  );
+  if (!admittedContractRevision.ok) {
+    return admittedContractRevision;
+  }
   return ok({
     coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
     workPackageId: row.work_package_id as WorkPackageId,
     source: source.value,
     sourceRef: row.source_ref,
     state: state.value,
+    priorContractRevision: priorContractRevision.value,
+    admittedContractRevision: admittedContractRevision.value,
     createdAt: row.created_at,
     releasedAt: row.released_at,
     releaseReason: row.release_reason,
@@ -4429,12 +4485,14 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           db.prepare(
             `INSERT INTO revision_holds (
                coordination_scope_id, work_package_id, source, source_ref, state,
-               created_at, released_at, release_reason
-             ) VALUES (?, ?, 'graph_patch', ?, 'pending', ?, NULL, NULL)
+               prior_contract_revision, admitted_contract_revision, created_at, released_at, release_reason
+             ) VALUES (?, ?, 'graph_patch', ?, 'pending', NULL, NULL, ?, NULL, NULL)
              ON CONFLICT (coordination_scope_id, work_package_id) DO UPDATE SET
                source = excluded.source,
                source_ref = excluded.source_ref,
                state = 'pending',
+               prior_contract_revision = NULL,
+               admitted_contract_revision = NULL,
                released_at = NULL,
                release_reason = NULL`,
           ).run(cmd.coordinationScopeId, workPackageId, cmd.patch?.patchId ?? '', now);
@@ -5536,15 +5594,52 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         db.prepare(
           `INSERT INTO revision_holds (
              coordination_scope_id, work_package_id, source, source_ref, state,
-             created_at, released_at, release_reason
-           ) VALUES (?, ?, ?, ?, 'pending', ?, NULL, NULL)
+             prior_contract_revision, admitted_contract_revision, created_at, released_at, release_reason
+           ) VALUES (?, ?, ?, ?, 'pending', NULL, NULL, ?, NULL, NULL)
            ON CONFLICT (coordination_scope_id, work_package_id) DO UPDATE SET
              source = excluded.source,
              source_ref = excluded.source_ref,
              state = 'pending',
+             prior_contract_revision = NULL,
+             admitted_contract_revision = NULL,
              released_at = NULL,
-             release_reason = NULL`,
+             release_reason = NULL,
+             -- 重新登记也是一次新的登记：created_at 是「当前这次持有」的登记时刻，修订 Planner 派发
+             -- 与它的先后关系靠它判定（见 advance-execution.ts 的 plannerDeliveryAfterHold）。保留第一次的
+             -- 旧时间戳会把上一个版本链的 Planner 派发误读成本次修订的派发。
+             created_at = excluded.created_at`,
         ).run(cmd.coordinationScopeId, cmd.workPackageId, cmd.source, cmd.sourceRef, now);
+        return ok(null);
+      }
+      case 'prepare-revision-hold': {
+        const existing = one<RevisionHoldRow>(
+          db.prepare('SELECT * FROM revision_holds WHERE coordination_scope_id = ? AND work_package_id = ?'),
+          cmd.coordinationScopeId,
+          cmd.workPackageId,
+        );
+        if (existing === undefined) {
+          return fail(`Work Package ${cmd.workPackageId} 没有 revision pending 持有`, 'constraint');
+        }
+        if (existing.source_ref !== cmd.sourceRef) {
+          return fail(
+            `Work Package ${cmd.workPackageId} 的持有来自 ${existing.source_ref}，与本次准备的 ${cmd.sourceRef} 不一致`,
+            'constraint',
+          );
+        }
+        const prior = cmd.priorContractRevision ?? 0;
+        if (existing.prior_contract_revision !== null) {
+          // 同源重放：读回同一值。版本边界一旦写下就不因重放而漂移，因此值不同即拒绝。
+          return existing.prior_contract_revision === prior
+            ? ok(null)
+            : fail(
+                `Work Package ${cmd.workPackageId} 的持有已记录了被替换的内容版本 ${String(existing.prior_contract_revision)}，与本次的 ${String(prior)} 不一致`,
+                'constraint',
+              );
+        }
+        db.prepare(
+          `UPDATE revision_holds SET prior_contract_revision = ?
+           WHERE coordination_scope_id = ? AND work_package_id = ?`,
+        ).run(prior, cmd.coordinationScopeId, cmd.workPackageId);
         return ok(null);
       }
       case 'release-revision-hold': {
@@ -5556,7 +5651,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         if (existing === undefined) {
           return fail(`Work Package ${cmd.workPackageId} 没有 revision pending 持有`, 'constraint');
         }
-        if (existing.state === 'released') {
+        if (existing.state === 'released' && cmd.admittedContractRevision === undefined) {
           return ok(null);
         }
         if (cmd.expectedSourceRef !== undefined && existing.source_ref !== cmd.expectedSourceRef) {
@@ -5565,18 +5660,61 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
             'constraint',
           );
         }
-        db.prepare(
-          `UPDATE revision_holds SET state = 'released', released_at = ?, release_reason = ?
-           WHERE coordination_scope_id = ? AND work_package_id = ?`,
-        ).run(now, cmd.reason, cmd.coordinationScopeId, cmd.workPackageId);
-        // 修订额度与解除持有同事务：重放已释放的持有在上面直接返回，因此不会重复扣减。
-        for (const consumption of cmd.budgetConsumption ?? []) {
-          const counter = db
-            .prepare('SELECT * FROM budget_counters WHERE coordination_scope_id = ? AND budget_key = ?')
-            .get(cmd.coordinationScopeId, consumption.budgetKey) as BudgetRow | undefined;
-          if (counter !== undefined && counter.approved_limit_ref !== consumption.approvedLimitRef) {
+        if (cmd.admittedContractRevision !== undefined) {
+          if (existing.state === 'released') {
+            // 重放同一次重新准入：只在来源与接纳版本都一致时幂等成功，否则会悄悄改写版本边界。
+            return existing.admitted_contract_revision === cmd.admittedContractRevision
+              ? ok(null)
+              : fail(
+                  `Work Package ${cmd.workPackageId} 的持有已按内容版本 ${String(existing.admitted_contract_revision)} 释放，与本次的 ${String(cmd.admittedContractRevision)} 不一致`,
+                  'constraint',
+                );
+          }
+          if (existing.prior_contract_revision === null) {
+            return fail(
+              `Work Package ${cmd.workPackageId} 的持有还没有记录被替换的内容版本，不能按重新准入结算`,
+              'invalid_state',
+            );
+          }
+          // 接纳版本与被替换版本**允许相同**：Graph Patch 可以只改该 Work Package 的契约（例如依赖），
+          // 修订 Planner 也可能原样交付同一份内容，两种情况下角色链都必须重跑，版本是否变化不作条件。
+          // 新旧结果的边界是持有登记时刻（见 `currentContractSettlements`），不是内容版本。
+        }
+        // 额度上限与消耗在同一事务内判定：准入判定与结算之间的竞争不能把计数记过已批准的界限。
+        const consumption = cmd.budgetConsumption ?? [];
+        for (const entry of consumption) {
+          const counter = one<BudgetRow>(
+            db.prepare('SELECT * FROM budget_counters WHERE coordination_scope_id = ? AND budget_key = ?'),
+            cmd.coordinationScopeId,
+            entry.budgetKey,
+          );
+          if (counter !== undefined && counter.approved_limit_ref !== entry.approvedLimitRef) {
             return fail('已登记的预算授权上限引用与本次不一致，拒绝在同一计数上叠加', 'constraint');
           }
+          const approvedLimit = cmd.approvedLimit;
+          if (approvedLimit === undefined) {
+            return fail('消耗预算必须同时给出已批准的额度上限', 'invalid_state');
+          }
+          if ((counter?.consumed ?? 0) + entry.amount > approvedLimit) {
+            return fail(
+              `预算 ${entry.budgetKey} 已消耗 ${String(counter?.consumed ?? 0)}，再加 ${String(entry.amount)} 会超过已批准的 ${String(approvedLimit)}`,
+              'constraint',
+            );
+          }
+        }
+        db.prepare(
+          `UPDATE revision_holds SET state = 'released', released_at = ?, release_reason = ?,
+             admitted_contract_revision = COALESCE(?, admitted_contract_revision)
+           WHERE coordination_scope_id = ? AND work_package_id = ?`,
+        ).run(
+          now,
+          cmd.reason,
+          cmd.admittedContractRevision ?? null,
+          cmd.coordinationScopeId,
+          cmd.workPackageId,
+        );
+        // 修订额度与解除持有同事务：重放已释放的持有在上面直接返回，因此不会重复扣减。
+        for (const consumption of cmd.budgetConsumption ?? []) {
           db.prepare(
             `INSERT INTO budget_counters (coordination_scope_id, budget_key, approved_limit_ref, consumed)
              VALUES (?, ?, ?, ?)

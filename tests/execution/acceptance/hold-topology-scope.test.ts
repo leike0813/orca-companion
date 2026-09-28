@@ -111,6 +111,7 @@ test('受影响节点与其未接受后代不派发后续角色', () => {
     lifecycleStage: 'frontier' as const,
     selectedCandidateId: candidate,
     revisionPending: projection.frozen,
+    revisionPlanner: null,
     dependenciesSatisfied: [candidate],
     controlState: 'active',
     authorization: { valid: true, authorizationId: 'auth-1', authorizationVersion: 1, reason: null },

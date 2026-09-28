@@ -15,6 +15,9 @@
  *   阻塞才返回 `blocked`，纯判定（授权、预算、控制状态、持有）的拒绝一律是 `idle` 加拒绝码；
  * - **不猜事实**：读不到快照、图版本、授权记录、预算计数或未决意图时一律停在 blocker，而不是用默认
  *   值继续。
+ *
+ * 在途修订节点是这四条之上的一条受控例外：持有不因旧 Worker 结算而释放，但当一个节点满足
+ * `revisionPlannerFacts` 列出的全部条件时，它的一次 Specification Planner 派发被允许（见 D1/D2）。
  */
 
 import type {
@@ -37,13 +40,15 @@ import type {
   BudgetConsumption,
   DispatchAuthorizationState,
   DispatchCandidateFacts,
+  RevisionPlannerPermit,
   WorkPackageBudgetField,
   WorkPackageLifecycleStage,
 } from '../../domain/dispatch-candidate.js';
-import { WORK_PACKAGE_BUDGET_FIELDS, workPackageBudgetKey } from '../../domain/dispatch-candidate.js';
+import { WORK_PACKAGE_BUDGET_FIELDS, workPackageBudgetKey, budgetFieldExhausted } from '../../domain/dispatch-candidate.js';
 import { frozenWorkPackageIds } from '../../domain/execution/revision-pending.js';
 import type { CanonicalHeadFacts } from '../../domain/git-integration-policy.js';
 import type { ExecutionGraph, WorkPackage } from '../../domain/planning/execution-graph.js';
+import { graphVersionChain } from '../../domain/planning/execution-graph.js';
 import type {
   ExecutionAuthorizationRecord,
   WorkerRole,
@@ -66,6 +71,7 @@ import type { WorkerLaunchStrategy } from '../worker-launch.js';
 import { effectiveBudgetConsumption } from './baseline-adoption.js';
 import {
   deriveExecutionFacts,
+  workerStateLiveness,
   type ExecutionNodeFacts,
   type ExecutionObservationFacts,
   type WorkPackageExecutionEntry,
@@ -244,15 +250,26 @@ function blocked(laneKey: string, code: string, message: string): AdvanceExecuti
  * 下一步该派发哪个角色；`null` 表示这个 Work Package 此刻没有可推进的角色。
  *
  * 只读投影已经把「走到哪一步」定死了，这里只做一次角色序映射，不重新推导生命周期：
+ * - `revision_pending` 且带匹配的受限 Planner 许可：在途修订节点从 Specification Planner 重跑；
  * - `admitting`：依赖已满足且没有任何执行事实 → 第一个角色 planner；
  * - `implementing` 且当前角色仍是 planner：planner 结果已被接受 → implementation；
  * - `validating` 且当前角色是 implementation：实现结果已被接受 → validator。
  *
  * 其余阶段都不在这里推进：`specifying`、`unknown` 属于 Recovery 的范围；`reconciling`、
- * `revision_pending`、`blocked`、`repairing` 是 blocker；`waiting` 是依赖未满足；
+ * 没有许可的 `revision_pending`、`blocked`、`repairing` 是 blocker；`waiting` 是依赖未满足；
  * `waiting_integration`、`accepted` 的角色工作已经结束。
+ *
+ * 这是唯一一份角色序判定：宿主装配候选与执行驱动都调用它，因此「界面上的候选」与「实际派发的候选」
+ * 不可能出现两种说法。
  */
-function nextRoleOf(entry: WorkPackageExecutionEntry): WorkerRole | null {
+export function nextAdvanceRoleOf(entry: {
+  readonly state: WorkPackageExecutionState;
+  readonly role: WorkerRole | null;
+  readonly revisionPlanner: RevisionPlannerPermit | null;
+}): WorkerRole | null {
+  if (entry.revisionPlanner !== null) {
+    return 'planner';
+  }
   switch (entry.state) {
     case 'admitting':
       return 'planner';
@@ -266,7 +283,7 @@ function nextRoleOf(entry: WorkPackageExecutionEntry): WorkerRole | null {
 }
 
 /** 没有可推进的候选时，把 Frontier 的现状作为 blocker 如实列出，而不是只说一句「没有候选」。 */
-function frontierBlockersOf(frontier: readonly WorkPackageExecutionEntry[]): readonly string[] {
+export function frontierBlockersOf(frontier: readonly WorkPackageExecutionEntry[]): readonly string[] {
   return frontier.map(
     (entry) =>
       `frontier:${entry.workPackageId}:${entry.state}${entry.role === null ? '' : `:${entry.role}`}`,
@@ -337,11 +354,165 @@ function revisionPendingOf(
 }
 
 /**
+ * 受限修订 Planner 许可的派生结果。
+ *
+ * `denials` 只用于如实报告「被持有冻住的节点为什么还不能重跑 Planner」；判定本身只看 `permits`。
+ */
+export type RevisionPlannerFacts = {
+  readonly permits: readonly RevisionPlannerPermit[];
+  readonly denials: readonly { readonly workPackageId: WorkPackageId; readonly reason: string }[];
+};
+
+/**
+ * 派生在途修订节点的受限 Planner 许可。
+ *
+ * 持有不因旧 Worker 结算而释放；这里回答的是**另一个**问题：什么条件下允许该节点重新跑一次
+ * Specification Planner。条件是穷尽的：所有已签发绑定都有可核验结算、执行主机列举完整且该节点没有
+ * live 或不可核验的 Worker、没有未核验的基线补救、修订额度未耗尽。任一项读不到或读不回来都拒绝并给出
+ * 结构化原因，而不是用默认值继续。
+ *
+ * 判定只读事实，不产生副作用，也不改动持有；它由执行驱动与宿主候选装配共用，因此两侧拿到同一份结论。
+ * 依赖、后代、其它角色、旧结果与 Git 集成继续被持有挡住——这里不放开任何别的口子。
+ */
+export function revisionPlannerFacts(input: {
+  readonly graph: ExecutionGraph;
+  readonly snapshot: CoordinationSnapshot;
+  readonly observations: ExecutionObservationFacts;
+  readonly consumptionOf: (workPackageId: WorkPackageId) => readonly BudgetConsumption[] | null;
+}): RevisionPlannerFacts {
+  const permits: RevisionPlannerPermit[] = [];
+  const denials: { readonly workPackageId: WorkPackageId; readonly reason: string }[] = [];
+  for (const hold of input.snapshot.revisionHolds.filter((entry) => entry.state === 'pending')) {
+    const deny = (reason: string): void => {
+      denials.push({ workPackageId: hold.workPackageId, reason });
+    };
+    if (hold.source !== 'graph_patch') {
+      continue;
+    }
+    const workPackage = input.graph.workPackages.find(
+      (entry) => entry.workPackageId === hold.workPackageId,
+    );
+    if (workPackage === undefined) {
+      // 退场节点由退休路径释放持有，不由这里续办。
+      continue;
+    }
+    if (!input.observations.workersEnumerated) {
+      deny('worker-list:unverifiable');
+      continue;
+    }
+    const bindings = input.snapshot.materializationBindings.filter(
+      (binding) => binding.workPackageId === hold.workPackageId && binding.identity === 'issued',
+    );
+    const unsettled = bindings.find(
+      (binding) =>
+        !input.snapshot.deliverySettlements.some(
+          (settlement) =>
+            settlement.workerTaskId === binding.workerTaskId && settlement.role === binding.role,
+        ),
+    );
+    if (unsettled !== undefined) {
+      // 旧派发必须运行至可核验终态：结算本身就是那个终态的持久证据，不靠 Worker 列举推断。
+      deny(`dispatch-unsettled:${unsettled.workerTaskId}`);
+      continue;
+    }
+    const notExited = input.observations.workers.find(
+      (worker) =>
+        bindings.some((binding) => binding.orcaTaskId === worker.taskId) &&
+        workerStateLiveness(worker.workerState) !== 'exited',
+    );
+    if (notExited !== undefined) {
+      deny(`worker-not-exited:${notExited.dispatchId}`);
+      continue;
+    }
+    if (
+      input.snapshot.baselineReconciliations.some(
+        (reconciliation) =>
+          reconciliation.workPackageId === hold.workPackageId && reconciliation.state !== 'verified',
+      )
+    ) {
+      deny('baseline-reconciliation:pending');
+      continue;
+    }
+    const consumed = input.consumptionOf(hold.workPackageId);
+    if (consumed === null) {
+      deny('budget:unreadable');
+      continue;
+    }
+    /**
+     * 修订 Planner 只派发一次：持有登记之后已经有**已结算**的 Planner 交付时，缺的是持有结算
+     * （与重新准入同一事务），不是再派一个 Planner。少了这条判定，宿主会在持有尚未结算的那一轮里
+     * 再派一次修订 Planner；那一次一旦会话丢失，旧派发结算判定与持有结算判定会互相锁死，整条链路
+     * 永久停在 `revision_pending`（真实运行 `orca-companion-e2e56` 实测）。
+     */
+    if (plannerDeliveryAfterHold(input.snapshot, hold) !== null) {
+      deny('revision-already-delivered');
+      continue;
+    }
+    const spent = consumed.find((entry) => entry.field === 'specificationRevisions')?.consumed ?? 0;
+    if (budgetFieldExhausted(workPackage.budget.specificationRevisions, spent)) {
+      deny(`budget-exhausted:${workPackageBudgetKey(hold.workPackageId, 'specificationRevisions')}`);
+      continue;
+    }
+    permits.push({
+      workPackageId: hold.workPackageId,
+      sourceRef: hold.sourceRef,
+      priorContractRevision: hold.priorContractRevision,
+    });
+  }
+  return { permits, denials };
+}
+
+/**
+ * 持有登记**之后**派发、且已经结算的 Planner 交付（没有则返回 `null`）。
+ *
+ * 「修订 Planner 已经交付」与「修订 Planner 还没派」是两件不同的事：前者要求结算持有（与重新准入
+ * 同事务），后者才要派发。判定按持有自己的 `createdAt` 划界——被替换版本的 Planner 派发一定早于持有
+ * （持有由随后的补丁登记），修订 Planner 一定晚于它——因此既不靠内容版本比较，也不靠时间戳猜历史。
+ *
+ * 只看已结算的交付：一次后发的、可能已经丢失会话（因而永远没有结算）的派发遮不掉先前那次。
+ *
+ * 宿主与派发门禁共用它：派发门禁据此拒绝重复派发，持有结算据此取接纳版本。
+ */
+export function plannerDeliveryAfterHold(
+  snapshot: CoordinationSnapshot,
+  hold: {
+    readonly workPackageId: WorkPackageId;
+    readonly createdAt: number;
+  },
+): CoordinationSnapshot['deliverySettlements'][number] | null {
+  let newest: {
+    readonly createdAt: number;
+    readonly settlement: CoordinationSnapshot['deliverySettlements'][number];
+  } | null = null;
+  for (const binding of snapshot.materializationBindings) {
+    if (
+      binding.workPackageId !== hold.workPackageId ||
+      binding.role !== 'planner' ||
+      binding.identity !== 'issued' ||
+      binding.createdAt <= hold.createdAt
+    ) {
+      continue;
+    }
+    const settlement = snapshot.deliverySettlements.find(
+      (candidate) => candidate.role === 'planner' && candidate.workerTaskId === binding.workerTaskId,
+    );
+    if (settlement === undefined) {
+      continue;
+    }
+    if (newest === null || binding.createdAt > newest.createdAt) {
+      newest = { createdAt: binding.createdAt, settlement };
+    }
+  }
+  return newest?.settlement ?? null;
+}
+
+/**
  * 实际已消耗额度：本代预算计数与 lineage 继承合并（继承由既有用例负责，不在这里重算）。
  *
  * 预算计数读不回来时返回 `null`：没有消耗事实就不能派发，否则「已经用完的额度」会被读成「还没用」。
+ * 执行驱动与宿主候选装配共用它，因此两侧看到的是同一份消耗事实。
  */
-function consumedBudgetOf(
+export function consumedBudgetForWorkPackage(
   store: BranchCoordinationStore,
   coordinationScopeId: CoordinationScopeId,
   workPackageId: WorkPackageId,
@@ -372,14 +543,18 @@ function intentsOf(
 /**
  * 授权只可能来自当前有效的 Execution Authorization。
  *
- * 三个指针必须同时成立：Scope 的授权引用、记录版本、以及授权绑定的图（GraphId、Generation 与
- * GraphVersion）。任一不一致都表示这份批准已经过期——图变了或换了一份授权——只能拒绝，不能拿它派发。
+ * 四个事实必须同时成立：Scope 的授权引用与记录版本一致、绑定的 GraphId 与 Generation 是当前图、
+ * 且绑定时刻的 GraphVersion **仍在当前图的追加链上**。
+ *
+ * 刻意**不要求**绑定版本等于当前版本：Manifest 绑定的是批准时刻的图，而图会随 accepted revision 前移
+ * （图补丁路径的同一规则见 `request-graph-patch.ts`）。要求两者相等会让「修订之后」的所有派发都不成立，
+ * 等于把每一次合法的图修订变成必须重新审批的死锁。
  */
 function dispatchAuthorization(input: {
   readonly scope: ScopeRecord;
   readonly authorization: ExecutionAuthorizationRecord;
   readonly graph: ExecutionGraph;
-  readonly graphVersion: GraphVersion;
+  readonly graphVersionChain: ReadonlySet<GraphVersion>;
 }): DispatchAuthorizationState {
   const { authorization } = input;
   const pointerId = input.scope.authorizationId;
@@ -398,13 +573,13 @@ function dispatchAuthorization(input: {
     authorization.authorizationVersion !== pointerVersion ||
     bound.graphId !== input.graph.graphId ||
     bound.generation !== input.graph.generation ||
-    bound.version !== input.graphVersion
+    !input.graphVersionChain.has(bound.version)
   ) {
     return {
       valid: false,
       authorizationId: authorization.authorizationId,
       authorizationVersion: authorization.authorizationVersion,
-      reason: `Execution Authorization ${authorization.authorizationId}#${String(authorization.authorizationVersion)} 绑定的图与当前 Graph Version 不一致`,
+      reason: `Execution Authorization ${authorization.authorizationId}#${String(authorization.authorizationVersion)} 绑定的图与当前 Graph Generation 或版本链不一致`,
     };
   }
   return { valid: true, authorizationId: pointerId, authorizationVersion: pointerVersion, reason: null };
@@ -502,6 +677,16 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
     );
   }
   const graph = graphRead.version.graph;
+  // 授权的版本判定需要追加链：绑定时刻的版本只要仍在链上就仍然有效（图会随 accepted revision 前移）。
+  const historyRead = input.store.query({
+    kind: 'graph-versions',
+    coordinationScopeId: input.coordinationScopeId,
+    graphId: graph.graphId,
+  });
+  if (historyRead.kind !== 'graph-versions') {
+    return blocked(input.coordinationScopeId, 'invalid_state', `无法读取 Graph ${graph.graphId} 的版本链`);
+  }
+  const authorizedVersions = graphVersionChain(historyRead.versions, graphRead.version);
 
   if (authorization === null) {
     return idle('Scope 尚无有效的 Execution Authorization，不能签发派发身份', ['authorization:missing']);
@@ -510,7 +695,7 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
     scope,
     authorization,
     graph,
-    graphVersion: scope.graphVersion,
+    graphVersionChain: authorizedVersions,
   });
   if (!authorizationFacts.valid) {
     return idle(authorizationFacts.reason ?? '当前 Graph Generation 没有有效的 Execution Authorization', [
@@ -551,18 +736,39 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
 
   let candidate: WorkPackageExecutionEntry | null = null;
   let role: WorkerRole | null = null;
+  let revisionPlannerPermit: RevisionPlannerPermit | null = null;
+  const revisionPlanner = revisionPlannerFacts({
+    graph,
+    snapshot,
+    observations: input.observations,
+    consumptionOf: (workPackageId) =>
+      consumedBudgetForWorkPackage(input.store, input.coordinationScopeId, workPackageId),
+  });
   for (const entry of derived.frontier) {
-    const next = nextRoleOf(entry);
+    const permit =
+      revisionPlanner.permits.find((candidatePermit) => candidatePermit.workPackageId === entry.workPackageId) ??
+      null;
+    const next = nextAdvanceRoleOf({
+      state: entry.state,
+      role: entry.role,
+      revisionPlanner: permit,
+    });
     if (next !== null) {
       candidate = entry;
       role = next;
+      revisionPlannerPermit = permit;
       break;
     }
   }
   if (candidate === null || role === null) {
     return idle(
       'Frontier 中没有可推进的候选：没有依赖已满足且后继角色尚未派发的 Work Package',
-      frontierBlockersOf(derived.frontier),
+      [
+        ...frontierBlockersOf(derived.frontier),
+        ...revisionPlanner.denials.map(
+          (denial) => `revision-planner:${denial.workPackageId}:${denial.reason}`,
+        ),
+      ],
     );
   }
 
@@ -592,7 +798,7 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
       `Graph Version ${String(scope.graphVersion)} 不含 Work Package ${candidate.workPackageId}`,
     );
   }
-  const consumed = consumedBudgetOf(input.store, input.coordinationScopeId, workPackage.workPackageId);
+  const consumed = consumedBudgetForWorkPackage(input.store, input.coordinationScopeId, workPackage.workPackageId);
   if (consumed === null) {
     return blocked(input.coordinationScopeId, 'invalid_state', '无法读取预算计数，不能在没有消耗事实的情况下派发');
   }
@@ -604,6 +810,7 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
     lifecycleStage: lifecycleStageOf(candidate.state),
     selectedCandidateId: workPackage.workPackageId,
     revisionPending: revisionPendingOf(graph, snapshot, derived.frontier),
+    revisionPlanner: revisionPlannerPermit,
     dependenciesSatisfied: dependenciesSatisfiedOf(graph, derived.frontier),
     controlState: scope.controlState,
     authorization: authorizationFacts,

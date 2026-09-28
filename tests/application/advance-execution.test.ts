@@ -25,7 +25,9 @@ import type {
 import type { ExecutionQueryResult, OperationOutcome } from '../../src/application/dto/operation-outcome.js';
 import {
   advanceExecution,
+  consumedBudgetForWorkPackage,
   materializeOperationIdsFor,
+  revisionPlannerFacts,
   type AdvanceExecutionInput,
   type AdvanceRoleDispatch,
 } from '../../src/application/execution/advance-execution.js';
@@ -280,6 +282,7 @@ function settle(harness: ExecutionScopeHarness, input: {
   readonly workerTaskId: string;
   readonly dispatchId: string;
   readonly attemptId: string;
+  readonly contractRevision: number;
 }): void {
   const recorded = harness.store.transact({
     kind: 'record-delivery-settlement',
@@ -294,7 +297,7 @@ function settle(harness: ExecutionScopeHarness, input: {
     dispatchId: input.dispatchId as DispatchId,
     attemptId: input.attemptId,
     role: input.role,
-    contractRevision: 0,
+    contractRevision: input.contractRevision,
     orcaResultRef: `${input.workerTaskId}#accepted`,
   });
   if (recorded.kind === 'rejected') {
@@ -302,12 +305,17 @@ function settle(harness: ExecutionScopeHarness, input: {
   }
 }
 
-function acceptPlannerResult(harness: ExecutionScopeHarness, dispatchId = 'dispatch-planner'): void {
+function acceptPlannerResult(
+  harness: ExecutionScopeHarness,
+  suffix = '',
+  contractRevision = 0,
+): void {
   settle(harness, {
     role: 'planner',
-    workerTaskId: 'orca-task-1',
-    dispatchId,
+    workerTaskId: `orca-task-1${suffix}`,
+    dispatchId: `dispatch-planner${suffix}`,
     attemptId: 'attempt-1',
+    contractRevision,
   });
 }
 
@@ -880,4 +888,364 @@ test('五个分步骤的 OperationId 由候选事实稳定派生，且未决 lan
   expect(retry.worktree).toBe(`${first.worktree}:retry:1`);
   expect(retry.task).toBe(first.task);
   expect(materializeOperationIdsFor({ ...base, unresolvedIntents: [pending], settledRejectedIntents: [rejected] }).workerStart).toBe(pending.operationId);
+});
+
+/* -------------------------------------------------------------------------- */
+/* 在途 Graph Patch 修订：持有不因旧 Worker 结算而释放，满足条件后才重跑 Planner   */
+/* -------------------------------------------------------------------------- */
+
+/** 一条与图版本同事务写下的补丁持有，再加上被替换的内容版本（准备阶段的事实）。 */
+function holdRevision(harness: ExecutionScopeHarness, priorContractRevision: number): void {
+  const recorded = harness.store.transact({
+    kind: 'record-revision-hold',
+    coordinationScopeId: harness.scopeId,
+    expectedRevision: harness.revision(),
+    writer: harness.writer,
+    workPackageId: WP,
+    source: 'graph_patch',
+    sourceRef: 'patch-1',
+  });
+  expect(recorded.kind).toBe('committed');
+  const prepared = harness.store.transact({
+    kind: 'prepare-revision-hold',
+    coordinationScopeId: harness.scopeId,
+    expectedRevision: harness.revision(),
+    writer: harness.writer,
+    workPackageId: WP,
+    sourceRef: 'patch-1',
+    priorContractRevision,
+  });
+  expect(prepared.kind).toBe('committed');
+}
+
+/** 一条已签发的 Planner 派发：物化绑定加它的 Orca Task 身份。 */
+function issuePlannerDispatch(
+  harness: ExecutionScopeHarness,
+  attemptId = 'attempt-1',
+  suffix = '',
+): void {
+  const recorded = harness.store.transact({
+    kind: 'record-materialization-binding',
+    coordinationScopeId: harness.scopeId,
+    expectedRevision: harness.revision(),
+    writer: harness.writer,
+    workPackageId: WP,
+    role: 'planner',
+    workerTaskId: `orca-task-1${suffix}` as WorkerTaskId,
+    dispatchId: `dispatch-planner${suffix}` as DispatchId,
+    attemptId,
+    worktreeId: 'worktree-1',
+    // Planner 首次创建规格：绑定不带 Spec Binding，只记固定目标路径。
+    specBinding: null,
+    specificationUnitPath: 'openspec/changes/wp-a',
+    orcaTaskId: `orca-task-1${suffix}`,
+    launchId: `worker-launch-1${suffix}`,
+    creationOperationId: `op-task-1${suffix}` as OperationId,
+  });
+  expect(recorded.kind).toBe('committed');
+}
+
+function deniedRevisionPlanner(blockers: readonly string[]): string | null {
+  return blockers.find((blocker) => blocker.startsWith('revision-planner:wp-a:')) ?? null;
+}
+
+test('在途修订的旧派发尚未结算时不重跑 Planner，也不触碰 Orca', async () => {
+  const harness = scenario({ workPackages: [executionWorkPackage('wp-a')] });
+  issuePlannerDispatch(harness);
+  holdRevision(harness, 1);
+  const execution = fakeBackend({});
+
+  const result = await advanceExecution({
+    ...advanceInput(harness, { roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-2' }) } }),
+    backend: execution.backend,
+  });
+
+  expect(result.kind).toBe('idle');
+  if (result.kind === 'idle') {
+    expect(result.blockers).toContain('revision-planner:wp-a:dispatch-unsettled:orca-task-1');
+  }
+  expect(execution.calls).toHaveLength(0);
+});
+
+test('旧派发有可核验结算后，在途修订节点重跑一次 Specification Planner', async () => {
+  const harness = scenario({ workPackages: [executionWorkPackage('wp-a')] });
+  // 真实顺序：先有被替换版本的 Planner 派发，补丁随后登记持有；结算是之后才到的。
+  issuePlannerDispatch(harness);
+  holdRevision(harness, 1);
+  acceptPlannerResult(harness);
+  // 修订复用原 Work Package 的隔离 worktree：它已经存在，因此不应再建立第二个。
+  const execution = fakeBackend({
+    worktrees: [
+      {
+        worktreeId: 'worktree-1',
+        path: '/tmp/worktrees/wp-a',
+        branch: 'refs/heads/wp-a',
+        head: BASELINE_HEAD,
+        displayName: worktreeNameFor(WP),
+        comment: workPackageComment(WP),
+        isMainWorktree: false,
+      },
+    ],
+  });
+
+  const result = await advanceExecution({
+    ...advanceInput(harness, {
+      roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-2' }) },
+      observations: plannerExited(),
+    }),
+    backend: execution.backend,
+  });
+
+  expect(result.kind).toBe('progressed');
+  if (result.kind === 'progressed') {
+    expect(result.role).toBe('planner');
+  }
+  const mutations = mutationsOf(execution.calls).map((mutation) => mutation.operation);
+  expect(mutations).toContain('task-create');
+  // 修订 Planner 复用原 Work Package：worktree 已经存在时不重建。
+  expect(mutations).not.toContain('worktree-create');
+});
+
+test('修订 Planner 已经交付后不再派发第二次：缺的是持有结算，不是再派一个 Planner', async () => {
+  const harness = scenario({ workPackages: [executionWorkPackage('wp-a')] });
+  // 被替换版本的 Planner 派发与它的结算：都发生在持有登记之前。
+  issuePlannerDispatch(harness);
+  holdRevision(harness, 1);
+  acceptPlannerResult(harness);
+  // 修订 Planner：持有登记之后的派发，并且已经交付。
+  issuePlannerDispatch(harness, 'attempt-2', '-revision');
+  acceptPlannerResult(harness, '-revision', 2);
+  const execution = fakeBackend({});
+
+  const result = await advanceExecution({
+    ...advanceInput(harness, {
+      roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-3' }) },
+      observations: {
+        workersEnumerated: true,
+        workers: [
+          { dispatchId: 'dispatch-planner', taskId: 'orca-task-1', workerState: 'succeeded', terminalState: null },
+          {
+            dispatchId: 'dispatch-planner-revision',
+            taskId: 'orca-task-1-revision',
+            workerState: 'succeeded',
+            terminalState: null,
+          },
+        ],
+        worktreePaths: new Map(),
+        unavailableReasons: [],
+        finalizer: null,
+      },
+    }),
+    backend: execution.backend,
+  });
+
+  expect(result.kind).toBe('idle');
+  if (result.kind === 'idle') {
+    expect(deniedRevisionPlanner(result.blockers)).toBe('revision-planner:wp-a:revision-already-delivered');
+  }
+  // 再派一次会让持有结算与旧派发结算判定互相锁死（真实运行 `orca-companion-e2e56`），因此这里必须不碰 Orca。
+  expect(execution.calls).toHaveLength(0);
+});
+
+test('旧 Worker 存活不可核验时不重跑 Planner：读取不到确定退出就不算结清', async () => {
+  const harness = scenario({ workPackages: [executionWorkPackage('wp-a')] });
+  issuePlannerDispatch(harness);
+  holdRevision(harness, 1);
+  acceptPlannerResult(harness);
+  const execution = fakeBackend({});
+
+  const result = await advanceExecution({
+    ...advanceInput(harness, {
+      roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-2' }) },
+      observations: {
+        workersEnumerated: true,
+        workers: [{ dispatchId: 'dispatch-planner', taskId: 'orca-task-1', workerState: 'unknown-state', terminalState: null }],
+        worktreePaths: new Map(),
+        unavailableReasons: [],
+        finalizer: null,
+      },
+    }),
+    backend: execution.backend,
+  });
+
+  expect(result.kind).toBe('idle');
+  if (result.kind === 'idle') {
+    expect(deniedRevisionPlanner(result.blockers)).toBe('revision-planner:wp-a:worker-not-exited:dispatch-planner');
+  }
+  expect(execution.calls).toHaveLength(0);
+});
+
+/**
+ * 真实地消耗一次修订额度：置入持有 → 准备旧版本 → 按重新准入结算。
+ *
+ * 额度只能由「接受并计一次修订」的那一个事务推进，因此这里不发明计数命令——测试走的就是产品路径。
+ */
+function consumeRevisionBudget(harness: ExecutionScopeHarness, times: number): void {
+  for (let index = 0; index < times; index += 1) {
+    const registered = harness.store.transact({
+      kind: 'record-revision-hold',
+      coordinationScopeId: harness.scopeId,
+      expectedRevision: harness.revision(),
+      writer: harness.writer,
+      workPackageId: WP,
+      source: 'graph_patch',
+      sourceRef: 'patch-1',
+    });
+    expect(registered.kind).toBe('committed');
+    const prepared = harness.store.transact({
+      kind: 'prepare-revision-hold',
+      coordinationScopeId: harness.scopeId,
+      expectedRevision: harness.revision(),
+      writer: harness.writer,
+      workPackageId: WP,
+      sourceRef: 'patch-1',
+      priorContractRevision: 0,
+    });
+    expect(prepared.kind).toBe('committed');
+    const released = harness.store.transact({
+      kind: 'release-revision-hold',
+      coordinationScopeId: harness.scopeId,
+      expectedRevision: harness.revision(),
+      writer: harness.writer,
+      workPackageId: WP,
+      reason: '消耗一次修订额度',
+      expectedSourceRef: 'patch-1',
+      admittedContractRevision: 1,
+      budgetConsumption: [
+        {
+          budgetKey: 'work-package:wp-a:specificationRevisions',
+          approvedLimitRef: EXECUTION_AUTHORIZATION_ID,
+          amount: 1,
+        },
+      ],
+      approvedLimit: 2,
+    });
+    expect(released.kind).toBe('committed');
+  }
+}
+
+test('修订额度耗尽时不重跑 Planner，拒绝原因带确切计数键', async () => {
+  const harness = scenario({ workPackages: [executionWorkPackage('wp-a')] });
+  consumeRevisionBudget(harness, 2);
+  issuePlannerDispatch(harness);
+  holdRevision(harness, 1);
+  acceptPlannerResult(harness);
+  const execution = fakeBackend({});
+
+  const result = await advanceExecution({
+    ...advanceInput(harness, {
+      roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-2' }) },
+      observations: plannerExited(),
+    }),
+    backend: execution.backend,
+  });
+
+  expect(result.kind).toBe('idle');
+  if (result.kind === 'idle') {
+    expect(deniedRevisionPlanner(result.blockers)).toBe(
+      'revision-planner:wp-a:budget-exhausted:work-package:wp-a:specificationRevisions',
+    );
+  }
+  expect(execution.calls).toHaveLength(0);
+});
+
+test('修订 Planner 许可携带持有已记录的旧内容版本，且只对当前图内的补丁持有成立', () => {
+  const harness = scenario({ workPackages: [executionWorkPackage('wp-a')] });
+  // 真实顺序：被替换版本的 Planner 派发先于补丁，因此也先于持有登记。
+  issuePlannerDispatch(harness);
+  acceptPlannerResult(harness);
+  const registered = harness.store.transact({
+    kind: 'record-revision-hold',
+    coordinationScopeId: harness.scopeId,
+    expectedRevision: harness.revision(),
+    writer: harness.writer,
+    workPackageId: WP,
+    source: 'graph_patch',
+    sourceRef: 'patch-1',
+  });
+  expect(registered.kind).toBe('committed');
+  const permitFacts = () => {
+    const snapshot = harness.store.query({ kind: 'snapshot', coordinationScopeId: harness.scopeId });
+    if (snapshot.kind !== 'snapshot') {
+      throw new Error('无法读取快照');
+    }
+    return revisionPlannerFacts({
+      graph: harness.currentGraph().graph,
+      snapshot: snapshot.snapshot,
+      observations: plannerExited(),
+      consumptionOf: (workPackageId) =>
+        consumedBudgetForWorkPackage(harness.store, harness.scopeId, workPackageId),
+    });
+  };
+
+  // 准备之前：许可已经成立（旧派发已结清），但持有还没有记下被替换的内容版本。
+  expect(permitFacts().permits).toEqual([
+    expect.objectContaining({ workPackageId: WP, sourceRef: 'patch-1', priorContractRevision: null }),
+  ]);
+
+  holdRevision(harness, 3);
+  expect(permitFacts().permits).toEqual([
+    expect.objectContaining({ workPackageId: WP, sourceRef: 'patch-1', priorContractRevision: 3 }),
+  ]);
+  // 来源不是图补丁的持有不产生许可：它不属于这条续办路径。
+  const specificationHold = harness.store.transact({
+    kind: 'record-revision-hold',
+    coordinationScopeId: harness.scopeId,
+    expectedRevision: harness.revision(),
+    writer: harness.writer,
+    workPackageId: WP,
+    source: 'specification_revision',
+    sourceRef: 'revision-9',
+  });
+  expect(specificationHold.kind).toBe('committed');
+  expect(permitFacts().permits).toEqual([]);
+});
+
+test('接受图修订后，审批时刻的 GraphVersion 仍在追加链上，角色派发继续', async () => {
+  const harness = scenario({ workPackages: [executionWorkPackage('wp-a')] });
+  // 与真实链路一致：一份 accepted revision 把当前图推到 v2，而 Execution Authorization 仍绑定 v1
+  // （批准的是批准时刻的图）。绑定时刻的版本还在追加链上，因此派发必须继续，而不是要求重新审批。
+  const revised = harness.store.transact({
+    kind: 'record-graph-version',
+    coordinationScopeId: harness.scopeId,
+    expectedRevision: harness.revision(),
+    writer: harness.writer,
+    graphId: harness.graphId,
+    generation: harness.generation,
+    graphVersion: 2 as never,
+    recordKind: 'accepted_revision',
+    parentVersion: 1 as never,
+    mapRevision: 2,
+    planRevision: 3,
+    orcaRunId: 'run-1',
+    graph: harness.currentGraph().graph,
+    patch: {
+      patchId: 'patch-1',
+      operationId: 'op-patch-1' as OperationId,
+      baseGraphVersion: 1 as never,
+      added: [],
+      revised: [],
+      retired: [],
+      descendants: [],
+      takesOver: [],
+      revisionPendingWorkPackageIds: [],
+    },
+  });
+  expect(revised.kind).toBe('committed');
+  const scope = harness.store.query({ kind: 'scope', coordinationScopeId: harness.scopeId });
+  expect(scope.kind === 'scope' ? (scope.scope?.graphVersion ?? null) : null).toBe(2);
+
+  const execution = fakeBackend({});
+  const result = await advanceExecution({
+    ...advanceInput(harness, { roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-1' }) } }),
+    backend: execution.backend,
+  });
+
+  expect(result.kind).toBe('progressed');
+  if (result.kind === 'progressed') {
+    expect(result.role).toBe('planner');
+  }
+  expect(mutationsOf(execution.calls)).toContainEqual(
+    expect.objectContaining({ operation: 'task-create' }),
+  );
 });

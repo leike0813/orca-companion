@@ -37,6 +37,7 @@ function candidate(): DispatchCandidateFacts {
     lifecycleStage: 'frontier',
     selectedCandidateId: WP,
     revisionPending: [],
+    revisionPlanner: null,
     dependenciesSatisfied: [WP],
     controlState: 'active',
     authorization: { valid: true, authorizationId: 'auth-1', authorizationVersion: 1, reason: null },

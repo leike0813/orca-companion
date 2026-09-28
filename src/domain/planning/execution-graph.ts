@@ -93,6 +93,27 @@ export function workPackageOf(graph: ExecutionGraph, workPackageId: WorkPackageI
   return graph.workPackages.find((workPackage) => workPackage.workPackageId === workPackageId) ?? null;
 }
 
+/**
+ * 当前图版本的追加链：从当前版本沿 `parentVersion` 回溯到初始版本。
+ *
+ * 授权与候选图都用它回答同一个问题——「某个 GraphVersion 是否仍是当前图的一部分」。图会随 accepted
+ * revision 前移（提交路径把新版本挂成当前 head 的子节点），因此**绑定时刻的版本只要还在链上就仍然有效**；
+ * 指向未来版本、其它图的版本或已被换掉的版本不在链上，一律不成立。
+ */
+export function graphVersionChain(
+  versions: readonly GraphVersionRecord[],
+  current: GraphVersionRecord,
+): ReadonlySet<GraphVersion> {
+  const byVersion = new Map(versions.map((version) => [version.version, version] as const));
+  const chain = new Set<GraphVersion>();
+  let cursor: GraphVersion | null = current.version;
+  while (cursor !== null && !chain.has(cursor)) {
+    chain.add(cursor);
+    cursor = byVersion.get(cursor)?.parentVersion ?? null;
+  }
+  return chain;
+}
+
 export function isGraphVersionRecordKind(raw: unknown): raw is GraphVersionRecordKind {
   return typeof raw === 'string' && (GRAPH_VERSION_RECORD_KINDS as readonly string[]).includes(raw);
 }

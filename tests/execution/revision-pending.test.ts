@@ -107,6 +107,7 @@ function facts(overrides: Partial<DispatchCandidateFacts> = {}): DispatchCandida
     lifecycleStage: 'frontier',
     selectedCandidateId: WP_B,
     revisionPending: [],
+    revisionPlanner: null,
     dependenciesSatisfied: [WP_B],
     controlState: 'active',
     authorization: { valid: true, authorizationId: 'auth-1', authorizationVersion: 1, reason: null },

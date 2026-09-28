@@ -242,8 +242,12 @@ test('开始修订时置入有界持有，并给出从 Specification Planner 起
     store: harness.store,
     coordinationScopeId: harness.scopeId,
     writer: harness.writer,
-    plan: decision.plan,
-    revisionId: 'revision-1',
+    request: {
+      kind: 'planned_content_revision',
+      plan: decision.plan,
+      revisionId: 'revision-1',
+      priorContractRevision: 1,
+    },
     manifest: harness.authorization().manifest,
     consumption: [],
     baseline: { requiredBaselineHead: 'head-1', worktreeBaseHead: 'head-1', relation: 'equal' },
@@ -277,8 +281,12 @@ test('额度耗尽时阻塞修订', () => {
     store: harness.store,
     coordinationScopeId: harness.scopeId,
     writer: harness.writer,
-    plan: decision.plan,
-    revisionId: 'revision-1',
+    request: {
+      kind: 'planned_content_revision',
+      plan: decision.plan,
+      revisionId: 'revision-1',
+      priorContractRevision: 1,
+    },
     manifest: harness.authorization().manifest,
     consumption: [{ workPackageId: WP_B, field: 'specificationRevisions', consumed: 2 }],
     baseline: null,
@@ -304,8 +312,12 @@ test('基线落后时先建立独立的 Baseline Reconciliation 任务', () => {
     store: harness.store,
     coordinationScopeId: harness.scopeId,
     writer: harness.writer,
-    plan: decision.plan,
-    revisionId: 'revision-1',
+    request: {
+      kind: 'planned_content_revision',
+      plan: decision.plan,
+      revisionId: 'revision-1',
+      priorContractRevision: 1,
+    },
     manifest: harness.authorization().manifest,
     consumption: [],
     baseline: { requiredBaselineHead: 'base-2', worktreeBaseHead: 'head-1', relation: 'behind' },
@@ -342,8 +354,12 @@ test('重新准入通过才消耗额度并解除持有；同一次收尾重放�
     store: harness.store,
     coordinationScopeId: harness.scopeId,
     writer: harness.writer,
-    plan: decision.plan,
-    revisionId: 'revision-1',
+    request: {
+      kind: 'planned_content_revision',
+      plan: decision.plan,
+      revisionId: 'revision-1',
+      priorContractRevision: 1,
+    },
     manifest: harness.authorization().manifest,
     consumption: [],
     baseline: null,
@@ -354,9 +370,11 @@ test('重新准入通过才消耗额度并解除持有；同一次收尾重放�
     store: harness.store,
     coordinationScopeId: harness.scopeId,
     writer: harness.writer,
-    plan: decision.plan,
-    revisionId: 'revision-1',
+    workPackageId: decision.plan.workPackageId,
+    sourceRef: 'revision-1',
+    admittedContractRevision: decision.plan.contractRevision,
     authorizationId: EXECUTION_AUTHORIZATION_ID,
+    approvedLimit: harness.authorization().manifest.limits.specificationRevisions,
     admission: { kind: 'admitted' },
   });
   expect(settled.kind).toBe('accepted');
@@ -377,9 +395,11 @@ test('重新准入通过才消耗额度并解除持有；同一次收尾重放�
     store: harness.store,
     coordinationScopeId: harness.scopeId,
     writer: harness.writer,
-    plan: decision.plan,
-    revisionId: 'revision-1',
+    workPackageId: decision.plan.workPackageId,
+    sourceRef: 'revision-1',
+    admittedContractRevision: decision.plan.contractRevision,
     authorizationId: EXECUTION_AUTHORIZATION_ID,
+    approvedLimit: harness.authorization().manifest.limits.specificationRevisions,
     admission: { kind: 'admitted' },
   });
   expect(replay.kind).toBe('accepted');
@@ -406,8 +426,12 @@ test('准入未通过时持有保持 pending 且不消耗额度', () => {
     store: harness.store,
     coordinationScopeId: harness.scopeId,
     writer: harness.writer,
-    plan: decision.plan,
-    revisionId: 'revision-1',
+    request: {
+      kind: 'planned_content_revision',
+      plan: decision.plan,
+      revisionId: 'revision-1',
+      priorContractRevision: 1,
+    },
     manifest: harness.authorization().manifest,
     consumption: [],
     baseline: null,
@@ -416,9 +440,11 @@ test('准入未通过时持有保持 pending 且不消耗额度', () => {
     store: harness.store,
     coordinationScopeId: harness.scopeId,
     writer: harness.writer,
-    plan: decision.plan,
-    revisionId: 'revision-1',
+    workPackageId: decision.plan.workPackageId,
+    sourceRef: 'revision-1',
+    admittedContractRevision: decision.plan.contractRevision,
     authorizationId: EXECUTION_AUTHORIZATION_ID,
+    approvedLimit: harness.authorization().manifest.limits.specificationRevisions,
     admission: { kind: 'rejected', message: 'scope envelope 越界' },
   });
   expect(settled.kind).toBe('kept_pending');
@@ -443,8 +469,12 @@ test('收尾必须匹配持有来源：另一次修订的收尾不能释放别�
     store: harness.store,
     coordinationScopeId: harness.scopeId,
     writer: harness.writer,
-    plan: decision.plan,
-    revisionId: 'revision-1',
+    request: {
+      kind: 'planned_content_revision',
+      plan: decision.plan,
+      revisionId: 'revision-1',
+      priorContractRevision: 1,
+    },
     manifest: harness.authorization().manifest,
     consumption: [],
     baseline: null,
@@ -454,9 +484,11 @@ test('收尾必须匹配持有来源：另一次修订的收尾不能释放别�
     store: harness.store,
     coordinationScopeId: harness.scopeId,
     writer: harness.writer,
-    plan: decision.plan,
-    revisionId: 'revision-2',
+    workPackageId: decision.plan.workPackageId,
+    sourceRef: 'revision-2',
+    admittedContractRevision: decision.plan.contractRevision,
     authorizationId: EXECUTION_AUTHORIZATION_ID,
+    approvedLimit: harness.authorization().manifest.limits.specificationRevisions,
     admission: { kind: 'admitted' },
   });
   expect(mismatched.kind).toBe('rejected');
@@ -482,8 +514,12 @@ test('重启后额度从已消耗值继续计数', () => {
     store: harness.store,
     coordinationScopeId: harness.scopeId,
     writer: harness.writer,
-    plan: decision.plan,
-    revisionId: 'revision-2',
+    request: {
+      kind: 'planned_content_revision',
+      plan: decision.plan,
+      revisionId: 'revision-2',
+      priorContractRevision: 2,
+    },
     manifest: harness.authorization().manifest,
     consumption,
     baseline: null,
@@ -530,4 +566,153 @@ test('退休结算：节点已退场即释放持有，仍在图里则保持 pend
   // 节点已退场：退休已生效，释放持有（兜底修复历史遗留行，不消耗修订额度）。
   expect(settle([WP_B]).kind).toBe('released');
   expect(holds()).toEqual([expect.objectContaining({ workPackageId: WP_A, state: 'released' })]);
+});
+
+/* -------------------------------------------------------------------------- */
+/* 在途 Graph Patch 修订：续办、准备旧内容版本与按补丁身份结算                    */
+/* -------------------------------------------------------------------------- */
+
+/** 一条与图版本同事务写下的补丁持有：续办路径的对象。 */
+function recordPatchHold(sourceRef = 'patch-1'): void {
+  const recorded = harness.store.transact({
+    kind: 'record-revision-hold',
+    coordinationScopeId: harness.scopeId,
+    expectedRevision: harness.revision(),
+    writer: harness.writer,
+    workPackageId: WP_B,
+    source: 'graph_patch',
+    sourceRef,
+  });
+  expect(recorded.kind).toBe('committed');
+}
+
+function beginInFlight(sourceRef = 'patch-1', priorContractRevision: number | null = 2) {
+  return beginSpecificationRevision({
+    store: harness.store,
+    coordinationScopeId: harness.scopeId,
+    writer: harness.writer,
+    request: {
+      kind: 'in_flight_graph_patch',
+      workPackageId: WP_B,
+      sourceRef,
+      priorContractRevision,
+    },
+    manifest: harness.authorization().manifest,
+    consumption: [],
+    baseline: null,
+  });
+}
+
+function pendingHold() {
+  const holds = harness.store.query({ kind: 'revision-holds', coordinationScopeId: harness.scopeId });
+  return holds.kind === 'revision-holds' ? holds.holds[0] : undefined;
+}
+
+test('在途补丁修订：准备被替换的内容版本，持有保持 pending 且额度不变', () => {
+  recordPatchHold();
+  const begun = beginInFlight();
+
+  expect(begun.kind).toBe('started');
+  if (begun.kind !== 'started') {
+    return;
+  }
+  expect(begun.taskPlan.role).toBe('planner');
+  expect(begun.taskPlan.revisionId).toBe('patch-1');
+  expect(begun.taskPlan.priorContractRevision).toBe(2);
+  expect(begun.allowance.remaining).toBe(2);
+  // 准备不是结算：持有仍冻结该节点，额度也还没有被消耗。
+  expect(pendingHold()).toMatchObject({
+    source: 'graph_patch',
+    sourceRef: 'patch-1',
+    state: 'pending',
+    priorContractRevision: 2,
+    admittedContractRevision: null,
+  });
+  const counters = harness.store.query({ kind: 'budget-counters', coordinationScopeId: harness.scopeId });
+  expect(counters.kind === 'budget-counters' ? counters.counters : null).toEqual([]);
+});
+
+test('在途分支只认匹配的补丁持有：没有持有或来源不符都阻塞', () => {
+  const absent = beginInFlight();
+  expect(absent.kind === 'rejected' ? absent.code : null).toBe('revision_hold_absent');
+
+  recordPatchHold('patch-1');
+  const mismatched = beginInFlight('patch-2');
+  expect(mismatched.kind === 'rejected' ? mismatched.code : null).toBe('revision_hold_mismatch');
+  expect(pendingHold()?.priorContractRevision).toBeNull();
+});
+
+test('已准备的旧内容版本是 durable 事实：重新读到的值不同即阻塞，相同则幂等', () => {
+  recordPatchHold();
+  expect(beginInFlight('patch-1', 2).kind).toBe('started');
+
+  const drifted = beginInFlight('patch-1', 5);
+  expect(drifted.kind === 'rejected' ? drifted.code : null).toBe('revision_prior_conflict');
+  expect(pendingHold()?.priorContractRevision).toBe(2);
+
+  const replay = beginInFlight('patch-1', 2);
+  expect(replay.kind).toBe('started');
+  if (replay.kind === 'started') {
+    // 重放读回记录里的同一个值，而不是调用方给的那一份。
+    expect(replay.taskPlan.priorContractRevision).toBe(2);
+  }
+});
+
+test('在途修订的结算按补丁身份释放持有、记录接纳版本并恰计一次额度', () => {
+  recordPatchHold();
+  expect(beginInFlight('patch-1', 2).kind).toBe('started');
+  const settle = (sourceRef: string, admittedContractRevision: number) =>
+    settleSpecificationRevision({
+      store: harness.store,
+      coordinationScopeId: harness.scopeId,
+      writer: harness.writer,
+      workPackageId: WP_B,
+      sourceRef,
+      admittedContractRevision,
+      authorizationId: EXECUTION_AUTHORIZATION_ID,
+      approvedLimit: harness.authorization().manifest.limits.specificationRevisions,
+      admission: { kind: 'admitted' },
+    });
+
+  const settled = settle('patch-1', 3);
+  expect(settled.kind).toBe('accepted');
+  expect(pendingHold()).toMatchObject({
+    state: 'released',
+    priorContractRevision: 2,
+    admittedContractRevision: 3,
+  });
+  const consumed = () => {
+    const counters = harness.store.query({ kind: 'budget-counters', coordinationScopeId: harness.scopeId });
+    return counters.kind === 'budget-counters'
+      ? counters.counters.find((counter) => counter.budgetKey.endsWith(':specificationRevisions'))?.consumed
+      : undefined;
+  };
+  expect(consumed()).toBe(1);
+
+  // 重放同一次重新准入：幂等，额度不再增加。
+  expect(settle('patch-1', 3).kind).toBe('accepted');
+  expect(consumed()).toBe(1);
+  // 另一次修订的收尾不能释放本次持有，也不能改写接纳版本。
+  expect(settle('patch-2', 4).kind).toBe('rejected');
+  expect(pendingHold()?.admittedContractRevision).toBe(3);
+});
+
+test('在途修订的准入未通过时持有保持 pending 且零写入', () => {
+  recordPatchHold();
+  expect(beginInFlight('patch-1', 2).kind).toBe('started');
+  const kept = settleSpecificationRevision({
+    store: harness.store,
+    coordinationScopeId: harness.scopeId,
+    writer: harness.writer,
+    workPackageId: WP_B,
+    sourceRef: 'patch-1',
+    admittedContractRevision: 3,
+    authorizationId: EXECUTION_AUTHORIZATION_ID,
+    approvedLimit: harness.authorization().manifest.limits.specificationRevisions,
+    admission: { kind: 'rejected', message: 'scope envelope 越界' },
+  });
+  expect(kept.kind).toBe('kept_pending');
+  expect(pendingHold()).toMatchObject({ state: 'pending', admittedContractRevision: null });
+  const counters = harness.store.query({ kind: 'budget-counters', coordinationScopeId: harness.scopeId });
+  expect(counters.kind === 'budget-counters' ? counters.counters : null).toEqual([]);
 });

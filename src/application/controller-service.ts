@@ -36,11 +36,12 @@ import type {
   ReplanningClosureMode,
   SettlementFacts,
 } from '../domain/execution/replanning.js';
-import type { GraphVersionRecord } from '../domain/planning/execution-graph.js';
+import { graphVersionChain, type GraphVersionRecord } from '../domain/planning/execution-graph.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
   EntityRef,
+  GraphVersion,
   InteractionId,
   Revision,
 } from './dto/identity.js';
@@ -966,10 +967,15 @@ function projectGraphTopology(
     })),
     readiness: {
       generationStatus: generation?.status ?? null,
+      // 与派发门禁同一条规则（`advance-execution.ts`）：批准时刻绑定的版本仍在当前图的追加链上即为仍然
+      // 有效。要求与当前版本严格相等会让每次 accepted revision 之后的界面都报 `auth=unbound`，而派发
+      // 其实照常进行。
       authorizationBound:
         facts.authorizationGraphRef !== null &&
         facts.authorizationGraphRef.graphId === version.graphId &&
-        facts.authorizationGraphRef.graphVersion === version.version,
+        graphVersionChain(facts.graphVersions, version).has(
+          facts.authorizationGraphRef.graphVersion as GraphVersion,
+        ),
     },
   };
 }

@@ -47,9 +47,9 @@ import type {
   ExecutionScope,
   WorktreeSummary,
 } from '../../src/application/ports/execution-backend.js';
-import type { WorkPackageBudgetField } from '../../src/domain/dispatch-candidate.js';
+import type { RevisionPlannerPermit, WorkPackageBudgetField } from '../../src/domain/dispatch-candidate.js';
 import { DEFAULT_EXECUTION_LIMITS, budgetFromLimits } from '../../src/domain/planning/budget-policy.js';
-import type { RoleAuthorities } from '../../src/domain/planning/execution-authorization.js';
+import type { RoleAuthorities, WorkerRole } from '../../src/domain/planning/execution-authorization.js';
 import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
 import { orcaDispatchIdFromReceipt, orcaTaskIdFromReceipt } from '../../src/application/ports/execution-backend.js';
 
@@ -219,6 +219,9 @@ function revision(): number {
 }
 
 type MaterializeOverrides = {
+  readonly role?: WorkerRole;
+  readonly revisionPending?: readonly WorkPackageId[];
+  readonly revisionPlanner?: RevisionPlannerPermit | null;
   readonly authorizationValid?: boolean;
   readonly consumed?: readonly { readonly field: WorkPackageBudgetField; readonly consumed: number }[];
   readonly lifecycleStage?: 'pending' | 'frontier';
@@ -234,12 +237,13 @@ function context(
     agent: 'codex',
     model: 'minimax-cn/MiniMax-M3',
   },
+  role: WorkerRole = 'implementation',
 ): MaterializeWorkPackageContext {
   return {
     candidate: {
       coordinationScopeId: SCOPE,
       writer,
-      role: 'implementation',
+      role,
       graphGeneration: 1,
       authorizationId: 'auth-1',
       runId: 'run-1',
@@ -251,7 +255,7 @@ function context(
         workerTaskId: 'worker-task-1' as never,
         dispatchId: 'dispatch-candidate-1' as never,
         attemptId: 'attempt-1',
-        role: 'implementation',
+        role,
         taskContract: {
           schemaVersion: 1,
           workPackageId: WP,
@@ -265,14 +269,19 @@ function context(
           resultSchemaVersion: 1,
         },
         instructions: [],
-        specBinding: {
-          provider: 'openspec',
-          relativePath: 'openspec/changes/wp-1',
-          contentDigest: 'digest-1',
-          providerVersion: '1',
-          contractRevision: 1,
-          trackingRevision: 1,
-        },
+        // Planner 首次创建规格：Spec Binding 由它自己的 Admission 产出，因此这里是空绑定加固定路径。
+        ...(role === 'planner'
+          ? { specBinding: null, specificationUnitPath: 'openspec/changes/wp-1' }
+          : {
+              specBinding: {
+                provider: 'openspec',
+                relativePath: 'openspec/changes/wp-1',
+                contentDigest: 'digest-1',
+                providerVersion: '1',
+                contractRevision: 1,
+                trackingRevision: 1,
+              },
+            }),
         workspace: {
           worktreeId: 'pending-worktree',
           canonicalWorktree: '/work/repo',
@@ -307,10 +316,11 @@ function context(
 function facts(overrides: MaterializeOverrides = {}) {
   return {
     candidateWorkPackageId: WP,
-    candidateRole: 'implementation' as const,
+    candidateRole: overrides.role ?? ('implementation' as const),
     lifecycleStage: overrides.lifecycleStage ?? ('frontier' as const),
     selectedCandidateId: overrides.selectedCandidateId === undefined ? WP : overrides.selectedCandidateId,
-    revisionPending: [],
+    revisionPending: overrides.revisionPending ?? [],
+    revisionPlanner: overrides.revisionPlanner ?? null,
     dependenciesSatisfied: overrides.dependenciesSatisfied ?? [WP],
     controlState: overrides.controlState ?? 'active',
     authorization: {
@@ -1055,4 +1065,56 @@ test('worker-start 结果未知且 Orca 列举里没有该 Task：保持 lane �
   });
 
   expect(result.kind).toBe('unknown');
+});
+
+test('修订节点只在带匹配补丁许可时以 planner 角色物化，且复用原 worktree', async () => {
+  const { backend, calls } = fakeBackend({ worktrees: [isolatedWorktree()] });
+  const permit: RevisionPlannerPermit = { workPackageId: WP, sourceRef: 'patch-1', priorContractRevision: 1 };
+
+  // 带匹配许可：在途修订节点可以续办一次 Specification Planner，日志里不出现 worktree-create。
+  const permitted = await materializeWorkPackage({
+    store,
+    backend,
+    coordinationScopeId: SCOPE,
+    workPackageId: WP,
+    context: context('revision', undefined, 'planner'),
+    facts: facts({ role: 'planner', revisionPending: [WP], revisionPlanner: permit }),
+    expectedRevision: revision(),
+  });
+  expect(permitted.kind).toBe('materialized');
+  if (permitted.kind !== 'materialized') {
+    return;
+  }
+  expect(permitted.worktreeReused).toBe(true);
+  const task = calls.find(
+    (call) => call.kind === 'mutate' && call.operation.operation === 'task-create',
+  );
+  expect(
+    task?.kind === 'mutate' && task.operation.operation === 'task-create'
+      ? (JSON.parse(task.operation.spec) as { readonly role?: string }).role
+      : null,
+  ).toBe('planner');
+
+  // 许可指向别的节点时仍然被持有挡住：来源不匹配的许可不放开任何派发。
+  const mismatched = await materializeWorkPackage({
+    store,
+    backend,
+    coordinationScopeId: SCOPE,
+    workPackageId: WP,
+    context: context('foreign', undefined, 'planner'),
+    facts: facts({
+      role: 'planner',
+      revisionPending: [WP],
+      revisionPlanner: {
+        workPackageId: 'wp-other' as WorkPackageId,
+        sourceRef: 'patch-1',
+        priorContractRevision: 1,
+      },
+    }),
+    expectedRevision: revision(),
+  });
+  expect(mismatched.kind).toBe('rejected');
+  if (mismatched.kind === 'rejected') {
+    expect(mismatched.failure.code).toBe('revision_pending');
+  }
 });

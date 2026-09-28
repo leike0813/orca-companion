@@ -1,5 +1,13 @@
 # 图修订落在在途节点上时，`revision_pending` 永不释放
 
+> **状态（2026-09-28）**：本记录描述的缺口已由 change `m2-settle-in-flight-graph-revision` 收口，规格增量在
+> `openspec/changes/m2-settle-in-flight-graph-revision/specs/execution/specification-revision/spec.md`。
+> 本文其余部分保留为当时的缺陷报告与候选设计，不再代表当前实现：解冻判定（受限 Planner 许可）在
+> `src/application/execution/advance-execution.ts`，续办与结算在 `revision-service.ts` + 宿主
+> `foreground-planning-runtime.ts`，旧结果隔离在 `execution-view.ts`，持有边界（登记时刻与内容版本）在 schema 13。
+> 实施期间另有两处同源缺陷被真实运行暴露并修复（授权门禁的 GraphVersion 判定、补丁请求饿住 Frontier），
+> 实测与结论见 `docs/orca-compatibility.md`。
+
 对应问题：`m2-deliver-execution-tui` 的 5.2 无法在当前代码上收口（该 change 的 `verification.md` 结论为 PARTIAL）。本文件是缺陷报告与实现交接，供后续独立的 change 使用；它不含产品决策，只给事实、根因、候选设计与验收计划。
 
 结论先行：
@@ -116,7 +124,7 @@ pnpm exec vitest run tests/tui/pty-execution.test.ts --no-file-parallelism
 
 ## 7. 相关文档锚点
 
-- `docs/orca-compatibility.md`：两支释放路径的差别与实测事实（退休支已修、修订支未接线）、`control_state` 语义、声明转写保真度、`maxActiveWorkPackages` 与串行派发无关。
+- `docs/orca-compatibility.md`：两支释放路径的差别与实测事实（退休支已修并真机通过；修订支已按本 change 接线，其真实运行的停滞与修复见该文件 2026-09-28 的「在途修订节点…」条目）、`control_state` 语义、声明转写保真度、`maxActiveWorkPackages` 与串行派发无关。
 - `docs/interface-contracts.md`：`ScopeControlService.reconcile`（只对账、重放未确认 Delivery）。
 - `openspec/changes/m2-deliver-execution-tui/verification.md`：结论 PARTIAL、9 处已修缺陷的清单与证据、本次运行证据表。
 - 本变更的 5.2 只有在上面第 5 节的真实运行全绿后才能勾选。

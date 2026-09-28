@@ -73,6 +73,7 @@ import type {
   CoordinationWriter,
 } from '../../src/application/ports/branch-coordination-store.js';
 import type { ExecutionBackend } from '../../src/application/ports/execution-backend.js';
+import type { GraphVersionRecord } from '../../src/domain/planning/execution-graph.js';
 
 const SCOPE = 'scope-controller' as CoordinationScopeId;
 const OTHER_SCOPE = 'scope-controller-new' as CoordinationScopeId;
@@ -1125,4 +1126,82 @@ test('图演进语义事件原样发布，噪声仍被丢弃', () => {
     null,
     null,
   ]);
+});
+
+test('readiness 与派发门禁同规则：批准时刻的 GraphVersion 仍在追加链上即视为仍覆盖当前图', () => {
+  const graphId = 'graph-1' as GraphId;
+  const graph = {
+    graphId,
+    generation: 1 as GraphGeneration,
+    concurrencyLimit: 1,
+    workPackages: [
+      {
+        workPackageId: 'wp-1' as WorkPackageId,
+        title: 'wp-1',
+        dependsOn: [],
+        scopeEnvelope: { include: ['src'], exclude: [] },
+        budget: {
+          implementationAttempts: 2,
+          validatorRepairs: 2,
+          graphRevisions: 2,
+          specificationRevisions: 2,
+          maxRecoveriesPerWorkerAttempt: 1,
+        },
+      },
+    ],
+  };
+  const versionOne: GraphVersionRecord = {
+    graphId,
+    generation: 1 as GraphGeneration,
+    version: 1 as GraphVersion,
+    recordKind: 'initial',
+    parentVersion: null,
+    patchId: null,
+    mapRevision: 2,
+    planRevision: 3,
+    orcaRunId: 'run-1',
+    graph,
+    recordedAt: 10,
+  };
+  const versionTwo: GraphVersionRecord = {
+    ...versionOne,
+    version: 2 as GraphVersion,
+    recordKind: 'accepted_revision',
+    parentVersion: 1 as GraphVersion,
+    patchId: 'patch-1',
+    recordedAt: 20,
+  };
+  const snapshotRead = store.query({ kind: 'snapshot', coordinationScopeId: SCOPE });
+  if (snapshotRead.kind !== 'snapshot') {
+    throw new Error('无法读取 snapshot');
+  }
+  const counters = store.query({ kind: 'budget-counters', coordinationScopeId: SCOPE });
+  const execution = deriveExecutionFacts({
+    snapshot: snapshotRead.snapshot,
+    nodes: [],
+    baselineHead: null,
+    authority: null,
+    observations: noExecutionObservations('controller-service-test'),
+  });
+  const readinessWith = (authorizationGraphVersion: number): readonly (boolean | undefined)[] =>
+    projectControllerSnapshot({
+      snapshot: snapshotRead.snapshot,
+      budgets: counters.kind === 'budget-counters' ? counters.counters : [],
+      graphGeneration: null,
+      frontier: execution.frontier,
+      workers: [],
+      execution,
+      recoveryBudgetLimit: null,
+      extraBlockers: [],
+      maintenance: null,
+      selectedSessionId: null,
+      graphVersions: [versionOne, versionTwo],
+      authorizationGraphRef: { graphId, graphVersion: authorizationGraphVersion },
+      compaction: null,
+    }).graphTopologies.map((topology) => topology.readiness.authorizationBound);
+
+  // 授权绑定 v1、当前图已推进到 v2：两个拓扑记录都必须读作「仍被覆盖」，因为 v1 还在追加链上。
+  expect(readinessWith(1)).toEqual([true, true]);
+  // 指向未来版本或其它图的引用不在链上：不成立。
+  expect(readinessWith(3)).toEqual([false, false]);
 });

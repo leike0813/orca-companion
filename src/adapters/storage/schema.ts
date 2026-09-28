@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -578,6 +578,21 @@ const MIGRATION_12: readonly string[] = [
   `ALTER TABLE materialization_bindings ADD COLUMN launch_id TEXT`,
 ];
 
+/**
+ * M13：修订持有的内容版本边界。
+ *
+ * 在途 Graph Patch 修订要回答两个此前没有持久事实的问题：被替换掉的契约内容版本是哪一个，以及重新
+ * 准入后接纳的是哪一个。少了前者的记录，「替换是否真的改变了内容」无法判定，只能拿时间戳猜；少了
+ * 后者的记录，修订完成前与完成后的角色结果无法区分——旧 Validator 的通过会被读成新修订已完成。
+ *
+ * 两列都可为空：旧行（含已 released 的历史持有）没有版本边界，沿原投影规则；重新登记新补丁持有时
+ * 两列清空，直到准备阶段写下旧版本、准入结算写下接纳版本。
+ */
+const MIGRATION_13: readonly string[] = [
+  `ALTER TABLE revision_holds ADD COLUMN prior_contract_revision INTEGER`,
+  `ALTER TABLE revision_holds ADD COLUMN admitted_contract_revision INTEGER`,
+];
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, statements: MIGRATION_1 },
   { version: 2, statements: MIGRATION_2 },
@@ -591,6 +606,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 10, statements: MIGRATION_10 },
   { version: 11, statements: MIGRATION_11 },
   { version: 12, statements: MIGRATION_12 },
+  { version: 13, statements: MIGRATION_13 },
 ];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {

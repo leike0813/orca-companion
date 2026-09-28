@@ -33,6 +33,7 @@ function facts(overrides: Partial<DispatchCandidateFacts> = {}): DispatchCandida
     lifecycleStage: 'frontier',
     selectedCandidateId: WP,
     revisionPending: [],
+    revisionPlanner: null,
     dependenciesSatisfied: [WP],
     controlState: 'active',
     authorization: {
@@ -175,4 +176,26 @@ test('判定是纯函数：重复求值结果一致且不改变输入', () => {
   expect(second).toEqual(first);
   expect(JSON.stringify(input)).toBe(snapshot);
   expect(WORK_PACKAGE_BUDGET_FIELDS.every((field) => field in input.budget)).toBe(true);
+});
+
+test('修订节点只对带匹配许可的 planner 放开：许可指向别处或角色不是 planner 都仍被挡住', () => {
+  const permit = { workPackageId: WP, sourceRef: 'patch-1', priorContractRevision: null };
+  const planner = evaluateDispatchCandidate(
+    facts({ candidateRole: 'planner', revisionPending: [WP], revisionPlanner: permit }),
+  );
+  expect(planner.kind).toBe('materializable');
+
+  const foreign = evaluateDispatchCandidate(
+    facts({
+      candidateRole: 'planner',
+      revisionPending: [WP],
+      revisionPlanner: { workPackageId: WP_OTHER, sourceRef: 'patch-1', priorContractRevision: null },
+    }),
+  );
+  expect(foreign.kind === 'rejected' ? foreign.rejection.code : null).toBe('revision_pending');
+
+  const otherRole = evaluateDispatchCandidate(
+    facts({ candidateRole: 'implementation', revisionPending: [WP], revisionPlanner: permit }),
+  );
+  expect(otherRole.kind === 'rejected' ? otherRole.rejection.code : null).toBe('revision_pending');
 });

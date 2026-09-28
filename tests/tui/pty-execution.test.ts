@@ -94,6 +94,8 @@ const BUILT_ENTRY = join(COMPANION_REPOSITORY, 'dist', 'src', 'interfaces', 'cli
 const REAL_SWITCH = 'ORCA_COMPANION_REAL_HARNESS';
 const WORKSPACE_VAR = 'ORCA_COMPANION_REAL_REPO';
 const IDENTITY_VAR = 'ORCA_COMPANION_REAL_IDENTITY';
+/** 置 1 时要求本次图变化声明把目标节点退场，用来验收「退场」形态；默认验收「保留并修订」形态。 */
+const RETIRE_NODE_SWITCH = 'ORCA_COMPANION_PTY_RETIRE_NODE';
 const MODEL_VAR = 'ORCA_COMPANION_COORDINATOR_MODEL';
 /**
  * 是否制造一次执行态 Worker Session 中断（默认制造）。
@@ -274,13 +276,16 @@ function statusLine(pane: string): string {
  *
  * 宿主的执行期 blocker 只存在于宿主自己的快照里，`status --json` 读不到；链路停住时这一行是唯一能
  * 说明「宿主到底卡在哪条门禁上」的可观察事实，因此每轮把它记进日志。
+ *
+ * 行的左边可能带终端边框（Sidebar 渲染成 `│! graph_patch`），所以先去掉行首的边框字符再判定；
+ * 只认行首的 `! ` 会让这条日志长期打印 `none`，把最关键的信息遮住。
  */
 function blockerLines(pane: string): string {
   return pane
     .split('\n')
-    .map((line) => line.trim())
+    .map((line) => line.replace(/^[\s│┃|]+/u, '').trim())
     .filter((line) => line.startsWith('! '))
-    .slice(0, 3)
+    .slice(0, 4)
     .join(' / ');
 }
 
@@ -425,8 +430,14 @@ function graphChangeInstruction(workPackageId: string): string {
     `请立即调用一次 request_graph_patch，request 参数按此 JSON 原样提交（不要改写取值、不要增删字段）：${request}` +
     // 补丁只会经由确定性 Admission 编译校验：把变化限定在该 Work Package 已有的 contract 内容上，
     // 不去新增或改动其它文件与 Scope Envelope（真实运行里 Planner 的初稿曾因此被判 `admission_rejected`）。
-    '补丁只应调整该 Work Package 已有的 contract 内容（requirements、design 或验收条件），' +
-    '不要新增或改动其它文件、依赖与 Scope Envelope。除这一次工具调用外不要做其它事。'
+    //
+    // 取舍说明（真实 Planner 自己决定补丁形态）：默认要求「保留该节点、只改 contract 内容」得到修订形态；
+    // 设 `ORCA_COMPANION_PTY_RETIRE_NODE=1` 时明确要求退场，用来覆盖另一种形态。
+    (process.env[RETIRE_NODE_SWITCH] === '1'
+      ? '这份工作已不再需要：补丁只应把该 Work Package 从图中退场（retire），不要保留它。' +
+        '不要新增或改动其它文件、依赖与 Scope Envelope。除这一次工具调用外不要做其它事。'
+      : '补丁只应调整该 Work Package 已有的 contract 内容（requirements、design 或验收条件），' +
+        '不要新增或改动其它文件、依赖与 Scope Envelope。除这一次工具调用外不要做其它事。')
   );
 }
 
@@ -647,6 +658,28 @@ if (gate.kind === 'skip') {
       readonly consumerGeneration: number;
       /** 当前图的全部已提交版本（含图修订）；`patchId` 为 `null` 表示初始编译版本。 */
       readonly graphVersions: readonly { readonly version: number; readonly patchId: string | null }[];
+      /**
+       * 修订持有：在途修订必须在闭环里被结算（`released`），且接纳版本落在被改过的那个节点上。
+       * pending 的持有意味着 Scope 会永久停在 revision_pending，Finalizer 门禁再也不满足。
+       */
+      readonly revisionHolds: readonly {
+        readonly workPackageId: string;
+        readonly source: string;
+        readonly sourceRef: string;
+        readonly state: string;
+        readonly priorContractRevision: number | null;
+        readonly admittedContractRevision: number | null;
+      }[];
+      /** 共享预算计数：修订次数必须恰好等于实际发生的重新准入次数（重启不重置、不重复扣减）。 */
+      readonly budgetCounters: readonly { readonly budgetKey: string; readonly consumed: number }[];
+      /**
+       * 有已收尾且被接受的 `git-integration` Operation 的 Work Package。
+       *
+       * 这是「集成已完成」的持久事实（宿主自己的判定规则与它一致）。界面投影目前仍按 Baseline Adoption
+       * 记录判断集成状态——那是研究记录 §4b 的既有不一致，按本 change 的范围另行处理——因此验收读持久
+       * 事实，而不是读那个尚未收敛的投影字段。
+       */
+      readonly integratedWorkPackageIds: readonly string[];
       /** 基线补救记录：图修订或 canonical 前移让 worktree base 落后时必须出现的那一条。 */
       readonly baselineReconciliations: readonly {
         readonly reconciliationId: string;
@@ -717,6 +750,18 @@ if (gate.kind === 'skip') {
           kind: 'baseline-reconciliations',
           coordinationScopeId: coordinationScopeId as CoordinationScopeId,
         });
+        const revisionHolds = opened.store.query({
+          kind: 'revision-holds',
+          coordinationScopeId: coordinationScopeId as CoordinationScopeId,
+        });
+        const budgetCounters = opened.store.query({
+          kind: 'budget-counters',
+          coordinationScopeId: coordinationScopeId as CoordinationScopeId,
+        });
+        const intents = opened.store.query({
+          kind: 'intents',
+          coordinationScopeId: coordinationScopeId as CoordinationScopeId,
+        });
         const currentGeneration =
           generations.kind === 'graph-generations' ? generations.generations[0] : undefined;
         // consumer generation 是 Orca 在绑定消费者时给出的代际：播种建立的第一个 Run 为 1，其后以已结算
@@ -737,6 +782,40 @@ if (gate.kind === 'skip') {
           graphVersions:
             versions?.kind === 'graph-versions'
               ? versions.versions.map((entry) => ({ version: entry.version, patchId: entry.patchId }))
+              : [],
+          revisionHolds:
+            revisionHolds.kind === 'revision-holds'
+              ? revisionHolds.holds.map((hold) => ({
+                  workPackageId: hold.workPackageId,
+                  source: hold.source,
+                  sourceRef: hold.sourceRef,
+                  state: hold.state,
+                  priorContractRevision: hold.priorContractRevision,
+                  admittedContractRevision: hold.admittedContractRevision,
+                }))
+              : [],
+          budgetCounters:
+            budgetCounters.kind === 'budget-counters'
+              ? budgetCounters.counters.map((counter) => ({
+                  budgetKey: counter.budgetKey,
+                  consumed: counter.consumed,
+                }))
+              : [],
+          integratedWorkPackageIds:
+            intents.kind === 'intents'
+              ? [
+                  ...new Set(
+                    intents.intents
+                      .filter(
+                        (intent) =>
+                          intent.operationCategory === 'git-integration' &&
+                          intent.target.kind === 'work-package' &&
+                          intent.state === 'settled' &&
+                          intent.outcomeClass === 'accepted',
+                      )
+                      .map((intent) => intent.target.id),
+                  ),
+                ]
               : [],
           baselineReconciliations:
             reconciliations.kind === 'baseline-reconciliations'
@@ -1204,6 +1283,12 @@ if (gate.kind === 'skip') {
             status.execution.reconciliations
               .map((entry) => `${entry.workPackageId}:${entry.severity}`)
               .join(','),
+            // blocker 集合也进指纹：**新出现或消失**的 blocker 是可观察变化，常驻的 blocker 不是。
+            // 反过来把「有 blocker」当成推进，会把任何静止状态读成进展，驱动也就永远等不到「无变化」。
+            `blockers:${status.blockers
+              .map((blocker) => `${blocker.source}:${blocker.code}`)
+              .sort()
+              .join(',')}`,
           ].join('#');
         /**
          * 终态判据：Finalizer 给出独立结论，或某个 Work Package 阻塞且**没有仍在续办的 Recovery**。
@@ -1285,6 +1370,15 @@ if (gate.kind === 'skip') {
          * 真的进得来；工具内部还会为静止的 Run 等待，所以窗口要比一次模型调用宽。
          */
         const GRAPH_CHANGE_HOLD_MS = 3 * 60_000;
+        /**
+         * 补丁落地后只提交一次的收口说明。
+         *
+         * 模型会把「请提交 request_graph_patch」这条指令留在上下文里，补丁落地后仍可能自行重试：而一次
+         * Graph Patch Planner 派发本身就占用并发上限 1（`graphPatchPlannerInFlight` 会挡住所有执行触发），
+         * 于是 Frontier 会被这次无谓的重试饿住，修订节点永远等不到自己的窗口。真实用户在这一步也会被告知
+         * 「已受理」，因此驱动补上同一句话，而不是让模型自己对着一份已生效的声明反复尝试。
+         */
+        let patchAcceptedNoticeSent = false;
         let graphChangeAttempts = 0;
         let graphChangeNextAttemptAt = 0;
         let graphChangeHoldUntil = 0;
@@ -1304,6 +1398,17 @@ if (gate.kind === 'skip') {
           if (patchApplied) {
             graphChangeAttempts = GRAPH_CHANGE_ATTEMPTS;
             graphChangeHoldUntil = 0;
+            if (!patchAcceptedNoticeSent && graphChangeTarget !== null) {
+              patchAcceptedNoticeSent = true;
+              submitComposerMessage(
+                `图变化已受理：补丁已提交为 GraphVersion ${String(snapshot.graph?.version ?? 0)}，` +
+                  `Work Package ${graphChangeTarget} 已进入修订流程。不要再调用 request_graph_patch，` +
+                  '也不要重复提交同一份声明；接下来只需用受控工具按既有事实继续推进。',
+              );
+              loopFacts = await readExecutionFacts();
+              snapshot = await readStatus(workspace);
+              continue;
+            }
             if (reconcilingPane === null) {
               // 基线补救期间 Sidebar 必须把该节点显示为 reconcile（严重性由持久记录给出）。
               const reconciling = pollPane(SOCKET, SESSION, (text) => text.includes('reconcile'), 60_000);
@@ -1382,7 +1487,6 @@ if (gate.kind === 'skip') {
             continue;
           }
           const beforeFingerprint = fingerprintOf(snapshot);
-          let roundApplied = false;
           let advanced = false;
           /**
            * 图修订请求在途时不制造 paused 窗口：只确保 Scope 回到 active，让模型的受控工具调用能被受理。
@@ -1405,7 +1509,7 @@ if (gate.kind === 'skip') {
            * 门禁拒绝。界面上的用户会再按一次 Resume，因此这里同样有界地重试，而不是空等一整轮。
            */
           for (let attempt = 0; attempt < TRIGGER_ATTEMPTS && !advanced; attempt += 1) {
-            roundApplied = await triggerRound();
+            await triggerRound();
             rounds += 1;
             sawInFlightWorker = sawInFlightWorker || (await inFlightWorkerCount()) > 0;
             const deadlineForThisAttempt =
@@ -1419,7 +1523,6 @@ if (gate.kind === 'skip') {
               if (
                 fingerprintOf(current) !== beforeFingerprint ||
                 current.execution.finalizer.verdict !== null ||
-                current.blockers.length > 0 ||
                 // 刚结束的真实 Worker：交付要走下一次触发才结算，因此这里就返回。
                 (wasLive && live === 0)
               ) {
@@ -1451,9 +1554,16 @@ if (gate.kind === 'skip') {
           // 「这一轮没有推进」只在**确实没有角色在跑**时才算无进展：并发上限为 1 时，一个真实 Worker
           // 在途期间宿主本来就没有可推进的对象（尤其中断模式还要跑 Capsule 与替代 Session），把这种等待
           // 计成无进展会让驱动在健康链路上提前收手。
-          noChangeRounds =
-            (advanced && roundApplied) || sawInFlightWorker ? 0 : noChangeRounds + 1;
+          //
+          // 判据是执行事实的指纹，而不是「这一轮有没有写库」：驱动自己的 Pause→Resume 每轮都会写 Scope，
+          // 把它算成推进就再也等不到「无变化」，链路真卡死时只能耗到截止时间。
+          noChangeRounds = advanced || sawInFlightWorker ? 0 : noChangeRounds + 1;
           if (noChangeRounds >= MAX_NO_CHANGE_ROUNDS) {
+            // 停在这里时，宿主自己的 blocker 只出现在这一屏里（`status --json` 读不到），因此整屏落盘。
+            console.warn(
+              `[pty-execution] 连续 ${String(MAX_NO_CHANGE_ROUNDS)} 轮没有可观察变化，停止驱动：\n` +
+                capturePane(SOCKET, SESSION),
+            );
             break;
           }
         }
@@ -1481,21 +1591,26 @@ if (gate.kind === 'skip') {
           `本次验收必须经真实 Graph Patch Planner 追加一个 GraphVersion：${JSON.stringify(facts.graphVersions)}`,
         ).toBeGreaterThan(0);
         expect(observed.graph?.version ?? 1).toBeGreaterThan(1);
-        const reconciliation = facts.baselineReconciliations.find((entry) => entry.workPackageId === target);
-        expect(
-          reconciliation,
-          `图修订后必须为落后基线的 ${target} 登记独立补救：${JSON.stringify(facts.baselineReconciliations)}`,
-        ).toBeDefined();
-        expect(reconciliation?.orcaTaskId, '基线补救必须是独立 Planner Task').toEqual(expect.any(String));
-        expect(reconciliation?.dispatchId, '基线补救必须绑定真实 Dispatch').toEqual(expect.any(String));
-        expect(
-          reconciliation?.state,
-          `基线补救必须由真实 Worker 核验通过：${JSON.stringify(reconciliation)}`,
-        ).toBe('verified');
-        expect(
-          observed.execution.reconciliations.find((entry) => entry.workPackageId === target)?.severity,
-          'canonical 前进必须以 `canonical_advance` 呈现，而不是停留在待核验或冲突升级',
-        ).toBe('canonical_advance');
+        // 目标节点在补丁落地后是否还在图里，决定本次是「保留并修订」还是「退场」形态：两种形态都必须在
+        // 同一次验收里被接受，因此形态相关的断言按它分支。
+        const stillInGraph = observed.execution.workPackages.some((entry) => entry.workPackageId === target);
+        if (stillInGraph) {
+          const reconciliation = facts.baselineReconciliations.find((entry) => entry.workPackageId === target);
+          expect(
+            reconciliation,
+            `图修订后必须为落后基线的 ${target} 登记独立补救：${JSON.stringify(facts.baselineReconciliations)}`,
+          ).toBeDefined();
+          expect(reconciliation?.orcaTaskId, '基线补救必须是独立 Planner Task').toEqual(expect.any(String));
+          expect(reconciliation?.dispatchId, '基线补救必须绑定真实 Dispatch').toEqual(expect.any(String));
+          expect(
+            reconciliation?.state,
+            `基线补救必须由真实 Worker 核验通过：${JSON.stringify(reconciliation)}`,
+          ).toBe('verified');
+          expect(
+            observed.execution.reconciliations.find((entry) => entry.workPackageId === target)?.severity,
+            'canonical 前进必须以 `canonical_advance` 呈现，而不是停留在待核验或冲突升级',
+          ).toBe('canonical_advance');
+        }
         expect(
           reconcilingPane,
           `Sidebar 必须把核验中的基线显示为 reconcile 行：\n${refreshed.text}`,
@@ -1505,12 +1620,36 @@ if (gate.kind === 'skip') {
         expect(reconcilingPane ?? '', 'Sidebar 的 reconcile 行必须带严重性').toMatch(
           /reconcile canonical_advance required=/u,
         );
+        // ---- 在途 Graph Patch 修订必须真的被结算，而不是把 Scope 钉在 revision_pending ----
+        //
+        // 两种补丁形态共用这一段断言：保留并修订的节点走「重新准入 → 释放持有 + 记接纳版本 + 计一次
+        // 修订额度」，退场节点走退休释放。两种形态都必须留下 released 的持有，且不能残留 pending。
+        expect(
+          facts.revisionHolds.filter((hold) => hold.state === 'pending').map((hold) => hold.workPackageId),
+          `不允许残留 pending 的修订持有：${JSON.stringify(facts.revisionHolds)}`,
+        ).toEqual([]);
+        const hold = facts.revisionHolds.find((entry) => entry.workPackageId === target);
+        expect(hold, `受影响节点 ${target} 必须有修订持有记录：${JSON.stringify(facts.revisionHolds)}`).toBeDefined();
+        expect(hold?.state, `修订持有必须已被结算：${JSON.stringify(hold)}`).toBe('released');
+        if (stillInGraph) {
+          // 修订形态：旧内容版本与新接纳版本都必须落盘；仅改图契约时两者可以相同。
+          expect(hold?.priorContractRevision, '修订形态必须记下被替换的内容版本').not.toBeNull();
+          expect(hold?.admittedContractRevision, '修订形态必须记下重新准入的内容版本').not.toBeNull();
+          expect(
+            facts.budgetCounters.find(
+              (counter) => counter.budgetKey === `work-package:${target}:specificationRevisions`,
+            )?.consumed ?? 0,
+            `一次修订必须恰好消耗一次规格修订额度：${JSON.stringify(facts.budgetCounters)}`,
+          ).toBe(1);
+        }
+
         // 每个**留在图里并已集成**的 Work Package 都必须真的在 canonical 留下集成提交。被图修订 retire 的
         // 节点不在这个集合里：它按设计不再集成（补丁已经把它移出图），要求它提交只会把正确的行为判成失败。
+        // 「已集成」按 `git-integration` 的持久 Operation 判定（与宿主的集成门禁同一规则）。
         const subjects = spawnSync('git', ['log', '--format=%s'], { cwd: workspace, encoding: 'utf8' });
         expect(subjects.status).toBe(0);
-        const integrated = observed.execution.workPackages.filter(
-          (entry) => entry.state === 'accepted' || entry.integration?.state === 'integrated',
+        const integrated = observed.execution.workPackages.filter((entry) =>
+          facts.integratedWorkPackageIds.includes(entry.workPackageId),
         );
         expect(integrated.length, `至少有一个 Work Package 集成完成：${describeStatus(observed)}`).toBeGreaterThan(0);
         for (const entry of integrated) {
@@ -1648,6 +1787,7 @@ if (gate.kind === 'skip') {
       async () => {
         ensureTuiPane();
         const before = await readStatus(workspace);
+        const factsBefore = await readExecutionFacts();
         const dispatchesBefore = (await listRunWorkers()).map((worker) => worker.dispatchId).sort();
 
         restartTui(workspace);
@@ -1675,6 +1815,11 @@ if (gate.kind === 'skip') {
           ]),
         );
         expect(after.blockers.length).toBe(before.blockers.length);
+
+        // 重启不重复结算：修订持有与预算计数必须与重启前完全一致（不重复释放、不重复扣额）。
+        const factsAfter = await readExecutionFacts();
+        expect(factsAfter.revisionHolds).toEqual(factsBefore.revisionHolds);
+        expect(factsAfter.budgetCounters).toEqual(factsBefore.budgetCounters);
 
         // 「先对账」只在存在未对账事实时可见；两种状态下界面都必须与持久事实一致。
         const rendered = pollPane(SOCKET, SESSION, (text) =>

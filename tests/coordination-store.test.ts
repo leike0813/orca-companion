@@ -1975,8 +1975,8 @@ test('图修订退场的节点与图版本同事务释放修订持有，仍在�
   // 永久停在 revision_pending（真实运行里 Git 侧早已集成成功，Finalizer 门禁却再也不满足）。
   const retired = submit((expectedRevision) =>
     acceptedRevisionCommand(expectedRevision, {
-      graphVersion: 2 as GraphVersion,
-      parentVersion: 1 as GraphVersion,
+      graphVersion: 2,
+      parentVersion: 1,
       graph: {
         ...executionGraph(),
         workPackages: [
@@ -2107,7 +2107,7 @@ test('释放持有是幂等的，重放不会把修订额度再扣一次', () =>
     }),
   );
 
-  const release = (): CoordinationCommandResult =>
+  const release = (approvedLimit = 2): CoordinationCommandResult =>
     submit((expectedRevision) => ({
       kind: 'release-revision-hold',
       coordinationScopeId: SCOPE,
@@ -2118,6 +2118,7 @@ test('释放持有是幂等的，重放不会把修订额度再扣一次', () =>
       budgetConsumption: [
         { budgetKey: 'work-package:wp-1:specificationRevisions', approvedLimitRef: 'auth-1', amount: 1 },
       ],
+      approvedLimit,
     }));
 
   expect(release().kind).toBe('committed');
@@ -2136,6 +2137,222 @@ test('释放持有是幂等的，重放不会把修订额度再扣一次', () =>
     reason: '不存在',
   }));
   expect(absent.kind).toBe('rejected');
+});
+
+test('旧内容版本只能在匹配来源的持有上准备一次，重新登记持有会清空版本边界', () => {
+  createScope();
+  activateSession();
+  recordInitialGraph();
+  acquireExecutionLease();
+  const record = (sourceRef: string): CoordinationCommandResult =>
+    submit((expectedRevision) => ({
+      kind: 'record-revision-hold',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      workPackageId: 'wp-1' as WorkPackageId,
+      source: 'graph_patch',
+      sourceRef,
+    }));
+  const prepare = (sourceRef: string, priorContractRevision: number): CoordinationCommandResult =>
+    submit((expectedRevision) => ({
+      kind: 'prepare-revision-hold',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      workPackageId: 'wp-1' as WorkPackageId,
+      sourceRef,
+      priorContractRevision,
+    }));
+  const hold = () => {
+    const holds = store.query({ kind: 'revision-holds', coordinationScopeId: SCOPE });
+    return holds.kind === 'revision-holds' ? holds.holds[0] : undefined;
+  };
+
+  expect(record('patch-1').kind).toBe('committed');
+  expect(hold()?.priorContractRevision).toBeNull();
+  expect(prepare('patch-1', 3).kind).toBe('committed');
+  expect(prepare('patch-1', 3).kind).toBe('committed');
+  expect(hold()?.priorContractRevision).toBe(3);
+  // 版本边界一旦写下就不因重放而漂移；另一个来源也不能准备别人的持有。
+  expect(prepare('patch-1', 4).kind).toBe('rejected');
+  expect(prepare('patch-2', 3).kind).toBe('rejected');
+  expect(hold()?.priorContractRevision).toBe(3);
+
+  // 重新登记新补丁：两列回到未准备、未结算。
+  expect(record('patch-2').kind).toBe('committed');
+  expect(hold()?.priorContractRevision).toBeNull();
+  expect(hold()?.admittedContractRevision).toBeNull();
+});
+
+test('按重新准入结算记录接纳版本：接纳版本可与被替换版本相同，来源不符一律拒绝且零写入', () => {
+  createScope();
+  activateSession();
+  recordInitialGraph();
+  acquireExecutionLease();
+  submit((expectedRevision) => ({
+    kind: 'record-revision-hold',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    workPackageId: 'wp-1' as WorkPackageId,
+    source: 'graph_patch',
+    sourceRef: 'patch-1',
+  }));
+  submit((expectedRevision) => ({
+    kind: 'prepare-revision-hold',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    workPackageId: 'wp-1' as WorkPackageId,
+    sourceRef: 'patch-1',
+    priorContractRevision: 3,
+  }));
+  const settle = (admittedContractRevision: number): CoordinationCommandResult =>
+    submit((expectedRevision) => ({
+      kind: 'release-revision-hold',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      workPackageId: 'wp-1' as WorkPackageId,
+      reason: '重新准入',
+      expectedSourceRef: 'patch-1',
+      admittedContractRevision,
+    }));
+  const hold = () => {
+    const holds = store.query({ kind: 'revision-holds', coordinationScopeId: SCOPE });
+    return holds.kind === 'revision-holds' ? holds.holds[0] : undefined;
+  };
+
+  // 只改契约（例如依赖）的修订、或 Planner 原样交付同一份内容时，接纳版本与被替换版本相同：
+  // 这仍然是一次修订，持有必须释放并记录接纳版本。
+  expect(settle(3).kind).toBe('committed');
+  expect(hold()?.state).toBe('released');
+  expect(hold()?.admittedContractRevision).toBe(3);
+  // 同一次结算的重放幂等；另一个接纳版本不能改写已经落下的记录。
+  expect(settle(3).kind).toBe('committed');
+  expect(settle(4).kind).toBe('rejected');
+  expect(hold()?.admittedContractRevision).toBe(3);
+
+  // 来源不符：另一个补丁的收尾不能释放这份持有，也不写任何字段。
+  submit((expectedRevision) => ({
+    kind: 'record-revision-hold',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    workPackageId: 'wp-2' as WorkPackageId,
+    source: 'graph_patch',
+    sourceRef: 'patch-1',
+  }));
+  submit((expectedRevision) => ({
+    kind: 'prepare-revision-hold',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    workPackageId: 'wp-2' as WorkPackageId,
+    sourceRef: 'patch-1',
+    priorContractRevision: 5,
+  }));
+  const mismatched = submit((expectedRevision) => ({
+    kind: 'release-revision-hold',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    workPackageId: 'wp-2' as WorkPackageId,
+    reason: '重新准入',
+    expectedSourceRef: 'patch-9',
+    admittedContractRevision: 6,
+  }));
+  expect(mismatched.kind).toBe('rejected');
+  const holds = store.query({ kind: 'revision-holds', coordinationScopeId: SCOPE });
+  expect(holds.kind === 'revision-holds' ? holds.holds.map((entry) => [entry.workPackageId, entry.state, entry.admittedContractRevision]) : null).toEqual([
+    ['wp-1', 'released', 3],
+    ['wp-2', 'pending', null],
+  ]);
+});
+
+test('结算拒绝越过已批准的修订额度上限', () => {
+  createScope();
+  activateSession();
+  recordInitialGraph();
+  acquireExecutionLease();
+  const budgetKey = 'work-package:wp-1:specificationRevisions';
+  submit((expectedRevision) => ({
+    kind: 'record-revision-hold',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    workPackageId: 'wp-1' as WorkPackageId,
+    source: 'graph_patch',
+    sourceRef: 'patch-1',
+  }));
+  submit((expectedRevision) => ({
+    kind: 'prepare-revision-hold',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    workPackageId: 'wp-1' as WorkPackageId,
+    sourceRef: 'patch-1',
+    priorContractRevision: 1,
+  }));
+
+  // 上限为 1 时第一次结算消耗掉唯一一次；随后的结算（同键、同授权）必须被拒绝而不是记到 2。
+  const settle = (admittedContractRevision: number): CoordinationCommandResult =>
+    submit((expectedRevision) => ({
+      kind: 'release-revision-hold',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      workPackageId: 'wp-1' as WorkPackageId,
+      reason: '重新准入',
+      expectedSourceRef: 'patch-1',
+      admittedContractRevision,
+      budgetConsumption: [{ budgetKey, approvedLimitRef: 'auth-1', amount: 1 }],
+      approvedLimit: 1,
+    }));
+  expect(settle(2).kind).toBe('committed');
+  const counters = store.query({ kind: 'budget-counters', coordinationScopeId: SCOPE });
+  expect(counters.kind === 'budget-counters' ? counters.counters : null).toEqual([
+    expect.objectContaining({ budgetKey, consumed: 1 }),
+  ]);
+
+  // 另一个节点在同一限额下再结算：累计会越界，因此整笔拒绝（持有保持 pending）。
+  submit((expectedRevision) => ({
+    kind: 'record-revision-hold',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    workPackageId: 'wp-2' as WorkPackageId,
+    source: 'graph_patch',
+    sourceRef: 'patch-1',
+  }));
+  submit((expectedRevision) => ({
+    kind: 'prepare-revision-hold',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    workPackageId: 'wp-2' as WorkPackageId,
+    sourceRef: 'patch-1',
+    priorContractRevision: 1,
+  }));
+  const overLimit = submit((expectedRevision) => ({
+    kind: 'release-revision-hold',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    workPackageId: 'wp-2' as WorkPackageId,
+    reason: '重新准入',
+    expectedSourceRef: 'patch-1',
+    admittedContractRevision: 2,
+    budgetConsumption: [{ budgetKey, approvedLimitRef: 'auth-1', amount: 1 }],
+    approvedLimit: 1,
+  }));
+  expect(overLimit.kind).toBe('rejected');
+  const holds = store.query({ kind: 'revision-holds', coordinationScopeId: SCOPE });
+  expect(holds.kind === 'revision-holds' ? holds.holds.map((entry) => [entry.workPackageId, entry.state]) : null).toEqual([
+    ['wp-1', 'released'],
+    ['wp-2', 'pending'],
+  ]);
 });
 
 test('Baseline Reconciliation 的 verified 要求四项核验齐全', () => {
