@@ -2,7 +2,7 @@
 
 为范围明确的小型软件项目提供可恢复、可追踪、有预算上限的开发流程。Orca 负责工作区与 agent 执行，Companion 负责项目计划、调度规则、验收与恢复。
 
-当前进度：M0、M1 与 M2 的规划任务和前台 TUI 验收已归档；M2 收尾修复见 `openspec/changes/m2-closeout-integration-and-wake/`。
+当前进度：M0、M1 与 M2 的规划任务和前台 TUI 验收已归档；M2 收尾修复见 `openspec/changes/archive/2026-09-29-m2-closeout-integration-and-wake/`。
 
 ## 环境
 
@@ -20,6 +20,8 @@
 | `pnpm lint`、`pnpm lint:fix` | ESLint，含类型感知规则 |
 | `pnpm test`、`pnpm test:watch` | Vitest（含 TUI 组件与 PTY 用例） |
 | `pnpm build` | 输出 `dist/`；`pnpm start` 运行构建产物 |
+| `pnpm ui:preview planning` | 启动只读假数据 TUI 预览；其他场景见 [TUI 调试工作台](docs/dev/tui-workbench.md) |
+| `pnpm ui:devtools` | 启动独立 React DevTools，配合 `DEV=true pnpm ui:preview execution` |
 
 ## 运行
 

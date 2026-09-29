@@ -20,6 +20,7 @@ import type {
 } from '../../../application/tui/view-model.js';
 import type { ControllerRecoveryView } from '../../../application/controller-service.js';
 import type { SidebarDensity } from '../state.js';
+import { tuiColors } from '../theme.js';
 
 export type SidebarProps = {
   readonly density: SidebarDensity;
@@ -156,11 +157,12 @@ export function Sidebar(props: SidebarProps) {
         flexDirection="column"
         width={width + 2}
         borderStyle="single"
+        borderColor={tuiColors.border}
         borderTop={false}
         borderBottom={false}
         borderRight={false}
       >
-        <Text>{header}</Text>
+        <Text color={execution.reconciliation.pending ? tuiColors.warning : tuiColors.accent} bold>{header}</Text>
         {compactGraphLines(view, width).map((text, index) => (
           <Text key={`graph-${String(index)}`}>{text}</Text>
         ))}
@@ -171,7 +173,7 @@ export function Sidebar(props: SidebarProps) {
           <Text key={`queue-${String(index)}`}>{text}</Text>
         ))}
         {alerts.map((text, index) => (
-          <Text key={`alert-${String(index)}`}>{text}</Text>
+          <Text key={`alert-${String(index)}`} color={tuiColors.error}>{text}</Text>
         ))}
       </Box>
     );
@@ -209,38 +211,39 @@ export function Sidebar(props: SidebarProps) {
       flexDirection="column"
       width={width + 2}
       borderStyle="single"
+      borderColor={tuiColors.border}
       borderTop={false}
       borderBottom={false}
       borderRight={false}
     >
-      <Text>{header}</Text>
-      <Text dimColor>预算</Text>
+      <Text color={execution.reconciliation.pending ? tuiColors.warning : tuiColors.accent} bold>{header}</Text>
+      <Text color={tuiColors.muted}>预算</Text>
       {budgetLines.map((text, index) => (
         <Text key={`budget-${String(index)}`}>{text}</Text>
       ))}
-      <Text dimColor>execution graph</Text>
+      <Text color={tuiColors.muted}>execution graph</Text>
       <Text>{readinessLine}</Text>
       {view.graph === null ? (
         <Text>{line('graph: 不可用', width)}</Text>
       ) : (
         topologyLines.map((text, index) => <Text key={`node-${String(index)}`}>{text}</Text>)
       )}
-      {queueLines.length === 0 ? null : <Text dimColor>integration queue (串行)</Text>}
+      {queueLines.length === 0 ? null : <Text color={tuiColors.muted}>integration queue (串行)</Text>}
       {queueLines.map((text, index) => (
         <Text key={`queue-${String(index)}`}>{text}</Text>
       ))}
-      {recoveryRows.length === 0 ? null : <Text dimColor>recovery</Text>}
+      {recoveryRows.length === 0 ? null : <Text color={tuiColors.muted}>recovery</Text>}
       {recoveryRows.map((text, index) => (
         <Text key={`recovery-${String(index)}`}>{text}</Text>
       ))}
       <FinalizerPanel finalizer={execution.finalizer} availableWidth={width} />
-      {workerLines.length === 0 ? null : <Text dimColor>workers</Text>}
+      {workerLines.length === 0 ? null : <Text color={tuiColors.muted}>workers</Text>}
       {workerLines.map((text, index) => (
         <Text key={`worker-${String(index)}`}>{text}</Text>
       ))}
-      {blockerLines.length === 0 ? null : <Text dimColor>blockers</Text>}
+      {blockerLines.length === 0 ? null : <Text color={tuiColors.muted}>blockers</Text>}
       {blockerLines.map((text, index) => (
-        <Text key={`blocker-${String(index)}`}>{text}</Text>
+        <Text key={`blocker-${String(index)}`} color={tuiColors.error}>{text}</Text>
       ))}
     </Box>
   );

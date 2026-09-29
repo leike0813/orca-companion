@@ -205,8 +205,12 @@ describe('tui/execution-control / Scope 级 Cancel', () => {
 
     await runPaletteCommand(rendered, 'cancel');
     expect(frameText(rendered)).toContain(CONFIRM_CANCEL);
+    expect(frameText(rendered)).toMatch(/y\/N/u);
     // 未确认前不持久化取消意图。
     expect(fake.executeIntents).toEqual([]);
+    await pressKey(rendered, '\r');
+    expect(fake.executeIntents).toEqual([]);
+    expect(frameText(rendered)).toContain(CONFIRM_CANCEL);
 
     // `n` 取消待确认动作：既不写状态，也不再显示提示。
     await pressKey(rendered, 'n');
@@ -222,6 +226,7 @@ describe('tui/execution-control / Scope 级 Cancel', () => {
 
     // 确认后才提交，且只提交一次。
     await runPaletteCommand(rendered, 'cancel');
+    await pressKey(rendered, 'y');
     await pressKey(rendered, 'y');
     await settle();
     expect(fake.executeIntents).toEqual([{ kind: 'scope-control', action: 'cancel' }]);

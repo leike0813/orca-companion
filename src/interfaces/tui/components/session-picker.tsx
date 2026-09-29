@@ -9,6 +9,8 @@ import { Box, Text } from 'ink';
 
 import { truncateToDisplayWidth } from '../render/width.js';
 import type { SessionSummaryView } from '../../../application/tui/view-model.js';
+import { tuiColors } from '../theme.js';
+import { SelectionList } from './selection-list.js';
 
 export type SessionPickerProps = {
   readonly sessions: readonly SessionSummaryView[];
@@ -40,17 +42,19 @@ export function sessionMarker(session: SessionSummaryView): string {
 
 export function SessionPicker(props: SessionPickerProps) {
   return (
-    <Box flexDirection="column" borderStyle="single">
-      <Text>Session Picker</Text>
-      {props.sessions.map((session) => {
-        const selected = session.coordinatorSessionId === props.selectedSessionId ? '>' : ' ';
-        const label = `${selected}${sessionMarker(session)} ${session.coordinatorSessionId} ${session.lifecycleState} pending=${String(session.openInteractionCount)}`;
-        return (
-          <Text key={session.coordinatorSessionId}>
-            {truncateToDisplayWidth(label, Math.max(1, props.availableWidth))}
-          </Text>
-        );
-      })}
+    <Box flexDirection="column" borderStyle="single" borderColor={tuiColors.border}>
+      <Text color={tuiColors.accent} bold>Session Picker</Text>
+      <SelectionList
+        options={props.sessions.map((session) => ({
+          label: truncateToDisplayWidth(
+            `${sessionMarker(session)} ${session.coordinatorSessionId} ${session.lifecycleState} pending=${String(session.openInteractionCount)}`,
+            Math.max(1, props.availableWidth - 5),
+          ),
+          value: session.coordinatorSessionId,
+        }))}
+        {...(props.selectedSessionId === null ? {} : { defaultValue: props.selectedSessionId })}
+        onSelect={props.onSelect}
+      />
       <Text dimColor>Enter 选择 · Esc 关闭</Text>
     </Box>
   );

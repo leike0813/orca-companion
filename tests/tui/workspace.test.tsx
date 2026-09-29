@@ -59,6 +59,8 @@ const NOOP_ACTIONS: WorkspaceActions = {
   confirmAuthorization: () => undefined,
   cancelAuthorization: () => undefined,
   closeTopOverlay: () => undefined,
+  confirmPending: () => undefined,
+  dismissPending: () => undefined,
 };
 
 function uiState(overrides: Partial<TuiState> = {}): TuiState {
@@ -102,7 +104,6 @@ function renderWorkspace(
       modelCatalog={MODEL_CATALOG}
       modelRejection={null}
       paletteSelection={0}
-      modelSelection={0}
       composerDisabledReason={null}
       newlineHint="Shift+Enter 换行"
       handoffProposal={null}

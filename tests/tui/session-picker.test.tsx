@@ -70,9 +70,8 @@ describe('session-interactions / Session Picker 与焦点约束', () => {
     const lines = (rendered.lastFrame() ?? '').split('\n');
     const selectedLine = lines.find((line) => line.includes('session-b')) ?? '';
     const otherLine = lines.find((line) => line.includes('session-a')) ?? '';
-    expect(selectedLine.indexOf('>')).toBeGreaterThanOrEqual(0);
-    expect(selectedLine.indexOf('>')).toBeLessThan(selectedLine.indexOf('session-b'));
-    expect(otherLine).not.toContain('>');
+    expect(selectedLine).toMatch(/[✔√]/u);
+    expect(otherLine).not.toMatch(/[✔√]/u);
   });
 
   test('Scenario: 启动时优先待答 Session（容器默认选中）', async () => {
@@ -200,7 +199,7 @@ describe('session-interactions / Session Picker 与焦点约束', () => {
     const unreadLine = lines.find((line) => line.includes('session-a')) ?? '';
     const selectedLine = lines.find((line) => line.includes('session-b')) ?? '';
     expect(unreadLine).toContain('*');
-    expect(selectedLine.indexOf('>')).toBeGreaterThanOrEqual(0);
+    expect(selectedLine).toMatch(/[✔√]/u);
     expect(selectedLine).not.toContain('*');
 
     rendered.unmount();

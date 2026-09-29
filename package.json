@@ -14,6 +14,8 @@
   },
   "scripts": {
     "start": "node ./dist/src/interfaces/cli/main.js",
+    "ui:preview": "pnpm build && node scripts/tui-preview.mjs",
+    "ui:devtools": "react-devtools",
     "build": "tsc --noEmit false --outDir dist",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -29,6 +31,9 @@
     "@types/react": "19.3.0",
     "eslint": "^10.10.0",
     "ink-testing-library": "4.0.0",
+    "react-devtools": "7.0.1",
+    "react-devtools-core": "7.0.1",
+    "tuistory": "0.11.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0",
     "vite": "^8.3.0",
@@ -39,6 +44,7 @@
     "@langchain/langgraph": "1.4.16",
     "@langchain/langgraph-checkpoint": "1.1.5",
     "@langchain/langgraph-checkpoint-sqlite": "1.0.4",
+    "@inkjs/ui": "2.0.0",
     "ink": "7.1.1",
     "react": "19.3.0",
     "zod": "^4.6.5"

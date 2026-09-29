@@ -10,6 +10,7 @@ import { Box, Text } from 'ink';
 
 import { truncateToDisplayWidth } from '../render/width.js';
 import type { InteractionView } from '../../../application/tui/view-model.js';
+import { tuiColors } from '../theme.js';
 
 export type InteractionCardProps = {
   readonly interaction: InteractionView;
@@ -28,7 +29,9 @@ export function InteractionCard(props: InteractionCardProps) {
   const label = `${props.answering ? '[回答模式] ' : ''}${interactionCardLabel(props.interaction)}`;
   return (
     <Box flexDirection="column">
-      <Text>{truncateToDisplayWidth(label, Math.max(1, props.availableWidth))}</Text>
+      <Text color={props.answering ? tuiColors.focus : tuiColors.warning} bold>
+        {truncateToDisplayWidth(label, Math.max(1, props.availableWidth))}
+      </Text>
       <Text dimColor>Ctrl+A 进入回答模式（绑定该 interaction 与当前 expected revision）</Text>
     </Box>
   );

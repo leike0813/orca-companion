@@ -114,12 +114,13 @@ Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation
 |---|---|
 | Canonical path | `src/interfaces/tui/`、`src/application/tui/view-model.ts` 与 `src/application/execution/execution-view.ts` |
 | 职责 | Ink transcript、composer、sidebar、overlay、Graph Inspector、输入映射，执行态/规划态纯展示 projection，以及执行阶段只读派生（`execution-view.ts`） |
-| 允许依赖 | `IC-11` Controller façade 和 `IC-12` view model；Ink/React |
+| 允许依赖 | `IC-11` Controller façade 和 `IC-12` view model；Ink/React 与 `@inkjs/ui` 展示组件 |
 | Interface | 用户 intent、选中 Session、局部草稿/滚动/overlay 状态和渲染帧 |
 | 禁止 | 调用 Orca、打开 store、恢复模型、实现重试/准入/预算、从自由文本推断待答 interaction；`execution-view.ts` 只从 IC-03 快照与调用方读到的只读观察派生，不派发、不写、不实现对账 |
 | 测试 seam | 组件经固定 view model 与 command callbacks 测试；PTY 单独验证 TTY/CJK/resize |
 
 React 组件只拥有展示与输入协调。render、effect、resize 和重挂载没有业务副作用；所有 Scope 级动作必须经 `ControllerService`。
+开发预览 `scripts/tui-preview.mjs` 只向构建后的 TUI 注入固定假端口；主题由 `src/interfaces/tui/theme.ts` 统一提供。预览中的写端口均拒绝，不属于生产 Bootstrap。
 
 ### MOD-07 Bootstrap
 

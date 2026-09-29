@@ -64,6 +64,8 @@ function noopActions(): WorkspaceActions {
     confirmAuthorization: vi.fn(),
     cancelAuthorization: vi.fn(),
     closeTopOverlay: vi.fn(),
+    confirmPending: vi.fn(),
+    dismissPending: vi.fn(),
   };
 }
 
@@ -144,7 +146,6 @@ describe('Pending Interaction 内联卡片', () => {
         modelCatalog: EMPTY_CATALOG,
         modelRejection: null,
         paletteSelection: 0,
-        modelSelection: 0,
         composerDisabledReason: null,
         newlineHint: 'Shift+Enter 换行',
         handoffProposal: null,

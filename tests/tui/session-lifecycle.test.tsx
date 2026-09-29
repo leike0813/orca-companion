@@ -183,7 +183,6 @@ describe('Model Picker 准入', () => {
       createElement(ModelPicker, {
         catalog,
         rejection: null,
-        selectedIndex: 0,
         onSelect: vi.fn(),
         availableWidth: 100,
       }),
@@ -225,10 +224,35 @@ describe('Model Picker 准入', () => {
     rendered.unmount();
   });
 
-  /**
-   * IP-11 要求「准入不满足时禁用提交」。当前 `app.tsx` 的 `handleModelKey`/`selectModel`
-   * 只读取 `catalog.options`，不读取 `modelSwitchAdmission`，因此仍会发出意图——预期失败。
-   */
+  test('当前配置可再次确认，拒绝后的同一候选可重试', async () => {
+    const onSelect = vi.fn();
+    const rendered = renderComponent(createElement(ModelPicker, {
+      catalog: {
+        options: [
+          { configurationRef: 'config-a', model: 'model-a' },
+          { configurationRef: 'config-b', model: 'model-b' },
+        ],
+        currentConfigurationRef: 'config-a',
+        switchable: true,
+        switchBlockReason: null,
+      },
+      rejection: null,
+      onSelect,
+      availableWidth: 100,
+    }));
+    await settle(2);
+    await pressKey(rendered, '\r');
+    await pressKey(rendered, '\u001b[B');
+    await pressKey(rendered, '\r');
+    await pressKey(rendered, '\r');
+    expect(onSelect).toHaveBeenCalledTimes(3);
+    expect(onSelect).toHaveBeenNthCalledWith(1, 'config-a');
+    expect(onSelect).toHaveBeenNthCalledWith(2, 'config-b');
+    expect(onSelect).toHaveBeenNthCalledWith(3, 'config-b');
+    rendered.unmount();
+  });
+
+  /** 准入不满足时禁用提交。 */
   test('switchable:false 时 Model Picker 不提交切换（IP-11 要求）', async () => {
     const catalog: ModelCatalog = {
       options: [{ configurationRef: 'config-b', model: 'model-b' }],

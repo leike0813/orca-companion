@@ -10,12 +10,13 @@ import { Box, Text } from 'ink';
 
 import { truncateToDisplayWidth } from '../render/width.js';
 import type { ModelCatalog } from '../ports.js';
+import { tuiColors } from '../theme.js';
+import { SelectionList } from './selection-list.js';
 
 export type ModelPickerProps = {
   readonly catalog: ModelCatalog;
   /** Controller 上一次拒绝的原因；`null` 表示没有被拒绝过。 */
   readonly rejection: string | null;
-  readonly selectedIndex: number;
   readonly onSelect: (configurationRef: string) => void;
   readonly availableWidth: number;
 };
@@ -47,16 +48,20 @@ export function ModelPicker(props: ModelPickerProps) {
     );
   }
   return (
-    <Box flexDirection="column" borderStyle="single">
-      <Text>Model Picker</Text>
-      {props.catalog.options.map((option, index) => (
-        <Text key={option.configurationRef}>
-          {truncateToDisplayWidth(
-            `${index === props.selectedIndex ? '>' : ' '} ${option.configurationRef} (${option.model})${option.configurationRef === props.catalog.currentConfigurationRef ? ' · 当前' : ''}`,
-            Math.max(1, props.availableWidth),
-          )}
-        </Text>
-      ))}
+    <Box flexDirection="column" borderStyle="single" borderColor={tuiColors.border}>
+      <Text color={tuiColors.accent} bold>Model Picker</Text>
+      <SelectionList
+        options={props.catalog.options.map((option) => ({
+          label: truncateToDisplayWidth(
+            `${option.configurationRef} (${option.model})${option.configurationRef === props.catalog.currentConfigurationRef ? ' · 当前' : ''}`,
+            Math.max(1, props.availableWidth - 5),
+          ),
+          value: option.configurationRef,
+        }))}
+        {...(props.catalog.currentConfigurationRef === null ? {} : { defaultValue: props.catalog.currentConfigurationRef })}
+        isDisabled={!admission.allowed}
+        onSelect={props.onSelect}
+      />
       {admission.allowed ? null : <Text>{`! ${admission.reason ?? ''}`}</Text>}
       {props.rejection === null ? null : <Text>{`! ${props.rejection}`}</Text>}
       <Text dimColor>Enter 提交 · Esc 关闭</Text>

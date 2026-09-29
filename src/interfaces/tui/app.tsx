@@ -9,6 +9,7 @@
  */
 
 import { Box, Text, useInput, useWindowSize } from 'ink';
+import { ThemeProvider } from '@inkjs/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { resolveGlobalAction } from './input/keymap.js';
@@ -31,7 +32,7 @@ import { Wizard, allChecksPassed } from './screens/wizard.js';
 import { Workspace, type WorkspaceActions } from './screens/workspace.js';
 import { COMMAND_IDS, type CommandId } from './components/command-palette.js';
 import { preferredSessionId } from './components/session-picker.js';
-import { modelSwitchAdmission } from './components/model-picker.js';
+import { tuiTheme } from './theme.js';
 import {
   projectTranscriptPage,
   projectTuiViewModel,
@@ -114,6 +115,10 @@ function resultNotice(result: ControllerCommandResult): string | null {
 }
 
 export function TuiApp(props: TuiAppProps) {
+  return <ThemeProvider theme={tuiTheme}><TuiAppContent {...props} /></ThemeProvider>;
+}
+
+function TuiAppContent(props: TuiAppProps) {
   const { ports, onExit } = props;
   // 终端宽度是渲染输入，不是业务状态：resize 只重算布局，不重新查询也不改变用户偏好。
   // 必须用 `useWindowSize`：它自己订阅 resize 并触发重渲染；只读 `stdout.columns` 在真实 PTY 里
@@ -135,8 +140,6 @@ export function TuiApp(props: TuiAppProps) {
   const [blocker, setBlocker] = useState<string | null>(null);
   const [scopeId, setScopeId] = useState<string | null>(props.initialScopeId);
   const paletteSelection = useSelectionCursor();
-  const sessionPickerSelection = useSelectionCursor();
-  const modelSelection = useSelectionCursor();
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog>(EMPTY_MODEL_CATALOG);
   const [modelRejection, setModelRejection] = useState<string | null>(null);
   const [handoffProposalId, setHandoffProposalId] = useState<string | null>(null);
@@ -471,11 +474,6 @@ export function TuiApp(props: TuiAppProps) {
           return;
         }
         case 'session-picker': {
-          const sessions = viewModelRef.current?.sessions ?? [];
-          const current = sessions.findIndex(
-            (session) => session.coordinatorSessionId === stateRef.current.selectedSessionId,
-          );
-          sessionPickerSelection.set(current < 0 ? 0 : current);
           dispatch({ kind: 'overlay-open', overlay: 'session-picker' });
           return;
         }
@@ -765,6 +763,13 @@ export function TuiApp(props: TuiAppProps) {
         }
       })();
     },
+    confirmPending: () => {
+      const pending = stateRef.current.pendingConfirmation;
+      if (pending === null) return;
+      dispatch({ kind: 'confirmation-dismissed' });
+      confirmPending(pending);
+    },
+    dismissPending: () => dispatch({ kind: 'confirmation-dismissed' }),
     confirmHandoff: () => {
       void confirmHandoff();
     },
@@ -787,17 +792,11 @@ export function TuiApp(props: TuiAppProps) {
   };
 
   useInput((input, key) => {
-    // 待确认动作是唯一的模态输入：确认前 `y`/`n`/`Esc` 之外的内容被吞掉，不会落到 composer。
+    // 待确认动作是唯一的模态输入：ConfirmInput 接管 y/n，根容器只处理 Esc。
     const pending = stateRef.current.pendingConfirmation;
     if (pending !== null) {
-      if (input === 'y') {
+      if (key.escape === true) {
         dispatch({ kind: 'confirmation-dismissed' });
-        confirmPending(pending);
-        return;
-      }
-      if (input === 'n' || key.escape === true) {
-        dispatch({ kind: 'confirmation-dismissed' });
-        return;
       }
       return;
     }
@@ -881,12 +880,6 @@ export function TuiApp(props: TuiAppProps) {
       return;
     }
     if (topOverlay() === 'model-picker') {
-      handleModelKey(key, {
-        options: modelCatalog.options,
-        cursor: modelSelection,
-        // 准入不满足时 Enter 不提交：界面不替 Controller 猜「也许可以」。
-        select: modelSwitchAdmission(modelCatalog).allowed ? workspaceActions.selectModel : () => undefined,
-      });
       return;
     }
     if (topOverlay() === 'graph-inspector') {
@@ -898,11 +891,6 @@ export function TuiApp(props: TuiAppProps) {
       return;
     }
     if (topOverlay() === 'session-picker') {
-      handleSessionPickerKey(key, {
-        sessions: viewModelRef.current?.sessions.map((session) => session.coordinatorSessionId) ?? [],
-        cursor: sessionPickerSelection,
-        select: workspaceActions.selectSession,
-      });
       return;
     }
     if (action === 'toggle-tool') {
@@ -990,7 +978,6 @@ export function TuiApp(props: TuiAppProps) {
       modelCatalog={modelCatalog}
       modelRejection={modelRejection}
       paletteSelection={paletteSelection.value}
-      modelSelection={modelSelection.value}
       composerDisabledReason={
         viewModel.compaction?.status === 'context_exhausted'
           ? 'context_exhausted：已停止发起新的模型调用'
@@ -1136,53 +1123,6 @@ function handleInspectorKey(
   }
 }
 
-function handleSessionPickerKey(
-  key: { readonly upArrow?: boolean; readonly downArrow?: boolean; readonly return?: boolean },
-  context: {
-    readonly sessions: readonly string[];
-    readonly cursor: SelectionCursor;
-    readonly select: (coordinatorSessionId: string) => void;
-  },
-): void {
-  if (key.upArrow === true) {
-    context.cursor.move(-1, context.sessions.length - 1);
-    return;
-  }
-  if (key.downArrow === true) {
-    context.cursor.move(1, context.sessions.length - 1);
-    return;
-  }
-  if (key.return === true) {
-    const session = context.sessions[context.cursor.current()];
-    if (session !== undefined) {
-      context.select(session);
-    }
-  }
-}
-
-function handleModelKey(
-  key: { readonly upArrow?: boolean; readonly downArrow?: boolean; readonly return?: boolean },
-  context: {
-    readonly options: readonly ModelCatalog['options'][number][];
-    readonly cursor: SelectionCursor;
-    readonly select: (configurationRef: string) => void;
-  },
-): void {
-  if (key.upArrow === true) {
-    context.cursor.move(-1, context.options.length - 1);
-    return;
-  }
-  if (key.downArrow === true) {
-    context.cursor.move(1, context.options.length - 1);
-    return;
-  }
-  if (key.return === true) {
-    const option = context.options[context.cursor.current()];
-    if (option !== undefined) {
-      context.select(option.configurationRef);
-    }
-  }
-}
 
 export type ComposerKeyContext = {
   readonly readOnly: boolean;

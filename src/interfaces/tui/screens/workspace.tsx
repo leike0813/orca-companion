@@ -43,6 +43,8 @@ export type WorkspaceActions = {
   readonly enterAnswer: (interactionId: string, expectedRevision: number) => void;
   readonly runCommand: (command: CommandId) => void;
   readonly selectModel: (configurationRef: string) => void;
+  readonly confirmPending: () => void;
+  readonly dismissPending: () => void;
   readonly confirmHandoff: () => void;
   readonly cancelHandoff: () => void;
   readonly confirmExecutionHandoff: () => void;
@@ -62,7 +64,6 @@ export type WorkspaceProps = {
   readonly modelCatalog: ModelCatalog;
   readonly modelRejection: string | null;
   readonly paletteSelection: number;
-  readonly modelSelection: number;
   readonly composerDisabledReason: string | null;
   readonly newlineHint: string;
   readonly handoffProposal: ControllerPlanningHandoffView | null;
@@ -146,6 +147,8 @@ export function Workspace(props: WorkspaceProps) {
             hazards={view.execution.hazards}
             pending={ui.pendingConfirmation}
             availableWidth={width}
+            onConfirm={props.actions.confirmPending}
+            onDismiss={props.actions.dismissPending}
           />
           <StatusLine
             scope={view.scope}
@@ -217,7 +220,6 @@ function Overlay(props: {
         <ModelPicker
           catalog={parent.modelCatalog}
           rejection={parent.modelRejection}
-          selectedIndex={parent.modelSelection}
           onSelect={parent.actions.selectModel}
           availableWidth={parent.terminalWidth}
         />

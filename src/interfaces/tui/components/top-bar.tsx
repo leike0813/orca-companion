@@ -8,6 +8,7 @@
 import { Box, Text } from 'ink';
 
 import { truncateToDisplayWidth } from '../render/width.js';
+import { tuiColors } from '../theme.js';
 
 export type TopBarProps = {
   readonly coordinationScopeId: string;
@@ -48,8 +49,10 @@ export function topBarSegments(props: TopBarProps): readonly string[] {
 
 export function TopBar(props: TopBarProps) {
   return (
-    <Box borderStyle="single" borderBottom borderTop={false} borderLeft={false} borderRight={false}>
-      <Text>{truncateToDisplayWidth(topBarSegments(props).join(' · '), props.availableWidth)}</Text>
+    <Box borderStyle="single" borderColor={tuiColors.border} borderBottom borderTop={false} borderLeft={false} borderRight={false}>
+      <Text color={props.reconciling || props.controlState === 'blocked' ? tuiColors.warning : tuiColors.accent} bold>
+        {truncateToDisplayWidth(topBarSegments(props).join(' · '), props.availableWidth)}
+      </Text>
     </Box>
   );
 }

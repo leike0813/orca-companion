@@ -15,6 +15,7 @@ import type {
   ScopeView,
 } from '../../../application/tui/view-model.js';
 import type { SidebarDensity } from '../state.js';
+import { tuiColors } from '../theme.js';
 
 export type StatusLineProps = {
   readonly scope: ScopeView;
@@ -89,9 +90,11 @@ export function StatusLine(props: StatusLineProps) {
   // 恰恰是最需要可见的部分）。
   return (
     <Box flexDirection="column">
-      <Text>{truncateToDisplayWidth(parts.join(' · '), Math.max(1, props.availableWidth))}</Text>
+      <Text color={props.notice !== null ? tuiColors.warning : props.blockerCount > 0 ? tuiColors.error : tuiColors.muted}>
+        {truncateToDisplayWidth(parts.join(' · '), Math.max(1, props.availableWidth))}
+      </Text>
       {executionParts.length === 0 ? null : (
-        <Text dimColor>
+        <Text color={props.execution?.reconciliation.pending ? tuiColors.warning : tuiColors.muted}>
           {truncateToDisplayWidth(executionParts.join(' · '), Math.max(1, props.availableWidth))}
         </Text>
       )}

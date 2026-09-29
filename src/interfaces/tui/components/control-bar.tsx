@@ -8,17 +8,21 @@
  * 确认只是一次意图提交：界面不推断终态，`cancelling` 一律来自 Controller 已持久化的控制状态。
  */
 
+import { ConfirmInput } from '@inkjs/ui';
 import { Box, Text } from 'ink';
 
 import { truncateToDisplayWidth } from '../render/width.js';
 import type { ControlHazardsView } from '../../../application/execution/execution-view.js';
 import type { PendingConfirmation } from '../state.js';
+import { tuiColors } from '../theme.js';
 
 export type ControlBarProps = {
   readonly controlState: string;
   readonly hazards: ControlHazardsView;
   readonly pending: PendingConfirmation;
   readonly availableWidth: number;
+  readonly onConfirm: () => void;
+  readonly onDismiss: () => void;
 };
 
 const HAZARD_LABELS = {
@@ -55,8 +59,8 @@ export function confirmationPrompt(
   const reasons = hazardReasons(hazards);
   const detail = reasons.length === 0 ? '没有危险态' : reasons.join('、');
   return pending.kind === 'cancel'
-    ? `确认 Cancel 整个 Coordination Scope？(${detail}) y 确认 · n 取消`
-    : `确认退出前台进程？Scope 不会进入暂停或取消。(${detail}) y 确认 · n 取消`;
+    ? `确认 Cancel 整个 Coordination Scope？(${detail}) `
+    : `确认退出前台进程？Scope 不会进入暂停或取消。(${detail}) `;
 }
 
 export function ControlBar(props: ControlBarProps) {
@@ -71,7 +75,10 @@ export function ControlBar(props: ControlBarProps) {
         )}
       </Text>
       {prompt === null ? null : (
-        <Text>{truncateToDisplayWidth(prompt, Math.max(1, props.availableWidth))}</Text>
+        <Box flexDirection="row">
+          <Text color={tuiColors.warning} bold>{truncateToDisplayWidth(prompt, Math.max(1, props.availableWidth - 5))}</Text>
+          <ConfirmInput defaultChoice="cancel" submitOnEnter={false} onConfirm={props.onConfirm} onCancel={props.onDismiss} />
+        </Box>
       )}
     </Box>
   );

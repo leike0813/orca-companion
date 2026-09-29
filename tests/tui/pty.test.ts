@@ -24,9 +24,8 @@
  */
 
 import { execFileSync, spawnSync, type SpawnSyncReturns } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import { afterAll, describe, expect, test } from 'vitest';
 
@@ -37,7 +36,6 @@ const BUILT_ENTRY = join(REPOSITORY_ROOT, 'dist', 'src', 'interfaces', 'cli', 'm
 const BUILT_TUI_APP = join(REPOSITORY_ROOT, 'dist', 'src', 'interfaces', 'tui', 'app.js');
 
 /** 渲染保真样本：中文与中英文混排，且足够长到会在窄屏换行。 */
-const CJK_SAMPLE = '请规划第一版路线图：中文abc混排内容需要按显示宽度换行';
 /** 换行前的稳定前缀（显示宽度 18，任何被测宽度下都不会被切断）。 */
 const CJK_MARKER = '请规划第一版路线图';
 const SIDEBAR_BORDER = '│';
@@ -283,151 +281,9 @@ function frameGeometryProblems(lines: readonly string[], terminalWidth: number):
 /* PTY fixture                                                                 */
 /* -------------------------------------------------------------------------- */
 
-const FIXTURE_DIRECTORIES: string[] = [];
-
 /** sh 单参数引用；只用于本文件控制的固定路径。 */
 function quoteArgument(value: string): string {
   return JSON.stringify(value);
-}
-
-/**
- * 真实 PTY 里渲染完整 `TuiApp` 的 fixture。
- *
- * 端口与快照形状与 `tests/tui/harness.ts` 的 fake 端口一致；CJK transcript 与图节点让 resize 后的
- * 换行、边框对齐与旧帧残留可以被观察，而不是只看空屏。
- */
-function fixtureSource(): string {
-  const appUrl = pathToFileURL(BUILT_TUI_APP).href;
-  return `import { createElement } from 'react';
-import { render } from 'ink';
-import { TuiApp } from ${JSON.stringify(appUrl)};
-
-const transcript = {
-  coordinatorSessionId: 'session-a',
-  messages: [
-    { role: 'user', content: ${JSON.stringify(CJK_SAMPLE)}, stepId: null },
-    { role: 'assistant', content: 'Coordinator 会先读地图，再确认依赖与范围。', stepId: 'step-1' },
-    { role: 'tool', content: 'search\\n命中 3 个文件', stepId: 'step-2' },
-  ],
-  nextCursor: null,
-};
-
-const snapshot = {
-  coordinationScopeId: 'scope-pty',
-  revision: 7,
-  mode: 'route_planning',
-  controlState: 'active',
-  planningCycleId: 'cycle-1',
-  mapRevision: 3,
-  graph: { graphId: 'graph-1', graphVersion: 2, generation: 1 },
-  authorization: null,
-  executionLeaseHolderSessionId: null,
-  selectedSessionId: null,
-  sessions: [
-    {
-      coordinatorSessionId: 'session-a',
-      coordinatorModelConfigurationRef: 'config-a',
-      lifecycleState: 'active',
-      holdsRuntimeLease: false,
-      holdsExecutionLease: false,
-      planningResponsible: true,
-      openInteractionCount: 0,
-    },
-  ],
-  budgets: [],
-  frontier: [],
-  workers: [],
-  finalizer: {
-    gate: { ready: false, blockers: ['no-work-packages'] },
-    coversWorkPackageIds: [],
-    worktreePath: null,
-    readOnlyProfile: 'unverified',
-    integrationFrozen: 'unknown',
-    workspace: null,
-    evidenceRefs: [],
-    verdict: null,
-  },
-  executionReconciliation: { pending: false, unresolvedIntentCount: 0, activeWorkerCount: 0, reasons: [] },
-  blockers: [],
-  interactions: [],
-  handoffs: [],
-  recoveries: [],
-  graphEvolution: { generations: [], revisionHolds: [], reconciliations: [], lineages: [], adoptions: [] },
-  maintenance: null,
-  graphTopologies: [
-    {
-      graphId: 'graph-1',
-      graphVersion: 2,
-      generation: 1,
-      nodes: [
-        {
-          workPackageId: 'wp-1',
-          title: '第一个工作包',
-          dependsOn: [],
-          scopeEnvelope: { include: ['src/a.ts'], exclude: [] },
-        },
-      ],
-      readiness: { generationStatus: 'candidate', authorizationBound: false },
-    },
-  ],
-  compaction: null,
-  planningHandoffs: [],
-};
-
-const accepted = { kind: 'accepted', revision: 1, summary: 'ok' };
-const ports = {
-  snapshot: async (selectedSessionId) => ({ kind: 'snapshot', snapshot: { ...snapshot, selectedSessionId } }),
-  transcript: async () => ({ kind: 'transcript', transcript }),
-  execute: async () => accepted,
-  subscribe: () => () => {},
-  scopeSetup: {
-    resolveHome: async () => ({ kind: 'restore', coordinationScopeId: 'scope-pty' }),
-    verify: async () => [],
-    proposal: async () => ({
-      coordinationScopeId: 'scope-pty',
-      coordinatorSessionId: 'session-a',
-      coordinatorModelConfigurationRef: 'config-a',
-      planningCycleId: 'cycle-1',
-      repositoryPath: process.cwd(),
-      canonicalWorktree: process.cwd(),
-      trackerRef: 'local:pty-fixture',
-    }),
-    initialize: async () => accepted,
-  },
-  modelCatalog: {
-    load: async () => ({ options: [], currentConfigurationRef: null, switchable: false, switchBlockReason: null }),
-  },
-  handoff: {
-    prepareProposal: async () => accepted,
-    cutover: async () => accepted,
-    cancel: async () => accepted,
-  },
-};
-
-let app;
-app = render(
-  createElement(TuiApp, {
-    ports,
-    terminalWidth: process.stdout.columns ?? 80,
-    initialScopeId: null,
-    onExit: () => {
-      app.unmount();
-    },
-  }),
-  // 与 src/bootstrap/tui-entry.ts 一致：Ink 7 的自动交互判定会被环境里的 CI=true 关掉，
-  // 导致真 TTY 下也不绘制任何帧。PTY 用例必须在任何 CI 环境下都真实渲染。
-  { exitOnCtrlC: false, interactive: true },
-);
-await app.waitUntilExit();
-`;
-}
-
-function writeFixture(): string {
-  const directory = mkdtempSync(join(REPOSITORY_ROOT, 'node_modules', '.orca-pty-fixture-'));
-  FIXTURE_DIRECTORIES.push(directory);
-  const file = join(directory, 'fixture.mjs');
-  writeFileSync(file, fixtureSource(), 'utf8');
-  return file;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -445,7 +301,7 @@ function newSocket(label: string): string {
 }
 
 function fixtureCommand(): string {
-  return [process.execPath, writeFixture()].map(quoteArgument).join(' ');
+  return [process.execPath, join(REPOSITORY_ROOT, 'scripts', 'tui-preview.mjs')].map(quoteArgument).join(' ');
 }
 
 afterAll(() => {
@@ -453,9 +309,6 @@ afterAll(() => {
     for (const socket of SOCKETS) {
       tmux(socket, ['kill-server']);
     }
-  }
-  for (const directory of FIXTURE_DIRECTORIES) {
-    rmSync(directory, { recursive: true, force: true });
   }
 });
 
@@ -555,6 +408,19 @@ describe.skipIf(!build.ok)(SUITE_NAME, () => {
         expect(narrow.text).not.toContain('sidebar full');
         // 全宽顶栏横线重排到新宽度，而不是残留 120 列。
         expect(narrow.text).toContain('─'.repeat(50));
+      });
+
+      test('执行态预览只用假端口，提交会明确拒绝', () => {
+        const socket = newSocket('preview-read-only');
+        const session = 'tui';
+        expect(startSession(socket, session, 120, 40, `${fixtureCommand()} execution`, { cwd: REPOSITORY_ROOT }).status).toBe(0);
+        const ready = pollPane(socket, session, (text) => text.includes('execution_coordination') && text.includes('wp-1 [implementing]'));
+        expect(ready.ok, ready.text).toBe(true);
+        tmux(socket, ['send-keys', '-t', session, '-l', 'hello']);
+        tmux(socket, ['send-keys', '-t', session, 'Enter']);
+        const rejected = pollPane(socket, session, (text) => text.includes('preview_read_only'));
+        expect(rejected.ok, rejected.text).toBe(true);
+        expect(paneState(socket, session).dead).toBe(false);
       });
 
       test('过窄终端下 Ctrl+G 只提示加宽，不遮挡主视图', () => {

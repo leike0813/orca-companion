@@ -45,6 +45,11 @@ async function openSessionPicker(rendered: RenderedTui): Promise<void> {
   await runPaletteCommand(rendered, COMMAND_IDS.indexOf('session-picker'));
 }
 
+function expectSelectedSession(frame: string, sessionId: string): void {
+  const row = frame.split('\n').find((line) => line.includes(sessionId)) ?? '';
+  expect(row).toMatch(/[✔√]/u);
+}
+
 /** Ink 把单独一个 `ESC` 当作可能的分块转义序列前缀挂起后再回放，因此按 Esc 必须等真实时间。 */
 async function pressEscape(rendered: RenderedTui): Promise<void> {
   rendered.stdin.write('\u001b');
@@ -170,7 +175,7 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
     await pressKey(rendered, '\u001b[A');
     await pressKey(rendered, '\r');
     await openSessionPicker(rendered);
-    expect(frameText(rendered)).toContain('>  session-a active pending=0');
+    expectSelectedSession(frameText(rendered), 'session-a');
     await pressEscape(rendered);
     expect(frameText(rendered)).toContain('Execution Handoff Review');
 
@@ -178,7 +183,7 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
 
     // cutover 完成后自动选中 Target（记录里的 targetSessionId），而不是停留在 Source。
     await openSessionPicker(rendered);
-    expect(frameText(rendered)).toContain('>? session-b active pending=1');
+    expectSelectedSession(frameText(rendered), 'session-b');
     await pressEscape(rendered);
 
     const cutoverFrame = frameText(rendered);
@@ -249,7 +254,7 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
 
     // Source 仍是唯一 owner：选中 Session 不变，Target 未被激活。
     await openSessionPicker(rendered);
-    expect(frameText(rendered)).toContain('>? session-b active pending=1');
+    expectSelectedSession(frameText(rendered), 'session-b');
     expect(fake.executeIntents).toEqual([]);
 
     rendered.unmount();
@@ -279,7 +284,7 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
 
     // Source 仍是唯一 owner：Target 未被激活，也没有任何业务意图。
     await openSessionPicker(rendered);
-    expect(frameText(rendered)).toContain('>? session-b active pending=1');
+    expectSelectedSession(frameText(rendered), 'session-b');
     expect(fake.executeIntents).toEqual([]);
 
     rendered.unmount();
@@ -311,7 +316,7 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
 
     // Source 仍是唯一 owner。
     await openSessionPicker(rendered);
-    expect(frameText(rendered)).toContain('>? session-b active pending=1');
+    expectSelectedSession(frameText(rendered), 'session-b');
     expect(fake.executeIntents).toEqual([]);
 
     rendered.unmount();
