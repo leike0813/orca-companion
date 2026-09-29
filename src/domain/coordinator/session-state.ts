@@ -81,6 +81,8 @@ export type CommittedMessageEntry = {
   /** 仅 tool：被回答的 call 身份与工具名。 */
   readonly toolCallId?: string;
   readonly toolName?: string;
+  /** 工具结果已处理的工作源；只有受理且结果已提交时存在。 */
+  readonly completedWorkSource?: SourceRevisionRef;
 };
 
 /**
@@ -275,6 +277,7 @@ const MESSAGE_ENTRY_FIELDS: readonly string[] = [
   'toolCalls',
   'toolCallId',
   'toolName',
+  'completedWorkSource',
 ];
 
 const LEGACY_MESSAGE_FIELDS: readonly string[] = ['role', 'content', 'toolCalls'];
@@ -545,6 +548,9 @@ function parseMessageEntry(raw: unknown, field: string): IdentityResult<Committe
   };
 
   if (role === 'assistant') {
+    if (raw['completedWorkSource'] !== undefined) {
+      return fail(`${field}.completedWorkSource`, '只有 tool 结果可标记已处理的工作源');
+    }
     const callsRaw = raw['toolCalls'];
     if (callsRaw === undefined) {
       return { ok: true, value: base };
@@ -573,10 +579,17 @@ function parseMessageEntry(raw: unknown, field: string): IdentityResult<Committe
     if (!toolName.ok) {
       return toolName;
     }
-    return { ok: true, value: { ...base, toolCallId: toolCallId.value, toolName: toolName.value } };
+    const completedWorkSource = raw['completedWorkSource'] === undefined
+      ? null
+      : parseSourceRevisionRef(raw['completedWorkSource'], `${field}.completedWorkSource`);
+    if (completedWorkSource !== null && !completedWorkSource.ok) return completedWorkSource;
+    return { ok: true, value: {
+      ...base, toolCallId: toolCallId.value, toolName: toolName.value,
+      ...(completedWorkSource === null ? {} : { completedWorkSource: completedWorkSource.value }),
+    } };
   }
 
-  if (raw['toolCalls'] !== undefined || raw['toolCallId'] !== undefined || raw['toolName'] !== undefined) {
+  if (raw['toolCalls'] !== undefined || raw['toolCallId'] !== undefined || raw['toolName'] !== undefined || raw['completedWorkSource'] !== undefined) {
     return fail(field, `${role} 消息不接受工具配对字段`);
   }
   return { ok: true, value: base };

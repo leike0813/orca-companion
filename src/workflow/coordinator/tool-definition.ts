@@ -36,6 +36,8 @@ export type CoordinatorToolDefinition = {
   readonly name: string;
   readonly description: string;
   readonly mutating: boolean;
+  /** 成功结果本身已处理当前工作；只用于可独立收尾的单次动作。 */
+  readonly completesWorkOnSuccess?: true;
   readonly inputSchema: Record<string, unknown>;
   /** 执行只发生在受控 tools 节点；身份取自调用上下文，不取自模型输入。 */
   readonly invoke: (input: unknown, context: CoordinatorToolCallContext) => Promise<CoordinatorToolOutcome>;

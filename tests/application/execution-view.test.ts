@@ -17,6 +17,7 @@ import type {
   CoordinatorSessionId,
   DispatchId,
   GraphId,
+  GraphGeneration,
   GraphVersion,
   InteractionId,
   OperationId,
@@ -28,6 +29,7 @@ import type {
   WorkPackageId,
 } from '../../src/application/dto/identity.js';
 import type { IntentState, OperationIntent } from '../../src/application/dto/operation-intent.js';
+import { integrationOperationIdsFor } from '../../src/application/integrate-work-package.js';
 import {
   controlHazards,
   deriveExecutionFacts,
@@ -95,6 +97,7 @@ const EMPTY_SNAPSHOT: CoordinationSnapshot = {
   ticketClaims: [],
   pendingInteractions: [],
   unresolvedIntents: [],
+  settledGitIntegrationIntents: [],
   planningHandoffs: [],
   planningResponsibility: null,
   sessionSegments: [],
@@ -569,6 +572,39 @@ describe('deriveExecutionFacts：Frontier 阶段只由持久事实推出', () =>
     expect(validating.role).toBe('implementation');
     expect(validating.validation?.state).toBe('validating');
     expect(validating.integration).toBeNull();
+  });
+
+  test('完整 push 结算才解除集成等待并放行依赖节点', () => {
+    const operationIds = integrationOperationIdsFor({ scopeId: SCOPE, graphId: GRAPH, generation: 1, workPackageId: WP_A as WorkPackageId });
+    const intents = [operationIds.commit, operationIds.integrate, operationIds.push].map((operationId) => ({
+      ...makeIntent(operationId, 'settled'),
+      operationId,
+      operationCategory: 'git-integration',
+      target: { kind: 'work-package', id: WP_A },
+      outcomeClass: 'accepted' as const,
+    }));
+    const base = snapshot({
+      graphGenerations: [{
+        coordinationScopeId: SCOPE, graphId: GRAPH, generation: 1 as GraphGeneration,
+        planningCycleId: CYCLE, orcaRunId: 'run-1', predecessorGraphId: null,
+        baselineHead: 'head-0001', status: 'active', createdAt: 1, updatedAt: 1,
+      }],
+      materializationBindings: [makeBinding(WP_A, 'orca-task-a')],
+      deliverySettlements: [makeSettlement({ workPackageId: WP_A, orcaTaskId: 'orca-task-a', role: 'validator' })],
+    });
+    const nodes = [{ workPackageId: WP_A, dependsOn: [] }, { workPackageId: WP_B, dependsOn: [WP_A] }];
+    for (const count of [0, 1, 2]) {
+      const facts = derive({ snapshot: { ...base, settledGitIntegrationIntents: intents.slice(0, count) }, nodes });
+      expect(frontierEntry(facts, WP_A).state).toBe('waiting_integration');
+      expect(frontierEntry(facts, WP_B).state).toBe('waiting');
+    }
+    expect(frontierEntry(derive({ snapshot: { ...base, settledGitIntegrationIntents: [
+      { ...intents[2]!, outcomeClass: 'rejected' },
+    ] }, nodes }), WP_A).state).toBe('waiting_integration');
+    const facts = derive({ snapshot: { ...base, settledGitIntegrationIntents: intents }, nodes });
+    expect(frontierEntry(facts, WP_A).state).toBe('accepted');
+    expect(frontierEntry(facts, WP_A).integration?.ref).toBe(operationIds.push);
+    expect(frontierEntry(facts, WP_B).state).toBe('admitting');
   });
 
   test('Scenario 迟到结果只补历史／unknown 不呈现为失败：只有 Session Segment 时是 unknown 且 liveness 不可核验', () => {

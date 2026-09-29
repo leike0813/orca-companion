@@ -18,7 +18,7 @@
 
 import type { CoordinationScopeId, OperationId, WorkPackageId } from './dto/identity.js';
 import type { OperationOutcome } from './dto/operation-outcome.js';
-import type { BranchCoordinationStore, CoordinationWriter } from './ports/branch-coordination-store.js';
+import type { BranchCoordinationStore, CoordinationSnapshot, CoordinationWriter } from './ports/branch-coordination-store.js';
 import {
   buildExecutionScope,
   type ExecutionAuthority,
@@ -101,6 +101,43 @@ export type IntegrationOperationIds = {
   readonly integrate: OperationId;
   readonly push: OperationId;
 };
+
+/** 与已发出的集成意图保持同一身份；完成判定只认最后一步 push。 */
+export function integrationOperationIdsFor(input: {
+  readonly scopeId: CoordinationScopeId;
+  readonly graphId: string;
+  readonly generation: number;
+  readonly workPackageId: WorkPackageId;
+}): IntegrationOperationIds {
+  const segments = [input.scopeId, input.graphId, String(input.generation), input.workPackageId]
+    .map((segment) => encodeURIComponent(segment));
+  const suffix = segments.join(':');
+  return {
+    commit: `git-integration-commit:${suffix}` as OperationId,
+    integrate: `git-integration-integrate:${suffix}` as OperationId,
+    push: `git-integration-push:${suffix}` as OperationId,
+  };
+}
+
+export function completedIntegrationRef(
+  snapshot: CoordinationSnapshot,
+  workPackageId: WorkPackageId,
+): OperationId | null {
+  const graphId = snapshot.scope.graphId;
+  const generation = snapshot.graphGenerations.find((entry) => entry.graphId === graphId);
+  if (graphId === null || generation === undefined) return null;
+  const pushId = integrationOperationIdsFor({
+    scopeId: snapshot.scope.coordinationScopeId,
+    graphId,
+    generation: generation.generation,
+    workPackageId,
+  }).push;
+  return snapshot.settledGitIntegrationIntents.some((intent) =>
+    intent.operationId === pushId && intent.operationCategory === 'git-integration' &&
+    intent.state === 'settled' && intent.outcomeClass === 'accepted' &&
+    intent.target.kind === 'work-package' && intent.target.id === workPackageId,
+  ) ? pushId : null;
+}
 
 export type IntegrateWorkPackageInput = {
   readonly port: GitIntegrationPort;

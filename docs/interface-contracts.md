@@ -161,6 +161,8 @@ type CoordinationCommandResult =
 | Budget counters | budget key、approved limit ref、consumed count；重启/恢复/patch 不重置 |
 | 后继记录 | wake admission、graph/auth refs、bindings、dedupe refs、Recovery/Handoff/lineage；只存不可重建最小事实 |
 
+`CoordinationSnapshot.unresolvedIntents` 只含 pending/blocked；`settledGitIntegrationIntents` 只读投影当前 Scope 已结算且被接受的 Git 步骤。完整集成须匹配当前 Graph Generation、Work Package 的 **push OperationId**，commit 或 canonical merge 意图不足以证明完成。两者来自同一张 Operation Intent 表，不新增写入权威。
+
 `m2-wire-execution-runtime` 的 schema 11 将 Materialization Binding 按 Scope、Work Package、角色和 Attempt 留存。每条新记录绑定一个 Orca Task、创建 OperationId、Task Envelope 的 WorkerTaskId/DispatchId/AttemptId、真实 worktreeId，以及已接纳的 Spec Binding；Planner 首次创建规格时改存固定 `specificationUnitPath`，Spec Binding 为空。Delivery 用这条持久绑定和精确 Session Segment 核验可信归属，不能从 Worker 自报 payload 补全。迁移前旧行保留但新增身份字段为空，读取时阻塞，不作猜测。
 
 schema 12 起每条物化绑定还记录这次派发使用的 **Worker launch 身份**（`launchId`）：它是补记 Session Binding 的唯一定位事实（报告文件按 launchId 派生）。Session Binding 的建立分两处，共用同一份签发实现：派发路径在 `bindingWindowMs` 窗口内读 Codex SessionStart 报告；每次执行触发在推进之前对「物化绑定已 issued 且有 launchId、但图内还没有对应 Session Segment」的角色再读一次同一路径的报告（Orca Dispatch 身份按已记录的 Orca Task 从列举事实匹配，不猜），校验通过才补记 Segment，读不到就什么都不做（保持 fail-closed：Delivery 结算会以 `dispatch_record_missing` 呈现）。补记不派发新 Worker、不改 Attempt、不消耗预算。schema 12 之前写入的行没有 `launchId`：读取方在需要补记时按不可补记处理，绝不重建派生编码。
@@ -211,6 +213,8 @@ type CoordinatorSessionState = {
 ```
 
 `m1-wire-foreground-planning-runtime` 将 Session payload 升为 v2：每条已提交消息有稳定 `entryId`；tool result 还包含配对的 `toolCallId` 与名称，assistant call 的可信 `OperationId` 在模型响应提交时由宿主分配；`lastCompactionOutcome` 是该 Session 最近一次维护结果。v1 读取只做可证明唯一的升级，失败阻塞且保留原 checkpoint。普通用户消息以 `submissionId` 与 WakeBatch 原子落盘后补记 source admission；交互回答正文属于 IC-03。
+
+`request_graph_patch` 的 `ok` 工具结果可以携带 `completedWorkSource`（完整 source kind/id/revision），表示该次用户工作已由受理动作处理。拒绝、unknown 与未落盘结果不带此字段；宿主按精确来源重建待处理工作，不再把同一声明交给模型。该字段只允许出现在 tool 消息中，旧 checkpoint 缺失字段仍可读。
 
 | 字段 | 合同 |
 |---|---|
@@ -396,6 +400,8 @@ Validator 在同一 Validation Attempt/真实 Session 内验证、范围内修�
 - **测试 seam**：fake transport + fake Orca result store 覆盖每个崩溃窗口；真实隔离闭环验证 transport 契约而非故障注入。
 
 受控 Git 集成是同一 Owner 的副作用 pipeline：`GitIntegrationPort` 只接受固定三步，生产实现（`src/adapters/git/integration.ts`）只以 argv 数组与显式 cwd 调用 `git`，不经 shell，不 force-push、不 reset、不 rewrite 历史。
+
+宿主、执行投影与 CLI 使用同一 `completedIntegrationRef`：仅当前 Scope/Graph Generation/Work Package 的 push 意图 settled/accepted 才表示完整集成。部分步骤在重启后沿原 OperationId 回读并继续，Finalizer 不得以部分步骤通过集成门禁。
 
 ```ts
 type GitStepRequest = {

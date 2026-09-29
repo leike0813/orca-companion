@@ -33,7 +33,7 @@ import type {
   WorkerTaskId,
   WorkPackageId,
 } from '../application/dto/identity.js';
-import type { ProjectedActionableWorkItem } from '../application/coordinator/actionable-work.js';
+import { pendingWorkFromHistory, type ProjectedActionableWorkItem } from '../application/coordinator/actionable-work.js';
 import {
   advanceExecution,
   consumedBudgetForWorkPackage,
@@ -97,7 +97,7 @@ import { admitSpecification, type SpecificationAdmissionResult } from '../applic
 import type { SpecificationProvider as SpecificationProviderPort } from '../application/ports/specification-provider.js';
 import type { ScopeEnvelope as ScopeEnvelopeShape } from '../domain/planning/execution-graph.js';
 import { planFinalizerDispatch, finalizeProject, type FinalizerGateFacts } from '../application/finalize-project.js';
-import { integrateWorkPackage, type GitIntegrationPort } from '../application/integrate-work-package.js';
+import { completedIntegrationRef, integrateWorkPackage, integrationOperationIdsFor, type GitIntegrationPort } from '../application/integrate-work-package.js';
 import {
   beginSpecificationRevision,
   settleRetiredRevision,
@@ -1982,32 +1982,11 @@ export async function createForegroundPlanningHost(
     if (state === null) {
       return [];
     }
-    const answers = new Map(answeredInteractionsFor(session).map((answer) => [answerEntryId(answer.interactionId), answer]));
-    const historyItems: ProjectedActionableWorkItem[] = [];
-    for (const entry of state.committedMessages) {
-      if (entry.role === 'assistant' && (entry.toolCalls?.length ?? 0) === 0) {
-        historyItems.shift();
-        continue;
-      }
-      if (entry.role === 'user') {
-        const submissionId = entry.entryId.replace(/^entry:user:/u, '');
-        historyItems.push({
-          source: { sourceKind: 'user-message', sourceId: submissionId, revision: 1 },
-          workKind: 'user_message',
-          summary: entry.content.slice(0, 240),
-        });
-        continue;
-      }
-      const answer = answers.get(entry.entryId);
-      if (answer !== undefined) {
-        historyItems.push({
-          source: { sourceKind: 'interaction-answer', sourceId: answer.interactionId, revision: 1 },
-          workKind: 'pending_interaction',
-          summary: `Pending Interaction ${answer.interactionId} 已被回答：${answer.answerText ?? ''}`,
-        });
-      }
-    }
-    return historyItems;
+    const answers = new Map(answeredInteractionsFor(session).map((answer) => [answerEntryId(answer.interactionId), {
+      interactionId: answer.interactionId,
+      answerText: answer.answerText ?? '',
+    }]));
+    return pendingWorkFromHistory(state.committedMessages, answers);
   };
 
   const runModelLoop = async (session: LiveSession): Promise<void> => {
@@ -2067,7 +2046,7 @@ export async function createForegroundPlanningHost(
           revision: scope.revision,
           reason: `model:${result.status}:${result.note}`,
         });
-        if (result.status !== 'running') {
+        if (result.status !== 'running' && result.status !== 'work_completed') {
           return;
         }
         work = result.remainingWork.length > 0 ? result.remainingWork : pendingWorkFor(session);
@@ -5181,43 +5160,6 @@ export async function createForegroundPlanningHost(
   };
 
   /** 该 Work Package 是否已经有已接受的 Git Integration Operation；判定只看已收尾的意图记录。 */
-  const integrationCompletedFor = (scopeId: CoordinationScopeId, workPackageId: WorkPackageId): boolean => {
-    const current = requireStore();
-    if (current === null) {
-      return false;
-    }
-    const intent = current.query({
-      kind: 'intents',
-      coordinationScopeId: scopeId,
-    });
-    return (
-      intent.kind === 'intents' &&
-      intent.intents.some(
-        (record) =>
-          record.operationCategory === 'git-integration' &&
-          record.target.kind === 'work-package' &&
-          record.target.id === workPackageId &&
-          record.state === 'settled' &&
-          record.outcomeClass === 'accepted',
-      )
-    );
-  };
-
-  /** 集成步骤的稳定 OperationId：同一 Work Package 在同一世代里只集成一次（D9）。 */
-  const integrationOperationIdsFor = (input: {
-    readonly scopeId: CoordinationScopeId;
-    readonly graphId: string;
-    readonly generation: number;
-    readonly workPackageId: WorkPackageId;
-  }): { readonly commit: OperationId; readonly integrate: OperationId; readonly push: OperationId } => {
-    const segments = [input.scopeId, input.graphId, String(input.generation), input.workPackageId];
-    return {
-      commit: derivedKey('git-integration-commit', segments) as OperationId,
-      integrate: derivedKey('git-integration-integrate', segments) as OperationId,
-      push: derivedKey('git-integration-push', segments) as OperationId,
-    };
-  };
-
   /**
    * 结算「退休」留下的修订持有。
    *
@@ -5416,7 +5358,7 @@ export async function createForegroundPlanningHost(
     const candidate = graph.workPackages.find(
       (workPackage) =>
         establishedStatusOf(snapshot, workPackage.workPackageId).validation.kind === 'validated' &&
-        !integrationCompletedFor(scopeId, workPackage.workPackageId),
+        completedIntegrationRef(snapshot, workPackage.workPackageId) === null,
     );
     if (candidate === undefined) {
       return;
@@ -5698,7 +5640,7 @@ export async function createForegroundPlanningHost(
     }
     // 集成完成是 Finalizer 的前置事实：只认已收尾且被接受的 Git Integration Operation。
     const unintegrated = graph.workPackages.filter(
-      (workPackage) => !integrationCompletedFor(scopeId, workPackage.workPackageId),
+      (workPackage) => completedIntegrationRef(snapshot, workPackage.workPackageId) === null,
     );
     if (unintegrated.length > 0) {
       return;

@@ -157,7 +157,7 @@ export function pendingToolCallsIn(
  * `suspended` 是可恢复条件；`stalled` 是 Loop Stall（模型调用未完整提交，历史停在最后一个
  * Committed Model Step）；`blocked` 是 fail closed，需要人工处理。
  */
-export const COORDINATOR_GRAPH_STATUSES = ['running', 'suspended', 'stalled', 'blocked'] as const;
+export const COORDINATOR_GRAPH_STATUSES = ['running', 'work_completed', 'suspended', 'stalled', 'blocked'] as const;
 
 export type CoordinatorGraphStatus = (typeof COORDINATOR_GRAPH_STATUSES)[number];
 

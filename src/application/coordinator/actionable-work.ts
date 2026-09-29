@@ -11,7 +11,7 @@
  */
 
 import type { ControlState } from '../../domain/coordination/mode.js';
-import type { SourceRevisionRef } from '../../domain/coordinator/session-state.js';
+import type { CommittedMessageEntry, SourceRevisionRef } from '../../domain/coordinator/session-state.js';
 import type { CoordinatorSessionId } from '../dto/identity.js';
 import { admissionKeyFor } from './wake-admission.js';
 import type { WakeAdmissionRecord } from '../ports/branch-coordination-store.js';
@@ -140,4 +140,43 @@ export function projectActionableWork(input: ProjectActionableWorkInput): Action
     deferredCount,
     suppressedBy: items.length === 0 && deferredCount > 0 ? 'limit' : null,
   };
+}
+
+/** 从已提交历史重建尚未处理的消息；工具完成标记按精确 source 身份消费。 */
+export function pendingWorkFromHistory(
+  entries: readonly CommittedMessageEntry[],
+  answers: ReadonlyMap<string, { readonly interactionId: string; readonly answerText: string }>,
+): readonly ProjectedActionableWorkItem[] {
+  const pending: ProjectedActionableWorkItem[] = [];
+  for (const entry of entries) {
+    if (entry.completedWorkSource !== undefined) {
+      const source = entry.completedWorkSource;
+      const index = pending.findIndex((item) => item.source.sourceKind === source.sourceKind &&
+        item.source.sourceId === source.sourceId && item.source.revision === source.revision);
+      if (index >= 0) pending.splice(index, 1);
+      continue;
+    }
+    if (entry.role === 'assistant' && (entry.toolCalls?.length ?? 0) === 0) {
+      pending.shift();
+      continue;
+    }
+    if (entry.role === 'user') {
+      const submissionId = entry.entryId.replace(/^entry:user:/u, '');
+      pending.push({
+        source: { sourceKind: 'user-message', sourceId: submissionId, revision: 1 },
+        workKind: 'user_message',
+        summary: entry.content.slice(0, 240),
+      });
+      continue;
+    }
+    const answer = answers.get(entry.entryId);
+    if (answer !== undefined) {
+      pending.push({
+        source: { sourceKind: 'interaction-answer', sourceId: answer.interactionId, revision: 1 },
+        workKind: 'pending_interaction',
+        summary: `Pending Interaction ${answer.interactionId} 已被回答：${answer.answerText}`,
+      });
+    }
+  }
+  return pending;
 }

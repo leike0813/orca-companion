@@ -618,6 +618,8 @@ export type CoordinationSnapshot = {
   readonly ticketClaims: readonly TicketClaimRecord[];
   readonly pendingInteractions: readonly PendingInteractionRecord[];
   readonly unresolvedIntents: readonly OperationIntent[];
+  /** 当前 Scope 已确定接受的 Git 步骤；完整集成还需匹配当前世代的 push 身份。 */
+  readonly settledGitIntegrationIntents: readonly OperationIntent[];
   readonly planningHandoffs: readonly PlanningHandoffRecord[];
   readonly planningResponsibility: PlanningResponsibilityRecord | null;
   readonly sessionSegments: readonly SessionSegmentRecord[];

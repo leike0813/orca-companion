@@ -13,8 +13,7 @@
  *   `unverifiable`）是两个字段，`liveness` 只在能核验时给出确定值；
  * - **不越权**：Finalizer 门禁只复述 `planFinalizerDispatch` 的判决与已接受的 Delivery Verdict；门禁
  *   不满足、只读无法强制或工作区在运行期间变化时只呈现 blocker，不呈现 deliverable（D7）；
- * - **不补齐**：执行运行时尚未接线，没有生产者的事实（Capsule coverage、worktree 路径、只读 Profile
- *   核验、运行前后工作区）一律显式留空，由界面如实呈现为未知，而不是编造一个看起来完整的执行视图。
+ * - **不补齐**：没有生产者的事实一律显式留空，由界面如实呈现为未知。
  *
  * 阶段判定只使用「已接受的角色结果」与「仍在运行的 Worker」两类证据，且只沿角色顺序前进：
  * planner 已接受 → `implementing`，implementation 已接受 → `validating`，validator 已接受 → 集成阶段。
@@ -22,6 +21,7 @@
  */
 
 import type { WorkPackageId } from '../dto/identity.js';
+import { completedIntegrationRef } from '../integrate-work-package.js';
 import type { RoleAuthorities, WorkerRole } from '../../domain/planning/execution-authorization.js';
 import type { WorkerLiveness } from '../../domain/worker-liveness.js';
 import {
@@ -387,6 +387,7 @@ type WorkPackageWorkflowFacts = {
   readonly reconciliation: CoordinationSnapshot['baselineReconciliations'][number] | null;
   readonly recoveries: readonly CoordinationSnapshot['recoveries'][number][];
   readonly adoption: CoordinationSnapshot['baselineAdoptions'][number] | null;
+  readonly integrationRef: string | null;
   readonly settlements: readonly DeliverySettlementRecord[];
   readonly segments: readonly CoordinationSnapshot['sessionSegments'][number][];
   readonly bindings: readonly CoordinationSnapshot['materializationBindings'][number][];
@@ -600,7 +601,7 @@ function deriveWorkPackage(
   let current: Phase = phase('waiting');
   if (furthest === 'validator') {
     const settlement = latestSettlementFor(workflow.settlements, 'validator');
-    const integrationRef = workflow.adoption?.integrationRef ?? null;
+    const integrationRef = workflow.integrationRef ?? workflow.adoption?.integrationRef ?? null;
     current = phase(integrationRef === null ? 'waiting_integration' : 'accepted', {
       role: 'validator',
       attemptId: settlement?.attemptId ?? null,
@@ -609,13 +610,13 @@ function deriveWorkPackage(
         acceptedResultRef: settlement?.orcaResultRef ?? null,
         evidenceRefs: settlement === null ? [] : [`orca-result:${settlement.orcaResultRef}`],
       },
-      // 集成事实没有本地生产者：只表达「角色工作已完成、可以进入集成」，不声称集成正在进行或已完成。
       integration: integrationRef === null ? { state: 'waiting', ref: null } : { state: 'integrated', ref: integrationRef },
       derivedFrom:
         settlement === null ? [] : [`settlement:${settlement.dedupeKey}`, `attempt:${settlement.attemptId}`],
     });
-    if (integrationRef !== null && workflow.adoption !== null) {
-      current = { ...current, derivedFrom: [...current.derivedFrom, `adoption:${workflow.adoption.adoptionId}`] };
+    if (integrationRef !== null) {
+      current = { ...current, derivedFrom: [...current.derivedFrom, workflow.integrationRef === null
+        ? `adoption:${workflow.adoption?.adoptionId ?? ''}` : `integration:${integrationRef}`] };
     }
   } else if (furthest === 'implementation') {
     const settlement = latestSettlementFor(workflow.settlements, 'implementation');
@@ -831,6 +832,7 @@ export function deriveExecutionFacts(input: DeriveExecutionFactsInput): DerivedE
                 latest === null || current.recordedAt >= latest.recordedAt ? current : latest,
               null,
             ),
+        integrationRef: completedIntegrationRef(snapshot, node.workPackageId as WorkPackageId),
         settlements,
         segments: snapshot.sessionSegments.filter(
           (segment) => segment.workPackageId === node.workPackageId,

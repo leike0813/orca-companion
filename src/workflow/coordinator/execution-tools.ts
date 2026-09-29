@@ -381,6 +381,7 @@ function buildDefinitions(): Readonly<
         '提交一份结构化的图变化声明：分类、Planner 派发、Admission 与图版本追加都由执行运行时按当前事实完成。' +
         '本工具只提交声明，不指定 Scope、Graph 版本或补丁标识；是否仍需图修订额度由授权判定。',
       mutating: true,
+      completesWorkOnSuccess: true,
       inputSchema: toolInputSchema({ request: CHANGE_REQUEST_PROPERTY }, ['request']),
       invoke: async (input, context) => {
         const fields = asRecord(input);

@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import {
   ACTIONABLE_WORK_LIMIT,
   isActionableObservationClass,
+  pendingWorkFromHistory,
   projectActionableWork,
   SOURCE_OBSERVATION_CLASSES,
   type SourceObservation,
@@ -11,9 +12,22 @@ import {
 import type { CoordinatorSessionId } from '../../src/application/dto/identity.js';
 import type { WakeAdmissionRecord } from '../../src/application/ports/branch-coordination-store.js';
 import type { SourceRevisionRef } from '../../src/domain/coordinator/session-state.js';
+import type { CommittedMessageEntry } from '../../src/domain/coordinator/session-state.js';
 
 const SESSION = 'session-a' as CoordinatorSessionId;
 const OTHER_SESSION = 'session-b' as CoordinatorSessionId;
+
+test('已持久化的工具完成源只消费对应消息，重启时不重提且不吞掉随后消息', () => {
+  const entries: CommittedMessageEntry[] = [
+    { entryId: 'entry:user:first', stepId: 'step:user:first', role: 'user', content: '提交一次图补丁' },
+    { entryId: 'entry:user:second', stepId: 'step:user:second', role: 'user', content: '检查当前状态' },
+    { entryId: 'entry:tool:step-1:patch-1', stepId: 'step-1', role: 'tool', content: '{"kind":"ok"}',
+      toolCallId: 'patch-1', toolName: 'request_graph_patch',
+      completedWorkSource: { sourceKind: 'user-message', sourceId: 'first', revision: 1 } },
+  ];
+  expect(pendingWorkFromHistory(entries, new Map()).map((item) => item.source.sourceId)).toEqual(['second']);
+  expect(pendingWorkFromHistory(entries.slice(0, 2), new Map()).map((item) => item.source.sourceId)).toEqual(['first', 'second']);
+});
 
 function source(sourceId: string, revision: number): SourceRevisionRef {
   return { sourceKind: 'delivery', sourceId, revision };

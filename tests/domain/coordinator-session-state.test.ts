@@ -101,6 +101,25 @@ test('合法会话状态通过校验并保留已提交 step', () => {
   }
 });
 
+test('已提交工具结果保留工作完成源，assistant 消息不能伪造该标记', () => {
+  const source = { sourceKind: 'user-message', sourceId: 'submission-1', revision: 1 };
+  const toolEntry = {
+    entryId: 'entry:tool:step-1:patch-1', stepId: 'step-1', role: 'tool',
+    content: '{"kind":"ok"}', toolCallId: 'patch-1', toolName: 'request_graph_patch',
+    completedWorkSource: source,
+  };
+  const parsed = parseCoordinatorSessionState(baseState({
+    committedMessages: [...(baseState()['committedMessages'] as unknown[]), toolEntry],
+  }));
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok) expect(parsed.value.committedMessages.at(-1)?.completedWorkSource).toEqual(source);
+
+  const forged = parseCoordinatorSessionState(baseState({
+    committedMessages: [{ ...toolEntry, role: 'assistant' }],
+  }));
+  expect(forged.ok).toBe(false);
+});
+
 test('凭据字段的候选状态被拒绝', () => {
   const withTopLevelCredential = parseCoordinatorSessionState(baseState({ apiKey: 'sk-live-123' }));
   expect(withTopLevelCredential.ok).toBe(false);

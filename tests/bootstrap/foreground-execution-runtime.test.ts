@@ -1191,6 +1191,7 @@ function snapshotWith(input: {
     ticketClaims: [],
     pendingInteractions: [],
     unresolvedIntents: [],
+    settledGitIntegrationIntents: [],
     planningHandoffs: [],
     planningResponsibility: null,
     sessionSegments: [...input.segments],

@@ -3776,10 +3776,10 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
     if (!interactions.ok) {
       return interactions;
     }
-    const intents = decodeRows(
-      readIntentRows(scopeId).filter((row) => row.state === 'pending' || row.state === 'blocked'),
-      decodeIntentRow,
-    );
+    const intents = decodeRows(readIntentRows(scopeId).filter((row) =>
+      row.state === 'pending' || row.state === 'blocked' ||
+      (row.operation_category === 'git-integration' && row.state === 'settled' && row.outcome_class === 'accepted'),
+    ), decodeIntentRow);
     if (!intents.ok) {
       return intents;
     }
@@ -3852,7 +3852,10 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         leases.value.find((lease) => lease.kind === 'execution_coordination' && lease.releasedAt === null) ?? null,
       ticketClaims: claims.value,
       pendingInteractions: interactions.value,
-      unresolvedIntents: intents.value,
+      unresolvedIntents: intents.value.filter((intent) => intent.state === 'pending' || intent.state === 'blocked'),
+      settledGitIntegrationIntents: intents.value.filter((intent) =>
+        intent.operationCategory === 'git-integration' && intent.state === 'settled' && intent.outcomeClass === 'accepted',
+      ),
       planningHandoffs: handoffs.value,
       planningResponsibility:
         responsibilityRow === undefined ? null : decodePlanningResponsibilityRow(responsibilityRow),
@@ -3868,7 +3871,9 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       workPackageLineages: workPackageLineages.value,
       baselineAdoptions: baselineAdoptions.value,
       // lane 阻塞由未决 intent 派生：只覆盖确有未决 intent 的 lane，不构成全局锁。
-      mutationLanes: projectMutationLanes(intents.value),
+      mutationLanes: projectMutationLanes(intents.value.filter((intent) =>
+        intent.state === 'pending' || intent.state === 'blocked',
+      )),
     });
   };
 

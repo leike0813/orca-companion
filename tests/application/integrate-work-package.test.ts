@@ -14,7 +14,7 @@ import { afterEach, beforeEach, expect, test } from 'vitest';
 
 import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
 import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
-import { beginIntent } from '../../src/application/coordination/intent-service.js';
+import { beginIntent, settleIntent } from '../../src/application/coordination/intent-service.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
@@ -312,6 +312,11 @@ test('授权内的普通集成按固定顺序执行，且每步只回读自己�
     BASELINE,
     INTEGRATED_HEAD,
   ]);
+  const snapshot = store.query({ kind: 'snapshot', coordinationScopeId: SCOPE });
+  expect(snapshot.kind === 'snapshot'
+    ? snapshot.snapshot.settledGitIntegrationIntents.map((intent) => intent.operationId)
+    : []).toEqual(['op-commit', 'op-integrate', 'op-push']);
+  expect(snapshot.kind === 'snapshot' ? snapshot.snapshot.unresolvedIntents : []).toEqual([]);
 });
 
 test('步骤结果为 unknown 时以原 OperationId 对账并阻塞后续步骤', async () => {
@@ -401,6 +406,27 @@ test('相同 OperationId 已结算时不重复执行 Git 副作用', async () =>
     { kind: 'canonical' },
     { kind: 'remote', remote: 'origin', ref: 'refs/heads/main' },
   ]);
+});
+
+test('commit 已结算后重启，只回读原步骤并执行剩余的 merge 与 push', async () => {
+  const operationId = 'op-commit' as OperationId;
+  expect(beginIntent(store, {
+    coordinationScopeId: SCOPE, operationId, target: { kind: 'work-package', id: WP },
+    operationCategory: 'git-integration', expectedHead: BASELINE, writer, expectedRevision: revision(),
+  }).kind).toBe('registered');
+  expect(settleIntent(store, {
+    coordinationScopeId: SCOPE, operationId, writer, expectedRevision: revision(),
+    outcome: { kind: 'accepted', operation: { operationId, target: { kind: 'work-package', id: WP } },
+      value: { kind: 'committed', head: COMMIT_HEAD } },
+  }).kind).toBe('settled');
+
+  const resumed = fakePort({ initialHeads: { source: COMMIT_HEAD } });
+  const result = await integrateWorkPackage(input(resumed.port));
+
+  expect(result.kind).toBe('integrated');
+  expect(resumed.requests.map((request) => request.step)).toEqual(['integrate_canonical', 'push']);
+  expect(resumed.scopes.map((scope) => scope.operationId)).toEqual(['op-integrate', 'op-push']);
+  expect(resumed.reads).toContainEqual({ kind: 'source', worktreePath: '/tmp/orca-wp-1' });
 });
 
 test('相同 OperationId 仍为 pending 时不重复执行 Git 副作用', async () => {

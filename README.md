@@ -2,7 +2,7 @@
 
 为范围明确的小型软件项目提供可恢复、可追踪、有预算上限的开发流程。Orca 负责工作区与 agent 执行，Companion 负责项目计划、调度规则、验收与恢复。
 
-当前进度：M0（Orca 控制基线）与 M1（有界协调闭环）已归档，M2 正在交付前台 TUI。
+当前进度：M0、M1 与 M2 的规划任务和前台 TUI 验收已归档；M2 收尾修复见 `openspec/changes/m2-closeout-integration-and-wake/`。
 
 ## 环境
 

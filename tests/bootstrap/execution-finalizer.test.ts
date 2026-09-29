@@ -42,6 +42,7 @@ import type {
 import type { SnapshotLoad } from '../../src/interfaces/tui/ports.js';
 import type { CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
 import { beginIntent, settleIntent } from '../../src/application/coordination/intent-service.js';
+import { integrationOperationIdsFor } from '../../src/application/integrate-work-package.js';
 import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
 import { ensureGraphGenerationRecord } from '../../src/application/execution/replanning-service.js';
 import { graphIdFor } from '../../src/application/planning/graph-generation.js';
@@ -533,7 +534,9 @@ function prepareExecutionState(repository: string, head: string): void {
       throw new Error(`无法记录物化绑定：${bound.message}`);
     }
     // 已完成的集成 Operation：Finalizer 的前置事实是「全部 Work Package 已完成集成」。
-    const integrationOperationId = 'op:integration-push' as OperationId;
+    const integrationOperationId = integrationOperationIdsFor({
+      scopeId: SCOPE, graphId: GRAPH_ID, generation: GENERATION, workPackageId: WP,
+    }).push;
     const begun = beginIntent(store, {
       coordinationScopeId: SCOPE,
       operationId: integrationOperationId,

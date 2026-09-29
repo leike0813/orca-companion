@@ -78,7 +78,7 @@ async function invokeRegistered(
  * 受控工具执行节点。
  *
  * 取最后一个 Committed Model Step，逐个执行还没有配对结果的 call，并把结果写回同一 Session 的
- * 已提交历史。全部落盘后回到模型节点：只有模型自己的最终响应才消费 Actionable Work。
+ * 已提交历史。普通工具完成后回到模型节点；被标记为单次动作的工具在结果落盘后消费当前工作。
  */
 export function createToolsNode(dependencies: ToolNodeDependencies) {
   return async (state: CoordinatorGraphState): Promise<CoordinatorGraphUpdate> => {
@@ -110,6 +110,9 @@ export function createToolsNode(dependencies: ToolNodeDependencies) {
     const answered = new Set(current.committedMessages.map((entry) => entry.entryId));
     let committedMessages = current.committedMessages;
     let executed = 0;
+    let completedWorkSource = committedMessages.find((entry) =>
+      entry.stepId === step.stepId && entry.completedWorkSource !== undefined,
+    )?.completedWorkSource;
 
     for (const call of step.toolCalls) {
       const entryId = toolResultEntryId(step.stepId, call.callId);
@@ -142,6 +145,11 @@ export function createToolsNode(dependencies: ToolNodeDependencies) {
         content: JSON.stringify(outcome),
         toolCallId: call.callId,
         toolName: call.name,
+        ...(completedWorkSource === undefined && outcome.kind === 'ok' &&
+          dependencies.tools.find((tool) => tool.name === call.name)?.completesWorkOnSuccess === true &&
+          state.remainingWork[0] !== undefined
+          ? { completedWorkSource: state.remainingWork[0].source }
+          : {}),
       };
       const written = dependencies.sessionRecords.saveCheckpoint({
         ...current,
@@ -153,6 +161,7 @@ export function createToolsNode(dependencies: ToolNodeDependencies) {
       }
       committedMessages = [...committedMessages, entry];
       answered.add(entryId);
+      completedWorkSource ??= entry.completedWorkSource;
       executed += 1;
     }
 
@@ -161,10 +170,13 @@ export function createToolsNode(dependencies: ToolNodeDependencies) {
         ? `没有待执行的调用：${step.stepId} 的每个 call 都已有配对结果`
         : `已执行 ${String(executed)} 个受控工具调用，结果已逐条写入 ${step.stepId}`;
     return {
-      status: 'running',
+      status: completedWorkSource === undefined ? 'running' : 'work_completed',
       graphPosition: TOOLS_NODE,
       pendingToolCalls: 0,
-      remainingWork: state.remainingWork,
+      remainingWork: completedWorkSource === undefined ? state.remainingWork : state.remainingWork.filter((item) =>
+        item.source.sourceKind !== completedWorkSource.sourceKind || item.source.sourceId !== completedWorkSource.sourceId ||
+        item.source.revision !== completedWorkSource.revision,
+      ),
       note: summary,
     };
   };

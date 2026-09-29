@@ -327,6 +327,34 @@ test('模型请求的受控工具被实际执行，配对结果进入后续模�
   expect(result.pendingToolCalls).toBe(0);
 });
 
+test('已受理的单次工具动作提交完成源并结束本条工作；拒绝不消费', async () => {
+  save(baseState());
+  const pending = work(2).items;
+  const completionTool: PlanningToolDefinition = {
+    name: 'request_graph_patch', description: '提交图补丁', mutating: true,
+    completesWorkOnSuccess: true, inputSchema: { type: 'object' },
+    invoke: () => Promise.resolve({ kind: 'ok', value: { graphVersion: 2 } }),
+  };
+  const model = new FakeToolModel([{ kind: 'tool_calls', calls: [
+    { callId: 'patch-1', name: 'request_graph_patch', args: {} },
+  ] }]);
+  const result = await runGraph(graphWith({ model, tools: [completionTool] }), { remainingWork: pending });
+  expect(result.status).toBe('work_completed');
+  expect(result.remainingWork).toEqual(pending.slice(1));
+  expect(model.received).toHaveLength(1);
+  expect(loadState().committedMessages.at(-1)?.completedWorkSource).toEqual(pending[0]?.source);
+
+  save(baseState());
+  seedPendingCalls([{ callId: 'patch-2', name: 'request_graph_patch', args: {} }]);
+  const rejected = await createToolsNode({
+    sessionRecords: store, assertFencing: () => ({ kind: 'valid', lease: {} as never }),
+    tools: [{ ...completionTool, invoke: () => Promise.resolve({ kind: 'rejected', code: 'busy', message: '稍后重试' }) }],
+  })(graphState(1));
+  expect(rejected.status).toBe('running');
+  expect(rejected.remainingWork).toEqual(work(1).items);
+  expect(loadState().committedMessages.at(-1)?.completedWorkSource).toBeUndefined();
+});
+
 test('响应提交后崩溃：恢复沿用原 call 与同一 operationId 补齐结果，且不重复执行已执行的调用', async () => {
   save(baseState());
   const toolFacts = facts();
