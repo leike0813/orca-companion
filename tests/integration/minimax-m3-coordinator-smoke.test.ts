@@ -280,7 +280,7 @@ function readProfiles(): readonly SmokeProfile[] {
     profiles.push({
       id: source.id,
       integration: process.env[source.integrationVar] ?? source.defaultIntegration,
-      model: process.env[source.modelVar] ?? 'MiniMax-M3',
+      model: process.env[source.modelVar] ?? 'MiniMax-M3.1-Flash-Preview',
       baseUrl,
       endpointUrl: `${baseUrl}${source.endpointPath}`,
       keyEnvVar: process.env[source.keyEnvVarVar] ?? source.defaultKeyEnvVar,

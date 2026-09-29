@@ -24,6 +24,7 @@
 | Orca runtime | `state: ready`、`reachable: true`、`runtimeId: f34e8953-f5ae-42b8-97db-90e33112562f` |
 | Node.js | 24.12.0 |
 | pnpm | 11.10.0 |
+| 验收模型 | `minimax-cn/MiniMax-M3.1-Flash-Preview`（2026-09-29 起；此前的真实验收用 `minimax-cn/MiniMax-M3`） |
 | 记录时间 | 2026-09-21 |
 
 ## 已核验
@@ -128,6 +129,12 @@
   - **验收监控（2026-09-28 新增）**：真机验收同时用 `artifacts/watch-fixture.mjs` 看护夹具——每 60s 采样**执行事实**（图版本、持有、绑定、结算、预算、结论、阻塞 intent、Recovery），连续 15 次不变即告警退出，拿到交付结论即 DONE。指纹刻意排除 `control_state` 与 `scope.revision`：驱动自己的 Pause→Resume 会推进它们，把它们算进来会让静止看起来「有变化」——此前空转 244 轮没被发现正是这个原因。加上直接读屏幕（宿主 blocker 只在屏幕里），`e2e58` 的停滞在 5–10 分钟内被发现，而不是等 100 分钟截止。
   - **验收脚手架同时修掉的判据缺陷**：驱动原先把「状态里有 blocker」当成推进信号，而修订持有本身就是常驻 blocker，于是 `noChangeRounds` 永远归零、真卡死时也只能耗到 100 分钟截止（实测 `orca-companion-e2e52` 空转 244 轮）。现在推进判据是执行事实的指纹（含 blocker 集合的变化），驱动自己的 Pause→Resume 写库不再算作推进。
 
+### 受控集成的提交作者与中断模式下的声明时序（2026-09-29 实测）
+
+- **宿主不保证自己创建集成 commit**：集成是「commit → integrate → push」三步，其中 commit 步只在 Work Package 的 worktree 里有未提交内容时才写新提交；Worker 自己已经提交过时，`merge --ff-only` 直接采用 Worker 的提交。隔离运行 `orca-companion-e2e71` 的持久事实就是这样：`readme-banner` 的三步 `git-integration` 全部 `settled/accepted`，而 canonical 上该 Work Package 的提交主题是 Worker 自己写的（`Add project status banner to README.md`、`Fix readme-banner spec to match actual banner placement`），只有 `notes-basics` 留下了宿主格式的主题（`e2e-loop-scope#g1:notes-basics: NOTES 基础说明`）。因此「canonical 的提交主题里含 Work Package id」不是可断言的集成证据；可断言的是**成果落进 canonical**（`git ls-tree -r --name-only HEAD` 含该 Work Package 计划内的文件）与三步 Operation 的 `settled/accepted`。
+- **中断模式下「提交图变化声明」的窗口很窄**：声明只有在 canonical 已经前移、且目标节点仍未被接受时才提得出来，而声明请求本身要求 Run 静止（`worker_in_flight`）与没有未确认 Delivery（`delivery_pending`）。制造执行态中断的那次验收会把链路缩短：实测 `orca-companion-e2e69`（Recovery 成功续办并取得 `deliverable`）与 `e2e70`（Recovery 停在保守持有、无结论）都只提交了声明、两次调用分别拿到 `worker_in_flight` 与 `delivery_pending`，补丁没有落地。因此图修订与 Baseline Reconciliation 的同链路证据取不中断模式（`e2e66`/`e2e68`），中断模式只验收 Recovery 与界面事实（`e2e71`：真实 Capsule 续办 `recovered`，同一运行里也走完了补丁 v2 与 `deliverable`）。
+- **Worker 会话可能整轮不再产生结果**（`orca-companion-e2e67` 实测）：Validator 的会话建立了、Orca 侧任务也曾 `succeeded`，但交付始终没有结算、rollout 停在派发后 3 分钟；`e2e72` 另有一次 Planner 在开局就 `blocked`。这两类停点与产品或 adapter 无关，判读纪律同前：不可核验不读成已退出/已完成，换全新夹具重跑。
+
 ### Graph Patch Planner 的派发门禁与「图修订请求」的时序（2026-09-26 实测）
 
 - `runGraphPatchPlannerWorker` 在新派发前要求**整个 Run 静止**：任何 Worker 的 `workerStateLiveness !== 'exited'` 都会得到 `worker_in_flight`（Graph Patch Planner 自己就是一个 Worker，受并发上限 1 约束），并且要求当前没有未确认 Delivery（`delivery_pending`，而 Delivery 由启动 / Resume 的重放结算，普通触发点不结算）。
@@ -139,6 +146,8 @@
 - **Planner 初稿可能过不了 Admission（2026-09-26 实测）**：真实 Graph Patch Planner 起草的补丁有一次被确定性 Admission 判为 `admission_rejected`（`补丁未通过 Admission 编译校验`），而同一请求在另一次运行里通过并追加了 GraphVersion。这是 Planner 产出纪律问题（T2 的信封纪律），产品侧门禁行为正确；验收因此按「提出请求」设计，允许有界重提，并把「补丁只调整该 Work Package 已有的 contract 内容」写进请求本身。
 - **重试必须先结清 Delivery（2026-09-26 实测）**：一次请求失败后再次提交，门禁只回 `delivery_pending`——上一次 Planner 收尾留下未确认批次，而那时已经没有角色在跑。等待路径因此改成**每轮都做一次对账**（同一 `ScopeControlService.reconcile`），而不是等 Run 静止之后才结算一次。
 - **修复（2026-09-26，本轮）**：`request_graph_patch` 的宿主路径在提交请求前**有界等待** Run 静止，并在此期间用同一个对账用例（`ScopeControlService.reconcile`：原 OperationId 对账 + 同一 pipeline 重放未确认 Delivery）结清 Delivery；10 分钟内没能静止则仍返回结构化 `worker_in_flight`。等待期间不改变控制状态、不建立第二套重放路径，因此派发语义与触发点顺序都不变。
+- **同一在途节点上的第二次接受修订会重新登记持有，必须刷新登记时刻（2026-09-29 实测，本轮修复）**：一次图版本事务登记持有与「纯内容修订」走的是同一张表，但两处 upsert 的 `ON CONFLICT` 子句曾是两份写法——`record-revision-hold` 刷新 `created_at`，`record-graph-version` 不刷新。隔离运行 `orca-companion-e2e64`（不中断模式、双包计划）里验收驱动在补丁 v2 落地的同一分钟又提交了一次声明，于是 v3 重新登记了 `readme-banner` 的持有：`source_ref` 换成了 v3 的补丁、`prior_contract_revision` / `admitted_contract_revision` 被清空，而 `created_at` 仍停在 v2 的时刻（实测 `1790608234057`，v3 的 `graph_versions.recorded_at` 是 `1790608471275`）。后果是同一事实被两处判定读反：受限 Planner 许可按 `plannerDeliveryAfterHold`（绑定签发时刻晚于 `created_at` 且已结算的 Planner 交付）判成「已交付」→ `revision-already-delivered` 拒绝续办；而持有结算要求内容版本已准备（`prior_contract_revision !== null`）→ 直接跳过。Scope 因此永久停在 `revision_pending`：`revision_holds` 始终 pending、无 verdict、后续两次补丁请求分别得到 `revision_budget_exhausted` 与 `no_backend_request_id`。修复：图版本事务与纯内容修订共用同一个登记函数（`coordination-store.ts` 的 `placeRevisionHold`），重新登记一律刷新 `created_at`——它表示「当前这次持有」的登记时刻，是修订 Planner 派发先后关系的唯一判据。`tests/coordination-store.test.ts` 的「图版本重新登记持有会刷新登记时刻…」修复前 `expected 5000 to be 9000`、修复后通过。
+  - **同轮验收脚手架缺陷**：驱动在「有 Worker 在途」的分支里 `continue` 时没有刷新事实副本，而那个在途 Worker 正是上一次请求自己派出的 Graph Patch Planner；它一退出，驱动就按**旧副本**判定「补丁还没落地」并在 4 分钟间隔到期时又提交一次声明（实测第二次提交与 v3 落地只差 1 秒）。修复：在途等待收尾后刷新事实，并把「没有在途 Worker」并入重提条件。重提的本意是救「模型把声明改写成 `no_change`」，而不是在上一次请求仍在处理时再发一次。
 
 ### 未确认 Delivery 的读取与批次推进（2026-09-25 实测）
 

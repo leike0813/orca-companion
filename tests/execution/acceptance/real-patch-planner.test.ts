@@ -19,7 +19,7 @@
  *
  * 端点与凭据沿用 `.env.smoke` 的 `COORDINATOR_SMOKE_OPENAI_*` 与 `COORDINATOR_SMOKE_API_KEY`（可用
  * `ORCA_COMPANION_REAL_ENV_FILE` 换一份文件），因此与其它 real-harness 用例共用同一套配置；模型默认
- * `MiniMax-M3`，可用 `ORCA_COMPANION_REAL_PLANNER_MODEL` 覆盖。凭据仅由隔离状态根内的 provider helper
+ * `MiniMax-M3.1-Flash-Preview`，可用 `ORCA_COMPANION_REAL_PLANNER_MODEL` 覆盖。凭据仅由隔离状态根内的 provider helper
  * 从忽略的 env 文件读取，不写入 Git、Codex 配置或 Orca Task。
  *
  * 前置条件：隔离工作区是一个**干净的一次性** Git 仓库（没有 Companion 状态目录），使用专用身份；
@@ -91,7 +91,7 @@ const INTEGRATION_VAR = 'ORCA_COMPANION_REAL_PLANNER_INTEGRATION';
 const MODEL_VAR = 'ORCA_COMPANION_REAL_PLANNER_MODEL';
 const BASE_URL_VAR = 'ORCA_COMPANION_REAL_PLANNER_BASE_URL';
 const DEFAULT_INTEGRATION = '@langchain/openai#ChatOpenAI';
-const DEFAULT_MODEL = 'MiniMax-M3';
+const DEFAULT_MODEL = 'MiniMax-M3.1-Flash-Preview';
 
 /**
  * Smoke 端点配置：`.env.smoke` 里的 `COORDINATOR_SMOKE_OPENAI_*` 与共享 key 直接复用，因此真实

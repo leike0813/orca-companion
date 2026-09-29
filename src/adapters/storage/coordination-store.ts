@@ -134,6 +134,7 @@ import {
   type RecoveryTerminalOutcome,
   type ReplacementSegmentInput,
   type RevisionHoldRecord,
+  type RevisionHoldSource,
   type ScopeRecord,
   type SessionLifecycleState,
   type SessionSegmentRecord,
@@ -4361,6 +4362,39 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
     return ok(null);
   };
 
+  /**
+   * 登记 revision pending 持有（图版本事务与「纯内容修订」共用这一处）。
+   *
+   * 重新登记是一次**新的**登记：`created_at` 是「当前这次持有」的登记时刻，修订 Planner 的派发与它的
+   * 先后关系靠它判定（见 `advance-execution.ts` 的 `plannerDeliveryAfterHold`）。保留第一次的旧时间戳，
+   * 新补丁的持有就会被读成「这次修订的 Planner 已经交付」：派发门禁据此拒绝续办，而持有结算又因为
+   * 内容版本没准备而跳过，Scope 永久停在 `revision_pending`（真实运行实测）。两处写法曾经分叉过，
+   * 因此这里只留一份。
+   */
+  const placeRevisionHold = (
+    coordinationScopeId: CoordinationScopeId,
+    workPackageId: WorkPackageId,
+    source: RevisionHoldSource,
+    sourceRef: string,
+    now: number,
+  ): void => {
+    db.prepare(
+      `INSERT INTO revision_holds (
+         coordination_scope_id, work_package_id, source, source_ref, state,
+         prior_contract_revision, admitted_contract_revision, created_at, released_at, release_reason
+       ) VALUES (?, ?, ?, ?, 'pending', NULL, NULL, ?, NULL, NULL)
+       ON CONFLICT (coordination_scope_id, work_package_id) DO UPDATE SET
+         source = excluded.source,
+         source_ref = excluded.source_ref,
+         state = 'pending',
+         prior_contract_revision = NULL,
+         admitted_contract_revision = NULL,
+         released_at = NULL,
+         release_reason = NULL,
+         created_at = excluded.created_at`,
+    ).run(coordinationScopeId, workPackageId, source, sourceRef, now);
+  };
+
   const applyCommand = (
     cmd: CoordinationCommand,
     now: number,
@@ -4482,20 +4516,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         );
         // revision pending 与图版本同事务：不存在「图已经改了，但该冻结的节点仍可派发」的窗口。
         for (const workPackageId of cmd.patch?.revisionPendingWorkPackageIds ?? []) {
-          db.prepare(
-            `INSERT INTO revision_holds (
-               coordination_scope_id, work_package_id, source, source_ref, state,
-               prior_contract_revision, admitted_contract_revision, created_at, released_at, release_reason
-             ) VALUES (?, ?, 'graph_patch', ?, 'pending', NULL, NULL, ?, NULL, NULL)
-             ON CONFLICT (coordination_scope_id, work_package_id) DO UPDATE SET
-               source = excluded.source,
-               source_ref = excluded.source_ref,
-               state = 'pending',
-               prior_contract_revision = NULL,
-               admitted_contract_revision = NULL,
-               released_at = NULL,
-               release_reason = NULL`,
-          ).run(cmd.coordinationScopeId, workPackageId, cmd.patch?.patchId ?? '', now);
+          placeRevisionHold(cmd.coordinationScopeId, workPackageId, 'graph_patch', cmd.patch?.patchId ?? '', now);
         }
         // 退休在与图版本同一事务里结清：节点已经不在新图中，不可能再有后续角色或依赖工作，
         // 留下的 pending 持有只会把整个 Scope 永久钉在 revision_pending（真实运行实测：Finalizer 门禁
@@ -5591,24 +5612,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         return ok(null);
       }
       case 'record-revision-hold': {
-        db.prepare(
-          `INSERT INTO revision_holds (
-             coordination_scope_id, work_package_id, source, source_ref, state,
-             prior_contract_revision, admitted_contract_revision, created_at, released_at, release_reason
-           ) VALUES (?, ?, ?, ?, 'pending', NULL, NULL, ?, NULL, NULL)
-           ON CONFLICT (coordination_scope_id, work_package_id) DO UPDATE SET
-             source = excluded.source,
-             source_ref = excluded.source_ref,
-             state = 'pending',
-             prior_contract_revision = NULL,
-             admitted_contract_revision = NULL,
-             released_at = NULL,
-             release_reason = NULL,
-             -- 重新登记也是一次新的登记：created_at 是「当前这次持有」的登记时刻，修订 Planner 派发
-             -- 与它的先后关系靠它判定（见 advance-execution.ts 的 plannerDeliveryAfterHold）。保留第一次的
-             -- 旧时间戳会把上一个版本链的 Planner 派发误读成本次修订的派发。
-             created_at = excluded.created_at`,
-        ).run(cmd.coordinationScopeId, cmd.workPackageId, cmd.source, cmd.sourceRef, now);
+        placeRevisionHold(cmd.coordinationScopeId, cmd.workPackageId, cmd.source, cmd.sourceRef, now);
         return ok(null);
       }
       case 'prepare-revision-hold': {

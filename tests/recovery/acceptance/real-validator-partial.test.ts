@@ -9,7 +9,7 @@
  * ORCA_COMPANION_REAL_HARNESS=1 \
  * ORCA_COMPANION_REAL_REPO=<isolated-workspace> \
  * ORCA_COMPANION_REAL_IDENTITY=<dedicated-identity> \
- * ORCA_COMPANION_REAL_WORKER_MODEL=minimax-cn/MiniMax-M3 \
+ * ORCA_COMPANION_REAL_WORKER_MODEL=minimax-cn/MiniMax-M3.1-Flash-Preview \
  * pnpm exec vitest run tests/recovery/acceptance/real-validator-partial.test.ts --no-file-parallelism
  * ```
  *
@@ -92,8 +92,8 @@ const ENV_FILE_VAR = 'ORCA_COMPANION_REAL_ENV_FILE';
 /** 专用协调身份引用；adapter 把它解析成本次自建终端的句柄，句柄不进入 DTO。 */
 const COORDINATOR_IDENTITY_REF = 'companion-real-recovery';
 
-/** 6.5 只允许 MiniMax-M3 作为 Validator 的模型；派发前显式绑定，缺失或不是它即失败。 */
-const REQUIRED_WORKER_MODEL_FRAGMENT = 'MiniMax-M3';
+/** 6.5 只允许计划声明的 MiniMax 模型作为 Validator；派发前显式绑定，缺失或不是它即失败。 */
+const REQUIRED_WORKER_MODEL_FRAGMENT = 'MiniMax-M3.1-Flash-Preview';
 
 const WORKER_START_TIMEOUT_MS = 300_000;
 const FIRST_OUTPUT_DEADLINE_MS = 45_000;
@@ -261,7 +261,7 @@ function readEndpointProfiles(): readonly RealEndpointProfile[] {
       id: source.id,
       baseUrl,
       endpointUrl: `${baseUrl}${source.endpointPath}`,
-      model: process.env[source.modelVar] ?? 'MiniMax-M3',
+      model: process.env[source.modelVar] ?? 'MiniMax-M3.1-Flash-Preview',
       keyEnvVar: process.env[source.keyEnvVarVar] ?? source.defaultKeyEnvVar,
     });
   }

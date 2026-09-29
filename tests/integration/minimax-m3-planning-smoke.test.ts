@@ -184,7 +184,7 @@ function readProfiles(): readonly SmokeProfile[] {
     profiles.push({
       id: source.id,
       integration: process.env[`${source.baseUrlVar.replace('_BASE_URL', '')}_INTEGRATION`] ?? source.defaultIntegration,
-      model: process.env[source.modelVar] ?? 'MiniMax-M3',
+      model: process.env[source.modelVar] ?? 'MiniMax-M3.1-Flash-Preview',
       baseUrl,
       endpointUrl: `${baseUrl}${source.endpointPath}`,
       keyEnvVar: process.env[`${source.baseUrlVar.replace('_BASE_URL', '')}_KEY_ENV`] ?? source.defaultKeyEnvVar,

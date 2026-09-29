@@ -21,11 +21,11 @@ import { toChildEnvironment } from '../src/interfaces/cli/main.js';
  */
 
 const PROBE_ENABLED = process.env['ORCA_M0_PROBE'] === '1';
-const EXPECTED_WORKER_MODEL = 'minimax-cn/MiniMax-M3';
+const EXPECTED_WORKER_MODEL = 'minimax-cn/MiniMax-M3.1-Flash-Preview';
 const COORDINATOR_REF = 'probe-coordinator';
 const COMPANION_REPO = process.cwd();
 
-/** 派发前必须存在的显式 Worker 模型绑定；缺失或不是 MiniMax-M3 即在派发前失败。 */
+/** 派发前必须存在的显式 Worker 模型绑定；缺失或不是计划声明的模型即在派发前失败。 */
 export function requireWorkerModel(env: Readonly<Record<string, string | undefined>>): string {
   const model = env['ORCA_M0_PROBE_MODEL'];
   if (model === undefined || model.length === 0) {

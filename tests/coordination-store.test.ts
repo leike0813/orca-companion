@@ -2185,6 +2185,77 @@ test('旧内容版本只能在匹配来源的持有上准备一次，重新登�
   expect(hold()?.admittedContractRevision).toBeNull();
 });
 
+test('图版本重新登记持有会刷新登记时刻：上一版本链的交付不再被当成本次修订的交付', () => {
+  createScope();
+  activateSession();
+  recordInitialGraph();
+  acquireExecutionLease();
+  const hold = () => {
+    const holds = store.query({ kind: 'revision-holds', coordinationScopeId: SCOPE });
+    return holds.kind === 'revision-holds' ? holds.holds[0] : undefined;
+  };
+  const recordRevision = (graphVersion: number, sourceRef: string): CoordinationCommandResult =>
+    submit((expectedRevision) =>
+      acceptedRevisionCommand(expectedRevision, {
+        graphVersion,
+        parentVersion: graphVersion - 1,
+        patch: {
+          patchId: sourceRef,
+          operationId: 'op-1' as OperationId,
+          baseGraphVersion: graphVersion - 1,
+          added: [],
+          revised: ['wp-1' as WorkPackageId],
+          retired: [],
+          descendants: [],
+          takesOver: [],
+          revisionPendingWorkPackageIds: ['wp-1' as WorkPackageId],
+        },
+      }),
+    );
+
+  // 第一次修订：持有登记 → 准备被替换的内容版本 → 按重新准入结算。
+  now = 5_000;
+  expect(recordRevision(2, 'patch-1').kind).toBe('committed');
+  expect(hold()?.createdAt).toBe(5_000);
+  expect(
+    submit((expectedRevision) => ({
+      kind: 'prepare-revision-hold',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      workPackageId: 'wp-1' as WorkPackageId,
+      sourceRef: 'patch-1',
+      priorContractRevision: 3,
+    })).kind,
+  ).toBe('committed');
+  expect(
+    submit((expectedRevision) => ({
+      kind: 'release-revision-hold',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      workPackageId: 'wp-1' as WorkPackageId,
+      reason: '重新准入',
+      expectedSourceRef: 'patch-1',
+      admittedContractRevision: 3,
+    })).kind,
+  ).toBe('committed');
+  expect(hold()?.state).toBe('released');
+  expect(hold()?.admittedContractRevision).toBe(3);
+
+  // 第二个补丁重新登记同一个节点的持有：这是一次**新的**登记。登记的 `created_at` 是修订 Planner
+  // 派发先后关系的唯一判据（`plannerDeliveryAfterHold`）：保留第一次的旧时间戳会把上一个版本链
+  // 已结算的 Planner 交付读成本次修订的交付，于是派发门禁拒绝续办、持有结算又因为内容版本没有准备
+  // 而跳过，Scope 永久停在 revision_pending（真实运行实测）。
+  now = 9_000;
+  expect(recordRevision(3, 'patch-2').kind).toBe('committed');
+  expect(hold()?.sourceRef).toBe('patch-2');
+  expect(hold()?.state).toBe('pending');
+  expect(hold()?.createdAt).toBe(9_000);
+  expect(hold()?.priorContractRevision).toBeNull();
+  expect(hold()?.admittedContractRevision).toBeNull();
+});
+
 test('按重新准入结算记录接纳版本：接纳版本可与被替换版本相同，来源不符一律拒绝且零写入', () => {
   createScope();
   activateSession();

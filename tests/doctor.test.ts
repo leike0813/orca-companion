@@ -251,13 +251,16 @@ test('真实探测在 Orca 不可执行时给出不可达结论，而不是抛�
 
 const builtEntry = path.join(process.cwd(), 'dist', 'src', 'interfaces', 'cli', 'main.js');
 
+// 这一例真的启动构建产物并做能力探测（含 Orca 往返），在满负载的全量测试里会明显超过默认的 5 秒。
 test.skipIf(!existsSync(builtEntry))(
   '构建产物在无 TTY 的管道中可运行，stdout 为机器输出',
+  { timeout: 60_000 },
   () => {
     const child = spawnSync(process.execPath, [builtEntry, 'doctor'], {
       stdio: ['pipe', 'pipe', 'pipe'],
       encoding: 'utf8',
       env: { PATH: process.env['PATH'] ?? '', HOME: process.env['HOME'] ?? '' },
+      timeout: 60_000,
     });
 
     // 结论取决于真实环境，但绝不能因为缺少 TTY 而崩溃或用 2 表示用法错误。

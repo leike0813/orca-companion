@@ -45,7 +45,7 @@ const REPO_VAR = 'ORCA_COMPANION_E2E_REPO';
 const IDENTITY_VAR = 'ORCA_COMPANION_E2E_IDENTITY';
 const LOOP_SWITCH = 'ORCA_COMPANION_E2E_LOOP';
 /** 计划要求的 Worker 模型；凭据只留在 provider 环境变量里，本文件不读也不打印。 */
-const REQUIRED_WORKER_MODEL = 'minimax-cn/MiniMax-M3';
+const REQUIRED_WORKER_MODEL = 'minimax-cn/MiniMax-M3.1-Flash-Preview';
 
 const isolatedRepo = process.env[REPO_VAR] ?? '';
 const dedicatedIdentity = process.env[IDENTITY_VAR] ?? '';
