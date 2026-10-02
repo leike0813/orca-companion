@@ -1,0 +1,359 @@
+/** Throwaway #51: tabs, an overview with sections, or a directory on the shared TUI workbench. */
+import { ThemeProvider } from '@inkjs/ui';
+import { Box, Text, useInput, useWindowSize } from 'ink';
+import { useRef, useState } from 'react';
+
+import type { ControllerSnapshot, ControllerTranscriptPage } from '../../application/controller-service.js';
+import { projectTranscriptPage, projectTuiViewModel } from '../../application/tui/view-model.js';
+import { handleComposerKey } from './app.js';
+import { AuthorizationReview } from './components/authorization-review.js';
+import { PrototypeComposerInput } from './composer-prototype.js';
+import { DialogPrototype, type DialogEntry, type WorkerSlotId } from './dialog-prototype.js';
+import { AdaptiveGraphSidebar, GraphIconHint } from './graph-sidebar-prototype.js';
+import type { ExecutionAuthorizationLoad, TuiPorts } from './ports.js';
+import { allowedSidebarDensity, truncateToDisplayWidth, wrapByDisplayWidth } from './render/width.js';
+import { initialTuiState, reduceTuiState, type TuiState } from './state.js';
+import { tuiColors, tuiIconMode, tuiTheme, type TuiIconMode } from './theme.js';
+import { PrototypeTranscript } from './workspace-prototype.js';
+
+type Scene = 'planning' | 'execution' | 'blocked' | 'answer' | 'idle';
+type Variant = 'tabs' | 'sections' | 'menu';
+type Page = 'overview' | 'records' | 'graph' | 'events' | 'pending' | 'details' | 'review';
+type Row = { label: string; group?: string; hint?: string; page?: Page; nodeId?: string | null; interactionId?: string; info?: string };
+type State = {
+  ui: TuiState;
+  scene: Scene;
+  variant: Variant;
+  path: Page[];
+  lastPath: Page[];
+  cursors: Partial<Record<Page, number>>;
+  detail: { nodeId: string | null; info: string };
+  answerDrafts: Record<string, string>;
+  answered: string[];
+  answerReturn: { sessionId: string; path: Page[] } | null;
+  notice: string | null;
+  events: string[];
+  eventCount: number;
+  unavailable: boolean;
+  dialog: DialogEntry | null;
+  modelRefs: Record<string, string>;
+  modelEfforts: Record<string, string | null>;
+  workerModelRefs: Partial<Record<WorkerSlotId, string>>;
+  workerEfforts: Partial<Record<WorkerSlotId, string | null>>;
+  graphInfoTab: number;
+  iconMode: TuiIconMode;
+};
+type Props = {
+  snapshots: Record<Scene, ControllerSnapshot>;
+  transcript: ControllerTranscriptPage;
+  otherTranscript: ControllerTranscriptPage;
+  initialScene: Scene;
+  initialVariant: Variant;
+  terminalWidth: number;
+  onExit: () => void;
+  dialogPorts?: Record<Scene, TuiPorts>;
+};
+
+const scenes: Scene[] = ['planning', 'execution', 'blocked', 'answer', 'idle'];
+const variants: Variant[] = ['tabs', 'sections', 'menu'];
+const variantNames = { tabs: '栏目切换', sections: '分区总览', menu: '目录导航' };
+const pageNames: Record<Page, string> = {
+  overview: '总览', records: '工作记录', graph: '执行图', events: '最近事件', pending: '待答列表', details: '详情', review: '授权审阅',
+};
+const sessionA = 'session-long-中文规划-2026';
+const sessionB = 'session-b';
+const sessionLabel = (id: string | null) => id === sessionA ? 'S-A' : id === sessionB ? 'S-B' : id ?? '无';
+
+// Only fixtures: these labels/questions/model settings are absent from the current snapshot contract.
+const questions: Record<string, string> = {
+  'interaction-48': '请确认工作范围是否包含中文路径和长消息的终端验收。',
+  'interaction-48-second': '预算引用已登记，是否需要调整这次工作的范围？',
+  'interaction-other': '另一会话的规划依赖已整理。请确认先处理输入还是执行图。',
+};
+
+export function ProjectPanelPrototype(props: Props) {
+  const size = useWindowSize();
+  const columns = size.columns || props.terminalWidth;
+  const height = size.rows || 40;
+  const [state, setState] = useState<State>({
+    ui: { ...initialTuiState, screen: 'workspace', selectedSessionId: sessionA },
+    scene: props.initialScene, variant: props.initialVariant, path: [], lastPath: ['overview'], cursors: {},
+    detail: { nodeId: null, info: '' }, answerDrafts: {}, answered: [], answerReturn: null,
+    notice: null, unavailable: false,
+    events: ['会话 S-A 已进入当前项目', '当前图已读取', 'Worker 的结果已接受；当前状态以总览为准'],
+    eventCount: 3,
+    dialog: null, modelRefs: {}, modelEfforts: {}, workerModelRefs: {}, workerEfforts: {}, graphInfoTab: 0, iconMode: tuiIconMode,
+  });
+  const stateRef = useRef(state);
+  // PTY may deliver multiple keys in one batch; apply each against the latest presentation state.
+  const change = (update: (current: State) => State) => {
+    const next = update(stateRef.current);
+    stateRef.current = next;
+    setState(next);
+  };
+  const snapshot = props.snapshots[state.scene];
+  const unavailable = state.unavailable;
+  const sidebarVisible = allowedSidebarDensity(columns) !== 'collapsed';
+  const sidebarWidth = Math.min(70, Math.max(24, Math.round(columns * 0.42)));
+  const view = projectTuiViewModel({
+    snapshot: { ...snapshot, graphTopologies: unavailable ? [] : snapshot.graphTopologies,
+      interactions: snapshot.interactions.filter((item) => !state.answered.includes(item.interactionId)) },
+    selectedSessionId: state.ui.selectedSessionId,
+    unreadSessionIds: state.ui.unreadSessionIds,
+    transcript: projectTranscriptPage(state.ui.selectedSessionId === sessionB ? props.otherTranscript : props.transcript,
+      { coordinatorSessionId: state.ui.selectedSessionId, scrollOffset: state.ui.scrollOffsets[state.ui.selectedSessionId ?? ''] ?? 0 }),
+    includeGraphNodes: sidebarVisible || state.path.length > 0,
+  });
+  const page = state.path.at(-1) ?? 'overview';
+  const panelOpen = state.path.length > 0;
+  const inspectorOpen = state.path.includes('graph');
+  const wide = columns >= 100;
+  const docked = wide && panelOpen && !inspectorOpen;
+  const panelWidth = docked ? sidebarWidth + 2 : columns;
+  const panelHeight = height - 4;
+  const chatWidth = sidebarVisible ? columns - sidebarWidth - 2 : columns;
+  const contentWidth = Math.max(1, panelWidth - 4);
+  const viewport = Math.max(1, panelHeight - 7);
+  const rawCursor = state.cursors[page] ?? 0;
+  const nodes = view.graph?.nodes ?? [];
+  const graphCursor = Math.min(state.cursors.graph ?? Math.max(0, nodes.findIndex((item) => item.active)), Math.max(0, nodes.length - 1));
+  const selectedNode = nodes[graphCursor];
+  const openQuestions = view.interactions.filter((item) => item.state === 'open');
+  const ownQuestion = openQuestions.find((item) => item.ownerCoordinatorSessionId === state.ui.selectedSessionId);
+  const answer = state.ui.composerMode.kind === 'answer' ? state.ui.composerMode : null;
+  const answering = answer === null ? null : openQuestions.find((item) => item.interactionId === answer.interactionId);
+  const draftKey = answer?.interactionId ?? state.ui.selectedSessionId ?? sessionA;
+  const draft = answer === null ? state.ui.drafts[draftKey] ?? '' : state.answerDrafts[draftKey] ?? '';
+  const question = answering ?? ownQuestion;
+  const fit = (text: string, width = contentWidth) => truncateToDisplayWidth(text, width);
+  const risk = view.execution.reconciliation.pending ? '! 原操作结果未知 · 待对账'
+    : view.blockers[0] === undefined ? null : `! ${view.blockers[0].message}`;
+  const overviewRows: Row[] = [
+    { group: '需要你处理', label: '待答问题', hint: `${openQuestions.length} 条 · 按所属会话查看并回答`, page: 'pending' },
+    { group: '额度与权限', label: '预算与授权', hint: '已用额度、批准引用与权限范围', page: 'details', info: [
+      ...view.budgets.map((budget) => `预算项：${budget.budgetKey}\n已用：${budget.consumed}\n上限引用：${budget.approvedLimitRef}`),
+      view.budgets.length === 0 ? '执行预算未登记' : '数值上限不可用；费用与 token usage 未提供',
+      `授权：${view.scope.authorization?.authorizationId ?? '尚未批准'}\n当前已批准授权正文不可用`,
+    ].join('\n') },
+    { label: '查看候选授权', hint: '打开审阅窗口 · 示例', page: 'review' },
+    { group: '项目资料', label: '项目与会话', hint: '完整身份、执行持有者与维护记录', page: 'details', info:
+      `仓库：orca-companion\n分支：refs/heads/main\nScope：${view.scope.coordinationScopeId}\n当前会话：${view.selectedSessionId ?? '无'}\n执行持有者：${view.scope.executionLeaseHolderSessionId ?? '无'}\n规划事项：项目面板原型（示例）\n维护：${view.maintenance?.stopped ? '已停止' : '无停止记录'}\n压缩：${view.compaction?.status ?? '无记录'}` },
+    { label: '工作记录与依据', hint: '完整 ID、工作区、验证和集成证据', page: 'records' },
+  ];
+  const rows: Row[] = page === 'pending' ? openQuestions.map((item) => ({
+    label: `${sessionLabel(item.ownerCoordinatorSessionId)} · 待回答`, hint: unavailable ? '问题正文不可读' : questions[item.interactionId] ?? '问题正文不可用',
+    interactionId: item.interactionId,
+  })) : page === 'records' ? nodes.map((item) => ({ label: item.title, hint: item.workPackageId, page: 'details', nodeId: item.workPackageId }))
+    : page === 'events' ? state.events.map((label, index) => ({ label, hint: `本次启动 · 记录 ${index + 1}`, page: 'details', info: `${label}\n这是发生时的记录。当前事实请查看 sidebar。` }))
+    : state.variant === 'tabs' || page !== 'overview' ? overviewRows : [
+      ...overviewRows,
+      { group: '回看变化', label: '最近事件', hint: `本次启动 · 最近 ${state.events.length} 条`, page: 'events' },
+    ];
+  const cursor = Math.min(rawCursor, Math.max(0, (page === 'graph' ? nodes : rows).length - 1));
+  const node = nodes.find((item) => item.workPackageId === state.detail.nodeId);
+  const detailLines = (node === undefined ? state.detail.nodeId === null ? state.detail.info : '工作详情不可读 · 图记录不可用'
+    : [node.title, `ID：${node.workPackageId}`, `工作区：${node.worktreePath ?? '尚未建立'}`,
+      `baseline：${node.baselineHead ?? '未提供'}`, `Attempt：${node.attemptId ?? '未派发'}`,
+      `包含范围：${node.scopeEnvelope.include.join(', ')}`, `排除范围：${node.scopeEnvelope.exclude.join(', ') || '无'}`,
+      `验证证据：${node.validation?.evidenceRefs.join(', ') || '未提供'}`,
+      `集成引用：${node.integration?.ref ?? '未提供'}`,
+      `依据：${node.derivedFrom.join(', ') || '当前无可用依据'}`, state.detail.info].join('\n'))
+    .split('\n').flatMap((line) => wrapByDisplayWidth(line, contentWidth));
+  const review: ExecutionAuthorizationLoad = {
+    kind: 'review', review: {
+      fingerprint: 'fixture-manifest-51', scopeRevision: view.scope.revision,
+      candidate: { graphId: snapshot.graph?.graphId ?? 'fixture-candidate', generation: snapshot.graph?.generation ?? 1, version: 3, baselineHead: 'fixture-baseline', workPackageCount: 20 },
+      manifestRows: [{ label: '对象', value: '当前 Scope 的候选图（示例）' },
+        { label: '权限', value: '隔离工作区；不包含发布/部署' }, { label: '预算', value: '仅演示审阅，未连接后端' }],
+      gate: { ready: false, blockers: ['预览模式：不能批准或执行'] },
+    },
+  };
+  const push = (current: State, target: Page): State => ({ ...current, path: [...current.path, target] });
+  const enterAnswer = (current: State, interactionId: string): State => {
+    const item = openQuestions.find((entry) => entry.interactionId === interactionId);
+    if (item === undefined || unavailable || questions[interactionId] === undefined) return { ...current, notice: '问题正文不可读，不能回答' };
+    const origin = current.ui.selectedSessionId ?? sessionA;
+    let ui = reduceTuiState(current.ui, { kind: 'session-selected', coordinatorSessionId: item.ownerCoordinatorSessionId });
+    ui = reduceTuiState(ui, { kind: 'answer-mode-entered', interactionId, expectedRevision: item.expectedRevision });
+    return { ...current, ui, path: [], answerReturn: { sessionId: origin, path: current.path }, notice: null };
+  };
+
+  useInput((input, key) => {
+    const current = stateRef.current;
+    if (current.dialog !== null) return;
+    if (props.dialogPorts !== undefined) {
+      if (key.ctrl && input === 'p') { change((s) => ({ ...s, dialog: 'commands' })); return; }
+      if (key.ctrl && input === 's') { change((s) => ({ ...s, dialog: 'sessions' })); return; }
+      if (key.ctrl && input === 'c') { change((s) => ({ ...s, dialog: 'exit' })); return; }
+      if (key.ctrl && input === 't') {
+        return;
+      }
+    }
+    if (key.ctrl && input === 'c') { props.onExit(); return; }
+    if (key.ctrl && input === 'b') {
+      change((s) => s.path.includes('graph') ? { ...s, path: s.path.slice(0, s.path.indexOf('graph')).length ? s.path.slice(0, s.path.indexOf('graph')) : s.lastPath }
+        : s.path.length ? { ...s, lastPath: s.path, path: [] } : { ...s, path: s.lastPath }); return;
+    }
+    if (key.ctrl && input === 'g') { change((s) => s.path.at(-1) === 'graph' ? s : push(s, 'graph')); return; }
+    if (key.ctrl && input === 't') { change((s) => ({ ...s, variant: variants[(variants.indexOf(s.variant) + 1) % variants.length]! })); return; }
+    if (key.ctrl && input === 'y') {
+      change((s) => ({ ...s, scene: scenes[(scenes.indexOf(s.scene) + 1) % scenes.length]!, answered: [], notice: null, cursors: {},
+        ui: reduceTuiState(s.ui, { kind: 'composer-mode-reset' }), answerReturn: null })); return;
+    }
+    if (key.ctrl && input === 'u') { change((s) => ({ ...s, unavailable: !s.unavailable })); return; }
+    if (key.ctrl && input === 'n') {
+      change((s) => ({ ...s, eventCount: s.eventCount + 1,
+        events: [...s.events, `新事件 ${s.eventCount + 1} · 会话 S-B 的工作状态有变化`].slice(-50),
+        ui: reduceTuiState(s.ui, { kind: 'events-arrived', coordinatorSessionIds: [sessionB] }) })); return;
+    }
+    if (key.ctrl && input === 'r' && current.answerReturn !== null) {
+      change((s) => ({ ...s, path: s.answerReturn?.path ?? [], answerReturn: null,
+        ui: reduceTuiState(s.ui, { kind: 'session-selected', coordinatorSessionId: s.answerReturn?.sessionId ?? sessionA }) })); return;
+    }
+    if (page === 'review' && panelOpen) {
+      if (key.escape) change((s) => ({ ...s, path: s.path.slice(0, -1) }));
+      return;
+    }
+    if (key.escape) {
+      change((s) => s.path.length ? { ...s, path: s.path.slice(0, -1) }
+        : s.ui.composerMode.kind === 'answer' ? { ...s, ui: reduceTuiState(s.ui, { kind: 'composer-mode-reset' }), notice: '回答已取消 · Ctrl+R 返回原列表' } : s);
+      return;
+    }
+    if (!panelOpen) {
+      if (key.ctrl && input === 'a' && ownQuestion !== undefined) { change((s) => enterAnswer(s, ownQuestion.interactionId)); return; }
+      if (key.pageUp || key.pageDown) {
+        change((s) => ({ ...s, ui: reduceTuiState(s.ui, { kind: 'scroll-changed', coordinatorSessionId: s.ui.selectedSessionId ?? sessionA,
+          offset: Math.max(0, Math.min(view.transcript.entries.length - 1, (s.ui.scrollOffsets[s.ui.selectedSessionId ?? sessionA] ?? 0) + (key.pageUp ? 2 : -2))) }) })); return;
+      }
+      if (key.ctrl || key.tab || key.upArrow || key.downArrow || key.leftArrow || key.rightArrow) return;
+      const mode = current.ui.composerMode;
+      const editingKey = mode.kind === 'answer' ? mode.interactionId : current.ui.selectedSessionId ?? sessionA;
+      const editingDraft = mode.kind === 'answer' ? current.answerDrafts[editingKey] ?? '' : current.ui.drafts[editingKey] ?? '';
+      handleComposerKey(input, key, {
+        readOnly: false, draft: editingDraft,
+        change: (text) => change((s) => mode.kind === 'message' ? { ...s, ui: reduceTuiState(s.ui, { kind: 'draft-changed', coordinatorSessionId: editingKey, text }) }
+          : { ...s, answerDrafts: { ...s.answerDrafts, [editingKey]: text } }),
+        submit: () => change((s) => mode.kind === 'message' ? { ...s, notice: '模拟消息未发送 · 草稿保留' }
+          : unavailable || answering === undefined || editingDraft.trim() === '' ? { ...s, notice: '问题不可用或回答为空 · 未提交' }
+            : { ...s, answered: [...s.answered, mode.interactionId], ui: reduceTuiState(s.ui, { kind: 'composer-mode-reset' }), notice: '模拟回答已记录 · Ctrl+R 返回原列表' }),
+      });
+      return;
+    }
+    if (key.tab) {
+      if (page === 'graph') { change((s) => ({ ...s, graphInfoTab: (s.graphInfoTab + (key.shift ? 2 : 1)) % 3 })); return; }
+      if (state.path.includes('graph')) return;
+      const tabs: Page[] = ['overview', 'pending', 'events'];
+      const target = tabs[(tabs.indexOf(page) + 1) % tabs.length]!;
+      change((s) => ({ ...s, path: [target] })); return;
+    }
+    if ((key.leftArrow || key.rightArrow) && page === 'graph' && selectedNode !== undefined) {
+      const related = key.leftArrow ? nodes.find((item) => selectedNode.dependsOn.includes(item.workPackageId))
+        : nodes.find((item) => item.dependsOn.includes(selectedNode.workPackageId));
+      if (related !== undefined) change((s) => ({ ...s, cursors: { ...s.cursors, graph: nodes.indexOf(related) } }));
+      return;
+    }
+    if (key.upArrow || key.downArrow) {
+      const maximum = page === 'details' ? detailLines.length - viewport : page === 'graph' ? nodes.length - 1 : rows.length - 1;
+      change((s) => ({ ...s, cursors: { ...s.cursors, [page]: Math.max(0, Math.min(Math.max(0, maximum), (page === 'graph' ? graphCursor : s.cursors[page] ?? 0) + (key.upArrow ? -1 : 1))) } })); return;
+    }
+    if (key.return) {
+      if (page === 'review' || page === 'details') return;
+      const row = rows[cursor];
+      if (page === 'graph' && selectedNode !== undefined) {
+        change((s) => ({ ...push(s, 'details'), detail: { nodeId: selectedNode.workPackageId, info: '' }, cursors: { ...s.cursors, details: 0 } }));
+      } else if (row?.interactionId !== undefined) change((s) => enterAnswer(s, row.interactionId!));
+      else if (row?.page === 'review' && props.dialogPorts !== undefined) change((s) => ({ ...s, dialog: 'authorize' }));
+      else if (row?.page !== undefined) change((s) => ({ ...push(s, row.page!), detail: { nodeId: row.nodeId ?? null, info: row.info ?? '' }, cursors: { ...s.cursors, details: 0 } }));
+    }
+  });
+
+  const renderRows = () => {
+    const selected = Math.min(cursor, Math.max(0, rows.length - 1));
+    const rowHeight = state.variant === 'menu' || page === 'records' ? 2 : 3;
+    const capacity = Math.max(1, Math.floor((viewport - (state.notice === null ? 0 : 1)) / rowHeight));
+    const start = Math.max(0, Math.min(Math.max(0, rows.length - capacity), selected - Math.floor(capacity / 2)));
+    return <Box flexDirection="column">
+      {state.notice === null ? null : <Text color={tuiColors.warning}>{fit(state.notice)}</Text>}
+      {rows.length === 0 ? <Text dimColor>{page === 'pending' ? '没有待答问题' : page === 'records' ? state.scene === 'idle' ? '暂无工作记录' : '工作记录不可读' : '窗口内暂无事件'}</Text> : null}
+      {rows.slice(start, start + capacity).map((row, index) => <Box key={`${page}-${start + index}`} height={rowHeight} flexDirection="column">
+        {rowHeight < 3 ? null : <Text color={tuiColors.accent} bold>{fit(row.group === undefined ? '' : `── ${row.group} ──`)}</Text>}
+        <Text color={start + index === selected ? tuiColors.focus : 'white'} bold inverse={start + index === selected}>
+          {fit(`${start + index === selected ? '›' : '→'} ${row.label}`)}
+        </Text>
+        <Text dimColor>{fit(`  ${row.hint ?? ''}`)}</Text>
+      </Box>)}
+      {rows.length > capacity ? <Text dimColor>{fit(`显示 ${start + 1}–${Math.min(rows.length, start + capacity)}/${rows.length} · ↑↓ 移动`)}</Text> : null}
+    </Box>;
+  };
+  const activeTab = state.path.includes('pending') ? 'pending' : state.path.includes('events') ? 'events' : 'overview';
+  const panel = <Box flexDirection="column" width={panelWidth} height={panelHeight} flexShrink={0} paddingX={1} borderStyle="round" borderColor={tuiColors.border} overflow="hidden">
+    <Text color={tuiColors.accent} bold>{fit(`${inspectorOpen ? '执行图检查' : '项目面板'} · ${state.path.map((entry) => pageNames[entry]).join(' › ')}`)}</Text>
+    {page === 'graph' ? null : <Box marginBottom={1}>{state.variant === 'tabs' && !inspectorOpen ? <Text>{(['overview', 'pending', 'events'] as const).map((tab) => <Text key={tab} color={activeTab === tab ? tuiColors.focus : tuiColors.muted} bold={activeTab === tab}>{activeTab === tab ? ` [${pageNames[tab]}] ` : ` ${pageNames[tab]} `}</Text>)}<Text dimColor> · Tab</Text></Text>
+      : <Text dimColor>{fit(inspectorOpen ? '查看依赖；Enter 阅读工作依据' : state.variant === 'sections' ? '按用途分区 · 标题下方选择操作' : '选择入口 → 阅读 → Esc 返回')}</Text>}</Box>}
+    {page === 'events' ? <Text dimColor>{fit(`本次启动 · 最近 ${state.events.length} 条${state.eventCount > 50 ? ' · 早期事件已截断' : ''}`)}</Text> : null}
+    <Box flexDirection="column" flexGrow={1} overflow="hidden">
+      {page === 'review' ? <AuthorizationReview review={review} onConfirm={() => {}} onCancel={() => {}} availableWidth={Math.max(1, contentWidth - 2)} />
+        : page === 'graph' ? view.graph === null ? <Text color={tuiColors.warning}>{state.scene === 'idle' ? '暂无执行图' : '图不可读 · 不能视为空图'}</Text>
+        : <AdaptiveGraphSidebar view={view} width={contentWidth} height={panelHeight - 4} horizontal={false} selectedId={selectedNode?.workPackageId ?? null} inspector infoTab={state.graphInfoTab} iconMode={state.iconMode} />
+        : page === 'details' ? detailLines.slice(rawCursor, rawCursor + viewport).map((line, index) => {
+          const separator = line.indexOf('：');
+          return <Text key={index} bold={rawCursor + index === 0}>{separator < 0 ? line : <><Text color={tuiColors.muted}>{line.slice(0, separator + 1)}</Text>{line.slice(separator + 1)}</>}</Text>;
+        }) : renderRows()}
+    </Box>
+    <Text dimColor>{fit(page === 'graph' ? '↑↓工作 · ←→依赖 · Tab信息 · Enter详情'
+      : page === 'details' ? '↑↓ 滚动 · Esc 返回上一级' : '↑↓ 选择 · Enter 打开 · Esc 返回')}</Text>
+  </Box>;
+  const scroll = state.ui.scrollOffsets[state.ui.selectedSessionId ?? sessionA] ?? 0;
+  const transcriptEnd = Math.max(1, view.transcript.entries.length - scroll);
+  const chat = <Box flexDirection="column" width={chatWidth} height={height - 4} overflow="hidden">
+    <Box flexDirection="column" flexGrow={1} overflow="hidden">
+      <PrototypeTranscript entries={view.transcript.entries.slice(Math.max(0, transcriptEnd - (height < 30 ? 4 : 7)), transcriptEnd)} width={chatWidth} compact={height < 30} expanded={false} />
+    </Box>
+    {question === undefined || question === null ? null : <Box flexDirection="column" paddingLeft={1}>
+      <Text color={tuiColors.warning}>{fit(`待答 · ${sessionLabel(question.ownerCoordinatorSessionId)}${answer === null ? ' · Ctrl+A 回答' : ' · 回答模式'}`, chatWidth)}</Text>
+      {(unavailable ? ['问题正文不可读 · 请返回项目面板核验'] : wrapByDisplayWidth(questions[question.interactionId] ?? '问题正文不可用', chatWidth - 2)).slice(0, 3).map((line, index) => <Text key={index}>{line}</Text>)}
+    </Box>}
+    {state.notice === null ? null : <Text color={tuiColors.warning}>{fit(state.notice, chatWidth)}</Text>}
+    {state.answerReturn === null ? null : <Text color={tuiColors.focus}>{fit(`来自 ${sessionLabel(state.answerReturn.sessionId)} · Ctrl+R 返回原列表/会话`, chatWidth)}</Text>}
+    <PrototypeComposerInput width={chatWidth} value={draft} label={answer === null ? `› ${sessionLabel(state.ui.selectedSessionId)} · 输入消息`
+      : `› 回答 ${answer.interactionId} · revision ${answer.expectedRevision}`} />
+    <Text dimColor>{fit(unavailable ? '示例模型 · 推理不可用 · 上下文不可用'
+      : `${state.modelRefs[state.ui.selectedSessionId ?? sessionA] === 'config-basic' ? '示例模型 D' : state.modelRefs[state.ui.selectedSessionId ?? sessionA] === 'config-b' ? '示例模型 B' : '示例模型 A'} · 推理 ${state.modelEfforts[state.ui.selectedSessionId ?? sessionA] === null ? '不支持' : state.modelEfforts[state.ui.selectedSessionId ?? sessionA] ?? (state.modelRefs[state.ui.selectedSessionId ?? sessionA] === 'config-b' ? 'medium' : 'high')} · 上下文 62%`, chatWidth)}</Text>
+  </Box>;
+  const sidebar = sidebarVisible ? <Box flexDirection="column" width={sidebarWidth + 2} height={height - 4} borderStyle="single" borderTop={false} borderBottom={false} borderRight={false} borderColor={tuiColors.border} overflow="hidden">
+    <Text color={tuiColors.accent} bold>执行图侧栏</Text>
+    {view.graph === null ? <Text color={tuiColors.warning}>{state.scene === 'idle' ? '暂无执行图' : '图不可读 · 不能视为空图'}</Text>
+      : <AdaptiveGraphSidebar view={view} width={sidebarWidth} height={height - 6} horizontal={false} selectedId={nodes[state.cursors.graph ?? -1]?.workPackageId ?? null} iconMode={state.iconMode} />}
+    <Box flexGrow={1} />
+    <GraphIconHint width={sidebarWidth} />
+  </Box> : null;
+  return <ThemeProvider theme={tuiTheme}>
+    <Box height={height} width={columns} flexDirection="column" overflow="hidden">
+      <Text bold color={tuiColors.accent}>{fit(`orca-c/main · ${sessionLabel(state.ui.selectedSessionId)} · ${view.scope.mode === 'route_planning' ? '规划' : '执行'}/${view.scope.controlState} · 待答${openQuestions.length}${state.ui.unreadSessionIds.length ? ' · 新消息' : ''}`, columns)}</Text>
+      <Text color={risk === null ? tuiColors.muted : tuiColors.warning}>{fit(risk ?? (props.dialogPorts === undefined ? 'Ctrl+B 项目 · Ctrl+G 图 · Ctrl+C 退出' : 'Ctrl+P 命令 · Ctrl+S 会话 · Ctrl+B 项目'), columns)}</Text>
+      {state.dialog !== null && props.dialogPorts !== undefined ? <DialogPrototype
+        entry={state.dialog} snapshot={snapshot} workerModelRefs={state.workerModelRefs} workerEfforts={state.workerEfforts} iconMode={state.iconMode}
+        sessions={view.sessions.map((session) => ({ ...session, coordinatorModelConfigurationRef: state.modelRefs[session.coordinatorSessionId] ?? session.coordinatorModelConfigurationRef }))}
+        selectedSessionId={state.ui.selectedSessionId ?? sessionA} currentConfigurationRef={state.modelRefs[state.ui.selectedSessionId ?? sessionA] ?? 'config-a'}
+        currentEffort={state.modelEfforts[state.ui.selectedSessionId ?? sessionA]}
+        ports={props.dialogPorts[state.scene]} width={columns} height={height - 4} unavailable={unavailable}
+        origin={panelOpen ? `项目面板 / ${pageNames[page]}` : '对话'}
+        onClose={() => change((s) => ({ ...s, dialog: null }))}
+        onSession={(id) => change((s) => ({ ...s, dialog: null, ui: reduceTuiState(s.ui, { kind: 'session-selected', coordinatorSessionId: id }) }))}
+        onPanel={(target) => change((s) => ({ ...s, dialog: null, path: [...s.path, target] }))}
+        onComplete={(summary) => change((s) => ({ ...s, dialog: null, notice: summary }))}
+        onCoordinatorModel={(configurationRef, effort) => change((s) => ({ ...s, modelRefs: { ...s.modelRefs, [s.ui.selectedSessionId ?? sessionA]: configurationRef }, modelEfforts: { ...s.modelEfforts, [s.ui.selectedSessionId ?? sessionA]: effort } }))}
+        onWorkerModel={(role, configurationRef, effort) => change((s) => ({ ...s, workerModelRefs: { ...s.workerModelRefs, [role]: configurationRef }, workerEfforts: { ...s.workerEfforts, [role]: effort } }))}
+        onIconMode={(iconMode) => change((s) => ({ ...s, iconMode }))}
+        onEvent={() => change((s) => ({ ...s, eventCount: s.eventCount + 1, events: [...s.events, `新事件 ${s.eventCount + 1} · 会话 S-B 的工作状态有变化`].slice(-50),
+          ui: reduceTuiState(s.ui, { kind: 'events-arrived', coordinatorSessionIds: [sessionB] }) }))}
+        onUnavailable={() => change((s) => ({ ...s, unavailable: !s.unavailable }))}
+        onExit={props.onExit}
+      /> : docked ? <Box flexDirection="row" height={panelHeight}>{chat}{panel}</Box>
+        : panelOpen ? panel
+        : <Box flexDirection="row" height={height - 4}>{chat}{sidebar}</Box>}
+      <Text dimColor>{fit(`原型 ${props.dialogPorts === undefined ? variantNames[state.variant] : '弹窗修订'} · ${state.scene} · ${state.dialog ?? (panelOpen ? pageNames[page] : answer === null ? '对话' : '回答')} · 滚动${scroll}`, columns)}</Text>
+      <Text inverse>{fit(props.dialogPorts === undefined ? '^T方案 ^Y场景 ^N消息 ^U缺失 · Esc返回' : '^P命令 ^S会话 ^Y场景 ^N消息 ^U缺失', columns)}</Text>
+    </Box>
+  </ThemeProvider>;
+}

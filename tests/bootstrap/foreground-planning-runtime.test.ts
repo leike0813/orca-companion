@@ -270,6 +270,7 @@ test('向导创建 Scope 后 Home 按精确绑定恢复，且只读查询不产�
 
   const initialized = await harness.host.ports.execute({
     kind: 'send-session-message',
+    submissionId: globalThis.crypto.randomUUID(),
     coordinatorSessionId: proposal.coordinatorSessionId,
     content: '这条消息在 Scope 创建之前不该被接受',
   });
@@ -310,6 +311,86 @@ test('向导创建 Scope 后 Home 按精确绑定恢复，且只读查询不产�
   expect(harness.requests.generations).toBe(0);
 });
 
+test('重启核验原提交并清理受理快照，保留下一稿且不启动模型', async () => {
+  const first = await startHarness();
+  const proposal = await first.host.ports.scopeSetup.proposal();
+  expect((await first.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  const target = {
+    kind: 'message' as const, coordinationScopeId: proposal.coordinationScopeId,
+    coordinatorSessionId: proposal.coordinatorSessionId,
+  };
+  const draft = { text: '保护重启前的提交', cursor: 8, pasteBlocks: [] };
+  expect(first.host.ports.inputStore.write({
+    key: 'pending-restart', expectedRevision: 0,
+    record: { kind: 'submission', target, draft, submissionId: 'restart-submission', status: 'unknown', reason: null },
+  }).kind).toBe('saved');
+  expect((await first.host.ports.execute({
+    kind: 'scope-control', action: 'pause',
+  })).kind).toBe('accepted');
+  const probeGenerations = first.requests.generations;
+  expect((await first.host.ports.execute({
+    kind: 'send-session-message', coordinatorSessionId: target.coordinatorSessionId,
+    submissionId: 'restart-submission', content: draft.text,
+  })).kind).toBe('accepted');
+  expect(first.requests.generations).toBe(probeGenerations);
+  expect(first.host.ports.inputStore.write({
+    key: 'next-draft', expectedRevision: 0,
+    record: { kind: 'draft', target, draft: { text: '下一条中文草稿', cursor: 7, pasteBlocks: [] } },
+  }).kind).toBe('saved');
+  first.dispose();
+  const commonDir = await resolveGitCommonDir({ repositoryPath: first.repository, env: process.env as Record<string, string> });
+  if (commonDir.kind !== 'resolved') throw new Error('无法解析测试仓库');
+  const opened = openCoordinationStore({ databasePath: coordinationDatabasePath(commonDir.path), clock, readOnly: true });
+  if (opened.kind !== 'opened') throw new Error(opened.message);
+  const leasesBefore = opened.store.query({ kind: 'leases', coordinationScopeId: target.coordinationScopeId as CoordinationScopeId });
+  const resumed = await startHarness({ repository: first.repository });
+  expect(resumed.host.ports.inputStore.read('pending-restart')).toMatchObject({ kind: 'record', record: null });
+  expect(resumed.host.ports.inputStore.read('next-draft')).toMatchObject({
+    kind: 'record', record: { draft: { text: '下一条中文草稿' } },
+  });
+  expect(await resumed.host.ports.submissionStatus({
+    kind: 'message', coordinatorSessionId: target.coordinatorSessionId,
+    submissionId: 'restart-submission', content: draft.text,
+  })).toMatchObject({ kind: 'accepted' });
+  expect(await resumed.host.ports.submissionStatus({
+    kind: 'message', coordinatorSessionId: target.coordinatorSessionId,
+    submissionId: 'restart-submission', content: '不同内容',
+  })).toMatchObject({ kind: 'conflict' });
+  expect(resumed.requests.generations).toBe(0);
+  try {
+    expect(opened.store.query({ kind: 'leases', coordinationScopeId: target.coordinationScopeId as CoordinationScopeId })).toEqual(leasesBefore);
+  } finally {
+    opened.store.close();
+  }
+});
+
+test('重启保留未发现的提交，不自动重发或取得租约', async () => {
+  const first = await startHarness();
+  const proposal = await first.host.ports.scopeSetup.proposal();
+  await first.host.ports.scopeSetup.initialize(proposal);
+  const target = {
+    kind: 'message' as const,
+    coordinationScopeId: proposal.coordinationScopeId,
+    coordinatorSessionId: proposal.coordinatorSessionId,
+  };
+  const value = {
+    kind: 'submission' as const, target,
+    draft: { text: '未确认的中文输入', cursor: 8, pasteBlocks: [] },
+    submissionId: 'unsettled', status: 'unknown' as const, reason: 'transport lost',
+  };
+  expect(first.host.ports.inputStore.write({ key: 'unsettled', expectedRevision: 0, record: value }).kind).toBe('saved');
+  first.dispose();
+  const resumed = await startHarness({ repository: first.repository });
+  expect(resumed.host.ports.inputStore.read('unsettled')).toMatchObject({ kind: 'record', record: value });
+  expect(await resumed.host.ports.submissionStatus({
+    kind: 'message', coordinatorSessionId: target.coordinatorSessionId,
+    submissionId: value.submissionId, content: value.draft.text,
+  })).toMatchObject({ kind: 'not-found' });
+  expect(resumed.requests.generations).toBe(0);
+  const snapshot = await resumed.host.ports.snapshot(null);
+  expect(snapshot.kind === 'snapshot' && snapshot.snapshot.sessions.some((session) => session.holdsRuntimeLease)).toBe(false);
+});
+
 test('提交消息后取得租约并由模型处理一次，transcript 里有用户消息与响应', async () => {
   const harness = await startHarness();
   const proposal = await harness.host.ports.scopeSetup.proposal();
@@ -317,6 +398,7 @@ test('提交消息后取得租约并由模型处理一次，transcript 里有用
 
   const accepted = await harness.host.ports.execute({
     kind: 'send-session-message',
+    submissionId: globalThis.crypto.randomUUID(),
     coordinatorSessionId: proposal.coordinatorSessionId,
     content: '请读一下 Route Map',
   });
@@ -459,6 +541,7 @@ test('回答写入 Branch 后即使进程退出，重启仍从权威正文恢复
   if (interaction === undefined) throw new Error('交互未落盘');
   const answer = `${'解释背景。'.repeat(50)}最终选择方案 A。`;
   const answered = answerPendingInteraction({
+    submissionId: 'answer-before-crash',
     store: opened.store,
     coordinationScopeId: scopeId,
     writer,
@@ -487,6 +570,7 @@ test('Runtime Lease 被续约；续约失败后停止模型调用与写入并发
   await harness.host.ports.scopeSetup.initialize(proposal);
   await harness.host.ports.execute({
     kind: 'send-session-message',
+    submissionId: globalThis.crypto.randomUUID(),
     coordinatorSessionId: proposal.coordinatorSessionId,
     content: '开始规划',
   });
@@ -534,6 +618,7 @@ test('Runtime Lease 被续约；续约失败后停止模型调用与写入并发
   expect(
     await harness.host.ports.execute({
       kind: 'send-session-message',
+      submissionId: globalThis.crypto.randomUUID(),
       coordinatorSessionId: proposal.coordinatorSessionId,
       content: '继续',
     }),
@@ -552,6 +637,7 @@ test('Runtime Lease 被续约；续约失败后停止模型调用与写入并发
   const generationsAfterFence = harness.requests.generations;
   const rejected = await harness.host.ports.execute({
     kind: 'send-session-message',
+    submissionId: globalThis.crypto.randomUUID(),
     coordinatorSessionId: proposal.coordinatorSessionId,
     content: '续约失败后不该产生新的模型调用',
   });
@@ -617,6 +703,7 @@ test('会话维护端口已接线：/compact 与模型切换都走既有用例�
   await harness.host.ports.scopeSetup.initialize(proposal);
   await harness.host.ports.execute({
     kind: 'send-session-message',
+    submissionId: globalThis.crypto.randomUUID(),
     coordinatorSessionId: proposal.coordinatorSessionId,
     content: '先看一遍地图',
   });
@@ -690,6 +777,7 @@ test('上下文耗尽时不再发起超窗模型请求，并把耗尽原因投�
 
   const accepted = await harness.host.ports.execute({
     kind: 'send-session-message',
+    submissionId: globalThis.crypto.randomUUID(),
     coordinatorSessionId: proposal.coordinatorSessionId,
     content: 'x'.repeat(3_000),
   });
@@ -714,6 +802,7 @@ test('上下文耗尽时不再发起超窗模型请求，并把耗尽原因投�
   expect(
     await harness.host.ports.execute({
       kind: 'send-session-message',
+      submissionId: globalThis.crypto.randomUUID(),
       coordinatorSessionId: proposal.coordinatorSessionId,
       content: '耗尽之后仍然可以写下来的想法',
     }),

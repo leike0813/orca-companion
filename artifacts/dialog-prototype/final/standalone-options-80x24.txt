@@ -1,0 +1,24 @@
+Scope scope-graph-preview · execution_coordination · active · graph-prototype v…
+────────────────────────────────────────────────────────────────────────────────
+                                            │选项 · 图标
+│ ›                                         │❯ Nerd Fonts · 当前
+│ 执行图现在走到哪里？有需要我处理的阻塞吗？│  ASCII
+                                            │Enter 应用 · Esc 返回
+● 当前只有一个工作包在运行。阻塞与 Worker   │
+存活状态分别显示在右侧。                    │
+                                            │
+                                            │
+                                            │
+                                            │
+                                            │
+                                            │
+                                            │
+                                            │
+                                            │
+                                            │
+╭──────────────────────────────────────────╮│
+│ › 继续提问…                              ││
+╰──────────────────────────────────────────╯│
+revision 11 · sidebar compact · blockers 1  │
+active 1 · hazard(1 live / 1 unverifiable /…│图标异常？O选项切ASCII
+拓扑分叉 · execution  |  J/K 选节点 · F 回当前  |  Tab 切换布局 · M 切换场景 · …

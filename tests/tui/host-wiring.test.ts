@@ -474,6 +474,7 @@ test('规划 Handoff 的 Target 来自用户在 Session Picker 里的选择', as
     (
       await harness.host.ports.execute({
         kind: 'send-session-message',
+        submissionId: globalThis.crypto.randomUUID(),
         coordinatorSessionId: source,
         content: '先读一遍 Route Map',
       })
@@ -549,6 +550,7 @@ test('会话维护与模型切换在 TUI 入口上落到真实记录，而不是
     (
       await harness.host.ports.execute({
         kind: 'send-session-message',
+        submissionId: globalThis.crypto.randomUUID(),
         coordinatorSessionId: session,
         content: '先读一遍 Route Map',
       })

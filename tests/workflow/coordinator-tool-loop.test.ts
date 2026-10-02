@@ -27,8 +27,10 @@ import { openCheckpointStore, type CheckpointStore } from '../../src/adapters/st
 import {
   COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
   toolOperationId,
+  userEntryId,
   type CommittedMessageEntry,
   type CoordinatorSessionState,
+  type WakeBatch,
 } from '../../src/domain/coordinator/session-state.js';
 import { fromDurableMessage } from '../../src/workflow/coordinator/context.js';
 import {
@@ -591,4 +593,54 @@ test('路由：有未决 tool call 时（含重启后的第一次 invoke）先�
   expect(routeAfterModel(done)).toBe(MODEL_NODE);
   // fenced 的 tools 节点以 blocked 结束：不得再回到模型，也不得挂起。
   expect(routeAfterTools({ ...done, status: 'blocked' })).toBe('__end__');
+});
+
+test('工具执行期间受理的新用户消息不被旧快照覆盖，且未完成的工作保持待处理', async () => {
+  save(baseState());
+  seedPendingCalls([{ callId: 'call-1', name: 'claim_ticket', args: { ticketId: 'ticket-1' } }]);
+  const busyBatch: WakeBatch = {
+    wakeBatchId: 'wake:user:submission-busy',
+    coordinationScopeId: SCOPE,
+    coordinatorSessionId: SESSION,
+    sourceRevisions: [{ sourceKind: 'user-message', sourceId: 'submission-busy', revision: 1 }],
+    actionableWork: [{ workKind: 'user_message', workId: 'submission-busy', summary: 'B' }],
+  };
+  // 这个工具在「执行中」模拟另一路受理了一条新用户消息（busy B）。
+  const concurrentTool: PlanningToolDefinition = {
+    name: 'claim_ticket',
+    description: '测试工具：执行期间受理一条新用户消息',
+    mutating: true,
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    invoke: () => {
+      const committed = store.commitUserMessage({
+        coordinatorSessionId: SESSION,
+        submissionId: 'submission-busy',
+        content: '等待期间的新消息 B',
+        wakeBatch: busyBatch,
+      });
+      if (committed.kind !== 'committed') {
+        throw new Error(`busy B 未能落盘：${committed.kind}`);
+      }
+      return Promise.resolve({ kind: 'ok', value: accepted() });
+    },
+  };
+
+  const node = createToolsNode({
+    sessionRecords: store,
+    assertFencing: () => ({ kind: 'valid', lease: {} as never }),
+    tools: [concurrentTool],
+  });
+  const update = await node(graphState(1));
+
+  expect(update.status).toBe('running');
+  const state = loadState();
+  // busy B 仍在已提交历史里：工具的写入基于最新状态，没有把新消息覆盖掉。
+  expect(state.committedMessages.some((entry) => entry.entryId === userEntryId('submission-busy'))).toBe(
+    true,
+  );
+  expect(state.committedMessages.find((entry) => entry.toolCallId === 'call-1')?.content).toContain(
+    '"kind":"ok"',
+  );
+  // 该工具不完成当前工作：原 Actionable Work 保持待处理，后续轮次再消费。
+  expect(update.remainingWork).toEqual(work(1).items);
 });

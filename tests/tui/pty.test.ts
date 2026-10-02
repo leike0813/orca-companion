@@ -360,6 +360,27 @@ describe.skipIf(!build.ok)(SUITE_NAME, () => {
     if (!pty.ok) {
       test.skip(`真实 PTY 用例未运行：${pty.reason}`, () => {});
     } else {
+      test.each([120, 80, 50])('%i 列中文多行粘贴只保存，退出恢复终端模式', (width) => {
+        const socket = newSocket(`input-${String(width)}`);
+        const session = 'input';
+        // 同一个 shell 在 TUI 退出后检查原 PTY，才能证明 raw mode 已恢复。
+        const command = `before=$(stty -g); ${fixtureCommand()}; result=$?; after=$(stty -g); if [ "$before" = "$after" ]; then printf '\\n__TERMINAL_RESTORED__\\n'; fi; printf '__TUI_EXIT_%s__\\n' "$result"; exit "$result"`;
+        expect(startSession(socket, session, width, 40, command, { cwd: REPOSITORY_ROOT }).status).toBe(0);
+        expect(pollPane(socket, session, (text) => text.includes('composer · 普通消息')).ok).toBe(true);
+
+        tmux(socket, ['send-keys', '-t', session, '-l', '\u001b[200~中文粘贴abc\n第二行\u001b[201~']);
+        const pasted = pollPane(socket, session, (text) => text.includes('中文粘贴abc') && text.includes('第二行'));
+        expect(pasted.ok, pasted.text).toBe(true);
+        expect(pasted.text).not.toContain('preview_read_only');
+        expect(frameGeometryProblems(paneLines(pasted.text), width)).toEqual([]);
+
+        tmux(socket, ['send-keys', '-t', session, 'C-c']);
+        const exited = pollPaneDead(socket, session);
+        expect(exited.ok).toBe(true);
+        expect(capturePane(socket, session)).toContain('__TUI_EXIT_0__');
+        expect(capturePane(socket, session)).toContain('__TERMINAL_RESTORED__');
+      });
+
       test('PTY 中启动前台 TUI，Ctrl+C 退出后终端仍可用', () => {
         const socket = newSocket('start');
         const session = 'app';

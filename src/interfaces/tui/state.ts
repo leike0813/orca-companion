@@ -22,10 +22,17 @@ export type OverlayKind =
   /** 执行阶段交接复用同一交互，但主题与记录是 `ExecutionHandoffState`。 */
   | 'execution-handoff-review'
   /** 规划 → 执行的完整 Manifest 审阅；只读展示 + 一次显式批准。 */
-  | 'authorization-review';
+  | 'authorization-review'
+  /** 有界输入记录管理：查看、恢复、核验与删除草稿/冲突副本/待核验提交。 */
+  | 'input-record-manager';
 
 /** 等待用户确认的动作（IP-05、IP-06）；`null` 表示没有待确认动作。 */
-export type PendingConfirmation = { readonly kind: 'cancel' } | { readonly kind: 'exit' } | null;
+export type PendingConfirmation =
+  | { readonly kind: 'cancel' }
+  | { readonly kind: 'exit' }
+  /** 退出前保存失败：只有再次明确确认后才丢弃未保存输入并退出。 */
+  | { readonly kind: 'exit-discard' }
+  | null;
 
 /** 执行图过滤条件（状态集合）；空集合表示不过滤。 */
 export type ExecutionFilter = readonly WorkPackageExecutionState[];
@@ -81,6 +88,8 @@ export type TuiState = {
   readonly sidebarDensity: SidebarDensity;
   readonly selectedSessionId: string | null;
   readonly drafts: Readonly<Record<string, string>>;
+  /** 回答草稿：按 interaction ID 与 expected revision 隔离，永不自动改绑。 */
+  readonly answerDrafts: Readonly<Record<string, string>>;
   readonly scrollOffsets: Readonly<Record<string, number>>;
   readonly unreadSessionIds: readonly string[];
   readonly composerMode: ComposerMode;
@@ -104,6 +113,7 @@ export const initialTuiState: TuiState = {
   sidebarDensity: 'full',
   selectedSessionId: null,
   drafts: {},
+  answerDrafts: {},
   scrollOffsets: {},
   unreadSessionIds: [],
   composerMode: { kind: 'message' },
@@ -127,6 +137,7 @@ export type TuiAction =
   | { readonly kind: 'session-selected'; readonly coordinatorSessionId: string }
   | { readonly kind: 'sessions-loaded'; readonly coordinatorSessionIds: readonly string[]; readonly preferred: string | null }
   | { readonly kind: 'draft-changed'; readonly coordinatorSessionId: string; readonly text: string }
+  | { readonly kind: 'answer-draft-changed'; readonly answerKey: string; readonly text: string }
   | { readonly kind: 'scroll-changed'; readonly coordinatorSessionId: string; readonly offset: number }
   | { readonly kind: 'events-arrived'; readonly coordinatorSessionIds: readonly (string | null)[] }
   | { readonly kind: 'answer-mode-entered'; readonly interactionId: string; readonly expectedRevision: number }
@@ -182,6 +193,11 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
       return {
         ...state,
         drafts: { ...state.drafts, [action.coordinatorSessionId]: action.text },
+      };
+    case 'answer-draft-changed':
+      return {
+        ...state,
+        answerDrafts: { ...state.answerDrafts, [action.answerKey]: action.text },
       };
     case 'scroll-changed':
       return {
@@ -250,6 +266,36 @@ export function draftFor(state: TuiState, coordinatorSessionId: string | null): 
     return '';
   }
   return state.drafts[coordinatorSessionId] ?? '';
+}
+
+/**
+ * 回答草稿的隔离 key。
+ *
+ * 按 Session、InteractionId 与 expected revision 三元组隔离：交互的 owner 可能转移，同 ID/rev 的
+ * 旧回答草稿因此不会投影到新 Session 上。
+ */
+export function answerDraftKey(
+  coordinatorSessionId: string,
+  interactionId: string,
+  expectedRevision: number,
+): string {
+  return JSON.stringify([coordinatorSessionId, interactionId, expectedRevision]);
+}
+
+/** composer 当前应显示的文本；回答模式下读回答草稿，普通模式读 Session 草稿。 */
+export function composerDraftFor(state: TuiState, coordinatorSessionId: string | null): string {
+  if (state.composerMode.kind === 'answer') {
+    if (coordinatorSessionId === null) {
+      return '';
+    }
+    const key = answerDraftKey(
+      coordinatorSessionId,
+      state.composerMode.interactionId,
+      state.composerMode.expectedRevision,
+    );
+    return state.answerDrafts[key] ?? '';
+  }
+  return draftFor(state, coordinatorSessionId);
 }
 
 /** 是否允许该 Session 提交普通消息：只读 transcript 与 composer 模式无关，仅由只读集合决定。 */

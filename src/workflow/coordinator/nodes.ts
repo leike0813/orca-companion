@@ -26,7 +26,6 @@ import {
   toolMapOperationId,
   toolOperationId,
   type CommittedModelStep,
-  type CoordinatorSessionState,
   type ModelUsageObservation,
 } from '../../domain/coordinator/session-state.js';
 import { entryFromResponse, parseModelToolCalls } from './context.js';
@@ -262,13 +261,13 @@ export function createModelNode(dependencies: CoordinatorNodeDependencies) {
     if (beforeWrite !== null) {
       return beforeWrite;
     }
-    const next: CoordinatorSessionState = {
-      ...read.state,
+    // 从最新已提交状态追加：模型等待期间受理的用户消息不会被这次写入覆盖。
+    const written = dependencies.sessionRecords.appendModelStep({
+      coordinatorSessionId,
       graphPosition: 'model',
-      committedMessages: [...read.state.committedMessages, entry],
-      committedModelSteps: [...read.state.committedModelSteps, step],
-    };
-    const written = dependencies.sessionRecords.saveCheckpoint(next);
+      step,
+      entry,
+    });
     if (written.kind === 'failed') {
       return blocked(`无法提交 Committed Model Step：${written.message}`);
     }

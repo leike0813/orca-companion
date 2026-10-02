@@ -108,9 +108,8 @@ export function createToolsNode(dependencies: ToolNodeDependencies) {
 
     const current = read.state;
     const answered = new Set(current.committedMessages.map((entry) => entry.entryId));
-    let committedMessages = current.committedMessages;
     let executed = 0;
-    let completedWorkSource = committedMessages.find((entry) =>
+    let completedWorkSource = current.committedMessages.find((entry) =>
       entry.stepId === step.stepId && entry.completedWorkSource !== undefined,
     )?.completedWorkSource;
 
@@ -151,15 +150,15 @@ export function createToolsNode(dependencies: ToolNodeDependencies) {
           ? { completedWorkSource: state.remainingWork[0].source }
           : {}),
       };
-      const written = dependencies.sessionRecords.saveCheckpoint({
-        ...current,
+      // 每次追加都基于最新已提交状态：工具执行期间受理的用户消息不会被覆盖。
+      const written = dependencies.sessionRecords.appendToolResult({
+        coordinatorSessionId,
         graphPosition: TOOLS_NODE,
-        committedMessages: [...committedMessages, entry],
+        entry,
       });
       if (written.kind === 'failed') {
         return blocked(`无法提交工具结果 ${entryId}：${written.message}`);
       }
-      committedMessages = [...committedMessages, entry];
       answered.add(entryId);
       completedWorkSource ??= entry.completedWorkSource;
       executed += 1;

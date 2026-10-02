@@ -8,7 +8,7 @@
  * - 没有 TTY 判断：那发生在挂载 Ink 之前的 `src/bootstrap/tui-entry.ts`。
  */
 
-import { Box, Text, useInput, useWindowSize } from 'ink';
+import { Box, Text, useInput, usePaste, useWindowSize } from 'ink';
 import { ThemeProvider } from '@inkjs/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -16,12 +16,22 @@ import { resolveGlobalAction } from './input/keymap.js';
 import { allowedSidebarDensity } from './render/width.js';
 import { requiresConfirmation } from './components/control-bar.js';
 import {
-  draftFor,
+  createInputProtection,
+  type SaveOutcome,
+} from './input/input-protection.js';
+import type {
+  InputManagerEntry,
+  InputRecordManagerView,
+} from './components/input-record-manager.js';
+import {
+  answerDraftKey,
+  composerDraftFor,
   executionFilterLabel,
   initialTuiState,
   isComposerReadOnly,
   nextExecutionFilter,
   reduceTuiState,
+  type ComposerMode,
   type OverlayKind,
   type PendingConfirmation,
   type TuiAction,
@@ -30,7 +40,7 @@ import {
 import { Home } from './screens/home.js';
 import { Wizard, allChecksPassed } from './screens/wizard.js';
 import { Workspace, type WorkspaceActions } from './screens/workspace.js';
-import { COMMAND_IDS, type CommandId } from './components/command-palette.js';
+import { COMMAND_IDS, parseSlashInput, type CommandId } from './components/command-palette.js';
 import { preferredSessionId } from './components/session-picker.js';
 import { tuiTheme } from './theme.js';
 import {
@@ -44,6 +54,12 @@ import type {
   ControllerTranscriptPage,
   SemanticEvent,
 } from '../../application/controller-service.js';
+import type {
+  UiDraft,
+  UiInputRecord,
+  UiInputTarget,
+} from '../../application/ports/ui-input-store.js';
+import type { SubmissionQuery, SubmissionStatus } from '../../application/coordinator/submission-status.js';
 import type {
   ExecutionAuthorizationLoad,
   HomeResolution,
@@ -114,6 +130,114 @@ function resultNotice(result: ControllerCommandResult): string | null {
   }
 }
 
+type AnswerMode = Extract<ComposerMode, { readonly kind: 'answer' }>;
+
+function messageInputTarget(coordinationScopeId: string, coordinatorSessionId: string): UiInputTarget {
+  return { kind: 'message', coordinationScopeId, coordinatorSessionId };
+}
+
+function answerInputTarget(
+  coordinationScopeId: string,
+  coordinatorSessionId: string,
+  mode: AnswerMode,
+): UiInputTarget {
+  return {
+    kind: 'answer',
+    coordinationScopeId,
+    coordinatorSessionId,
+    interactionId: mode.interactionId,
+    expectedRevision: mode.expectedRevision,
+  };
+}
+
+/** 当前 composer 输入的目标；没有选中 Session 或 Scope 时为空，界面因此不会构造半截身份。 */
+function currentInputTarget(state: TuiState, coordinationScopeId: string | null): UiInputTarget | null {
+  const session = state.selectedSessionId;
+  if (session === null || coordinationScopeId === null) {
+    return null;
+  }
+  return state.composerMode.kind === 'answer'
+    ? answerInputTarget(coordinationScopeId, session, state.composerMode)
+    : messageInputTarget(coordinationScopeId, session);
+}
+
+function saveOutcomeText(outcome: SaveOutcome): string {
+  if (outcome.status === 'failed') {
+    return `${outcome.code}: ${outcome.message}`;
+  }
+  return outcome.status === 'conflict' ? outcome.message : '已保存';
+}
+
+/** 从记录派生只读核验查询；普通消息按 Session 与 submissionId，回答另加交互绑定。 */
+function submissionQueryFor(record: UiInputRecord): SubmissionQuery | null {
+  if (record.kind !== 'submission') {
+    return null;
+  }
+  const { target } = record;
+  const base = {
+    coordinatorSessionId: target.coordinatorSessionId,
+    submissionId: record.submissionId,
+    content: record.draft.text,
+  };
+  return target.kind === 'answer'
+    ? { kind: 'answer', ...base, interactionId: target.interactionId, expectedRevision: target.expectedRevision }
+    : { kind: 'message', ...base };
+}
+
+/** 把某个目标的文本写回展示态的 action：普通草稿与回答草稿分别走各自的隔离槽。 */
+function draftActionFor(target: UiInputTarget, text: string): TuiAction {
+  return target.kind === 'message'
+    ? { kind: 'draft-changed', coordinatorSessionId: target.coordinatorSessionId, text }
+    : {
+        kind: 'answer-draft-changed',
+        answerKey: answerDraftKey(
+          target.coordinatorSessionId,
+          target.interactionId,
+          target.expectedRevision,
+        ),
+        text,
+      };
+}
+
+/** 两个输入目标是否是同一个：回答要求 interaction 与 revision 都一致。 */
+function sameInputTarget(a: UiInputTarget, b: UiInputTarget): boolean {
+  const base =
+    a.coordinationScopeId === b.coordinationScopeId &&
+    a.coordinatorSessionId === b.coordinatorSessionId;
+  if (a.kind === 'message' && b.kind === 'message') {
+    return base;
+  }
+  if (a.kind === 'answer' && b.kind === 'answer') {
+    return base && a.interactionId === b.interactionId && a.expectedRevision === b.expectedRevision;
+  }
+  return false;
+}
+
+function selectedInputEntry(view: InputRecordManagerView | null): InputManagerEntry | null {
+  return view === null ? null : (view.entries[view.selectedIndex] ?? null);
+}
+
+/** 两个 composer 模式是否指向同一次提交（普通模式或同一 interaction + revision）。 */
+function sameComposerMode(a: ComposerMode, b: ComposerMode): boolean {
+  if (a.kind === 'message' && b.kind === 'message') {
+    return true;
+  }
+  if (a.kind === 'answer' && b.kind === 'answer') {
+    return a.interactionId === b.interactionId && a.expectedRevision === b.expectedRevision;
+  }
+  return false;
+}
+
+function inputManagerEntriesOf(
+  records: readonly UiInputRecord[],
+  invalidRecords: readonly { readonly key: string; readonly revision: number }[],
+): readonly InputManagerEntry[] {
+  return [
+    ...records.map((record): InputManagerEntry => ({ kind: 'record', record })),
+    ...invalidRecords.map((invalid): InputManagerEntry => ({ kind: 'invalid', ...invalid })),
+  ];
+}
+
 export function TuiApp(props: TuiAppProps) {
   return <ThemeProvider theme={tuiTheme}><TuiAppContent {...props} /></ThemeProvider>;
 }
@@ -150,6 +274,30 @@ function TuiAppContent(props: TuiAppProps) {
    * 塞进展示态 reducer，也不会随事件批次被改写。
    */
   const [authorizationReview, setAuthorizationReview] = useState<ExecutionAuthorizationLoad | null>(null);
+  /**
+   * 输入记录管理 overlay 的当前投影；`null` 表示未打开。
+   *
+   * 列表、正文视口与反馈都在这里：组件只渲染读好的内容，容器自己经 `inputStore` 执行动作。
+   */
+  const [inputManager, setInputManager] = useState<InputRecordManagerView | null>(null);
+  /** 输入记录管理的同步镜像：同一批按键要读到最新选择与视口。 */
+  const inputManagerRef = useRef<InputRecordManagerView | null>(null);
+  inputManagerRef.current = inputManager;
+  /** 合并窗口自动保存失败时的通知出口；`dispatch` 定义后才接线。 */
+  const noticeRef = useRef<(message: string) => void>(() => undefined);
+  /**
+   * 输入保护模块：每个挂载一次，只经 `ports.inputStore` 同步读写。
+   *
+   * 它不打开数据库、不发送、不恢复模型；`dispose` 只取消计时器，卸载时绝不写库。
+   */
+  const [protection] = useState(() =>
+    createInputProtection({
+      store: props.ports.inputStore,
+      onSaveOutcome: (outcome) => {
+        noticeRef.current(`输入保存失败：${saveOutcomeText(outcome)}（输入仍保留在内存中）`);
+      },
+    }),
+  );
   /** 向导初始化的同步闩锁：初始化必须恰好一次，不能靠异步 state 挡重复确认。 */
   const wizardSubmittingRef = useRef(false);
 
@@ -168,9 +316,19 @@ function TuiAppContent(props: TuiAppProps) {
     stateRef.current = next;
     setState(next);
   }, []);
+  noticeRef.current = (message) => {
+    dispatch({ kind: 'notice', notice: message });
+  };
+
+  // 卸载只取消计时器：组件重挂载绝不产生新的持久写入。
+  useEffect(() => () => protection.dispose(), [protection]);
 
   const scopeIdRef = useRef(scopeId);
   scopeIdRef.current = scopeId;
+  /** 当前 Coordination Scope：优先取快照，其次取 Home 解析结果。 */
+  const coordinationScopeId = snapshot?.coordinationScopeId ?? scopeId;
+  const coordScopeRef = useRef<string | null>(coordinationScopeId);
+  coordScopeRef.current = coordinationScopeId;
 
   const loadSnapshot = useCallback(
     async (selectedSessionId: string | null) => {
@@ -273,6 +431,37 @@ function TuiAppContent(props: TuiAppProps) {
     void loadTranscript(state.selectedSessionId);
   }, [loadTranscript, state.selectedSessionId, state.screen]);
 
+  /**
+   * 载入当前目标的持久草稿。
+   *
+   * 这是只读 effect：只 `read`，不写库、不发送、不恢复模型。用户已在编辑时保护模块返回 `stale`，
+   * 因此异步载入永远不会覆盖新输入；切换 Session 或进入/退出回答模式时同样按各自目标隔离载入。
+   */
+  useEffect(() => {
+    if (state.screen !== 'workspace') {
+      return;
+    }
+    const target = currentInputTarget(state, coordinationScopeId);
+    if (target === null) {
+      return;
+    }
+    const loaded = protection.load(target);
+    if (loaded.status === 'failed') {
+      dispatch({ kind: 'notice', notice: `草稿载入失败：${loaded.code} ${loaded.message}` });
+      return;
+    }
+    if (loaded.status === 'loaded') {
+      dispatch(draftActionFor(target, loaded.draft.text));
+    }
+  }, [
+    coordinationScopeId,
+    dispatch,
+    protection,
+    state.composerMode,
+    state.screen,
+    state.selectedSessionId,
+  ]);
+
   // Session 列表就绪后应用默认选中规则（待答优先）。
   useEffect(() => {
     if (snapshot === null) {
@@ -316,6 +505,11 @@ function TuiAppContent(props: TuiAppProps) {
   }, [snapshot, state, transcript]);
   const viewModelRef = useRef<TuiViewModel | null>(null);
   viewModelRef.current = viewModel;
+  /** 快照的同步镜像：提交时需要当前模式来决定 `/handoff` 落到哪个业务合同。 */
+  const snapshotRef = useRef<ControllerSnapshot | null>(null);
+  snapshotRef.current = snapshot;
+  /** `runCommand` 定义之前的提交路径需要它；读时取最新实现，避免互相依赖。 */
+  const runCommandRef = useRef<(command: CommandId) => Promise<void>>(() => Promise.resolve());
 
   const reload = useCallback(async () => {
     await loadSnapshot(stateRef.current.selectedSessionId);
@@ -328,35 +522,154 @@ function TuiAppContent(props: TuiAppProps) {
   const submit = useCallback(async () => {
     const current = stateRef.current;
     const session = current.selectedSessionId;
-    if (session === null) {
+    const scope = coordScopeRef.current;
+    if (session === null || scope === null) {
       return;
     }
-    const text = draftFor(current, session);
+    const text = composerDraftFor(current, session);
     if (text.length === 0 || isComposerReadOnly(current, session)) {
       return;
     }
-    // `context_exhausted` 表示上下文无法安全收敛：界面不再发起新的模型调用。
+    // `context_exhausted` 表示上下文无法安全收敛：界面不再发起新的模型调用，也不写提交快照。
     if (viewModelRef.current?.compaction?.status === 'context_exhausted') {
       dispatch({ kind: 'notice', notice: 'context_exhausted：已停止发起新的模型调用' });
       return;
     }
-    const result =
-      current.composerMode.kind === 'answer'
-        ? await ports.execute({
-            kind: 'answer-pending-interaction',
-            interactionId: current.composerMode.interactionId,
-            expectedRevision: current.composerMode.expectedRevision,
-            answer: text,
-          })
-        : await ports.execute({ kind: 'send-session-message', coordinatorSessionId: session, content: text });
-    dispatch({ kind: 'notice', notice: resultNotice(result) });
+    const target = currentInputTarget(current, scope);
+    if (target === null) {
+      return;
+    }
+    // 严格 slash：只要以 `/` 开头就不是消息；未知、参数或多行格式错误都保留输入。
+    const slash = parseSlashInput(text, snapshotRef.current?.mode ?? 'route_planning');
+    if (slash.kind === 'error') {
+      dispatch({ kind: 'notice', notice: `${slash.code}: ${slash.message}` });
+      return;
+    }
+    if (slash.kind === 'unavailable') {
+      dispatch({ kind: 'notice', notice: `/${slash.alias} 本批尚未接通：${slash.reason}` });
+      return;
+    }
+    if (slash.kind === 'command') {
+      const generation = protection.generation(target);
+      await runCommandRef.current(slash.command);
+      // 命令成功只结清这次输入；等待期间的新输入（代际变化）与清理失败都保留。
+      if (protection.generation(target) === generation) {
+        const cleared = protection.clearInput(target);
+        if (cleared.status === 'saved') {
+          dispatch(draftActionFor(target, ''));
+        } else {
+          dispatch({ kind: 'notice', notice: `命令输入未结清：${saveOutcomeText(cleared)}` });
+        }
+      }
+      return;
+    }
+    // 单活跃提交：同一 Session 已有等待确认或不可核验的提交时不再发起第二次请求。
+    const lane = protection.pendingSubmission(scope, session);
+    if (lane.status === 'failed') {
+      dispatch({ kind: 'notice', notice: `提交前无法读取待核验提交：${lane.code} ${lane.message}` });
+      return;
+    }
+    if (lane.status === 'active') {
+      dispatch({
+        kind: 'notice',
+        notice: `该 Session 已有一条待核验提交（${lane.state}）${lane.submissionId}：先在 /inputs 核验或清理`,
+      });
+      return;
+    }
+    // 提交前先把草稿落盘；保存失败或存在待解冲突时不发起调用，也不丢内存输入。
+    const flushed = protection.flushAll();
+    if (flushed.status !== 'saved') {
+      dispatch({ kind: 'notice', notice: `输入未保存，未发起提交：${saveOutcomeText(flushed)}` });
+      return;
+    }
+    const submissionId = globalThis.crypto.randomUUID();
+    const generation = protection.generation(target);
+    const snapshotDraft: UiDraft = protection.draftOf(target) ?? {
+      text,
+      cursor: text.length,
+      pasteBlocks: [],
+    };
+    const begun = protection.beginSubmission({ target, draft: snapshotDraft, submissionId });
+    if (begun.status !== 'started') {
+      dispatch({
+        kind: 'notice',
+        notice:
+          begun.status === 'lane-busy'
+            ? `该 Session 已有待核验提交 ${begun.submissionId}（${begun.state}）`
+            : `提交快照未保存，未发起提交：${begun.code} ${begun.message}`,
+      });
+      return;
+    }
+    const submittedMode = current.composerMode;
+    let result: ControllerCommandResult;
+    try {
+      result =
+        submittedMode.kind === 'answer'
+          ? await ports.execute({
+              kind: 'answer-pending-interaction',
+              coordinatorSessionId: session,
+              interactionId: submittedMode.interactionId,
+              expectedRevision: submittedMode.expectedRevision,
+              submissionId,
+              answer: text,
+            })
+          : await ports.execute({
+              kind: 'send-session-message',
+              coordinatorSessionId: session,
+              submissionId,
+              content: text,
+            });
+    } catch (error) {
+      // 调用抛异常既不证明受理也不证明未发生：按 `unknown` 处理，lane 保持待核验。
+      result = {
+        kind: 'unknown',
+        code: 'execute_threw',
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+    const settled = protection.settleSubmission({
+      target,
+      submissionId,
+      outcome:
+        result.kind === 'accepted'
+          ? { kind: 'accepted' }
+          : result.kind === 'rejected'
+            ? { kind: 'rejected', code: result.code, message: result.message }
+            : { kind: 'unknown', code: result.code, message: result.message },
+    });
+    const settlementNote =
+      settled.status === 'saved'
+        ? null
+        : result.kind === 'accepted'
+          ? `已受理，但输入快照清理失败：${saveOutcomeText(settled)}（可在 /inputs 重新核验或删除）`
+          : `提交状态回写失败：${saveOutcomeText(settled)}；原提交 ${submissionId} 仍待核验`;
+    // 失败优先：结算异常与拒绝/未知原因一起展示，绝不被成功文案遮蔽。
+    const notes = [settlementNote, resultNotice(result)].filter(
+      (entry): entry is string => entry !== null,
+    );
+    dispatch({ kind: 'notice', notice: notes.length === 0 ? null : notes.join(' · ') });
     if (result.kind === 'accepted') {
-      dispatch({ kind: 'draft-changed', coordinatorSessionId: session, text: '' });
-      dispatch({ kind: 'composer-mode-reset' });
+      // 只结清原提交：用户已继续编辑（代际变化）时保留新输入，也不复位模式以免隐藏新回答草稿。
+      if (protection.generation(target) === generation) {
+        const cleared = protection.clearDraft(target);
+        if (cleared.status === 'saved') {
+          // 只有持久草稿真的被清除才清界面正文；清理失败时保留输入并如实提示。
+          dispatch(draftActionFor(target, ''));
+          // 只有界面仍停在这条提交对应的 Session 与 composer 模式时才复位。
+          if (
+            stateRef.current.selectedSessionId === session &&
+            sameComposerMode(stateRef.current.composerMode, submittedMode)
+          ) {
+            dispatch({ kind: 'composer-mode-reset' });
+          }
+        } else {
+          dispatch({ kind: 'notice', notice: `已受理，但草稿未清除：${saveOutcomeText(cleared)}` });
+        }
+      }
       await reload();
     }
     // 拒绝（含 stale revision）时保留输入内容，只提示重读。
-  }, [dispatch, ports, reload]);
+  }, [dispatch, ports, protection, reload]);
 
   /** 提交一次 Scope 级控制意图；终态一律来自 Controller 已持久化的控制状态。 */
   const applyScopeControl = useCallback(
@@ -398,6 +711,15 @@ function TuiAppContent(props: TuiAppProps) {
    * 或未决操作时必须先确认。
    */
   const requestExit = useCallback(() => {
+    // 退出前先立即保存所有未保存输入；保存失败默认留在界面，只有再次明确确认才丢弃。
+    if (protection.hasUnsaved()) {
+      const flushed = protection.flushAll();
+      if (flushed.status !== 'saved') {
+        dispatch({ kind: 'notice', notice: `输入未保存：${saveOutcomeText(flushed)}` });
+        dispatch({ kind: 'confirmation-requested', pending: { kind: 'exit-discard' } });
+        return;
+      }
+    }
     const view = viewModelRef.current;
     if (view === null && scopeIdRef.current !== null) {
       // Scope 已确定但执行快照尚未落地：无法排除活跃 Worker 或未决操作，因此先确认再退出。
@@ -409,7 +731,7 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     onExit();
-  }, [dispatch, onExit]);
+  }, [dispatch, onExit, protection]);
 
   /** 确认一次待确认动作；`exit` 只结束前台进程，`cancel` 提交取消意图。 */
   const confirmPending = useCallback(
@@ -418,9 +740,15 @@ function TuiAppContent(props: TuiAppProps) {
         onExit();
         return;
       }
+      if (pending.kind === 'exit-discard') {
+        // 用户已明确同意丢弃：只清内存脏标记（不删持久记录），随后退出。
+        protection.discardUnsaved();
+        onExit();
+        return;
+      }
       void applyScopeControl('cancel');
     },
-    [applyScopeControl, onExit],
+    [applyScopeControl, onExit, protection],
   );
 
   const runCommand = useCallback(
@@ -564,10 +892,205 @@ function TuiAppContent(props: TuiAppProps) {
         case 'exit':
           requestExit();
           return;
+        case 'input-record-manager': {
+          const scope = coordScopeRef.current;
+          if (scope === null) {
+            dispatch({ kind: 'notice', notice: '尚未确定 Coordination Scope，无法打开输入记录管理' });
+            return;
+          }
+          const listed = protection.list(scope);
+          if (listed.status === 'failed') {
+            dispatch({ kind: 'notice', notice: `输入记录读取失败：${listed.code} ${listed.message}` });
+            return;
+          }
+          setInputManager({
+            entries: inputManagerEntriesOf(listed.records, listed.invalidRecords),
+            usage: listed.usage,
+            selectedIndex: 0,
+            bodyScroll: 0,
+            bodyFocus: false,
+            feedback: null,
+            confirmDelete: false,
+          });
+          dispatch({ kind: 'overlay-open', overlay: 'input-record-manager' });
+          return;
+        }
       }
     },
-    [dispatch, ports, reload, requestExit, requestScopeControl, terminalWidth],
+    [dispatch, ports, protection, reload, requestExit, requestScopeControl, terminalWidth],
   );
+  runCommandRef.current = runCommand;
+
+  /** 重新读该 Scope 的输入记录并刷新 overlay；读取失败只更新反馈，不伪造空列表。 */
+  const refreshInputManager = useCallback((): void => {
+    const scope = coordScopeRef.current;
+    if (scope === null) {
+      return;
+    }
+    const listed = protection.list(scope);
+    if (listed.status === 'failed') {
+      setInputManager((current) =>
+        current === null ? null : { ...current, feedback: `${listed.code}: ${listed.message}`, confirmDelete: false },
+      );
+      return;
+    }
+    const entries = inputManagerEntriesOf(listed.records, listed.invalidRecords);
+    setInputManager((current) => ({
+      entries,
+      usage: listed.usage,
+      selectedIndex: Math.min(current?.selectedIndex ?? 0, Math.max(0, entries.length - 1)),
+      bodyScroll: 0,
+      bodyFocus: current?.bodyFocus ?? false,
+      feedback: current?.feedback ?? null,
+      confirmDelete: false,
+    }));
+  }, [protection]);
+
+  /** 恢复选中记录：只作用于它自己的目标；只有该目标正是当前 composer 时才刷新显示。 */
+  const restoreInputRecord = useCallback((): void => {
+    const entry = selectedInputEntry(inputManagerRef.current);
+    if (entry === null) {
+      return;
+    }
+    if (entry.kind === 'invalid') {
+      setInputManager((current) => (current === null ? null : { ...current, feedback: '不可读记录只能删除' }));
+      return;
+    }
+    const outcome = protection.adoptRecord(entry.record);
+    if (outcome.status === 'saved') {
+      const target = currentInputTarget(stateRef.current, coordScopeRef.current);
+      if (target !== null && sameInputTarget(target, entry.record.target)) {
+        dispatch(draftActionFor(target, entry.record.draft.text));
+      }
+    }
+    setInputManager((current) =>
+      current === null
+        ? null
+        : {
+            ...current,
+            feedback:
+              outcome.status === 'saved'
+                ? `已把 ${entry.record.kind} 记录的正文恢复为该目标的草稿`
+                : `恢复失败：${saveOutcomeText(outcome)}`,
+          },
+    );
+    refreshInputManager();
+  }, [dispatch, protection, refreshInputManager]);
+
+  /** 核验选中提交：`accepted` 立即清理记录；其余按结论如实回写，不猜测、不盲重试。 */
+  const verifyInputRecord = useCallback(async (): Promise<void> => {
+    let entry = selectedInputEntry(inputManagerRef.current);
+    if (entry !== null && entry.kind === 'invalid') {
+      // spec 的「不可读记录重新核验入口」：先重读该 Scope，能解析出来就按同一身份继续核验。
+      const scope = coordScopeRef.current;
+      const invalidKey = entry.key;
+      const listed = scope === null ? null : protection.list(scope);
+      refreshInputManager();
+      const reread =
+        listed === null || listed.status !== 'ok'
+          ? null
+          : (inputManagerEntriesOf(listed.records, listed.invalidRecords).find((candidate) =>
+              candidate.kind === 'record' ? candidate.record.key === invalidKey : candidate.key === invalidKey,
+            ) ?? null);
+      entry = reread;
+      if (entry === null || entry.kind !== 'record') {
+        setInputManager((current) =>
+          current === null
+            ? null
+            : { ...current, feedback: '记录仍不可读：已重新读取，仍无法解析，可显式删除' },
+        );
+        return;
+      }
+    }
+    if (entry === null || entry.kind !== 'record') {
+      setInputManager((current) => (current === null ? null : { ...current, feedback: '只有有效记录可以核验' }));
+      return;
+    }
+    const query = submissionQueryFor(entry.record);
+    if (query === null) {
+      setInputManager((current) => (current === null ? null : { ...current, feedback: '只有待核验提交可以核验' }));
+      return;
+    }
+    let status: SubmissionStatus;
+    try {
+      status = await ports.submissionStatus(query);
+    } catch (error) {
+      status = { kind: 'unverifiable', reason: error instanceof Error ? error.message : String(error) };
+    }
+    let feedback: string;
+    if (status.kind === 'accepted') {
+      const removed = protection.removeRecord(entry.record.key, entry.record.revision);
+      feedback =
+        removed.status === 'saved'
+          ? `已受理（${status.ref.kind}:${status.ref.id}）并已清理记录`
+          : `已受理，但记录清理失败：${saveOutcomeText(removed)}`;
+    } else if (status.kind === 'not-found') {
+      feedback = '未发现该提交：保持待核验';
+    } else if (status.kind === 'conflict') {
+      const marked = protection.markVerified({
+        key: entry.record.key,
+        status: 'conflict',
+        reason: `${status.code}: ${status.message}`,
+      });
+      feedback = marked.status === 'saved' ? `内容冲突：${status.code}` : `核验结论未落盘：${saveOutcomeText(marked)}`;
+    } else {
+      const marked = protection.markVerified({
+        key: entry.record.key,
+        status: 'unverifiable',
+        reason: status.reason,
+      });
+      feedback = marked.status === 'saved' ? `不可核验：${status.reason}` : `核验结论未落盘：${saveOutcomeText(marked)}`;
+    }
+    refreshInputManager();
+    setInputManager((current) => (current === null ? null : { ...current, feedback }));
+  }, [ports, protection, refreshInputManager]);
+
+  /** 删除选中记录（二次确认）：一次同步 CAS 删除，不替用户覆盖别的新草稿。 */
+  const deleteInputRecord = useCallback((): void => {
+    const view = inputManagerRef.current;
+    const entry = selectedInputEntry(view);
+    if (view === null || entry === null) {
+      return;
+    }
+    if (!view.confirmDelete) {
+      setInputManager((current) => (current === null ? null : { ...current, confirmDelete: true }));
+      return;
+    }
+    const key = entry.kind === 'record' ? entry.record.key : entry.key;
+    const revision = entry.kind === 'record' ? entry.record.revision : entry.revision;
+    const removed = protection.removeRecord(key, revision);
+    setInputManager((current) =>
+      current === null
+        ? null
+        : {
+            ...current,
+            confirmDelete: false,
+            feedback: removed.status === 'saved' ? '记录已删除' : `删除失败：${saveOutcomeText(removed)}`,
+          },
+    );
+    refreshInputManager();
+  }, [protection, refreshInputManager]);
+
+  const moveInputManagerSelection = useCallback((delta: number): void => {
+    setInputManager((current) => {
+      if (current === null) {
+        return current;
+      }
+      const last = Math.max(0, current.entries.length - 1);
+      return {
+        ...current,
+        selectedIndex: Math.min(Math.max(0, current.selectedIndex + delta), last),
+        bodyScroll: 0,
+        confirmDelete: false,
+      };
+    });
+  }, []);
+
+  const scrollInputManagerBody = useCallback((delta: number): void => {
+    setInputManager((current) =>
+      current === null ? null : { ...current, bodyScroll: Math.max(0, current.bodyScroll + delta) },
+    );
+  }, []);
 
   const confirmHandoff = useCallback(async () => {
     const proposal =
@@ -726,22 +1249,39 @@ function TuiAppContent(props: TuiAppProps) {
   const workspaceActions: WorkspaceActions = {
     dispatch,
     composerChange: (text) => {
-      const session = stateRef.current.selectedSessionId;
-      if (session === null) {
+      const target = currentInputTarget(stateRef.current, coordScopeRef.current);
+      if (target === null) {
         return;
       }
-      dispatch({ kind: 'draft-changed', coordinatorSessionId: session, text });
+      // 编辑只更新内存与合并计时器；真正的持久写入由保护模块在窗口到期时执行。
+      protection.edit(target, text);
+      dispatch(draftActionFor(target, text));
     },
     submit: () => {
       void submit();
     },
     toggleTool: (entryId) => dispatch({ kind: 'tool-toggled', entryId }),
     selectSession: (coordinatorSessionId) => {
+      // 切 Session 前立即保存当前输入；失败如实提示，输入仍保留在内存。
+      if (protection.hasUnsaved()) {
+        const flushed = protection.flushAll();
+        if (flushed.status !== 'saved') {
+          dispatch({ kind: 'notice', notice: `切换前输入未保存：${saveOutcomeText(flushed)}` });
+        }
+      }
       dispatch({ kind: 'session-selected', coordinatorSessionId });
       dispatch({ kind: 'overlay-close-top' });
     },
-    enterAnswer: (interactionId, expectedRevision) =>
-      dispatch({ kind: 'answer-mode-entered', interactionId, expectedRevision }),
+    enterAnswer: (interactionId, expectedRevision) => {
+      // 进入回答模式前先把当前草稿落盘，避免模式切换丢掉未保存输入。
+      if (protection.hasUnsaved()) {
+        const flushed = protection.flushAll();
+        if (flushed.status !== 'saved') {
+          dispatch({ kind: 'notice', notice: `进入回答模式前输入未保存：${saveOutcomeText(flushed)}` });
+        }
+      }
+      dispatch({ kind: 'answer-mode-entered', interactionId, expectedRevision });
+    },
     runCommand: (command) => {
       void runCommand(command);
     },
@@ -807,6 +1347,16 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (action === 'escape') {
+      if (topOverlay() === 'input-record-manager') {
+        if (inputManagerRef.current?.bodyFocus === true) {
+          // 正文视口里的 Esc 只返回列表，不关闭 overlay，也不把 `/` 输入变成聊天。
+          setInputManager((current) => (current === null ? null : { ...current, bodyFocus: false }));
+          return;
+        }
+        setInputManager(null);
+        dispatch({ kind: 'overlay-close-top' });
+        return;
+      }
       if (stateRef.current.overlayStack.length > 0) {
         dispatch({ kind: 'overlay-close-top' });
         return;
@@ -893,6 +1443,57 @@ function TuiAppContent(props: TuiAppProps) {
     if (topOverlay() === 'session-picker') {
       return;
     }
+    if (topOverlay() === 'input-record-manager') {
+      const view = inputManagerRef.current;
+      if (view !== null && view.bodyFocus) {
+        // 正文视口接管方向键与 Enter；Esc 已在上面的分支返回列表。
+        if (key.upArrow === true) {
+          scrollInputManagerBody(-1);
+          return;
+        }
+        if (key.downArrow === true) {
+          scrollInputManagerBody(1);
+          return;
+        }
+        if (key.return === true) {
+          setInputManager((current) => (current === null ? null : { ...current, bodyFocus: false }));
+        }
+        return;
+      }
+      if (key.upArrow === true) {
+        moveInputManagerSelection(-1);
+        return;
+      }
+      if (key.downArrow === true) {
+        moveInputManagerSelection(1);
+        return;
+      }
+      if (key.return === true) {
+        setInputManager((current) => (current === null ? null : { ...current, bodyFocus: true, bodyScroll: 0 }));
+        return;
+      }
+      if (input === 'r') {
+        restoreInputRecord();
+        return;
+      }
+      if (input === 'v') {
+        void verifyInputRecord();
+        return;
+      }
+      if (input === 'd') {
+        deleteInputRecord();
+        return;
+      }
+      if (input === 'n' && view?.confirmDelete === true) {
+        setInputManager((current) => (current === null ? null : { ...current, confirmDelete: false }));
+        return;
+      }
+      if (input === 'y' && view?.confirmDelete === true) {
+        deleteInputRecord();
+        return;
+      }
+      return;
+    }
     if (action === 'toggle-tool') {
       const entries = viewModelRef.current?.transcript.entries ?? [];
       const lastTool = [...entries].reverse().find((entry) => entry.kind === 'tool');
@@ -917,10 +1518,41 @@ function TuiAppContent(props: TuiAppProps) {
     }
     handleComposerKey(input, key, {
       readOnly: isComposerReadOnly(stateRef.current, stateRef.current.selectedSessionId),
-      draft: draftFor(stateRef.current, stateRef.current.selectedSessionId),
+      draft: composerDraftFor(stateRef.current, stateRef.current.selectedSessionId),
       change: workspaceActions.composerChange,
       submit: workspaceActions.submit,
     });
+  });
+
+  /**
+   * 粘贴：只在工作区、无 overlay、无待确认动作、非只读且有明确目标时插入全文并立即保存。
+   *
+   * 它绝不触发发送或命令解析；CRLF 归一为 LF，批内不做字符级编辑（本批 append-only）。
+   */
+  usePaste((text) => {
+    const current = stateRef.current;
+    if (current.screen !== 'workspace') {
+      return;
+    }
+    if (current.pendingConfirmation !== null || current.overlayStack.length > 0) {
+      return;
+    }
+    if (isComposerReadOnly(current, current.selectedSessionId)) {
+      return;
+    }
+    const target = currentInputTarget(current, coordScopeRef.current);
+    if (target === null) {
+      return;
+    }
+    const normalized = text.replace(/\r\n?/gu, '\n');
+    if (normalized.length === 0) {
+      return;
+    }
+    const outcome = protection.paste(target, normalized);
+    dispatch(draftActionFor(target, protection.draftOf(target)?.text ?? ''));
+    if (outcome.status !== 'saved') {
+      dispatch({ kind: 'notice', notice: `粘贴未保存：${saveOutcomeText(outcome)}（内容仍保留在内存中）` });
+    }
   });
 
   if (state.screen === 'home' || state.screen === 'legacy-review') {
@@ -989,6 +1621,7 @@ function TuiAppContent(props: TuiAppProps) {
       }
       authorizationReview={authorizationReview}
       commands={COMMAND_IDS}
+      inputManager={inputManager}
     />
   );
 }

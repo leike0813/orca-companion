@@ -1,0 +1,405 @@
+/** Throwaway #52: compact command directory, divided identity previews and task-specific reviews. */
+import { Box, Text, useInput } from 'ink';
+import { useEffect, useRef, useState } from 'react';
+import type { ControllerSnapshot } from '../../application/controller-service.js';
+import type { SessionSummaryView } from '../../application/tui/view-model.js';
+import { authorizationApprovable } from './components/authorization-review.js';
+import { modelSwitchAdmission } from './components/model-picker.js';
+import type { ExecutionAuthorizationLoad, ModelCatalog, TuiPorts } from './ports.js';
+import { displayWidth, padToDisplayWidth, truncateToDisplayWidth, wrapByDisplayWidth } from './render/width.js';
+import { tuiColors, type TuiIconMode } from './theme.js';
+
+export type DialogEntry = 'sessions' | 'commands' | 'options' | 'models' | 'authorize' | 'handoff' | 'cancel' | 'exit';
+export type WorkerSlotId = 'planning-utility' | 'planner' | 'spec-validator' | 'implementation' | 'validator' | 'finalizer' | 'recovery-utility';
+type SlotId = 'coordinator' | WorkerSlotId;
+type Frame = { kind: DialogEntry | 'model-menu' | 'handoff-target'; query: string; index: number; scroll: number; tab: number; action: number; slot: SlotId; focus: 'list' | 'effort' | 'actions'; efforts: Record<string, string> };
+type Choice = { id: string; label: string; hint: string; reason: string | null };
+type ReviewRow = { label: string; value: string; heading?: boolean };
+type Props = {
+  entry: DialogEntry;
+  snapshot: ControllerSnapshot;
+  sessions: readonly SessionSummaryView[];
+  selectedSessionId: string;
+  currentConfigurationRef: string;
+  currentEffort: string | null | undefined;
+  workerModelRefs: Partial<Record<WorkerSlotId, string>>;
+  workerEfforts: Partial<Record<WorkerSlotId, string | null>>;
+  iconMode: TuiIconMode;
+  ports: TuiPorts;
+  width: number;
+  height: number;
+  unavailable: boolean;
+  origin: string;
+  onClose: () => void;
+  onSession: (sessionId: string) => void;
+  onPanel: (page: 'overview' | 'pending' | 'events' | 'graph') => void;
+  onComplete: (summary: string) => void;
+  onCoordinatorModel: (configurationRef: string, effort: string | null) => void;
+  onWorkerModel: (slot: WorkerSlotId, configurationRef: string, effort: string | null) => void;
+  onIconMode: (mode: TuiIconMode) => void;
+  onEvent: () => void;
+  onUnavailable: () => void;
+  onExit: () => void;
+};
+const titles: Record<Frame['kind'], string> = {
+  sessions: 'Session Picker · 会话选择', commands: 'Command Palette · 命令目录', models: 'Model Picker · 模型配置',
+  'model-menu': '选择模型', 'handoff-target': '选择交接接收方', authorize: 'Execution Authorization · 执行授权',
+  handoff: 'Handoff · 责任交接', cancel: 'Cancel · 停止项目协调', exit: 'Exit · 退出前台',
+  options: '选项 · 图标',
+};
+const newFrame = (kind: Frame['kind'], slot: SlotId = 'coordinator'): Frame => ({ kind, slot, query: '', index: 0, scroll: 0, tab: 0, action: 0, focus: 'list', efforts: {} });
+const sessionName = (id: string) => id === 'session-b' ? 'S-B · 执行图依赖与终端验收' : 'S-A · 中文规划与输入体验';
+const sessionShort = (id: string) => id === 'session-b' ? 'S-B' : 'S-A';
+const slots: { id: SlotId; label: string; purpose: string; group: string }[] = [
+  { id: 'coordinator', label: 'Coordinator', purpose: '当前会话的协调模型', group: '当前会话' },
+  { id: 'planning-utility', label: 'Utility', purpose: '调研与规划协助', group: 'Planning · 路线规划' },
+  { id: 'planner', label: 'Planner', purpose: '编写工作包规格', group: 'Execution · 执行协调' },
+  { id: 'spec-validator', label: 'Spec Validator', purpose: '独立规格验证 · 可选', group: 'Execution · 执行协调' },
+  { id: 'implementation', label: 'Implementation', purpose: '实现工作包', group: 'Execution · 执行协调' },
+  { id: 'validator', label: 'Validator', purpose: '验证、修复与复验', group: 'Execution · 执行协调' },
+  { id: 'finalizer', label: 'Finalizer', purpose: '只读项目验收', group: 'Execution · 执行协调' },
+  { id: 'recovery-utility', label: 'Recovery Utility', purpose: '生成恢复材料', group: 'Execution · 执行协调' },
+];
+// Presentation fixtures, not a provider catalogue or a production role configuration contract.
+const modelInfo: Record<string, { provider: string; model: string; efforts: readonly string[]; defaultEffort: string | null }> = {
+  'config-a': { provider: 'openai', model: '示例模型 A', efforts: ['low', 'medium', 'high'], defaultEffort: 'high' },
+  'config-b': { provider: 'openai', model: '示例模型 B', efforts: ['low', 'medium'], defaultEffort: 'medium' },
+  'config-rejected': { provider: 'anthropic', model: '示例模型 C', efforts: ['medium', 'high'], defaultEffort: 'high' },
+  'config-basic': { provider: 'example', model: '示例模型 D', efforts: [], defaultEffort: null },
+};
+
+export function DialogPrototype(props: Props) {
+  const [stack, setStack] = useState<Frame[]>([newFrame(props.entry === 'handoff' ? 'handoff-target' : props.entry)]);
+  const stackRef = useRef(stack);
+  const busy = useRef(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<ModelCatalog | null>(null);
+  const [authorization, setAuthorization] = useState<ExecutionAuthorizationLoad | null>(null);
+  const [handoffTarget, setHandoffTarget] = useState('session-b');
+  const [handoffReady, setHandoffReady] = useState(false);
+  useEffect(() => {
+    let current = true;
+    if (props.entry === 'authorize') void props.ports.executionAuthorization.review().then((load) => { if (current) setAuthorization(load); });
+    return () => { current = false; };
+  }, [props.entry, props.ports]);
+  const change = (update: (frames: Frame[]) => Frame[]) => { stackRef.current = update(stackRef.current); setStack(stackRef.current); };
+  const updateTop = (update: (frame: Frame) => Frame) => change((frames) => frames.map((frame, index) => index === frames.length - 1 ? update(frame) : frame));
+  const frame = stack.at(-1)!;
+  const innerWidth = Math.max(1, Math.min(94, props.width - 4) - 4);
+  const bodyHeight = Math.max(1, props.height - 11);
+  const fit = (value: string, width = innerWidth) => truncateToDisplayWidth(value, width);
+  const line = (left: string, right: string) => {
+    const rightWidth = Math.min(Math.floor(innerWidth * 0.4), displayWidth(right));
+    const leftWidth = Math.max(1, innerWidth - rightWidth - 2);
+    return padToDisplayWidth(fit(left, leftWidth), innerWidth - rightWidth) + fit(right, rightWidth);
+  };
+  const slot = slots.find((item) => item.id === frame.slot)!;
+  const modelRef = (id: SlotId) => id === 'coordinator' ? props.currentConfigurationRef
+    : props.workerModelRefs[id] ?? (id === 'planning-utility' || id === 'recovery-utility' ? 'config-b' : id === 'spec-validator' ? 'disabled' : 'config-a');
+  const roleEffort = (id: SlotId) => id === 'coordinator' ? props.currentEffort : props.workerEfforts[id];
+  const modelSummary = (ref: string, effort?: string | null) => {
+    const info = modelInfo[ref];
+    return info === undefined ? '未启用' : info.provider + ' / ' + info.model + ' / ' + (effort ?? info.defaultEffort ?? '不支持 effort');
+  };
+  const admission = modelSwitchAdmission({
+    ...(catalog ?? { options: [], switchable: false, switchBlockReason: '正在读取候选配置', currentConfigurationRef: null }),
+    switchable: catalog !== null && catalog.switchable && !props.unavailable,
+    switchBlockReason: props.unavailable ? '模型清单不可读' : catalog?.switchBlockReason ?? null,
+  });
+  const commandRows: (Choice & { page?: 'overview' | 'pending' | 'events' | 'graph'; dialog?: DialogEntry })[] = [
+    { id: 'session-picker', label: 'Session Picker', hint: '切换会话', reason: null, dialog: 'sessions' },
+    { id: 'model-picker', label: 'Model Picker', hint: '阶段与角色模型', reason: null, dialog: 'models' },
+    { id: 'authorize-execution', label: 'Execution Authorization', hint: '批准执行', reason: props.snapshot.mode === 'route_planning' ? null : '当前已在执行协调模式', dialog: 'authorize' },
+    { id: 'handoff', label: props.snapshot.mode === 'route_planning' ? 'Route Planning Handoff' : 'Execution Handoff', hint: '转移协调责任', reason: null, dialog: 'handoff' },
+    { id: 'overview', label: '项目总览', hint: '预算与身份', reason: null, page: 'overview' },
+    { id: 'pending', label: '待答列表', hint: '跨会话问题', reason: null, page: 'pending' },
+    { id: 'events', label: '最近事件', hint: '回看变化', reason: null, page: 'events' },
+    { id: 'graph', label: '执行图检查', hint: '依赖与依据', reason: null, page: 'graph' },
+    { id: 'options', label: '选项', hint: '图标显示模式', reason: null, dialog: 'options' },
+    { id: 'cancel', label: 'Cancel', hint: '停止整个项目', reason: null, dialog: 'cancel' },
+    { id: 'exit', label: 'Exit', hint: '退出前台', reason: null, dialog: 'exit' },
+    { id: 'resume', label: 'Resume', hint: '恢复项目', reason: '当前 Scope 没有暂停' },
+  ];
+  const picker = frame.kind === 'sessions' || frame.kind === 'handoff-target' || frame.kind === 'model-menu';
+  const choices: Choice[] = frame.kind === 'commands' ? commandRows
+    : frame.kind === 'options' ? [
+      { id: 'nerd', label: 'Nerd Fonts', hint: props.iconMode === 'nerd' ? '当前' : '字体图标', reason: null },
+      { id: 'ascii', label: 'ASCII', hint: props.iconMode === 'ascii' ? '当前' : '图标异常时选此项', reason: null },
+    ]
+    : frame.kind === 'model-menu' ? [
+      ...(frame.slot === 'spec-validator' ? [{ id: 'disabled', label: '未启用', hint: '跳过独立规格验证', reason: null }] : []),
+      ...(catalog?.options ?? []).map((option): Choice => ({ id: option.configurationRef,
+        label: modelInfo[option.configurationRef] === undefined ? option.model : modelInfo[option.configurationRef]!.provider + ' / ' + modelInfo[option.configurationRef]!.model,
+        hint: option.configurationRef === modelRef(frame.slot) ? '当前' : '可选',
+        reason: props.unavailable ? '模型清单不可读' : frame.slot === 'coordinator' && !admission.allowed ? admission.reason : null })),
+    ] : picker ? props.sessions.filter((session) => frame.kind !== 'handoff-target' || session.coordinatorSessionId !== props.selectedSessionId).map((session) => ({
+      id: session.coordinatorSessionId, label: sessionName(session.coordinatorSessionId),
+      hint: (session.coordinatorSessionId === props.selectedSessionId ? '当前 · ' : '') + (session.unread ? '未读 · ' : '') + '待答 ' + session.openInteractionCount,
+      reason: props.unavailable ? '会话信息不可读' : null,
+    })) : [];
+  const filtered = choices.filter((choice) => (choice.label + ' ' + choice.id).toLocaleLowerCase().includes(frame.query.toLocaleLowerCase()));
+  const index = Math.min(frame.index, Math.max(0, filtered.length - 1));
+  const selected = filtered[index];
+  const selectedSession = props.sessions.find((session) => session.coordinatorSessionId === selected?.id);
+  const selectedModel = selected === undefined ? undefined : modelInfo[selected.id];
+  const supportedEfforts = selectedModel?.efforts ?? [];
+  const savedEffort = selected?.id === modelRef(frame.slot) ? roleEffort(frame.slot) : undefined;
+  const draftEffort = selected === undefined ? undefined : frame.efforts[selected.id] ?? savedEffort;
+  const selectedEffort = draftEffort !== undefined && draftEffort !== null && supportedEfforts.includes(draftEffort)
+    ? draftEffort : selectedModel?.defaultEffort ?? null;
+  const preview: ReviewRow[] = selectedSession === undefined ? selectedModel === undefined ? selected?.id === 'disabled'
+    ? [{ label: '选择', value: '未启用独立规格验证' }, { label: '生效对象', value: slot.group + ' / ' + slot.label }] : [] : [
+    { label: 'Provider', value: selectedModel.provider }, { label: 'Model', value: selectedModel.model },
+    { label: '生效对象', value: slot.group + ' / ' + slot.label },
+  ] : [
+    { label: '会话', value: selectedSession.coordinatorSessionId },
+    { label: '状态', value: selectedSession.lifecycleState + ' · 待答 ' + selectedSession.openInteractionCount + (selectedSession.unread ? ' · 未读' : '') },
+    { label: '配置', value: modelSummary(selectedSession.coordinatorModelConfigurationRef) },
+    { label: '责任', value: (selectedSession.planningResponsible ? '持有规划责任' : '无规划责任') + (selectedSession.holdsExecutionLease ? ' · 持有执行权' : '') },
+  ];
+  const back = async () => {
+    if (busy.current) return;
+    if (stackRef.current.at(-1)?.kind === 'handoff' && handoffReady) {
+      busy.current = true;
+      try {
+        const result = props.snapshot.mode === 'route_planning' ? await props.ports.handoff.cancel('fixture-planning-handoff-52') : await props.ports.executionHandoff.cancel('fixture-execution-handoff-52');
+        if (result.kind !== 'accepted') { setNotice(result.message); return; }
+        setHandoffReady(false);
+      } finally { busy.current = false; }
+    }
+    setNotice(null);
+    if (stackRef.current.length === 1) props.onClose();
+    else change((frames) => frames.slice(0, -1));
+  };
+  const open = async (kind: Frame['kind'], targetSlot: SlotId = 'coordinator') => {
+    if (busy.current) return;
+    const next = newFrame(kind === 'handoff' ? 'handoff-target' : kind, targetSlot);
+    if (kind === 'options') next.index = props.iconMode === 'ascii' ? 1 : 0;
+    if (kind === 'model-menu') {
+      const ids = [...(targetSlot === 'spec-validator' ? ['disabled'] : []), ...(catalog?.options.map((option) => option.configurationRef) ?? [])];
+      next.index = Math.max(0, ids.indexOf(modelRef(targetSlot)));
+    }
+    change((frames) => [...frames, next]);
+    setNotice(null);
+    busy.current = true;
+    try {
+      if (kind === 'models') setCatalog(await props.ports.modelCatalog.load());
+      if (kind === 'authorize') setAuthorization(await props.ports.executionAuthorization.review());
+    } finally { busy.current = false; }
+  };
+  const runChoice = async () => {
+    if (selected === undefined || busy.current) return;
+    if (selected.reason !== null) { setNotice(selected.reason); return; }
+    if (frame.kind === 'commands') {
+      const command = commandRows.find((item) => item.id === selected.id)!;
+      if (command.page !== undefined) props.onPanel(command.page);
+      else if (command.dialog !== undefined) await open(command.dialog);
+      return;
+    }
+    if (frame.kind === 'sessions') { props.onSession(selected.id); return; }
+    if (frame.kind === 'options') {
+      props.onIconMode(selected.id === 'ascii' ? 'ascii' : 'nerd');
+      setNotice('当前图标：' + selected.label);
+      return;
+    }
+    if (frame.kind === 'handoff-target') {
+      busy.current = true;
+      try {
+        const result = props.snapshot.mode === 'route_planning' ? await props.ports.handoff.prepareProposal(selected.id) : await props.ports.executionHandoff.prepare(selected.id);
+        setHandoffTarget(selected.id); setHandoffReady(result.kind === 'accepted');
+        change((frames) => [...frames, newFrame('handoff')]);
+        setNotice(result.kind === 'accepted' ? null : result.message);
+      } finally { busy.current = false; }
+      return;
+    }
+    if (frame.kind === 'model-menu') {
+      if (selectedModel !== undefined && selectedEffort !== null && !supportedEfforts.includes(selectedEffort)) { setNotice('当前模型不支持此 effort'); return; }
+      busy.current = true;
+      try {
+        if (frame.slot === 'coordinator') {
+          const result = await props.ports.execute({ kind: 'switch-model-configuration', coordinatorSessionId: props.selectedSessionId, nextConfigurationRef: selected.id });
+          if (result.kind !== 'accepted') { setNotice('被拒绝：' + result.message); return; }
+          props.onCoordinatorModel(selected.id, selectedEffort);
+        } else {
+          if (selected.id === 'config-rejected') { setNotice('被拒绝：候选配置验证失败；当前角色配置保留'); return; }
+          props.onWorkerModel(frame.slot, selected.id, selectedEffort);
+        }
+        change((frames) => frames.slice(0, -1));
+        setNotice(slot.label + ' 已选择 ' + modelSummary(selected.id, selectedEffort));
+      } finally { busy.current = false; }
+    }
+  };
+
+  const load = authorization?.kind === 'review' ? authorization.review : null;
+  const reviewTabs = frame.kind === 'authorize' ? ['概览', '权限', '预算', '工作范围', '完整清单']
+    : frame.kind === 'handoff' ? ['交接概览', '转移责任', '绑定依据'] : frame.kind === 'exit' ? ['影响范围'] : ['影响范围', '完整身份'];
+  const tab = Math.min(frame.tab, reviewTabs.length - 1);
+  const group = (value: string): ReviewRow => ({ label: '', value, heading: true });
+  const manifestRow = (position: number): ReviewRow[] => load?.manifestRows[position] === undefined ? [] : [load.manifestRows[position]];
+  // Section positions belong to this fixed fixture; production needs semantic sections from its host.
+  const reviewRows: ReviewRow[] = frame.kind === 'authorize' ? load === null ? [{ label: '状态', value: authorization === null ? '读取候选授权中' : authorization.kind === 'review' ? '' : authorization.message }]
+    : tab === 0 ? [group('执行计划'), { label: '项目', value: 'orca-companion / main' },
+      { label: '工作规模', value: load.candidate.workPackageCount + ' 个工作包 · 第 ' + load.candidate.generation + ' 代执行图' },
+      { label: '确认后', value: '从路线规划进入执行协调' }, group('执行流程'),
+      { label: '工作包', value: 'Planner → Implementation → Validator' }, { label: '项目验收', value: 'Finalizer 独立只读检查' },
+      group('需接受的风险'), ...manifestRow(5)]
+    : tab === 1 ? [group('允许的操作'), ...manifestRow(1), ...manifestRow(3), ...manifestRow(4)]
+      : tab === 2 ? [group('执行上限'), ...manifestRow(2)]
+        : tab === 3 ? [group('隔离工作范围'), ...load.manifestRows.slice(6)]
+          : [group('批准绑定的完整内容'), ...load.manifestRows, { label: 'Graph ID', value: load.candidate.graphId },
+            { label: 'Baseline', value: load.candidate.baselineHead }, { label: 'Revision', value: String(load.scopeRevision) }, { label: 'Fingerprint', value: load.fingerprint }]
+    : frame.kind === 'handoff' ? tab === 0 ? [group(props.snapshot.mode === 'route_planning' ? '规划责任交接' : '执行责任交接'),
+      { label: '移交方', value: sessionName(props.selectedSessionId) }, { label: '接收方', value: sessionName(handoffTarget) }, group('确认后的变化'),
+      { label: '责任', value: '由接收方继续处理当前协调工作' }, { label: '接收方', value: '等待你的下一条消息再开始' },
+      { label: '保留', value: '当前会话草稿、运行中的 Worker 与执行记录' }]
+      : tab === 1 ? [group('转移给接收方'), { label: '责任', value: props.snapshot.mode === 'route_planning' ? '当前规划事项、Ticket Claim 和待答问题' : '执行协调权、待答问题和 Worker 生命周期事件' },
+        group('继续保留'), { label: '运行工作', value: 'Worker 继续运行，任务与工作区保持原绑定' }, { label: '历史', value: '两份会话的对话和草稿分别保留' }]
+        : [group('交接依据'), { label: '移交会话', value: props.selectedSessionId }, { label: '接收会话', value: handoffTarget },
+          { label: '提案', value: props.snapshot.mode === 'route_planning' ? 'fixture-planning-handoff-52' : 'fixture-execution-handoff-52' },
+          { label: 'Revision', value: String(props.snapshot.revision) }, { label: '恢复材料', value: 'fixture-capsule-52' }]
+      : frame.kind === 'cancel' ? tab === 0 ? [group('影响整个项目'), { label: '项目', value: 'orca-companion / main' },
+        { label: '会话', value: props.sessions.length + ' 个协调会话' }, { label: 'Worker', value: props.snapshot.workers.length + ' 个运行对象' },
+        group('确认后'), { label: '新工作', value: '停止新的模型恢复和 Worker 派发' }, { label: '运行工作', value: '请求停止；以核验结果为准' },
+        { label: '结果未确认', value: '保持取消中或不可核验，等待对账' }, group('已完成的工作'), { label: '保留', value: '代码、工作记录与已消耗预算' }]
+        : [group('取消目标'), { label: 'Scope', value: props.snapshot.coordinationScopeId }, { label: '当前会话', value: props.selectedSessionId },
+          { label: '未决操作', value: String(props.snapshot.executionReconciliation.unresolvedIntentCount) }]
+      : [group('退出当前前台'), { label: '项目', value: 'orca-companion / main' }, { label: '关闭', value: '当前 TUI 和 Controller 进程' },
+        group('退出之后'), { label: 'Worker', value: '活跃 Worker 可能继续运行' }, { label: '项目状态', value: '维持原有状态，不隐式暂停或取消' },
+        { label: '下次启动', value: '先对账，再继续协调' }];
+  const review = frame.kind === 'authorize' || frame.kind === 'handoff' || frame.kind === 'cancel' || frame.kind === 'exit';
+  const blocked = props.unavailable || (frame.kind === 'authorize' && (props.snapshot.mode !== 'route_planning' || !authorizationApprovable(authorization)))
+    || (frame.kind === 'handoff' && (!handoffReady || props.snapshot.controlState === 'blocked'));
+  const confirmLabel = frame.kind === 'authorize' ? '批准并进入执行' : frame.kind === 'handoff' ? '确认转移责任' : frame.kind === 'cancel' ? '停止整个项目' : '确认退出前台';
+  const confirm = async () => {
+    if (blocked || busy.current) { setNotice('当前不可确认 · 请核验目标与准入'); return; }
+    busy.current = true;
+    try {
+      if (frame.kind === 'exit') { props.onExit(); return; }
+      const result = frame.kind === 'cancel' ? await props.ports.execute({ kind: 'scope-control', action: 'cancel' })
+        : frame.kind === 'authorize' && load !== null ? await props.ports.executionAuthorization.approve({ fingerprint: load.fingerprint, expectedRevision: load.scopeRevision })
+          : props.snapshot.mode === 'route_planning' ? await props.ports.handoff.cutover('fixture-planning-handoff-52') : await props.ports.executionHandoff.cutover('fixture-execution-handoff-52');
+      if (result.kind === 'accepted') props.onComplete(result.summary);
+      else setNotice((result.kind === 'unknown' ? '结果未知 · 先对账：' : '被拒绝：') + result.message);
+    } finally { busy.current = false; }
+  };
+  const labelWidth = Math.min(12, Math.floor(innerWidth / 3));
+  const formatted = (rows: readonly ReviewRow[]) => rows.flatMap((row) => row.heading
+    ? [{ text: fit('── ' + row.value + ' ──'), label: '', heading: true }]
+    : wrapByDisplayWidth(row.value, Math.max(1, innerWidth - labelWidth - 2)).map((text, position) => ({ text,
+      label: position === 0 ? fit(row.label, labelWidth) : '', heading: false })));
+  const renderFields = (rows: ReturnType<typeof formatted>) => rows.map((item, position) => <Text key={position} bold={item.heading}>
+    {item.heading ? <Text color={tuiColors.accent}>{item.text}</Text> : <><Text color={tuiColors.muted}>{padToDisplayWidth(item.label, labelWidth)}  </Text>{item.text}</>}
+  </Text>);
+  const reviewLines = formatted(props.unavailable ? [{ label: '状态', value: '正文不可读，暂不能确认' }] : reviewRows);
+  const viewport = Math.max(1, bodyHeight - 1);
+  const maxScroll = Math.max(0, reviewLines.length - viewport);
+  const scroll = Math.min(frame.scroll, maxScroll);
+  const previewLines = formatted(preview);
+  const previewHeight = Math.min(Math.max(2, Math.floor(bodyHeight * 0.55)), previewLines.length);
+  const listCapacity = picker ? Math.max(2, bodyHeight - previewHeight - (frame.kind === 'model-menu' ? 2 : 1)) : bodyHeight;
+  const visibleCount = Math.max(1, listCapacity - 1);
+  const listStart = Math.max(0, Math.min(Math.max(0, filtered.length - visibleCount), index - Math.floor(visibleCount / 2)));
+  const slotIndex = Math.min(frame.index, slots.length - 1);
+  const gridLines = slots.flatMap((item, position) => [
+    ...(position === 0 || item.group !== slots[position - 1]?.group ? [{ key: 'group-' + item.id, text: '── ' + item.group + ' ──', heading: true, position }] : []),
+    { key: item.id, text: innerWidth >= 65 ? padToDisplayWidth(fit((position === slotIndex ? '› ' : '  ') + item.label, 23), 24) + fit(modelSummary(modelRef(item.id), roleEffort(item.id)), innerWidth - 24)
+      : fit((position === slotIndex ? '› ' : '  ') + item.label + ' · ' + item.purpose), heading: false, position },
+    ...(innerWidth < 65 ? [{ key: 'model-' + item.id, text: fit('  ' + modelSummary(modelRef(item.id), roleEffort(item.id))), heading: false, position }] : []),
+  ]);
+  const gridSelectedLine = gridLines.findIndex((item) => item.key === slots[slotIndex]?.id);
+  const gridStart = Math.max(0, Math.min(Math.max(0, gridLines.length - bodyHeight), gridSelectedLine - Math.floor(bodyHeight / 2)));
+  const tabLabels = reviewTabs.map((label, position) => position === tab ? '[' + label + ']' : label).join('  ');
+  const previewHeading = fit('── ' + (frame.kind === 'model-menu' ? slot.group + ' / ' + slot.label : '会话信息') + ' ');
+
+  useInput((input, key) => {
+    if (key.ctrl && input === 'n') { props.onEvent(); return; }
+    if (key.ctrl && input === 'u') { props.onUnavailable(); return; }
+    if (busy.current) return;
+    if (key.ctrl && input === 'c') { void open('exit'); return; }
+    if (key.escape) { void back(); return; }
+    if (key.ctrl) return;
+    if (frame.kind === 'model-menu') {
+      if (key.tab) {
+        const focuses: Frame['focus'][] = supportedEfforts.length > 0 ? ['list', 'effort', 'actions'] : ['list', 'actions'];
+        updateTop((f) => ({ ...f, focus: focuses[(focuses.indexOf(f.focus) + (key.shift ? focuses.length - 1 : 1)) % focuses.length]! })); return;
+      }
+      if (key.leftArrow || key.rightArrow) {
+        if (frame.focus === 'effort' && selected !== undefined && supportedEfforts.length > 0) {
+          const next = supportedEfforts[(supportedEfforts.indexOf(selectedEffort ?? '') + (key.leftArrow ? supportedEfforts.length - 1 : 1)) % supportedEfforts.length]!;
+          updateTop((f) => ({ ...f, efforts: { ...f.efforts, [selected.id]: next } }));
+        } else if (frame.focus === 'actions') updateTop((f) => ({ ...f, action: key.rightArrow ? 1 : 0 }));
+        return;
+      }
+      if (key.return) {
+        if (frame.focus === 'actions') { if (frame.action === 0) void back(); else void runChoice(); }
+        else updateTop((f) => ({ ...f, focus: f.focus === 'list' && supportedEfforts.length > 0 ? 'effort' : 'actions', action: 1 }));
+        return;
+      }
+      if (frame.focus !== 'list') return;
+    }
+    if (key.tab && review) { updateTop((f) => ({ ...f, tab: (f.tab + (key.shift ? reviewTabs.length - 1 : 1)) % reviewTabs.length, scroll: 0 })); return; }
+    if ((key.leftArrow || key.rightArrow) && review) { updateTop((f) => ({ ...f, action: key.rightArrow ? 1 : 0 })); return; }
+    if (key.return) {
+      if (review) { if (frame.action === 0) void back(); else void confirm(); }
+      else if (frame.kind === 'models') void open('model-menu', slots[slotIndex]!.id);
+      else void runChoice();
+      return;
+    }
+    if (key.upArrow || key.downArrow || key.pageUp || key.pageDown) {
+      const delta = key.upArrow || key.pageUp ? -1 : 1;
+      const pageSize = key.pageUp || key.pageDown ? viewport : 1;
+      updateTop((f) => review ? { ...f, scroll: Math.max(0, Math.min(maxScroll, scroll + delta * pageSize)) }
+        : { ...f, index: Math.max(0, Math.min((f.kind === 'models' ? slots.length : filtered.length) - 1, f.index + delta)), scroll: 0 });
+      return;
+    }
+    if (frame.kind === 'commands' || frame.kind === 'options' || picker) {
+      if (key.backspace || key.delete) updateTop((f) => ({ ...f, query: Array.from(f.query).slice(0, -1).join(''), index: 0, scroll: 0 }));
+      else if (input !== '' && !key.tab) updateTop((f) => ({ ...f, query: f.query + input.replace(/[\r\n]/g, ''), index: 0, scroll: 0 }));
+    }
+  });
+  return <Box width={props.width} height={props.height} justifyContent="center" alignItems="center">
+    <Box flexDirection="column" borderStyle="round" borderColor={tuiColors.focus} width={Math.min(94, props.width - 4)} height={props.height - 2} paddingX={1} overflow="hidden">
+      <Text bold color={tuiColors.accent}>{fit(titles[frame.kind])}</Text>
+      <Text dimColor>{fit('orca-companion / main · ' + sessionShort(props.selectedSessionId) + ' · 来自 ' + props.origin)}</Text>
+      <Text color={tuiColors.border}>{'─'.repeat(innerWidth)}</Text>
+      <Box height={bodyHeight} flexDirection="column" overflow="hidden">
+        {frame.kind === 'models' ? gridLines.slice(gridStart, gridStart + bodyHeight).map((item) => <Text key={item.key}
+          bold={item.heading} {...(item.heading ? { color: tuiColors.accent } : {})} inverse={!item.heading && item.position === slotIndex}>{fit(item.text)}</Text>)
+          : review ? <>
+            <Text>{displayWidth(tabLabels) <= innerWidth ? tabLabels : '[' + reviewTabs[tab] + '] · ' + (tab + 1) + '/' + reviewTabs.length}</Text>
+            {renderFields(reviewLines.slice(scroll, scroll + viewport))}
+          </> : <>
+            <Text color={tuiColors.focus}>{fit('搜索 › ' + (frame.query || '输入名称或 ID'))}</Text>
+            <Box height={visibleCount} flexDirection="column" overflow="hidden">
+              {filtered.slice(listStart, listStart + visibleCount).map((item, position) => <Text key={item.id} inverse={listStart + position === index && (frame.kind !== 'model-menu' || frame.focus === 'list')}>
+                {line((listStart + position === index ? '› ' : '  ') + item.label, item.reason === null ? item.hint : '! 不可用')}
+              </Text>)}
+              {filtered.length === 0 ? <Text dimColor>没有匹配项</Text> : null}
+            </Box>
+            {picker ? <>
+              <Text color={tuiColors.accent} bold>{previewHeading + '─'.repeat(Math.max(0, innerWidth - displayWidth(previewHeading)))}</Text>
+              <Box height={previewHeight} flexDirection="column" overflow="hidden">
+                {renderFields(previewLines.slice(0, previewHeight))}
+              </Box>
+              {frame.kind === 'model-menu' ? <Text><Text color={frame.focus === 'effort' ? tuiColors.focus : tuiColors.muted}>Effort </Text>
+                {supportedEfforts.length === 0 ? <Text dimColor>{selected?.id === 'disabled' ? '不适用' : '此模型不支持'}</Text>
+                  : supportedEfforts.map((effort) => <Text key={effort} inverse={effort === selectedEffort} bold={effort === selectedEffort}>{' [' + effort + '] '}</Text>)}
+              </Text> : null}
+            </> : null}
+          </>}
+      </Box>
+      <Text color={tuiColors.border}>{'─'.repeat(innerWidth)}</Text>
+      <Text color={tuiColors.warning}>{fit(notice ?? (blocked && review ? '当前不可确认' : selected?.reason ?? (frame.kind === 'model-menu'
+        ? '当前区域：' + (frame.focus === 'list' ? '模型列表 · effort ' + (selectedEffort ?? '不适用') : frame.focus === 'effort' ? 'Effort · ' + selectedEffort : '操作按钮 · ' + (frame.action === 0 ? '返回' : '应用选择'))
+        : frame.kind === 'models' ? slots[slotIndex]!.purpose : review ? '当前操作：' + (frame.action === 0 ? '返回' : confirmLabel)
+          + (maxScroll > 0 ? ' · 行 ' + (scroll + 1) + '–' + Math.min(scroll + viewport, reviewLines.length) + '/' + reviewLines.length : '') : '')))}</Text>
+      {review || frame.kind === 'model-menu' ? <Text>
+        <Text inverse={frame.action === 0 && (review || frame.focus === 'actions')} bold>{' [返回] '}</Text>{'   '}
+        <Text inverse={frame.action === 1 && (review || frame.focus === 'actions')} bold dimColor={review ? blocked : selected?.reason !== null}>{' [' + (review ? confirmLabel + (blocked ? ' · 不可用' : '') : '应用选择') + '] '}</Text>
+      </Text>
+        : <Text dimColor>{fit(frame.kind === 'models' ? (slotIndex + 1) + '/' + slots.length + ' · ↑↓ 选角色 · Enter 更换 · Esc 返回' : (filtered.length ? index + 1 : 0) + '/' + filtered.length + ' · ↑↓ 选择 · Enter 确认 · Esc 返回')}</Text>}
+      <Text dimColor>{fit(review ? 'Tab 栏目 · ↑↓ 浏览 · ←→ 按钮 · Enter' : frame.kind === 'model-menu' ? 'Tab 区域 · ↑↓模型 · ←→选项 · Enter' : picker ? '新消息保留当前选择'
+        : frame.kind === 'models' ? 'Provider / Model / Effort · 按角色分别选择' : frame.kind === 'options' ? 'Enter 应用图标模式 · Esc 返回' : '搜索目录项 · 新消息保留当前输入')}</Text>
+    </Box>
+  </Box>;
+}

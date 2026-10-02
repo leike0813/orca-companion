@@ -24,8 +24,8 @@ import {
   type RenderedTui,
 } from './harness.js';
 
-/** 只读端口白名单：渲染路径只允许 query，不允许任何写。 */
-const READ_ONLY_PORTS = ['resolveHome', 'snapshot', 'transcript'];
+/** 只读端口白名单：渲染路径只允许 query 与只读 store 读取，不允许任何写。 */
+const READ_ONLY_PORTS = ['resolveHome', 'snapshot', 'transcript', 'inputStore.read', 'submissionStatus'];
 
 async function pressKey(rendered: RenderedTui, input: string): Promise<void> {
   rendered.stdin.write(input);
@@ -41,10 +41,11 @@ describe('重挂载与 resize 零业务副作用', () => {
     // resize 只重算布局：不重新查询、更不写入。
     first.stdout.emit('resize');
     await settle(2);
-    // 未提交的普通输入同样不产生任何写。
+    // 编辑只启动用户的合并计时器（窗口未到，且卸载会取消它）：渲染与输入路径本身不写库。
     first.stdin.write('half-typed');
     await settle(2);
     expect(fake.executeCount()).toBe(0);
+    expect(fake.calls.filter((call) => call.name === 'inputStore.write')).toEqual([]);
     first.unmount();
 
     const second = renderTui(fake.ports);

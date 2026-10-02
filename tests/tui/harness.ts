@@ -39,6 +39,30 @@ import type {
   WorkPackageExecutionEntry,
 } from '../../src/application/execution/execution-view.js';
 import { WIZARD_CHECKS } from '../../src/interfaces/tui/ports.js';
+import { openUiInputStore } from '../../src/adapters/storage/ui-input-store.js';
+import type { UiInputStore } from '../../src/application/ports/ui-input-store.js';
+import type { SubmissionQuery, SubmissionStatus } from '../../src/application/coordinator/submission-status.js';
+
+/** 真实的内存 UI 输入存储：行为测试因此不重复实现 store 的 CAS/容量语义。 */
+export function createMemoryInputStore(): UiInputStore {
+  const opened = openUiInputStore({ databasePath: ':memory:' });
+  if (opened.kind !== 'opened') {
+    throw new Error(`无法创建内存 UI 输入存储：${opened.code} ${opened.message}`);
+  }
+  return opened.store;
+}
+
+/** 写操作一律失败、读操作照常的 store：验证「保存失败仍保留内存输入」。 */
+export function createFailingInputStore(code = 'capacity_exceeded'): UiInputStore {
+  const base = createMemoryInputStore();
+  const failure = { kind: 'failed' as const, code, message: '注入的写入失败' };
+  return {
+    read: (key) => base.read(key),
+    list: (coordinationScopeId) => base.list(coordinationScopeId),
+    write: () => failure,
+    remove: () => failure,
+  };
+}
 
 /* -------------------------------------------------------------------------- */
 /* 快照构造                                                                    */
@@ -242,6 +266,9 @@ export type FakePortsOptions = {
   /** Execution Authorization 的审阅结果与批准结果；省略即一份门禁通过的完整 Manifest。 */
   readonly authorizationReview?: ExecutionAuthorizationLoad;
   readonly authorizationApprove?: ControllerCommandResult;
+  /** 注入 UI 输入存储（可失败）；省略即使用真实的内存 store。 */
+  readonly inputStore?: UiInputStore;
+  readonly submissionStatus?: (query: SubmissionQuery) => Promise<SubmissionStatus>;
 };
 
 export type FakePorts = {
@@ -251,6 +278,9 @@ export type FakePorts = {
   readonly emitted: SemanticEvent[];
   readonly emit: (event: SemanticEvent) => void;
   readonly executeCount: () => number;
+  /** 真实的 UI 输入存储句柄：测试可直接 `read`/`list` 断言持久状态。 */
+  readonly inputStore: UiInputStore;
+  readonly closeInputStore: () => void;
 };
 
 export const DEFAULT_PROPOSAL: WizardProposal = {
@@ -274,6 +304,38 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
   const snapshot = makeSnapshot(options.snapshot ?? {});
   const transcript = options.transcript ?? makeTranscript();
   const accepted: ControllerCommandResult = { kind: 'accepted', revision: 1, summary: 'ok' };
+
+  let closeInputStore: () => void = () => undefined;
+  let rawInputStore: UiInputStore;
+  if (options.inputStore !== undefined) {
+    rawInputStore = options.inputStore;
+  } else {
+    const opened = openUiInputStore({ databasePath: ':memory:' });
+    if (opened.kind !== 'opened') {
+      throw new Error(`无法创建内存 UI 输入存储：${opened.code} ${opened.message}`);
+    }
+    rawInputStore = opened.store;
+    closeInputStore = opened.store.close;
+  }
+  // 记录每个 store 调用：`no-side-effect` 因此能断言渲染路径只发生只读读取。
+  const inputStore: UiInputStore = {
+    read: (key) => {
+      calls.push({ name: 'inputStore.read', detail: key });
+      return rawInputStore.read(key);
+    },
+    list: (coordinationScopeId) => {
+      calls.push({ name: 'inputStore.list', detail: coordinationScopeId });
+      return rawInputStore.list(coordinationScopeId);
+    },
+    write: (input) => {
+      calls.push({ name: 'inputStore.write', detail: input.key });
+      return rawInputStore.write(input);
+    },
+    remove: (input) => {
+      calls.push({ name: 'inputStore.remove', detail: input.key });
+      return rawInputStore.remove(input);
+    },
+  };
 
   const scopeSetup: ScopeSetupPort = {
     resolveHome: (): Promise<HomeResolution> => {
@@ -354,6 +416,11 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
     },
     executionHandoff: createFakeExecutionHandoff(options, calls, accepted),
     executionAuthorization: createFakeExecutionAuthorization(options, calls, accepted),
+    inputStore,
+    submissionStatus: (query) => {
+      calls.push({ name: 'submissionStatus', detail: query });
+      return options.submissionStatus?.(query) ?? Promise.resolve({ kind: 'not-found' });
+    },
   };
 
   return {
@@ -367,6 +434,8 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
       }
     },
     executeCount: () => calls.filter((call) => call.name === 'execute').length,
+    inputStore: rawInputStore,
+    closeInputStore,
   };
 }
 

@@ -136,3 +136,90 @@ describe('容器输入路径', () => {
     rendered.unmount();
   });
 });
+
+/**
+ * 严格 slash 表：只要以 `/` 开头就不再是消息。无法作为单个完整命令执行的内容一律提示并保留输入，
+ * 绝不回退为普通消息或回答。
+ */
+const SLASH_REJECTIONS = [
+  { label: '未知命令', keys: '/nope', notice: 'unknown_command', preserved: '/nope' },
+  { label: '内联参数', keys: '/compact 现在', notice: 'invalid_format', preserved: '/compact 现在' },
+  { label: '空白参数', keys: '/help\tx', notice: 'invalid_format', preserved: '/help' },
+  { label: '空命令', keys: '/', notice: 'invalid_format', preserved: '/' },
+] as const;
+
+describe('严格 slash 分类：错误输入保留且不发送', () => {
+  for (const entry of SLASH_REJECTIONS) {
+    test(entry.label, async () => {
+      const fake = createFakePorts();
+      const rendered = renderTui(fake.ports);
+      // 等到 Session 选中后再输入：composer 标题会先于 sessions-loaded 出现。
+      await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+      await waitFor(rendered, (frame) => frame.includes('composer · 普通消息'));
+
+      await press(rendered, entry.keys);
+      await press(rendered, ENTER);
+
+      // 既不发送普通消息，也不回答。
+      expect(fake.executeIntents).toEqual([]);
+      expect(rendered.lastFrame() ?? '').toContain(entry.notice);
+      expect(rendered.lastFrame() ?? '').toContain(entry.preserved);
+      rendered.unmount();
+    });
+  }
+
+  test('多行命令：不发送且保留输入', async () => {
+    const fake = createFakePorts();
+    const rendered = renderTui(fake.ports);
+    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+    await waitFor(rendered, (frame) => frame.includes('composer · 普通消息'));
+
+    // 粘贴多行，保证正文里真的有换行而不是被当成两次输入。
+    rendered.stdin.write('\u001b[200~/help\n正文\u001b[201~');
+    await waitFor(rendered, (frame) => frame.includes('/help'));
+    await press(rendered, ENTER);
+
+    expect(fake.executeIntents).toEqual([]);
+    const frame = rendered.lastFrame() ?? '';
+    expect(frame).toContain('invalid_format');
+    expect(frame).toContain('/help');
+    rendered.unmount();
+  });
+
+  test('回答模式同样严格：错误命令不提交答案、保留待答与草稿', async () => {
+    const fake = createFakePorts({
+      snapshot: {
+        interactions: [
+          {
+            interactionId: 'i-1',
+            ownerCoordinatorSessionId: 'session-b',
+            subjectRef: { kind: 'ticket', id: 't-1' },
+            expectedRevision: 4,
+            state: 'open',
+          },
+        ],
+      },
+      transcript: makeTranscript('session-b', [{ role: 'user', content: '请回答', stepId: null }]),
+    });
+    const rendered = renderTui(fake.ports);
+    await waitFor(
+      rendered,
+      () => fake.calls.some((call) => call.name === 'transcript' && call.detail === 'session-b'),
+    );
+    await waitFor(rendered, (frame) => frame.includes('待答'));
+
+    await press(rendered, CTRL_A);
+    await waitFor(rendered, (frame) => frame.includes('回答 interaction i-1'));
+
+    await press(rendered, '/nope');
+    await press(rendered, ENTER);
+
+    // 命令不会满足待答问题：没有回答 intent，问题仍待答，命令输入保留。
+    expect(fake.executeIntents).toEqual([]);
+    const frame = rendered.lastFrame() ?? '';
+    expect(frame).toContain('/nope');
+    expect(frame).toContain('回答 interaction i-1');
+    expect(frame).toContain('待答 ticket:t-1');
+    rendered.unmount();
+  });
+});

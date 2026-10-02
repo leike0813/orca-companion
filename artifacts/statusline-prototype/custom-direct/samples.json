@@ -1,0 +1,238 @@
+{
+  "capturedAt": "2026-09-30T13:32:08.481Z",
+  "ticket": 48,
+  "renderer": "tuistory PTY + ghostty-opentui bundled Nerd Font and CJK fallback",
+  "samples": [
+    {
+      "name": "custom-preview",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-preview-120x40.png",
+      "text": "custom-preview-120x40.txt"
+    },
+    {
+      "name": "custom-ordered",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-ordered-120x40.png",
+      "text": "custom-ordered-120x40.txt"
+    },
+    {
+      "name": "custom-saved",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-saved-120x40.png",
+      "text": "custom-saved-120x40.txt"
+    },
+    {
+      "name": "custom-other-session",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-other-session-120x40.png",
+      "text": "custom-other-session-120x40.txt"
+    },
+    {
+      "name": "custom-reset-preview",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-reset-preview-120x40.png",
+      "text": "custom-reset-preview-120x40.txt"
+    },
+    {
+      "name": "custom-restored",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-restored-120x40.png",
+      "text": "custom-restored-120x40.txt"
+    },
+    {
+      "name": "custom-save-failed",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-save-failed-120x40.png",
+      "text": "custom-save-failed-120x40.txt"
+    },
+    {
+      "name": "field-colors",
+      "columns": 120,
+      "rows": 40,
+      "png": "field-colors-120x40.png",
+      "text": "field-colors-120x40.txt"
+    },
+    {
+      "name": "direct-options-colors",
+      "columns": 120,
+      "rows": 40,
+      "png": "direct-options-colors-120x40.png",
+      "text": "direct-options-colors-120x40.txt"
+    },
+    {
+      "name": "field-monochrome",
+      "columns": 120,
+      "rows": 40,
+      "png": "field-monochrome-120x40.png",
+      "text": "field-monochrome-120x40.txt"
+    },
+    {
+      "name": "direct-options-monochrome",
+      "columns": 120,
+      "rows": 40,
+      "png": "direct-options-monochrome-120x40.png",
+      "text": "direct-options-monochrome-120x40.txt"
+    },
+    {
+      "name": "custom-preview",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-preview-80x24.png",
+      "text": "custom-preview-80x24.txt"
+    },
+    {
+      "name": "custom-ordered",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-ordered-80x24.png",
+      "text": "custom-ordered-80x24.txt"
+    },
+    {
+      "name": "custom-saved",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-saved-80x24.png",
+      "text": "custom-saved-80x24.txt"
+    },
+    {
+      "name": "custom-other-session",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-other-session-80x24.png",
+      "text": "custom-other-session-80x24.txt"
+    },
+    {
+      "name": "custom-reset-preview",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-reset-preview-80x24.png",
+      "text": "custom-reset-preview-80x24.txt"
+    },
+    {
+      "name": "custom-restored",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-restored-80x24.png",
+      "text": "custom-restored-80x24.txt"
+    },
+    {
+      "name": "custom-save-failed",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-save-failed-80x24.png",
+      "text": "custom-save-failed-80x24.txt"
+    },
+    {
+      "name": "field-colors",
+      "columns": 80,
+      "rows": 24,
+      "png": "field-colors-80x24.png",
+      "text": "field-colors-80x24.txt"
+    },
+    {
+      "name": "direct-options-colors",
+      "columns": 80,
+      "rows": 24,
+      "png": "direct-options-colors-80x24.png",
+      "text": "direct-options-colors-80x24.txt"
+    },
+    {
+      "name": "field-monochrome",
+      "columns": 80,
+      "rows": 24,
+      "png": "field-monochrome-80x24.png",
+      "text": "field-monochrome-80x24.txt"
+    },
+    {
+      "name": "direct-options-monochrome",
+      "columns": 80,
+      "rows": 24,
+      "png": "direct-options-monochrome-80x24.png",
+      "text": "direct-options-monochrome-80x24.txt"
+    },
+    {
+      "name": "custom-preview",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-preview-50x40.png",
+      "text": "custom-preview-50x40.txt"
+    },
+    {
+      "name": "custom-ordered",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-ordered-50x40.png",
+      "text": "custom-ordered-50x40.txt"
+    },
+    {
+      "name": "custom-saved",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-saved-50x40.png",
+      "text": "custom-saved-50x40.txt"
+    },
+    {
+      "name": "custom-other-session",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-other-session-50x40.png",
+      "text": "custom-other-session-50x40.txt"
+    },
+    {
+      "name": "custom-reset-preview",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-reset-preview-50x40.png",
+      "text": "custom-reset-preview-50x40.txt"
+    },
+    {
+      "name": "custom-restored",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-restored-50x40.png",
+      "text": "custom-restored-50x40.txt"
+    },
+    {
+      "name": "custom-save-failed",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-save-failed-50x40.png",
+      "text": "custom-save-failed-50x40.txt"
+    },
+    {
+      "name": "field-colors",
+      "columns": 50,
+      "rows": 40,
+      "png": "field-colors-50x40.png",
+      "text": "field-colors-50x40.txt"
+    },
+    {
+      "name": "direct-options-colors",
+      "columns": 50,
+      "rows": 40,
+      "png": "direct-options-colors-50x40.png",
+      "text": "direct-options-colors-50x40.txt"
+    },
+    {
+      "name": "field-monochrome",
+      "columns": 50,
+      "rows": 40,
+      "png": "field-monochrome-50x40.png",
+      "text": "field-monochrome-50x40.txt"
+    },
+    {
+      "name": "direct-options-monochrome",
+      "columns": 50,
+      "rows": 40,
+      "png": "direct-options-monochrome-50x40.png",
+      "text": "direct-options-monochrome-50x40.txt"
+    }
+  ]
+}

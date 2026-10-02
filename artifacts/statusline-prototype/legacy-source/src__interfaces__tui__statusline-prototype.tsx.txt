@@ -1,0 +1,226 @@
+/** Throwaway #48 comparison: current chrome, fixed priority, and a guarded optional slot. */
+import { ThemeProvider } from '@inkjs/ui';
+import { Box, Text, useInput, useWindowSize } from 'ink';
+import { useState } from 'react';
+
+import type { ControllerSnapshot } from '../../application/controller-service.js';
+import { projectTranscriptPage, projectTuiViewModel, type TuiViewModel } from '../../application/tui/view-model.js';
+import { compactGraphLines, Sidebar } from './components/sidebar.js';
+import { StatusLine } from './components/status-line.js';
+import { TopBar } from './components/top-bar.js';
+import { allowedSidebarDensity, displayWidth, sidebarWidthFor, truncateToDisplayWidth, wrapByDisplayWidth } from './render/width.js';
+import { bodyWidth } from './screens/workspace.js';
+import { tuiColors, tuiTheme } from './theme.js';
+
+type Scene = 'planning' | 'execution' | 'blocked' | 'answer' | 'idle';
+type Variant = 'current' | 'fixed' | 'custom';
+type Slot = 'graph' | 'budget' | 'revision';
+type Props = {
+  readonly snapshots: Record<Scene, ControllerSnapshot>;
+  readonly initialScene: Scene;
+  readonly initialVariant: Variant;
+  readonly terminalWidth: number;
+  readonly onExit: () => void;
+};
+
+const scenes: readonly Scene[] = ['planning', 'execution', 'blocked', 'answer', 'idle'];
+const variants: readonly Variant[] = ['current', 'fixed', 'custom'];
+const slots: readonly Slot[] = ['graph', 'budget', 'revision'];
+
+// Prototype-only labels. ControllerSnapshot currently has no repo/branch label, claimed ticket, or question body.
+const sampleRepository = 'orca-companion/main';
+const sampleQuestions: Readonly<Record<string, string>> = {
+  'interaction-48': '请确认顶栏采用固定优先级，还是允许自选普通字段。',
+  'interaction-48-second': '50 列终端中，详情入口应当如何让用户发现？',
+  'interaction-other': '另一 Session 的路线图依赖是否已确认？',
+};
+
+function fitSegments(segments: readonly string[], width: number): string {
+  const visible: string[] = [];
+  for (const segment of segments) {
+    const next = [...visible, segment].join(' · ');
+    if (displayWidth(next) > width) break;
+    visible.push(segment);
+  }
+  return visible.join(' · ');
+}
+
+function shortSession(id: string | null): string {
+  if (id === null) return '无';
+  return id === 'session-long-中文规划-2026' ? 'S-A' : id === 'session-b' ? 'S-B' : truncateToDisplayWidth(id, 8);
+}
+
+function alertLines(view: TuiViewModel, width: number): readonly string[] {
+  const active = view.graph?.frontier.find((item) => item.workPackageId === view.execution.activeWorkPackageId);
+  const items = [
+    view.execution.reconciliation.pending ? '原操作待对账' : null,
+    view.scope.controlState === 'cancelling' ? '取消中' : null,
+    active?.liveness === 'unverifiable' ? 'Worker 状态待核验' : null,
+    view.compaction?.status === 'context_exhausted' ? '上下文耗尽' : null,
+    view.blockers.length > 0 ? `阻塞：${view.blockers[0]!.message}` : null,
+    view.compaction?.status === 'compaction_degraded' ? '压缩降级' : null,
+    view.maintenance?.stopped ? '维护已停止' : null,
+  ].filter((item): item is string => item !== null);
+  const groups: string[][] = [];
+  let hidden = 0;
+  for (const item of items) {
+    const last = groups.at(-1);
+    if (last !== undefined && displayWidth(`! ${[...last, item].join(' · ')}`) <= width) last.push(item);
+    else if (groups.length < 2) groups.push([item]);
+    else hidden += 1;
+  }
+  if (hidden > 0) {
+    const last = groups.at(-1)!;
+    while (last.length > 1 && displayWidth(`! ${last.join(' · ')} · 另有 ${hidden} 项`) > width) {
+      last.pop();
+      hidden += 1;
+    }
+    const suffix = ` · 另有 ${hidden} 项`;
+    return groups.map((group, index) => index === groups.length - 1
+      ? `${truncateToDisplayWidth(`! ${group.join(' · ')}`, width - displayWidth(suffix))}${suffix}`
+      : truncateToDisplayWidth(`! ${group.join(' · ')}`, width));
+  }
+  return groups.map((group) => truncateToDisplayWidth(`! ${group.join(' · ')}`, width));
+}
+
+function chrome(view: TuiViewModel, scene: Scene, slot: Slot, topWidth: number, lineWidth: number) {
+  const pending = view.interactions.filter((item) => item.state === 'open').length;
+  const mode = view.scope.mode === 'route_planning' ? '规划' : '执行';
+  const holder = view.scope.executionLeaseHolderSessionId;
+  const compact = topWidth < 60;
+  const control = view.scope.controlState === 'blocked' ? '阻塞'
+    : view.scope.controlState === 'active' ? '运行' : view.scope.controlState;
+  const context = [mode, control, pending > 0 ? `${compact ? '答' : '待答'}${pending}` : null,
+    holder !== null && holder !== view.selectedSessionId ? `${compact ? '持' : '执行:'}${shortSession(holder)}` : null]
+    .filter((item): item is string => item !== null).join(' · ');
+  const session = shortSession(view.selectedSessionId);
+  const repository = truncateToDisplayWidth(compact ? 'orca-c/main' : sampleRepository,
+    Math.max(5, topWidth - displayWidth(context) - displayWidth(session) - 6));
+  const top = truncateToDisplayWidth(`${repository} · ${session} · ${context}`, topWidth);
+  const active = view.graph?.frontier.find((item) => item.workPackageId === view.execution.activeWorkPackageId);
+  const summary = scene === 'idle' ? 'Ctrl+P 命令'
+    : view.scope.mode === 'route_planning' ? '当前票据 #48 顶栏与状态行'
+      : active === undefined ? '当前无活动工作包' : `${active.workPackageId} · ${active.state} · ${active.liveness ?? '待核验'}`;
+  const graph = view.graph === null ? '图未记录' : `G${view.graph.generation ?? '?'} v${view.graph.graphVersion}`;
+  const budget = view.budgets.length === 0 ? '预算未记录' : `${view.budgets[0]!.budgetKey} 已用 ${view.budgets[0]!.consumed}`;
+  const optional = slot === 'graph' ? graph : slot === 'budget' ? budget : `rev ${view.scope.revision}`;
+  return { top, summary: truncateToDisplayWidth(summary, lineWidth), optional, alerts: alertLines(view, topWidth) };
+}
+
+export function StatuslinePrototype(props: Props) {
+  const size = useWindowSize();
+  const columns = size.columns || props.terminalWidth;
+  const rows = size.rows || 40;
+  const density = allowedSidebarDensity(columns);
+  const width = bodyWidth(columns, density);
+  const [scene, setScene] = useState<Scene>(props.initialScene);
+  const [variant, setVariant] = useState<Variant>(props.initialVariant);
+  const [slot, setSlot] = useState<Slot>('graph');
+  const [notice, setNotice] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const view = projectTuiViewModel({
+    snapshot: props.snapshots[scene], transcript: projectTranscriptPage(null, { coordinatorSessionId: 'session-long-中文规划-2026' }),
+    selectedSessionId: 'session-long-中文规划-2026',
+    unreadSessionIds: [], includeGraphNodes: density !== 'collapsed' || detailsOpen,
+  });
+  const active = chrome(view, scene, slot, columns, width);
+  const selectedInteractions = view.interactions.filter((item) => item.state === 'open' && item.ownerCoordinatorSessionId === view.selectedSessionId);
+  const summary = notice ?? active.summary;
+  const status = variant === 'custom' && notice === null
+    ? fitSegments([summary, active.optional], width) : summary;
+  const fit = (value: string, available = width) => truncateToDisplayWidth(value, Math.max(1, available));
+
+  useInput((input, key) => {
+    if (key.ctrl && input === 'c') props.onExit();
+    else if (key.ctrl && input === 'b') setDetailsOpen((current) => !current);
+    else if (key.escape && detailsOpen) setDetailsOpen(false);
+    else if (input === '1' || input === '2' || input === '3') setVariant(variants[Number(input) - 1]!);
+    else if (input === 'm') setScene((current) => scenes[(scenes.indexOf(current) + 1) % scenes.length]!);
+    else if (input === 's') setSlot((current) => slots[(slots.indexOf(current) + 1) % slots.length]!);
+    else if (input === 'n') setNotice((current) => current === null ? '结果未知 · 等待对账 · 详情在事件抽屉' : null);
+  });
+
+  return (
+    <ThemeProvider theme={tuiTheme}>
+      {detailsOpen ? (
+        <Box flexDirection="column" height={rows}>
+          <Text color={tuiColors.focus} bold>{fit('Scope 详情 · Esc / Ctrl+B 返回', columns)}</Text>
+          <Text>{fit(`仓库/分支 ${sampleRepository}`, columns)}</Text>
+          {wrapByDisplayWidth(`Scope ${view.scope.coordinationScopeId}`, columns).map((line, index) => <Text key={`scope-${index}`}>{line}</Text>)}
+          {wrapByDisplayWidth(`Session ${view.selectedSessionId ?? '无'}`, columns).map((line, index) => <Text key={`session-${index}`}>{line}</Text>)}
+          {wrapByDisplayWidth(`执行持有者 ${view.scope.executionLeaseHolderSessionId ?? '无'}`, columns).map((line, index) => <Text key={`holder-${index}`}>{line}</Text>)}
+          <Text>{fit(`模式 ${view.scope.mode}`, columns)}</Text>
+          <Text>{fit(`控制 ${view.scope.controlState} · revision ${view.scope.revision}`, columns)}</Text>
+          <Text color={tuiColors.warning}>{fit(`阻塞 ${view.blockers.length} · 对账 ${view.execution.reconciliation.pending ? '待完成' : '无'}`, columns)}</Text>
+          {view.blockers.map((item, index) => <Text key={index}>{fit(`! ${item.message}`, columns)}</Text>)}
+          <Text>{fit(`图 ${view.graph === null ? '未记录' : `${view.graph.graphId} · G${view.graph.generation ?? '?'} v${view.graph.graphVersion}`}`, columns)}</Text>
+          {(view.graph?.nodes ?? []).slice(0, 6).map((node) => <Text key={node.workPackageId}>{fit(`  ${node.workPackageId} ${node.state} · ${node.liveness ?? '未知'}`, columns)}</Text>)}
+          <Text>{fit(`授权 ${view.scope.authorization === null ? '未记录' : `v${view.scope.authorization.version}`}`, columns)}</Text>
+          {view.budgets.map((item) => <Text key={item.budgetKey}>{fit(`预算 ${item.budgetKey} 已用 ${item.consumed}`, columns)}</Text>)}
+          {view.budgets.map((item) => <Text key={`${item.budgetKey}-limit`}>{fit(`  上限引用 ${item.approvedLimitRef}`, columns)}</Text>)}
+          <Text>{fit(`待答 ${view.interactions.filter((item) => item.state === 'open').length}`, columns)}</Text>
+          {view.interactions.filter((item) => item.state === 'open').flatMap((item) =>
+            wrapByDisplayWidth(`  ${shortSession(item.ownerCoordinatorSessionId)} · ${sampleQuestions[item.interactionId] ?? item.subjectRef.id}`, columns)
+              .map((line, index) => <Text key={`${item.interactionId}-${index}`}>{line}</Text>))}
+        </Box>
+      ) : (
+      <Box flexDirection="column" height={rows}>
+        {variant === 'current' ? (
+          <TopBar coordinationScopeId={view.scope.coordinationScopeId} mode={view.scope.mode} controlState={view.scope.controlState}
+            graphLabel={view.graph === null ? null : `${view.graph.graphId} v${view.graph.graphVersion}`}
+            generation={view.graph?.generation ?? null} authorizationLabel={view.scope.authorization?.authorizationId ?? null}
+            activeWorkPackageCount={view.execution.activeWorkPackageCount} reconciling={view.execution.reconciliation.pending}
+            availableWidth={columns} />
+        ) : (
+          <Box flexDirection="column" borderStyle="single" borderTop={false} borderLeft={false} borderRight={false} borderColor={tuiColors.border}>
+            <Text color={tuiColors.accent} bold>{fit(active.top, columns)}</Text>
+            {active.alerts.map((line, index) => <Text key={index} color={tuiColors.warning} bold>{fit(line, columns)}</Text>)}
+          </Box>
+        )}
+        <Box flexDirection="row" flexGrow={1}>
+          <Box flexDirection="column" width={width} flexGrow={1}>
+            <Box flexDirection="column" flexGrow={1} overflowY="hidden" paddingTop={rows < 30 ? 0 : 1}>
+              <Text color={tuiColors.muted}>{fit('用户  请检查当前范围，确认下一步。')}</Text>
+              <Text>{fit('● Coordinator  已整理当前进度与需要你处理的事项。')}</Text>
+              <Text color={tuiColors.muted}>{fit('▸ read_scope  ·  已折叠')}</Text>
+            </Box>
+            {selectedInteractions.length === 0 ? null : (
+              <Box flexDirection="column" borderStyle="single" borderTop={false} borderBottom={false} borderRight={false} borderColor={tuiColors.warning} paddingLeft={1}>
+                <Text color={tuiColors.warning} bold>{fit(`待答 · ${selectedInteractions[0]!.subjectRef.id}${selectedInteractions.length > 1 ? ` · 另有 ${selectedInteractions.length - 1} 条` : ''}`, width - 2)}</Text>
+                {wrapByDisplayWidth(sampleQuestions[selectedInteractions[0]!.interactionId] ?? '问题正文待补', Math.max(1, width - 3))
+                  .slice(0, 3).map((line, index) => <Text key={index}>{line}</Text>)}
+                <Text dimColor>{fit('Ctrl+B 查看全部 · 回答绑定当前问题', width - 2)}</Text>
+              </Box>
+            )}
+            <Box borderStyle="round" borderColor={tuiColors.focus} paddingX={1}>
+              <Text>{fit('›  输入消息…', width - 4)}</Text>
+            </Box>
+            {variant === 'current' ? (
+              <StatusLine scope={view.scope} compaction={view.compaction} maintenance={view.maintenance}
+                blockerCount={view.blockers.length} notice={notice} sidebarDensity={density}
+                execution={view.execution} availableWidth={width} />
+            ) : (
+              <Text color={notice === null ? tuiColors.muted : tuiColors.warning}>{fit(status)}</Text>
+            )}
+          </Box>
+          {density === 'collapsed' ? null : density === 'full' ? <Sidebar density={density} viewModel={view} terminalWidth={columns} /> : (
+            <Box flexDirection="column" width={sidebarWidthFor(density) + 2} borderStyle="single" borderTop={false} borderBottom={false} borderRight={false} borderColor={tuiColors.border}>
+              <Text bold>{fit(`当前 ${view.execution.activeWorkPackageId ?? '无'}`, 24)}</Text>
+              <Text>{fit(`Worker ${view.graph?.frontier.find((item) => item.workPackageId === view.execution.activeWorkPackageId)?.liveness ?? '未知'}`, 24)}</Text>
+              {view.blockers.slice(0, 2).map((item, index) => <Text key={index} color={tuiColors.warning}>{fit(`! ${item.message}`, 24)}</Text>)}
+              <Text dimColor>{fit('依赖图摘要', 24)}</Text>
+              {compactGraphLines(view, 24).slice(0, 4).map((line, index) => <Text key={index}>{line}</Text>)}
+              <Text dimColor>{fit('Ctrl+B 完整详情', 24)}</Text>
+            </Box>
+          )}
+        </Box>
+        <Text color={tuiColors.focus} inverse>{fit(columns < 60
+          ? ` #48 ${variant === 'current' ? '现有' : variant === 'fixed' ? '固定' : '自选'}  1/2/3 M场景 S字段 N通知 ^B详情`
+          : columns < 110
+          ? ` #48 ${variant}/${scene}  1/2/3  M场景 S字段 N通知 ^B详情`
+          : ` #48  1 现有  2 固定优先级  3 有限自选  ·  M 场景:${scene}  S 字段:${slot}  N 通知  Ctrl+B 详情  Ctrl+C 退出`, columns)}</Text>
+      </Box>
+      )}
+    </ThemeProvider>
+  );
+}

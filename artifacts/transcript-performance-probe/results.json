@@ -1,0 +1,387 @@
+{
+  "scope": "Scratch SQLite primitives and source-text layout only; not a product implementation or PTY verdict.",
+  "node": "v24.12.0",
+  "marked": "17.0.1",
+  "widths": [
+    120,
+    80,
+    50
+  ],
+  "viewportRows": 20,
+  "sqliteSynchronous": "FULL",
+  "sqliteJournal": "WAL",
+  "pageEntries": 100,
+  "rangeBytes": 16384,
+  "peakProcessRssMiB": 1926.171875,
+  "results": [
+    {
+      "kind": "history",
+      "entries": 1000,
+      "serializedBytes": 787680,
+      "blobTailRead": {
+        "medianMs": 6.503553000000011,
+        "maxMs": 8.261154000000033,
+        "samples": 5
+      },
+      "indexedTailRead": {
+        "medianMs": 0.5330060000000003,
+        "maxMs": 0.562328999999977,
+        "samples": 5
+      },
+      "indexedBeginningRead": {
+        "medianMs": 0.5396899999999505,
+        "maxMs": 0.5976510000000417,
+        "samples": 5
+      },
+      "indexedActiveContextRead": {
+        "medianMs": 2.3391149999999925,
+        "maxMs": 2.725377999999978,
+        "samples": 5
+      },
+      "metadataRead": {
+        "medianMs": 0.08275900000001002,
+        "maxMs": 0.09202300000004016,
+        "samples": 5
+      },
+      "pageBytes": 74201,
+      "layout": [
+        {
+          "width": 120,
+          "visitedEntries": 3,
+          "baseline": {
+            "medianMs": 4.138679000000025,
+            "maxMs": 10.434825000000046,
+            "samples": 5
+          },
+          "local": {
+            "medianMs": 0.045183999999949265,
+            "maxMs": 0.06173999999998614,
+            "samples": 5
+          }
+        },
+        {
+          "width": 80,
+          "visitedEntries": 3,
+          "baseline": {
+            "medianMs": 4.5980409999999665,
+            "maxMs": 6.158465999999976,
+            "samples": 5
+          },
+          "local": {
+            "medianMs": 0.04843500000004042,
+            "maxMs": 0.05292900000006284,
+            "samples": 5
+          }
+        },
+        {
+          "width": 50,
+          "visitedEntries": 2,
+          "baseline": {
+            "medianMs": 4.597718999999984,
+            "maxMs": 5.959086999999954,
+            "samples": 5
+          },
+          "local": {
+            "medianMs": 0.031942999999955646,
+            "maxMs": 0.03305899999998019,
+            "samples": 5
+          }
+        }
+      ],
+      "blobAppend": {
+        "medianMs": 45.173208000000045,
+        "maxMs": 98.78130599999997,
+        "samples": 5
+      },
+      "indexedAppend": {
+        "medianMs": 13.853768000000173,
+        "maxMs": 31.52142200000003,
+        "samples": 5
+      }
+    },
+    {
+      "kind": "history",
+      "entries": 10000,
+      "serializedBytes": 7906683,
+      "blobTailRead": {
+        "medianMs": 75.32233099999985,
+        "maxMs": 91.92945299999997,
+        "samples": 5
+      },
+      "indexedTailRead": {
+        "medianMs": 0.6487590000001546,
+        "maxMs": 0.6552280000000792,
+        "samples": 5
+      },
+      "indexedBeginningRead": {
+        "medianMs": 0.6351979999999458,
+        "maxMs": 0.6417240000000675,
+        "samples": 5
+      },
+      "indexedActiveContextRead": {
+        "medianMs": 3.4008199999998396,
+        "maxMs": 3.6173939999998765,
+        "samples": 5
+      },
+      "metadataRead": {
+        "medianMs": 0.10794200000009369,
+        "maxMs": 0.11587499999995998,
+        "samples": 5
+      },
+      "pageBytes": 74301,
+      "layout": [
+        {
+          "width": 120,
+          "visitedEntries": 3,
+          "baseline": {
+            "medianMs": 3.5511999999998807,
+            "maxMs": 3.677110999999968,
+            "samples": 5
+          },
+          "local": {
+            "medianMs": 0.05291200000010576,
+            "maxMs": 0.05392799999981435,
+            "samples": 5
+          }
+        },
+        {
+          "width": 80,
+          "visitedEntries": 3,
+          "baseline": {
+            "medianMs": 4.3932420000001,
+            "maxMs": 6.228579000000082,
+            "samples": 5
+          },
+          "local": {
+            "medianMs": 0.07006099999989601,
+            "maxMs": 0.07914400000026944,
+            "samples": 5
+          }
+        },
+        {
+          "width": 50,
+          "visitedEntries": 2,
+          "baseline": {
+            "medianMs": 4.428920999999718,
+            "maxMs": 5.189554000000044,
+            "samples": 5
+          },
+          "local": {
+            "medianMs": 0.06624600000031933,
+            "maxMs": 0.08457200000020748,
+            "samples": 5
+          }
+        }
+      ],
+      "blobAppend": {
+        "medianMs": 322.43782599999986,
+        "maxMs": 368.56445699999995,
+        "samples": 5
+      },
+      "indexedAppend": {
+        "medianMs": 23.930585999999494,
+        "maxMs": 28.849600999999893,
+        "samples": 5
+      }
+    },
+    {
+      "kind": "history",
+      "entries": 100000,
+      "serializedBytes": 79366686,
+      "blobTailRead": {
+        "medianMs": 688.3117880000009,
+        "maxMs": 702.848383999999,
+        "samples": 5
+      },
+      "indexedTailRead": {
+        "medianMs": 0.47010299999965355,
+        "maxMs": 0.4810429999997723,
+        "samples": 5
+      },
+      "indexedBeginningRead": {
+        "medianMs": 0.4678860000003624,
+        "maxMs": 0.4838919999983773,
+        "samples": 5
+      },
+      "indexedActiveContextRead": {
+        "medianMs": 2.287685999999667,
+        "maxMs": 2.293078999999125,
+        "samples": 5
+      },
+      "metadataRead": {
+        "medianMs": 0.07762600000023667,
+        "maxMs": 0.07881799999995565,
+        "samples": 5
+      },
+      "pageBytes": 74401,
+      "layout": [
+        {
+          "width": 120,
+          "visitedEntries": 3,
+          "baseline": {
+            "medianMs": 2.7700519999998505,
+            "maxMs": 5.351588999999876,
+            "samples": 5
+          },
+          "local": {
+            "medianMs": 0.04407300000093528,
+            "maxMs": 0.04471600000033504,
+            "samples": 5
+          }
+        },
+        {
+          "width": 80,
+          "visitedEntries": 3,
+          "baseline": {
+            "medianMs": 3.0397459999985585,
+            "maxMs": 3.098735999999917,
+            "samples": 5
+          },
+          "local": {
+            "medianMs": 0.04838199999903736,
+            "maxMs": 0.053456999999980326,
+            "samples": 5
+          }
+        },
+        {
+          "width": 50,
+          "visitedEntries": 2,
+          "baseline": {
+            "medianMs": 2.988683999999921,
+            "maxMs": 3.0018439999985276,
+            "samples": 5
+          },
+          "local": {
+            "medianMs": 0.030823000000964385,
+            "maxMs": 0.032451000000946806,
+            "samples": 5
+          }
+        }
+      ],
+      "blobAppend": {
+        "medianMs": 2854.3667330000007,
+        "maxMs": 2966.256018,
+        "samples": 5
+      },
+      "indexedAppend": {
+        "medianMs": 12.755967000000965,
+        "maxMs": 17.59868500000084,
+        "samples": 5
+      }
+    },
+    {
+      "kind": "long-code",
+      "bytes": 1048648,
+      "parts": 65,
+      "rangeBytes": 16384,
+      "wholeMarkdownLex": {
+        "medianMs": 2.4633749999993597,
+        "maxMs": 3.0427960000015446,
+        "samples": 5
+      },
+      "rangeRead": {
+        "medianMs": 0.013470999998389743,
+        "maxMs": 0.015490999998291954,
+        "samples": 5
+      },
+      "layout": [
+        {
+          "width": 120,
+          "whole": {
+            "medianMs": 51.224097000002075,
+            "maxMs": 72.17895200000203,
+            "samples": 5
+          },
+          "range": {
+            "medianMs": 0.5726770000001125,
+            "maxMs": 0.7626909999999043,
+            "samples": 5
+          }
+        },
+        {
+          "width": 80,
+          "whole": {
+            "medianMs": 38.836285000001226,
+            "maxMs": 52.21626300000207,
+            "samples": 5
+          },
+          "range": {
+            "medianMs": 0.45437999999921885,
+            "maxMs": 0.45983200000046054,
+            "samples": 5
+          }
+        },
+        {
+          "width": 50,
+          "whole": {
+            "medianMs": 37.292310000000725,
+            "maxMs": 47.39454399999886,
+            "samples": 5
+          },
+          "range": {
+            "medianMs": 0.44564600000012433,
+            "maxMs": 0.45161300000108895,
+            "samples": 5
+          }
+        }
+      ]
+    },
+    {
+      "kind": "long-code",
+      "bytes": 5242948,
+      "parts": 321,
+      "rangeBytes": 16384,
+      "wholeMarkdownLex": {
+        "medianMs": 11.184698999997636,
+        "maxMs": 11.316995000001043,
+        "samples": 5
+      },
+      "rangeRead": {
+        "medianMs": 0.01861800000187941,
+        "maxMs": 0.023346000001765788,
+        "samples": 5
+      },
+      "layout": [
+        {
+          "width": 120,
+          "whole": {
+            "medianMs": 291.99948199999926,
+            "maxMs": 324.85461999999825,
+            "samples": 5
+          },
+          "range": {
+            "medianMs": 0.5406039999943459,
+            "maxMs": 0.5502110000015819,
+            "samples": 5
+          }
+        },
+        {
+          "width": 80,
+          "whole": {
+            "medianMs": 274.0998780000009,
+            "maxMs": 320.69894300000306,
+            "samples": 5
+          },
+          "range": {
+            "medianMs": 0.45022099999914644,
+            "maxMs": 0.45762200000172015,
+            "samples": 5
+          }
+        },
+        {
+          "width": 50,
+          "whole": {
+            "medianMs": 295.53503899999487,
+            "maxMs": 409.37320300000283,
+            "samples": 5
+          },
+          "range": {
+            "medianMs": 0.545696000001044,
+            "maxMs": 26.70926099999633,
+            "samples": 5
+          }
+        }
+      ]
+    }
+  ]
+}

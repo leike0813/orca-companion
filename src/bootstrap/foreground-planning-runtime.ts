@@ -5,7 +5,7 @@
  * 这里是**唯一**的生产装配点：读取版本化项目配置、核验 Git/Orca/tracker/模型、打开可写的
  * Branch Coordination State 与会话 checkpoint、按需为一个 Coordinator Session 取得 Runtime Lease
  * 并续约，然后把用户消息、会话维护、模型切换与规划交接接到既有的应用用例上。界面只经它拿到
- * `TuiPorts`，永远看不到 store、backend 或 writer 身份。
+ * `TuiPorts` 和 IC-13 输入端口；业务 store、backend 与 writer 身份留在宿主。
  *
  * 三条硬边界：
  * - **写入者身份来自 lease**：每个命令与每个图节点在写入前都回读 Runtime Lease 并核验 fencing；
@@ -45,6 +45,9 @@ import {
   type AdvanceRoleDispatch,
 } from '../application/execution/advance-execution.js';
 import { answerPendingInteraction } from '../application/coordination/pending-interaction.js';
+import { querySubmission, type SubmissionQuery, type SubmissionStatus } from '../application/coordinator/submission-status.js';
+import type { UiInputStore, UiInputRecord } from '../application/ports/ui-input-store.js';
+import { openUiInputStore } from '../adapters/storage/ui-input-store.js';
 import { requestSessionCompaction } from '../application/coordinator/compact-session.js';
 import {
   assertSwitchable,
@@ -832,6 +835,17 @@ export async function createForegroundPlanningHost(
     blocker = { code: 'store_unavailable', message: storeOpened.message };
   }
   const store: BranchCoordinationStore | null = storeOpened !== null && storeOpened.kind === 'opened' ? storeOpened.store : null;
+
+  const uiOpened = commonDirPath === null ? null : openUiInputStore({
+    databasePath: join(commonDirPath, COMPANION_STATE_DIRECTORY, 'ui.sqlite'),
+  });
+  const uiFailure = {
+    kind: 'failed' as const, code: 'ui_store_unavailable',
+    message: uiOpened?.kind === 'failed' ? uiOpened.message : '无法定位 UI 输入存储',
+  };
+  const inputStore: UiInputStore = uiOpened?.kind === 'opened' ? uiOpened.store : {
+    read: () => uiFailure, list: () => uiFailure, write: () => uiFailure, remove: () => uiFailure,
+  };
 
   let selectedScopeId: CoordinationScopeId | null = null;
   let scopeCheckpointStore: CheckpointStore | null = null;
@@ -2090,6 +2104,9 @@ export async function createForegroundPlanningHost(
     readonly submissionId: string;
     readonly content: string;
   }): Promise<ControllerCommandResult> => {
+    if (typeof input.submissionId !== 'string' || input.submissionId.length === 0) {
+      return rejected('invalid_submission', '提交必须携带稳定 submissionId');
+    }
     const ensured = await ensureLiveSession(input.coordinatorSessionId);
     if (ensured.kind === 'failed') {
       return rejected(ensured.code, ensured.message);
@@ -2108,7 +2125,10 @@ export async function createForegroundPlanningHost(
       case 'rejected':
         return rejected(result.code, result.message);
       case 'blocked':
-        return rejected('checkpoint_unrecoverable', result.reason);
+        return {
+          kind: 'unknown', code: 'checkpoint_unrecoverable',
+          message: result.reason,
+        };
       default: {
         publish(session.coordinatorSessionId, {
           kind: 'state-changed',
@@ -2281,11 +2301,15 @@ export async function createForegroundPlanningHost(
   };
 
   const pendingInteractionAnswer = async (input: {
+    readonly submissionId: string;
     readonly interactionId: InteractionId;
     readonly expectedRevision: number;
     readonly answer: string;
     readonly ownerCoordinatorSessionId: CoordinatorSessionId;
   }): Promise<ControllerCommandResult> => {
+    if (typeof input.submissionId !== 'string' || input.submissionId.length === 0) {
+      return rejected('invalid_submission', '提交必须携带稳定 submissionId');
+    }
     const ensured = await ensureLiveSession(input.ownerCoordinatorSessionId);
     if (ensured.kind === 'failed') {
       return rejected(ensured.code, ensured.message);
@@ -2296,6 +2320,7 @@ export async function createForegroundPlanningHost(
       coordinationScopeId: session.incarnation.coordinationScopeId,
       writer: writerFor(session.incarnation),
       interactionId: input.interactionId,
+      submissionId: input.submissionId,
       expectedRevision: input.expectedRevision,
       answer: input.answer,
     });
@@ -2684,7 +2709,7 @@ export async function createForegroundPlanningHost(
       case 'send-session-message':
         return await sessionMessages({
           coordinatorSessionId: intent.coordinatorSessionId as CoordinatorSessionId,
-          submissionId: newId(),
+          submissionId: intent.submissionId,
           content: intent.content,
         });
       case 'answer-pending-interaction': {
@@ -2692,7 +2717,11 @@ export async function createForegroundPlanningHost(
         if (owner === null) {
           return rejected('not_found', `Pending Interaction ${intent.interactionId} 不在当前 Scope`);
         }
+        if (owner !== intent.coordinatorSessionId) {
+          return rejected('owner_mismatch', '回答绑定的 Session 与问题 owner 不一致');
+        }
         return await pendingInteractionAnswer({
+          submissionId: intent.submissionId,
           interactionId: intent.interactionId as InteractionId,
           expectedRevision: intent.expectedRevision,
           answer: intent.answer,
@@ -7148,7 +7177,24 @@ export async function createForegroundPlanningHost(
     },
   };
 
+  const submissionStatus = (query: SubmissionQuery): Promise<SubmissionStatus> => {
+    const current = requireStore();
+    const checkpoints = checkpointStoreForScope();
+    if (current === null || selectedScopeId === null || checkpoints === null) {
+      return Promise.resolve({ kind: 'unverifiable', reason: '提交的权威记录不可读取' });
+    }
+    return Promise.resolve(querySubmission({
+      store: current, checkpoints, coordinationScopeId: selectedScopeId, input: query,
+    }));
+  };
+
   const controller = createControllerService({
+    submissionStatus: async (input) => {
+      if (input.coordinationScopeId !== selectedScopeId) {
+        return { kind: 'unverifiable', reason: '提交核验 Scope 与当前宿主不匹配' };
+      }
+      return await submissionStatus(input.query);
+    },
     snapshots: async ({ coordinationScopeId, selectedSessionId }) => {
       void coordinationScopeId;
       const loaded = await readSnapshot(selectedSessionId);
@@ -7217,6 +7263,7 @@ export async function createForegroundPlanningHost(
         return rejected('not_found', `Pending Interaction ${input.interactionId} 不在当前 Scope`);
       }
       return await pendingInteractionAnswer({
+        submissionId: input.submissionId,
         interactionId: input.interactionId,
         expectedRevision: input.expectedRevision,
         answer: input.answer,
@@ -7273,6 +7320,8 @@ export async function createForegroundPlanningHost(
   });
 
   const ports: TuiPorts = {
+    inputStore,
+    submissionStatus,
     snapshot: async (selectedSessionId) => await readSnapshot(selectedSessionId),
     transcript: (coordinatorSessionId) => Promise.resolve(readTranscript(coordinatorSessionId)),
     execute: async (intent) => await execute(intent),
@@ -7288,6 +7337,21 @@ export async function createForegroundPlanningHost(
     executionHandoff: executionHandoffPort,
     executionAuthorization: executionAuthorizationPort,
   };
+
+  // 恢复清理由宿主生命周期拥有，不在 React 挂载、重绘或 effect 中执行。
+  resolveHome();
+  if (selectedScopeId !== null) {
+    const pending = inputStore.list(selectedScopeId);
+    if (pending.kind === 'records') {
+      for (const record of pending.records) {
+        if (record.kind !== 'submission') continue;
+        const status = await submissionStatus(submissionQueryFor(record));
+        if (status.kind === 'accepted') {
+          inputStore.remove({ key: record.key, expectedRevision: record.revision });
+        }
+      }
+    }
+  }
 
   return {
     ports,
@@ -7307,6 +7371,7 @@ export async function createForegroundPlanningHost(
       liveSessions.clear();
       listeners.clear();
       scopeCheckpointStore?.close();
+      if (uiOpened?.kind === 'opened') uiOpened.store.close();
       if (storeOpened !== null && storeOpened.kind === 'opened') {
         storeOpened.close();
       }
@@ -7322,4 +7387,16 @@ export function createForegroundPlanningPorts(
     repositoryPath: environment.cwd,
     env: environment.env,
   }).then((host) => host.ports);
+}
+
+function submissionQueryFor(record: Extract<UiInputRecord, { kind: 'submission' }>): SubmissionQuery {
+  const common = {
+    coordinatorSessionId: record.target.coordinatorSessionId,
+    submissionId: record.submissionId,
+    content: record.draft.text,
+  };
+  return record.target.kind === 'message'
+    ? { kind: 'message', ...common }
+    : { kind: 'answer', ...common, interactionId: record.target.interactionId,
+        expectedRevision: record.target.expectedRevision };
 }

@@ -58,6 +58,9 @@ export function confirmationPrompt(
   }
   const reasons = hazardReasons(hazards);
   const detail = reasons.length === 0 ? '没有危险态' : reasons.join('、');
+  if (pending.kind === 'exit-discard') {
+    return `未保存的输入写入失败，仍要退出并丢弃这些输入？(${detail}) `;
+  }
   return pending.kind === 'cancel'
     ? `确认 Cancel 整个 Coordination Scope？(${detail}) `
     : `确认退出前台进程？Scope 不会进入暂停或取消。(${detail}) `;

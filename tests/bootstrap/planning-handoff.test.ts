@@ -197,6 +197,7 @@ async function startHandoffHarness(options: { readonly withSourceHistory: boolea
     // Source 产生真实已提交历史：这是 Capsule 能被派生出来的前提。
     await host.ports.execute({
       kind: 'send-session-message',
+      submissionId: globalThis.crypto.randomUUID(),
       coordinatorSessionId: source,
       content: '先读一遍 Route Map',
     });

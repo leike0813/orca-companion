@@ -27,6 +27,8 @@ import type {
   CoordinatorSessionId,
 } from '../../application/dto/identity.js';
 import type {
+  AppendModelStepInput,
+  AppendToolResultInput,
   CheckpointRecoveryRead,
   CheckpointWriteResult,
   UserMessageCommitInput,
@@ -156,6 +158,18 @@ export type CheckpointStore = {
    */
   commitUserMessage(input: UserMessageCommitInput): UserMessageCommitResult;
 
+  /**
+   * 从最新已提交状态追加一次模型响应（IC-04 的 checkpoint 侧 seam）。
+   *
+   * 与 `saveCheckpoint` 的区别在基准：写入前重新读取该 Session 最新已提交状态再追加，因此等待模型
+   * 返回期间受理的用户消息不会被旧快照覆盖。同一 `stepId` 重复追加不产生第二条记录，幂等返回
+   * `saved`；身份相同但内容不同返回 `failed`。
+   */
+  appendModelStep(input: AppendModelStepInput): CheckpointWriteResult;
+
+  /** 从最新已提交状态追加一条工具结果条目；同一 `entryId` 重复追加不产生第二条记录。 */
+  appendToolResult(input: AppendToolResultInput): CheckpointWriteResult;
+
   close(): void;
 };
 
@@ -195,6 +209,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stepIndexById(steps: readonly CommittedModelStep[]): ReadonlyMap<string, number> {
   return new Map(steps.map((step, index) => [step.stepId, index]));
+}
+
+/**
+ * 稳定身份相同即视为同一条记录：忽略只在本地重算、不构成语义的字段（提交时间与 usage 观察）。
+ * 重放时若时间戳不同就判为冲突，会把一次幂等重放误报成损坏。
+ */
+function sameModelStep(existing: CommittedModelStep, incoming: CommittedModelStep): boolean {
+  return (
+    existing.entryId === incoming.entryId &&
+    JSON.stringify(existing.messages) === JSON.stringify(incoming.messages) &&
+    JSON.stringify(existing.toolCalls) === JSON.stringify(incoming.toolCalls)
+  );
+}
+
+/** 已提交条目逐字比较：稳定身份相同、内容必须一致才算幂等重放。 */
+function sameEntry(existing: CommittedMessageEntry, incoming: CommittedMessageEntry): boolean {
+  return JSON.stringify(existing) === JSON.stringify(incoming);
 }
 
 /**
@@ -423,6 +454,125 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
     }
   }
 
+  /**
+   * 读-改-写必须落在同一个写事务里。
+   *
+   * 两个连接各自「读最新 core → 写回」时，后写的会把先写的覆盖掉。`BEGIN IMMEDIATE` 先取得写锁，
+   * 事务内读到的因此就是最新已提交状态，并发追加之间不会互相丢写。
+   */
+  function appendAtomically<T>(work: () => T): T {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const value = work();
+      db.exec('COMMIT');
+      return value;
+    } catch (error) {
+      try {
+        db.exec('ROLLBACK');
+      } catch {
+        // 事务已不可用；以原始失败为准。
+      }
+      throw error;
+    }
+  }
+
+  /** 在写事务内基于最新 core 追加一次模型响应；成功与幂等重放都返回 `saved`。 */
+  function appendModelStepCore(input: AppendModelStepInput): CheckpointWriteResult {
+    const sessionId = input.coordinatorSessionId;
+    // 条目必须与 step 是同一条已提交消息；身份不符是调用方的编程错误，按失败报告而不是猜。
+    if (
+      input.entry.entryId !== input.step.entryId ||
+      input.entry.stepId !== input.step.stepId ||
+      input.entry.role !== 'assistant'
+    ) {
+      return {
+        kind: 'failed',
+        message: `模型响应 ${input.step.stepId} 与其条目身份不一致（entryId/stepId/role 必须匹配）`,
+      };
+    }
+    const current = loadCheckpoint(sessionId);
+    if (current.kind === 'unrecoverable') {
+      return { kind: 'failed', message: current.reason };
+    }
+    if (current.kind === 'absent') {
+      return { kind: 'failed', message: `Session ${sessionId} 还没有会话记录，无法追加模型响应` };
+    }
+    const core = coreOf(current.state);
+    const existingStep = core.committedModelSteps.find((step) => step.stepId === input.step.stepId);
+    const existingEntry = core.committedMessages.find((entry) => entry.entryId === input.entry.entryId);
+    if (existingStep !== undefined || existingEntry !== undefined) {
+      // 重放：step 与它对应的已提交条目都必须逐字一致，否则是同身份不同内容。
+      if (existingStep === undefined || existingEntry === undefined) {
+        return { kind: 'failed', message: `stepId ${input.step.stepId} 的已提交历史不完整` };
+      }
+      return sameModelStep(existingStep, input.step) && sameEntry(existingEntry, input.entry)
+        ? { kind: 'saved' }
+        : {
+            kind: 'failed',
+            message: `stepId ${input.step.stepId} 或条目 ${input.entry.entryId} 已存在且内容不同`,
+          };
+    }
+    const next: CoordinatorSessionState = {
+      ...core,
+      graphPosition: input.graphPosition,
+      committedMessages: [...core.committedMessages, input.entry],
+      committedModelSteps: [...core.committedModelSteps, input.step],
+    };
+    const parsed = parseCoordinatorSessionState(next);
+    if (!parsed.ok) {
+      return { kind: 'failed', message: `${parsed.field}: ${parsed.message}` };
+    }
+    const written = saveCore(parsed.value);
+    if (written.kind === 'failed') {
+      return written;
+    }
+    const reloaded = loadCheckpoint(sessionId);
+    if (reloaded.kind !== 'recovered') {
+      return { kind: 'failed', message: '追加模型响应后无法读回会话状态' };
+    }
+    return { kind: 'saved' };
+  }
+
+  /** 在写事务内基于最新 core 追加一条工具结果条目。 */
+  function appendToolResultCore(input: AppendToolResultInput): CheckpointWriteResult {
+    const sessionId = input.coordinatorSessionId;
+    if (input.entry.role !== 'tool') {
+      return { kind: 'failed', message: `工具结果条目 ${input.entry.entryId} 的 role 不是 tool` };
+    }
+    const current = loadCheckpoint(sessionId);
+    if (current.kind === 'unrecoverable') {
+      return { kind: 'failed', message: current.reason };
+    }
+    if (current.kind === 'absent') {
+      return { kind: 'failed', message: `Session ${sessionId} 还没有会话记录，无法追加工具结果` };
+    }
+    const core = coreOf(current.state);
+    const existing = core.committedMessages.find((entry) => entry.entryId === input.entry.entryId);
+    if (existing !== undefined) {
+      return sameEntry(existing, input.entry)
+        ? { kind: 'saved' }
+        : { kind: 'failed', message: `已提交条目 ${input.entry.entryId} 已存在且内容不同` };
+    }
+    const next: CoordinatorSessionState = {
+      ...core,
+      graphPosition: input.graphPosition,
+      committedMessages: [...core.committedMessages, input.entry],
+    };
+    const parsed = parseCoordinatorSessionState(next);
+    if (!parsed.ok) {
+      return { kind: 'failed', message: `${parsed.field}: ${parsed.message}` };
+    }
+    const written = saveCore(parsed.value);
+    if (written.kind === 'failed') {
+      return written;
+    }
+    const reloaded = loadCheckpoint(sessionId);
+    if (reloaded.kind !== 'recovered') {
+      return { kind: 'failed', message: '追加工具结果后无法读回会话状态' };
+    }
+    return { kind: 'saved' };
+  }
+
   const store: CheckpointStore = {
     checkpointer: saver,
     loadCheckpoint,
@@ -593,6 +743,20 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
         return { kind: 'unrecoverable', reason: '用户消息写入后无法读回会话状态' };
       }
       return { kind: 'committed', state: reloaded.state };
+    },
+    appendModelStep(input) {
+      try {
+        return appendAtomically(() => appendModelStepCore(input));
+      } catch (error) {
+        return { kind: 'failed', message: describeError(error) };
+      }
+    },
+    appendToolResult(input) {
+      try {
+        return appendAtomically(() => appendToolResultCore(input));
+      } catch (error) {
+        return { kind: 'failed', message: describeError(error) };
+      }
     },
     close() {
       db.close();

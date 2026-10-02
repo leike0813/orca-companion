@@ -15,9 +15,11 @@ import {
 import {
   COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
   assistantEntryId,
+  toolResultEntryId,
   userEntryId,
   userStepId,
   type CommittedModelStep,
+  type CommittedMessageEntry,
   type CoordinatorSessionState,
   type WakeBatch,
 } from '../../src/domain/coordinator/session-state.js';
@@ -67,6 +69,11 @@ function step(stepId: string, content: string, at: number): CommittedModelStep {
     toolCalls: [],
     usage: null,
   };
+}
+
+/** 与 `step` 同身份的 Companion 持久化条目；`step.messages` 是 provider 形状，两者不能混用。 */
+function assistantEntry(stepId: string, content: string): CommittedMessageEntry {
+  return { entryId: assistantEntryId(stepId), stepId, role: 'assistant', content };
 }
 
 function sessionState(
@@ -461,4 +468,126 @@ test('重新打开同一个库时 migration 可重入，schema 版本更高时�
 test('库文件只在给定路径产生，不与 coordination.sqlite 共用', () => {
   expect(existsSync(databasePath)).toBe(true);
   expect(existsSync(join(directory, 'coordination.sqlite'))).toBe(false);
+});
+
+test('追加模型响应从最新已提交状态出发：等待期间受理的用户消息不被旧快照覆盖', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
+
+  // 模拟模型等待期间另一路写入的新用户消息（不必经过 append seam）。
+  const late = store.commitUserMessage({
+    coordinatorSessionId: SESSION_A,
+    submissionId: 'submission-late',
+    content: '等待期间的新消息',
+    wakeBatch: wakeBatch('wake-late', SESSION_A),
+  });
+  expect(late.kind).toBe('committed');
+
+  const written = store.appendModelStep({
+    coordinatorSessionId: SESSION_A,
+    graphPosition: 'model',
+    step: step('step-2', '第二次响应', 2_000),
+    entry: assistantEntry('step-2', '第二次响应'),
+  });
+  expect(written.kind).toBe('saved');
+
+  const read = store.loadCheckpoint(SESSION_A);
+  expect(read.kind).toBe('recovered');
+  if (read.kind === 'recovered') {
+    expect(read.state.committedMessages.map((entry) => entry.entryId)).toEqual([
+      userEntryId('submission-1'),
+      assistantEntryId('step-1'),
+      userEntryId('submission-late'),
+      assistantEntryId('step-2'),
+    ]);
+    expect(read.state.committedModelSteps.map((entry) => entry.stepId)).toEqual(['step-1', 'step-2']);
+    // 初始会话状态没有 batch；追加模型响应只补 step，不吞掉 concurrent 那条 batch。
+    expect(read.state.wakeBatches.map((batch) => batch.wakeBatchId)).toEqual(['wake-late']);
+  }
+});
+
+test('同一 stepId 重复追加幂等返回 saved；内容不同则失败', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
+
+  // 内容相同、提交时间不同：仍应视为同一条记录，不产生第二条 step。
+  const replay = step('step-1', '先读地图', 9_999);
+  expect(
+    store.appendModelStep({
+      coordinatorSessionId: SESSION_A,
+      graphPosition: 'model',
+      step: replay,
+      entry: assistantEntry('step-1', '先读地图'),
+    }).kind,
+  ).toBe('saved');
+  const read = store.loadCheckpoint(SESSION_A);
+  if (read.kind === 'recovered') {
+    expect(read.state.committedModelSteps).toHaveLength(1);
+    expect(read.state.committedMessages).toHaveLength(2);
+  }
+
+  const conflicting = step('step-1', '完全不同的响应', 9_999);
+  const failed = store.appendModelStep({
+    coordinatorSessionId: SESSION_A,
+    graphPosition: 'model',
+    step: conflicting,
+    entry: assistantEntry('step-1', '完全不同的响应'),
+  });
+  expect(failed.kind).toBe('failed');
+
+  // step 逐字相同、但携带的条目内容不同：稳定条目身份 + 内容不符，同样冲突。
+  const entryMismatch = store.appendModelStep({
+    coordinatorSessionId: SESSION_A,
+    graphPosition: 'model',
+    step: step('step-1', '先读地图', 9_999),
+    entry: assistantEntry('step-1', '被改过的条目内容'),
+  });
+  expect(entryMismatch.kind).toBe('failed');
+
+  // 条目身份与 step 不符：按调用方错误报告失败，不写入。
+  const mismatchedIdentity = store.appendModelStep({
+    coordinatorSessionId: SESSION_A,
+    graphPosition: 'model',
+    step: step('step-2', '第二响应', 9_999),
+    entry: assistantEntry('step-1', '第二响应'),
+  });
+  expect(mismatchedIdentity.kind).toBe('failed');
+});
+
+test('工具结果按条目身份幂等追加；内容不同则失败', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
+  const entry = {
+    entryId: toolResultEntryId('step-1', 'call-1'),
+    stepId: 'step-1',
+    role: 'tool' as const,
+    content: '{"kind":"ok"}',
+    toolCallId: 'call-1',
+    toolName: 'claim_ticket',
+  };
+  expect(
+    store.appendToolResult({ coordinatorSessionId: SESSION_A, graphPosition: 'tools', entry }).kind,
+  ).toBe('saved');
+  expect(
+    store.appendToolResult({ coordinatorSessionId: SESSION_A, graphPosition: 'tools', entry }).kind,
+  ).toBe('saved');
+  const read = store.loadCheckpoint(SESSION_A);
+  if (read.kind === 'recovered') {
+    expect(read.state.committedMessages.filter((candidate) => candidate.toolCallId === 'call-1')).toHaveLength(1);
+  }
+
+  const failed = store.appendToolResult({
+    coordinatorSessionId: SESSION_A,
+    graphPosition: 'tools',
+    entry: { ...entry, content: '{"kind":"rejected"}' },
+  });
+  expect(failed.kind).toBe('failed');
+});
+
+test('会话记录不存在时追加失败，不隐式创建会话', () => {
+  const result = store.appendModelStep({
+    coordinatorSessionId: SESSION_B,
+    graphPosition: 'model',
+    step: step('step-1', 'x', 1),
+    entry: assistantEntry('step-1', 'x'),
+  });
+  expect(result.kind).toBe('failed');
+  expect(store.loadCheckpoint(SESSION_B)).toEqual({ kind: 'absent' });
 });

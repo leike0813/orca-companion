@@ -234,7 +234,12 @@ _Avoid_: Success boolean, task result, validation verdict
 
 **Pending Interaction**:
 A durable run-time question, answer, or one-time authorization persisted in Branch Coordination State with its owning Coordinator Session, ticket or graph scope, and expected revision. Creating one does not suspend its Session or unrelated work; any UI may submit the first valid answer, but only the owning or explicitly transferred Session may consume it.
+An answer is identified by its stable submission identity and exact interaction binding; a closed interaction alone does not establish that a particular answer was accepted.
 _Avoid_: Route Map decision, Worker Profile
+
+**UI Input Record**:
+Recoverable user input belonging to one Coordination Scope and Coordinator Session, with an exact interaction and expected revision when it is an answer. It retains a draft, a conflicting copy, or a submitted snapshot awaiting authoritative verification. It does not authorize actions or establish that a message or answer has been accepted.
+_Avoid_: Coordinator history, Actionable Work, scheduling queue
 
 **Route Map**:
 The shared map of a delivery effort's destination, resolved decisions, open Decision Tickets, dependencies, fog, and scope boundaries.

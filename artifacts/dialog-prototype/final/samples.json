@@ -1,0 +1,595 @@
+{
+  "ticket": 52,
+  "capturedAt": "2026-09-30T10:06:52.497Z",
+  "renderer": "tuistory PTY + ghostty-opentui bundled JetBrainsMono Nerd Font and CJK fallback",
+  "samples": [
+    {
+      "name": "commands",
+      "columns": 120,
+      "rows": 40,
+      "png": "commands-120x40.png",
+      "text": "commands-120x40.txt"
+    },
+    {
+      "name": "sessions",
+      "columns": 120,
+      "rows": 40,
+      "png": "sessions-120x40.png",
+      "text": "sessions-120x40.txt"
+    },
+    {
+      "name": "models",
+      "columns": 120,
+      "rows": 40,
+      "png": "models-120x40.png",
+      "text": "models-120x40.txt"
+    },
+    {
+      "name": "planner-model-menu",
+      "columns": 120,
+      "rows": 40,
+      "png": "planner-model-menu-120x40.png",
+      "text": "planner-model-menu-120x40.txt"
+    },
+    {
+      "name": "planner-effort",
+      "columns": 120,
+      "rows": 40,
+      "png": "planner-effort-120x40.png",
+      "text": "planner-effort-120x40.txt"
+    },
+    {
+      "name": "authorization-overview",
+      "columns": 120,
+      "rows": 40,
+      "png": "authorization-overview-120x40.png",
+      "text": "authorization-overview-120x40.txt"
+    },
+    {
+      "name": "authorization-permissions",
+      "columns": 120,
+      "rows": 40,
+      "png": "authorization-permissions-120x40.png",
+      "text": "authorization-permissions-120x40.txt"
+    },
+    {
+      "name": "authorization-budget",
+      "columns": 120,
+      "rows": 40,
+      "png": "authorization-budget-120x40.png",
+      "text": "authorization-budget-120x40.txt"
+    },
+    {
+      "name": "authorization-scope",
+      "columns": 120,
+      "rows": 40,
+      "png": "authorization-scope-120x40.png",
+      "text": "authorization-scope-120x40.txt"
+    },
+    {
+      "name": "authorization-full",
+      "columns": 120,
+      "rows": 40,
+      "png": "authorization-full-120x40.png",
+      "text": "authorization-full-120x40.txt"
+    },
+    {
+      "name": "handoff-target",
+      "columns": 120,
+      "rows": 40,
+      "png": "handoff-target-120x40.png",
+      "text": "handoff-target-120x40.txt"
+    },
+    {
+      "name": "handoff-overview",
+      "columns": 120,
+      "rows": 40,
+      "png": "handoff-overview-120x40.png",
+      "text": "handoff-overview-120x40.txt"
+    },
+    {
+      "name": "handoff-responsibilities",
+      "columns": 120,
+      "rows": 40,
+      "png": "handoff-responsibilities-120x40.png",
+      "text": "handoff-responsibilities-120x40.txt"
+    },
+    {
+      "name": "handoff-binding",
+      "columns": 120,
+      "rows": 40,
+      "png": "handoff-binding-120x40.png",
+      "text": "handoff-binding-120x40.txt"
+    },
+    {
+      "name": "cancel-return",
+      "columns": 120,
+      "rows": 40,
+      "png": "cancel-return-120x40.png",
+      "text": "cancel-return-120x40.txt"
+    },
+    {
+      "name": "cancel-confirm",
+      "columns": 120,
+      "rows": 40,
+      "png": "cancel-confirm-120x40.png",
+      "text": "cancel-confirm-120x40.txt"
+    },
+    {
+      "name": "cancel-identity",
+      "columns": 120,
+      "rows": 40,
+      "png": "cancel-identity-120x40.png",
+      "text": "cancel-identity-120x40.txt"
+    },
+    {
+      "name": "exit",
+      "columns": 120,
+      "rows": 40,
+      "png": "exit-120x40.png",
+      "text": "exit-120x40.txt"
+    },
+    {
+      "name": "sidebar-nerd",
+      "columns": 120,
+      "rows": 40,
+      "png": "sidebar-nerd-120x40.png",
+      "text": "sidebar-nerd-120x40.txt"
+    },
+    {
+      "name": "inspector-evidence-nerd",
+      "columns": 120,
+      "rows": 40,
+      "png": "inspector-evidence-nerd-120x40.png",
+      "text": "inspector-evidence-nerd-120x40.txt"
+    },
+    {
+      "name": "inspector-scope-nerd",
+      "columns": 120,
+      "rows": 40,
+      "png": "inspector-scope-nerd-120x40.png",
+      "text": "inspector-scope-nerd-120x40.txt"
+    },
+    {
+      "name": "inspector-identity-nerd",
+      "columns": 120,
+      "rows": 40,
+      "png": "inspector-identity-nerd-120x40.png",
+      "text": "inspector-identity-nerd-120x40.txt"
+    },
+    {
+      "name": "options-nerd",
+      "columns": 120,
+      "rows": 40,
+      "png": "options-nerd-120x40.png",
+      "text": "options-nerd-120x40.txt"
+    },
+    {
+      "name": "options-ascii",
+      "columns": 120,
+      "rows": 40,
+      "png": "options-ascii-120x40.png",
+      "text": "options-ascii-120x40.txt"
+    },
+    {
+      "name": "sidebar-ascii",
+      "columns": 120,
+      "rows": 40,
+      "png": "sidebar-ascii-120x40.png",
+      "text": "sidebar-ascii-120x40.txt"
+    },
+    {
+      "name": "inspector-ascii",
+      "columns": 120,
+      "rows": 40,
+      "png": "inspector-ascii-120x40.png",
+      "text": "inspector-ascii-120x40.txt"
+    },
+    {
+      "name": "standalone-nerd",
+      "columns": 120,
+      "rows": 40,
+      "png": "standalone-nerd-120x40.png",
+      "text": "standalone-nerd-120x40.txt"
+    },
+    {
+      "name": "standalone-options",
+      "columns": 120,
+      "rows": 40,
+      "png": "standalone-options-120x40.png",
+      "text": "standalone-options-120x40.txt"
+    },
+    {
+      "name": "standalone-ascii",
+      "columns": 120,
+      "rows": 40,
+      "png": "standalone-ascii-120x40.png",
+      "text": "standalone-ascii-120x40.txt"
+    },
+    {
+      "name": "commands",
+      "columns": 80,
+      "rows": 24,
+      "png": "commands-80x24.png",
+      "text": "commands-80x24.txt"
+    },
+    {
+      "name": "sessions",
+      "columns": 80,
+      "rows": 24,
+      "png": "sessions-80x24.png",
+      "text": "sessions-80x24.txt"
+    },
+    {
+      "name": "models",
+      "columns": 80,
+      "rows": 24,
+      "png": "models-80x24.png",
+      "text": "models-80x24.txt"
+    },
+    {
+      "name": "planner-model-menu",
+      "columns": 80,
+      "rows": 24,
+      "png": "planner-model-menu-80x24.png",
+      "text": "planner-model-menu-80x24.txt"
+    },
+    {
+      "name": "planner-effort",
+      "columns": 80,
+      "rows": 24,
+      "png": "planner-effort-80x24.png",
+      "text": "planner-effort-80x24.txt"
+    },
+    {
+      "name": "authorization-overview",
+      "columns": 80,
+      "rows": 24,
+      "png": "authorization-overview-80x24.png",
+      "text": "authorization-overview-80x24.txt"
+    },
+    {
+      "name": "authorization-permissions",
+      "columns": 80,
+      "rows": 24,
+      "png": "authorization-permissions-80x24.png",
+      "text": "authorization-permissions-80x24.txt"
+    },
+    {
+      "name": "authorization-budget",
+      "columns": 80,
+      "rows": 24,
+      "png": "authorization-budget-80x24.png",
+      "text": "authorization-budget-80x24.txt"
+    },
+    {
+      "name": "authorization-scope",
+      "columns": 80,
+      "rows": 24,
+      "png": "authorization-scope-80x24.png",
+      "text": "authorization-scope-80x24.txt"
+    },
+    {
+      "name": "authorization-full",
+      "columns": 80,
+      "rows": 24,
+      "png": "authorization-full-80x24.png",
+      "text": "authorization-full-80x24.txt"
+    },
+    {
+      "name": "handoff-target",
+      "columns": 80,
+      "rows": 24,
+      "png": "handoff-target-80x24.png",
+      "text": "handoff-target-80x24.txt"
+    },
+    {
+      "name": "handoff-overview",
+      "columns": 80,
+      "rows": 24,
+      "png": "handoff-overview-80x24.png",
+      "text": "handoff-overview-80x24.txt"
+    },
+    {
+      "name": "handoff-responsibilities",
+      "columns": 80,
+      "rows": 24,
+      "png": "handoff-responsibilities-80x24.png",
+      "text": "handoff-responsibilities-80x24.txt"
+    },
+    {
+      "name": "handoff-binding",
+      "columns": 80,
+      "rows": 24,
+      "png": "handoff-binding-80x24.png",
+      "text": "handoff-binding-80x24.txt"
+    },
+    {
+      "name": "cancel-return",
+      "columns": 80,
+      "rows": 24,
+      "png": "cancel-return-80x24.png",
+      "text": "cancel-return-80x24.txt"
+    },
+    {
+      "name": "cancel-confirm",
+      "columns": 80,
+      "rows": 24,
+      "png": "cancel-confirm-80x24.png",
+      "text": "cancel-confirm-80x24.txt"
+    },
+    {
+      "name": "cancel-identity",
+      "columns": 80,
+      "rows": 24,
+      "png": "cancel-identity-80x24.png",
+      "text": "cancel-identity-80x24.txt"
+    },
+    {
+      "name": "exit",
+      "columns": 80,
+      "rows": 24,
+      "png": "exit-80x24.png",
+      "text": "exit-80x24.txt"
+    },
+    {
+      "name": "sidebar-nerd",
+      "columns": 80,
+      "rows": 24,
+      "png": "sidebar-nerd-80x24.png",
+      "text": "sidebar-nerd-80x24.txt"
+    },
+    {
+      "name": "inspector-evidence-nerd",
+      "columns": 80,
+      "rows": 24,
+      "png": "inspector-evidence-nerd-80x24.png",
+      "text": "inspector-evidence-nerd-80x24.txt"
+    },
+    {
+      "name": "inspector-scope-nerd",
+      "columns": 80,
+      "rows": 24,
+      "png": "inspector-scope-nerd-80x24.png",
+      "text": "inspector-scope-nerd-80x24.txt"
+    },
+    {
+      "name": "inspector-identity-nerd",
+      "columns": 80,
+      "rows": 24,
+      "png": "inspector-identity-nerd-80x24.png",
+      "text": "inspector-identity-nerd-80x24.txt"
+    },
+    {
+      "name": "options-nerd",
+      "columns": 80,
+      "rows": 24,
+      "png": "options-nerd-80x24.png",
+      "text": "options-nerd-80x24.txt"
+    },
+    {
+      "name": "options-ascii",
+      "columns": 80,
+      "rows": 24,
+      "png": "options-ascii-80x24.png",
+      "text": "options-ascii-80x24.txt"
+    },
+    {
+      "name": "sidebar-ascii",
+      "columns": 80,
+      "rows": 24,
+      "png": "sidebar-ascii-80x24.png",
+      "text": "sidebar-ascii-80x24.txt"
+    },
+    {
+      "name": "inspector-ascii",
+      "columns": 80,
+      "rows": 24,
+      "png": "inspector-ascii-80x24.png",
+      "text": "inspector-ascii-80x24.txt"
+    },
+    {
+      "name": "standalone-nerd",
+      "columns": 80,
+      "rows": 24,
+      "png": "standalone-nerd-80x24.png",
+      "text": "standalone-nerd-80x24.txt"
+    },
+    {
+      "name": "standalone-options",
+      "columns": 80,
+      "rows": 24,
+      "png": "standalone-options-80x24.png",
+      "text": "standalone-options-80x24.txt"
+    },
+    {
+      "name": "standalone-ascii",
+      "columns": 80,
+      "rows": 24,
+      "png": "standalone-ascii-80x24.png",
+      "text": "standalone-ascii-80x24.txt"
+    },
+    {
+      "name": "commands",
+      "columns": 50,
+      "rows": 40,
+      "png": "commands-50x40.png",
+      "text": "commands-50x40.txt"
+    },
+    {
+      "name": "sessions",
+      "columns": 50,
+      "rows": 40,
+      "png": "sessions-50x40.png",
+      "text": "sessions-50x40.txt"
+    },
+    {
+      "name": "models",
+      "columns": 50,
+      "rows": 40,
+      "png": "models-50x40.png",
+      "text": "models-50x40.txt"
+    },
+    {
+      "name": "planner-model-menu",
+      "columns": 50,
+      "rows": 40,
+      "png": "planner-model-menu-50x40.png",
+      "text": "planner-model-menu-50x40.txt"
+    },
+    {
+      "name": "planner-effort",
+      "columns": 50,
+      "rows": 40,
+      "png": "planner-effort-50x40.png",
+      "text": "planner-effort-50x40.txt"
+    },
+    {
+      "name": "authorization-overview",
+      "columns": 50,
+      "rows": 40,
+      "png": "authorization-overview-50x40.png",
+      "text": "authorization-overview-50x40.txt"
+    },
+    {
+      "name": "authorization-permissions",
+      "columns": 50,
+      "rows": 40,
+      "png": "authorization-permissions-50x40.png",
+      "text": "authorization-permissions-50x40.txt"
+    },
+    {
+      "name": "authorization-budget",
+      "columns": 50,
+      "rows": 40,
+      "png": "authorization-budget-50x40.png",
+      "text": "authorization-budget-50x40.txt"
+    },
+    {
+      "name": "authorization-scope",
+      "columns": 50,
+      "rows": 40,
+      "png": "authorization-scope-50x40.png",
+      "text": "authorization-scope-50x40.txt"
+    },
+    {
+      "name": "authorization-full",
+      "columns": 50,
+      "rows": 40,
+      "png": "authorization-full-50x40.png",
+      "text": "authorization-full-50x40.txt"
+    },
+    {
+      "name": "handoff-target",
+      "columns": 50,
+      "rows": 40,
+      "png": "handoff-target-50x40.png",
+      "text": "handoff-target-50x40.txt"
+    },
+    {
+      "name": "handoff-overview",
+      "columns": 50,
+      "rows": 40,
+      "png": "handoff-overview-50x40.png",
+      "text": "handoff-overview-50x40.txt"
+    },
+    {
+      "name": "handoff-responsibilities",
+      "columns": 50,
+      "rows": 40,
+      "png": "handoff-responsibilities-50x40.png",
+      "text": "handoff-responsibilities-50x40.txt"
+    },
+    {
+      "name": "handoff-binding",
+      "columns": 50,
+      "rows": 40,
+      "png": "handoff-binding-50x40.png",
+      "text": "handoff-binding-50x40.txt"
+    },
+    {
+      "name": "cancel-return",
+      "columns": 50,
+      "rows": 40,
+      "png": "cancel-return-50x40.png",
+      "text": "cancel-return-50x40.txt"
+    },
+    {
+      "name": "cancel-confirm",
+      "columns": 50,
+      "rows": 40,
+      "png": "cancel-confirm-50x40.png",
+      "text": "cancel-confirm-50x40.txt"
+    },
+    {
+      "name": "cancel-identity",
+      "columns": 50,
+      "rows": 40,
+      "png": "cancel-identity-50x40.png",
+      "text": "cancel-identity-50x40.txt"
+    },
+    {
+      "name": "exit",
+      "columns": 50,
+      "rows": 40,
+      "png": "exit-50x40.png",
+      "text": "exit-50x40.txt"
+    },
+    {
+      "name": "sidebar-nerd",
+      "columns": 50,
+      "rows": 40,
+      "png": "sidebar-nerd-50x40.png",
+      "text": "sidebar-nerd-50x40.txt"
+    },
+    {
+      "name": "inspector-evidence-nerd",
+      "columns": 50,
+      "rows": 40,
+      "png": "inspector-evidence-nerd-50x40.png",
+      "text": "inspector-evidence-nerd-50x40.txt"
+    },
+    {
+      "name": "inspector-scope-nerd",
+      "columns": 50,
+      "rows": 40,
+      "png": "inspector-scope-nerd-50x40.png",
+      "text": "inspector-scope-nerd-50x40.txt"
+    },
+    {
+      "name": "inspector-identity-nerd",
+      "columns": 50,
+      "rows": 40,
+      "png": "inspector-identity-nerd-50x40.png",
+      "text": "inspector-identity-nerd-50x40.txt"
+    },
+    {
+      "name": "options-nerd",
+      "columns": 50,
+      "rows": 40,
+      "png": "options-nerd-50x40.png",
+      "text": "options-nerd-50x40.txt"
+    },
+    {
+      "name": "options-ascii",
+      "columns": 50,
+      "rows": 40,
+      "png": "options-ascii-50x40.png",
+      "text": "options-ascii-50x40.txt"
+    },
+    {
+      "name": "sidebar-ascii",
+      "columns": 50,
+      "rows": 40,
+      "png": "sidebar-ascii-50x40.png",
+      "text": "sidebar-ascii-50x40.txt"
+    },
+    {
+      "name": "inspector-ascii",
+      "columns": 50,
+      "rows": 40,
+      "png": "inspector-ascii-50x40.png",
+      "text": "inspector-ascii-50x40.txt"
+    }
+  ]
+}

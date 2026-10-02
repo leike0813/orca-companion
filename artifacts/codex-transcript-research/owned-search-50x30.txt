@@ -1,0 +1,31 @@
+
+› [固定调研样例] 阅读工具记录和长回复。
+fixture output 10
+fixture output 11
+fixture output 12
+fixture output 13
+fixture output 14
+fixture output 15
+fixture output 16
+fixture output 17
+✓ • 70ms
+
+• 1. 中文长会话样例：保持阅读位置，检查工具详情与
+     窄屏换行。
+
+  2. 中文长会话样例：保持阅读位置，检查工具详情与
+     窄屏换行。
+
+  3. 中文长会话样例：保持阅读位置，检查工具详情与
+     窄屏换行。
+
+  4. 中文长会话样例：保持阅读位置，检查工具详情与
+     窄屏换行。
+
+
+
+› 未发送草稿
+
+  fixture-model default · Read Only · Fast off · …
+  Find: fixture output 10█
+  enter next · ctrl+p previous · esc close

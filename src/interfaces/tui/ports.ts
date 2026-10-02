@@ -15,6 +15,8 @@ import type {
   SemanticEvent,
   Unsubscribe,
 } from '../../application/controller-service.js';
+import type { UiInputStore } from '../../application/ports/ui-input-store.js';
+import type { SubmissionQuery, SubmissionStatus } from '../../application/coordinator/submission-status.js';
 
 export type SnapshotLoad =
   | { readonly kind: 'snapshot'; readonly snapshot: ControllerSnapshot }
@@ -29,10 +31,13 @@ export type TuiIntent =
   | {
       readonly kind: 'send-session-message';
       readonly coordinatorSessionId: string;
+      readonly submissionId: string;
       readonly content: string;
     }
   | {
       readonly kind: 'answer-pending-interaction';
+      readonly coordinatorSessionId: string;
+      readonly submissionId: string;
       readonly interactionId: string;
       readonly expectedRevision: number;
       readonly answer: string;
@@ -52,6 +57,8 @@ export type TuiIntent =
     };
 
 export type TuiPorts = {
+  readonly inputStore: UiInputStore;
+  readonly submissionStatus: (query: SubmissionQuery) => Promise<SubmissionStatus>;
   readonly snapshot: (selectedSessionId: string | null) => Promise<SnapshotLoad>;
   readonly transcript: (
     coordinatorSessionId: string,

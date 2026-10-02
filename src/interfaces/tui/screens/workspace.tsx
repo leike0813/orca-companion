@@ -15,6 +15,10 @@ import { ControlBar } from '../components/control-bar.js';
 import { EventDrawer } from '../components/event-drawer.js';
 import { GraphInspector } from '../components/graph-inspector.js';
 import { HandoffReview } from '../components/handoff-review.js';
+import {
+  InputRecordManager,
+  type InputRecordManagerView,
+} from '../components/input-record-manager.js';
 import { AuthorizationReview } from '../components/authorization-review.js';
 import { InteractionCard } from '../components/interaction-card.js';
 import { ModelPicker } from '../components/model-picker.js';
@@ -32,7 +36,7 @@ import type {
 } from '../../../application/controller-service.js';
 import type { TuiViewModel } from '../../../application/tui/view-model.js';
 import type { OverlayKind, TuiAction, TuiState } from '../state.js';
-import { draftFor, isComposerReadOnly } from '../state.js';
+import { composerDraftFor, isComposerReadOnly } from '../state.js';
 
 export type WorkspaceActions = {
   readonly dispatch: (action: TuiAction) => void;
@@ -69,6 +73,19 @@ export type WorkspaceProps = {
   readonly handoffProposal: ControllerPlanningHandoffView | null;
   readonly authorizationReview: ExecutionAuthorizationLoad | null;
   readonly commands: readonly CommandId[];
+  /** 输入记录管理的当前投影；`null` 表示 overlay 未打开。 */
+  readonly inputManager?: InputRecordManagerView | null;
+};
+
+/** overlay 未打开时的空投影：组件本身不猜记录，只渲染容器读好的内容。 */
+export const EMPTY_INPUT_MANAGER: InputRecordManagerView = {
+  entries: [],
+  usage: { records: 0, bytes: 0 },
+  selectedIndex: 0,
+  bodyScroll: 0,
+  bodyFocus: false,
+  feedback: null,
+  confirmDelete: false,
 };
 
 /**
@@ -86,7 +103,7 @@ export function Workspace(props: WorkspaceProps) {
   const ui = props.ui;
   const width = bodyWidth(props.terminalWidth, ui.sidebarDensity);
   const selected = ui.selectedSessionId;
-  const draft = draftFor(ui, selected);
+  const draft = composerDraftFor(ui, selected);
   const readOnly = isComposerReadOnly(ui, selected);
   const interactions = view.interactions.filter(
     (interaction) => selected === null || interaction.ownerCoordinatorSessionId === selected,
@@ -255,6 +272,13 @@ function Overlay(props: {
           review={parent.authorizationReview}
           onConfirm={parent.actions.confirmAuthorization}
           onCancel={parent.actions.cancelAuthorization}
+          availableWidth={parent.terminalWidth}
+        />
+      );
+    case 'input-record-manager':
+      return (
+        <InputRecordManager
+          view={parent.inputManager ?? EMPTY_INPUT_MANAGER}
           availableWidth={parent.terminalWidth}
         />
       );

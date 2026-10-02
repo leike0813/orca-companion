@@ -1,0 +1,31 @@
+
+
+  >_ OpenAI Codex (v0.159.3)
+     ~/Workspace/Code/JavaScript/orca-companion
+
+  Welcome to our little rectangle of possibility.
+
+
+› [固定调研样例] 阅读工具记录和长回复。
+
+
+• Explored
+  └ Search transcript in src
+    + Show details
+
+• 1. 中文长会话样例：保持阅读位置，检查工具详情与
+     窄屏换行。
+
+  2. 中文长会话样例：保持阅读位置，检查工具详情与
+     窄屏换行。
+
+  3. 中文长会话样例：保持阅读位置，检查工具详情与
+     窄屏换行。
+
+  4. 中文长会话样例：保持阅读位置，检查工具详情与
+              ↓ Back to bottom · esc
+
+› 未发送草稿█
+
+  fixture-model default · Read Only · Fast off · …
+  esc latest

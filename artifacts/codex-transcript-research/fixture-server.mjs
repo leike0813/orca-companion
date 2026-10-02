@@ -1,0 +1,45 @@
+import http from 'node:http';
+import process from 'node:process';
+import console from 'node:console';
+import {URL} from 'node:url';
+import {createRequire} from 'node:module';
+import {writeFileSync,appendFileSync} from 'node:fs';
+const require=createRequire(import.meta.resolve('tuistory'));
+const {Server:WebSocketServer}=require('ws');
+const cwd=process.cwd();
+const id='00000000-0000-0000-0000-000000000041';
+const turnId='fixture-turn';
+const user={type:'userMessage',id:'fixture-user',content:[{type:'text',text:'[固定调研样例] 阅读工具记录和长回复。',text_elements:[]}]};
+const lines=Array.from({length:30},(_,i)=>`${i+1}. 中文长会话样例：保持阅读位置，检查工具详情与窄屏换行。`).join('\n');
+const answer={type:'agentMessage',id:'fixture-answer',text:lines,phase:'final_answer',memoryCitation:null};
+const tool={type:'commandExecution',id:'fixture-command',command:'rg transcript src',cwd,processId:null,source:'agent',status:'completed',commandActions:[{type:'search',command:'rg transcript src',query:'transcript',path:'src'}],aggregatedOutput:'src/a.ts:1: transcript\nsrc/b.ts:2: transcript\n'+Array.from({length:15},(_,i)=>`fixture output ${i+3}`).join('\n'),exitCode:0,durationMs:70};
+const turn={id:turnId,items:[user,tool,answer],status:'completed',error:null};
+const thread={id,sessionId:id,preview:'固定调研样例',ephemeral:true,modelProvider:'fixture',model:'fixture-model',createdAt:1,updatedAt:2,status:{type:'idle'},cwd,cliVersion:'0.159.3',source:'cli',historyMode:'legacy',turns:[turn]};
+let socket;
+const send=(method,params)=>socket?.send(JSON.stringify({method,params}));
+const server=http.createServer((req,res)=>{if(req.url==='/live'){
+turn.status='inProgress';send('turn/started',{threadId:id,turn:{...turn,items:[]}});
+send('item/started',{threadId:id,turnId,item:{...answer,id:'fixture-live',text:''}});
+send('item/agentMessage/delta',{threadId:id,turnId,itemId:'fixture-live',delta:'新内容到来\n第二行正在生成。\n'});
+res.end('sent');}else if(req.url==='/complete'){
+turn.status='completed';send('item/completed',{threadId:id,turnId,item:{...answer,id:'fixture-live',text:'新内容到来\n第二行正在生成。'}});send('turn/completed',{threadId:id,turn:{...turn,items:[]}});res.end('completed');}else res.end('fixture');});
+const wss=new WebSocketServer({server});
+wss.on('connection',ws=>{socket=ws;ws.on('message',raw=>{const q=JSON.parse(raw);appendFileSync(new URL('./methods.log',import.meta.url),q.method+'\n');if(q.id===undefined)return;
+let result;
+switch(q.method){
+case 'initialize':result={userAgent:'codex-display-fixture/1.0',platformFamily:'unix',platformOs:'linux'};break;
+case 'account/read':result={account:{type:'apiKey'},requiresOpenaiAuth:false};break;
+case 'model/list':result={data:[],nextCursor:null};break;
+case 'config/read':result={config:{model:'fixture-model',model_provider:'fixture',tui:{status_line:['model-name'],animations:false},projects:{[cwd]:{trust_level:'trusted'}}},origins:{},layers:[]};break;
+case 'configRequirements/read':result={requirements:null};break;
+case 'experimentalFeature/list':result={data:[],nextCursor:null};break;
+case 'thread/start':case 'thread/resume':result={thread,model:'fixture-model',modelProvider:'fixture',cwd,approvalPolicy:'never',approvalsReviewer:'user',sandbox:{type:'readOnly'},reasoningEffort:null};break;
+case 'thread/read':result={thread};break;
+case 'thread/goal/get':result={goal:null};break;
+case 'thread/list':result={data:[thread],nextCursor:null};break;
+case 'thread/turns/list':result={data:[turn],nextCursor:null};break;
+case 'skills/list':result={data:[]};break;
+case 'app/list':result={data:[],nextCursor:null};break;
+default:ws.send(JSON.stringify({id:q.id,error:{code:-32601,message:'fixture method not provided'}}));return;
+}ws.send(JSON.stringify({id:q.id,result}));});});
+server.listen(0,'127.0.0.1',()=>{const port=server.address().port;writeFileSync(new URL('./port',import.meta.url),String(port));console.log('fixture port '+port)});

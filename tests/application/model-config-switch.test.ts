@@ -174,6 +174,8 @@ test('切换成功时先持久化 checkpoint，再清空旧 cache 与维护计�
         },
         readCommittedMessages: (sessionId) => store.readCommittedMessages(sessionId),
         commitUserMessage: (input) => store.commitUserMessage(input),
+        appendModelStep: (input) => store.appendModelStep(input),
+        appendToolResult: (input) => store.appendToolResult(input),
       },
       clearDerivedCaches: () => {
         order.push('cache:clear');

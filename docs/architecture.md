@@ -17,9 +17,10 @@ flowchart LR
   Harness --> Workspace[隔离 Worktree]
   Companion --> Coordination[(coordination.sqlite)]
   Companion --> Checkpoints[(checkpoints.sqlite)]
+  Companion --> Inputs[(ui.sqlite)]
 ```
 
-Companion 是单个前台进程，只运行 Coordinator Agent。Orca 拥有 Run、Task、Dispatch、Worker、Delivery、receipt 与 Accepted Worker Result；Worker Harness 拥有 provider session 和 transcript；Git 拥有代码、HEAD 与 worktree；issue tracker 拥有 Route Map 和 Decision Ticket。两个 SQLite store 只保存无法从这些来源重建的协调事实与 Coordinator Session checkpoint。
+Companion 是单个前台进程，只运行 Coordinator Agent。Orca 拥有 Run、Task、Dispatch、Worker、Delivery、receipt 与 Accepted Worker Result；Worker Harness 拥有 provider session 和 transcript；Git 拥有代码、HEAD 与 worktree；issue tracker 拥有 Route Map 和 Decision Ticket。`coordination.sqlite` 与 `checkpoints.sqlite` 分别保存协调事实和 Coordinator Session checkpoint；`ui.sqlite` 独立保存尚未发送或待核验的用户输入。
 
 ## 模块依赖
 
@@ -67,7 +68,7 @@ flowchart TB
 | Canonical path | `src/application/` |
 | 职责 | Controller 用例、准入、对账、意图、查询/命令 DTO、ports 和界面 façade |
 | 允许依赖 | `MOD-01`；由调用方注入的 ports、时钟或 ID 函数 |
-| Interface | `IC-02`–`IC-11` 中由 Application 拥有的 ports、commands、queries 和 projections |
+| Interface | `IC-02`–`IC-11` 与 `IC-13` 中由 Application 拥有的 ports、commands、queries 和 projections |
 | 禁止 | 导入具体 adapter、打开数据库、拼接 CLI argv、渲染 UI、复制外部状态机 |
 | 测试 seam | 经生产调用方使用的同一用例或 port，注入最小 fake/mock adapter |
 
@@ -95,7 +96,7 @@ Application 是业务规则的外部 interface。小型纯用例可以直接是�
 | 禁止 | 决定模式转换、预算、准入、重试、图推进或 UI 状态；直接读写 Orca DB 或私有 RPC |
 | 测试 seam | contract test 覆盖 parser/error passthrough；真实集成只在显式隔离目标运行 |
 
-Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation catalog、进程和 schema 转换；`storage` 的两个 adapter 分别实现 Branch Coordination Store 与 LangGraph checkpointer，不共享表或伪装跨库事务。
+Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation catalog、进程和 schema 转换；`storage` 分别实现 Branch Coordination Store、LangGraph checkpointer 与 IC-13 UI 输入存储，不共享表或伪装跨库事务。
 
 ### MOD-05 CLI
 
@@ -114,12 +115,12 @@ Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation
 |---|---|
 | Canonical path | `src/interfaces/tui/`、`src/application/tui/view-model.ts` 与 `src/application/execution/execution-view.ts` |
 | 职责 | Ink transcript、composer、sidebar、overlay、Graph Inspector、输入映射，执行态/规划态纯展示 projection，以及执行阶段只读派生（`execution-view.ts`） |
-| 允许依赖 | `IC-11` Controller façade 和 `IC-12` view model；Ink/React 与 `@inkjs/ui` 展示组件 |
+| 允许依赖 | `IC-11` Controller façade、`IC-12` view model 与 `IC-13` UI 输入端口；Ink/React 与 `@inkjs/ui` 展示组件 |
 | Interface | 用户 intent、选中 Session、局部草稿/滚动/overlay 状态和渲染帧 |
 | 禁止 | 调用 Orca、打开 store、恢复模型、实现重试/准入/预算、从自由文本推断待答 interaction；`execution-view.ts` 只从 IC-03 快照与调用方读到的只读观察派生，不派发、不写、不实现对账 |
 | 测试 seam | 组件经固定 view model 与 command callbacks 测试；PTY 单独验证 TTY/CJK/resize |
 
-React 组件只拥有展示与输入协调。render、effect、resize 和重挂载没有业务副作用；所有 Scope 级动作必须经 `ControllerService`。
+React 组件只拥有展示与输入协调。render、effect、resize 和重挂载只读取与查询；用户输入事件经 IC-13 保存草稿与提交快照，所有 Scope 级动作经 `ControllerService`。Bootstrap 启动核验 pending 提交并清理已受理快照，恢复过程不自动发送。
 开发预览 `scripts/tui-preview.mjs` 只向构建后的 TUI 注入固定假端口；主题由 `src/interfaces/tui/theme.ts` 统一提供。预览中的写端口均拒绝，不属于生产 Bootstrap。
 
 ### MOD-07 Bootstrap
@@ -168,6 +169,7 @@ flowchart LR
 | Execution Graph | Implementation Plan + accepted Graph Revision 历史 | append-only graph history 与当前引用 |
 | 共享协调事实 | `coordination.sqlite` | mode、leases、claims、intents、budgets、interactions、CAS revision |
 | Coordinator Session | `checkpoints.sqlite` | 已提交消息/tool step、图位置、Wake Batch、Context Capsule |
+| UI 输入 | `ui.sqlite` | 按 Scope/Session/回答 revision 隔离的草稿、冲突副本、待核验提交；不形成业务受理事实 |
 | Worker Harness session/transcript | Worker Harness | 精确 Session Binding、Segment 与 transcript 引用 |
 
 ## 跨接缝流程
@@ -300,9 +302,9 @@ sequenceDiagram
 | Module | 主要接口合同 |
 |---|---|
 | MOD-01 Domain | IC-01、IC-05–IC-10 |
-| MOD-02 Application | IC-02–IC-11 |
+| MOD-02 Application | IC-02–IC-11、IC-13 |
 | MOD-03 Workflow | IC-04、IC-11 |
-| MOD-04 Adapters | IC-02–IC-10 |
+| MOD-04 Adapters | IC-02–IC-10、IC-13 |
 | MOD-05 CLI | IC-11、IC-12 |
-| MOD-06 TUI | IC-11、IC-12 |
-| MOD-07 Bootstrap | IC-02–IC-04、IC-11、IC-12 |
+| MOD-06 TUI | IC-11、IC-12、IC-13 |
+| MOD-07 Bootstrap | IC-02–IC-04、IC-11–IC-13 |

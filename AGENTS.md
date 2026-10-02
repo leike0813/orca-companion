@@ -185,6 +185,8 @@ Graph Patch 采用原子的 `add + revise + retire`：
 - `coordination.sqlite` 保存模式、Planning Cycle、当前 graph/authorization 引用、Session 注册、Ticket Claim、Pending Interaction、Operation Intent、Runtime/Execution lease、fencing、共享预算状态和 CAS revision；
 - `checkpoints.sqlite` 由 LangGraph SqliteSaver 保存每个 Session 的已提交消息/tool step、图位置、Wake Batch、Context Capsule 和 Coordinator Model Configuration binding。
 
+UI 输入另存于同目录 `ui.sqlite`，由 IC-13 的应用端口、storage adapter 和 Bootstrap 装配拥有。草稿、冲突副本与待核验提交按 Scope/Session/回答 revision 隔离；提交先保存完整快照和稳定 submissionId，再调用业务用例。输入恢复只核验原身份，界面 render/effect/resize/remount 只读取，不持久写入或自动发送。容量满额与 CAS 冲突保留输入并经 `/inputs` 显式处理；详细合同见 `docs/interface-contracts.md` IC-13。
+
 不同 Coordinator Session 不共享 checkpoint。同一 Session 同时只有一个 Runtime Incarnation；短 Runtime Lease 和递增 fencing generation 拒绝迟到进程写入。Execution Coordination 只有一个 Session 持有 Execution Coordination Lease。SQLite 事务保持短小，不使用项目级长期单写者锁。
 
 副作用前先持久化 Operation Intent，再执行外部 mutation，最后写后核验并完成 intent。外部响应丢失、receipt 缺失或 transport 故障不证明动作未发生；恢复时以原 OperationId、scope、receipt 和实时资源对账，仍不确定则阻塞对应 mutation lane。

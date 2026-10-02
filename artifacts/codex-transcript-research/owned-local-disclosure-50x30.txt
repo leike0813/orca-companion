@@ -1,0 +1,31 @@
+
+› [固定调研样例] 阅读工具记录和长回复。
+$ rg transcript src
+src/a.ts:1: transcript
+src/b.ts:2: transcript
+fixture output 3
+fixture output 4
+fixture output 5
+fixture output 6
+fixture output 7
+fixture output 8
+fixture output 9
+fixture output 10
+fixture output 11
+fixture output 12
+fixture output 13
+fixture output 14
+fixture output 15
+fixture output 16
+fixture output 17
+✓ • 70ms
+    − Show less
+
+• 1. 中文长会话样例：保持阅读位置，检查工具详情与
+     窄屏换行。
+              ↓ Back to bottom · esc
+
+› Ask Codex to do anything
+
+  fixture-model default · Read Only · Fast off · …
+  ↑ previous · ↓ next · enter details · esc back

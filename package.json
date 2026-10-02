@@ -15,6 +15,12 @@
   "scripts": {
     "start": "node ./dist/src/interfaces/cli/main.js",
     "ui:preview": "pnpm build && node scripts/tui-preview.mjs",
+    "ui:prototype": "pnpm build && node scripts/tui-preview.mjs --prototype",
+    "ui:graph-prototype": "pnpm build && node scripts/tui-preview.mjs --graph-prototype",
+    "ui:composer-prototype": "pnpm build && node scripts/tui-preview.mjs --composer-prototype",
+    "ui:status-prototype": "pnpm build && node scripts/tui-preview.mjs --status-prototype",
+    "ui:project-prototype": "pnpm build && node scripts/tui-preview.mjs --project-prototype",
+    "ui:dialog-prototype": "pnpm build && node scripts/tui-preview.mjs --dialog-prototype",
     "ui:devtools": "react-devtools",
     "build": "tsc --noEmit false --outDir dist",
     "typecheck": "tsc --noEmit",

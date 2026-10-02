@@ -439,6 +439,7 @@ function intentOf(store: CoordinationStore): {
 async function openSession(harness: Harness): Promise<void> {
   const accepted = await harness.host.ports.execute({
     kind: 'send-session-message',
+    submissionId: globalThis.crypto.randomUUID(),
     coordinatorSessionId: SESSION,
     content: '重启后继续处理',
   });
@@ -1025,6 +1026,7 @@ async function openAdvanceHarness(options?: { readonly unknownWorkerStart?: bool
 async function sendAdvanceMessage(harness: AdvanceHarness, content: string): Promise<void> {
   const result = await harness.host.ports.execute({
     kind: 'send-session-message',
+    submissionId: globalThis.crypto.randomUUID(),
     coordinatorSessionId: EXEC_SESSION,
     content,
   });

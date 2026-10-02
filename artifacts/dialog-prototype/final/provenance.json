@@ -1,0 +1,15 @@
+{
+  "ticket": "https://github.com/leike0813/orca-companion/issues/52",
+  "acceptedAt": "2026-09-30",
+  "savedAt": "2026-09-30T10:09:26.669Z",
+  "baseHead": "e774b5ab97aa103d1f3c160cd9c5e3d34413551e",
+  "node": "v24.12.0",
+  "pnpm": "11.10.0",
+  "sourceIncludesUncommittedChanges": true,
+  "defaultIconMode": "nerd",
+  "fallbackIconMode": "ascii",
+  "sourceArchive": "source.tar.gz",
+  "captureScript": "../capture-final.mjs",
+  "finalSamples": 84,
+  "remoteAvailability": "local workspace only; not committed or uploaded"
+}

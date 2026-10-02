@@ -1,0 +1,40 @@
+orca-c/main · S-A · 规划/active · 待答0
+Ctrl+P 命令 · Ctrl+S 会话 · Ctrl+B 项目
+
+  ╭────────────────────────────────────────────╮
+  │ Model Picker · 模型配置                    │
+  │ orca-companion / main · S-A · 来自 对话    │
+  │ ────────────────────────────────────────── │
+  │ ── 当前会话 ──                             │
+  │ › Coordinator · 当前会话的协调模型         │
+  │   openai / 示例模型 A / high               │
+  │ ── Planning · 路线规划 ──                  │
+  │   Utility · 调研与规划协助                 │
+  │   openai / 示例模型 B / medium             │
+  │ ── Execution · 执行协调 ──                 │
+  │   Planner · 编写工作包规格                 │
+  │   openai / 示例模型 A / high               │
+  │   Spec Validator · 独立规格验证 · 可选     │
+  │   未启用                                   │
+  │   Implementation · 实现工作包              │
+  │   openai / 示例模型 A / high               │
+  │   Validator · 验证、修复与复验             │
+  │   openai / 示例模型 A / high               │
+  │   Finalizer · 只读项目验收                 │
+  │   openai / 示例模型 A / high               │
+  │   Recovery Utility · 生成恢复材料          │
+  │   openai / 示例模型 B / medium             │
+  │                                            │
+  │                                            │
+  │                                            │
+  │                                            │
+  │                                            │
+  │                                            │
+  │ ────────────────────────────────────────── │
+  │ 当前会话的协调模型                         │
+  │ 1/8 · ↑↓ 选角色 · Enter 更换 · Esc 返回    │
+  │ Provider / Model / Effort · 按角色分别选择 │
+  ╰────────────────────────────────────────────╯
+
+原型 弹窗修订 · planning · commands · 滚动0
+^P命令 ^S会话 ^Y场景 ^N消息 ^U缺失

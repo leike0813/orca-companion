@@ -733,6 +733,7 @@ async function openHarness(options?: {
 async function sendMessage(harness: Harness, content: string): Promise<void> {
   const result = await harness.host.ports.execute({
     kind: 'send-session-message',
+    submissionId: globalThis.crypto.randomUUID(),
     coordinatorSessionId: SESSION,
     content,
   });

@@ -1,0 +1,679 @@
+{
+  "capturedAt": "2026-09-30T12:53:55.131Z",
+  "ticket": 48,
+  "renderer": "tuistory PTY + ghostty-opentui bundled Nerd Font and CJK fallback",
+  "samples": [
+    {
+      "name": "current-planning",
+      "columns": 120,
+      "rows": 40,
+      "png": "current-planning-120x40.png",
+      "text": "current-planning-120x40.txt"
+    },
+    {
+      "name": "current-execution",
+      "columns": 120,
+      "rows": 40,
+      "png": "current-execution-120x40.png",
+      "text": "current-execution-120x40.txt"
+    },
+    {
+      "name": "current-blocked",
+      "columns": 120,
+      "rows": 40,
+      "png": "current-blocked-120x40.png",
+      "text": "current-blocked-120x40.txt"
+    },
+    {
+      "name": "current-answer",
+      "columns": 120,
+      "rows": 40,
+      "png": "current-answer-120x40.png",
+      "text": "current-answer-120x40.txt"
+    },
+    {
+      "name": "current-idle",
+      "columns": 120,
+      "rows": 40,
+      "png": "current-idle-120x40.png",
+      "text": "current-idle-120x40.txt"
+    },
+    {
+      "name": "fixed-planning",
+      "columns": 120,
+      "rows": 40,
+      "png": "fixed-planning-120x40.png",
+      "text": "fixed-planning-120x40.txt"
+    },
+    {
+      "name": "fixed-execution",
+      "columns": 120,
+      "rows": 40,
+      "png": "fixed-execution-120x40.png",
+      "text": "fixed-execution-120x40.txt"
+    },
+    {
+      "name": "fixed-blocked",
+      "columns": 120,
+      "rows": 40,
+      "png": "fixed-blocked-120x40.png",
+      "text": "fixed-blocked-120x40.txt"
+    },
+    {
+      "name": "fixed-answer",
+      "columns": 120,
+      "rows": 40,
+      "png": "fixed-answer-120x40.png",
+      "text": "fixed-answer-120x40.txt"
+    },
+    {
+      "name": "fixed-idle",
+      "columns": 120,
+      "rows": 40,
+      "png": "fixed-idle-120x40.png",
+      "text": "fixed-idle-120x40.txt"
+    },
+    {
+      "name": "custom-planning",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-planning-120x40.png",
+      "text": "custom-planning-120x40.txt"
+    },
+    {
+      "name": "custom-execution",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-execution-120x40.png",
+      "text": "custom-execution-120x40.txt"
+    },
+    {
+      "name": "custom-blocked",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-blocked-120x40.png",
+      "text": "custom-blocked-120x40.txt"
+    },
+    {
+      "name": "custom-answer",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-answer-120x40.png",
+      "text": "custom-answer-120x40.txt"
+    },
+    {
+      "name": "custom-idle",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-idle-120x40.png",
+      "text": "custom-idle-120x40.txt"
+    },
+    {
+      "name": "notification",
+      "columns": 120,
+      "rows": 40,
+      "png": "notification-120x40.png",
+      "text": "notification-120x40.txt"
+    },
+    {
+      "name": "project",
+      "columns": 120,
+      "rows": 40,
+      "png": "project-120x40.png",
+      "text": "project-120x40.txt"
+    },
+    {
+      "name": "session-dialog-risk",
+      "columns": 120,
+      "rows": 40,
+      "png": "session-dialog-risk-120x40.png",
+      "text": "session-dialog-risk-120x40.txt"
+    },
+    {
+      "name": "other-session",
+      "columns": 120,
+      "rows": 40,
+      "png": "other-session-120x40.png",
+      "text": "other-session-120x40.txt"
+    },
+    {
+      "name": "source-unset",
+      "columns": 120,
+      "rows": 40,
+      "png": "source-unset-120x40.png",
+      "text": "source-unset-120x40.txt"
+    },
+    {
+      "name": "source-unavailable",
+      "columns": 120,
+      "rows": 40,
+      "png": "source-unavailable-120x40.png",
+      "text": "source-unavailable-120x40.txt"
+    },
+    {
+      "name": "source-available",
+      "columns": 120,
+      "rows": 40,
+      "png": "source-available-120x40.png",
+      "text": "source-available-120x40.txt"
+    },
+    {
+      "name": "custom-options",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-options-120x40.png",
+      "text": "custom-options-120x40.txt"
+    },
+    {
+      "name": "model-no-effort",
+      "columns": 120,
+      "rows": 40,
+      "png": "model-no-effort-120x40.png",
+      "text": "model-no-effort-120x40.txt"
+    },
+    {
+      "name": "model-changed",
+      "columns": 120,
+      "rows": 40,
+      "png": "model-changed-120x40.png",
+      "text": "model-changed-120x40.txt"
+    },
+    {
+      "name": "current-planning",
+      "columns": 80,
+      "rows": 24,
+      "png": "current-planning-80x24.png",
+      "text": "current-planning-80x24.txt"
+    },
+    {
+      "name": "current-execution",
+      "columns": 80,
+      "rows": 24,
+      "png": "current-execution-80x24.png",
+      "text": "current-execution-80x24.txt"
+    },
+    {
+      "name": "current-blocked",
+      "columns": 80,
+      "rows": 24,
+      "png": "current-blocked-80x24.png",
+      "text": "current-blocked-80x24.txt"
+    },
+    {
+      "name": "current-answer",
+      "columns": 80,
+      "rows": 24,
+      "png": "current-answer-80x24.png",
+      "text": "current-answer-80x24.txt"
+    },
+    {
+      "name": "current-idle",
+      "columns": 80,
+      "rows": 24,
+      "png": "current-idle-80x24.png",
+      "text": "current-idle-80x24.txt"
+    },
+    {
+      "name": "fixed-planning",
+      "columns": 80,
+      "rows": 24,
+      "png": "fixed-planning-80x24.png",
+      "text": "fixed-planning-80x24.txt"
+    },
+    {
+      "name": "fixed-execution",
+      "columns": 80,
+      "rows": 24,
+      "png": "fixed-execution-80x24.png",
+      "text": "fixed-execution-80x24.txt"
+    },
+    {
+      "name": "fixed-blocked",
+      "columns": 80,
+      "rows": 24,
+      "png": "fixed-blocked-80x24.png",
+      "text": "fixed-blocked-80x24.txt"
+    },
+    {
+      "name": "fixed-answer",
+      "columns": 80,
+      "rows": 24,
+      "png": "fixed-answer-80x24.png",
+      "text": "fixed-answer-80x24.txt"
+    },
+    {
+      "name": "fixed-idle",
+      "columns": 80,
+      "rows": 24,
+      "png": "fixed-idle-80x24.png",
+      "text": "fixed-idle-80x24.txt"
+    },
+    {
+      "name": "custom-planning",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-planning-80x24.png",
+      "text": "custom-planning-80x24.txt"
+    },
+    {
+      "name": "custom-execution",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-execution-80x24.png",
+      "text": "custom-execution-80x24.txt"
+    },
+    {
+      "name": "custom-blocked",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-blocked-80x24.png",
+      "text": "custom-blocked-80x24.txt"
+    },
+    {
+      "name": "custom-answer",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-answer-80x24.png",
+      "text": "custom-answer-80x24.txt"
+    },
+    {
+      "name": "custom-idle",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-idle-80x24.png",
+      "text": "custom-idle-80x24.txt"
+    },
+    {
+      "name": "notification",
+      "columns": 80,
+      "rows": 24,
+      "png": "notification-80x24.png",
+      "text": "notification-80x24.txt"
+    },
+    {
+      "name": "project",
+      "columns": 80,
+      "rows": 24,
+      "png": "project-80x24.png",
+      "text": "project-80x24.txt"
+    },
+    {
+      "name": "session-dialog-risk",
+      "columns": 80,
+      "rows": 24,
+      "png": "session-dialog-risk-80x24.png",
+      "text": "session-dialog-risk-80x24.txt"
+    },
+    {
+      "name": "other-session",
+      "columns": 80,
+      "rows": 24,
+      "png": "other-session-80x24.png",
+      "text": "other-session-80x24.txt"
+    },
+    {
+      "name": "source-unset",
+      "columns": 80,
+      "rows": 24,
+      "png": "source-unset-80x24.png",
+      "text": "source-unset-80x24.txt"
+    },
+    {
+      "name": "source-unavailable",
+      "columns": 80,
+      "rows": 24,
+      "png": "source-unavailable-80x24.png",
+      "text": "source-unavailable-80x24.txt"
+    },
+    {
+      "name": "source-available",
+      "columns": 80,
+      "rows": 24,
+      "png": "source-available-80x24.png",
+      "text": "source-available-80x24.txt"
+    },
+    {
+      "name": "custom-options",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-options-80x24.png",
+      "text": "custom-options-80x24.txt"
+    },
+    {
+      "name": "model-no-effort",
+      "columns": 80,
+      "rows": 24,
+      "png": "model-no-effort-80x24.png",
+      "text": "model-no-effort-80x24.txt"
+    },
+    {
+      "name": "model-changed",
+      "columns": 80,
+      "rows": 24,
+      "png": "model-changed-80x24.png",
+      "text": "model-changed-80x24.txt"
+    },
+    {
+      "name": "current-planning",
+      "columns": 50,
+      "rows": 40,
+      "png": "current-planning-50x40.png",
+      "text": "current-planning-50x40.txt"
+    },
+    {
+      "name": "current-execution",
+      "columns": 50,
+      "rows": 40,
+      "png": "current-execution-50x40.png",
+      "text": "current-execution-50x40.txt"
+    },
+    {
+      "name": "current-blocked",
+      "columns": 50,
+      "rows": 40,
+      "png": "current-blocked-50x40.png",
+      "text": "current-blocked-50x40.txt"
+    },
+    {
+      "name": "current-answer",
+      "columns": 50,
+      "rows": 40,
+      "png": "current-answer-50x40.png",
+      "text": "current-answer-50x40.txt"
+    },
+    {
+      "name": "current-idle",
+      "columns": 50,
+      "rows": 40,
+      "png": "current-idle-50x40.png",
+      "text": "current-idle-50x40.txt"
+    },
+    {
+      "name": "fixed-planning",
+      "columns": 50,
+      "rows": 40,
+      "png": "fixed-planning-50x40.png",
+      "text": "fixed-planning-50x40.txt"
+    },
+    {
+      "name": "fixed-execution",
+      "columns": 50,
+      "rows": 40,
+      "png": "fixed-execution-50x40.png",
+      "text": "fixed-execution-50x40.txt"
+    },
+    {
+      "name": "fixed-blocked",
+      "columns": 50,
+      "rows": 40,
+      "png": "fixed-blocked-50x40.png",
+      "text": "fixed-blocked-50x40.txt"
+    },
+    {
+      "name": "fixed-answer",
+      "columns": 50,
+      "rows": 40,
+      "png": "fixed-answer-50x40.png",
+      "text": "fixed-answer-50x40.txt"
+    },
+    {
+      "name": "fixed-idle",
+      "columns": 50,
+      "rows": 40,
+      "png": "fixed-idle-50x40.png",
+      "text": "fixed-idle-50x40.txt"
+    },
+    {
+      "name": "custom-planning",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-planning-50x40.png",
+      "text": "custom-planning-50x40.txt"
+    },
+    {
+      "name": "custom-execution",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-execution-50x40.png",
+      "text": "custom-execution-50x40.txt"
+    },
+    {
+      "name": "custom-blocked",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-blocked-50x40.png",
+      "text": "custom-blocked-50x40.txt"
+    },
+    {
+      "name": "custom-answer",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-answer-50x40.png",
+      "text": "custom-answer-50x40.txt"
+    },
+    {
+      "name": "custom-idle",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-idle-50x40.png",
+      "text": "custom-idle-50x40.txt"
+    },
+    {
+      "name": "notification",
+      "columns": 50,
+      "rows": 40,
+      "png": "notification-50x40.png",
+      "text": "notification-50x40.txt"
+    },
+    {
+      "name": "project",
+      "columns": 50,
+      "rows": 40,
+      "png": "project-50x40.png",
+      "text": "project-50x40.txt"
+    },
+    {
+      "name": "session-dialog-risk",
+      "columns": 50,
+      "rows": 40,
+      "png": "session-dialog-risk-50x40.png",
+      "text": "session-dialog-risk-50x40.txt"
+    },
+    {
+      "name": "other-session",
+      "columns": 50,
+      "rows": 40,
+      "png": "other-session-50x40.png",
+      "text": "other-session-50x40.txt"
+    },
+    {
+      "name": "source-unset",
+      "columns": 50,
+      "rows": 40,
+      "png": "source-unset-50x40.png",
+      "text": "source-unset-50x40.txt"
+    },
+    {
+      "name": "source-unavailable",
+      "columns": 50,
+      "rows": 40,
+      "png": "source-unavailable-50x40.png",
+      "text": "source-unavailable-50x40.txt"
+    },
+    {
+      "name": "source-available",
+      "columns": 50,
+      "rows": 40,
+      "png": "source-available-50x40.png",
+      "text": "source-available-50x40.txt"
+    },
+    {
+      "name": "custom-options",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-options-50x40.png",
+      "text": "custom-options-50x40.txt"
+    },
+    {
+      "name": "model-no-effort",
+      "columns": 50,
+      "rows": 40,
+      "png": "model-no-effort-50x40.png",
+      "text": "model-no-effort-50x40.txt"
+    },
+    {
+      "name": "model-changed",
+      "columns": 50,
+      "rows": 40,
+      "png": "model-changed-50x40.png",
+      "text": "model-changed-50x40.txt"
+    },
+    {
+      "name": "custom-preview",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-preview-120x40.png",
+      "text": "custom-preview-120x40.txt"
+    },
+    {
+      "name": "custom-ordered",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-ordered-120x40.png",
+      "text": "custom-ordered-120x40.txt"
+    },
+    {
+      "name": "custom-saved",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-saved-120x40.png",
+      "text": "custom-saved-120x40.txt"
+    },
+    {
+      "name": "custom-other-session",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-other-session-120x40.png",
+      "text": "custom-other-session-120x40.txt"
+    },
+    {
+      "name": "custom-reset-preview",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-reset-preview-120x40.png",
+      "text": "custom-reset-preview-120x40.txt"
+    },
+    {
+      "name": "custom-restored",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-restored-120x40.png",
+      "text": "custom-restored-120x40.txt"
+    },
+    {
+      "name": "custom-save-failed",
+      "columns": 120,
+      "rows": 40,
+      "png": "custom-save-failed-120x40.png",
+      "text": "custom-save-failed-120x40.txt"
+    },
+    {
+      "name": "custom-preview",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-preview-80x24.png",
+      "text": "custom-preview-80x24.txt"
+    },
+    {
+      "name": "custom-ordered",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-ordered-80x24.png",
+      "text": "custom-ordered-80x24.txt"
+    },
+    {
+      "name": "custom-saved",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-saved-80x24.png",
+      "text": "custom-saved-80x24.txt"
+    },
+    {
+      "name": "custom-other-session",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-other-session-80x24.png",
+      "text": "custom-other-session-80x24.txt"
+    },
+    {
+      "name": "custom-reset-preview",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-reset-preview-80x24.png",
+      "text": "custom-reset-preview-80x24.txt"
+    },
+    {
+      "name": "custom-restored",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-restored-80x24.png",
+      "text": "custom-restored-80x24.txt"
+    },
+    {
+      "name": "custom-save-failed",
+      "columns": 80,
+      "rows": 24,
+      "png": "custom-save-failed-80x24.png",
+      "text": "custom-save-failed-80x24.txt"
+    },
+    {
+      "name": "custom-preview",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-preview-50x40.png",
+      "text": "custom-preview-50x40.txt"
+    },
+    {
+      "name": "custom-ordered",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-ordered-50x40.png",
+      "text": "custom-ordered-50x40.txt"
+    },
+    {
+      "name": "custom-saved",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-saved-50x40.png",
+      "text": "custom-saved-50x40.txt"
+    },
+    {
+      "name": "custom-other-session",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-other-session-50x40.png",
+      "text": "custom-other-session-50x40.txt"
+    },
+    {
+      "name": "custom-reset-preview",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-reset-preview-50x40.png",
+      "text": "custom-reset-preview-50x40.txt"
+    },
+    {
+      "name": "custom-restored",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-restored-50x40.png",
+      "text": "custom-restored-50x40.txt"
+    },
+    {
+      "name": "custom-save-failed",
+      "columns": 50,
+      "rows": 40,
+      "png": "custom-save-failed-50x40.png",
+      "text": "custom-save-failed-50x40.txt"
+    }
+  ]
+}

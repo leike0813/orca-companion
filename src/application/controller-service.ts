@@ -73,6 +73,7 @@ import type {
 } from './ports/branch-coordination-store.js';
 import type { ExecutionHandoffReviewFacts } from './handoff/execution-handoff.js';
 import type { HandoffReviewFacts } from './planning/planning-handoff.js';
+import type { SubmissionQuery, SubmissionStatus } from './coordinator/submission-status.js';
 
 /* -------------------------------------------------------------------------- */
 /* 查询：只读快照与 transcript                                                 */
@@ -369,11 +370,18 @@ export type ControllerQuery =
       readonly kind: 'session-transcript';
       readonly coordinatorSessionId: CoordinatorSessionId;
       readonly cursor?: string;
+    }
+  | {
+      /** 只读提交核验：界面确认自己上一次提交是否已被权威事实受理。 */
+      readonly kind: 'submission-status';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly query: SubmissionQuery;
     };
 
 export type ControllerQueryResult =
   | { readonly kind: 'snapshot'; readonly snapshot: ControllerSnapshot }
   | { readonly kind: 'session-transcript'; readonly transcript: ControllerTranscriptPage }
+  | { readonly kind: 'submission-status'; readonly status: SubmissionStatus }
   | { readonly kind: 'rejected'; readonly code: string; readonly message: string };
 
 /* -------------------------------------------------------------------------- */
@@ -475,6 +483,8 @@ export type ExecutionAuthorizationCommand = ControllerScopeFields &
  */
 export type AnswerPendingInteractionCommand = ControllerScopeFields & {
   readonly kind: 'answer-pending-interaction';
+  /** 界面生成的稳定提交身份；同一次重试复用，缺失即结构化拒绝。 */
+  readonly submissionId: string;
   readonly interactionId: InteractionId;
   readonly expectedRevision: Revision;
   readonly answer: string;
@@ -757,9 +767,21 @@ export type ExecutionAuthorizationPort = (
 export type GraphEvolutionPort = (input: GraphEvolutionCommand) => Promise<DelegatedOutcome>;
 export type ScopeInitializationPort = (input: InitializeScopeCommand) => Promise<DelegatedOutcome>;
 
+/** 只读提交核验的委派入参：Scope 由宿主绑定，查询本身只描述界面提交过的事实。 */
+export type ControllerSubmissionStatusInput = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly query: SubmissionQuery;
+};
+
+export type ControllerSubmissionStatusPort = (
+  input: ControllerSubmissionStatusInput,
+) => Promise<SubmissionStatus> | SubmissionStatus;
+
 export type ControllerServiceDependencies = {
   readonly snapshots: ControllerSnapshotReader;
   readonly transcript: ControllerTranscriptReader;
+  /** 只读提交核验；测试 fake 省略时该查询返回不可核验，不猜测结果。 */
+  readonly submissionStatus?: ControllerSubmissionStatusPort;
   readonly sessionMessages: SessionMessagePort;
   readonly compaction: CompactionPort;
   readonly modelConfiguration: ModelConfigurationPort;
@@ -1142,6 +1164,19 @@ export function createControllerService(dependencies: ControllerServiceDependenc
           cursor: input.cursor ?? null,
         });
         return { kind: 'session-transcript', transcript };
+      }
+      case 'submission-status': {
+        if (dependencies.submissionStatus === undefined) {
+          return {
+            kind: 'submission-status',
+            status: { kind: 'unverifiable', reason: '宿主未提供提交核验能力' },
+          };
+        }
+        const status = await dependencies.submissionStatus({
+          coordinationScopeId: input.coordinationScopeId,
+          query: input.query,
+        });
+        return { kind: 'submission-status', status };
       }
     }
   };

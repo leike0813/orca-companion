@@ -1,0 +1,40 @@
+orca-c/main · S-A · 规划/active · 待答0
+Ctrl+P 命令 · Ctrl+S 会话 · Ctrl+B 项目
+
+                ╭──────────────────────────────────────────────────────────────────────────────────────╮
+                │ 命令面板 › 交接审阅                                                                  │
+                │ 来自 对话 · 会话 S-A                                                                 │
+                │ 目标 session-long-中文规划-2026                                                      │
+                │ 请审阅目标、范围与影响                                                               │
+                │ 目标：session-long-中文规划-2026 → session-b                                         │
+                │ proposal fixture-planning-handoff-52 phase=reviewed                                  │
+                │ source session-long-中文规划-2026 -> target session-b                                │
+                │ mapRevision 3 · planRevision 3                                                       │
+                │ capsule fixture-capsule-52                                                           │
+                │ 待转移规划责任: session-long-中文规划-2026                                           │
+                │ proposalRevision 7                                                                   │
+                │ Source 的责任由 Target 接收；Target 等待下一条用户消息                               │
+                │ Worker 继续运行；原会话草稿保留                                                      │
+                │                                                                                      │
+                │                                                                                      │
+                │                                                                                      │
+                │                                                                                      │
+                │                                                                                      │
+                │                                                                                      │
+                │                                                                                      │
+                │                                                                                      │
+                │                                                                                      │
+                │                                                                                      │
+                │                                                                                      │
+                │                                                                                      │
+                │                                                                                      │
+                │                                                                                      │
+                │                                                                                      │
+                │ 阅读 1–9/9 · ↑↓ / PgUp PgDn                                                          │
+                │ Enter 确认 · Esc 返回                                                                │
+                │                                                                                      │
+                │                                                                                      │
+                ╰──────────────────────────────────────────────────────────────────────────────────────╯
+
+原型 身份摘要 · planning · commands · 滚动0
+^T方案 ^Y场景 ^N消息 ^U缺失 · Esc返回

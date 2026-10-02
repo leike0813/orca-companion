@@ -20,6 +20,7 @@
 | IC-10 | `m1-evolve-execution-graph` | 无 | ControllerService、TUI |
 | IC-11 | `m1-recover-execution` | Change 8 增加图演进 projection/commands；`m1-wire-foreground-planning-runtime` 增加消息/回答字段与事件归属；`m2-deliver-planning-tui` 增加只读投影；`m2-deliver-execution-tui` 增加执行投影、Finalizer 与执行交接投影 | CLI、两个 TUI change |
 | IC-12 | `m0-orca-control-baseline` | `m1-wire-foreground-planning-runtime` 登记精确 Home 解析；`m2-deliver-planning-tui` 增加 planning 投影与组件；`m2-deliver-execution-tui` 增加执行态字段与组件 | CLI machine output、TUI React components |
+| IC-13 | `protect-tui-input` | 无 | Bootstrap、TUI 输入保护与记录管理 |
 
 ## IC-01 Identity、revision 与引用字段族
 
@@ -156,7 +157,7 @@ type CoordinationCommandResult =
 | Session registry | Session ID、Coordinator Model Configuration ref、生命周期状态；不保存 provider credential/object |
 | Lease | lease kind、holder Session/Incarnation、expiry、fencing generation；Runtime expiry 不自动释放长期 claim/Execution Lease |
 | Ticket claim | ticket ref、Session、state；正文和 tracker assignee 仍归 tracker |
-| Pending Interaction | InteractionId、owner Session、scope ref、expected revision、state、answer ref；受控回答正文与状态在同一 CAS 事务写入，普通聊天不能满足 |
+| Pending Interaction | InteractionId、owner Session、scope ref、expected revision、state、answer ref；回答引用绑定 interaction 与 submissionId，受控正文与状态在同一 CAS 事务写入，普通聊天不能满足 |
 | Operation Intent | OperationId、target、expected revision、state、outcome class、backend request ref；不复制 receipt 正文 |
 | Budget counters | budget key、approved limit ref、consumed count；重启/恢复/patch 不重置 |
 | 后继记录 | wake admission、graph/auth refs、bindings、dedupe refs、Recovery/Handoff/lineage；只存不可重建最小事实 |
@@ -213,6 +214,8 @@ type CoordinatorSessionState = {
 ```
 
 `m1-wire-foreground-planning-runtime` 将 Session payload 升为 v2：每条已提交消息有稳定 `entryId`；tool result 还包含配对的 `toolCallId` 与名称，assistant call 的可信 `OperationId` 在模型响应提交时由宿主分配；`lastCompactionOutcome` 是该 Session 最近一次维护结果。v1 读取只做可证明唯一的升级，失败阻塞且保留原 checkpoint。普通用户消息以 `submissionId` 与 WakeBatch 原子落盘后补记 source admission；交互回答正文属于 IC-03。
+
+`CoordinatorSessionRecordPort.appendModelStep` 与 `appendToolResult` 在既有 storage 事务中读取最新 core、核验稳定条目身份并追加。相同身份与内容的重放返回 `saved`，身份相同但内容冲突返回 `failed`；等待期间受理的用户消息与 Wake Batch 保留。Workflow 使用这两个方法提交响应和工具结果，路由与消费字段维持原语义。
 
 `request_graph_patch` 的 `ok` 工具结果可以携带 `completedWorkSource`（完整 source kind/id/revision），表示该次用户工作已由受理动作处理。拒绝、unknown 与未落盘结果不带此字段；宿主按精确来源重建待处理工作，不再把同一声明交给模型。该字段只允许出现在 tool 消息中，旧 checkpoint 缺失字段仍可读。
 
@@ -540,7 +543,8 @@ interface ControllerService {
 
 type ControllerQuery =
   | { kind: 'snapshot'; coordinationScopeId: string; selectedSessionId?: string }
-  | { kind: 'session-transcript'; coordinatorSessionId: string; cursor?: string };
+  | { kind: 'session-transcript'; coordinatorSessionId: string; cursor?: string }
+  | { kind: 'submission-status'; coordinationScopeId: string; query: SubmissionQuery };
 
 type ControllerCommand =
   | SendSessionMessage
@@ -693,9 +697,9 @@ type ExecutionAuthorizationCommand = ControllerScopeFields &
 
 Execution Authorization Manifest 的长期字段（Worker Profile、角色权限、预算上限、Git 与 Dependency Policy、accepted risks）来自版本化项目配置的 `execution` 段（`src/bootstrap/project-config.ts`，见 README）；Manifest 仍是唯一的授权事实，配置只提供待批准的候选值，批准是用户对完整 Manifest 的一次决定。`execution.codexSandbox` 只影响角色级 Session 的 Codex 沙箱模式：设为 `danger-full-access` 时审阅要求 `acceptedRisks` 含 `codex-sandbox-danger-full-access`（并把该模式显示为 `Worker Sandbox` 一行），角色级派发与替代 Session 还要求**已批准 Manifest** 携带同一风险；Finalizer 始终以 `read-only` 运行。
 
-`SemanticEvent` 是 UI 可投影的封闭联合；keepalive、stderr、poll timeout、无变化 reconciliation 和诊断日志不发布。`AnswerPendingInteraction` 必须含 InteractionId、expected revision 和 answer payload；普通 Session message 不满足 interaction。
+`SemanticEvent` 是 UI 可投影的封闭联合；keepalive、stderr、poll timeout、无变化 reconciliation 和诊断日志不发布。`AnswerPendingInteraction` 必须含 InteractionId、expected revision、submissionId 和 answer payload；普通 Session message 不满足 interaction。
 
-`m1-wire-foreground-planning-runtime` 的 Extend：`SendSessionMessage` 增加稳定 `submissionId`；`AnswerPendingInteraction` 以 `answer: string` 进入应用用例，由宿主/IC-03 生成稳定 answer ref 并原子存正文。语义事件统一携带 `eventId`、`coordinationScopeId` 与可空 `coordinatorSessionId`，只在对应权威事实已提交并读回后发布。TUI 只用归属 ID 设置未读标记，重启后依快照恢复。
+`m1-wire-foreground-planning-runtime` 的 Extend：`SendSessionMessage` 增加稳定 `submissionId`；`AnswerPendingInteraction` 以 `answer: string` 进入应用用例，IC-03 由 interaction ID 与提交身份生成稳定 answer ref 并原子存正文。语义事件统一携带 `eventId`、`coordinationScopeId` 与可空 `coordinatorSessionId`，只在对应权威事实已提交并读回后发布。TUI 只用归属 ID 设置未读标记，重启后依快照恢复。
 
 Service 只委派既有用例，不打开 store、不调用具体 adapter、不拥有状态转换。Scope 初始化继续使用 `initializeCoordinationScope`，不塞入 façade。
 
@@ -758,6 +762,29 @@ type StatusJson = {
 
 - **版本/可访问性**：状态不能只靠颜色；宽字符按显示宽度裁切。`StatusJson.schemaVersion` 变化时消费者可 fail closed；字段顺序不是合同。
 - **测试 seam**：纯 projection 单测、Ink 组件交互测试、真实 PTY 的 TTY/CJK/resize/终端恢复测试；不使用整屏大 snapshot。
+
+## IC-13 UI 输入存储
+
+- **Owner (Create)**: `protect-tui-input`
+- **Canonical paths**: `src/application/ports/ui-input-store.ts`、`src/adapters/storage/ui-input-store.ts`
+- **Consumers (Consume)**: Bootstrap、TUI 输入保护与输入记录管理
+
+`UiInputStore` 是同步窄端口，提供 `read(key)`、`list(scopeId)`、`write({key, expectedRevision, record})` 和 `remove({key, expectedRevision})`。Bootstrap 注入 `TuiPorts.inputStore`，TUI 不打开数据库。adapter 生命周期的 `close` 由宿主拥有。
+
+目标为普通消息的 Scope/Session，或回答的 Scope/owner Session/InteractionId/expected revision。`targetDraftKey` 使用 JSON tuple，草稿、冲突副本和提交分别有独立 key。正文、光标与 `{id,text}` 粘贴载荷组成 `UiDraft`；`UiInputRecord` 是 `draft`、`conflict` 或带 submissionId、reason 和 `awaiting|unknown|rejected|conflict` 状态的 `submission`，附 key/revision。边界使用运行时 schema；无效数据报告失败或有界 `invalidRecords`，可显式删除，不静默丢弃。
+
+SQLite 位于 Git common dir 的 `orca-companion/ui.sqlite`。短事务中完成 CAS、容量检查和写入；删除保留单调版本标记，拒绝删除前的旧写入。同一 Scope/Session 最多一条 awaiting/unknown 提交；明确拒绝与冲突记录保留但释放等待位置。每仓库双上限为 256 条有效记录和 32 MiB UTF-8 正文/粘贴载荷，涵盖冲突与快照，不包含 SQLite/WAL 文件尺寸；不自动淘汰。单次发送沿用 `MAX_USER_MESSAGE_CHARS`，超限输入保留，不截断。
+
+用户编辑触发约 250 ms 合并保存；粘贴、切 Session、退出回答、提交和正常退出立即保存。发送前持久化完整快照与稳定 submissionId；保存失败不发送。结果只结清原快照，新输入和其他草稿不被清空。确认受理后删除快照，删除失败保留供再次核验。拒绝、冲突或不可核验内容由用户恢复或删除。并发草稿冲突保留双方供用户选择；容量不足时保留内存输入与原持久记录。
+
+恢复时先通过 IC-11 查询核验既有提交；Bootstrap 生命周期可删除已确认快照，React effect 只读。用户可经 `/inputs` 查看、恢复、删除和核验记录；恢复草稿不自动发送。退出保存失败默认留在界面，只有再次明确确认才丢弃未保存输入并退出。
+
+### `protect-tui-input` 对 IC-03/04/11/12 的扩展
+
+- **IC-03 回答引用**：`answerRefFor(interactionId, submissionId)` 派生 `{kind:'interaction-answer', id:JSON.stringify([interactionId,submissionId])}`，与正文和解决状态沿现有事务持久化。同身份、同 expected revision、相同正文重放幂等；他人的关闭或回答不算本次成功。复用既有字段。
+- **IC-04 追加**：`CoordinatorSessionRecordPort.appendModelStep`、`appendToolResult` 由 storage 同步读取最新状态，按稳定条目身份校验并追加，返回 `CheckpointWriteResult`。两个异步 workflow 节点消费该接缝，保留执行期间新受理的消息、Wake 与上下文；路由、消费语义和 schema 不变。
+- **IC-11 核验**：普通消息与回答都必填 submissionId。`submission-status` 查询以 Scope、Session、submissionId、精确正文及回答绑定返回 `accepted`（含权威 ref）、`not-found`、`conflict` 或 `unverifiable`。它只读权威 checkpoint/交互记录，不取得 Runtime Lease、不启动模型；未知不能推断为未发生。
+- **IC-12 输入**：`TuiPorts.submissionStatus` 为必填只读端口；slash 前缀严格分流，未知/参数/多行格式错误保留输入，不进入聊天或回答；粘贴只插入并立即保存。管理入口及展示不复制业务受理规则。末尾编辑的光标随正文保存，完整编辑另由后续 change 扩展。
 
 ## 合同演进规则
 

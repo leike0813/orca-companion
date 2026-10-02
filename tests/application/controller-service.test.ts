@@ -356,6 +356,7 @@ function harness(options: { readonly realStoreUseCases: boolean }): {
         store: useCases,
         coordinationScopeId: input.coordinationScopeId,
         writer: input.writer,
+        submissionId: input.submissionId,
         interactionId: input.interactionId,
         expectedRevision: input.expectedRevision,
         answer: input.answer,
@@ -553,6 +554,23 @@ test('每个 query variant 只委派一次到对应读取用例', async () => {
   expect(calls.snapshots).toHaveLength(1);
 });
 
+test('缺少提交核验能力时返回不可核验且不产生副作用', async () => {
+  const { service, counting, backend } = harness({ realStoreUseCases: true });
+  const result = await service.query({
+    kind: 'submission-status',
+    coordinationScopeId: SCOPE,
+    query: {
+      kind: 'message',
+      coordinatorSessionId: SESSION,
+      submissionId: 'unverified-message',
+      content: '待核验消息',
+    },
+  });
+  expect(result).toMatchObject({ kind: 'submission-status', status: { kind: 'unverifiable' } });
+  expect(counting.commands).toHaveLength(0);
+  expect(backend.calls).toEqual({ query: 0, mutate: 0 });
+});
+
 test('过期的 Pending Interaction 回答被拒绝：零副作用、交互保持 open，且不产生 Orca mutation', async () => {
   const { service, counting, backend } = harness({ realStoreUseCases: true });
   const recorded = store.transact({
@@ -591,6 +609,7 @@ test('过期的 Pending Interaction 回答被拒绝：零副作用、交互保�
     kind: 'answer-pending-interaction',
     coordinationScopeId: SCOPE,
     writer: WRITER,
+    submissionId: 'submission-stale',
     interactionId: 'interaction-1' as InteractionId,
     // 过期的回答绑定的是提问之前的 revision。
     expectedRevision: binding - 1,
@@ -640,6 +659,7 @@ test('回答正文进入应用用例：派生稳定 answerRef，并与解决状�
     kind: 'answer-pending-interaction',
     coordinationScopeId: SCOPE,
     writer: WRITER,
+    submissionId: 'submission-answer-3',
     interactionId: 'interaction-3' as InteractionId,
     expectedRevision: binding,
     answer: '按方案 B 执行',
@@ -649,6 +669,7 @@ test('回答正文进入应用用例：派生稳定 answerRef，并与解决状�
   // façade 只搬运正文：answerRef 由用例派生，界面不构造它。
   expect(calls.pendingInteractions).toHaveLength(1);
   expect(calls.pendingInteractions[0]?.answer).toBe('按方案 B 执行');
+  expect(calls.pendingInteractions[0]?.submissionId).toBe('submission-answer-3');
   expect(counting.commands.filter((command) => command.kind === 'resolve-pending-interaction')).toHaveLength(1);
   const snapshot = store.query({ kind: 'snapshot', coordinationScopeId: SCOPE });
   const interaction =
@@ -658,7 +679,10 @@ test('回答正文进入应用用例：派生稳定 answerRef，并与解决状�
         )
       : undefined;
   expect(interaction?.state).toBe('answered');
-  expect(interaction?.answerRef).toEqual({ kind: 'interaction-answer', id: 'interaction-3' });
+  expect(interaction?.answerRef).toEqual({
+    kind: 'interaction-answer',
+    id: JSON.stringify(['interaction-3', 'submission-answer-3']),
+  });
   expect(interaction?.answerText).toBe('按方案 B 执行');
 });
 

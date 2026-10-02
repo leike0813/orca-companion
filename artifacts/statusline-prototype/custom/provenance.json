@@ -1,0 +1,31 @@
+{
+  "ticket": "https://github.com/leike0813/orca-companion/issues/48",
+  "status": "user selected custom and approved configuration design; prototype verified",
+  "savedAt": "2026-09-30T12:56:09.361Z",
+  "baseHead": "e774b5ab97aa103d1f3c160cd9c5e3d34413551e",
+  "node": "v24.12.0",
+  "pnpm": "11.10.0",
+  "sourceIncludesUncommittedChanges": true,
+  "sourceArchive": "source.tar.gz",
+  "sourceFiles": 339,
+  "samples": 96,
+  "defaultVariant": "custom",
+  "checks": [
+    "pnpm build",
+    "pnpm lint",
+    "git diff --check",
+    "node artifacts/statusline-prototype/verify.mjs --capture",
+    "node artifacts/statusline-prototype/verify.mjs --capture --custom-only (final custom changes)",
+    "node artifacts/project-panel-prototype/verify.mjs --variant tabs (12 passed)",
+    "no TTY: exit 2, empty stdout",
+    "archive source readback"
+  ],
+  "previousArchives": [
+    "artifacts/statusline-prototype/resumed/source.tar.gz",
+    "artifacts/dialog-prototype/final/source.tar.gz"
+  ],
+  "data": "explicit shared fixtures; progress 9/20 from complete fixture work packages, not a production aggregate",
+  "preferences": "prototype-only user JSON; test paths isolated in temporary directories",
+  "limitations": "No real provider usage/context, Claim projection, accepted-result aggregation, backend or cross-platform verification",
+  "remoteAvailability": "local workspace only; not committed or uploaded"
+}

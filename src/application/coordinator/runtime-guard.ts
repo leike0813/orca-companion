@@ -16,7 +16,12 @@ import {
   type FenceViolationCode,
   type LeaseRecord,
 } from '../../domain/coordination/leases.js';
-import type { CoordinatorSessionState, WakeBatch } from '../../domain/coordinator/session-state.js';
+import type {
+  CommittedMessageEntry,
+  CommittedModelStep,
+  CoordinatorSessionState,
+  WakeBatch,
+} from '../../domain/coordinator/session-state.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
@@ -112,13 +117,52 @@ export type UserMessageCommitPort = {
 };
 
 /**
+ * 追加一次模型响应（IC-04 的 checkpoint 侧 seam，design D9）。
+ *
+ * 与 `saveCheckpoint` 的区别在于**基准**：这里不接受调用方读到的整份状态，由 storage 在写入事务内
+ * 重新读取该 Session 的最新已提交状态后再追加。等待模型返回期间新受理的用户消息因此不会被旧快照
+ * 覆盖。
+ */
+export type AppendModelStepInput = {
+  readonly coordinatorSessionId: CoordinatorSessionId;
+  readonly graphPosition: CoordinatorSessionState['graphPosition'];
+  readonly step: CommittedModelStep;
+  /**
+   * 与 `step` 同身份的已提交消息条目。
+   *
+   * `step.messages` 是 provider 形状的可还原消息，`committedMessages` 是 Companion 自己的持久化形状；
+   * 两者身份相同但不能互相赋值，所以 seam 显式携带条目而不是让 storage 去猜。
+   */
+  readonly entry: CommittedMessageEntry;
+};
+
+/** 追加一条工具结果条目（与 `AppendModelStepInput` 同一语义，只改已提交消息一侧）。 */
+export type AppendToolResultInput = {
+  readonly coordinatorSessionId: CoordinatorSessionId;
+  readonly graphPosition: CoordinatorSessionState['graphPosition'];
+  readonly entry: CommittedMessageEntry;
+};
+
+/**
+ * 从最新已提交状态追加的窄 seam。
+ *
+ * 返回值复用 `CheckpointWriteResult`：成功与幂等重放都返回 `saved`（同一稳定身份不产生第二条记录），
+ * 身份相同但内容不同则以 `failed` 报告。
+ */
+export type CheckpointAppendPort = {
+  readonly appendModelStep: (input: AppendModelStepInput) => CheckpointWriteResult;
+  readonly appendToolResult: (input: AppendToolResultInput) => CheckpointWriteResult;
+};
+
+/**
  * 图节点需要的会话记录读写 seam。
  *
  * 声明在 Application 层，让 Workflow 只依赖这个 port 而不依赖具体 storage adapter；storage
  * adapter 以结构相容的方式实现它，两边都不需要互相 import。
  */
 export type CoordinatorSessionRecordPort = CheckpointRecoveryPort &
-  UserMessageCommitPort & {
+  UserMessageCommitPort &
+  CheckpointAppendPort & {
     readonly saveCheckpoint: (state: CoordinatorSessionState) => CheckpointWriteResult;
     /** 读回底层完整已提交消息条目；Capsule 是派生视图，不覆盖它们。 */
     readonly readCommittedMessages: (coordinatorSessionId: CoordinatorSessionId) => readonly unknown[];

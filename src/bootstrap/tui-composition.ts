@@ -5,7 +5,7 @@
  * `foreground-planning-runtime.ts`（配置、Git/Orca/tracker/模型核验、store、Session lease 心跳、
  * Controller 与事件源），本模块只负责把它按进程环境实例化，并把 `close` 交给调用方。
  *
- * 端口因此全部来自同一个宿主：界面拿不到 store、backend 或 writer 身份，也不存在两套装配。
+ * 端口全部来自同一个宿主：界面通过 IC-13 访问 UI 输入，业务 store、backend 与 writer 仍由宿主拥有。
  */
 
 import { createForegroundPlanningHost } from './foreground-planning-runtime.js';
@@ -14,7 +14,7 @@ import type { TuiEntryEnvironment } from './tui-entry.js';
 
 export type ComposedTuiPorts = {
   readonly ports: TuiPorts;
-  /** 进程退出前清理本进程资源（心跳 timer、checkpoint 句柄、订阅）；不改变任何业务状态。 */
+  /** 进程退出前清理心跳、checkpoint/UI 输入句柄与订阅；不改变任何业务状态。 */
   readonly close: () => void;
 };
 

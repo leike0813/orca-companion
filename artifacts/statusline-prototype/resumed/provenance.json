@@ -1,0 +1,14 @@
+{
+  "ticket": "https://github.com/leike0813/orca-companion/issues/48",
+  "status": "prototype awaiting user choice",
+  "savedAt": "2026-09-30T11:58:13.545Z",
+  "baseHead": "e774b5ab97aa103d1f3c160cd9c5e3d34413551e",
+  "node": "v24.12.0",
+  "pnpm": "11.10.0",
+  "sourceIncludesUncommittedChanges": true,
+  "sourceArchive": "source.tar.gz",
+  "samples": 81,
+  "defaultVariant": "fixed",
+  "originalDialogArchive": "artifacts/dialog-prototype/final/source.tar.gz",
+  "remoteAvailability": "local workspace only; not committed or uploaded"
+}
