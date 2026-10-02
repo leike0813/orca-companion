@@ -48,6 +48,7 @@ import {
 import { COORDINATOR_INVOKE_DEFAULTS, pendingToolCallsIn, type CoordinatorGraphState } from '../../src/workflow/coordinator/state.js';
 import { MODEL_NODE } from '../../src/workflow/coordinator/nodes.js';
 import { createToolsNode, TOOLS_NODE } from '../../src/workflow/coordinator/tool-node.js';
+import { userQuestionTool } from '../../src/workflow/coordinator/interaction-tools.js';
 import { FakeToolModel, type FakeToolModelTurn } from '../support/fake-tool-model.js';
 
 const SESSION = 'session-a' as CoordinatorSessionId;
@@ -187,6 +188,7 @@ function modelInput(currentWork: { readonly source: { readonly sourceId: string 
 function graphWith(input: {
   readonly model: unknown;
   readonly tools: readonly PlanningToolDefinition[];
+  readonly sessionTools?: readonly PlanningToolDefinition[];
   readonly assertFencing?: () => FencingAssertion;
   readonly seenWork?: (string | null)[];
 }) {
@@ -198,6 +200,7 @@ function graphWith(input: {
     checkpointer: store.checkpointer,
     sessionRecords: store,
     planningTools: input.tools,
+    ...(input.sessionTools === undefined ? {} : { sessionTools: input.sessionTools }),
     assertFencing: input.assertFencing ?? (() => ({ kind: 'valid', lease: {} as never })),
     newStepId: () => `step-${String((step += 1))}`,
     sleep: () => Promise.resolve(),
@@ -355,6 +358,30 @@ test('已受理的单次工具动作提交完成源并结束本条工作；拒�
   expect(rejected.status).toBe('running');
   expect(rejected.remainingWork).toEqual(work(1).items);
   expect(loadState().committedMessages.at(-1)?.completedWorkSource).toBeUndefined();
+});
+
+test('ask_user 在没有规划工具的图中恢复原调用，并继续处理下一次提问', async () => {
+  const recoveredId = 'ask-recovered';
+  seedPendingCalls([{ callId: recoveredId, name: 'ask_user', args: { question: '恢复问题' } }]);
+  const calls: { question: unknown; operationId: OperationId }[] = [];
+  const ask = userQuestionTool((question, context) => {
+    calls.push({ question, operationId: context.operationId });
+    return { kind: 'ok', value: { interactionId: context.operationId } };
+  });
+  const model = new FakeToolModel([
+    { kind: 'tool_calls', calls: [{ callId: 'ask-new', name: 'ask_user', args: { question: '新的问题' } }] },
+    { kind: 'text', content: '问题已创建' },
+  ]);
+  const result = await runGraph(graphWith({ model, tools: [], sessionTools: [ask] }), {
+    remainingWork: work(1).items, pendingToolCalls: 1,
+  });
+  expect(result.status).toBe('suspended');
+  expect(calls).toEqual([
+    { question: { text: '恢复问题', options: [] }, operationId: toolOperationId('step-1', recoveredId) },
+    { question: { text: '新的问题', options: [] }, operationId: toolOperationId('step-2', 'ask-new') },
+  ]);
+  expect(toolMessages(model.received[0] ?? []).map((message) => message.tool_call_id)).toEqual([recoveredId]);
+  expect(pendingToolCallsIn(loadState())).toBe(0);
 });
 
 test('响应提交后崩溃：恢复沿用原 call 与同一 operationId 补齐结果，且不重复执行已执行的调用', async () => {

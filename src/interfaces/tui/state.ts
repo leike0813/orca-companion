@@ -10,6 +10,8 @@
  */
 
 import type { WorkPackageExecutionState } from '../../application/execution/execution-view.js';
+import type { UiDraft } from '../../application/ports/ui-input-store.js';
+import { emptyDraft, textDraft } from './input/composer-editor.js';
 
 export type SidebarDensity = 'full' | 'compact' | 'collapsed';
 export type OverlayKind =
@@ -24,7 +26,8 @@ export type OverlayKind =
   /** 规划 → 执行的完整 Manifest 审阅；只读展示 + 一次显式批准。 */
   | 'authorization-review'
   /** 有界输入记录管理：查看、恢复、核验与删除草稿/冲突副本/待核验提交。 */
-  | 'input-record-manager';
+  | 'input-record-manager'
+  | 'paste-viewer';
 
 /** 等待用户确认的动作（IP-05、IP-06）；`null` 表示没有待确认动作。 */
 export type PendingConfirmation =
@@ -87,9 +90,9 @@ export type TuiState = {
   readonly overlayStack: readonly OverlayKind[];
   readonly sidebarDensity: SidebarDensity;
   readonly selectedSessionId: string | null;
-  readonly drafts: Readonly<Record<string, string>>;
+  readonly drafts: Readonly<Record<string, UiDraft>>;
   /** 回答草稿：按 interaction ID 与 expected revision 隔离，永不自动改绑。 */
-  readonly answerDrafts: Readonly<Record<string, string>>;
+  readonly answerDrafts: Readonly<Record<string, UiDraft>>;
   readonly scrollOffsets: Readonly<Record<string, number>>;
   readonly unreadSessionIds: readonly string[];
   readonly composerMode: ComposerMode;
@@ -136,8 +139,8 @@ export type TuiAction =
   | { readonly kind: 'sidebar-resized'; readonly allowed: SidebarDensity }
   | { readonly kind: 'session-selected'; readonly coordinatorSessionId: string }
   | { readonly kind: 'sessions-loaded'; readonly coordinatorSessionIds: readonly string[]; readonly preferred: string | null }
-  | { readonly kind: 'draft-changed'; readonly coordinatorSessionId: string; readonly text: string }
-  | { readonly kind: 'answer-draft-changed'; readonly answerKey: string; readonly text: string }
+  | { readonly kind: 'draft-changed'; readonly coordinatorSessionId: string; readonly text?: string; readonly draft?: UiDraft }
+  | { readonly kind: 'answer-draft-changed'; readonly answerKey: string; readonly text?: string; readonly draft?: UiDraft }
   | { readonly kind: 'scroll-changed'; readonly coordinatorSessionId: string; readonly offset: number }
   | { readonly kind: 'events-arrived'; readonly coordinatorSessionIds: readonly (string | null)[] }
   | { readonly kind: 'answer-mode-entered'; readonly interactionId: string; readonly expectedRevision: number }
@@ -192,12 +195,12 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
     case 'draft-changed':
       return {
         ...state,
-        drafts: { ...state.drafts, [action.coordinatorSessionId]: action.text },
+        drafts: { ...state.drafts, [action.coordinatorSessionId]: action.draft ?? textDraft(action.text ?? '') },
       };
     case 'answer-draft-changed':
       return {
         ...state,
-        answerDrafts: { ...state.answerDrafts, [action.answerKey]: action.text },
+        answerDrafts: { ...state.answerDrafts, [action.answerKey]: action.draft ?? textDraft(action.text ?? '') },
       };
     case 'scroll-changed':
       return {
@@ -265,7 +268,7 @@ export function draftFor(state: TuiState, coordinatorSessionId: string | null): 
   if (coordinatorSessionId === null) {
     return '';
   }
-  return state.drafts[coordinatorSessionId] ?? '';
+  return state.drafts[coordinatorSessionId]?.text ?? '';
 }
 
 /**
@@ -284,18 +287,22 @@ export function answerDraftKey(
 
 /** composer 当前应显示的文本；回答模式下读回答草稿，普通模式读 Session 草稿。 */
 export function composerDraftFor(state: TuiState, coordinatorSessionId: string | null): string {
+  return composerInputFor(state, coordinatorSessionId).text;
+}
+
+export function composerInputFor(state: TuiState, coordinatorSessionId: string | null): UiDraft {
   if (state.composerMode.kind === 'answer') {
     if (coordinatorSessionId === null) {
-      return '';
+      return emptyDraft();
     }
     const key = answerDraftKey(
       coordinatorSessionId,
       state.composerMode.interactionId,
       state.composerMode.expectedRevision,
     );
-    return state.answerDrafts[key] ?? '';
+    return state.answerDrafts[key] ?? emptyDraft();
   }
-  return draftFor(state, coordinatorSessionId);
+  return coordinatorSessionId === null ? emptyDraft() : state.drafts[coordinatorSessionId] ?? emptyDraft();
 }
 
 /** 是否允许该 Session 提交普通消息：只读 transcript 与 composer 模式无关，仅由只读集合决定。 */

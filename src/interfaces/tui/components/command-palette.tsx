@@ -28,6 +28,8 @@ export const COMMAND_IDS = [
   'execution-handoff',
   'authorize-execution',
   'filter-execution',
+  'answer',
+  'paste',
   'exit',
   'help',
 ] as const;
@@ -49,6 +51,8 @@ export type CommandPaletteProps = {
 export type CommandMeta = { readonly alias: string | null; readonly label: string };
 
 export const COMMAND_METADATA: Readonly<Record<CommandId, CommandMeta>> = {
+  answer: { alias: 'answer', label: '/answer 当前 Session 回答面板（Shift+←）' },
+  paste: { alias: 'paste', label: '/paste 查看完整粘贴块' },
   compact: { alias: 'compact', label: '/compact 手动压缩该 Session' },
   'model-picker': { alias: 'model', label: 'Model Picker 切换 Coordinator Model Configuration' },
   handoff: { alias: 'handoff', label: 'Route Planning Handoff（prepare → review → cutover）' },
@@ -107,8 +111,6 @@ const UNAVAILABLE_SLASH: Readonly<Record<string, string>> = {
   project: '项目面板将在后续批次接通',
   options: '选项目录将在后续批次接通',
   statusline: '状态栏设置将在后续批次接通',
-  answer: '待答选择将在后续批次接通（本批仍用待答卡片进入回答）',
-  paste: '粘贴块查看将在后续批次接通',
 };
 
 /**
@@ -149,10 +151,10 @@ export function parseSlashInput(text: string, mode: string): SlashResolution {
 
 export const HELP_LINES = [
   'Ctrl+P Command Palette · Ctrl+B Sidebar · Ctrl+G Graph Inspector',
-  'Ctrl+T 展开/折叠最近一条工具记录 · Ctrl+A 进入回答模式',
+  'Ctrl+T 展开/折叠最近一条工具记录 · Shift+← 回答 · Ctrl+A/E 行首尾',
   'Esc 逐层关闭 · Ctrl+C 退出（不隐式 Pause/Cancel，危险态先确认）',
   '执行图过滤只隐藏节点，不改变拓扑顺序',
-  'Enter 提交 · Shift+Enter（或 Alt+Enter）换行',
+  'Enter 提交 · Alt+Enter 换行（支持解析 Shift+Enter 的终端也可使用）',
 ];
 
 export function CommandPalette(props: CommandPaletteProps) {

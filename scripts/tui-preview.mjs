@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { createElement } from 'react';
 import { render } from 'ink';
 
-const scenarios = ['planning', 'execution', 'blocked', 'empty', 'long-cjk'];
+const scenarios = ['planning', 'execution', 'blocked', 'empty', 'long-cjk', 'answer'];
 const prototype = process.argv[2] === '--prototype';
 const graphPrototype = process.argv[2] === '--graph-prototype';
 const composerPrototype = process.argv[2] === '--composer-prototype';
@@ -74,7 +74,8 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
       workers: [],
       finalizer: { gate: { ready: false, blockers: ['no-work-packages'] }, coversWorkPackageIds: [], worktreePath: null, readOnlyProfile: 'unverified', integrationFrozen: 'unknown', workspace: null, evidenceRefs: [], verdict: null },
       executionReconciliation: { pending: scenario === 'blocked', unresolvedIntentCount: scenario === 'blocked' ? 1 : 0, activeWorkerCount: scenario === 'execution' ? 1 : 0, reasons: scenario === 'blocked' ? ['等待原操作对账'] : [] },
-      blockers: [], interactions: [], handoffs: [], recoveries: [],
+      blockers: [], interactions: scenario === 'answer' ? [{ interactionId: 'preview-question', ownerCoordinatorSessionId: 'session-a',
+        subjectRef: { kind: 'coordinator-session', id: 'session-a' }, expectedRevision: 7, state: 'open' }] : [], handoffs: [], recoveries: [],
       graphEvolution: { generations: [], revisionHolds: [], reconciliations: [], lineages: [], adoptions: [] },
       maintenance: null,
       graphTopologies: scenario === 'empty' ? [] : [graph],
@@ -295,6 +296,10 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
     const previewInputs = openUiInputStore({ databasePath: ':memory:' });
     if (previewInputs.kind !== 'opened') throw new Error(previewInputs.message);
     const ports = {
+      questions: async (input) => input.kind === 'pending-interactions'
+        ? { kind: 'pending-interactions', interactions: snapshot.interactions.filter((item) => item.ownerCoordinatorSessionId === input.coordinatorSessionId), nextCursor: null }
+        : { kind: 'pending-interaction', interaction: snapshot.interactions.find((item) => item.interactionId === input.interactionId && item.ownerCoordinatorSessionId === input.coordinatorSessionId)
+          ? { ...snapshot.interactions.find((item) => item.interactionId === input.interactionId), question: { text: '请确认中文路径与完整输入验收范围。', options: [{ label: '继续', description: '完成本批验收' }, { label: '稍后' }] } } : null },
       inputStore: previewInputs.store,
       submissionStatus: async () => ({ kind: 'unverifiable', reason: '预览不读取真实提交记录' }),
       snapshot: async (selectedSessionId) => ({ kind: 'snapshot', snapshot: { ...snapshot, selectedSessionId } }),

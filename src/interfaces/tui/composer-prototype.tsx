@@ -6,6 +6,7 @@ import { useRef, useState } from 'react';
 import type { ControllerSnapshot, ControllerTranscriptPage } from '../../application/controller-service.js';
 import { projectTranscriptPage, projectTuiViewModel } from '../../application/tui/view-model.js';
 import { handleComposerKey } from './app.js';
+import { textDraft } from './input/composer-editor.js';
 import { CommandPalette } from './components/command-palette.js';
 import { InteractionCard } from './components/interaction-card.js';
 import { Sidebar } from './components/sidebar.js';
@@ -153,8 +154,8 @@ export function ComposerPrototype(props: Props) {
     else if (key.tab) { /* Tab only accepts a visible command. */ }
     else handleComposerKey(input, key, {
       readOnly: false,
-      draft,
-      change,
+      draft: textDraft(draft),
+      change: (value) => change(value.text),
       submit: () => setNotice(answering && interaction !== undefined
         ? `模拟回答 ${interaction.interactionId} @ revision ${interaction.expectedRevision}；没有提交`
         : '模拟消息：文本与图片均没有提交'),

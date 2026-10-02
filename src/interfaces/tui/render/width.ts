@@ -4,11 +4,20 @@
  * Node 24 没有内置的显示宽度计算，而验收明确要求中文与中英文混排在 resize 后不失配，因此这里有一
  * 处最小实现：只覆盖本项目实际使用的码点区间（ASCII、CJK 全宽/宽、韩文、零宽组合与格式字符）。
  *
- * 边界是明确的：复杂 emoji、ZWJ 序列与区域指示符不做图形簇合并，按单个码点计算（多数情况下宽度
- * 为 1，不保证与所有终端一致）；无法判定的码点按宽度 1 处理。
+ * Grapheme 按原生 Segmenter 分组；emoji 与区域指示符按两列，未知字符按一列。
  */
 
 import type { SidebarDensity } from '../state.js';
+const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+function graphemes(text: string): readonly string[] {
+  return Array.from(segmenter.segment(text), (part) => part.segment);
+}
+
+function graphemeWidth(text: string): number {
+  if (/\p{Extended_Pictographic}|\p{Regional_Indicator}|\ufe0f/u.test(text)) return 2;
+  return Array.from(text).reduce((width, character) =>
+    width + (/\p{Mark}/u.test(character) ? 0 : codePointWidth(character.codePointAt(0) ?? 0)), 0);
+}
 
 /** 零宽：组合附加符号与格式控制字符，不占终端列。 */
 function isZeroWidth(codePoint: number): boolean {
@@ -47,8 +56,8 @@ export function codePointWidth(codePoint: number): number {
 
 export function displayWidth(text: string): number {
   let width = 0;
-  for (const character of text) {
-    width += codePointWidth(character.codePointAt(0) ?? 0);
+  for (const character of graphemes(text)) {
+    width += graphemeWidth(character);
   }
   return width;
 }
@@ -68,8 +77,8 @@ export function wrapByDisplayWidth(text: string, width: number): readonly string
     }
     let current = '';
     let currentWidth = 0;
-    for (const character of rawLine) {
-      const characterWidth = codePointWidth(character.codePointAt(0) ?? 0);
+    for (const character of graphemes(rawLine)) {
+      const characterWidth = graphemeWidth(character);
       if (currentWidth + characterWidth > limit && current.length > 0) {
         lines.push(current);
         current = '';
@@ -96,8 +105,8 @@ export function truncateToDisplayWidth(text: string, width: number, ellipsis = '
   const budget = limit - ellipsisWidth;
   let result = '';
   let used = 0;
-  for (const character of text) {
-    const characterWidth = codePointWidth(character.codePointAt(0) ?? 0);
+  for (const character of graphemes(text)) {
+    const characterWidth = graphemeWidth(character);
     if (used + characterWidth > budget) {
       break;
     }

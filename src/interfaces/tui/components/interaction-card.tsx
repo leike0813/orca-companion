@@ -32,7 +32,7 @@ export function InteractionCard(props: InteractionCardProps) {
       <Text color={props.answering ? tuiColors.focus : tuiColors.warning} bold>
         {truncateToDisplayWidth(label, Math.max(1, props.availableWidth))}
       </Text>
-      <Text dimColor>Ctrl+A 进入回答模式（绑定该 interaction 与当前 expected revision）</Text>
+      <Text dimColor>Shift+← 或 /answer 打开当前 Session 回答面板</Text>
     </Box>
   );
 }

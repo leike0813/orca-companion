@@ -11,13 +11,15 @@ import { createFakePorts, makeTranscript, renderTui, settle } from './harness.js
 
 const CTRL_P = '\u0010';
 const CTRL_T = '\u0014';
-const CTRL_A = '\u0001';
+const SHIFT_LEFT = '\u001b[1;2D';
 const ARROW_DOWN = '\u001b[B';
 const ARROW_UP = '\u001b[A';
 const ENTER = '\r';
+const OWN_QUESTION = { interactionId: 'i-own', ownerCoordinatorSessionId: 'session-b', subjectRef: { kind: 'ticket', id: 't-own' }, expectedRevision: 4, state: 'open' as const };
 
 async function press(rendered: ReturnType<typeof renderTui>, keys: string): Promise<void> {
   rendered.stdin.write(keys);
+  if (keys === '\u001b') await new Promise<void>((resolve) => setTimeout(resolve, 100));
   await settle(4);
 }
 
@@ -37,6 +39,115 @@ async function waitFor(
 }
 
 describe('容器输入路径', () => {
+  test('Ctrl+A 行首编辑；面板 Esc 恢复聊天光标，overlay 不穿透', async () => {
+    const fake = createFakePorts({ snapshot: { interactions: [OWN_QUESTION] } });
+    const rendered = renderTui(fake.ports);
+    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+    await press(rendered, '首尾');
+    await press(rendered, '\u001b[D');
+    await press(rendered, '中');
+    await press(rendered, SHIFT_LEFT);
+    await waitFor(rendered, (frame) => frame.includes('回答 interaction'));
+    await press(rendered, '回答草稿');
+    await press(rendered, '\u001b');
+    await press(rendered, '后');
+    expect(rendered.lastFrame()).toContain('首中后尾');
+    await press(rendered, CTRL_P);
+    await press(rendered, '\u0002');
+    await press(rendered, '\u001b');
+    await press(rendered, '\u0001');
+    await press(rendered, '前');
+    await press(rendered, ENTER);
+    expect(fake.executeIntents).toMatchObject([{ kind: 'send-session-message', content: '前首中后尾' }]);
+    rendered.unmount();
+  });
+
+  test('默认选项只选中，Enter 直接提交标签；自由回答的未知结果保留', async () => {
+    const fake = createFakePorts({ snapshot: { interactions: [OWN_QUESTION] }, executeResult: { kind: 'unknown', code: 'transport', message: '等待核验' } });
+    const ports = { ...fake.ports, questions: async (query: Parameters<NonNullable<typeof fake.ports.questions>>[0]) => {
+      const result = await fake.ports.questions!(query);
+      return result.kind === 'pending-interaction' && result.interaction ? { ...result, interaction: { ...result.interaction,
+        question: { text: '下一步怎么做？', options: [{ label: '继续', description: '完成实现' }, { label: '稍后' }] } } } : result;
+    } };
+    const rendered = renderTui(ports);
+    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+    await press(rendered, SHIFT_LEFT);
+    expect(await waitFor(rendered, (frame) => frame.includes('下一步怎么做'))).toContain('下一步怎么做');
+    expect(fake.executeIntents).toHaveLength(0);
+    await press(rendered, ARROW_DOWN);
+    await press(rendered, ENTER);
+    expect(fake.executeIntents).toMatchObject([{ kind: 'answer-pending-interaction', answer: '稍后' }]);
+    expect(rendered.lastFrame()).toContain('回答 1/1');
+    await press(rendered, '\t');
+    expect(rendered.lastFrame()).toContain('稍后');
+    rendered.unmount();
+  });
+
+  test('迟到受理不清空后来编辑的回答或离开面板', async () => {
+    const fake = createFakePorts({ snapshot: { interactions: [OWN_QUESTION] } });
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof fake.ports.execute>>>();
+    const rendered = renderTui({ ...fake.ports, execute: (intent) => { fake.executeIntents.push(intent); return pending.promise; } });
+    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+    await press(rendered, SHIFT_LEFT);
+    await waitFor(rendered, (frame) => frame.includes('回答 interaction'));
+    await press(rendered, '答案');
+    await press(rendered, ENTER);
+    await press(rendered, '后续编辑');
+    pending.resolve({ kind: 'accepted', revision: 8, summary: '已受理' });
+    await settle(6);
+    expect(rendered.lastFrame()).toContain('答案后续编辑');
+    expect(rendered.lastFrame()).toContain('回答 1/1');
+    rendered.unmount();
+  });
+
+  test('大粘贴在光标折叠，viewer Esc 恢复位置，发送全文', async () => {
+    const fake = createFakePorts({ snapshot: { interactions: [] } });
+    const rendered = renderTui(fake.ports);
+    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+    await press(rendered, '首尾');
+    await press(rendered, '\u001b[D');
+    const payload = '中文'.repeat(501) + '\n\n';
+    await press(rendered, '\u001b[200~' + payload + '\u001b[201~');
+    expect(rendered.lastFrame()).toContain('粘贴 1');
+    await press(rendered, CTRL_P);
+    // Palette 的 /paste 与 slash 共用入口。
+    for (let index = 0; index < 15; index++) await press(rendered, ARROW_DOWN);
+    await press(rendered, ENTER);
+    expect(rendered.lastFrame()).toContain('粘贴查看');
+    await press(rendered, '\u001b');
+    await press(rendered, '后');
+    await press(rendered, ENTER);
+    expect(fake.executeIntents, rendered.lastFrame()).toMatchObject([{ kind: 'send-session-message', content: '首' + payload + '后尾' }]);
+    rendered.unmount();
+  });
+
+  test('受理后的下一题详情迟到时，不抢占新的聊天输入', async () => {
+    const next = { ...OWN_QUESTION, interactionId: 'i-next', expectedRevision: 6 };
+    const fake = createFakePorts({ snapshot: { interactions: [OWN_QUESTION, next] } });
+    const delayed = Promise.withResolvers<Awaited<ReturnType<NonNullable<typeof fake.ports.questions>>>>();
+    let awaitingNext = false;
+    const rendered = renderTui({ ...fake.ports, questions: async (query) => {
+      if (query.kind === 'pending-interaction' && query.interactionId === next.interactionId) {
+        awaitingNext = true;
+        return delayed.promise;
+      }
+      return fake.ports.questions!(query);
+    } });
+    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+    await press(rendered, SHIFT_LEFT);
+    await waitFor(rendered, (frame) => frame.includes('回答 interaction'));
+    await press(rendered, '答案');
+    await press(rendered, ENTER);
+    await waitFor(rendered, () => awaitingNext);
+    expect(awaitingNext).toBe(true);
+    await press(rendered, '新的聊天');
+    delayed.resolve(await fake.ports.questions!({ kind: 'pending-interaction', coordinatorSessionId: 'session-b', interactionId: next.interactionId }));
+    await settle(6);
+    expect(rendered.lastFrame()).toContain('composer · 普通消息');
+    expect(rendered.lastFrame()).toContain('新的聊天');
+    expect(rendered.lastFrame()).not.toContain('回答 2/2');
+    rendered.unmount();
+  });
   test('Ctrl+T 展开最近一条工具记录，再次按下折叠', async () => {
     const fake = createFakePorts();
     const rendered = renderTui(fake.ports);
@@ -107,7 +218,7 @@ describe('容器输入路径', () => {
     rendered.unmount();
   });
 
-  test('Ctrl+A 在有待答交互时进入绑定 revision 的回答模式', async () => {
+  test('Shift+Left 在有待答交互时进入绑定 revision 的回答模式', async () => {
     const fake = createFakePorts({
       snapshot: {
         interactions: [
@@ -129,7 +240,7 @@ describe('容器输入路径', () => {
       () => fake.calls.some((call) => call.name === 'transcript' && call.detail === 'session-b'),
     );
     await waitFor(rendered, (frame) => frame.includes('待答'));
-    await press(rendered, CTRL_A);
+    await press(rendered, SHIFT_LEFT);
     const frame = await waitFor(rendered, (text) => text.includes('回答 interaction i-1'));
     expect(frame).toContain('回答 interaction i-1');
     expect(frame).toContain('revision 4');
@@ -157,7 +268,7 @@ describe('严格 slash 分类：错误输入保留且不发送', () => {
       await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
       await waitFor(rendered, (frame) => frame.includes('composer · 普通消息'));
 
-      await press(rendered, entry.keys);
+      await press(rendered, entry.label === '空白参数' ? '\u001b[200~' + entry.keys + '\u001b[201~' : entry.keys);
       await press(rendered, ENTER);
 
       // 既不发送普通消息，也不回答。
@@ -208,7 +319,7 @@ describe('严格 slash 分类：错误输入保留且不发送', () => {
     );
     await waitFor(rendered, (frame) => frame.includes('待答'));
 
-    await press(rendered, CTRL_A);
+    await press(rendered, SHIFT_LEFT);
     await waitFor(rendered, (frame) => frame.includes('回答 interaction i-1'));
 
     await press(rendered, '/nope');
@@ -219,7 +330,7 @@ describe('严格 slash 分类：错误输入保留且不发送', () => {
     const frame = rendered.lastFrame() ?? '';
     expect(frame).toContain('/nope');
     expect(frame).toContain('回答 interaction i-1');
-    expect(frame).toContain('待答 ticket:t-1');
+    expect(frame).toContain('ticket:t-1');
     rendered.unmount();
   });
 });

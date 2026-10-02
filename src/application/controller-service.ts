@@ -360,7 +360,15 @@ export type ControllerTranscriptPage = {
   readonly nextCursor: string | null;
 };
 
-export type ControllerQuery =
+export type ControllerQuestionQuery =
+  | { readonly kind: 'pending-interactions'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId: CoordinatorSessionId; readonly after?: import('./ports/branch-coordination-store.js').InteractionPageCursor }
+  | { readonly kind: 'pending-interaction'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId: CoordinatorSessionId; readonly interactionId: InteractionId };
+export type ControllerQuestionResult =
+  | { readonly kind: 'pending-interactions'; readonly interactions: readonly ControllerInteractionView[]; readonly nextCursor: import('./ports/branch-coordination-store.js').InteractionPageCursor | null }
+  | { readonly kind: 'pending-interaction'; readonly interaction: (ControllerInteractionView & { readonly question: import('./ports/branch-coordination-store.js').UserQuestion | null }) | null }
+  | { readonly kind: 'rejected'; readonly code: string; readonly message: string };
+
+export type ControllerQuery = ControllerQuestionQuery
   | {
       readonly kind: 'snapshot';
       readonly coordinationScopeId: CoordinationScopeId;
@@ -378,7 +386,7 @@ export type ControllerQuery =
       readonly query: SubmissionQuery;
     };
 
-export type ControllerQueryResult =
+export type ControllerQueryResult = ControllerQuestionResult
   | { readonly kind: 'snapshot'; readonly snapshot: ControllerSnapshot }
   | { readonly kind: 'session-transcript'; readonly transcript: ControllerTranscriptPage }
   | { readonly kind: 'submission-status'; readonly status: SubmissionStatus }
@@ -778,6 +786,7 @@ export type ControllerSubmissionStatusPort = (
 ) => Promise<SubmissionStatus> | SubmissionStatus;
 
 export type ControllerServiceDependencies = {
+  readonly questions?: (input: ControllerQuestionQuery) => Promise<ControllerQuestionResult> | ControllerQuestionResult;
   readonly snapshots: ControllerSnapshotReader;
   readonly transcript: ControllerTranscriptReader;
   /** 只读提交核验；测试 fake 省略时该查询返回不可核验，不猜测结果。 */
@@ -1151,6 +1160,9 @@ export function createControllerService(dependencies: ControllerServiceDependenc
 
   const query = async (input: ControllerQuery): Promise<ControllerQueryResult> => {
     switch (input.kind) {
+      case 'pending-interaction':
+      case 'pending-interactions':
+        return dependencies.questions === undefined ? { kind: 'rejected', code: 'questions_unavailable', message: '宿主未提供问题读取能力' } : dependencies.questions(input);
       case 'snapshot': {
         const snapshot = await dependencies.snapshots({
           coordinationScopeId: input.coordinationScopeId,

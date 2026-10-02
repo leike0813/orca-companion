@@ -11,7 +11,7 @@ export const GLOBAL_KEY_BINDINGS = {
   'toggle-sidebar': 'ctrl+b',
   'graph-inspector': 'ctrl+g',
   'toggle-tool': 'ctrl+t',
-  'enter-answer': 'ctrl+a',
+  'enter-answer': 'shift+left',
   exit: 'ctrl+c',
   escape: 'escape',
 } as const;
@@ -29,6 +29,8 @@ export type KeyEventLike = {
   readonly ctrl?: boolean;
   readonly meta?: boolean;
   readonly escape?: boolean;
+  readonly shift?: boolean;
+  readonly leftArrow?: boolean;
 };
 
 /**
@@ -37,6 +39,7 @@ export type KeyEventLike = {
  * 未识别的键位（包括所有普通字符）返回 `null`：调用方据此把输入交给 composer，而不是猜测意图。
  */
 export function resolveGlobalAction(input: string, key: KeyEventLike): GlobalAction | null {
+  if (key.shift && key.leftArrow && !key.ctrl && !key.meta) return 'enter-answer';
   if (key.ctrl === true && key.meta !== true) {
     if (input === 'p') {
       return 'command-palette';
@@ -49,9 +52,6 @@ export function resolveGlobalAction(input: string, key: KeyEventLike): GlobalAct
     }
     if (input === 't') {
       return 'toggle-tool';
-    }
-    if (input === 'a') {
-      return 'enter-answer';
     }
     if (input === 'c') {
       return 'exit';

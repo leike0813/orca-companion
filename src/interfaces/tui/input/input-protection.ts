@@ -21,6 +21,7 @@ import {
   type UiInputValue,
   type UiPasteBlock,
 } from '../../../application/ports/ui-input-store.js';
+import { insertPaste } from './composer-editor.js';
 
 /** 编辑合并窗口：由用户编辑触发，到点后合并保存。 */
 export const DRAFT_DEBOUNCE_MS = 250;
@@ -66,8 +67,8 @@ export type InputProtection = {
   /** 只读载入持久草稿；用户已编辑时返回 `stale`，绝不覆盖当前输入。 */
   readonly load: (target: UiInputTarget) => DraftLoad;
   /** 用户编辑：更新内存草稿并启动/重置合并窗口。 */
-  readonly edit: (target: UiInputTarget, text: string) => void;
-  /** 粘贴：追加正文与载荷并立即保存，不等待合并窗口。 */
+  readonly edit: (target: UiInputTarget, draft: UiDraft) => void;
+  /** 粘贴：在光标插入全文并立即保存，不等待合并窗口。 */
   readonly paste: (target: UiInputTarget, text: string) => SaveOutcome;
   /** 立即保存全部未保存草稿（切 Session、退出回答、正常退出前）。 */
   readonly flushAll: () => SaveOutcome;
@@ -150,6 +151,7 @@ export function createInputProtection(options: InputProtectionOptions): InputPro
   const { store } = options;
   const debounceMs = options.debounceMs ?? DRAFT_DEBOUNCE_MS;
   const makeBlockId = options.makeBlockId ?? randomId;
+  let pasteSequence = 0;
   const slots = new Map<string, Slot>();
   /**
    * 每个目标的编辑代际。
@@ -325,22 +327,28 @@ export function createInputProtection(options: InputProtectionOptions): InputPro
       slot.text = record.draft.text;
       slot.cursor = record.draft.cursor;
       slot.pasteBlocks = record.draft.pasteBlocks;
+      for (const block of slot.pasteBlocks) {
+        const sequence = Number(block.id.split(':')[0]);
+        if (Number.isSafeInteger(sequence)) pasteSequence = Math.max(pasteSequence, sequence);
+      }
       slot.dirty = false;
       return { status: 'loaded', draft: record.draft };
     },
-    edit(target, text) {
+    edit(target, draft) {
       const slot = ensureSlot(target);
-      slot.text = text;
-      slot.cursor = text.length;
+      slot.text = draft.text;
+      slot.cursor = draft.cursor;
+      slot.pasteBlocks = draft.pasteBlocks;
       bumpGeneration(target);
       slot.dirty = true;
       schedule();
     },
     paste(target, text) {
       const slot = ensureSlot(target);
-      slot.text = `${slot.text}${text}`;
-      slot.cursor = slot.text.length;
-      slot.pasteBlocks = [...slot.pasteBlocks, { id: makeBlockId(), text }];
+      const draft = insertPaste({ text: slot.text, cursor: slot.cursor, pasteBlocks: slot.pasteBlocks }, text, `${String(++pasteSequence)}:${makeBlockId()}`);
+      slot.text = draft.text;
+      slot.cursor = draft.cursor;
+      slot.pasteBlocks = draft.pasteBlocks;
       bumpGeneration(target);
       slot.dirty = true;
       return saveOne(target);
@@ -405,7 +413,7 @@ export function createInputProtection(options: InputProtectionOptions): InputPro
       }
       // 冲突副本与提交快照的正文都能恢复为该目标的草稿；提交记录本身保留稳定身份，不删除。
       const current = read.record;
-      if (current !== null && current.kind !== 'submission' && current.draft.text === record.draft.text) {
+      if (current !== null && current.kind !== 'submission' && JSON.stringify(current.draft) === JSON.stringify(record.draft)) {
         // 恢复的正是库内当前版本：无需覆盖，也就无需备份。
         slot.revision = read.revision;
       } else {

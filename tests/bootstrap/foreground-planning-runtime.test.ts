@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, expect, test } from 'vitest';
+import { AIMessage } from '@langchain/core/messages';
 
 import type { IssueTrackerGateway, TrackerIssue, TrackerReadOutcome, TrackerWriteOutcome } from '../../src/application/planning/route-map-service.js';
 import type {
@@ -148,6 +149,7 @@ async function startHarness(
     readonly heartbeatIntervalMs?: number;
     readonly repository?: string;
     readonly maxInputTokens?: number;
+    readonly askUser?: boolean;
   } = {},
 ): Promise<Harness> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-foreground-'));
@@ -177,9 +179,17 @@ async function startHarness(
     loadIntegration: () =>
       Promise.resolve({
         CapableChatModel: class extends CapableChatModel {
+          private asked = false;
           override _generate(messages: never, options: never): never {
             requests.generations += 1;
             requests.inputs.push((messages as readonly { readonly content: unknown }[]).map((message) => String(message.content)).join('\n'));
+            if (overrides.askUser && !this.asked && requests.inputs.at(-1)?.includes('__ASK_USER__')) {
+              this.asked = true;
+              const message = new AIMessage({ content: '', tool_calls: [{ id: 'call-question', name: 'ask_user', args: {
+                question: '下一步怎么做？', options: [{ label: '继续', description: '完成实现' }, { label: '稍后' }],
+              } }] });
+              return Promise.resolve({ generations: [{ text: '', message }] }) as never;
+            }
             return super._generate(messages, options) as never;
           }
         },
@@ -256,6 +266,27 @@ test('配置缺失与 detached HEAD 都是可诊断拒绝，且不建立任何 S
     kind: 'failed',
     code: 'detached_head',
   });
+});
+
+test('生产工具循环创建真实问题，窄查询与回答沿用原 Session', async () => {
+  const harness = await startHarness({ askUser: true });
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  expect((await harness.host.ports.execute({ kind: 'send-session-message', coordinatorSessionId: proposal.coordinatorSessionId,
+    submissionId: 'ask-prompt', content: '__ASK_USER__' })).kind).toBe('accepted');
+  expect(await waitFor(() => harness.events.some((event) => event.kind === 'interaction-opened'))).toBe(true);
+  const opened = harness.events.find((event) => event.kind === 'interaction-opened');
+  if (!opened || opened.kind !== 'interaction-opened' || !harness.host.ports.questions) throw new Error('问题入口不可用');
+  const page = await harness.host.ports.questions({ kind: 'pending-interactions', coordinatorSessionId: proposal.coordinatorSessionId });
+  expect(page).toMatchObject({ kind: 'pending-interactions', interactions: [{ interactionId: opened.interactionId }], nextCursor: null });
+  const detail = await harness.host.ports.questions({ kind: 'pending-interaction', coordinatorSessionId: proposal.coordinatorSessionId, interactionId: opened.interactionId });
+  expect(detail).toMatchObject({ kind: 'pending-interaction', interaction: { question: { text: '下一步怎么做？', options: [{ label: '继续' }, { label: '稍后' }] } } });
+  const before = harness.requests.generations;
+  expect((await harness.host.ports.execute({ kind: 'answer-pending-interaction', coordinatorSessionId: proposal.coordinatorSessionId,
+    interactionId: opened.interactionId, expectedRevision: opened.expectedRevision, submissionId: 'answer-option', answer: '继续' })).kind).toBe('accepted');
+  expect(await waitFor(() => harness.requests.generations > before)).toBe(true);
+  expect(await harness.host.ports.questions({ kind: 'pending-interactions', coordinatorSessionId: proposal.coordinatorSessionId })).toMatchObject({ kind: 'pending-interactions', interactions: [] });
+  expect(harness.events.filter((event) => event.kind === 'interaction-opened')).toHaveLength(1);
 });
 
 test('向导创建 Scope 后 Home 按精确绑定恢复，且只读查询不产生模型调用或租约', async () => {

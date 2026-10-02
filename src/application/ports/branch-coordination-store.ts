@@ -14,6 +14,7 @@
  */
 
 import type { ControlState, CoordinationMode } from '../../domain/coordination/mode.js';
+import { MAX_USER_MESSAGE_CHARS } from '../coordinator/user-message.js';
 import type { MutationLaneRecord } from '../../domain/coordination/mutation-lane.js';
 import type { LeaseKind, LeaseRecord } from '../../domain/coordination/leases.js';
 import type { SourceRevisionRef } from '../../domain/coordinator/session-state.js';
@@ -116,6 +117,33 @@ export type PendingInteractionRecord = {
   readonly createdAt: number;
   readonly resolvedAt: number | null;
 };
+
+export type UserQuestion = {
+  readonly text: string;
+  readonly options: readonly { readonly label: string; readonly description?: string }[];
+};
+export type PendingInteractionDetail = PendingInteractionRecord & { readonly question: UserQuestion | null };
+export type InteractionPageCursor = { readonly createdAt: number; readonly interactionId: string };
+
+/** 工具与存储共用的问题边界，不接受模型填写身份。 */
+export function isUserQuestion(value: unknown): value is UserQuestion {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const data = value as Record<string, unknown>;
+  if (Object.keys(data).some((key) => key !== 'text' && key !== 'options') ||
+    typeof data['text'] !== 'string' || !data['text'].trim() || !Array.isArray(data['options']) || data['options'].length > 8) return false;
+  const labels = new Set<string>();
+  let length = data['text'].length;
+  for (const option of data['options']) {
+    if (typeof option !== 'object' || option === null || Array.isArray(option)) return false;
+    const item = option as Record<string, unknown>;
+    if (Object.keys(item).some((key) => key !== 'label' && key !== 'description') ||
+      typeof item['label'] !== 'string' || !item['label'].trim() || labels.has(item['label'].trim()) ||
+      (item['description'] !== undefined && typeof item['description'] !== 'string')) return false;
+    labels.add(item['label'].trim());
+    length += item['label'].length + (typeof item['description'] === 'string' ? item['description'].length : 0);
+  }
+  return length <= MAX_USER_MESSAGE_CHARS;
+}
 
 export type BudgetCounterRecord = {
   readonly coordinationScopeId: CoordinationScopeId;
@@ -638,6 +666,8 @@ export type CoordinationSnapshot = {
 };
 
 export type CoordinationQuery =
+  | { readonly kind: 'pending-interaction'; readonly coordinationScopeId: CoordinationScopeId; readonly interactionId: InteractionId; readonly coordinatorSessionId?: CoordinatorSessionId }
+  | { readonly kind: 'pending-interactions'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId: CoordinatorSessionId; readonly after?: InteractionPageCursor }
   | { readonly kind: 'scopes' }
   | { readonly kind: 'scope'; readonly coordinationScopeId: CoordinationScopeId }
   | { readonly kind: 'snapshot'; readonly coordinationScopeId: CoordinationScopeId }
@@ -749,6 +779,8 @@ export type CoordinationQueryRejectionCode = 'unreadable' | 'invalid_query';
  * `*| null` 表示「记录确实不存在」，与拒绝区分开。
  */
 export type CoordinationQueryResult =
+  | { readonly kind: 'pending-interaction'; readonly interaction: PendingInteractionDetail | null }
+  | { readonly kind: 'pending-interactions'; readonly interactions: readonly PendingInteractionRecord[]; readonly nextCursor: InteractionPageCursor | null }
   | { readonly kind: 'scopes'; readonly scopes: readonly ScopeRecord[] }
   | { readonly kind: 'scope'; readonly scope: ScopeRecord | null }
   | { readonly kind: 'snapshot'; readonly snapshot: CoordinationSnapshot }
@@ -851,6 +883,7 @@ export type CoordinationCommand =
       readonly interactionId: InteractionId;
       readonly ownerCoordinatorSessionId: CoordinatorSessionId;
       readonly subjectRef: EntityRef<string>;
+      readonly question?: UserQuestion;
     })
   | (CoordinationCommandBase & {
       readonly kind: 'resolve-pending-interaction';

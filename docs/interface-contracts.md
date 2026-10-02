@@ -544,7 +544,9 @@ interface ControllerService {
 type ControllerQuery =
   | { kind: 'snapshot'; coordinationScopeId: string; selectedSessionId?: string }
   | { kind: 'session-transcript'; coordinatorSessionId: string; cursor?: string }
-  | { kind: 'submission-status'; coordinationScopeId: string; query: SubmissionQuery };
+  | { kind: 'submission-status'; coordinationScopeId: string; query: SubmissionQuery }
+  | { kind: 'pending-interactions'; coordinationScopeId: string; coordinatorSessionId: string; after?: InteractionPageCursor }
+  | { kind: 'pending-interaction'; coordinationScopeId: string; coordinatorSessionId: string; interactionId: string };
 
 type ControllerCommand =
   | SendSessionMessage
@@ -771,9 +773,9 @@ type StatusJson = {
 
 `UiInputStore` 是同步窄端口，提供 `read(key)`、`list(scopeId)`、`write({key, expectedRevision, record})` 和 `remove({key, expectedRevision})`。Bootstrap 注入 `TuiPorts.inputStore`，TUI 不打开数据库。adapter 生命周期的 `close` 由宿主拥有。
 
-目标为普通消息的 Scope/Session，或回答的 Scope/owner Session/InteractionId/expected revision。`targetDraftKey` 使用 JSON tuple，草稿、冲突副本和提交分别有独立 key。正文、光标与 `{id,text}` 粘贴载荷组成 `UiDraft`；`UiInputRecord` 是 `draft`、`conflict` 或带 submissionId、reason 和 `awaiting|unknown|rejected|conflict` 状态的 `submission`，附 key/revision。边界使用运行时 schema；无效数据报告失败或有界 `invalidRecords`，可显式删除，不静默丢弃。
+目标为普通消息的 Scope/Session，或回答的 Scope/owner Session/InteractionId/expected revision。`targetDraftKey` 使用 JSON tuple，草稿、冲突副本和提交分别有独立 key。`UiDraft.text` 是唯一展开正文；cursor 为 UTF-16 grapheme 边界，`pasteBlocks` 只保存 `{id,start,end}`。块身份唯一，范围有序且不重叠，光标不能进入块内。`UiInputRecord` 是 `draft`、`conflict` 或带 submissionId、reason 和 `awaiting|unknown|rejected|conflict` 状态的 `submission`，附 key/revision。边界使用运行时 schema；无效数据报告失败或有界 `invalidRecords`，可显式删除，不静默丢弃。UI schema 版本为 2，不支持的版本保留原库并拒绝打开，不自动重建。
 
-SQLite 位于 Git common dir 的 `orca-companion/ui.sqlite`。短事务中完成 CAS、容量检查和写入；删除保留单调版本标记，拒绝删除前的旧写入。同一 Scope/Session 最多一条 awaiting/unknown 提交；明确拒绝与冲突记录保留但释放等待位置。每仓库双上限为 256 条有效记录和 32 MiB UTF-8 正文/粘贴载荷，涵盖冲突与快照，不包含 SQLite/WAL 文件尺寸；不自动淘汰。单次发送沿用 `MAX_USER_MESSAGE_CHARS`，超限输入保留，不截断。
+SQLite 位于 Git common dir 的 `orca-companion/ui.sqlite`。短事务中完成 CAS、容量检查和写入；删除保留单调版本标记，拒绝删除前的旧写入。同一 Scope/Session 最多一条 awaiting/unknown 提交；明确拒绝与冲突记录保留但释放等待位置。每仓库双上限为 256 条有效记录和 32 MiB UTF-8 展开正文，涵盖冲突与快照，同一记录不重复计粘贴载荷，不包含 SQLite/WAL 文件尺寸；不自动淘汰。单次发送沿用 `MAX_USER_MESSAGE_CHARS`，超限输入保留，不截断。
 
 用户编辑触发约 250 ms 合并保存；粘贴、切 Session、退出回答、提交和正常退出立即保存。发送前持久化完整快照与稳定 submissionId；保存失败不发送。结果只结清原快照，新输入和其他草稿不被清空。确认受理后删除快照，删除失败保留供再次核验。拒绝、冲突或不可核验内容由用户恢复或删除。并发草稿冲突保留双方供用户选择；容量不足时保留内存输入与原持久记录。
 
@@ -784,7 +786,15 @@ SQLite 位于 Git common dir 的 `orca-companion/ui.sqlite`。短事务中完成
 - **IC-03 回答引用**：`answerRefFor(interactionId, submissionId)` 派生 `{kind:'interaction-answer', id:JSON.stringify([interactionId,submissionId])}`，与正文和解决状态沿现有事务持久化。同身份、同 expected revision、相同正文重放幂等；他人的关闭或回答不算本次成功。复用既有字段。
 - **IC-04 追加**：`CoordinatorSessionRecordPort.appendModelStep`、`appendToolResult` 由 storage 同步读取最新状态，按稳定条目身份校验并追加，返回 `CheckpointWriteResult`。两个异步 workflow 节点消费该接缝，保留执行期间新受理的消息、Wake 与上下文；路由、消费语义和 schema 不变。
 - **IC-11 核验**：普通消息与回答都必填 submissionId。`submission-status` 查询以 Scope、Session、submissionId、精确正文及回答绑定返回 `accepted`（含权威 ref）、`not-found`、`conflict` 或 `unverifiable`。它只读权威 checkpoint/交互记录，不取得 Runtime Lease、不启动模型；未知不能推断为未发生。
-- **IC-12 输入**：`TuiPorts.submissionStatus` 为必填只读端口；slash 前缀严格分流，未知/参数/多行格式错误保留输入，不进入聊天或回答；粘贴只插入并立即保存。管理入口及展示不复制业务受理规则。末尾编辑的光标随正文保存，完整编辑另由后续 change 扩展。
+- **IC-12 输入**：`TuiPorts.submissionStatus` 为必填只读端口；slash 前缀严格分流，未知/参数/多行格式错误保留输入，不进入聊天或回答；粘贴只插入并立即保存。管理入口及展示不复制业务受理规则。完整 draft 经保护模块保存；编辑、viewport 与粘贴原子范围由 TUI 的 composer-editor 拥有。
+
+### `complete-tui-editor` 对 IC-03/11/12/13 的扩展
+
+- **IC-03 问题权威**：Pending Interaction 的精确详情增加可空 `question: {text,options:[{label,description?}]}`；Scope snapshot 保持身份摘要。`pending-interactions` 按 Scope/owner Session/open 状态，以 `(createdAt,interactionId)` keyset 返回最多 20 条摘要和 nextCursor；`pending-interaction` 精确读取绑定详情。Coordination schema 14 复用现有事务迁移新增 question 列和分页索引。
+- **Coordinator `ask_user`**：规划、执行和恢复注册表共用工具协议。一题至多八项，标签唯一非空，总文字沿用消息上限；Scope/owner/subject 来自可信 runtime，InteractionId 为 `JSON.stringify(['ask_user',operationId])`。应用用例负责验证、CAS 写入、回读和同载荷重放；异载荷冲突。写后核验成功才发布 interaction-opened，不自动 suspend。
+- **IC-11/12 查询**：Controller façade 委派窄问题查询；生产 `TuiPorts.questions` 由 Bootstrap 注入 Scope，未提供能力时明确拒绝。详情不包含回答正文、数据库 handle 或其他 Session 的问题。组件 render/effect 仍只读。
+- **IC-13 编辑**：保护模块接收完整 UiDraft；超过 1000 code points 的单次粘贴折叠，CRLF/CR 归一 LF，保留 tab/缩进/末尾空行。移动和删除跨整块，发送展开正文；250 ms 合并保存、立即保存节点、CAS、单活跃提交与 generation 规则不变。
+- **IC-12 面板**：Shift+Left、`/answer`、Palette 打开当前 Session 底部回答面板；Shift+左右切问题，Tab 切选项/自由输入，Enter 直接提交标签或输入。Esc 保存回答并恢复聊天完整草稿与阅读位置；新问题不抢焦点。`/paste` 和 Palette 查看完整折叠块，视口有界，退出恢复原位置。
 
 ## 合同演进规则
 

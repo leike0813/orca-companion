@@ -6,8 +6,11 @@
  * 回调。overlay 只渲染栈顶，`Esc` 由容器翻译成 `overlay-close-top`。
  */
 
-import { Box, Text } from 'ink';
-import type { ReactElement } from 'react';
+import { Box, Text, useBoxMetrics, type DOMElement } from 'ink';
+import { useRef, type ReactElement } from 'react';
+import { AnswerPanel, type AnswerPanelView } from '../components/answer-panel.js';
+import { PasteViewer, type PasteViewerView } from '../components/paste-viewer.js';
+import { composerViewport } from '../input/composer-editor.js';
 
 import { CommandPalette, type CommandId } from '../components/command-palette.js';
 import { Composer } from '../components/composer.js';
@@ -36,11 +39,12 @@ import type {
 } from '../../../application/controller-service.js';
 import type { TuiViewModel } from '../../../application/tui/view-model.js';
 import type { OverlayKind, TuiAction, TuiState } from '../state.js';
-import { composerDraftFor, isComposerReadOnly } from '../state.js';
+import { composerDraftFor, composerInputFor, isComposerReadOnly } from '../state.js';
+import type { UiDraft } from '../../../application/ports/ui-input-store.js';
 
 export type WorkspaceActions = {
   readonly dispatch: (action: TuiAction) => void;
-  readonly composerChange: (text: string) => void;
+  readonly composerChange: (draft: UiDraft) => void;
   readonly submit: () => void;
   readonly toggleTool: (entryId: string) => void;
   readonly selectSession: (coordinatorSessionId: string) => void;
@@ -75,6 +79,8 @@ export type WorkspaceProps = {
   readonly commands: readonly CommandId[];
   /** 输入记录管理的当前投影；`null` 表示 overlay 未打开。 */
   readonly inputManager?: InputRecordManagerView | null;
+  readonly answerPanel?: AnswerPanelView | null;
+  readonly pasteViewer?: PasteViewerView | null;
 };
 
 /** overlay 未打开时的空投影：组件本身不猜记录，只渲染容器读好的内容。 */
@@ -99,16 +105,26 @@ export function bodyWidth(terminalWidth: number, density: TuiState['sidebarDensi
 }
 
 export function Workspace(props: WorkspaceProps) {
+  const rowRef = useRef<DOMElement>(null);
+  const bodyRef = useRef<DOMElement>(null);
+  const rowMetrics = useBoxMetrics(rowRef);
+  const bodyMetrics = useBoxMetrics(bodyRef);
   const view = props.viewModel;
   const ui = props.ui;
   const width = bodyWidth(props.terminalWidth, ui.sidebarDensity);
   const selected = ui.selectedSessionId;
   const draft = composerDraftFor(ui, selected);
+  const input = composerInputFor(ui, selected);
   const readOnly = isComposerReadOnly(ui, selected);
   const interactions = view.interactions.filter(
-    (interaction) => selected === null || interaction.ownerCoordinatorSessionId === selected,
+    (interaction) => interaction.state === 'open' && interaction.ownerCoordinatorSessionId === selected,
   );
   const overlay = ui.overlayStack.at(-1) ?? null;
+  const origin = { x: rowMetrics.left + bodyMetrics.left, y: rowMetrics.top + bodyMetrics.top };
+  const rows = props.terminalHeight ?? 24;
+  const editorRows = composerViewport(input, Math.max(1, width - 1), rows).lines.length;
+  const panel = props.answerPanel;
+  if (overlay === 'paste-viewer' && props.pasteViewer) return <PasteViewer view={props.pasteViewer} width={props.terminalWidth} rows={rows} />;
 
   return (
     <Box flexDirection="column">
@@ -130,16 +146,19 @@ export function Workspace(props: WorkspaceProps) {
       {ui.sidebarDensity === 'collapsed' ? (
         <Text>{truncateToDisplayWidth(SIDEBAR_COLLAPSED_MARKER, props.terminalWidth)}</Text>
       ) : null}
-      <Box flexDirection="row">
-        <Box flexDirection="column" width={width}>
+      <Box ref={rowRef} flexDirection="row">
+        <Box ref={bodyRef} flexDirection="column" width={width}>
           <Transcript
             transcript={view.transcript}
             expandedToolIds={ui.expandedToolIds}
             onToggleTool={props.actions.toggleTool}
             availableWidth={width}
-            maxLines={Math.max(1, (props.terminalHeight ?? 60) - 12 - interactions.length * 5)}
+            maxLines={Math.max(1, rows - 12 - editorRows - (panel ? 9 : interactions.length ? 2 : 0))}
           />
-          {interactions.map((interaction) => (
+          {panel ? <AnswerPanel view={panel} draft={input} width={width} rows={rows} origin={origin}
+            focused={overlay === null && ui.pendingConfirmation === null} readOnly={readOnly} disabledReason={props.composerDisabledReason} /> : null}
+          {!panel && interactions.length ? <Text>{`${String(interactions.length)} 个待答问题 · Shift+← 或 /answer`}</Text> : null}
+          {!panel && interactions.slice(0, 1).map((interaction) => (
             <InteractionCard
               key={interaction.interactionId}
               interaction={interaction}
@@ -151,14 +170,18 @@ export function Workspace(props: WorkspaceProps) {
               availableWidth={width}
             />
           ))}
-          <Composer
+          {panel ? null : <Composer
             value={draft}
+            draft={input}
+            terminalHeight={rows}
+            focused={overlay === null && ui.pendingConfirmation === null}
+            origin={origin}
             mode={ui.composerMode}
             readOnly={readOnly}
             disabledReason={props.composerDisabledReason}
             newlineHint={props.newlineHint}
             availableWidth={width}
-          />
+          />}
           <ControlBar
             controlState={view.scope.controlState}
             hazards={view.execution.hazards}
@@ -200,6 +223,8 @@ function Overlay(props: {
 }): ReactElement {
   const { overlay, props: parent } = props;
   switch (overlay) {
+    case 'paste-viewer':
+      return <PasteViewer view={parent.pasteViewer ?? { draft: composerInputFor(parent.ui, parent.ui.selectedSessionId), block: 0, scroll: 0 }} width={parent.terminalWidth} rows={parent.terminalHeight ?? 24} />;
     case 'command-palette':
       return (
         <CommandPalette
@@ -304,7 +329,7 @@ export function HelpNotice(): ReactElement {
     <Box flexDirection="column">
       <Text>Help</Text>
       <Text>Ctrl+P Command Palette · Ctrl+B Sidebar · Ctrl+G Graph Inspector</Text>
-      <Text>Ctrl+T 展开/折叠最近一条工具记录 · Ctrl+A 进入回答模式</Text>
+      <Text>Ctrl+T 展开/折叠最近一条工具记录 · Shift+← 回答 · Ctrl+A/E 行首尾</Text>
       <Text>Esc 逐层关闭 · Ctrl+C 退出（危险态先确认）· Cancel 需确认</Text>
     </Box>
   );

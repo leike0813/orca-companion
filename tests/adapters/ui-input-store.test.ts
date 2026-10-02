@@ -116,8 +116,8 @@ test('默认上限是每仓库 256 条与 32 MiB，并写入 schema 版本位', 
 test('草稿、光标与粘贴载荷跨重启完整恢复', () => {
   const target = messageTarget();
   const pasteBlocks = [
-    { id: 'paste-1', text: '第一段粘贴\n内容' },
-    { id: 'paste-2', text: '第二段' },
+    { id: 'paste-1', start: 0, end: 2 },
+    { id: 'paste-2', start: 5, end: 7 },
   ];
   const value: UiInputValue = {
     kind: 'draft',
@@ -290,14 +290,14 @@ test('记录数满额时保留既有记录并拒绝新写入', () => {
   expect(store.list(SCOPE)).toMatchObject({ kind: 'records', usage: { records: 1 } });
 });
 
-test('容量按正文与粘贴载荷的 UTF-8 字节计算', () => {
+test('容量按唯一展开正文的 UTF-8 字节计算', () => {
   store.close();
   store = openInputs({ maxRecords: 16, maxBytes: 8 });
   const target = messageTarget();
   const value: UiInputValue = {
     kind: 'draft',
     target,
-    draft: { text: '你好', cursor: 2, pasteBlocks: [{ id: 'paste-1', text: 'ab' }] },
+    draft: { text: '你好ab', cursor: 4, pasteBlocks: [{ id: 'paste-1', start: 2, end: 4 }] },
   };
   expect(store.write({ key: targetDraftKey(target), expectedRevision: 0, record: value })).toMatchObject({ kind: 'saved' });
 
@@ -307,6 +307,21 @@ test('容量按正文与粘贴载荷的 UTF-8 字节计算', () => {
     code: 'capacity_exceeded',
   });
   expect(store.list(SCOPE)).toMatchObject({ kind: 'records', usage: { records: 1, bytes: 8 } });
+});
+
+test('草稿拒绝非法块身份、范围和 grapheme 光标，保留既有记录', () => {
+  const target = messageTarget();
+  const key = targetDraftKey(target);
+  expect(store.write({ key, expectedRevision: 0, record: draftValue(target, '既有') }).kind).toBe('saved');
+  const invalid: UiDraft[] = [
+    { text: '😀', cursor: 1, pasteBlocks: [] },
+    { text: 'abcd', cursor: 2, pasteBlocks: [{ id: 'x', start: 1, end: 3 }] },
+    { text: 'abcd', cursor: 4, pasteBlocks: [{ id: 'x', start: 0, end: 2 }, { id: 'x', start: 2, end: 4 }] },
+    { text: 'abcd', cursor: 4, pasteBlocks: [{ id: 'x', start: 0, end: 3 }, { id: 'y', start: 2, end: 4 }] },
+    { text: 'a', cursor: 1, pasteBlocks: [{ id: 'x', start: 0, end: 2 }] },
+  ];
+  for (const draft of invalid) expect(store.write({ key, expectedRevision: 1, record: { kind: 'draft', target, draft } }).kind).toBe('failed');
+  expect(store.read(key)).toMatchObject({ kind: 'record', record: { revision: 1, draft: { text: '既有' } } });
 });
 
 test('更新既有记录不额外占用记录位', () => {

@@ -187,6 +187,8 @@ Graph Patch 采用原子的 `add + revise + retire`：
 
 UI 输入另存于同目录 `ui.sqlite`，由 IC-13 的应用端口、storage adapter 和 Bootstrap 装配拥有。草稿、冲突副本与待核验提交按 Scope/Session/回答 revision 隔离；提交先保存完整快照和稳定 submissionId，再调用业务用例。输入恢复只核验原身份，界面 render/effect/resize/remount 只读取，不持久写入或自动发送。容量满额与 CAS 冲突保留输入并经 `/inputs` 显式处理；详细合同见 `docs/interface-contracts.md` IC-13。
 
+UiDraft.text 是唯一展开载荷，cursor 位于 grapheme 边界，折叠粘贴只保存唯一身份与非重叠范围。`ask_user` 的问题正文由 Branch Store 拥有，可信 operationId 派生 InteractionId；同载荷重放复用原记录，异载荷拒绝。当前 Session 问题列表按 keyset 最多 20 条，详情精确读取，Scope snapshot 只投影摘要。
+
 不同 Coordinator Session 不共享 checkpoint。同一 Session 同时只有一个 Runtime Incarnation；短 Runtime Lease 和递增 fencing generation 拒绝迟到进程写入。Execution Coordination 只有一个 Session 持有 Execution Coordination Lease。SQLite 事务保持短小，不使用项目级长期单写者锁。
 
 副作用前先持久化 Operation Intent，再执行外部 mutation，最后写后核验并完成 intent。外部响应丢失、receipt 缺失或 transport 故障不证明动作未发生；恢复时以原 OperationId、scope、receipt 和实时资源对账，仍不确定则阻塞对应 mutation lane。
@@ -211,9 +213,11 @@ LangGraph checkpoint、SQLite 和 Orca receipt 都不提供跨系统 exactly-onc
 
 初始化只建立 Scope、Planning Cycle 与首个 Coordinator Session；Worker Profiles、预算、依赖权限、Git 集成和 accepted risks 留给 Execution Authorization Manifest。
 
+**TUI 硬约束：尊重已确认原型。** 规划、实现或验收任何 TUI change 前，必须读取 [TUI 实现进度与原型交接](docs/dev/tui-implementation-handoff.md)，核对对应定稿来源、当前批次及验收要求。未经用户明确批准不得自行重新设计；交互或自动测试通过不能替代原型一致性验收。
+
 TUI 以选中 Coordinator Session 的 transcript 与 composer 为主视图。右侧响应式 sidebar 展示 Scope 状态、预算、紧凑 Execution Graph、Worker、blocker 和待处理交互；窄屏折叠或改为 overlay。全屏 Graph Inspector 只用于检查、选择与导航。
 
-Transcript 只显示用户/Agent 消息和折叠 tool 记录；运行事实进入 sidebar，语义事件进入 Event Drawer，诊断噪声只进日志。Pending Interaction 以内联卡片显示，回答 composer 必须绑定 interaction ID 与 expected revision；普通聊天不能满足待答问题。
+Transcript 只显示用户/Agent 消息和折叠 tool 记录；运行事实进入 sidebar，语义事件进入 Event Drawer，诊断噪声只进日志。Pending Interaction 显示紧凑入口，Shift+Left 或 `/answer` 打开当前 Session 底部面板，回答 composer 必须绑定 interaction ID 与 expected revision；普通聊天不能满足待答问题。Ctrl+A/E 为行首尾，Enter 提交，Alt+Enter 换行；面板 Esc 保存回答并恢复聊天光标，新问题不得抢焦点。
 
 最小全局键位为 `Ctrl+P` 打开 Command Palette、`Ctrl+B` 切换 sidebar、`Ctrl+G` 打开 Graph Inspector、`Esc` 逐层关闭 overlay，方向键与 Enter 用于导航。Session Picker 和新事件不得自动切换 transcript、抢占 composer 或改变 Scope 级 Graph；M2 不实现自定义键位。
 

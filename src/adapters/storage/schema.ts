@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -607,6 +607,10 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 11, statements: MIGRATION_11 },
   { version: 12, statements: MIGRATION_12 },
   { version: 13, statements: MIGRATION_13 },
+  { version: 14, statements: [
+    `ALTER TABLE pending_interactions ADD COLUMN question TEXT`,
+    `CREATE INDEX pending_interaction_page ON pending_interactions(coordination_scope_id, owner_coordinator_session_id, state, created_at, interaction_id)`,
+  ] },
 ];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {

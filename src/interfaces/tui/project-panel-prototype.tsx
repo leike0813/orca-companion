@@ -6,6 +6,7 @@ import { useRef, useState } from 'react';
 import type { ControllerSnapshot, ControllerTranscriptPage } from '../../application/controller-service.js';
 import { projectTranscriptPage, projectTuiViewModel } from '../../application/tui/view-model.js';
 import { handleComposerKey } from './app.js';
+import { textDraft } from './input/composer-editor.js';
 import { AuthorizationReview } from './components/authorization-review.js';
 import { StatusLine } from './components/status-line.js';
 import { TopBar } from './components/top-bar.js';
@@ -136,7 +137,7 @@ export function ProjectPanelPrototype(props: Props) {
   const answer = state.ui.composerMode.kind === 'answer' ? state.ui.composerMode : null;
   const answering = answer === null ? null : openQuestions.find((item) => item.interactionId === answer.interactionId);
   const draftKey = answer?.interactionId ?? state.ui.selectedSessionId ?? sessionA;
-  const draft = answer === null ? state.ui.drafts[draftKey] ?? '' : state.answerDrafts[draftKey] ?? '';
+  const draft = answer === null ? state.ui.drafts[draftKey]?.text ?? '' : state.answerDrafts[draftKey] ?? '';
   const originalConfigurationRef = view.sessions.find((item) => item.coordinatorSessionId === view.selectedSessionId)?.coordinatorModelConfigurationRef ?? 'config-a';
   const configurationRef = state.modelRefs[view.selectedSessionId ?? sessionA] ?? originalConfigurationRef;
   // Explicit fixtures for missing IC-11 fields. Progress uses the complete fixture topology,
@@ -267,11 +268,11 @@ export function ProjectPanelPrototype(props: Props) {
       if (key.ctrl || key.tab || key.upArrow || key.downArrow || key.leftArrow || key.rightArrow) return;
       const mode = current.ui.composerMode;
       const editingKey = mode.kind === 'answer' ? mode.interactionId : current.ui.selectedSessionId ?? sessionA;
-      const editingDraft = mode.kind === 'answer' ? current.answerDrafts[editingKey] ?? '' : current.ui.drafts[editingKey] ?? '';
+      const editingDraft = mode.kind === 'answer' ? current.answerDrafts[editingKey] ?? '' : current.ui.drafts[editingKey]?.text ?? '';
       handleComposerKey(input, key, {
-        readOnly: false, draft: editingDraft,
-        change: (text) => change((s) => mode.kind === 'message' ? { ...s, ui: reduceTuiState(s.ui, { kind: 'draft-changed', coordinatorSessionId: editingKey, text }) }
-          : { ...s, answerDrafts: { ...s.answerDrafts, [editingKey]: text } }),
+        readOnly: false, draft: textDraft(editingDraft),
+        change: (value) => { const text = value.text; change((s) => mode.kind === 'message' ? { ...s, ui: reduceTuiState(s.ui, { kind: 'draft-changed', coordinatorSessionId: editingKey, text }) }
+          : { ...s, answerDrafts: { ...s.answerDrafts, [editingKey]: text } }); },
         submit: () => change((s) => mode.kind === 'message' ? { ...s, notice: '模拟消息未发送 · 草稿保留' }
           : unavailable || answering === undefined || editingDraft.trim() === '' ? { ...s, notice: '问题不可用或回答为空 · 未提交' }
             : { ...s, answered: [...s.answered, mode.interactionId], ui: reduceTuiState(s.ui, { kind: 'composer-mode-reset' }), notice: '模拟回答已记录 · Ctrl+R 返回原列表' }),

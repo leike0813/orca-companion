@@ -35,6 +35,7 @@ import type {
 import type { SpecBinding } from '../src/domain/task-contract.js';
 import { openCoordinationStore, type CoordinationStore } from '../src/adapters/storage/coordination-store.js';
 import { COORDINATION_TABLES, MIGRATIONS, SCHEMA_VERSION } from '../src/adapters/storage/schema.js';
+import { createUserQuestion, answerPendingInteraction } from '../src/application/coordination/pending-interaction.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SCOPE_2 = 'scope-2' as CoordinationScopeId;
@@ -155,6 +156,55 @@ test('创建 Scope 从缺失状态推进到 revision 1', () => {
     expect(result.scope.planningCycleId).toBe('cycle-1');
     expect(result.scope.revision).toBe(1);
   }
+});
+
+test('真实问题写后回读、原操作重放与回答，Scope 摘要不复制正文', () => {
+  createScope(); activateSession();
+  const input = { store, coordinationScopeId: SCOPE, writer: writer(), operationId: 'ask-1' as OperationId,
+    question: { text: '下一步？', options: [{ label: '继续', description: '完成实现' }] } };
+  const created = createUserQuestion(input);
+  expect(created.kind).toBe('recorded');
+  if (created.kind !== 'recorded') throw new Error('问题创建失败');
+  const revision = revisionOf();
+  expect(createUserQuestion(input)).toMatchObject({ kind: 'recorded', replayed: true, interaction: { interactionId: created.interaction.interactionId } });
+  expect(revisionOf()).toBe(revision);
+  expect(createUserQuestion({ ...input, question: { text: '不同内容', options: [] } })).toMatchObject({ kind: 'rejected', code: 'content_conflict' });
+  expect(store.query({ kind: 'pending-interaction', coordinationScopeId: SCOPE, coordinatorSessionId: SESSION_B, interactionId: created.interaction.interactionId }))
+    .toMatchObject({ kind: 'pending-interaction', interaction: null });
+  const snapshot = store.query({ kind: 'snapshot', coordinationScopeId: SCOPE });
+  if (snapshot.kind !== 'snapshot') throw new Error('快照不可读');
+  expect(snapshot.snapshot.pendingInteractions[0]).not.toHaveProperty('question');
+  expect(answerPendingInteraction({ store, coordinationScopeId: SCOPE, writer: writer(), submissionId: 'answer-1',
+    interactionId: created.interaction.interactionId, expectedRevision: created.interaction.expectedRevision, answer: '继续' })).toMatchObject({ kind: 'answered' });
+  expect(createUserQuestion(input)).toMatchObject({ kind: 'recorded', replayed: true, interaction: { state: 'answered' } });
+  expect(submit((expectedRevision) => ({ kind: 'record-control-state', coordinationScopeId: SCOPE,
+    expectedRevision, writer: writer(), controlState: 'cancelled' })).kind).toBe('committed');
+  const lateId = 'ask-after-cancel' as OperationId;
+  expect(createUserQuestion({ ...input, operationId: lateId })).toMatchObject({ kind: 'rejected', code: 'control_state' });
+  expect(store.query({ kind: 'pending-interaction', coordinationScopeId: SCOPE,
+    interactionId: JSON.stringify(['ask_user', lateId]) as InteractionId })).toMatchObject({ interaction: null });
+});
+
+test('当前 Session 问题 keyset 分页最多二十个，不泄漏其他 Session', () => {
+  createScope(); activateSession();
+  expect(store.transact({ kind: 'register-session', coordinationScopeId: SCOPE, expectedRevision: revisionOf(), writer: writer(),
+    coordinatorSessionId: SESSION_B, coordinatorModelConfigurationRef: 'profile-b', lifecycleState: 'registered' }).kind).toBe('committed');
+  expect(store.transact({ kind: 'acquire-runtime-lease', coordinationScopeId: SCOPE, expectedRevision: revisionOf(), writer: writer(SESSION_B, 0), ttlMs: 30000 }).kind).toBe('committed');
+  for (let index = 0; index < 23; index++) {
+    const result = createUserQuestion({ store, coordinationScopeId: SCOPE, writer: writer(), operationId: `ask-${String(index).padStart(2, '0')}` as OperationId,
+      question: { text: `问题 ${String(index)}`, options: [] } });
+    expect(result.kind).toBe('recorded');
+  }
+  expect(createUserQuestion({ store, coordinationScopeId: SCOPE, writer: writer(SESSION_B), operationId: 'other' as OperationId,
+    question: { text: '另一 Session', options: [] } }).kind).toBe('recorded');
+  const first = store.query({ kind: 'pending-interactions', coordinationScopeId: SCOPE, coordinatorSessionId: SESSION_A });
+  if (first.kind !== 'pending-interactions' || !first.nextCursor) throw new Error('分页不可用');
+  expect(first.interactions).toHaveLength(20);
+  const second = store.query({ kind: 'pending-interactions', coordinationScopeId: SCOPE, coordinatorSessionId: SESSION_A, after: first.nextCursor });
+  if (second.kind !== 'pending-interactions') throw new Error('第二页不可读');
+  expect(second.interactions).toHaveLength(3);
+  expect(new Set([...first.interactions, ...second.interactions].map((item) => item.interactionId)).size).toBe(23);
+  expect(second.nextCursor).toBeNull();
 });
 
 test('过期 revision 的写入被拒绝且先前写入保持不变', () => {

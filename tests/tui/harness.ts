@@ -361,6 +361,13 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
   };
 
   const ports: TuiPorts = {
+    questions: (input) => {
+      calls.push({ name: 'questions', detail: input });
+      const items = snapshot.interactions.filter((item) => item.ownerCoordinatorSessionId === input.coordinatorSessionId && item.state === 'open');
+      if (input.kind === 'pending-interactions') return Promise.resolve({ kind: 'pending-interactions', interactions: items.slice(0, 20), nextCursor: null });
+      const item = items.find((item) => item.interactionId === input.interactionId);
+      return Promise.resolve({ kind: 'pending-interaction', interaction: item ? { ...item, question: null } : null });
+    },
     snapshot: (selectedSessionId): Promise<SnapshotLoad> => {
       calls.push({ name: 'snapshot', detail: selectedSessionId });
       if (options.snapshotFailure !== undefined) {

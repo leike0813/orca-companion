@@ -6,6 +6,7 @@ import { useState } from 'react';
 import type { ControllerSnapshot, ControllerTranscriptPage } from '../../application/controller-service.js';
 import { projectTranscriptPage, projectTuiViewModel, type TranscriptEntry } from '../../application/tui/view-model.js';
 import { handleComposerKey } from './app.js';
+import { textDraft } from './input/composer-editor.js';
 import { Sidebar } from './components/sidebar.js';
 import { StatusLine } from './components/status-line.js';
 import { TopBar } from './components/top-bar.js';
@@ -112,8 +113,8 @@ export function WorkspacePrototype(props: PrototypeProps) {
     } else if (!historyOpen) {
       handleComposerKey(input, key, {
         readOnly: false,
-        draft,
-        change: setDraft,
+        draft: textDraft(draft),
+        change: (value) => setDraft(value.text),
         submit: () => setNotice('原型只读：消息未发送'),
       });
     }

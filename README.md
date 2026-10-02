@@ -94,7 +94,9 @@
 ### 前台 TUI 键位与分区
 
 - `Ctrl+P` Command Palette、`Ctrl+B` 切换 Sidebar 密度、`Ctrl+G` Graph Inspector、`Esc` 逐层关闭、`Ctrl+C` 退出（不隐式 Pause/Cancel）。
-- composer 聚焦时普通字符只进入输入框；`Enter` 提交，`Shift+Enter`（终端无法区分时为 `Alt+Enter`）换行。
+- composer 支持中间编辑、方向键、Home/End、Ctrl+A/E 行首尾与完整字符删除；`Enter` 提交非空正文，`Alt+Enter` 换行（可靠解析 Shift+Enter 的终端也可使用）。正文视口最多六行，随光标和 resize 调整。
+- 粘贴插入光标处并立即保存。超过 1000 个 Unicode 字符的粘贴显示原子折叠块；`/paste` 或 Palette 查看完整内容，Esc 返回原位置，发送使用全文。
+- `Shift+Left`、`/answer` 或 Palette 打开当前 Session 回答面板；Shift+左右切问题，Tab 切选项与自由回答，选项 Enter 直接提交。Esc 保存回答并恢复聊天草稿。历史搜索、完整命令候选与跨 Session 回跳留给后续批次。
 - 主视图常驻顶栏 / transcript / composer / 状态行；Scope 状态、预算、执行图、Worker 与 blocker 只在 Sidebar；语义事件只在 Event Drawer。
 - 中文与中英文混排按显示宽度换行与裁切；过窄终端下 `Ctrl+G` 只提示扩宽，不用 overlay 遮挡主视图。
 

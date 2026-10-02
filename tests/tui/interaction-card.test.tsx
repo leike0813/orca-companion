@@ -30,7 +30,7 @@ import {
 } from './harness.js';
 
 /** Ctrl+A：进入当前 Session 的回答模式（见 `src/interfaces/tui/input/keymap.ts`）。 */
-const CTRL_A = '\u0001';
+const SHIFT_LEFT = '\u001b[1;2D';
 
 const INTERACTION: ControllerInteractionView = {
   interactionId: 'i-1',
@@ -82,7 +82,7 @@ describe('Pending Interaction 内联卡片', () => {
 
     // 卡片可见：绑定 interaction ID 与 expected revision。
     const before = frameText(rendered);
-    expect(before).toContain('待答 ticket:t-1');
+    expect(before).toContain('ticket:t-1');
     expect(before).toContain('revision=4');
 
     await pressKey(rendered, 'proceed');
@@ -99,7 +99,7 @@ describe('Pending Interaction 内联卡片', () => {
     expect(fake.executeIntents.some((entry) => entry.kind === 'answer-pending-interaction')).toBe(
       false,
     );
-    expect(frameText(rendered)).toContain('待答 ticket:t-1');
+    expect(frameText(rendered)).toContain('ticket:t-1');
     expect(frameText(rendered)).toContain('state=open');
 
     rendered.unmount();
@@ -171,7 +171,7 @@ describe('Pending Interaction 内联卡片', () => {
       }),
     );
     const frame = frameText(rendered);
-    expect(frame).toContain('待答 ticket:t-1');
+    expect(frame).toContain('ticket:t-1');
     expect(frame).toContain('revision=4');
     expect(frame).toContain('[回答模式]');
   });
@@ -183,7 +183,7 @@ describe('Answer 模式端到端', () => {
     const rendered = renderTui(fake.ports);
     await settle();
 
-    await pressKey(rendered, CTRL_A);
+    await pressKey(rendered, SHIFT_LEFT);
     expect(frameText(rendered)).toContain('回答 interaction i-1');
     expect(frameText(rendered)).toContain('revision 4');
 
@@ -214,7 +214,7 @@ describe('Answer 模式端到端', () => {
     const rendered = renderTui(fake.ports);
     await settle();
 
-    await pressKey(rendered, CTRL_A);
+    await pressKey(rendered, SHIFT_LEFT);
     await pressKey(rendered, 'yes');
     await pressKey(rendered, '\r');
 

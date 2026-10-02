@@ -57,6 +57,7 @@ export type TuiIntent =
     };
 
 export type TuiPorts = {
+  readonly questions?: (input: TuiQuestionQuery) => Promise<import('../../application/controller-service.js').ControllerQuestionResult>;
   readonly inputStore: UiInputStore;
   readonly submissionStatus: (query: SubmissionQuery) => Promise<SubmissionStatus>;
   readonly snapshot: (selectedSessionId: string | null) => Promise<SnapshotLoad>;
@@ -72,6 +73,10 @@ export type TuiPorts = {
   readonly executionHandoff: ExecutionHandoffIntentPort;
   readonly executionAuthorization: ExecutionAuthorizationIntentPort;
 };
+
+export type TuiQuestionQuery =
+  | { readonly kind: 'pending-interactions'; readonly coordinatorSessionId: string; readonly after?: import('../../application/ports/branch-coordination-store.js').InteractionPageCursor }
+  | { readonly kind: 'pending-interaction'; readonly coordinatorSessionId: string; readonly interactionId: string };
 
 /**
  * Execution Authorization 的审阅结果。

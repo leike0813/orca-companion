@@ -87,6 +87,7 @@ import {
   GRAPH_GENERATION_STATUSES,
   GRAPH_GENERATION_TRANSITIONS,
   PENDING_INTERACTION_STATES,
+  isUserQuestion,
   PLANNING_HANDOFF_PHASES,
   PLANNING_HANDOFF_TRANSITIONS,
   EXECUTION_HANDOFF_PHASES,
@@ -994,12 +995,14 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (!subjectRef.ok) {
         return subjectRef;
       }
+      if (command['question'] !== undefined && !isUserQuestion(command['question'])) return fail('question 格式无效');
       return ok({
         ...base,
         kind: 'record-pending-interaction',
         interactionId: interactionId.value as InteractionId,
         ownerCoordinatorSessionId: owner.value as CoordinatorSessionId,
         subjectRef: subjectRef.value,
+        ...(command['question'] === undefined ? {} : { question: command['question'] }),
       });
     }
     case 'resolve-pending-interaction': {
@@ -3429,7 +3432,9 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
   const readInteractionRows = (scopeId: string): readonly InteractionRow[] =>
     many<InteractionRow>(
       db.prepare(
-        'SELECT * FROM pending_interactions WHERE coordination_scope_id = ? ORDER BY created_at, interaction_id',
+        `SELECT coordination_scope_id, interaction_id, owner_coordinator_session_id, subject_kind, subject_id,
+          expected_revision, state, answer_kind, answer_id, answer_text, created_at, resolved_at
+          FROM pending_interactions WHERE coordination_scope_id = ? ORDER BY created_at, interaction_id`,
       ),
       scopeId,
     );
@@ -3921,6 +3926,32 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
             return { kind: 'rejected', code: 'unreadable', message: snapshot.message };
           }
           return { kind: 'snapshot', snapshot: snapshot.value };
+        }
+        case 'pending-interaction': {
+          if (!input.interactionId || input.coordinatorSessionId === '') return { kind: 'rejected', code: 'invalid_query', message: '问题身份不能为空' };
+          const row = one<InteractionRow & { readonly question: string | null }>(db.prepare(`SELECT * FROM pending_interactions WHERE coordination_scope_id = ? AND interaction_id = ?
+            ${input.coordinatorSessionId === undefined ? '' : 'AND owner_coordinator_session_id = ?'}`), scopeId, input.interactionId,
+            ...(input.coordinatorSessionId === undefined ? [] : [input.coordinatorSessionId]));
+          if (!row) return { kind: 'pending-interaction', interaction: null };
+          const decoded = decodeInteractionRow(row);
+          if (!decoded.ok) return { kind: 'rejected', code: 'unreadable', message: decoded.message };
+          const question: unknown = row.question === null ? null : JSON.parse(row.question);
+          if (question !== null && !isUserQuestion(question)) return { kind: 'rejected', code: 'unreadable', message: 'question 格式无效' };
+          return { kind: 'pending-interaction', interaction: { ...decoded.value, question } };
+        }
+        case 'pending-interactions': {
+          if (!input.coordinatorSessionId || (input.after !== undefined &&
+            (!isNonNegativeInteger(input.after.createdAt) || !input.after.interactionId))) return { kind: 'rejected', code: 'invalid_query', message: '分页身份无效' };
+          const rows = many<InteractionRow>(db.prepare(`SELECT coordination_scope_id, interaction_id, owner_coordinator_session_id,
+            subject_kind, subject_id, expected_revision, state, answer_kind, answer_id, answer_text, created_at, resolved_at
+            FROM pending_interactions WHERE coordination_scope_id = ? AND owner_coordinator_session_id = ? AND state = 'open'
+            ${input.after === undefined ? '' : 'AND (created_at, interaction_id) > (?, ?)'} ORDER BY created_at, interaction_id LIMIT 21`),
+            scopeId, input.coordinatorSessionId, ...(input.after === undefined ? [] : [input.after.createdAt, input.after.interactionId]));
+          const decoded = decodeRows(rows.slice(0, 20), decodeInteractionRow);
+          if (!decoded.ok) return { kind: 'rejected', code: 'unreadable', message: decoded.message };
+          const last = decoded.value.at(-1);
+          return { kind: 'pending-interactions', interactions: decoded.value,
+            nextCursor: rows.length > 20 && last ? { createdAt: last.createdAt, interactionId: last.interactionId } : null };
         }
         case 'sessions': {
           const sessions = decodeRows(readSessionRows(scopeId), decodeSessionRow);
@@ -5315,8 +5346,8 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         db.prepare(
           `INSERT INTO pending_interactions (
              coordination_scope_id, interaction_id, owner_coordinator_session_id,
-             subject_kind, subject_id, expected_revision, state, answer_kind, answer_id, created_at, resolved_at
-           ) VALUES (?, ?, ?, ?, ?, ?, 'open', NULL, NULL, ?, NULL)`,
+             subject_kind, subject_id, expected_revision, state, answer_kind, answer_id, created_at, resolved_at, question
+           ) VALUES (?, ?, ?, ?, ?, ?, 'open', NULL, NULL, ?, NULL, ?)`,
         ).run(
           cmd.coordinationScopeId,
           cmd.interactionId,
@@ -5325,6 +5356,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           cmd.subjectRef.id,
           cmd.expectedRevision,
           now,
+          cmd.question === undefined ? null : JSON.stringify(cmd.question),
         );
         return ok(null);
       }

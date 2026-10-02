@@ -360,12 +360,12 @@ describe.skipIf(!build.ok)(SUITE_NAME, () => {
     if (!pty.ok) {
       test.skip(`真实 PTY 用例未运行：${pty.reason}`, () => {});
     } else {
-      test.each([120, 80, 50])('%i 列中文多行粘贴只保存，退出恢复终端模式', (width) => {
+      test.each([[120, 40], [80, 24], [50, 40]])('%i 列 %i 行中文多行粘贴只保存，退出恢复终端模式', (width, height) => {
         const socket = newSocket(`input-${String(width)}`);
         const session = 'input';
         // 同一个 shell 在 TUI 退出后检查原 PTY，才能证明 raw mode 已恢复。
         const command = `before=$(stty -g); ${fixtureCommand()}; result=$?; after=$(stty -g); if [ "$before" = "$after" ]; then printf '\\n__TERMINAL_RESTORED__\\n'; fi; printf '__TUI_EXIT_%s__\\n' "$result"; exit "$result"`;
-        expect(startSession(socket, session, width, 40, command, { cwd: REPOSITORY_ROOT }).status).toBe(0);
+        expect(startSession(socket, session, width, height, command, { cwd: REPOSITORY_ROOT }).status).toBe(0);
         expect(pollPane(socket, session, (text) => text.includes('composer · 普通消息')).ok).toBe(true);
 
         tmux(socket, ['send-keys', '-t', session, '-l', '\u001b[200~中文粘贴abc\n第二行\u001b[201~']);
@@ -379,6 +379,42 @@ describe.skipIf(!build.ok)(SUITE_NAME, () => {
         expect(exited.ok).toBe(true);
         expect(capturePane(socket, session)).toContain('__TUI_EXIT_0__');
         expect(capturePane(socket, session)).toContain('__TERMINAL_RESTORED__');
+      });
+
+      test('无色真实 PTY 的完整编辑、ShiftLeft 面板、Esc 光标恢复与折叠块查看', () => {
+        const socket = newSocket('editor');
+        const session = 'editor';
+        expect(startSession(socket, session, 80, 24, `${fixtureCommand()} answer`, { cwd: REPOSITORY_ROOT, env: childEnvironment({ NO_COLOR: '1', FORCE_COLOR: '0' }) }).status).toBe(0);
+        expect(pollPane(socket, session, (text) => text.includes('/answer')).ok).toBe(true);
+        tmux(socket, ['send-keys', '-t', session, '-l', '首尾']);
+        tmux(socket, ['send-keys', '-t', session, 'Left']);
+        tmux(socket, ['send-keys', '-t', session, '-l', '中']);
+        expect(pollPane(socket, session, (text) => text.includes('首中尾')).ok).toBe(true);
+        const cursor = tmux(socket, ['display-message', '-p', '-t', session, '#{cursor_x}:#{cursor_y}:#{cursor_flag}']).stdout.trim().split(':');
+        expect(cursor[0]).toBe('4');
+        expect(cursor[2]).toBe('1');
+        expect(capturePane(socket, session).split('\n')[Number(cursor[1])]).toContain('首中尾');
+        tmux(socket, ['send-keys', '-t', session, '-l', '\u001b[1;2D']);
+        expect(pollPane(socket, session, (text) => text.includes('请确认中文路径')).ok).toBe(true);
+        tmux(socket, ['send-keys', '-t', session, 'Tab']);
+        tmux(socket, ['send-keys', '-t', session, '-l', '回答草稿']);
+        expect(pollPane(socket, session, (text) => text.includes('回答草稿')).ok).toBe(true);
+        tmux(socket, ['send-keys', '-t', session, 'Escape']);
+        expect(pollPane(socket, session, (text) => text.includes('composer · 普通消息')).ok).toBe(true);
+        tmux(socket, ['send-keys', '-t', session, '-l', '后']);
+        expect(pollPane(socket, session, (text) => text.includes('首中后尾')).ok).toBe(true);
+        tmux(socket, ['send-keys', '-t', session, '-l', '\u001b[200~' + '中文'.repeat(501) + '\u001b[201~']);
+        expect(pollPane(socket, session, (text) => text.includes('粘贴 1')).ok).toBe(true);
+        tmux(socket, ['send-keys', '-t', session, 'C-p']);
+        for (let index = 0; index < 15; index++) tmux(socket, ['send-keys', '-t', session, 'Down']);
+        tmux(socket, ['send-keys', '-t', session, 'Enter']);
+        expect(pollPane(socket, session, (text) => text.includes('粘贴查看')).ok).toBe(true);
+        tmux(socket, ['send-keys', '-t', session, 'Escape']);
+        expect(pollPane(socket, session, (text) => text.includes('粘贴 1')).ok).toBe(true);
+        tmux(socket, ['send-keys', '-t', session, 'C-c']);
+        expect(pollPane(socket, session, (text) => text.includes('确认')).ok).toBe(true);
+        tmux(socket, ['send-keys', '-t', session, '-l', 'y']);
+        expect(pollPaneDead(socket, session).ok).toBe(true);
       });
 
       test('PTY 中启动前台 TUI，Ctrl+C 退出后终端仍可用', () => {

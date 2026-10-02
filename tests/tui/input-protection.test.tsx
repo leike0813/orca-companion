@@ -1,3 +1,4 @@
+import { textDraft } from '../../src/interfaces/tui/input/composer-editor.js';
 /**
  * 输入保护模块行为（IP-01/IP-03，`tui/input-protection`）。
  *
@@ -96,7 +97,7 @@ describe('草稿持久化、隔离与合并保存', () => {
   test('重启后完整恢复多行中文草稿与粘贴载荷，且多目标互不串', () => {
     const store = createMemoryInputStore();
     const first = createInputProtection({ store });
-    first.edit(targetA, '多行\n中文草稿');
+    first.edit(targetA, textDraft('多行\n中文草稿'));
     expect(first.flushAll().status).toBe('saved');
     expect(first.paste(answerTarget, '粘贴的一段').status).toBe('saved');
     expect(first.paste(answerTarget, '第二段').status).toBe('saved');
@@ -109,7 +110,7 @@ describe('草稿持久化、隔离与合并保存', () => {
 
     const loadedAnswer = restarted.load(answerTarget);
     expect(loadedAnswer.status === 'loaded' && loadedAnswer.draft.text).toBe('粘贴的一段第二段');
-    expect(loadedAnswer.status === 'loaded' && loadedAnswer.draft.pasteBlocks).toHaveLength(2);
+    expect(loadedAnswer.status === 'loaded' && loadedAnswer.draft.pasteBlocks).toHaveLength(0);
 
     // 同一 Session 的普通草稿与回答草稿是不同目标，互不影响。
     expect(restarted.load(targetB).status).toBe('absent');
@@ -118,9 +119,9 @@ describe('草稿持久化、隔离与合并保存', () => {
   test('连续编辑只落最后一次内容；粘贴立即保存', async () => {
     const store = createMemoryInputStore();
     const protection = createInputProtection({ store, debounceMs: 20 });
-    protection.edit(targetA, 'a');
-    protection.edit(targetA, 'ab');
-    protection.edit(targetA, 'abc');
+    protection.edit(targetA, textDraft('a'));
+    protection.edit(targetA, textDraft('ab'));
+    protection.edit(targetA, textDraft('abc'));
     // 合并窗口未到：还没有任何持久记录。
     expect(recordAt(store, targetDraftKey(targetA))).toBeNull();
     await new Promise((resolve) => setTimeout(resolve, 60));
@@ -133,11 +134,11 @@ describe('草稿持久化、隔离与合并保存', () => {
   test('载入期间已编辑时返回 stale，绝不覆盖当前输入', () => {
     const store = createMemoryInputStore();
     const seed = createInputProtection({ store });
-    seed.edit(targetA, '旧稿');
+    seed.edit(targetA, textDraft('旧稿'));
     seed.flushAll();
 
     const protection = createInputProtection({ store });
-    protection.edit(targetA, '新稿');
+    protection.edit(targetA, textDraft('新稿'));
     expect(protection.load(targetA).status).toBe('stale');
     expect(protection.draftOf(targetA)?.text).toBe('新稿');
   });
@@ -159,7 +160,7 @@ describe('草稿持久化、隔离与合并保存', () => {
   test('dispose 只取消计时器，不产生任何写入', async () => {
     const store = createMemoryInputStore();
     const protection = createInputProtection({ store, debounceMs: 10 });
-    protection.edit(targetA, '未保存');
+    protection.edit(targetA, textDraft('未保存'));
     protection.dispose();
     await new Promise((resolve) => setTimeout(resolve, 40));
     expect(recordAt(store, targetDraftKey(targetA))).toBeNull();
@@ -175,9 +176,9 @@ describe('并发冲突、容量与恢复保护', () => {
     p1.load(targetA);
     p2.load(targetA);
 
-    p1.edit(targetA, '来自 p1');
+    p1.edit(targetA, textDraft('来自 p1'));
     expect(p1.flushAll().status).toBe('saved');
-    p2.edit(targetA, '来自 p2');
+    p2.edit(targetA, textDraft('来自 p2'));
     const outcome = p2.flushAll();
 
     expect(outcome.status).toBe('conflict');
@@ -196,12 +197,12 @@ describe('并发冲突、容量与恢复保护', () => {
     const p2 = createInputProtection({ store });
     p1.load(targetA);
     p2.load(targetA);
-    p1.edit(targetA, '库内');
+    p1.edit(targetA, textDraft('库内'));
     p1.flushAll();
-    p2.edit(targetA, '本地');
+    p2.edit(targetA, textDraft('本地'));
     expect(p2.flushAll().status).toBe('conflict');
 
-    p2.edit(targetA, '本地改了');
+    p2.edit(targetA, textDraft('本地改了'));
     const afterEdit = p2.flushAll();
     expect(afterEdit.status).toBe('conflict');
     expect(draftText(recordAt(store, targetDraftKey(targetA)))).toBe('库内');
@@ -222,9 +223,9 @@ describe('并发冲突、容量与恢复保护', () => {
     const p2 = createInputProtection({ store: guarded });
     // p2 先读到 revision 0，之后 seeded 写入推进 revision，制造 CAS 不匹配。
     p2.load(targetA);
-    seeded.edit(targetA, '库内');
+    seeded.edit(targetA, textDraft('库内'));
     seeded.flushAll();
-    p2.edit(targetA, '本机内容');
+    p2.edit(targetA, textDraft('本机内容'));
     const outcome = p2.flushAll();
 
     expect(outcome.status).toBe('failed');
@@ -235,7 +236,7 @@ describe('并发冲突、容量与恢复保护', () => {
   test('写入失败（容量满额）时保留内存输入并如实报告', () => {
     const store = createFailingInputStore('capacity_exceeded');
     const protection = createInputProtection({ store });
-    protection.edit(targetA, '重要输入');
+    protection.edit(targetA, textDraft('重要输入'));
     const outcome = protection.flushAll();
     expect(outcome.status).toBe('failed');
     expect(outcome.status === 'failed' && outcome.code).toBe('capacity_exceeded');
@@ -249,9 +250,9 @@ describe('并发冲突、容量与恢复保护', () => {
     const p2 = createInputProtection({ store });
     p1.load(targetA);
     p2.load(targetA);
-    p1.edit(targetA, '库内版本');
+    p1.edit(targetA, textDraft('库内版本'));
     p1.flushAll();
-    p2.edit(targetA, '本地版本');
+    p2.edit(targetA, textDraft('本地版本'));
     expect(p2.flushAll().status).toBe('conflict');
 
     const conflictRecord = listedRecords(store, 'scope-1').find((record) => record.kind === 'conflict');
@@ -360,11 +361,11 @@ describe('提交快照、单活跃 lane 与结算', () => {
     p1.load(targetA);
     p2.load(targetA);
     p3.load(targetA);
-    p1.edit(targetA, '库内');
+    p1.edit(targetA, textDraft('库内'));
     p1.flushAll();
-    p2.edit(targetA, '第二个写入者');
+    p2.edit(targetA, textDraft('第二个写入者'));
     expect(p2.flushAll().status).toBe('conflict');
-    p3.edit(targetA, '第三个写入者');
+    p3.edit(targetA, textDraft('第三个写入者'));
     expect(p3.flushAll().status).toBe('conflict');
 
     const conflicts = listedRecords(store, 'scope-1')

@@ -55,6 +55,7 @@ export type CoordinatorGraphDependencies = CoordinatorNodeDependencies & {
    * 是同一份列表，因此模型能申请的名字与节点能执行的名字始终一致。
    */
   readonly executionTools?: readonly CoordinatorToolDefinition[];
+  readonly sessionTools?: readonly CoordinatorToolDefinition[];
 };
 
 /**
@@ -132,9 +133,10 @@ export function routeAfterTools(state: CoordinatorGraphState): typeof MODEL_NODE
 export function buildCoordinatorGraph(dependencies: CoordinatorGraphDependencies) {
   const tools = dependencies.planningTools ?? [];
   const executionTools = dependencies.executionTools ?? [];
+  const sessionTools = dependencies.sessionTools ?? [];
   // 模型能申请的名字与 tools 节点能执行的名字是同一份列表：两份不一致会让一次合法调用退化成
   // 「未注册 = unknown」。
-  const registered = [...tools, ...executionTools];
+  const registered = [...tools, ...executionTools, ...sessionTools];
   const model = bindPlanningTools(dependencies.model, registered);
   return new StateGraph(COORDINATOR_GRAPH_CHANNELS)
     .addNode(MODEL_NODE, createModelNode({ ...dependencies, model, tools: registered }))
@@ -143,7 +145,7 @@ export function buildCoordinatorGraph(dependencies: CoordinatorGraphDependencies
       createToolsNode({
         sessionRecords: dependencies.sessionRecords,
         assertFencing: dependencies.assertFencing,
-        tools: [...(dependencies.recoveryTools ?? tools), ...executionTools],
+        tools: [...(dependencies.recoveryTools ?? tools), ...executionTools, ...sessionTools],
       }),
     )
     .addNode(

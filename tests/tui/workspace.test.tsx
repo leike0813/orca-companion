@@ -1,3 +1,4 @@
+import { textDraft } from '../../src/interfaces/tui/input/composer-editor.js';
 /**
  * 常驻 transcript 与 composer 主视图（IP-05，Owner: `m2-deliver-planning-tui`）。
  *
@@ -155,9 +156,9 @@ describe('planning-workspace / 常驻 transcript 与 composer 主视图', () => 
     // 窄屏下继续输入：普通字符经 composer 输入路径进入当前 Session 草稿。
     handleComposerKey('窄屏草稿', {}, {
       readOnly: false,
-      draft: draftFor(ui, 'session-a'),
-      change: (text) => {
-        ui = reduceTuiState(ui, { kind: 'draft-changed', coordinatorSessionId: 'session-a', text });
+      draft: textDraft(draftFor(ui, 'session-a')),
+      change: (draft) => {
+        ui = reduceTuiState(ui, { kind: 'draft-changed', coordinatorSessionId: 'session-a', draft });
       },
       submit: () => undefined,
     });
@@ -207,13 +208,13 @@ describe('planning-workspace / 常驻 transcript 与 composer 主视图', () => 
     expect(resolveGlobalAction('x', { ctrl: true })).toBeNull();
 
     // 字符进入草稿，且不产生 overlay。
-    let ui = uiState({ drafts: { 'session-a': '已经输入' } });
+    let ui = uiState({ drafts: { 'session-a': textDraft('已经输入') } });
     const submitted: string[] = [];
     handleComposerKey('p', {}, {
       readOnly: false,
-      draft: draftFor(ui, 'session-a'),
-      change: (text) => {
-        ui = reduceTuiState(ui, { kind: 'draft-changed', coordinatorSessionId: 'session-a', text });
+      draft: textDraft(draftFor(ui, 'session-a')),
+      change: (draft) => {
+        ui = reduceTuiState(ui, { kind: 'draft-changed', coordinatorSessionId: 'session-a', draft });
       },
       submit: () => {
         submitted.push(draftFor(ui, 'session-a'));

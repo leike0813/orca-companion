@@ -19,13 +19,16 @@ import type {
   CoordinationScopeId,
   EntityRef,
   InteractionId,
+  OperationId,
   Revision,
 } from '../dto/identity.js';
 import type {
   BranchCoordinationStore,
   CoordinationWriter,
   PendingInteractionRecord,
+  PendingInteractionDetail,
 } from '../ports/branch-coordination-store.js';
+import { isUserQuestion } from '../ports/branch-coordination-store.js';
 import { MAX_USER_MESSAGE_CHARS } from '../coordinator/user-message.js';
 
 export const ANSWER_PENDING_INTERACTION_REJECTIONS = [
@@ -81,21 +84,22 @@ function readInteraction(
   store: BranchCoordinationStore,
   coordinationScopeId: CoordinationScopeId,
   interactionId: InteractionId,
+  coordinatorSessionId: CoordinationWriter['coordinatorSessionId'],
 ): InteractionRead {
-  const result = store.query({ kind: 'snapshot', coordinationScopeId });
+  const result = store.query({ kind: 'pending-interaction', coordinationScopeId, interactionId, coordinatorSessionId });
   if (result.kind === 'rejected') {
     return { kind: 'rejected', code: 'unreadable', message: result.message };
   }
-  if (result.kind !== 'snapshot') {
-    return { kind: 'rejected', code: 'unreadable', message: 'snapshot 查询返回了非预期结果' };
+  if (result.kind !== 'pending-interaction') {
+    return { kind: 'rejected', code: 'unreadable', message: '问题查询返回了非预期结果' };
   }
-  const interaction = result.snapshot.pendingInteractions.find(
-    (entry) => entry.interactionId === interactionId,
-  );
-  if (interaction === undefined) {
+  const interaction = result.interaction;
+  if (interaction === null) {
     return { kind: 'rejected', code: 'not_found', message: `Pending Interaction ${interactionId} 不存在` };
   }
-  return { kind: 'read', interaction, scopeRevision: result.snapshot.scope.revision };
+  const scope = store.query({ kind: 'scope', coordinationScopeId });
+  if (scope.kind !== 'scope' || scope.scope === null) return { kind: 'rejected', code: 'unreadable', message: 'Scope 不可读' };
+  return { kind: 'read', interaction, scopeRevision: scope.scope.revision };
 }
 
 /**
@@ -115,6 +119,53 @@ export function answerRefFor(interactionId: InteractionId, submissionId: string)
  * 但必须有界——无限重试会把一次过期回答挂在写入路径上。
  */
 const MAX_ANSWER_CAS_ATTEMPTS = 5;
+
+export function createUserQuestion(input: {
+  readonly store: BranchCoordinationStore;
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly writer: CoordinationWriter;
+  readonly operationId: OperationId;
+  readonly question: unknown;
+}):
+  | { readonly kind: 'recorded'; readonly interaction: PendingInteractionDetail; readonly replayed: boolean }
+  | { readonly kind: 'rejected'; readonly code: string; readonly message: string }
+  | { readonly kind: 'unknown'; readonly reason: string } {
+  if (!isUserQuestion(input.question) || !input.operationId) return { kind: 'rejected', code: 'invalid_question', message: '问题或选项格式无效' };
+  const question = { text: input.question.text, options: input.question.options.map((option) => ({ label: option.label,
+    ...(option.description === undefined ? {} : { description: option.description }) })) };
+  const interactionId = JSON.stringify(['ask_user', input.operationId]) as InteractionId;
+  const subjectRef = { kind: 'coordinator-session', id: input.writer.coordinatorSessionId };
+  const matches = (existing: PendingInteractionDetail): boolean =>
+    existing.ownerCoordinatorSessionId === input.writer.coordinatorSessionId && existing.subjectRef.kind === subjectRef.kind &&
+    existing.subjectRef.id === subjectRef.id && existing.question?.text === question.text &&
+    JSON.stringify(existing.question.options) === JSON.stringify(question.options);
+  for (let attempt = 0; attempt < MAX_ANSWER_CAS_ATTEMPTS; attempt++) {
+    const read = input.store.query({ kind: 'pending-interaction', coordinationScopeId: input.coordinationScopeId, interactionId });
+    if (read.kind !== 'pending-interaction') return { kind: 'unknown', reason: '无法核验问题身份' };
+    if (read.interaction !== null) {
+      const existing = read.interaction;
+      return matches(existing) ? { kind: 'recorded', interaction: existing, replayed: true }
+        : { kind: 'rejected', code: 'content_conflict', message: '原提问身份已绑定其他内容' };
+    }
+    const scope = input.store.query({ kind: 'scope', coordinationScopeId: input.coordinationScopeId });
+    if (scope.kind !== 'scope' || !scope.scope) return { kind: 'rejected', code: 'stale_scope', message: 'Scope 不存在或不可读' };
+    if (scope.scope.controlState === 'cancelling' || scope.scope.controlState === 'cancelled') {
+      return { kind: 'rejected', code: 'control_state', message: '取消中的 Scope 不再创建新问题' };
+    }
+    const written = input.store.transact({ kind: 'record-pending-interaction', coordinationScopeId: input.coordinationScopeId,
+      expectedRevision: scope.scope.revision, writer: input.writer, interactionId,
+      ownerCoordinatorSessionId: input.writer.coordinatorSessionId, subjectRef, question });
+    if (written.kind === 'rejected') {
+      if (written.code === 'stale_revision') continue;
+      return { kind: 'rejected', code: written.code, message: written.message };
+    }
+    const verified = input.store.query({ kind: 'pending-interaction', coordinationScopeId: input.coordinationScopeId,
+      coordinatorSessionId: input.writer.coordinatorSessionId, interactionId });
+    if (verified.kind !== 'pending-interaction' || verified.interaction === null || !matches(verified.interaction)) return { kind: 'unknown', reason: '问题写后核验不可用' };
+    return { kind: 'recorded', interaction: verified.interaction, replayed: false };
+  }
+  return { kind: 'rejected', code: 'stale_revision', message: '问题创建遭遇持续 CAS 冲突' };
+}
 
 function sameOwnAnswer(
   interaction: PendingInteractionRecord,
@@ -154,7 +205,7 @@ export function answerPendingInteraction(
     };
   }
   const ref = answerRefFor(input.interactionId, input.submissionId);
-  const read = readInteraction(input.store, input.coordinationScopeId, input.interactionId);
+  const read = readInteraction(input.store, input.coordinationScopeId, input.interactionId, input.writer.coordinatorSessionId);
   if (read.kind === 'rejected') {
     return { kind: 'rejected', code: read.code, message: read.message };
   }
@@ -211,7 +262,7 @@ export function answerPendingInteraction(
     }
     if (written.code === 'stale_revision' && written.currentRevision !== undefined) {
       // 竞争落空：重读权威记录，确认是不是自己的回答已经落盘，或已被别人解决。
-      const reread = readInteraction(input.store, input.coordinationScopeId, input.interactionId);
+      const reread = readInteraction(input.store, input.coordinationScopeId, input.interactionId, input.writer.coordinatorSessionId);
       if (reread.kind === 'rejected') {
         return { kind: 'rejected', code: reread.code, message: reread.message };
       }

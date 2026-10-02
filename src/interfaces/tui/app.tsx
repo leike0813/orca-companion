@@ -13,6 +13,13 @@ import { ThemeProvider } from '@inkjs/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { resolveGlobalAction } from './input/keymap.js';
+import type { AnswerPanelView } from './components/answer-panel.js';
+import type { PasteViewerView } from './components/paste-viewer.js';
+import type { ControllerInteractionView } from '../../application/controller-service.js';
+import type { InteractionPageCursor } from '../../application/ports/branch-coordination-store.js';
+import { bodyWidth } from './screens/workspace.js';
+import { wrapByDisplayWidth } from './render/width.js';
+import { editComposer, editorLayout, emptyDraft, textDraft, type EditorKey } from './input/composer-editor.js';
 import { allowedSidebarDensity } from './render/width.js';
 import { requiresConfirmation } from './components/control-bar.js';
 import {
@@ -26,6 +33,7 @@ import type {
 import {
   answerDraftKey,
   composerDraftFor,
+  composerInputFor,
   executionFilterLabel,
   initialTuiState,
   isComposerReadOnly,
@@ -185,9 +193,9 @@ function submissionQueryFor(record: UiInputRecord): SubmissionQuery | null {
 }
 
 /** 把某个目标的文本写回展示态的 action：普通草稿与回答草稿分别走各自的隔离槽。 */
-function draftActionFor(target: UiInputTarget, text: string): TuiAction {
+function draftActionFor(target: UiInputTarget, draft: UiDraft): TuiAction {
   return target.kind === 'message'
-    ? { kind: 'draft-changed', coordinatorSessionId: target.coordinatorSessionId, text }
+    ? { kind: 'draft-changed', coordinatorSessionId: target.coordinatorSessionId, draft }
     : {
         kind: 'answer-draft-changed',
         answerKey: answerDraftKey(
@@ -195,7 +203,7 @@ function draftActionFor(target: UiInputTarget, text: string): TuiAction {
           target.interactionId,
           target.expectedRevision,
         ),
-        text,
+        draft,
       };
 }
 
@@ -280,6 +288,14 @@ function TuiAppContent(props: TuiAppProps) {
    * 列表、正文视口与反馈都在这里：组件只渲染读好的内容，容器自己经 `inputStore` 执行动作。
    */
   const [inputManager, setInputManager] = useState<InputRecordManagerView | null>(null);
+  const [answerPanel, setAnswerPanel] = useState<AnswerPanelView | null>(null);
+  const answerPanelRef = useRef<AnswerPanelView | null>(null);
+  const updateAnswerPanel = (value: AnswerPanelView | null) => { answerPanelRef.current = value; setAnswerPanel(value); };
+  const answerRequest = useRef(0);
+  const answerPage = useRef<{ items: readonly ControllerInteractionView[]; next: InteractionPageCursor | null; cursors: readonly (InteractionPageCursor | undefined)[] }>({ items: [], next: null, cursors: [undefined] });
+  const [pasteViewer, setPasteViewer] = useState<PasteViewerView | null>(null);
+  const pasteViewerRef = useRef<PasteViewerView | null>(null);
+  const updatePasteViewer = (value: PasteViewerView | null) => { pasteViewerRef.current = value; setPasteViewer(value); };
   /** 输入记录管理的同步镜像：同一批按键要读到最新选择与视口。 */
   const inputManagerRef = useRef<InputRecordManagerView | null>(null);
   inputManagerRef.current = inputManager;
@@ -451,7 +467,7 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (loaded.status === 'loaded') {
-      dispatch(draftActionFor(target, loaded.draft.text));
+      dispatch(draftActionFor(target, loaded.draft));
     }
   }, [
     coordinationScopeId,
@@ -510,6 +526,70 @@ function TuiAppContent(props: TuiAppProps) {
   snapshotRef.current = snapshot;
   /** `runCommand` 定义之前的提交路径需要它；读时取最新实现，避免互相依赖。 */
   const runCommandRef = useRef<(command: CommandId) => Promise<void>>(() => Promise.resolve());
+  const openAnswerRef = useRef<(interactionId?: string, skipId?: string) => Promise<boolean>>(() => Promise.resolve(false));
+  const readQuestions = async (query: import('./ports.js').TuiQuestionQuery): Promise<import('../../application/controller-service.js').ControllerQuestionResult> => {
+    if (!ports.questions) return { kind: 'rejected', code: 'questions_unavailable', message: '当前问题读取不可用' };
+    try { return await ports.questions(query); }
+    catch (error) { return { kind: 'rejected', code: 'questions_unreadable', message: error instanceof Error ? error.message : String(error) }; }
+  };
+
+  const showAnswer = async (item: ControllerInteractionView, index: number, count: number): Promise<boolean> => {
+    const session = stateRef.current.selectedSessionId;
+    const scope = coordScopeRef.current;
+    const request = ++answerRequest.current;
+    if (session === null || scope === null || item.ownerCoordinatorSessionId !== session || ports.questions === undefined) {
+      dispatch({ kind: 'notice', notice: 'questions_unavailable：当前问题读取不可用' }); return false;
+    }
+    const detail = await readQuestions({ kind: 'pending-interaction', coordinatorSessionId: session, interactionId: item.interactionId });
+    if (request !== answerRequest.current || stateRef.current.selectedSessionId !== session || coordScopeRef.current !== scope) return false;
+    if (detail.kind !== 'pending-interaction' || !detail.interaction || detail.interaction.state !== 'open' ||
+      detail.interaction.ownerCoordinatorSessionId !== session || detail.interaction.interactionId !== item.interactionId || detail.interaction.expectedRevision !== item.expectedRevision) {
+      dispatch({ kind: 'notice', notice: detail.kind === 'rejected' ? `${detail.code}: ${detail.message}` : 'stale_revision：问题已变化，请重新打开' }); return false;
+    }
+    const saved = protection.flushAll();
+    if (saved.status !== 'saved') { dispatch({ kind: 'notice', notice: saveOutcomeText(saved) }); return false; }
+    dispatch({ kind: 'answer-mode-entered', interactionId: item.interactionId, expectedRevision: item.expectedRevision });
+    updateAnswerPanel({ interaction: detail.interaction, index, count, option: 0, focus: detail.interaction.question?.options.length ? 'options' : 'text', scroll: 0 });
+    return true;
+  };
+
+  const openAnswer = async (interactionId?: string, skipId?: string): Promise<boolean> => {
+    const session = stateRef.current.selectedSessionId;
+    const scope = coordScopeRef.current;
+    const request = ++answerRequest.current;
+    if (!session || !scope || !ports.questions) { dispatch({ kind: 'notice', notice: 'questions_unavailable：当前问题读取不可用' }); return false; }
+    const page = await readQuestions({ kind: 'pending-interactions', coordinatorSessionId: session });
+    if (request !== answerRequest.current || stateRef.current.selectedSessionId !== session || coordScopeRef.current !== scope) return false;
+    if (page.kind !== 'pending-interactions') { dispatch({ kind: 'notice', notice: page.kind === 'rejected' ? `${page.code}: ${page.message}` : '问题列表不可读' }); return false; }
+    const items = page.interactions.filter((item) => item.ownerCoordinatorSessionId === session && item.state === 'open' && item.interactionId !== skipId).slice(0, 20);
+    answerPage.current = { items, next: page.nextCursor, cursors: [undefined] };
+    const index = interactionId === undefined ? 0 : items.findIndex((item) => item.interactionId === interactionId);
+    const item = items[index];
+    if (!item) { dispatch({ kind: 'notice', notice: '当前 Session 没有待答问题' }); return false; }
+    return showAnswer(item, index, items.length);
+  };
+  openAnswerRef.current = openAnswer;
+
+  const navigateAnswer = async (direction: number): Promise<void> => {
+    const current = answerPanelRef.current;
+    const session = stateRef.current.selectedSessionId;
+    if (!current || !session || !ports.questions) return;
+    const saved = protection.flushAll();
+    if (saved.status !== 'saved') { dispatch({ kind: 'notice', notice: saveOutcomeText(saved) }); return; }
+    const index = current.index + direction;
+    const item = answerPage.current.items[index];
+    if (item) { await showAnswer(item, index, answerPage.current.items.length); return; }
+    const cursors = answerPage.current.cursors;
+    const after = direction > 0 ? answerPage.current.next ?? undefined : cursors.at(-2);
+    if ((direction > 0 && !answerPage.current.next) || (direction < 0 && cursors.length < 2)) return;
+    const request = ++answerRequest.current;
+    const page = await readQuestions({ kind: 'pending-interactions', coordinatorSessionId: session, ...(after === undefined ? {} : { after }) });
+    if (request !== answerRequest.current || stateRef.current.selectedSessionId !== session || page.kind !== 'pending-interactions') return;
+    answerPage.current = { items: page.interactions, next: page.nextCursor, cursors: direction > 0 ? [...cursors, after] : cursors.slice(0, -1) };
+    const nextIndex = direction > 0 ? 0 : page.interactions.length - 1;
+    const next = page.interactions[nextIndex];
+    if (next) await showAnswer(next, nextIndex, page.interactions.length);
+  };
 
   const reload = useCallback(async () => {
     await loadSnapshot(stateRef.current.selectedSessionId);
@@ -527,7 +607,7 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     const text = composerDraftFor(current, session);
-    if (text.length === 0 || isComposerReadOnly(current, session)) {
+    if (text.trim().length === 0 || isComposerReadOnly(current, session)) {
       return;
     }
     // `context_exhausted` 表示上下文无法安全收敛：界面不再发起新的模型调用，也不写提交快照。
@@ -550,13 +630,15 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (slash.kind === 'command') {
+      if (slash.command === 'answer') { await openAnswerRef.current(); return; }
+      if (slash.command === 'paste') { await runCommandRef.current('paste'); return; }
       const generation = protection.generation(target);
       await runCommandRef.current(slash.command);
       // 命令成功只结清这次输入；等待期间的新输入（代际变化）与清理失败都保留。
       if (protection.generation(target) === generation) {
         const cleared = protection.clearInput(target);
         if (cleared.status === 'saved') {
-          dispatch(draftActionFor(target, ''));
+          dispatch(draftActionFor(target, emptyDraft()));
         } else {
           dispatch({ kind: 'notice', notice: `命令输入未结清：${saveOutcomeText(cleared)}` });
         }
@@ -654,13 +736,17 @@ function TuiAppContent(props: TuiAppProps) {
         const cleared = protection.clearDraft(target);
         if (cleared.status === 'saved') {
           // 只有持久草稿真的被清除才清界面正文；清理失败时保留输入并如实提示。
-          dispatch(draftActionFor(target, ''));
+          dispatch(draftActionFor(target, emptyDraft()));
           // 只有界面仍停在这条提交对应的 Session 与 composer 模式时才复位。
           if (
             stateRef.current.selectedSessionId === session &&
             sameComposerMode(stateRef.current.composerMode, submittedMode)
           ) {
             dispatch({ kind: 'composer-mode-reset' });
+            if (submittedMode.kind === 'answer') {
+              updateAnswerPanel(null);
+              await openAnswerRef.current(undefined, submittedMode.interactionId);
+            }
           }
         } else {
           dispatch({ kind: 'notice', notice: `已受理，但草稿未清除：${saveOutcomeText(cleared)}` });
@@ -757,6 +843,13 @@ function TuiAppContent(props: TuiAppProps) {
       const session = current.selectedSessionId;
       dispatch({ kind: 'overlay-close-top' });
       switch (command) {
+        case 'answer':
+          await openAnswerRef.current(); return;
+        case 'paste': {
+          const current = stateRef.current;
+          updatePasteViewer({ draft: composerInputFor(current, current.selectedSessionId), block: 0, scroll: 0 });
+          dispatch({ kind: 'overlay-open', overlay: 'paste-viewer' }); return;
+        }
         case 'compact': {
           if (session === null) {
             dispatch({ kind: 'notice', notice: '/compact 需要先选中一个 Coordinator Session' });
@@ -820,7 +913,7 @@ function TuiAppContent(props: TuiAppProps) {
         case 'help':
           dispatch({
             kind: 'notice',
-            notice: 'Ctrl+P 命令 · Ctrl+B Sidebar · Ctrl+G Inspector · Ctrl+T 工具详情 · Ctrl+A 回答 · Esc 关闭',
+            notice: 'Ctrl+P 命令 · Ctrl+B Sidebar · Ctrl+G Inspector · Shift+← 回答 · Ctrl+A/E 行首尾 · Alt+Enter 换行 · Ctrl+R/F3 历史搜索尚未接通',
           });
           return;
         case 'pause':
@@ -960,7 +1053,7 @@ function TuiAppContent(props: TuiAppProps) {
     if (outcome.status === 'saved') {
       const target = currentInputTarget(stateRef.current, coordScopeRef.current);
       if (target !== null && sameInputTarget(target, entry.record.target)) {
-        dispatch(draftActionFor(target, entry.record.draft.text));
+        dispatch(draftActionFor(target, entry.record.draft));
       }
     }
     setInputManager((current) =>
@@ -1248,14 +1341,15 @@ function TuiAppContent(props: TuiAppProps) {
   const topOverlay = (): OverlayKind | null => stateRef.current.overlayStack.at(-1) ?? null;
   const workspaceActions: WorkspaceActions = {
     dispatch,
-    composerChange: (text) => {
+    composerChange: (draft) => {
       const target = currentInputTarget(stateRef.current, coordScopeRef.current);
       if (target === null) {
         return;
       }
+      answerRequest.current++;
       // 编辑只更新内存与合并计时器；真正的持久写入由保护模块在窗口到期时执行。
-      protection.edit(target, text);
-      dispatch(draftActionFor(target, text));
+      protection.edit(target, draft);
+      dispatch(draftActionFor(target, draft));
     },
     submit: () => {
       void submit();
@@ -1270,6 +1364,8 @@ function TuiAppContent(props: TuiAppProps) {
         }
       }
       dispatch({ kind: 'session-selected', coordinatorSessionId });
+      answerRequest.current++;
+      updateAnswerPanel(null);
       dispatch({ kind: 'overlay-close-top' });
     },
     enterAnswer: (interactionId, expectedRevision) => {
@@ -1280,7 +1376,8 @@ function TuiAppContent(props: TuiAppProps) {
           dispatch({ kind: 'notice', notice: `进入回答模式前输入未保存：${saveOutcomeText(flushed)}` });
         }
       }
-      dispatch({ kind: 'answer-mode-entered', interactionId, expectedRevision });
+      void expectedRevision;
+      void openAnswerRef.current(interactionId);
     },
     runCommand: (command) => {
       void runCommand(command);
@@ -1332,6 +1429,7 @@ function TuiAppContent(props: TuiAppProps) {
   };
 
   useInput((input, key) => {
+    if (key.eventType === 'release') return;
     // 待确认动作是唯一的模态输入：ConfirmInput 接管 y/n，根容器只处理 Esc。
     const pending = stateRef.current.pendingConfirmation;
     if (pending !== null) {
@@ -1340,13 +1438,14 @@ function TuiAppContent(props: TuiAppProps) {
       }
       return;
     }
-    const action = resolveGlobalAction(input, { ctrl: key.ctrl, escape: key.escape });
+    const action = resolveGlobalAction(input, key);
     if (action === 'exit') {
       // Exit 与 `Ctrl+C` 只结束前台进程；Scope 不因此进入暂停或取消。
       requestExit();
       return;
     }
     if (action === 'escape') {
+      answerRequest.current++;
       if (topOverlay() === 'input-record-manager') {
         if (inputManagerRef.current?.bodyFocus === true) {
           // 正文视口里的 Esc 只返回列表，不关闭 overlay，也不把 `/` 输入变成聊天。
@@ -1361,12 +1460,27 @@ function TuiAppContent(props: TuiAppProps) {
         dispatch({ kind: 'overlay-close-top' });
         return;
       }
+      if (stateRef.current.composerMode.kind === 'answer') {
+        const saved = protection.flushAll();
+        if (saved.status !== 'saved') { dispatch({ kind: 'notice', notice: saveOutcomeText(saved) }); return; }
+        updateAnswerPanel(null);
+        dispatch({ kind: 'composer-mode-reset' });
+        return;
+      }
       if (stateRef.current.screen === 'wizard' || stateRef.current.screen === 'legacy-review') {
         dispatch({ kind: 'screen', screen: 'home' });
       }
       return;
     }
+    const overlay = topOverlay();
+    const reviewNavigation = action === 'command-palette' &&
+      (overlay === 'handoff-review' || overlay === 'execution-handoff-review' || overlay === 'authorization-review');
+    if (overlay !== null && !reviewNavigation && (action === 'command-palette' || action === 'toggle-sidebar' || action === 'graph-inspector' || action === 'enter-answer' || action === 'toggle-tool')) return;
+    if (stateRef.current.screen === 'workspace' && topOverlay() === null && answerPanelRef.current && key.shift && (key.leftArrow || key.rightArrow)) {
+      void navigateAnswer(key.leftArrow ? -1 : 1); return;
+    }
     if (action === 'command-palette') {
+      answerRequest.current++;
       paletteSelection.set(0);
       dispatch({ kind: 'overlay-open', overlay: 'command-palette' });
       return;
@@ -1376,26 +1490,12 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (action === 'graph-inspector') {
+      answerRequest.current++;
       dispatch({ kind: 'overlay-open', overlay: 'graph-inspector' });
       return;
     }
     if (action === 'enter-answer') {
-      const session = stateRef.current.selectedSessionId;
-      // 尚无选中 Session 时（Home→workspace 的过渡帧）取第一条待答交互，而不是报「没有待答问题」。
-      const pending = viewModelRef.current?.interactions.find(
-        (interaction) =>
-          interaction.state === 'open' &&
-          (session === null || interaction.ownerCoordinatorSessionId === session),
-      );
-      if (pending === undefined) {
-        dispatch({ kind: 'notice', notice: '当前 Session 没有待答的 Pending Interaction' });
-        return;
-      }
-      dispatch({
-        kind: 'answer-mode-entered',
-        interactionId: pending.interactionId,
-        expectedRevision: pending.expectedRevision,
-      });
+      if (stateRef.current.screen === 'workspace') void openAnswerRef.current();
       return;
     }
 
@@ -1503,6 +1603,17 @@ function TuiAppContent(props: TuiAppProps) {
       dispatch({ kind: 'tool-toggled', entryId: lastTool.id });
       return;
     }
+    if (topOverlay() === 'paste-viewer') {
+      const viewer = pasteViewerRef.current;
+      if (!viewer) return;
+      if (key.leftArrow || key.rightArrow) updatePasteViewer({ ...viewer, block: Math.max(0, Math.min(viewer.draft.pasteBlocks.length - 1, viewer.block + (key.leftArrow ? -1 : 1))), scroll: 0 });
+      if (key.upArrow || key.downArrow || key.pageUp || key.pageDown) {
+        const block = viewer.draft.pasteBlocks[viewer.block];
+        const lines = block ? editorLayout(textDraft(viewer.draft.text.slice(block.start, block.end)), terminalWidth - 2).length : 1;
+        updatePasteViewer({ ...viewer, scroll: Math.max(0, Math.min(lines - 1, viewer.scroll + (key.upArrow || key.pageUp ? -1 : 1) * (key.pageUp || key.pageDown ? 10 : 1))) });
+      }
+      return;
+    }
     if (topOverlay() !== null) {
       // 其余 overlay 只支持 Esc（已在上面处理）与 Enter 的默认动作。
       if (key.return === true && topOverlay() === 'handoff-review') {
@@ -1516,9 +1627,30 @@ function TuiAppContent(props: TuiAppProps) {
       }
       return;
     }
+    const panel = answerPanelRef.current;
+    if (panel && stateRef.current.composerMode.kind === 'answer') {
+      const options = panel.interaction.question?.options ?? [];
+      if (key.tab) { updateAnswerPanel({ ...panel, focus: panel.focus === 'options' || !options.length ? 'text' : 'options' }); return; }
+      if (key.pageUp || key.pageDown) {
+        const lines = wrapByDisplayWidth(panel.interaction.question?.text ?? '', bodyWidth(terminalWidth, stateRef.current.sidebarDensity)).length;
+        updateAnswerPanel({ ...panel, scroll: Math.max(0, Math.min(lines - 1, panel.scroll + (key.pageUp ? -3 : 3))) }); return;
+      }
+      if (panel.focus === 'options') {
+        if (key.upArrow || key.downArrow) updateAnswerPanel({ ...panel, option: Math.max(0, Math.min(options.length - 1, panel.option + (key.upArrow ? -1 : 1))) });
+        if (key.return && !key.meta && !key.shift && !isComposerReadOnly(stateRef.current, stateRef.current.selectedSessionId)) {
+          const option = options[panel.option];
+          if (option) { workspaceActions.composerChange(textDraft(option.label)); workspaceActions.submit(); }
+        }
+        return;
+      }
+    }
+    if (key.ctrl && input === 'r') {
+      dispatch({ kind: 'notice', notice: '历史搜索尚未接通' }); return;
+    }
     handleComposerKey(input, key, {
       readOnly: isComposerReadOnly(stateRef.current, stateRef.current.selectedSessionId),
-      draft: composerDraftFor(stateRef.current, stateRef.current.selectedSessionId),
+      draft: composerInputFor(stateRef.current, stateRef.current.selectedSessionId),
+      width: Math.max(1, bodyWidth(terminalWidth, stateRef.current.sidebarDensity) - 1),
       change: workspaceActions.composerChange,
       submit: workspaceActions.submit,
     });
@@ -1527,7 +1659,7 @@ function TuiAppContent(props: TuiAppProps) {
   /**
    * 粘贴：只在工作区、无 overlay、无待确认动作、非只读且有明确目标时插入全文并立即保存。
    *
-   * 它绝不触发发送或命令解析；CRLF 归一为 LF，批内不做字符级编辑（本批 append-only）。
+   * 它不触发发送或命令解析；换行归一，在当前光标插入，长载荷作为原子块编辑。
    */
   usePaste((text) => {
     const current = stateRef.current;
@@ -1548,8 +1680,10 @@ function TuiAppContent(props: TuiAppProps) {
     if (normalized.length === 0) {
       return;
     }
+    answerRequest.current++;
+    if (answerPanelRef.current) updateAnswerPanel({ ...answerPanelRef.current, focus: 'text' });
     const outcome = protection.paste(target, normalized);
-    dispatch(draftActionFor(target, protection.draftOf(target)?.text ?? ''));
+    dispatch(draftActionFor(target, protection.draftOf(target) ?? emptyDraft()));
     if (outcome.status !== 'saved') {
       dispatch({ kind: 'notice', notice: `粘贴未保存：${saveOutcomeText(outcome)}（内容仍保留在内存中）` });
     }
@@ -1615,13 +1749,15 @@ function TuiAppContent(props: TuiAppProps) {
           ? 'context_exhausted：已停止发起新的模型调用'
           : null
       }
-      newlineHint="Shift+Enter 换行"
+      newlineHint="Alt+Enter 换行"
       handoffProposal={
         viewModel.planningHandoffs.find((entry) => entry.proposalId === handoffProposalId) ?? null
       }
       authorizationReview={authorizationReview}
       commands={COMMAND_IDS}
       inputManager={inputManager}
+      answerPanel={state.composerMode.kind === 'answer' ? answerPanel : null}
+      pasteViewer={pasteViewer}
     />
   );
 }
@@ -1759,8 +1895,9 @@ function handleInspectorKey(
 
 export type ComposerKeyContext = {
   readonly readOnly: boolean;
-  readonly draft: string;
-  readonly change: (text: string) => void;
+  readonly draft: UiDraft;
+  readonly width?: number;
+  readonly change: (draft: UiDraft) => void;
   readonly submit: () => void;
 };
 
@@ -1772,7 +1909,7 @@ export type ComposerKeyContext = {
  */
 export function handleComposerKey(
   input: string,
-  key: { readonly backspace?: boolean; readonly return?: boolean; readonly shift?: boolean; readonly meta?: boolean },
+  key: EditorKey,
   context: ComposerKeyContext,
 ): void {
   if (context.readOnly) {
@@ -1780,18 +1917,12 @@ export function handleComposerKey(
   }
   if (key.return === true) {
     if (key.shift === true || key.meta === true) {
-      context.change(`${context.draft}\n`);
+      context.change(editComposer(context.draft, input, key, context.width));
       return;
     }
-    context.submit();
+    if (context.draft.text.trim()) context.submit();
     return;
   }
-  if (key.backspace === true) {
-    context.change(context.draft.slice(0, -1));
-    return;
-  }
-  if (input.length === 0) {
-    return;
-  }
-  context.change(`${context.draft}${input}`);
+  const next = editComposer(context.draft, input, key, context.width);
+  if (next !== context.draft) context.change(next);
 }

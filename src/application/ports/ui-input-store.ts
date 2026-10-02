@@ -34,10 +34,11 @@ export type UiAnswerTarget = {
 
 export type UiInputTarget = UiMessageTarget | UiAnswerTarget;
 
-/** 粘贴载荷：全文同时展开进 `UiDraft.text`，这里保留块身份供后续编辑批次使用。 */
+/** 折叠块范围：正文只存在于 UiDraft.text。 */
 export type UiPasteBlock = {
   readonly id: string;
-  readonly text: string;
+  readonly start: number;
+  readonly end: number;
 };
 
 export type UiDraft = {
@@ -45,6 +46,24 @@ export type UiDraft = {
   readonly cursor: number;
   readonly pasteBlocks: readonly UiPasteBlock[];
 };
+
+export function isValidUiDraft(draft: UiDraft): boolean {
+  const boundaries = new Set([0, draft.text.length]);
+  for (const part of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(draft.text)) {
+    boundaries.add(part.index);
+  }
+  if (!boundaries.has(draft.cursor)) return false;
+  const ids = new Set<string>();
+  let end = 0;
+  for (const block of draft.pasteBlocks) {
+    if (!block.id || ids.has(block.id) || block.start < end || block.start >= block.end ||
+      !boundaries.has(block.start) || !boundaries.has(block.end) ||
+      (draft.cursor > block.start && draft.cursor < block.end)) return false;
+    ids.add(block.id);
+    end = block.end;
+  }
+  return true;
+}
 
 export const UI_SUBMISSION_STATUSES = ['awaiting', 'unknown', 'rejected', 'conflict'] as const;
 
@@ -145,7 +164,7 @@ export type UiInputLimits = {
   readonly maxBytes: number;
 };
 
-/** 起始双上限：256 条有效记录、32 MiB UTF-8 正文/粘贴载荷；不做自动淘汰。 */
+/** 起始双上限：256 条有效记录、32 MiB UTF-8 正文（含粘贴）；不做自动淘汰。 */
 export const DEFAULT_UI_INPUT_LIMITS: UiInputLimits = {
   maxRecords: 256,
   maxBytes: 32 * 1024 * 1024,

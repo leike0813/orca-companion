@@ -18,6 +18,7 @@ import { z } from 'zod';
 
 import {
   DEFAULT_UI_INPUT_LIMITS,
+  isValidUiDraft,
   UI_ACTIVE_SUBMISSION_STATUSES,
   UI_SUBMISSION_STATUSES,
   type UiInputInvalidRecord,
@@ -36,7 +37,7 @@ import {
 } from '../../application/ports/ui-input-store.js';
 import { describeError } from './schema.js';
 
-export const UI_INPUT_SCHEMA_VERSION = 1;
+export const UI_INPUT_SCHEMA_VERSION = 2;
 
 const SCHEMA_VERSION_KEY = 'ui_input_schema_version';
 const SEQUENCE_KEY = 'ui_input_seq';
@@ -72,13 +73,13 @@ const UI_INPUT_DDL: readonly string[] = [
 
 const nonEmptyString = z.string().min(1);
 
-const pasteBlockSchema = z.strictObject({ id: nonEmptyString, text: z.string() });
+const pasteBlockSchema = z.strictObject({ id: nonEmptyString, start: z.number().int().nonnegative(), end: z.number().int().nonnegative() });
 
 const draftSchema = z.strictObject({
   text: z.string(),
   cursor: z.number().int().nonnegative(),
   pasteBlocks: z.array(pasteBlockSchema),
-});
+}).refine(isValidUiDraft, 'invalid draft boundaries');
 
 const messageTargetSchema = z.strictObject({
   kind: z.literal('message'),
@@ -166,18 +167,9 @@ function isConstraintError(error: unknown): boolean {
   return typeof code === 'number' && (code & 0xff) === SQLITE_CONSTRAINT;
 }
 
-/**
- * 容量按正文与粘贴载荷的 UTF-8 字节求和，不含 JSON 开销。
- *
- * 粘贴全文同时展开进正文，因此同一段内容会被计两次——这是「保留完整载荷」的物理表示，
- * 不是重复记账。
- */
+/** 完整正文的 UTF-8 字节数；折叠元数据不重复计载荷。 */
 function payloadBytes(value: UiInputValue): number {
-  let total = Buffer.byteLength(value.draft.text, 'utf8');
-  for (const block of value.draft.pasteBlocks) {
-    total += Buffer.byteLength(block.text, 'utf8');
-  }
-  return total;
+  return Buffer.byteLength(value.draft.text, 'utf8');
 }
 
 function readMeta(db: DatabaseSync, key: string): string | null {

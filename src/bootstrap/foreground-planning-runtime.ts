@@ -44,7 +44,8 @@ import {
   type AdvanceExecutionResult,
   type AdvanceRoleDispatch,
 } from '../application/execution/advance-execution.js';
-import { answerPendingInteraction } from '../application/coordination/pending-interaction.js';
+import { answerPendingInteraction, createUserQuestion } from '../application/coordination/pending-interaction.js';
+import { userQuestionTool } from '../workflow/coordinator/interaction-tools.js';
 import { querySubmission, type SubmissionQuery, type SubmissionStatus } from '../application/coordinator/submission-status.js';
 import type { UiInputStore, UiInputRecord } from '../application/ports/ui-input-store.js';
 import { openUiInputStore } from '../adapters/storage/ui-input-store.js';
@@ -1634,7 +1635,7 @@ export async function createForegroundPlanningHost(
         read.kind === 'absent' ? '该 Session 还没有可恢复的会话记录' : `会话记录不可恢复：${read.reason}`,
       );
     }
-    const tools = [...registeredToolsFor(session), ...executionToolsFor(session.coordinatorSessionId)];
+    const tools = [...registeredToolsFor(session), ...executionToolsFor(session.coordinatorSessionId), ...sessionToolsFor(session)];
     const input = buildBoundedModelInput({
       segments: segmentsFromState(read.state),
       estimate: estimatorInput,
@@ -1688,6 +1689,18 @@ export async function createForegroundPlanningHost(
     return registerPlanningTools({ mode: facts.mode, facts, services });
   };
 
+  const sessionToolsFor = (session: LiveSession): readonly PlanningToolDefinition[] => [userQuestionTool((question, context) => {
+    const fence = assertFencingGeneration(requiredStore(), session.incarnation, { clock });
+    if (fence.kind === 'fenced') return { kind: 'rejected', code: 'fenced', message: fence.code };
+    const result = createUserQuestion({ store: requiredStore(), coordinationScopeId: session.incarnation.coordinationScopeId,
+      writer: writerFor(session.incarnation), operationId: context.operationId, question });
+    if (result.kind !== 'recorded') return result;
+    if (!result.replayed) publish(session.coordinatorSessionId, { kind: 'interaction-opened',
+      coordinationScopeId: session.incarnation.coordinationScopeId, interactionId: result.interaction.interactionId,
+      expectedRevision: result.interaction.expectedRevision });
+    return { kind: 'ok', value: { interactionId: result.interaction.interactionId, expectedRevision: result.interaction.expectedRevision, state: result.interaction.state } };
+  })];
+
   const recoveryToolsFor = (session: LiveSession): readonly PlanningToolDefinition[] => {
     const facts = planningFacts(session.coordinatorSessionId);
     const services = planningServices(session.coordinatorSessionId);
@@ -1707,6 +1720,7 @@ export async function createForegroundPlanningHost(
       planningTools: registeredToolsFor(session),
       recoveryTools: recoveryToolsFor(session),
       executionTools: executionToolsFor(session.coordinatorSessionId),
+      sessionTools: sessionToolsFor(session),
     });
 
   // ---------------------------------------------------------------------
@@ -7189,6 +7203,17 @@ export async function createForegroundPlanningHost(
   };
 
   const controller = createControllerService({
+    questions: (input) => {
+      if (input.coordinationScopeId !== selectedScopeId) return { kind: 'rejected', code: 'stale_scope', message: '问题 Scope 不匹配' };
+      const result = requiredStore().query(input);
+      const project = (interaction: import('../application/ports/branch-coordination-store.js').PendingInteractionRecord) => ({
+        interactionId: interaction.interactionId, ownerCoordinatorSessionId: interaction.ownerCoordinatorSessionId,
+        subjectRef: interaction.subjectRef, expectedRevision: interaction.expectedRevision, state: interaction.state,
+      });
+      if (result.kind === 'pending-interaction') return { kind: result.kind, interaction: result.interaction === null ? null : { ...project(result.interaction), question: result.interaction.question } };
+      if (result.kind === 'pending-interactions') return { kind: result.kind, interactions: result.interactions.map(project), nextCursor: result.nextCursor };
+      return result.kind === 'rejected' ? result : { kind: 'rejected', code: 'unreadable', message: '问题查询结果无效' };
+    },
     submissionStatus: async (input) => {
       if (input.coordinationScopeId !== selectedScopeId) {
         return { kind: 'unverifiable', reason: '提交核验 Scope 与当前宿主不匹配' };
@@ -7320,6 +7345,14 @@ export async function createForegroundPlanningHost(
   });
 
   const ports: TuiPorts = {
+    questions: async (input) => {
+      if (selectedScopeId === null) return { kind: 'rejected', code: 'stale_scope', message: '没有当前 Scope' };
+      const result = await controller.query(input.kind === 'pending-interaction'
+        ? { ...input, coordinationScopeId: selectedScopeId, coordinatorSessionId: input.coordinatorSessionId as CoordinatorSessionId, interactionId: input.interactionId as InteractionId }
+        : { ...input, coordinationScopeId: selectedScopeId, coordinatorSessionId: input.coordinatorSessionId as CoordinatorSessionId });
+      return result.kind === 'pending-interaction' || result.kind === 'pending-interactions' || result.kind === 'rejected'
+        ? result : { kind: 'rejected', code: 'unreadable', message: '问题查询结果无效' };
+    },
     inputStore,
     submissionStatus,
     snapshot: async (selectedSessionId) => await readSnapshot(selectedSessionId),
