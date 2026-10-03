@@ -7,7 +7,7 @@
  */
 
 import { Box, Text, useBoxMetrics, type DOMElement } from 'ink';
-import { useRef, type ReactElement } from 'react';
+import { useEffect, useRef, type ReactElement } from 'react';
 import { AnswerPanel, type AnswerPanelView } from '../components/answer-panel.js';
 import { PasteViewer, type PasteViewerView } from '../components/paste-viewer.js';
 
@@ -69,6 +69,7 @@ export type WorkspaceProps = {
   readonly ui: TuiState;
   readonly terminalWidth: number;
   readonly terminalHeight?: number;
+  readonly onTranscriptHeight?: (height: number) => void;
   readonly events: readonly SemanticEvent[];
   readonly actions: WorkspaceActions;
   readonly modelCatalog: ModelCatalog;
@@ -110,6 +111,7 @@ export function workspaceLayout(view: TuiViewModel, ui: TuiState, terminalWidth:
   const width=bodyWidth(terminalWidth,ui.sidebarDensity);
   const alerts=[
     ...(ui.notice?[ui.notice]:[]),
+    ...(view.transcript.hasUpdates ? ['当前会话有更新 · Ctrl+End 查看'] : []),
     ...(view.execution.reconciliation.pending?['reconciling · 原操作结果未知，待对账']:[]),
     ...(view.execution.hazards.unverifiedWorkerCount?['Worker 状态待核验']:[]),
     ...(view.scope.controlState==='cancelling'?['停止结果待核验']:[]),
@@ -124,6 +126,8 @@ export function workspaceLayout(view: TuiViewModel, ui: TuiState, terminalWidth:
 export function Workspace(props: WorkspaceProps) {
   const rowRef=useRef<DOMElement>(null), bodyRef=useRef<DOMElement>(null), transcriptRef=useRef<DOMElement>(null);
   const rowMetrics=useBoxMetrics(rowRef),bodyMetrics=useBoxMetrics(bodyRef),transcriptMetrics=useBoxMetrics(transcriptRef);
+  const transcriptHeight = transcriptMetrics.hasMeasured ? Math.max(1, Math.round(transcriptMetrics.height)) : null;
+  useEffect(() => { if (transcriptHeight !== null) props.onTranscriptHeight?.(transcriptHeight); }, [transcriptHeight, props.onTranscriptHeight]);
   const view=props.viewModel,ui=props.ui,rows=props.terminalHeight??24;
   const {width,bodyRows,alerts,projectWidth}=workspaceLayout(view,ui,props.terminalWidth,rows);
   const selected=ui.selectedSessionId,input=composerInputFor(ui,selected),readOnly=isComposerReadOnly(ui,selected);

@@ -97,7 +97,7 @@ export function requestSessionCompaction(
   if (input.reason.trim().length === 0) {
     return rejection('reason_required', '压缩请求必须给出原因');
   }
-  const read = input.checkpoints.loadCheckpoint(input.coordinatorSessionId);
+  const read = input.checkpoints.loadCheckpoint(input.coordinatorSessionId, 'context');
   if (read.kind === 'absent') {
     return rejection('no_session', `Session ${input.coordinatorSessionId} 还没有可压缩的会话记录`);
   }
@@ -132,10 +132,7 @@ export function requestSessionCompaction(
     return { kind: 'blocked', reason: error instanceof Error ? error.message : String(error) };
   }
 
-  const written = input.checkpoints.saveCheckpoint({
-    ...state,
-    lastCompactionOutcome: artifacts.outcome,
-  });
+  const written = input.checkpoints.updateCheckpoint(input.coordinatorSessionId, { lastCompactionOutcome: artifacts.outcome });
   if (written.kind === 'failed') {
     return { kind: 'blocked', reason: `无法持久化压缩结论：${written.message}` };
   }

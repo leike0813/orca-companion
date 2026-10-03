@@ -75,7 +75,7 @@ const submissionQuerySchema = z.discriminatedUnion('kind', [
 
 export type SubmissionStatusQueryInput = {
   readonly store: BranchCoordinationStore;
-  readonly checkpoints: CheckpointRecoveryPort;
+  readonly checkpoints: CheckpointRecoveryPort & Pick<import('./history.js').HistoryReadPort, 'readEntry'>;
   readonly coordinationScopeId: CoordinationScopeId;
   readonly input: SubmissionQuery;
 };
@@ -98,13 +98,13 @@ function ownsAnswer(
 }
 
 function verifyMessage(
-  checkpoints: CheckpointRecoveryPort,
+  checkpoints: SubmissionStatusQueryInput['checkpoints'],
   query: Extract<SubmissionQuery, { kind: 'message' }>,
 ): SubmissionStatus {
   const sessionId = query.coordinatorSessionId as CoordinatorSessionId;
   let read;
   try {
-    read = checkpoints.loadCheckpoint(sessionId);
+    read = checkpoints.loadCheckpoint(sessionId, 'metadata');
   } catch (error) {
     return unverifiable(`无法读取会话历史：${error instanceof Error ? error.message : String(error)}`);
   }
@@ -122,11 +122,10 @@ function verifyMessage(
   const stepId = userStepId(query.submissionId);
   // 只认「同 submissionId 派生的用户消息条目」：entryId、role 与 stepId 必须同时命中，
   // 否则一条形态相近的工具或助手条目会被误判成这次提交。
-  const entry = read.state.committedMessages.find(
-    (candidate) =>
-      candidate.entryId === entryId && candidate.role === 'user' && candidate.stepId === stepId,
-  );
-  if (entry === undefined) {
+  let entry;
+  try { entry = checkpoints.readEntry(sessionId, entryId); }
+  catch (error) { return unverifiable(error instanceof Error ? error.message : String(error)); }
+  if (entry === null || entry.role !== 'user' || entry.stepId !== stepId) {
     return { kind: 'not-found' };
   }
   if (entry.content !== query.content) {

@@ -221,6 +221,8 @@ TUI 以选中 Coordinator Session 的 continuous transcript 与 composer 为主�
 
 Transcript 只显示用户/Agent 消息和折叠 tool 记录；运行事实按上述区域分层，语义事件进入项目面板最近事件（本次启动最多 50 条），诊断噪声只进日志。Pending Interaction 显示紧凑入口，Shift+Left 或 `/answer` 打开当前 Session 底部面板，回答 composer 必须绑定 interaction ID 与 expected revision；普通聊天不能满足待答问题。Ctrl+A/E 为行首尾，Enter 提交，Alt+Enter 换行；面板 Esc 保存回答并恢复聊天光标，新问题不得抢焦点。
 
+修改 Coordinator 历史存储、恢复、压缩或 transcript 分页时，先读 `docs/interface-contracts.md` 的 IC-04/11/12。生产读写按目的访问增量权威记录；分页读取与有效上下文读取各自有界，正文与调度状态保持单一 owner。
+
 最小全局键位为 `Ctrl+P` 打开 Command Palette、`Ctrl+B` 开合项目面板、`Ctrl+G` 打开 Graph Inspector、`Esc` 逐层返回，方向键与 Enter 用于导航。slash 上方候选先采用、再明确执行；审阅默认返回。Session Picker 和新事件不得自动切换 transcript、抢占 composer 或改变 Scope 级 Graph；M2 不实现自定义键位。Nerd/ASCII 可在选项中即时切换，用户级偏好尚未持久化；缺少 effort/context/验收摘要时明示不可用。
 
 Pause、Resume 和 Cancel 都作用于整个 Coordination Scope：

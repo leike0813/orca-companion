@@ -349,6 +349,10 @@ test('已受理的单次工具动作提交完成源并结束本条工作；拒�
   expect(model.received).toHaveLength(1);
   expect(loadState().committedMessages.at(-1)?.completedWorkSource).toEqual(pending[0]?.source);
 
+  store.close();
+  const fresh = openCheckpointStore({ databasePath: join(directory, 'rejected.sqlite') });
+  if (fresh.kind !== 'opened') throw new Error(fresh.message);
+  store = fresh.store;
   save(baseState());
   seedPendingCalls([{ callId: 'patch-2', name: 'request_graph_patch', args: {} }]);
   const rejected = await createToolsNode({
@@ -568,6 +572,10 @@ test('无法受控执行的 tool call 先提交响应，再以 blocked 结束并
     ];
 
   for (const [index, scenario] of scenarios.entries()) {
+    store.close();
+    const fresh = openCheckpointStore({ databasePath: join(directory, `invalid-${index}.sqlite`) });
+    if (fresh.kind !== 'opened') throw new Error(fresh.message);
+    store = fresh.store;
     save(baseState());
     const toolFacts = facts();
     const harness = recordingServices(toolFacts);

@@ -31,10 +31,8 @@ async function run(scene,size,mode,body){
 }
 
 
-const {COMMAND_IDS}=await import(root+'/dist/src/interfaces/tui/components/command-palette.js');
 const pause=()=>new Promise(resolve=>setTimeout(resolve,100));
 async function press(s,key){await s.press(key);await pause();}
-async function command(s,id){await press(s,['ctrl','p']);for(let i=0;i<COMMAND_IDS.indexOf(id);i++)await s.press('down');await press(s,'enter');}
 
 
 for(const size of [[120,40],[80,24],[50,40]])for(const mode of ['color','no-color'])await run('alignment',size,mode,async s=>{

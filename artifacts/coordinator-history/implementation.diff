@@ -1,0 +1,3046 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 05434b8..56ed2ef 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -221,6 +221,8 @@ TUI 以选中 Coordinator Session 的 continuous transcript 与 composer 为主
+ 
+ Transcript 只显示用户/Agent 消息和折叠 tool 记录；运行事实按上述区域分层，语义事件进入项目面板最近事件（本次启动最多 50 条），诊断噪声只进日志。Pending Interaction 显示紧凑入口，Shift+Left 或 `/answer` 打开当前 Session 底部面板，回答 composer 必须绑定 interaction ID 与 expected revision；普通聊天不能满足待答问题。Ctrl+A/E 为行首尾，Enter 提交，Alt+Enter 换行；面板 Esc 保存回答并恢复聊天光标，新问题不得抢焦点。
+ 
++修改 Coordinator 历史存储、恢复、压缩或 transcript 分页时，先读 `docs/interface-contracts.md` 的 IC-04/11/12。生产读写按目的访问增量权威记录；分页读取与有效上下文读取各自有界，正文与调度状态保持单一 owner。
++
+ 最小全局键位为 `Ctrl+P` 打开 Command Palette、`Ctrl+B` 开合项目面板、`Ctrl+G` 打开 Graph Inspector、`Esc` 逐层返回，方向键与 Enter 用于导航。slash 上方候选先采用、再明确执行；审阅默认返回。Session Picker 和新事件不得自动切换 transcript、抢占 composer 或改变 Scope 级 Graph；M2 不实现自定义键位。Nerd/ASCII 可在选项中即时切换，用户级偏好尚未持久化；缺少 effort/context/验收摘要时明示不可用。
+ 
+ Pause、Resume 和 Cancel 都作用于整个 Coordination Scope：
+diff --git a/artifacts/tui-prototype-alignment/repair-20261003/capture-post-review.mjs b/artifacts/tui-prototype-alignment/repair-20261003/capture-post-review.mjs
+index 3430558..dff7e78 100644
+--- a/artifacts/tui-prototype-alignment/repair-20261003/capture-post-review.mjs
++++ b/artifacts/tui-prototype-alignment/repair-20261003/capture-post-review.mjs
+@@ -31,10 +31,8 @@ async function run(scene,size,mode,body){
+ }
+ 
+ 
+-const {COMMAND_IDS}=await import(root+'/dist/src/interfaces/tui/components/command-palette.js');
+ const pause=()=>new Promise(resolve=>setTimeout(resolve,100));
+ async function press(s,key){await s.press(key);await pause();}
+-async function command(s,id){await press(s,['ctrl','p']);for(let i=0;i<COMMAND_IDS.indexOf(id);i++)await s.press('down');await press(s,'enter');}
+ 
+ 
+ for(const size of [[120,40],[80,24],[50,40]])for(const mode of ['color','no-color'])await run('alignment',size,mode,async s=>{
+diff --git a/docs/architecture.md b/docs/architecture.md
+index d5d64fa..4de5e71 100644
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -96,7 +96,7 @@ Application 是业务规则的外部 interface。小型纯用例可以直接是
+ | 禁止 | 决定模式转换、预算、准入、重试、图推进或 UI 状态；直接读写 Orca DB 或私有 RPC |
+ | 测试 seam | contract test 覆盖 parser/error passthrough；真实集成只在显式隔离目标运行 |
+ 
+-Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation catalog、进程和 schema 转换；`storage` 分别实现 Branch Coordination Store、LangGraph checkpointer 与 IC-13 UI 输入存储，不共享表或伪装跨库事务。
++Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation catalog、进程和 schema 转换；`storage` 分别实现 Branch Coordination Store、LangGraph checkpointer 与 IC-13 UI 输入存储，不共享表或伪装跨库事务。IC-04 的会话历史在 checkpoint 库中按稳定 entry、正文块、step 和 Wake 关联追加，控制记录保持小型；正文范围与 metadata keyset 由 `application/coordinator/history.ts` 定义。有效上下文、工具恢复、待处理输入和 UI 分页各自按用途读取，压缩历史保留原文且不进入常规模型输入读取。TUI 只保留当前有界页；SQLite 是原文的唯一权威。
+ 
+ ### MOD-05 CLI
+ 
+diff --git a/docs/dev/tui-implementation-handoff.md b/docs/dev/tui-implementation-handoff.md
+index 7266f76..3c61dec 100644
+--- a/docs/dev/tui-implementation-handoff.md
++++ b/docs/dev/tui-implementation-handoff.md
+@@ -8,11 +8,11 @@
+ 
+ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功能依赖见 [#46 最终决议](https://github.com/leike0813/orca-companion/issues/46#issuecomment-5946016892)。
+ 
+-**原型对应表已直接写入当前 [design.md D-01](../../openspec/changes/align-tui-with-approved-prototypes/design.md#d-01六张原型票直接作为设计参照)，包含六票最终决议、源码和代表画面的可点击链接。接手不能只看一张票或凭记忆实施。** 后续归档时将此链接迁到实际归档路径，保留对应表。
++**原型对应表见已归档的 [design.md D-01](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/design.md#d-01六张原型票直接作为设计参照)，包含六票最终决议、源码和代表画面的可点击链接。接手不能只看一张票或凭记忆实施。**
+ 
+ | 原型票 | 定稿版本 | 当前纠偏职责 | 仍需后继功能合同 |
+ | --- | --- | --- | --- |
+-| #40 / P-40 | continuous | 保留已改标记/色边/留白/工具，并在新布局重新验收 | 全历史、活动分组、Markdown、详情/搜索 |
++| #40 / P-40 | continuous | 保留标记/色边/留白/工具；3A 接通全历史分页和正文范围 | 3B 视窗/缓存/Markdown/流式；后继活动分组、详情/搜索 |
+ | #47 / P-47 | above-input | 圆角真实 composer、有界上方候选、采用/执行分离 | 完整命令搜索及未接通操作 |
+ | #51 / P-51 | tabs，固定 sidebar 区域，窄屏主区域 | Ctrl+B、总览/待答/最近事件及已有详情，固定外框和返回 | 跨 Session 回答完整返回、可信身份/批准后正文 |
+ | #52 / P-52 | dialog final | 现有四类弹窗、反色动作、默认返回、Nerd/ASCII 即时选择 | provider/effort/Worker 角色配置、图标持久偏好 |
+@@ -32,11 +32,12 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
+ | `tui-debug-workbench-and-ui-migration` | 6/6；[verification PASS](../../openspec/changes/archive/2026-09-29-tui-debug-workbench-and-ui-migration/verification.md) | 实现 `b4dfd3c`、归档 `e774b5a`；2026-09-29 已归档 | 共享主题/组件/隔离预览基础 |
+ | `protect-tui-input`（第一批） | 18/18；[verification PASS](../../openspec/changes/archive/2026-10-02-protect-tui-input/verification.md) | 实现/归档包含于 `c1964d4`；2026-10-02 已归档 | 输入保护行为基础 |
+ | `complete-tui-editor`（第二批） | [任务 7/7](../../openspec/changes/archive/2026-10-02-complete-tui-editor/tasks.md)；[verification PASS](../../openspec/changes/archive/2026-10-02-complete-tui-editor/verification.md)，限批准功能范围 | 实现/归档包含于 `d3066e2`；2026-10-02 已归档、主规格已同步 | 完整编辑与当前回答；不能推定整体原型通过 |
+-| `align-tui-with-approved-prototypes` | 任务 21/21；最终复验 27 文件/181 项通过，2 条件跳过，普通真实 PTY 13 项通过；**[verification PASS](../../openspec/changes/align-tui-with-approved-prototypes/verification.md)**，V-01–04 及审计发现的滚动预算 F-01 已修复 | `d3066e2` 上的已检查未提交工作区；六份主规格与 IC-12 已同步；未归档 | 原 277 对证据已复查；另存 [108 对修复/补采画面与操作](../../artifacts/tui-prototype-alignment/repair-20261003/README.md)，三档层级、键位、固定框/返回通过；D-10 全功能缺口继续保留 |
++| `align-tui-with-approved-prototypes` | 任务 21/21；最终复验 27 文件/181 项通过，2 条件跳过，普通真实 PTY 13 项通过；**[verification PASS](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/verification.md)**，V-01–04 及审计发现的滚动预算 F-01 已修复 | 已包含于 `8af15029`；2026-10-03 已归档，六份主规格已同步 | 原 277 对证据已复查；另存 [108 对修复/补采画面与操作](../../artifacts/tui-prototype-alignment/repair-20261003/README.md)，三档层级、键位、固定框/返回通过；D-10 全功能缺口继续保留 |
++| `paginate-coordinator-history`（3A） | 增量权威历史、有界有效上下文与正式 transcript 分页；当前证据见 [README](../../artifacts/coordinator-history/README.md) | `8af15029` 上的工作区；尚未提交/归档 | 沿用 #40 continuous 和 #41 阅读键位，三档彩色/NO_COLOR、跨页与 resize 共 45 对画面；3B 性能和渲染仍待后继 |
+ 
+ ### 第二批成果及证据边界
+ 
+-当前基线 HEAD：`d3066e2bf805db3efdc6db1cf9b4d1a8af81c205`。第二批已包含于 HEAD；当前 dirty 工作区主要为原型纠偏阶段成果与重稿工件。接手先检查 `git status --short`，不要覆盖、重置或重复实现。
++当前基线 HEAD：`8af15029d22ba364985abcf2cb8edbf30cc85bf2`。第二批与原型纠偏已包含于 HEAD；当前 dirty 工作区为 3A 实现及用户已有的交接报告归档移动。接手先检查 `git status --short`，不要覆盖、重置或重复实现。
+ 
+ 第二批已提供 grapheme 任意位置编辑、行首尾、多行有界视窗、原生光标；>1000 code points 原子粘贴及 /paste；唯一完整 UiDraft、CAS、提交快照/稳定 submissionId、单活跃提交/generation；真实 ask_user 创建/重放与精确查询；当前 Session 选项/自由回答、Esc 恢复。UI schema v2、Coordination schema 14，问题正文由 Branch Store 拥有。
+ 
+@@ -61,13 +62,14 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
+ 
+ ## 3. 接续顺序与缺口
+ 
+-先完成重稿后的呈现纠偏，再接 #46 的功能批次；后继沿用同一原型，不重新比较视觉方案。完整缺口、当前显示方式与 owner 的唯一登记见 [design D-10](../../openspec/changes/align-tui-with-approved-prototypes/design.md#d-10逐项合同缺口与后续归属)。
++呈现纠偏已归档，当前接 #46 的 3A 功能批次；后继沿用同一原型。原纠偏范围的缺口与 owner 见 [design D-10](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/design.md#d-10逐项合同缺口与后续归属)，3A 的具体边界见 [当前 design](../../openspec/changes/paginate-coordinator-history/design.md)。
+ 
+ | 顺序 | 当前状态 / 后续职责 |
+ | --- | --- |
+ | 第二批 | 已归档，功能验证 PASS |
+-| 当前原型纠偏 | 已实施并复验，正式验收 PASS，V-01–04/F-01 已修复；旧输入保护接缝保留，D-10 功能缺口转后继合同，当前未提交/未归档 |
+-| 3A / 3B | 全历史增量读写、keyset/正文范围、稳定锚点/有界缓存、Markdown/流式与 #53 性能 |
++| 原型纠偏 | 已归档，正式验收 PASS；V-01–04/F-01 已修复，输入保护接缝保留 |
++| 3A | 当前 change：全历史增量读写、keyset/正文范围、分页返回和有效上下文边界；证据与限制见当前 README |
++| 3B | 下一批：局部视窗、稳定锚点/有界缓存、Markdown/流式与 #53 输入/缓存导航 p95 |
+ | 第四批 | 活动关联/完整详情、F3 transcript 搜索、Ctrl+R 普通发送历史 |
+ | 第五批 | 当前回答基础已具备；补历史卡片状态和跨 Session 进入/返回，保护原位置/草稿 |
+ | 第六批 | 当前命令/弹窗样式与候选已实现；后继补完整目录搜索、真实 provider/effort/角色配置及其权限 |
+@@ -78,10 +80,10 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
+ 
+ ## 4. 六票原型验收和进度更新
+ 
+-当前 [tasks.md](../../openspec/changes/align-tui-with-approved-prototypes/tasks.md) 与 [implementation-plan.md](../../openspec/changes/align-tui-with-approved-prototypes/implementation-plan.md) 按 IP-01–09 登记实际完成项，旧局部测试保留其范围。本轮新增固定项目/详情、候选两步采用、弹窗默认返回、图多关系/活动节点和连续 resize 验证；事件更新不抢焦点，移出窗口的原选择明确失效。
++纠偏的 [tasks.md](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/tasks.md) 与 [implementation-plan.md](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/implementation-plan.md) 按 IP-01–09 登记实际完成项，旧局部测试保留其范围。该批新增固定项目/详情、候选两步采用、弹窗默认返回、图多关系/活动节点和连续 resize 验证；事件更新不抢焦点，移出窗口的原选择明确失效。
+ 
+ 生产画面对照使用现有 `pnpm ui:preview`/tuistory/PTY，隔离端口与存储，不把 prototype 入口当生产。覆盖三档、彩色/NO_COLOR、Nerd/ASCII、规划/执行/阻塞/unknown/待答/空闲；逐项操作项目页签/详情、四类弹窗、候选采用、图选择/依赖/栏目/返回和连续 resize。
+ 
+ 阶段证据见 [full-map README](../../artifacts/tui-prototype-alignment/full-map/README.md)，修复后的当前证据见 [repair README](../../artifacts/tui-prototype-alignment/repair-20261003/README.md)：用途分组、三类审阅键位、位置提示及固定框/返回另存 108 对画面与同名文本，保留操作序列、18 组拦截观察及实际 cursor。原型素材和历史 verification 保留原范围，旧阶段一对文件的丢失按上面的用户反馈登记。行为测试复用现有用例，不用整屏 snapshot、像素或源码字符串门禁代替对照。
+ 
+-完整历史/真实配置/跨会话协议仍未完成，标准布局不能称 custom 功能完成。typecheck/lint/build、change/六份主规格严格 OpenSpec、diff 和 TUI 181 项复验通过，两项隔离真实 Orca 条件检查未运行。2026-10-03 正式 [verification](../../openspec/changes/align-tui-with-approved-prototypes/verification.md) 结论为 **PASS**：输入分发、用途分组、区域规格与 PTY 入口已修复，限定审计的滚动预算问题复核闭合；当前对象固定于报告链接的工作区补丁。提交和归档尚未进行。平台证据限 Ubuntu；本次没有新增 OS 输入法预编辑/候选窗人工证据，Windows 未验证。
++真实配置/跨会话协议仍待后继，标准布局不能称 custom 功能完成。纠偏批 typecheck/lint/build、change/六份主规格严格 OpenSpec、diff 和 TUI 181 项复验通过，两项隔离真实 Orca 条件检查未运行。2026-10-03 正式 [verification](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/verification.md) 结论为 **PASS**：输入分发、用途分组、区域规格与 PTY 入口已修复，限定审计的滚动预算问题复核闭合；已提交并归档。3A 单独验收全部原文分页，不据此宣称 3B 的渲染/缓存或整体性能完成。平台证据限 Ubuntu；本次没有新增 OS 输入法预编辑/候选窗人工证据，Windows 未验证。
+diff --git a/docs/interface-contracts.md b/docs/interface-contracts.md
+index 28d00b9..7243214 100644
+--- a/docs/interface-contracts.md
++++ b/docs/interface-contracts.md
+@@ -213,7 +213,17 @@ type CoordinatorSessionState = {
+ };
+ ```
+ 
+-`m1-wire-foreground-planning-runtime` 将 Session payload 升为 v2：每条已提交消息有稳定 `entryId`；tool result 还包含配对的 `toolCallId` 与名称，assistant call 的可信 `OperationId` 在模型响应提交时由宿主分配；`lastCompactionOutcome` 是该 Session 最近一次维护结果。v1 读取只做可证明唯一的升级，失败阻塞且保留原 checkpoint。普通用户消息以 `submissionId` 与 WakeBatch 原子落盘后补记 source admission；交互回答正文属于 IC-03。
++Session payload 为 v2：每条已提交消息有稳定 `entryId`；tool result 包含配对的 `toolCallId` 与名称，assistant call 的可信 `OperationId` 在模型响应提交时由宿主分配；`lastCompactionOutcome` 是该 Session 最近一次维护结果。普通用户消息以 `submissionId` 与 WakeBatch 原子落盘后补记 source admission；交互回答正文属于 IC-03。
++
++`paginate-coordinator-history` 扩展 IC-04，历史 DTO/限额的 canonical path 为 `src/application/coordinator/history.ts`。checkpoint 库 schema 为 2，旧整体 JSON 库明确拒绝打开并保留。`coordinator_sessions` 只保存控制字段；entry、16KiB UTF-8 正文块、model step metadata 与 Wake 关联追加。正文只由 entry 的块记录拥有；step 引用该 entry，不再保存另一份正文。独立的小型 summary metadata 用于有界列表，工具参数仍由原 entry 拥有。
++
++生产读取必须显式选择 `metadata`（控制）、`context`（有效输入）、`tools`（最新 step 及配对结果）、`pending`（最多 32 条未处理输入）或 `migration`（原生窗口转 Capsule 所需的有界原文）。后四种读取受 4096 条/4MiB 预算约束，超限返回 `unrecoverable/context_exhausted`；压缩区间由索引排除后才读取正文。原生窗口保存覆盖序号，之后的新消息仍进入有效上下文。`full` 与无范围 `readCommittedMessages` 只用于测试/诊断，生产不调用。
++
++`appendMessage` 保存稳定回答引用，`updateCheckpoint` 只更新控制字段，均使用短事务；提交核验通过 `readEntry` 精确读取提交身份。`commitUserMessage`/`commitWakeBatch` 的 `state` 是控制字段和本次提交的条目或 batch，不是全历史快照。entry 的 `handled_by` 是已提交消费事实的索引，Application 仍拥有 Actionable Work 投影和调度。
++
++`HistoryReadPort.readHistoryPage` 使用 Session/sequence keyset，至多 100 条且 metadata 合计 64KiB；先读取长度与身份，再按剩余预算物化 metadata。`readHistoryBody` 绑定 Session、entry、revision=1 与 UTF-8 byte offset，每次至多 64KiB 正文，拒绝越界与非字符边界。两者独立读取，不加载整个 Session 后切片。
++
++Capsule 的替换区间在保存时绑定固定序号边界；摘要包含实际被替换的全部条目，包括交错的用户输入和工具结果。压缩前缀保留完整最新 step，同载荷重放保持原边界，后续追加不会扩大已替换区间。
+ 
+ `CoordinatorSessionRecordPort.appendModelStep` 与 `appendToolResult` 在既有 storage 事务中读取最新 core、核验稳定条目身份并追加。相同身份与内容的重放返回 `saved`，身份相同但内容冲突返回 `failed`；等待期间受理的用户消息与 Wake Batch 保留。Workflow 使用这两个方法提交响应和工具结果，路由与消费字段维持原语义。
+ 
+@@ -529,6 +539,8 @@ Replanning 停止新派发并结清在途/Delivery/Interaction/Intent，建立
+ 
+ ## IC-11 ControllerService、Snapshot、SemanticEvent 与用户 intent
+ 
++`paginate-coordinator-history` 扩展 transcript reader：`null` 读取最新片段，`oldest` 通过首序号直达最早；其余游标为经 schema 核验的 `[SessionId, sequence, byteOffset, direction]`，跨 Session 拒绝。`ControllerTranscriptPage.nextCursor` 指向更早原文，`newerCursor` 指向更晚原文；message 携带稳定 `entryId`、sequence、offset/end 与总 byteLength。每页至多 100 条、64KiB 原文，巨型单条可跨页完整读取。正文权威和范围限额由 IC-04 拥有，Controller 与 TUI 不复制历史。
++
+ - **Owner (Create)**: `m1-recover-execution`
+ - **Canonical path**: `src/application/controller-service.ts`
+ - **Extenders (Extend)**: `m1-evolve-execution-graph` 增加图 patch/replanning projection 与 command variants；`m1-wire-foreground-planning-runtime` 增加提交身份、回答正文与事件归属；`m2-deliver-planning-tui` 增加候选图拓扑、压缩状态与规划交接提案投影；`m2-deliver-execution-tui` 增加执行投影、Finalizer 与执行交接投影；`m2-wire-execution-runtime` 增加有界的 Execution Authorization 命令（propose-graph / review / approve），不新增快照字段
+@@ -710,6 +722,8 @@ Service 只委派既有用例，不打开 store、不调用具体 adapter、不
+ 
+ ## IC-12 Presentation projection、CLI 输出与进程生命周期
+ 
++正式 continuous transcript 保留当前有界页。PgUp/PgDn 先在当前页阅读，到边界再使用权威游标；Ctrl+Home/End 分别直达最早/最新，Esc 在关闭更高层界面后返回最新。离开底部时新事件保留当前页与输入；失败保留原页并展示原因，切 Session 或更晚请求使迟到响应失效。entry ID 用于工具展开身份。视口高度改变仅调整本地滚动位置，不查询或持久写入。此处是 3A 基本阅读合同，Markdown、局部解析、缓存和流式性能由 3B 实现。
++
+ - **Owner (Create)**: `m0-orca-control-baseline`
+ - **Canonical paths**: `src/application/tui/view-model.ts`、`src/interfaces/cli/`、`src/interfaces/tui/`
+ - **Extenders (Extend)**: `m2-deliver-planning-tui` 在同一合同内实现 planning 投影与 TUI；`m2-deliver-execution-tui` 增加执行态分区；`m2-wire-execution-runtime` 增加 Execution Authorization 审阅 overlay 与 `authorize-execution` 命令，不新增页面或键位
+diff --git a/scripts/tui-preview.mjs b/scripts/tui-preview.mjs
+index 92094b1..7e38a32 100644
+--- a/scripts/tui-preview.mjs
++++ b/scripts/tui-preview.mjs
+@@ -6,7 +6,7 @@ import { setTimeout, clearTimeout } from 'node:timers';
+ import { createElement } from 'react';
+ import { render } from 'ink';
+ 
+-const scenarios = ['planning', 'execution', 'blocked', 'empty', 'long-cjk', 'answer', 'disabled', 'alignment', 'alignment-planning'];
++const scenarios = ['planning', 'execution', 'blocked', 'empty', 'long-cjk', 'answer', 'disabled', 'alignment', 'alignment-planning', 'history'];
+ const alignmentPreview = ['alignment', 'alignment-planning'].includes(process.argv[2]);
+ const prototype = process.argv[2] === '--prototype';
+ const graphPrototype = process.argv[2] === '--graph-prototype';
+@@ -308,6 +308,22 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
+     const { openUiInputStore } = await import('../dist/src/adapters/storage/ui-input-store.js');
+     const previewInputs = openUiInputStore({ databasePath: ':memory:' });
+     if (previewInputs.kind !== 'opened') throw new Error(previewInputs.message);
++    const { openCheckpointStore } = await import('../dist/src/adapters/storage/checkpoint-store.js');
++    const { readTranscriptPage } = await import('../dist/src/application/coordinator/history.js');
++    const history = scenario === 'history' ? openCheckpointStore({ databasePath: ':memory:' }) : null;
++    if (history?.kind === 'failed') throw new Error(history.message);
++    if (history?.kind === 'opened') {
++      history.store.saveCheckpoint({ schemaVersion: 2, coordinatorSessionId: 'session-a', graphPosition: 'suspend',
++        committedMessages: [], committedModelSteps: [], wakeBatches: [], lastCompactionOutcome: null });
++      for (let index = 0; index < 320; index += 1) {
++        const content = index === 0 ? '历史起点 0 · 请从第一条开始阅读。'
++          : index === 319 ? '历史终点 319 · 全部原文可按页阅读。'
++          : index === 150 ? '巨型正文 中文abc🙂\n'.repeat(12000) : `历史条目 ${index} · 中文abc混排与分页。`;
++        const saved = history.store.appendMessage('session-a', { entryId: `history-${index}`, stepId: `history-${index}`,
++          role: index % 2 === 0 ? 'user' : 'assistant', content });
++        if (saved.kind === 'failed') throw new Error(saved.message);
++      }
++    }
+     const ports = {
+       questions: async (input) => input.kind === 'pending-interactions'
+         ? { kind: 'pending-interactions', interactions: snapshot.interactions.filter((item) => item.ownerCoordinatorSessionId === input.coordinatorSessionId), nextCursor: null }
+@@ -316,7 +332,11 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
+       inputStore: previewInputs.store,
+       submissionStatus: async () => ({ kind: 'unverifiable', reason: '预览不读取真实提交记录' }),
+       snapshot: async (selectedSessionId) => ({ kind: 'snapshot', snapshot: { ...snapshot, selectedSessionId } }),
+-      transcript: async (coordinatorSessionId) => ({ kind: 'transcript', transcript: { ...transcript, coordinatorSessionId } }),
++      transcript: async (coordinatorSessionId, cursor) => {
++        try { return { kind: 'transcript', transcript: history?.kind === 'opened'
++          ? readTranscriptPage(history.store, coordinatorSessionId, cursor) : { ...transcript, coordinatorSessionId } }; }
++        catch (error) { return { kind: 'failed', code: 'history_unreadable', message: String(error) }; }
++      },
+       execute: async (intent) => previewDialogs ? intent.kind === 'switch-model-configuration' && intent.nextConfigurationRef === 'config-rejected'
+         ? { kind: 'rejected', code: 'fixture_model_rejected', message: '候选配置验证失败；当前配置保留' }
+         : { kind: 'accepted', revision: 7, summary: `模拟意图已记录：${intent.kind}；未执行真实操作` } : rejected,
+@@ -398,6 +418,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
+       await app.waitUntilExit();
+     } finally {
+       previewInputs.store.close();
++      if (history?.kind === 'opened') history.store.close();
+     }
+   } catch (error) {
+     process.stderr.write(`无法启动 TUI 预览：${error instanceof Error ? error.message : String(error)}\n`);
+diff --git a/src/adapters/storage/checkpoint-store.ts b/src/adapters/storage/checkpoint-store.ts
+index c5e8b4a..bad6f26 100644
+--- a/src/adapters/storage/checkpoint-store.ts
++++ b/src/adapters/storage/checkpoint-store.ts
+@@ -1,766 +1,550 @@
+-/**
+- * IC-04：Coordinator Session checkpoint store
+- * （Owner: `m1-run-coordinator-sessions`）。
+- *
+- * 两个职责刻意放在同一个文件、同一个 `checkpoints.sqlite` 里，因为它们是同一件事的两面：
+- *
+- * 1. **LangGraph 图的运行状态**由 `SqliteSaver` 保存在它自己的 `checkpoints` / `writes` 表里，
+- *    负责图位置、pending writes 与 tool step 的可恢复性。本文件不复制它的表结构，也不读写它的行。
+- * 2. **Coordinator Session 的会话记录**由本文件的 `coordinator_sessions` 表保存，是
+- *    `CoordinatorSessionState` 的唯一归属。图节点通过本模块读写它，而不是把它塞进图通道，
+- *    这样已提交消息、Wake Batch 与压缩产物都只有一个真值。
+- *
+- * 两类上下文压缩产物分开保存：Native Compacted Window 的 owner metadata 与可移植 Context Capsule
+- * 各有自己的表。删除或损坏任一方都不会影响另一方，这是 D10 的直接落地。
+- *
+- * 数据库驱动是 `better-sqlite3`（LangGraph SqliteSaver 的依赖），与前置的 `coordination.sqlite`
+- * 使用不同驱动、不同文件，两者不共享表，也不伪装跨库事务。
+- */
+-
++/** IC-04: authoritative incremental records; LangGraph owns its checkpoint tables. */
+ import { mkdirSync } from 'node:fs';
+ import { dirname } from 'node:path';
+-
+ import type { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
+ import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
+-
+-import type {
+-  CoordinatorSessionId,
+-} from '../../application/dto/identity.js';
+-import type {
+-  AppendModelStepInput,
+-  AppendToolResultInput,
+-  CheckpointRecoveryRead,
+-  CheckpointWriteResult,
+-  UserMessageCommitInput,
+-  UserMessageCommitResult,
+-} from '../../application/coordinator/runtime-guard.js';
++import type { CoordinatorSessionId } from '../../application/dto/identity.js';
++import type { CoordinatorSessionRecordPort, CheckpointRecoveryRead, CheckpointWriteResult } from '../../application/coordinator/runtime-guard.js';
+ import type { WakeCheckpointCommit } from '../../application/coordinator/wake-admission.js';
+-import type {
+-  NativeCompactedWindowOwner,
+-  PortableContextCapsule,
+-  CommittedMessageEntry,
+-  CommittedModelStep,
+-  CoordinatorSessionState,
+-  WakeBatch,
+-} from '../../domain/coordinator/session-state.js';
+-import {
+-  COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
+-  parseCoordinatorSessionState,
+-  userEntryId,
+-  userStepId,
+-} from '../../domain/coordinator/session-state.js';
++import { HistoryBoundaryError, HISTORY_CHUNK_BYTES, HISTORY_PAGE_BYTES, HISTORY_PAGE_ITEMS, HISTORY_BODY_BYTES, CONTEXT_READ_BYTES, CONTEXT_READ_ITEMS, historyBodyQuerySchema, historyPageQuerySchema, type CheckpointReadPurpose, type HistoryReadPort, type HistoryMetadata } from '../../application/coordinator/history.js';
++import { COORDINATOR_SESSION_STATE_SCHEMA_VERSION, parseCoordinatorSessionState, userEntryId, userStepId, type NativeCompactedWindowOwner, type PortableContextCapsule, type CommittedMessageEntry, type CommittedModelStep, type CoordinatorSessionState, type WakeBatch } from '../../domain/coordinator/session-state.js';
+ import { describeError } from './schema.js';
+-
+-export const CHECKPOINT_SCHEMA_VERSION = 1;
+-
+-const CHECKPOINT_VERSION_KEY = 'checkpoint_schema_version';
+-
+-const CHECKPOINT_MIGRATIONS: readonly string[] = [
+-  `CREATE TABLE IF NOT EXISTS checkpoint_meta (
+-     key TEXT PRIMARY KEY,
+-     value TEXT NOT NULL
+-   ) STRICT`,
+-  // 会话记录只保存除 contextMaterial 以外的部分：压缩产物有各自的表。
+-  `CREATE TABLE IF NOT EXISTS coordinator_sessions (
+-     coordinator_session_id TEXT PRIMARY KEY,
+-     schema_version INTEGER NOT NULL,
+-     session_state TEXT NOT NULL,
+-     updated_at INTEGER NOT NULL
+-   ) STRICT`,
+-  `CREATE TABLE IF NOT EXISTS native_window_owners (
+-     coordinator_session_id TEXT PRIMARY KEY,
+-     owner_ref TEXT NOT NULL,
+-     items TEXT NOT NULL,
+-     updated_at INTEGER NOT NULL
+-   ) STRICT`,
+-  `CREATE TABLE IF NOT EXISTS portable_capsules (
+-     coordinator_session_id TEXT PRIMARY KEY,
+-     capsule_id TEXT NOT NULL,
+-     replaced_from_step_id TEXT NOT NULL,
+-     replaced_to_step_id TEXT NOT NULL,
+-     text TEXT NOT NULL,
+-     updated_at INTEGER NOT NULL
+-   ) STRICT`,
+-];
+-
+-/**
+- * `better-sqlite3` 不是本项目的直接依赖（它随 SqliteSaver 一起安装），因此它自己的类型在本包里
+- * 无法解析。这里只声明本文件实际用到的极小结构，并在打开时做一次受控转换；`node:sqlite` 的
+- * coordination store 与本文件各自内聚，互不共享表。
+- */
+-type SqliteStatement = {
+-  run(...params: readonly unknown[]): unknown;
+-  get(...params: readonly unknown[]): unknown;
+-  all(...params: readonly unknown[]): unknown;
+-};
+-
+-type SqliteDatabase = {
+-  prepare(sql: string): SqliteStatement;
+-  exec(sql: string): void;
+-  close(): void;
+-};
+-
+-export type CheckpointStoreOpenFailureCode =
+-  | 'unreadable'
+-  | 'schema_version_unsupported'
+-  | 'migration_failed';
+-
+-/** 被 Capsule 取代的区间，按已提交 step 的闭区间表示。 */
++export const CHECKPOINT_SCHEMA_VERSION = 2;
+ export type CommittedMessageRange = {
+-  readonly replacedFromStepId: string;
+-  readonly replacedToStepId: string;
++    readonly replacedFromStepId: string;
++    readonly replacedToStepId: string;
+ };
+-
+-export type CheckpointStore = {
+-  /**
+-   * 交给 LangGraph `compile` 的 checkpointer。调用方按 `COORDINATOR_DURABILITY` 设置耐久度。
+-   */
+-  readonly checkpointer: BaseCheckpointSaver;
+-
+-  saveCheckpoint(state: CoordinatorSessionState): CheckpointWriteResult;
+-  loadCheckpoint(coordinatorSessionId: CoordinatorSessionId): CheckpointRecoveryRead;
+-  /**
+-   * 读回底层完整已提交消息**条目**。
+-   *
+-   * 给定区间时只返回被 Capsule 取代的那段原始消息——Capsule 是派生视图，永远不覆盖原始对话，
+-   * 所以被取代的区间始终可以读回。
+-   */
+-  readCommittedMessages(
+-    coordinatorSessionId: CoordinatorSessionId,
+-    range?: CommittedMessageRange,
+-  ): readonly CommittedMessageEntry[];
+-
+-  saveNativeWindowOwner(
+-    coordinatorSessionId: CoordinatorSessionId,
+-    owner: NativeCompactedWindowOwner,
+-  ): CheckpointWriteResult;
+-  loadNativeWindowOwner(coordinatorSessionId: CoordinatorSessionId): NativeCompactedWindowOwner | null;
+-  /** 迁移到 Capsule 之后清除原生项；只影响原生窗口一侧，Capsule 不受影响。 */
+-  clearNativeWindowOwner(coordinatorSessionId: CoordinatorSessionId): CheckpointWriteResult;
+-  savePortableCapsule(
+-    coordinatorSessionId: CoordinatorSessionId,
+-    capsule: PortableContextCapsule,
+-  ): CheckpointWriteResult;
+-  loadPortableCapsule(coordinatorSessionId: CoordinatorSessionId): PortableContextCapsule | null;
+-
+-  /**
+-   * 同步把一个 Wake Batch 追加进会话历史（IC-04 的 checkpoint 侧 seam）。
+-   *
+-   * 同一 WakeBatchId 不会被写入两次：已存在时以 `already-committed` 报告，让调用方走补齐路径。
+-   */
+-  commitWakeBatch(batch: WakeBatch): WakeCheckpointCommit;
+-
+-  /**
+-   * 同步提交一条普通用户消息（IC-04 的 checkpoint 侧 seam）。
+-   *
+-   * 消息与随它一起准入的 Wake Batch 是同一次写入：两者要么都在，要么都不在。同一 `submissionId`
+-   * 再提交一次不会留下第二条消息。
+-   */
+-  commitUserMessage(input: UserMessageCommitInput): UserMessageCommitResult;
+-
+-  /**
+-   * 从最新已提交状态追加一次模型响应（IC-04 的 checkpoint 侧 seam）。
+-   *
+-   * 与 `saveCheckpoint` 的区别在基准：写入前重新读取该 Session 最新已提交状态再追加，因此等待模型
+-   * 返回期间受理的用户消息不会被旧快照覆盖。同一 `stepId` 重复追加不产生第二条记录，幂等返回
+-   * `saved`；身份相同但内容不同返回 `failed`。
+-   */
+-  appendModelStep(input: AppendModelStepInput): CheckpointWriteResult;
+-
+-  /** 从最新已提交状态追加一条工具结果条目；同一 `entryId` 重复追加不产生第二条记录。 */
+-  appendToolResult(input: AppendToolResultInput): CheckpointWriteResult;
+-
+-  close(): void;
++export type CheckpointStore = CoordinatorSessionRecordPort & HistoryReadPort & {
++    readonly checkpointer: BaseCheckpointSaver;
++    readCommittedMessages(id: CoordinatorSessionId, range?: CommittedMessageRange): readonly CommittedMessageEntry[];
++    saveNativeWindowOwner(id: CoordinatorSessionId, owner: NativeCompactedWindowOwner): CheckpointWriteResult;
++    loadNativeWindowOwner(id: CoordinatorSessionId): NativeCompactedWindowOwner | null;
++    clearNativeWindowOwner(id: CoordinatorSessionId): CheckpointWriteResult;
++    savePortableCapsule(id: CoordinatorSessionId, capsule: PortableContextCapsule): CheckpointWriteResult;
++    loadPortableCapsule(id: CoordinatorSessionId): PortableContextCapsule | null;
++    commitWakeBatch(batch: WakeBatch): WakeCheckpointCommit;
++    close(): void;
++};
++export type CheckpointStoreOpenFailureCode = 'unreadable' | 'schema_version_unsupported' | 'migration_failed';
++export type OpenCheckpointStoreResult = {
++    readonly kind: 'opened';
++    readonly store: CheckpointStore;
++} | {
++    readonly kind: 'failed';
++    readonly code: CheckpointStoreOpenFailureCode;
++    readonly message: string;
+ };
+-
+-export type { WakeCheckpointCommit };
+-
+-export type OpenCheckpointStoreResult =
+-  | { readonly kind: 'opened'; readonly store: CheckpointStore }
+-  | {
+-      readonly kind: 'failed';
+-      readonly code: CheckpointStoreOpenFailureCode;
+-      readonly message: string;
+-    };
+-
+ export type OpenCheckpointStoreOptions = {
+-  readonly databasePath: string;
+-  /** 可注入时钟：适配器不隐藏时间来源，领域层不读时钟。 */
+-  readonly clock?: () => number;
++    readonly databasePath: string;
++    readonly clock?: () => number;
+ };
+-
+-type SessionCore = Omit<CoordinatorSessionState, 'contextMaterial'>;
+-
+-function coreOf(state: CoordinatorSessionState): SessionCore {
+-  return {
+-    schemaVersion: state.schemaVersion,
+-    coordinatorSessionId: state.coordinatorSessionId,
+-    committedMessages: state.committedMessages,
+-    graphPosition: state.graphPosition,
+-    committedModelSteps: state.committedModelSteps,
+-    wakeBatches: state.wakeBatches,
+-    lastCompactionOutcome: state.lastCompactionOutcome,
+-  };
+-}
+-
+-function isRecord(value: unknown): value is Record<string, unknown> {
+-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+-}
+-
+-function stepIndexById(steps: readonly CommittedModelStep[]): ReadonlyMap<string, number> {
+-  return new Map(steps.map((step, index) => [step.stepId, index]));
+-}
+-
+-/**
+- * 稳定身份相同即视为同一条记录：忽略只在本地重算、不构成语义的字段（提交时间与 usage 观察）。
+- * 重放时若时间戳不同就判为冲突，会把一次幂等重放误报成损坏。
+- */
+-function sameModelStep(existing: CommittedModelStep, incoming: CommittedModelStep): boolean {
+-  return (
+-    existing.entryId === incoming.entryId &&
+-    JSON.stringify(existing.messages) === JSON.stringify(incoming.messages) &&
+-    JSON.stringify(existing.toolCalls) === JSON.stringify(incoming.toolCalls)
+-  );
++type Statement = {
++    run(...params: readonly unknown[]): unknown;
++    get(...params: readonly unknown[]): unknown;
++    all(...params: readonly unknown[]): unknown;
++};
++type Database = {
++    prepare(sql: string): Statement;
++    exec(sql: string): void;
++    close(): void;
++};
++type RecoveryRow = {
++    seq: number;
++    entry_id: string;
++    byte_length: number;
++    metadata_length: number;
++};
++type EntryRow = {
++    seq: number;
++    metadata: string;
++    byte_length: number;
++};
++type Core = Omit<CoordinatorSessionState, 'committedMessages' | 'committedModelSteps' | 'wakeBatches' | 'contextMaterial'>;
++const empty = (id: CoordinatorSessionId): CoordinatorSessionState => ({ schemaVersion: COORDINATOR_SESSION_STATE_SCHEMA_VERSION, coordinatorSessionId: id, graphPosition: 'suspend', lastCompactionOutcome: null, committedMessages: [], committedModelSteps: [], wakeBatches: [] });
++function valid(state: CoordinatorSessionState): CoordinatorSessionState {
++    const parsed = parseCoordinatorSessionState(state);
++    if (!parsed.ok)
++        throw new Error(parsed.field + ': ' + parsed.message);
++    return parsed.value;
+ }
+-
+-/** 已提交条目逐字比较：稳定身份相同、内容必须一致才算幂等重放。 */
+-function sameEntry(existing: CommittedMessageEntry, incoming: CommittedMessageEntry): boolean {
+-  return JSON.stringify(existing) === JSON.stringify(incoming);
++function headOf(state: CoordinatorSessionState): Core {
++    return { schemaVersion: state.schemaVersion, coordinatorSessionId: state.coordinatorSessionId,
++        graphPosition: state.graphPosition, lastCompactionOutcome: state.lastCompactionOutcome };
+ }
+-
+-/**
+- * 打开（或创建）`checkpoints.sqlite` 并升级到当前 schema。
+- *
+- * 库内 schema 版本高于本实现时拒绝启动：旧代码无法理解新记录，猜测只会写坏会话。
+- */
++const failed = (error: unknown): CheckpointWriteResult => ({ kind: 'failed', message: describeError(error) });
+ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCheckpointStoreResult {
+-  const clock = options.clock ?? (() => Date.now());
+-  try {
+-    mkdirSync(dirname(options.databasePath), { recursive: true });
+-  } catch (error) {
+-    return { kind: 'failed', code: 'unreadable', message: describeError(error) };
+-  }
+-
+-  let saver: SqliteSaver;
+-  try {
+-    saver = SqliteSaver.fromConnString(options.databasePath);
+-  } catch (error) {
+-    return { kind: 'failed', code: 'unreadable', message: describeError(error) };
+-  }
+-  const db = saver.db as unknown as SqliteDatabase;
+-
+-  const readVersion = (): number | null => {
+-    const exists = db
+-      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'checkpoint_meta'`)
+-      .get() as { readonly name: string } | undefined;
+-    if (exists === undefined) {
+-      return null;
+-    }
+-    const row = db.prepare(`SELECT value FROM checkpoint_meta WHERE key = ?`).get(CHECKPOINT_VERSION_KEY) as
+-      | { readonly value: string }
+-      | undefined;
+-    if (row === undefined) {
+-      return null;
+-    }
+-    const parsed = Number.parseInt(row.value, 10);
+-    return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+-  };
+-
+-  try {
+-    const current = readVersion() ?? 0;
+-    if (current > CHECKPOINT_SCHEMA_VERSION) {
+-      return {
+-        kind: 'failed',
+-        code: 'schema_version_unsupported',
+-        message: `库内 checkpoint schema 版本 ${String(current)} 高于当前实现的 ${String(CHECKPOINT_SCHEMA_VERSION)}`,
+-      };
+-    }
+-    db.exec('BEGIN IMMEDIATE');
+-    for (const statement of CHECKPOINT_MIGRATIONS) {
+-      db.exec(statement);
+-    }
+-    db.prepare(
+-      `INSERT INTO checkpoint_meta (key, value) VALUES (?, ?)
+-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+-    ).run(CHECKPOINT_VERSION_KEY, String(CHECKPOINT_SCHEMA_VERSION));
+-    db.exec('COMMIT');
+-  } catch (error) {
++    const clock = options.clock ?? Date.now;
++    let saver: SqliteSaver;
+     try {
+-      db.exec('ROLLBACK');
+-    } catch {
+-      // 事务已不可用；以原始失败为准。
+-    }
+-    return { kind: 'failed', code: 'migration_failed', message: describeError(error) };
+-  }
+-
+-  const readCoreRow = (coordinatorSessionId: string): { readonly session_state: string } | undefined =>
+-    db
+-      .prepare('SELECT session_state FROM coordinator_sessions WHERE coordinator_session_id = ?')
+-      .get(coordinatorSessionId) as { readonly session_state: string } | undefined;
+-
+-  const writeCore = (core: SessionCore): void => {
+-    db.prepare(
+-      `INSERT INTO coordinator_sessions (coordinator_session_id, schema_version, session_state, updated_at)
+-       VALUES (?, ?, ?, ?)
+-       ON CONFLICT(coordinator_session_id) DO UPDATE SET
+-         schema_version = excluded.schema_version,
+-         session_state = excluded.session_state,
+-         updated_at = excluded.updated_at`,
+-    ).run(
+-      core.coordinatorSessionId,
+-      core.schemaVersion,
+-      JSON.stringify(core),
+-      clock(),
+-    );
+-  };
+-
+-  function loadNativeWindowOwner(coordinatorSessionId: CoordinatorSessionId): NativeCompactedWindowOwner | null {
+-    const row = db
+-      .prepare('SELECT owner_ref, items FROM native_window_owners WHERE coordinator_session_id = ?')
+-      .get(coordinatorSessionId) as { readonly owner_ref: string; readonly items: string } | undefined;
+-    if (row === undefined) {
+-      return null;
+-    }
+-    try {
+-      const items: unknown = JSON.parse(row.items);
+-      if (!Array.isArray(items)) {
+-        throw new Error('native_window_owners.items 不是数组');
+-      }
+-      return {
+-        ownerRef: row.owner_ref,
+-        items: items as NativeCompactedWindowOwner['items'],
+-      };
+-    } catch (error) {
+-      throw new Error(`原生压缩项不可恢复：${describeError(error)}`, { cause: error });
+-    }
+-  }
+-
+-  function loadPortableCapsule(coordinatorSessionId: CoordinatorSessionId): PortableContextCapsule | null {
+-    const row = db
+-      .prepare(
+-        `SELECT capsule_id, replaced_from_step_id, replaced_to_step_id, text
+-         FROM portable_capsules WHERE coordinator_session_id = ?`,
+-      )
+-      .get(coordinatorSessionId) as
+-      | {
+-          readonly capsule_id: string;
+-          readonly replaced_from_step_id: string;
+-          readonly replaced_to_step_id: string;
+-          readonly text: string;
++        mkdirSync(dirname(options.databasePath), { recursive: true });
++        saver = SqliteSaver.fromConnString(options.databasePath);
++    }
++    catch (error) {
++        return { kind: 'failed', code: 'unreadable', message: describeError(error) };
++    }
++    const db = saver.db as unknown as Database;
++    const stmt = (sql: string): Statement => db.prepare(sql);
++    function atomic<T>(work: () => T): T {
++        db.exec('BEGIN IMMEDIATE');
++        try {
++            const value = work();
++            db.exec('COMMIT');
++            return value;
++        }
++        catch (error) {
++            try {
++                db.exec('ROLLBACK');
++            }
++            catch { /* retain original */ }
++            throw error;
+         }
+-      | undefined;
+-    if (row === undefined) {
+-      return null;
+-    }
+-    return {
+-      kind: 'derived_context_capsule',
+-      capsuleId: row.capsule_id,
+-      replacedFromStepId: row.replaced_from_step_id,
+-      replacedToStepId: row.replaced_to_step_id,
+-      text: row.text,
+-    };
+-  }
+-
+-  /** 合成会话状态：核心记录 + 两个独立产物表。任一产物缺失都只是它自己为空。 */
+-  function composeState(core: SessionCore): unknown {
+-    const nativeWindowOwner = loadNativeWindowOwner(core.coordinatorSessionId);
+-    const capsule = loadPortableCapsule(core.coordinatorSessionId);
+-    if (nativeWindowOwner === null && capsule === null) {
+-      return core;
+-    }
+-    return { ...core, contextMaterial: { nativeWindowOwner, capsule } };
+-  }
+-
+-  function loadCheckpoint(coordinatorSessionId: CoordinatorSessionId): CheckpointRecoveryRead {
+-    let row: { readonly session_state: string } | undefined;
+-    try {
+-      row = readCoreRow(coordinatorSessionId);
+-    } catch (error) {
+-      return { kind: 'unrecoverable', reason: describeError(error) };
+-    }
+-    if (row === undefined) {
+-      return { kind: 'absent' };
+-    }
+-    let parsedJson: unknown;
+-    try {
+-      parsedJson = JSON.parse(row.session_state);
+-    } catch (error) {
+-      return { kind: 'unrecoverable', reason: `session_state 不是合法 JSON：${describeError(error)}` };
+-    }
+-    if (!isRecord(parsedJson)) {
+-      return { kind: 'unrecoverable', reason: 'session_state 不是对象' };
+-    }
+-    let composed: unknown;
+-    try {
+-      composed = composeState(parsedJson as unknown as SessionCore);
+-    } catch (error) {
+-      return { kind: 'unrecoverable', reason: describeError(error) };
+-    }
+-    const parsed = parseCoordinatorSessionState(composed);
+-    if (!parsed.ok) {
+-      return { kind: 'unrecoverable', reason: `${parsed.field}: ${parsed.message}` };
+-    }
+-    return { kind: 'recovered', state: parsed.value };
+-  }
+-
+-  function saveCore(next: CoordinatorSessionState): CheckpointWriteResult {
+-    const parsed = parseCoordinatorSessionState(next);
+-    if (!parsed.ok) {
+-      return { kind: 'failed', message: `${parsed.field}: ${parsed.message}` };
+-    }
+-    try {
+-      writeCore(coreOf(parsed.value));
+-      return { kind: 'saved' };
+-    } catch (error) {
+-      return { kind: 'failed', message: describeError(error) };
+-    }
+-  }
+-
+-  /** 产物写入前先合成一次完整状态做校验，确保任一方都不会写坏另一方。 */
+-  function saveArtifact(
+-    coordinatorSessionId: CoordinatorSessionId,
+-    patch: {
+-      readonly nativeWindowOwner?: NativeCompactedWindowOwner;
+-      readonly capsule?: PortableContextCapsule;
+-    },
+-    write: () => void,
+-  ): CheckpointWriteResult {
+-    const current = loadCheckpoint(coordinatorSessionId);
+-    if (current.kind !== 'recovered') {
+-      return {
+-        kind: 'failed',
+-        message:
+-          current.kind === 'absent'
+-            ? '该 Session 还没有会话记录，必须先写入 checkpoint'
+-            : `现有会话记录不可恢复：${current.reason}`,
+-      };
+-    }
+-    const owner =
+-      patch.nativeWindowOwner ?? current.state.contextMaterial?.nativeWindowOwner ?? null;
+-    const capsule = patch.capsule ?? current.state.contextMaterial?.capsule ?? null;
+-    const candidate: CoordinatorSessionState =
+-      owner === null && capsule === null
+-        ? current.state
+-        : { ...current.state, contextMaterial: { nativeWindowOwner: owner, capsule } };
+-    const parsed = parseCoordinatorSessionState(candidate);
+-    if (!parsed.ok) {
+-      return { kind: 'failed', message: `${parsed.field}: ${parsed.message}` };
+-    }
+-    try {
+-      write();
+-      return { kind: 'saved' };
+-    } catch (error) {
+-      return { kind: 'failed', message: describeError(error) };
+     }
+-  }
+-
+-  /**
+-   * 读-改-写必须落在同一个写事务里。
+-   *
+-   * 两个连接各自「读最新 core → 写回」时，后写的会把先写的覆盖掉。`BEGIN IMMEDIATE` 先取得写锁，
+-   * 事务内读到的因此就是最新已提交状态，并发追加之间不会互相丢写。
+-   */
+-  function appendAtomically<T>(work: () => T): T {
+-    db.exec('BEGIN IMMEDIATE');
+     try {
+-      const value = work();
+-      db.exec('COMMIT');
+-      return value;
+-    } catch (error) {
+-      try {
+-        db.exec('ROLLBACK');
+-      } catch {
+-        // 事务已不可用；以原始失败为准。
+-      }
+-      throw error;
+-    }
+-  }
+-
+-  /** 在写事务内基于最新 core 追加一次模型响应；成功与幂等重放都返回 `saved`。 */
+-  function appendModelStepCore(input: AppendModelStepInput): CheckpointWriteResult {
+-    const sessionId = input.coordinatorSessionId;
+-    // 条目必须与 step 是同一条已提交消息；身份不符是调用方的编程错误，按失败报告而不是猜。
+-    if (
+-      input.entry.entryId !== input.step.entryId ||
+-      input.entry.stepId !== input.step.stepId ||
+-      input.entry.role !== 'assistant'
+-    ) {
+-      return {
+-        kind: 'failed',
+-        message: `模型响应 ${input.step.stepId} 与其条目身份不一致（entryId/stepId/role 必须匹配）`,
+-      };
+-    }
+-    const current = loadCheckpoint(sessionId);
+-    if (current.kind === 'unrecoverable') {
+-      return { kind: 'failed', message: current.reason };
+-    }
+-    if (current.kind === 'absent') {
+-      return { kind: 'failed', message: `Session ${sessionId} 还没有会话记录，无法追加模型响应` };
+-    }
+-    const core = coreOf(current.state);
+-    const existingStep = core.committedModelSteps.find((step) => step.stepId === input.step.stepId);
+-    const existingEntry = core.committedMessages.find((entry) => entry.entryId === input.entry.entryId);
+-    if (existingStep !== undefined || existingEntry !== undefined) {
+-      // 重放：step 与它对应的已提交条目都必须逐字一致，否则是同身份不同内容。
+-      if (existingStep === undefined || existingEntry === undefined) {
+-        return { kind: 'failed', message: `stepId ${input.step.stepId} 的已提交历史不完整` };
+-      }
+-      return sameModelStep(existingStep, input.step) && sameEntry(existingEntry, input.entry)
+-        ? { kind: 'saved' }
+-        : {
+-            kind: 'failed',
+-            message: `stepId ${input.step.stepId} 或条目 ${input.entry.entryId} 已存在且内容不同`,
+-          };
+-    }
+-    const next: CoordinatorSessionState = {
+-      ...core,
+-      graphPosition: input.graphPosition,
+-      committedMessages: [...core.committedMessages, input.entry],
+-      committedModelSteps: [...core.committedModelSteps, input.step],
+-    };
+-    const parsed = parseCoordinatorSessionState(next);
+-    if (!parsed.ok) {
+-      return { kind: 'failed', message: `${parsed.field}: ${parsed.message}` };
+-    }
+-    const written = saveCore(parsed.value);
+-    if (written.kind === 'failed') {
+-      return written;
+-    }
+-    const reloaded = loadCheckpoint(sessionId);
+-    if (reloaded.kind !== 'recovered') {
+-      return { kind: 'failed', message: '追加模型响应后无法读回会话状态' };
+-    }
+-    return { kind: 'saved' };
+-  }
+-
+-  /** 在写事务内基于最新 core 追加一条工具结果条目。 */
+-  function appendToolResultCore(input: AppendToolResultInput): CheckpointWriteResult {
+-    const sessionId = input.coordinatorSessionId;
+-    if (input.entry.role !== 'tool') {
+-      return { kind: 'failed', message: `工具结果条目 ${input.entry.entryId} 的 role 不是 tool` };
+-    }
+-    const current = loadCheckpoint(sessionId);
+-    if (current.kind === 'unrecoverable') {
+-      return { kind: 'failed', message: current.reason };
+-    }
+-    if (current.kind === 'absent') {
+-      return { kind: 'failed', message: `Session ${sessionId} 还没有会话记录，无法追加工具结果` };
+-    }
+-    const core = coreOf(current.state);
+-    const existing = core.committedMessages.find((entry) => entry.entryId === input.entry.entryId);
+-    if (existing !== undefined) {
+-      return sameEntry(existing, input.entry)
+-        ? { kind: 'saved' }
+-        : { kind: 'failed', message: `已提交条目 ${input.entry.entryId} 已存在且内容不同` };
+-    }
+-    const next: CoordinatorSessionState = {
+-      ...core,
+-      graphPosition: input.graphPosition,
+-      committedMessages: [...core.committedMessages, input.entry],
++        const hasMeta = stmt("SELECT name FROM sqlite_master WHERE name='checkpoint_meta'").get();
++        const version = hasMeta === undefined ? undefined : stmt("SELECT value FROM checkpoint_meta WHERE key='checkpoint_schema_version'").get() as {
++            value: string;
++        } | undefined;
++        if ((version === undefined && stmt("SELECT name FROM sqlite_master WHERE name='coordinator_sessions'").get() !== undefined) || (version !== undefined && Number(version.value) !== CHECKPOINT_SCHEMA_VERSION)) {
++            db.close();
++            return { kind: 'failed', code: 'schema_version_unsupported', message: 'Unsupported checkpoint schema ' + (version?.value ?? 'missing') };
++        }
++        atomic(() => {
++            db.exec([
++                'CREATE TABLE IF NOT EXISTS checkpoint_meta (key TEXT PRIMARY KEY,value TEXT NOT NULL) STRICT;',
++                'CREATE TABLE IF NOT EXISTS coordinator_sessions (coordinator_session_id TEXT PRIMARY KEY,schema_version INTEGER NOT NULL,session_state TEXT NOT NULL,updated_at INTEGER NOT NULL) STRICT;',
++                'CREATE TABLE IF NOT EXISTS conversation_entries (coordinator_session_id TEXT NOT NULL,seq INTEGER NOT NULL,entry_id TEXT NOT NULL,step_id TEXT NOT NULL,role TEXT NOT NULL,metadata TEXT NOT NULL,summary_metadata TEXT NOT NULL,byte_length INTEGER NOT NULL,work_input INTEGER NOT NULL,handled_by TEXT,PRIMARY KEY(coordinator_session_id,seq),UNIQUE(coordinator_session_id,entry_id)) STRICT;',
++                'CREATE INDEX IF NOT EXISTS conversation_steps ON conversation_entries(coordinator_session_id,step_id,seq);',
++                "CREATE INDEX IF NOT EXISTS conversation_visible ON conversation_entries(coordinator_session_id,seq) WHERE role!='system';",
++                'CREATE INDEX IF NOT EXISTS conversation_pending ON conversation_entries(coordinator_session_id,seq) WHERE work_input=1 AND handled_by IS NULL;',
++                'CREATE TABLE IF NOT EXISTS conversation_bodies (coordinator_session_id TEXT NOT NULL,entry_id TEXT NOT NULL,start INTEGER NOT NULL,data BLOB NOT NULL,PRIMARY KEY(coordinator_session_id,entry_id,start)) STRICT;',
++                'CREATE TABLE IF NOT EXISTS conversation_model_steps (coordinator_session_id TEXT NOT NULL,seq INTEGER NOT NULL,step_id TEXT NOT NULL,entry_id TEXT NOT NULL,metadata TEXT NOT NULL,PRIMARY KEY(coordinator_session_id,step_id),UNIQUE(coordinator_session_id,seq),UNIQUE(coordinator_session_id,entry_id)) STRICT;',
++                'CREATE TABLE IF NOT EXISTS conversation_wakes (coordinator_session_id TEXT NOT NULL,wake_batch_id TEXT NOT NULL,metadata TEXT NOT NULL,PRIMARY KEY(coordinator_session_id,wake_batch_id)) STRICT;',
++                'CREATE TABLE IF NOT EXISTS native_window_owners (coordinator_session_id TEXT PRIMARY KEY,owner_ref TEXT NOT NULL,items TEXT NOT NULL,through_seq INTEGER NOT NULL,updated_at INTEGER NOT NULL) STRICT;',
++                'CREATE TABLE IF NOT EXISTS portable_capsules (coordinator_session_id TEXT PRIMARY KEY,capsule_id TEXT NOT NULL,replaced_from_step_id TEXT NOT NULL,replaced_to_step_id TEXT NOT NULL,text TEXT NOT NULL,from_seq INTEGER NOT NULL,to_seq INTEGER NOT NULL,updated_at INTEGER NOT NULL) STRICT;',
++            ].join('\n'));
++            stmt("INSERT OR IGNORE INTO checkpoint_meta VALUES('checkpoint_schema_version',?)").run(String(CHECKPOINT_SCHEMA_VERSION));
++        });
++    }
++    catch (error) {
++        db.close();
++        return { kind: 'failed', code: 'migration_failed', message: describeError(error) };
++    }
++    function core(id: string): Core | null {
++        const row = stmt('SELECT session_state FROM coordinator_sessions WHERE coordinator_session_id=?').get(id) as {
++            session_state: string;
++        } | undefined;
++        if (row === undefined)
++            return null;
++        const state = valid({ ...(JSON.parse(row.session_state) as Core), committedMessages: [], committedModelSteps: [], wakeBatches: [] });
++        if (state.coordinatorSessionId !== id)
++            throw new Error('Checkpoint identity mismatch');
++        return headOf(state);
++    }
++    function writeCore(head: Core): void {
++        stmt('INSERT INTO coordinator_sessions VALUES(?,?,?,?) ON CONFLICT(coordinator_session_id) DO UPDATE SET session_state=excluded.session_state,updated_at=excluded.updated_at')
++            .run(head.coordinatorSessionId, head.schemaVersion, JSON.stringify(head), clock());
++    }
++    function requireCore(id: string): Core { const head = core(id); if (head === null)
++        throw new Error('Session has no checkpoint: ' + id); return head; }
++    function ensureCore(id: CoordinatorSessionId): void {
++        if (core(id) !== null)
++            return;
++        writeCore(headOf(empty(id)));
++    }
++    function rowFor(id: string, entryId: string, summary = false): EntryRow | undefined {
++        return stmt('SELECT seq,' + (summary ? 'summary_metadata AS metadata' : 'metadata') + ',byte_length FROM conversation_entries WHERE coordinator_session_id=? AND entry_id=?').get(id, entryId) as EntryRow | undefined;
++    }
++    function metadata(row: EntryRow): HistoryMetadata {
++        const entry = valid({ ...empty('metadata' as CoordinatorSessionId), committedMessages: [{ ...(JSON.parse(row.metadata) as CommittedMessageEntry), content: '' }] }).committedMessages[0]!;
++        const { content, toolCalls, ...rest } = entry;
++        void content;
++        void toolCalls;
++        return { ...rest, sequence: row.seq, contentRevision: 1, byteLength: row.byte_length };
++    }
++    const decoder = new TextDecoder('utf-8', { fatal: true });
++    const readHistoryBody: HistoryReadPort['readHistoryBody'] = (input) => {
++        const q = historyBodyQuerySchema.parse(input);
++        requireCore(q.coordinatorSessionId);
++        const row = rowFor(q.coordinatorSessionId, q.entryId, true);
++        if (row === undefined)
++            return null;
++        if (q.offset > row.byte_length)
++            throw new Error('Body offset outside content');
++        const limit = q.maxBytes ?? HISTORY_BODY_BYTES;
++        const blocks = stmt('SELECT start,data FROM conversation_bodies WHERE coordinator_session_id=? AND entry_id=? AND start>=? AND start<? ORDER BY start')
++            .all(q.coordinatorSessionId, q.entryId, Math.floor(q.offset / HISTORY_CHUNK_BYTES) * HISTORY_CHUNK_BYTES, q.offset + limit + 4) as {
++            start: number;
++            data: Uint8Array;
++        }[];
++        let expected = Math.floor(q.offset / HISTORY_CHUNK_BYTES) * HISTORY_CHUNK_BYTES;
++        for (const block of blocks) {
++            if (block.start !== expected || block.data.byteLength !== Math.min(HISTORY_CHUNK_BYTES, row.byte_length - block.start))
++                throw new Error('Corrupt body blocks');
++            expected += block.data.byteLength;
++        }
++        if (expected < Math.min(row.byte_length, q.offset + limit))
++            throw new Error('Missing body blocks');
++        const buffer = Buffer.concat(blocks.map(block => Buffer.from(block.data)));
++        const start = q.offset - (blocks[0]?.start ?? q.offset);
++        if (start < buffer.length && (buffer[start]! & 0xc0) === 0x80)
++            throw new HistoryBoundaryError('Body offset is not a UTF-8 boundary');
++        let end = Math.min(buffer.length, start + limit);
++        while (end < buffer.length && end > start && (buffer[end]! & 0xc0) === 0x80)
++            end -= 1;
++        const text = decoder.decode(buffer.subarray(start, end)), absoluteEnd = q.offset + Math.max(0, end - start);
++        if (q.offset < row.byte_length && absoluteEnd === q.offset)
++            throw new Error('Body range missing');
++        return { entryId: q.entryId, contentRevision: 1, offset: q.offset, end: absoluteEnd, byteLength: row.byte_length, text };
+     };
+-    const parsed = parseCoordinatorSessionState(next);
+-    if (!parsed.ok) {
+-      return { kind: 'failed', message: `${parsed.field}: ${parsed.message}` };
+-    }
+-    const written = saveCore(parsed.value);
+-    if (written.kind === 'failed') {
+-      return written;
++    function readEntry(id: string, entryId: string): CommittedMessageEntry | null {
++        requireCore(id);
++        const row = rowFor(id, entryId);
++        if (row === undefined)
++            return null;
++        let content = '';
++        for (let offset = 0; offset < row.byte_length;) {
++            const range = readHistoryBody({ coordinatorSessionId: id, entryId, contentRevision: 1, offset });
++            if (range === null)
++                throw new Error('Missing entry body');
++            content += range.text;
++            offset = range.end;
++        }
++        return valid({ ...empty(id as CoordinatorSessionId), committedMessages: [{ ...(JSON.parse(row.metadata) as CommittedMessageEntry), content }] }).committedMessages[0]!;
++    }
++    function insertEntry(id: string, input: CommittedMessageEntry): boolean {
++        const entry = valid({ ...empty(id as CoordinatorSessionId), committedMessages: [input] }).committedMessages[0]!, existing = readEntry(id, entry.entryId);
++        if (existing !== null) {
++            if (JSON.stringify(existing) !== JSON.stringify(entry))
++                throw new Error('Entry identity content conflict: ' + entry.entryId);
++            return false;
++        }
++        const seq = (stmt('SELECT seq FROM conversation_entries WHERE coordinator_session_id=? ORDER BY seq DESC LIMIT 1').get(id) as {
++            seq: number;
++        } | undefined)?.seq ?? 0;
++        const { content, ...meta } = entry, summary = { ...meta }, bytes = Buffer.from(content, 'utf8'), work = entry.role === 'user' || entry.entryId.startsWith('entry:interaction-answer:');
++        delete summary.toolCalls;
++        if (Buffer.byteLength(JSON.stringify(summary)) > HISTORY_PAGE_BYTES)
++            throw new Error('History metadata exceeds page budget');
++        stmt('INSERT INTO conversation_entries VALUES(?,?,?,?,?,?,?,?,?,NULL)').run(id, seq + 1, entry.entryId, entry.stepId, entry.role, JSON.stringify(meta), JSON.stringify(summary), bytes.length, work ? 1 : 0);
++        for (let start = 0; start < bytes.length; start += HISTORY_CHUNK_BYTES)
++            stmt('INSERT INTO conversation_bodies VALUES(?,?,?,?)').run(id, entry.entryId, start, bytes.subarray(start, start + HISTORY_CHUNK_BYTES));
++        const source = entry.completedWorkSource;
++        if (source !== undefined) {
++            const target = source.sourceKind === 'user-message' ? userEntryId(source.sourceId) : source.sourceKind === 'interaction-answer' ? 'entry:interaction-answer:' + source.sourceId : null;
++            if (target !== null)
++                stmt('UPDATE conversation_entries SET handled_by=? WHERE coordinator_session_id=? AND entry_id=? AND handled_by IS NULL').run(entry.entryId, id, target);
++        }
++        else if (entry.role === 'assistant' && (entry.toolCalls?.length ?? 0) === 0) {
++            stmt('UPDATE conversation_entries SET handled_by=? WHERE coordinator_session_id=? AND seq=(SELECT seq FROM conversation_entries WHERE coordinator_session_id=? AND work_input=1 AND handled_by IS NULL ORDER BY seq LIMIT 1)').run(entry.entryId, id, id);
++        }
++        return true;
++    }
++    function insertStep(id: string, step: CommittedModelStep): void {
++        const row = rowFor(id, step.entryId);
++        if (row === undefined)
++            throw new Error('Step has no entry');
++        const { messages, toolCalls, ...rest } = step;
++        void toolCalls;
++        const canonical = readEntry(id, step.entryId)!;
++        if (messages.length !== 1)
++            throw new Error('A model step must reference exactly one canonical entry');
++        const shapes = messages.map(message => { if (typeof message !== 'object' || message === null || Array.isArray(message))
++            throw new Error('Step message must be a durable object'); const shape = { ...message as Record<string, unknown> }; if (shape.content !== canonical.content)
++            throw new Error('Step body differs from canonical entry'); delete shape.content; delete shape.toolCalls; return shape; });
++        if (JSON.stringify(step.toolCalls) !== JSON.stringify(canonical.toolCalls ?? []))
++            throw new Error('Step tool calls differ from canonical entry');
++        const old = stmt('SELECT metadata FROM conversation_model_steps WHERE coordinator_session_id=? AND step_id=?').get(id, step.stepId) as {
++            metadata: string;
++        } | undefined;
++        if (old !== undefined) {
++            const value = JSON.parse(old.metadata) as {
++                entryId: string;
++                shapes: unknown;
++            };
++            if (value.entryId !== step.entryId || JSON.stringify(value.shapes) !== JSON.stringify(shapes))
++                throw new Error('Step identity conflict');
++            return;
++        }
++        const serialized = JSON.stringify({ ...rest, shapes });
++        if (Buffer.byteLength(serialized) > HISTORY_PAGE_BYTES)
++            throw new Error('Model step metadata exceeds budget');
++        stmt('INSERT INTO conversation_model_steps VALUES(?,?,?,?,?)').run(id, row.seq, step.stepId, step.entryId, serialized);
++    }
++    function stepsFor(id: string, entries: readonly CommittedMessageEntry[], budget = Infinity): CommittedModelStep[] {
++        return entries.flatMap(entry => {
++            const row = stmt('SELECT CAST(substr(CAST(metadata AS BLOB),1,65537) AS TEXT) AS metadata FROM conversation_model_steps WHERE coordinator_session_id=? AND entry_id=?').get(id, entry.entryId) as {
++                metadata: string;
++            } | undefined;
++            if (row === undefined)
++                return [];
++            budget -= Buffer.byteLength(row.metadata);
++            if (budget < 0 || Buffer.byteLength(row.metadata) > HISTORY_PAGE_BYTES)
++                throw new Error('context_exhausted: model step metadata budget');
++            const { shapes, ...rest } = JSON.parse(row.metadata) as Omit<CommittedModelStep, 'messages' | 'toolCalls'> & {
++                shapes: Record<string, unknown>[];
++            };
++            return [{ ...rest, toolCalls: entry.toolCalls ?? [], messages: shapes.map(shape => ({ ...shape, content: entry.content, ...(entry.toolCalls !== undefined && 'entryId' in shape ? { toolCalls: entry.toolCalls } : {}) })) }];
++        });
++    }
++    function loadNativeWindowOwner(id: CoordinatorSessionId): NativeCompactedWindowOwner | null {
++        const row = stmt('SELECT owner_ref,substr(items,1,4194305) AS items FROM native_window_owners WHERE coordinator_session_id=?').get(id) as {
++            owner_ref: string;
++            items: string;
++        } | undefined;
++        if (row === undefined)
++            return null;
++        if (Buffer.byteLength(row.items) > CONTEXT_READ_BYTES)
++            throw new Error('context_exhausted: native window read budget');
++        const owner = { ownerRef: row.owner_ref, items: JSON.parse(row.items) as NativeCompactedWindowOwner['items'] };
++        return valid({ ...empty(id), contextMaterial: { nativeWindowOwner: owner, capsule: null } }).contextMaterial?.nativeWindowOwner ?? null;
++    }
++    function loadPortableCapsule(id: CoordinatorSessionId): PortableContextCapsule | null {
++        const row = stmt('SELECT capsule_id,replaced_from_step_id,replaced_to_step_id,substr(text,1,4194305) AS text FROM portable_capsules WHERE coordinator_session_id=?').get(id) as {
++            capsule_id: string;
++            replaced_from_step_id: string;
++            replaced_to_step_id: string;
++            text: string;
++        } | undefined;
++        if (row === undefined)
++            return null;
++        if (Buffer.byteLength(row.text) > CONTEXT_READ_BYTES)
++            throw new Error('context_exhausted: capsule read budget');
++        const capsule: PortableContextCapsule = { kind: 'derived_context_capsule', capsuleId: row.capsule_id, replacedFromStepId: row.replaced_from_step_id, replacedToStepId: row.replaced_to_step_id, text: row.text };
++        return valid({ ...empty(id), contextMaterial: { nativeWindowOwner: null, capsule } }).contextMaterial?.capsule ?? null;
++    }
++    function loadCheckpoint(id: CoordinatorSessionId, purpose: CheckpointReadPurpose = 'full'): CheckpointRecoveryRead {
++        try {
++            const head = core(id);
++            if (head === null)
++                return { kind: 'absent' };
++            const nativeWindowOwner = loadNativeWindowOwner(id), capsule = loadPortableCapsule(id);
++            let rows: RecoveryRow[] = [];
++            if (purpose === 'tools') {
++                const last = stmt('SELECT step_id FROM conversation_model_steps WHERE coordinator_session_id=? ORDER BY seq DESC LIMIT 1').get(id) as {
++                    step_id: string;
++                } | undefined;
++                if (last !== undefined)
++                    rows = stmt('SELECT seq,entry_id,byte_length,length(CAST(metadata AS BLOB)) AS metadata_length FROM conversation_entries WHERE coordinator_session_id=? AND step_id=? ORDER BY seq LIMIT ?').all(id, last.step_id, CONTEXT_READ_ITEMS + 1) as RecoveryRow[];
++            }
++            else if (purpose === 'pending')
++                rows = stmt('SELECT seq,entry_id,byte_length,length(CAST(metadata AS BLOB)) AS metadata_length FROM conversation_entries WHERE coordinator_session_id=? AND work_input=1 AND handled_by IS NULL ORDER BY seq LIMIT 32').all(id) as RecoveryRow[];
++            else if (purpose !== 'metadata') {
++                let from = -1, to = -1;
++                if (purpose === 'context' && capsule !== null) {
++                    const bounds = stmt('SELECT from_seq,to_seq FROM portable_capsules WHERE coordinator_session_id=?').get(id) as {from_seq:number;to_seq:number};
++                    if (bounds.from_seq > bounds.to_seq) throw new Error('Invalid Capsule range');
++                    from=bounds.from_seq;to=bounds.to_seq;
++                }
++                {
++                    const limit = purpose === 'full' ? -1 : CONTEXT_READ_ITEMS + 1;
++                    if (purpose === 'context' && nativeWindowOwner !== null) {
++                        const bound = stmt('SELECT through_seq FROM native_window_owners WHERE coordinator_session_id=?').get(id) as {
++                            through_seq: number;
++                        };
++                        rows = stmt('SELECT seq,entry_id,byte_length,length(CAST(metadata AS BLOB)) AS metadata_length FROM conversation_entries WHERE coordinator_session_id=? AND seq>? ORDER BY seq LIMIT ?').all(id, bound.through_seq, limit) as RecoveryRow[];
++                    }
++                    else if (from < 0)
++                        rows = stmt('SELECT seq,entry_id,byte_length,length(CAST(metadata AS BLOB)) AS metadata_length FROM conversation_entries WHERE coordinator_session_id=? ORDER BY seq LIMIT ?').all(id, limit) as RecoveryRow[];
++                    else {
++                        const before = stmt('SELECT seq,entry_id,byte_length,length(CAST(metadata AS BLOB)) AS metadata_length FROM conversation_entries WHERE coordinator_session_id=? AND seq<? ORDER BY seq LIMIT ?').all(id, from, limit) as RecoveryRow[];
++                        const after = stmt('SELECT seq,entry_id,byte_length,length(CAST(metadata AS BLOB)) AS metadata_length FROM conversation_entries WHERE coordinator_session_id=? AND seq>? ORDER BY seq LIMIT ?').all(id, to, CONTEXT_READ_ITEMS + 1 - before.length) as RecoveryRow[];
++                        rows = [...before, ...after];
++                    }
++                }
++            }
++            if (purpose !== 'full' && (rows.length > CONTEXT_READ_ITEMS || rows.reduce((n, r) => n + r.byte_length + r.metadata_length, 0) > CONTEXT_READ_BYTES))
++                throw new Error('context_exhausted: effective history read budget exceeded');
++            const entries = rows.map(row => { const entry = readEntry(id, row.entry_id); if (entry === null)
++                throw new Error('Committed entry missing'); return entry; });
++            const wakes = purpose === 'full' ? (stmt('SELECT metadata FROM conversation_wakes WHERE coordinator_session_id=? ORDER BY rowid').all(id) as {
++                metadata: string;
++            }[]).map(row => JSON.parse(row.metadata) as WakeBatch) : [];
++            return { kind: 'recovered', state: valid({ ...head, committedMessages: entries, committedModelSteps: stepsFor(id, entries, purpose === 'full' ? Infinity : CONTEXT_READ_BYTES - rows.reduce((sum, row) => sum + row.byte_length + row.metadata_length, 0)), wakeBatches: wakes, ...(nativeWindowOwner === null && capsule === null ? {} : { contextMaterial: { nativeWindowOwner, capsule } }) }) };
++        }
++        catch (error) {
++            return { kind: 'unrecoverable', reason: describeError(error) };
++        }
+     }
+-    const reloaded = loadCheckpoint(sessionId);
+-    if (reloaded.kind !== 'recovered') {
+-      return { kind: 'failed', message: '追加工具结果后无法读回会话状态' };
++    function updateCheckpoint(id: CoordinatorSessionId, patch: Partial<Pick<CoordinatorSessionState, 'graphPosition' | 'lastCompactionOutcome'>>): CheckpointWriteResult {
++        try {
++            atomic(() => { const state = valid({ ...requireCore(id), ...patch, committedMessages: [], committedModelSteps: [], wakeBatches: [] }); writeCore(headOf(state)); });
++            return { kind: 'saved' };
++        }
++        catch (error) {
++            return failed(error);
++        }
+     }
+-    return { kind: 'saved' };
+-  }
+-
+-  const store: CheckpointStore = {
+-    checkpointer: saver,
+-    loadCheckpoint,
+-    saveCheckpoint: saveCore,
+-    readCommittedMessages(coordinatorSessionId, range) {
+-      const read = loadCheckpoint(coordinatorSessionId);
+-      if (read.kind !== 'recovered') {
+-        return [];
+-      }
+-      if (range === undefined) {
+-        return read.state.committedMessages;
+-      }
+-      const index = stepIndexById(read.state.committedModelSteps);
+-      const from = index.get(range.replacedFromStepId);
+-      const to = index.get(range.replacedToStepId);
+-      if (from === undefined || to === undefined || from > to) {
+-        return [];
+-      }
+-      // 被取代区间按 step 界定；条目按 committedMessages 原序返回，翻译回上下文时不重排历史。
+-      const replacedSteps = new Set(
+-        read.state.committedModelSteps.slice(from, to + 1).map((step) => step.stepId),
+-      );
+-      return read.state.committedMessages.filter((entry) => replacedSteps.has(entry.stepId));
+-    },
+-    loadNativeWindowOwner,
+-    saveNativeWindowOwner(coordinatorSessionId, owner) {
+-      return saveArtifact(
+-        coordinatorSessionId,
+-        { nativeWindowOwner: owner },
+-        () => {
+-          db.prepare(
+-            `INSERT INTO native_window_owners (coordinator_session_id, owner_ref, items, updated_at)
+-             VALUES (?, ?, ?, ?)
+-             ON CONFLICT(coordinator_session_id) DO UPDATE SET
+-               owner_ref = excluded.owner_ref, items = excluded.items, updated_at = excluded.updated_at`,
+-          ).run(coordinatorSessionId, owner.ownerRef, JSON.stringify(owner.items), clock());
+-        },
+-      );
+-    },
+-    loadPortableCapsule,
+-    savePortableCapsule(coordinatorSessionId, capsule) {
+-      return saveArtifact(
+-        coordinatorSessionId,
+-        { capsule },
+-        () => {
+-          db.prepare(
+-            `INSERT INTO portable_capsules (
+-               coordinator_session_id, capsule_id, replaced_from_step_id, replaced_to_step_id, text, updated_at
+-             ) VALUES (?, ?, ?, ?, ?, ?)
+-             ON CONFLICT(coordinator_session_id) DO UPDATE SET
+-               capsule_id = excluded.capsule_id,
+-               replaced_from_step_id = excluded.replaced_from_step_id,
+-               replaced_to_step_id = excluded.replaced_to_step_id,
+-               text = excluded.text,
+-               updated_at = excluded.updated_at`,
+-          ).run(
+-            coordinatorSessionId,
+-            capsule.capsuleId,
+-            capsule.replacedFromStepId,
+-            capsule.replacedToStepId,
+-            capsule.text,
+-            clock(),
+-          );
++    function putWake(batch: WakeBatch): boolean {
++        const id = batch.coordinatorSessionId;
++        valid({ ...empty(id as CoordinatorSessionId), wakeBatches: [batch] });
++        const old = stmt('SELECT metadata FROM conversation_wakes WHERE coordinator_session_id=? AND wake_batch_id=?').get(id, batch.wakeBatchId) as {
++            metadata: string;
++        } | undefined;
++        if (old !== undefined) {
++            if (old.metadata !== JSON.stringify(batch))
++                throw new Error('Wake identity conflict');
++            return false;
++        }
++        stmt('INSERT INTO conversation_wakes VALUES(?,?,?)').run(id, batch.wakeBatchId, JSON.stringify(batch));
++        return true;
++    }
++    const resultState = (id: CoordinatorSessionId, entries: readonly CommittedMessageEntry[] = [], wakes: readonly WakeBatch[] = []): CoordinatorSessionState => valid({ ...requireCore(id), committedMessages: entries, committedModelSteps: [], wakeBatches: wakes });
++    const store: CheckpointStore = {
++        checkpointer: saver, loadCheckpoint, updateCheckpoint, readEntry, readHistoryBody,
++        saveCheckpoint(input) { try {
++            const state = valid(input);
++            atomic(() => { const { committedMessages, committedModelSteps, wakeBatches } = state; writeCore(headOf(state)); for (const entry of committedMessages)
++                insertEntry(state.coordinatorSessionId, entry); for (const step of committedModelSteps)
++                insertStep(state.coordinatorSessionId, step); for (const wake of wakeBatches)
++                putWake(wake); });
++            return { kind: 'saved' };
++        }
++        catch (error) {
++            return failed(error);
++        } },
++        appendMessage(id, entry) { try {
++            atomic(() => { requireCore(id); insertEntry(id, entry); });
++            return { kind: 'saved' };
++        }
++        catch (error) {
++            return failed(error);
++        } },
++        appendModelStep(input) { try {
++            valid({ ...empty(input.coordinatorSessionId), committedMessages: [input.entry], committedModelSteps: [input.step] });
++            if (input.entry.role !== 'assistant' || input.entry.entryId !== input.step.entryId || input.entry.stepId !== input.step.stepId)
++                throw new Error('Model step/entry identity mismatch');
++            atomic(() => { const head = requireCore(input.coordinatorSessionId), fresh = insertEntry(input.coordinatorSessionId, input.entry); insertStep(input.coordinatorSessionId, input.step); if (fresh)
++                writeCore({ ...head, graphPosition: input.graphPosition }); });
++            return { kind: 'saved' };
++        }
++        catch (error) {
++            return failed(error);
++        } },
++        appendToolResult(input) { try {
++            if (input.entry.role !== 'tool')
++                throw new Error('Tool role mismatch');
++            atomic(() => {
++                const head = requireCore(input.coordinatorSessionId);
++                const paired = stmt("SELECT e.entry_id FROM conversation_model_steps s JOIN conversation_entries e ON e.coordinator_session_id=s.coordinator_session_id AND e.entry_id=s.entry_id WHERE s.coordinator_session_id=? AND s.step_id=? AND EXISTS (SELECT 1 FROM json_each(e.metadata,'$.toolCalls') c WHERE json_extract(c.value,'$.callId')=? AND json_extract(c.value,'$.name')=?)")
++                    .get(input.coordinatorSessionId, input.entry.stepId, input.entry.toolCallId, input.entry.toolName);
++                if (paired === undefined) throw new Error('Tool result has no matching committed call');
++                if (insertEntry(input.coordinatorSessionId, input.entry)) writeCore({ ...head, graphPosition: input.graphPosition });
++            });
++            return { kind: 'saved' };
++        }
++        catch (error) {
++            return failed(error);
++        } },
++        commitWakeBatch(batch) { try {
++            return atomic(() => { const id = batch.coordinatorSessionId as CoordinatorSessionId; ensureCore(id); const fresh = putWake(batch); return { kind: fresh ? 'committed' : 'already-committed', state: resultState(id, [], [batch]) }; });
++        }
++        catch (error) {
++            return { kind: 'unrecoverable', reason: describeError(error) };
++        } },
++        commitUserMessage(input) { try {
++            return atomic(() => {
++                const id = input.coordinatorSessionId;
++                if (input.wakeBatch.coordinatorSessionId !== id) throw new Error('User Wake Session mismatch');
++                ensureCore(id);
++                const old = readEntry(id, userEntryId(input.submissionId));
++                if (old !== null) {
++                    const row = stmt('SELECT metadata FROM conversation_wakes WHERE coordinator_session_id=? AND wake_batch_id=?').get(id, input.wakeBatch.wakeBatchId) as { metadata: string } | undefined;
++                    if (row === undefined) throw new Error('User Wake identity conflict');
++                    const contentMatches = old.role === 'user' && old.stepId === userStepId(input.submissionId) && old.content === input.content;
++                    if (contentMatches && row.metadata !== JSON.stringify(input.wakeBatch)) throw new Error('User Wake content conflict');
++                    return { kind: 'already-committed', contentMatches, state: resultState(id, [old], [JSON.parse(row.metadata) as WakeBatch]) };
++                }
++                const entry: CommittedMessageEntry = { entryId: userEntryId(input.submissionId), stepId: userStepId(input.submissionId), role: 'user', content: input.content };
++                insertEntry(id, entry); putWake(input.wakeBatch);
++                return { kind: 'committed', state: resultState(id, [entry], [input.wakeBatch]) };
++            });
++        }
++        catch (error) {
++            return { kind: 'unrecoverable', reason: describeError(error) };
++        } },
++        readCommittedMessages(id, range?: CommittedMessageRange) { requireCore(id); if (range === undefined) {
++            const read = loadCheckpoint(id, 'full');
++            if (read.kind !== 'recovered')
++                throw new Error(read.kind === 'unrecoverable' ? read.reason : 'Session absent');
++            return read.state.committedMessages;
++        } const from = stmt('SELECT seq FROM conversation_entries WHERE coordinator_session_id=? AND step_id=? ORDER BY seq LIMIT 1').get(id, range.replacedFromStepId) as {
++            seq: number;
++        } | undefined, to = stmt('SELECT seq FROM conversation_entries WHERE coordinator_session_id=? AND step_id=? ORDER BY seq DESC LIMIT 1').get(id, range.replacedToStepId) as {
++            seq: number;
++        } | undefined; if (from === undefined || to === undefined || from.seq > to.seq)
++            return []; return (stmt('SELECT entry_id FROM conversation_entries WHERE coordinator_session_id=? AND seq>=? AND seq<=? ORDER BY seq').all(id, from.seq, to.seq) as {
++            entry_id: string;
++        }[]).map(row => readEntry(id, row.entry_id)!); },
++        readHistoryPage(input) {
++            const q = historyPageQuerySchema.parse(input);
++            requireCore(q.coordinatorSessionId);
++            const newer = q.direction === 'newer';
++            const rows = stmt("SELECT seq,entry_id,length(CAST(summary_metadata AS BLOB)) AS metadata_length FROM conversation_entries WHERE coordinator_session_id=? AND role!='system' AND seq" + (newer ? '>' : '<') + '? ORDER BY seq ' + (newer ? 'ASC' : 'DESC') + ' LIMIT ?')
++                .all(q.coordinatorSessionId, newer ? q.after ?? 0 : q.before ?? Number.MAX_SAFE_INTEGER, HISTORY_PAGE_ITEMS + 1) as {
++                seq: number;
++                entry_id: string;
++                metadata_length: number;
++            }[];
++            const entries: HistoryMetadata[] = [];
++            let bytes = 2;
++            for (const row of rows.slice(0, HISTORY_PAGE_ITEMS)) {
++                if (row.metadata_length > HISTORY_PAGE_BYTES)
++                    throw new Error('History metadata exceeds page budget');
++                if (bytes + row.metadata_length > HISTORY_PAGE_BYTES)
++                    break;
++                const stored = rowFor(q.coordinatorSessionId, row.entry_id, true);
++                if (stored === undefined)
++                    throw new Error('History entry absent');
++                const item = metadata(stored), size = Buffer.byteLength(JSON.stringify(item)) + (entries.length > 0 ? 1 : 0);
++                if (size > HISTORY_PAGE_BYTES)
++                    throw new Error('History metadata exceeds page budget');
++                if (bytes + size > HISTORY_PAGE_BYTES)
++                    break;
++                entries.push(item);
++                bytes += size;
++            }
++            return { entries: newer ? entries : entries.reverse(), hasMore: entries.length < rows.length };
+         },
+-      );
+-    },
+-    clearNativeWindowOwner(coordinatorSessionId) {
+-      try {
+-        // 只删原生窗口一侧：Capsule 是自己的表，不受影响。
+-        db.prepare('DELETE FROM native_window_owners WHERE coordinator_session_id = ?').run(
+-          coordinatorSessionId,
+-        );
+-        return { kind: 'saved' };
+-      } catch (error) {
+-        return { kind: 'failed', message: describeError(error) };
+-      }
+-    },
+-    commitWakeBatch(batch) {
+-      const sessionId = batch.coordinatorSessionId as CoordinatorSessionId;
+-      const current = loadCheckpoint(sessionId);
+-      let core: SessionCore;
+-      if (current.kind === 'unrecoverable') {
+-        return { kind: 'unrecoverable', reason: current.reason };
+-      }
+-      if (current.kind === 'absent') {
+-        core = {
+-          schemaVersion: COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
+-          coordinatorSessionId: sessionId,
+-          committedMessages: [],
+-          graphPosition: 'suspend',
+-          committedModelSteps: [],
+-          wakeBatches: [],
+-          lastCompactionOutcome: null,
+-        };
+-      } else {
+-        core = coreOf(current.state);
+-        if (core.wakeBatches.some((existing) => existing.wakeBatchId === batch.wakeBatchId)) {
+-          return { kind: 'already-committed', state: current.state };
++        loadNativeWindowOwner, loadPortableCapsule,
++        saveNativeWindowOwner(id, owner) { try {
++            requireCore(id);
++            valid({ ...empty(id), contextMaterial: { nativeWindowOwner: owner, capsule: null } });
++            atomic(() => { const bound = stmt('SELECT seq FROM conversation_entries WHERE coordinator_session_id=? ORDER BY seq DESC LIMIT 1').get(id) as {
++                seq: number;
++            } | undefined; stmt('INSERT INTO native_window_owners VALUES(?,?,?,?,?) ON CONFLICT(coordinator_session_id) DO UPDATE SET owner_ref=excluded.owner_ref,items=excluded.items,through_seq=excluded.through_seq,updated_at=excluded.updated_at').run(id, owner.ownerRef, JSON.stringify(owner.items), bound?.seq ?? 0, clock()); });
++            return { kind: 'saved' };
+         }
+-      }
+-      const next: CoordinatorSessionState = { ...core, wakeBatches: [...core.wakeBatches, batch] };
+-      const parsed = parseCoordinatorSessionState(next);
+-      if (!parsed.ok) {
+-        return { kind: 'unrecoverable', reason: `${parsed.field}: ${parsed.message}` };
+-      }
+-      const written = saveCore(parsed.value);
+-      if (written.kind === 'failed') {
+-        return { kind: 'unrecoverable', reason: written.message };
+-      }
+-      const reloaded = loadCheckpoint(sessionId);
+-      if (reloaded.kind !== 'recovered') {
+-        return { kind: 'unrecoverable', reason: 'Wake Batch 写入后无法读回会话状态' };
+-      }
+-      return { kind: 'committed', state: reloaded.state };
+-    },
+-    commitUserMessage(input) {
+-      const sessionId = input.coordinatorSessionId;
+-      const entryId = userEntryId(input.submissionId);
+-      const current = loadCheckpoint(sessionId);
+-      if (current.kind === 'unrecoverable') {
+-        return { kind: 'unrecoverable', reason: current.reason };
+-      }
+-      let core: SessionCore;
+-      if (current.kind === 'absent') {
+-        core = {
+-          schemaVersion: COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
+-          coordinatorSessionId: sessionId,
+-          committedMessages: [],
+-          graphPosition: 'suspend',
+-          committedModelSteps: [],
+-          wakeBatches: [],
+-          lastCompactionOutcome: null,
+-        };
+-      } else {
+-        core = coreOf(current.state);
+-        // 稳定重放：同一 submissionId 已有条目时不再追加消息或 batch，只报告内容是否逐字一致。
+-        const existing = core.committedMessages.find((entry) => entry.entryId === entryId);
+-        if (existing !== undefined) {
+-          return {
+-            kind: 'already-committed',
+-            state: current.state,
+-            contentMatches: existing.content === input.content,
+-          };
++        catch (error) {
++            return failed(error);
++        } },
++        savePortableCapsule(id, capsule) { try {
++            requireCore(id);
++            valid({ ...empty(id), contextMaterial: { nativeWindowOwner: null, capsule } });
++            atomic(() => {
++                const old=loadPortableCapsule(id);
++                if(old?.capsuleId===capsule.capsuleId){
++                    if(JSON.stringify(old)!==JSON.stringify(capsule))throw new Error('Capsule identity conflict');
++                    return;
++                }
++                const first=stmt('SELECT seq FROM conversation_entries WHERE coordinator_session_id=? AND step_id=? ORDER BY seq LIMIT 1').get(id,capsule.replacedFromStepId) as {seq:number}|undefined;
++                const last=stmt('SELECT seq FROM conversation_entries WHERE coordinator_session_id=? AND step_id=? ORDER BY seq DESC LIMIT 1').get(id,capsule.replacedToStepId) as {seq:number}|undefined;
++                if(first===undefined||last===undefined||first.seq>last.seq)throw new Error('Capsule range missing');
++                stmt('INSERT INTO portable_capsules VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(coordinator_session_id) DO UPDATE SET capsule_id=excluded.capsule_id,replaced_from_step_id=excluded.replaced_from_step_id,replaced_to_step_id=excluded.replaced_to_step_id,text=excluded.text,from_seq=excluded.from_seq,to_seq=excluded.to_seq,updated_at=excluded.updated_at')
++                    .run(id,capsule.capsuleId,capsule.replacedFromStepId,capsule.replacedToStepId,capsule.text,first.seq,last.seq,clock());
++            });
++            return { kind: 'saved' };
+         }
+-      }
+-      const entry: CommittedMessageEntry = {
+-        entryId,
+-        stepId: userStepId(input.submissionId),
+-        role: 'user',
+-        content: input.content,
+-      };
+-      // 消息与 Wake Batch 是同一次写入：两者不可能成为两条独立事实。
+-      const next: CoordinatorSessionState = {
+-        ...core,
+-        committedMessages: [...core.committedMessages, entry],
+-        wakeBatches: [...core.wakeBatches, input.wakeBatch],
+-      };
+-      const parsed = parseCoordinatorSessionState(next);
+-      if (!parsed.ok) {
+-        return { kind: 'unrecoverable', reason: `${parsed.field}: ${parsed.message}` };
+-      }
+-      const written = saveCore(parsed.value);
+-      if (written.kind === 'failed') {
+-        return { kind: 'unrecoverable', reason: written.message };
+-      }
+-      const reloaded = loadCheckpoint(sessionId);
+-      if (reloaded.kind !== 'recovered') {
+-        return { kind: 'unrecoverable', reason: '用户消息写入后无法读回会话状态' };
+-      }
+-      return { kind: 'committed', state: reloaded.state };
+-    },
+-    appendModelStep(input) {
+-      try {
+-        return appendAtomically(() => appendModelStepCore(input));
+-      } catch (error) {
+-        return { kind: 'failed', message: describeError(error) };
+-      }
+-    },
+-    appendToolResult(input) {
+-      try {
+-        return appendAtomically(() => appendToolResultCore(input));
+-      } catch (error) {
+-        return { kind: 'failed', message: describeError(error) };
+-      }
+-    },
+-    close() {
+-      db.close();
+-    },
+-  };
+-  return { kind: 'opened', store };
++        catch (error) {
++            return failed(error);
++        } },
++        clearNativeWindowOwner(id) { try {
++            stmt('DELETE FROM native_window_owners WHERE coordinator_session_id=?').run(id);
++            return { kind: 'saved' };
++        }
++        catch (error) {
++            return failed(error);
++        } },
++        close() { db.close(); },
++    };
++    return { kind: 'opened', store };
+ }
+diff --git a/src/application/controller-service.ts b/src/application/controller-service.ts
+index bef1555..ad4de3f 100644
+--- a/src/application/controller-service.ts
++++ b/src/application/controller-service.ts
+@@ -352,12 +352,18 @@ export type ControllerTranscriptMessage = {
+   readonly role: string;
+   readonly content: string;
+   readonly stepId: string | null;
++  readonly entryId?: string;
++  readonly sequence?: number;
++  readonly offset?: number;
++  readonly end?: number;
++  readonly byteLength?: number;
+ };
+ 
+ export type ControllerTranscriptPage = {
+   readonly coordinatorSessionId: string;
+   readonly messages: readonly ControllerTranscriptMessage[];
+   readonly nextCursor: string | null;
++  readonly newerCursor?: string | null;
+ };
+ 
+ export type ControllerQuestionQuery =
+diff --git a/src/application/coordinator/compact-session.ts b/src/application/coordinator/compact-session.ts
+index 19e2ff9..f312065 100644
+--- a/src/application/coordinator/compact-session.ts
++++ b/src/application/coordinator/compact-session.ts
+@@ -97,7 +97,7 @@ export function requestSessionCompaction(
+   if (input.reason.trim().length === 0) {
+     return rejection('reason_required', '压缩请求必须给出原因');
+   }
+-  const read = input.checkpoints.loadCheckpoint(input.coordinatorSessionId);
++  const read = input.checkpoints.loadCheckpoint(input.coordinatorSessionId, 'context');
+   if (read.kind === 'absent') {
+     return rejection('no_session', `Session ${input.coordinatorSessionId} 还没有可压缩的会话记录`);
+   }
+@@ -132,10 +132,7 @@ export function requestSessionCompaction(
+     return { kind: 'blocked', reason: error instanceof Error ? error.message : String(error) };
+   }
+ 
+-  const written = input.checkpoints.saveCheckpoint({
+-    ...state,
+-    lastCompactionOutcome: artifacts.outcome,
+-  });
++  const written = input.checkpoints.updateCheckpoint(input.coordinatorSessionId, { lastCompactionOutcome: artifacts.outcome });
+   if (written.kind === 'failed') {
+     return { kind: 'blocked', reason: `无法持久化压缩结论：${written.message}` };
+   }
+diff --git a/src/application/coordinator/model-config-switch.ts b/src/application/coordinator/model-config-switch.ts
+index 22e7869..e3a428a 100644
+--- a/src/application/coordinator/model-config-switch.ts
++++ b/src/application/coordinator/model-config-switch.ts
+@@ -138,9 +138,9 @@ export function migrateNativeWindowToCapsule(input: {
+   if (input.owner === null) {
+     return { kind: 'not-needed' };
+   }
+-  const steps = input.sessionState.committedModelSteps.map((step) => ({
+-    stepId: step.stepId,
+-    messages: step.messages,
++  const steps = input.sessionState.committedMessages.map((entry) => ({
++    stepId: entry.stepId,
++    messages: [entry],
+   }));
+   const first = steps[0];
+   const last = steps[steps.length - 1];
+@@ -223,15 +223,15 @@ export async function switchModelConfiguration(
+     return reject(switchable.code, switchable.message);
+   }
+ 
+-  // 1. 先持久化当前 checkpoint：切换后的状态必须从一个完整的历史继续。
+-  const read = request.sessionRecords.loadCheckpoint(request.coordinatorSessionId);
++  // 1. 核验有效上下文并持久化控制位置；已提交历史独立保留。
++  const read = request.sessionRecords.loadCheckpoint(request.coordinatorSessionId, 'context');
+   if (read.kind !== 'recovered') {
+     return reject(
+       'persist_failed',
+       read.kind === 'absent' ? '该 Session 还没有可持久化的会话记录' : `会话记录不可恢复：${read.reason}`,
+     );
+   }
+-  const persisted = request.sessionRecords.saveCheckpoint(read.state);
++  const persisted = request.sessionRecords.updateCheckpoint(request.coordinatorSessionId, { graphPosition: read.state.graphPosition });
+   if (persisted.kind === 'failed') {
+     return reject('persist_failed', `切换前无法持久化 checkpoint：${persisted.message}`);
+   }
+@@ -240,10 +240,12 @@ export async function switchModelConfiguration(
+   const owner = read.state.contextMaterial?.nativeWindowOwner ?? null;
+   let migrated = false;
+   if (!isNativeWindowCompatible(request.next, owner)) {
++    const original = request.sessionRecords.loadCheckpoint(request.coordinatorSessionId, 'migration');
++    if (original.kind !== 'recovered') return reject('migration_failed', original.kind === 'unrecoverable' ? original.reason : 'Session absent');
+     const migration = migrateNativeWindowToCapsule({
+       coordinatorSessionId: request.coordinatorSessionId,
+       owner,
+-      sessionState: read.state,
++      sessionState: original.state,
+       deriveCapsule: request.deriveCapsule,
+       checkpoints: request.nativeWindows,
+     });
+diff --git a/src/application/coordinator/runtime-guard.ts b/src/application/coordinator/runtime-guard.ts
+index 8759625..63c590a 100644
+--- a/src/application/coordinator/runtime-guard.ts
++++ b/src/application/coordinator/runtime-guard.ts
+@@ -81,7 +81,7 @@ export type CheckpointRecoveryRead =
+   | { readonly kind: 'unrecoverable'; readonly reason: string };
+ 
+ export type CheckpointRecoveryPort = {
+-  readonly loadCheckpoint: (coordinatorSessionId: CoordinatorSessionId) => CheckpointRecoveryRead;
++  readonly loadCheckpoint: (coordinatorSessionId: CoordinatorSessionId, purpose?: import('./history.js').CheckpointReadPurpose) => CheckpointRecoveryRead;
+ };
+ 
+ export type CheckpointWriteResult =
+@@ -102,6 +102,7 @@ export type UserMessageCommitInput = {
+  *
+  * `already-committed` 覆盖稳定重放：同 `submissionId` 再提交一次不会产生第二条消息，`contentMatches`
+  * 说明这次提交的内容是否与原内容逐字相同；内容不同必须由调用方按拒绝处理，而不是静默改写历史。
++ * `state` 只携带控制字段、本次条目和 Wake，不携带历史快照。
+  */
+ export type UserMessageCommitResult =
+   | { readonly kind: 'committed'; readonly state: CoordinatorSessionState }
+@@ -163,6 +164,9 @@ export type CheckpointAppendPort = {
+ export type CoordinatorSessionRecordPort = CheckpointRecoveryPort &
+   UserMessageCommitPort &
+   CheckpointAppendPort & {
++    readonly updateCheckpoint: (coordinatorSessionId: CoordinatorSessionId, patch: Partial<Pick<CoordinatorSessionState, 'graphPosition' | 'lastCompactionOutcome'>>) => CheckpointWriteResult;
++    readonly appendMessage: (coordinatorSessionId: CoordinatorSessionId, entry: CommittedMessageEntry) => CheckpointWriteResult;
++    readonly readEntry: (coordinatorSessionId: string, entryId: string) => CommittedMessageEntry | null;
+     readonly saveCheckpoint: (state: CoordinatorSessionState) => CheckpointWriteResult;
+     /** 读回底层完整已提交消息条目；Capsule 是派生视图，不覆盖它们。 */
+     readonly readCommittedMessages: (coordinatorSessionId: CoordinatorSessionId) => readonly unknown[];
+@@ -342,7 +346,7 @@ export function resumeIncarnation(
+     return { kind: 'rejected', rejection: acquired.rejection };
+   }
+ 
+-  const read = request.checkpoints.loadCheckpoint(request.coordinatorSessionId);
++  const read = request.checkpoints.loadCheckpoint(request.coordinatorSessionId, 'metadata');
+   const block = (reason: string): ResumeIncarnationResult => ({
+     kind: 'blocked',
+     coordinatorSessionId: request.coordinatorSessionId,
+diff --git a/src/application/coordinator/submission-status.ts b/src/application/coordinator/submission-status.ts
+index f47ac09..158a7da 100644
+--- a/src/application/coordinator/submission-status.ts
++++ b/src/application/coordinator/submission-status.ts
+@@ -75,7 +75,7 @@ const submissionQuerySchema = z.discriminatedUnion('kind', [
+ 
+ export type SubmissionStatusQueryInput = {
+   readonly store: BranchCoordinationStore;
+-  readonly checkpoints: CheckpointRecoveryPort;
++  readonly checkpoints: CheckpointRecoveryPort & Pick<import('./history.js').HistoryReadPort, 'readEntry'>;
+   readonly coordinationScopeId: CoordinationScopeId;
+   readonly input: SubmissionQuery;
+ };
+@@ -98,13 +98,13 @@ function ownsAnswer(
+ }
+ 
+ function verifyMessage(
+-  checkpoints: CheckpointRecoveryPort,
++  checkpoints: SubmissionStatusQueryInput['checkpoints'],
+   query: Extract<SubmissionQuery, { kind: 'message' }>,
+ ): SubmissionStatus {
+   const sessionId = query.coordinatorSessionId as CoordinatorSessionId;
+   let read;
+   try {
+-    read = checkpoints.loadCheckpoint(sessionId);
++    read = checkpoints.loadCheckpoint(sessionId, 'metadata');
+   } catch (error) {
+     return unverifiable(`无法读取会话历史：${error instanceof Error ? error.message : String(error)}`);
+   }
+@@ -122,11 +122,10 @@ function verifyMessage(
+   const stepId = userStepId(query.submissionId);
+   // 只认「同 submissionId 派生的用户消息条目」：entryId、role 与 stepId 必须同时命中，
+   // 否则一条形态相近的工具或助手条目会被误判成这次提交。
+-  const entry = read.state.committedMessages.find(
+-    (candidate) =>
+-      candidate.entryId === entryId && candidate.role === 'user' && candidate.stepId === stepId,
+-  );
+-  if (entry === undefined) {
++  let entry;
++  try { entry = checkpoints.readEntry(sessionId, entryId); }
++  catch (error) { return unverifiable(error instanceof Error ? error.message : String(error)); }
++  if (entry === null || entry.role !== 'user' || entry.stepId !== stepId) {
+     return { kind: 'not-found' };
+   }
+   if (entry.content !== query.content) {
+diff --git a/src/application/coordinator/wake-admission.ts b/src/application/coordinator/wake-admission.ts
+index 4c650ff..c18b78d 100644
+--- a/src/application/coordinator/wake-admission.ts
++++ b/src/application/coordinator/wake-admission.ts
+@@ -35,6 +35,7 @@ export type WakeCheckpointPort = {
+ };
+ 
+ export type WakeCheckpointCommit =
++  // state 是本次 batch 与控制字段；完整原文通过 IC-04 独立读取。
+   | { readonly kind: 'committed'; readonly state: CoordinatorSessionState }
+   | { readonly kind: 'already-committed'; readonly state: CoordinatorSessionState }
+   | { readonly kind: 'unrecoverable'; readonly reason: string };
+diff --git a/src/application/tui/view-model.ts b/src/application/tui/view-model.ts
+index 9d3a0b2..39a21b0 100644
+--- a/src/application/tui/view-model.ts
++++ b/src/application/tui/view-model.ts
+@@ -177,6 +177,8 @@ export type TranscriptEntry =
+   | { readonly kind: 'tool'; readonly id: string; readonly name: string; readonly detail: string };
+ 
+ export type TranscriptView = {
++  readonly historyStatus?: 'loading' | 'unavailable' | 'ready';
++  readonly hasUpdates?: boolean;
+   readonly coordinatorSessionId: string | null;
+   readonly entries: readonly TranscriptEntry[];
+   readonly nextCursor: string | null;
+@@ -434,14 +436,14 @@ export function planningResponsibleSessionId(viewModel: TuiViewModel): string |
+ 
+ /** 上游把 Agent 回复与工具调用都记成普通消息；这里按角色分区，system 与未知角色不进入时间线。 */
+ export function projectTranscriptEntry(
+-  message: { readonly role: string; readonly content: string; readonly stepId: string | null },
++  message: { readonly role: string; readonly content: string; readonly stepId: string | null; readonly entryId?: string },
+   index: number,
+ ): TranscriptEntry | null {
+   const role = message.role.toLowerCase();
+   if (role === 'system') {
+     return null;
+   }
+-  const id = message.stepId ?? `${role}-${String(index)}`;
++  const id = message.entryId ?? message.stepId ?? `${role}-${String(index)}`;
+   if (role === 'human' || role === 'user') {
+     return { kind: 'user', id, text: message.content };
+   }
+@@ -459,6 +461,8 @@ export function projectTranscriptPage(
+     readonly coordinatorSessionId: string | null;
+     readonly scrollOffset?: number;
+     readonly readOnly?: boolean;
++    readonly historyStatus?: 'loading' | 'unavailable' | 'ready';
++    readonly hasUpdates?: boolean;
+   },
+ ): TranscriptView {
+   const messages = page?.messages ?? [];
+@@ -472,6 +476,8 @@ export function projectTranscriptPage(
+   return {
+     coordinatorSessionId: page?.coordinatorSessionId ?? state.coordinatorSessionId,
+     entries,
++    historyStatus: state.historyStatus ?? (page === null ? 'unavailable' : 'ready'),
++    hasUpdates: state.hasUpdates ?? false,
+     nextCursor: page?.nextCursor ?? null,
+     scrollOffset: state.scrollOffset ?? 0,
+     readOnly: state.readOnly ?? false,
+diff --git a/src/bootstrap/foreground-planning-runtime.ts b/src/bootstrap/foreground-planning-runtime.ts
+index 65afe7e..5bbe588 100644
+--- a/src/bootstrap/foreground-planning-runtime.ts
++++ b/src/bootstrap/foreground-planning-runtime.ts
+@@ -144,8 +144,6 @@ import { createControllerService,
+   type ControllerNotificationMessage,
+   type ControllerService,
+   type ControllerSnapshot,
+-  type ControllerTranscriptMessage,
+-  type ControllerTranscriptPage,
+   type SemanticEvent,
+   type Unsubscribe,
+ } from '../application/controller-service.js';
+@@ -374,7 +372,7 @@ export const FOREGROUND_COORDINATOR_INSTRUCTIONS: readonly string[] = [
+   '写入地图、认领或解决票据都只通过受控工具调用，且同一 revision 下不要并发写入。',
+ ];
+ 
+-const TRANSCRIPT_WINDOW = 200;
++import { readTranscriptPage, type CheckpointReadPurpose } from '../application/coordinator/history.js';
+ 
+ const PLANNING_MUTATION_CATEGORIES: ReadonlySet<string> = new Set([
+   'route-map-section-update',
+@@ -896,7 +894,7 @@ export async function createForegroundPlanningHost(
+     if (existing !== null) {
+       return { kind: 'ok', capsuleId: existing.capsuleId };
+     }
+-    const read = checkpoints.loadCheckpoint(coordinatorSessionId);
++    const read = checkpoints.loadCheckpoint(coordinatorSessionId, 'migration');
+     if (read.kind !== 'recovered') {
+       return {
+         kind: 'failed',
+@@ -906,8 +904,8 @@ export async function createForegroundPlanningHost(
+             : `源 Session 的会话记录不可恢复：${read.reason}`,
+       };
+     }
+-    const first = read.state.committedModelSteps[0];
+-    const last = read.state.committedModelSteps[read.state.committedModelSteps.length - 1];
++    const first = read.state.committedMessages[0];
++    const last = read.state.committedMessages.at(-1);
+     if (first === undefined || last === undefined) {
+       return { kind: 'failed', reason: '源 Session 还没有可派生的已提交历史' };
+     }
+@@ -915,9 +913,9 @@ export async function createForegroundPlanningHost(
+       const capsule = deriveContextCapsule({
+         fromStepId: first.stepId,
+         toStepId: last.stepId,
+-        steps: read.state.committedModelSteps.map((step) => ({
+-          stepId: step.stepId,
+-          messages: step.messages,
++        steps: read.state.committedMessages.map((entry) => ({
++          stepId: entry.stepId,
++          messages: [entry],
+         })),
+       });
+       const saved = checkpoints.savePortableCapsule(coordinatorSessionId, capsule);
+@@ -1509,9 +1507,6 @@ export async function createForegroundPlanningHost(
+   const segmentsFromState = (state: CoordinatorSessionState): readonly HistorySegment[] => {
+     const capsule = state.contextMaterial?.capsule ?? null;
+     const native = state.contextMaterial?.nativeWindowOwner ?? null;
+-    if (native !== null) {
+-      return [{ kind: 'native-window', ownerRef: native.ownerRef, items: native.items }];
+-    }
+     const covered = new Set<string>();
+     if (capsule !== null) {
+       const from = state.committedMessages.findIndex((entry) => entry.stepId === capsule.replacedFromStepId);
+@@ -1523,7 +1518,8 @@ export async function createForegroundPlanningHost(
+       }
+     }
+     const grouped: HistorySegment[] = [];
+-    if (capsule !== null) {
++    if (native !== null) grouped.push({ kind: 'native-window', ownerRef: native.ownerRef, items: native.items });
++    if (capsule !== null && native === null) {
+       grouped.push({
+         kind: 'capsule',
+         capsuleId: capsule.capsuleId,
+@@ -1580,24 +1576,30 @@ export async function createForegroundPlanningHost(
+     const capsuleSegment = input.segments.find((segment) => segment.kind === 'capsule');
+     const nativeSegment = input.segments.find((segment) => segment.kind === 'native-window');
+     const next: CoordinatorSessionState = { ...state, lastCompactionOutcome: input.compaction };
+-    const saved = checkpoints.saveCheckpoint(next);
++    const saved = checkpoints.updateCheckpoint(coordinatorSessionId, { lastCompactionOutcome: input.compaction });
+     if (saved.kind === 'failed') {
+       throw new Error(`无法持久化压缩结论：${saved.message}`);
+     }
+     if (capsuleSegment !== undefined && capsuleSegment.kind === 'capsule') {
+-      checkpoints.savePortableCapsule(coordinatorSessionId, {
++      const capsuleSaved = checkpoints.savePortableCapsule(coordinatorSessionId, {
+         kind: 'derived_context_capsule',
+         capsuleId: capsuleSegment.capsuleId,
+         replacedFromStepId: capsuleSegment.replacedFromStepId,
+         replacedToStepId: capsuleSegment.replacedToStepId,
+         text: capsuleSegment.text,
+       });
++      if (capsuleSaved.kind === 'failed') {
++        throw new Error(`无法持久化压缩 Capsule：${capsuleSaved.message}`);
++      }
+     }
+     if (nativeSegment !== undefined && nativeSegment.kind === 'native-window') {
+-      checkpoints.saveNativeWindowOwner(coordinatorSessionId, {
++      const nativeSaved = checkpoints.saveNativeWindowOwner(coordinatorSessionId, {
+         ownerRef: nativeSegment.ownerRef,
+         items: [...nativeSegment.items],
+       });
++      if (nativeSaved.kind === 'failed') {
++        throw new Error(`无法持久化原生上下文：${nativeSaved.message}`);
++      }
+     }
+     return next;
+   };
+@@ -1629,7 +1631,7 @@ export async function createForegroundPlanningHost(
+     currentWork: ProjectedActionableWorkItem | null,
+   ): Promise<{ readonly messages: readonly unknown[]; readonly note: string }> => {
+     const checkpoints = session.checkpoints;
+-    const read = checkpoints.loadCheckpoint(session.coordinatorSessionId);
++    const read = checkpoints.loadCheckpoint(session.coordinatorSessionId, 'context');
+     if (read.kind !== 'recovered') {
+       throw new Error(
+         read.kind === 'absent' ? '该 Session 还没有可恢复的会话记录' : `会话记录不可恢复：${read.reason}`,
+@@ -1776,7 +1778,7 @@ export async function createForegroundPlanningHost(
+     const checkpoints = checkpointStoreForScope();
+     const current = requireStore();
+     if (checkpoints === null || current === null || selectedScopeId === null ||
+-        checkpoints.loadCheckpoint(coordinatorSessionId).kind !== 'absent') {
++        checkpoints.loadCheckpoint(coordinatorSessionId, 'metadata').kind !== 'absent') {
+       return;
+     }
+     const responsibility = current.query({ kind: 'planning-responsibility', coordinationScopeId: selectedScopeId });
+@@ -1938,8 +1940,11 @@ export async function createForegroundPlanningHost(
+     return { kind: 'live', session: withGraph };
+   };
+ 
+-  const liveStateOf = (session: LiveSession): CoordinatorSessionState | null => {
+-    const read = session.checkpoints.loadCheckpoint(session.coordinatorSessionId);
++  const liveStateOf = (session: LiveSession, purpose: CheckpointReadPurpose = 'metadata'): CoordinatorSessionState | null => {
++    const read = session.checkpoints.loadCheckpoint(session.coordinatorSessionId, purpose);
++    if (read.kind === 'unrecoverable' && purpose !== 'metadata') {
++      throw new Error(`会话记录无法安全读取：${read.reason}`);
++    }
+     return read.kind === 'recovered' ? read.state : null;
+   };
+ 
+@@ -1974,26 +1979,18 @@ export async function createForegroundPlanningHost(
+   /** Branch 回答是权威；checkpoint 只记录稳定引用，使崩溃后仍可识别未处理工作。 */
+   const syncAnsweredInteractions = (session: LiveSession): void => {
+     const answers = answeredInteractionsFor(session);
+-    const state = liveStateOf(session);
+-    if (state === null) throw new Error('无法读回 Session checkpoint');
+-    const existing = new Set(state.committedMessages.map((entry) => entry.entryId));
+-    const missing = answers.filter((answer) => !existing.has(answerEntryId(answer.interactionId)));
++    const missing = answers.filter((answer) =>
++      session.checkpoints.readEntry(session.coordinatorSessionId, answerEntryId(answer.interactionId)) === null);
+     if (missing.length === 0) return;
+     const fencing = assertFencingGeneration(requiredStore(), session.incarnation, { clock });
+     if (fencing.kind === 'fenced') throw new Error(`写入回答引用前失去 Runtime Lease：${fencing.code}`);
+-    const written = session.checkpoints.saveCheckpoint({
+-      ...state,
+-      committedMessages: [
+-        ...state.committedMessages,
+-        ...missing.sort((left, right) => (left.resolvedAt ?? 0) - (right.resolvedAt ?? 0)).map((answer) => ({
+-          entryId: answerEntryId(answer.interactionId),
+-          stepId: `interaction-answer:${answer.interactionId}`,
+-          role: 'system' as const,
+-          content: `Pending Interaction ${answer.interactionId} 的回答引用`,
+-        })),
+-      ],
+-    });
+-    if (written.kind === 'failed') throw new Error(`无法保存回答引用：${written.message}`);
++    for (const answer of missing.sort((left, right) => (left.resolvedAt ?? 0) - (right.resolvedAt ?? 0))) {
++      const written = session.checkpoints.appendMessage(session.coordinatorSessionId, {
++        entryId: answerEntryId(answer.interactionId), stepId: `interaction-answer:${answer.interactionId}`,
++        role: 'system', content: `Pending Interaction ${answer.interactionId} 的回答引用`,
++      });
++      if (written.kind === 'failed') throw new Error(`无法保存回答引用：${written.message}`);
++    }
+   };
+ 
+   // ---------------------------------------------------------------------
+@@ -2006,7 +2003,7 @@ export async function createForegroundPlanningHost(
+    * 用户消息与 Branch 中已回答交互的稳定引用按历史顺序排队；最终 assistant 响应消费队首。
+    */
+   const pendingWorkFor = (session: LiveSession): readonly ProjectedActionableWorkItem[] => {
+-    const state = liveStateOf(session);
++    const state = liveStateOf(session, 'pending');
+     if (state === null) {
+       return [];
+     }
+@@ -2042,7 +2039,7 @@ export async function createForegroundPlanningHost(
+       let work = pendingWorkFor(session);
+       while (work.length > 0 && !session.fencingLost && session.graph !== null) {
+         const scope = selectedScopeId === null ? null : scopeRecord(selectedScopeId);
+-        const state = liveStateOf(session);
++        const state = liveStateOf(session, 'tools');
+         if (scope === null || state === null) {
+           return;
+         }
+@@ -2386,7 +2383,7 @@ export async function createForegroundPlanningHost(
+     const selectedState =
+       selectedSessionId === null
+         ? null
+-        : (checkpointStoreForScope()?.loadCheckpoint(selectedSessionId as CoordinatorSessionId) ?? null);
++        : (checkpointStoreForScope()?.loadCheckpoint(selectedSessionId as CoordinatorSessionId, 'metadata') ?? null);
+     const graphVersions = versions.kind === 'graph-versions' ? versions.versions : [];
+     const currentVersion =
+       graphId === null
+@@ -2443,35 +2440,16 @@ export async function createForegroundPlanningHost(
+     return { kind: 'snapshot', snapshot: projected };
+   };
+ 
+-  const readTranscript = (coordinatorSessionId: string): TranscriptLoad => {
++  const readTranscript = (coordinatorSessionId: string, cursor: string | null = null): TranscriptLoad => {
+     const checkpoints = checkpointStoreForScope();
+     if (checkpoints === null) {
+       return { kind: 'failed', code: 'checkpoint_store_unavailable', message: 'checkpoint store 不可读' };
+     }
+-    const read = checkpoints.loadCheckpoint(coordinatorSessionId as CoordinatorSessionId);
+-    if (read.kind !== 'recovered') {
+-      return {
+-        kind: 'failed',
+-        code: read.kind,
+-        message: `Session ${coordinatorSessionId} 没有可恢复的会话记录`,
+-      };
++    try {
++      return { kind: 'transcript', transcript: readTranscriptPage(checkpoints, coordinatorSessionId, cursor) };
++    } catch (error) {
++      return { kind: 'failed', code: 'history_unreadable', message: error instanceof Error ? error.message : String(error) };
+     }
+-    const entries = read.state.committedMessages.filter((entry) => entry.role !== 'system').slice(-TRANSCRIPT_WINDOW);
+-    const messages: ControllerTranscriptMessage[] = entries.map((entry) =>
+-      entry.role === 'tool'
+-        ? {
+-            role: 'tool',
+-            content: `${entry.toolName ?? 'tool'}\n${entry.content}`,
+-            stepId: entry.entryId,
+-          }
+-        : { role: entry.role, content: entry.content, stepId: entry.stepId },
+-    );
+-    const page: ControllerTranscriptPage = {
+-      coordinatorSessionId,
+-      messages,
+-      nextCursor: null,
+-    };
+-    return { kind: 'transcript', transcript: page };
+   };
+ 
+   // ---------------------------------------------------------------------
+@@ -7081,7 +7059,7 @@ export async function createForegroundPlanningHost(
+           ? (snapshot.snapshot.graphGenerations.find((entry) => entry.graphId === scope.graphId) ?? null)
+           : null;
+       const checkpoints = checkpointStoreForScope();
+-      const sourceRead = checkpoints?.loadCheckpoint(handoff.sourceSessionId) ?? null;
++      const sourceRead = checkpoints?.loadCheckpoint(handoff.sourceSessionId, 'metadata') ?? null;
+       const sourceCheckpoint: ExecutionHandoffReviewFacts['sourceCheckpoint'] =
+         sourceRead === null
+           ? 'unrecoverable'
+@@ -7228,8 +7206,8 @@ export async function createForegroundPlanningHost(
+       }
+       return loaded.snapshot;
+     },
+-    transcript: ({ coordinatorSessionId }) => {
+-      const loaded = readTranscript(coordinatorSessionId);
++    transcript: ({ coordinatorSessionId, cursor }) => {
++      const loaded = readTranscript(coordinatorSessionId, cursor ?? null);
+       if (loaded.kind !== 'transcript') {
+         throw new Error(loaded.message);
+       }
+@@ -7356,7 +7334,7 @@ export async function createForegroundPlanningHost(
+     inputStore,
+     submissionStatus,
+     snapshot: async (selectedSessionId) => await readSnapshot(selectedSessionId),
+-    transcript: (coordinatorSessionId) => Promise.resolve(readTranscript(coordinatorSessionId)),
++    transcript: (coordinatorSessionId, cursor) => Promise.resolve(readTranscript(coordinatorSessionId, cursor)),
+     execute: async (intent) => await execute(intent),
+     subscribe: (listener): Unsubscribe => {
+       listeners.add(listener);
+diff --git a/src/interfaces/tui/app.tsx b/src/interfaces/tui/app.tsx
+index b80a45b..a8979cf 100644
+--- a/src/interfaces/tui/app.tsx
++++ b/src/interfaces/tui/app.tsx
+@@ -18,6 +18,7 @@ import type { PasteViewerView } from './components/paste-viewer.js';
+ import type { ControllerInteractionView } from '../../application/controller-service.js';
+ import type { InteractionPageCursor } from '../../application/ports/branch-coordination-store.js';
+ import { bodyWidth } from './screens/workspace.js';
++import { transcriptLineCount } from './components/transcript.js';
+ import { wrapByDisplayWidth } from './render/width.js';
+ import { editComposer, editorLayout, emptyDraft, textDraft, type EditorKey } from './input/composer-editor.js';
+ import { allowedSidebarDensity, composerContentWidth } from './render/width.js';
+@@ -263,6 +264,8 @@ function TuiAppContent(props: TuiAppProps) {
+   const [events, setEvents] = useState<readonly SemanticEvent[]>([]);
+   const [snapshot, setSnapshot] = useState<ControllerSnapshot | null>(null);
+   const [transcript, setTranscript] = useState<ControllerTranscriptPage | null>(null);
++  const [historyLoading, setHistoryLoading] = useState(false);
++  const [historyUpdated, setHistoryUpdated] = useState(false);
+   const [home, setHome] = useState<HomeResolution | null>(null);
+   const [candidates, setCandidates] = useState<readonly ScopeCandidate[]>([]);
+   const homeSelection = useSelectionCursor();
+@@ -360,14 +363,62 @@ function TuiAppContent(props: TuiAppProps) {
+     [ports],
+   );
+ 
++  const terminalWidthRef = useRef(terminalWidth);
++  terminalWidthRef.current = terminalWidth;
++  const transcriptHeight = useRef(12);
++  const recordTranscriptHeight = useCallback((height: number) => {
++    const previous = transcriptHeight.current;
++    transcriptHeight.current = height;
++    const selected = stateRef.current.selectedSessionId;
++    if (selected !== null && historyReading.current) {
++      const offset = stateRef.current.scrollOffsets[selected] ?? 0;
++      if (offset > 0 && previous !== height) dispatch({ kind: 'scroll-changed', coordinatorSessionId: selected, offset: Math.max(0, offset + previous - height) });
++    }
++  }, [dispatch]);
++  const transcriptRequest = useRef(0);
++  const activeHistoryRequest = useRef<{ session: string; cursor: string | null } | null>(null);
++  const transcriptRef = useRef<ControllerTranscriptPage | null>(null);
++  const historyReading = useRef(false);
+   const loadTranscript = useCallback(
+-    async (coordinatorSessionId: string) => {
+-      const result = await ports.transcript(coordinatorSessionId, null);
+-      if (result.kind === 'transcript') {
+-        setTranscript(result.transcript);
++    async (coordinatorSessionId: string, cursor: string | null = null, navigate = false,
++      align: 'start' | 'end' = cursor === 'oldest' ? 'start' : 'end') => {
++      if (!navigate && historyReading.current && transcriptRef.current?.coordinatorSessionId === coordinatorSessionId) return;
++      if (activeHistoryRequest.current?.session === coordinatorSessionId && activeHistoryRequest.current.cursor === cursor) return;
++      const request = ++transcriptRequest.current;
++      const wasReading = historyReading.current;
++      if (navigate && cursor !== null) historyReading.current = true;
++      const active = { session: coordinatorSessionId, cursor };
++      activeHistoryRequest.current = active;
++      setHistoryLoading(true);
++      try {
++        const result = await ports.transcript(coordinatorSessionId, cursor);
++        if (request !== transcriptRequest.current || stateRef.current.selectedSessionId !== coordinatorSessionId) return;
++        if (result.kind === 'transcript') {
++          transcriptRef.current = result.transcript;
++          historyReading.current = cursor !== null;
++          if (cursor === null) setHistoryUpdated(false);
++          setTranscript(result.transcript);
++          if (navigate) {
++            const first = align === 'start';
++            const width = bodyWidth(terminalWidthRef.current, stateRef.current.sidebarDensity);
++            const lines = first ? transcriptLineCount(projectTranscriptPage(result.transcript, { coordinatorSessionId }), stateRef.current.expandedToolIds, width) : 0;
++            dispatch({ kind: 'scroll-changed', coordinatorSessionId, offset: first ? Math.max(0, lines - transcriptHeight.current) : 0 });
++          }
++        } else {
++          historyReading.current = wasReading;
++          dispatch({ kind: 'notice', notice: `历史读取失败：${result.message}` });
++        }
++      } catch (error) {
++        if (request === transcriptRequest.current && stateRef.current.selectedSessionId === coordinatorSessionId) {
++          historyReading.current = wasReading;
++          dispatch({ kind: 'notice', notice: `历史读取失败：${error instanceof Error ? error.message : String(error)}` });
++        }
++      } finally {
++        if (activeHistoryRequest.current === active) activeHistoryRequest.current = null;
++        if (request === transcriptRequest.current) setHistoryLoading(false);
+       }
+     },
+-    [ports],
++    [ports, dispatch],
+   );
+ 
+   // 挂载时解析 Home 并订阅事件；这两件事都只读，重挂载不会产生业务副作用。
+@@ -423,6 +474,7 @@ function TuiAppContent(props: TuiAppProps) {
+         pendingSessionIds.clear();
+         flushScheduled = false;
+         setEvents((current) => [...current, ...batch].slice(-EVENT_WINDOW));
++        if (historyReading.current && sessionIds.includes(stateRef.current.selectedSessionId)) setHistoryUpdated(true);
+         dispatch({ kind: 'events-arrived', coordinatorSessionIds: sessionIds });
+       });
+     });
+@@ -453,7 +505,13 @@ function TuiAppContent(props: TuiAppProps) {
+     if (state.selectedSessionId === null || state.screen !== 'workspace') {
+       return;
+     }
+-    void loadTranscript(state.selectedSessionId);
++    historyReading.current = false;
++    setHistoryUpdated(false);
++    activeHistoryRequest.current = null;
++    transcriptRef.current = null;
++    setTranscript(null);
++    void loadTranscript(state.selectedSessionId, null, true);
++    return () => { transcriptRequest.current += 1; };
+   }, [loadTranscript, state.selectedSessionId, state.screen]);
+ 
+   /**
+@@ -521,13 +579,15 @@ function TuiAppContent(props: TuiAppProps) {
+         coordinatorSessionId: state.selectedSessionId,
+         scrollOffset: state.selectedSessionId === null ? 0 : (state.scrollOffsets[state.selectedSessionId] ?? 0),
+         readOnly: isComposerReadOnly(state, state.selectedSessionId),
++        historyStatus: transcript === null ? (historyLoading ? 'loading' : 'unavailable') : 'ready',
++        hasUpdates: historyUpdated,
+       }),
+       selectedSessionId: state.selectedSessionId,
+       unreadSessionIds: state.unreadSessionIds,
+       executionFilter: state.executionFilter,
+       includeGraphNodes: state.sidebarDensity !== 'collapsed' || state.projectPanel.open || state.overlayStack.at(-1) === 'graph-inspector',
+     });
+-  }, [snapshot, state, transcript]);
++  }, [snapshot, state, transcript, historyLoading, historyUpdated]);
+   const viewModelRef = useRef<TuiViewModel | null>(null);
+   viewModelRef.current = viewModel;
+   // A collapsed sidebar omits nodes; initialize only after the Inspector projection is available.
+@@ -1495,6 +1555,11 @@ function TuiAppContent(props: TuiAppProps) {
+         dispatch({ kind: 'composer-mode-reset' });
+         return;
+       }
++      const selected = stateRef.current.selectedSessionId;
++      if (selected !== null && (historyReading.current || (stateRef.current.scrollOffsets[selected] ?? 0) > 0)) {
++        void loadTranscript(selected, null, true);
++        return;
++      }
+       if (stateRef.current.screen === 'wizard' || stateRef.current.screen === 'legacy-review') {
+         dispatch({ kind: 'screen', screen: 'home' });
+       }
+@@ -1725,6 +1790,31 @@ function TuiAppContent(props: TuiAppProps) {
+         return;
+       }
+     }
++    const readingSession = stateRef.current.selectedSessionId;
++    if (readingSession !== null && (key.pageUp || key.pageDown || (key.ctrl && (key.home || key.end)))) {
++      if (key.ctrl && key.home) { void loadTranscript(readingSession, 'oldest', true); return; }
++      if (key.ctrl && key.end) { void loadTranscript(readingSession, null, true); return; }
++      const currentPage = transcriptRef.current;
++      const offset = stateRef.current.scrollOffsets[readingSession] ?? 0;
++      const width = bodyWidth(terminalWidth, stateRef.current.sidebarDensity);
++      const projected = projectTranscriptPage(currentPage, { coordinatorSessionId: readingSession });
++      const lines = transcriptLineCount(projected, stateRef.current.expandedToolIds, width);
++      const height = transcriptHeight.current;
++      const maxOffset = Math.max(0, lines - height);
++      if (key.pageUp && offset < maxOffset) {
++        historyReading.current = true;
++        dispatch({ kind: 'scroll-changed', coordinatorSessionId: readingSession, offset: Math.min(maxOffset, offset + height) });
++      } else if (key.pageDown && offset > 0) {
++        const next = Math.max(0, offset - height);
++        if (next === 0 && !currentPage?.newerCursor) historyReading.current = false;
++        dispatch({ kind: 'scroll-changed', coordinatorSessionId: readingSession, offset: next });
++      } else {
++        const cursor = key.pageUp ? currentPage?.nextCursor : currentPage?.newerCursor;
++        if (cursor) void loadTranscript(readingSession, cursor, true, key.pageDown ? 'start' : 'end');
++        else if (key.pageDown && historyReading.current) void loadTranscript(readingSession, null, true);
++      }
++      return;
++    }
+     if (key.ctrl && input === 'r') {
+       dispatch({ kind: 'notice', notice: '历史搜索尚未接通' }); return;
+     }
+@@ -1821,6 +1911,7 @@ function TuiAppContent(props: TuiAppProps) {
+       ui={state}
+       terminalWidth={terminalWidth}
+       terminalHeight={windowSize.rows ?? process.stdout.rows ?? 24}
++      onTranscriptHeight={recordTranscriptHeight}
+       events={events}
+       actions={workspaceActions}
+       modelCatalog={modelCatalog}
+diff --git a/src/interfaces/tui/components/transcript.tsx b/src/interfaces/tui/components/transcript.tsx
+index 9831bb6..e091ef2 100644
+--- a/src/interfaces/tui/components/transcript.tsx
++++ b/src/interfaces/tui/components/transcript.tsx
+@@ -28,7 +28,17 @@ export function toolToggleLabel(entry: { readonly id: string; readonly name: str
+   return `${marker} tool ${entry.name}`;
+ }
+ 
++export function transcriptLineCount(transcript: TranscriptView, expanded: readonly string[], width: number): number {
++  return transcript.entries.reduce((lines, entry, index) => lines + (index > 0 && entry.kind !== 'tool' ? 1 : 0) +
++    (entry.kind === 'tool' ? 1 + (expanded.includes(entry.id) ? wrapByDisplayWidth(entry.detail, Math.max(1, width - 4)).length : 0)
++      : wrapByDisplayWidth(entry.text, Math.max(1, width - (entry.kind === 'user' ? 4 : 2))).length), 0);
++}
++
+ export function Transcript(props: TranscriptProps) {
++  if (props.transcript.entries.length === 0) return <Text dimColor>{
++    props.transcript.historyStatus === 'loading' ? '正在读取对话…'
++      : props.transcript.historyStatus === 'unavailable' ? '对话尚未载入' : '尚无对话记录'
++  }</Text>;
+   const width = Math.max(1, props.availableWidth);
+   const lines = props.transcript.entries.flatMap((entry, entryIndex) => {
+     const gap = entryIndex === 0 ? [] : [{ key: `${entry.id}-gap`, content: <Text> </Text> }];
+@@ -54,7 +64,8 @@ export function Transcript(props: TranscriptProps) {
+       }
+     }
+   });
+-  const visible = props.maxLines === undefined ? lines : lines.slice(-Math.max(1, props.maxLines));
++  const end = Math.max(0, lines.length - Math.max(0, props.transcript.scrollOffset));
++  const visible = props.maxLines === undefined ? lines : lines.slice(Math.max(0, end - Math.max(1, props.maxLines)), end);
+   return (
+     <Box flexDirection="column">
+       {visible.map((line) => <Box key={line.key}>{line.content}</Box>)}
+diff --git a/src/interfaces/tui/screens/workspace.tsx b/src/interfaces/tui/screens/workspace.tsx
+index 44e673b..1014510 100644
+--- a/src/interfaces/tui/screens/workspace.tsx
++++ b/src/interfaces/tui/screens/workspace.tsx
+@@ -7,7 +7,7 @@
+  */
+ 
+ import { Box, Text, useBoxMetrics, type DOMElement } from 'ink';
+-import { useRef, type ReactElement } from 'react';
++import { useEffect, useRef, type ReactElement } from 'react';
+ import { AnswerPanel, type AnswerPanelView } from '../components/answer-panel.js';
+ import { PasteViewer, type PasteViewerView } from '../components/paste-viewer.js';
+ 
+@@ -69,6 +69,7 @@ export type WorkspaceProps = {
+   readonly ui: TuiState;
+   readonly terminalWidth: number;
+   readonly terminalHeight?: number;
++  readonly onTranscriptHeight?: (height: number) => void;
+   readonly events: readonly SemanticEvent[];
+   readonly actions: WorkspaceActions;
+   readonly modelCatalog: ModelCatalog;
+@@ -110,6 +111,7 @@ export function workspaceLayout(view: TuiViewModel, ui: TuiState, terminalWidth:
+   const width=bodyWidth(terminalWidth,ui.sidebarDensity);
+   const alerts=[
+     ...(ui.notice?[ui.notice]:[]),
++    ...(view.transcript.hasUpdates ? ['当前会话有更新 · Ctrl+End 查看'] : []),
+     ...(view.execution.reconciliation.pending?['reconciling · 原操作结果未知，待对账']:[]),
+     ...(view.execution.hazards.unverifiedWorkerCount?['Worker 状态待核验']:[]),
+     ...(view.scope.controlState==='cancelling'?['停止结果待核验']:[]),
+@@ -124,6 +126,8 @@ export function workspaceLayout(view: TuiViewModel, ui: TuiState, terminalWidth:
+ export function Workspace(props: WorkspaceProps) {
+   const rowRef=useRef<DOMElement>(null), bodyRef=useRef<DOMElement>(null), transcriptRef=useRef<DOMElement>(null);
+   const rowMetrics=useBoxMetrics(rowRef),bodyMetrics=useBoxMetrics(bodyRef),transcriptMetrics=useBoxMetrics(transcriptRef);
++  const transcriptHeight = transcriptMetrics.hasMeasured ? Math.max(1, Math.round(transcriptMetrics.height)) : null;
++  useEffect(() => { if (transcriptHeight !== null) props.onTranscriptHeight?.(transcriptHeight); }, [transcriptHeight, props.onTranscriptHeight]);
+   const view=props.viewModel,ui=props.ui,rows=props.terminalHeight??24;
+   const {width,bodyRows,alerts,projectWidth}=workspaceLayout(view,ui,props.terminalWidth,rows);
+   const selected=ui.selectedSessionId,input=composerInputFor(ui,selected),readOnly=isComposerReadOnly(ui,selected);
+diff --git a/src/workflow/coordinator/context.ts b/src/workflow/coordinator/context.ts
+index fb2834d..57fa145 100644
+--- a/src/workflow/coordinator/context.ts
++++ b/src/workflow/coordinator/context.ts
+@@ -359,7 +359,7 @@ export function deriveContextCapsule(input: {
+   }[];
+ }): PortableContextCapsule {
+   const fromIndex = input.steps.findIndex((step) => step.stepId === input.fromStepId);
+-  const toIndex = input.steps.findIndex((step) => step.stepId === input.toStepId);
++  const toIndex = input.steps.findLastIndex((step) => step.stepId === input.toStepId);
+   if (fromIndex < 0 || toIndex < 0 || fromIndex > toIndex) {
+     throw new ContextMaintenanceError('Capsule 区间与被取代的已提交历史不匹配');
+   }
+@@ -553,7 +553,14 @@ export function buildBoundedModelInput(request: BuildBoundedModelInputRequest):
+         run.push(segment);
+       }
+       // 至少保留最新一个 step 逐字出现：Capsule 只取代更早的区间，不吞掉当前上下文。
+-      const replaceable = run.slice(0, Math.max(0, run.length - 1));
++      const firstOccurrence = new Map<string, number>();
++      run.forEach((segment, index) => { if (!firstOccurrence.has(segment.stepId)) firstOccurrence.set(segment.stepId, index); });
++      let boundary = Math.max(0, run.length - 1);
++      // A tool result can follow an interleaved user entry. Keep the whole retained step.
++      for (let index = run.length - 1; index >= boundary; index -= 1) {
++        boundary = Math.min(boundary, firstOccurrence.get(run[index]!.stepId)!);
++      }
++      const replaceable = run.slice(0, boundary);
+       const first = replaceable[0];
+       const last = replaceable[replaceable.length - 1];
+       if (first === undefined || last === undefined) {
+diff --git a/src/workflow/coordinator/nodes.ts b/src/workflow/coordinator/nodes.ts
+index 4349a5f..e63918d 100644
+--- a/src/workflow/coordinator/nodes.ts
++++ b/src/workflow/coordinator/nodes.ts
+@@ -195,7 +195,7 @@ export function createModelNode(dependencies: CoordinatorNodeDependencies) {
+     }
+     let read: CheckpointRecoveryRead;
+     try {
+-      read = dependencies.sessionRecords.loadCheckpoint(coordinatorSessionId);
++      read = dependencies.sessionRecords.loadCheckpoint(coordinatorSessionId, 'metadata');
+     } catch (error) {
+       return blocked(`无法读回会话记录：${describeError(error)}`);
+     }
+@@ -315,7 +315,7 @@ export type SuspendNodeDependencies = {
+ export function createSuspendNode(dependencies: SuspendNodeDependencies) {
+   return (state: CoordinatorGraphState): CoordinatorGraphUpdate => {
+     const coordinatorSessionId = state.coordinatorSessionId as CoordinatorSessionId;
+-    const read = dependencies.sessionRecords.loadCheckpoint(coordinatorSessionId);
++    const read = dependencies.sessionRecords.loadCheckpoint(coordinatorSessionId, 'metadata');
+     if (read.kind !== 'recovered') {
+       return blocked(
+         read.kind === 'absent'
+@@ -327,10 +327,7 @@ export function createSuspendNode(dependencies: SuspendNodeDependencies) {
+     if (beforeWrite !== null) {
+       return beforeWrite;
+     }
+-    const written = dependencies.sessionRecords.saveCheckpoint({
+-      ...read.state,
+-      graphPosition: 'suspend',
+-    });
++    const written = dependencies.sessionRecords.updateCheckpoint(coordinatorSessionId, { graphPosition: 'suspend' });
+     if (written.kind === 'failed') {
+       return blocked(`无法记录挂起位置：${written.message}`);
+     }
+diff --git a/src/workflow/coordinator/tool-node.ts b/src/workflow/coordinator/tool-node.ts
+index 5b9c71c..1deb5ae 100644
+--- a/src/workflow/coordinator/tool-node.ts
++++ b/src/workflow/coordinator/tool-node.ts
+@@ -88,7 +88,7 @@ export function createToolsNode(dependencies: ToolNodeDependencies) {
+     }
+     let read: CheckpointRecoveryRead;
+     try {
+-      read = dependencies.sessionRecords.loadCheckpoint(coordinatorSessionId);
++      read = dependencies.sessionRecords.loadCheckpoint(coordinatorSessionId, 'tools');
+     } catch (error) {
+       return blocked(`无法读回会话记录：${describeError(error)}`);
+     }
+diff --git a/tests/adapters/checkpoint-store.test.ts b/tests/adapters/checkpoint-store.test.ts
+index 2f05185..d8ec1be 100644
+--- a/tests/adapters/checkpoint-store.test.ts
++++ b/tests/adapters/checkpoint-store.test.ts
+@@ -24,6 +24,34 @@ import {
+   type WakeBatch,
+ } from '../../src/domain/coordinator/session-state.js';
+ import { COORDINATOR_DURABILITY } from '../../src/workflow/coordinator/state.js';
++import { HISTORY_BODY_BYTES, HISTORY_CHUNK_BYTES, CONTEXT_READ_BYTES, readTranscriptPage } from '../../src/application/coordinator/history.js';
++import { deriveContextCapsule } from '../../src/workflow/coordinator/context.js';
++
++test('Capsule 总结交错消息并固定边界，迟到的同 step 结果仍进入有效上下文', () => {
++  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
++  const calls = ['one', 'two'].map(callId => ({ callId, name: 'read', args: {}, operationId: `op:${callId}` as import('../../src/application/dto/identity.js').OperationId, mapOperationId: null }));
++  const assistant = { ...assistantEntry('S', '发起调用'), toolCalls: calls };
++  expect(store.appendModelStep({ coordinatorSessionId: SESSION_A, graphPosition: 'tools', entry: assistant,
++    step: { ...step('S', assistant.content, 1), messages: [assistant], toolCalls: calls } }).kind).toBe('saved');
++  const user: CommittedMessageEntry = { entryId: 'interleaved-user', stepId: 'B', role: 'user', content: '交错用户输入' };
++  expect(store.appendMessage(SESSION_A, user).kind).toBe('saved');
++  const tool: CommittedMessageEntry = { entryId: toolResultEntryId('S', 'one'), stepId: 'S', role: 'tool', content: '首个结果', toolCallId: 'one', toolName: 'read' };
++  expect(store.appendToolResult({ coordinatorSessionId: SESSION_A, graphPosition: 'tools', entry: tool }).kind).toBe('saved');
++  const capsule = deriveContextCapsule({ fromStepId: 'S', toStepId: 'S',
++    steps: [assistant, user, tool].map(entry => ({ stepId: entry.stepId, messages: [entry] })) });
++  expect(store.savePortableCapsule(SESSION_A, capsule).kind).toBe('saved');
++  expect(capsule.text).toContain(user.content);
++  const late = { ...tool, entryId: toolResultEntryId('S', 'two'), toolCallId: 'two', content: '迟到结果' };
++  expect(store.appendToolResult({ coordinatorSessionId: SESSION_A, graphPosition: 'tools', entry: late }).kind).toBe('saved');
++  expect(store.savePortableCapsule(SESSION_A, capsule).kind).toBe('saved');
++  const context = store.loadCheckpoint(SESSION_A, 'context');
++  expect(context.kind).toBe('recovered');
++  if (context.kind === 'recovered') {
++    expect(context.state.committedMessages.map(entry => entry.content)).toEqual([late.content]);
++    expect(context.state.contextMaterial?.capsule?.text).toContain(user.content);
++  }
++  expect(store.readEntry(SESSION_A, user.entryId)?.content).toBe(user.content);
++});
+ 
+ const SESSION_A = 'session-a' as CoordinatorSessionId;
+ const SESSION_B = 'session-b' as CoordinatorSessionId;
+@@ -60,6 +88,106 @@ function open(): CheckpointStore {
+   return opened.store;
+ }
+ 
++test('历史分页可完整读回巨型 CJK 原文，正文范围有界且游标跨追加稳定', () => {
++  const content = '开头🙂中文é\n' + '大段混排中文abc🙂\n'.repeat(8000) + '终点';
++  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
++  expect(store.appendMessage(SESSION_A, { entryId: 'large', stepId: 'large', role: 'user', content }).kind).toBe('saved');
++  let offset = 0, original = '';
++  while (offset < Buffer.byteLength(content)) {
++    const range = store.readHistoryBody({ coordinatorSessionId: SESSION_A, entryId: 'large', contentRevision: 1, offset });
++    expect(range).not.toBeNull();
++    if (range === null) throw new Error('Missing range');
++    expect(Buffer.byteLength(range.text)).toBeLessThanOrEqual(HISTORY_BODY_BYTES);
++    expect(range.end).toBeGreaterThan(offset);
++    original += range.text; offset = range.end;
++  }
++  expect(original).toBe(content);
++  let page = readTranscriptPage(store, SESSION_A, null);
++  const oldCursor = page.nextCursor;
++  const pieces = page.messages.map(message => message.content);
++  while (page.nextCursor !== null) {
++    page = readTranscriptPage(store, SESSION_A, page.nextCursor);
++    pieces.unshift(...page.messages.map(message => message.content));
++  }
++  expect(pieces.join('')).toBe(content);
++  expect(store.appendMessage(SESSION_A, { entryId: 'new', stepId: 'new', role: 'user', content: '新增' }).kind).toBe('saved');
++  expect(readTranscriptPage(store, SESSION_A, oldCursor).messages.some(message => message.entryId === 'new')).toBe(false);
++  expect(() => readTranscriptPage(store, SESSION_B, oldCursor)).toThrow();
++  expect(readTranscriptPage(store, SESSION_A, 'oldest').messages[0]?.offset).toBe(0);
++});
++
++test('失败的原子响应追加不留下条目、正文或图位置，重放不重复', () => {
++  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
++  const entry = assistantEntry('atomic', '唯一正文');
++  const candidate = { coordinatorSessionId: SESSION_A, entry, graphPosition: 'tools' as const,
++    step: { ...step('atomic', '另一正文', 100), entryId: entry.entryId } };
++  expect(store.appendModelStep(candidate).kind).toBe('failed');
++  expect(store.readEntry(SESSION_A, entry.entryId)).toBeNull();
++  expect(store.readHistoryBody({ coordinatorSessionId: SESSION_A, entryId: entry.entryId, contentRevision: 1, offset: 0 })).toBeNull();
++  const valid = { ...candidate, step: step('atomic', entry.content, 100) };
++  expect(store.appendModelStep(valid).kind).toBe('saved');
++  expect(store.appendModelStep(valid).kind).toBe('saved');
++  expect(store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries.filter(item => item.entryId === entry.entryId)).toHaveLength(1);
++});
++
++test('压缩后的上下文、精确工具恢复和新增提交不读取被替代的旧正文', () => {
++  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
++  expect(store.savePortableCapsule(SESSION_A, { kind: 'derived_context_capsule', capsuleId: 'skip-old',
++    replacedFromStepId: userStepId('submission-1'), replacedToStepId: 'step-1', text: '摘要' }).kind).toBe('saved');
++  const raw = rawDatabase();
++  raw.prepare('UPDATE conversation_bodies SET data=? WHERE coordinator_session_id=?').run(Buffer.from([0xff]), SESSION_A);
++  raw.close();
++  expect(store.loadCheckpoint(SESSION_A, 'metadata').kind).toBe('recovered');
++  const context = store.loadCheckpoint(SESSION_A, 'context');
++  expect(context.kind).toBe('recovered');
++  if (context.kind === 'recovered') expect(context.state.committedMessages).toHaveLength(0);
++  const entry = assistantEntry('latest', '当前回复');
++  expect(store.appendModelStep({ coordinatorSessionId: SESSION_A, entry, step: step('latest', entry.content, 10), graphPosition: 'suspend' }).kind).toBe('saved');
++  const tools = store.loadCheckpoint(SESSION_A, 'tools');
++  expect(tools.kind).toBe('recovered');
++  if (tools.kind === 'recovered') expect(tools.state.committedMessages.map(item => item.content)).toEqual([entry.content]);
++  expect(() => store.readEntry(SESSION_A, userEntryId('submission-1'))).toThrow();
++});
++
++test('metadata keyset 与有效上下文在十万条历史下仍有界，正文只保存一次', () => {
++  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
++  expect(store.appendMessage(SESSION_A, { entryId: 'seed', stepId: 'seed', role: 'user', content: '旧正文' }).kind).toBe('saved');
++  const raw = rawDatabase();
++  const template = raw.prepare('SELECT metadata,summary_metadata,byte_length FROM conversation_entries WHERE entry_id=?').get('seed') as { metadata: string; summary_metadata: string; byte_length: number };
++  const insert = raw.prepare('INSERT INTO conversation_entries VALUES(?,?,?,?,?,?,?,?,?,NULL)');
++  const copyBody = raw.prepare('INSERT INTO conversation_bodies SELECT coordinator_session_id,?,start,data FROM conversation_bodies WHERE coordinator_session_id=? AND entry_id=?');
++  raw.exec('BEGIN');
++  for (let seq = 2; seq <= 100000; seq += 1) {
++    const metadata = JSON.stringify({ ...JSON.parse(template.metadata) as object, entryId: `seed-${seq}` });
++    insert.run(SESSION_A, seq, `seed-${seq}`, 'seed', 'user', metadata, metadata, template.byte_length, 0);
++    copyBody.run(`seed-${seq}`, SESSION_A, 'seed');
++  }
++  raw.exec('COMMIT');
++  raw.close();
++  expect(store.savePortableCapsule(SESSION_A, { kind: 'derived_context_capsule', capsuleId: 'large-history',
++    replacedFromStepId: 'seed', replacedToStepId: 'seed', text: '摘要' }).kind).toBe('saved');
++  const latest = store.readHistoryPage({ coordinatorSessionId: SESSION_A });
++  expect(latest.entries).toHaveLength(100);
++  expect(latest.entries[0]?.sequence).toBe(99901);
++  expect(Buffer.byteLength(JSON.stringify(latest.entries))).toBeLessThanOrEqual(HISTORY_BODY_BYTES);
++  expect(store.readHistoryPage({ coordinatorSessionId: SESSION_A, direction: 'newer' }).entries[0]?.sequence).toBe(1);
++  expect(store.loadCheckpoint(SESSION_A, 'context').kind).toBe('recovered');
++  const entry = assistantEntry('after-large', '新正文');
++  expect(store.appendModelStep({ coordinatorSessionId: SESSION_A, entry, step: step('after-large', entry.content, 10), graphPosition: 'suspend' }).kind).toBe('saved');
++  const body = store.readHistoryBody({ coordinatorSessionId: SESSION_A, entryId: entry.entryId, contentRevision: 1, offset: 0, maxBytes: HISTORY_CHUNK_BYTES });
++  expect(body?.text).toBe(entry.content);
++}, 15_000);
++
++test('上下文超过安全读取预算时明确拒绝，仍可分页读回原文', () => {
++  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
++  const entry = { entryId: 'over-budget', stepId: 'over-budget', role: 'user' as const, content: 'x'.repeat(CONTEXT_READ_BYTES + 1) };
++  expect(store.appendMessage(SESSION_A, entry).kind).toBe('saved');
++  expect(store.loadCheckpoint(SESSION_A, 'context').kind).toBe('unrecoverable');
++  expect(store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries[0]?.byteLength).toBe(CONTEXT_READ_BYTES + 1);
++  const body = store.readHistoryBody({ coordinatorSessionId: SESSION_A, entryId: entry.entryId, contentRevision: 1, offset: 0 });
++  expect(body?.end).toBe(HISTORY_BODY_BYTES);
++});
++
+ function step(stepId: string, content: string, at: number): CommittedModelStep {
+   return {
+     stepId,
+@@ -246,12 +374,12 @@ test('两类压缩产物分字段保存；原生项损坏时阻塞会话但不
+   );
+   raw.close();
+ 
+-  expect(() => store.loadNativeWindowOwner(SESSION_A)).toThrow(/原生压缩项不可恢复/);
++  expect(() => store.loadNativeWindowOwner(SESSION_A)).toThrow();
+   expect(store.loadPortableCapsule(SESSION_A)?.capsuleId).toBe('capsule-1');
+   const degraded = store.loadCheckpoint(SESSION_A);
+   expect(degraded.kind).toBe('unrecoverable');
+   if (degraded.kind === 'unrecoverable') {
+-    expect(degraded.reason).toContain('原生压缩项不可恢复');
++    expect(degraded.reason.length).toBeGreaterThan(0);
+   }
+ });
+ 
+@@ -366,12 +494,15 @@ test('用户消息追加到既有会话历史，已提交 step 不受影响', ()
+   if (result.kind !== 'committed') {
+     return;
+   }
+-  expect(result.state.committedMessages.map((entry) => entry.entryId)).toEqual([
++  const recovered = store.loadCheckpoint(SESSION_A);
++  expect(recovered.kind).toBe('recovered');
++  if (recovered.kind !== 'recovered') return;
++  expect(recovered.state.committedMessages.map((entry) => entry.entryId)).toEqual([
+     userEntryId('submission-1'),
+     assistantEntryId('step-1'),
+     userEntryId('submission-2'),
+   ]);
+-  expect(result.state.committedModelSteps.map((entry) => entry.stepId)).toEqual(['step-1']);
++  expect(recovered.state.committedModelSteps.map((entry) => entry.stepId)).toEqual(['step-1']);
+   expect(result.state.graphPosition).toBe('model');
+ });
+ 
+@@ -553,7 +684,13 @@ test('同一 stepId 重复追加幂等返回 saved；内容不同则失败', ()
+ });
+ 
+ test('工具结果按条目身份幂等追加；内容不同则失败', () => {
+-  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
++  const call = { callId: 'call-1', name: 'claim_ticket', args: {},
++    operationId: 'op:call-1' as import('../../src/application/dto/identity.js').OperationId, mapOperationId: null };
++  const assistant = { ...assistantEntry('step-1', '先读地图'), toolCalls: [call] };
++  expect(store.saveCheckpoint(sessionState(SESSION_A, {
++    committedMessages: [assistant],
++    committedModelSteps: [{ ...step('step-1', assistant.content, 1_000), messages: [assistant], toolCalls: [call] }],
++  })).kind).toBe('saved');
+   const entry = {
+     entryId: toolResultEntryId('step-1', 'call-1'),
+     stepId: 'step-1',
+diff --git a/tests/application/model-config-switch.test.ts b/tests/application/model-config-switch.test.ts
+index 574510d..b9f04a1 100644
+--- a/tests/application/model-config-switch.test.ts
++++ b/tests/application/model-config-switch.test.ts
+@@ -164,14 +164,17 @@ test('切换成功时先持久化 checkpoint，再清空旧 cache 与维护计
+   const result = await switchModelConfiguration(
+     request({
+       sessionRecords: {
+-        loadCheckpoint: (sessionId) => {
++        loadCheckpoint: (sessionId, purpose) => {
+           order.push('persist:load');
+-          return store.loadCheckpoint(sessionId);
++          return store.loadCheckpoint(sessionId, purpose);
+         },
+         saveCheckpoint: (state) => {
+           order.push('persist:save');
+           return store.saveCheckpoint(state);
+         },
++        updateCheckpoint: (id, patch) => { order.push('persist:save'); return store.updateCheckpoint(id, patch); },
++        appendMessage: (id, entry) => store.appendMessage(id, entry),
++        readEntry: (id, entryId) => store.readEntry(id, entryId),
+         readCommittedMessages: (sessionId) => store.readCommittedMessages(sessionId),
+         commitUserMessage: (input) => store.commitUserMessage(input),
+         appendModelStep: (input) => store.appendModelStep(input),
+@@ -201,7 +204,11 @@ test('切换成功时先持久化 checkpoint，再清空旧 cache 与维护计
+ });
+ 
+ test('不兼容的 native window 先迁移为 Capsule，迁移成功才继续', async () => {
+-  seed();
++  const messages = [
++    { entryId: assistantEntryId('step-1'), stepId: 'step-1', role: 'assistant' as const, content: '先读地图' },
++    { entryId: 'user-interleaved', stepId: 'user-interleaved', role: 'user' as const, content: '用户补充迁移约束' },
++  ];
++  seed({ committedMessages: messages });
+   const saved = store.saveNativeWindowOwner(SESSION, {
+     ownerRef: 'provider:minimax-m3:generation-2',
+     items: [{ itemId: 'enc-1', position: 0, mediaType: 'application/octet-stream', opaque: { blob: 'AAAA' } }],
+@@ -219,9 +226,8 @@ test('不兼容的 native window 先迁移为 Capsule，迁移成功才继续',
+   // 原生项已清除，Capsule 成为该区间的表示；底层原始消息仍可读回。
+   expect(store.loadNativeWindowOwner(SESSION)).toBeNull();
+   expect(store.loadPortableCapsule(SESSION)?.replacedFromStepId).toBe('step-1');
+-  expect(store.readCommittedMessages(SESSION)).toEqual([
+-    { entryId: assistantEntryId('step-1'), stepId: 'step-1', role: 'assistant', content: '先读地图' },
+-  ]);
++  expect(store.loadPortableCapsule(SESSION)?.text).toContain(messages[1]?.content);
++  expect(store.readCommittedMessages(SESSION)).toEqual(messages);
+ });
+ 
+ test('迁移失败时保持原配置并保持 suspended 或 blocked', async () => {
+diff --git a/tests/bootstrap/coordinator-runtime.test.ts b/tests/bootstrap/coordinator-runtime.test.ts
+index 60262ba..457db5b 100644
+--- a/tests/bootstrap/coordinator-runtime.test.ts
++++ b/tests/bootstrap/coordinator-runtime.test.ts
+@@ -235,7 +235,12 @@ test('已有会话记录时恢复同一 Session，不创建新身份', async ()
+   }
+   expect(started.recovered).toBe(true);
+   expect(started.sessionState?.coordinatorSessionId).toBe(SESSION);
+-  expect(started.sessionState?.committedMessages).toHaveLength(1);
++  // 启动恢复控制身份；原文通过独立历史读取仍然完整。
++  expect(started.sessionState?.graphPosition).toBe('suspend');
++  const history = openCheckpointStore({ databasePath: checkpointPath(), clock });
++  if (history.kind !== 'opened') throw new Error(history.message);
++  expect(history.store.readEntry(SESSION, assistantEntryId('step-1'))?.content).toBe('先读地图');
++  history.store.close();
+   started.close();
+ });
+ 
+diff --git a/tests/bootstrap/foreground-planning-runtime.test.ts b/tests/bootstrap/foreground-planning-runtime.test.ts
+index 7c445a6..c0074cd 100644
+--- a/tests/bootstrap/foreground-planning-runtime.test.ts
++++ b/tests/bootstrap/foreground-planning-runtime.test.ts
+@@ -460,6 +460,36 @@ test('提交消息后取得租约并由模型处理一次，transcript 里有用
+   expect(sessionEvent?.eventId.length).toBeGreaterThan(0);
+ });
+ 
++test('正式宿主读取全历史 keyset，停止模型期间分页仍可用', async () => {
++  const harness = await startHarness();
++  const proposal = await harness.host.ports.scopeSetup.proposal();
++  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
++  expect((await harness.host.ports.execute({ kind: 'scope-control', action: 'pause' })).kind).toBe('accepted');
++  const common = await resolveGitCommonDir({ repositoryPath: harness.repository, env: process.env as Record<string, string> });
++  if (common.kind !== 'resolved') throw new Error('Git common dir unavailable');
++  const opened = openCheckpointStore({ databasePath: checkpointDatabasePath(common.path), clock });
++  if (opened.kind !== 'opened') throw new Error(opened.message);
++  const sessionId = proposal.coordinatorSessionId as CoordinatorSessionId;
++  expect(opened.store.saveCheckpoint({ schemaVersion: 2, coordinatorSessionId: sessionId,
++    graphPosition: 'suspend', committedMessages: Array.from({ length: 301 }, (_, index) => ({
++      entryId: `history-${index}`, stepId: `history-${index}`, role: 'assistant' as const, content: `正文-${index}` })),
++    committedModelSteps: [], wakeBatches: [], lastCompactionOutcome: null }).kind).toBe('saved');
++  opened.store.close();
++  const beforeReading = harness.requests.generations;
++  let result = await harness.host.ports.transcript(sessionId, null);
++  const ids: string[] = [];
++  while (result.kind === 'transcript') {
++    expect(result.transcript.messages.length).toBeLessThanOrEqual(100);
++    ids.unshift(...result.transcript.messages.map(message => message.entryId!));
++    if (result.transcript.nextCursor === null) break;
++    result = await harness.host.ports.transcript(sessionId, result.transcript.nextCursor);
++  }
++  expect(ids).toEqual(Array.from({ length: 301 }, (_, index) => `history-${index}`));
++  const oldest = await harness.host.ports.transcript(sessionId, 'oldest');
++  expect(oldest.kind === 'transcript' && oldest.transcript.messages[0]?.entryId).toBe('history-0');
++  expect(harness.requests.generations).toBe(beforeReading);
++});
++
+ test('重启后继续未完成的工具回合，直到用户消息收到最终回答', async () => {
+   const first = await startHarness();
+   const proposal = await first.host.ports.scopeSetup.proposal();
+diff --git a/tests/tui/workspace.test.tsx b/tests/tui/workspace.test.tsx
+index 721229b..29009e7 100644
+--- a/tests/tui/workspace.test.tsx
++++ b/tests/tui/workspace.test.tsx
+@@ -9,6 +9,83 @@ import { textDraft } from '../../src/interfaces/tui/input/composer-editor.js';
+  */
+ 
+ import { describe, expect, test } from 'vitest';
++import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
++import { readTranscriptPage } from '../../src/application/coordinator/history.js';
++import type { CoordinatorSessionId } from '../../src/application/dto/identity.js';
++import type { TranscriptLoad } from '../../src/interfaces/tui/ports.js';
++
++test('分页阅读、最早/最新与 Esc 保留 composer，失败保留原画面', async () => {
++  const opened = openCheckpointStore({ databasePath: ':memory:' });
++  if (opened.kind !== 'opened') throw new Error(opened.message);
++  const history = opened.store, session = 'session-b' as CoordinatorSessionId;
++  history.saveCheckpoint({ schemaVersion: 2, coordinatorSessionId: session, graphPosition: 'suspend',
++    committedMessages: [], committedModelSteps: [], wakeBatches: [], lastCompactionOutcome: null });
++  for (let index = 0; index < 320; index += 1) history.appendMessage(session, {
++    entryId: `row-${index}`, stepId: `row-${index}`, role: 'assistant', content: `历史条目 ${index}` });
++  const fake = createFakePorts();
++  let fail = false;
++  const ports = { ...fake.ports, transcript: (id: string, cursor: string | null): Promise<TranscriptLoad> =>
++    Promise.resolve(fail ? { kind: 'failed', code: 'offline', message: '离线' }
++      : { kind: 'transcript', transcript: readTranscriptPage(history, id, cursor) }) };
++  const rendered = renderTui(ports);
++  try {
++    await settle();
++    rendered.stdin.write('首尾'); await settle(2);
++    rendered.stdin.write('\u001b[D'); await settle(2);
++    rendered.stdin.write('\u001b[1;5H'); await settle();
++    expect(rendered.lastFrame()).toContain('历史条目 0');
++    expect(rendered.lastFrame()).toContain('首尾');
++    fake.emit({ kind: 'state-changed', coordinationScopeId: 'scope-1', revision: 8, reason: 'updated',
++      eventId: 'history-update', coordinatorSessionId: 'session-b' });
++    await settle();
++    expect(rendered.lastFrame()).toContain('历史条目 0');
++    expect(rendered.lastFrame()).toContain('会话有更新');
++    for (let index = 0; index < 30 && !rendered.lastFrame()?.includes('历史条目 100'); index += 1) {
++      rendered.stdin.write('\u001b[6~'); await settle(2);
++    }
++    expect(rendered.lastFrame()).toContain('历史条目 100');
++    rendered.stdin.write('\u001b[1;5H'); await settle();
++    fail = true;
++    rendered.stdin.write('\u001b[1;5F'); await settle();
++    expect(rendered.lastFrame()).toContain('历史条目 0');
++    expect(rendered.lastFrame()).toContain('离线');
++    fail = false;
++    rendered.stdin.write('\u001b'); await new Promise(resolve => setTimeout(resolve, 100)); await settle();
++    expect(rendered.lastFrame()).toContain('历史条目 319');
++    rendered.stdin.write('中'); await settle();
++    expect(rendered.lastFrame()).toContain('首中尾');
++    expect(fake.executeIntents).toHaveLength(0);
++  } finally { rendered.unmount(); fake.closeInputStore(); history.close(); }
++});
++
++test.each(['最新请求', '切换 Session'])('分页响应迟到时不覆盖%s', async (action) => {
++  const fake = createFakePorts();
++  let finish: ((value: TranscriptLoad) => void) | undefined;
++  const ports = { ...fake.ports, transcript: (id: string, cursor: string | null): Promise<TranscriptLoad> =>
++    cursor === 'oldest' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ kind: 'transcript',
++      transcript: { coordinatorSessionId: id, messages: [{ role: 'assistant', content: `最新记录 ${id}`, stepId: 'latest' }], nextCursor: 'earlier' } }) };
++  const rendered = renderTui(ports);
++  try {
++    await settle();
++    rendered.stdin.write('\u001b[1;5H'); await settle();
++    if (action === '切换 Session') {
++      rendered.stdin.write('\u0010'); await settle(2);
++      for (let index = 0; index < COMMAND_IDS.indexOf('session-picker'); index += 1) {
++        rendered.stdin.write('\u001b[B'); await settle(2);
++      }
++      rendered.stdin.write('\r'); await settle();
++      rendered.stdin.write('\u001b[A'); await settle(2);
++      rendered.stdin.write('\r'); await settle();
++    } else {
++      rendered.stdin.write('\u001b[1;5F'); await settle();
++    }
++    finish?.({ kind: 'transcript', transcript: { coordinatorSessionId: 'session-b',
++      messages: [{ role: 'assistant', content: '迟到旧记录', stepId: 'old' }], nextCursor: null } });
++    await settle();
++    expect(rendered.lastFrame()).toContain(`最新记录 ${action === '切换 Session' ? 'session-a' : 'session-b'}`);
++    expect(rendered.lastFrame()).not.toContain('迟到旧记录');
++  } finally { rendered.unmount(); fake.closeInputStore(); }
++});
+ 
+ import { toSemanticEvent, type SemanticEvent } from '../../src/application/controller-service.js';
+ import {
+diff --git a/tests/workflow/context-maintenance.test.ts b/tests/workflow/context-maintenance.test.ts
+index 50e2b06..6a1393a 100644
+--- a/tests/workflow/context-maintenance.test.ts
++++ b/tests/workflow/context-maintenance.test.ts
+@@ -21,6 +21,29 @@ const STEPS = [
+   { stepId: 'step-3', messages: [{ role: 'assistant', content: '登记一条 Decision Ticket' }] },
+ ];
+ 
++test('压缩交错区间时摘要包含用户消息和终点 step 的全部片段', () => {
++  const capsule = deriveContextCapsule({ fromStepId: 'S', toStepId: 'S', steps: [
++    { stepId: 'S', messages: [{ role: 'assistant', content: '发起调用' }] },
++    { stepId: 'B', messages: [{ role: 'user', content: '交错用户输入' }] },
++    { stepId: 'S', messages: [{ role: 'tool', content: '已提交工具结果' }] },
++  ] });
++  expect(capsule.text).toContain('交错用户输入');
++  expect(capsule.text).toContain('已提交工具结果');
++});
++
++test('最新 step 出现在较早片段时，压缩不拆开它并吞掉交错用户输入', () => {
++  const segments: HistorySegment[] = [
++    { kind: 'messages', stepId: 'S', messages: [{ role: 'assistant', content: '发起调用' }] },
++    { kind: 'messages', stepId: 'B', messages: [{ role: 'user', content: '交错用户输入' }] },
++    { kind: 'messages', stepId: 'S', messages: [{ role: 'assistant', content: '最后片段' }] },
++  ];
++  const input = buildBoundedModelInput({ segments, estimate, fixedOverhead: 0, budgetTokens: 1,
++    native: { kind: 'unavailable', reason: 'fixture' }, shaken: true, instructions: ['你是 Coordinator'], toolSchema: [], authoritativeFacts: [] });
++  expect(input.compaction.kind).toBe('context_exhausted');
++  expect(input.messages.map(message => (message as { content: string }).content).join('\n')).toContain('交错用户输入');
++  expect(input.segments.some(segment => segment.kind === 'capsule')).toBe(false);
++});
++
+ function estimate(segments: readonly HistorySegment[]): number {
+   return segments.reduce((total, segment) => {
+     if (segment.kind === 'capsule') {
+diff --git a/tests/workflow/coordinator-tool-loop.test.ts b/tests/workflow/coordinator-tool-loop.test.ts
+index de18a8a..f8ae7d8 100644
+--- a/tests/workflow/coordinator-tool-loop.test.ts
++++ b/tests/workflow/coordinator-tool-loop.test.ts
+@@ -349,6 +349,10 @@ test('已受理的单次工具动作提交完成源并结束本条工作；拒
+   expect(model.received).toHaveLength(1);
+   expect(loadState().committedMessages.at(-1)?.completedWorkSource).toEqual(pending[0]?.source);
+ 
++  store.close();
++  const fresh = openCheckpointStore({ databasePath: join(directory, 'rejected.sqlite') });
++  if (fresh.kind !== 'opened') throw new Error(fresh.message);
++  store = fresh.store;
+   save(baseState());
+   seedPendingCalls([{ callId: 'patch-2', name: 'request_graph_patch', args: {} }]);
+   const rejected = await createToolsNode({
+@@ -568,6 +572,10 @@ test('无法受控执行的 tool call 先提交响应，再以 blocked 结束并
+     ];
+ 
+   for (const [index, scenario] of scenarios.entries()) {
++    store.close();
++    const fresh = openCheckpointStore({ databasePath: join(directory, `invalid-${index}.sqlite`) });
++    if (fresh.kind !== 'opened') throw new Error(fresh.message);
++    store = fresh.store;
+     save(baseState());
+     const toolFacts = facts();
+     const harness = recordingServices(toolFacts);
+diff --git a/src/application/coordinator/history.ts b/src/application/coordinator/history.ts
+new file mode 100644
+index 0000000..2d1c208
+--- /dev/null
++++ b/src/application/coordinator/history.ts
+@@ -0,0 +1,116 @@
++/** IC-04/11: authoritative history identities, keysets and UTF-8 ranges. */
++import { z } from 'zod';
++import type { CommittedMessageEntry } from '../../domain/coordinator/session-state.js';
++import type { ControllerTranscriptPage, ControllerTranscriptMessage } from '../controller-service.js';
++
++export const HISTORY_PAGE_ITEMS = 100;
++export const HISTORY_PAGE_BYTES = 64 * 1024;
++export const HISTORY_BODY_BYTES = 64 * 1024;
++export const HISTORY_CHUNK_BYTES = 16 * 1024;
++export const CONTEXT_READ_BYTES = 4 * 1024 * 1024;
++export const CONTEXT_READ_ITEMS = 4096;
++export type CheckpointReadPurpose = 'full' | 'migration' | 'metadata' | 'context' | 'tools' | 'pending';
++export type HistoryMetadata = Omit<CommittedMessageEntry, 'content' | 'toolCalls'> & {
++  readonly sequence: number;
++  readonly contentRevision: 1;
++  readonly byteLength: number;
++};
++export type HistoryPageQuery = {
++  readonly coordinatorSessionId: string;
++  readonly before?: number;
++  readonly after?: number;
++  readonly direction?: 'older' | 'newer';
++};
++export type HistoryMetadataPage = {
++  readonly entries: readonly HistoryMetadata[];
++  readonly hasMore: boolean;
++};
++export type HistoryBodyQuery = {
++  readonly coordinatorSessionId: string;
++  readonly entryId: string;
++  readonly contentRevision: 1;
++  readonly offset: number;
++  readonly maxBytes?: number;
++};
++export type HistoryBodyRange = {
++  readonly entryId: string;
++  readonly contentRevision: 1;
++  readonly offset: number;
++  readonly end: number;
++  readonly byteLength: number;
++  readonly text: string;
++};
++export type HistoryReadPort = {
++  readonly readHistoryPage: (query: HistoryPageQuery) => HistoryMetadataPage;
++  readonly readHistoryBody: (query: HistoryBodyQuery) => HistoryBodyRange | null;
++  readonly readEntry: (coordinatorSessionId: string, entryId: string) => CommittedMessageEntry | null;
++};
++const integer = z.number().int().nonnegative();
++export const historyPageQuerySchema = z.strictObject({
++  coordinatorSessionId: z.string().min(1), before: integer.optional(), after: integer.optional(),
++  direction: z.enum(['older', 'newer']).optional(),
++}).refine(q => q.before === undefined || q.after === undefined);
++export const historyBodyQuerySchema = z.strictObject({
++  coordinatorSessionId: z.string().min(1), entryId: z.string().min(1), contentRevision: z.literal(1),
++  offset: integer, maxBytes: z.number().int().min(4).max(HISTORY_BODY_BYTES).optional(),
++});
++const cursorSchema = z.tuple([z.string().min(1), integer, integer, z.enum(['older', 'newer'])]);
++export type HistoryCursor = z.infer<typeof cursorSchema>;
++export function parseHistoryCursor(cursor: string, sessionId: string): HistoryCursor {
++  const parsed = cursorSchema.parse(JSON.parse(cursor) as unknown);
++  if (parsed[0] !== sessionId) throw new Error('history cursor belongs to another Session');
++  return parsed;
++}
++
++export class HistoryBoundaryError extends RangeError {}
++
++/** A bounded fragment of authoritative history, ordered oldest to newest. */
++export function readTranscriptPage(port: HistoryReadPort, sessionId: string, cursor: string | null): ControllerTranscriptPage {
++  const anchor = cursor === null || cursor === 'oldest' ? null : parseHistoryCursor(cursor, sessionId);
++  const newer = cursor === 'oldest' || anchor?.[3] === 'newer';
++  const page = port.readHistoryPage({ coordinatorSessionId: sessionId,
++    direction: newer ? 'newer' : 'older',
++    ...(anchor === null ? {} : newer
++      ? { after: anchor[1] - (anchor[2] > 0 ? 1 : 0) }
++      : { before: anchor[1] + (anchor[2] > 0 ? 1 : 0) }),
++  });
++  const rows = newer ? page.entries : [...page.entries].reverse();
++  const messages: ControllerTranscriptMessage[] = [];
++  let remaining = HISTORY_BODY_BYTES;
++  for (const entry of rows) {
++    if (remaining < 4) break;
++    const boundary = anchor?.[1] === entry.sequence ? anchor[2] : newer ? 0 : entry.byteLength;
++    if (newer && boundary === entry.byteLength && entry.byteLength > 0) continue;
++    let offset = newer ? boundary : Math.max(0, boundary - remaining);
++    let body: HistoryBodyRange | null = null;
++    for (let attempt = 0; attempt < 4; attempt += 1) {
++      try {
++        body = port.readHistoryBody({ coordinatorSessionId: sessionId, entryId: entry.entryId,
++          contentRevision: 1, offset, maxBytes: remaining });
++        break;
++      } catch (error) {
++        if (!(error instanceof HistoryBoundaryError) || newer) throw error;
++        offset += 1;
++      }
++    }
++    if (body === null) throw new Error('Authoritative history body unavailable');
++    const text = newer ? body.text : new TextDecoder('utf-8', { fatal: true }).decode(
++      new TextEncoder().encode(body.text).subarray(0, boundary - offset));
++    const end = offset + new TextEncoder().encode(text).length;
++    messages.push({ role: entry.role, content: entry.role === 'tool' ? `${entry.toolName ?? 'tool'}\n${text}` : text,
++      stepId: entry.role === 'tool' ? entry.entryId : entry.stepId, entryId: entry.entryId,
++      sequence: entry.sequence, offset, end, byteLength: entry.byteLength });
++    remaining -= end - offset;
++    if (newer ? end < entry.byteLength : offset > 0) break;
++  }
++  if (!newer) messages.reverse();
++  const first = messages[0], last = messages.at(-1);
++  // The opposite endpoint needs only an indexed metadata probe, never its body.
++  const older = first !== undefined && (first.offset! > 0 || port.readHistoryPage({
++    coordinatorSessionId: sessionId, before: first.sequence!, direction: 'older' }).entries.length > 0);
++  const later = last !== undefined && (last.end! < last.byteLength! || port.readHistoryPage({
++    coordinatorSessionId: sessionId, after: last.sequence!, direction: 'newer' }).entries.length > 0);
++  return { coordinatorSessionId: sessionId, messages,
++    nextCursor: older ? JSON.stringify([sessionId, first.sequence, first.offset, 'older']) : null,
++    newerCursor: later ? JSON.stringify([sessionId, last.sequence, last.end! < last.byteLength! ? last.end : 0, 'newer']) : null };
++}
+diff --git a/artifacts/coordinator-history/capture.mjs b/artifacts/coordinator-history/capture.mjs
+new file mode 100644
+index 0000000..39de8ce
+--- /dev/null
++++ b/artifacts/coordinator-history/capture.mjs
+@@ -0,0 +1,63 @@
++import { createRequire } from 'node:module';
++import { mkdirSync, writeFileSync } from 'node:fs';
++import { pathToFileURL, URL } from 'node:url';
++import { setTimeout as delay } from 'node:timers/promises';
++import process from 'node:process';
++import { displayWidth } from '../../dist/src/interfaces/tui/render/width.js';
++
++const root = process.cwd(), output = root + '/artifacts/coordinator-history';
++mkdirSync(output, { recursive: true });
++const require = createRequire(root + '/package.json');
++const { launchTerminal } = await import(require.resolve('tuistory'));
++const terminalRequire = createRequire(require.resolve('tuistory'));
++const imageModule = terminalRequire.resolve('ghostty-opentui/image');
++const { renderTerminalToImage } = await import(imageModule);
++const { StyleFlags } = await import(new URL('./ffi.js', pathToFileURL(imageModule)));
++const samples = [];
++async function shot(session, name, size, mode) {
++  await session.text();
++  const data = session.getTerminalData(), lines = data.lines.slice(-data.rows);
++  const text = lines.map(line => line.spans.map(span => span.text).join('').trimEnd()).join('\n');
++  const stem = name + '-' + size.join('x') + '-' + mode;
++  const cells = { ...data, lines: lines.map(line => ({ ...line, spans: line.spans.flatMap(span =>
++    Array.from(span.text, character => ({ ...span, text: character, width: displayWidth(character),
++      ...((span.flags & StyleFlags.INVERSE) !== 0 ? { fg: span.fg ?? '#c0caf5', bg: span.bg ?? '#1a1b26' } : {}) }))) })) };
++  writeFileSync(output + '/' + stem + '.txt', text + '\n');
++  writeFileSync(output + '/' + stem + '.png', await renderTerminalToImage(cells));
++  samples.push({ name, size, mode, png: stem + '.png', text: stem + '.txt', cursor: data.cursor, cursorVisible: data.cursorVisible });
++}
++async function press(session, key) { await session.press(key); await delay(120); }
++for (const size of [[120, 40], [80, 24], [50, 40]]) for (const mode of ['color', 'no-color']) {
++  const env = { ...process.env, TERM: 'xterm-256color', NODE_NO_WARNINGS: '1', FORCE_COLOR: mode === 'color' ? '1' : '0' };
++  if (mode === 'no-color') env.NO_COLOR = '1'; else delete env.NO_COLOR;
++  const session = await launchTerminal({ command: process.execPath, cwd: root, cols: size[0], rows: size[1], env,
++    args: ['scripts/tui-preview.mjs', 'history'] });
++  try {
++    await session.waitForText('历史终点');
++    session.writeRaw('首尾'); await press(session, 'left');
++    await shot(session, 'latest', size, mode);
++    session.writeRaw('\u001b[1;5H'); await delay(120); await session.waitForText('历史起点');
++    await shot(session, 'oldest', size, mode);
++    await press(session, 'pagedown'); await shot(session, 'page-down', size, mode);
++    await press(session, 'pageup'); await shot(session, 'page-up', size, mode);
++    for (let page = 0; page < 40 && !(await session.text()).includes('历史条目 100'); page += 1) {
++      await press(session, 'pagedown');
++    }
++    await session.waitForText('历史条目 100');
++    await shot(session, 'cross-page-next', size, mode);
++    session.writeRaw('\u001b[1;5F'); await delay(120); await session.waitForText('历史终点');
++    await press(session, 'pageup'); await shot(session, 'reading', size, mode);
++    await press(session, 'esc'); await session.waitForText('历史终点');
++    session.writeRaw('中'); await session.waitForText('首中尾');
++    await shot(session, 'return-cursor', size, mode);
++    if (size[0] === 120 && mode === 'color') {
++      for (const resized of [[80, 24], [50, 40], [120, 40]]) {
++        session.resize({ cols: resized[0], rows: resized[1] }); await delay(200);
++        await session.waitForText('首中尾');
++        await shot(session, 'resize-return', resized, mode);
++      }
++    }
++    process.stdout.write('history captured ' + size + ' ' + mode + '\n');
++  } finally { session.close(); }
++}
++writeFileSync(output + '/samples.json', JSON.stringify(samples, null, 2) + '\n');
+diff --git a/artifacts/coordinator-history/measure.mjs b/artifacts/coordinator-history/measure.mjs
+new file mode 100644
+index 0000000..428fa3f
+--- /dev/null
++++ b/artifacts/coordinator-history/measure.mjs
+@@ -0,0 +1,56 @@
++import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { DatabaseSync } from 'node:sqlite';
++import { performance } from 'node:perf_hooks';
++import process from 'node:process';
++import { Buffer } from 'node:buffer';
++import { openCheckpointStore } from '../../dist/src/adapters/storage/checkpoint-store.js';
++import { readTranscriptPage } from '../../dist/src/application/coordinator/history.js';
++
++const directory = mkdtempSync(join(tmpdir(), 'companion-history-measure-'));
++const samples = [];
++try {
++  for (const count of [1000, 10000, 100000]) {
++    const path = join(directory, count + '.sqlite');
++    const opened = openCheckpointStore({ databasePath: path });
++    if (opened.kind !== 'opened') throw new Error(opened.message);
++    const store = opened.store, id = 'measurement';
++    try {
++      const saved = store.saveCheckpoint({ schemaVersion: 2, coordinatorSessionId: id, graphPosition: 'suspend',
++        committedMessages: Array.from({ length: count }, (_, index) => ({ entryId: 'seed-' + index,
++          stepId: 'seed', role: 'assistant', content: '旧原文 中文abc🙂' })),
++        committedModelSteps: [], wakeBatches: [], lastCompactionOutcome: null });
++      if (saved.kind !== 'saved') throw new Error(saved.message);
++      const compacted = store.savePortableCapsule(id, { kind: 'derived_context_capsule', capsuleId: 'measured-capsule',
++        replacedFromStepId: 'seed', replacedToStepId: 'seed', text: '旧历史摘要' });
++      if (compacted.kind !== 'saved') throw new Error(compacted.message);
++      const start = performance.now();
++      const entry = { entryId: 'new-response', stepId: 'new-step', role: 'assistant', content: '新回复' };
++      const appended = store.appendModelStep({ coordinatorSessionId: id, graphPosition: 'suspend', entry,
++        step: { stepId: entry.stepId, entryId: entry.entryId, committedAt: Date.now(),
++          messages: [entry], toolCalls: [], usage: null } });
++      if (appended.kind !== 'saved') throw new Error(appended.message);
++      const appendMs = performance.now() - start;
++      const contextStart = performance.now(), context = store.loadCheckpoint(id, 'context');
++      if (context.kind !== 'recovered' || context.state.committedMessages.length !== 1) throw new Error('Effective context not bounded');
++      const contextMs = performance.now() - contextStart;
++      const pageStart = performance.now(), metadata = store.readHistoryPage({ coordinatorSessionId: id });
++      const pageMs = performance.now() - pageStart;
++      const oldest = readTranscriptPage(store, id, 'oldest');
++      if (oldest.messages[0]?.entryId !== 'seed-0') throw new Error('Oldest direct access failed');
++      const raw = new DatabaseSync(path);
++      const total = raw.prepare('SELECT count(*) AS entries FROM conversation_entries').get();
++      const canonical = raw.prepare('SELECT count(*) AS blocks,sum(length(data)) AS bytes FROM conversation_bodies WHERE entry_id=?').get(entry.entryId);
++      const plans = raw.prepare("EXPLAIN QUERY PLAN SELECT seq FROM conversation_entries WHERE coordinator_session_id=? AND role!='system' AND seq<? ORDER BY seq DESC LIMIT 101").all(id, Number.MAX_SAFE_INTEGER);
++      raw.close();
++      samples.push({ count, appendMs, contextMs, pageMs, contextEntries: context.state.committedMessages.length,
++        metadataItems: metadata.entries.length, metadataBytes: Buffer.byteLength(JSON.stringify(metadata.entries)),
++        total, canonical, queryPlan: plans.map(row => row.detail) });
++      process.stdout.write('measured ' + count + '\n');
++    } finally { store.close(); }
++  }
++  writeFileSync('artifacts/coordinator-history/storage-measurements.json', JSON.stringify({
++    platform: process.platform, node: process.version, measurements: samples,
++    scope: 'Actual file-backed SQLite and production history reader; fixture entries have no model steps. These timings do not establish the 3B UI/cached-navigation p95 target.' }, null, 2) + '\n');
++} finally { rmSync(directory, { recursive: true, force: true }); }

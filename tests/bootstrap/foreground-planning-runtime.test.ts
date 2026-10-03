@@ -460,6 +460,36 @@ test('提交消息后取得租约并由模型处理一次，transcript 里有用
   expect(sessionEvent?.eventId.length).toBeGreaterThan(0);
 });
 
+test('正式宿主读取全历史 keyset，停止模型期间分页仍可用', async () => {
+  const harness = await startHarness();
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  expect((await harness.host.ports.execute({ kind: 'scope-control', action: 'pause' })).kind).toBe('accepted');
+  const common = await resolveGitCommonDir({ repositoryPath: harness.repository, env: process.env as Record<string, string> });
+  if (common.kind !== 'resolved') throw new Error('Git common dir unavailable');
+  const opened = openCheckpointStore({ databasePath: checkpointDatabasePath(common.path), clock });
+  if (opened.kind !== 'opened') throw new Error(opened.message);
+  const sessionId = proposal.coordinatorSessionId as CoordinatorSessionId;
+  expect(opened.store.saveCheckpoint({ schemaVersion: 2, coordinatorSessionId: sessionId,
+    graphPosition: 'suspend', committedMessages: Array.from({ length: 301 }, (_, index) => ({
+      entryId: `history-${index}`, stepId: `history-${index}`, role: 'assistant' as const, content: `正文-${index}` })),
+    committedModelSteps: [], wakeBatches: [], lastCompactionOutcome: null }).kind).toBe('saved');
+  opened.store.close();
+  const beforeReading = harness.requests.generations;
+  let result = await harness.host.ports.transcript(sessionId, null);
+  const ids: string[] = [];
+  while (result.kind === 'transcript') {
+    expect(result.transcript.messages.length).toBeLessThanOrEqual(100);
+    ids.unshift(...result.transcript.messages.map(message => message.entryId!));
+    if (result.transcript.nextCursor === null) break;
+    result = await harness.host.ports.transcript(sessionId, result.transcript.nextCursor);
+  }
+  expect(ids).toEqual(Array.from({ length: 301 }, (_, index) => `history-${index}`));
+  const oldest = await harness.host.ports.transcript(sessionId, 'oldest');
+  expect(oldest.kind === 'transcript' && oldest.transcript.messages[0]?.entryId).toBe('history-0');
+  expect(harness.requests.generations).toBe(beforeReading);
+});
+
 test('重启后继续未完成的工具回合，直到用户消息收到最终回答', async () => {
   const first = await startHarness();
   const proposal = await first.host.ports.scopeSetup.proposal();

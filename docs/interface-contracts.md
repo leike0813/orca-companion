@@ -213,7 +213,17 @@ type CoordinatorSessionState = {
 };
 ```
 
-`m1-wire-foreground-planning-runtime` 将 Session payload 升为 v2：每条已提交消息有稳定 `entryId`；tool result 还包含配对的 `toolCallId` 与名称，assistant call 的可信 `OperationId` 在模型响应提交时由宿主分配；`lastCompactionOutcome` 是该 Session 最近一次维护结果。v1 读取只做可证明唯一的升级，失败阻塞且保留原 checkpoint。普通用户消息以 `submissionId` 与 WakeBatch 原子落盘后补记 source admission；交互回答正文属于 IC-03。
+Session payload 为 v2：每条已提交消息有稳定 `entryId`；tool result 包含配对的 `toolCallId` 与名称，assistant call 的可信 `OperationId` 在模型响应提交时由宿主分配；`lastCompactionOutcome` 是该 Session 最近一次维护结果。普通用户消息以 `submissionId` 与 WakeBatch 原子落盘后补记 source admission；交互回答正文属于 IC-03。
+
+`paginate-coordinator-history` 扩展 IC-04，历史 DTO/限额的 canonical path 为 `src/application/coordinator/history.ts`。checkpoint 库 schema 为 2，旧整体 JSON 库明确拒绝打开并保留。`coordinator_sessions` 只保存控制字段；entry、16KiB UTF-8 正文块、model step metadata 与 Wake 关联追加。正文只由 entry 的块记录拥有；step 引用该 entry，不再保存另一份正文。独立的小型 summary metadata 用于有界列表，工具参数仍由原 entry 拥有。
+
+生产读取必须显式选择 `metadata`（控制）、`context`（有效输入）、`tools`（最新 step 及配对结果）、`pending`（最多 32 条未处理输入）或 `migration`（原生窗口转 Capsule 所需的有界原文）。后四种读取受 4096 条/4MiB 预算约束，超限返回 `unrecoverable/context_exhausted`；压缩区间由索引排除后才读取正文。原生窗口保存覆盖序号，之后的新消息仍进入有效上下文。`full` 与无范围 `readCommittedMessages` 只用于测试/诊断，生产不调用。
+
+`appendMessage` 保存稳定回答引用，`updateCheckpoint` 只更新控制字段，均使用短事务；提交核验通过 `readEntry` 精确读取提交身份。`commitUserMessage`/`commitWakeBatch` 的 `state` 是控制字段和本次提交的条目或 batch，不是全历史快照。entry 的 `handled_by` 是已提交消费事实的索引，Application 仍拥有 Actionable Work 投影和调度。
+
+`HistoryReadPort.readHistoryPage` 使用 Session/sequence keyset，至多 100 条且 metadata 合计 64KiB；先读取长度与身份，再按剩余预算物化 metadata。`readHistoryBody` 绑定 Session、entry、revision=1 与 UTF-8 byte offset，每次至多 64KiB 正文，拒绝越界与非字符边界。两者独立读取，不加载整个 Session 后切片。
+
+Capsule 的替换区间在保存时绑定固定序号边界；摘要包含实际被替换的全部条目，包括交错的用户输入和工具结果。压缩前缀保留完整最新 step，同载荷重放保持原边界，后续追加不会扩大已替换区间。
 
 `CoordinatorSessionRecordPort.appendModelStep` 与 `appendToolResult` 在既有 storage 事务中读取最新 core、核验稳定条目身份并追加。相同身份与内容的重放返回 `saved`，身份相同但内容冲突返回 `failed`；等待期间受理的用户消息与 Wake Batch 保留。Workflow 使用这两个方法提交响应和工具结果，路由与消费字段维持原语义。
 
@@ -529,6 +539,8 @@ Replanning 停止新派发并结清在途/Delivery/Interaction/Intent，建立�
 
 ## IC-11 ControllerService、Snapshot、SemanticEvent 与用户 intent
 
+`paginate-coordinator-history` 扩展 transcript reader：`null` 读取最新片段，`oldest` 通过首序号直达最早；其余游标为经 schema 核验的 `[SessionId, sequence, byteOffset, direction]`，跨 Session 拒绝。`ControllerTranscriptPage.nextCursor` 指向更早原文，`newerCursor` 指向更晚原文；message 携带稳定 `entryId`、sequence、offset/end 与总 byteLength。每页至多 100 条、64KiB 原文，巨型单条可跨页完整读取。正文权威和范围限额由 IC-04 拥有，Controller 与 TUI 不复制历史。
+
 - **Owner (Create)**: `m1-recover-execution`
 - **Canonical path**: `src/application/controller-service.ts`
 - **Extenders (Extend)**: `m1-evolve-execution-graph` 增加图 patch/replanning projection 与 command variants；`m1-wire-foreground-planning-runtime` 增加提交身份、回答正文与事件归属；`m2-deliver-planning-tui` 增加候选图拓扑、压缩状态与规划交接提案投影；`m2-deliver-execution-tui` 增加执行投影、Finalizer 与执行交接投影；`m2-wire-execution-runtime` 增加有界的 Execution Authorization 命令（propose-graph / review / approve），不新增快照字段
@@ -709,6 +721,8 @@ Service 只委派既有用例，不打开 store、不调用具体 adapter、不�
 - **测试 seam**：注入 fake use cases，断言每个 variant 委派一次；snapshot/event contract tests 只断言字段与语义，不锁定内部调用顺序。
 
 ## IC-12 Presentation projection、CLI 输出与进程生命周期
+
+正式 continuous transcript 保留当前有界页。PgUp/PgDn 先在当前页阅读，到边界再使用权威游标；Ctrl+Home/End 分别直达最早/最新，Esc 在关闭更高层界面后返回最新。离开底部时新事件保留当前页与输入；失败保留原页并展示原因，切 Session 或更晚请求使迟到响应失效。entry ID 用于工具展开身份。视口高度改变仅调整本地滚动位置，不查询或持久写入。此处是 3A 基本阅读合同，Markdown、局部解析、缓存和流式性能由 3B 实现。
 
 - **Owner (Create)**: `m0-orca-control-baseline`
 - **Canonical paths**: `src/application/tui/view-model.ts`、`src/interfaces/cli/`、`src/interfaces/tui/`

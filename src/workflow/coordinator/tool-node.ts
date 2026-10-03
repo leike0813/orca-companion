@@ -88,7 +88,7 @@ export function createToolsNode(dependencies: ToolNodeDependencies) {
     }
     let read: CheckpointRecoveryRead;
     try {
-      read = dependencies.sessionRecords.loadCheckpoint(coordinatorSessionId);
+      read = dependencies.sessionRecords.loadCheckpoint(coordinatorSessionId, 'tools');
     } catch (error) {
       return blocked(`无法读回会话记录：${describeError(error)}`);
     }

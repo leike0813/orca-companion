@@ -28,7 +28,17 @@ export function toolToggleLabel(entry: { readonly id: string; readonly name: str
   return `${marker} tool ${entry.name}`;
 }
 
+export function transcriptLineCount(transcript: TranscriptView, expanded: readonly string[], width: number): number {
+  return transcript.entries.reduce((lines, entry, index) => lines + (index > 0 && entry.kind !== 'tool' ? 1 : 0) +
+    (entry.kind === 'tool' ? 1 + (expanded.includes(entry.id) ? wrapByDisplayWidth(entry.detail, Math.max(1, width - 4)).length : 0)
+      : wrapByDisplayWidth(entry.text, Math.max(1, width - (entry.kind === 'user' ? 4 : 2))).length), 0);
+}
+
 export function Transcript(props: TranscriptProps) {
+  if (props.transcript.entries.length === 0) return <Text dimColor>{
+    props.transcript.historyStatus === 'loading' ? '正在读取对话…'
+      : props.transcript.historyStatus === 'unavailable' ? '对话尚未载入' : '尚无对话记录'
+  }</Text>;
   const width = Math.max(1, props.availableWidth);
   const lines = props.transcript.entries.flatMap((entry, entryIndex) => {
     const gap = entryIndex === 0 ? [] : [{ key: `${entry.id}-gap`, content: <Text> </Text> }];
@@ -54,7 +64,8 @@ export function Transcript(props: TranscriptProps) {
       }
     }
   });
-  const visible = props.maxLines === undefined ? lines : lines.slice(-Math.max(1, props.maxLines));
+  const end = Math.max(0, lines.length - Math.max(0, props.transcript.scrollOffset));
+  const visible = props.maxLines === undefined ? lines : lines.slice(Math.max(0, end - Math.max(1, props.maxLines)), end);
   return (
     <Box flexDirection="column">
       {visible.map((line) => <Box key={line.key}>{line.content}</Box>)}

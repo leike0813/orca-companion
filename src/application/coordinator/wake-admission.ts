@@ -35,6 +35,7 @@ export type WakeCheckpointPort = {
 };
 
 export type WakeCheckpointCommit =
+  // state 是本次 batch 与控制字段；完整原文通过 IC-04 独立读取。
   | { readonly kind: 'committed'; readonly state: CoordinatorSessionState }
   | { readonly kind: 'already-committed'; readonly state: CoordinatorSessionState }
   | { readonly kind: 'unrecoverable'; readonly reason: string };

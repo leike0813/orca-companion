@@ -144,8 +144,6 @@ import { createControllerService,
   type ControllerNotificationMessage,
   type ControllerService,
   type ControllerSnapshot,
-  type ControllerTranscriptMessage,
-  type ControllerTranscriptPage,
   type SemanticEvent,
   type Unsubscribe,
 } from '../application/controller-service.js';
@@ -374,7 +372,7 @@ export const FOREGROUND_COORDINATOR_INSTRUCTIONS: readonly string[] = [
   '写入地图、认领或解决票据都只通过受控工具调用，且同一 revision 下不要并发写入。',
 ];
 
-const TRANSCRIPT_WINDOW = 200;
+import { readTranscriptPage, type CheckpointReadPurpose } from '../application/coordinator/history.js';
 
 const PLANNING_MUTATION_CATEGORIES: ReadonlySet<string> = new Set([
   'route-map-section-update',
@@ -896,7 +894,7 @@ export async function createForegroundPlanningHost(
     if (existing !== null) {
       return { kind: 'ok', capsuleId: existing.capsuleId };
     }
-    const read = checkpoints.loadCheckpoint(coordinatorSessionId);
+    const read = checkpoints.loadCheckpoint(coordinatorSessionId, 'migration');
     if (read.kind !== 'recovered') {
       return {
         kind: 'failed',
@@ -906,8 +904,8 @@ export async function createForegroundPlanningHost(
             : `源 Session 的会话记录不可恢复：${read.reason}`,
       };
     }
-    const first = read.state.committedModelSteps[0];
-    const last = read.state.committedModelSteps[read.state.committedModelSteps.length - 1];
+    const first = read.state.committedMessages[0];
+    const last = read.state.committedMessages.at(-1);
     if (first === undefined || last === undefined) {
       return { kind: 'failed', reason: '源 Session 还没有可派生的已提交历史' };
     }
@@ -915,9 +913,9 @@ export async function createForegroundPlanningHost(
       const capsule = deriveContextCapsule({
         fromStepId: first.stepId,
         toStepId: last.stepId,
-        steps: read.state.committedModelSteps.map((step) => ({
-          stepId: step.stepId,
-          messages: step.messages,
+        steps: read.state.committedMessages.map((entry) => ({
+          stepId: entry.stepId,
+          messages: [entry],
         })),
       });
       const saved = checkpoints.savePortableCapsule(coordinatorSessionId, capsule);
@@ -1509,9 +1507,6 @@ export async function createForegroundPlanningHost(
   const segmentsFromState = (state: CoordinatorSessionState): readonly HistorySegment[] => {
     const capsule = state.contextMaterial?.capsule ?? null;
     const native = state.contextMaterial?.nativeWindowOwner ?? null;
-    if (native !== null) {
-      return [{ kind: 'native-window', ownerRef: native.ownerRef, items: native.items }];
-    }
     const covered = new Set<string>();
     if (capsule !== null) {
       const from = state.committedMessages.findIndex((entry) => entry.stepId === capsule.replacedFromStepId);
@@ -1523,7 +1518,8 @@ export async function createForegroundPlanningHost(
       }
     }
     const grouped: HistorySegment[] = [];
-    if (capsule !== null) {
+    if (native !== null) grouped.push({ kind: 'native-window', ownerRef: native.ownerRef, items: native.items });
+    if (capsule !== null && native === null) {
       grouped.push({
         kind: 'capsule',
         capsuleId: capsule.capsuleId,
@@ -1580,24 +1576,30 @@ export async function createForegroundPlanningHost(
     const capsuleSegment = input.segments.find((segment) => segment.kind === 'capsule');
     const nativeSegment = input.segments.find((segment) => segment.kind === 'native-window');
     const next: CoordinatorSessionState = { ...state, lastCompactionOutcome: input.compaction };
-    const saved = checkpoints.saveCheckpoint(next);
+    const saved = checkpoints.updateCheckpoint(coordinatorSessionId, { lastCompactionOutcome: input.compaction });
     if (saved.kind === 'failed') {
       throw new Error(`无法持久化压缩结论：${saved.message}`);
     }
     if (capsuleSegment !== undefined && capsuleSegment.kind === 'capsule') {
-      checkpoints.savePortableCapsule(coordinatorSessionId, {
+      const capsuleSaved = checkpoints.savePortableCapsule(coordinatorSessionId, {
         kind: 'derived_context_capsule',
         capsuleId: capsuleSegment.capsuleId,
         replacedFromStepId: capsuleSegment.replacedFromStepId,
         replacedToStepId: capsuleSegment.replacedToStepId,
         text: capsuleSegment.text,
       });
+      if (capsuleSaved.kind === 'failed') {
+        throw new Error(`无法持久化压缩 Capsule：${capsuleSaved.message}`);
+      }
     }
     if (nativeSegment !== undefined && nativeSegment.kind === 'native-window') {
-      checkpoints.saveNativeWindowOwner(coordinatorSessionId, {
+      const nativeSaved = checkpoints.saveNativeWindowOwner(coordinatorSessionId, {
         ownerRef: nativeSegment.ownerRef,
         items: [...nativeSegment.items],
       });
+      if (nativeSaved.kind === 'failed') {
+        throw new Error(`无法持久化原生上下文：${nativeSaved.message}`);
+      }
     }
     return next;
   };
@@ -1629,7 +1631,7 @@ export async function createForegroundPlanningHost(
     currentWork: ProjectedActionableWorkItem | null,
   ): Promise<{ readonly messages: readonly unknown[]; readonly note: string }> => {
     const checkpoints = session.checkpoints;
-    const read = checkpoints.loadCheckpoint(session.coordinatorSessionId);
+    const read = checkpoints.loadCheckpoint(session.coordinatorSessionId, 'context');
     if (read.kind !== 'recovered') {
       throw new Error(
         read.kind === 'absent' ? '该 Session 还没有可恢复的会话记录' : `会话记录不可恢复：${read.reason}`,
@@ -1776,7 +1778,7 @@ export async function createForegroundPlanningHost(
     const checkpoints = checkpointStoreForScope();
     const current = requireStore();
     if (checkpoints === null || current === null || selectedScopeId === null ||
-        checkpoints.loadCheckpoint(coordinatorSessionId).kind !== 'absent') {
+        checkpoints.loadCheckpoint(coordinatorSessionId, 'metadata').kind !== 'absent') {
       return;
     }
     const responsibility = current.query({ kind: 'planning-responsibility', coordinationScopeId: selectedScopeId });
@@ -1938,8 +1940,11 @@ export async function createForegroundPlanningHost(
     return { kind: 'live', session: withGraph };
   };
 
-  const liveStateOf = (session: LiveSession): CoordinatorSessionState | null => {
-    const read = session.checkpoints.loadCheckpoint(session.coordinatorSessionId);
+  const liveStateOf = (session: LiveSession, purpose: CheckpointReadPurpose = 'metadata'): CoordinatorSessionState | null => {
+    const read = session.checkpoints.loadCheckpoint(session.coordinatorSessionId, purpose);
+    if (read.kind === 'unrecoverable' && purpose !== 'metadata') {
+      throw new Error(`会话记录无法安全读取：${read.reason}`);
+    }
     return read.kind === 'recovered' ? read.state : null;
   };
 
@@ -1974,26 +1979,18 @@ export async function createForegroundPlanningHost(
   /** Branch 回答是权威；checkpoint 只记录稳定引用，使崩溃后仍可识别未处理工作。 */
   const syncAnsweredInteractions = (session: LiveSession): void => {
     const answers = answeredInteractionsFor(session);
-    const state = liveStateOf(session);
-    if (state === null) throw new Error('无法读回 Session checkpoint');
-    const existing = new Set(state.committedMessages.map((entry) => entry.entryId));
-    const missing = answers.filter((answer) => !existing.has(answerEntryId(answer.interactionId)));
+    const missing = answers.filter((answer) =>
+      session.checkpoints.readEntry(session.coordinatorSessionId, answerEntryId(answer.interactionId)) === null);
     if (missing.length === 0) return;
     const fencing = assertFencingGeneration(requiredStore(), session.incarnation, { clock });
     if (fencing.kind === 'fenced') throw new Error(`写入回答引用前失去 Runtime Lease：${fencing.code}`);
-    const written = session.checkpoints.saveCheckpoint({
-      ...state,
-      committedMessages: [
-        ...state.committedMessages,
-        ...missing.sort((left, right) => (left.resolvedAt ?? 0) - (right.resolvedAt ?? 0)).map((answer) => ({
-          entryId: answerEntryId(answer.interactionId),
-          stepId: `interaction-answer:${answer.interactionId}`,
-          role: 'system' as const,
-          content: `Pending Interaction ${answer.interactionId} 的回答引用`,
-        })),
-      ],
-    });
-    if (written.kind === 'failed') throw new Error(`无法保存回答引用：${written.message}`);
+    for (const answer of missing.sort((left, right) => (left.resolvedAt ?? 0) - (right.resolvedAt ?? 0))) {
+      const written = session.checkpoints.appendMessage(session.coordinatorSessionId, {
+        entryId: answerEntryId(answer.interactionId), stepId: `interaction-answer:${answer.interactionId}`,
+        role: 'system', content: `Pending Interaction ${answer.interactionId} 的回答引用`,
+      });
+      if (written.kind === 'failed') throw new Error(`无法保存回答引用：${written.message}`);
+    }
   };
 
   // ---------------------------------------------------------------------
@@ -2006,7 +2003,7 @@ export async function createForegroundPlanningHost(
    * 用户消息与 Branch 中已回答交互的稳定引用按历史顺序排队；最终 assistant 响应消费队首。
    */
   const pendingWorkFor = (session: LiveSession): readonly ProjectedActionableWorkItem[] => {
-    const state = liveStateOf(session);
+    const state = liveStateOf(session, 'pending');
     if (state === null) {
       return [];
     }
@@ -2042,7 +2039,7 @@ export async function createForegroundPlanningHost(
       let work = pendingWorkFor(session);
       while (work.length > 0 && !session.fencingLost && session.graph !== null) {
         const scope = selectedScopeId === null ? null : scopeRecord(selectedScopeId);
-        const state = liveStateOf(session);
+        const state = liveStateOf(session, 'tools');
         if (scope === null || state === null) {
           return;
         }
@@ -2386,7 +2383,7 @@ export async function createForegroundPlanningHost(
     const selectedState =
       selectedSessionId === null
         ? null
-        : (checkpointStoreForScope()?.loadCheckpoint(selectedSessionId as CoordinatorSessionId) ?? null);
+        : (checkpointStoreForScope()?.loadCheckpoint(selectedSessionId as CoordinatorSessionId, 'metadata') ?? null);
     const graphVersions = versions.kind === 'graph-versions' ? versions.versions : [];
     const currentVersion =
       graphId === null
@@ -2443,35 +2440,16 @@ export async function createForegroundPlanningHost(
     return { kind: 'snapshot', snapshot: projected };
   };
 
-  const readTranscript = (coordinatorSessionId: string): TranscriptLoad => {
+  const readTranscript = (coordinatorSessionId: string, cursor: string | null = null): TranscriptLoad => {
     const checkpoints = checkpointStoreForScope();
     if (checkpoints === null) {
       return { kind: 'failed', code: 'checkpoint_store_unavailable', message: 'checkpoint store 不可读' };
     }
-    const read = checkpoints.loadCheckpoint(coordinatorSessionId as CoordinatorSessionId);
-    if (read.kind !== 'recovered') {
-      return {
-        kind: 'failed',
-        code: read.kind,
-        message: `Session ${coordinatorSessionId} 没有可恢复的会话记录`,
-      };
+    try {
+      return { kind: 'transcript', transcript: readTranscriptPage(checkpoints, coordinatorSessionId, cursor) };
+    } catch (error) {
+      return { kind: 'failed', code: 'history_unreadable', message: error instanceof Error ? error.message : String(error) };
     }
-    const entries = read.state.committedMessages.filter((entry) => entry.role !== 'system').slice(-TRANSCRIPT_WINDOW);
-    const messages: ControllerTranscriptMessage[] = entries.map((entry) =>
-      entry.role === 'tool'
-        ? {
-            role: 'tool',
-            content: `${entry.toolName ?? 'tool'}\n${entry.content}`,
-            stepId: entry.entryId,
-          }
-        : { role: entry.role, content: entry.content, stepId: entry.stepId },
-    );
-    const page: ControllerTranscriptPage = {
-      coordinatorSessionId,
-      messages,
-      nextCursor: null,
-    };
-    return { kind: 'transcript', transcript: page };
   };
 
   // ---------------------------------------------------------------------
@@ -7081,7 +7059,7 @@ export async function createForegroundPlanningHost(
           ? (snapshot.snapshot.graphGenerations.find((entry) => entry.graphId === scope.graphId) ?? null)
           : null;
       const checkpoints = checkpointStoreForScope();
-      const sourceRead = checkpoints?.loadCheckpoint(handoff.sourceSessionId) ?? null;
+      const sourceRead = checkpoints?.loadCheckpoint(handoff.sourceSessionId, 'metadata') ?? null;
       const sourceCheckpoint: ExecutionHandoffReviewFacts['sourceCheckpoint'] =
         sourceRead === null
           ? 'unrecoverable'
@@ -7228,8 +7206,8 @@ export async function createForegroundPlanningHost(
       }
       return loaded.snapshot;
     },
-    transcript: ({ coordinatorSessionId }) => {
-      const loaded = readTranscript(coordinatorSessionId);
+    transcript: ({ coordinatorSessionId, cursor }) => {
+      const loaded = readTranscript(coordinatorSessionId, cursor ?? null);
       if (loaded.kind !== 'transcript') {
         throw new Error(loaded.message);
       }
@@ -7356,7 +7334,7 @@ export async function createForegroundPlanningHost(
     inputStore,
     submissionStatus,
     snapshot: async (selectedSessionId) => await readSnapshot(selectedSessionId),
-    transcript: (coordinatorSessionId) => Promise.resolve(readTranscript(coordinatorSessionId)),
+    transcript: (coordinatorSessionId, cursor) => Promise.resolve(readTranscript(coordinatorSessionId, cursor)),
     execute: async (intent) => await execute(intent),
     subscribe: (listener): Unsubscribe => {
       listeners.add(listener);

@@ -6,7 +6,7 @@ import { setTimeout, clearTimeout } from 'node:timers';
 import { createElement } from 'react';
 import { render } from 'ink';
 
-const scenarios = ['planning', 'execution', 'blocked', 'empty', 'long-cjk', 'answer', 'disabled', 'alignment', 'alignment-planning'];
+const scenarios = ['planning', 'execution', 'blocked', 'empty', 'long-cjk', 'answer', 'disabled', 'alignment', 'alignment-planning', 'history'];
 const alignmentPreview = ['alignment', 'alignment-planning'].includes(process.argv[2]);
 const prototype = process.argv[2] === '--prototype';
 const graphPrototype = process.argv[2] === '--graph-prototype';
@@ -308,6 +308,22 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
     const { openUiInputStore } = await import('../dist/src/adapters/storage/ui-input-store.js');
     const previewInputs = openUiInputStore({ databasePath: ':memory:' });
     if (previewInputs.kind !== 'opened') throw new Error(previewInputs.message);
+    const { openCheckpointStore } = await import('../dist/src/adapters/storage/checkpoint-store.js');
+    const { readTranscriptPage } = await import('../dist/src/application/coordinator/history.js');
+    const history = scenario === 'history' ? openCheckpointStore({ databasePath: ':memory:' }) : null;
+    if (history?.kind === 'failed') throw new Error(history.message);
+    if (history?.kind === 'opened') {
+      history.store.saveCheckpoint({ schemaVersion: 2, coordinatorSessionId: 'session-a', graphPosition: 'suspend',
+        committedMessages: [], committedModelSteps: [], wakeBatches: [], lastCompactionOutcome: null });
+      for (let index = 0; index < 320; index += 1) {
+        const content = index === 0 ? '历史起点 0 · 请从第一条开始阅读。'
+          : index === 319 ? '历史终点 319 · 全部原文可按页阅读。'
+          : index === 150 ? '巨型正文 中文abc🙂\n'.repeat(12000) : `历史条目 ${index} · 中文abc混排与分页。`;
+        const saved = history.store.appendMessage('session-a', { entryId: `history-${index}`, stepId: `history-${index}`,
+          role: index % 2 === 0 ? 'user' : 'assistant', content });
+        if (saved.kind === 'failed') throw new Error(saved.message);
+      }
+    }
     const ports = {
       questions: async (input) => input.kind === 'pending-interactions'
         ? { kind: 'pending-interactions', interactions: snapshot.interactions.filter((item) => item.ownerCoordinatorSessionId === input.coordinatorSessionId), nextCursor: null }
@@ -316,7 +332,11 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
       inputStore: previewInputs.store,
       submissionStatus: async () => ({ kind: 'unverifiable', reason: '预览不读取真实提交记录' }),
       snapshot: async (selectedSessionId) => ({ kind: 'snapshot', snapshot: { ...snapshot, selectedSessionId } }),
-      transcript: async (coordinatorSessionId) => ({ kind: 'transcript', transcript: { ...transcript, coordinatorSessionId } }),
+      transcript: async (coordinatorSessionId, cursor) => {
+        try { return { kind: 'transcript', transcript: history?.kind === 'opened'
+          ? readTranscriptPage(history.store, coordinatorSessionId, cursor) : { ...transcript, coordinatorSessionId } }; }
+        catch (error) { return { kind: 'failed', code: 'history_unreadable', message: String(error) }; }
+      },
       execute: async (intent) => previewDialogs ? intent.kind === 'switch-model-configuration' && intent.nextConfigurationRef === 'config-rejected'
         ? { kind: 'rejected', code: 'fixture_model_rejected', message: '候选配置验证失败；当前配置保留' }
         : { kind: 'accepted', revision: 7, summary: `模拟意图已记录：${intent.kind}；未执行真实操作` } : rejected,
@@ -398,6 +418,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
       await app.waitUntilExit();
     } finally {
       previewInputs.store.close();
+      if (history?.kind === 'opened') history.store.close();
     }
   } catch (error) {
     process.stderr.write(`无法启动 TUI 预览：${error instanceof Error ? error.message : String(error)}\n`);

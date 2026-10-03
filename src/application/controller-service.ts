@@ -352,12 +352,18 @@ export type ControllerTranscriptMessage = {
   readonly role: string;
   readonly content: string;
   readonly stepId: string | null;
+  readonly entryId?: string;
+  readonly sequence?: number;
+  readonly offset?: number;
+  readonly end?: number;
+  readonly byteLength?: number;
 };
 
 export type ControllerTranscriptPage = {
   readonly coordinatorSessionId: string;
   readonly messages: readonly ControllerTranscriptMessage[];
   readonly nextCursor: string | null;
+  readonly newerCursor?: string | null;
 };
 
 export type ControllerQuestionQuery =

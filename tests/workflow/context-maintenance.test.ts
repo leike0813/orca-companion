@@ -21,6 +21,29 @@ const STEPS = [
   { stepId: 'step-3', messages: [{ role: 'assistant', content: '登记一条 Decision Ticket' }] },
 ];
 
+test('压缩交错区间时摘要包含用户消息和终点 step 的全部片段', () => {
+  const capsule = deriveContextCapsule({ fromStepId: 'S', toStepId: 'S', steps: [
+    { stepId: 'S', messages: [{ role: 'assistant', content: '发起调用' }] },
+    { stepId: 'B', messages: [{ role: 'user', content: '交错用户输入' }] },
+    { stepId: 'S', messages: [{ role: 'tool', content: '已提交工具结果' }] },
+  ] });
+  expect(capsule.text).toContain('交错用户输入');
+  expect(capsule.text).toContain('已提交工具结果');
+});
+
+test('最新 step 出现在较早片段时，压缩不拆开它并吞掉交错用户输入', () => {
+  const segments: HistorySegment[] = [
+    { kind: 'messages', stepId: 'S', messages: [{ role: 'assistant', content: '发起调用' }] },
+    { kind: 'messages', stepId: 'B', messages: [{ role: 'user', content: '交错用户输入' }] },
+    { kind: 'messages', stepId: 'S', messages: [{ role: 'assistant', content: '最后片段' }] },
+  ];
+  const input = buildBoundedModelInput({ segments, estimate, fixedOverhead: 0, budgetTokens: 1,
+    native: { kind: 'unavailable', reason: 'fixture' }, shaken: true, instructions: ['你是 Coordinator'], toolSchema: [], authoritativeFacts: [] });
+  expect(input.compaction.kind).toBe('context_exhausted');
+  expect(input.messages.map(message => (message as { content: string }).content).join('\n')).toContain('交错用户输入');
+  expect(input.segments.some(segment => segment.kind === 'capsule')).toBe(false);
+});
+
 function estimate(segments: readonly HistorySegment[]): number {
   return segments.reduce((total, segment) => {
     if (segment.kind === 'capsule') {

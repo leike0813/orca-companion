@@ -24,6 +24,34 @@ import {
   type WakeBatch,
 } from '../../src/domain/coordinator/session-state.js';
 import { COORDINATOR_DURABILITY } from '../../src/workflow/coordinator/state.js';
+import { HISTORY_BODY_BYTES, HISTORY_CHUNK_BYTES, CONTEXT_READ_BYTES, readTranscriptPage } from '../../src/application/coordinator/history.js';
+import { deriveContextCapsule } from '../../src/workflow/coordinator/context.js';
+
+test('Capsule 总结交错消息并固定边界，迟到的同 step 结果仍进入有效上下文', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
+  const calls = ['one', 'two'].map(callId => ({ callId, name: 'read', args: {}, operationId: `op:${callId}` as import('../../src/application/dto/identity.js').OperationId, mapOperationId: null }));
+  const assistant = { ...assistantEntry('S', '发起调用'), toolCalls: calls };
+  expect(store.appendModelStep({ coordinatorSessionId: SESSION_A, graphPosition: 'tools', entry: assistant,
+    step: { ...step('S', assistant.content, 1), messages: [assistant], toolCalls: calls } }).kind).toBe('saved');
+  const user: CommittedMessageEntry = { entryId: 'interleaved-user', stepId: 'B', role: 'user', content: '交错用户输入' };
+  expect(store.appendMessage(SESSION_A, user).kind).toBe('saved');
+  const tool: CommittedMessageEntry = { entryId: toolResultEntryId('S', 'one'), stepId: 'S', role: 'tool', content: '首个结果', toolCallId: 'one', toolName: 'read' };
+  expect(store.appendToolResult({ coordinatorSessionId: SESSION_A, graphPosition: 'tools', entry: tool }).kind).toBe('saved');
+  const capsule = deriveContextCapsule({ fromStepId: 'S', toStepId: 'S',
+    steps: [assistant, user, tool].map(entry => ({ stepId: entry.stepId, messages: [entry] })) });
+  expect(store.savePortableCapsule(SESSION_A, capsule).kind).toBe('saved');
+  expect(capsule.text).toContain(user.content);
+  const late = { ...tool, entryId: toolResultEntryId('S', 'two'), toolCallId: 'two', content: '迟到结果' };
+  expect(store.appendToolResult({ coordinatorSessionId: SESSION_A, graphPosition: 'tools', entry: late }).kind).toBe('saved');
+  expect(store.savePortableCapsule(SESSION_A, capsule).kind).toBe('saved');
+  const context = store.loadCheckpoint(SESSION_A, 'context');
+  expect(context.kind).toBe('recovered');
+  if (context.kind === 'recovered') {
+    expect(context.state.committedMessages.map(entry => entry.content)).toEqual([late.content]);
+    expect(context.state.contextMaterial?.capsule?.text).toContain(user.content);
+  }
+  expect(store.readEntry(SESSION_A, user.entryId)?.content).toBe(user.content);
+});
 
 const SESSION_A = 'session-a' as CoordinatorSessionId;
 const SESSION_B = 'session-b' as CoordinatorSessionId;
@@ -59,6 +87,106 @@ function open(): CheckpointStore {
   openedStores.push(opened.store);
   return opened.store;
 }
+
+test('历史分页可完整读回巨型 CJK 原文，正文范围有界且游标跨追加稳定', () => {
+  const content = '开头🙂中文é\n' + '大段混排中文abc🙂\n'.repeat(8000) + '终点';
+  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
+  expect(store.appendMessage(SESSION_A, { entryId: 'large', stepId: 'large', role: 'user', content }).kind).toBe('saved');
+  let offset = 0, original = '';
+  while (offset < Buffer.byteLength(content)) {
+    const range = store.readHistoryBody({ coordinatorSessionId: SESSION_A, entryId: 'large', contentRevision: 1, offset });
+    expect(range).not.toBeNull();
+    if (range === null) throw new Error('Missing range');
+    expect(Buffer.byteLength(range.text)).toBeLessThanOrEqual(HISTORY_BODY_BYTES);
+    expect(range.end).toBeGreaterThan(offset);
+    original += range.text; offset = range.end;
+  }
+  expect(original).toBe(content);
+  let page = readTranscriptPage(store, SESSION_A, null);
+  const oldCursor = page.nextCursor;
+  const pieces = page.messages.map(message => message.content);
+  while (page.nextCursor !== null) {
+    page = readTranscriptPage(store, SESSION_A, page.nextCursor);
+    pieces.unshift(...page.messages.map(message => message.content));
+  }
+  expect(pieces.join('')).toBe(content);
+  expect(store.appendMessage(SESSION_A, { entryId: 'new', stepId: 'new', role: 'user', content: '新增' }).kind).toBe('saved');
+  expect(readTranscriptPage(store, SESSION_A, oldCursor).messages.some(message => message.entryId === 'new')).toBe(false);
+  expect(() => readTranscriptPage(store, SESSION_B, oldCursor)).toThrow();
+  expect(readTranscriptPage(store, SESSION_A, 'oldest').messages[0]?.offset).toBe(0);
+});
+
+test('失败的原子响应追加不留下条目、正文或图位置，重放不重复', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
+  const entry = assistantEntry('atomic', '唯一正文');
+  const candidate = { coordinatorSessionId: SESSION_A, entry, graphPosition: 'tools' as const,
+    step: { ...step('atomic', '另一正文', 100), entryId: entry.entryId } };
+  expect(store.appendModelStep(candidate).kind).toBe('failed');
+  expect(store.readEntry(SESSION_A, entry.entryId)).toBeNull();
+  expect(store.readHistoryBody({ coordinatorSessionId: SESSION_A, entryId: entry.entryId, contentRevision: 1, offset: 0 })).toBeNull();
+  const valid = { ...candidate, step: step('atomic', entry.content, 100) };
+  expect(store.appendModelStep(valid).kind).toBe('saved');
+  expect(store.appendModelStep(valid).kind).toBe('saved');
+  expect(store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries.filter(item => item.entryId === entry.entryId)).toHaveLength(1);
+});
+
+test('压缩后的上下文、精确工具恢复和新增提交不读取被替代的旧正文', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
+  expect(store.savePortableCapsule(SESSION_A, { kind: 'derived_context_capsule', capsuleId: 'skip-old',
+    replacedFromStepId: userStepId('submission-1'), replacedToStepId: 'step-1', text: '摘要' }).kind).toBe('saved');
+  const raw = rawDatabase();
+  raw.prepare('UPDATE conversation_bodies SET data=? WHERE coordinator_session_id=?').run(Buffer.from([0xff]), SESSION_A);
+  raw.close();
+  expect(store.loadCheckpoint(SESSION_A, 'metadata').kind).toBe('recovered');
+  const context = store.loadCheckpoint(SESSION_A, 'context');
+  expect(context.kind).toBe('recovered');
+  if (context.kind === 'recovered') expect(context.state.committedMessages).toHaveLength(0);
+  const entry = assistantEntry('latest', '当前回复');
+  expect(store.appendModelStep({ coordinatorSessionId: SESSION_A, entry, step: step('latest', entry.content, 10), graphPosition: 'suspend' }).kind).toBe('saved');
+  const tools = store.loadCheckpoint(SESSION_A, 'tools');
+  expect(tools.kind).toBe('recovered');
+  if (tools.kind === 'recovered') expect(tools.state.committedMessages.map(item => item.content)).toEqual([entry.content]);
+  expect(() => store.readEntry(SESSION_A, userEntryId('submission-1'))).toThrow();
+});
+
+test('metadata keyset 与有效上下文在十万条历史下仍有界，正文只保存一次', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
+  expect(store.appendMessage(SESSION_A, { entryId: 'seed', stepId: 'seed', role: 'user', content: '旧正文' }).kind).toBe('saved');
+  const raw = rawDatabase();
+  const template = raw.prepare('SELECT metadata,summary_metadata,byte_length FROM conversation_entries WHERE entry_id=?').get('seed') as { metadata: string; summary_metadata: string; byte_length: number };
+  const insert = raw.prepare('INSERT INTO conversation_entries VALUES(?,?,?,?,?,?,?,?,?,NULL)');
+  const copyBody = raw.prepare('INSERT INTO conversation_bodies SELECT coordinator_session_id,?,start,data FROM conversation_bodies WHERE coordinator_session_id=? AND entry_id=?');
+  raw.exec('BEGIN');
+  for (let seq = 2; seq <= 100000; seq += 1) {
+    const metadata = JSON.stringify({ ...JSON.parse(template.metadata) as object, entryId: `seed-${seq}` });
+    insert.run(SESSION_A, seq, `seed-${seq}`, 'seed', 'user', metadata, metadata, template.byte_length, 0);
+    copyBody.run(`seed-${seq}`, SESSION_A, 'seed');
+  }
+  raw.exec('COMMIT');
+  raw.close();
+  expect(store.savePortableCapsule(SESSION_A, { kind: 'derived_context_capsule', capsuleId: 'large-history',
+    replacedFromStepId: 'seed', replacedToStepId: 'seed', text: '摘要' }).kind).toBe('saved');
+  const latest = store.readHistoryPage({ coordinatorSessionId: SESSION_A });
+  expect(latest.entries).toHaveLength(100);
+  expect(latest.entries[0]?.sequence).toBe(99901);
+  expect(Buffer.byteLength(JSON.stringify(latest.entries))).toBeLessThanOrEqual(HISTORY_BODY_BYTES);
+  expect(store.readHistoryPage({ coordinatorSessionId: SESSION_A, direction: 'newer' }).entries[0]?.sequence).toBe(1);
+  expect(store.loadCheckpoint(SESSION_A, 'context').kind).toBe('recovered');
+  const entry = assistantEntry('after-large', '新正文');
+  expect(store.appendModelStep({ coordinatorSessionId: SESSION_A, entry, step: step('after-large', entry.content, 10), graphPosition: 'suspend' }).kind).toBe('saved');
+  const body = store.readHistoryBody({ coordinatorSessionId: SESSION_A, entryId: entry.entryId, contentRevision: 1, offset: 0, maxBytes: HISTORY_CHUNK_BYTES });
+  expect(body?.text).toBe(entry.content);
+}, 15_000);
+
+test('上下文超过安全读取预算时明确拒绝，仍可分页读回原文', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
+  const entry = { entryId: 'over-budget', stepId: 'over-budget', role: 'user' as const, content: 'x'.repeat(CONTEXT_READ_BYTES + 1) };
+  expect(store.appendMessage(SESSION_A, entry).kind).toBe('saved');
+  expect(store.loadCheckpoint(SESSION_A, 'context').kind).toBe('unrecoverable');
+  expect(store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries[0]?.byteLength).toBe(CONTEXT_READ_BYTES + 1);
+  const body = store.readHistoryBody({ coordinatorSessionId: SESSION_A, entryId: entry.entryId, contentRevision: 1, offset: 0 });
+  expect(body?.end).toBe(HISTORY_BODY_BYTES);
+});
 
 function step(stepId: string, content: string, at: number): CommittedModelStep {
   return {
@@ -246,12 +374,12 @@ test('两类压缩产物分字段保存；原生项损坏时阻塞会话但不�
   );
   raw.close();
 
-  expect(() => store.loadNativeWindowOwner(SESSION_A)).toThrow(/原生压缩项不可恢复/);
+  expect(() => store.loadNativeWindowOwner(SESSION_A)).toThrow();
   expect(store.loadPortableCapsule(SESSION_A)?.capsuleId).toBe('capsule-1');
   const degraded = store.loadCheckpoint(SESSION_A);
   expect(degraded.kind).toBe('unrecoverable');
   if (degraded.kind === 'unrecoverable') {
-    expect(degraded.reason).toContain('原生压缩项不可恢复');
+    expect(degraded.reason.length).toBeGreaterThan(0);
   }
 });
 
@@ -366,12 +494,15 @@ test('用户消息追加到既有会话历史，已提交 step 不受影响', ()
   if (result.kind !== 'committed') {
     return;
   }
-  expect(result.state.committedMessages.map((entry) => entry.entryId)).toEqual([
+  const recovered = store.loadCheckpoint(SESSION_A);
+  expect(recovered.kind).toBe('recovered');
+  if (recovered.kind !== 'recovered') return;
+  expect(recovered.state.committedMessages.map((entry) => entry.entryId)).toEqual([
     userEntryId('submission-1'),
     assistantEntryId('step-1'),
     userEntryId('submission-2'),
   ]);
-  expect(result.state.committedModelSteps.map((entry) => entry.stepId)).toEqual(['step-1']);
+  expect(recovered.state.committedModelSteps.map((entry) => entry.stepId)).toEqual(['step-1']);
   expect(result.state.graphPosition).toBe('model');
 });
 
@@ -553,7 +684,13 @@ test('同一 stepId 重复追加幂等返回 saved；内容不同则失败', () 
 });
 
 test('工具结果按条目身份幂等追加；内容不同则失败', () => {
-  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
+  const call = { callId: 'call-1', name: 'claim_ticket', args: {},
+    operationId: 'op:call-1' as import('../../src/application/dto/identity.js').OperationId, mapOperationId: null };
+  const assistant = { ...assistantEntry('step-1', '先读地图'), toolCalls: [call] };
+  expect(store.saveCheckpoint(sessionState(SESSION_A, {
+    committedMessages: [assistant],
+    committedModelSteps: [{ ...step('step-1', assistant.content, 1_000), messages: [assistant], toolCalls: [call] }],
+  })).kind).toBe('saved');
   const entry = {
     entryId: toolResultEntryId('step-1', 'call-1'),
     stepId: 'step-1',

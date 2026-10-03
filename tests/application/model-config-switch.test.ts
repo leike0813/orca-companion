@@ -164,14 +164,17 @@ test('切换成功时先持久化 checkpoint，再清空旧 cache 与维护计�
   const result = await switchModelConfiguration(
     request({
       sessionRecords: {
-        loadCheckpoint: (sessionId) => {
+        loadCheckpoint: (sessionId, purpose) => {
           order.push('persist:load');
-          return store.loadCheckpoint(sessionId);
+          return store.loadCheckpoint(sessionId, purpose);
         },
         saveCheckpoint: (state) => {
           order.push('persist:save');
           return store.saveCheckpoint(state);
         },
+        updateCheckpoint: (id, patch) => { order.push('persist:save'); return store.updateCheckpoint(id, patch); },
+        appendMessage: (id, entry) => store.appendMessage(id, entry),
+        readEntry: (id, entryId) => store.readEntry(id, entryId),
         readCommittedMessages: (sessionId) => store.readCommittedMessages(sessionId),
         commitUserMessage: (input) => store.commitUserMessage(input),
         appendModelStep: (input) => store.appendModelStep(input),
@@ -201,7 +204,11 @@ test('切换成功时先持久化 checkpoint，再清空旧 cache 与维护计�
 });
 
 test('不兼容的 native window 先迁移为 Capsule，迁移成功才继续', async () => {
-  seed();
+  const messages = [
+    { entryId: assistantEntryId('step-1'), stepId: 'step-1', role: 'assistant' as const, content: '先读地图' },
+    { entryId: 'user-interleaved', stepId: 'user-interleaved', role: 'user' as const, content: '用户补充迁移约束' },
+  ];
+  seed({ committedMessages: messages });
   const saved = store.saveNativeWindowOwner(SESSION, {
     ownerRef: 'provider:minimax-m3:generation-2',
     items: [{ itemId: 'enc-1', position: 0, mediaType: 'application/octet-stream', opaque: { blob: 'AAAA' } }],
@@ -219,9 +226,8 @@ test('不兼容的 native window 先迁移为 Capsule，迁移成功才继续', 
   // 原生项已清除，Capsule 成为该区间的表示；底层原始消息仍可读回。
   expect(store.loadNativeWindowOwner(SESSION)).toBeNull();
   expect(store.loadPortableCapsule(SESSION)?.replacedFromStepId).toBe('step-1');
-  expect(store.readCommittedMessages(SESSION)).toEqual([
-    { entryId: assistantEntryId('step-1'), stepId: 'step-1', role: 'assistant', content: '先读地图' },
-  ]);
+  expect(store.loadPortableCapsule(SESSION)?.text).toContain(messages[1]?.content);
+  expect(store.readCommittedMessages(SESSION)).toEqual(messages);
 });
 
 test('迁移失败时保持原配置并保持 suspended 或 blocked', async () => {

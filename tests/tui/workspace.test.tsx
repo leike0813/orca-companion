@@ -9,6 +9,83 @@ import { textDraft } from '../../src/interfaces/tui/input/composer-editor.js';
  */
 
 import { describe, expect, test } from 'vitest';
+import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
+import { readTranscriptPage } from '../../src/application/coordinator/history.js';
+import type { CoordinatorSessionId } from '../../src/application/dto/identity.js';
+import type { TranscriptLoad } from '../../src/interfaces/tui/ports.js';
+
+test('分页阅读、最早/最新与 Esc 保留 composer，失败保留原画面', async () => {
+  const opened = openCheckpointStore({ databasePath: ':memory:' });
+  if (opened.kind !== 'opened') throw new Error(opened.message);
+  const history = opened.store, session = 'session-b' as CoordinatorSessionId;
+  history.saveCheckpoint({ schemaVersion: 2, coordinatorSessionId: session, graphPosition: 'suspend',
+    committedMessages: [], committedModelSteps: [], wakeBatches: [], lastCompactionOutcome: null });
+  for (let index = 0; index < 320; index += 1) history.appendMessage(session, {
+    entryId: `row-${index}`, stepId: `row-${index}`, role: 'assistant', content: `历史条目 ${index}` });
+  const fake = createFakePorts();
+  let fail = false;
+  const ports = { ...fake.ports, transcript: (id: string, cursor: string | null): Promise<TranscriptLoad> =>
+    Promise.resolve(fail ? { kind: 'failed', code: 'offline', message: '离线' }
+      : { kind: 'transcript', transcript: readTranscriptPage(history, id, cursor) }) };
+  const rendered = renderTui(ports);
+  try {
+    await settle();
+    rendered.stdin.write('首尾'); await settle(2);
+    rendered.stdin.write('\u001b[D'); await settle(2);
+    rendered.stdin.write('\u001b[1;5H'); await settle();
+    expect(rendered.lastFrame()).toContain('历史条目 0');
+    expect(rendered.lastFrame()).toContain('首尾');
+    fake.emit({ kind: 'state-changed', coordinationScopeId: 'scope-1', revision: 8, reason: 'updated',
+      eventId: 'history-update', coordinatorSessionId: 'session-b' });
+    await settle();
+    expect(rendered.lastFrame()).toContain('历史条目 0');
+    expect(rendered.lastFrame()).toContain('会话有更新');
+    for (let index = 0; index < 30 && !rendered.lastFrame()?.includes('历史条目 100'); index += 1) {
+      rendered.stdin.write('\u001b[6~'); await settle(2);
+    }
+    expect(rendered.lastFrame()).toContain('历史条目 100');
+    rendered.stdin.write('\u001b[1;5H'); await settle();
+    fail = true;
+    rendered.stdin.write('\u001b[1;5F'); await settle();
+    expect(rendered.lastFrame()).toContain('历史条目 0');
+    expect(rendered.lastFrame()).toContain('离线');
+    fail = false;
+    rendered.stdin.write('\u001b'); await new Promise(resolve => setTimeout(resolve, 100)); await settle();
+    expect(rendered.lastFrame()).toContain('历史条目 319');
+    rendered.stdin.write('中'); await settle();
+    expect(rendered.lastFrame()).toContain('首中尾');
+    expect(fake.executeIntents).toHaveLength(0);
+  } finally { rendered.unmount(); fake.closeInputStore(); history.close(); }
+});
+
+test.each(['最新请求', '切换 Session'])('分页响应迟到时不覆盖%s', async (action) => {
+  const fake = createFakePorts();
+  let finish: ((value: TranscriptLoad) => void) | undefined;
+  const ports = { ...fake.ports, transcript: (id: string, cursor: string | null): Promise<TranscriptLoad> =>
+    cursor === 'oldest' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ kind: 'transcript',
+      transcript: { coordinatorSessionId: id, messages: [{ role: 'assistant', content: `最新记录 ${id}`, stepId: 'latest' }], nextCursor: 'earlier' } }) };
+  const rendered = renderTui(ports);
+  try {
+    await settle();
+    rendered.stdin.write('\u001b[1;5H'); await settle();
+    if (action === '切换 Session') {
+      rendered.stdin.write('\u0010'); await settle(2);
+      for (let index = 0; index < COMMAND_IDS.indexOf('session-picker'); index += 1) {
+        rendered.stdin.write('\u001b[B'); await settle(2);
+      }
+      rendered.stdin.write('\r'); await settle();
+      rendered.stdin.write('\u001b[A'); await settle(2);
+      rendered.stdin.write('\r'); await settle();
+    } else {
+      rendered.stdin.write('\u001b[1;5F'); await settle();
+    }
+    finish?.({ kind: 'transcript', transcript: { coordinatorSessionId: 'session-b',
+      messages: [{ role: 'assistant', content: '迟到旧记录', stepId: 'old' }], nextCursor: null } });
+    await settle();
+    expect(rendered.lastFrame()).toContain(`最新记录 ${action === '切换 Session' ? 'session-a' : 'session-b'}`);
+    expect(rendered.lastFrame()).not.toContain('迟到旧记录');
+  } finally { rendered.unmount(); fake.closeInputStore(); }
+});
 
 import { toSemanticEvent, type SemanticEvent } from '../../src/application/controller-service.js';
 import {

@@ -177,6 +177,8 @@ export type TranscriptEntry =
   | { readonly kind: 'tool'; readonly id: string; readonly name: string; readonly detail: string };
 
 export type TranscriptView = {
+  readonly historyStatus?: 'loading' | 'unavailable' | 'ready';
+  readonly hasUpdates?: boolean;
   readonly coordinatorSessionId: string | null;
   readonly entries: readonly TranscriptEntry[];
   readonly nextCursor: string | null;
@@ -434,14 +436,14 @@ export function planningResponsibleSessionId(viewModel: TuiViewModel): string | 
 
 /** 上游把 Agent 回复与工具调用都记成普通消息；这里按角色分区，system 与未知角色不进入时间线。 */
 export function projectTranscriptEntry(
-  message: { readonly role: string; readonly content: string; readonly stepId: string | null },
+  message: { readonly role: string; readonly content: string; readonly stepId: string | null; readonly entryId?: string },
   index: number,
 ): TranscriptEntry | null {
   const role = message.role.toLowerCase();
   if (role === 'system') {
     return null;
   }
-  const id = message.stepId ?? `${role}-${String(index)}`;
+  const id = message.entryId ?? message.stepId ?? `${role}-${String(index)}`;
   if (role === 'human' || role === 'user') {
     return { kind: 'user', id, text: message.content };
   }
@@ -459,6 +461,8 @@ export function projectTranscriptPage(
     readonly coordinatorSessionId: string | null;
     readonly scrollOffset?: number;
     readonly readOnly?: boolean;
+    readonly historyStatus?: 'loading' | 'unavailable' | 'ready';
+    readonly hasUpdates?: boolean;
   },
 ): TranscriptView {
   const messages = page?.messages ?? [];
@@ -472,6 +476,8 @@ export function projectTranscriptPage(
   return {
     coordinatorSessionId: page?.coordinatorSessionId ?? state.coordinatorSessionId,
     entries,
+    historyStatus: state.historyStatus ?? (page === null ? 'unavailable' : 'ready'),
+    hasUpdates: state.hasUpdates ?? false,
     nextCursor: page?.nextCursor ?? null,
     scrollOffset: state.scrollOffset ?? 0,
     readOnly: state.readOnly ?? false,

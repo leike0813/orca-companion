@@ -195,7 +195,7 @@ export function createModelNode(dependencies: CoordinatorNodeDependencies) {
     }
     let read: CheckpointRecoveryRead;
     try {
-      read = dependencies.sessionRecords.loadCheckpoint(coordinatorSessionId);
+      read = dependencies.sessionRecords.loadCheckpoint(coordinatorSessionId, 'metadata');
     } catch (error) {
       return blocked(`无法读回会话记录：${describeError(error)}`);
     }
@@ -315,7 +315,7 @@ export type SuspendNodeDependencies = {
 export function createSuspendNode(dependencies: SuspendNodeDependencies) {
   return (state: CoordinatorGraphState): CoordinatorGraphUpdate => {
     const coordinatorSessionId = state.coordinatorSessionId as CoordinatorSessionId;
-    const read = dependencies.sessionRecords.loadCheckpoint(coordinatorSessionId);
+    const read = dependencies.sessionRecords.loadCheckpoint(coordinatorSessionId, 'metadata');
     if (read.kind !== 'recovered') {
       return blocked(
         read.kind === 'absent'
@@ -327,10 +327,7 @@ export function createSuspendNode(dependencies: SuspendNodeDependencies) {
     if (beforeWrite !== null) {
       return beforeWrite;
     }
-    const written = dependencies.sessionRecords.saveCheckpoint({
-      ...read.state,
-      graphPosition: 'suspend',
-    });
+    const written = dependencies.sessionRecords.updateCheckpoint(coordinatorSessionId, { graphPosition: 'suspend' });
     if (written.kind === 'failed') {
       return blocked(`无法记录挂起位置：${written.message}`);
     }

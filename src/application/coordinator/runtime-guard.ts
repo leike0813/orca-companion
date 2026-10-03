@@ -81,7 +81,7 @@ export type CheckpointRecoveryRead =
   | { readonly kind: 'unrecoverable'; readonly reason: string };
 
 export type CheckpointRecoveryPort = {
-  readonly loadCheckpoint: (coordinatorSessionId: CoordinatorSessionId) => CheckpointRecoveryRead;
+  readonly loadCheckpoint: (coordinatorSessionId: CoordinatorSessionId, purpose?: import('./history.js').CheckpointReadPurpose) => CheckpointRecoveryRead;
 };
 
 export type CheckpointWriteResult =
@@ -102,6 +102,7 @@ export type UserMessageCommitInput = {
  *
  * `already-committed` 覆盖稳定重放：同 `submissionId` 再提交一次不会产生第二条消息，`contentMatches`
  * 说明这次提交的内容是否与原内容逐字相同；内容不同必须由调用方按拒绝处理，而不是静默改写历史。
+ * `state` 只携带控制字段、本次条目和 Wake，不携带历史快照。
  */
 export type UserMessageCommitResult =
   | { readonly kind: 'committed'; readonly state: CoordinatorSessionState }
@@ -163,6 +164,9 @@ export type CheckpointAppendPort = {
 export type CoordinatorSessionRecordPort = CheckpointRecoveryPort &
   UserMessageCommitPort &
   CheckpointAppendPort & {
+    readonly updateCheckpoint: (coordinatorSessionId: CoordinatorSessionId, patch: Partial<Pick<CoordinatorSessionState, 'graphPosition' | 'lastCompactionOutcome'>>) => CheckpointWriteResult;
+    readonly appendMessage: (coordinatorSessionId: CoordinatorSessionId, entry: CommittedMessageEntry) => CheckpointWriteResult;
+    readonly readEntry: (coordinatorSessionId: string, entryId: string) => CommittedMessageEntry | null;
     readonly saveCheckpoint: (state: CoordinatorSessionState) => CheckpointWriteResult;
     /** 读回底层完整已提交消息条目；Capsule 是派生视图，不覆盖它们。 */
     readonly readCommittedMessages: (coordinatorSessionId: CoordinatorSessionId) => readonly unknown[];
@@ -342,7 +346,7 @@ export function resumeIncarnation(
     return { kind: 'rejected', rejection: acquired.rejection };
   }
 
-  const read = request.checkpoints.loadCheckpoint(request.coordinatorSessionId);
+  const read = request.checkpoints.loadCheckpoint(request.coordinatorSessionId, 'metadata');
   const block = (reason: string): ResumeIncarnationResult => ({
     kind: 'blocked',
     coordinatorSessionId: request.coordinatorSessionId,

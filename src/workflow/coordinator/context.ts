@@ -359,7 +359,7 @@ export function deriveContextCapsule(input: {
   }[];
 }): PortableContextCapsule {
   const fromIndex = input.steps.findIndex((step) => step.stepId === input.fromStepId);
-  const toIndex = input.steps.findIndex((step) => step.stepId === input.toStepId);
+  const toIndex = input.steps.findLastIndex((step) => step.stepId === input.toStepId);
   if (fromIndex < 0 || toIndex < 0 || fromIndex > toIndex) {
     throw new ContextMaintenanceError('Capsule 区间与被取代的已提交历史不匹配');
   }
@@ -553,7 +553,14 @@ export function buildBoundedModelInput(request: BuildBoundedModelInputRequest): 
         run.push(segment);
       }
       // 至少保留最新一个 step 逐字出现：Capsule 只取代更早的区间，不吞掉当前上下文。
-      const replaceable = run.slice(0, Math.max(0, run.length - 1));
+      const firstOccurrence = new Map<string, number>();
+      run.forEach((segment, index) => { if (!firstOccurrence.has(segment.stepId)) firstOccurrence.set(segment.stepId, index); });
+      let boundary = Math.max(0, run.length - 1);
+      // A tool result can follow an interleaved user entry. Keep the whole retained step.
+      for (let index = run.length - 1; index >= boundary; index -= 1) {
+        boundary = Math.min(boundary, firstOccurrence.get(run[index]!.stepId)!);
+      }
+      const replaceable = run.slice(0, boundary);
       const first = replaceable[0];
       const last = replaceable[replaceable.length - 1];
       if (first === undefined || last === undefined) {

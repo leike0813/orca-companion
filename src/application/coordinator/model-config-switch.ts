@@ -138,9 +138,9 @@ export function migrateNativeWindowToCapsule(input: {
   if (input.owner === null) {
     return { kind: 'not-needed' };
   }
-  const steps = input.sessionState.committedModelSteps.map((step) => ({
-    stepId: step.stepId,
-    messages: step.messages,
+  const steps = input.sessionState.committedMessages.map((entry) => ({
+    stepId: entry.stepId,
+    messages: [entry],
   }));
   const first = steps[0];
   const last = steps[steps.length - 1];
@@ -223,15 +223,15 @@ export async function switchModelConfiguration(
     return reject(switchable.code, switchable.message);
   }
 
-  // 1. 先持久化当前 checkpoint：切换后的状态必须从一个完整的历史继续。
-  const read = request.sessionRecords.loadCheckpoint(request.coordinatorSessionId);
+  // 1. 核验有效上下文并持久化控制位置；已提交历史独立保留。
+  const read = request.sessionRecords.loadCheckpoint(request.coordinatorSessionId, 'context');
   if (read.kind !== 'recovered') {
     return reject(
       'persist_failed',
       read.kind === 'absent' ? '该 Session 还没有可持久化的会话记录' : `会话记录不可恢复：${read.reason}`,
     );
   }
-  const persisted = request.sessionRecords.saveCheckpoint(read.state);
+  const persisted = request.sessionRecords.updateCheckpoint(request.coordinatorSessionId, { graphPosition: read.state.graphPosition });
   if (persisted.kind === 'failed') {
     return reject('persist_failed', `切换前无法持久化 checkpoint：${persisted.message}`);
   }
@@ -240,10 +240,12 @@ export async function switchModelConfiguration(
   const owner = read.state.contextMaterial?.nativeWindowOwner ?? null;
   let migrated = false;
   if (!isNativeWindowCompatible(request.next, owner)) {
+    const original = request.sessionRecords.loadCheckpoint(request.coordinatorSessionId, 'migration');
+    if (original.kind !== 'recovered') return reject('migration_failed', original.kind === 'unrecoverable' ? original.reason : 'Session absent');
     const migration = migrateNativeWindowToCapsule({
       coordinatorSessionId: request.coordinatorSessionId,
       owner,
-      sessionState: read.state,
+      sessionState: original.state,
       deriveCapsule: request.deriveCapsule,
       checkpoints: request.nativeWindows,
     });

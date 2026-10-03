@@ -235,7 +235,12 @@ test('已有会话记录时恢复同一 Session，不创建新身份', async () 
   }
   expect(started.recovered).toBe(true);
   expect(started.sessionState?.coordinatorSessionId).toBe(SESSION);
-  expect(started.sessionState?.committedMessages).toHaveLength(1);
+  // 启动恢复控制身份；原文通过独立历史读取仍然完整。
+  expect(started.sessionState?.graphPosition).toBe('suspend');
+  const history = openCheckpointStore({ databasePath: checkpointPath(), clock });
+  if (history.kind !== 'opened') throw new Error(history.message);
+  expect(history.store.readEntry(SESSION, assistantEntryId('step-1'))?.content).toBe('先读地图');
+  history.store.close();
   started.close();
 });
 

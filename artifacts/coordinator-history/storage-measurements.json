@@ -1,0 +1,64 @@
+{
+  "platform": "linux",
+  "node": "v24.12.0",
+  "measurements": [
+    {
+      "count": 1000,
+      "appendMs": 96.55383100000017,
+      "contextMs": 3.860963999999967,
+      "pageMs": 15.854608999999982,
+      "contextEntries": 1,
+      "metadataItems": 100,
+      "metadataBytes": 10910,
+      "total": {
+        "entries": 1001
+      },
+      "canonical": {
+        "blocks": 1,
+        "bytes": 9
+      },
+      "queryPlan": [
+        "SEARCH conversation_entries USING INDEX conversation_visible (coordinator_session_id=? AND seq<?)"
+      ]
+    },
+    {
+      "count": 10000,
+      "appendMs": 118.36750900000015,
+      "contextMs": 1.2002660000002834,
+      "pageMs": 8.83192999999983,
+      "contextEntries": 1,
+      "metadataItems": 100,
+      "metadataBytes": 11109,
+      "total": {
+        "entries": 10001
+      },
+      "canonical": {
+        "blocks": 1,
+        "bytes": 9
+      },
+      "queryPlan": [
+        "SEARCH conversation_entries USING INDEX conversation_visible (coordinator_session_id=? AND seq<?)"
+      ]
+    },
+    {
+      "count": 100000,
+      "appendMs": 98.60246600000028,
+      "contextMs": 1.7999740000013844,
+      "pageMs": 10.150606999999582,
+      "contextEntries": 1,
+      "metadataItems": 100,
+      "metadataBytes": 11308,
+      "total": {
+        "entries": 100001
+      },
+      "canonical": {
+        "blocks": 1,
+        "bytes": 9
+      },
+      "queryPlan": [
+        "SEARCH conversation_entries USING INDEX conversation_visible (coordinator_session_id=? AND seq<?)"
+      ]
+    }
+  ],
+  "scope": "Actual file-backed SQLite and production history reader; fixture entries have no model steps. These timings do not establish the 3B UI/cached-navigation p95 target."
+}

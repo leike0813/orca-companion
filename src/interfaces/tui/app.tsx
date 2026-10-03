@@ -18,6 +18,7 @@ import type { PasteViewerView } from './components/paste-viewer.js';
 import type { ControllerInteractionView } from '../../application/controller-service.js';
 import type { InteractionPageCursor } from '../../application/ports/branch-coordination-store.js';
 import { bodyWidth } from './screens/workspace.js';
+import { transcriptLineCount } from './components/transcript.js';
 import { wrapByDisplayWidth } from './render/width.js';
 import { editComposer, editorLayout, emptyDraft, textDraft, type EditorKey } from './input/composer-editor.js';
 import { allowedSidebarDensity, composerContentWidth } from './render/width.js';
@@ -263,6 +264,8 @@ function TuiAppContent(props: TuiAppProps) {
   const [events, setEvents] = useState<readonly SemanticEvent[]>([]);
   const [snapshot, setSnapshot] = useState<ControllerSnapshot | null>(null);
   const [transcript, setTranscript] = useState<ControllerTranscriptPage | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyUpdated, setHistoryUpdated] = useState(false);
   const [home, setHome] = useState<HomeResolution | null>(null);
   const [candidates, setCandidates] = useState<readonly ScopeCandidate[]>([]);
   const homeSelection = useSelectionCursor();
@@ -360,14 +363,62 @@ function TuiAppContent(props: TuiAppProps) {
     [ports],
   );
 
+  const terminalWidthRef = useRef(terminalWidth);
+  terminalWidthRef.current = terminalWidth;
+  const transcriptHeight = useRef(12);
+  const recordTranscriptHeight = useCallback((height: number) => {
+    const previous = transcriptHeight.current;
+    transcriptHeight.current = height;
+    const selected = stateRef.current.selectedSessionId;
+    if (selected !== null && historyReading.current) {
+      const offset = stateRef.current.scrollOffsets[selected] ?? 0;
+      if (offset > 0 && previous !== height) dispatch({ kind: 'scroll-changed', coordinatorSessionId: selected, offset: Math.max(0, offset + previous - height) });
+    }
+  }, [dispatch]);
+  const transcriptRequest = useRef(0);
+  const activeHistoryRequest = useRef<{ session: string; cursor: string | null } | null>(null);
+  const transcriptRef = useRef<ControllerTranscriptPage | null>(null);
+  const historyReading = useRef(false);
   const loadTranscript = useCallback(
-    async (coordinatorSessionId: string) => {
-      const result = await ports.transcript(coordinatorSessionId, null);
-      if (result.kind === 'transcript') {
-        setTranscript(result.transcript);
+    async (coordinatorSessionId: string, cursor: string | null = null, navigate = false,
+      align: 'start' | 'end' = cursor === 'oldest' ? 'start' : 'end') => {
+      if (!navigate && historyReading.current && transcriptRef.current?.coordinatorSessionId === coordinatorSessionId) return;
+      if (activeHistoryRequest.current?.session === coordinatorSessionId && activeHistoryRequest.current.cursor === cursor) return;
+      const request = ++transcriptRequest.current;
+      const wasReading = historyReading.current;
+      if (navigate && cursor !== null) historyReading.current = true;
+      const active = { session: coordinatorSessionId, cursor };
+      activeHistoryRequest.current = active;
+      setHistoryLoading(true);
+      try {
+        const result = await ports.transcript(coordinatorSessionId, cursor);
+        if (request !== transcriptRequest.current || stateRef.current.selectedSessionId !== coordinatorSessionId) return;
+        if (result.kind === 'transcript') {
+          transcriptRef.current = result.transcript;
+          historyReading.current = cursor !== null;
+          if (cursor === null) setHistoryUpdated(false);
+          setTranscript(result.transcript);
+          if (navigate) {
+            const first = align === 'start';
+            const width = bodyWidth(terminalWidthRef.current, stateRef.current.sidebarDensity);
+            const lines = first ? transcriptLineCount(projectTranscriptPage(result.transcript, { coordinatorSessionId }), stateRef.current.expandedToolIds, width) : 0;
+            dispatch({ kind: 'scroll-changed', coordinatorSessionId, offset: first ? Math.max(0, lines - transcriptHeight.current) : 0 });
+          }
+        } else {
+          historyReading.current = wasReading;
+          dispatch({ kind: 'notice', notice: `历史读取失败：${result.message}` });
+        }
+      } catch (error) {
+        if (request === transcriptRequest.current && stateRef.current.selectedSessionId === coordinatorSessionId) {
+          historyReading.current = wasReading;
+          dispatch({ kind: 'notice', notice: `历史读取失败：${error instanceof Error ? error.message : String(error)}` });
+        }
+      } finally {
+        if (activeHistoryRequest.current === active) activeHistoryRequest.current = null;
+        if (request === transcriptRequest.current) setHistoryLoading(false);
       }
     },
-    [ports],
+    [ports, dispatch],
   );
 
   // 挂载时解析 Home 并订阅事件；这两件事都只读，重挂载不会产生业务副作用。
@@ -423,6 +474,7 @@ function TuiAppContent(props: TuiAppProps) {
         pendingSessionIds.clear();
         flushScheduled = false;
         setEvents((current) => [...current, ...batch].slice(-EVENT_WINDOW));
+        if (historyReading.current && sessionIds.includes(stateRef.current.selectedSessionId)) setHistoryUpdated(true);
         dispatch({ kind: 'events-arrived', coordinatorSessionIds: sessionIds });
       });
     });
@@ -453,7 +505,13 @@ function TuiAppContent(props: TuiAppProps) {
     if (state.selectedSessionId === null || state.screen !== 'workspace') {
       return;
     }
-    void loadTranscript(state.selectedSessionId);
+    historyReading.current = false;
+    setHistoryUpdated(false);
+    activeHistoryRequest.current = null;
+    transcriptRef.current = null;
+    setTranscript(null);
+    void loadTranscript(state.selectedSessionId, null, true);
+    return () => { transcriptRequest.current += 1; };
   }, [loadTranscript, state.selectedSessionId, state.screen]);
 
   /**
@@ -521,13 +579,15 @@ function TuiAppContent(props: TuiAppProps) {
         coordinatorSessionId: state.selectedSessionId,
         scrollOffset: state.selectedSessionId === null ? 0 : (state.scrollOffsets[state.selectedSessionId] ?? 0),
         readOnly: isComposerReadOnly(state, state.selectedSessionId),
+        historyStatus: transcript === null ? (historyLoading ? 'loading' : 'unavailable') : 'ready',
+        hasUpdates: historyUpdated,
       }),
       selectedSessionId: state.selectedSessionId,
       unreadSessionIds: state.unreadSessionIds,
       executionFilter: state.executionFilter,
       includeGraphNodes: state.sidebarDensity !== 'collapsed' || state.projectPanel.open || state.overlayStack.at(-1) === 'graph-inspector',
     });
-  }, [snapshot, state, transcript]);
+  }, [snapshot, state, transcript, historyLoading, historyUpdated]);
   const viewModelRef = useRef<TuiViewModel | null>(null);
   viewModelRef.current = viewModel;
   // A collapsed sidebar omits nodes; initialize only after the Inspector projection is available.
@@ -1495,6 +1555,11 @@ function TuiAppContent(props: TuiAppProps) {
         dispatch({ kind: 'composer-mode-reset' });
         return;
       }
+      const selected = stateRef.current.selectedSessionId;
+      if (selected !== null && (historyReading.current || (stateRef.current.scrollOffsets[selected] ?? 0) > 0)) {
+        void loadTranscript(selected, null, true);
+        return;
+      }
       if (stateRef.current.screen === 'wizard' || stateRef.current.screen === 'legacy-review') {
         dispatch({ kind: 'screen', screen: 'home' });
       }
@@ -1725,6 +1790,31 @@ function TuiAppContent(props: TuiAppProps) {
         return;
       }
     }
+    const readingSession = stateRef.current.selectedSessionId;
+    if (readingSession !== null && (key.pageUp || key.pageDown || (key.ctrl && (key.home || key.end)))) {
+      if (key.ctrl && key.home) { void loadTranscript(readingSession, 'oldest', true); return; }
+      if (key.ctrl && key.end) { void loadTranscript(readingSession, null, true); return; }
+      const currentPage = transcriptRef.current;
+      const offset = stateRef.current.scrollOffsets[readingSession] ?? 0;
+      const width = bodyWidth(terminalWidth, stateRef.current.sidebarDensity);
+      const projected = projectTranscriptPage(currentPage, { coordinatorSessionId: readingSession });
+      const lines = transcriptLineCount(projected, stateRef.current.expandedToolIds, width);
+      const height = transcriptHeight.current;
+      const maxOffset = Math.max(0, lines - height);
+      if (key.pageUp && offset < maxOffset) {
+        historyReading.current = true;
+        dispatch({ kind: 'scroll-changed', coordinatorSessionId: readingSession, offset: Math.min(maxOffset, offset + height) });
+      } else if (key.pageDown && offset > 0) {
+        const next = Math.max(0, offset - height);
+        if (next === 0 && !currentPage?.newerCursor) historyReading.current = false;
+        dispatch({ kind: 'scroll-changed', coordinatorSessionId: readingSession, offset: next });
+      } else {
+        const cursor = key.pageUp ? currentPage?.nextCursor : currentPage?.newerCursor;
+        if (cursor) void loadTranscript(readingSession, cursor, true, key.pageDown ? 'start' : 'end');
+        else if (key.pageDown && historyReading.current) void loadTranscript(readingSession, null, true);
+      }
+      return;
+    }
     if (key.ctrl && input === 'r') {
       dispatch({ kind: 'notice', notice: '历史搜索尚未接通' }); return;
     }
@@ -1821,6 +1911,7 @@ function TuiAppContent(props: TuiAppProps) {
       ui={state}
       terminalWidth={terminalWidth}
       terminalHeight={windowSize.rows ?? process.stdout.rows ?? 24}
+      onTranscriptHeight={recordTranscriptHeight}
       events={events}
       actions={workspaceActions}
       modelCatalog={modelCatalog}
