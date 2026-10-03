@@ -70,6 +70,9 @@ describe('初始化向导的核验与原子创建', () => {
     expect(fake.calls.filter((call) => call.name.startsWith('handoff.')).length).toBe(0);
 
     // 创建成功后进入该 Scope 的 workspace。
+    rendered.stdin.write('\u0002');await settle(2);
+    rendered.stdin.write('\u001b[B\u001b[B\u001b[B');await settle(2);
+    rendered.stdin.write('\r');await settle(2);
     expect(rendered.lastFrame() ?? '').toContain(DEFAULT_PROPOSAL.coordinationScopeId);
 
     // 已经离开向导，后续按键不会重复创建。
@@ -138,4 +141,3 @@ describe('初始化向导的核验与原子创建', () => {
     expect(callsNamed(fake, 'initialize')).toBe(0);
   });
 });
-

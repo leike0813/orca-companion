@@ -158,7 +158,7 @@ describe('Pending Interaction 内联卡片', () => {
     // composer 与卡片都显式绑定该 interaction 与 revision。
     expect(frame).toContain('回答 interaction i-1');
     expect(frame).toContain('revision 4');
-    expect(frame).toContain('[回答模式]');
+    expect(frame).toContain('回答');
   });
 
   test('卡片展示绑定的 interaction 与 revision，回答模式下带标记', () => {
@@ -173,7 +173,7 @@ describe('Pending Interaction 内联卡片', () => {
     const frame = frameText(rendered);
     expect(frame).toContain('ticket:t-1');
     expect(frame).toContain('revision=4');
-    expect(frame).toContain('[回答模式]');
+    expect(frame).toContain('回答');
   });
 });
 

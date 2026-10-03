@@ -1,0 +1,711 @@
+{
+  "change": "align-tui-with-approved-prototypes",
+  "capturedAt": "2026-10-02T13:22:58.965Z",
+  "baselineHead": "d3066e2bf805db3efdc6db1cf9b4d1a8af81c205",
+  "implementation": "uncommitted workspace",
+  "renderer": "tuistory 0.11.0 PTY + ghostty-opentui bundled JetBrains Mono Nerd Font / CJK fallback",
+  "samples": [
+    {
+      "scenario": "chat-empty",
+      "columns": 120,
+      "rows": 40,
+      "mode": "color",
+      "png": "chat-empty-120x40-color.png",
+      "text": "chat-empty-120x40-color.txt",
+      "cursor": [
+        2,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "tool-expanded",
+      "columns": 120,
+      "rows": 40,
+      "mode": "color",
+      "png": "tool-expanded-120x40-color.png",
+      "text": "tool-expanded-120x40-color.txt",
+      "cursor": [
+        2,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-multiline",
+      "columns": 120,
+      "rows": 40,
+      "mode": "color",
+      "png": "chat-multiline-120x40-color.png",
+      "text": "chat-multiline-120x40-color.txt",
+      "cursor": [
+        24,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-paste",
+      "columns": 120,
+      "rows": 40,
+      "mode": "color",
+      "png": "chat-paste-120x40-color.png",
+      "text": "chat-paste-120x40-color.txt",
+      "cursor": [
+        44,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "long-cjk",
+      "columns": 120,
+      "rows": 40,
+      "mode": "color",
+      "png": "long-cjk-120x40-color.png",
+      "text": "long-cjk-120x40-color.txt",
+      "cursor": [
+        2,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "answer-options",
+      "columns": 120,
+      "rows": 40,
+      "mode": "color",
+      "png": "answer-options-120x40-color.png",
+      "text": "answer-options-120x40-color.txt",
+      "cursor": [
+        0,
+        39
+      ],
+      "cursorVisible": false
+    },
+    {
+      "scenario": "answer-free",
+      "columns": 120,
+      "rows": 40,
+      "mode": "color",
+      "png": "answer-free-120x40-color.png",
+      "text": "answer-free-120x40-color.txt",
+      "cursor": [
+        16,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "answer-esc",
+      "columns": 120,
+      "rows": 40,
+      "mode": "color",
+      "png": "answer-esc-120x40-color.png",
+      "text": "answer-esc-120x40-color.txt",
+      "cursor": [
+        14,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "disabled",
+      "columns": 120,
+      "rows": 40,
+      "mode": "color",
+      "png": "disabled-120x40-color.png",
+      "text": "disabled-120x40-color.txt",
+      "cursor": [
+        22,
+        33
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-empty",
+      "columns": 120,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "chat-empty-120x40-no-color.png",
+      "text": "chat-empty-120x40-no-color.txt",
+      "cursor": [
+        2,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "tool-expanded",
+      "columns": 120,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "tool-expanded-120x40-no-color.png",
+      "text": "tool-expanded-120x40-no-color.txt",
+      "cursor": [
+        2,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-multiline",
+      "columns": 120,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "chat-multiline-120x40-no-color.png",
+      "text": "chat-multiline-120x40-no-color.txt",
+      "cursor": [
+        24,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-paste",
+      "columns": 120,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "chat-paste-120x40-no-color.png",
+      "text": "chat-paste-120x40-no-color.txt",
+      "cursor": [
+        44,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "long-cjk",
+      "columns": 120,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "long-cjk-120x40-no-color.png",
+      "text": "long-cjk-120x40-no-color.txt",
+      "cursor": [
+        2,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "answer-options",
+      "columns": 120,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "answer-options-120x40-no-color.png",
+      "text": "answer-options-120x40-no-color.txt",
+      "cursor": [
+        0,
+        39
+      ],
+      "cursorVisible": false
+    },
+    {
+      "scenario": "answer-free",
+      "columns": 120,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "answer-free-120x40-no-color.png",
+      "text": "answer-free-120x40-no-color.txt",
+      "cursor": [
+        16,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "answer-esc",
+      "columns": 120,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "answer-esc-120x40-no-color.png",
+      "text": "answer-esc-120x40-no-color.txt",
+      "cursor": [
+        14,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "disabled",
+      "columns": 120,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "disabled-120x40-no-color.png",
+      "text": "disabled-120x40-no-color.txt",
+      "cursor": [
+        22,
+        33
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-empty",
+      "columns": 80,
+      "rows": 24,
+      "mode": "color",
+      "png": "chat-empty-80x24-color.png",
+      "text": "chat-empty-80x24-color.txt",
+      "cursor": [
+        2,
+        18
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "tool-expanded",
+      "columns": 80,
+      "rows": 24,
+      "mode": "color",
+      "png": "tool-expanded-80x24-color.png",
+      "text": "tool-expanded-80x24-color.txt",
+      "cursor": [
+        2,
+        18
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-multiline",
+      "columns": 80,
+      "rows": 24,
+      "mode": "color",
+      "png": "chat-multiline-80x24-color.png",
+      "text": "chat-multiline-80x24-color.txt",
+      "cursor": [
+        24,
+        18
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-paste",
+      "columns": 80,
+      "rows": 24,
+      "mode": "color",
+      "png": "chat-paste-80x24-color.png",
+      "text": "chat-paste-80x24-color.txt",
+      "cursor": [
+        44,
+        18
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "long-cjk",
+      "columns": 80,
+      "rows": 24,
+      "mode": "color",
+      "png": "long-cjk-80x24-color.png",
+      "text": "long-cjk-80x24-color.txt",
+      "cursor": [
+        2,
+        18
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "answer-options",
+      "columns": 80,
+      "rows": 24,
+      "mode": "color",
+      "png": "answer-options-80x24-color.png",
+      "text": "answer-options-80x24-color.txt",
+      "cursor": [
+        0,
+        23
+      ],
+      "cursorVisible": false
+    },
+    {
+      "scenario": "answer-free",
+      "columns": 80,
+      "rows": 24,
+      "mode": "color",
+      "png": "answer-free-80x24-color.png",
+      "text": "answer-free-80x24-color.txt",
+      "cursor": [
+        16,
+        18
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "answer-esc",
+      "columns": 80,
+      "rows": 24,
+      "mode": "color",
+      "png": "answer-esc-80x24-color.png",
+      "text": "answer-esc-80x24-color.txt",
+      "cursor": [
+        14,
+        18
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "disabled",
+      "columns": 80,
+      "rows": 24,
+      "mode": "color",
+      "png": "disabled-80x24-color.png",
+      "text": "disabled-80x24-color.txt",
+      "cursor": [
+        22,
+        17
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-empty",
+      "columns": 80,
+      "rows": 24,
+      "mode": "no-color",
+      "png": "chat-empty-80x24-no-color.png",
+      "text": "chat-empty-80x24-no-color.txt",
+      "cursor": [
+        2,
+        18
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "tool-expanded",
+      "columns": 80,
+      "rows": 24,
+      "mode": "no-color",
+      "png": "tool-expanded-80x24-no-color.png",
+      "text": "tool-expanded-80x24-no-color.txt",
+      "cursor": [
+        2,
+        18
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-multiline",
+      "columns": 80,
+      "rows": 24,
+      "mode": "no-color",
+      "png": "chat-multiline-80x24-no-color.png",
+      "text": "chat-multiline-80x24-no-color.txt",
+      "cursor": [
+        24,
+        18
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-paste",
+      "columns": 80,
+      "rows": 24,
+      "mode": "no-color",
+      "png": "chat-paste-80x24-no-color.png",
+      "text": "chat-paste-80x24-no-color.txt",
+      "cursor": [
+        44,
+        18
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "long-cjk",
+      "columns": 80,
+      "rows": 24,
+      "mode": "no-color",
+      "png": "long-cjk-80x24-no-color.png",
+      "text": "long-cjk-80x24-no-color.txt",
+      "cursor": [
+        2,
+        18
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "answer-options",
+      "columns": 80,
+      "rows": 24,
+      "mode": "no-color",
+      "png": "answer-options-80x24-no-color.png",
+      "text": "answer-options-80x24-no-color.txt",
+      "cursor": [
+        0,
+        23
+      ],
+      "cursorVisible": false
+    },
+    {
+      "scenario": "answer-free",
+      "columns": 80,
+      "rows": 24,
+      "mode": "no-color",
+      "png": "answer-free-80x24-no-color.png",
+      "text": "answer-free-80x24-no-color.txt",
+      "cursor": [
+        16,
+        18
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "answer-esc",
+      "columns": 80,
+      "rows": 24,
+      "mode": "no-color",
+      "png": "answer-esc-80x24-no-color.png",
+      "text": "answer-esc-80x24-no-color.txt",
+      "cursor": [
+        14,
+        18
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "disabled",
+      "columns": 80,
+      "rows": 24,
+      "mode": "no-color",
+      "png": "disabled-80x24-no-color.png",
+      "text": "disabled-80x24-no-color.txt",
+      "cursor": [
+        22,
+        17
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-empty",
+      "columns": 50,
+      "rows": 40,
+      "mode": "color",
+      "png": "chat-empty-50x40-color.png",
+      "text": "chat-empty-50x40-color.txt",
+      "cursor": [
+        2,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "tool-expanded",
+      "columns": 50,
+      "rows": 40,
+      "mode": "color",
+      "png": "tool-expanded-50x40-color.png",
+      "text": "tool-expanded-50x40-color.txt",
+      "cursor": [
+        2,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-multiline",
+      "columns": 50,
+      "rows": 40,
+      "mode": "color",
+      "png": "chat-multiline-50x40-color.png",
+      "text": "chat-multiline-50x40-color.txt",
+      "cursor": [
+        24,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-paste",
+      "columns": 50,
+      "rows": 40,
+      "mode": "color",
+      "png": "chat-paste-50x40-color.png",
+      "text": "chat-paste-50x40-color.txt",
+      "cursor": [
+        44,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "long-cjk",
+      "columns": 50,
+      "rows": 40,
+      "mode": "color",
+      "png": "long-cjk-50x40-color.png",
+      "text": "long-cjk-50x40-color.txt",
+      "cursor": [
+        2,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "answer-options",
+      "columns": 50,
+      "rows": 40,
+      "mode": "color",
+      "png": "answer-options-50x40-color.png",
+      "text": "answer-options-50x40-color.txt",
+      "cursor": [
+        0,
+        39
+      ],
+      "cursorVisible": false
+    },
+    {
+      "scenario": "answer-free",
+      "columns": 50,
+      "rows": 40,
+      "mode": "color",
+      "png": "answer-free-50x40-color.png",
+      "text": "answer-free-50x40-color.txt",
+      "cursor": [
+        16,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "answer-esc",
+      "columns": 50,
+      "rows": 40,
+      "mode": "color",
+      "png": "answer-esc-50x40-color.png",
+      "text": "answer-esc-50x40-color.txt",
+      "cursor": [
+        14,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "disabled",
+      "columns": 50,
+      "rows": 40,
+      "mode": "color",
+      "png": "disabled-50x40-color.png",
+      "text": "disabled-50x40-color.txt",
+      "cursor": [
+        22,
+        33
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-empty",
+      "columns": 50,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "chat-empty-50x40-no-color.png",
+      "text": "chat-empty-50x40-no-color.txt",
+      "cursor": [
+        2,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "tool-expanded",
+      "columns": 50,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "tool-expanded-50x40-no-color.png",
+      "text": "tool-expanded-50x40-no-color.txt",
+      "cursor": [
+        2,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-multiline",
+      "columns": 50,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "chat-multiline-50x40-no-color.png",
+      "text": "chat-multiline-50x40-no-color.txt",
+      "cursor": [
+        24,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "chat-paste",
+      "columns": 50,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "chat-paste-50x40-no-color.png",
+      "text": "chat-paste-50x40-no-color.txt",
+      "cursor": [
+        44,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "long-cjk",
+      "columns": 50,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "long-cjk-50x40-no-color.png",
+      "text": "long-cjk-50x40-no-color.txt",
+      "cursor": [
+        2,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "answer-options",
+      "columns": 50,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "answer-options-50x40-no-color.png",
+      "text": "answer-options-50x40-no-color.txt",
+      "cursor": [
+        0,
+        39
+      ],
+      "cursorVisible": false
+    },
+    {
+      "scenario": "answer-free",
+      "columns": 50,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "answer-free-50x40-no-color.png",
+      "text": "answer-free-50x40-no-color.txt",
+      "cursor": [
+        16,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "answer-esc",
+      "columns": 50,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "answer-esc-50x40-no-color.png",
+      "text": "answer-esc-50x40-no-color.txt",
+      "cursor": [
+        14,
+        34
+      ],
+      "cursorVisible": true
+    },
+    {
+      "scenario": "disabled",
+      "columns": 50,
+      "rows": 40,
+      "mode": "no-color",
+      "png": "disabled-50x40-no-color.png",
+      "text": "disabled-50x40-no-color.txt",
+      "cursor": [
+        22,
+        33
+      ],
+      "cursorVisible": true
+    }
+  ]
+}

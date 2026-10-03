@@ -60,7 +60,7 @@ async function waitFor(
  */
 async function ready(rendered: RenderedTui, fake: ReturnType<typeof createFakePorts>): Promise<void> {
   await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
-  await waitFor(rendered, (frame) => frame.includes('composer · 普通消息'));
+  await waitFor(rendered, (frame) => frame.includes('普通消息'));
 }
 
 const targetA: UiInputTarget = { kind: 'message', coordinationScopeId: 'scope-1', coordinatorSessionId: 'session-a' };
@@ -491,7 +491,8 @@ describe('TuiApp 输入保护集成（真实组件行为）', () => {
     await press(rendered, CTRL_C);
 
     const frame = await waitFor(rendered, (text) => text.includes('capacity_exceeded'));
-    expect(frame).toContain('重要草稿');
+    await press(rendered,'n');
+    expect(rendered.lastFrame()??'').toContain('重要草稿');
     expect(frame).toContain('capacity_exceeded');
     expect(frame).toContain('仍要退出并丢弃');
     rendered.unmount();

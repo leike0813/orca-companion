@@ -123,6 +123,9 @@ export function padToDisplayWidth(text: string, width: number): string {
 }
 
 /** Sidebar 宽度预算；终端过窄时主视图优先。 */
+/** 圆角输入框：左右边框与各一列内边距。 */
+export const composerContentWidth = (width: number): number => Math.max(1, width - 4);
+
 export const SIDEBAR_FULL_WIDTH = 40;
 export const SIDEBAR_COMPACT_WIDTH = 24;
 /** 低于这个宽度时 Sidebar 只能折叠，主视图不再被挤压。 */

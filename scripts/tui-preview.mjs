@@ -2,10 +2,12 @@ import process from 'node:process';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { setTimeout, clearTimeout } from 'node:timers';
 import { createElement } from 'react';
 import { render } from 'ink';
 
-const scenarios = ['planning', 'execution', 'blocked', 'empty', 'long-cjk', 'answer'];
+const scenarios = ['planning', 'execution', 'blocked', 'empty', 'long-cjk', 'answer', 'disabled', 'alignment', 'alignment-planning'];
+const alignmentPreview = ['alignment', 'alignment-planning'].includes(process.argv[2]);
 const prototype = process.argv[2] === '--prototype';
 const graphPrototype = process.argv[2] === '--graph-prototype';
 const composerPrototype = process.argv[2] === '--composer-prototype';
@@ -18,7 +20,7 @@ const requestedComposerVariant = composerPrototype ? process.argv[4] ?? 'above' 
 const composerVariant = requestedComposerVariant === 'inside' ? 'inline' : requestedComposerVariant === 'above' ? 'review' : requestedComposerVariant;
 const statusVariant = statusPrototype ? process.argv[4] ?? 'custom' : null;
 const largeGraph = graphPrototype && process.argv[4] === 'large';
-const adaptiveGraph = projectPrototype || (graphPrototype && process.argv[4] === 'adaptive');
+const adaptiveGraph = alignmentPreview || projectPrototype || (graphPrototype && process.argv[4] === 'adaptive');
 const previewFlag = prototype || graphPrototype || composerPrototype || statusPrototype || projectPrototype;
 const allowedScenarios = statusPrototype || projectPrototype ? ['planning', 'execution', 'blocked', 'answer', 'idle'] : composerPrototype ? ['slash', 'typing', 'long', 'images', 'answer'] : graphPrototype ? ['planning', 'execution', 'blocked'] : scenarios;
 const scenario = process.argv[previewFlag ? 3 : 2] ?? (composerPrototype ? 'slash' : graphPrototype ? 'execution' : 'planning');
@@ -79,9 +81,10 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
       graphEvolution: { generations: [], revisionHolds: [], reconciliations: [], lineages: [], adoptions: [] },
       maintenance: null,
       graphTopologies: scenario === 'empty' ? [] : [graph],
-      compaction: null, planningHandoffs: [],
+      compaction: scenario === 'disabled' ? { status: 'context_exhausted', path: null,
+        reason: '隔离预览：上下文预算耗尽', stillOverBudget: 1 } : null, planningHandoffs: [],
     };
-    const graphPrototypeSnapshots = graphPrototype || projectPrototype ? Object.fromEntries(
+    const graphPrototypeSnapshots = graphPrototype || projectPrototype || alignmentPreview ? Object.fromEntries(
       ['planning', 'execution', 'blocked'].map((phase) => {
         const planning = phase === 'planning';
         const blocked = phase === 'blocked';
@@ -232,7 +235,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
         subjectRef: { kind: 'ticket', id: 'composer-question' }, expectedRevision: 12, state: 'open',
       }],
     } : null;
-    const statusPrototypeSnapshots = statusPrototype || projectPrototype ? Object.fromEntries(
+    const statusPrototypeSnapshots = statusPrototype || projectPrototype || alignmentPreview ? Object.fromEntries(
       ['planning', 'execution', 'blocked', 'answer', 'idle'].map((phase) => {
         const executing = phase === 'execution' || phase === 'blocked';
         const blocked = phase === 'blocked';
@@ -275,7 +278,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
       }),
     ) : null;
     // Project, statusline and graph comparisons share these same bounded fixtures.
-    const projectPrototypeSnapshots = projectPrototype ? Object.fromEntries(
+    const projectPrototypeSnapshots = projectPrototype || alignmentPreview ? Object.fromEntries(
       Object.entries(statusPrototypeSnapshots).map(([phase, chrome]) => {
         const execution = graphPrototypeSnapshots[phase === 'blocked' ? 'blocked' : phase === 'execution' ? 'execution' : 'planning'];
         return [phase, {
@@ -291,6 +294,16 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
         }];
       }),
     ) : null;
+    // The full-map fixture mounts production TuiApp; only its ports are isolated fakes.
+    const previewDialogs = sharedDialogs || alignmentPreview;
+    if (alignmentPreview) {
+      Object.assign(snapshot, projectPrototypeSnapshots[scenario === 'alignment-planning' ? 'answer' : 'blocked']);
+      snapshot.planningHandoffs = [{ proposalId: 'fixture-planning-handoff', sourceSessionId: 'session-long-中文规划-2026', targetSessionId: 'session-b',
+        phase: 'prepared', capsuleRef: 'fixture-capsule', mapRevision: snapshot.mapRevision, planRevision: 1, proposalRevision: 1 }];
+      snapshot.handoffs = [{ handoffId: 'fixture-execution-handoff', sourceSessionId: 'session-b', targetSessionId: 'session-long-中文规划-2026',
+        phase: 'reviewed', graphGeneration: snapshot.graph.generation, expectedRevision: snapshot.revision,
+        responsibilitySet: ['execution_coordination_lease', 'pending_interactions', 'worker_lifecycle_events'] }];
+    }
     const rejected = { kind: 'rejected', code: 'preview_read_only', message: '预览只读：没有连接真实项目' };
     const { openUiInputStore } = await import('../dist/src/adapters/storage/ui-input-store.js');
     const previewInputs = openUiInputStore({ databasePath: ':memory:' });
@@ -303,11 +316,18 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
       inputStore: previewInputs.store,
       submissionStatus: async () => ({ kind: 'unverifiable', reason: '预览不读取真实提交记录' }),
       snapshot: async (selectedSessionId) => ({ kind: 'snapshot', snapshot: { ...snapshot, selectedSessionId } }),
-      transcript: async () => ({ kind: 'transcript', transcript }),
-      execute: async (intent) => sharedDialogs ? intent.kind === 'switch-model-configuration' && intent.nextConfigurationRef === 'config-rejected'
+      transcript: async (coordinatorSessionId) => ({ kind: 'transcript', transcript: { ...transcript, coordinatorSessionId } }),
+      execute: async (intent) => previewDialogs ? intent.kind === 'switch-model-configuration' && intent.nextConfigurationRef === 'config-rejected'
         ? { kind: 'rejected', code: 'fixture_model_rejected', message: '候选配置验证失败；当前配置保留' }
         : { kind: 'accepted', revision: 7, summary: `模拟意图已记录：${intent.kind}；未执行真实操作` } : rejected,
-      subscribe: () => () => {},
+      subscribe: (listener) => {
+        if (!alignmentPreview) return () => {};
+        const timer = setTimeout(() => {
+          for (let index = 0; index < 4; index++) listener({ eventId: 'fixture-event-'+index, kind: 'scope-control-changed',
+            coordinationScopeId: snapshot.coordinationScopeId, coordinatorSessionId: null, controlState: snapshot.controlState, revision: snapshot.revision });
+        }, 100);
+        return () => clearTimeout(timer);
+      },
       scopeSetup: {
         resolveHome: async () => ({ kind: 'restore', coordinationScopeId: snapshot.coordinationScopeId }),
         verify: async () => [],
@@ -315,17 +335,17 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
         initialize: async () => rejected,
         bindLegacyIdentity: async () => rejected,
       },
-      modelCatalog: { load: async () => ({ options: [{ configurationRef: 'config-a', model: sharedDialogs ? '示例模型 A' : 'preview-model-a' }, { configurationRef: 'config-b', model: sharedDialogs ? '示例模型 B' : 'preview-model-b' },
-        ...(sharedDialogs ? [{ configurationRef: 'config-rejected', model: '演示宿主拒绝的候选模型' }, { configurationRef: 'config-basic', model: '不支持 effort 的示例模型' }] : [])], currentConfigurationRef: 'config-a', switchable: true, switchBlockReason: null }) },
-      handoff: { prepareProposal: async () => sharedDialogs ? { kind: 'accepted', revision: 7, summary: '模拟交接提案已准备' } : rejected,
-        cutover: async () => sharedDialogs ? { kind: 'accepted', revision: 7, summary: '模拟规划交接已记录；Target 等待下一条消息' } : rejected,
-        cancel: async () => sharedDialogs ? { kind: 'accepted', revision: 7, summary: '模拟规划交接提案已取消' } : rejected },
-      executionHandoff: { prepare: async () => sharedDialogs ? { kind: 'accepted', revision: 7, summary: '模拟执行交接已准备' } : rejected,
-        review: async () => rejected, cutover: async () => sharedDialogs ? { kind: 'accepted', revision: 7, summary: '模拟执行交接已记录；Target 等待下一条消息' } : rejected,
-        cancel: async () => sharedDialogs ? { kind: 'accepted', revision: 7, summary: '模拟执行交接提案已取消' } : rejected },
-      executionAuthorization: { review: async () => sharedDialogs ? { kind: 'review', review: {
+      modelCatalog: { load: async () => ({ options: [{ configurationRef: 'config-a', model: previewDialogs ? '示例模型 A' : 'preview-model-a' }, { configurationRef: 'config-b', model: previewDialogs ? '示例模型 B' : 'preview-model-b' },
+        ...(previewDialogs ? [{ configurationRef: 'config-rejected', model: '演示宿主拒绝的候选模型' }, { configurationRef: 'config-basic', model: '不支持 effort 的示例模型' }] : [])], currentConfigurationRef: 'config-a', switchable: true, switchBlockReason: null }) },
+      handoff: { prepareProposal: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟交接提案已准备' } : rejected,
+        cutover: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟规划交接已记录；Target 等待下一条消息' } : rejected,
+        cancel: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟规划交接提案已取消' } : rejected },
+      executionHandoff: { prepare: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟执行交接已准备' } : rejected,
+        review: async () => rejected, cutover: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟执行交接已记录；Target 等待下一条消息' } : rejected,
+        cancel: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟执行交接提案已取消' } : rejected },
+      executionAuthorization: { review: async () => previewDialogs ? { kind: 'review', review: {
         fingerprint: 'fixture-manifest-52', scopeRevision: 7,
-        candidate: { graphId: 'graph-preview-20', generation: 1, version: 3, baselineHead: 'fixture-baseline-52', workPackageCount: 20 },
+        candidate: { graphId: snapshot.graph.graphId, generation: 1, version: 3, baselineHead: 'fixture-baseline-52', workPackageCount: 20 },
         manifestRows: [
           { label: '目标项目', value: 'scope-long-cjk-中文项目-2026-路线图-主工作区' },
           { label: '权限', value: '仅隔离工作区；无发布、部署或历史改写' },
@@ -336,7 +356,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
           ...Array.from({ length: 8 }, (_, index) => ({ label: `工作范围 ${index + 1}`, value: `src/中文长路径/交互与终端验收/工作包-${index + 1}；测试和证据随交接提交` })),
         ], gate: { ready: true, blockers: [] },
       } } : { kind: 'rejected', code: rejected.code, message: rejected.message },
-        approve: async () => sharedDialogs ? { kind: 'accepted', revision: 8, summary: '模拟授权批准已记录；未启动执行协调' } : rejected },
+        approve: async () => previewDialogs ? { kind: 'accepted', revision: 8, summary: '模拟授权批准已记录；未启动执行协调' } : rejected },
     };
     let app;
     const element = projectPrototype

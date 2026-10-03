@@ -1,0 +1,40 @@
+session-long-中文规划-2026 · 执行 · blocked · 待对账 · 待答3 · 持有 session-b
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+! reconciling · 原操作结果未知，待对账
+! Worker 状态待核验 · 另有 2 项
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ Execution Handoff Review                                                                                         │
+  │ session-b → session-long-中文规划-2026                                                                           │
+  │ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+  │ 概要  完整记录                                                                                                   │
+  │ execution handoff fixture-execution-handoff phase=reviewed                                                       │
+  │ source session-b -> target session-long-中文规划-2026                                                            │
+  │ graphGeneration 1                                                                                                │
+  │ 待转移责任: execution_coordination_lease, pending_interactions, worker_lifecycle_events                          │
+  │ expectedRevision 7                                                                                               │
+  │ target awaiting_user_prompt                                                                                      │
+  │ 运行身份（Run/Task/Dispatch/Attempt/worktree/Authorization/预算）保持不变                                        │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │ 当前操作：返回                                                                                                   │
+  │  返回    确认 cutover                                                                                            │
+  │ Tab 栏目 · ↑↓ 滚动 · ←→ 动作 · Enter 选择 · Esc 返回                                                             │
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+

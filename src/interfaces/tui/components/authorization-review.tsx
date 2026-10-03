@@ -5,12 +5,10 @@
  * 或事实不可读时只显示 blocker，批准入口随之关闭（fail closed 由用例决定，界面不发明替代方案）。
  */
 
-import { Box, Text } from 'ink';
-
-import { truncateToDisplayWidth } from '../render/width.js';
+import { DialogFrame, fieldRows, ReviewBody, type ReviewLayoutProps } from './selection-list.js';
 import type { ExecutionAuthorizationLoad } from '../ports.js';
 
-export type AuthorizationReviewProps = {
+export type AuthorizationReviewProps = ReviewLayoutProps & {
   /** `null` 表示审阅结果尚未加载：此时不显示任何可批准的内容。 */
   readonly review: ExecutionAuthorizationLoad | null;
   readonly onConfirm: () => void;
@@ -39,26 +37,11 @@ export function authorizationApprovable(load: ExecutionAuthorizationLoad | null)
 }
 
 export function AuthorizationReview(props: AuthorizationReviewProps) {
-  const load = props.review;
-  const rows = load === null ? [] : authorizationReviewRows(load);
-  const gate = load !== null && load.kind === 'review' ? load.review.gate : null;
-  return (
-    <Box flexDirection="column" borderStyle="single">
-      <Text>Execution Authorization Review</Text>
-      {load === null ? <Text dimColor>正在读取当前规划产物…</Text> : null}
-      {rows.map((row) => (
-        <Text key={row}>{truncateToDisplayWidth(row, Math.max(1, props.availableWidth))}</Text>
-      ))}
-      {gate === null ? null : gate.ready ? (
-        <Text>门禁: 通过</Text>
-      ) : (
-        gate.blockers.map((blocker) => <Text key={blocker}>{`! 门禁未通过: ${blocker}`}</Text>)
-      )}
-      {authorizationApprovable(load) ? (
-        <Text dimColor>Enter 批准并进入 Execution Coordination · Esc 取消</Text>
-      ) : (
-        <Text dimColor>当前不可批准（fail closed）· Esc 关闭</Text>
-      )}
-    </Box>
-  );
+  const load=props.review,rows=props.rows??18;
+  const lines=load===null?['正在读取当前规划产物…']:authorizationReviewRows(load);
+  const gate=load?.kind==='review'?load.review.gate:null;
+  const overview=load?.kind==='review'?fieldRows([{label:'图',value:load.review.candidate.graphId+' v'+load.review.candidate.version},{label:'工作包',value:String(load.review.candidate.workPackageCount)},{label:'baseline',value:load.review.candidate.baselineHead},{label:'revision',value:String(load.review.scopeRevision)},...load.review.manifestRows,{label:'fingerprint',value:load.review.fingerprint}],Math.max(1,props.availableWidth-8)):lines;
+  return <DialogFrame title="Execution Authorization Review" summary={load?.kind==='review'?`graph ${load.review.candidate.graphId} · revision ${load.review.scopeRevision}`:'规划授权'} width={props.availableWidth} rows={rows} footer="Tab 栏目 · ↑↓ 滚动 · ←→ 动作 · Enter 选择 · Esc 返回">
+    <ReviewBody lines={[...(gate?.ready?['门禁: 通过']:gate?.blockers.map(b=>`! 门禁未通过: ${b}`)??[]),...(props.tab===1?lines:overview)]} width={props.availableWidth} rows={rows} tab={props.tab??0} scroll={props.scroll??0} action={props.action??0} allowed={authorizationApprovable(load)} label="批准授权"/>
+  </DialogFrame>;
 }

@@ -1,0 +1,24 @@
+Scope scope-preview · route_planning · active · graph-1 v2 · gen=1 · auth=none …
+────────────────────────────────────────────────────────────────────────────────
+│ › 请规划第一版路线图：中文abc混排内容需要按显示宽度 │Scope active · active 0
+│   换行                                              │- wp-1 unknown
+                                                      │  - wp-2 unknown <- wp-1
+● Coordinator 会先读地图，再确认依赖与范围。
+  ▸ tool search
+
+
+
+› 回答 1/1 · Shift+←/→ 切题 · Esc 返回聊天
+请确认中文路径与完整输入验收范围。
+  继续 · 完成本批验收
+  稍后
+Tab 切换选项/自由回答 · Enter 提交 · PgUp/PgDn 阅读问…
+╭────────────────────────────────────────────────────╮
+│ › 回答 interaction preview-question (revision 7)   │
+│ 中文自由回答                                       │
+│ 第二行继续说明                                     │
+╰────────────────────────────────────────────────────╯
+scope control · active · Pause/Resume/Cancel 只作用于…
+revision 7 · sidebar compact
+active 0 · hazard(0 live / 0 unverifiable / 1 interac…
+

@@ -1,0 +1,314 @@
+[
+  {
+    "scenario": "workspace",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "workspace-120x40-color.png",
+    "text": "workspace-120x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "project-overview",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-overview-120x40-color.png",
+    "text": "project-overview-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-pending",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-pending-120x40-color.png",
+    "text": "project-pending-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "slash",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "slash-120x40-color.png",
+    "text": "slash-120x40-color.txt",
+    "cursor": [
+      3,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "commands",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "commands-120x40-color.png",
+    "text": "commands-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-120x40-color.png",
+    "text": "inspector-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-scope",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-scope-120x40-color.png",
+    "text": "inspector-scope-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-identity",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-identity-120x40-color.png",
+    "text": "inspector-identity-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "workspace",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "workspace-80x24-color.png",
+    "text": "workspace-80x24-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "project-overview",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-overview-80x24-color.png",
+    "text": "project-overview-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-pending",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-pending-80x24-color.png",
+    "text": "project-pending-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "slash",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "slash-80x24-color.png",
+    "text": "slash-80x24-color.txt",
+    "cursor": [
+      3,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "commands",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "commands-80x24-color.png",
+    "text": "commands-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "inspector-80x24-color.png",
+    "text": "inspector-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-scope",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "inspector-scope-80x24-color.png",
+    "text": "inspector-scope-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-identity",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "inspector-identity-80x24-color.png",
+    "text": "inspector-identity-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "workspace",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "workspace-50x40-color.png",
+    "text": "workspace-50x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "project-overview",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-overview-50x40-color.png",
+    "text": "project-overview-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-pending",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-pending-50x40-color.png",
+    "text": "project-pending-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "slash",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "slash-50x40-color.png",
+    "text": "slash-50x40-color.txt",
+    "cursor": [
+      3,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "commands",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "commands-50x40-color.png",
+    "text": "commands-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-50x40-color.png",
+    "text": "inspector-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-scope",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-scope-50x40-color.png",
+    "text": "inspector-scope-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-identity",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-identity-50x40-color.png",
+    "text": "inspector-identity-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  }
+]

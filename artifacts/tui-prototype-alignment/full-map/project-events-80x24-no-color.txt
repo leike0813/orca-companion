@@ -1,0 +1,24 @@
+session-long-中文规划-2026 · 执行 · blocked · 待对账 · 待答3 · 持有 session-b
+────────────────────────────────────────────────────────────────────────────────
+! reconciling · 原操作结果未知，待对账
+! Worker 状态待核验 · 另有 2 项
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ 项目面板 · 最近事件                                                          │
+│ 总览  待答列表  [最近事件] · Tab                                             │
+│ 本次启动 · 最近至多 50 条                                                    │
+│ › [control] scope-control-changed -> blocked                                 │
+│   本次启动 · scope-control-changed                                           │
+│ → [control] scope-control-changed -> blocked                                 │
+│   本次启动 · scope-control-changed                                           │
+│ → [control] scope-control-changed -> blocked                                 │
+│   本次启动 · scope-control-changed                                           │
+│ → [control] scope-control-changed -> blocked                                 │
+│   本次启动 · scope-control-changed                                           │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│ ↑↓ 选择 · Enter 打开 · Esc 返回                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

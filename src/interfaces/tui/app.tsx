@@ -20,7 +20,7 @@ import type { InteractionPageCursor } from '../../application/ports/branch-coord
 import { bodyWidth } from './screens/workspace.js';
 import { wrapByDisplayWidth } from './render/width.js';
 import { editComposer, editorLayout, emptyDraft, textDraft, type EditorKey } from './input/composer-editor.js';
-import { allowedSidebarDensity } from './render/width.js';
+import { allowedSidebarDensity, composerContentWidth } from './render/width.js';
 import { requiresConfirmation } from './components/control-bar.js';
 import {
   createInputProtection,
@@ -47,8 +47,10 @@ import {
 } from './state.js';
 import { Home } from './screens/home.js';
 import { Wizard, allChecksPassed } from './screens/wizard.js';
-import { Workspace, type WorkspaceActions } from './screens/workspace.js';
-import { COMMAND_IDS, parseSlashInput, type CommandId } from './components/command-palette.js';
+import { Workspace, workspaceLayout, type WorkspaceActions } from './screens/workspace.js';
+import { COMMAND_IDS, COMMAND_METADATA, commandReason, HELP_LINES, slashCandidates, parseSlashInput, type CommandId } from './components/command-palette.js';
+import { projectItems, projectDetailViewport } from './components/project-panel.js';
+import { selectedGraphNode } from './components/graph-inspector.js';
 import { preferredSessionId } from './components/session-picker.js';
 import { tuiTheme } from './theme.js';
 import {
@@ -439,6 +441,13 @@ function TuiAppContent(props: TuiAppProps) {
     void loadSnapshot(stateRef.current.selectedSessionId);
   }, [dispatch, loadSnapshot, scopeId]);
 
+  useEffect(() => {
+    if(state.selectedSessionId===null)return;
+    let active=true;
+    void ports.modelCatalog.load().then(catalog=>{ if(active) setModelCatalog(catalog); }).catch(()=>{ if(active) setModelCatalog(EMPTY_MODEL_CATALOG); });
+    return ()=>{active=false;};
+  }, [ports, state.selectedSessionId, snapshot?.sessions.find(session=>session.coordinatorSessionId===state.selectedSessionId)?.coordinatorModelConfigurationRef]);
+
   // 选中 Session 后加载其 transcript。
   useEffect(() => {
     if (state.selectedSessionId === null || state.screen !== 'workspace') {
@@ -516,11 +525,17 @@ function TuiAppContent(props: TuiAppProps) {
       selectedSessionId: state.selectedSessionId,
       unreadSessionIds: state.unreadSessionIds,
       executionFilter: state.executionFilter,
-      includeGraphNodes: state.sidebarDensity !== 'collapsed' || state.overlayStack.at(-1) === 'graph-inspector',
+      includeGraphNodes: state.sidebarDensity !== 'collapsed' || state.projectPanel.open || state.overlayStack.at(-1) === 'graph-inspector',
     });
   }, [snapshot, state, transcript]);
   const viewModelRef = useRef<TuiViewModel | null>(null);
   viewModelRef.current = viewModel;
+  // A collapsed sidebar omits nodes; initialize only after the Inspector projection is available.
+  useEffect(() => {
+    if(state.overlayStack.at(-1)!=='graph-inspector'||state.inspectorSelection!==null)return;
+    const node=selectedGraphNode(viewModel?.graph??null,null);
+    if(node)dispatch({kind:'inspector-selected',workPackageId:node.workPackageId});
+  }, [dispatch,state.overlayStack,state.inspectorSelection,viewModel?.graph]);
   /** 快照的同步镜像：提交时需要当前模式来决定 `/handoff` 落到哪个业务合同。 */
   const snapshotRef = useRef<ControllerSnapshot | null>(null);
   snapshotRef.current = snapshot;
@@ -625,11 +640,9 @@ function TuiAppContent(props: TuiAppProps) {
       dispatch({ kind: 'notice', notice: `${slash.code}: ${slash.message}` });
       return;
     }
-    if (slash.kind === 'unavailable') {
-      dispatch({ kind: 'notice', notice: `/${slash.alias} 本批尚未接通：${slash.reason}` });
-      return;
-    }
     if (slash.kind === 'command') {
+      const unavailable=commandReason(slash.command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length});
+      if(unavailable){dispatch({kind:'notice',notice:unavailable});return;}
       if (slash.command === 'answer') { await openAnswerRef.current(); return; }
       if (slash.command === 'paste') { await runCommandRef.current('paste'); return; }
       const generation = protection.generation(target);
@@ -838,10 +851,13 @@ function TuiAppContent(props: TuiAppProps) {
   );
 
   const runCommand = useCallback(
-    async (command: CommandId) => {
+    async (command: CommandId, recipient?: string) => {
       const current = stateRef.current;
       const session = current.selectedSessionId;
-      dispatch({ kind: 'overlay-close-top' });
+      const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length});
+      if(reason){dispatch({kind:'notice',notice:reason});return;}
+      if (current.overlayStack.at(-1) === 'command-palette') dispatch({ kind: 'overlay-close-top' });
+      dispatch({kind:'review-view',tab:0,scroll:0,action:0});
       switch (command) {
         case 'answer':
           await openAnswerRef.current(); return;
@@ -871,13 +887,8 @@ function TuiAppContent(props: TuiAppProps) {
           return;
         }
         case 'handoff': {
-          // Target 必须由用户明确选择：这里用 Session Picker 里当前选中的 Session 作为接收方，
-          // 不替用户挑一个（宿主会拒绝 Source 与 Target 相同的提案）。
-          const target = stateRef.current.selectedSessionId;
-          if (target === null) {
-            dispatch({ kind: 'notice', notice: '先在 Session Picker 里选中接收规划责任的 Session，再发起交接' });
-            return;
-          }
+          if(recipient===undefined){dispatch({kind:'handoff-target',command:'handoff'});dispatch({kind:'overlay-open',overlay:'handoff-target'});return;}
+          const target=recipient;
           const result = await ports.handoff.prepareProposal(target);
           dispatch({ kind: 'notice', notice: resultNotice(result) });
           if (result.kind === 'accepted') {
@@ -899,8 +910,11 @@ function TuiAppContent(props: TuiAppProps) {
           return;
         }
         case 'event-drawer':
-          dispatch({ kind: 'overlay-open', overlay: 'event-drawer' });
+        case 'project':
+          dispatch({kind:'project-panel',panel:{...stateRef.current.projectPanel,open:true,tab:command==='event-drawer'?2:0,selectedKey:command==='event-drawer'?'event:'+events.at(-1)?.eventId:null,detail:null,scroll:0}});
           return;
+        case 'options': dispatch({kind:'overlay-open',overlay:'options'}); return;
+        case 'statusline': dispatch({kind:'notice',notice:'用户级状态栏设置尚未接通'});return;
         case 'graph-inspector':
           dispatch({ kind: 'overlay-open', overlay: 'graph-inspector' });
           return;
@@ -913,7 +927,7 @@ function TuiAppContent(props: TuiAppProps) {
         case 'help':
           dispatch({
             kind: 'notice',
-            notice: 'Ctrl+P 命令 · Ctrl+B Sidebar · Ctrl+G Inspector · Shift+← 回答 · Ctrl+A/E 行首尾 · Alt+Enter 换行 · Ctrl+R/F3 历史搜索尚未接通',
+            notice: HELP_LINES[0] + ' · ' + COMMAND_IDS.map(id=>COMMAND_METADATA[id].alias).filter(Boolean).map(alias=>'/'+alias).join(' '),
           });
           return;
         case 'pause':
@@ -922,12 +936,8 @@ function TuiAppContent(props: TuiAppProps) {
           requestScopeControl(command);
           return;
         case 'execution-handoff': {
-          // 接收方必须由用户在 Session Picker 里明确选中；界面不替用户挑一个 Target。
-          const target = stateRef.current.selectedSessionId;
-          if (target === null) {
-            dispatch({ kind: 'notice', notice: '先在 Session Picker 里选中接收执行责任的 Session，再发起交接' });
-            return;
-          }
+          if(recipient===undefined){dispatch({kind:'handoff-target',command:'execution-handoff'});dispatch({kind:'overlay-open',overlay:'handoff-target'});return;}
+          const target=recipient;
           const prepared = await ports.executionHandoff.prepare(target);
           dispatch({ kind: 'notice', notice: resultNotice(prepared) });
           if (prepared.kind !== 'accepted') {
@@ -1010,7 +1020,7 @@ function TuiAppContent(props: TuiAppProps) {
         }
       }
     },
-    [dispatch, ports, protection, reload, requestExit, requestScopeControl, terminalWidth],
+    [dispatch, events, ports, protection, reload, requestExit, requestScopeControl, terminalWidth],
   );
   runCommandRef.current = runCommand;
 
@@ -1350,6 +1360,7 @@ function TuiAppContent(props: TuiAppProps) {
       // 编辑只更新内存与合并计时器；真正的持久写入由保护模块在窗口到期时执行。
       protection.edit(target, draft);
       dispatch(draftActionFor(target, draft));
+      dispatch({kind:'slash-view',index:0,dismissed:false});
     },
     submit: () => {
       void submit();
@@ -1381,6 +1392,10 @@ function TuiAppContent(props: TuiAppProps) {
     },
     runCommand: (command) => {
       void runCommand(command);
+    },
+    selectRecipient: (coordinatorSessionId) => {
+      dispatch({kind:'overlay-close-top'});
+      void runCommand(stateRef.current.handoffCommand,coordinatorSessionId);
     },
     selectModel: (configurationRef) => {
       void (async () => {
@@ -1430,11 +1445,18 @@ function TuiAppContent(props: TuiAppProps) {
 
   useInput((input, key) => {
     if (key.eventType === 'release') return;
-    // 待确认动作是唯一的模态输入：ConfirmInput 接管 y/n，根容器只处理 Esc。
+    // 待确认动作独占输入；y/n 沿原 ConfirmInput，方向键与 Enter 使用默认返回的动作栏。
     const pending = stateRef.current.pendingConfirmation;
     if (pending !== null) {
       if (key.escape === true) {
         dispatch({ kind: 'confirmation-dismissed' });
+      }
+      else if (key.tab) dispatch({kind:'review-view',tab:stateRef.current.reviewTab===0?1:0,scroll:0});
+      else if (key.upArrow||key.downArrow||key.pageUp||key.pageDown) dispatch({kind:'review-view',scroll:Math.max(0,stateRef.current.reviewScroll+(key.upArrow||key.pageUp?-1:1)*(key.pageUp||key.pageDown?8:1))});
+      else if (key.leftArrow||key.rightArrow) dispatch({kind:'review-view',action:stateRef.current.reviewAction===0?1:0});
+      else if (key.return) {
+        if(stateRef.current.reviewAction===0) dispatch({kind:'confirmation-dismissed'});
+        else workspaceActions.confirmPending();
       }
       return;
     }
@@ -1456,10 +1478,16 @@ function TuiAppContent(props: TuiAppProps) {
         dispatch({ kind: 'overlay-close-top' });
         return;
       }
+      if(topOverlay()==='graph-inspector'&&stateRef.current.inspectorRelations){dispatch({kind:'inspector-view',relations:null});return;}
+      if(topOverlay()==='graph-inspector'&&stateRef.current.inspectorDetail){dispatch({kind:'inspector-view',detail:false,scroll:0});return;}
       if (stateRef.current.overlayStack.length > 0) {
         dispatch({ kind: 'overlay-close-top' });
         return;
       }
+      const project=stateRef.current.projectPanel;
+      if(project.open){dispatch({kind:'project-panel',panel:project.detail?{...project,detail:null,scroll:0}:{...project,open:false}});return;}
+      const draft=composerInputFor(stateRef.current,stateRef.current.selectedSessionId);
+      if(!stateRef.current.slashDismissed&&slashCandidates(draft.text,snapshotRef.current?.mode??'route_planning').length){dispatch({kind:'slash-view',index:0,dismissed:true});return;}
       if (stateRef.current.composerMode.kind === 'answer') {
         const saved = protection.flushAll();
         if (saved.status !== 'saved') { dispatch({ kind: 'notice', notice: saveOutcomeText(saved) }); return; }
@@ -1473,9 +1501,9 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     const overlay = topOverlay();
-    const reviewNavigation = action === 'command-palette' &&
-      (overlay === 'handoff-review' || overlay === 'execution-handoff-review' || overlay === 'authorization-review');
-    if (overlay !== null && !reviewNavigation && (action === 'command-palette' || action === 'toggle-sidebar' || action === 'graph-inspector' || action === 'enter-answer' || action === 'toggle-tool')) return;
+    // 任何 overlay 都优先消费输入：全局导航键（Ctrl+P/B/G/T、Shift+Left）不穿透到调用的工作区。
+    // Esc 逐层返回与 Ctrl+C 退出在上面单独处理，因此关闭弹窗与退出保留。
+    if (overlay !== null && (action === 'command-palette' || action === 'toggle-sidebar' || action === 'graph-inspector' || action === 'enter-answer' || action === 'toggle-tool')) return;
     if (stateRef.current.screen === 'workspace' && topOverlay() === null && answerPanelRef.current && key.shift && (key.leftArrow || key.rightArrow)) {
       void navigateAnswer(key.leftArrow ? -1 : 1); return;
     }
@@ -1486,12 +1514,12 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (action === 'toggle-sidebar') {
-      dispatch({ kind: 'sidebar-toggle', allowed: allowedSidebarDensity(terminalWidth) });
+      dispatch({kind:'project-panel',panel:{...stateRef.current.projectPanel,open:!stateRef.current.projectPanel.open}});
       return;
     }
     if (action === 'graph-inspector') {
       answerRequest.current++;
-      dispatch({ kind: 'overlay-open', overlay: 'graph-inspector' });
+      void runCommand('graph-inspector');
       return;
     }
     if (action === 'enter-answer') {
@@ -1533,14 +1561,31 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (topOverlay() === 'graph-inspector') {
+      const current=stateRef.current;
+      if(key.tab){dispatch({kind:'inspector-view',tab:(current.inspectorTab+1)%3,scroll:0});return;}
+      if(key.pageUp||key.pageDown){dispatch({kind:'inspector-view',scroll:Math.max(0,current.inspectorScroll+(key.pageUp?-1:1))});return;}
+      if(current.inspectorRelations){
+        if(key.upArrow||key.downArrow)dispatch({kind:'inspector-view',relationIndex:Math.max(0,Math.min(current.inspectorRelations.length-1,current.relationIndex+(key.upArrow?-1:1)))});
+        if(key.return){const id=current.inspectorRelations[current.relationIndex],graph=viewModelRef.current?.graph??null,node=selectedGraphNode(graph,current.inspectorSelection),target=graph?.nodes.find(n=>n.workPackageId===id);
+          if(target&&node&&(node.dependsOn.includes(target.workPackageId)||target.dependsOn.includes(node.workPackageId)))dispatch({kind:'inspector-selected',workPackageId:target.workPackageId});
+          else dispatch({kind:'notice',notice:'所选关系已改变，请重新选择'});
+          dispatch({kind:'inspector-view',relations:null,scroll:0});}return;
+      }
+      if(key.return){dispatch({kind:'inspector-view',detail:!current.inspectorDetail,scroll:0});return;}
+      if(current.inspectorDetail&&(key.upArrow||key.downArrow)){dispatch({kind:'inspector-view',scroll:Math.max(0,current.inspectorScroll+(key.upArrow?-1:1))});return;}
+      if(key.leftArrow||key.rightArrow){const graph=viewModelRef.current?.graph??null,nodes=graph?.nodes??[],node=selectedGraphNode(graph,current.inspectorSelection);
+        if(!node){dispatch({kind:'notice',notice:'所选节点已不在当前图中，请重新选择'});return;}
+        if(current.inspectorSelection===null)dispatch({kind:'inspector-selected',workPackageId:node.workPackageId});
+        const ids=node?(key.rightArrow?node.dependsOn:nodes.filter(n=>n.dependsOn.includes(node.workPackageId)).map(n=>n.workPackageId)):[];
+        if(ids.length===1&&ids[0])dispatch({kind:'inspector-selected',workPackageId:ids[0]});else if(ids.length>1)dispatch({kind:'inspector-view',relations:ids,relationIndex:0});return;}
       handleInspectorKey(key, {
         nodes: viewModelRef.current?.graph?.nodes ?? [],
-        selection: stateRef.current.inspectorSelection,
+        selection: selectedGraphNode(viewModelRef.current?.graph??null,stateRef.current.inspectorSelection)?.workPackageId??stateRef.current.inspectorSelection,
         select: (workPackageId) => dispatch({ kind: 'inspector-selected', workPackageId }),
       });
       return;
     }
-    if (topOverlay() === 'session-picker') {
+    if (topOverlay() === 'session-picker' || topOverlay() === 'handoff-target') {
       return;
     }
     if (topOverlay() === 'input-record-manager') {
@@ -1614,18 +1659,54 @@ function TuiAppContent(props: TuiAppProps) {
       }
       return;
     }
+    if(topOverlay()==='options'){ if(key.return)dispatch({kind:'icons',mode:stateRef.current.iconMode==='nerd'?'ascii':'nerd'});return; }
     if (topOverlay() !== null) {
-      // 其余 overlay 只支持 Esc（已在上面处理）与 Enter 的默认动作。
-      if (key.return === true && topOverlay() === 'handoff-review') {
-        void confirmHandoff();
-      }
-      if (key.return === true && topOverlay() === 'execution-handoff-review') {
-        void confirmExecutionHandoff();
-      }
-      if (key.return === true && topOverlay() === 'authorization-review') {
-        void confirmAuthorization();
+      if(key.tab){dispatch({kind:'review-view',tab:(stateRef.current.reviewTab+1)%3,scroll:0});return;}
+      if(key.upArrow||key.downArrow){dispatch({kind:'review-view',scroll:Math.max(0,stateRef.current.reviewScroll+(key.upArrow?-1:1))});return;}
+      if(key.leftArrow||key.rightArrow){dispatch({kind:'review-view',action:stateRef.current.reviewAction===0?1:0});return;}
+      if(key.return){
+        if(stateRef.current.reviewAction===0){dispatch({kind:'overlay-close-top'});return;}
+        if(topOverlay()==='handoff-review')void confirmHandoff();
+        if(topOverlay()==='execution-handoff-review')void confirmExecutionHandoff();
+        if(topOverlay()==='authorization-review')void confirmAuthorization();
       }
       return;
+    }
+    const project=stateRef.current.projectPanel;
+    if(project.open){
+      const view=viewModelRef.current;if(!view)return;
+      if(key.tab){const tab=(project.tab+1)%3;dispatch({kind:'project-panel',panel:{...project,tab,detail:null,selectedKey:projectItems(view,events,tab)[0]?.key??null,scroll:0}});return;}
+      if(project.detail){
+        if(key.upArrow||key.downArrow){
+          const layout=workspaceLayout(view,stateRef.current,terminalWidth,windowSize.rows??process.stdout.rows??24);
+          const viewport=projectDetailViewport(view,events,project,layout.projectWidth,layout.bodyRows);
+          dispatch({kind:'project-panel',panel:{...project,scroll:Math.max(0,Math.min(viewport.maxScroll,viewport.offset+(key.upArrow?-1:1)))}});
+        }return;
+      }
+      const items=projectItems(view,events,project.tab),index=project.selectedKey===null?0:items.findIndex(i=>i.key===project.selectedKey);
+      if(key.upArrow||key.downArrow){const item=items[Math.max(0,Math.min(items.length-1,index+(key.upArrow?-1:1)))];if(item)dispatch({kind:'project-panel',panel:{...project,selectedKey:item.key}});return;}
+      if(key.return){const item=items[index];if(!item){dispatch({kind:'notice',notice:'所选对象已不在当前窗口，请重新选择'});return;}
+        if(item.key==='pending'){dispatch({kind:'project-panel',panel:{...project,tab:1,selectedKey:null}});return;}
+        if(item.key==='authorize'){void runCommand('authorize-execution');return;}
+        const interaction=view.interactions.find(i=>i.interactionId===item.key);
+        if(interaction?.ownerCoordinatorSessionId===stateRef.current.selectedSessionId&&interaction.state==='open'){
+          void openAnswerRef.current(interaction.interactionId).then(opened=>{if(opened)dispatch({kind:'project-panel',panel:{...stateRef.current.projectPanel,open:false}});});return;
+        }
+        dispatch({kind:'project-panel',panel:{...project,detail:item.key,selectedKey:item.key,scroll:0}});
+      }return;
+    }
+    const inputDraft=composerInputFor(stateRef.current,stateRef.current.selectedSessionId);
+    const matches=stateRef.current.slashDismissed?[]:slashCandidates(inputDraft.text,snapshotRef.current?.mode??'route_planning');
+    if(matches.length){
+      if(key.upArrow||key.downArrow){dispatch({kind:'slash-view',index:Math.max(0,Math.min(matches.length-1,stateRef.current.slashIndex+(key.upArrow?-1:1))),dismissed:false});return;}
+      if((key.return||key.tab)&&!key.meta&&!key.shift){
+        const command=matches[Math.min(stateRef.current.slashIndex,matches.length-1)];
+        if(command){const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:stateRef.current.selectedSessionId,pasteBlocks:inputDraft.pasteBlocks.length});
+          if(reason){dispatch({kind:'notice',notice:reason});return;}
+          workspaceActions.composerChange(textDraft('/'+COMMAND_METADATA[command].alias));
+          dispatch({kind:'slash-view',index:0,dismissed:true});
+        }return;
+      }
     }
     const panel = answerPanelRef.current;
     if (panel && stateRef.current.composerMode.kind === 'answer') {
@@ -1650,7 +1731,7 @@ function TuiAppContent(props: TuiAppProps) {
     handleComposerKey(input, key, {
       readOnly: isComposerReadOnly(stateRef.current, stateRef.current.selectedSessionId),
       draft: composerInputFor(stateRef.current, stateRef.current.selectedSessionId),
-      width: Math.max(1, bodyWidth(terminalWidth, stateRef.current.sidebarDensity) - 1),
+      width: composerContentWidth(bodyWidth(terminalWidth, stateRef.current.sidebarDensity)),
       change: workspaceActions.composerChange,
       submit: workspaceActions.submit,
     });
@@ -1666,7 +1747,7 @@ function TuiAppContent(props: TuiAppProps) {
     if (current.screen !== 'workspace') {
       return;
     }
-    if (current.pendingConfirmation !== null || current.overlayStack.length > 0) {
+    if (current.pendingConfirmation !== null || current.overlayStack.length > 0 || current.projectPanel.open) {
       return;
     }
     if (isComposerReadOnly(current, current.selectedSessionId)) {
@@ -1681,6 +1762,7 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     answerRequest.current++;
+    dispatch({kind:'slash-view',index:0,dismissed:true});
     if (answerPanelRef.current) updateAnswerPanel({ ...answerPanelRef.current, focus: 'text' });
     const outcome = protection.paste(target, normalized);
     dispatch(draftActionFor(target, protection.draftOf(target) ?? emptyDraft()));
@@ -1868,27 +1950,6 @@ function handleInspectorKey(
       context.select(next.workPackageId);
     }
     return;
-  }
-  if (index < 0) {
-    return;
-  }
-  const current = context.nodes[index];
-  if (current === undefined) {
-    return;
-  }
-  if (key.rightArrow === true) {
-    // 沿依赖方向移动到上游节点。
-    const upstream = context.nodes.find((node) => node.workPackageId === current.dependsOn[0]);
-    if (upstream !== undefined) {
-      context.select(upstream.workPackageId);
-    }
-    return;
-  }
-  if (key.leftArrow === true) {
-    const downstream = context.nodes.find((node) => node.dependsOn.includes(current.workPackageId));
-    if (downstream !== undefined) {
-      context.select(downstream.workPackageId);
-    }
   }
 }
 

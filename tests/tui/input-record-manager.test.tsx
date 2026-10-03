@@ -186,7 +186,7 @@ describe('记录管理经容器执行', () => {
       },
     });
     const rendered = renderTui(fake.ports);
-    await waitFor(rendered, (frame) => frame.includes('composer · 普通消息'));
+    await waitFor(rendered, (frame) => frame.includes('普通消息'));
 
     await openInputs(rendered);
     const opened = await waitFor(rendered, (frame) => frame.includes('输入记录管理'));
@@ -214,7 +214,7 @@ describe('记录管理经容器执行', () => {
       },
     });
     const rendered = renderTui(fake.ports);
-    await waitFor(rendered, (frame) => frame.includes('composer · 普通消息'));
+    await waitFor(rendered, (frame) => frame.includes('普通消息'));
 
     await openInputs(rendered);
     await waitFor(rendered, (frame) => frame.includes('待删除草稿'));
@@ -279,4 +279,3 @@ describe('记录管理经容器执行', () => {
     rendered.unmount();
   });
 });
-

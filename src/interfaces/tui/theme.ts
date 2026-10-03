@@ -52,6 +52,7 @@ export const tuiTheme = extendTheme(defaultTheme, {
         selectedIndicator: () => ({ color: tuiColors.success }),
         label: ({ isFocused, isSelected }) => ({
           color: isFocused ? tuiColors.focus : isSelected ? tuiColors.success : undefined,
+          inverse: isFocused,
           bold: isFocused,
         }),
       },

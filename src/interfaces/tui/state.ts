@@ -12,12 +12,17 @@
 import type { WorkPackageExecutionState } from '../../application/execution/execution-view.js';
 import type { UiDraft } from '../../application/ports/ui-input-store.js';
 import { emptyDraft, textDraft } from './input/composer-editor.js';
+import { tuiIconMode, type TuiIconMode } from './theme.js';
+
+export type ProjectPanelState = { readonly open: boolean; readonly tab: number; readonly selectedKey: string | null; readonly detail: string | null; readonly scroll: number };
 
 export type SidebarDensity = 'full' | 'compact' | 'collapsed';
 export type OverlayKind =
   | 'command-palette'
+  | 'options'
   | 'graph-inspector'
   | 'session-picker'
+  | 'handoff-target'
   | 'event-drawer'
   | 'model-picker'
   | 'handoff-review'
@@ -86,6 +91,19 @@ export type ComposerMode =
 export type TuiScreen = 'home' | 'wizard' | 'legacy-review' | 'workspace';
 
 export type TuiState = {
+  readonly handoffCommand: 'handoff' | 'execution-handoff';
+  readonly projectPanel: ProjectPanelState;
+  readonly iconMode: TuiIconMode;
+  readonly inspectorTab: number;
+  readonly inspectorDetail: boolean;
+  readonly inspectorScroll: number;
+  readonly inspectorRelations: readonly string[] | null;
+  readonly relationIndex: number;
+  readonly reviewTab: number;
+  readonly reviewScroll: number;
+  readonly reviewAction: number;
+  readonly slashIndex: number;
+  readonly slashDismissed: boolean;
   readonly screen: TuiScreen;
   readonly overlayStack: readonly OverlayKind[];
   readonly sidebarDensity: SidebarDensity;
@@ -111,6 +129,19 @@ export type TuiState = {
 };
 
 export const initialTuiState: TuiState = {
+  handoffCommand: 'handoff',
+  projectPanel: { open: false, tab: 0, selectedKey: null, detail: null, scroll: 0 },
+  iconMode: tuiIconMode,
+  inspectorTab: 0,
+  inspectorDetail: false,
+  inspectorScroll: 0,
+  inspectorRelations: null,
+  relationIndex: 0,
+  reviewTab: 0,
+  reviewScroll: 0,
+  reviewAction: 0,
+  slashIndex: 0,
+  slashDismissed: false,
   screen: 'home',
   overlayStack: [],
   sidebarDensity: 'full',
@@ -131,6 +162,12 @@ export const initialTuiState: TuiState = {
 };
 
 export type TuiAction =
+  | { readonly kind: 'handoff-target'; readonly command: 'handoff' | 'execution-handoff' }
+  | { readonly kind: 'project-panel'; readonly panel: ProjectPanelState }
+  | { readonly kind: 'icons'; readonly mode: TuiIconMode }
+  | { readonly kind: 'inspector-view'; readonly tab?: number; readonly detail?: boolean; readonly scroll?: number; readonly relations?: readonly string[] | null; readonly relationIndex?: number }
+  | { readonly kind: 'review-view'; readonly tab?: number; readonly scroll?: number; readonly action?: number }
+  | { readonly kind: 'slash-view'; readonly index: number; readonly dismissed: boolean }
   | { readonly kind: 'screen'; readonly screen: TuiScreen }
   | { readonly kind: 'overlay-open'; readonly overlay: OverlayKind }
   | { readonly kind: 'overlay-close-top' }
@@ -163,6 +200,12 @@ function clampDensity(current: SidebarDensity, allowed: SidebarDensity): Sidebar
 
 export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
   switch (action.kind) {
+    case 'handoff-target': return { ...state, handoffCommand: action.command };
+    case 'project-panel': return { ...state, projectPanel: action.panel };
+    case 'icons': return { ...state, iconMode: action.mode };
+    case 'slash-view': return { ...state, slashIndex: action.index, slashDismissed: action.dismissed };
+    case 'review-view': return { ...state, reviewTab: action.tab ?? state.reviewTab, reviewScroll: action.scroll ?? state.reviewScroll, reviewAction: action.action ?? state.reviewAction };
+    case 'inspector-view': return { ...state, inspectorDetail: action.detail ?? state.inspectorDetail, inspectorTab: action.tab ?? state.inspectorTab, inspectorScroll: action.scroll ?? state.inspectorScroll, inspectorRelations: action.relations === undefined ? state.inspectorRelations : action.relations, relationIndex: action.relationIndex ?? state.relationIndex };
     case 'screen':
       return { ...state, screen: action.screen };
     case 'overlay-open':
@@ -243,7 +286,7 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
           : [...state.expandedToolIds, action.entryId],
       };
     case 'inspector-selected':
-      return { ...state, inspectorSelection: action.workPackageId };
+      return { ...state, inspectorSelection: action.workPackageId, inspectorScroll: 0 };
     case 'notice':
       return { ...state, notice: action.notice };
     case 'attention-cleared':
@@ -253,7 +296,7 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         ? state
         : { ...state, readOnlySessionIds: [...state.readOnlySessionIds, action.coordinatorSessionId] };
     case 'confirmation-requested':
-      return { ...state, pendingConfirmation: action.pending };
+      return { ...state, pendingConfirmation: action.pending, reviewTab: 0, reviewScroll: 0, reviewAction: 0 };
     case 'confirmation-dismissed':
       return state.pendingConfirmation === null ? state : { ...state, pendingConfirmation: null };
     case 'execution-filter-changed':

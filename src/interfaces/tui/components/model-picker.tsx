@@ -6,12 +6,11 @@
  * 原配置。
  */
 
-import { Box, Text } from 'ink';
+import { Text } from 'ink';
 
 import { truncateToDisplayWidth } from '../render/width.js';
 import type { ModelCatalog } from '../ports.js';
-import { tuiColors } from '../theme.js';
-import { SelectionList } from './selection-list.js';
+import { DialogFrame, SelectionList } from './selection-list.js';
 
 export type ModelPickerProps = {
   readonly catalog: ModelCatalog;
@@ -19,6 +18,7 @@ export type ModelPickerProps = {
   readonly rejection: string | null;
   readonly onSelect: (configurationRef: string) => void;
   readonly availableWidth: number;
+  readonly rows?: number;
 };
 
 /** 只有宿主判定可切换、且存在候选配置时才允许提交。 */
@@ -36,35 +36,14 @@ export function modelSwitchAdmission(catalog: ModelCatalog): {
 }
 
 export function ModelPicker(props: ModelPickerProps) {
-  const admission = modelSwitchAdmission(props.catalog);
-  if (props.catalog.options.length === 0) {
-    return (
-      <Box flexDirection="column" borderStyle="single">
-        <Text>Model Picker</Text>
-        <Text>! 没有可用的 Coordinator Model Configuration</Text>
-        {props.rejection === null ? null : <Text>{`! ${props.rejection}`}</Text>}
-        <Text dimColor>Esc 关闭</Text>
-      </Box>
-    );
-  }
-  return (
-    <Box flexDirection="column" borderStyle="single" borderColor={tuiColors.border}>
-      <Text color={tuiColors.accent} bold>Model Picker</Text>
-      <SelectionList
-        options={props.catalog.options.map((option) => ({
-          label: truncateToDisplayWidth(
-            `${option.configurationRef} (${option.model})${option.configurationRef === props.catalog.currentConfigurationRef ? ' · 当前' : ''}`,
-            Math.max(1, props.availableWidth - 5),
-          ),
-          value: option.configurationRef,
-        }))}
-        {...(props.catalog.currentConfigurationRef === null ? {} : { defaultValue: props.catalog.currentConfigurationRef })}
-        isDisabled={!admission.allowed}
-        onSelect={props.onSelect}
-      />
-      {admission.allowed ? null : <Text>{`! ${admission.reason ?? ''}`}</Text>}
-      {props.rejection === null ? null : <Text>{`! ${props.rejection}`}</Text>}
-      <Text dimColor>Enter 提交 · Esc 关闭</Text>
-    </Box>
-  );
+  const admission=modelSwitchAdmission(props.catalog),rows=props.rows??16;
+  return <DialogFrame title="Model Picker" summary={`Coordinator · 配置 ${props.catalog.currentConfigurationRef??'不可用'}`} width={props.availableWidth} rows={rows} footer="↑↓ 选择 · Enter 提交 · Esc 返回">
+    <Text dimColor>Coordinator 模型 · provider/effort/其他角色未接通</Text>
+    <SelectionList options={props.catalog.options.map(option=>({
+      label:truncateToDisplayWidth(`${option.model} · ${option.configurationRef}${option.configurationRef===props.catalog.currentConfigurationRef?' · 当前':''}`,Math.max(1,props.availableWidth-10)),
+      value:option.configurationRef,
+    }))} {...(props.catalog.currentConfigurationRef===null?{}:{defaultValue:props.catalog.currentConfigurationRef})} visibleOptionCount={Math.max(1,rows-10)} isDisabled={!admission.allowed} onSelect={props.onSelect}/>
+    {admission.allowed?null:<Text>{`! ${admission.reason}`}</Text>}
+    {props.rejection===null?null:<Text>{truncateToDisplayWidth(`! ${props.rejection}`,props.availableWidth-8)}</Text>}
+  </DialogFrame>;
 }

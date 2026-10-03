@@ -34,6 +34,9 @@ describe('Home 的 Scope 恢复与查找', () => {
     const rendered = renderTui(fake.ports);
     await settle(12);
 
+    rendered.stdin.write('\u0002');await settle(2);
+    rendered.stdin.write('\u001b[B\u001b[B\u001b[B');await settle(2);
+    rendered.stdin.write('\r');await settle(2);
     const frame = rendered.lastFrame() ?? '';
     expect(frame).toContain('scope-restored');
     // 直接进入该 Scope 的 workspace：命中恢复路径就意味着加载了选中 Session 的快照。
@@ -105,6 +108,9 @@ describe('Home 的 Scope 恢复与查找', () => {
     ]);
     expect(snapshotCalls(fake)).toBeGreaterThan(0);
     expect(initializeCalls(fake)).toBe(0);
+    rendered.stdin.write('\u0002');await settle(2);
+    rendered.stdin.write('\u001b[B\u001b[B\u001b[B');await settle(2);
+    rendered.stdin.write('\r');await settle(2);
     expect(rendered.lastFrame() ?? '').toContain('scope-2');
   });
 

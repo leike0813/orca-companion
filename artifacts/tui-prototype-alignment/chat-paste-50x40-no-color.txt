@@ -1,0 +1,40 @@
+Scope scope-preview · route_planning · active · g…
+──────────────────────────────────────────────────
+▏sidebar 已折叠 (Ctrl+B)
+│ › 请规划第一版路线图：中文abc混排内容需要按显
+│   示宽度换行
+
+● Coordinator 会先读地图，再确认依赖与范围。
+  ▸ tool search
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+╭──────────────────────────────────────────────╮
+│ › 普通消息                                   │
+│ 中文abc混排，光标跟随。                      │
+│ 第二行：继续检查输入与边框。                 │
+│ 第三行：保留完整内容。[粘贴 2 · 1440 字符]   │
+╰──────────────────────────────────────────────╯
+scope control · active · Pause/Resume/Cancel 只…
+revision 7 · sidebar collapsed
+active 0
+

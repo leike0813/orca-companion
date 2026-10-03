@@ -6,7 +6,7 @@
  * 1. 前台入口与 TTY 门禁：无 TTY 时在挂载 Ink 之前以非零状态拒绝、stdout 不含渲染帧；`status --json`
  *    无 TTY 仍可运行；`resume`/`tui` 被拒绝并指出受支持入口。
  * 2. 真实 PTY 中的启动/退出与渲染保真：窗口 120x40 → 50x40 重绘后按显示宽度换行、边框列对齐、
- *    无 120 列旧帧残留；过窄终端下 `Ctrl+G` 只提示加宽，不用 overlay 遮挡主视图。
+ *    无旧帧残留；三档项目/图检查保留选择与草稿，关闭恢复原生输入位置。
  *
  * 运行：
  *
@@ -29,7 +29,7 @@ import { join } from 'node:path';
 
 import { afterAll, describe, expect, test } from 'vitest';
 
-import { NARROW_TERMINAL_NOTICE, displayWidth } from '../../src/interfaces/tui/render/width.js';
+import { displayWidth } from '../../src/interfaces/tui/render/width.js';
 
 const REPOSITORY_ROOT = process.cwd();
 const BUILT_ENTRY = join(REPOSITORY_ROOT, 'dist', 'src', 'interfaces', 'cli', 'main.js');
@@ -39,7 +39,7 @@ const BUILT_TUI_APP = join(REPOSITORY_ROOT, 'dist', 'src', 'interfaces', 'tui', 
 /** 换行前的稳定前缀（显示宽度 18，任何被测宽度下都不会被切断）。 */
 const CJK_MARKER = '请规划第一版路线图';
 const SIDEBAR_BORDER = '│';
-const HORIZONTAL_RULE_LINE = /^[─│┌┐└┘├┤┬┴┼]+$/u;
+const HORIZONTAL_RULE_LINE = /^[─│┌┐└┘├┤┬┴┼╭╮╰╯]+$/u;
 
 /* -------------------------------------------------------------------------- */
 /* 构建产物                                                                    */
@@ -248,7 +248,8 @@ function verticalBorderColumns(line: string): readonly number[] {
  *
  * spec 说「所有含边框的行显示宽度一致」；不同盒子本来就允许不同宽度（全宽顶栏横线 = 终端宽度，
  * Sidebar 分隔线 = 主体宽度），因此这里断言的是真正可观察的对齐事实：任一行不超宽、所有含竖边框的
- * 行边框列一致、含横线的行只由 box-drawing 字符组成（错位会混入文本）。
+ * 输入框自身的左右边框对齐、含横线的行只由 box-drawing 字符组成（错位会混入文本）。
+ * continuous 用户色边、工具详情与 Sidebar 分隔线各有自己的列，不能当成同一个外框。
  */
 function frameGeometryProblems(lines: readonly string[], terminalWidth: number): readonly string[] {
   const problems: string[] = [];
@@ -264,14 +265,16 @@ function frameGeometryProblems(lines: readonly string[], terminalWidth: number):
       problems.push(`横线行混入非边框字符：${line}`);
     }
   }
-  const bordered = lines.filter((line) => line.includes(SIDEBAR_BORDER));
-  const reference = bordered.length === 0 ? null : verticalBorderColumns(bordered[0] ?? '').join(',');
-  if (reference !== null) {
-    for (const line of bordered) {
-      const columns = verticalBorderColumns(line).join(',');
-      if (columns !== reference) {
-        problems.push(`竖边框列与基准 ${reference} 不一致（实际 ${columns}）：${line}`);
-      }
+  const top = lines.findIndex((line) => line.startsWith('╭'));
+  const bottom = lines.findIndex((line, index) => index > top && line.startsWith('╰'));
+  if (top >= 0 && bottom > top) {
+    const width = displayWidth((lines[top] ?? '').split(SIDEBAR_BORDER)[0] ?? '');
+    if (displayWidth((lines[bottom] ?? '').split(SIDEBAR_BORDER)[0] ?? '') !== width) {
+      problems.push('输入框上下边框宽度不一致');
+    }
+    for (const line of lines.slice(top + 1, bottom)) {
+      const columns = verticalBorderColumns(line);
+      if (columns[0] !== 0 || !columns.includes(width - 1)) problems.push(`外框竖边框错位：${line}`);
     }
   }
   return problems;
@@ -366,7 +369,7 @@ describe.skipIf(!build.ok)(SUITE_NAME, () => {
         // 同一个 shell 在 TUI 退出后检查原 PTY，才能证明 raw mode 已恢复。
         const command = `before=$(stty -g); ${fixtureCommand()}; result=$?; after=$(stty -g); if [ "$before" = "$after" ]; then printf '\\n__TERMINAL_RESTORED__\\n'; fi; printf '__TUI_EXIT_%s__\\n' "$result"; exit "$result"`;
         expect(startSession(socket, session, width, height, command, { cwd: REPOSITORY_ROOT }).status).toBe(0);
-        expect(pollPane(socket, session, (text) => text.includes('composer · 普通消息')).ok).toBe(true);
+        expect(pollPane(socket, session, (text) => text.includes('普通消息')).ok).toBe(true);
 
         tmux(socket, ['send-keys', '-t', session, '-l', '\u001b[200~中文粘贴abc\n第二行\u001b[201~']);
         const pasted = pollPane(socket, session, (text) => text.includes('中文粘贴abc') && text.includes('第二行'));
@@ -391,7 +394,8 @@ describe.skipIf(!build.ok)(SUITE_NAME, () => {
         tmux(socket, ['send-keys', '-t', session, '-l', '中']);
         expect(pollPane(socket, session, (text) => text.includes('首中尾')).ok).toBe(true);
         const cursor = tmux(socket, ['display-message', '-p', '-t', session, '#{cursor_x}:#{cursor_y}:#{cursor_flag}']).stdout.trim().split(':');
-        expect(cursor[0]).toBe('4');
+        const cursorLine = capturePane(socket, session).split('\n')[Number(cursor[1])] ?? '';
+        expect(Number(cursor[0])).toBe(displayWidth(cursorLine.slice(0, cursorLine.indexOf('首')) + '首中'));
         expect(cursor[2]).toBe('1');
         expect(capturePane(socket, session).split('\n')[Number(cursor[1])]).toContain('首中尾');
         tmux(socket, ['send-keys', '-t', session, '-l', '\u001b[1;2D']);
@@ -400,7 +404,7 @@ describe.skipIf(!build.ok)(SUITE_NAME, () => {
         tmux(socket, ['send-keys', '-t', session, '-l', '回答草稿']);
         expect(pollPane(socket, session, (text) => text.includes('回答草稿')).ok).toBe(true);
         tmux(socket, ['send-keys', '-t', session, 'Escape']);
-        expect(pollPane(socket, session, (text) => text.includes('composer · 普通消息')).ok).toBe(true);
+        expect(pollPane(socket, session, (text) => text.includes('普通消息')).ok).toBe(true);
         tmux(socket, ['send-keys', '-t', session, '-l', '后']);
         expect(pollPane(socket, session, (text) => text.includes('首中后尾')).ok).toBe(true);
         tmux(socket, ['send-keys', '-t', session, '-l', '\u001b[200~' + '中文'.repeat(501) + '\u001b[201~']);
@@ -449,7 +453,7 @@ describe.skipIf(!build.ok)(SUITE_NAME, () => {
         const wide = pollPane(
           socket,
           session,
-          (text) => text.includes(CJK_MARKER) && text.includes(SIDEBAR_BORDER) && text.includes('wp-1'),
+          (text) => text.includes(CJK_MARKER) && text.includes(SIDEBAR_BORDER) && text.includes('第一个工作包'),
         );
         expect(wide.ok, `120 列下未渲染出 CJK transcript 与完整 Sidebar：\n${wide.text}`).toBe(true);
         expect(frameGeometryProblems(paneLines(wide.text), 120)).toEqual([]);
@@ -458,7 +462,7 @@ describe.skipIf(!build.ok)(SUITE_NAME, () => {
         const narrow = pollPane(
           socket,
           session,
-          (text) => text.includes('已折叠') && !text.includes('wp-1') && text.includes(CJK_MARKER),
+          (text) => !text.includes('执行图侧栏') && text.includes(CJK_MARKER),
         );
         expect(narrow.ok, `50 列下未按新宽度重排（仍见旧帧或丢内容）：\n${narrow.text}`).toBe(true);
         expect(frameGeometryProblems(paneLines(narrow.text), 50)).toEqual([]);
@@ -471,33 +475,74 @@ describe.skipIf(!build.ok)(SUITE_NAME, () => {
         const socket = newSocket('preview-read-only');
         const session = 'tui';
         expect(startSession(socket, session, 120, 40, `${fixtureCommand()} execution`, { cwd: REPOSITORY_ROOT }).status).toBe(0);
-        const ready = pollPane(socket, session, (text) => text.includes('execution_coordination') && text.includes('wp-1 [implementing]'));
+        const ready = pollPane(socket, session, (text) => text.includes('执行') && text.includes('implementing') && text.includes('preview-model-a'));
         expect(ready.ok, ready.text).toBe(true);
         tmux(socket, ['send-keys', '-t', session, '-l', 'hello']);
+        expect(pollPane(socket,session,text=>text.includes('hello')).ok).toBe(true);
         tmux(socket, ['send-keys', '-t', session, 'Enter']);
         const rejected = pollPane(socket, session, (text) => text.includes('preview_read_only'));
         expect(rejected.ok, rejected.text).toBe(true);
         expect(paneState(socket, session).dead).toBe(false);
       });
 
-      test('过窄终端下 Ctrl+G 只提示加宽，不遮挡主视图', () => {
+      test('项目详情与图选择跨三档 resize 保持，返回恢复中文插入位置', () => {
+        const socket=newSocket('project-graph-resize'),session='tui';
+        expect(startSession(socket,session,120,40,fixtureCommand(),{cwd:REPOSITORY_ROOT}).status).toBe(0);
+        expect(pollPane(socket,session,text=>text.includes('preview-model-a')).ok).toBe(true);
+        tmux(socket,['send-keys','-t',session,'-l','首尾']);
+        expect(pollPane(socket,session,text=>text.includes('首尾')).ok).toBe(true);
+        tmux(socket,['send-keys','-t',session,'Left']);
+        tmux(socket,['send-keys','-t',session,'C-b']);
+        for(let index=0;index<3;index++)tmux(socket,['send-keys','-t',session,'Down']);
+        tmux(socket,['send-keys','-t',session,'Enter']);
+        expect(pollPane(socket,session,text=>text.includes('Scope: scope-preview')).ok).toBe(true);
+        for(const [width,height] of [[80,24],[50,40]]){
+          tmux(socket,['resize-window','-t',session,'-x',String(width),'-y',String(height)]);
+          const detail=pollPane(socket,session,text=>text.includes('Scope: scope-preview')&&text.includes('项目面板')&&!text.includes('普通消息')&&frameGeometryProblems(paneLines(text),width!).length===0);
+          expect(detail.ok,detail.text).toBe(true);
+          expect(frameGeometryProblems(paneLines(detail.text),width!)).toEqual([]);
+        }
+        tmux(socket,['send-keys','-t',session,'Escape']);
+        expect(pollPane(socket,session,text=>text.includes('项目面板')&&!text.includes('Scope: scope-preview')).ok).toBe(true);
+        tmux(socket,['send-keys','-t',session,'Escape']);
+        expect(pollPane(socket,session,text=>text.includes('普通消息')&&!text.includes('项目面板')).ok).toBe(true);
+        tmux(socket,['send-keys','-t',session,'C-g']);
+        expect(pollPane(socket,session,text=>text.includes('Graph Inspector')).ok).toBe(true);
+        tmux(socket,['send-keys','-t',session,'Down']);
+        const selected=pollPane(socket,session,text=>/(?:^|\n)[│\s]*2 长中文路径和日志验收/u.test(text));
+        expect(selected.ok,selected.text).toBe(true);
+        tmux(socket,['send-keys','-t',session,'Enter']);
+        tmux(socket,['send-keys','-t',session,'Tab']);
+        tmux(socket,['resize-window','-t',session,'-x','120','-y','40']);
+        const graph=pollPane(socket,session,text=>text.includes('工作范围')&&text.includes('2 长中文路径和日志验收')&&text.includes('─'.repeat(120))&&text.includes('中文文件名.ts'));
+        expect(graph.ok,graph.text).toBe(true);
+        expect(graph.text).toContain('中文文件名.ts');
+        tmux(socket,['send-keys','-t',session,'Escape']);
+        expect(pollPane(socket,session,text=>text.includes('Graph Inspector')&&!text.includes('完整记录')).ok).toBe(true);
+        tmux(socket,['send-keys','-t',session,'Escape']);
+        expect(pollPane(socket,session,text=>text.includes('普通消息')).ok).toBe(true);
+        tmux(socket,['send-keys','-t',session,'-l','中']);
+        const restored=pollPane(socket,session,text=>text.includes('首中尾'));
+        expect(restored.ok,restored.text).toBe(true);
+      });
+
+      test('50 列 Ctrl+G 可浏览图，Esc 恢复主视图', () => {
         const socket = newSocket('narrow');
         const session = 'tui';
         expect(
           startSession(socket, session, 50, 40, fixtureCommand(), { cwd: REPOSITORY_ROOT }).status,
         ).toBe(0);
 
-        const frame = pollPane(socket, session, (text) => text.includes('composer ·') && text.includes(CJK_MARKER));
+        const frame = pollPane(socket, session, (text) => text.includes('普通消息') && text.includes(CJK_MARKER));
         expect(frame.ok, `50 列下主视图未就绪：\n${frame.text}`).toBe(true);
 
         tmux(socket, ['send-keys', '-t', session, 'C-g']);
-        const afterInspector = pollPane(socket, session, (text) => text.includes(NARROW_TERMINAL_NOTICE));
-        expect(afterInspector.ok, `Ctrl+G 后未看到加宽提示：\n${afterInspector.text}`).toBe(true);
-        expect(afterInspector.text).toMatch(/[扩加]宽终端/u);
-        // 主视图保持可见，且没有打开遮挡它的 Inspector 面板。
-        expect(afterInspector.text).toContain('composer · 普通消息');
-        expect(afterInspector.text).toContain(CJK_MARKER);
-        expect(afterInspector.text).not.toContain('generation=');
+        const afterInspector = pollPane(socket, session, (text) => text.includes('Graph Inspector'));
+        expect(afterInspector.ok, afterInspector.text).toBe(true);
+        expect(frameGeometryProblems(paneLines(afterInspector.text), 50)).toEqual([]);
+        tmux(socket, ['send-keys', '-t', session, 'Escape']);
+        const restored = pollPane(socket, session, (text) => text.includes('普通消息') && text.includes(CJK_MARKER));
+        expect(restored.ok, restored.text).toBe(true);
       });
     }
   });

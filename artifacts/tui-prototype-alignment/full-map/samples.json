@@ -1,0 +1,3603 @@
+[
+  {
+    "scenario": "blocked-workspace",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "blocked-workspace-120x40-color.png",
+    "text": "blocked-workspace-120x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "tool-expanded",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "tool-expanded-120x40-color.png",
+    "text": "tool-expanded-120x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "project-overview",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-overview-120x40-color.png",
+    "text": "project-overview-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-budget",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-budget-120x40-color.png",
+    "text": "project-budget-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-identity",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-identity-120x40-color.png",
+    "text": "project-identity-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-identity-scroll",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-identity-scroll-120x40-color.png",
+    "text": "project-identity-scroll-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-work-120x40-color.png",
+    "text": "project-work-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-pending",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-pending-120x40-color.png",
+    "text": "project-pending-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-other-question",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-other-question-120x40-color.png",
+    "text": "project-other-question-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-events",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-events-120x40-color.png",
+    "text": "project-events-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-event-detail",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-event-detail-120x40-color.png",
+    "text": "project-event-detail-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "slash",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "slash-120x40-color.png",
+    "text": "slash-120x40-color.txt",
+    "cursor": [
+      7,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "slash-adopted",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "slash-adopted-120x40-color.png",
+    "text": "slash-adopted-120x40-color.txt",
+    "cursor": [
+      10,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "commands",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "commands-120x40-color.png",
+    "text": "commands-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "sessions",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "sessions-120x40-color.png",
+    "text": "sessions-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "models",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "models-120x40-color.png",
+    "text": "models-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "authorization-120x40-color.png",
+    "text": "authorization-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-record",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "authorization-record-120x40-color.png",
+    "text": "authorization-record-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff-recipient",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "handoff-recipient-120x40-color.png",
+    "text": "handoff-recipient-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "handoff-120x40-color.png",
+    "text": "handoff-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff-record",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "handoff-record-120x40-color.png",
+    "text": "handoff-record-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "cancel-120x40-color.png",
+    "text": "cancel-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel-record",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "cancel-record-120x40-color.png",
+    "text": "cancel-record-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "exit",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "exit-120x40-color.png",
+    "text": "exit-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "exit-record",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "exit-record-120x40-color.png",
+    "text": "exit-record-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-120x40-color.png",
+    "text": "inspector-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-relations",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-relations-120x40-color.png",
+    "text": "inspector-relations-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-relation-selected",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-relation-selected-120x40-color.png",
+    "text": "inspector-relation-selected-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-evidence",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-evidence-120x40-color.png",
+    "text": "inspector-evidence-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-scope",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-scope-120x40-color.png",
+    "text": "inspector-scope-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-identity",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-identity-120x40-color.png",
+    "text": "inspector-identity-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "options",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "options-120x40-color.png",
+    "text": "options-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "workspace-ascii",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "workspace-ascii-120x40-color.png",
+    "text": "workspace-ascii-120x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "inspector-ascii",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-ascii-120x40-color.png",
+    "text": "inspector-ascii-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "blocked-workspace",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "blocked-workspace-120x40-no-color.png",
+    "text": "blocked-workspace-120x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "tool-expanded",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "tool-expanded-120x40-no-color.png",
+    "text": "tool-expanded-120x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "project-overview",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-overview-120x40-no-color.png",
+    "text": "project-overview-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-budget",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-budget-120x40-no-color.png",
+    "text": "project-budget-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-identity",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-identity-120x40-no-color.png",
+    "text": "project-identity-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-identity-scroll",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-identity-scroll-120x40-no-color.png",
+    "text": "project-identity-scroll-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-work-120x40-no-color.png",
+    "text": "project-work-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-pending",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-pending-120x40-no-color.png",
+    "text": "project-pending-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-other-question",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-other-question-120x40-no-color.png",
+    "text": "project-other-question-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-events",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-events-120x40-no-color.png",
+    "text": "project-events-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-event-detail",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-event-detail-120x40-no-color.png",
+    "text": "project-event-detail-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "slash",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "slash-120x40-no-color.png",
+    "text": "slash-120x40-no-color.txt",
+    "cursor": [
+      7,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "slash-adopted",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "slash-adopted-120x40-no-color.png",
+    "text": "slash-adopted-120x40-no-color.txt",
+    "cursor": [
+      10,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "commands",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "commands-120x40-no-color.png",
+    "text": "commands-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "sessions",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "sessions-120x40-no-color.png",
+    "text": "sessions-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "models",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "models-120x40-no-color.png",
+    "text": "models-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "authorization-120x40-no-color.png",
+    "text": "authorization-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-record",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "authorization-record-120x40-no-color.png",
+    "text": "authorization-record-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff-recipient",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "handoff-recipient-120x40-no-color.png",
+    "text": "handoff-recipient-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "handoff-120x40-no-color.png",
+    "text": "handoff-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff-record",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "handoff-record-120x40-no-color.png",
+    "text": "handoff-record-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "cancel-120x40-no-color.png",
+    "text": "cancel-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel-record",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "cancel-record-120x40-no-color.png",
+    "text": "cancel-record-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "exit",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "exit-120x40-no-color.png",
+    "text": "exit-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "exit-record",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "exit-record-120x40-no-color.png",
+    "text": "exit-record-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-120x40-no-color.png",
+    "text": "inspector-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-relations",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-relations-120x40-no-color.png",
+    "text": "inspector-relations-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-relation-selected",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-relation-selected-120x40-no-color.png",
+    "text": "inspector-relation-selected-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-evidence",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-evidence-120x40-no-color.png",
+    "text": "inspector-evidence-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-scope",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-scope-120x40-no-color.png",
+    "text": "inspector-scope-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-identity",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-identity-120x40-no-color.png",
+    "text": "inspector-identity-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "options",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "options-120x40-no-color.png",
+    "text": "options-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "workspace-ascii",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "workspace-ascii-120x40-no-color.png",
+    "text": "workspace-ascii-120x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "inspector-ascii",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-ascii-120x40-no-color.png",
+    "text": "inspector-ascii-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "blocked-workspace",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "blocked-workspace-80x24-color.png",
+    "text": "blocked-workspace-80x24-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "tool-expanded",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "tool-expanded-80x24-color.png",
+    "text": "tool-expanded-80x24-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "project-overview",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-overview-80x24-color.png",
+    "text": "project-overview-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-budget",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-budget-80x24-color.png",
+    "text": "project-budget-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-identity",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-identity-80x24-color.png",
+    "text": "project-identity-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-identity-scroll",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-identity-scroll-80x24-color.png",
+    "text": "project-identity-scroll-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-work-80x24-color.png",
+    "text": "project-work-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-pending",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-pending-80x24-color.png",
+    "text": "project-pending-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-other-question",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-other-question-80x24-color.png",
+    "text": "project-other-question-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-events",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-events-80x24-color.png",
+    "text": "project-events-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-event-detail",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-event-detail-80x24-color.png",
+    "text": "project-event-detail-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "slash",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "slash-80x24-color.png",
+    "text": "slash-80x24-color.txt",
+    "cursor": [
+      7,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "slash-adopted",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "slash-adopted-80x24-color.png",
+    "text": "slash-adopted-80x24-color.txt",
+    "cursor": [
+      10,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "commands",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "commands-80x24-color.png",
+    "text": "commands-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "sessions",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "sessions-80x24-color.png",
+    "text": "sessions-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "models",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "models-80x24-color.png",
+    "text": "models-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "authorization-80x24-color.png",
+    "text": "authorization-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-record",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "authorization-record-80x24-color.png",
+    "text": "authorization-record-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff-recipient",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "handoff-recipient-80x24-color.png",
+    "text": "handoff-recipient-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "handoff-80x24-color.png",
+    "text": "handoff-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff-record",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "handoff-record-80x24-color.png",
+    "text": "handoff-record-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "cancel-80x24-color.png",
+    "text": "cancel-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel-record",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "cancel-record-80x24-color.png",
+    "text": "cancel-record-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "exit",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "exit-80x24-color.png",
+    "text": "exit-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "exit-record",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "exit-record-80x24-color.png",
+    "text": "exit-record-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "inspector-80x24-color.png",
+    "text": "inspector-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-relations",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "inspector-relations-80x24-color.png",
+    "text": "inspector-relations-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-relation-selected",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "inspector-relation-selected-80x24-color.png",
+    "text": "inspector-relation-selected-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-evidence",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "inspector-evidence-80x24-color.png",
+    "text": "inspector-evidence-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-scope",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "inspector-scope-80x24-color.png",
+    "text": "inspector-scope-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-identity",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "inspector-identity-80x24-color.png",
+    "text": "inspector-identity-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "options",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "options-80x24-color.png",
+    "text": "options-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "workspace-ascii",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "workspace-ascii-80x24-color.png",
+    "text": "workspace-ascii-80x24-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "inspector-ascii",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "inspector-ascii-80x24-color.png",
+    "text": "inspector-ascii-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "blocked-workspace",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "blocked-workspace-80x24-no-color.png",
+    "text": "blocked-workspace-80x24-no-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "tool-expanded",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "tool-expanded-80x24-no-color.png",
+    "text": "tool-expanded-80x24-no-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "project-overview",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-overview-80x24-no-color.png",
+    "text": "project-overview-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-budget",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-budget-80x24-no-color.png",
+    "text": "project-budget-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-identity",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-identity-80x24-no-color.png",
+    "text": "project-identity-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-identity-scroll",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-identity-scroll-80x24-no-color.png",
+    "text": "project-identity-scroll-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-work-80x24-no-color.png",
+    "text": "project-work-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-pending",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-pending-80x24-no-color.png",
+    "text": "project-pending-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-other-question",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-other-question-80x24-no-color.png",
+    "text": "project-other-question-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-events",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-events-80x24-no-color.png",
+    "text": "project-events-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-event-detail",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-event-detail-80x24-no-color.png",
+    "text": "project-event-detail-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "slash",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "slash-80x24-no-color.png",
+    "text": "slash-80x24-no-color.txt",
+    "cursor": [
+      7,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "slash-adopted",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "slash-adopted-80x24-no-color.png",
+    "text": "slash-adopted-80x24-no-color.txt",
+    "cursor": [
+      10,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "commands",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "commands-80x24-no-color.png",
+    "text": "commands-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "sessions",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "sessions-80x24-no-color.png",
+    "text": "sessions-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "models",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "models-80x24-no-color.png",
+    "text": "models-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "authorization-80x24-no-color.png",
+    "text": "authorization-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-record",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "authorization-record-80x24-no-color.png",
+    "text": "authorization-record-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff-recipient",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "handoff-recipient-80x24-no-color.png",
+    "text": "handoff-recipient-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "handoff-80x24-no-color.png",
+    "text": "handoff-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff-record",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "handoff-record-80x24-no-color.png",
+    "text": "handoff-record-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "cancel-80x24-no-color.png",
+    "text": "cancel-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel-record",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "cancel-record-80x24-no-color.png",
+    "text": "cancel-record-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "exit",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "exit-80x24-no-color.png",
+    "text": "exit-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "exit-record",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "exit-record-80x24-no-color.png",
+    "text": "exit-record-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "inspector-80x24-no-color.png",
+    "text": "inspector-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-relations",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "inspector-relations-80x24-no-color.png",
+    "text": "inspector-relations-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-relation-selected",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "inspector-relation-selected-80x24-no-color.png",
+    "text": "inspector-relation-selected-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-evidence",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "inspector-evidence-80x24-no-color.png",
+    "text": "inspector-evidence-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-scope",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "inspector-scope-80x24-no-color.png",
+    "text": "inspector-scope-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-identity",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "inspector-identity-80x24-no-color.png",
+    "text": "inspector-identity-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "options",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "options-80x24-no-color.png",
+    "text": "options-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "workspace-ascii",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "workspace-ascii-80x24-no-color.png",
+    "text": "workspace-ascii-80x24-no-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "inspector-ascii",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "inspector-ascii-80x24-no-color.png",
+    "text": "inspector-ascii-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "blocked-workspace",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "blocked-workspace-50x40-color.png",
+    "text": "blocked-workspace-50x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "tool-expanded",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "tool-expanded-50x40-color.png",
+    "text": "tool-expanded-50x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "project-overview",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-overview-50x40-color.png",
+    "text": "project-overview-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-budget",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-budget-50x40-color.png",
+    "text": "project-budget-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-identity",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-identity-50x40-color.png",
+    "text": "project-identity-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-identity-scroll",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-identity-scroll-50x40-color.png",
+    "text": "project-identity-scroll-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-work-50x40-color.png",
+    "text": "project-work-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-pending",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-pending-50x40-color.png",
+    "text": "project-pending-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-other-question",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-other-question-50x40-color.png",
+    "text": "project-other-question-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-events",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-events-50x40-color.png",
+    "text": "project-events-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-event-detail",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-event-detail-50x40-color.png",
+    "text": "project-event-detail-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "slash",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "slash-50x40-color.png",
+    "text": "slash-50x40-color.txt",
+    "cursor": [
+      7,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "slash-adopted",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "slash-adopted-50x40-color.png",
+    "text": "slash-adopted-50x40-color.txt",
+    "cursor": [
+      10,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "commands",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "commands-50x40-color.png",
+    "text": "commands-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "sessions",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "sessions-50x40-color.png",
+    "text": "sessions-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "models",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "models-50x40-color.png",
+    "text": "models-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "authorization-50x40-color.png",
+    "text": "authorization-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-record",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "authorization-record-50x40-color.png",
+    "text": "authorization-record-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff-recipient",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "handoff-recipient-50x40-color.png",
+    "text": "handoff-recipient-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "handoff-50x40-color.png",
+    "text": "handoff-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff-record",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "handoff-record-50x40-color.png",
+    "text": "handoff-record-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "cancel-50x40-color.png",
+    "text": "cancel-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel-record",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "cancel-record-50x40-color.png",
+    "text": "cancel-record-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "exit",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "exit-50x40-color.png",
+    "text": "exit-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "exit-record",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "exit-record-50x40-color.png",
+    "text": "exit-record-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-50x40-color.png",
+    "text": "inspector-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-relations",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-relations-50x40-color.png",
+    "text": "inspector-relations-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-relation-selected",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-relation-selected-50x40-color.png",
+    "text": "inspector-relation-selected-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-evidence",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-evidence-50x40-color.png",
+    "text": "inspector-evidence-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-scope",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-scope-50x40-color.png",
+    "text": "inspector-scope-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-identity",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-identity-50x40-color.png",
+    "text": "inspector-identity-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "options",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "options-50x40-color.png",
+    "text": "options-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "workspace-ascii",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "workspace-ascii-50x40-color.png",
+    "text": "workspace-ascii-50x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "inspector-ascii",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-ascii-50x40-color.png",
+    "text": "inspector-ascii-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "blocked-workspace",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "blocked-workspace-50x40-no-color.png",
+    "text": "blocked-workspace-50x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "tool-expanded",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "tool-expanded-50x40-no-color.png",
+    "text": "tool-expanded-50x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "project-overview",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-overview-50x40-no-color.png",
+    "text": "project-overview-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-budget",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-budget-50x40-no-color.png",
+    "text": "project-budget-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-identity",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-identity-50x40-no-color.png",
+    "text": "project-identity-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-identity-scroll",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-identity-scroll-50x40-no-color.png",
+    "text": "project-identity-scroll-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-work-50x40-no-color.png",
+    "text": "project-work-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-pending",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-pending-50x40-no-color.png",
+    "text": "project-pending-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-other-question",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-other-question-50x40-no-color.png",
+    "text": "project-other-question-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-events",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-events-50x40-no-color.png",
+    "text": "project-events-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-event-detail",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-event-detail-50x40-no-color.png",
+    "text": "project-event-detail-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "slash",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "slash-50x40-no-color.png",
+    "text": "slash-50x40-no-color.txt",
+    "cursor": [
+      7,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "slash-adopted",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "slash-adopted-50x40-no-color.png",
+    "text": "slash-adopted-50x40-no-color.txt",
+    "cursor": [
+      10,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "commands",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "commands-50x40-no-color.png",
+    "text": "commands-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "sessions",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "sessions-50x40-no-color.png",
+    "text": "sessions-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "models",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "models-50x40-no-color.png",
+    "text": "models-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "authorization-50x40-no-color.png",
+    "text": "authorization-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-record",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "authorization-record-50x40-no-color.png",
+    "text": "authorization-record-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff-recipient",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "handoff-recipient-50x40-no-color.png",
+    "text": "handoff-recipient-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "handoff-50x40-no-color.png",
+    "text": "handoff-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "handoff-record",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "handoff-record-50x40-no-color.png",
+    "text": "handoff-record-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "cancel-50x40-no-color.png",
+    "text": "cancel-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel-record",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "cancel-record-50x40-no-color.png",
+    "text": "cancel-record-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "exit",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "exit-50x40-no-color.png",
+    "text": "exit-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "exit-record",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "exit-record-50x40-no-color.png",
+    "text": "exit-record-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-50x40-no-color.png",
+    "text": "inspector-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-relations",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-relations-50x40-no-color.png",
+    "text": "inspector-relations-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-relation-selected",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-relation-selected-50x40-no-color.png",
+    "text": "inspector-relation-selected-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-evidence",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-evidence-50x40-no-color.png",
+    "text": "inspector-evidence-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-scope",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-scope-50x40-no-color.png",
+    "text": "inspector-scope-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-identity",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-identity-50x40-no-color.png",
+    "text": "inspector-identity-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "options",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "options-50x40-no-color.png",
+    "text": "options-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "workspace-ascii",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "workspace-ascii-50x40-no-color.png",
+    "text": "workspace-ascii-50x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "inspector-ascii",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-ascii-50x40-no-color.png",
+    "text": "inspector-ascii-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-workspace",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "planning-workspace-120x40-color.png",
+    "text": "planning-workspace-120x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-workspace",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "planning-workspace-120x40-no-color.png",
+    "text": "planning-workspace-120x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-workspace",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "planning-workspace-80x24-color.png",
+    "text": "planning-workspace-80x24-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-workspace",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "planning-workspace-80x24-no-color.png",
+    "text": "planning-workspace-80x24-no-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-workspace",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "planning-workspace-50x40-color.png",
+    "text": "planning-workspace-50x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-workspace",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "planning-workspace-50x40-no-color.png",
+    "text": "planning-workspace-50x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "execution-workspace",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "execution-workspace-120x40-color.png",
+    "text": "execution-workspace-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-workspace",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "execution-workspace-120x40-no-color.png",
+    "text": "execution-workspace-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-workspace",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "execution-workspace-80x24-color.png",
+    "text": "execution-workspace-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-workspace",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "execution-workspace-80x24-no-color.png",
+    "text": "execution-workspace-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-workspace",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "execution-workspace-50x40-color.png",
+    "text": "execution-workspace-50x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "execution-workspace",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "execution-workspace-50x40-no-color.png",
+    "text": "execution-workspace-50x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "empty-workspace",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "empty-workspace-120x40-color.png",
+    "text": "empty-workspace-120x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "empty-workspace",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "empty-workspace-120x40-no-color.png",
+    "text": "empty-workspace-120x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "empty-workspace",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "empty-workspace-80x24-color.png",
+    "text": "empty-workspace-80x24-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "empty-workspace",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "empty-workspace-80x24-no-color.png",
+    "text": "empty-workspace-80x24-no-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "empty-workspace",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "empty-workspace-50x40-color.png",
+    "text": "empty-workspace-50x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "empty-workspace",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "empty-workspace-50x40-no-color.png",
+    "text": "empty-workspace-50x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "disabled-workspace",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "disabled-workspace-120x40-color.png",
+    "text": "disabled-workspace-120x40-color.txt",
+    "cursor": [
+      2,
+      35
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "disabled-workspace",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "disabled-workspace-120x40-no-color.png",
+    "text": "disabled-workspace-120x40-no-color.txt",
+    "cursor": [
+      2,
+      35
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "disabled-workspace",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "disabled-workspace-80x24-color.png",
+    "text": "disabled-workspace-80x24-color.txt",
+    "cursor": [
+      2,
+      19
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "disabled-workspace",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "disabled-workspace-80x24-no-color.png",
+    "text": "disabled-workspace-80x24-no-color.txt",
+    "cursor": [
+      2,
+      19
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "disabled-workspace",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "disabled-workspace-50x40-color.png",
+    "text": "disabled-workspace-50x40-color.txt",
+    "cursor": [
+      2,
+      35
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "disabled-workspace",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "disabled-workspace-50x40-no-color.png",
+    "text": "disabled-workspace-50x40-no-color.txt",
+    "cursor": [
+      2,
+      35
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "alignment-planning-workspace",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "alignment-planning-workspace-120x40-color.png",
+    "text": "alignment-planning-workspace-120x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-handoff",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "planning-handoff-120x40-color.png",
+    "text": "planning-handoff-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-record",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "planning-handoff-record-120x40-color.png",
+    "text": "planning-handoff-record-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "alignment-planning-workspace",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "alignment-planning-workspace-120x40-no-color.png",
+    "text": "alignment-planning-workspace-120x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-handoff",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "planning-handoff-120x40-no-color.png",
+    "text": "planning-handoff-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-record",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "planning-handoff-record-120x40-no-color.png",
+    "text": "planning-handoff-record-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "alignment-planning-workspace",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "alignment-planning-workspace-80x24-color.png",
+    "text": "alignment-planning-workspace-80x24-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-handoff",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "planning-handoff-80x24-color.png",
+    "text": "planning-handoff-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-record",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "planning-handoff-record-80x24-color.png",
+    "text": "planning-handoff-record-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "alignment-planning-workspace",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "alignment-planning-workspace-80x24-no-color.png",
+    "text": "alignment-planning-workspace-80x24-no-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-handoff",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "planning-handoff-80x24-no-color.png",
+    "text": "planning-handoff-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-record",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "planning-handoff-record-80x24-no-color.png",
+    "text": "planning-handoff-record-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "alignment-planning-workspace",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "alignment-planning-workspace-50x40-color.png",
+    "text": "alignment-planning-workspace-50x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-handoff",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "planning-handoff-50x40-color.png",
+    "text": "planning-handoff-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-record",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "planning-handoff-record-50x40-color.png",
+    "text": "planning-handoff-record-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "alignment-planning-workspace",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "alignment-planning-workspace-50x40-no-color.png",
+    "text": "alignment-planning-workspace-50x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-handoff",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "planning-handoff-50x40-no-color.png",
+    "text": "planning-handoff-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-record",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "planning-handoff-record-50x40-no-color.png",
+    "text": "planning-handoff-record-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "answer-options",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "answer-options-120x40-color.png",
+    "text": "answer-options-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "answer-free",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "answer-free-120x40-color.png",
+    "text": "answer-free-120x40-color.txt",
+    "cursor": [
+      8,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "answer-return",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "answer-return-120x40-color.png",
+    "text": "answer-return-120x40-color.txt",
+    "cursor": [
+      14,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "slash-executed",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "slash-executed-120x40-color.png",
+    "text": "slash-executed-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "answer-options",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "answer-options-120x40-no-color.png",
+    "text": "answer-options-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "answer-free",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "answer-free-120x40-no-color.png",
+    "text": "answer-free-120x40-no-color.txt",
+    "cursor": [
+      8,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "answer-return",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "answer-return-120x40-no-color.png",
+    "text": "answer-return-120x40-no-color.txt",
+    "cursor": [
+      14,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "slash-executed",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "slash-executed-120x40-no-color.png",
+    "text": "slash-executed-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "answer-options",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "answer-options-80x24-color.png",
+    "text": "answer-options-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "answer-free",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "answer-free-80x24-color.png",
+    "text": "answer-free-80x24-color.txt",
+    "cursor": [
+      8,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "answer-return",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "answer-return-80x24-color.png",
+    "text": "answer-return-80x24-color.txt",
+    "cursor": [
+      14,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "slash-executed",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "slash-executed-80x24-color.png",
+    "text": "slash-executed-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "answer-options",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "answer-options-80x24-no-color.png",
+    "text": "answer-options-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "answer-free",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "answer-free-80x24-no-color.png",
+    "text": "answer-free-80x24-no-color.txt",
+    "cursor": [
+      8,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "answer-return",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "answer-return-80x24-no-color.png",
+    "text": "answer-return-80x24-no-color.txt",
+    "cursor": [
+      14,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "slash-executed",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "slash-executed-80x24-no-color.png",
+    "text": "slash-executed-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "answer-options",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "answer-options-50x40-color.png",
+    "text": "answer-options-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "answer-free",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "answer-free-50x40-color.png",
+    "text": "answer-free-50x40-color.txt",
+    "cursor": [
+      8,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "answer-return",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "answer-return-50x40-color.png",
+    "text": "answer-return-50x40-color.txt",
+    "cursor": [
+      14,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "slash-executed",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "slash-executed-50x40-color.png",
+    "text": "slash-executed-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "answer-options",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "answer-options-50x40-no-color.png",
+    "text": "answer-options-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "answer-free",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "answer-free-50x40-no-color.png",
+    "text": "answer-free-50x40-no-color.txt",
+    "cursor": [
+      8,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "answer-return",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "answer-return-50x40-no-color.png",
+    "text": "answer-return-50x40-no-color.txt",
+    "cursor": [
+      14,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "slash-executed",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "slash-executed-50x40-no-color.png",
+    "text": "slash-executed-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "resize-project",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "resize-project-120x40-color.png",
+    "text": "resize-project-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "resize-project",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "resize-project-80x24-color.png",
+    "text": "resize-project-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "resize-project",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "resize-project-50x40-color.png",
+    "text": "resize-project-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "resize-inspector",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "resize-inspector-50x40-color.png",
+    "text": "resize-inspector-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "resize-inspector",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "resize-inspector-80x24-color.png",
+    "text": "resize-inspector-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "resize-inspector",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "resize-inspector-120x40-color.png",
+    "text": "resize-inspector-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "resize-return",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "resize-return-120x40-color.png",
+    "text": "resize-return-120x40-color.txt",
+    "cursor": [
+      6,
+      36
+    ],
+    "cursorVisible": true
+  }
+]

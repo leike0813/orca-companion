@@ -7,7 +7,7 @@
 
 import { Box, Text } from 'ink';
 
-import { truncateToDisplayWidth } from '../render/width.js';
+import { displayWidth, truncateToDisplayWidth } from '../render/width.js';
 import { tuiColors } from '../theme.js';
 
 export type TopBarProps = {
@@ -26,25 +26,29 @@ export type TopBarProps = {
   readonly reconciling: boolean;
   /** 可用显示宽度；由工作区按终端预算传入。 */
   readonly availableWidth: number;
+  readonly sessionId?: string | null;
+  readonly pendingCount?: number;
+  readonly holder?: string | null;
 };
 
 /**
- * 顶栏的展示片段；纯函数，便于断言「授权后出现新的 Generation 与计数」。
- *
- * `reconciling` 排在控制状态之后：顶栏会被按终端宽度裁切，而「重启先对账」是安全相关的状态，不能被
- * Generation/Authorization 等次要片段挤出屏幕。
+ * 为模式、控制状态、待对账与待答数量预留宽度，次要持有者仅使用剩余空间。
  */
 export function topBarSegments(props: TopBarProps): readonly string[] {
-  return [
-    `Scope ${props.coordinationScopeId}`,
-    props.mode,
+  const fixed=[props.mode==='route_planning'?'规划':'执行',props.controlState,...(props.reconciling?['待对账']:[]),'待答'+(props.pendingCount??0)].join(' · ');
+  const identity=truncateToDisplayWidth(props.sessionId??'未选择会话',Math.max(1,props.availableWidth-displayWidth(fixed)-3));
+  const segments = [
+    identity,
+    props.mode === 'route_planning' ? '规划' : '执行',
     props.controlState,
-    ...(props.reconciling ? ['reconciling'] : []),
-    props.graphLabel ?? 'graph none',
-    `gen=${props.generation === null ? 'none' : String(props.generation)}`,
-    `auth=${props.authorizationLabel ?? 'none'}`,
-    `active=${String(props.activeWorkPackageCount)}`,
+    ...(props.reconciling ? ['待对账'] : []),
+    '待答' + (props.pendingCount ?? 0),
   ];
+  const remaining = props.availableWidth - displayWidth(segments.join(' · ')) - 3;
+  if (props.holder && props.holder !== props.sessionId && remaining >= 6) {
+    segments.push(truncateToDisplayWidth('持有 ' + props.holder, remaining));
+  }
+  return segments;
 }
 
 export function TopBar(props: TopBarProps) {

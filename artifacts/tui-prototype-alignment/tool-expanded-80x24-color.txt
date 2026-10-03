@@ -1,0 +1,24 @@
+Scope scope-preview · route_planning · active · graph-1 v2 · gen=1 · auth=none …
+────────────────────────────────────────────────────────────────────────────────
+│ › 请规划第一版路线图：中文abc混排内容需要按显示宽度 │Scope active · active 0
+│   换行                                              │- wp-1 unknown
+                                                      │  - wp-2 unknown <- wp-1
+● Coordinator 会先读地图，再确认依赖与范围。
+  ▾ tool search
+  │ search
+  │ 命中 3 个文件
+
+
+
+
+
+
+
+╭────────────────────────────────────────────────────╮
+│ › 普通消息                                         │
+│ 输入消息… · Alt+Enter 换行                         │
+╰────────────────────────────────────────────────────╯
+scope control · active · Pause/Resume/Cancel 只作用于…
+revision 7 · sidebar compact
+active 0
+

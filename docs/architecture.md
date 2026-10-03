@@ -124,7 +124,7 @@ React 组件只拥有展示与输入协调。render、effect、resize 和重挂�
 
 Composer 的纯编辑模块拥有 grapheme 光标、原子粘贴范围和有界 viewport；正文在 UiDraft 中只有一份。当前 Session 的回答面板与粘贴 viewer 消费窄查询和同一输入保护管线。应用 Pending Interaction 用例拥有问题创建/重放与回答，Branch Store 拥有问题正文；workflow 的共享 `ask_user` 在两种模式和恢复注册表接线，不增加业务状态机。问题列表最多 20 条，详情按身份精确读取，Scope snapshot 不复制正文。
 
-开发预览 `scripts/tui-preview.mjs` 只向构建后的 TUI 注入固定假端口；主题由 `src/interfaces/tui/theme.ts` 统一提供。预览中的写端口均拒绝，不属于生产 Bootstrap。
+开发预览 `scripts/tui-preview.mjs` 只向构建后的 TUI 注入隔离假端口；主题由 `src/interfaces/tui/theme.ts` 统一提供。普通场景拒绝写入，alignment 场景在内存中模拟 accepted 以观察交接/确认后的展示，不连接生产 Bootstrap 或真实后端。
 
 ### MOD-07 Bootstrap
 

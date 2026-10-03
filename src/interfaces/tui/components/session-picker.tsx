@@ -5,18 +5,19 @@
  * 最近活动顺序取第一个。选择动作只是展示态变化——它不改变 Scope 级 Execution Graph。
  */
 
-import { Box, Text } from 'ink';
+import { Text } from 'ink';
 
 import { truncateToDisplayWidth } from '../render/width.js';
 import type { SessionSummaryView } from '../../../application/tui/view-model.js';
-import { tuiColors } from '../theme.js';
-import { SelectionList } from './selection-list.js';
+import { DialogFrame, SelectionList } from './selection-list.js';
 
 export type SessionPickerProps = {
   readonly sessions: readonly SessionSummaryView[];
   readonly selectedSessionId: string | null;
   readonly onSelect: (coordinatorSessionId: string) => void;
   readonly availableWidth: number;
+  readonly rows?: number;
+  readonly title?: string;
 };
 
 /**
@@ -41,21 +42,12 @@ export function sessionMarker(session: SessionSummaryView): string {
 }
 
 export function SessionPicker(props: SessionPickerProps) {
-  return (
-    <Box flexDirection="column" borderStyle="single" borderColor={tuiColors.border}>
-      <Text color={tuiColors.accent} bold>Session Picker</Text>
-      <SelectionList
-        options={props.sessions.map((session) => ({
-          label: truncateToDisplayWidth(
-            `${sessionMarker(session)} ${session.coordinatorSessionId} ${session.lifecycleState} pending=${String(session.openInteractionCount)}`,
-            Math.max(1, props.availableWidth - 5),
-          ),
-          value: session.coordinatorSessionId,
-        }))}
-        {...(props.selectedSessionId === null ? {} : { defaultValue: props.selectedSessionId })}
-        onSelect={props.onSelect}
-      />
-      <Text dimColor>Enter 选择 · Esc 关闭</Text>
-    </Box>
-  );
+  const rows=props.rows??16;
+  return <DialogFrame title={props.title??'Session Picker'} summary={`当前 ${props.selectedSessionId??'未选择'} · ${props.sessions.length} 个会话`} width={props.availableWidth} rows={rows} footer="↑↓ 选择 · Enter 进入 · Esc 返回">
+    <Text dimColor>会话                                      状态 / 待答</Text>
+    <SelectionList options={props.sessions.map(session=>({
+      label:truncateToDisplayWidth(`${sessionMarker(session)} ${session.coordinatorSessionId} · ${session.lifecycleState} · 待答 ${session.openInteractionCount}`,Math.max(1,props.availableWidth-10)),
+      value:session.coordinatorSessionId,
+    }))} {...(props.selectedSessionId===null?{}:{defaultValue:props.selectedSessionId})} visibleOptionCount={Math.max(1,rows-8)} onSelect={props.onSelect}/>
+  </DialogFrame>;
 }

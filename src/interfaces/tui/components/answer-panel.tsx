@@ -5,6 +5,7 @@ import type { UserQuestion } from '../../../application/ports/branch-coordinatio
 import type { UiDraft } from '../../../application/ports/ui-input-store.js';
 import { wrapByDisplayWidth, truncateToDisplayWidth } from '../render/width.js';
 import { Composer } from './composer.js';
+import { tuiColors } from '../theme.js';
 
 export type AnswerPanelView = {
   readonly interaction: ControllerInteractionView & { readonly question: UserQuestion | null };
@@ -25,16 +26,25 @@ export function AnswerPanel(props: { readonly view: AnswerPanelView; readonly dr
   const options = question?.options ?? [];
   const body = wrapByDisplayWidth(question?.text ?? `${view.interaction.subjectRef.kind}:${view.interaction.subjectRef.id}`, props.width);
   const start = Math.max(0, view.option - 3);
+  const visibleBody = body.slice(view.scroll, view.scroll + 3);
+  const visibleOptions = options.slice(start, start + 4);
+  // 标题/提示 2 行、输入框 3 行、工作区控制/状态 3 行，至少保留 1 行 transcript。
+  const editorRows = Math.max(1, props.rows - visibleBody.length - visibleOptions.length - 9
+    - (props.disabledReason === null ? 0 : 1) - (props.focused ? 0 : 1));
   return <Box ref={ref} flexDirection="column">
-    <Text bold>{truncateToDisplayWidth(`回答 ${String(view.index + 1)}/${String(view.count)} · Shift+←/→ 切题 · Esc 返回聊天`, props.width)}</Text>
-    {body.slice(view.scroll, view.scroll + 3).map((line, index) => <Text key={index}>{line || ' '}</Text>)}
-    {options.slice(start, start + 4).map((option, index) => <Text key={option.label}>
-      {truncateToDisplayWidth(`${view.focus === 'options' && view.option === start + index ? '>' : ' '} ${option.label}${option.description ? ` · ${option.description}` : ''}`, props.width)}
+    <Text color={tuiColors.focus} bold>{truncateToDisplayWidth(`› 回答 ${String(view.index + 1)}/${String(view.count)} · Shift+←/→ 切题 · Esc 返回聊天`, props.width)}</Text>
+    {visibleBody.map((line, index) => <Text key={index}>{line || ' '}</Text>)}
+    {visibleOptions.map((option, index) => <Text key={option.label}
+      inverse={props.focused && view.focus === 'options' && view.option === start + index}
+      bold={view.focus === 'options' && view.option === start + index}>
+      {truncateToDisplayWidth(`${view.focus === 'options' && view.option === start + index ? '›' : ' '} ${option.label}${option.description ? ` · ${option.description}` : ''}`, props.width)}
     </Text>)}
     <Text dimColor>{truncateToDisplayWidth('Tab 切换选项/自由回答 · Enter 提交 · PgUp/PgDn 阅读问题', props.width)}</Text>
+    {view.focus === 'options' && (props.disabledReason !== null || props.readOnly)
+      ? <Text color={tuiColors.warning}>{truncateToDisplayWidth(`! ${props.disabledReason ?? '只读：该 Session 已交接'}`, props.width)}</Text> : null}
     {view.focus === 'text' ? <Composer value={props.draft.text} draft={props.draft}
       mode={{ kind: 'answer', interactionId: view.interaction.interactionId, expectedRevision: view.interaction.expectedRevision }}
-      availableWidth={props.width} terminalHeight={props.rows} newlineHint="Alt+Enter 换行" readOnly={props.readOnly}
+      availableWidth={props.width} terminalHeight={Math.min(props.rows, editorRows * 3)} newlineHint="Alt+Enter 换行" readOnly={props.readOnly}
       disabledReason={props.disabledReason} focused={props.focused}
       origin={{ x: props.origin.x + metrics.left, y: props.origin.y + metrics.top }} /> : null}
   </Box>;

@@ -264,13 +264,6 @@ async function readStatus(workspace: string): Promise<StatusSnapshot> {
   return JSON.parse(stdout) as StatusSnapshot;
 }
 
-/** 状态行的稳定形状：`[一次性提示 · ]revision N · sidebar <密度> …`。 */
-const STATUS_LINE_PATTERN = /(?<notice>.*?)revision \d+ · sidebar (?:full|compact|collapsed)/u;
-
-function statusLine(pane: string): string {
-  return pane.split('\n').find((line) => STATUS_LINE_PATTERN.test(line)) ?? '';
-}
-
 /**
  * 界面上的 blocker 行（Sidebar 的 `blockers` 分区以 `! ` 开头）。
  *
@@ -291,9 +284,7 @@ function blockerLines(pane: string): string {
 
 /** 状态行上的一次性提示（拒绝原因、unknown 提示）；没有提示时为 `null`。 */
 function noticeOf(pane: string): string | null {
-  const matched = STATUS_LINE_PATTERN.exec(statusLine(pane));
-  const prefix = (matched?.groups?.['notice'] ?? '').replace(/ · $/u, '').trim();
-  return prefix.length === 0 ? null : prefix;
+  return pane.split('\n').find(line=>line.startsWith('! '))?.slice(2) ?? null;
 }
 
 /**
@@ -302,15 +293,14 @@ function noticeOf(pane: string): string | null {
  * 同一行右侧是 Sidebar 的内容（两者在同一个终端行里拼接），因此这里只认行首的 `active 0|1` 词边界，
  * 不对行尾作任何假设。
  */
-const EXECUTION_SUMMARY_PATTERN = /^active [01]\b/u;
-
 function executionSummaryLine(pane: string): string {
-  return pane.split('\n').map((line) => line.trim()).find((line) => EXECUTION_SUMMARY_PATTERN.test(line)) ?? '';
+  const count=/执行图侧栏 · active ([01])\b/u.exec(pane)?.[1];
+  return count===undefined?'':`active ${count}`;
 }
 
 /** 控制条 `scope control · <state>`；未渲染控制条时为 `null`。 */
 function displayedControlStateOrNull(pane: string): string | null {
-  return /scope control · ([a-z_]+)/u.exec(pane)?.[1] ?? null;
+  return /(?:规划|执行) · ([a-z_]+)/u.exec(pane.split('\n')[0]??'')?.[1] ?? null;
 }
 
 function displayedControlState(pane: string): string {
@@ -350,7 +340,7 @@ function startTui(workspace: string): void {
     '-c', workspace, command,
   ], { env });
   expect(started.status, `tmux 无法启动前台 TUI：${(started.stderr ?? '').trim()}`).toBe(0);
-  const workspaceFrame = pollPane(SOCKET, SESSION, (text) => text.includes('composer ·'), 60_000);
+  const workspaceFrame = pollPane(SOCKET, SESSION, (text) => text.includes('普通消息'), 60_000);
   expect(
     workspaceFrame.ok,
     `TUI 未在隔离项目中进入 workspace（${paneStatus(SOCKET, SESSION)}）：\n${workspaceFrame.text}`,
@@ -500,7 +490,7 @@ if (gate.kind === 'skip') {
       }
       const pane = capturePane(SOCKET, SESSION);
       expect(pane, `前台 TUI 不在 workspace（${paneStatus(SOCKET, SESSION)}）：\n${pane}`).toContain(
-        'composer ·',
+        '普通消息',
       );
       return pane;
     }
@@ -1050,41 +1040,101 @@ if (gate.kind === 'skip') {
     }
 
     /**
-     * 同一终端行里左面板与 Sidebar 用 `│` 分隔：Sidebar 单元格是最后一个分隔符之后的内容。
-     *
-     * 不能直接对整行 trim 后比较分区标题——左边距会把 `│recovery` 一起带进来。
+     * 面板按列硬换行，断言 token 可能正好落在换行处；去掉空白与边框字符后，被换行拆开的连续事实重新
+     * 接上，`includes` 因此不依赖某一帧恰好停在哪一列。
      */
-    function sidebarCell(line: string): string {
-      const index = line.lastIndexOf('│');
-      return (index < 0 ? line : line.slice(index + 1)).trim();
+    function compactPane(text: string): string {
+      return text.replace(/[\s│┃|─╭╮╰╯]/gu, '');
     }
 
-    /** Sidebar 的 recovery 分区行；没有该分区时为空数组。 */
-    function recoveryRows(pane: string): readonly string[] {
-      const cells = pane.split('\n').map(sidebarCell);
-      const headers = new Set([
-        '预算',
-        'execution graph',
-        'integration queue (串行)',
-        'recovery',
-        'workers',
-        'blockers',
-        'finalizer',
-      ]);
-      const start = cells.indexOf('recovery');
-      if (start < 0) {
-        return [];
+    /** 发送按键并等到界面变化（复用 pollPane）；超时无变化时返回最后一次文本，由调用方判定。 */
+    function sendKeyAndSettle(key: string, previous: string, timeoutMs = 3_000): string {
+      tmux(SOCKET, ['send-keys', '-t', SESSION, key]);
+      return pollPane(SOCKET, SESSION, (text) => text !== previous, timeoutMs).text;
+    }
+
+    /**
+     * 经真实入口读取项目面板「工作记录与依据」详情。
+     *
+     * V-03 把完整工作记录、Recovery 与 Finalizer 归到这里，默认 Sidebar 不再产出 recovery/finalizer
+     * 分区，因此核验必须真的进入详情，而不是在普通工作区等旧分区。总览条目的顺序由原型分组决定，这里
+     * 按选中标记定位「工作记录与依据」，不硬编码索引。面板只有 40 列，条目/字段会硬换行，两个节点加
+     * Recovery 与 Finalizer 可能远超一屏，所以必须真的滚到底：每按一次 Down 都轮询到界面变化（Ink 的
+     * 一帧可能落后于 send-keys），连续两次没有变化才判定到底，读到 tail（含 verdict 之后的
+     * verdictRecording）。返回前把详情滚回顶部（Esc 回列表再 Enter 重开），避免第二次读取从底部开始而
+     * 漏掉 Recovery。调用方读完用 `closeProjectPanel` 逐层退回工作区。
+     */
+    function readProjectWorkDetail(): string {
+      if (!capturePane(SOCKET, SESSION).includes('项目面板')) {
+        tmux(SOCKET, ['send-keys', '-t', SESSION, 'C-b']);
       }
-      const rows: string[] = [];
-      for (const cell of cells.slice(start + 1)) {
-        if (headers.has(cell)) {
+      const list = pollPane(SOCKET, SESSION, (text) => text.includes('项目面板'), 10_000);
+      expect(list.ok, `项目面板未打开：\n${list.text}`).toBe(true);
+      let pane = list.text;
+      if (list.text.includes('Esc 返回列表')) {
+        pane = sendKeyAndSettle('Escape', list.text, 5_000);
+      }
+      let collected: string | null = null;
+      for (let step = 0; step < 12 && collected === null; step += 1) {
+        pane = sendKeyAndSettle('Down', pane);
+        if (!/› [^\n]*工作记录/u.test(pane)) {
+          continue;
+        }
+        pane = sendKeyAndSettle('Enter', pane, 10_000);
+        if (!pane.includes('Esc 返回列表')) {
+          continue;
+        }
+        // 逐帧滚到底：连续两次无变化（scroll 已被夹到底部）才停；400 只是技术上限。
+        let scrolled = pane + '\n';
+        let unchanged = 0;
+        for (let down = 0; down < 400; down += 1) {
+          const next = sendKeyAndSettle('Down', pane, 1_000);
+          if (next === pane) {
+            unchanged += 1;
+            if (unchanged >= 2) {
+              break;
+            }
+            continue;
+          }
+          unchanged = 0;
+          pane = next;
+          scrolled += pane + '\n';
+        }
+        // 必须真的读到底部：Finalizer 只在「工作记录与依据」详情里出现，而 verdictRecording（或没有结论
+        // 时的「verdict 未返回」）排在 verdict 之后，只有滚到 tail 才能看到——仅命中 Finalizer 不能证明
+        // 读全了。任一不成立就退回列表继续找，避免读到别的条目或半截详情。
+        const atTail = pane.includes('verdictRecording') || pane.includes('verdict 未返回');
+        if (scrolled.includes('Finalizer') && atTail) {
+          collected = scrolled;
           break;
         }
-        if (cell.length > 0) {
-          rows.push(cell);
-        }
+        pane = sendKeyAndSettle('Escape', pane, 5_000);
       }
-      return rows;
+      expect(
+        collected,
+        `未能经真实入口读到底部（Finalizer 与 verdict tail）：\n${capturePane(SOCKET, SESSION)}`,
+      ).not.toBeNull();
+      // 返回前滚回顶部：Esc 回列表、再 Enter 重开（打开详情时 scroll=0），避免下一次读取从底部开始。
+      pane = sendKeyAndSettle('Escape', pane, 5_000);
+      if (!pane.includes('Esc 返回列表')) {
+        sendKeyAndSettle('Enter', pane, 10_000);
+      }
+      return collected ?? capturePane(SOCKET, SESSION);
+    }
+
+    /** Esc 逐层返回：详情 → 列表 → 工作区（关闭项目面板）。 */
+    function closeProjectPanel(): void {
+      // 两次 Esc 必须各自等到界面真的回到上一层：Ink/终端可能把紧挨的两个 Esc 当成一次 Alt 序列吞掉，
+      // 因此一次只发一个 Esc，等到界面变化再发下一个。
+      for (let step = 0; step < 4; step += 1) {
+        const current = capturePane(SOCKET, SESSION);
+        if (!current.includes('项目面板')) {
+          break;
+        }
+        sendKeyAndSettle('Escape', current, 5_000);
+      }
+      const gone = pollPane(SOCKET, SESSION, (text) => !text.includes('项目面板'), 10_000);
+      expect(gone.ok, `项目面板未关闭：\n${gone.text}`).toBe(true);
     }
 
     /**
@@ -1173,31 +1223,35 @@ if (gate.kind === 'skip') {
         const pane = ensureTuiPane();
         // 双 TTY 门禁在挂载 Ink 之前判决：没有 TTY 时进程只会留下拒绝提示，不会渲染 workspace。
         expect(pane, '有 TTY 时不应出现无 TTY 的拒绝提示').not.toContain('需要交互式终端');
-        expect(pane).toContain('composer ·');
+        expect(pane).toContain('普通消息');
       },
       180_000,
     );
 
     test(
-      '② 顶栏显示 Graph Generation、Authorization 与 active 计数（Scenario: 授权不重置工作区 / 并发上限为 1）',
+      '② 图摘要、授权详情与 active 计数按定稿分层（Scenario: 授权不重置工作区 / 并发上限为 1）',
       async () => {
         const pane = ensureTuiPane();
         const status = await readStatus(workspace);
-        const topBar = pane.split('\n').find((line) => line.startsWith('Scope ')) ?? '';
-        expect(topBar, `顶栏未显示执行摘要（终端宽度 ${PANE_WIDTH} 是否被裁切）：\n${pane}`).toMatch(
-          /gen=(?:none|\d+)/u,
-        );
-        expect(topBar).toContain(`active=${String(status.execution.activeWorkPackageCount)}`);
+        expect(displayedControlState(pane)).toBe(status.scope.controlState);
+        if(status.graph!==undefined)expect(pane).toContain(`·v${status.graph.version}`);
+        if(status.scope.mode==='execution_coordination')expect(executionSummaryLine(pane)).toBe(`active ${status.execution.activeWorkPackageCount}`);
+        tmux(SOCKET,['send-keys','-t',SESSION,'C-b']);
+        tmux(SOCKET,['send-keys','-t',SESSION,'Down']);
+        tmux(SOCKET,['send-keys','-t',SESSION,'Enter']);
+        const detail=pollPane(SOCKET,SESSION,text=>text.includes('授权引用:'));
+        expect(detail.ok,detail.text).toBe(true);
         // 顶栏不得虚构授权：显示的 Authorization 必须与持久化的授权记录一致。
         const authorization = status.scope.authorization;
-        expect(topBar).toContain(
+        expect(detail.text).toContain(
           authorization === null
-            ? 'auth=none'
-            : `auth=${authorization.id} v${String(authorization.version)}`,
+            ? '尚未授权'
+            : `${authorization.id} v${String(authorization.version)}`,
         );
+        tmux(SOCKET,['send-keys','-t',SESSION,'Escape']);
+        tmux(SOCKET,['send-keys','-t',SESSION,'Escape']);
         // Execution Coordination 的并发上限固定为 1；真实快照与界面都只可能给出 0 或 1。
         expect(status.execution.activeWorkPackageCount).toBeLessThanOrEqual(1);
-        expect(topBar).toMatch(/active=[01]\b/u);
       },
       90_000,
     );
@@ -1268,6 +1322,7 @@ if (gate.kind === 'skip') {
         // 放宽沙箱必须真的写在项目配置里并被审阅显示出来，批准才是有意为之。
         expect(review.text, '审阅必须显示 Worker Sandbox').toContain('danger-full-access');
         expect(review.text, '门禁通过才允许批准').toContain('门禁: 通过');
+        tmux(SOCKET, ['send-keys', '-t', SESSION, 'Right']);
         tmux(SOCKET, ['send-keys', '-t', SESSION, 'Enter']);
         const authorized = await pollStatus(
           (status) => status.scope.mode === 'execution_coordination',
@@ -1277,9 +1332,9 @@ if (gate.kind === 'skip') {
         expect(authorized.scope.authorization).not.toBeNull();
         expect(authorized.scope.executionLeaseHolder).not.toBeNull();
         // 授权不重置工作区：顶栏出现授权，composer 仍在。
-        const authorizedPane = pollPane(SOCKET, SESSION, (text) => /auth=(?!none)\S+/u.test(text), 30_000);
-        expect(authorizedPane.ok, `顶栏未显示授权：\n${authorizedPane.text}`).toBe(true);
-        expect(authorizedPane.text, '授权不重置工作区').toContain('composer ·');
+        const authorizedPane = pollPane(SOCKET, SESSION, (text) => text.includes('执行图侧栏') && displayedControlStateOrNull(text)===authorized.scope.controlState, 30_000);
+        expect(authorizedPane.ok, `界面未显示授权后的执行状态：\n${authorizedPane.text}`).toBe(true);
+        expect(authorizedPane.text, '授权不重置工作区').toContain('普通消息');
 
         // ---- 驱动：一次触发最多推进一个阶段，因此用 Pause→Resume 轮次推进真实 Frontier ----
         /**
@@ -1396,8 +1451,6 @@ if (gate.kind === 'skip') {
         let graphChangeAttempts = 0;
         let graphChangeNextAttemptAt = 0;
         let graphChangeHoldUntil = 0;
-        /** 提交声明后界面上出现过的 reconcile 行：只在真的需要核验的时刻采集。 */
-        let reconcilingPane: string | null = null;
         const canonicalHead = (): string =>
           spawnSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).stdout.trim();
         while (Date.now() < deadline && !terminalReached(snapshot, loopFacts)) {
@@ -1423,11 +1476,6 @@ if (gate.kind === 'skip') {
               snapshot = await readStatus(workspace);
               continue;
             }
-            if (reconcilingPane === null) {
-              // 基线补救期间 Sidebar 必须把该节点显示为 reconcile（严重性由持久记录给出）。
-              const reconciling = pollPane(SOCKET, SESSION, (text) => text.includes('reconcile'), 60_000);
-              reconcilingPane = reconciling.ok ? reconciling.text : null;
-            }
           } else if (
             canonicalHead() !== seededBaselineHead &&
             candidateTarget !== null &&
@@ -1442,12 +1490,6 @@ if (gate.kind === 'skip') {
             graphChangeNextAttemptAt = Date.now() + GRAPH_CHANGE_INTERVAL_MS;
             graphChangeHoldUntil = Date.now() + GRAPH_CHANGE_HOLD_MS;
             graphChangeTarget = graphChangeTarget ?? candidateTarget;
-            // 提交那一刻目标节点一定还在图上，Sidebar 也就一定还在渲染它的 reconcile 行：补丁可能把它
-            // retire 掉（真实 Planner 起草时会），那时再找就找不到了。这里先采，补丁落地后再兜底采一次。
-            if (reconcilingPane === null) {
-              const reconcilingNow = pollPane(SOCKET, SESSION, (text) => text.includes('reconcile'), 30_000);
-              reconcilingPane = reconcilingNow.ok ? reconcilingNow.text : null;
-            }
             submitComposerMessage(graphChangeInstruction(candidateTarget));
             console.warn(
               `[pty-execution] 图变化声明第 ${String(graphChangeAttempts)} 次提交 ${describeStatus(snapshot)}`,
@@ -1594,16 +1636,24 @@ if (gate.kind === 'skip') {
         const facts = await readExecutionFacts();
         console.warn(`[pty-execution] rounds=${String(rounds)} ${describeStatus(observed)}`);
 
-        // ---- 界面先重读一次快照：只是为了让 Sidebar 画出已持久化的 Recovery / Finalizer 事实 ----
+        // ---- 界面先重读一次快照：让项目面板详情画出已持久化的 Recovery / Finalizer 事实 ----
         await waitForQuiescence(QUIESCENCE_WINDOW_MS);
         await submitControl('pause', (await readStatus(workspace)).scope.controlState);
-        const refreshed = pollPane(
-          SOCKET,
-          SESSION,
-          (text) => text.includes('finalizer'),
-          15_000,
-        );
-        expect(refreshed.ok, `Sidebar 未渲染 finalizer 分区：\n${refreshed.text}`).toBe(true);
+        // V-03/V-04：完整工作记录（含 Recovery 与 Finalizer）归项目面板「工作记录与依据」详情，默认
+        // Sidebar 不再产出这两个分区。经真实入口进入并只读浏览，断言完逐层退回工作区。
+        const refreshedPane = readProjectWorkDetail();
+        closeProjectPanel();
+        const refreshed = {
+          text: refreshedPane,
+          compact: compactPane(refreshedPane),
+          ok:
+            refreshedPane.includes('Finalizer') &&
+            (refreshedPane.includes('verdictRecording') || refreshedPane.includes('verdict 未返回')),
+        };
+        expect(
+          refreshed.ok,
+          `「工作记录与依据」详情未读到底部（Finalizer 与 verdict tail）：\n${refreshed.text}`,
+        ).toBe(true);
 
         // ---- 图修订与基线补救：含糊变化声明必须走完真实 Graph Patch Planner 与独立核验 ----
         //
@@ -1649,15 +1699,15 @@ if (gate.kind === 'skip') {
           ).toBe('canonical_advance');
         }
         if (facts.baselineReconciliations.length > 0) {
-          // Sidebar 必须把核验中的基线显示为 reconcile 行（没有登记过补救的那次运行没有这一行）。
+          // 「工作记录与依据」详情必须把核验中的基线显示为 reconcile 行（没有登记过补救的那次运行没有
+          // 这一行）。详情按列硬换行，因此用去掉换行与边框后的文本核对严重性与所需基线。
           expect(
-            reconcilingPane ?? '',
-            `Sidebar 必须把核验中的基线显示为 reconcile 行：\n${refreshed.text}`,
+            refreshed.compact,
+            `「工作记录与依据」详情必须把核验中的基线显示为 reconcile 行：\n${refreshed.text}`,
           ).toContain(target);
-          // Sidebar 按宽度裁切长值（`required=…`），因此这里只断言渲染出来的部分；两个基线的**精确值**
-          // 由上面的持久事实断言负责，不靠界面文本。
-          expect(reconcilingPane ?? '', 'Sidebar 的 reconcile 行必须带严重性').toMatch(
-            /reconcile canonical_advance required=/u,
+          // 两个基线的**精确值**由上面的持久事实断言负责，界面只核对严重性与所需基线可读。
+          expect(refreshed.compact, 'reconcile 行必须带严重性与所需基线').toMatch(
+            /reconcile:canonical_advance·required/u,
           );
         }
         // ---- 在途 Graph Patch 修订必须真的被结算，而不是把 Scope 钉在 revision_pending ----
@@ -1740,19 +1790,31 @@ if (gate.kind === 'skip') {
             // 能力可用：中断必须被真实 Capsule 续办，替代 Session 是唯一可接受的终态。
             expect(recovered, `本机只读能力可用时必须取得真实 Capsule：${JSON.stringify(facts.recoveries)}`).toBe(true);
           }
-          const rows = recoveryRows(refreshed.text);
-          expect(rows.length, `Sidebar 未渲染 recovery 分区：\n${refreshed.text}`).toBeGreaterThan(0);
-          const rowsText = rows.join('\n');
-          expect(rowsText, 'recovery 行必须点名角色与状态').toContain(recovery?.role ?? '');
+          // Recovery 的完整字段只在「工作记录与依据」详情里呈现：身份、预算、Capsule 与 Segment 都要
+          // 真的可读，而不是被省略号吃掉。
+          expect(
+            refreshed.compact,
+            `「工作记录与依据」详情未渲染 Recovery：\n${refreshed.text}`,
+          ).toContain('recovery' + (recovery?.recoveryId ?? ''));
+          expect(refreshed.compact, 'recovery 行必须点名角色与状态').toContain(recovery?.role ?? '');
+          expect(refreshed.compact, 'recovery 行必须带预算').toContain('budget');
           if (!recovered) {
-            expect(rowsText, `blocked Recovery 必须在界面上带原因：\n${rowsText}`).toMatch(/^! .+/mu);
+            // 只用这条 Recovery 自己的 blockingReason 核对：项目面板是逐行边框，全屏任意一行 `! ` 也可能是
+            // 别的 blocker（其它分区，甚至 Node 的 blockerRef），不能拿它冒充 Recovery 的原因。
+            const reason = recovery?.blockingReason ?? '';
+            expect(reason, `未续办时必须给出可诊断的原因：${JSON.stringify(recovery)}`).not.toBe('');
+            expect(
+              refreshed.compact,
+              `blocked Recovery 必须在界面上带真实原因：\n${refreshed.text}`,
+            ).toContain(compactPane('! ' + reason));
           }
           if (recovered) {
             expect(recovery?.capsuleRef, '续办必须绑定真实 Capsule').toEqual(expect.any(String));
             expect(recovery?.replacementSegmentId, '续办必须绑定替代 Segment').toEqual(expect.any(String));
-            // Sidebar 会裁切长身份；身份取持久事实，界面核验状态与对应行。
-            expect(rowsText).toContain('recovered');
-            expect(rowsText).toMatch(/^segment \S+/mu);
+            // 身份取持久事实，界面核验状态、Capsule 与 Segment 行。
+            expect(refreshed.compact).toContain('recovered');
+            expect(refreshed.compact).toMatch(/segment[^\n]*->/u);
+            expect(refreshed.compact).toContain('capsule');
           }
         } else {
           // 未制造中断时不该凭空出现 Recovery：Record 只能由真实中断产生。
@@ -1789,25 +1851,34 @@ if (gate.kind === 'skip') {
         if (capabilityGap) {
           expect(verdict, '只读能力不可用时不接受任何交付结论').toBeNull();
           expect(
-            refreshed.text,
+            refreshed.compact,
             `没有独立结论时不得显示 deliverable：\n${refreshed.text}`,
-          ).toContain('verdict 未返回（不显示 deliverable）');
-          expect(refreshed.text).not.toContain('verdict deliverable');
+          ).toContain('verdict未返回（不显示deliverable）');
+          expect(refreshed.compact).not.toContain('verdictdeliverable');
         } else {
           expect(
             verdict,
             `本机只读能力可用时必须取得独立交付结论：${describeStatus(observed)}`,
           ).not.toBeNull();
           expect(
-            refreshed.text,
+            refreshed.compact,
             `Finalizer 结论必须在界面上如实呈现：\n${refreshed.text}`,
-          ).toContain(verdict?.kind === 'deliverable' ? 'verdict deliverable' : 'verdict blocked');
+          ).toContain(verdict?.kind === 'deliverable' ? 'verdictdeliverable' : 'verdictblocked');
+          // verdictRecording 排在 verdict 之后：只有真的滚到详情尾部的读取才可能看到它。
+          expect(refreshed.compact, `Finalizer 记录引用必须在详情尾部可读：\n${refreshed.text}`)
+            .toContain('verdictRecording');
           if (!interruptRecovery) {
             // 不制造中断的那次验收以 deliverable 为必达项：只读角色能跑通就应该走完整条链路。
             expect(verdict?.kind, `不中断模式必须取得 deliverable：${describeStatus(observed)}`).toBe('deliverable');
             // 只读观察属于运行中的宿主；独立 status 查询只有持久事实，无法提供该观察。
-            expect(refreshed.text).toContain('read-only enforced');
+            expect(refreshed.compact).toContain('read-onlyenforced');
           }
+        }
+        // Finalizer 的只读 Profile 之外，运行前后工作区事实（HEAD/index/dirty）也必须真的呈现。
+        if (observed.execution.finalizer.workspace !== null) {
+          expect(refreshed.compact, `Finalizer 必须呈现运行前后的 HEAD/index/dirty：\n${refreshed.text}`)
+            .toContain('HEAD');
+          expect(refreshed.compact).toContain('dirty');
         }
 
         // ---- 逐角色核对真实 Codex Session 的模型绑定 ----
@@ -1906,22 +1977,27 @@ if (gate.kind === 'skip') {
         const pane = ensureTuiPane();
         const status = await readStatus(workspace);
         const verdict = status.execution.finalizer.verdict;
-        expect(pane, `Sidebar 未渲染 finalizer 分区：\n${pane}`).toContain('finalizer');
+        // Finalizer 字段已移入项目面板「工作记录与依据」详情：经真实入口进入读取；宿主自己的 blocker 仍
+        // 由 Sidebar 风险行给出，因此先在工作区帧上取 blocker 诊断，再进入详情核对结论呈现。
+        const blockers = blockerLines(pane);
+        const detailText = readProjectWorkDetail();
+        closeProjectPanel();
+        const detail = compactPane(detailText);
+        expect(detailText, `「工作记录与依据」详情未渲染 Finalizer：\n${detailText}`).toContain('Finalizer');
         if (verdict === null) {
           // 不变量：没有独立结论时只能呈现「不显示 deliverable」，而且必须同时有可诊断的原因——
           // 只读能力缺口只是一种原因；中断模式下的 Recovery 保守持有、Worker 会话不再产生结果同样是
           // 真实的环境阻塞（见 `docs/orca-compatibility.md`）。宿主自己的 blocker 只出现在这一屏里
           // （`status --json` 读不到），因此判据取 Sidebar 的 blocker 行。
-          expect(pane).toContain('不显示 deliverable');
-          expect(pane).not.toContain('verdict deliverable');
-          const blockers = blockerLines(pane);
+          expect(detail).toContain('verdict未返回（不显示deliverable）');
+          expect(detail).not.toContain('verdictdeliverable');
           expect(blockers.length, `没有结论必须同时给出可诊断的 blocker：\n${pane}`).toBeGreaterThan(0);
           expect(blockers, `没有结论的 blocker 必须点名原因：\n${pane}`).toMatch(
             /work-package|recovery|worker|frontier|delivery|baseline|unsettled/u,
           );
           return;
         }
-        expect(pane).toContain(verdict.kind === 'deliverable' ? 'verdict deliverable' : 'verdict blocked');
+        expect(detail).toContain(verdict.kind === 'deliverable' ? 'verdictdeliverable' : 'verdictblocked');
       },
       60_000,
     );
@@ -1934,11 +2010,11 @@ if (gate.kind === 'skip') {
         // 不可核验 Worker 属于危险态；确认后仍只退出前台，不修改 Scope。
         tmux(SOCKET, ['send-keys', '-t', SESSION, 'C-c']);
         const prompted = pollPane(SOCKET, SESSION, (text) =>
-          text.includes('确认退出前台进程') || !text.includes('composer ·'), 5_000);
+          text.includes('确认退出前台进程') || !text.includes('普通消息'), 5_000);
         if (prompted.text.includes('确认退出前台进程')) {
           tmux(SOCKET, ['send-keys', '-t', SESSION, 'y']);
         }
-        const gone = pollPane(SOCKET, SESSION, (text) => !text.includes('composer ·'), 30_000);
+        const gone = pollPane(SOCKET, SESSION, (text) => !text.includes('普通消息'), 30_000);
         expect(
           gone.ok,
           `前台进程未退出（${paneStatus(SOCKET, SESSION)}）：\n${gone.text}`,

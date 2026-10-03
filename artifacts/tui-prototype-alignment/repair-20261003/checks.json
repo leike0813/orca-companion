@@ -1,0 +1,236 @@
+[
+  {
+    "scenario": "authorization",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "execution-handoff",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "planning-handoff",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "authorization",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "execution-handoff",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "planning-handoff",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "authorization",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "execution-handoff",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "planning-handoff",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "authorization",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "execution-handoff",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "planning-handoff",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "authorization",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "execution-handoff",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "planning-handoff",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "authorization",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "execution-handoff",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  },
+  {
+    "scenario": "planning-handoff",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "blocked": [
+      "Ctrl+P",
+      "Ctrl+B",
+      "Ctrl+G"
+    ]
+  }
+]

@@ -382,6 +382,9 @@ test('向导创建后按当前完整 ref 与 canonical worktree 恢复', async (
 
   const instance = render(harness.host);
   await settle(16);
+  await pressKey(instance, '\u0002');
+  for (let step = 0; step < 3; step += 1) await pressKey(instance, '\u001b[B');
+  await pressKey(instance, '\r');
   expect(frameText(instance)).toContain(proposal.coordinationScopeId);
 });
 
@@ -456,6 +459,9 @@ test('旧未绑定记录：确认前零写入，Review 确认后补齐绑定并�
   } finally {
     after.close();
   }
+  await pressKey(instance, '\u0002');
+  for (let step = 0; step < 3; step += 1) await pressKey(instance, '\u001b[B');
+  await pressKey(instance, '\r');
   expect(frameText(instance)).toContain(scopeId);
   // 该用例要构造真实 schema 9 库、跑完 migration 并走完整 Review 流程；并行全量套件下 5s 上限会被吃掉。
 }, 30_000);
@@ -525,6 +531,10 @@ test('规划 Handoff 的 Target 来自用户在 Session Picker 里的选择', as
 
   // 发起 Handoff（paletteSelection 2 = handoff）：提案必须落在用户选中的 Target 上。
   await runPaletteCommand(instance, 2);
+  await settle(12);
+  expect(frameText(instance)).toContain('选择交接收件方');
+  for (let step = 0; step < targetIndex; step += 1) await pressKey(instance, '\u001b[B');
+  await pressKey(instance, '\r');
   await settle(12);
   expect(frameText(instance)).toContain('Handoff Review');
 

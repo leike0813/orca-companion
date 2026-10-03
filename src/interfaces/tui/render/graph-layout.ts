@@ -8,6 +8,7 @@
  * 折叠态在这里不参与：调用方在折叠时根本不调用本模块，因此不可见详情不会被计算（D8）。
  */
 
+import { tuiColors, tuiIcons } from '../theme.js';
 import type { IntegrationQueueEntryView, WorkPackageNodeView } from '../../../application/tui/view-model.js';
 
 export type GraphLayoutDensity = 'full' | 'compact' | 'collapsed';
@@ -107,4 +108,45 @@ export function compactGraphRow(row: GraphLayoutRow): string {
   const alerts = node.blockerRefs.length > 0 || node.liveness === 'unverifiable' ? ' !' : '';
   const dependency = node.dependsOn.length === 0 ? '' : ` <- ${node.dependsOn.join(',')}`;
   return `${indentFor(row.depth)}- ${node.shortKey} ${node.state}${alerts}${dependency}`;
+}
+
+export type GraphCell = { mask: number; color: string; glyph: string | null; spinning: boolean };
+export function adaptiveGraphCanvas(nodes: readonly WorkPackageNodeView[], width: number, height: number, selectedId: string | null, planning: boolean, icons: import('../theme.js').TuiIconMode) {
+  const rows = layoutExecutionGraph(nodes);
+  const positions = new Map<string, { x: number; y: number }>();
+  const layers = new Map<number, GraphLayoutRow[]>();
+  for (const row of rows) { const layer = layers.get(row.depth) ?? []; layer.push(row); layers.set(row.depth, layer); }
+  const fullWidth=Math.max(width,...[...layers.values()].map(layer=>layer.length*5+4));
+  for (const [depth, layer] of layers) layer.forEach((row,i) => positions.set(row.workPackageId, { x: Math.round((i+1)*(fullWidth-4)/(layer.length+1))+1, y: depth*3 }));
+  const selected = positions.get(selectedId ?? '');
+  const startX=Math.max(0,Math.min(fullWidth-width,(selected?.x??0)-Math.floor(width/2)));
+  const fullHeight = Math.max(1, ...rows.map(row => row.depth*3+1));
+  const start = Math.max(0, Math.min(fullHeight-height, (selected?.y ?? 0)-Math.floor(height/2)));
+  const cells = Array.from({ length: Math.min(height, fullHeight) }, () => Array.from({ length: width }, (): GraphCell => ({ mask: 0, color: tuiColors.border, glyph: null, spinning: false })));
+  const mark = (x: number, y: number, bit: number, color: string) => {
+    const cell = cells[y-start]?.[x-startX]; if (cell) { cell.mask |= bit; cell.color = color; }
+  };
+  const segment = (a: {x:number;y:number}, b: {x:number;y:number}, color: string) => {
+    if (a.y === b.y) { for (let x=Math.min(a.x,b.x);x<Math.max(a.x,b.x);x++) { mark(x,a.y,2,color);mark(x+1,a.y,8,color); } }
+    else { for (let y=Math.max(start-1,Math.min(a.y,b.y));y<Math.min(start+height,Math.max(a.y,b.y));y++) { mark(a.x,y,4,color);mark(a.x,y+1,1,color); } }
+  };
+  for (const row of rows) {
+    if (row.node.hidden) continue;
+    const target=positions.get(row.workPackageId); if(!target) continue;
+    for(const id of row.node.dependsOn) {
+      const source=positions.get(id); if(!source) continue;
+      const points=target.y-source.y>3?[source,{x:source.x,y:source.y+1},{x:fullWidth-2,y:source.y+1},{x:fullWidth-2,y:target.y-1},{x:target.x,y:target.y-1},target]:[source,{x:source.x,y:source.y+1},{x:target.x,y:source.y+1},target];
+      const color=row.node.state==='blocked' ? tuiColors.error : row.workPackageId===selectedId ? tuiColors.focus : tuiColors.border;
+      for(let i=1;i<points.length;i++) segment(points[i-1]!,points[i]!,color);
+    }
+  }
+  for(const row of rows) {
+    if(row.node.hidden) continue;
+    const p=positions.get(row.workPackageId); if(!p) continue;
+    const symbol = planning ? tuiIcons[icons].candidate : row.node.state==='accepted' ? tuiIcons[icons].accepted : row.node.state==='blocked' ? tuiIcons[icons].blocked : row.node.state==='unknown' ? tuiIcons[icons].unknown : row.node.active ? tuiIcons[icons].running : tuiIcons[icons].waiting;
+    const color=planning ? tuiColors.accent : row.node.state==='accepted' ? tuiColors.success : row.node.state==='blocked' ? tuiColors.error : row.node.state==='unknown' ? tuiColors.warning : tuiColors.accent;
+    const label=(row.workPackageId===selectedId ? icons==='ascii'?'>':'›' : ' ') + symbol+' '+(row.position+1);
+    [...label].forEach((glyph,i) => { const cell=cells[p.y-start]?.[p.x-1+i-startX]; if(cell) {cell.glyph=glyph;cell.color=color;cell.spinning=i===1&&!planning&&row.node.active&&row.node.liveness==='live';} });
+  }
+  return { cells, start, fullHeight, startX, fullWidth };
 }

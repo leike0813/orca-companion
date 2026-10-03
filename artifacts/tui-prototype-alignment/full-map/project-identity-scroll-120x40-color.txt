@@ -1,0 +1,40 @@
+session-long-中文规划-2026 · 执行 · blocked · 待对账 · 待答3 · 持有 session-b
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+! reconciling · 原操作结果未知，待对账
+! Worker 状态待核验 · 另有 2 项
+│ › 请规划第一版路线图：中文abc混排内容需要按显示宽度换行                     ╭────────────────────────────────────────╮
+                                                                              │ 项目面板 · 总览 · 详情                 │
+● Coordinator 会先读地图，再确认依赖与范围。                                  │ [总览]  待答列表  最近事件 · Tab       │
+  ▸ tool search                                                               │ ── 项目资料与操作 ──                   │
+                                                                              │ Scope: scope-long-cjk-中文项目-2026-路 │
+                                                                              │ 线图-主工作区                          │
+                                                                              │ revision: 7                            │
+                                                                              │ Planning Cycle: cycle-1                │
+                                                                              │ Map revision: 3                        │
+                                                                              │ Execution holder: session-b            │
+                                                                              │ 仓库/分支展示标签、Ticket Claim：不可  │
+                                                                              │ 用                                     │
+                                                                              │ Session: session-long-中文规划-2026    │
+                                                                              │ 配置: config-a · active                │
+                                                                              │ Session: session-b                     │
+                                                                              │ 配置: config-a · active                │
+                                                                              │ 维护: 停止 · cycles 3 · reconciliation │
+                                                                              │ _pending                               │
+                                                                              │ 压缩: compaction_degraded · 上下文不足 │
+                                                                              │  · path 未提供                         │
+                                                                              │ 阻塞: reconciliation_pending · wp-12   │
+                                                                              │ 等待原操作对账                         │
+                                                                              │ 阻塞: worker_status_unverifiable · wp- │
+                                                                              │ 13 Worker 状态待核验                   │
+                                                                              │                                        │
+                                                                              │                                        │
+                                                                              │                                        │
+                                                                              │                                        │
+待答 ticket:48 · state=open · revision=7                                      │                                        │
+Shift+← 或 /answer 打开当前 Session 回答面板                                  │                                        │
+╭────────────────────────────────────────────────────────────────────────────╮│                                        │
+│ › 普通消息                                                                 ││                                        │
+│ 首尾                                                                       ││                                        │
+╰────────────────────────────────────────────────────────────────────────────╯│ ↑↓ 浏览 · Esc 返回列表                 │
+示例模型 A · 推理 不可用 · 上下文 不可用 · 图 G1·v3                           ╰────────────────────────────────────────╯
+

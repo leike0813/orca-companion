@@ -62,6 +62,10 @@ describe('tui/execution-authorization / 完整 Manifest 的审阅与一次批准
 
     await runPaletteCommand(rendered, 'authorize-execution');
     await pressKey(rendered, '\r');
+    expect(fake.calls.filter(call=>call.name==='authorization.approve')).toHaveLength(0);
+    await runPaletteCommand(rendered, 'authorize-execution');
+    await pressKey(rendered, '\u001b[C');
+    await pressKey(rendered, '\r');
 
     expect(fake.calls.filter((call) => call.name === 'authorization.approve')).toEqual([
       {
@@ -83,9 +87,9 @@ describe('tui/execution-authorization / 完整 Manifest 的审阅与一次批准
     await settle();
 
     await runPaletteCommand(rendered, 'authorize-execution');
+    expect(frameText(rendered)).toContain('open_decision_tickets');
+    await pressKey(rendered, '\u001b[C');
     await pressKey(rendered, '\r');
-
-    expect(frameText(rendered)).toContain('当前不可批准');
     expect(fake.calls.filter((call) => call.name === 'authorization.approve')).toHaveLength(0);
   });
 

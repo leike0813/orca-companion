@@ -22,7 +22,8 @@ import {
   FinalizerPanel,
   finalizerRows,
 } from '../../src/interfaces/tui/components/finalizer-panel.js';
-import { Sidebar } from '../../src/interfaces/tui/components/sidebar.js';
+import { ProjectPanel } from '../../src/interfaces/tui/components/project-panel.js';
+import { initialTuiState } from '../../src/interfaces/tui/state.js';
 import {
   frameText,
   makeFinalizer,
@@ -51,7 +52,7 @@ function viewFor(finalizer: FinalizerView, overrides: SnapshotOverrides): TuiVie
 /** Sidebar 的 full 密度渲染：Finalizer 分区就在其中。 */
 function renderSidebar(finalizer: FinalizerView, overrides: SnapshotOverrides = {}): RenderedTui {
   return renderComponent(
-    <Sidebar density="full" viewModel={viewFor(finalizer, overrides)} terminalWidth={100} />,
+    <ProjectPanel view={viewFor(finalizer, overrides)} events={[]} panel={{...initialTuiState.projectPanel,open:true,detail:"work"}} width={200} height={100}/>,
   );
 }
 
@@ -180,8 +181,8 @@ describe('delivery-finalization / Finalizer 门禁与 Delivery Verdict 投影', 
     const frame = frameText(rendered);
     // 三种事实各自可见：包已接受、单包 validation 通过、只缺独立 Finalizer 结论。
     expect(frame).toContain('wp-1 [accepted]');
-    expect(frame).toContain('validation validated');
-    expect(frame).toContain('integration integrated');
+    expect(frame).toContain('验证: validated');
+    expect(frame).toContain('集成: integrated');
     expect(frame).toContain('不显示 deliverable');
     expect(frame).not.toContain(DELIVERABLE);
   });

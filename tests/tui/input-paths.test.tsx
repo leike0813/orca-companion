@@ -5,9 +5,23 @@
  * 「按键之后可观察到的行为」——工具详情出现、transcript 换到另一个 Session——而不是回调是否存在。
  */
 
-import { describe, expect, test } from 'vitest';
+import { createElement } from 'react';
+import { describe, expect, test, vi } from 'vitest';
 
-import { createFakePorts, makeTranscript, renderTui, settle } from './harness.js';
+import { TuiApp } from '../../src/interfaces/tui/app.js';
+import { COMMAND_IDS, type CommandId } from '../../src/interfaces/tui/components/command-palette.js';
+import {
+  createFakePorts,
+  makeExecutionHandoff,
+  makeSnapshot,
+  makeTranscript,
+  renderComponent,
+  renderTui,
+  settle,
+  type FakePorts,
+  type RenderedTui,
+  type SnapshotOverrides,
+} from './harness.js';
 
 const CTRL_P = '\u0010';
 const CTRL_T = '\u0014';
@@ -39,6 +53,56 @@ async function waitFor(
 }
 
 describe('容器输入路径', () => {
+  test('slash 候选先采用再执行，采用过程不发送聊天', async () => {
+    const fake=createFakePorts();
+    const rendered=renderTui(fake.ports);
+    await waitFor(rendered,()=>fake.calls.some(call=>call.name==='transcript'));
+    await press(rendered,'/proj');
+    expect(rendered.lastFrame()).toContain('命令候选');
+    await press(rendered,ENTER);
+    expect(rendered.lastFrame()).toContain('/project');
+    expect(rendered.lastFrame()).not.toContain('项目面板');
+    expect(fake.executeCount()).toBe(0);
+    await press(rendered,ENTER);
+    expect(rendered.lastFrame()).toContain('项目面板');
+    expect(fake.executeCount()).toBe(0);
+    await press(rendered,'\u001b');
+    await press(rendered,'/statusline');
+    await press(rendered,ENTER);
+    await press(rendered,ENTER);
+    expect(rendered.lastFrame()).toContain('/statusline');
+    expect(rendered.lastFrame()).toContain('尚未接通');
+    expect(fake.executeCount()).toBe(0);
+    rendered.unmount();
+  });
+
+  test('项目 tabs 与新事件不抢草稿，事件详情保持原 eventId', async () => {
+    const fake=createFakePorts();
+    const rendered=renderTui(fake.ports);
+    await waitFor(rendered,()=>fake.calls.some(call=>call.name==='transcript'));
+    await press(rendered,'首尾');
+    await press(rendered,'\u001b[D');
+    const event={eventId:'event-original',kind:'state-changed' as const,coordinationScopeId:'scope-1',coordinatorSessionId:null,revision:7,reason:'原事件'};
+    fake.emit(event);await settle(4);
+    await press(rendered,'\u0002');
+    await press(rendered,'\t');await press(rendered,'\t');
+    fake.emit({...event,eventId:'event-new',revision:8});await settle(4);
+    await press(rendered,ENTER);
+    expect(rendered.lastFrame()).toContain('event-original');
+    for(let index=0;index<51;index++)fake.emit({...event,eventId:'window-'+index,revision:9+index});
+    await settle(4);
+    expect(rendered.lastFrame()).toContain('移出');
+    await press(rendered,'\u001b');
+    expect(rendered.lastFrame()).toContain('项目面板');
+    await press(rendered,ENTER);
+    expect(rendered.lastFrame()).toContain('所选对象');
+    expect(rendered.lastFrame()).not.toContain('事件 ID: window-');
+    await press(rendered,'\u001b');
+    await press(rendered,'中');await press(rendered,ENTER);
+    expect(fake.executeIntents).toMatchObject([{kind:'send-session-message',content:'首中尾'}]);
+    rendered.unmount();
+  });
+
   test('Ctrl+A 行首编辑；面板 Esc 恢复聊天光标，overlay 不穿透', async () => {
     const fake = createFakePorts({ snapshot: { interactions: [OWN_QUESTION] } });
     const rendered = renderTui(fake.ports);
@@ -143,7 +207,7 @@ describe('容器输入路径', () => {
     await press(rendered, '新的聊天');
     delayed.resolve(await fake.ports.questions!({ kind: 'pending-interaction', coordinatorSessionId: 'session-b', interactionId: next.interactionId }));
     await settle(6);
-    expect(rendered.lastFrame()).toContain('composer · 普通消息');
+    expect(rendered.lastFrame()).toContain('普通消息');
     expect(rendered.lastFrame()).toContain('新的聊天');
     expect(rendered.lastFrame()).not.toContain('回答 2/2');
     rendered.unmount();
@@ -192,7 +256,7 @@ describe('容器输入路径', () => {
   test('同一批按键里的连续方向键各移动一格（选择光标读同步事实源）', async () => {
     const fake = createFakePorts();
     const rendered = renderTui(fake.ports);
-    await waitFor(rendered, (frame) => frame.includes('composer · 普通消息'));
+    await waitFor(rendered, (frame) => frame.includes('普通消息'));
 
     await press(rendered, CTRL_P);
     await waitFor(rendered, (frame) => frame.includes('Command Palette'));
@@ -203,16 +267,17 @@ describe('容器输入路径', () => {
     rendered.stdin.write(ARROW_DOWN);
     const moved = await waitFor(
       rendered,
-      (frame) => frame.includes('> Route Planning Handoff') || frame.includes('> Model Picker'),
+      (frame) => frame.includes('交接规划责任') || frame.includes('> Model Picker'),
     );
-    expect(moved).toContain('> Route Planning Handoff');
+    expect(moved).toContain('交接规划责任');
 
     // 等这一帧的重渲染落地后再提交：`Command Palette` 里也有 "Model Picker" 字面量，因此
     // 断言用覆盖层自身的页脚判断它是否还开着。
     await press(rendered, ENTER);
-    const frame = await waitFor(rendered, (text) => text.includes('Handoff Review') || text.includes('Model Picker'));
+    const frame = await waitFor(rendered, (text) => text.includes('选择交接收件方') || text.includes('Model Picker'));
 
-    expect(frame).toContain('Handoff Review');
+    expect(frame).toContain('选择交接收件方');
+    expect(fake.calls.some(call=>call.name==='handoff.prepare')).toBe(false);
     // 覆盖层已经换掉：Command Palette 的页脚不再出现。
     expect(frame).not.toContain('Enter 执行 · Esc 关闭');
     rendered.unmount();
@@ -249,6 +314,122 @@ describe('容器输入路径', () => {
 });
 
 /**
+ * 审阅 overlay 优先消费输入：全局导航键不穿透到被调用的工作区。
+ *
+ * 三类审阅（规划交接、执行交接、执行授权）都必须挡下 Ctrl+P/B/G，既不打开新的 overlay，也不触发
+ * 任何业务意图；Esc 逐层返回与 Ctrl+C 退出仍是合法导航。`onExit` 换成 spy 才能观察 Ctrl+C 真的退出。
+ */
+test.each([0, 1])('项目详情滚到底后一次 Up 即可回退（侧栏密度切换 %i 次）', async (switches) => {
+  const fake = createFakePorts({snapshot:{sessions:makeSnapshot().sessions.map(session=>({
+    ...session,coordinatorModelConfigurationRef:session.coordinatorModelConfigurationRef.repeat(20),
+  }))}});
+  const rendered = renderTui(fake.ports);
+  await waitFor(rendered, () => fake.calls.some(call => call.name === 'transcript'));
+  for (let change = 0; change < switches; change += 1) {
+    await press(rendered, CTRL_P);
+    for (let step = 0; step < COMMAND_IDS.indexOf('toggle-sidebar'); step += 1) await press(rendered, ARROW_DOWN);
+    await press(rendered, ENTER);
+  }
+  await press(rendered, '\u0002');
+  for (let step = 0; step < 3; step += 1) await press(rendered, ARROW_DOWN);
+  await press(rendered, ENTER);
+  expect(rendered.lastFrame()).toContain('Scope: scope-1');
+  for (let step = 0; step < 80; step += 1) await press(rendered, ARROW_DOWN);
+  const bottom = rendered.lastFrame();
+  await press(rendered, ARROW_UP);
+  expect(rendered.lastFrame()).not.toBe(bottom);
+  await press(rendered, ARROW_DOWN);
+  expect(rendered.lastFrame()).toBe(bottom);
+  expect(fake.executeCount()).toBe(0);
+  rendered.unmount();
+});
+
+describe('审阅 overlay 的全局键位不穿透', () => {
+  const CTRL_B = '\u0002';
+  const CTRL_G = '\u0007';
+  const CTRL_C = '\u0003';
+  const ESC = '\u001b';
+
+  const PLANNING_HANDOFF = {
+    proposalId: 'h-1',
+    sourceSessionId: 'session-b',
+    targetSessionId: 'session-c',
+    phase: 'prepared' as const,
+    mapRevision: 1,
+    planRevision: 1,
+    capsuleRef: 'capsule-1',
+    proposalRevision: 1,
+  };
+
+  const REVIEWS: readonly {
+    readonly label: string;
+    readonly marker: string;
+    readonly command: CommandId;
+    readonly snapshot: SnapshotOverrides;
+    readonly withRecipient: boolean;
+  }[] = [
+    { label: '规划交接审阅', marker: 'Handoff Review', command: 'handoff', snapshot: { planningHandoffs: [PLANNING_HANDOFF] }, withRecipient: true },
+    {
+      label: '执行交接审阅',
+      marker: 'Execution Handoff Review',
+      command: 'execution-handoff',
+      snapshot: { mode: 'execution_coordination', handoffs: [makeExecutionHandoff({ handoffId: 'h-x' })] },
+      withRecipient: true,
+    },
+    { label: '执行授权审阅', marker: 'Execution Authorization Review', command: 'authorize-execution', snapshot: {}, withRecipient: false },
+  ];
+
+  async function openReview(rendered: RenderedTui, review: (typeof REVIEWS)[number]): Promise<void> {
+    await press(rendered, CTRL_P);
+    for (let step = 0; step < COMMAND_IDS.indexOf(review.command); step += 1) await press(rendered, ARROW_DOWN);
+    await press(rendered, ENTER);
+    if (review.withRecipient) {
+      // 交接需要先选收件方，再由原端口 prepare。
+      await press(rendered, ARROW_DOWN);
+      await press(rendered, ENTER);
+    }
+  }
+
+  for (const review of REVIEWS) {
+    test(`${review.label}：Ctrl+P/B/G 不穿透、Esc 返回、Ctrl+C 仍退出`, async () => {
+      const fake: FakePorts = createFakePorts({ snapshot: review.snapshot });
+      const onExit = vi.fn();
+      const rendered = renderComponent(
+        createElement(TuiApp, { ports: fake.ports, terminalWidth: 100, initialScopeId: null, onExit }),
+      );
+      await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+
+      await openReview(rendered, review);
+      expect(await waitFor(rendered, (frame) => frame.includes(review.marker))).toContain(review.marker);
+
+      const intentsAtOpen = fake.executeIntents.length;
+      for (const key of [CTRL_P, CTRL_B, CTRL_G]) {
+        await press(rendered, key);
+        const frame = rendered.lastFrame() ?? '';
+        expect(frame).toContain(review.marker);
+        expect(frame).not.toContain('Command Palette');
+        expect(frame).not.toContain('Graph Inspector');
+        expect(frame).not.toContain('项目面板');
+      }
+      expect(onExit).not.toHaveBeenCalled();
+      expect(fake.executeIntents).toHaveLength(intentsAtOpen);
+
+      // Esc 逐层返回：合法关闭审阅。
+      await press(rendered, ESC);
+      expect(rendered.lastFrame() ?? '').not.toContain(review.marker);
+
+      // Ctrl+C 只退出前台进程，不被 overlay guard 吞掉。
+      await openReview(rendered, review);
+      await waitFor(rendered, (frame) => frame.includes(review.marker));
+      await press(rendered, CTRL_C);
+      expect(onExit).toHaveBeenCalledTimes(1);
+
+      rendered.unmount();
+    });
+  }
+});
+
+/**
  * 严格 slash 表：只要以 `/` 开头就不再是消息。无法作为单个完整命令执行的内容一律提示并保留输入，
  * 绝不回退为普通消息或回答。
  */
@@ -266,9 +447,10 @@ describe('严格 slash 分类：错误输入保留且不发送', () => {
       const rendered = renderTui(fake.ports);
       // 等到 Session 选中后再输入：composer 标题会先于 sessions-loaded 出现。
       await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
-      await waitFor(rendered, (frame) => frame.includes('composer · 普通消息'));
+      await waitFor(rendered, (frame) => frame.includes('普通消息'));
 
       await press(rendered, entry.label === '空白参数' ? '\u001b[200~' + entry.keys + '\u001b[201~' : entry.keys);
+      if(entry.keys==='/')await press(rendered,'\u001b');
       await press(rendered, ENTER);
 
       // 既不发送普通消息，也不回答。
@@ -283,7 +465,7 @@ describe('严格 slash 分类：错误输入保留且不发送', () => {
     const fake = createFakePorts();
     const rendered = renderTui(fake.ports);
     await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
-    await waitFor(rendered, (frame) => frame.includes('composer · 普通消息'));
+    await waitFor(rendered, (frame) => frame.includes('普通消息'));
 
     // 粘贴多行，保证正文里真的有换行而不是被当成两次输入。
     rendered.stdin.write('\u001b[200~/help\n正文\u001b[201~');

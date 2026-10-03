@@ -126,7 +126,8 @@ describe('Sidebar 三态与密度上限', () => {
     );
     await settle(2);
     const frame = rendered.lastFrame() ?? '';
-    expect(frame).toContain('wp-1');
-    expect(frame).toContain('auth=unbound');
+    expect(frame).toContain('第一个工作包');
+    expect(frame).toContain('前驱 无');
+    expect(viewModel.graph?.readiness.authorizationBound).toBe(false);
   });
 });

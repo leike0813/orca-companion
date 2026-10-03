@@ -64,6 +64,7 @@
 #### Scenario: Handoff 灾难路径 fail closed
 - **WHEN** Source checkpoint 不可恢复或必要 Coordinator Context Capsule 无法生成
 - **THEN** 系统不创建替代 Coordinator Session、不转移 Ticket Claim，Scope 保持 blocked 并显示该 blocker
+
 ### Requirement: 当前 Session 异步回答面板
 Shift+Left、`/answer` 和 Palette SHALL 打开相同的当前 Session 底部面板，同时保留 transcript。面板 SHALL 有界读取问题正文与选项；Shift+Left/Right SHALL 切问题，Tab SHALL 切选项与自由输入，选项 Enter SHALL 直接以所选标签提交，自由输入 SHALL 走完整 composer。Esc SHALL 保存回答并恢复聊天全文、光标、粘贴块和阅读位置。新问题 SHALL NOT 自动打开面板或切 Session；Ctrl+A SHALL 只到行首。回答 SHALL 沿用 InteractionId、expected revision、稳定 submissionId 和单活跃提交。未知、过期和失败 SHALL 保留输入且不推进问题；受理 SHALL 只结清未再编辑的原输入。
 
@@ -78,3 +79,19 @@ Shift+Left、`/answer` 和 Palette SHALL 打开相同的当前 Session 底部面
 #### Scenario: 失败或后来编辑保留输入
 - **WHEN** 回答被拒绝、不可核验或受理前用户继续编辑
 - **THEN** 当前回答保留，不由旧结果清空或跳走
+
+### Requirement: 当前 Session 回答面板的定稿视觉层级
+
+当前 Session 回答面板 SHALL 位于原输入区位置并保留 transcript；问题、进度、选项与自由输入 SHALL 沿用定稿 composer 和既定选择组件的边框、焦点、选中态及次要信息规则。选项焦点 SHALL 具有文字或符号标记，并在彩色终端使用高对比选中态；说明与操作提示 SHALL 有界呈现，不挤掉当前问题或输入。呈现调整 SHALL 保留 owner Session、InteractionId、expected revision、稳定 submissionId 和聊天/回答草稿隔离；新问题 MUST NOT 自动打开面板或抢焦点，未知、拒绝或过期结果 MUST NOT 被显示为回答成功。
+
+#### Scenario: 选项和自由回答保持统一视觉
+- **WHEN** 用户进入当前 Session 的回答面板，用 Tab 切换选项与自由输入
+- **THEN** 问题和输入保持同一视觉层级，当前选项具有明确选中标记，自由输入使用定稿输入框及完整编辑能力，提交仍指向原问题和 revision
+
+#### Scenario: Esc 返回恢复原聊天
+- **WHEN** 用户在回答面板编辑后按 Esc 返回聊天
+- **THEN** 回答草稿保存，原聊天全文、光标和粘贴块恢复，焦点回到原输入区，不新增提交或切换 Session
+
+#### Scenario: 未确定状态保持真实含义
+- **WHEN** 回答被拒绝、revision 过期或结果未知，或者新问题在用户输入时到达
+- **THEN** 失败或未确定状态在彩色和无色环境都清楚可读，原输入与绑定保持，不显示成功、不跳题、不抢焦点

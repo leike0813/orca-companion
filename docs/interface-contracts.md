@@ -748,6 +748,9 @@ type StatusJson = {
 
 - **Home 解析**：以 Git common dir 定位 Branch Coordination State，再以当前完整 branch ref 和登记的 canonical worktree 精确匹配 Scope。无匹配则进入初始化向导；旧未绑定记录须经显式迁移 Review（`bind-scope-identity` 一次性补齐绑定后本进程才登记当前 Scope）；linked worktree（git dir 不等于 common dir）或 detached HEAD 阻塞。不得以 common dir 下 Scope 数量推断当前身份。
 - **Session 选择**：选中 Session 与 Sidebar 密度都是进程内展示态。重启后按「存在 Pending Interaction 的 Session 优先，否则最近活动」重新选择；M1 没有「上次选择」的持久来源，本 change 不新增表、文件或 migration。
+- **工作区布局**：Ctrl+B 开合固定项目面板（总览、待答列表、最近事件），100 列及以上替换原右侧区域，更窄时独占主区域。事件沿用本次启动最多 50 条的窗口，旧事件入口进入同一页签；Ctrl+G 在三档尺寸均打开只读 adaptive 检查。面板/栏目/详情/关系选择/图标均为进程内展示态，关闭恢复原会话、草稿、光标与阅读位置。
+- **命令与审阅**：Palette、slash 与 Help 共享操作元数据和可用性；上方候选采用与执行分开，不可用与错误 slash 保留输入。选择页及审阅使用固定有界框，审阅默认返回；确认沿用 IC-11 的目标/指纹/revision 校验。顶栏、单行会话核心、独立风险与项目详情消费已有可信投影，缺失数据明示不可用；用户级 custom 偏好、可信 context/effort 与共享 Validator 摘要仍需后继合同。
+- **信息归属**：项目总览按需要处理、额度与权限、项目资料分组；Sidebar 保留图定位编号、阶段、Worker/liveness、串行队列和风险摘要。角色/attempt、Validation/Integration、worktree/baseline/Evidence 在 Inspector 节点栏目与项目工作详情读取；Recovery 的 Segment/预算/Capsule/superseded 和 Finalizer 的门禁/只读/集成冻结/前后工作区/Evidence/Verdict 在项目工作详情读取。相关语义事件进入最近事件，完整 WorkPackageId 在详情核对，定位编号仅用于当前图版本。审阅/确认期间 Ctrl+P/B/G 不穿透；Esc 逐层返回，Ctrl+C 沿原退出流程。
 - **`StatusJson` 形状不变**：`schemaVersion` 仍为 1，字段与既有 machine DTO 一致；`status --json` 改为经同一 `ControllerSnapshot` 投影规则构造，不再自行从 store 记录逐字段映射。
 
 `m2-deliver-execution-tui` 的 Extend 只增加执行态分区与相应组件，不新增页面、不新增键位、不改动 transcript/composer 主视图：

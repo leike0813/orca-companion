@@ -25,7 +25,7 @@ import {
 } from './harness.js';
 
 /** 只读端口白名单：渲染路径只允许 query 与只读 store 读取，不允许任何写。 */
-const READ_ONLY_PORTS = ['resolveHome', 'snapshot', 'transcript', 'inputStore.read', 'submissionStatus'];
+const READ_ONLY_PORTS = ['resolveHome', 'snapshot', 'transcript', 'inputStore.read', 'submissionStatus', 'modelCatalog'];
 
 async function pressKey(rendered: RenderedTui, input: string): Promise<void> {
   rendered.stdin.write(input);
@@ -50,7 +50,7 @@ describe('重挂载与 resize 零业务副作用', () => {
 
     const second = renderTui(fake.ports);
     await settle();
-    expect(frameText(second)).toContain('composer');
+    expect(frameText(second)).toContain('普通消息');
 
     expect(fake.executeCount()).toBe(0);
     expect(fake.executeIntents).toEqual([]);
@@ -107,14 +107,19 @@ describe('高频事件有界刷新', () => {
     await pressKey(rendered, '\r');
 
     const frame = frameText(rendered);
-    expect(frame).toContain('Event Drawer');
+    expect(frame).toContain('最近事件');
     const shown = frame.match(/state-changed rev=/g) ?? [];
-    expect(shown).toHaveLength(EVENT_WINDOW);
+    expect(shown.length).toBeGreaterThan(0);
+    expect(shown.length).toBeLessThan(EVENT_WINDOW);
+    expect(frame).toContain('50');
     expect(shown.length).toBeLessThan(200);
     // 窗口保留的是最新事件，最旧的已被裁掉。
     expect(frame).toContain('(r199)');
     expect(frame).not.toContain('(r0)');
     expect(frame).not.toContain('duplicate-delivery');
+    for(let step=0;step<EVENT_WINDOW-1;step++)await pressKey(rendered,'\u001b[B');
+    expect(frameText(rendered)).toContain('(r150)');
+    expect(frameText(rendered)).not.toContain('(r149)');
     expect(fake.executeCount()).toBe(0);
 
     rendered.unmount();

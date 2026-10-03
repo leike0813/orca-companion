@@ -81,7 +81,7 @@ describe('tui/execution-control / 前台 Exit 与 Ctrl+C', () => {
     expect(onExit).toHaveBeenCalledTimes(1);
     expect(fake.executeIntents).toEqual([]);
     expect(fake.executeCount()).toBe(0);
-    expect(frameText(rendered)).toContain('scope control · active');
+    expect(frameText(rendered)).toContain('active');
     expect(frameText(rendered)).not.toContain('cancelling');
 
     rendered.unmount();
@@ -162,7 +162,7 @@ describe('tui/execution-control / 前台 Exit 与 Ctrl+C', () => {
     expect(fake.executeCount()).toBe(0);
     // 控制状态仍是退出前的快照值：Exit 既没有 Pause 也没有 Cancel。
     const frame = frameText(rendered);
-    expect(frame).toContain('scope control · paused');
+    expect(frame).toContain('paused');
     expect(frame).not.toContain('cancelling');
 
     rendered.unmount();

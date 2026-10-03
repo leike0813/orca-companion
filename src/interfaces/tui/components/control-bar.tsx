@@ -9,18 +9,17 @@
  */
 
 import { ConfirmInput } from '@inkjs/ui';
-import { Box, Text } from 'ink';
-
-import { truncateToDisplayWidth } from '../render/width.js';
 import type { ControlHazardsView } from '../../../application/execution/execution-view.js';
 import type { PendingConfirmation } from '../state.js';
-import { tuiColors } from '../theme.js';
+import { DialogFrame, fieldRows, ReviewBody, type ReviewLayoutProps } from './selection-list.js';
 
-export type ControlBarProps = {
+export type ControlBarProps = ReviewLayoutProps & {
   readonly controlState: string;
   readonly hazards: ControlHazardsView;
   readonly pending: PendingConfirmation;
   readonly availableWidth: number;
+  readonly scopeId?: string;
+  readonly sessionCount?: number;
   readonly onConfirm: () => void;
   readonly onDismiss: () => void;
 };
@@ -67,22 +66,20 @@ export function confirmationPrompt(
 }
 
 export function ControlBar(props: ControlBarProps) {
-  const prompt = confirmationPrompt(props.pending, props.hazards);
-  const summary = `scope control · ${props.controlState}`;
-  return (
-    <Box flexDirection="column">
-      <Text dimColor>
-        {truncateToDisplayWidth(
-          `${summary} · Pause/Resume/Cancel 只作用于整个 Scope（无单包控制）`,
-          Math.max(1, props.availableWidth),
-        )}
-      </Text>
-      {prompt === null ? null : (
-        <Box flexDirection="row">
-          <Text color={tuiColors.warning} bold>{truncateToDisplayWidth(prompt, Math.max(1, props.availableWidth - 5))}</Text>
-          <ConfirmInput defaultChoice="cancel" submitOnEnter={false} onConfirm={props.onConfirm} onCancel={props.onDismiss} />
-        </Box>
-      )}
-    </Box>
-  );
+  const prompt=confirmationPrompt(props.pending,props.hazards);
+  if(prompt===null)return null;
+  const rows=props.rows??18,cancel=props.pending?.kind==='cancel';
+  const fields=fieldRows([{label:'Scope',value:props.scopeId??'身份不可用'},{label:'控制状态',value:props.controlState},
+    {label:'会话',value:props.sessionCount===undefined?'不可用':String(props.sessionCount)},
+    {label:'活跃 Worker',value:String(props.hazards.activeWorkerCount)},
+    {label:'不可核验 Worker',value:String(props.hazards.unverifiedWorkerCount)},
+    {label:'待答交互',value:String(props.hazards.openInteractionCount)},
+    {label:'未决操作',value:String(props.hazards.unresolvedOperationCount)}],Math.max(1,props.availableWidth-8));
+  const impact=cancel?['— 确认后 —','新工作：停止新的模型恢复与 Worker 派发','运行工作：请求停止；结果未确认时保持 cancelling 或不可核验','— 已完成的工作 —','保留代码、工作记录与已消耗预算']:
+    ['— 确认后 —','退出前台进程；活跃 Worker 可能继续运行','恢复时先对账；Scope 不隐式暂停或取消',...(props.pending?.kind==='exit-discard'?['未保存的输入将按本次明确确认丢弃']:['保留已保存输入与工作记录'])];
+  return <DialogFrame title={cancel?'Cancel Scope':'Exit Companion'} summary={`Scope · ${props.controlState}`} width={props.availableWidth} rows={rows} footer="Tab 栏目 · ↑↓ 浏览 · ←→ 动作 · Enter · y 确认 / n 返回">
+    <ReviewBody lines={props.tab===1?[prompt,...fields,...impact]:[prompt,'— 影响整个项目 —',...hazardReasons(props.hazards),...impact]}
+      width={props.availableWidth} rows={rows-1} tab={props.tab??0} scroll={props.scroll??0} action={props.action??0} allowed label="确认 y"/>
+    <ConfirmInput defaultChoice="cancel" submitOnEnter={false} onConfirm={props.onConfirm} onCancel={props.onDismiss}/>
+  </DialogFrame>;
 }

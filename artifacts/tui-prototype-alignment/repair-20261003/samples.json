@@ -1,0 +1,1250 @@
+[
+  {
+    "scenario": "project-overview",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-overview-120x40-color.png",
+    "text": "project-overview-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-budget",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-budget-120x40-color.png",
+    "text": "project-budget-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-record-groups",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-record-groups-120x40-color.png",
+    "text": "project-record-groups-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work-selected",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-work-selected-120x40-color.png",
+    "text": "project-work-selected-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-work-120x40-color.png",
+    "text": "project-work-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-before",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "authorization-before-120x40-color.png",
+    "text": "authorization-before-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-guarded",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "authorization-guarded-120x40-color.png",
+    "text": "authorization-guarded-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-handoff-before",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "execution-handoff-before-120x40-color.png",
+    "text": "execution-handoff-before-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-handoff-guarded",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "execution-handoff-guarded-120x40-color.png",
+    "text": "execution-handoff-guarded-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel-guarded",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "cancel-guarded-120x40-color.png",
+    "text": "cancel-guarded-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-ascii",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-ascii-120x40-color.png",
+    "text": "project-ascii-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-ascii",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-ascii-120x40-color.png",
+    "text": "inspector-ascii-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "return-cursor",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "return-cursor-120x40-color.png",
+    "text": "return-cursor-120x40-color.txt",
+    "cursor": [
+      6,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-handoff-before",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "planning-handoff-before-120x40-color.png",
+    "text": "planning-handoff-before-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-guarded",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "planning-handoff-guarded-120x40-color.png",
+    "text": "planning-handoff-guarded-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-return",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "planning-handoff-return-120x40-color.png",
+    "text": "planning-handoff-return-120x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "project-overview",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-overview-120x40-no-color.png",
+    "text": "project-overview-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-budget",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-budget-120x40-no-color.png",
+    "text": "project-budget-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-record-groups",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-record-groups-120x40-no-color.png",
+    "text": "project-record-groups-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work-selected",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-work-selected-120x40-no-color.png",
+    "text": "project-work-selected-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-work-120x40-no-color.png",
+    "text": "project-work-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-before",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "authorization-before-120x40-no-color.png",
+    "text": "authorization-before-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-guarded",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "authorization-guarded-120x40-no-color.png",
+    "text": "authorization-guarded-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-handoff-before",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "execution-handoff-before-120x40-no-color.png",
+    "text": "execution-handoff-before-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-handoff-guarded",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "execution-handoff-guarded-120x40-no-color.png",
+    "text": "execution-handoff-guarded-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel-guarded",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "cancel-guarded-120x40-no-color.png",
+    "text": "cancel-guarded-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-ascii",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-ascii-120x40-no-color.png",
+    "text": "project-ascii-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-ascii",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-ascii-120x40-no-color.png",
+    "text": "inspector-ascii-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "return-cursor",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "return-cursor-120x40-no-color.png",
+    "text": "return-cursor-120x40-no-color.txt",
+    "cursor": [
+      6,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-handoff-before",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "planning-handoff-before-120x40-no-color.png",
+    "text": "planning-handoff-before-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-guarded",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "planning-handoff-guarded-120x40-no-color.png",
+    "text": "planning-handoff-guarded-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-return",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "planning-handoff-return-120x40-no-color.png",
+    "text": "planning-handoff-return-120x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "project-overview",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-overview-80x24-color.png",
+    "text": "project-overview-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-budget",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-budget-80x24-color.png",
+    "text": "project-budget-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-record-groups",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-record-groups-80x24-color.png",
+    "text": "project-record-groups-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work-selected",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-work-selected-80x24-color.png",
+    "text": "project-work-selected-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-work-80x24-color.png",
+    "text": "project-work-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-before",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "authorization-before-80x24-color.png",
+    "text": "authorization-before-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-guarded",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "authorization-guarded-80x24-color.png",
+    "text": "authorization-guarded-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-handoff-before",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "execution-handoff-before-80x24-color.png",
+    "text": "execution-handoff-before-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-handoff-guarded",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "execution-handoff-guarded-80x24-color.png",
+    "text": "execution-handoff-guarded-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel-guarded",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "cancel-guarded-80x24-color.png",
+    "text": "cancel-guarded-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-ascii",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "project-ascii-80x24-color.png",
+    "text": "project-ascii-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-ascii",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "inspector-ascii-80x24-color.png",
+    "text": "inspector-ascii-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "return-cursor",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "return-cursor-80x24-color.png",
+    "text": "return-cursor-80x24-color.txt",
+    "cursor": [
+      6,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-handoff-before",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "planning-handoff-before-80x24-color.png",
+    "text": "planning-handoff-before-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-guarded",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "planning-handoff-guarded-80x24-color.png",
+    "text": "planning-handoff-guarded-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-return",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "planning-handoff-return-80x24-color.png",
+    "text": "planning-handoff-return-80x24-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "project-overview",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-overview-80x24-no-color.png",
+    "text": "project-overview-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-budget",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-budget-80x24-no-color.png",
+    "text": "project-budget-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-record-groups",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-record-groups-80x24-no-color.png",
+    "text": "project-record-groups-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work-selected",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-work-selected-80x24-no-color.png",
+    "text": "project-work-selected-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-work-80x24-no-color.png",
+    "text": "project-work-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-before",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "authorization-before-80x24-no-color.png",
+    "text": "authorization-before-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-guarded",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "authorization-guarded-80x24-no-color.png",
+    "text": "authorization-guarded-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-handoff-before",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "execution-handoff-before-80x24-no-color.png",
+    "text": "execution-handoff-before-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-handoff-guarded",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "execution-handoff-guarded-80x24-no-color.png",
+    "text": "execution-handoff-guarded-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel-guarded",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "cancel-guarded-80x24-no-color.png",
+    "text": "cancel-guarded-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-ascii",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "project-ascii-80x24-no-color.png",
+    "text": "project-ascii-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-ascii",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "inspector-ascii-80x24-no-color.png",
+    "text": "inspector-ascii-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "return-cursor",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "return-cursor-80x24-no-color.png",
+    "text": "return-cursor-80x24-no-color.txt",
+    "cursor": [
+      6,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-handoff-before",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "planning-handoff-before-80x24-no-color.png",
+    "text": "planning-handoff-before-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-guarded",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "planning-handoff-guarded-80x24-no-color.png",
+    "text": "planning-handoff-guarded-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-return",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "planning-handoff-return-80x24-no-color.png",
+    "text": "planning-handoff-return-80x24-no-color.txt",
+    "cursor": [
+      2,
+      20
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "project-overview",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-overview-50x40-color.png",
+    "text": "project-overview-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-budget",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-budget-50x40-color.png",
+    "text": "project-budget-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-record-groups",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-record-groups-50x40-color.png",
+    "text": "project-record-groups-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work-selected",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-work-selected-50x40-color.png",
+    "text": "project-work-selected-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-work-50x40-color.png",
+    "text": "project-work-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-before",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "authorization-before-50x40-color.png",
+    "text": "authorization-before-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-guarded",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "authorization-guarded-50x40-color.png",
+    "text": "authorization-guarded-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-handoff-before",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "execution-handoff-before-50x40-color.png",
+    "text": "execution-handoff-before-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-handoff-guarded",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "execution-handoff-guarded-50x40-color.png",
+    "text": "execution-handoff-guarded-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel-guarded",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "cancel-guarded-50x40-color.png",
+    "text": "cancel-guarded-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-ascii",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "project-ascii-50x40-color.png",
+    "text": "project-ascii-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-ascii",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "inspector-ascii-50x40-color.png",
+    "text": "inspector-ascii-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "return-cursor",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "return-cursor-50x40-color.png",
+    "text": "return-cursor-50x40-color.txt",
+    "cursor": [
+      6,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-handoff-before",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "planning-handoff-before-50x40-color.png",
+    "text": "planning-handoff-before-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-guarded",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "planning-handoff-guarded-50x40-color.png",
+    "text": "planning-handoff-guarded-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-return",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "planning-handoff-return-50x40-color.png",
+    "text": "planning-handoff-return-50x40-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "project-overview",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-overview-50x40-no-color.png",
+    "text": "project-overview-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-budget",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-budget-50x40-no-color.png",
+    "text": "project-budget-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-record-groups",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-record-groups-50x40-no-color.png",
+    "text": "project-record-groups-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work-selected",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-work-selected-50x40-no-color.png",
+    "text": "project-work-selected-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-work",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-work-50x40-no-color.png",
+    "text": "project-work-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-before",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "authorization-before-50x40-no-color.png",
+    "text": "authorization-before-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "authorization-guarded",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "authorization-guarded-50x40-no-color.png",
+    "text": "authorization-guarded-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-handoff-before",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "execution-handoff-before-50x40-no-color.png",
+    "text": "execution-handoff-before-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "execution-handoff-guarded",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "execution-handoff-guarded-50x40-no-color.png",
+    "text": "execution-handoff-guarded-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "cancel-guarded",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "cancel-guarded-50x40-no-color.png",
+    "text": "cancel-guarded-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "project-ascii",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "project-ascii-50x40-no-color.png",
+    "text": "project-ascii-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "inspector-ascii",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "inspector-ascii-50x40-no-color.png",
+    "text": "inspector-ascii-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "return-cursor",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "return-cursor-50x40-no-color.png",
+    "text": "return-cursor-50x40-no-color.txt",
+    "cursor": [
+      6,
+      36
+    ],
+    "cursorVisible": true
+  },
+  {
+    "scenario": "planning-handoff-before",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "planning-handoff-before-50x40-no-color.png",
+    "text": "planning-handoff-before-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-guarded",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "planning-handoff-guarded-50x40-no-color.png",
+    "text": "planning-handoff-guarded-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "planning-handoff-return",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "planning-handoff-return-50x40-no-color.png",
+    "text": "planning-handoff-return-50x40-no-color.txt",
+    "cursor": [
+      2,
+      36
+    ],
+    "cursorVisible": true
+  }
+]

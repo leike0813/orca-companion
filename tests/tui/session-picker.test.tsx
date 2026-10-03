@@ -68,7 +68,7 @@ describe('session-interactions / Session Picker 与焦点约束', () => {
     );
     await settle(2);
     const lines = (rendered.lastFrame() ?? '').split('\n');
-    const selectedLine = lines.find((line) => line.includes('session-b')) ?? '';
+    const selectedLine = lines.find((line) => line.includes('session-b')&&/[✔√]/u.test(line)) ?? '';
     const otherLine = lines.find((line) => line.includes('session-a')) ?? '';
     expect(selectedLine).toMatch(/[✔√]/u);
     expect(otherLine).not.toMatch(/[✔√]/u);
@@ -197,7 +197,7 @@ describe('session-interactions / Session Picker 与焦点约束', () => {
 
     const lines = (rendered.lastFrame() ?? '').split('\n');
     const unreadLine = lines.find((line) => line.includes('session-a')) ?? '';
-    const selectedLine = lines.find((line) => line.includes('session-b')) ?? '';
+    const selectedLine = lines.find((line) => line.includes('session-b')&&/[✔√]/u.test(line)) ?? '';
     expect(unreadLine).toContain('*');
     expect(selectedLine).toMatch(/[✔√]/u);
     expect(selectedLine).not.toContain('*');

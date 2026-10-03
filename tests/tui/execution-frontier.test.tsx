@@ -18,6 +18,8 @@ import {
   type TuiViewModel,
 } from '../../src/application/tui/view-model.js';
 import { Sidebar } from '../../src/interfaces/tui/components/sidebar.js';
+import { ProjectPanel } from '../../src/interfaces/tui/components/project-panel.js';
+import { initialTuiState } from '../../src/interfaces/tui/state.js';
 import {
   makeSnapshot,
   makeWorkPackageExecution,
@@ -56,9 +58,9 @@ function viewModelFor(snapshot: ControllerSnapshot): TuiViewModel {
 }
 
 /** 完整密度 Sidebar 的渲染文本；密度只由 `density` 决定，因此显式渲染组件而不依赖终端尺寸。 */
-async function renderSidebar(snapshot: ControllerSnapshot): Promise<string> {
+async function renderSidebar(snapshot: ControllerSnapshot, details=false): Promise<string> {
   const rendered = renderComponent(
-    createElement(Sidebar, {
+    details?createElement(ProjectPanel,{view:viewModelFor(snapshot),events:[],panel:{...initialTuiState.projectPanel,detail:'work'},width:200,height:100}):createElement(Sidebar, {
       density: 'full',
       viewModel: viewModelFor(snapshot),
       terminalWidth: 120,
@@ -100,8 +102,8 @@ describe('execution-monitoring / Work Package 生命周期与串行 integration 
     ).toEqual(['wp-1']);
 
     const frame = await renderSidebar(snapshot);
-    expect(frame).toContain('wp-1 [implementing] *active');
-    expect(frame).toContain('wp-2 [waiting]');
+    expect(frame).toContain('implementing');
+    expect(viewModel.graph?.nodes.find(node=>node.workPackageId==='wp-2')?.state).toBe('waiting');
     expect(frame).not.toContain('wp-2 [waiting] *active');
     expect(frame).not.toContain('wp-3 [waiting] *active');
   });
@@ -147,10 +149,10 @@ describe('execution-monitoring / Work Package 生命周期与串行 integration 
     expect(viewModel.execution.activeWorkPackageCount).toBe(0);
 
     const frame = await renderSidebar(snapshot);
-    expect(frame).toContain('wp-1 [waiting_integration]');
-    expect(frame).toContain('integration queue (串行)');
-    expect(frame).toContain('queue 0 wp-1 integrating');
-    expect(frame).toContain('queue 1 wp-2');
+    expect(frame).toContain('waiting_integration');
+    expect(frame).toContain('集成队列（串行）');
+    expect(frame).toContain('wp-1 → wp-2');
+    expect(viewModel.execution.integrationQueue[1]?.integrating).toBe(false);
     // 串行：不会出现第二个 integrating。
     expect(frame).not.toContain('queue 1 wp-2 integrating');
   });
@@ -185,7 +187,7 @@ describe('execution-monitoring / Work Package 生命周期与串行 integration 
     expect(node?.liveness).toBe('unverifiable');
 
     const frame = await renderSidebar(snapshot);
-    expect(frame).toContain('[implementing]');
+    expect(frame).toContain('implementing');
     expect(frame).toContain('unverifiable');
     // 不可核验既不是失败也不是已停止。
     expect(frame).not.toContain('exited');
@@ -253,10 +255,10 @@ describe('execution-monitoring / Work Package 生命周期与串行 integration 
     expect(reconciliationOf('wp-3')?.blockerRef).toBe('conflict-out-of-scope');
     expect(reconciliationOf('wp-2')?.blockerRef).toBeNull();
 
-    const frame = await renderSidebar(snapshot);
+    const frame = await renderSidebar(snapshot,true);
     // 三种严重度在界面上互相可区分。
-    expect(frame).toContain('reconcile canonical_advance');
-    expect(frame).toContain('reconcile reconciliation_required');
-    expect(frame).toContain('reconcile conflict_escalated');
+    expect(frame).toContain('reconcile: canonical_advance');
+    expect(frame).toContain('reconcile: reconciliation_required');
+    expect(frame).toContain('reconcile: conflict_escalated');
   });
 });

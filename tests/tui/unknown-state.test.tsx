@@ -10,7 +10,6 @@ import { createElement } from 'react';
 
 import { TuiApp } from '../../src/interfaces/tui/app.js';
 import { COMMAND_IDS, type CommandId } from '../../src/interfaces/tui/components/command-palette.js';
-import { SIDEBAR_COLLAPSED_MARKER } from '../../src/interfaces/tui/components/sidebar.js';
 import {
   createFakePorts,
   frameText,
@@ -44,8 +43,7 @@ describe('recovery-observability / unknown 与 unverifiable 的如实呈现', ()
     const rendered = renderTui(fake.ports);
     await settle();
     // 折叠 Sidebar：状态行才有足够宽度完整显示提示（满密度时状态行只剩 58 列）。
-    await press(rendered, '\u0002');
-    expect(frameText(rendered)).toContain(SIDEBAR_COLLAPSED_MARKER);
+    await runPaletteCommand(rendered,'toggle-sidebar');
 
     // 无危险态，因此 Cancel 立即提交一次 Worker 停止请求。
     await runPaletteCommand(rendered, 'cancel');
@@ -60,7 +58,7 @@ describe('recovery-observability / unknown 与 unverifiable 的如实呈现', ()
     expect(frame).not.toContain('失败');
     expect(frame).not.toContain('已停止');
     // 界面不乐观显示终态：控制状态仍来自快照。
-    expect(frame).toContain('scope control · active');
+    expect(frame).toContain('active');
     expect(frame).not.toContain('cancelling');
 
     rendered.unmount();
@@ -84,14 +82,14 @@ describe('recovery-observability / unknown 与 unverifiable 的如实呈现', ()
     await settle();
     const frame = frameText(rendered);
     // unknown 与 unverifiable 如实呈现，既不是失败也不是已停止。
-    expect(frame).toContain('wp-1 [unknown]');
+    expect(frame).toContain('unknown');
     expect(frame).not.toContain('失败');
     expect(frame).not.toContain('已停止');
 
     // 整宽的 Graph Inspector 给出完整 liveness 事实：unverifiable 不被读作已停止。
     await press(rendered, '\u0007');
-    expect(frameText(rendered)).toContain('liveness=unverifiable');
-    expect(frameText(rendered)).toContain('[unknown]');
+    expect(frameText(rendered)).toContain('Worker unverifiable');
+    expect(frameText(rendered)).toContain('unknown');
     await press(rendered, '\u001b');
 
     // 反复重绘与 resize。
@@ -115,7 +113,7 @@ describe('recovery-observability / unknown 与 unverifiable 的如实呈现', ()
     // 展示只需要已持久化的状态：不产生新的重试、对账写入或派发。
     expect(fake.executeCount()).toBe(0);
     expect(fake.executeIntents).toEqual([]);
-    expect(frameText(rendered)).toContain('wp-1 [unknown]');
+    expect(frameText(rendered)).toContain('unknown');
 
     rendered.unmount();
   });

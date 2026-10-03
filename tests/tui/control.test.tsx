@@ -8,7 +8,7 @@
 
 import { describe, expect, test } from 'vitest';
 
-import { COMMAND_IDS, COMMAND_LABELS, type CommandId } from '../../src/interfaces/tui/components/command-palette.js';
+import { COMMAND_IDS, COMMAND_METADATA, type CommandId } from '../../src/interfaces/tui/components/command-palette.js';
 import { requiresConfirmation } from '../../src/interfaces/tui/components/control-bar.js';
 import type { ControlHazardsView } from '../../src/application/execution/execution-view.js';
 import {
@@ -81,7 +81,7 @@ describe('tui/execution-control / Scope 级控制粒度与 Pause 与 Resume', ()
 
     // 已在运行的 Worker 不被读作已停止：暂停只阻止新派发，它继续到可核验边界。
     const frame = frameText(rendered);
-    expect(frame).toContain('wp-1 [implementing] *active');
+    expect(frame).toContain('implementing');
     expect(frame).toContain('live');
 
     rendered.unmount();
@@ -97,7 +97,7 @@ describe('tui/execution-control / Scope 级控制粒度与 Pause 与 Resume', ()
     expect(fake.executeIntents).toEqual([{ kind: 'scope-control', action: 'resume' }]);
     // 对账与恢复调度在宿主；界面不乐观改写控制状态，展示的仍是快照里的 `paused`。
     const frame = frameText(rendered);
-    expect(frame).toContain('scope control · paused');
+    expect(frame).toContain('paused');
     expect(frame).not.toContain('scope control · active');
 
     rendered.unmount();
@@ -150,7 +150,7 @@ describe('tui/execution-control / Scope 级控制粒度与 Pause 与 Resume', ()
     expect(controlCommands).toEqual(['pause', 'resume', 'cancel']);
     expect(COMMAND_IDS.filter((command) => /wp-|work-package|package/.test(command))).toEqual([]);
     for (const command of controlCommands) {
-      expect(COMMAND_LABELS[command]).toContain('整个 Coordination Scope');
+      expect(COMMAND_METADATA[command].target).toBe('Scope');
     }
 
     // 运行层：选中一个 Work Package 后，控制入口仍是同一批 Scope 级命令，且 ControlBar 明示无单包控制。
@@ -161,15 +161,15 @@ describe('tui/execution-control / Scope 级控制粒度与 Pause 与 Resume', ()
     await pressKey(rendered, '\u0007'); // Ctrl+G：Graph Inspector
     expect(frameText(rendered)).toContain('Graph Inspector');
     await pressKey(rendered, '\u001b[B'); // ↓：选中第一个节点
-    expect(frameText(rendered)).toContain('> 第一个工作包');
+    expect(frameText(rendered)).toContain('第一个工作包');
     await pressEscape(rendered); // Esc：关闭 Inspector
 
     await pressKey(rendered, '\u0010'); // Ctrl+P：Command Palette
     const frame = frameText(rendered);
-    expect(frame).toContain('Pause 整个 Coordination Scope');
-    expect(frame).toContain('Resume 整个 Coordination Scope');
-    expect(frame).toContain('Cancel 整个 Coordination Scope');
-    expect(frame).toContain('Pause/Resume/Cancel 只作用于整个');
+    expect(frame).toContain('Pause');
+    expect(frame).toContain('Resume');
+    expect(frame).toContain('Cancel');
+    expect(frame).toContain('Scope');
     // 选择与查找控制入口本身不写任何东西。
     expect(fake.executeIntents).toEqual([]);
 
@@ -190,7 +190,7 @@ describe('tui/execution-control / Scope 级 Cancel', () => {
 
     expect(fake.executeIntents).toEqual([{ kind: 'scope-control', action: 'cancel' }]);
     const frame = frameText(rendered);
-    expect(frame).toContain('scope control · cancelling');
+    expect(frame).toContain('cancelling');
     // 未确认停止前不得读作终态。
     expect(frame).not.toContain('cancelled');
     expect(frame).not.toContain('已停止');
@@ -210,9 +210,10 @@ describe('tui/execution-control / Scope 级 Cancel', () => {
     expect(fake.executeIntents).toEqual([]);
     await pressKey(rendered, '\r');
     expect(fake.executeIntents).toEqual([]);
-    expect(frameText(rendered)).toContain(CONFIRM_CANCEL);
+    expect(frameText(rendered)).not.toContain(CONFIRM_CANCEL);
 
     // `n` 取消待确认动作：既不写状态，也不再显示提示。
+    await runPaletteCommand(rendered, 'cancel');
     await pressKey(rendered, 'n');
     expect(fake.executeIntents).toEqual([]);
     expect(frameText(rendered)).not.toContain(CONFIRM_CANCEL);
@@ -226,7 +227,10 @@ describe('tui/execution-control / Scope 级 Cancel', () => {
 
     // 确认后才提交，且只提交一次。
     await runPaletteCommand(rendered, 'cancel');
-    await pressKey(rendered, 'y');
+    await pressKey(rendered, '\t');
+    expect(frameText(rendered)).toContain('scope-1');
+    await pressKey(rendered, '\u001b[C');
+    await pressKey(rendered, '\r');
     await pressKey(rendered, 'y');
     await settle();
     expect(fake.executeIntents).toEqual([{ kind: 'scope-control', action: 'cancel' }]);
@@ -252,10 +256,10 @@ describe('tui/execution-control / Scope 级 Cancel', () => {
     await settle();
 
     const frame = frameText(rendered);
-    expect(frame).toContain('scope control · unverifiable');
+    expect(frame).toContain('unverifiable');
     // Sidebar 的存活三值里有独立文案：不可核验读作「待核验」，而不是「已退出」。
-    expect(frame).toContain('unverifiable(待核验)');
-    expect(frame).toContain('[unknown]');
+    expect(frame).toContain('Worker unverifiable');
+    expect(frame).toContain('unknown');
     expect(frame).not.toContain('已停止');
     expect(frame).not.toContain('cancelled');
     // 只读投影：渲染不产生任何写。

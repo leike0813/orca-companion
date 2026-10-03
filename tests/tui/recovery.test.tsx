@@ -4,8 +4,7 @@
  * 只断言界面里可观察的事实：Recovery Capsule 的 coverage 与已知缺口、剩余预算、替代 Segment 与
  * superseded 的原 Segment、失败 Recovery 形成的 blocker，以及迟到结果只进入 Event Drawer 的审计历史。
  *
- * 注意：Sidebar 满密度每行只有 40 列（`SIDEBAR_FULL_WIDTH`），超长内容会被省略号裁切。因此 fixture
- * 使用较短的身份 id（Segment、attempt），让断言的事实完整可见，而不是去断言被裁切后的残片。
+ * Recovery 详情经项目工作记录入口读取；固定框内滚动观察换行后的身份与事实。
  */
 
 import { describe, expect, test } from 'vitest';
@@ -36,6 +35,25 @@ async function runPaletteCommand(rendered: RenderedTui, command: CommandId): Pro
   await press(rendered, '\r');
 }
 
+async function readWorkDetails(rendered: RenderedTui): Promise<string> {
+  await press(rendered, '\u0002');
+  for (let step = 0; step < 4; step += 1) await press(rendered, '\u001b[B');
+  await press(rendered, '\r');
+  const frames: string[] = [];
+  for (let step = 0; step < 120; step += 1) {
+    const frame = frameText(rendered).replace(/[\s│]/gu, '');
+    frames.push(frame);
+    if (frame.includes('历史图版本和依据全文读取')) break;
+    await press(rendered, '\u001b[B');
+  }
+  expect(frames.at(-1)).toContain('历史图版本和依据全文读取');
+  await press(rendered, '\u001b');
+  await new Promise(resolve => setTimeout(resolve, 60));
+  await press(rendered, '\u001b');
+  await new Promise(resolve => setTimeout(resolve, 60));
+  return frames.join('\n');
+}
+
 describe('recovery-observability / Recovery 与 Segment 可观察', () => {
   test('Scenario: partial coverage 与缺口可见', async () => {
     const fake = createFakePorts({
@@ -57,16 +75,16 @@ describe('recovery-observability / Recovery 与 Segment 可观察', () => {
 
     const rendered = renderTui(fake.ports);
     await settle();
-    const frame = frameText(rendered);
+    const rows = await readWorkDetails(rendered);
 
-    expect(frame).toContain('recovery'); // recovery 分区
+    expect(rows).toContain('recovery'); // recovery 分区
     // Capsule 的 coverage 与已知缺口是独立字段，不被合并成「已恢复」。
-    expect(frame).toContain('capsule cap-1 coverage=partial gaps=g1');
+    expect(rows).toContain('capsulecap-1coverage=partialgaps=g1');
     // 剩余 Recovery 预算。
-    expect(frame).toContain('budget remaining=1/2');
+    expect(rows).toContain('budgetremaining=1/2');
     // 替代 Segment 与原 provider Segment 分开呈现，并标出被取代的原 Segment。
-    expect(frame).toContain('segment s0 -> s2');
-    expect(frame).toContain('superseded s0');
+    expect(rows).toContain('segments0->s2');
+    expect(rows).toContain('supersededs0');
 
     // 只读投影：展示 Recovery 不产生任何写。
     expect(fake.executeCount()).toBe(0);
@@ -90,8 +108,8 @@ describe('recovery-observability / Recovery 与 Segment 可观察', () => {
 
     const rendered = renderTui(fake.ports);
     await settle();
-    expect(frameText(rendered)).toContain('superseded s0');
-    expect(frameText(rendered)).toContain('wp-1 [implementing]');
+    expect(await readWorkDetails(rendered)).toContain('supersededs0');
+    expect(frameText(rendered)).toContain('implementing');
 
     // 被 superseded 的原 Session 在替代 Dispatch 被接受后返回结果。
     fake.emit({
@@ -111,13 +129,17 @@ describe('recovery-observability / Recovery 与 Segment 可观察', () => {
 
     await runPaletteCommand(rendered, 'event-drawer');
     await settle(2);
+    const list=frameText(rendered);
+    expect(list).toContain('[recovery]');
+    await press(rendered,'\r');
     const drawer = frameText(rendered);
-    expect(drawer).toContain('[recovery]');
-    expect(drawer).toContain('recovery-status-changed recovery-1 -> recovered');
+    expect(drawer).toContain('recovery-1');
+    expect(drawer.replace(/\s|│/g,'')).toContain('recovery-status-changedrecovery-1->recovered');
 
     // 关闭抽屉后当前 Work Package 生命周期不变。
-    await press(rendered, '\u001b');
-    expect(frameText(rendered)).toContain('wp-1 [implementing]');
+    await press(rendered,'\u001b');await new Promise(resolve=>setTimeout(resolve,60));
+    await press(rendered,'\u001b');await new Promise(resolve=>setTimeout(resolve,60));await settle();
+    expect(frameText(rendered)).toContain('implementing');
     expect(fake.executeCount()).toBe(0);
     rendered.unmount();
   });
@@ -149,11 +171,12 @@ describe('recovery-observability / Recovery 与 Segment 可观察', () => {
     const frame = frameText(rendered);
 
     // 失败以明确 blocker 呈现（Recovery 行与 Work Package 的 blockerRefs 都可见）。
-    expect(frame).toContain('! transcript 不可用');
-    expect(frame).toContain('recovery:transcript-unavailable');
-    expect(frame).toContain('recovery blocked 1');
+    const rows = await readWorkDetails(rendered);
+    expect(rows).toContain('!transcript不可用');
+    expect(rows).toContain('recovery:transcript-unavailable');
+    expect(rows).toContain('validatorblocked');
     // 没有替代 Segment 就没有「已恢复」。
-    expect(frame).toContain('segment segment-1 -> none');
+    expect(rows).toContain('segmentsegment-1->none');
     expect(frame).not.toContain('recovered');
     expect(frame).not.toContain('已恢复');
 

@@ -295,7 +295,7 @@ if (gate.kind === 'skip') {
           ], { env });
           expect(started.status).toBe(0);
 
-          const workspace = pollPane(socket, session, (text) => text.includes('composer ·'));
+          const workspace = pollPane(socket, session, (text) => text.includes('普通消息'));
           expect(workspace.ok, `TUI 未在隔离项目中进入 workspace：\n${workspace.text}`).toBe(true);
 
           // 先在 Session Picker 里把接收方选为当前 Session：交接的 Target 只能由用户明确选择，
@@ -310,7 +310,7 @@ if (gate.kind === 'skip') {
           tmux(socket, ['send-keys', '-t', session, 'Enter']);
           // 只认 Session Picker 自己的页脚：Command Palette 里也有 "Session Picker" 这一行，
           // 用宽泛的 "Session" 会在覆盖层还没打开时就放行。
-          const picker = pollPane(socket, session, (text) => text.includes('Enter 选择 · Esc 关闭'));
+          const picker = pollPane(socket, session, (text) => text.includes('Session Picker') && !text.includes('Command Palette'));
           expect(picker.ok, `Session Picker 未打开：\n${picker.text}`).toBe(true);
           tmux(socket, ['send-keys', '-t', session, 'Down']);
           tmux(socket, ['send-keys', '-t', session, 'Enter']);
@@ -318,7 +318,7 @@ if (gate.kind === 'skip') {
           const switched = pollPane(
             socket,
             session,
-            (text) => !text.includes('Enter 选择 · Esc 关闭'),
+            (text) => !text.includes('Session Picker'),
           );
           expect(switched.ok, `Session Picker 未关闭：\n${switched.text}`).toBe(true);
 
@@ -329,6 +329,10 @@ if (gate.kind === 'skip') {
             tmux(socket, ['send-keys', '-t', session, 'Down']);
           }
           tmux(socket, ['send-keys', '-t', session, 'Enter']);
+          const recipient = pollPane(socket, session, (text) => text.includes('选择交接收件方'));
+          expect(recipient.ok, recipient.text).toBe(true);
+          tmux(socket, ['send-keys', '-t', session, 'Down']);
+          tmux(socket, ['send-keys', '-t', session, 'Enter']);
           // prepare 途中会真实读取 Route Map 并派生 Capsule（一次 `gh issue view` 加两次 store 写入），
           // 5s 的默认窗口在真实身份下不够。
           const review = pollPane(socket, session, (text) => text.includes('Handoff Review'), 30_000);
@@ -338,6 +342,7 @@ if (gate.kind === 'skip') {
           ).toBe(true);
 
           // Review 界面确认 cutover。
+          tmux(socket, ['send-keys', '-t', session, 'Right']);
           tmux(socket, ['send-keys', '-t', session, 'Enter']);
           const cutover = pollPane(
             socket,

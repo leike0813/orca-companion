@@ -1,0 +1,158 @@
+[
+  {
+    "scenario": "post-review-overview",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "post-review-overview-120x40-color.png",
+    "text": "post-review-overview-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "post-review-work-selected",
+    "columns": 120,
+    "rows": 40,
+    "mode": "color",
+    "png": "post-review-work-selected-120x40-color.png",
+    "text": "post-review-work-selected-120x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "post-review-overview",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "post-review-overview-120x40-no-color.png",
+    "text": "post-review-overview-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "post-review-work-selected",
+    "columns": 120,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "post-review-work-selected-120x40-no-color.png",
+    "text": "post-review-work-selected-120x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "post-review-overview",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "post-review-overview-80x24-color.png",
+    "text": "post-review-overview-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "post-review-work-selected",
+    "columns": 80,
+    "rows": 24,
+    "mode": "color",
+    "png": "post-review-work-selected-80x24-color.png",
+    "text": "post-review-work-selected-80x24-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "post-review-overview",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "post-review-overview-80x24-no-color.png",
+    "text": "post-review-overview-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "post-review-work-selected",
+    "columns": 80,
+    "rows": 24,
+    "mode": "no-color",
+    "png": "post-review-work-selected-80x24-no-color.png",
+    "text": "post-review-work-selected-80x24-no-color.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "post-review-overview",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "post-review-overview-50x40-color.png",
+    "text": "post-review-overview-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "post-review-work-selected",
+    "columns": 50,
+    "rows": 40,
+    "mode": "color",
+    "png": "post-review-work-selected-50x40-color.png",
+    "text": "post-review-work-selected-50x40-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "post-review-overview",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "post-review-overview-50x40-no-color.png",
+    "text": "post-review-overview-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  },
+  {
+    "scenario": "post-review-work-selected",
+    "columns": 50,
+    "rows": 40,
+    "mode": "no-color",
+    "png": "post-review-work-selected-50x40-no-color.png",
+    "text": "post-review-work-selected-50x40-no-color.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "cursorVisible": false
+  }
+]

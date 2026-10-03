@@ -18,14 +18,15 @@ import {
   type TuiViewModel,
 } from '../../src/application/tui/view-model.js';
 import { handleComposerKey } from '../../src/interfaces/tui/app.js';
+import type { AnswerPanelView } from '../../src/interfaces/tui/components/answer-panel.js';
 import { COMMAND_IDS } from '../../src/interfaces/tui/components/command-palette.js';
-import { SIDEBAR_COLLAPSED_MARKER } from '../../src/interfaces/tui/components/sidebar.js';
 import { TOOL_COLLAPSED_MARKER, TOOL_EXPANDED_MARKER } from '../../src/interfaces/tui/components/transcript.js';
+import { TopBar } from '../../src/interfaces/tui/components/top-bar.js';
 import { resolveGlobalAction } from '../../src/interfaces/tui/input/keymap.js';
 import type { ModelCatalog } from '../../src/interfaces/tui/ports.js';
 import { allowedSidebarDensity } from '../../src/interfaces/tui/render/width.js';
 import { Workspace, type WorkspaceActions } from '../../src/interfaces/tui/screens/workspace.js';
-import { draftFor, initialTuiState, reduceTuiState, type TuiState } from '../../src/interfaces/tui/state.js';
+import { answerDraftKey, draftFor, initialTuiState, reduceTuiState, type TuiState } from '../../src/interfaces/tui/state.js';
 import {
   createFakePorts,
   makeSnapshot,
@@ -87,6 +88,8 @@ function renderWorkspace(
     readonly ui?: TuiState;
     readonly snapshot?: SnapshotOverrides;
     readonly events?: readonly SemanticEvent[];
+    readonly answerPanel?: AnswerPanelView;
+    readonly disabledReason?: string;
   } = {},
 ): RenderedTui {
   const ui = options.ui ?? uiState();
@@ -105,7 +108,8 @@ function renderWorkspace(
       modelCatalog={MODEL_CATALOG}
       modelRejection={null}
       paletteSelection={0}
-      composerDisabledReason={null}
+      composerDisabledReason={options.disabledReason ?? null}
+      answerPanel={options.answerPanel ?? null}
       newlineHint="Shift+Enter 换行"
       handoffProposal={null}
       authorizationReview={null}
@@ -115,6 +119,31 @@ function renderWorkspace(
 }
 
 describe('planning-workspace / 常驻 transcript 与 composer 主视图', () => {
+  test.each([[80, 24], [50, 40]])('长问题、选项和答案在 %ix%i 保留时间线与不可提交原因', async (terminalWidth, terminalHeight) => {
+    const header = renderComponent(<TopBar coordinationScopeId="scope-a" mode="execution_coordination"
+      controlState="blocked" graphLabel={null} generation={null} authorizationLabel={null}
+      activeWorkPackageCount={0} reconciling availableWidth={terminalWidth}
+      sessionId="session-long-中文规划-2026" pendingCount={3} holder="another-session-with-long-identity" />);
+    expect(header.lastFrame()).toContain('待答3');
+    header.unmount();
+    const interaction = { interactionId: 'i-large', ownerCoordinatorSessionId: 'session-a',
+      subjectRef: { kind: 'coordinator-session' as const, id: 'session-a' }, expectedRevision: 7, state: 'open' as const,
+      question: { text: '需要保留的中文问题。'.repeat(30), options: Array.from({ length: 8 }, (_, index) => ({ label: `选项 ${String(index)}` })) } };
+    let ui = uiState({ sidebarDensity: allowedSidebarDensity(terminalWidth) });
+    ui = reduceTuiState(ui, { kind: 'answer-mode-entered', interactionId: interaction.interactionId, expectedRevision: 7 });
+    ui = reduceTuiState(ui, { kind: 'answer-draft-changed', answerKey: answerDraftKey('session-a', interaction.interactionId, 7),
+      draft: textDraft(Array.from({ length: 10 }, (_, index) => `答案 ${String(index)}`).join('\n')) });
+    const rendered = renderWorkspace({ terminalWidth, terminalHeight, ui, disabledReason: 'context_exhausted',
+      answerPanel: { interaction, index: 0, count: 1, option: 3, focus: 'text', scroll: 0 } });
+    await settle(4);
+    const frame = rendered.lastFrame() ?? '';
+    expect(frame).toContain('search');
+    expect(frame).toContain('答案 9');
+    expect(frame).toContain('context_exhausted');
+    expect(frame.split('\n').length).toBeLessThanOrEqual(terminalHeight);
+    rendered.unmount();
+  });
+
   test('长会话保留最新消息与固定状态区域', async () => {
     const transcriptEntries: TranscriptEntry[] = Array.from({ length: 40 }, (_, index) => ({
       kind: 'agent', id: `message-${String(index)}`, text: `消息 ${String(index)}`,
@@ -124,8 +153,8 @@ describe('planning-workspace / 常驻 transcript 与 composer 主视图', () => 
     const frame = rendered.lastFrame() ?? '';
     expect(frame).toContain('消息 39');
     expect(frame).not.toContain('消息 0');
-    expect(frame).toContain('composer ·');
-    expect(frame).toContain('sidebar full');
+    expect(frame).toContain('普通消息');
+    expect(frame).toContain('上下文 不可用');
   });
 
   test('Scenario: 窄屏下主视图保持可见', async () => {
@@ -140,7 +169,7 @@ describe('planning-workspace / 常驻 transcript 与 composer 主视图', () => 
       const frame = rendered.lastFrame() ?? '';
       expect(frame).toContain('先看看地图'); // transcript 常驻
       expect(frame).toContain('好的');
-      expect(frame).toContain('composer ·'); // composer 常驻
+      expect(frame).toContain('普通消息'); // composer 常驻
     }
 
     const terminalWidth = 40;
@@ -168,10 +197,10 @@ describe('planning-workspace / 常驻 transcript 与 composer 主视图', () => 
     await settle(2);
     const frame = rendered.lastFrame() ?? '';
 
-    expect(frame).toContain(SIDEBAR_COLLAPSED_MARKER); // Sidebar 折叠，主视图不被挤压
+    expect(frame).not.toContain('执行图侧栏'); // Sidebar 折叠，主视图不被挤压
     expect(frame).not.toContain('wp-1'); // 折叠态不渲染不可见详情
     expect(frame).toContain('先看看地图');
-    expect(frame).toContain('composer ·');
+    expect(frame).toContain('普通消息');
     expect(frame).toContain('窄屏草稿'); // 窄屏下草稿仍完整可见
   });
 
@@ -232,12 +261,12 @@ describe('planning-workspace / 常驻 transcript 与 composer 主视图', () => 
     const fake = createFakePorts();
     const app = renderTui(fake.ports);
     await settle(12);
-    expect(app.lastFrame() ?? '').toContain('输入消息后回车提交');
+    expect(app.lastFrame() ?? '').toContain('输入消息…');
 
     app.stdin.write('p');
     await settle(2);
     const frame = app.lastFrame() ?? '';
-    expect(frame).not.toContain('输入消息后回车提交');
+    expect(frame).not.toContain('输入消息…');
     expect(frame).not.toContain('Command Palette');
     expect(fake.executeCount()).toBe(0);
   });
@@ -252,7 +281,7 @@ describe('planning-workspace / 常驻 transcript 与 composer 主视图', () => 
     const stacked = renderWorkspace({ ui });
     await settle(2);
     const stackedFrame = stacked.lastFrame() ?? '';
-    expect(stackedFrame).toContain('Event Drawer');
+    expect(stackedFrame).toContain('最近事件');
     expect(stackedFrame).not.toContain('Session Picker');
 
     const closed = reduceTuiState(ui, { kind: 'overlay-close-top' });
@@ -282,7 +311,7 @@ describe('planning-workspace / 信息分层', () => {
       }),
     ).toBeNull();
 
-    const ui = uiState({ overlayStack: ['event-drawer'] });
+    const ui = uiState({ projectPanel: {...initialTuiState.projectPanel,open:true,tab:2} });
     const rendered = renderWorkspace({ ui, events: [] });
     await settle(2);
     const frame = rendered.lastFrame() ?? '';
@@ -306,14 +335,14 @@ describe('planning-workspace / 信息分层', () => {
       revision: 9,
       reason: 'worker-task-verified-accepted',
     };
-    const ui = uiState({ overlayStack: ['event-drawer'] });
+    const ui = uiState({ projectPanel: {...initialTuiState.projectPanel,open:true,tab:2,detail:'event:event-verified'} });
 
     const withEvent = renderWorkspace({ ui, events: [verified] });
     await settle(2);
     const frame = withEvent.lastFrame() ?? '';
-    expect(frame).toContain('worker-task-verified-accepted');
+    expect(frame.replace(/\s|│/g,'')).toContain('worker-task-verified-accepted');
     // 事件只在抽屉里，位于常驻主视图之后；transcript 不被改写。
-    expect(frame.indexOf('state-changed')).toBeGreaterThan(frame.indexOf('composer ·'));
+    expect(frame).toContain('最近事件');
     for (const line of ['先看看地图', '好的', 'tool search']) {
       expect(frame).toContain(line);
     }

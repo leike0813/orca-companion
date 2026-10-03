@@ -8,15 +8,13 @@
  * Capsule 不可用时界面显示 blocker，不提供「跳过」路径：fail closed 由用例决定，界面不发明替代方案。
  */
 
-import { Box, Text } from 'ink';
-
-import { truncateToDisplayWidth } from '../render/width.js';
+import { DialogFrame, fieldRows, ReviewBody, type ReviewLayoutProps } from './selection-list.js';
 import type {
   ControllerHandoffView,
   ControllerPlanningHandoffView,
 } from '../../../application/controller-service.js';
 
-export type HandoffReviewProps = {
+export type HandoffReviewProps = ReviewLayoutProps & {
   readonly proposal: ControllerPlanningHandoffView | null;
   /** 当前持有规划责任的 Session；即这次规划交接要转移的责任来源。 */
   readonly responsibleSessionId: string | null;
@@ -71,53 +69,11 @@ export function executionHandoffRows(
 }
 
 export function HandoffReview(props: HandoffReviewProps) {
-  if (props.executionHandoff !== undefined) {
-    const handoff = props.executionHandoff;
-    if (handoff === null) {
-      return (
-        <Box flexDirection="column" borderStyle="single">
-          <Text>Execution Handoff Review</Text>
-          <Text>! 没有待审阅的 Execution Handoff 记录</Text>
-          <Text dimColor>Esc 关闭</Text>
-        </Box>
-      );
-    }
-    return (
-      <Box flexDirection="column" borderStyle="single">
-        <Text>Execution Handoff Review</Text>
-        {executionHandoffRows(handoff, props.targetAwaitingUserPrompt ?? false).map((row) => (
-          <Text key={row}>{truncateToDisplayWidth(row, Math.max(1, props.availableWidth))}</Text>
-        ))}
-        {handoff.phase === 'blocked' ? (
-          <Text>! 交接进入 blocked：Source 仍是唯一 owner，Target 未被激活</Text>
-        ) : null}
-        <Text dimColor>
-          {handoff.phase === 'reviewed' ? 'Enter 确认 cutover · Esc 取消' : '当前阶段不可 cutover（fail closed）· Esc 关闭'}
-        </Text>
-      </Box>
-    );
-  }
-
-  const proposal = props.proposal;
-  if (proposal === null) {
-    return (
-      <Box flexDirection="column" borderStyle="single">
-        <Text>Handoff Review</Text>
-        <Text>! 没有待审阅的 Route Planning Handoff 提案</Text>
-        <Text dimColor>Esc 关闭</Text>
-      </Box>
-    );
-  }
-  return (
-    <Box flexDirection="column" borderStyle="single">
-      <Text>Handoff Review</Text>
-      {handoffReviewRows(proposal, props.responsibleSessionId).map((row) => (
-        <Text key={row}>{truncateToDisplayWidth(row, Math.max(1, props.availableWidth))}</Text>
-      ))}
-      {proposal.capsuleRef === null ? (
-        <Text>! Capsule 不可用：cutover 不会激活 Target</Text>
-      ) : null}
-      <Text dimColor>Enter 确认 cutover · Esc 取消</Text>
-    </Box>
-  );
+  const execution=props.executionHandoff!==undefined,record=execution?props.executionHandoff:props.proposal,rows=props.rows??18;
+  const lines=execution?(props.executionHandoff==null?['! 没有待审阅的 Execution Handoff 记录']:executionHandoffRows(props.executionHandoff,props.targetAwaitingUserPrompt??false)):(props.proposal===null?['! 没有待审阅的 Route Planning Handoff 提案']:handoffReviewRows(props.proposal,props.responsibleSessionId));
+  const overview=record?fieldRows([{label:'Source',value:record.sourceSessionId},{label:'Target',value:record.targetSessionId},{label:'阶段',value:record.phase},...(props.executionHandoff?[{label:'图代际',value:String(props.executionHandoff.graphGeneration)},{label:'revision',value:String(props.executionHandoff.expectedRevision)},{label:'待转移责任',value:props.executionHandoff.responsibilitySet.join(', ')},{label:'Target',value:props.targetAwaitingUserPrompt?'awaiting_user_prompt':'active'}]:props.proposal?[{label:'提案',value:props.proposal.proposalId},{label:'Capsule',value:props.proposal.capsuleRef??'不可用 · fail closed'},{label:'map revision',value:String(props.proposal.mapRevision)},{label:'plan revision',value:String(props.proposal.planRevision)},{label:'proposal revision',value:String(props.proposal.proposalRevision)},{label:'待转移规划责任',value:props.responsibleSessionId??'无'}]:[])],Math.max(1,props.availableWidth-8)):lines;
+  const allowed=execution?props.executionHandoff?.phase==='reviewed':props.proposal?.capsuleRef!==null&&props.proposal!==null;
+  return <DialogFrame title={execution?'Execution Handoff Review':'Handoff Review'} summary={record?`${record.sourceSessionId} → ${record.targetSessionId}`:'交接记录不可用'} width={props.availableWidth} rows={rows} footer="Tab 栏目 · ↑↓ 滚动 · ←→ 动作 · Enter 选择 · Esc 返回">
+    <ReviewBody lines={[...(!allowed?['! '+(execution?'交接不可确认':'Capsule 不可用 · fail closed')]:[]),...(props.executionHandoff?.phase==='blocked'?['! 交接进入 blocked：Source 仍是唯一 owner，Target 未被激活']:[]),...(props.tab===1?lines:overview)]} width={props.availableWidth} rows={rows} tab={props.tab??0} scroll={props.scroll??0} action={props.action??0} allowed={allowed} label="确认 cutover"/>
+  </DialogFrame>;
 }

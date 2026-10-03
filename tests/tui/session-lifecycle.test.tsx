@@ -49,7 +49,7 @@ describe('/compact', () => {
     await settle();
 
     await pressKey(rendered, '\u0010');
-    expect(frameText(rendered)).toContain('/compact');
+    expect(frameText(rendered)).toContain('压缩');
 
     // paletteSelection 0 = compact
     await pressKey(rendered, '\r');
@@ -207,7 +207,7 @@ describe('Model Picker 准入', () => {
     await runPaletteCommand(rendered, 1);
     expect(frameText(rendered)).toContain('Model Picker');
     expect(frameText(rendered)).toContain('config-b');
-    expect(fake.calls.filter((call) => call.name === 'modelCatalog')).toHaveLength(1);
+    expect(fake.calls.filter((call) => call.name === 'modelCatalog')).toHaveLength(2);
 
     // 下移到 config-b 后提交。
     await pressKey(rendered, '\u001b[B');
@@ -337,6 +337,9 @@ describe('Handoff Review', () => {
 
     // paletteSelection 2 = handoff
     await runPaletteCommand(rendered, 2);
+    expect(fake.calls.some(call=>call.name==='handoff.prepare')).toBe(false);
+    await pressKey(rendered, '\u001b[B');
+    await pressKey(rendered, '\r');
 
     expect(fake.calls.some((call) => call.name === 'handoff.prepare')).toBe(true);
     const review = frameText(rendered);
@@ -346,6 +349,7 @@ describe('Handoff Review', () => {
     // Review 期间不产生任何其他写。
     expect(fake.calls.some((call) => call.name === 'handoff.cutover')).toBe(false);
 
+    await pressKey(rendered, '\u001b[C');
     await pressKey(rendered, '\r');
 
     expect(fake.calls.filter((call) => call.name === 'handoff.cutover').map((call) => call.detail)).toEqual([

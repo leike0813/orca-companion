@@ -1,0 +1,40 @@
+Scope scope-preview · route_planning · active · g…
+──────────────────────────────────────────────────
+▏sidebar 已折叠 (Ctrl+B)
+│ › 请规划第一版路线图：中文abc混排内容需要按显
+│   示宽度换行
+
+● Coordinator 会先读地图，再确认依赖与范围。
+  ▸ tool search
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+1 个待答问题 · Shift+← 或 /answer
+待答 coordinator-session:session-a · state=open…
+Shift+← 或 /answer 打开当前 Session 回答面板
+╭──────────────────────────────────────────────╮
+│ › 普通消息                                   │
+│ 原草稿中文abc                                │
+╰──────────────────────────────────────────────╯
+scope control · active · Pause/Resume/Cancel 只…
+revision 7 · sidebar collapsed
+active 0 · hazard(0 live / 0 unverifiable / 1 i…
+

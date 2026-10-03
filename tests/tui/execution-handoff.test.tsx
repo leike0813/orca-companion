@@ -5,7 +5,7 @@
  * `ExecutionHandoffState`、cutover 后自动选中记录里的 Target、Source 转为只读、Target 等到用户下一条
  * 普通 Prompt 才回到普通会话，以及灾难路径 fail closed（不打开 cutover 路径、Source 仍是唯一 owner）。
  *
- * 「运行身份不变」用可观察的同一性证明：cutover 前后 Sidebar 里由快照投影出的身份行逐字相同，且
+ * 「运行身份不变」用可观察的同一性证明：cutover 前后项目工作/预算详情里的身份与引用保持可读，且
  * `executionHandoffRows` 明确把 Run/Task/Dispatch/Attempt/worktree/Authorization/预算排除在待转移责任
  * 之外。
  */
@@ -39,6 +39,9 @@ async function runPaletteCommand(rendered: RenderedTui, index: number): Promise<
   }
   await pressKey(rendered, '\r');
   await settle();
+  if(index===COMMAND_IDS.indexOf('execution-handoff')){
+    await pressKey(rendered,'\u001b[B');await pressKey(rendered,'\r');await settle();
+  }
 }
 
 async function openSessionPicker(rendered: RenderedTui): Promise<void> {
@@ -46,7 +49,7 @@ async function openSessionPicker(rendered: RenderedTui): Promise<void> {
 }
 
 function expectSelectedSession(frame: string, sessionId: string): void {
-  const row = frame.split('\n').find((line) => line.includes(sessionId)) ?? '';
+  const row = frame.split('\n').find((line) => line.includes(sessionId)&&/[✔√]/u.test(line)) ?? '';
   expect(row).toMatch(/[✔√]/u);
 }
 
@@ -70,6 +73,7 @@ const HANDOFF = makeExecutionHandoff({
 });
 
 const EXECUTION_SNAPSHOT: SnapshotOverrides = {
+  mode:'execution_coordination',
   handoffs: [HANDOFF],
   executionLeaseHolderSessionId: 'session-a',
   frontier: [
@@ -85,30 +89,25 @@ const EXECUTION_SNAPSHOT: SnapshotOverrides = {
   budgets: [{ budgetKey: 'worker-recovery', approvedLimitRef: 'limit-1', consumed: 2 }],
 };
 
-/**
- * Sidebar 一列的内容。Sidebar 与主视图处在同一行文本里，用左框线 `│` 切出右列，避免把主视图的
- * 状态行/提示也算进运行身份。
- */
-function sidebarColumn(frame: string): readonly string[] {
-  return frame.split('\n').map((line) => {
-    const index = line.lastIndexOf('│');
-    return index === -1 ? '' : line.slice(index + 1);
-  });
-}
-
-/**
- * Sidebar 里由快照投影出的运行身份行（Run/Task/Dispatch/Attempt/worktree/Authorization/预算）。
- * 40 列会裁切行尾，因此只取这些行做逐字比较，不比较整屏。
- */
-function runIdentityLines(frame: string): readonly string[] {
-  return sidebarColumn(frame).filter(
-    (line) =>
-      line.includes('wp-1') ||
-      line.includes('worktree=') ||
-      line.includes('baseline=') ||
-      line.includes('attempt=') ||
-      line.includes('worker-recovery'),
-  );
+async function runIdentityLines(rendered: RenderedTui): Promise<string> {
+  await pressKey(rendered, '\u0002');
+  for (let step = 0; step < 4; step += 1) await pressKey(rendered, '\u001b[B');
+  await pressKey(rendered, '\r');
+  const frames: string[] = [];
+  for (let step = 0; step < 100; step += 1) {
+    const frame = frameText(rendered).replace(/[\s│]/gu, '');
+    frames.push(frame);
+    if (frame.includes('历史图版本和依据全文读取')) break;
+    await pressKey(rendered, '\u001b[B');
+  }
+  expect(frames.at(-1)).toContain('历史图版本和依据全文读取');
+  await pressEscape(rendered);
+  for (let step = 0; step < 3; step += 1) await pressKey(rendered, '\u001b[A');
+  await pressKey(rendered, '\r');
+  frames.push(frameText(rendered).replace(/[\s│]/gu, ''));
+  await pressEscape(rendered);
+  await pressEscape(rendered);
+  return frames.join('\n');
 }
 
 describe('recovery-observability / Execution Handoff 复用既有交互', () => {
@@ -117,10 +116,9 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
     const rendered = renderTui(fake.ports);
     await settle();
 
-    const identityBefore = runIdentityLines(frameText(rendered));
-    expect(identityBefore.join('\n')).toContain('worktree=/wt/wp1');
-    expect(identityBefore.join('\n')).toContain('attempt=attempt-7');
-    expect(identityBefore.join('\n')).toContain('worker-recovery 2/limit-1');
+    const identities = ['wp-1', '/wt/wp1', 'attempt-7', 'head-1', 'worker-recovery:已用2', '批准引用limit-1'];
+    const identityBefore = await runIdentityLines(rendered);
+    for (const identity of identities) expect(identityBefore).toContain(identity);
 
     await runPaletteCommand(rendered, COMMAND_IDS.indexOf('execution-handoff'));
 
@@ -129,6 +127,7 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
     expect(fake.calls.find((call) => call.name === 'execution-handoff.prepare')?.detail).toBe('session-b');
     expect(fake.calls.map((call) => call.name)).not.toContain('execution-handoff.review');
 
+    await pressKey(rendered, '\t');
     const overlay = frameText(rendered);
     expect(overlay).toContain('Execution Handoff Review');
     expect(overlay).toContain(`execution handoff ${HANDOFF_ID} phase=reviewed`);
@@ -146,6 +145,7 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
     expect(rows).not.toContain('attempt-7');
     expect(rows).not.toContain('/wt/wp1');
 
+    await pressKey(rendered, '\u001b[C');
     await pressKey(rendered, '\r');
 
     expect(
@@ -154,8 +154,9 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
 
     const after = frameText(rendered);
     expect(after).not.toContain('Execution Handoff Review');
-    // 在途 Worker 与 worktree、预算身份逐字不变：cutover 只转移责任，不重建运行身份。
-    expect(runIdentityLines(after)).toEqual(identityBefore);
+    // cutover 后仍从真实界面入口核对原 Work Package、attempt、worktree、baseline 与预算引用。
+    const identityAfter = await runIdentityLines(rendered);
+    for (const identity of identities) expect(identityAfter).toContain(identity);
     expect(after).not.toContain('运行身份已变更');
 
     rendered.unmount();
@@ -166,19 +167,21 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
     const rendered = renderTui(fake.ports);
     await settle();
 
-    await runPaletteCommand(rendered, COMMAND_IDS.indexOf('execution-handoff'));
-    // cutover 之前 Target 处于 awaiting_user_prompt：还没有被唤醒。
-    expect(frameText(rendered)).toContain('target awaiting_user_prompt');
-
-    // 确认前把选中 Session 切到 Source，用于观察 cutover 是否自动选中记录里的 Target。
+    // 审阅优先消费输入：全局键位不穿透。因此先切到 Source（session-a），再打开审阅；
+    // 这样仍能观察 cutover 是否自动选中记录里的 Target（session-b）。
     await openSessionPicker(rendered);
     await pressKey(rendered, '\u001b[A');
     await pressKey(rendered, '\r');
     await openSessionPicker(rendered);
     expectSelectedSession(frameText(rendered), 'session-a');
     await pressEscape(rendered);
-    expect(frameText(rendered)).toContain('Execution Handoff Review');
 
+    await runPaletteCommand(rendered, COMMAND_IDS.indexOf('execution-handoff'));
+    await pressKey(rendered, '\t');
+    // cutover 之前 Target 处于 awaiting_user_prompt：还没有被唤醒。
+    expect(frameText(rendered)).toContain('target awaiting_user_prompt');
+
+    await pressKey(rendered, '\u001b[C');
     await pressKey(rendered, '\r');
 
     // cutover 完成后自动选中 Target（记录里的 targetSessionId），而不是停留在 Source。
@@ -264,6 +267,7 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
     // 只有 `prepared` 提案会被复核；复核被拒绝即 fail closed，且界面不得再给出 cutover 路径。
     const fake = createFakePorts({
       snapshot: {
+        mode:'execution_coordination',
         ...EXECUTION_SNAPSHOT,
         handoffs: [makeExecutionHandoff({ handoffId: HANDOFF_ID, phase: 'prepared' })],
       },
@@ -282,7 +286,9 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
     expect(called).not.toContain('execution-handoff.cutover');
     expect(frameText(rendered)).toContain('no-capsule');
 
+    // 审阅优先消费输入：先合法返回（Esc），再查看选中 Session。
     // Source 仍是唯一 owner：Target 未被激活，也没有任何业务意图。
+    await pressEscape(rendered);
     await openSessionPicker(rendered);
     expectSelectedSession(frameText(rendered), 'session-b');
     expect(fake.executeIntents).toEqual([]);
@@ -294,7 +300,8 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
     // 宿主在 checkpoint 不可恢复时把记录置为 blocked；即使 prepare 已被接受，也不得进入可确认的
     // cutover（因此 fake 的 review 返回值在本例中不会被触达）。
     const fake = createFakePorts({
-      snapshot: { ...EXECUTION_SNAPSHOT, handoffs: [makeExecutionHandoff({ handoffId: HANDOFF_ID, phase: 'blocked' })] },
+      snapshot: {
+        mode:'execution_coordination', ...EXECUTION_SNAPSHOT, handoffs: [makeExecutionHandoff({ handoffId: HANDOFF_ID, phase: 'blocked' })] },
       executionHandoff: {
         review: { kind: 'rejected', code: 'capsule-unrecoverable', message: 'Source checkpoint 不可恢复' },
       },
@@ -314,7 +321,9 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
     expect(frame).toContain('Execution Handoff Review');
     expect(frame).toContain('Source 仍是唯一 owner');
 
+    // 审阅优先消费输入：先合法返回（Esc）。
     // Source 仍是唯一 owner。
+    await pressEscape(rendered);
     await openSessionPicker(rendered);
     expectSelectedSession(frameText(rendered), 'session-b');
     expect(fake.executeIntents).toEqual([]);

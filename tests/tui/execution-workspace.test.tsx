@@ -79,9 +79,9 @@ describe('execution-monitoring / 授权后工作区连续性', () => {
 
     // 授权前：规划态的工作区，transcript 与 composer 都是原内容。
     const before = frameText(rendered);
-    expect(before).toContain('route_planning');
-    expect(before).toContain('gen=1');
-    expect(before).toContain('auth=none');
+    expect(before).toContain('规划');
+    expect(before).toContain('图 G1·v2');
+    expect(before).toContain('推理 不可用');
     expect(before).toContain('先看看地图');
 
     await pressKey(rendered, '继续实现 wp-1');
@@ -96,10 +96,15 @@ describe('execution-monitoring / 授权后工作区连续性', () => {
 
     const after = frameText(rendered);
     // 顶栏换成新的 Generation、Authorization 与 active Work Package 计数。
-    expect(after).toContain('execution_coordination');
-    expect(after).toContain('gen=2');
-    expect(after).toContain('auth=auth-1 v4');
-    expect(after).toContain('active=1');
+    expect(after).toContain('执行');
+    expect(after).toContain('图 G2');
+    await pressKey(rendered,'\u0002');
+    await pressKey(rendered,'\u001b[B');
+    await pressKey(rendered,'\r');
+    expect(frameText(rendered)).toContain('auth-1');
+    rendered.stdin.write('\u001b');await new Promise(resolve=>setTimeout(resolve,60));await settle();
+    await pressKey(rendered,'\u0002');
+    expect(after).toContain('active 1');
     // 工作区没有被重置：transcript 条目与 composer 草稿都还在。
     expect(after).toContain('先看看地图');
     expect(after).toContain('好的');
@@ -139,7 +144,7 @@ describe('execution-monitoring / 授权后工作区连续性', () => {
     // 先进入 reconciling 投影：Sidebar 头部与状态行都显示对账中（顶栏片段在 100 列下会被裁切）。
     expect(frame).toContain('reconciling');
     // 生命周期仍如实来自事实（不可核验的 Worker 不被读成已退出，也不被读成已完成）。
-    expect(frame).toContain('wp-1 [implementing]');
+    expect(frame).toContain('implementing');
     expect(frame).toContain('unverifiable');
     expect(frame).not.toContain('[accepted]');
     expect(frame).not.toContain('exited');

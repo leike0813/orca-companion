@@ -215,11 +215,13 @@ LangGraph checkpoint、SQLite 和 Orca receipt 都不提供跨系统 exactly-onc
 
 **TUI 硬约束：尊重已确认原型。** 规划、实现或验收任何 TUI change 前，必须读取 [TUI 实现进度与原型交接](docs/dev/tui-implementation-handoff.md)，核对对应定稿来源、当前批次及验收要求。未经用户明确批准不得自行重新设计；交互或自动测试通过不能替代原型一致性验收。
 
-TUI 以选中 Coordinator Session 的 transcript 与 composer 为主视图。右侧响应式 sidebar 展示 Scope 状态、预算、紧凑 Execution Graph、Worker、blocker 和待处理交互；窄屏折叠或改为 overlay。全屏 Graph Inspector 只用于检查、选择与导航。
+TUI 实施必须先读 [原型交接](docs/dev/tui-implementation-handoff.md) 所指的六票定稿决议、源码和画面，按已批准的布局、层级、配色、导航及返回约定验收；修改设计须获用户明确批准。自动检查与交互正常不能代替逐票画面对照。
 
-Transcript 只显示用户/Agent 消息和折叠 tool 记录；运行事实进入 sidebar，语义事件进入 Event Drawer，诊断噪声只进日志。Pending Interaction 显示紧凑入口，Shift+Left 或 `/answer` 打开当前 Session 底部面板，回答 composer 必须绑定 interaction ID 与 expected revision；普通聊天不能满足待答问题。Ctrl+A/E 为行首尾，Enter 提交，Alt+Enter 换行；面板 Esc 保存回答并恢复聊天光标，新问题不得抢焦点。
+TUI 以选中 Coordinator Session 的 continuous transcript 与 composer 为主视图。右侧 adaptive sidebar 展示当前图、节点卡、Worker/liveness、串行队列与 blocker。项目面板承载预算/授权、身份、工作依据、待答列表和最近事件；100 列及以上使用原 sidebar 区域，对话宽度与位置不变，更窄时独占主区域，关闭恢复原工作区。Graph Inspector 在三档尺寸都支持只读邻域、详情与明确关系选择。
 
-最小全局键位为 `Ctrl+P` 打开 Command Palette、`Ctrl+B` 切换 sidebar、`Ctrl+G` 打开 Graph Inspector、`Esc` 逐层关闭 overlay，方向键与 Enter 用于导航。Session Picker 和新事件不得自动切换 transcript、抢占 composer 或改变 Scope 级 Graph；M2 不实现自定义键位。
+Transcript 只显示用户/Agent 消息和折叠 tool 记录；运行事实按上述区域分层，语义事件进入项目面板最近事件（本次启动最多 50 条），诊断噪声只进日志。Pending Interaction 显示紧凑入口，Shift+Left 或 `/answer` 打开当前 Session 底部面板，回答 composer 必须绑定 interaction ID 与 expected revision；普通聊天不能满足待答问题。Ctrl+A/E 为行首尾，Enter 提交，Alt+Enter 换行；面板 Esc 保存回答并恢复聊天光标，新问题不得抢焦点。
+
+最小全局键位为 `Ctrl+P` 打开 Command Palette、`Ctrl+B` 开合项目面板、`Ctrl+G` 打开 Graph Inspector、`Esc` 逐层返回，方向键与 Enter 用于导航。slash 上方候选先采用、再明确执行；审阅默认返回。Session Picker 和新事件不得自动切换 transcript、抢占 composer 或改变 Scope 级 Graph；M2 不实现自定义键位。Nerd/ASCII 可在选项中即时切换，用户级偏好尚未持久化；缺少 effort/context/验收摘要时明示不可用。
 
 Pause、Resume 和 Cancel 都作用于整个 Coordination Scope：
 

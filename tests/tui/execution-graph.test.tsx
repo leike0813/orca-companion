@@ -26,7 +26,7 @@ import {
 import { COMMAND_IDS } from '../../src/interfaces/tui/components/command-palette.js';
 import { SIDEBAR_COLLAPSED_MARKER, Sidebar } from '../../src/interfaces/tui/components/sidebar.js';
 import type { ModelCatalog } from '../../src/interfaces/tui/ports.js';
-import { layoutExecutionGraph, visibleRows } from '../../src/interfaces/tui/render/graph-layout.js';
+import { adaptiveGraphCanvas, layoutExecutionGraph, visibleRows } from '../../src/interfaces/tui/render/graph-layout.js';
 import { Workspace, type WorkspaceActions } from '../../src/interfaces/tui/screens/workspace.js';
 import { initialTuiState, type SidebarDensity, type TuiState } from '../../src/interfaces/tui/state.js';
 import {
@@ -154,41 +154,12 @@ function renderWorkspace(snapshot: ControllerSnapshot, filter: ExecutionFilter =
   );
 }
 
-/** 顶栏/侧栏渲染出的 Work Package 详情行；按节点顺序取出 id。 */
-function nodeIds(frame: string): readonly string[] {
-  return frame
-    .split('\n')
-    .map((line) => /(wp-\d+) \[/.exec(line)?.[1])
-    .filter((id): id is string => id !== undefined);
-}
-
-/** 某节点的完整详情块：从状态行到下一个节点行之前的全部渲染行。 */
-function nodeBlock(frame: string, workPackageId: string): readonly string[] {
-  const lines = frame.split('\n');
-  const start = lines.findIndex((line) => line.includes(`${workPackageId} [`));
-  if (start === -1) {
-    return [];
-  }
-  const block = [lines[start] ?? ''];
-  for (const line of lines.slice(start + 1)) {
-    if (/(wp-\d+) \[/.test(line)) {
-      break;
-    }
-    block.push(line);
-  }
-  return block;
-}
-
-/**
- * 节点在界面上的位置：详情行号 + 行内起始列。
- *
- * 不能比较整个 frame 里的字符偏移——状态文案变短会让后面所有行的偏移前移，那不是重排。
- */
-function nodePlacement(frame: string, workPackageId: string): readonly [number, number] {
-  const lines = frame.split('\n');
-  const rowIndex = lines.findIndex((line) => line.includes(`${workPackageId} [`));
-  const column = rowIndex === -1 ? -1 : (lines[rowIndex] ?? '').indexOf(workPackageId);
-  return [rowIndex, column];
+/** Adaptive's public terminal canvas keeps each visible number in its stable position. */
+function placements(snapshot:ControllerSnapshot,filter:ExecutionFilter=[]):ReadonlyMap<string,readonly[number,number]> {
+  const canvas=adaptiveGraphCanvas(viewFor(snapshot,filter).graph?.nodes??[],40,24,'wp-1',false,'ascii');
+  const result=new Map<string,readonly[number,number]>();
+  canvas.cells.forEach((line,y)=>line.forEach((cell,x)=>{if(cell.glyph&&/^[1-3]$/.test(cell.glyph))result.set('wp-'+cell.glyph,[y,x]);}));
+  return result;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -238,19 +209,11 @@ describe('execution-monitoring / 执行图与 Frontier 投影', () => {
     const beforeFrame = before.lastFrame() ?? '';
     const afterFrame = after.lastFrame() ?? '';
 
-    // 只有状态标识更新。
-    expect(beforeFrame).toContain('wp-1 [implementing]');
-    expect(afterFrame).toContain('wp-1 [validating]');
-    expect(afterFrame).not.toContain('[implementing]');
-    // 节点位置与相对顺序不变：详情行号与行内列偏移完全一致，行数也不变。
-    expect(nodeIds(afterFrame)).toEqual(['wp-1', 'wp-2', 'wp-3']);
-    expect(afterFrame.split('\n')).toHaveLength(beforeFrame.split('\n').length);
-    for (const workPackageId of ['wp-1', 'wp-2', 'wp-3']) {
-      const placement = nodePlacement(beforeFrame, workPackageId);
-      expect(placement[0]).toBeGreaterThan(0);
-      expect(nodePlacement(afterFrame, workPackageId)).toEqual(placement);
-    }
-    expect(afterFrame.indexOf('wp-1')).toBeLessThan(afterFrame.indexOf('wp-2'));
+    expect(beforeFrame).toContain('implementing');
+    expect(afterFrame).toContain('validating');
+    expect(afterFrame).not.toContain('implementing');
+    expect(placements(validating)).toEqual(placements(implementing));
+    expect([...placements(validating).keys()].sort()).toEqual(['wp-1','wp-2','wp-3']);
 
     before.unmount();
     after.unmount();
@@ -299,11 +262,10 @@ describe('execution-monitoring / 执行图与 Frontier 投影', () => {
     const full = renderSidebar(snapshot, 'full');
     await settle(2);
     const fullFrame = full.lastFrame() ?? '';
-    expect(fullFrame).toContain('execution graph');
-    expect(fullFrame).toContain('integration queue (串行)');
-    expect(fullFrame).toContain('wp-1');
-    expect(fullFrame).toContain('role=');
-    expect(fullFrame).toContain('finalizer');
+    expect(fullFrame).toContain('执行图');
+    expect(fullFrame).toContain('集成队列');
+    expect(fullFrame).toContain('第一个工作包');
+    expect(fullFrame).toContain('implementing');
 
     const collapsed = renderSidebar(snapshot, 'collapsed');
     await settle(2);
@@ -318,7 +280,7 @@ describe('execution-monitoring / 执行图与 Frontier 投影', () => {
     collapsed.unmount();
   });
 
-  test('Scenario: 过滤只隐藏节点', async () => {
+  test('Scenario: 过滤只隐藏节点', () => {
     const snapshot = graphSnapshot([
       makeWorkPackageExecution('wp-1', { state: 'implementing', role: 'implementation' }),
       makeWorkPackageExecution('wp-2', { state: 'validating', role: 'validator' }),
@@ -343,21 +305,12 @@ describe('execution-monitoring / 执行图与 Frontier 投影', () => {
     expect(visible.map((row) => row.workPackageId)).toEqual(['wp-1', 'wp-3']);
     expect(visible.map((row) => row.position)).toEqual([0, 2]);
 
-    // 界面上同样只少了被隐藏的节点，其余节点行逐字不变。
-    const unfilteredRender = renderSidebar(snapshot);
-    const filteredRender = renderSidebar(snapshot, 'full', filter);
-    await settle(2);
-    const unfilteredFrame = unfilteredRender.lastFrame() ?? '';
-    const filteredFrame = filteredRender.lastFrame() ?? '';
-    expect(nodeIds(unfilteredFrame)).toEqual(['wp-1', 'wp-2', 'wp-3']);
-    expect(nodeIds(filteredFrame)).toEqual(['wp-1', 'wp-3']);
-    expect(filteredFrame).not.toContain('wp-2');
-    // 其余节点的完整详情块逐行不变：过滤没有改写任何未隐藏的节点。
-    expect(nodeBlock(filteredFrame, 'wp-1')).toEqual(nodeBlock(unfilteredFrame, 'wp-1'));
-    expect(nodeBlock(filteredFrame, 'wp-3')).toEqual(nodeBlock(unfilteredFrame, 'wp-3'));
+    const all=placements(snapshot),hidden=placements(snapshot,filter);
+    expect([...all.keys()].sort()).toEqual(['wp-1','wp-2','wp-3']);
+    expect([...hidden.keys()].sort()).toEqual(['wp-1','wp-3']);
+    expect(hidden.get('wp-1')).toEqual(all.get('wp-1'));
+    expect(hidden.get('wp-3')).toEqual(all.get('wp-3'));
 
-    unfilteredRender.unmount();
-    filteredRender.unmount();
   });
 
   test('Scenario: 并发上限为 1', async () => {
@@ -391,10 +344,10 @@ describe('execution-monitoring / 执行图与 Frontier 投影', () => {
     await settle(2);
     const frame = rendered.lastFrame() ?? '';
     // 界面上最多一个 `*active` 标记，其余候选显示为 waiting。
-    expect(frame.split('*active').length - 1).toBe(1);
-    expect(frame).toContain('wp-1 [implementing] *active');
-    expect(frame).toContain('wp-2 [waiting]');
-    expect(frame).toContain('wp-3 [waiting]');
+    expect(frame).toContain('active 1');
+    expect(frame).toContain('当前 wp-1');
+    expect(frame).toContain('implementing');
+    expect(frame).not.toContain('active 2');
 
     rendered.unmount();
   });

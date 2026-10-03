@@ -1,0 +1,20 @@
+PASS workspace mounted
+PASS panel opened (Ctrl+B)
+  -> highlighted work item at step 3
+  -> scrolled 39 lines to tail
+PASS detail opened via real entry
+PASS Finalizer section visible
+PASS verdict deliverable
+PASS verdictRecording (tail read)
+PASS read-only enforced
+PASS workspace HEAD/index/dirty
+PASS recovery identity+role+status
+PASS recovery budget
+PASS recovery capsule + segment
+PASS reconcile severity+required
+PASS node long worktree/baseline/evidence
+PASS Esc returns to list
+PASS Enter reopens detail at top
+PASS Esc Esc returns to workspace
+
+ALL CHECKS PASSED

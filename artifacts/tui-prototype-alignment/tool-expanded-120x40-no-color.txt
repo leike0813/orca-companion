@@ -1,0 +1,40 @@
+Scope scope-preview · route_planning · active · graph-1 v2 · gen=1 · auth=none · active=0
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+│ › 请规划第一版路线图：中文abc混排内容需要按显示宽度换行                     │Scope active · active 0
+                                                                              │预算
+● Coordinator 会先读地图，再确认依赖与范围。                                  │execution graph
+  ▾ tool search                                                               │ready: gen=candidate auth=unbound
+  │ search                                                                    │wp-1 [unknown]
+  │ 命中 3 个文件                                                             │  role=unknown attempt=unknown
+                                                                              │  liveness 未知
+                                                                              │  worktree=未记录
+                                                                              │  baseline=未记录
+                                                                              │wp-2 [unknown]
+                                                                              │  role=unknown attempt=unknown
+                                                                              │  liveness 未知
+                                                                              │  worktree=未记录
+                                                                              │  baseline=未记录
+                                                                              │finalizer
+                                                                              │gate not ready · read-only 未核验 · int…
+                                                                              │worktree 未记录
+                                                                              │covers none
+                                                                              │workspace 运行前后事实未记录
+                                                                              │! no-work-packages
+                                                                              │verdict 未返回（不显示 deliverable）
+
+
+
+
+
+
+
+
+
+╭────────────────────────────────────────────────────────────────────────────╮
+│ › 普通消息                                                                 │
+│ 输入消息… · Alt+Enter 换行                                                 │
+╰────────────────────────────────────────────────────────────────────────────╯
+scope control · active · Pause/Resume/Cancel 只作用于整个 Scope（无单包控制）
+revision 7 · sidebar full
+active 0
+
