@@ -12,6 +12,7 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync, type SQLInputValue, type StatementSync } from 'node:sqlite';
+import { HistoryBoundaryError } from '../../application/coordinator/history.js';
 
 import {
   findFenceViolation,
@@ -113,7 +114,10 @@ import {
   type CoordinationQuery,
   type CoordinationQueryResult,
   type CoordinationRejectionCode,
-  type CoordinationSnapshot,
+  type CoordinationReadSnapshot,
+  type InteractionSummary,
+  type InteractionIdentity,
+  type InteractionOverview,
   type CoordinatorSessionRegistration,
   type DeliverySettlementRecord,
   type DeliveryVerdictRecord,
@@ -3764,7 +3768,41 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       handoffId,
     );
 
-  const buildSnapshot = (scopeId: string, scope: ScopeRecord): Decoded<CoordinationSnapshot> => {
+  const questionBodySql = `COALESCE(json_extract(question, '$.text'), '') || COALESCE((SELECT '\n' || group_concat(json_extract(value, '$.label') || CASE WHEN json_extract(value, '$.description') IS NULL THEN '' ELSE ' — ' || json_extract(value, '$.description') END, '\n') FROM json_each(question, '$.options')), '')`;
+  const identityColumns = `coordination_scope_id, interaction_id, owner_coordinator_session_id,
+    subject_kind, subject_id, expected_revision, state, answer_kind, answer_id, NULL AS answer_text, created_at, resolved_at`;
+  const summaryColumns = `${identityColumns},
+    substr(COALESCE(json_extract(question, '$.text'), ''), 1, 160) AS question_preview,
+    substr(COALESCE(answer_text, ''), 1, 160) AS answer_preview,
+    length(CAST((${questionBodySql}) AS BLOB)) AS question_bytes,
+    length(CAST(COALESCE(answer_text, '') AS BLOB)) AS answer_bytes`;
+  type SummaryRow = InteractionRow & { question_preview: string; answer_preview: string; question_bytes: number; answer_bytes: number };
+  const decodeIdentity = (row: InteractionRow): Decoded<InteractionIdentity> => {
+    const record = decodeInteractionRow(row);
+    if (!record.ok) return record;
+    const { answerText, ...identity } = record.value;
+    if (answerText !== null) return fail('摘要不能包含回答正文');
+    return ok(identity);
+  };
+  const decodeSummary = (row: SummaryRow): Decoded<InteractionSummary> => {
+    const record = decodeIdentity(row);
+    if (!record.ok) return record;
+    if (typeof row.question_preview !== 'string' || typeof row.answer_preview !== 'string' ||
+      !isNonNegativeInteger(row.question_bytes) || !isNonNegativeInteger(row.answer_bytes)) return fail('问题摘要无效');
+    return ok({ ...record.value, questionPreview: row.question_preview, answerPreview: row.answer_preview,
+      questionByteLength: row.question_bytes, answerByteLength: row.answer_bytes });
+  };
+  const readInteractionPage = (scopeId: string, owner?: string, after?: { createdAt: number; interactionId: string }) => {
+    const rows = many<SummaryRow>(db.prepare(`SELECT ${summaryColumns} FROM pending_interactions
+      WHERE coordination_scope_id = ? AND state = 'open' ${owner === undefined ? '' : 'AND owner_coordinator_session_id = ?'}
+      ${after === undefined ? '' : 'AND (created_at, interaction_id) > (?, ?)'} ORDER BY created_at, interaction_id LIMIT 21`),
+      scopeId, ...(owner === undefined ? [] : [owner]), ...(after === undefined ? [] : [after.createdAt, after.interactionId]));
+    const decoded = decodeRows(rows.slice(0, 20), decodeSummary);
+    if (!decoded.ok) return decoded;
+    const last = decoded.value.at(-1);
+    return ok({ interactions: decoded.value, nextCursor: rows.length > 20 && last ? { createdAt: last.createdAt, interactionId: last.interactionId } : null });
+  };
+  const buildSnapshot = (scopeId: string, scope: ScopeRecord, presentation = false, owner?: string): Decoded<CoordinationReadSnapshot> => {
     const leases = readLeases(scopeId);
     if (!leases.ok) {
       return leases;
@@ -3777,7 +3815,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
     if (!claims.ok) {
       return claims;
     }
-    const interactions = decodeRows(readInteractionRows(scopeId), decodeInteractionRow);
+    const interactions = decodeRows(presentation ? [] : readInteractionRows(scopeId), decodeInteractionRow);
     if (!interactions.ok) {
       return interactions;
     }
@@ -3849,6 +3887,16 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
     if (!materializationBindings.ok) {
       return materializationBindings;
     }
+    let overview: InteractionOverview | null = null;
+    if (presentation) {
+      const page = readInteractionPage(scopeId, owner);
+      if (!page.ok) return page;
+      const counts = many<{ owner_coordinator_session_id: string; count: number }>(db.prepare(`SELECT owner_coordinator_session_id, count(*) AS count
+        FROM pending_interactions WHERE coordination_scope_id = ? AND state = 'open' GROUP BY owner_coordinator_session_id`), scopeId);
+      if (counts.some(row => typeof row.owner_coordinator_session_id !== 'string' || !isNonNegativeInteger(row.count))) return fail('待答计数无效');
+      overview = { items: page.value.interactions, openCount: counts.reduce((sum, row) => sum + row.count, 0),
+        sessionCounts: counts.map(row => ({ coordinatorSessionId: row.owner_coordinator_session_id, openCount: row.count })) };
+    }
     return ok({
       scope,
       sessions: sessions.value,
@@ -3856,7 +3904,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       executionLease:
         leases.value.find((lease) => lease.kind === 'execution_coordination' && lease.releasedAt === null) ?? null,
       ticketClaims: claims.value,
-      pendingInteractions: interactions.value,
+      ...(overview === null ? { pendingInteractions: interactions.value } : { interactionOverview: overview }),
       unresolvedIntents: intents.value.filter((intent) => intent.state === 'pending' || intent.state === 'blocked'),
       settledGitIntegrationIntents: intents.value.filter((intent) =>
         intent.operationCategory === 'git-integration' && intent.state === 'settled' && intent.outcomeClass === 'accepted',
@@ -3912,7 +3960,8 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           }
           return { kind: 'scope', scope: scope.value };
         }
-        case 'snapshot': {
+        case 'snapshot':
+        case 'presentation-snapshot': {
           const row = readScopeRow(scopeId);
           if (row === undefined) {
             return { kind: 'rejected', code: 'invalid_query', message: `Scope ${scopeId} 不存在` };
@@ -3921,11 +3970,12 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           if (!scope.ok) {
             return { kind: 'rejected', code: 'unreadable', message: scope.message };
           }
-          const snapshot = buildSnapshot(scopeId, scope.value);
+          const snapshot = buildSnapshot(scopeId, scope.value, input.kind === 'presentation-snapshot', input.kind === 'presentation-snapshot' ? input.coordinatorSessionId : undefined);
           if (!snapshot.ok) {
             return { kind: 'rejected', code: 'unreadable', message: snapshot.message };
           }
-          return { kind: 'snapshot', snapshot: snapshot.value };
+          return 'interactionOverview' in snapshot.value ? { kind: 'presentation-snapshot', snapshot: snapshot.value }
+            : { kind: 'snapshot', snapshot: snapshot.value };
         }
         case 'pending-interaction': {
           if (!input.interactionId || input.coordinatorSessionId === '') return { kind: 'rejected', code: 'invalid_query', message: '问题身份不能为空' };
@@ -3940,18 +3990,37 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           return { kind: 'pending-interaction', interaction: { ...decoded.value, question } };
         }
         case 'pending-interactions': {
-          if (!input.coordinatorSessionId || (input.after !== undefined &&
+          if (input.coordinatorSessionId === '' || (input.after !== undefined &&
             (!isNonNegativeInteger(input.after.createdAt) || !input.after.interactionId))) return { kind: 'rejected', code: 'invalid_query', message: '分页身份无效' };
-          const rows = many<InteractionRow>(db.prepare(`SELECT coordination_scope_id, interaction_id, owner_coordinator_session_id,
-            subject_kind, subject_id, expected_revision, state, answer_kind, answer_id, answer_text, created_at, resolved_at
-            FROM pending_interactions WHERE coordination_scope_id = ? AND owner_coordinator_session_id = ? AND state = 'open'
-            ${input.after === undefined ? '' : 'AND (created_at, interaction_id) > (?, ?)'} ORDER BY created_at, interaction_id LIMIT 21`),
-            scopeId, input.coordinatorSessionId, ...(input.after === undefined ? [] : [input.after.createdAt, input.after.interactionId]));
-          const decoded = decodeRows(rows.slice(0, 20), decodeInteractionRow);
-          if (!decoded.ok) return { kind: 'rejected', code: 'unreadable', message: decoded.message };
-          const last = decoded.value.at(-1);
-          return { kind: 'pending-interactions', interactions: decoded.value,
-            nextCursor: rows.length > 20 && last ? { createdAt: last.createdAt, interactionId: last.interactionId } : null };
+          const page = readInteractionPage(scopeId, input.coordinatorSessionId, input.after);
+          return page.ok ? { kind: 'pending-interactions', ...page.value } : { kind: 'rejected', code: 'unreadable', message: page.message };
+        }
+        case 'pending-interaction-identities': {
+          const decoded = decodeRows(many<InteractionRow>(db.prepare(`SELECT ${identityColumns} FROM pending_interactions
+            WHERE coordination_scope_id = ? AND state = 'open' ORDER BY created_at, interaction_id`), scopeId), decodeIdentity);
+          return decoded.ok ? { kind: 'pending-interaction-identities', interactions: decoded.value } : { kind: 'rejected', code: 'unreadable', message: decoded.message };
+        }
+        case 'interaction-summaries': {
+          if (!input.coordinatorSessionId || input.interactionIds.length > 20 || input.interactionIds.some(id => typeof id !== 'string' || !id)) return { kind: 'rejected', code: 'invalid_query', message: '摘要身份或数量无效' };
+          if (input.interactionIds.length === 0) return { kind: 'interaction-summaries', interactions: [] };
+          const decoded = decodeRows(many<SummaryRow>(db.prepare(`SELECT ${summaryColumns} FROM pending_interactions WHERE coordination_scope_id = ? AND owner_coordinator_session_id = ?
+            AND interaction_id IN (${input.interactionIds.map(() => '?').join(',')})`), scopeId, input.coordinatorSessionId, ...input.interactionIds), decodeSummary);
+          return decoded.ok ? { kind: 'interaction-summaries', interactions: decoded.value } : { kind: 'rejected', code: 'unreadable', message: decoded.message };
+        }
+        case 'interaction-body': {
+          if (!input.coordinatorSessionId || !input.interactionId || !input.contentRevision || !isNonNegativeInteger(input.offset) ||
+            !Number.isInteger(input.maxBytes) || input.maxBytes < 4 || input.maxBytes > 65536 || !['question', 'answer'].includes(input.part)) return { kind: 'rejected', code: 'invalid_query', message: '正文范围无效' };
+          const expr = input.part === 'question' ? questionBodySql : 'answer_text';
+          const row = one<{ expected_revision: number; answer_id: string | null; bytes: number; chunk: Uint8Array }>(db.prepare(`SELECT expected_revision, answer_id,
+            length(CAST((${expr}) AS BLOB)) AS bytes, substr(CAST((${expr}) AS BLOB), ?, ?) AS chunk
+            FROM pending_interactions WHERE coordination_scope_id = ? AND owner_coordinator_session_id = ? AND interaction_id = ?`), input.offset + 1, input.maxBytes + 4, scopeId, input.coordinatorSessionId, input.interactionId);
+          if (!row || (input.part === 'question' ? String(row.expected_revision) : row.answer_id) !== input.contentRevision) return { kind: 'interaction-body', body: null };
+          if (!isNonNegativeInteger(row.bytes) || input.offset > row.bytes || !(row.chunk instanceof Uint8Array)) return { kind: 'rejected', code: 'unreadable', message: '正文范围不可读' };
+          const bytes = Buffer.from(row.chunk);
+          if (bytes.length > 0 && (bytes[0]! & 0xc0) === 0x80) throw new HistoryBoundaryError('正文偏移必须位于 UTF-8 边界');
+          let end = Math.min(input.maxBytes, bytes.length);
+          while (end > 0 && end < bytes.length && (bytes[end]! & 0xc0) === 0x80) end -= 1;
+          return { kind: 'interaction-body', body: { text: bytes.subarray(0, end).toString('utf8'), offset: input.offset, end: input.offset + end, byteLength: row.bytes } };
         }
         case 'sessions': {
           const sessions = decodeRows(readSessionRows(scopeId), decodeSessionRow);
@@ -4222,7 +4291,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           return { kind: 'rejected', code: 'invalid_query', message: '未登记的 query variant' };
       }
     } catch (error) {
-      return { kind: 'rejected', code: 'unreadable', message: describeError(error) };
+      return { kind: 'rejected', code: error instanceof HistoryBoundaryError ? 'invalid_utf8_offset' : 'unreadable', message: describeError(error) };
     }
   };
 

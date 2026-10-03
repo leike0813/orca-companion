@@ -120,6 +120,10 @@ export function answerRefFor(interactionId: InteractionId, submissionId: string)
  */
 const MAX_ANSWER_CAS_ATTEMPTS = 5;
 
+export function userQuestionInteractionId(operationId: string): InteractionId {
+  return JSON.stringify(['ask_user', operationId]) as InteractionId;
+}
+
 export function createUserQuestion(input: {
   readonly store: BranchCoordinationStore;
   readonly coordinationScopeId: CoordinationScopeId;
@@ -133,7 +137,7 @@ export function createUserQuestion(input: {
   if (!isUserQuestion(input.question) || !input.operationId) return { kind: 'rejected', code: 'invalid_question', message: '问题或选项格式无效' };
   const question = { text: input.question.text, options: input.question.options.map((option) => ({ label: option.label,
     ...(option.description === undefined ? {} : { description: option.description }) })) };
-  const interactionId = JSON.stringify(['ask_user', input.operationId]) as InteractionId;
+  const interactionId = userQuestionInteractionId(input.operationId);
   const subjectRef = { kind: 'coordinator-session', id: input.writer.coordinatorSessionId };
   const matches = (existing: PendingInteractionDetail): boolean =>
     existing.ownerCoordinatorSessionId === input.writer.coordinatorSessionId && existing.subjectRef.kind === subjectRef.kind &&

@@ -126,6 +126,8 @@ React 组件只拥有展示与输入协调。render、effect、resize 和重挂�
 
 历史检查 DTO 由 `application/coordinator/history-inspection.ts` 拥有。存储的派生调用索引只保存原 metadata 的参数字节范围、可信调用关联及活动摘要；Bootstrap 分批准备索引，读端不补齐。工具注册表的 `mutating` 决定分类，unknown 观测不产生配对结果。`history-search.ts` 独立扫描保留原文与参数，不依赖 Markdown 或展示缓存，每批有限且可取消。TUI 的整体详细、活动导航与查询上下文消费这些来源；输入历史只取当前 Session 的普通用户 entry，预览采用前不写草稿。
 
+待答联动沿用同一 reader：HistoryCall 的可信 operationId 经应用用例正向派生问题 ID，摘要按指定 ID 有界读取，Q/A 正文范围由 Branch Store 拥有。生产展示 snapshot 的交互分区采用有界摘要与完整 Scope/Session count，执行准入仍取完整计数。项目待答使用独立 Scope keyset 页；显式选题通过原提交保护管线切 owner Session，返回上下文只保存展示位置和焦点，输入留在 IC-13，迟到结果不恢复已失效入口。
+
 Workflow 的 `coordinator/model-call.ts` 消费真实模型 stream，SDK 的等待式 end callback 提供唯一完整响应。Application 的 stream observer 将临时片段送至 `adapters/storage/transcript-preview-store.ts`；临时文件总额 64 MiB/64 项，由 Bootstrap 生命周期清理，不参与恢复。正式接受沿原 appendModelStep 事务；Scope Cancel 在持久化意图后中止调用，Pause 保留在途响应，关闭/失去 fencing 也中止调用。失效订阅合并到约 30fps，不发布 token 语义事件或读取 Scope 快照。
 
 Composer 的纯编辑模块拥有 grapheme 光标、原子粘贴范围和有界 viewport；正文在 UiDraft 中只有一份。当前 Session 的回答面板与粘贴 viewer 消费窄查询和同一输入保护管线。应用 Pending Interaction 用例拥有问题创建/重放与回答，Branch Store 拥有问题正文；workflow 的共享 `ask_user` 在两种模式和恢复注册表接线，不增加业务状态机。问题列表最多 20 条，详情按身份精确读取，Scope snapshot 不复制正文。

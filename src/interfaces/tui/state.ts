@@ -166,6 +166,10 @@ export const initialTuiState: TuiState = {
   executionHandoffReviewId: null,
 };
 
+export type AnswerReturnState = Pick<TuiState, 'selectedSessionId' | 'composerMode' | 'projectPanel' | 'expandedToolIds' | 'detailedTranscript'> & {
+  readonly anchor: import('./render/transcript-reader.js').TranscriptAnchor | null;
+};
+
 export type TuiAction =
   | { readonly kind: 'transcript-details'; readonly detailed: boolean; readonly expanded?: readonly string[] }
   | { readonly kind: 'handoff-target'; readonly command: 'handoff' | 'execution-handoff' }
@@ -187,7 +191,8 @@ export type TuiAction =
   | { readonly kind: 'scroll-changed'; readonly coordinatorSessionId: string; readonly offset: number }
   | { readonly kind: 'reading-anchor'; readonly coordinatorSessionId: string; readonly anchor: import('./render/transcript-reader.js').TranscriptAnchor | null }
   | { readonly kind: 'events-arrived'; readonly coordinatorSessionIds: readonly (string | null)[] }
-  | { readonly kind: 'answer-mode-entered'; readonly interactionId: string; readonly expectedRevision: number }
+  | { readonly kind: 'answer-mode-entered'; readonly interactionId: string; readonly expectedRevision: number; readonly coordinatorSessionId?: string; readonly closeProject?: boolean }
+  | { readonly kind: 'answer-returned'; readonly origin: AnswerReturnState }
   | { readonly kind: 'composer-mode-reset' }
   | { readonly kind: 'tool-toggled'; readonly entryId: string }
   | { readonly kind: 'inspector-selected'; readonly workPackageId: string }
@@ -280,12 +285,18 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
     case 'answer-mode-entered':
       return {
         ...state,
+        ...(action.coordinatorSessionId === undefined ? {} : { selectedSessionId: action.coordinatorSessionId }),
+        ...(action.closeProject ? { projectPanel: { ...state.projectPanel, open: false } } : {}),
         composerMode: {
           kind: 'answer',
           interactionId: action.interactionId,
           expectedRevision: action.expectedRevision,
         },
       };
+    case 'answer-returned': {
+      const { anchor, ...origin } = action.origin;
+      return { ...state, ...origin, readingAnchors: origin.selectedSessionId === null ? state.readingAnchors : { ...state.readingAnchors, [origin.selectedSessionId]: anchor } };
+    }
     case 'composer-mode-reset':
       return { ...state, composerMode: { kind: 'message' } };
     case 'tool-toggled':

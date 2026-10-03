@@ -57,7 +57,6 @@ import type {
   BaselineAdoptionState,
   BudgetCounterRecord,
   DeliverySettlementRecord,
-  CoordinationSnapshot,
   CoordinationWriter,
   ExecutionHandoffPhase,
   ExecutionHandoffRecord,
@@ -143,6 +142,8 @@ export type ControllerInteractionView = {
   readonly subjectRef: EntityRef<string>;
   readonly expectedRevision: Revision;
   readonly state: PendingInteractionState;
+  readonly questionPreview?: string;
+  readonly answerPreview?: string;
 };
 
 export type ControllerHandoffView = {
@@ -343,6 +344,7 @@ export type ControllerSnapshot = {
   readonly executionReconciliation: ExecutionReconciliationGateView;
   readonly blockers: readonly ControllerBlockerEntry[];
   readonly interactions: readonly ControllerInteractionView[];
+  readonly openInteractionCount: number;
   readonly handoffs: readonly ControllerHandoffView[];
   readonly recoveries: readonly ControllerRecoveryView[];
   readonly graphEvolution: ControllerGraphEvolutionView;
@@ -374,11 +376,13 @@ export type ControllerTranscriptPage = {
 };
 
 export type ControllerQuestionQuery =
-  | { readonly kind: 'pending-interactions'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId: CoordinatorSessionId; readonly after?: import('./ports/branch-coordination-store.js').InteractionPageCursor }
+  | { readonly kind: 'pending-interactions'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId?: CoordinatorSessionId; readonly after?: import('./ports/branch-coordination-store.js').InteractionPageCursor }
+  | { readonly kind: 'interaction-summaries'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId: CoordinatorSessionId; readonly interactionIds: readonly InteractionId[] }
   | { readonly kind: 'pending-interaction'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId: CoordinatorSessionId; readonly interactionId: InteractionId };
 export type ControllerQuestionResult =
+  | { readonly kind: 'interaction-summaries'; readonly interactions: readonly import('./ports/branch-coordination-store.js').InteractionSummary[] }
   | { readonly kind: 'pending-interactions'; readonly interactions: readonly ControllerInteractionView[]; readonly nextCursor: import('./ports/branch-coordination-store.js').InteractionPageCursor | null }
-  | { readonly kind: 'pending-interaction'; readonly interaction: (ControllerInteractionView & { readonly question: import('./ports/branch-coordination-store.js').UserQuestion | null }) | null }
+  | { readonly kind: 'pending-interaction'; readonly interaction: (ControllerInteractionView & { readonly question: import('./ports/branch-coordination-store.js').UserQuestion | null; readonly answerRef: EntityRef<string> | null; readonly answerText: string | null }) | null }
   | { readonly kind: 'rejected'; readonly code: string; readonly message: string };
 
 export type ControllerQuery = ControllerQuestionQuery
@@ -845,7 +849,7 @@ export interface ControllerService {
 
 export type ControllerSnapshotFacts = {
   /** IC-03 的只读投影；本函数只从中取白名单字段。 */
-  readonly snapshot: CoordinationSnapshot;
+  readonly snapshot: import('./ports/branch-coordination-store.js').CoordinationReadSnapshot;
   /** Scope 的共享预算计数；来自 IC-03 的 `budget-counters` 查询。 */
   readonly budgets: readonly BudgetCounterRecord[];
   readonly graphGeneration: number | null;
@@ -880,13 +884,15 @@ export type ControllerSnapshotFacts = {
   readonly compaction: ControllerCompactionView | null;
 };
 
-function projectInteraction(interaction: PendingInteractionRecord): ControllerInteractionView {
+function projectInteraction(interaction: Omit<PendingInteractionRecord, 'answerText'> & { questionPreview?: string; answerPreview?: string }): ControllerInteractionView {
   return {
     interactionId: interaction.interactionId,
     ownerCoordinatorSessionId: interaction.ownerCoordinatorSessionId,
     subjectRef: interaction.subjectRef,
     expectedRevision: interaction.expectedRevision,
     state: interaction.state,
+    ...(interaction.questionPreview === undefined ? {} : { questionPreview: interaction.questionPreview }),
+    ...(interaction.answerPreview === undefined ? {} : { answerPreview: interaction.answerPreview }),
   };
 }
 
@@ -1046,7 +1052,9 @@ function projectGraphTopology(
  * 或 adapter handle 带进界面。
  */
 export function projectControllerSnapshot(facts: ControllerSnapshotFacts): ControllerSnapshot {
-  const { scope, sessions, leases, executionLease, pendingInteractions, mutationLanes } = facts.snapshot;
+  const { scope, sessions, leases, executionLease, mutationLanes } = facts.snapshot;
+  const overview = 'interactionOverview' in facts.snapshot ? facts.snapshot.interactionOverview : null;
+  const pendingInteractions = 'pendingInteractions' in facts.snapshot ? facts.snapshot.pendingInteractions : facts.snapshot.interactionOverview.items;
   const executionLeaseHolderSessionId = executionLease === null ? null : executionLease.coordinatorSessionId;
   const runtimeLeaseHolders = new Set(
     leases.filter((lease) => lease.kind === 'runtime' && lease.releasedAt === null).map((lease) => lease.coordinatorSessionId),
@@ -1114,11 +1122,11 @@ export function projectControllerSnapshot(facts: ControllerSnapshotFacts): Contr
       holdsRuntimeLease: runtimeLeaseHolders.has(session.coordinatorSessionId),
       holdsExecutionLease: executionLeaseHolderSessionId === session.coordinatorSessionId,
       planningResponsible: planningResponsible === session.coordinatorSessionId,
-      openInteractionCount: pendingInteractions.filter(
+      openInteractionCount: overview?.sessionCounts.find(count => count.coordinatorSessionId === session.coordinatorSessionId)?.openCount ?? (overview === null ? pendingInteractions.filter(
         (interaction) =>
           interaction.state === 'open' &&
           interaction.ownerCoordinatorSessionId === session.coordinatorSessionId,
-      ).length,
+      ).length : 0),
     })),
     budgets: facts.budgets.map(projectBudget),
     frontier: facts.frontier.map((entry) => ({
@@ -1139,6 +1147,7 @@ export function projectControllerSnapshot(facts: ControllerSnapshotFacts): Contr
     },
     blockers,
     interactions: pendingInteractions.map(projectInteraction),
+    openInteractionCount: overview?.openCount ?? pendingInteractions.filter(item => item.state === 'open').length,
     handoffs: facts.snapshot.executionHandoffs.map(projectHandoff),
     recoveries: facts.snapshot.recoveries.map((recovery) =>
       projectRecovery(recovery, {
@@ -1239,6 +1248,7 @@ export function createControllerService(dependencies: ControllerServiceDependenc
       }
       case 'pending-interaction':
       case 'pending-interactions':
+      case 'interaction-summaries':
         return dependencies.questions === undefined ? { kind: 'rejected', code: 'questions_unavailable', message: '宿主未提供问题读取能力' } : dependencies.questions(input);
       case 'snapshot': {
         const snapshot = await dependencies.snapshots({

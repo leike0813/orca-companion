@@ -205,6 +205,58 @@ test('当前 Session 问题 keyset 分页最多二十个，不泄漏其他 Sessi
   expect(second.interactions).toHaveLength(3);
   expect(new Set([...first.interactions, ...second.interactions].map((item) => item.interactionId)).size).toBe(23);
   expect(second.nextCursor).toBeNull();
+  const scopePage = store.query({ kind: 'pending-interactions', coordinationScopeId: SCOPE });
+  if (scopePage.kind !== 'pending-interactions' || !scopePage.nextCursor) throw new Error('Scope 页不可读');
+  expect(scopePage.interactions).toHaveLength(20);
+  const scopeTail = store.query({ kind: 'pending-interactions', coordinationScopeId: SCOPE, after: scopePage.nextCursor });
+  if (scopeTail.kind !== 'pending-interactions') throw new Error('Scope 后页不可读');
+  expect(scopeTail.interactions).toHaveLength(4);
+  expect(scopeTail.interactions.some(item => item.ownerCoordinatorSessionId === SESSION_B)).toBe(true);
+  const later = second.interactions[0]!;
+  expect(store.query({ kind: 'pending-interaction', coordinationScopeId: SCOPE, coordinatorSessionId: SESSION_A, interactionId: later.interactionId }))
+    .toMatchObject({ interaction: { interactionId: later.interactionId } });
+  const presentation = store.query({ kind: 'presentation-snapshot', coordinationScopeId: SCOPE, coordinatorSessionId: SESSION_A });
+  if (presentation.kind !== 'presentation-snapshot') throw new Error('展示快照不可读');
+  expect(presentation.snapshot).not.toHaveProperty('pendingInteractions');
+  expect(presentation.snapshot.interactionOverview).toMatchObject({ openCount: 24, sessionCounts: [
+    { coordinatorSessionId: SESSION_A, openCount: 23 }, { coordinatorSessionId: SESSION_B, openCount: 1 },
+  ] });
+  expect(presentation.snapshot.interactionOverview.items).toHaveLength(20);
+  expect(presentation.snapshot.interactionOverview.items.every(item => !('question' in item) && !('answerText' in item))).toBe(true);
+  expect(store.query({ kind: 'interaction-summaries', coordinationScopeId: SCOPE, coordinatorSessionId: SESSION_B, interactionIds: [later.interactionId] })).toMatchObject({ interactions: [] });
+  expect(store.query({ kind: 'pending-interactions', coordinationScopeId: SCOPE_2 })).toMatchObject({ interactions: [] });
+});
+
+test('问题和回答范围来自同一权威记录，正文版本与 UTF-8 边界受核验', () => {
+  createScope(); activateSession();
+  const created = createUserQuestion({ store, coordinationScopeId: SCOPE, writer: writer(), operationId: 'range-ask' as OperationId,
+    question: { text: '中文🙂'.repeat(2000), options: [{ label: '继续', description: '保留全文' }] } });
+  if (created.kind !== 'recorded') throw new Error('问题未保存');
+  const id = created.interaction.interactionId;
+  const query = { kind: 'interaction-body' as const, coordinationScopeId: SCOPE, coordinatorSessionId: SESSION_A, interactionId: id,
+    part: 'question' as const, contentRevision: String(created.interaction.expectedRevision), offset: 0, maxBytes: 4096 };
+  let text = '', offset = 0;
+  for (;;) {
+    const range = store.query({ ...query, offset });
+    if (range.kind !== 'interaction-body' || range.body === null) throw new Error('范围不可读');
+    expect(Buffer.byteLength(range.body.text)).toBeLessThanOrEqual(4096);
+    expect(range.body.text).not.toContain('�'); text += range.body.text; offset = range.body.end;
+    if (offset === range.body.byteLength) break;
+  }
+  expect(text).toBe('中文🙂'.repeat(2000) + '\n继续 — 保留全文');
+  expect(store.query({ ...query, offset: 1 })).toMatchObject({ kind: 'rejected', code: 'invalid_utf8_offset' });
+  expect(store.query({ ...query, contentRevision: 'stale' })).toMatchObject({ body: null });
+  expect(store.query({ ...query, coordinatorSessionId: SESSION_B })).toMatchObject({ body: null });
+  expect(answerPendingInteraction({ store, coordinationScopeId: SCOPE, writer: writer(), interactionId: id,
+    expectedRevision: created.interaction.expectedRevision, submissionId: 'range-answer', answer: '完整回答🙂'.repeat(1000) }).kind).toBe('answered');
+  const detail = store.query({ kind: 'pending-interaction', coordinationScopeId: SCOPE, coordinatorSessionId: SESSION_A, interactionId: id });
+  if (detail.kind !== 'pending-interaction' || !detail.interaction?.answerRef) throw new Error('答案不可读');
+  expect(store.query({ ...query, part: 'answer', contentRevision: detail.interaction.answerRef.id })).toMatchObject({ kind: 'interaction-body', body: { offset: 0 } });
+  const summary = store.query({ kind: 'interaction-summaries', coordinationScopeId: SCOPE, coordinatorSessionId: SESSION_A, interactionIds: [id] });
+  if (summary.kind !== 'interaction-summaries') throw new Error('摘要不可读');
+  expect(summary.interactions[0]).toMatchObject({ state: 'answered', answerRef: detail.interaction.answerRef });
+  expect([...summary.interactions[0]!.answerPreview].length).toBeLessThanOrEqual(160);
+  expect(store.query({ kind: 'presentation-snapshot', coordinationScopeId: SCOPE })).toMatchObject({ snapshot: { interactionOverview: { openCount: 0, items: [] } } });
 });
 
 test('过期 revision 的写入被拒绝且先前写入保持不变', () => {

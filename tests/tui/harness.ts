@@ -115,6 +115,7 @@ export function makeSnapshot(overrides: SnapshotOverrides = {}): ControllerSnaps
     },
     blockers: [],
     interactions: [],
+    openInteractionCount: overrides.interactions?.filter(item => item.state === 'open').length ?? 0,
     handoffs: [],
     recoveries: [],
     graphEvolution: {
@@ -375,10 +376,14 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
     },
     questions: (input) => {
       calls.push({ name: 'questions', detail: input });
-      const items = snapshot.interactions.filter((item) => item.ownerCoordinatorSessionId === input.coordinatorSessionId && item.state === 'open');
-      if (input.kind === 'pending-interactions') return Promise.resolve({ kind: 'pending-interactions', interactions: items.slice(0, 20), nextCursor: null });
+      const items = snapshot.interactions.filter((item) => (input.coordinatorSessionId === undefined || item.ownerCoordinatorSessionId === input.coordinatorSessionId) && item.state === 'open');
+      if (input.kind === 'pending-interactions') {
+        const start = input.after === undefined ? 0 : items.findIndex(item => item.interactionId === input.after!.interactionId) + 1;
+        const page = items.slice(start, start + 20), last = page.at(-1);
+        return Promise.resolve({ kind: 'pending-interactions', interactions: page, nextCursor: start + page.length < items.length && last ? { createdAt: start + page.length, interactionId: last.interactionId } : null });
+      }
       const item = items.find((item) => item.interactionId === input.interactionId);
-      return Promise.resolve({ kind: 'pending-interaction', interaction: item ? { ...item, question: null } : null });
+      return Promise.resolve({ kind: 'pending-interaction', interaction: item ? { ...item, question: null, answerRef: null, answerText: null } : null });
     },
     snapshot: (selectedSessionId): Promise<SnapshotLoad> => {
       calls.push({ name: 'snapshot', detail: selectedSessionId });

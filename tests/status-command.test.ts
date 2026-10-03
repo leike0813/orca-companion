@@ -247,6 +247,20 @@ test('status 只投影仍然 open 的 Pending Interaction', async () => {
   expect(await runStatus({ openStore: () => Promise.resolve(openReadOnly()), json: true, io: capture.io })).toBe(0);
   const snapshot = JSON.parse(capture.stdout.join('')) as StatusSnapshot;
   expect(snapshot.scope.pendingInteractions).toEqual([]);
+
+  for (let index = 0; index < 25; index += 1) {
+    expect(store.transact({ kind: 'record-pending-interaction', coordinationScopeId: SCOPE,
+      expectedRevision: revisionOf(), writer, interactionId: ('open-' + index) as InteractionId,
+      ownerCoordinatorSessionId: SESSION, subjectRef: { kind: 'decision_ticket', id: 'ticket-' + index },
+      question: { text: '问题正文只归精确读取'.repeat(500), options: [] },
+    }).kind).toBe('committed');
+  }
+  const many = captureIO();
+  expect(await runStatus({ openStore: () => Promise.resolve(openReadOnly()), json: true, io: many.io })).toBe(0);
+  const allOpen = (JSON.parse(many.stdout.join('')) as StatusSnapshot).scope.pendingInteractions;
+  expect(allOpen).toHaveLength(25);
+  expect(allOpen.some(item => item.interactionId === 'open-24')).toBe(true);
+  expect(many.stdout.join('')).not.toContain('问题正文只归精确读取');
 });
 
 test('无 TTY 的管道调用把机器输出写到标准输出，诊断写到标准错误', async () => {

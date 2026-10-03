@@ -15,13 +15,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { resolveGlobalAction } from './input/keymap.js';
 import type { AnswerPanelView } from './components/answer-panel.js';
 import type { PasteViewerView } from './components/paste-viewer.js';
-import type { ControllerInteractionView } from '../../application/controller-service.js';
+import type { ControllerInteractionView, ControllerQuestionResult } from '../../application/controller-service.js';
 import type { InteractionPageCursor } from '../../application/ports/branch-coordination-store.js';
 import { bodyWidth } from './screens/workspace.js';
 import { TranscriptReader, type TranscriptFrame, type TranscriptAnchor } from './render/transcript-reader.js';
 import { InputHistory, readHistoricalInput } from './input/input-history.js';
 import { scanHistory } from '../../application/coordinator/history-search.js';
 import type { HistorySearchHit, HistoryCall } from '../../application/coordinator/history-inspection.js';
+import { userQuestionInteractionId } from '../../application/coordination/pending-interaction.js';
 import { wrapByDisplayWidth } from './render/width.js';
 import { editComposer, editorLayout, emptyDraft, textDraft, type EditorKey } from './input/composer-editor.js';
 import { allowedSidebarDensity, composerContentWidth } from './render/width.js';
@@ -48,6 +49,7 @@ import {
   type PendingConfirmation,
   type TuiAction,
   type TuiState,
+  type AnswerReturnState,
 } from './state.js';
 import { Home } from './screens/home.js';
 import { Wizard, allChecksPassed } from './screens/wizard.js';
@@ -338,6 +340,12 @@ function TuiAppContent(props: TuiAppProps) {
   const updateAnswerPanel = (value: AnswerPanelView | null) => { answerPanelRef.current = value; setAnswerPanel(value); };
   const answerRequest = useRef(0);
   const answerPage = useRef<{ items: readonly ControllerInteractionView[]; next: InteractionPageCursor | null; cursors: readonly (InteractionPageCursor | undefined)[] }>({ items: [], next: null, cursors: [undefined] });
+  const [scopeQuestions, setScopeQuestions] = useState<{ items: readonly ControllerInteractionView[]; page: number; hasPrevious: boolean; hasNext: boolean; loading: boolean; error: string | null }>({ items: [], page: 1, hasPrevious: false, hasNext: false, loading: false, error: null });
+  const scopeQuestionPage = useRef<{ next: InteractionPageCursor | null; cursors: readonly (InteractionPageCursor | undefined)[] }>({ next: null, cursors: [undefined] });
+  const scopeQuestionRequest = useRef(0);
+  const scopeQuestionScope = useRef<string | null>(null);
+  const answerReturn = useRef<{ state: AnswerReturnState; panel: AnswerPanelView | null; page: typeof answerPage.current; history: HistoryContext | null } | null>(null);
+  const returnAnswerRef = useRef<() => boolean>(() => false);
   const [pasteViewer, setPasteViewer] = useState<PasteViewerView | null>(null);
   const pasteViewerRef = useRef<PasteViewerView | null>(null);
   const updatePasteViewer = (value: PasteViewerView | null) => { pasteViewerRef.current = value; setPasteViewer(value); };
@@ -395,6 +403,7 @@ function TuiAppContent(props: TuiAppProps) {
     async (selectedSessionId: string | null) => {
       const result = await ports.snapshot(selectedSessionId);
       if (result.kind === 'snapshot') {
+        if (selectedSessionId !== null && selectedSessionId !== stateRef.current.selectedSessionId) return;
         setSnapshot(result.snapshot);
         return;
       }
@@ -416,15 +425,16 @@ function TuiAppContent(props: TuiAppProps) {
     dispatch({ kind: 'reading-anchor', coordinatorSessionId: frame.coordinatorSessionId, anchor: frame.atLatest ? null : frame.anchor });
   }, [dispatch]);
   const loadTranscript = useCallback(async (session: string, cursor: string | null = null, navigate = false) => {
-    if (!navigate && historyReading.current) return;
+    if (!navigate && historyReading.current && reader.frame?.coordinatorSessionId === session) return;
     const request = ++transcriptRequest.current;
     setHistoryLoading(true);
     try {
       const width = bodyWidth(terminalWidthRef.current, stateRef.current.sidebarDensity);
       reader.setDetailed(stateRef.current.detailedTranscript);
+      const restoreAnchor = cursor === 'restore' ? stateRef.current.readingAnchors[session] ?? null : null;
       const frame = reader.frame?.coordinatorSessionId !== session
         ? await reader.open(session, width, transcriptHeight.current, stateRef.current.expandedToolIds, stateRef.current.readingAnchors[session] ?? null)
-        : await reader.read(cursor === 'oldest' ? 'oldest' : 'latest');
+        : await reader.read(restoreAnchor !== null ? 'anchor' : cursor === 'oldest' ? 'oldest' : !navigate && historyReading.current ? 'anchor' : 'latest', restoreAnchor ?? (!navigate && historyReading.current ? stateRef.current.readingAnchors[session] ?? null : null));
       if (request === transcriptRequest.current) applyTranscriptFrame(frame);
     } catch (error) {
       if (request === transcriptRequest.current) dispatch({ kind: 'notice', notice: '历史读取失败：' + (error instanceof Error ? error.message : String(error)) });
@@ -499,6 +509,13 @@ function TuiAppContent(props: TuiAppProps) {
         pendingSessionIds.clear();
         flushScheduled = false;
         setEvents((current) => [...current, ...batch].slice(-EVENT_WINDOW));
+        if (batch.some(event => event.kind === 'interaction-opened' || event.kind === 'interaction-resolved')) {
+          void loadSnapshot(stateRef.current.selectedSessionId);
+          const selected = stateRef.current.selectedSessionId;
+          if (selected !== null && sessionIds.includes(selected) && historyReading.current) {
+            void reader.read('anchor', stateRef.current.readingAnchors[selected] ?? reader.frame?.anchor ?? null).then(applyTranscriptFrame).catch(error => dispatch({ kind: 'notice', notice: '问题读取失败：' + String(error) }));
+          }
+        }
         const selected = stateRef.current.selectedSessionId;
         if (selected !== null && sessionIds.includes(selected)) {
           if (historyReading.current) setHistoryUpdated(true); else void loadTranscript(selected);
@@ -510,7 +527,7 @@ function TuiAppContent(props: TuiAppProps) {
       cancelled = true;
       unsubscribe();
     };
-  }, [dispatch, ports, loadTranscript]);
+  }, [dispatch, ports, loadTranscript, loadSnapshot, reader, applyTranscriptFrame]);
 
   // Scope 就绪后：进入 workspace 并加载一次快照。
   useEffect(() => {
@@ -537,9 +554,10 @@ function TuiAppContent(props: TuiAppProps) {
     setHistoryUpdated(false);
     setTranscriptFrame(null);
     setTranscript(null);
-    void loadTranscript(state.selectedSessionId, null, true);
+    void loadSnapshot(state.selectedSessionId);
+    void loadTranscript(state.selectedSessionId, 'restore', true);
     return () => { transcriptRequest.current += 1; };
-  }, [loadTranscript, state.selectedSessionId, state.screen]);
+  }, [loadTranscript, loadSnapshot, state.selectedSessionId, state.screen]);
 
   /**
    * 载入当前目标的持久草稿。
@@ -600,7 +618,7 @@ function TuiAppContent(props: TuiAppProps) {
     if (snapshot === null) {
       return null;
     }
-    return projectTuiViewModel({
+    const view = projectTuiViewModel({
       snapshot,
       transcript: projectTranscriptPage(transcript, {
         coordinatorSessionId: state.selectedSessionId,
@@ -614,7 +632,8 @@ function TuiAppContent(props: TuiAppProps) {
       executionFilter: state.executionFilter,
       includeGraphNodes: state.sidebarDensity !== 'collapsed' || state.projectPanel.open || state.overlayStack.at(-1) === 'graph-inspector',
     });
-  }, [snapshot, state, transcript, historyLoading, historyUpdated]);
+    return { ...view, pendingPage: scopeQuestions };
+  }, [snapshot, state, transcript, historyLoading, historyUpdated, scopeQuestions]);
   const viewModelRef = useRef<TuiViewModel | null>(null);
   viewModelRef.current = viewModel;
   // A collapsed sidebar omits nodes; initialize only after the Inspector projection is available.
@@ -628,41 +647,108 @@ function TuiAppContent(props: TuiAppProps) {
   snapshotRef.current = snapshot;
   /** `runCommand` 定义之前的提交路径需要它；读时取最新实现，避免互相依赖。 */
   const runCommandRef = useRef<(command: CommandId) => Promise<void>>(() => Promise.resolve());
-  const openAnswerRef = useRef<(interactionId?: string, skipId?: string) => Promise<boolean>>(() => Promise.resolve(false));
-  const readQuestions = async (query: import('./ports.js').TuiQuestionQuery): Promise<import('../../application/controller-service.js').ControllerQuestionResult> => {
+  const openAnswerRef = useRef<(interactionId?: string, skipId?: string, returnToOrigin?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
+  const readQuestions = useCallback(async (query: import('./ports.js').TuiQuestionQuery): Promise<import('../../application/controller-service.js').ControllerQuestionResult> => {
     if (!ports.questions) return { kind: 'rejected', code: 'questions_unavailable', message: '当前问题读取不可用' };
     try { return await ports.questions(query); }
     catch (error) { return { kind: 'rejected', code: 'questions_unreadable', message: error instanceof Error ? error.message : String(error) }; }
-  };
+  }, [ports]);
 
-  const showAnswer = async (item: ControllerInteractionView, index: number, count: number): Promise<boolean> => {
+  const loadScopeQuestions = useCallback(async (direction = 0) => {
+    const scope = coordScopeRef.current, request = ++scopeQuestionRequest.current;
+    if (scope === null) return;
+    if (scopeQuestionScope.current !== scope) {
+      scopeQuestionScope.current = scope; scopeQuestionPage.current = { next: null, cursors: [undefined] }; direction = 0;
+    }
+    const page = scopeQuestionPage.current;
+    if (direction > 0 && page.next === null || direction < 0 && page.cursors.length < 2) return;
+    const cursors = direction > 0 ? [...page.cursors, page.next!] : direction < 0 ? page.cursors.slice(0, -1) : page.cursors;
+    const after = cursors.at(-1);
+    setScopeQuestions(current => ({ ...current, loading: true, error: null }));
+    const result = await readQuestions({ kind: 'pending-interactions', ...(after === undefined ? {} : { after }) });
+    if (request !== scopeQuestionRequest.current || coordScopeRef.current !== scope) return;
+    if (result.kind !== 'pending-interactions') {
+      setScopeQuestions(current => ({ ...current, loading: false, error: result.kind === 'rejected' ? result.code + ': ' + result.message : '待答列表不可读' })); return;
+    }
+    scopeQuestionPage.current = { next: result.nextCursor, cursors };
+    setScopeQuestions({ items: result.interactions, page: cursors.length, hasPrevious: cursors.length > 1, hasNext: result.nextCursor !== null, loading: false, error: null });
+    if (direction !== 0) dispatch({ kind: 'project-panel', panel: { ...stateRef.current.projectPanel, selectedKey: null, detail: null, scroll: 0 } });
+  }, [readQuestions, dispatch]);
+  useEffect(() => {
+    if (state.projectPanel.open && state.projectPanel.tab === 1) void loadScopeQuestions();
+    return () => { scopeQuestionRequest.current++; };
+  }, [state.projectPanel.open, state.projectPanel.tab, coordinationScopeId, events, loadScopeQuestions]);
+
+  const returnAnswer = (): boolean => {
+    const origin = answerReturn.current;
+    if (origin === null) return false;
+    answerReturn.current = null; answerRequest.current++;
+    updateAnswerPanel(origin.panel); answerPage.current = origin.page;
+    historyContextRef.current?.abort.abort();
+    const history = origin.history === null ? null : { ...origin.history, abort: new AbortController(), busy: false };
+    historyContextRef.current = history; setHistoryContext(history);
+    reader.highlight(history?.hit ?? null);
+    dispatch({ kind: 'answer-returned', origin: origin.state });
+    historyReading.current = origin.state.anchor !== null || history !== null;
+    const session = origin.state.selectedSessionId;
+    if (session !== null && reader.frame?.coordinatorSessionId === session) {
+      void reader.open(session, bodyWidth(terminalWidthRef.current, stateRef.current.sidebarDensity), transcriptHeight.current,
+        origin.state.expandedToolIds, origin.state.anchor).then(applyTranscriptFrame).catch(error => dispatch({ kind: 'notice', notice: '历史读取失败：' + String(error) }));
+    }
+    return true;
+  };
+  returnAnswerRef.current = returnAnswer;
+
+  const showAnswer = async (item: ControllerInteractionView, index: number, count: number, fromProject = false,
+    loadedDetail?: Extract<ControllerQuestionResult, { kind: 'pending-interaction' }>): Promise<boolean> => {
     const session = stateRef.current.selectedSessionId;
     const scope = coordScopeRef.current;
     const request = ++answerRequest.current;
-    if (session === null || scope === null || item.ownerCoordinatorSessionId !== session || ports.questions === undefined) {
+    const entryState = stateRef.current;
+    if (session === null || scope === null || !fromProject && item.ownerCoordinatorSessionId !== session || ports.questions === undefined) {
       dispatch({ kind: 'notice', notice: 'questions_unavailable：当前问题读取不可用' }); return false;
     }
-    const detail = await readQuestions({ kind: 'pending-interaction', coordinatorSessionId: session, interactionId: item.interactionId });
-    if (request !== answerRequest.current || stateRef.current.selectedSessionId !== session || coordScopeRef.current !== scope) return false;
+    const saved = protection.flushAll();
+    if (saved.status !== 'saved') { dispatch({ kind: 'notice', notice: saveOutcomeText(saved) + '；请通过 /inputs 处理' }); return false; }
+    const targetSession = item.ownerCoordinatorSessionId;
+    const detail = loadedDetail ?? await readQuestions({ kind: 'pending-interaction', coordinatorSessionId: targetSession, interactionId: item.interactionId });
+    if (request !== answerRequest.current || stateRef.current.selectedSessionId !== session || coordScopeRef.current !== scope || fromProject && stateRef.current.projectPanel !== entryState.projectPanel) return false;
     if (detail.kind !== 'pending-interaction' || !detail.interaction || detail.interaction.state !== 'open' ||
-      detail.interaction.ownerCoordinatorSessionId !== session || detail.interaction.interactionId !== item.interactionId || detail.interaction.expectedRevision !== item.expectedRevision) {
+      detail.interaction.ownerCoordinatorSessionId !== targetSession || detail.interaction.interactionId !== item.interactionId || detail.interaction.expectedRevision !== item.expectedRevision) {
       dispatch({ kind: 'notice', notice: detail.kind === 'rejected' ? `${detail.code}: ${detail.message}` : 'stale_revision：问题已变化，请重新打开' }); return false;
     }
-    const saved = protection.flushAll();
-    if (saved.status !== 'saved') { dispatch({ kind: 'notice', notice: saveOutcomeText(saved) }); return false; }
+    if (fromProject && answerReturn.current === null) {
+      const current = stateRef.current;
+      answerReturn.current = { state: { selectedSessionId: session, composerMode: current.composerMode, projectPanel: { ...current.projectPanel, selectedKey: item.interactionId },
+        expandedToolIds: current.expandedToolIds, detailedTranscript: current.detailedTranscript, anchor: current.readingAnchors[session] ?? null },
+        panel: answerPanelRef.current, page: answerPage.current, history: historyContextRef.current };
+    }
+    if (fromProject) {
+      historyContextRef.current?.abort.abort(); historyContextRef.current = null; setHistoryContext(null); reader.highlight(null);
+      answerPage.current = { items: [detail.interaction], next: null, cursors: [undefined] };
+    }
     // 普通输入召回与回答互不相干：进入回答模式前丢掉仍在显示的预览，
     // 否则下一次 Enter 会把旧聊天原文当成回答提交给当前 interaction。
     inputHistory.cancel(); updateHistoryPreview(null);
-    dispatch({ kind: 'answer-mode-entered', interactionId: item.interactionId, expectedRevision: item.expectedRevision });
+    dispatch({ kind: 'answer-mode-entered', coordinatorSessionId: targetSession, interactionId: item.interactionId, expectedRevision: item.expectedRevision, closeProject: fromProject });
     updateAnswerPanel({ interaction: detail.interaction, index, count, option: 0, focus: detail.interaction.question?.options.length ? 'options' : 'text', scroll: 0 });
     return true;
   };
 
-  const openAnswer = async (interactionId?: string, skipId?: string): Promise<boolean> => {
+  const openAnswer = async (interactionId?: string, skipId?: string, returnToOrigin = false): Promise<boolean> => {
     const session = stateRef.current.selectedSessionId;
     const scope = coordScopeRef.current;
     const request = ++answerRequest.current;
     if (!session || !scope || !ports.questions) { dispatch({ kind: 'notice', notice: 'questions_unavailable：当前问题读取不可用' }); return false; }
+    if (interactionId !== undefined) {
+      const saved = protection.flushAll();
+      if (saved.status !== 'saved') { dispatch({ kind: 'notice', notice: saveOutcomeText(saved) + '；请通过 /inputs 处理' }); return false; }
+      const detail = await readQuestions({ kind: 'pending-interaction', coordinatorSessionId: session, interactionId });
+      if (request !== answerRequest.current || stateRef.current.selectedSessionId !== session || coordScopeRef.current !== scope) return false;
+      if (detail.kind !== 'pending-interaction' || detail.interaction === null) { dispatch({ kind: 'notice', notice: detail.kind === 'rejected' ? detail.code + ': ' + detail.message : '问题记录缺失' }); return false; }
+      if (!returnToOrigin) answerPage.current = { items: [detail.interaction], next: null, cursors: [undefined] };
+      return showAnswer(detail.interaction, 0, 1, returnToOrigin, detail);
+    }
     const page = await readQuestions({ kind: 'pending-interactions', coordinatorSessionId: session });
     if (request !== answerRequest.current || stateRef.current.selectedSessionId !== session || coordScopeRef.current !== scope) return false;
     if (page.kind !== 'pending-interactions') { dispatch({ kind: 'notice', notice: page.kind === 'rejected' ? `${page.code}: ${page.message}` : '问题列表不可读' }); return false; }
@@ -786,6 +872,8 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     const submittedMode = current.composerMode;
+    const submittedRequest = answerRequest.current;
+    const returnContext = answerReturn.current;
     let result: ControllerCommandResult;
     try {
       result =
@@ -835,7 +923,7 @@ function TuiAppContent(props: TuiAppProps) {
     dispatch({ kind: 'notice', notice: notes.length === 0 ? null : notes.join(' · ') });
     if (result.kind === 'accepted') {
       // 只结清原提交：用户已继续编辑（代际变化）时保留新输入，也不复位模式以免隐藏新回答草稿。
-      if (protection.generation(target) === generation) {
+      if (settled.status === 'saved' && protection.generation(target) === generation) {
         const cleared = protection.clearDraft(target);
         if (cleared.status === 'saved') {
           // 只有持久草稿真的被清除才清界面正文；清理失败时保留输入并如实提示。
@@ -843,12 +931,12 @@ function TuiAppContent(props: TuiAppProps) {
           // 只有界面仍停在这条提交对应的 Session 与 composer 模式时才复位。
           if (
             stateRef.current.selectedSessionId === session &&
-            sameComposerMode(stateRef.current.composerMode, submittedMode)
+            sameComposerMode(stateRef.current.composerMode, submittedMode) && answerRequest.current === submittedRequest
           ) {
             dispatch({ kind: 'composer-mode-reset' });
             if (submittedMode.kind === 'answer') {
               updateAnswerPanel(null);
-              await openAnswerRef.current(undefined, submittedMode.interactionId);
+              if (returnContext === null || answerReturn.current !== returnContext || !returnAnswerRef.current()) await openAnswerRef.current(undefined, submittedMode.interactionId);
             }
           }
         } else {
@@ -1610,14 +1698,15 @@ function TuiAppContent(props: TuiAppProps) {
     },
     toggleTool: (entryId) => dispatch({ kind: 'tool-toggled', entryId }),
     selectSession: (coordinatorSessionId) => {
-      historyContextRef.current?.abort.abort(); updateHistoryContext(null); inputHistory.cancel(); updateHistoryPreview(null); reader.highlight(null);
       // 切 Session 前立即保存当前输入；失败如实提示，输入仍保留在内存。
       if (protection.hasUnsaved()) {
         const flushed = protection.flushAll();
         if (flushed.status !== 'saved') {
-          dispatch({ kind: 'notice', notice: `切换前输入未保存：${saveOutcomeText(flushed)}` });
+          dispatch({ kind: 'notice', notice: `切换前输入未保存：${saveOutcomeText(flushed)}；请通过 /inputs 处理` }); return;
         }
       }
+      answerReturn.current = null; answerRequest.current++;
+      historyContextRef.current?.abort.abort(); updateHistoryContext(null); inputHistory.cancel(); updateHistoryPreview(null); reader.highlight(null);
       dispatch({ kind: 'session-selected', coordinatorSessionId });
       answerRequest.current++;
       updateAnswerPanel(null);
@@ -1631,8 +1720,9 @@ function TuiAppContent(props: TuiAppProps) {
           dispatch({ kind: 'notice', notice: `进入回答模式前输入未保存：${saveOutcomeText(flushed)}` });
         }
       }
-      void expectedRevision;
-      void openAnswerRef.current(interactionId);
+      const item = viewModelRef.current?.interactions.find(item => item.interactionId === interactionId);
+      if (item) void showAnswer({ ...item, expectedRevision }, 0, 1);
+      else dispatch({ kind: 'notice', notice: '问题已移出当前窗口，请从待答列表重新读取' });
     },
     runCommand: (command) => {
       void runCommand(command);
@@ -1714,6 +1804,10 @@ function TuiAppContent(props: TuiAppProps) {
     if (history !== null) {
       if (key.escape) { closeHistoryContext(); return; }
       if (history.kind === 'activity') {
+        if (action === 'enter-answer' && history.call?.name === 'ask_user') {
+          const call = history.call;
+          void openAnswerRef.current(userQuestionInteractionId(call.operationId), undefined, true); return;
+        }
         if (key.upArrow || key.downArrow) void seekHistory(history, key.upArrow ? 'older' : 'newer');
         if (key.return && history.call !== null) dispatch({ kind: 'tool-toggled', entryId: history.call.activityId });
         return;
@@ -1751,7 +1845,8 @@ function TuiAppContent(props: TuiAppProps) {
       if(!stateRef.current.slashDismissed&&slashCandidates(draft.text,snapshotRef.current?.mode??'route_planning').length){dispatch({kind:'slash-view',index:0,dismissed:true});return;}
       if (stateRef.current.composerMode.kind === 'answer') {
         const saved = protection.flushAll();
-        if (saved.status !== 'saved') { dispatch({ kind: 'notice', notice: saveOutcomeText(saved) }); return; }
+        if (saved.status !== 'saved') { dispatch({ kind: 'notice', notice: saveOutcomeText(saved) + '；请通过 /inputs 处理' }); return; }
+        if (returnAnswerRef.current()) return;
         updateAnswerPanel(null);
         dispatch({ kind: 'composer-mode-reset' });
         return;
@@ -1936,6 +2031,7 @@ function TuiAppContent(props: TuiAppProps) {
     const project=stateRef.current.projectPanel;
     if(project.open){
       const view=viewModelRef.current;if(!view)return;
+      if (project.tab === 1 && project.detail === null && (key.pageUp || key.pageDown)) { void loadScopeQuestions(key.pageUp ? -1 : 1); return; }
       if(key.tab){const tab=(project.tab+1)%3;dispatch({kind:'project-panel',panel:{...project,tab,detail:null,selectedKey:projectItems(view,events,tab)[0]?.key??null,scroll:0}});return;}
       if(project.detail){
         if(key.upArrow||key.downArrow){
@@ -1949,9 +2045,9 @@ function TuiAppContent(props: TuiAppProps) {
       if(key.return){const item=items[index];if(!item){dispatch({kind:'notice',notice:'所选对象已不在当前窗口，请重新选择'});return;}
         if(item.key==='pending'){dispatch({kind:'project-panel',panel:{...project,tab:1,selectedKey:null}});return;}
         if(item.key==='authorize'){void runCommand('authorize-execution');return;}
-        const interaction=view.interactions.find(i=>i.interactionId===item.key);
-        if(interaction?.ownerCoordinatorSessionId===stateRef.current.selectedSessionId&&interaction.state==='open'){
-          void openAnswerRef.current(interaction.interactionId).then(opened=>{if(opened)dispatch({kind:'project-panel',panel:{...stateRef.current.projectPanel,open:false}});});return;
+        const interaction=(view.pendingPage?.items ?? view.interactions).find(i=>i.interactionId===item.key);
+        if(interaction?.state==='open'){
+          void showAnswer(interaction, 0, 1, true);return;
         }
         dispatch({kind:'project-panel',panel:{...project,detail:item.key,selectedKey:item.key,scroll:0}});
       }return;

@@ -1,0 +1,40 @@
+session-a · 执行 · blocked · 待对账 · 待答25
+──────────────────────────────────────────────────
+! reconciling · 原操作结果未知，待对账
+! Worker 状态待核验 · 另有 2 项
+│ › 请核验待答联动，保留中文草稿与阅读位置。
+  ▾ tool ask_user · 参数 · ok
+  │ {"text":"已经回答的问题：完整回答仍在原提问
+  │ 处。","options":[{"label":"继续","descriptio
+  │ n":"完成本批验证"},{"label":"稍后"}]}
+  ▾ Q · 问题 · 已回答
+  │ 已经回答的问题：完整回答仍在原提问处。
+  │ 继续 — 完成本批验证
+  │ 稍后
+  ▾ A · 回答 · 已回答
+  │ 确认通过，问答正文由原记录保存。
+  │ 中文🙂与选项均完整保留。
+  ▾ tool ask_user · 结果 · ok
+  │ {"kind":"ok","value":{"interactionId":"[\"as
+  │ k_user\",\"pending-session-a-0\"]"}}
+  ▾ tool ask_user · 参数 · ok
+  │ {"text":"当前会话问题：请确认本批验收范围。"
+  │ ,"options":[{"label":"继续","description":"
+  │ 完成本批验证"},{"label":"稍后"}]}
+  ▾ Q · 问题 · 待回答
+  │ 当前会话问题：请确认本批验收范围。
+  │ 继续 — 完成本批验证
+  │ 稍后
+  ▾ tool ask_user · 结果 · ok
+  │ {"kind":"ok","value":{"interactionId":"[\"as
+  │ k_user\",\"pending-session-a-1\"]"}}
+
+待答 coordinator-session:session-a · state=open…
+当前会话问题：请确认本批验收范围。
+Shift+← 或 /answer 打开当前 Session 回答面板
+╭──────────────────────────────────────────────╮
+│ › 普通消息                                   │
+│ 首尾                                         │
+╰──────────────────────────────────────────────╯
+示例模型 A · 推理 不可用 · 上下文 不可用
+

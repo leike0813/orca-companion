@@ -145,14 +145,16 @@ export function buildStatusSnapshot(
   store: BranchCoordinationStore,
   coordinationScopeId: CoordinationScopeId,
 ): StatusSnapshotResult {
-  const result = store.query({ kind: 'snapshot', coordinationScopeId });
+  const result = store.query({ kind: 'presentation-snapshot', coordinationScopeId });
   if (result.kind === 'rejected') {
     return { kind: 'failed', message: `${result.code}: ${result.message}` };
   }
-  if (result.kind !== 'snapshot') {
+  if (result.kind !== 'presentation-snapshot') {
     return { kind: 'failed', message: 'snapshot 查询返回了非预期结果' };
   }
   const { leases, ticketClaims, unresolvedIntents } = result.snapshot;
+  const identities = store.query({ kind: 'pending-interaction-identities', coordinationScopeId });
+  if (identities.kind !== 'pending-interaction-identities') return { kind: 'failed', message: identities.kind === 'rejected' ? identities.message : '待答身份查询无效' };
   const counters = store.query({ kind: 'budget-counters', coordinationScopeId });
   const scope = result.snapshot.scope;
   const versions =
@@ -232,7 +234,7 @@ export function buildStatusSnapshot(
           expiresAt: lease.expiresAt,
         })),
         executionLeaseHolder: scopeView.executionLeaseHolderSessionId,
-        pendingInteractions: projected.interactions
+        pendingInteractions: identities.interactions
           .filter((interaction) => interaction.state === 'open')
           .map((interaction) => ({
             interactionId: interaction.interactionId,

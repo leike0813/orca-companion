@@ -1,0 +1,185 @@
+{
+  "baseline": "69f0aa1781265bb7623cb4bbb3e8ae5722e72bce",
+  "node": "v24.12.0",
+  "platform": "linux",
+  "scope": "Synthetic isolated file-backed SQLite; production branch queries, reader and TuiApp. Controller/backend ports are fake. 1/5 MiB answers are oversized persisted-body stress fixtures, not current user-input limits. No live provider, Orca or IME.",
+  "measurements": [
+    {
+      "count": 1000,
+      "openCount": 25,
+      "pageItems": 20,
+      "coldMs": 97.35965600000009,
+      "projection": {
+        "samples": 100,
+        "p50": 1.3955340000002252,
+        "p95": 2.251659000000018,
+        "max": 2.541769999999815
+      },
+      "input": {
+        "samples": 100,
+        "p50": 37.575386999999864,
+        "p95": 54.36417900000015,
+        "max": 68.24887000000035
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 5.922015999999985,
+        "p95": 7.75776900000028,
+        "max": 12.052486999999928
+      },
+      "maxBodyBytes": 0,
+      "maxSummaryIds": 1,
+      "cache": {
+        "bodyBytes": 15168,
+        "bodyItems": 24,
+        "layoutBytes": 28788,
+        "layoutItems": 42,
+        "lastReadBytes": 0,
+        "lastLayoutRows": 0,
+        "metadataItems": 0
+      }
+    },
+    {
+      "count": 10000,
+      "openCount": 25,
+      "pageItems": 20,
+      "coldMs": 91.93564399999741,
+      "projection": {
+        "samples": 100,
+        "p50": 1.9372540000003937,
+        "p95": 2.1188729999994393,
+        "max": 3.4288119999982882
+      },
+      "input": {
+        "samples": 100,
+        "p50": 45.83265599999868,
+        "p95": 58.77140199999849,
+        "max": 125.13110699999743
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 5.633146999996825,
+        "p95": 6.218951999999263,
+        "max": 20.20668300000034
+      },
+      "maxBodyBytes": 0,
+      "maxSummaryIds": 1,
+      "cache": {
+        "bodyBytes": 15264,
+        "bodyItems": 24,
+        "layoutBytes": 29034,
+        "layoutItems": 42,
+        "lastReadBytes": 0,
+        "lastLayoutRows": 0,
+        "metadataItems": 0
+      }
+    },
+    {
+      "count": 100000,
+      "openCount": 25,
+      "pageItems": 20,
+      "coldMs": 12.187894000002416,
+      "projection": {
+        "samples": 100,
+        "p50": 14.475900999997975,
+        "p95": 17.194511999994575,
+        "max": 23.992687999998452
+      },
+      "input": {
+        "samples": 100,
+        "p50": 49.862970999995014,
+        "p95": 68.64383400000224,
+        "max": 126.48193999999785
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 5.7111839999997756,
+        "p95": 8.11564499999804,
+        "max": 53.5071470000039
+      },
+      "maxBodyBytes": 0,
+      "maxSummaryIds": 1,
+      "cache": {
+        "bodyBytes": 15360,
+        "bodyItems": 24,
+        "layoutBytes": 29280,
+        "layoutItems": 42,
+        "lastReadBytes": 0,
+        "lastLayoutRows": 0,
+        "metadataItems": 0
+      }
+    },
+    {
+      "count": 1000,
+      "mib": 1,
+      "openCount": 25,
+      "pageItems": 20,
+      "coldMs": 87.91135599999689,
+      "projection": {
+        "samples": 100,
+        "p50": 1.3849820000032196,
+        "p95": 1.9479779999965103,
+        "max": 2.141205000007176
+      },
+      "input": {
+        "samples": 100,
+        "p50": 50.67930899999919,
+        "p95": 64.21173700000509,
+        "max": 74.75853999999526
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 5.805728999999701,
+        "p95": 6.385320000001229,
+        "max": 70.81474399998842
+      },
+      "maxBodyBytes": 16388,
+      "maxSummaryIds": 1,
+      "cache": {
+        "bodyBytes": 34036,
+        "bodyItems": 2,
+        "layoutBytes": 44372,
+        "layoutItems": 6,
+        "lastReadBytes": 0,
+        "lastLayoutRows": 0,
+        "metadataItems": 0
+      }
+    },
+    {
+      "count": 1000,
+      "mib": 5,
+      "openCount": 25,
+      "pageItems": 20,
+      "coldMs": 115.90668499999447,
+      "projection": {
+        "samples": 100,
+        "p50": 1.4641989999945508,
+        "p95": 1.5805830000026617,
+        "max": 1.7168559999990975
+      },
+      "input": {
+        "samples": 100,
+        "p50": 52.07622699999774,
+        "p95": 74.73064399999566,
+        "max": 84.14901599999575
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 7.8594690000027185,
+        "p95": 11.018945000003441,
+        "max": 18.301917999997386
+      },
+      "maxBodyBytes": 16388,
+      "maxSummaryIds": 1,
+      "cache": {
+        "bodyBytes": 34036,
+        "bodyItems": 2,
+        "layoutBytes": 44372,
+        "layoutItems": 6,
+        "lastReadBytes": 0,
+        "lastLayoutRows": 0,
+        "metadataItems": 0
+      }
+    }
+  ]
+}

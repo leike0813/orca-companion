@@ -805,6 +805,11 @@ describe('deriveExecutionFacts：Frontier 阶段只由持久事实推出', () =>
       snapshot: snapshot({ ...readySnapshot, pendingInteractions: [makeInteraction('interaction-1', 'open')] }),
     });
     expect(withInteraction.finalizer.gate.blockers).toContain('pending-interactions:1');
+    const { pendingInteractions: _pending, ...presentation } = snapshot(readySnapshot);
+    expect(_pending).toHaveLength(0);
+    const bounded = deriveExecutionFacts({ nodes: [], baselineHead: null, authority: null, observations: observations(), snapshot: { ...presentation,
+      interactionOverview: { openCount: 37, sessionCounts: [], items: [] } } });
+    expect(bounded.finalizer.gate.blockers).toContain('pending-interactions:37');
     expect(withInteraction.finalizer.gate.ready).toBe(false);
 
     // 存在未结算的 mutation。

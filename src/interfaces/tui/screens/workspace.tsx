@@ -152,7 +152,7 @@ export function Workspace(props: WorkspaceProps) {
     <TopBar coordinationScopeId={view.scope.coordinationScopeId} mode={view.scope.mode} controlState={view.scope.controlState}
       graphLabel={null} generation={view.graph?.generation??null} authorizationLabel={null} activeWorkPackageCount={view.execution.activeWorkPackageCount}
       reconciling={view.execution.reconciliation.pending} availableWidth={props.terminalWidth} sessionId={selected}
-      holder={view.scope.executionLeaseHolderSessionId} pendingCount={view.interactions.filter(i=>i.state==='open').length}/>
+      holder={view.scope.executionLeaseHolderSessionId} pendingCount={view.execution.hazards.openInteractionCount}/>
     {alerts.slice(0,2).map((s,i)=><Text key={i} color={tuiColors.warning}>{truncateToDisplayWidth('! '+s+(i===1&&alerts.length>2?' · 另有 '+(alerts.length-2)+' 项':''),props.terminalWidth)}</Text>)}
     {overlay!==null?<Box height={bodyRows} width={props.terminalWidth} justifyContent="center" flexDirection="column"><Overlay overlay={overlay} props={props} narrow={props.terminalWidth<100}/></Box>:
     ui.pendingConfirmation!==null?<Box height={bodyRows} width={props.terminalWidth} justifyContent="center" flexDirection="column"><ControlBar controlState={view.scope.controlState} hazards={view.execution.hazards} pending={ui.pendingConfirmation} availableWidth={props.terminalWidth}

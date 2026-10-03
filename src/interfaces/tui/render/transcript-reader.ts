@@ -7,6 +7,8 @@ import {
 } from '../../../application/coordinator/history.js';
 import type { ControllerTranscriptPage } from '../../../application/controller-service.js';
 import type { HistoryCall } from '../../../application/coordinator/history-inspection.js';
+import { userQuestionInteractionId } from '../../../application/coordination/pending-interaction.js';
+import type { InteractionSummary } from '../../../application/ports/branch-coordination-store.js';
 import type { TranscriptView } from '../../../application/tui/view-model.js';
 import { displayWidth, truncateToDisplayWidth } from './width.js';
 
@@ -18,7 +20,9 @@ type Source = {
   readonly ref: TranscriptSourceRef; readonly sequence: number; readonly byteLength: number;
   readonly role: 'user' | 'assistant' | 'tool'; readonly name: string; readonly status?: TranscriptPreview['status'];
   readonly call?: HistoryCall;
-  readonly part?: 'arguments' | 'result';
+  readonly part?: 'arguments' | 'result' | 'question' | 'answer';
+  readonly interaction?: InteractionSummary | null;
+  readonly questionIndexPending?: boolean;
 };
 export type TranscriptAnchor = {
   readonly coordinatorSessionId: string; readonly source: TranscriptSourceRef;
@@ -28,6 +32,7 @@ export type TranscriptLine = {
   readonly key: string; readonly id: string; readonly kind: 'user' | 'agent' | 'tool' | 'tool-detail' | 'gap' | 'status';
   readonly first: boolean; readonly text: string; readonly spans: readonly TranscriptSpan[];
   readonly activityId?: string;
+  readonly interaction?: InteractionSummary | null;
   readonly highlighted?: boolean;
   readonly anchor: TranscriptAnchor; readonly end: number;
 };
@@ -66,8 +71,8 @@ class Cache<T> {
   get size(): number { return this.items.size; }
 }
 const utf8Length = (text: string): number => Buffer.byteLength(text, 'utf8');
-const idOf = (source: TranscriptSourceRef): string => source.kind === 'preview' ? source.previewId : source.entryId;
-const sourceKey = (source: TranscriptSourceRef): string => `${source.kind}:${idOf(source)}${source.kind === 'arguments' ? ':' + source.callId : ''}`;
+const idOf = (source: TranscriptSourceRef): string => source.kind === 'preview' ? source.previewId : source.kind === 'interaction' ? source.interactionId : source.entryId;
+const sourceKey = (source: TranscriptSourceRef): string => `${source.kind}:${idOf(source)}${source.kind === 'arguments' ? ':' + source.callId : source.kind === 'interaction' ? ':' + source.part : ''}`;
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 function rawSpan(text: string, offset: number, style: Style = 'plain'): PaintedSpan {
@@ -195,6 +200,7 @@ export class TranscriptReader {
   private detailed = false;
   private detailChanged = false;
   private inspectionBytes = 0;
+  private interactions = new Map<string, InteractionSummary>();
   private upperSequence: number | undefined;
   private hit: { source: TranscriptSourceRef; offset: number; end: number } | null = null;
   private sources: Source[] = [];
@@ -220,6 +226,7 @@ export class TranscriptReader {
   dispose(): void {
     this.generation += 1; this.bodies.clear(); this.layouts.clear(); this.contexts.clear(); this.currentSources.clear(); this.inspectionBytes = 0; this.upperSequence = undefined;
     for (const release of this.previewPins.values()) release(); this.previewPins.clear();
+    this.interactions.clear();
   }
   private check(request: number): void { if (request !== this.generation) throw new StaleRead(); }
   private async metadata(direction: 'older' | 'newer', sequence: number | undefined, request: number): Promise<Source[]> {
@@ -242,11 +249,25 @@ export class TranscriptReader {
         const calls = await inspection.calls({ coordinatorSessionId: this.session, upperSequence: this.upperSequence, direction,
           ...(sequence === undefined ? {} : direction === 'older' ? { before: { sequence, ordinal: 0 } } : { after: { sequence, ordinal: Number.MAX_SAFE_INTEGER } }) });
         this.check(request); this.inspectionBytes = utf8Length(JSON.stringify(calls)) * 2 + 1024;
+        const questionIds = [...new Set(calls.calls.filter(call => call.name === 'ask_user').map(call => userQuestionInteractionId(call.operationId)))];
+        this.interactions.clear();
+        if (this.port.interactions !== undefined) {
+          for (let offset = 0; offset < questionIds.length; offset += 20) {
+            const summaries = await this.port.interactions(this.session, questionIds.slice(offset, offset + 20));
+            this.check(request);
+            for (const summary of summaries) {
+              if (summary.ownerCoordinatorSessionId !== this.session || !questionIds.includes(summary.interactionId)) throw new Error('问题摘要身份不匹配');
+              this.interactions.set(summary.interactionId, summary);
+            }
+            this.inspectionBytes += utf8Length(JSON.stringify(summaries)) * 2;
+          }
+        }
         const refs = calls.calls.flatMap(call => this.callSources(call));
         const paired = new Set(calls.calls.flatMap(call => call.result === null ? [] : [call.result.entryId]));
         histories = [...histories.filter(source => !paired.has(idOf(source.ref)) &&
           !(source.role === 'assistant' && source.byteLength === 0 && calls.calls.some(call => call.entryId === idOf(source.ref)))), ...refs];
-      }
+      } else histories = histories.map(source => source.role === 'tool' && source.name === 'ask_user'
+        ? { ...source, questionIndexPending: true } : source);
     }
     const from = histories[0]?.sequence ?? 0;
     const to = histories.at(-1)?.sequence ?? Infinity;
@@ -256,14 +277,26 @@ export class TranscriptReader {
         : { ref: { kind: 'preview', previewId: preview.previewId, contentRevision: preview.contentRevision },
           sequence: preview.afterSequence, byteLength: preview.byteLength, role: 'assistant', name: '', status: preview.status });
     this.sources = [...histories, ...temporary].sort((a, b) => a.sequence - b.sequence || (a.call?.ordinal ?? -1) - (b.call?.ordinal ?? -1) ||
-      (a.ref.kind === 'history' ? -1 : b.ref.kind === 'history' ? 1 : 0));
+      (a.part === 'arguments' ? -1 : b.part === 'arguments' ? 1 : a.part === 'question' ? -1 : b.part === 'question' ? 1 :
+        a.ref.kind === 'history' ? -1 : b.ref.kind === 'history' ? 1 : 0));
     return this.sources;
   }
   private callSources(call: HistoryCall): Source[] {
     return [{ ref: { kind: 'arguments', entryId: call.entryId, stepId: call.stepId, callId: call.callId, contentRevision: 1 },
       sequence: call.sequence, byteLength: call.argsByteLength, role: 'tool', name: call.name, call, part: 'arguments' },
+    ...this.questionSources(call),
     ...(call.result === null ? [] : [{ ref: { kind: 'history' as const, entryId: call.result.entryId, contentRevision: 1 as const },
       sequence: call.result.sequence, byteLength: call.result.byteLength, role: 'tool' as const, name: call.name, call, part: 'result' as const }])];
+  }
+  private questionSources(call: HistoryCall): Source[] {
+    if (call.name !== 'ask_user') return [];
+    const id = userQuestionInteractionId(call.operationId), summary = this.interactions.get(id);
+    const ref: TranscriptSourceRef = { kind: 'interaction', interactionId: id, part: 'question', contentRevision: String(summary?.expectedRevision ?? 0) };
+    const question: Source = { ref, sequence: call.sequence, byteLength: summary?.questionByteLength ?? 0, role: 'tool', name: 'ask_user', call, part: 'question', interaction: summary ?? null };
+    return [question, ...(summary?.answerRef === null || summary?.answerRef === undefined ? [] : [{
+      ...question, ref: { kind: 'interaction' as const, interactionId: id, part: 'answer' as const, contentRevision: summary.answerRef.id },
+      part: 'answer' as const, byteLength: summary.answerByteLength,
+    }])];
   }
   private anchor(source: Source, offset: number): TranscriptAnchor {
     return { coordinatorSessionId: this.session, source: source.ref, sequence: source.sequence, offset };
@@ -272,10 +305,11 @@ export class TranscriptReader {
     return { ...item, key: `${sourceKey(source.ref)}:${source.ref.contentRevision}:${item.start}:${kind}`,
       id: idOf(source.ref), kind, anchor: this.anchor(source, item.start),
       ...(source.call === undefined ? {} : { activityId: source.call.activityId }),
+      ...(source.interaction === undefined ? {} : { interaction: source.interaction }),
       ...(this.hit !== null && sourceKey(this.hit.source) === sourceKey(source.ref) && item.start < this.hit.end && item.end > this.hit.offset ? { highlighted: true } : {}) };
   }
   private async range(source: Source, block: number, request: number, keys: Set<string>): Promise<TranscriptBodyRange> {
-    const immutable = source.ref.kind === 'history' || block + HISTORY_CHUNK_BYTES + 8 <= source.byteLength;
+    const immutable = source.ref.kind === 'history' || source.ref.kind !== 'interaction' && block + HISTORY_CHUNK_BYTES + 8 <= source.byteLength;
     const key = `${this.session}:${sourceKey(source.ref)}:${block}:${immutable ? 'fixed' : source.ref.contentRevision}`;
     keys.add(key);
     const cached = this.bodies.get(key);
@@ -322,7 +356,7 @@ export class TranscriptReader {
     }
     const range = await this.range(source, block, request, bodyKeys);
     this.captureContext(source, range, block);
-    const immutable = source.ref.kind === 'history' || block + HISTORY_CHUNK_BYTES + 8 <= source.byteLength;
+    const immutable = source.ref.kind === 'history' || source.ref.kind !== 'interaction' && block + HISTORY_CHUNK_BYTES + 8 <= source.byteLength;
     const key = `${prefix}:${immutable ? 'fixed' : source.ref.contentRevision}:${range.offset}:${offset}:${this.width}:${direction}:${count}`;
     layoutKeys.add(key);
     const cached = this.layouts.get(key); if (cached !== undefined) return cached;
@@ -344,6 +378,15 @@ export class TranscriptReader {
     return rows;
   }
   private async neighbor(source: Source, direction: 'older' | 'newer', request: number): Promise<Source | null> {
+    const index = this.sources.findIndex(item => sourceKey(item.ref) === sourceKey(source.ref));
+    const adjacent = index < 0 ? undefined : this.sources[index + (direction === 'older' ? -1 : 1)];
+    if (adjacent !== undefined) return adjacent;
+    if (source.call !== undefined) {
+      const siblings = this.callSources(source.call);
+      const index = siblings.findIndex(item => sourceKey(item.ref) === sourceKey(source.ref));
+      const next = siblings[index + (direction === 'older' ? -1 : 1)];
+      if (index >= 0 && next !== undefined) return next;
+    }
     if (source.ref.kind === 'arguments' && source.call !== undefined && this.port.inspection !== undefined) {
       const page = await this.port.inspection.calls({ coordinatorSessionId: this.session, upperSequence: this.upperSequence,
         entryId: source.call.entryId, direction, ...(direction === 'older' ? { before: { sequence: source.call.sequence, ordinal: source.call.ordinal } } : { after: { sequence: source.call.sequence, ordinal: source.call.ordinal } }) });
@@ -351,9 +394,6 @@ export class TranscriptReader {
       const call = direction === 'older' ? page.calls.at(-1) : page.calls[0];
       if (call !== undefined) return this.callSources(call)[0]!;
     }
-    const index = this.sources.findIndex(item => sourceKey(item.ref) === sourceKey(source.ref));
-    const adjacent = index < 0 ? undefined : this.sources[index + (direction === 'older' ? -1 : 1)];
-    if (adjacent !== undefined) return adjacent;
     const sequence = direction === 'older' && source.ref.kind === 'preview' ? source.sequence + 1 : source.sequence;
     const page = await this.metadata(direction, sequence, request);
     const eligible = page.filter(item => sourceKey(item.ref) !== sourceKey(source.ref) &&
@@ -386,12 +426,19 @@ export class TranscriptReader {
         const activityId = current.call?.activityId ?? id;
         const temporary = this.hit !== null && sourceKey(this.hit.source) === sourceKey(current.ref);
         const collapsed = current.role === 'tool' && !this.detailed && !this.expanded.includes(activityId) && !this.expanded.includes(id) && !temporary;
-        if (collapsed) {
+        if (current.ref.kind === 'interaction' && current.interaction === null) {
+          rows = [this.line(current, { text: this.port.interactions === undefined ? '问题关联不可用' : '问题记录缺失', spans: [], start: 0, end: 0, first: true }, 'status')];
+        } else if (collapsed && current.ref.kind === 'interaction') {
+          const summary = current.interaction!;
+          const state = summary.state === 'open' ? '待回答' : summary.state === 'answered' ? '已回答' : '已取消';
+          const text = current.part === 'question' ? `Q · ${state} · ${summary.questionPreview || '正文不可用'}` : `A · ${summary.answerPreview}`;
+          rows = [this.line(current, { text: truncateToDisplayWidth(text.replace(/\s+/gu, ' '), Math.max(1, this.width - 2)), spans: [], start: 0, end: current.byteLength, first: true }, 'tool')];
+        } else if (collapsed) {
           const existing = lines.some(line => line.activityId === activityId);
           const label = current.call?.activityKind === 'query' ? '查询活动' : `tool ${current.name}`;
           const status = current.call?.activityStatus ?? current.call?.status;
           rows = existing && (status === undefined || status === 'ok' || status === 'unconfirmed') ? [] :
-            [this.line(current, { text: truncateToDisplayWidth(`▸ ${label}${current.call?.activityCount === undefined ? '' : ' · ' + current.call.activityCount + ' 次'}${status === undefined ? '' : ' · ' + status}`, Math.max(1, this.width - 2)),
+            [this.line(current, { text: truncateToDisplayWidth(`▸ ${label}${current.call?.activityCount === undefined ? '' : ' · ' + current.call.activityCount + ' 次'}${status === undefined ? '' : ' · ' + status}${current.questionIndexPending ? ' · 问题索引未就绪' : ''}`, Math.max(1, this.width - 2)),
               spans: [], start: 0, end: current.byteLength, first: true }, 'tool')];
         } else {
           let local: LocalLine[];
@@ -399,7 +446,9 @@ export class TranscriptReader {
           catch (error) { if (error instanceof ReadBudget) break; throw error; }
           rows = local.map(row => this.line(current!, row, current!.role === 'user' ? 'user' : current!.role === 'tool' ? 'tool-detail' : 'agent'));
           if (current.role === 'tool' && (direction === 'start' ? position === 0 : rows[0]?.anchor.offset === 0)) rows.unshift(this.line(current,
-            { text: truncateToDisplayWidth(`▾ tool ${current.name}${current.part === undefined ? '' : ' · ' + (current.part === 'arguments' ? '参数' : '结果')}${current.call === undefined ? '' : ' · ' + current.call.status}`, Math.max(1, this.width - 2)), spans: [], start: 0, end: 0, first: true }, 'tool'));
+            { text: truncateToDisplayWidth(current.ref.kind === 'interaction'
+              ? `▾ ${current.part === 'question' ? 'Q · 问题' : 'A · 回答'} · ${current.interaction?.state === 'open' ? '待回答' : current.interaction?.state === 'answered' ? '已回答' : '已取消'}`
+              : `▾ tool ${current.name}${current.part === undefined ? '' : ' · ' + (current.part === 'arguments' ? '参数' : '结果')}${current.call === undefined ? '' : ' · ' + current.call.status}${current.questionIndexPending ? ' · 问题索引未就绪' : ''}`, Math.max(1, this.width - 2)), spans: [], start: 0, end: 0, first: true }, 'tool'));
           if (current.ref.kind === 'preview' && current.status !== 'streaming' &&
             (direction === 'end' ? position === current.byteLength : (rows.at(-1)?.end ?? 0) >= current.byteLength)) {
             rows.push(this.line(current, { text: current.status === 'not_saved' ? '流式预览不可用 · 等待完整响应' : '预览中断 · 未提交',
@@ -450,7 +499,7 @@ export class TranscriptReader {
   }
   private sourceAt(anchor: TranscriptAnchor): Source | undefined {
     const frozen = this.currentSources.get(sourceKey(anchor.source));
-    if (!this.following && frozen?.ref.contentRevision === anchor.source.contentRevision) return frozen;
+    if (!this.following && anchor.source.kind !== 'interaction' && frozen?.ref.contentRevision === anchor.source.contentRevision) return frozen;
     const exact = this.sources.find(item => sourceKey(item.ref) === sourceKey(anchor.source));
     if (exact !== undefined && anchor.source.kind !== 'preview') return exact;
     if (anchor.source.kind === 'preview') {

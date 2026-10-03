@@ -77,7 +77,7 @@ export type TuiPorts = {
 };
 
 export type TuiQuestionQuery =
-  | { readonly kind: 'pending-interactions'; readonly coordinatorSessionId: string; readonly after?: import('../../application/ports/branch-coordination-store.js').InteractionPageCursor }
+  | { readonly kind: 'pending-interactions'; readonly coordinatorSessionId?: string; readonly after?: import('../../application/ports/branch-coordination-store.js').InteractionPageCursor }
   | { readonly kind: 'pending-interaction'; readonly coordinatorSessionId: string; readonly interactionId: string };
 
 /**

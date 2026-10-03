@@ -187,7 +187,7 @@ Graph Patch 采用原子的 `add + revise + retire`：
 
 UI 输入另存于同目录 `ui.sqlite`，由 IC-13 的应用端口、storage adapter 和 Bootstrap 装配拥有。草稿、冲突副本与待核验提交按 Scope/Session/回答 revision 隔离；提交先保存完整快照和稳定 submissionId，再调用业务用例。输入恢复只核验原身份，界面 render/effect/resize/remount 只读取，不持久写入或自动发送。容量满额与 CAS 冲突保留输入并经 `/inputs` 显式处理；详细合同见 `docs/interface-contracts.md` IC-13。
 
-UiDraft.text 是唯一展开载荷，cursor 位于 grapheme 边界，折叠粘贴只保存唯一身份与非重叠范围。`ask_user` 的问题正文由 Branch Store 拥有，可信 operationId 派生 InteractionId；同载荷重放复用原记录，异载荷拒绝。当前 Session 问题列表按 keyset 最多 20 条，详情精确读取，Scope snapshot 只投影摘要。
+UiDraft.text 是唯一展开载荷，cursor 位于 grapheme 边界，折叠粘贴只保存唯一身份与非重叠范围。`ask_user` 的问答正文由 Branch Store 拥有，可信 operationId 派生 InteractionId；同载荷重放复用原记录，异载荷拒绝。Scope/Session 问题页和指定 ID 摘要每次最多 20 条，展示 snapshot 使用完整聚合计数，Finalizer 不取页长。历史 Q/A 沿 IC-11 的 interaction source/version/part/UTF-8 range 原位阅读；完整合同见 IC-03/11/12。
 
 不同 Coordinator Session 不共享 checkpoint。同一 Session 同时只有一个 Runtime Incarnation；短 Runtime Lease 和递增 fencing generation 拒绝迟到进程写入。Execution Coordination 只有一个 Session 持有 Execution Coordination Lease。SQLite 事务保持短小，不使用项目级长期单写者锁。
 
@@ -219,7 +219,7 @@ TUI 实施必须先读 [原型交接](docs/dev/tui-implementation-handoff.md) �
 
 TUI 以选中 Coordinator Session 的 continuous transcript 与 composer 为主视图。右侧 adaptive sidebar 展示当前图、节点卡、Worker/liveness、串行队列与 blocker。项目面板承载预算/授权、身份、工作依据、待答列表和最近事件；100 列及以上使用原 sidebar 区域，对话宽度与位置不变，更窄时独占主区域，关闭恢复原工作区。Graph Inspector 在三档尺寸都支持只读邻域、详情与明确关系选择。
 
-Transcript 只显示用户/Agent 消息和折叠 tool 记录；运行事实按上述区域分层，语义事件进入项目面板最近事件（本次启动最多 50 条），诊断噪声只进日志。Pending Interaction 显示紧凑入口，Shift+Left 或 `/answer` 打开当前 Session 底部面板，回答 composer 必须绑定 interaction ID 与 expected revision；普通聊天不能满足待答问题。Ctrl+A/E 为行首尾，Enter 提交，Alt+Enter 换行；面板 Esc 保存回答并恢复聊天光标，新问题不得抢焦点。
+Transcript 只显示用户/Agent 消息和折叠 tool 记录；运行事实按上述区域分层，语义事件进入项目面板最近事件（本次启动最多 50 条），诊断噪声只进日志。Pending Interaction 显示紧凑入口，Shift+Left 或 `/answer` 打开当前 Session 底部面板，回答 composer 必须绑定 interaction ID 与 expected revision；普通聊天不能满足待答问题。项目待答页支持精确跨 Session 进入；返回上下文只保存原 Session、来源锚点、栏目/选择/滚动与焦点，草稿仍由 IC-13 保存。Esc 保存成功或原提交确定受理且没有后来编辑才返回；手工切会话使旧返回失效。Ctrl+A/E 为行首尾，Enter 提交，Alt+Enter 换行；新问题不得抢焦点。
 
 对话阅读统一经 IC-11 的 metadata/body/preview 端口和 `render/transcript-reader.ts`，锚点绑定 Session/来源版本/UTF-8 offset。正文与派生布局缓存各限 8 MiB/64 项；折叠工具只读 metadata，render 只绘制有限 frame。流式片段只写 Runtime 临时来源，SDK 完整响应经 appendModelStep 接受后才进入历史；输出/上下文读回预算由项目配置归一化并注入所有调用点。离底更新和 resize 保留原来源，取消/失去 fencing/退出中止模型；合同和测量方法见 docs/interface-contracts.md IC-04/11 与原型交接。
 

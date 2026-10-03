@@ -17,10 +17,10 @@ export function recoveryRows(r:ControllerRecoveryView):readonly string[] {
 }
 
 export function projectItems(view: TuiViewModel, events: readonly SemanticEvent[], tab: number): readonly { key: string; title: string; hint: string; group?: string }[] {
-  if (tab === 1) return view.interactions.map(item => ({ key: item.interactionId, title: item.subjectRef.id, hint: item.ownerCoordinatorSessionId + ' · ' + item.state + ' @' + item.expectedRevision }));
+  if (tab === 1) return (view.pendingPage?.items ?? view.interactions).map(item => ({ key: item.interactionId, title: (item.questionPreview || item.subjectRef.id).replace(/\s+/gu, ' '), hint: item.ownerCoordinatorSessionId + ' · ' + (item.state === 'open' ? '待回答' : item.state === 'answered' ? '已回答' : '已取消') }));
   if (tab === 2) return events.toReversed().map((event) => ({ key: 'event:' + event.eventId, title: '[' + semanticEventCategory(event) + '] ' + describeSemanticEvent(event), hint: '本次启动 · ' + event.kind }));
   return [
-    { key: 'pending', group: '需要你处理', title: '待答问题', hint: view.interactions.filter(item => item.state === 'open').length + ' 条 · 按所属会话查看' },
+    { key: 'pending', group: '需要你处理', title: '待答问题', hint: view.execution.hazards.openInteractionCount + ' 条 · 按所属会话查看' },
     { key: 'budget', group: '额度与权限', title: '预算与授权', hint: '已用额度、批准引用与权限' },
     { key: 'authorize', title: '查看候选授权', hint: '打开独立审阅' },
     { key: 'identity', group: '项目资料', title: '项目与会话', hint: '完整身份、执行持有者与维护记录' },
@@ -55,10 +55,10 @@ export function projectDetail(view: TuiViewModel, events: readonly SemanticEvent
     const event = events.find(event=>event.eventId===key.slice(6));
     return event ? [describeSemanticEvent(event), '事件 ID: '+event.eventId, '所属会话: '+(event.coordinatorSessionId??'Scope')] : ['该事件已移出本次启动窗口'];
   }
-  const item = view.interactions.find(i => i.interactionId === key);
+  const item = (view.pendingPage?.items ?? view.interactions).find(i => i.interactionId === key);
   return item ? ['interaction: ' + item.interactionId, 'owner: ' + item.ownerCoordinatorSessionId,
     'state: ' + item.state + ' · expected revision: ' + item.expectedRevision, 'subject: ' + item.subjectRef.id,
-    '正文请在所属会话的回答面板读取', '跨会话一键进入/返回：未接通'] : ['当前对象不可用'];
+    item.questionPreview || '问题正文不可用', 'Enter 在所属会话回答，Esc 保存并返回'] : ['当前对象不可用'];
 }
 
 export function projectDetailViewport(view: TuiViewModel, events: readonly SemanticEvent[], panel: ProjectPanelState, width: number, height: number) {
@@ -84,7 +84,7 @@ export function ProjectPanel({ view, events, panel, width, height }: {
   return <Box width={width} height={height} flexShrink={0} flexDirection="column" borderStyle="round" borderColor={tuiColors.border} paddingX={1} overflow="hidden">
     <Text bold color={tuiColors.accent}>{fit('项目面板 · ' + ['总览', '待答列表', '最近事件'][panel.tab] + (panel.detail?' · 详情':''))}</Text>
     <Text color={tuiColors.muted}>{fit(['总览', '待答列表', '最近事件'].map((s,i) => i === panel.tab ? '[' + s + ']' : s).join('  ') + ' · Tab')}</Text>
-    <Text color={tuiColors.muted}>{fit(panel.tab === 2 ? '本次启动 · 最近至多 50 条' + (events.length === 50 ? ' · 窗口可能截断' : '') : '')}</Text>
+    <Text color={tuiColors.muted}>{fit(panel.tab === 2 ? '本次启动 · 最近至多 50 条' + (events.length === 50 ? ' · 窗口可能截断' : '') : panel.tab === 1 && view.pendingPage ? view.pendingPage.error ?? (view.pendingPage.loading ? '正在读取待答…' : `第 ${view.pendingPage.page} 页 · PgUp/PgDn 翻页`) : '')}</Text>
     <Box flexDirection="column" flexGrow={1} overflow="hidden">
       {selectionLost&&panel.detail===null?<Text color={tuiColors.warning}>{fit('所选对象已不在当前窗口，请重新选择')}</Text>:null}
       {panel.detail !== null ? lines.slice(offset, offset + rows).map((line,i) => <Text key={i}>{line}</Text>) :

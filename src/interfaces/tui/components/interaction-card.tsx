@@ -32,6 +32,7 @@ export function InteractionCard(props: InteractionCardProps) {
       <Text color={props.answering ? tuiColors.focus : tuiColors.warning} bold>
         {truncateToDisplayWidth(label, Math.max(1, props.availableWidth))}
       </Text>
+      {props.interaction.questionPreview ? <Text>{truncateToDisplayWidth(props.interaction.questionPreview.replace(/\s+/gu, ' '), Math.max(1, props.availableWidth))}</Text> : null}
       <Text dimColor>{truncateToDisplayWidth('Shift+← 或 /answer 打开当前 Session 回答面板', props.availableWidth)}</Text>
     </Box>
   );

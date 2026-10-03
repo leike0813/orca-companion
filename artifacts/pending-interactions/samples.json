@@ -1,0 +1,2207 @@
+[
+  {
+    "name": "history-cards",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "history-cards-120x40-color-nerd.png",
+    "text": "history-cards-120x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "history-detailed",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "history-detailed-120x40-color-nerd.png",
+    "text": "history-detailed-120x40-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "scope-page",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "scope-page-120x40-color-nerd.png",
+    "text": "scope-page-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "scope-later-page",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "scope-later-page-120x40-color-nerd.png",
+    "text": "scope-later-page-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cross-answer",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cross-answer-120x40-color-nerd.png",
+    "text": "cross-answer-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "saved-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "saved-return-120x40-color-nerd.png",
+    "text": "saved-return-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "accepted-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "accepted-return-120x40-color-nerd.png",
+    "text": "accepted-return-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cursor-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cursor-return-120x40-color-nerd.png",
+    "text": "cursor-return-120x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "sessions",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "sessions-120x40-color-nerd.png",
+    "text": "sessions-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "graph-120x40-color-nerd.png",
+    "text": "graph-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cancel-review-120x40-color-nerd.png",
+    "text": "cancel-review-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "slash-120x40-color-nerd.png",
+    "text": "slash-120x40-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "continuous-resize",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "continuous-resize-80x24-color-nerd.png",
+    "text": "continuous-resize-80x24-color-nerd.txt",
+    "cursor": [
+      3,
+      20
+    ]
+  },
+  {
+    "name": "continuous-resize",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "continuous-resize-50x40-color-nerd.png",
+    "text": "continuous-resize-50x40-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "continuous-resize",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "continuous-resize-120x40-color-nerd.png",
+    "text": "continuous-resize-120x40-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "history-cards",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "history-cards-120x40-color-ascii.png",
+    "text": "history-cards-120x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "history-detailed",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "history-detailed-120x40-color-ascii.png",
+    "text": "history-detailed-120x40-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "scope-page",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "scope-page-120x40-color-ascii.png",
+    "text": "scope-page-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "scope-later-page",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "scope-later-page-120x40-color-ascii.png",
+    "text": "scope-later-page-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cross-answer",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cross-answer-120x40-color-ascii.png",
+    "text": "cross-answer-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "saved-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "saved-return-120x40-color-ascii.png",
+    "text": "saved-return-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "accepted-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "accepted-return-120x40-color-ascii.png",
+    "text": "accepted-return-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cursor-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cursor-return-120x40-color-ascii.png",
+    "text": "cursor-return-120x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "sessions",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "sessions-120x40-color-ascii.png",
+    "text": "sessions-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "graph-120x40-color-ascii.png",
+    "text": "graph-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cancel-review-120x40-color-ascii.png",
+    "text": "cancel-review-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "slash-120x40-color-ascii.png",
+    "text": "slash-120x40-color-ascii.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "history-cards",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "history-cards-120x40-no-color-nerd.png",
+    "text": "history-cards-120x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "history-detailed",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "history-detailed-120x40-no-color-nerd.png",
+    "text": "history-detailed-120x40-no-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "scope-page",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "scope-page-120x40-no-color-nerd.png",
+    "text": "scope-page-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "scope-later-page",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "scope-later-page-120x40-no-color-nerd.png",
+    "text": "scope-later-page-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cross-answer",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cross-answer-120x40-no-color-nerd.png",
+    "text": "cross-answer-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "saved-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "saved-return-120x40-no-color-nerd.png",
+    "text": "saved-return-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "accepted-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "accepted-return-120x40-no-color-nerd.png",
+    "text": "accepted-return-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cursor-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cursor-return-120x40-no-color-nerd.png",
+    "text": "cursor-return-120x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "sessions",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "sessions-120x40-no-color-nerd.png",
+    "text": "sessions-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "graph-120x40-no-color-nerd.png",
+    "text": "graph-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cancel-review-120x40-no-color-nerd.png",
+    "text": "cancel-review-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "slash-120x40-no-color-nerd.png",
+    "text": "slash-120x40-no-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "history-cards",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "history-cards-120x40-no-color-ascii.png",
+    "text": "history-cards-120x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "history-detailed",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "history-detailed-120x40-no-color-ascii.png",
+    "text": "history-detailed-120x40-no-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "scope-page",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "scope-page-120x40-no-color-ascii.png",
+    "text": "scope-page-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "scope-later-page",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "scope-later-page-120x40-no-color-ascii.png",
+    "text": "scope-later-page-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cross-answer",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cross-answer-120x40-no-color-ascii.png",
+    "text": "cross-answer-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "saved-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "saved-return-120x40-no-color-ascii.png",
+    "text": "saved-return-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "accepted-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "accepted-return-120x40-no-color-ascii.png",
+    "text": "accepted-return-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cursor-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cursor-return-120x40-no-color-ascii.png",
+    "text": "cursor-return-120x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "sessions",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "sessions-120x40-no-color-ascii.png",
+    "text": "sessions-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "graph-120x40-no-color-ascii.png",
+    "text": "graph-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cancel-review-120x40-no-color-ascii.png",
+    "text": "cancel-review-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "slash-120x40-no-color-ascii.png",
+    "text": "slash-120x40-no-color-ascii.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "history-cards",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "history-cards-80x24-color-nerd.png",
+    "text": "history-cards-80x24-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "history-detailed",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "history-detailed-80x24-color-nerd.png",
+    "text": "history-detailed-80x24-color-nerd.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "scope-page",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "scope-page-80x24-color-nerd.png",
+    "text": "scope-page-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "scope-later-page",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "scope-later-page-80x24-color-nerd.png",
+    "text": "scope-later-page-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cross-answer",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cross-answer-80x24-color-nerd.png",
+    "text": "cross-answer-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "saved-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "saved-return-80x24-color-nerd.png",
+    "text": "saved-return-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "accepted-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "accepted-return-80x24-color-nerd.png",
+    "text": "accepted-return-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cursor-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cursor-return-80x24-color-nerd.png",
+    "text": "cursor-return-80x24-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "sessions",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "sessions-80x24-color-nerd.png",
+    "text": "sessions-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "graph-80x24-color-nerd.png",
+    "text": "graph-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cancel-review-80x24-color-nerd.png",
+    "text": "cancel-review-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "slash-80x24-color-nerd.png",
+    "text": "slash-80x24-color-nerd.txt",
+    "cursor": [
+      3,
+      20
+    ]
+  },
+  {
+    "name": "history-cards",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "history-cards-80x24-color-ascii.png",
+    "text": "history-cards-80x24-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "history-detailed",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "history-detailed-80x24-color-ascii.png",
+    "text": "history-detailed-80x24-color-ascii.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "scope-page",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "scope-page-80x24-color-ascii.png",
+    "text": "scope-page-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "scope-later-page",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "scope-later-page-80x24-color-ascii.png",
+    "text": "scope-later-page-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cross-answer",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cross-answer-80x24-color-ascii.png",
+    "text": "cross-answer-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "saved-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "saved-return-80x24-color-ascii.png",
+    "text": "saved-return-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "accepted-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "accepted-return-80x24-color-ascii.png",
+    "text": "accepted-return-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cursor-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cursor-return-80x24-color-ascii.png",
+    "text": "cursor-return-80x24-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "sessions",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "sessions-80x24-color-ascii.png",
+    "text": "sessions-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "graph-80x24-color-ascii.png",
+    "text": "graph-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cancel-review-80x24-color-ascii.png",
+    "text": "cancel-review-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "slash-80x24-color-ascii.png",
+    "text": "slash-80x24-color-ascii.txt",
+    "cursor": [
+      3,
+      20
+    ]
+  },
+  {
+    "name": "history-cards",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "history-cards-80x24-no-color-nerd.png",
+    "text": "history-cards-80x24-no-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "history-detailed",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "history-detailed-80x24-no-color-nerd.png",
+    "text": "history-detailed-80x24-no-color-nerd.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "scope-page",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "scope-page-80x24-no-color-nerd.png",
+    "text": "scope-page-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "scope-later-page",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "scope-later-page-80x24-no-color-nerd.png",
+    "text": "scope-later-page-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cross-answer",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cross-answer-80x24-no-color-nerd.png",
+    "text": "cross-answer-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "saved-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "saved-return-80x24-no-color-nerd.png",
+    "text": "saved-return-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "accepted-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "accepted-return-80x24-no-color-nerd.png",
+    "text": "accepted-return-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cursor-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cursor-return-80x24-no-color-nerd.png",
+    "text": "cursor-return-80x24-no-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "sessions",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "sessions-80x24-no-color-nerd.png",
+    "text": "sessions-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "graph-80x24-no-color-nerd.png",
+    "text": "graph-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cancel-review-80x24-no-color-nerd.png",
+    "text": "cancel-review-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "slash-80x24-no-color-nerd.png",
+    "text": "slash-80x24-no-color-nerd.txt",
+    "cursor": [
+      3,
+      20
+    ]
+  },
+  {
+    "name": "history-cards",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "history-cards-80x24-no-color-ascii.png",
+    "text": "history-cards-80x24-no-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "history-detailed",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "history-detailed-80x24-no-color-ascii.png",
+    "text": "history-detailed-80x24-no-color-ascii.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "scope-page",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "scope-page-80x24-no-color-ascii.png",
+    "text": "scope-page-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "scope-later-page",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "scope-later-page-80x24-no-color-ascii.png",
+    "text": "scope-later-page-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cross-answer",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cross-answer-80x24-no-color-ascii.png",
+    "text": "cross-answer-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "saved-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "saved-return-80x24-no-color-ascii.png",
+    "text": "saved-return-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "accepted-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "accepted-return-80x24-no-color-ascii.png",
+    "text": "accepted-return-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cursor-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cursor-return-80x24-no-color-ascii.png",
+    "text": "cursor-return-80x24-no-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "sessions",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "sessions-80x24-no-color-ascii.png",
+    "text": "sessions-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "graph-80x24-no-color-ascii.png",
+    "text": "graph-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cancel-review-80x24-no-color-ascii.png",
+    "text": "cancel-review-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "slash-80x24-no-color-ascii.png",
+    "text": "slash-80x24-no-color-ascii.txt",
+    "cursor": [
+      3,
+      20
+    ]
+  },
+  {
+    "name": "history-cards",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "history-cards-50x40-color-nerd.png",
+    "text": "history-cards-50x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "history-detailed",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "history-detailed-50x40-color-nerd.png",
+    "text": "history-detailed-50x40-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "scope-page",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "scope-page-50x40-color-nerd.png",
+    "text": "scope-page-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "scope-later-page",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "scope-later-page-50x40-color-nerd.png",
+    "text": "scope-later-page-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cross-answer",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cross-answer-50x40-color-nerd.png",
+    "text": "cross-answer-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "saved-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "saved-return-50x40-color-nerd.png",
+    "text": "saved-return-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "accepted-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "accepted-return-50x40-color-nerd.png",
+    "text": "accepted-return-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cursor-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cursor-return-50x40-color-nerd.png",
+    "text": "cursor-return-50x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "sessions",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "sessions-50x40-color-nerd.png",
+    "text": "sessions-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "graph-50x40-color-nerd.png",
+    "text": "graph-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cancel-review-50x40-color-nerd.png",
+    "text": "cancel-review-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "slash-50x40-color-nerd.png",
+    "text": "slash-50x40-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "history-cards",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "history-cards-50x40-color-ascii.png",
+    "text": "history-cards-50x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "history-detailed",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "history-detailed-50x40-color-ascii.png",
+    "text": "history-detailed-50x40-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "scope-page",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "scope-page-50x40-color-ascii.png",
+    "text": "scope-page-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "scope-later-page",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "scope-later-page-50x40-color-ascii.png",
+    "text": "scope-later-page-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cross-answer",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cross-answer-50x40-color-ascii.png",
+    "text": "cross-answer-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "saved-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "saved-return-50x40-color-ascii.png",
+    "text": "saved-return-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "accepted-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "accepted-return-50x40-color-ascii.png",
+    "text": "accepted-return-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cursor-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cursor-return-50x40-color-ascii.png",
+    "text": "cursor-return-50x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "sessions",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "sessions-50x40-color-ascii.png",
+    "text": "sessions-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "graph-50x40-color-ascii.png",
+    "text": "graph-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cancel-review-50x40-color-ascii.png",
+    "text": "cancel-review-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "slash-50x40-color-ascii.png",
+    "text": "slash-50x40-color-ascii.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "history-cards",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "history-cards-50x40-no-color-nerd.png",
+    "text": "history-cards-50x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "history-detailed",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "history-detailed-50x40-no-color-nerd.png",
+    "text": "history-detailed-50x40-no-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "scope-page",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "scope-page-50x40-no-color-nerd.png",
+    "text": "scope-page-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "scope-later-page",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "scope-later-page-50x40-no-color-nerd.png",
+    "text": "scope-later-page-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cross-answer",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cross-answer-50x40-no-color-nerd.png",
+    "text": "cross-answer-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "saved-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "saved-return-50x40-no-color-nerd.png",
+    "text": "saved-return-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "accepted-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "accepted-return-50x40-no-color-nerd.png",
+    "text": "accepted-return-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cursor-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cursor-return-50x40-no-color-nerd.png",
+    "text": "cursor-return-50x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "sessions",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "sessions-50x40-no-color-nerd.png",
+    "text": "sessions-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "graph-50x40-no-color-nerd.png",
+    "text": "graph-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cancel-review-50x40-no-color-nerd.png",
+    "text": "cancel-review-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "slash-50x40-no-color-nerd.png",
+    "text": "slash-50x40-no-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "history-cards",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "history-cards-50x40-no-color-ascii.png",
+    "text": "history-cards-50x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "history-detailed",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "history-detailed-50x40-no-color-ascii.png",
+    "text": "history-detailed-50x40-no-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "scope-page",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "scope-page-50x40-no-color-ascii.png",
+    "text": "scope-page-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "scope-later-page",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "scope-later-page-50x40-no-color-ascii.png",
+    "text": "scope-later-page-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cross-answer",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cross-answer-50x40-no-color-ascii.png",
+    "text": "cross-answer-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "saved-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "saved-return-50x40-no-color-ascii.png",
+    "text": "saved-return-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "accepted-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "accepted-return-50x40-no-color-ascii.png",
+    "text": "accepted-return-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cursor-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cursor-return-50x40-no-color-ascii.png",
+    "text": "cursor-return-50x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "sessions",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "sessions-50x40-no-color-ascii.png",
+    "text": "sessions-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "graph-50x40-no-color-ascii.png",
+    "text": "graph-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cancel-review-50x40-no-color-ascii.png",
+    "text": "cancel-review-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "slash-50x40-no-color-ascii.png",
+    "text": "slash-50x40-no-color-ascii.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  }
+]

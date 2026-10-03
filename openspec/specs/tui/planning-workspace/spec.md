@@ -133,7 +133,18 @@ Composer SHALL 按 grapheme 支持任意位置插入、左右移动、上下行�
 
 #### Scenario: 事件和问题不复制权威
 - **WHEN** 用户查看最近事件或另一 Session 的待答摘要
-- **THEN** 事件标明本次启动窗口，问题显示真实 owner/state/revision，未接通的正文或跨 Session 返回能力明确不可用，不自动换会话或提交
+- **THEN** 事件标明本次启动窗口，问题显示真实 owner/state/revision；用户明确选择后读取所属会话正文并建立返回入口，新事件不自动换会话或提交
+
+### Requirement: 项目待答有界联动
+项目待答栏目 SHALL 展示 Scope 的二十条 keyset 页及简短问题预览、所属 Session 与状态，明确提供翻页；精确选题 SHALL 不受首屏限制。栏目、空状态、详情及返回 SHALL 使用定稿固定外框。历史问题展开 SHALL 纳入原 transcript 视口与缓存预算，折叠态 SHALL 只读取有限摘要。render、effect、resize 和事件刷新 SHALL 只查询，不发送回答、恢复模型或派发 Worker。
+
+#### Scenario: 后页跨会话选题
+- **WHEN** 用户在窄屏或宽屏项目栏目翻到后页并选择其他 Session 的问题
+- **THEN** 精确打开该问题，关闭或完成后恢复原栏目和页面，对话布局保持定稿约定
+
+#### Scenario: 后台状态刷新
+- **WHEN** 问题在后台被回答或终端连续 resize
+- **THEN** 摘要从权威来源重读，阅读位置与输入保持，刷新本身不产生业务动作
 
 ### Requirement: 定稿上方命令候选
 

@@ -62,6 +62,7 @@ export type TranscriptStreamObserver = (event: TranscriptStreamEvent) => void;
 export type TranscriptSourceRef =
   | { readonly kind: 'history'; readonly entryId: string; readonly contentRevision: 1 }
   | { readonly kind: 'arguments'; readonly entryId: string; readonly stepId: string; readonly callId: string; readonly contentRevision: 1 }
+  | { readonly kind: 'interaction'; readonly interactionId: string; readonly part: 'question' | 'answer'; readonly contentRevision: string }
   | { readonly kind: 'preview'; readonly previewId: string; readonly contentRevision: number };
 export type TranscriptPreview = {
   readonly coordinatorSessionId: string;
@@ -83,6 +84,7 @@ export type TranscriptBodyRange = Omit<HistoryBodyRange, 'entryId' | 'contentRev
 };
 /** IC-11: one bounded reading surface for authoritative and temporary sources. */
 export type TranscriptReadingPort = {
+  readonly interactions?: (coordinatorSessionId: string, interactionIds: readonly string[]) => Promise<readonly import('../ports/branch-coordination-store.js').InteractionSummary[]>;
   readonly inspection?: HistoryInspectionReadingPort;
   readonly history: (query: HistoryPageQuery) => Promise<HistoryMetadataPage>;
   readonly body: (query: TranscriptBodyQuery) => Promise<TranscriptBodyRange | null>;
@@ -95,6 +97,7 @@ export const transcriptBodyQuerySchema = z.strictObject({
   source: z.discriminatedUnion('kind', [
     z.strictObject({ kind: z.literal('history'), entryId: z.string().min(1), contentRevision: z.literal(1) }),
     z.strictObject({ kind: z.literal('arguments'), entryId: z.string().min(1), stepId: z.string().min(1), callId: z.string().min(1), contentRevision: z.literal(1) }),
+    z.strictObject({ kind: z.literal('interaction'), interactionId: z.string().min(1), part: z.enum(['question', 'answer']), contentRevision: z.string().min(1) }),
     z.strictObject({ kind: z.literal('preview'), previewId: z.string().min(1), contentRevision: z.number().int().positive() }),
   ]),
   offset: z.number().int().nonnegative(),

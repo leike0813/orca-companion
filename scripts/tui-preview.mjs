@@ -8,6 +8,7 @@ import { render } from 'ink';
 
 const scenarios = ['planning', 'execution', 'blocked', 'empty', 'long-cjk', 'answer', 'disabled', 'alignment', 'alignment-planning', 'history', 'streaming'];
 const alignmentPreview = ['alignment', 'alignment-planning'].includes(process.argv[2]);
+const pendingPreview = process.env.ORCA_COMPANION_PENDING_INTERACTIONS === '1';
 const prototype = process.argv[2] === '--prototype';
 const graphPrototype = process.argv[2] === '--graph-prototype';
 const composerPrototype = process.argv[2] === '--composer-prototype';
@@ -361,8 +362,65 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
     }
     while (!history.store.prepareHistoryInspection().ready) await new Promise(resolve => setTimeout(resolve, 0));
     const { scanHistory } = await import('../dist/src/application/coordinator/history-search.js');
+    const { openCoordinationStore } = await import('../dist/src/adapters/storage/coordination-store.js');
+    const { createUserQuestion, answerPendingInteraction } = await import('../dist/src/application/coordination/pending-interaction.js');
+    const branch = pendingPreview ? openCoordinationStore({ databasePath: ':memory:' }) : null;
+    if (branch !== null && branch.kind !== 'opened') throw new Error(branch.message);
+    const questionListeners = new Set();
+    const scope = snapshot.coordinationScopeId;
+    const writer = session => ({ coordinatorSessionId: session, runtimeIncarnationId: 'preview-' + session, fencingGeneration: 1 });
+    const questionQuery = input => {
+      const result = branch.store.query({ ...input, coordinationScopeId: scope });
+      if (result.kind === 'rejected') throw new Error(result.code + ': ' + result.message);
+      return result;
+    };
+    if (branch?.kind === 'opened') {
+      const store = branch.store;
+      let result = store.transact({ kind: 'create-scope', coordinationScopeId: scope, expectedRevision: 0, writer: writer('session-a'),
+        mode: 'route_planning', controlState: 'active', planningCycleId: 'preview-cycle', fullBranchRef: 'refs/heads/preview', canonicalWorktreePath: process.cwd() });
+      if (result.kind !== 'committed') throw new Error(result.message);
+      const transact = command => {
+        const revision = questionQuery({ kind: 'scope' }).scope.revision;
+        const result = store.transact({ ...command, coordinationScopeId: scope, expectedRevision: revision });
+        if (result.kind !== 'committed') throw new Error(result.message);
+      };
+      snapshot.sessions = ['session-a', 'session-b'].map((id, index) => ({ ...snapshot.sessions[0], coordinatorSessionId: id,
+        coordinatorModelConfigurationRef: index === 0 ? 'config-a' : 'config-b', planningResponsible: index === 0 }));
+      for (const session of snapshot.sessions) {
+        const id = session.coordinatorSessionId;
+        transact({ kind: 'register-session', writer: { ...writer('session-a'), fencingGeneration: id === 'session-a' ? 0 : 1 }, coordinatorSessionId: id,
+          coordinatorModelConfigurationRef: session.coordinatorModelConfigurationRef, lifecycleState: 'registered' });
+        transact({ kind: 'acquire-runtime-lease', writer: { ...writer(id), fencingGeneration: 0 }, ttlMs: 3600000 });
+        const messages = [{ entryId: 'intro-' + id, stepId: 'intro-' + id, role: 'user', content: '请核验待答联动，保留中文草稿与阅读位置。' }];
+        for (let n = 0; n < (id === 'session-a' ? 2 : 24); n++) {
+          const operationId = 'pending-' + id + '-' + n;
+          const question = { text: id === 'session-a' ? n === 0 ? '已经回答的问题：完整回答仍在原提问处。' : '当前会话问题：请确认本批验收范围。'
+            : `跨会话问题 ${n + 1}：请确认中文路径、输入和恢复验收。`,
+            options: [{ label: '继续', description: '完成本批验证' }, { label: '稍后' }] };
+          const created = createUserQuestion({ store, coordinationScopeId: scope, writer: writer(id), operationId, question });
+          if (created.kind !== 'recorded') throw new Error(created.message ?? created.reason);
+          const call = { callId: 'call-' + operationId, name: 'ask_user', operationId, mapOperationId: null, activityKind: 'action', args: question };
+          messages.push({ entryId: 'entry-' + operationId, stepId: operationId, role: 'assistant', content: '', toolCalls: [call] });
+          messages.push({ entryId: 'result-' + operationId, stepId: operationId, role: 'tool', toolName: 'ask_user', toolCallId: call.callId,
+            content: JSON.stringify({ kind: 'ok', value: { interactionId: created.interaction.interactionId } }) });
+          if (id === 'session-a' && n === 0) {
+            result = answerPendingInteraction({ store, coordinationScopeId: scope, writer: writer(id), interactionId: created.interaction.interactionId,
+              expectedRevision: created.interaction.expectedRevision, submissionId: 'initial-answer', answer: '确认通过，问答正文由原记录保存。\n中文🙂与选项均完整保留。' });
+            if (result.kind !== 'answered') throw new Error(result.message);
+          }
+        }
+        result = history.store.saveCheckpoint({ schemaVersion: 2, coordinatorSessionId: id, graphPosition: 'suspend', committedMessages: messages,
+          committedModelSteps: messages.filter(entry => entry.toolCalls).map(entry => ({ stepId: entry.stepId, entryId: entry.entryId, committedAt: 1,
+            messages: [{ role: 'assistant', content: entry.content, toolCalls: entry.toolCalls }], toolCalls: entry.toolCalls, usage: null })), wakeBatches: [], lastCompactionOutcome: null });
+        if (result.kind !== 'saved') throw new Error(result.message);
+      }
+      while (!history.store.prepareHistoryInspection().ready) await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    snapshot.openInteractionCount = snapshot.interactions.filter(item => item.state === 'open').length;
     const ports = {
       reading: {
+        interactions: async (session, interactionIds) => branch?.kind === 'opened'
+          ? questionQuery({ kind: 'interaction-summaries', coordinatorSessionId: session, interactionIds }).interactions : [],
         inspection: {
           snapshot: async session => history.store.readHistoryInspection(session),
           calls: async query => history.store.readHistoryCalls(query),
@@ -372,6 +430,16 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
         history: async (query) => history.store.readHistoryPage(query),
         body: async (query) => {
           if (query.source.kind === 'preview') return previewStore.body(query);
+          if (query.source.kind === 'interaction') {
+            if (branch?.kind !== 'opened') return null;
+            const result = branch.store.query({ kind: 'interaction-body', coordinationScopeId: scope, coordinatorSessionId: query.coordinatorSessionId,
+              interactionId: query.source.interactionId, part: query.source.part, contentRevision: query.source.contentRevision, offset: query.offset, maxBytes: query.maxBytes });
+            if (result.kind === 'rejected') {
+              if (result.code === 'invalid_utf8_offset') throw new (await import('../dist/src/application/coordinator/history.js')).HistoryBoundaryError(result.message);
+              throw new Error(result.message);
+            }
+            return result.body === null ? null : { source: query.source, ...result.body };
+          }
           if (query.source.kind === 'arguments') return history.store.readHistoryArguments({ coordinatorSessionId: query.coordinatorSessionId,
             entryId: query.source.entryId, stepId: query.source.stepId, callId: query.source.callId, contentRevision: 1, offset: query.offset, maxBytes: query.maxBytes });
           const range = history.store.readHistoryBody({ coordinatorSessionId: query.coordinatorSessionId, entryId: query.source.entryId,
@@ -380,28 +448,46 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
         },
         previews: async (sessionId) => previewStore.list(sessionId), pin: previewStore.pin, subscribe: previewStore.subscribe,
       },
-      questions: async (input) => input.kind === 'pending-interactions'
-        ? { kind: 'pending-interactions', interactions: snapshot.interactions.filter((item) => item.ownerCoordinatorSessionId === input.coordinatorSessionId), nextCursor: null }
+      questions: async (input) => branch?.kind === 'opened' ? questionQuery(input) : input.kind === 'pending-interactions'
+        ? { kind: 'pending-interactions', interactions: snapshot.interactions.filter((item) => input.coordinatorSessionId === undefined || item.ownerCoordinatorSessionId === input.coordinatorSessionId), nextCursor: null }
         : { kind: 'pending-interaction', interaction: snapshot.interactions.find((item) => item.interactionId === input.interactionId && item.ownerCoordinatorSessionId === input.coordinatorSessionId)
-          ? { ...snapshot.interactions.find((item) => item.interactionId === input.interactionId), question: { text: '请确认中文路径与完整输入验收范围。', options: [{ label: '继续', description: '完成本批验收' }, { label: '稍后' }] } } : null },
+          ? { ...snapshot.interactions.find((item) => item.interactionId === input.interactionId), answerRef: null, answerText: null, question: { text: '请确认中文路径与完整输入验收范围。', options: [{ label: '继续', description: '完成本批验收' }, { label: '稍后' }] } } : null },
       inputStore: previewInputs.store,
       submissionStatus: async () => ({ kind: 'unverifiable', reason: '预览不读取真实提交记录' }),
-      snapshot: async (selectedSessionId) => ({ kind: 'snapshot', snapshot: { ...snapshot, selectedSessionId } }),
+      snapshot: async (selectedSessionId) => {
+        if (branch?.kind === 'opened') {
+          const overview = questionQuery({ kind: 'presentation-snapshot', ...(selectedSessionId === null ? {} : { coordinatorSessionId: selectedSessionId }) }).snapshot.interactionOverview;
+          snapshot.interactions = overview.items; snapshot.openInteractionCount = overview.openCount;
+          snapshot.sessions = snapshot.sessions.map(session => ({ ...session, openInteractionCount: overview.sessionCounts.find(count => count.coordinatorSessionId === session.coordinatorSessionId)?.openCount ?? 0 }));
+        }
+        return { kind: 'snapshot', snapshot: { ...snapshot, selectedSessionId } };
+      },
       transcript: async (coordinatorSessionId, cursor) => {
         try { return { kind: 'transcript', transcript: history?.kind === 'opened'
           ? readTranscriptPage(history.store, coordinatorSessionId, cursor) : { ...transcript, coordinatorSessionId } }; }
         catch (error) { return { kind: 'failed', code: 'history_unreadable', message: String(error) }; }
       },
-      execute: async (intent) => previewDialogs ? intent.kind === 'switch-model-configuration' && intent.nextConfigurationRef === 'config-rejected'
+      execute: async (intent) => {
+        if (branch?.kind === 'opened' && intent.kind === 'answer-pending-interaction') {
+          const result = answerPendingInteraction({ store: branch.store, coordinationScopeId: scope, writer: writer(intent.coordinatorSessionId),
+            interactionId: intent.interactionId, expectedRevision: intent.expectedRevision, submissionId: intent.submissionId, answer: intent.answer });
+          if (result.kind === 'rejected') return result;
+          for (const listener of questionListeners) listener({ eventId: 'answer-' + intent.submissionId, kind: 'interaction-resolved', coordinationScopeId: scope,
+            coordinatorSessionId: intent.coordinatorSessionId, interactionId: intent.interactionId });
+          return { kind: 'accepted', revision: result.revision, summary: '隔离预览回答已保存' };
+        }
+        return previewDialogs ? intent.kind === 'switch-model-configuration' && intent.nextConfigurationRef === 'config-rejected'
         ? { kind: 'rejected', code: 'fixture_model_rejected', message: '候选配置验证失败；当前配置保留' }
-        : { kind: 'accepted', revision: 7, summary: `模拟意图已记录：${intent.kind}；未执行真实操作` } : rejected,
+        : { kind: 'accepted', revision: 7, summary: `模拟意图已记录：${intent.kind}；未执行真实操作` } : rejected;
+      },
       subscribe: (listener) => {
+        questionListeners.add(listener);
         if (!alignmentPreview) return () => {};
         const timer = setTimeout(() => {
           for (let index = 0; index < 4; index++) listener({ eventId: 'fixture-event-'+index, kind: 'scope-control-changed',
             coordinationScopeId: snapshot.coordinationScopeId, coordinatorSessionId: null, controlState: snapshot.controlState, revision: snapshot.revision });
         }, 100);
-        return () => clearTimeout(timer);
+        return () => { clearTimeout(timer); questionListeners.delete(listener); };
       },
       scopeSetup: {
         resolveHome: async () => ({ kind: 'restore', coordinationScopeId: snapshot.coordinationScopeId }),
@@ -512,6 +598,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
       previewStore.close();
       previewInputs.store.close();
       if (history?.kind === 'opened') history.store.close();
+      if (branch?.kind === 'opened') branch.store.close();
     }
   } catch (error) {
     process.stderr.write(`无法启动 TUI 预览：${error instanceof Error ? error.message : String(error)}\n`);

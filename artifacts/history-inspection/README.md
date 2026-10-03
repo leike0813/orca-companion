@@ -1,6 +1,6 @@
 # 第四批：活动详情与历史搜索实施证据
 
-2026-10-03，change：`inspect-and-search-coordinator-history`。实施基线为 `20f02996471adb3efca524faced20ef9ffa0136d`，源码在当前未提交工作区。本轮按用户要求修复并重新核验，正式 [verification](../../openspec/changes/inspect-and-search-coordinator-history/verification.md) 结论为 PASS，完整扫描成本证据已补齐。未提交或归档。
+2026-10-03，change：`inspect-and-search-coordinator-history`。实施基线为 `20f02996471adb3efca524faced20ef9ffa0136d`，实现和归档现已包含于 `69f0aa1781265bb7623cb4bbb3e8ae5722e72bce`。本轮按用户要求修复并重新核验，正式 [verification](../../openspec/changes/archive/2026-10-03-inspect-and-search-coordinator-history/verification.md) 结论为 PASS，完整扫描成本证据已补齐。以下保留第四批验收当时的记录与范围。
 
 当前 Session 的可信只读调用可跨页组成活动，变更动作单列，紧凑态保留 rejected/unknown。参数与结果分别定位到原 entry/step/call，按 UTF-8 范围读取。Ctrl+T 切整体详细，F4 选择活动并原位开合；F3 搜索已提交正文、参数和结果，Esc 恢复原阅读状态与草稿。空输入↑召回普通输入；Ctrl+R 的 Enter 只采用，再次 Enter 才沿原提交管线发送。
 

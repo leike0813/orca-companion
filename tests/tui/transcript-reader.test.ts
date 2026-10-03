@@ -21,6 +21,7 @@ function fixture(messages: readonly CommittedMessageEntry[], session = 'reader')
     body: query => Promise.resolve().then(() => {
       reads.push(query);
       if (query.source.kind === 'preview') return previews.body(query);
+      if (query.source.kind === 'interaction') return null;
       const range = store.readHistoryBody({ coordinatorSessionId: query.coordinatorSessionId, offset: query.offset,
         maxBytes: query.maxBytes, entryId: query.source.entryId, contentRevision: 1 });
       return range === null ? null : { source: query.source, offset: range.offset, end: range.end, byteLength: range.byteLength, text: range.text };

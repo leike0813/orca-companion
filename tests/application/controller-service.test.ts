@@ -915,6 +915,7 @@ test('快照只携带可投影字段：不含 receipt、结果正文、provider 
       'maintenance',
       'mapRevision',
       'mode',
+      'openInteractionCount',
       'planningCycleId',
       'planningHandoffs',
       'recoveries',

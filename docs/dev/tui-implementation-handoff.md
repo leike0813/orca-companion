@@ -14,7 +14,7 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 | --- | --- | --- | --- |
 | #40 / P-40 | continuous | 保留标记/色边/留白/工具；3A 全历史范围读取，3B 有界视窗/锚点/Markdown/真实流式 | 后继活动分组、详情/搜索 |
 | #47 / P-47 | above-input | 圆角真实 composer、有界上方候选、采用/执行分离 | 完整命令搜索及未接通操作 |
-| #51 / P-51 | tabs，固定 sidebar 区域，窄屏主区域 | Ctrl+B、总览/待答/最近事件及已有详情，固定外框和返回 | 跨 Session 回答完整返回、可信身份/批准后正文 |
+| #51 / P-51 | tabs，固定 sidebar 区域，窄屏主区域 | Ctrl+B、总览/Scope 待答页/最近事件及已有详情，固定外框和回答返回 | 可信身份/批准后正文 |
 | #52 / P-52 | dialog final | 现有四类弹窗、反色动作、默认返回、Nerd/ASCII 即时选择 | provider/effort/Worker 角色配置、图标持久偏好 |
 | #48 / P-48 | custom-direct | 简短顶栏、单行会话核心/图、独立风险与字段配色 | 可靠 effort/context/Claim/预算 metadata、完整 custom 设置与保存 |
 | #43 / P-43 | adaptive，联动 #52 final | 当前图 sidebar/Inspector、分区节点卡、准确关系与窄屏检查 | 共享 Validator 摘要、历史图与依据全文 |
@@ -35,11 +35,12 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 | `align-tui-with-approved-prototypes` | 任务 21/21；最终复验 27 文件/181 项通过，2 条件跳过，普通真实 PTY 13 项通过；**[verification PASS](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/verification.md)**，V-01–04 及审计发现的滚动预算 F-01 已修复 | 已包含于 `8af15029`；2026-10-03 已归档，六份主规格已同步 | 原 277 对证据已复查；另存 [108 对修复/补采画面与操作](../../artifacts/tui-prototype-alignment/repair-20261003/README.md)，三档层级、键位、固定框/返回通过；D-10 全功能缺口继续保留 |
 | `paginate-coordinator-history`（3A） | 增量权威历史、有界有效上下文与正式 transcript 分页；证据见 [README](../../artifacts/coordinator-history/README.md) | 已包含于 `b15ff20d`，2026-10-03 已归档 | 沿用 #40 continuous 和 #41 阅读键位，三档彩色/NO_COLOR、跨页与 resize 共 45 对画面 |
 | `render-bounded-transcript`（3B） | 局部原文视窗、双缓存、来源锚点、有限 Markdown、生产流式/中止与预算；[性能与81对画面](../../artifacts/bounded-transcript/README.md)；[verification PASS](../../openspec/changes/archive/2026-10-03-render-bounded-transcript/verification.md) | 已包含于 `20f02996`；2026-10-03 已归档、主规格已同步；原验收按用户要求复用当时证据 | 六票结构沿用，三档两色/Nerd与ASCII、历史/流式/resize/返回；输入和缓存导航各100采样达到 #53 p95 |
-| `inspect-and-search-coordinator-history`（第四批） | 任务9/9；可信活动、参数/结果来源、整体详细、F4、F3 原文搜索及普通输入召回/Ctrl+R；[性能与192对画面](../../artifacts/history-inspection/README.md)，五场景完整扫描及响应门槛通过；[verification PASS](../../openspec/changes/inspect-and-search-coordinator-history/verification.md)，已直接修复并重新核验 | `20f02996` 上的当前工作区实现；未提交、未归档，含搜索效率、回答预览隔离与unknown幂等/上界修复 | 沿六票定稿；完整扫描、必要检查与最终画面证据齐备 |
+| `inspect-and-search-coordinator-history`（第四批） | 任务9/9；可信活动、参数/结果来源、整体详细、F4、F3 原文搜索及普通输入召回/Ctrl+R；[性能与192对画面](../../artifacts/history-inspection/README.md)，五场景完整扫描及响应门槛通过；[verification PASS](../../openspec/changes/archive/2026-10-03-inspect-and-search-coordinator-history/verification.md) | 已包含于 `69f0aa17`；2026-10-03 已归档、主规格已同步 | 沿六票定稿；完整扫描、必要检查与最终画面证据齐备 |
+| `link-tui-pending-interactions`（第五批） | 9/9；有界问题摘要与完整计数、原提问处 Q/state/A、原位详情、跨 Session 回答和原入口/草稿/锚点返回；[verification PASS](../../openspec/changes/link-tui-pending-interactions/verification.md)，[147对画面与性能](../../artifacts/pending-interactions/README.md) | `69f0aa17` 上的当前工作区实现；验收完成，未提交、未归档 | 沿六票定稿；输入/缓存导航p95通过，范围外配置与图功能留后继 |
 
 ### 第二批成果及证据边界
 
-当前基线 HEAD：`20f02996471adb3efca524faced20ef9ffa0136d`。第二批、原型纠偏、3A 与 3B 已包含于 HEAD；当前 dirty 工作区为第四批实现及用户已有的交接报告归档移动。接手先检查 `git status --short`，不要覆盖、重置或重复实现。
+当前基线 HEAD：`69f0aa1781265bb7623cb4bbb3e8ae5722e72bce`。第二批、原型纠偏、3A、3B 与第四批已包含于 HEAD；当前 dirty 工作区为第五批实现。接手先检查 `git status --short`，不要覆盖、重置或重复实现。
 
 第二批已提供 grapheme 任意位置编辑、行首尾、多行有界视窗、原生光标；>1000 code points 原子粘贴及 /paste；唯一完整 UiDraft、CAS、提交快照/稳定 submissionId、单活跃提交/generation；真实 ask_user 创建/重放与精确查询；当前 Session 选项/自由回答、Esc 恢复。UI schema v2、Coordination schema 14，问题正文由 Branch Store 拥有。
 
@@ -64,7 +65,7 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 
 ## 3. 接续顺序与缺口
 
-呈现纠偏、3A 与 3B 已归档，当前实施 #46 的第四批；后继沿用同一原型。原纠偏范围的缺口与 owner 见 [design D-10](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/design.md#d-10逐项合同缺口与后续归属)，第四批边界见 [当前 design](../../openspec/changes/inspect-and-search-coordinator-history/design.md)。
+呈现纠偏、3A、3B 与第四批已归档，#46 的第五批已实现并验收、尚未归档；后继沿用同一原型。原纠偏范围的缺口与 owner 见 [design D-10](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/design.md#d-10逐项合同缺口与后续归属)，第五批边界见 [当前 design](../../openspec/changes/link-tui-pending-interactions/design.md)。
 
 | 顺序 | 当前状态 / 后续职责 |
 | --- | --- |
@@ -72,8 +73,8 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 | 原型纠偏 | 已归档，正式验收 PASS；V-01–04/F-01 已修复，输入保护接缝保留 |
 | 3A | 已归档：全历史增量读写、keyset/正文范围、分页返回和有效上下文边界 |
 | 3B | 已归档：局部视窗、稳定锚点/有界缓存、Markdown/流式与 #53 输入/缓存导航 p95；原验收复用当时既有证据 |
-| 第四批 | 当前工作区实现9/9：活动关联/参数与结果详情、F3 transcript 搜索、Ctrl+R 普通输入历史；直接修复后重新核验通过，1千/1万/10万记录与1/5MiB完整扫描成本均已记录 |
-| 第五批 | 当前回答基础已具备；补历史卡片状态和跨 Session 进入/返回，保护原位置/草稿 |
+| 第四批 | 已归档9/9：活动关联/参数与结果详情、F3 transcript 搜索、Ctrl+R 普通输入历史；1千/1万/10万记录与1/5MiB完整扫描成本均已记录 |
+| 第五批 | 当前工作区9/9、正式验收PASS：历史问答卡片、Scope有界待答页、跨Session进入/返回及输入保护；6文件140项独立复验通过，全量与唯一失败修复后合并1514项通过、12项条件跳过；147对画面及性能见独立证据 |
 | 第六批 | 当前命令/弹窗样式与候选已实现；后继补完整目录搜索、真实 provider/effort/角色配置及其权限 |
 | 第七批 | 当前项目固定框/状态栏层级已实现；后继补可信身份/context/metadata、用户级 custom 配置/恢复/保存失败和共享验收摘要 |
 | 第八批 | 当前 adaptive/节点卡/准确导航已实现；后继补历史版本/依据有界读取与全链路验收 |
@@ -88,4 +89,4 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 
 阶段证据见 [full-map README](../../artifacts/tui-prototype-alignment/full-map/README.md)，修复后的当前证据见 [repair README](../../artifacts/tui-prototype-alignment/repair-20261003/README.md)：用途分组、三类审阅键位、位置提示及固定框/返回另存 108 对画面与同名文本，保留操作序列、18 组拦截观察及实际 cursor。原型素材和历史 verification 保留原范围，旧阶段一对文件的丢失按上面的用户反馈登记。行为测试复用现有用例，不用整屏 snapshot、像素或源码字符串门禁代替对照。
 
-真实配置/跨会话协议仍待后继，标准布局不能称 custom 功能完成。纠偏批 typecheck/lint/build、change/六份主规格严格 OpenSpec、diff 和 TUI 181 项复验通过，两项隔离真实 Orca 条件检查未运行。2026-10-03 正式 [verification](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/verification.md) 结论为 **PASS**：输入分发、用途分组、区域规格与 PTY 入口已修复，限定审计的滚动预算问题复核闭合；已提交并归档。3A 单独验收全部原文分页，不据此宣称 3B 的渲染/缓存或整体性能完成。平台证据限 Ubuntu；本次没有新增 OS 输入法预编辑/候选窗人工证据，Windows 未验证。
+真实配置仍待后继，标准布局不能称 custom 功能完成；第五批跨 Session 待答协议的独立证据见上表。纠偏批 typecheck/lint/build、change/六份主规格严格 OpenSpec、diff 和 TUI 181 项复验通过，两项隔离真实 Orca 条件检查未运行。2026-10-03 正式 [verification](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/verification.md) 结论为 **PASS**：输入分发、用途分组、区域规格与 PTY 入口已修复，限定审计的滚动预算问题复核闭合；已提交并归档。3A 单独验收全部原文分页，不据此宣称 3B 的渲染/缓存或整体性能完成。平台证据限 Ubuntu；本次没有新增 OS 输入法预编辑/候选窗人工证据，Windows 未验证。

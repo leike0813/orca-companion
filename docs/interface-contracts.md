@@ -826,9 +826,17 @@ SQLite 位于 Git common dir 的 `orca-companion/ui.sqlite`。短事务中完成
 
 - **IC-03 问题权威**：Pending Interaction 的精确详情增加可空 `question: {text,options:[{label,description?}]}`；Scope snapshot 保持身份摘要。`pending-interactions` 按 Scope/owner Session/open 状态，以 `(createdAt,interactionId)` keyset 返回最多 20 条摘要和 nextCursor；`pending-interaction` 精确读取绑定详情。Coordination schema 14 复用现有事务迁移新增 question 列和分页索引。
 - **Coordinator `ask_user`**：规划、执行和恢复注册表共用工具协议。一题至多八项，标签唯一非空，总文字沿用消息上限；Scope/owner/subject 来自可信 runtime，InteractionId 为 `JSON.stringify(['ask_user',operationId])`。应用用例负责验证、CAS 写入、回读和同载荷重放；异载荷冲突。写后核验成功才发布 interaction-opened，不自动 suspend。
-- **IC-11/12 查询**：Controller façade 委派窄问题查询；生产 `TuiPorts.questions` 由 Bootstrap 注入 Scope，未提供能力时明确拒绝。详情不包含回答正文、数据库 handle 或其他 Session 的问题。组件 render/effect 仍只读。
+- **IC-11/12 查询**：Controller façade 委派窄问题查询；生产 `TuiPorts.questions` 由 Bootstrap 注入 Scope，未提供能力时明确拒绝。精确详情包含原问题、answerRef 与可空回答正文，核验 Scope/owner/ID，不返回其他 Session 的问题或数据库 handle。组件 render/effect 仍只读。
 - **IC-13 编辑**：保护模块接收完整 UiDraft；超过 1000 code points 的单次粘贴折叠，CRLF/CR 归一 LF，保留 tab/缩进/末尾空行。移动和删除跨整块，发送展开正文；250 ms 合并保存、立即保存节点、CAS、单活跃提交与 generation 规则不变。
 - **IC-12 面板**：Shift+Left、`/answer`、Palette 打开当前 Session 底部回答面板；Shift+左右切问题，Tab 切选项/自由输入，Enter 直接提交标签或输入。Esc 保存回答并恢复聊天完整草稿与阅读位置；新问题不抢焦点。`/paste` 和 Palette 查看完整折叠块，视口有界，退出恢复原位置。
+
+### `link-tui-pending-interactions` 对 IC-03/11/12 的扩展
+
+- **IC-03 展示读取**：`CoordinationPresentationSnapshot` 与完整 `CoordinationSnapshot` 类型分开，使用 `presentation-snapshot` 查询；交互分区为至多20条 `InteractionSummary`、完整 Scope `openCount` 与分 Session count。生产宿主选中 Session 后只查询该 owner 的摘要；Scope 待答页独立读取。SQL 聚合只扫描 open 索引，不解码问答载荷。业务完整 snapshot 保持原合同，`openInteractionCount` 为完整事实或完整聚合计数，Finalizer 不使用页长。CLI 用 `pending-interaction-identities` 保留公开 JSON 的全部开放身份列表，该专用查询不返回问答正文或预览；TUI 不消费此查询。
+- **IC-03 查询**：`pending-interactions` 的 owner 可选，省略时是当前 Scope 页；keyset 为 `(createdAt,interactionId)`，每页20条及 nextCursor。`interaction-summaries` 只读取同 Scope/owner 的至多20个指定 ID，附160 Unicode字符预览和正文 byteLength，包含 answerRef，不携带完整正文。`interaction-body` 精确按 Scope/owner/ID、question/answer part、内容版本读取UTF-8范围；maxBytes 为4–65536，非法边界返回 `invalid_utf8_offset`，版本不符/缺失返回 null。Q 含文字与选项，版本绑定 expectedRevision；A 版本绑定稳定 answerRef。Coordination schema15只追加Scope分页索引，UI/checkpoint schema不变。
+- **IC-11 历史关联**：`userQuestionInteractionId(operationId)` 统一正向身份派生；已持久化 HistoryCall 的 operationId 是 reader 的关联输入。`TranscriptReadingPort.interactions` 是只读指定摘要查询；正文经同一 body 端口读取，`TranscriptSourceRef` 增加 interactionId/part/contentRevision，anchor 的 Session 即 owner。Q/A 权威继续属于 Branch Store，不写入 checkpoint 或通用事件载荷。
+- **IC-12 呈现/返回**：历史原调用处紧凑显示 Q/state/A，F4 Enter 原位开合；开放提问在活动导航内以 Shift+Left 进入同一回答管线。项目 Scope 列表 PgUp/PgDn 翻页，Enter 精确核验 owner/revision 并保存输入后进入。单次进程内返回上下文保存原 Session、来源锚点、展开模式、栏目/selectedKey/scroll 和焦点，草稿留在 IC-13。Esc 保存成功返回；受理且没有后续编辑或选题/Session变化才自动返回。显式切会话使旧返回失效；unknown/拒绝/保存失败保持原绑定与输入。消失的 selectedKey 明确显示变化，不自动选择下一题。Ctrl+R 仍是普通输入历史。
+- **读取失效**：交互事件只触发摘要重读及有界 snapshot/原锚点 refresh，不作为问题或受理权威，不开回答或抢焦点。render/effect/resize 仍无 command、副作用或持久写入。
 
 ## 合同演进规则
 

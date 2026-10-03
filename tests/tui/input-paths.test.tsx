@@ -10,8 +10,10 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { TuiApp } from '../../src/interfaces/tui/app.js';
 import { COMMAND_IDS, type CommandId } from '../../src/interfaces/tui/components/command-palette.js';
+import { targetDraftKey } from '../../src/application/ports/ui-input-store.js';
 import {
   createFakePorts,
+  createMemoryInputStore,
   makeExecutionHandoff,
   makeSnapshot,
   makeTranscript,
@@ -30,6 +32,7 @@ const ARROW_DOWN = '\u001b[B';
 const ARROW_UP = '\u001b[A';
 const ENTER = '\r';
 const OWN_QUESTION = { interactionId: 'i-own', ownerCoordinatorSessionId: 'session-b', subjectRef: { kind: 'ticket', id: 't-own' }, expectedRevision: 4, state: 'open' as const };
+const CROSS_QUESTION = { ...OWN_QUESTION, interactionId: 'i-cross', ownerCoordinatorSessionId: 'session-a', questionPreview: '跨会话问题' };
 
 async function press(rendered: ReturnType<typeof renderTui>, keys: string): Promise<void> {
   rendered.stdin.write(keys);
@@ -342,6 +345,126 @@ test.each([0, 1])('项目详情滚到底后一次 Up 即可回退（侧栏密度
   expect(rendered.lastFrame()).toBe(bottom);
   expect(fake.executeCount()).toBe(0);
   rendered.unmount();
+});
+
+describe('跨会话待答往返', () => {
+  async function enterProjectQuestion(rendered: RenderedTui) {
+    await press(rendered, '\u0002');
+    if (!(rendered.lastFrame() ?? '').includes('项目面板 · 待答列表')) await press(rendered, '\t');
+    await waitFor(rendered, frame => frame.includes('跨会话问题'));
+    await press(rendered, ENTER);
+    await waitFor(rendered, frame => frame.includes('回答 interaction i-cross'));
+  }
+  test('明确选题与 Esc 恢复原项目入口、聊天全文和光标，不发送', async () => {
+    const fake = createFakePorts({ snapshot: { interactions: [CROSS_QUESTION] } });
+    const rendered = renderTui(fake.ports);
+    await waitFor(rendered, () => fake.calls.some(call => call.name === 'history' && call.detail === 'session-b'));
+    await press(rendered, '首尾'); await press(rendered, '\u001b[D');
+    await enterProjectQuestion(rendered);
+    expect(fake.executeCount()).toBe(0);
+    await press(rendered, '保留回答'); await press(rendered, '\u001b');
+    expect(await waitFor(rendered, frame => frame.includes('项目面板'))).toContain('跨会话问题');
+    await press(rendered, '\u001b'); await press(rendered, '中');
+    expect(rendered.lastFrame()).toContain('首中尾');
+    expect(fake.executeCount()).toBe(0);
+    await enterProjectQuestion(rendered);
+    expect(rendered.lastFrame()).toContain('保留回答');
+    rendered.unmount();
+  });
+  test.each(['escape', 'accepted'] as const)('%s 返回恢复历史来源锚点及完整折叠粘贴草稿', async outcome => {
+    const fake = createFakePorts({ snapshot: { interactions: [CROSS_QUESTION] }, transcript: makeTranscript('session-b',
+      Array.from({ length: 80 }, (_, n) => ({ role: 'assistant', content: '原历史 ' + n + ' 中文🙂', stepId: 'step-' + n }))) });
+    const target = { kind: 'message' as const, coordinationScopeId: 'scope-1', coordinatorSessionId: 'session-b' };
+    const pasted = '中文🙂\n'.repeat(250), draft = { text: '首' + pasted + '尾', cursor: 1, pasteBlocks: [{ id: 'paste-original', start: 1, end: pasted.length + 1 }] };
+    fake.inputStore.write({ key: targetDraftKey(target), expectedRevision: 0, record: { kind: 'draft', target, draft } });
+    const rendered = renderTui(fake.ports); await waitFor(rendered, frame => frame.includes('原历史 79'));
+    await press(rendered, '\u001b[1;5H'); await waitFor(rendered, frame => frame.includes('原历史 0'));
+    await enterProjectQuestion(rendered); await press(rendered, '答案');
+    await press(rendered, outcome === 'escape' ? '\u001b' : ENTER);
+    await waitFor(rendered, frame => frame.includes('项目面板')); await press(rendered, '\u001b');
+    expect(await waitFor(rendered, frame => frame.includes('原历史 0'))).not.toContain('原历史 79');
+    await press(rendered, '中');
+    await new Promise(resolve => setTimeout(resolve, 300));
+    const saved = fake.inputStore.read(targetDraftKey(target));
+    expect(saved.kind === 'record' && saved.record).toMatchObject({ kind: 'draft', draft: {
+      text: '首中' + pasted + '尾', cursor: 2, pasteBlocks: [{ id: 'paste-original', start: 2, end: pasted.length + 2 }],
+    } });
+    rendered.unmount();
+  }, 10000);
+  test.each(['accepted', 'rejected', 'unknown'] as const)('%s 只在确定受理且没有后来编辑时返回', async kind => {
+    const result = kind === 'accepted' ? { kind, revision: 8, summary: '已受理' } : { kind, code: 'injected', message: '核验状态' };
+    const fake = createFakePorts({ snapshot: { interactions: [CROSS_QUESTION] }, executeResult: result });
+    const rendered = renderTui(fake.ports);
+    await waitFor(rendered, () => fake.calls.some(call => call.name === 'history'));
+    await press(rendered, '原聊天'); await enterProjectQuestion(rendered);
+    await press(rendered, '确定回答'); await press(rendered, ENTER);
+    expect(fake.executeIntents).toMatchObject([{ kind: 'answer-pending-interaction', coordinatorSessionId: 'session-a', interactionId: 'i-cross', expectedRevision: 4, answer: '确定回答' }]);
+    if (kind === 'accepted') {
+      expect(await waitFor(rendered, frame => frame.includes('项目面板'))).toContain('待答列表');
+      await press(rendered, '\u001b'); expect(rendered.lastFrame()).toContain('原聊天');
+    } else { expect(rendered.lastFrame()).toContain('确定回答'); expect(rendered.lastFrame()).not.toContain('项目面板'); }
+    rendered.unmount();
+  });
+  test('迟到受理保留新回答，不自动返回；Esc 仍可保存返回', async () => {
+    const fake = createFakePorts({ snapshot: { interactions: [CROSS_QUESTION] } });
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof fake.ports.execute>>>();
+    const rendered = renderTui({ ...fake.ports, execute: intent => { fake.executeIntents.push(intent); return pending.promise; } });
+    await waitFor(rendered, () => fake.calls.some(call => call.name === 'history'));
+    await enterProjectQuestion(rendered); await press(rendered, '回答'); await press(rendered, ENTER); await press(rendered, '后来编辑');
+    pending.resolve({ kind: 'accepted', revision: 8, summary: '已受理' }); await settle(8);
+    expect(rendered.lastFrame()).toContain('回答后来编辑'); expect(rendered.lastFrame()).not.toContain('项目面板');
+    await press(rendered, '\u001b'); expect(rendered.lastFrame()).toContain('项目面板');
+    rendered.unmount();
+  });
+  test('Scope 后页选题不依赖当前 Session 首屏', async () => {
+    const questions = Array.from({ length: 24 }, (_, n) => ({ ...CROSS_QUESTION, interactionId: 'cross-' + n, questionPreview: '后页问题 ' + n }));
+    const fake = createFakePorts({ snapshot: { interactions: questions } }); const rendered = renderTui(fake.ports);
+    await waitFor(rendered, () => fake.calls.some(call => call.name === 'history'));
+    await press(rendered, '\u0002'); await press(rendered, '\t');
+    await waitFor(rendered, frame => frame.includes('第 1 页'));
+    await press(rendered, '\u001b[6~'); await waitFor(rendered, frame => frame.includes('第 2 页'));
+    await press(rendered, ENTER); await waitFor(rendered, frame => frame.includes('回答 interaction cross-20'));
+    expect(fake.executeCount()).toBe(0); await press(rendered, '\u001b');
+    expect(rendered.lastFrame()).toContain('第 2 页'); rendered.unmount();
+  });
+  test('手动切 Session 使旧往返失效，迟到受理只结算原提交', async () => {
+    const fake = createFakePorts({ snapshot: { interactions: [CROSS_QUESTION] } });
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof fake.ports.execute>>>();
+    const rendered = renderTui({ ...fake.ports, execute: intent => { fake.executeIntents.push(intent); return pending.promise; } });
+    await waitFor(rendered, () => fake.calls.some(call => call.name === 'history'));
+    await enterProjectQuestion(rendered); await press(rendered, '答案'); await press(rendered, ENTER);
+    await press(rendered, CTRL_P);
+    for (let index = 0; index < COMMAND_IDS.indexOf('session-picker'); index++) await press(rendered, ARROW_DOWN);
+    await press(rendered, ENTER);
+    await press(rendered, ARROW_DOWN); await press(rendered, ENTER);
+    await press(rendered, '新的聊天');
+    pending.resolve({ kind: 'accepted', revision: 8, summary: '受理' }); await settle(8);
+    expect(rendered.lastFrame()).toContain('新的聊天'); expect(rendered.lastFrame()).not.toContain('项目面板');
+    expect(fake.executeIntents).toHaveLength(1); rendered.unmount();
+  });
+  test.each(['owner', 'revision'] as const)('选题后 %s 改变时不切会话或丢输入', async change => {
+    const fake = createFakePorts({ snapshot: { interactions: [CROSS_QUESTION] } });
+    const rendered = renderTui({ ...fake.ports, questions: async query => {
+      const result = await fake.ports.questions!(query);
+      return result.kind === 'pending-interaction' && result.interaction ? { ...result, interaction: { ...result.interaction,
+        ...(change === 'owner' ? { ownerCoordinatorSessionId: 'session-other' } : { expectedRevision: 99 }) } } : result;
+    } });
+    await waitFor(rendered, () => fake.calls.some(call => call.name === 'history'));
+    await press(rendered, '原输入'); await press(rendered, '\u0002'); await press(rendered, '\t');
+    await waitFor(rendered, frame => frame.includes('跨会话问题')); await press(rendered, ENTER);
+    expect(await waitFor(rendered, frame => frame.includes('stale_revision'))).toContain('项目面板');
+    await press(rendered, '\u001b'); expect(rendered.lastFrame()).toContain('原输入'); expect(fake.executeCount()).toBe(0); rendered.unmount();
+  });
+  test('回答保存失败时留在原绑定，可经 /inputs 处理后再返回', async () => {
+    const base = createMemoryInputStore(); let fail = false;
+    const fake = createFakePorts({ snapshot: { interactions: [CROSS_QUESTION] }, inputStore: { ...base,
+      write: input => fail ? { kind: 'failed', code: 'capacity_exceeded', message: '满额' } : base.write(input) } });
+    const rendered = renderTui(fake.ports); await waitFor(rendered, () => fake.calls.some(call => call.name === 'history'));
+    await enterProjectQuestion(rendered); fail = true; await press(rendered, '保留答案'); await press(rendered, '\u001b');
+    expect(rendered.lastFrame()).toContain('保留答案'); expect(rendered.lastFrame()).toContain('/inputs'); expect(rendered.lastFrame()).not.toContain('项目面板');
+    fail = false; await press(rendered, '\u001b'); expect(rendered.lastFrame()).toContain('项目面板');
+    rendered.unmount();
+  });
 });
 
 describe('审阅 overlay 的全局键位不穿透', () => {

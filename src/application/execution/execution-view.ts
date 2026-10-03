@@ -37,6 +37,7 @@ import type {
   DeliverySettlementRecord,
 } from '../ports/branch-coordination-store.js';
 import { planFinalizerDispatch } from '../finalize-project.js';
+import { openInteractionCount, type CoordinationReadSnapshot } from '../ports/branch-coordination-store.js';
 
 /* -------------------------------------------------------------------------- */
 /* 词汇                                                                        */
@@ -322,7 +323,7 @@ export type ExecutionNodeFacts = {
 };
 
 export type DeriveExecutionFactsInput = {
-  readonly snapshot: CoordinationSnapshot;
+  readonly snapshot: CoordinationReadSnapshot;
   /** 当前 GraphVersion 的节点；传入顺序即稳定拓扑顺序。 */
   readonly nodes: readonly ExecutionNodeFacts[];
   /** 当前 Graph Generation 的基线 HEAD；没有生成时为 `null`。 */
@@ -433,7 +434,7 @@ function phase(
  * 调用方只负责按归属（物化绑定的 Orca Task 身份）筛出属于自己的结算，不重复实现这条规则。
  */
 export function currentContractSettlements(input: {
-  readonly snapshot: CoordinationSnapshot;
+  readonly snapshot: CoordinationReadSnapshot;
   readonly workPackageId: string;
   readonly settlements: readonly DeliverySettlementRecord[];
 }): readonly DeliverySettlementRecord[] {
@@ -741,7 +742,7 @@ function workPackageStatusOf(
 /* -------------------------------------------------------------------------- */
 
 function latestVerdict(
-  snapshot: CoordinationSnapshot,
+  snapshot: CoordinationReadSnapshot,
 ): CoordinationSnapshot['deliveryVerdicts'][number] | null {
   return snapshot.deliveryVerdicts.reduce<CoordinationSnapshot['deliveryVerdicts'][number] | null>(
     (latest, current) =>
@@ -773,7 +774,7 @@ function workspaceChanged(workspace: {
  * 归属之后再过当前契约规则：修订中的节点没有可用的结果，修订已接纳的节点只认接纳版本的结果。
  */
 function settlementsFor(
-  snapshot: CoordinationSnapshot,
+  snapshot: CoordinationReadSnapshot,
   node: ExecutionNodeFacts,
 ): readonly DeliverySettlementRecord[] {
   const bindings = snapshot.materializationBindings.filter(
@@ -866,9 +867,7 @@ export function deriveExecutionFacts(input: DeriveExecutionFactsInput): DerivedE
     workPackageStatuses: input.nodes.map((node) =>
       workPackageStatusOf(node.workPackageId, settlementsFor(snapshot, node), verdict),
     ),
-    pendingInteractionCount: snapshot.pendingInteractions.filter(
-      (interaction) => interaction.state === 'open',
-    ).length,
+    pendingInteractionCount: openInteractionCount(snapshot),
     unresolvedMutationCount: snapshot.unresolvedIntents.length,
     authority:
       input.authority ?? {
@@ -954,7 +953,7 @@ export type WorkerEntryView = {
  * 显示一个本地没有依据的 Worker；没有列举执行主机时存活结论一律是 `unverifiable`，不假设已退出。
  */
 export function deriveWorkerEntries(input: {
-  readonly snapshot: CoordinationSnapshot;
+  readonly snapshot: CoordinationReadSnapshot;
   readonly observations: ExecutionObservationFacts;
 }): readonly WorkerEntryView[] {
   const entries = new Map<string, Omit<WorkerEntryView, 'liveness'>>();

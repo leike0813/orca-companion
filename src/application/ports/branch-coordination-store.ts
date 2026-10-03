@@ -124,6 +124,18 @@ export type UserQuestion = {
 };
 export type PendingInteractionDetail = PendingInteractionRecord & { readonly question: UserQuestion | null };
 export type InteractionPageCursor = { readonly createdAt: number; readonly interactionId: string };
+export type InteractionIdentity = Omit<PendingInteractionRecord, 'answerText'>;
+export type InteractionSummary = InteractionIdentity & {
+  readonly questionPreview: string;
+  readonly answerPreview: string;
+  readonly questionByteLength: number;
+  readonly answerByteLength: number;
+};
+export type InteractionOverview = {
+  readonly openCount: number;
+  readonly sessionCounts: readonly { readonly coordinatorSessionId: string; readonly openCount: number }[];
+  readonly items: readonly InteractionSummary[];
+};
 
 /** 工具与存储共用的问题边界，不接受模型填写身份。 */
 export function isUserQuestion(value: unknown): value is UserQuestion {
@@ -665,12 +677,26 @@ export type CoordinationSnapshot = {
   readonly mutationLanes: readonly MutationLaneRecord[];
 };
 
+/** 展示读取与完整业务读取具有不同类型，分页不会改变业务准入事实。 */
+export type CoordinationPresentationSnapshot = Omit<CoordinationSnapshot, 'pendingInteractions'> & {
+  readonly interactionOverview: InteractionOverview;
+};
+export type CoordinationReadSnapshot = CoordinationSnapshot | CoordinationPresentationSnapshot;
+export function openInteractionCount(snapshot: CoordinationReadSnapshot): number {
+  return 'interactionOverview' in snapshot ? snapshot.interactionOverview.openCount
+    : snapshot.pendingInteractions.filter(item => item.state === 'open').length;
+}
+
 export type CoordinationQuery =
   | { readonly kind: 'pending-interaction'; readonly coordinationScopeId: CoordinationScopeId; readonly interactionId: InteractionId; readonly coordinatorSessionId?: CoordinatorSessionId }
-  | { readonly kind: 'pending-interactions'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId: CoordinatorSessionId; readonly after?: InteractionPageCursor }
+  | { readonly kind: 'pending-interactions'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId?: CoordinatorSessionId; readonly after?: InteractionPageCursor }
+  | { readonly kind: 'interaction-summaries'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId: CoordinatorSessionId; readonly interactionIds: readonly InteractionId[] }
+  | { readonly kind: 'pending-interaction-identities'; readonly coordinationScopeId: CoordinationScopeId }
+  | { readonly kind: 'interaction-body'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId: CoordinatorSessionId; readonly interactionId: InteractionId; readonly part: 'question' | 'answer'; readonly contentRevision: string; readonly offset: number; readonly maxBytes: number }
   | { readonly kind: 'scopes' }
   | { readonly kind: 'scope'; readonly coordinationScopeId: CoordinationScopeId }
   | { readonly kind: 'snapshot'; readonly coordinationScopeId: CoordinationScopeId }
+  | { readonly kind: 'presentation-snapshot'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId?: CoordinatorSessionId }
   | { readonly kind: 'sessions'; readonly coordinationScopeId: CoordinationScopeId }
   | { readonly kind: 'leases'; readonly coordinationScopeId: CoordinationScopeId }
   | {
@@ -772,7 +798,7 @@ export type CoordinationQuery =
       readonly workPackageId?: WorkPackageId;
     };
 
-export type CoordinationQueryRejectionCode = 'unreadable' | 'invalid_query';
+export type CoordinationQueryRejectionCode = 'unreadable' | 'invalid_query' | 'invalid_utf8_offset';
 
 /**
  * 结果与查询同判别：调用方只需 narrowing 一次，不需要对 `value` 做类型断言。
@@ -780,10 +806,14 @@ export type CoordinationQueryRejectionCode = 'unreadable' | 'invalid_query';
  */
 export type CoordinationQueryResult =
   | { readonly kind: 'pending-interaction'; readonly interaction: PendingInteractionDetail | null }
-  | { readonly kind: 'pending-interactions'; readonly interactions: readonly PendingInteractionRecord[]; readonly nextCursor: InteractionPageCursor | null }
+  | { readonly kind: 'pending-interactions'; readonly interactions: readonly InteractionSummary[]; readonly nextCursor: InteractionPageCursor | null }
+  | { readonly kind: 'interaction-summaries'; readonly interactions: readonly InteractionSummary[] }
+  | { readonly kind: 'pending-interaction-identities'; readonly interactions: readonly InteractionIdentity[] }
+  | { readonly kind: 'interaction-body'; readonly body: { readonly text: string; readonly offset: number; readonly end: number; readonly byteLength: number } | null }
   | { readonly kind: 'scopes'; readonly scopes: readonly ScopeRecord[] }
   | { readonly kind: 'scope'; readonly scope: ScopeRecord | null }
   | { readonly kind: 'snapshot'; readonly snapshot: CoordinationSnapshot }
+  | { readonly kind: 'presentation-snapshot'; readonly snapshot: CoordinationPresentationSnapshot }
   | { readonly kind: 'sessions'; readonly sessions: readonly CoordinatorSessionRegistration[] }
   | { readonly kind: 'leases'; readonly leases: readonly LeaseRecord[] }
   | { readonly kind: 'intents'; readonly intents: readonly OperationIntent[] }

@@ -120,7 +120,7 @@ export function integrationOperationIdsFor(input: {
 }
 
 export function completedIntegrationRef(
-  snapshot: CoordinationSnapshot,
+  snapshot: Pick<CoordinationSnapshot, 'scope' | 'graphGenerations' | 'settledGitIntegrationIntents'>,
   workPackageId: WorkPackageId,
 ): OperationId | null {
   const graphId = snapshot.scope.graphId;

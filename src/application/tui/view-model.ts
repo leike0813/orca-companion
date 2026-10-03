@@ -199,6 +199,7 @@ export type TuiViewModel = {
   readonly workers: readonly WorkerView[];
   readonly blockers: readonly BlockerView[];
   readonly interactions: readonly InteractionView[];
+  readonly pendingPage?: { readonly items: readonly InteractionView[]; readonly page: number; readonly hasPrevious: boolean; readonly hasNext: boolean; readonly loading: boolean; readonly error: string | null };
   readonly maintenance: MaintenanceView | null;
   readonly compaction: CompactionView | null;
   readonly planningHandoffs: readonly ControllerPlanningHandoffView[];
@@ -404,9 +405,7 @@ export function projectExecutionProjection(
     reconciliation: snapshot.executionReconciliation,
     hazards: controlHazards({
       frontier: snapshot.frontier,
-      openInteractionCount: snapshot.interactions.filter(
-        (interaction) => interaction.state === 'open',
-      ).length,
+      openInteractionCount: snapshot.openInteractionCount,
       unresolvedIntentCount: snapshot.executionReconciliation.unresolvedIntentCount,
     }),
     recoveries: snapshot.recoveries.map((recovery) => ({ ...recovery })),

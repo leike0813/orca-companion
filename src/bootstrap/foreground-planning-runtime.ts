@@ -187,6 +187,7 @@ import { COORDINATOR_SESSION_STATE_SCHEMA_VERSION, threadIdFor } from '../domain
 import type {
   BranchCoordinationStore,
   CoordinationSnapshot,
+  CoordinationReadSnapshot,
   CoordinationWriter,
   GraphGenerationRecord,
   MaterializationBindingRecord,
@@ -372,7 +373,7 @@ export const FOREGROUND_COORDINATOR_INSTRUCTIONS: readonly string[] = [
   '写入地图、认领或解决票据都只通过受控工具调用，且同一 revision 下不要并发写入。',
 ];
 
-import { readTranscriptPage, type CheckpointReadPurpose } from '../application/coordinator/history.js';
+import { HistoryBoundaryError, readTranscriptPage, type CheckpointReadPurpose } from '../application/coordinator/history.js';
 import type { TranscriptReadingPort } from '../application/coordinator/history.js';
 import { scanHistory } from '../application/coordinator/history-search.js';
 import { createTranscriptPreviewStore } from '../adapters/storage/transcript-preview-store.js';
@@ -2399,8 +2400,8 @@ export async function createForegroundPlanningHost(
     if (current === null || selectedScopeId === null) {
       return { kind: 'failed', code: 'scope_unavailable', message: '当前没有可读取的 Coordination Scope' };
     }
-    const snapshot = current.query({ kind: 'snapshot', coordinationScopeId: selectedScopeId });
-    if (snapshot.kind !== 'snapshot') {
+    const snapshot = current.query({ kind: 'presentation-snapshot', coordinationScopeId: selectedScopeId, ...(selectedSessionId === null ? {} : { coordinatorSessionId: selectedSessionId as CoordinatorSessionId }) });
+    if (snapshot.kind !== 'presentation-snapshot') {
       return {
         kind: 'failed',
         code: snapshot.kind === 'rejected' ? snapshot.code : 'invalid_state',
@@ -2490,6 +2491,12 @@ export async function createForegroundPlanningHost(
     return checkpoints;
   };
   const reading: TranscriptReadingPort = {
+    interactions: (sessionId, interactionIds) => Promise.resolve().then(() => {
+      readingStore(sessionId);
+      const result = requiredStore().query({ kind: 'interaction-summaries', coordinationScopeId: selectedScopeId!, coordinatorSessionId: sessionId as CoordinatorSessionId, interactionIds: interactionIds as readonly InteractionId[] });
+      if (result.kind !== 'interaction-summaries') throw new Error(result.kind === 'rejected' ? result.message : '问题摘要不可读');
+      return result.interactions;
+    }),
     inspection: {
       snapshot: sessionId => Promise.resolve(readingStore(sessionId).readHistoryInspection(sessionId)),
       calls: query => Promise.resolve(readingStore(query.coordinatorSessionId).readHistoryCalls(query)),
@@ -2499,6 +2506,13 @@ export async function createForegroundPlanningHost(
     history: (query) => Promise.resolve(readingStore(query.coordinatorSessionId).readHistoryPage(query)),
     body: (query) => Promise.resolve().then(() => {
       const checkpoints = readingStore(query.coordinatorSessionId);
+      if (query.source.kind === 'interaction') {
+        const result = requiredStore().query({ kind: 'interaction-body', coordinationScopeId: selectedScopeId!, coordinatorSessionId: query.coordinatorSessionId as CoordinatorSessionId,
+          interactionId: query.source.interactionId as InteractionId, part: query.source.part, contentRevision: query.source.contentRevision, offset: query.offset, maxBytes: query.maxBytes });
+        if (result.kind === 'rejected' && result.code === 'invalid_utf8_offset') throw new HistoryBoundaryError(result.message);
+        if (result.kind !== 'interaction-body') throw new Error(result.kind === 'rejected' ? result.message : '问题正文不可读');
+        return result.body === null ? null : { source: query.source, ...result.body };
+      }
       if (query.source.kind === 'preview') return previews.body(query);
       if (query.source.kind === 'arguments') return checkpoints.readHistoryArguments({ coordinatorSessionId: query.coordinatorSessionId,
         entryId: query.source.entryId, stepId: query.source.stepId, callId: query.source.callId, contentRevision: 1,
@@ -2831,14 +2845,8 @@ export async function createForegroundPlanningHost(
     if (current === null || selectedScopeId === null) {
       return null;
     }
-    const snapshot = current.query({ kind: 'snapshot', coordinationScopeId: selectedScopeId });
-    if (snapshot.kind !== 'snapshot') {
-      return null;
-    }
-    const interaction = snapshot.snapshot.pendingInteractions.find(
-      (entry) => entry.interactionId === interactionId,
-    );
-    return interaction === undefined ? null : interaction.ownerCoordinatorSessionId;
+    const result = current.query({ kind: 'pending-interaction', coordinationScopeId: selectedScopeId, interactionId: interactionId as InteractionId });
+    return result.kind === 'pending-interaction' ? result.interaction?.ownerCoordinatorSessionId ?? null : null;
   };
 
   const handoff = {
@@ -3626,7 +3634,7 @@ export async function createForegroundPlanningHost(
   };
 
   const executionDerivation = (input: {
-    readonly snapshot: CoordinationSnapshot;
+    readonly snapshot: CoordinationReadSnapshot;
     readonly scope: ScopeRecord;
     readonly observations: ExecutionObservationFacts;
     readonly nodes: readonly { readonly workPackageId: string; readonly dependsOn: readonly string[] }[];
@@ -7267,11 +7275,14 @@ export async function createForegroundPlanningHost(
     questions: (input) => {
       if (input.coordinationScopeId !== selectedScopeId) return { kind: 'rejected', code: 'stale_scope', message: '问题 Scope 不匹配' };
       const result = requiredStore().query(input);
-      const project = (interaction: import('../application/ports/branch-coordination-store.js').PendingInteractionRecord) => ({
+      const project = (interaction: Omit<import('../application/ports/branch-coordination-store.js').PendingInteractionRecord, 'answerText'> & { questionPreview?: string; answerPreview?: string }) => ({
         interactionId: interaction.interactionId, ownerCoordinatorSessionId: interaction.ownerCoordinatorSessionId,
         subjectRef: interaction.subjectRef, expectedRevision: interaction.expectedRevision, state: interaction.state,
+        ...(interaction.questionPreview === undefined ? {} : { questionPreview: interaction.questionPreview }),
+        ...(interaction.answerPreview === undefined ? {} : { answerPreview: interaction.answerPreview }),
       });
-      if (result.kind === 'pending-interaction') return { kind: result.kind, interaction: result.interaction === null ? null : { ...project(result.interaction), question: result.interaction.question } };
+      if (result.kind === 'pending-interaction') return { kind: result.kind, interaction: result.interaction === null ? null : { ...project(result.interaction), question: result.interaction.question, answerRef: result.interaction.answerRef, answerText: result.interaction.answerText } };
+      if (result.kind === 'interaction-summaries') return result;
       if (result.kind === 'pending-interactions') return { kind: result.kind, interactions: result.interactions.map(project), nextCursor: result.nextCursor };
       return result.kind === 'rejected' ? result : { kind: 'rejected', code: 'unreadable', message: '问题查询结果无效' };
     },
@@ -7407,6 +7418,12 @@ export async function createForegroundPlanningHost(
 
   const ports: TuiPorts = {
     reading: {
+      interactions: async (coordinatorSessionId, interactionIds) => {
+        if (selectedScopeId === null) throw new Error('没有当前 Scope');
+        const result = await controller.query({ kind: 'interaction-summaries', coordinationScopeId: selectedScopeId, coordinatorSessionId: coordinatorSessionId as CoordinatorSessionId, interactionIds: interactionIds as readonly InteractionId[] });
+        if (result.kind !== 'interaction-summaries') throw new Error(result.kind === 'rejected' ? result.message : '问题摘要不可读');
+        return result.interactions;
+      },
       inspection: {
         snapshot: async coordinatorSessionId => {
           const result = await controller.query({ kind: 'history-inspection', coordinatorSessionId });

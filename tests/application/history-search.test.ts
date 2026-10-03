@@ -139,7 +139,7 @@ function createSearchFixture(options: FixtureOptions = {}) {
     },
     body: async (query: TranscriptBodyQuery): Promise<TranscriptBodyRange | null> => {
       if (query.coordinatorSessionId !== sessionId) return null;
-      if (query.source.kind === 'preview') return null;
+      if (query.source.kind === 'preview' || query.source.kind === 'interaction') return null;
       const text = textOf(query.source);
       if (text === null) return null;
       const bytes = encoder.encode(text);
