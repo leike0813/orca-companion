@@ -34,11 +34,12 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 | `complete-tui-editor`（第二批） | [任务 7/7](../../openspec/changes/archive/2026-10-02-complete-tui-editor/tasks.md)；[verification PASS](../../openspec/changes/archive/2026-10-02-complete-tui-editor/verification.md)，限批准功能范围 | 实现/归档包含于 `d3066e2`；2026-10-02 已归档、主规格已同步 | 完整编辑与当前回答；不能推定整体原型通过 |
 | `align-tui-with-approved-prototypes` | 任务 21/21；最终复验 27 文件/181 项通过，2 条件跳过，普通真实 PTY 13 项通过；**[verification PASS](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/verification.md)**，V-01–04 及审计发现的滚动预算 F-01 已修复 | 已包含于 `8af15029`；2026-10-03 已归档，六份主规格已同步 | 原 277 对证据已复查；另存 [108 对修复/补采画面与操作](../../artifacts/tui-prototype-alignment/repair-20261003/README.md)，三档层级、键位、固定框/返回通过；D-10 全功能缺口继续保留 |
 | `paginate-coordinator-history`（3A） | 增量权威历史、有界有效上下文与正式 transcript 分页；证据见 [README](../../artifacts/coordinator-history/README.md) | 已包含于 `b15ff20d`，2026-10-03 已归档 | 沿用 #40 continuous 和 #41 阅读键位，三档彩色/NO_COLOR、跨页与 resize 共 45 对画面 |
-| `render-bounded-transcript`（3B） | 局部原文视窗、双缓存、来源锚点、有限 Markdown、生产流式/中止与预算；[性能与81对画面](../../artifacts/bounded-transcript/README.md)；[verification PASS](../../openspec/changes/render-bounded-transcript/verification.md) | `b15ff20d` 上的未提交实现；按用户要求依据工作区和既有证据出具验收，未重跑、未归档 | 六票结构沿用，三档两色/Nerd与ASCII、历史/流式/resize/返回；输入和缓存导航各100采样达到 #53 p95 |
+| `render-bounded-transcript`（3B） | 局部原文视窗、双缓存、来源锚点、有限 Markdown、生产流式/中止与预算；[性能与81对画面](../../artifacts/bounded-transcript/README.md)；[verification PASS](../../openspec/changes/archive/2026-10-03-render-bounded-transcript/verification.md) | 已包含于 `20f02996`；2026-10-03 已归档、主规格已同步；原验收按用户要求复用当时证据 | 六票结构沿用，三档两色/Nerd与ASCII、历史/流式/resize/返回；输入和缓存导航各100采样达到 #53 p95 |
+| `inspect-and-search-coordinator-history`（第四批） | 任务9/9；可信活动、参数/结果来源、整体详细、F4、F3 原文搜索及普通输入召回/Ctrl+R；[性能与192对画面](../../artifacts/history-inspection/README.md)，五场景完整扫描及响应门槛通过；[verification PASS](../../openspec/changes/inspect-and-search-coordinator-history/verification.md)，已直接修复并重新核验 | `20f02996` 上的当前工作区实现；未提交、未归档，含搜索效率、回答预览隔离与unknown幂等/上界修复 | 沿六票定稿；完整扫描、必要检查与最终画面证据齐备 |
 
 ### 第二批成果及证据边界
 
-当前基线 HEAD：`b15ff20d4fe7d42a218c7259fb0ebc793f24d2ae`。第二批、原型纠偏与3A已包含于 HEAD；当前 dirty 工作区为3B实现及用户已有的交接报告归档移动。接手先检查 `git status --short`，不要覆盖、重置或重复实现。
+当前基线 HEAD：`20f02996471adb3efca524faced20ef9ffa0136d`。第二批、原型纠偏、3A 与 3B 已包含于 HEAD；当前 dirty 工作区为第四批实现及用户已有的交接报告归档移动。接手先检查 `git status --short`，不要覆盖、重置或重复实现。
 
 第二批已提供 grapheme 任意位置编辑、行首尾、多行有界视窗、原生光标；>1000 code points 原子粘贴及 /paste；唯一完整 UiDraft、CAS、提交快照/稳定 submissionId、单活跃提交/generation；真实 ask_user 创建/重放与精确查询；当前 Session 选项/自由回答、Esc 恢复。UI schema v2、Coordination schema 14，问题正文由 Branch Store 拥有。
 
@@ -63,15 +64,15 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 
 ## 3. 接续顺序与缺口
 
-呈现纠偏与3A已归档，当前实现 #46 的3B功能批次；后继沿用同一原型。原纠偏范围的缺口与 owner 见 [design D-10](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/design.md#d-10逐项合同缺口与后续归属)，3B边界见 [当前 design](../../openspec/changes/render-bounded-transcript/design.md)。
+呈现纠偏、3A 与 3B 已归档，当前实施 #46 的第四批；后继沿用同一原型。原纠偏范围的缺口与 owner 见 [design D-10](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/design.md#d-10逐项合同缺口与后续归属)，第四批边界见 [当前 design](../../openspec/changes/inspect-and-search-coordinator-history/design.md)。
 
 | 顺序 | 当前状态 / 后续职责 |
 | --- | --- |
 | 第二批 | 已归档，功能验证 PASS |
 | 原型纠偏 | 已归档，正式验收 PASS；V-01–04/F-01 已修复，输入保护接缝保留 |
 | 3A | 已归档：全历史增量读写、keyset/正文范围、分页返回和有效上下文边界 |
-| 3B | 当前 change 已实现并出具工作区 verification PASS：局部视窗、稳定锚点/有界缓存、Markdown/流式与 #53 输入/缓存导航 p95；验收复用既有证据，未提交或归档 |
-| 第四批 | 活动关联/完整详情、F3 transcript 搜索、Ctrl+R 普通发送历史 |
+| 3B | 已归档：局部视窗、稳定锚点/有界缓存、Markdown/流式与 #53 输入/缓存导航 p95；原验收复用当时既有证据 |
+| 第四批 | 当前工作区实现9/9：活动关联/参数与结果详情、F3 transcript 搜索、Ctrl+R 普通输入历史；直接修复后重新核验通过，1千/1万/10万记录与1/5MiB完整扫描成本均已记录 |
 | 第五批 | 当前回答基础已具备；补历史卡片状态和跨 Session 进入/返回，保护原位置/草稿 |
 | 第六批 | 当前命令/弹窗样式与候选已实现；后继补完整目录搜索、真实 provider/effort/角色配置及其权限 |
 | 第七批 | 当前项目固定框/状态栏层级已实现；后继补可信身份/context/metadata、用户级 custom 配置/恢复/保存失败和共享验收摘要 |

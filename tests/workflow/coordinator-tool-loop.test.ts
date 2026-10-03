@@ -17,6 +17,7 @@ import { afterEach, beforeEach, expect, test } from 'vitest';
 import { projectActionableWork, type ProjectedActionableWorkItem, type SourceObservation } from '../../src/application/coordinator/actionable-work.js';
 import type { TranscriptStreamEvent } from '../../src/application/coordinator/history.js';
 import type { FencingAssertion } from '../../src/application/coordinator/runtime-guard.js';
+import type { HistoryToolObservation } from '../../src/application/coordinator/history-inspection.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
@@ -286,6 +287,24 @@ function toolMessages(messages: readonly unknown[]): readonly ToolMessage[] {
   return messages.filter((message): message is ToolMessage => message instanceof ToolMessage);
 }
 
+/** 真实 store 负责全部权威写入，这个端口只接住 unknown 观测；failure 制造观测写不下来的情形。 */
+function observingRecords(failure: string | null) {
+  const observations: HistoryToolObservation[] = [];
+  return {
+    observations,
+    records: {
+      ...store,
+      recordToolObservation: (observation: HistoryToolObservation) => {
+        if (failure !== null) {
+          return { kind: 'failed' as const, message: failure };
+        }
+        observations.push(observation);
+        return { kind: 'saved' as const };
+      },
+    },
+  };
+}
+
 test('模型请求的受控工具被实际执行，配对结果进入后续模型输入与已提交历史', async () => {
   save(baseState());
   const toolFacts = facts();
@@ -314,7 +333,16 @@ test('模型请求的受控工具被实际执行，配对结果进入后续模�
     stepId: 'step-1',
     role: 'assistant',
     content: '',
-    toolCalls: [{ callId: 'call-1', name: 'claim_ticket', args, operationId: 'op:step-1:call-1', mapOperationId: null }],
+    toolCalls: [
+      {
+        callId: 'call-1',
+        name: 'claim_ticket',
+        args,
+        operationId: 'op:step-1:call-1',
+        mapOperationId: null,
+        activityKind: 'action',
+      },
+    ],
   });
   const toolResult = state.committedMessages[1];
   expect(toolResult?.entryId).toBe('entry:tool:step-1:call-1');
@@ -336,6 +364,38 @@ test('模型请求的受控工具被实际执行，配对结果进入后续模�
   // 只有没有未决调用的最终响应才消费工作。
   expect(result.remainingWork).toEqual([]);
   expect(result.pendingToolCalls).toBe(0);
+});
+
+test('活动分类只由注册定义的 mutating 决定：模型在参数里自称什么都不改变它', async () => {
+  save(baseState());
+  const toolFacts = facts();
+  const harness = recordingServices(toolFacts);
+  // 这个工具接受任意参数，因此模型可以在 args 里自称分类；已提交 call 的分类不受影响。
+  const probe: PlanningToolDefinition = {
+    name: 'probe_tool',
+    description: '测试工具：接受任意参数',
+    mutating: false,
+    inputSchema: { type: 'object' },
+    invoke: () => Promise.resolve({ kind: 'ok', value: { ok: true } }),
+  };
+  const tools = [...planningToolset(toolFacts, harness.services), probe];
+  const model = new FakeToolModel([
+    { kind: 'tool_calls', calls: [
+      { callId: 'call-read', name: 'read_frontier', args: {} },
+      { callId: 'call-write', name: 'claim_ticket', args: { ticketId: 'ticket-1', expectedRevision: 7 } },
+      { callId: 'call-probe', name: 'probe_tool', args: { activityKind: 'action' } },
+    ] },
+    { kind: 'text', content: '读过、认领过' },
+  ]);
+
+  const result = await runGraph(graphWith({ model, tools }), { remainingWork: work(1).items });
+
+  expect(result.status).toBe('suspended');
+  expect(loadState().committedModelSteps[0]?.toolCalls.map((call) => [call.name, call.activityKind])).toEqual([
+    ['read_frontier', 'query'],
+    ['claim_ticket', 'action'],
+    ['probe_tool', 'query'],
+  ]);
 });
 
 test('已受理的单次工具动作提交完成源并结束本条工作；拒绝不消费', async () => {
@@ -510,6 +570,57 @@ test('未注册的已提交 call 停止执行，保留原身份等待核验', as
   expect(entry).toBeUndefined();
   expect(pendingToolCallsIn(loadState())).toBe(1);
   expect(model.received).toEqual([]);
+});
+
+test('未注册的 call 留下绑定原身份的 unknown 观测，权威历史仍是不完整配对', async () => {
+  seedPendingCalls([{ callId: 'call-1', name: 'ghost_tool', args: {} }]);
+  const { observations, records } = observingRecords(null);
+  const node = createToolsNode({
+    sessionRecords: records,
+    assertFencing: () => ({ kind: 'valid', lease: {} as never }),
+    tools: [],
+  });
+
+  const update = await node(graphState(1));
+
+  expect(update.status).toBe('blocked');
+  expect(update.note).toContain('ghost_tool(call-1)');
+  // 观测绑定原 assistant entry 与原 OperationId：它是这次结果的记录，不是新的一次尝试。
+  expect(observations).toHaveLength(1);
+  expect(observations[0]).toMatchObject({
+    coordinatorSessionId: SESSION,
+    entryId: 'entry:assistant:step-1',
+    stepId: 'step-1',
+    callId: 'call-1',
+    operationId: 'op:step-1:call-1',
+    kind: 'unknown',
+  });
+  expect(observations[0]?.reason).toContain('ghost_tool');
+  // 观测不冒充结果：没有配对的 tool 条目，调用仍待原 OperationId 对账。
+  const state = loadState();
+  expect(state.committedMessages.filter((entry) => entry.role === 'tool')).toEqual([]);
+  expect(state.committedMessages.map((entry) => entry.entryId)).toEqual(['entry:assistant:step-1']);
+  expect(pendingToolCallsIn(state)).toBe(1);
+});
+
+test('unknown 观测写不下来时 fail closed：按写不成功阻塞，且不补配对结果', async () => {
+  seedPendingCalls([{ callId: 'call-1', name: 'claim_ticket', args: { ticketId: 'ticket-1', expectedRevision: 7 } }]);
+  const toolFacts = facts();
+  const harness = recordingServices(toolFacts, { kind: 'unknown', reason: 'tracker 丢响应' });
+  const { observations, records } = observingRecords('checkpoint 只读');
+  const node = createToolsNode({
+    sessionRecords: records,
+    assertFencing: () => ({ kind: 'valid', lease: {} as never }),
+    tools: planningToolset(toolFacts, harness.services),
+  });
+
+  const update = await node(graphState(1));
+
+  expect(update.status).toBe('blocked');
+  expect(update.note).toContain('call-1');
+  expect(observations).toEqual([]);
+  expect(loadState().committedMessages.filter((entry) => entry.role === 'tool')).toEqual([]);
+  expect(pendingToolCallsIn(loadState())).toBe(1);
 });
 
 test('unknown 停止后续调用；恢复先用原 OperationId 对账，再处理剩余 call', async () => {
@@ -722,6 +833,7 @@ test('tool call 参数跨多个 chunk 到达时，身份只来自完整响应，
         args,
         operationId: 'op:step-1:call-split',
         mapOperationId: null,
+        activityKind: 'action',
       },
     ],
   });
@@ -760,6 +872,13 @@ test('分片工具参数在输出预算里只计一次：原始片段与解析�
     { name: 'claim_ticket', operationId: 'op:step-1:call-big', mapOperationId: null },
   ]);
   expect(loadState().committedMessages[0]?.toolCalls).toEqual([
-    { callId: 'call-big', name: 'claim_ticket', args, operationId: 'op:step-1:call-big', mapOperationId: null },
+    {
+      callId: 'call-big',
+      name: 'claim_ticket',
+      args,
+      operationId: 'op:step-1:call-big',
+      mapOperationId: null,
+      activityKind: 'action',
+    },
   ]);
 });

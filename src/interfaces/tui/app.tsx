@@ -8,7 +8,7 @@
  * - 没有 TTY 判断：那发生在挂载 Ink 之前的 `src/bootstrap/tui-entry.ts`。
  */
 
-import { Box, Text, useInput, usePaste, useWindowSize } from 'ink';
+import { Box, Text, useInput, usePaste, useWindowSize, useStdin } from 'ink';
 import { ThemeProvider } from '@inkjs/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -18,7 +18,10 @@ import type { PasteViewerView } from './components/paste-viewer.js';
 import type { ControllerInteractionView } from '../../application/controller-service.js';
 import type { InteractionPageCursor } from '../../application/ports/branch-coordination-store.js';
 import { bodyWidth } from './screens/workspace.js';
-import { TranscriptReader, type TranscriptFrame } from './render/transcript-reader.js';
+import { TranscriptReader, type TranscriptFrame, type TranscriptAnchor } from './render/transcript-reader.js';
+import { InputHistory, readHistoricalInput } from './input/input-history.js';
+import { scanHistory } from '../../application/coordinator/history-search.js';
+import type { HistorySearchHit, HistoryCall } from '../../application/coordinator/history-inspection.js';
 import { wrapByDisplayWidth } from './render/width.js';
 import { editComposer, editorLayout, emptyDraft, textDraft, type EditorKey } from './input/composer-editor.js';
 import { allowedSidebarDensity, composerContentWidth } from './render/width.js';
@@ -253,6 +256,14 @@ export function TuiApp(props: TuiAppProps) {
   return <ThemeProvider theme={tuiTheme}><TuiAppContent {...props} /></ThemeProvider>;
 }
 
+type HistoryContext = {
+  kind: 'transcript' | 'users' | 'activity'; session: string; query: UiDraft;
+  anchor: TranscriptAnchor | null; detailed: boolean; expanded: readonly string[];
+  upper: number; initialized: boolean; hit: HistorySearchHit | null; call: HistoryCall | null;
+  hits: readonly HistorySearchHit[]; index: number; cursor: string | null; complete: boolean;
+  feedback: string; busy: boolean; abort: AbortController;
+};
+
 function TuiAppContent(props: TuiAppProps) {
   const { ports, onExit } = props;
   // 终端宽度是渲染输入，不是业务状态：resize 只重算布局，不重新查询也不改变用户偏好。
@@ -266,7 +277,33 @@ function TuiAppContent(props: TuiAppProps) {
   const [transcript, setTranscript] = useState<ControllerTranscriptPage | null>(null);
   const [reader] = useState(() => new TranscriptReader(ports.reading));
   const [transcriptFrame, setTranscriptFrame] = useState<TranscriptFrame | null>(null);
+  const [inputHistory] = useState(() => new InputHistory(ports.reading));
+  const [historyPreview, setHistoryPreview] = useState<UiDraft | null>(null);
+  const historyPreviewRef = useRef<UiDraft | null>(null);
+  const [historyContext, setHistoryContext] = useState<HistoryContext | null>(null);
+  const historyContextRef = useRef<HistoryContext | null>(null);
+  const functionKeyRef = useRef<(action: 'search-history' | 'navigate-activity') => void>(() => {});
+  const { stdin } = useStdin();
+  useEffect(() => {
+    const onData = (data: Buffer | string) => {
+      const text = data.toString();
+      // Ink's public useInput omits function-key names. Only these complete keys use stdin.
+      if (text.charCodeAt(0) !== 27) return;
+      const sequence = text.slice(1);
+      if (/^(?:OR|\[R|\[13~|\[\[C|\[57366(?:;1)?u)$/u.test(sequence)) functionKeyRef.current('search-history');
+      if (/^(?:OS|\[S|\[14~|\[\[D|\[57367(?:;1)?u)$/u.test(sequence)) functionKeyRef.current('navigate-activity');
+    };
+    stdin.on('data', onData);
+    return () => { stdin.off('data', onData); historyContextRef.current?.abort.abort(); };
+  }, [stdin]);
   useEffect(() => () => reader.dispose(), [reader]);
+  useEffect(() => {
+    inputHistory.cancel(); historyPreviewRef.current = null; setHistoryPreview(null);
+    const context = historyContextRef.current;
+    if (context !== null && context.session !== state.selectedSessionId) {
+      context.abort.abort(); historyContextRef.current = null; setHistoryContext(null); reader.highlight(null);
+    }
+  }, [state.selectedSessionId, inputHistory, reader]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyUpdated, setHistoryUpdated] = useState(false);
   const [home, setHome] = useState<HomeResolution | null>(null);
@@ -373,7 +410,7 @@ function TuiAppContent(props: TuiAppProps) {
   const historyReading = useRef(false);
   const applyTranscriptFrame = useCallback((frame: TranscriptFrame | null) => {
     if (frame === null || frame.coordinatorSessionId !== stateRef.current.selectedSessionId) return;
-    historyReading.current = !frame.atLatest;
+    historyReading.current = historyContextRef.current !== null || !frame.atLatest;
     setTranscriptFrame(frame); setTranscript(frame.page);
     if (frame.atLatest) setHistoryUpdated(false);
     dispatch({ kind: 'reading-anchor', coordinatorSessionId: frame.coordinatorSessionId, anchor: frame.atLatest ? null : frame.anchor });
@@ -384,6 +421,7 @@ function TuiAppContent(props: TuiAppProps) {
     setHistoryLoading(true);
     try {
       const width = bodyWidth(terminalWidthRef.current, stateRef.current.sidebarDensity);
+      reader.setDetailed(stateRef.current.detailedTranscript);
       const frame = reader.frame?.coordinatorSessionId !== session
         ? await reader.open(session, width, transcriptHeight.current, stateRef.current.expandedToolIds, stateRef.current.readingAnchors[session] ?? null)
         : await reader.read(cursor === 'oldest' ? 'oldest' : 'latest');
@@ -393,7 +431,7 @@ function TuiAppContent(props: TuiAppProps) {
     } finally { if (request === transcriptRequest.current) setHistoryLoading(false); }
   }, [reader, dispatch, applyTranscriptFrame]);
   const resizeTranscript = useCallback(async () => {
-    try { applyTranscriptFrame(await reader.resize(bodyWidth(terminalWidthRef.current, stateRef.current.sidebarDensity), transcriptHeight.current, stateRef.current.expandedToolIds)); }
+    try { reader.setDetailed(stateRef.current.detailedTranscript); applyTranscriptFrame(await reader.resize(bodyWidth(terminalWidthRef.current, stateRef.current.sidebarDensity), transcriptHeight.current, stateRef.current.expandedToolIds)); }
     catch (error) { dispatch({ kind: 'notice', notice: '历史读取失败：' + (error instanceof Error ? error.message : String(error)) }); }
   }, [reader, applyTranscriptFrame, dispatch]);
   const recordTranscriptHeight = useCallback((height: number) => {
@@ -401,7 +439,7 @@ function TuiAppContent(props: TuiAppProps) {
     transcriptHeight.current = height;
     if (reader.frame) void resizeTranscript();
   }, [reader, resizeTranscript]);
-  useEffect(() => { if (reader.frame) void resizeTranscript(); }, [reader, resizeTranscript, terminalWidth, state.sidebarDensity, state.expandedToolIds]);
+  useEffect(() => { if (reader.frame) void resizeTranscript(); }, [reader, resizeTranscript, terminalWidth, state.sidebarDensity, state.expandedToolIds, state.detailedTranscript]);
   useEffect(() => ports.reading.subscribe(session => {
     if (session !== stateRef.current.selectedSessionId) return;
     if (historyReading.current) setHistoryUpdated(true);
@@ -612,6 +650,9 @@ function TuiAppContent(props: TuiAppProps) {
     }
     const saved = protection.flushAll();
     if (saved.status !== 'saved') { dispatch({ kind: 'notice', notice: saveOutcomeText(saved) }); return false; }
+    // 普通输入召回与回答互不相干：进入回答模式前丢掉仍在显示的预览，
+    // 否则下一次 Enter 会把旧聊天原文当成回答提交给当前 interaction。
+    inputHistory.cancel(); updateHistoryPreview(null);
     dispatch({ kind: 'answer-mode-entered', interactionId: item.interactionId, expectedRevision: item.expectedRevision });
     updateAnswerPanel({ interaction: detail.interaction, index, count, option: 0, focus: detail.interaction.question?.options.length ? 'options' : 'text', scroll: 0 });
     return true;
@@ -1398,9 +1439,162 @@ function TuiAppContent(props: TuiAppProps) {
   // 路由必须读**同步镜像**：同一批按键里 `Ctrl+P` 之后紧跟的方向键/Enter 不能等到下一次渲染才知道
   // 覆盖层已经打开（那会把命令投给 composer）。渲染本身仍用下面 `state` 派生出的值。
   const topOverlay = (): OverlayKind | null => stateRef.current.overlayStack.at(-1) ?? null;
+  const updateHistoryPreview = (draft: UiDraft | null) => { historyPreviewRef.current = draft; setHistoryPreview(draft); };
+  const updateHistoryContext = (context: HistoryContext | null) => { historyContextRef.current = context; setHistoryContext(context === null ? null : { ...context }); };
+  const closeHistoryContext = (adopt: UiDraft | null = null) => {
+    const context = historyContextRef.current;
+    context?.abort.abort(); updateHistoryContext(null); updateHistoryPreview(null); inputHistory.cancel(); reader.highlight(null);
+    if (context !== null && context.kind !== 'activity') {
+      dispatch({ kind: 'transcript-details', detailed: context.detailed, expanded: context.expanded });
+      reader.setDetailed(context.detailed);
+      void reader.open(context.session, bodyWidth(terminalWidthRef.current, stateRef.current.sidebarDensity), transcriptHeight.current,
+        context.expanded, context.anchor).then(applyTranscriptFrame).catch(error => dispatch({ kind: 'notice', notice: String(error) }));
+    }
+    if (adopt !== null) workspaceActions.composerChange(adopt);
+  };
+  const showHistoryHit = async (context: HistoryContext, hit: HistorySearchHit) => {
+    if (context.abort.signal.aborted || historyContextRef.current !== context) return;
+    context.hit = hit;
+    if (context.kind === 'users') {
+      if (hit.source.kind !== 'history') throw new Error('输入历史来源无效');
+      const draft = await readHistoricalInput(ports.reading, context.session, hit.source.entryId, context.abort.signal);
+      if (historyContextRef.current === context) updateHistoryPreview(draft);
+    } else {
+      reader.highlight(hit);
+      const frame = await reader.read('anchor', { coordinatorSessionId: context.session, ...hit });
+      if (historyContextRef.current === context && !context.abort.signal.aborted) applyTranscriptFrame(frame);
+    }
+    if (historyContextRef.current === context) {
+      context.busy = false;
+      context.feedback = context.kind === 'users' ? '↑ 旧 / ↓ 新 · Enter 采用 · Esc 返回' : 'Enter 向新 · Shift+Enter 向旧 · Esc 返回';
+      updateHistoryContext(context);
+    }
+  };
+  const seekHistory = async (context: HistoryContext, direction: 'older' | 'newer', restart = false) => {
+    if (context.busy || historyContextRef.current !== context) return;
+    context.busy = true; context.feedback = '正在查找…'; updateHistoryContext(context);
+    try {
+      const inspection = ports.reading.inspection;
+      if (inspection === undefined) throw new Error('历史检索不可用');
+      if (!context.initialized) {
+        const snapshot = await inspection.snapshot(context.session);
+        context.abort.signal.throwIfAborted(); if (historyContextRef.current !== context) return;
+        if (!snapshot.ready && context.kind !== 'users') throw new Error('调用关联索引正在准备');
+        context.upper = snapshot.upperSequence; context.initialized = true;
+      }
+      if (context.kind === 'activity') {
+        const boundary = context.call === null ? undefined : { sequence: context.call.sequence, ordinal: context.call.ordinal };
+        let edge = boundary;
+        if (context.call !== null) {
+          const group = await inspection.calls({ coordinatorSessionId: context.session, activityId: context.call.activityId,
+            upperSequence: context.upper, direction: direction === 'older' ? 'newer' : 'older' });
+          const end = direction === 'older' ? group.calls[0] : group.calls.at(-1);
+          if (end !== undefined) edge = { sequence: end.sequence, ordinal: end.ordinal };
+        }
+        const page = await inspection.calls({ coordinatorSessionId: context.session, upperSequence: context.upper, direction,
+          ...(edge === undefined ? {} : direction === 'older' ? { before: edge } : { after: edge }) });
+        if (context.abort.signal.aborted || historyContextRef.current !== context) return;
+        let call = direction === 'older' ? page.calls.at(-1) : page.calls[0];
+        if (call === undefined) { context.busy = false; context.feedback = '已到活动边界 · Esc 返回'; updateHistoryContext(context); return; }
+        const start = await inspection.calls({ coordinatorSessionId: context.session, activityId: call.activityId,
+          upperSequence: context.upper, direction: 'newer' });
+        if (context.abort.signal.aborted || historyContextRef.current !== context) return;
+        call = start.calls[0] ?? call;
+        context.call = call;
+        const expanded = [...new Set([...stateRef.current.expandedToolIds, call.activityId])];
+        dispatch({ kind: 'transcript-details', detailed: stateRef.current.detailedTranscript,
+          expanded });
+        await reader.resize(bodyWidth(terminalWidthRef.current, stateRef.current.sidebarDensity), transcriptHeight.current, expanded);
+        await showHistoryHit(context, { source: { kind: 'arguments', entryId: call.entryId, stepId: call.stepId, callId: call.callId, contentRevision: 1 },
+          sequence: call.sequence, offset: 0, end: Math.min(1, call.argsByteLength) });
+        reader.highlight(null); context.feedback = '↑/↓ 选择活动 · Enter 开合 · Esc 返回'; updateHistoryContext(context); return;
+      }
+      if (context.kind === 'users' && context.query.text === '') {
+        const page = await inspection.users({ coordinatorSessionId: context.session, upperSequence: context.upper, direction,
+          ...(context.hit === null ? {} : direction === 'older' ? { before: context.hit.sequence } : { after: context.hit.sequence }) });
+        const entry = direction === 'older' ? page.entries.at(-1) : page.entries[0];
+        if (entry !== undefined) { await showHistoryHit(context, { source: { kind: 'history', entryId: entry.entryId, contentRevision: 1 }, sequence: entry.sequence, offset: 0, end: Math.min(1, entry.byteLength) }); return; }
+        context.busy = false; context.feedback = '已到输入历史边界 · Esc 返回'; updateHistoryContext(context); return;
+      }
+      if (context.query.text === '') { context.busy = false; context.feedback = '输入查找文字 · Esc 返回'; updateHistoryContext(context); return; }
+      const index = context.index + (direction === 'newer' ? 1 : -1);
+      if (!restart && context.kind === 'transcript' && index >= 0 && index < context.hits.length) {
+        context.index = index; await showHistoryHit(context, context.hits[index]!); return;
+      }
+      // Older navigation retains one candidate while rescanning bounded batches, never all hits.
+      const older = direction === 'older';
+      const before = restart ? null : context.hit;
+      const position = (hit: HistorySearchHit) => [hit.sequence, hit.source.kind === 'arguments' ? 1 : 0, hit.ordinal ?? 0, hit.offset] as const;
+      const precedes = (a: HistorySearchHit, b: HistorySearchHit) => {
+        const x = position(a), y = position(b);
+        for (let n = 0; n < x.length; n++) { if (x[n] !== y[n]) return x[n]! < y[n]!; }
+        return false;
+      };
+      let cursor = older || restart ? null : context.cursor, candidate: HistorySearchHit | null = null;
+      let complete = !older && !restart && context.complete;
+      do {
+        if (complete) break;
+        const page = await (inspection.search?.({ coordinatorSessionId: context.session, target: context.kind,
+          literal: context.query.text, upperSequence: context.upper, cursor }, context.abort.signal)
+          ?? scanHistory(ports.reading, { coordinatorSessionId: context.session, target: context.kind,
+            literal: context.query.text, upperSequence: context.upper, cursor }, context.abort.signal));
+        context.abort.signal.throwIfAborted(); if (historyContextRef.current !== context) return;
+        const newerHits = !older ? page.hits.filter(hit => before === null || precedes(before, hit)) : [];
+        if (!older && newerHits.length > 0) {
+          context.hits = newerHits; context.index = 0; context.cursor = page.cursor; context.complete = page.complete;
+          await showHistoryHit(context, newerHits[0]!); return;
+        }
+        for (const hit of older ? page.hits : []) {
+          if (before === null || precedes(hit, before)) candidate = hit;
+          else { complete = true; break; }
+        }
+        cursor = page.cursor; complete ||= page.complete;
+        context.feedback = '正在扫描保留历史…'; updateHistoryContext(context);
+        await new Promise<void>(resolve => setImmediate(resolve));
+      } while (!complete);
+      if (candidate !== null) { context.hits = [candidate]; context.index = 0; context.cursor = null; context.complete = false; await showHistoryHit(context, candidate); return; }
+      context.busy = false; context.feedback = before === null ? '无匹配 · Esc 返回' : '已到匹配边界 · Esc 返回'; updateHistoryContext(context);
+    } catch (error) {
+      if (context.abort.signal.aborted || historyContextRef.current !== context) return;
+      context.busy = false; context.feedback = '读取失败 · Enter 重试：' + (error instanceof Error ? error.message : String(error)); updateHistoryContext(context);
+    }
+  };
+  const beginHistoryContext = async (kind: HistoryContext['kind']) => {
+    const isCurrent = (context: HistoryContext) => historyContextRef.current === context;
+    const current = stateRef.current, session = current.selectedSessionId;
+    if (session === null || current.screen !== 'workspace' || current.overlayStack.length || current.pendingConfirmation !== null || current.projectPanel.open || current.composerMode.kind !== 'message' || isComposerReadOnly(current, session)) return;
+    if (historyContextRef.current !== null) return;
+    inputHistory.cancel(); updateHistoryPreview(null);
+    const context: HistoryContext = { kind, session, query: emptyDraft(), anchor: reader.atLatest ? null : reader.frame?.anchor ?? null,
+      detailed: current.detailedTranscript, expanded: current.expandedToolIds, upper: 0, initialized: false, hit: null, call: null,
+      hits: [], index: -1, cursor: null, complete: false, feedback: '读取历史范围…', busy: true, abort: new AbortController() };
+    updateHistoryContext(context); historyReading.current = true;
+    try {
+      const inspection = ports.reading.inspection;
+      if (inspection === undefined) throw new Error('历史检索不可用');
+      const snapshot = await inspection.snapshot(session);
+      if (context.abort.signal.aborted || !isCurrent(context)) return;
+      if (!snapshot.ready && kind !== 'users') throw new Error('调用关联索引正在准备，请稍后重试');
+      context.upper = snapshot.upperSequence; context.initialized = true; context.busy = false; context.feedback = '输入查找文字 · Esc 返回'; updateHistoryContext(context);
+      if (kind !== 'transcript') void seekHistory(context, 'older', true);
+    } catch (error) { context.busy = false; context.feedback = String(error); updateHistoryContext(context); }
+  };
+  const changeHistoryQuery = (draft: UiDraft) => {
+    const previous = historyContextRef.current;
+    if (previous === null || previous.kind === 'activity') return;
+    if ([...draft.text].length > 256) { previous.feedback = '查找最多 256 字符'; updateHistoryContext(previous); return; }
+    if (draft.text === previous.query.text) { previous.query = draft; updateHistoryContext(previous); return; }
+    previous.abort.abort();
+    const context = { ...previous, query: draft, hit: null, hits: [], index: -1, cursor: null, complete: false,
+      abort: new AbortController(), busy: false };
+    updateHistoryContext(context); updateHistoryPreview(null); reader.highlight(null);
+    void seekHistory(context, context.kind === 'users' ? 'older' : 'newer', true);
+  };
+  functionKeyRef.current = action => { void beginHistoryContext(action === 'search-history' ? 'transcript' : 'activity'); };
   const workspaceActions: WorkspaceActions = {
     dispatch,
     composerChange: (draft) => {
+      inputHistory.cancel(); updateHistoryPreview(null);
       const target = currentInputTarget(stateRef.current, coordScopeRef.current);
       if (target === null) {
         return;
@@ -1416,6 +1610,7 @@ function TuiAppContent(props: TuiAppProps) {
     },
     toggleTool: (entryId) => dispatch({ kind: 'tool-toggled', entryId }),
     selectSession: (coordinatorSessionId) => {
+      historyContextRef.current?.abort.abort(); updateHistoryContext(null); inputHistory.cancel(); updateHistoryPreview(null); reader.highlight(null);
       // 切 Session 前立即保存当前输入；失败如实提示，输入仍保留在内存。
       if (protection.hasUnsaved()) {
         const flushed = protection.flushAll();
@@ -1515,7 +1710,24 @@ function TuiAppContent(props: TuiAppProps) {
       requestExit();
       return;
     }
+    const history = historyContextRef.current;
+    if (history !== null) {
+      if (key.escape) { closeHistoryContext(); return; }
+      if (history.kind === 'activity') {
+        if (key.upArrow || key.downArrow) void seekHistory(history, key.upArrow ? 'older' : 'newer');
+        if (key.return && history.call !== null) dispatch({ kind: 'tool-toggled', entryId: history.call.activityId });
+        return;
+      }
+      if (key.return) {
+        if (history.kind === 'users' && historyPreviewRef.current !== null && !history.busy) closeHistoryContext(historyPreviewRef.current);
+        else void seekHistory(history, key.shift || history.kind === 'users' && history.hit === null ? 'older' : 'newer', history.hit === null);
+        return;
+      }
+      if (history.kind === 'users' && (key.upArrow || key.downArrow)) { void seekHistory(history, key.upArrow ? 'older' : 'newer'); return; }
+      changeHistoryQuery(editComposer(history.query, input, key)); return;
+    }
     if (action === 'escape') {
+      if (inputHistory.active || historyPreviewRef.current !== null) { inputHistory.cancel(); updateHistoryPreview(null); return; }
       answerRequest.current++;
       if (topOverlay() === 'input-record-manager') {
         if (inputManagerRef.current?.bodyFocus === true) {
@@ -1694,12 +1906,7 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (action === 'toggle-tool') {
-      const entries = viewModelRef.current?.transcript.entries ?? [];
-      const lastTool = [...entries].reverse().find((entry) => entry.kind === 'tool');
-      if (lastTool === undefined) {
-        return;
-      }
-      dispatch({ kind: 'tool-toggled', entryId: lastTool.id });
+      dispatch({ kind: 'transcript-details', detailed: !stateRef.current.detailedTranscript });
       return;
     }
     if (topOverlay() === 'paste-viewer') {
@@ -1789,7 +1996,26 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (key.ctrl && input === 'r') {
-      dispatch({ kind: 'notice', notice: '历史搜索尚未接通' }); return;
+      void beginHistoryContext('users'); return;
+    }
+    if (action === 'search-history' || action === 'navigate-activity') { functionKeyRef.current(action); return; }
+    const ordinary = stateRef.current.composerMode.kind === 'message' && readingSession !== null && !isComposerReadOnly(stateRef.current, readingSession);
+    const draft = historyPreviewRef.current ?? composerInputFor(stateRef.current, readingSession);
+    if (ordinary && !key.ctrl && !key.meta && (key.upArrow || key.downArrow) &&
+      (key.upArrow && draft.text === '' || inputHistory.canMove(draft, key.upArrow ? 'older' : 'newer'))) {
+      const session = readingSession;
+      void inputHistory.move(session, draft, key.upArrow ? 'older' : 'newer').then(value => {
+        if (stateRef.current.selectedSessionId === session && value !== null) updateHistoryPreview(inputHistory.active ? value : null);
+      }).catch(error => dispatch({ kind: 'notice', notice: '输入历史读取失败：' + String(error) })); return;
+    }
+    if (historyPreviewRef.current !== null) {
+      if (key.return && !key.meta && !key.shift) {
+        workspaceActions.composerChange(historyPreviewRef.current); workspaceActions.submit(); return;
+      }
+      const edited = editComposer(draft, input, key, composerContentWidth(bodyWidth(terminalWidth, stateRef.current.sidebarDensity)));
+      if (edited.text !== draft.text || edited.pasteBlocks !== draft.pasteBlocks) workspaceActions.composerChange(edited);
+      else updateHistoryPreview(edited);
+      return;
     }
     handleComposerKey(input, key, {
       readOnly: isComposerReadOnly(stateRef.current, stateRef.current.selectedSessionId),
@@ -1813,6 +2039,12 @@ function TuiAppContent(props: TuiAppProps) {
     if (current.pendingConfirmation !== null || current.overlayStack.length > 0 || current.projectPanel.open) {
       return;
     }
+    if (historyContextRef.current !== null) {
+      const context = historyContextRef.current;
+      if (context.kind !== 'activity') changeHistoryQuery(editComposer(context.query, text.replace(/\r\n?/gu, '\n'), {}));
+      return;
+    }
+    if (historyPreviewRef.current !== null) workspaceActions.composerChange(historyPreviewRef.current);
     if (isComposerReadOnly(current, current.selectedSessionId)) {
       return;
     }
@@ -1886,6 +2118,9 @@ function TuiAppContent(props: TuiAppProps) {
       terminalHeight={windowSize.rows ?? process.stdout.rows ?? 24}
       onTranscriptHeight={recordTranscriptHeight}
       transcriptFrame={transcriptFrame}
+      historyPreview={historyPreview}
+      historyContext={historyContext === null ? null : { label: historyContext.kind === 'transcript' ? 'F3 查找' : historyContext.kind === 'users' ? 'Ctrl+R 输入历史' : 'F4 活动',
+        draft: historyContext.query, feedback: historyContext.feedback, editable: historyContext.kind !== 'activity' }}
       events={events}
       actions={workspaceActions}
       modelCatalog={modelCatalog}

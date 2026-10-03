@@ -1,0 +1,370 @@
+{
+  "node": "v24.12.0",
+  "platform": "linux",
+  "baseline": "20f02996471adb3efca524faced20ef9ffa0136d",
+  "measurements": [
+    {
+      "count": 1000,
+      "payloadBytes": null,
+      "argsBytes": null,
+      "resultBytes": null,
+      "index": {
+        "steps": 1,
+        "scannedBytes": 0,
+        "scannedItems": 0,
+        "ready": true
+      },
+      "coldMs": 66.989,
+      "input": {
+        "samples": 100,
+        "p50": 42.38155799999913,
+        "p95": 59.06,
+        "max": 74.23490200000015
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 6.494906000000356,
+        "p95": 10.826526999999942,
+        "max": 34
+      },
+      "resizeMs": 9.594,
+      "commitMs": 34.913,
+      "finishMs": 24.338,
+      "scan": {
+        "batches": 112,
+        "scannedBytes": 347840,
+        "scannedItems": 10450,
+        "hits": 5350,
+        "maxBatchHits": 50,
+        "maxBatchBytes": 3264,
+        "maxBatchItems": 100,
+        "maxCursorBytes": 312,
+        "fullScanCount": 5,
+        "firstFullScanMs": 2948.528,
+        "complete": true,
+        "aborted": true,
+        "elapsedMs": 11484
+      },
+      "fullScan": {
+        "complete": true,
+        "batches": 21,
+        "hits": 1000,
+        "scannedBytes": 65056,
+        "scannedItems": 1952,
+        "maxBatchHits": 50,
+        "maxBatchBytes": 3264,
+        "maxBatchItems": 100,
+        "maxResponseBytes": 5842,
+        "maxCursorBytes": 312,
+        "elapsedMs": 368.127
+      },
+      "cache": {
+        "bodyBytes": 18054,
+        "bodyItems": 26,
+        "layoutBytes": 44554,
+        "layoutItems": 49,
+        "lastReadBytes": 60,
+        "lastLayoutRows": 25,
+        "metadataItems": 100
+      },
+      "memory": {
+        "rss": 353460224,
+        "heapTotal": 252993536,
+        "heapUsed": 120907400,
+        "external": 20596637,
+        "arrayBuffers": 166997
+      }
+    },
+    {
+      "count": 10000,
+      "payloadBytes": null,
+      "argsBytes": null,
+      "resultBytes": null,
+      "index": {
+        "steps": 1,
+        "scannedBytes": 0,
+        "scannedItems": 0,
+        "ready": true
+      },
+      "coldMs": 29.926,
+      "input": {
+        "samples": 100,
+        "p50": 48.505089000002044,
+        "p95": 70.3644260000001,
+        "max": 91.02943099999902
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 6.233916000001045,
+        "p95": 6.801681000000826,
+        "max": 59.95791600000121
+      },
+      "resizeMs": 9.359,
+      "commitMs": 52.383,
+      "finishMs": 15.122,
+      "scan": {
+        "batches": 99,
+        "scannedBytes": 330904,
+        "scannedItems": 9900,
+        "hits": 4950,
+        "maxBatchHits": 50,
+        "maxBatchBytes": 3366,
+        "maxBatchItems": 100,
+        "maxCursorBytes": 315,
+        "fullScanCount": 0,
+        "firstFullScanMs": null,
+        "complete": false,
+        "aborted": true,
+        "elapsedMs": 13074.851
+      },
+      "fullScan": {
+        "complete": true,
+        "batches": 201,
+        "hits": 10000,
+        "scannedBytes": 670936,
+        "scannedItems": 19952,
+        "maxBatchHits": 50,
+        "maxBatchBytes": 3366,
+        "maxBatchItems": 100,
+        "maxResponseBytes": 5946,
+        "maxCursorBytes": 316,
+        "elapsedMs": 2958.972
+      },
+      "cache": {
+        "bodyBytes": 18204,
+        "bodyItems": 26,
+        "layoutBytes": 45020,
+        "layoutItems": 49,
+        "lastReadBytes": 60,
+        "lastLayoutRows": 25,
+        "metadataItems": 100
+      },
+      "memory": {
+        "rss": 553005056,
+        "heapTotal": 300101632,
+        "heapUsed": 150536592,
+        "external": 21265397,
+        "arrayBuffers": 835717
+      }
+    },
+    {
+      "count": 100000,
+      "payloadBytes": null,
+      "argsBytes": null,
+      "resultBytes": null,
+      "index": {
+        "steps": 1,
+        "scannedBytes": 0,
+        "scannedItems": 0,
+        "ready": true
+      },
+      "coldMs": 37.33,
+      "input": {
+        "samples": 100,
+        "p50": 51.43011299999489,
+        "p95": 68.01990300000034,
+        "max": 79.95955900000263
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 6.232689999997092,
+        "p95": 9.970108000001346,
+        "max": 36.24213900000177
+      },
+      "resizeMs": 15.245,
+      "commitMs": 44.629,
+      "finishMs": 15.515,
+      "scan": {
+        "batches": 101,
+        "scannedBytes": 337636,
+        "scannedItems": 10100,
+        "hits": 5050,
+        "maxBatchHits": 50,
+        "maxBatchBytes": 3366,
+        "maxBatchItems": 100,
+        "maxCursorBytes": 316,
+        "fullScanCount": 0,
+        "firstFullScanMs": null,
+        "complete": false,
+        "aborted": true,
+        "elapsedMs": 13549.696
+      },
+      "fullScan": {
+        "complete": true,
+        "batches": 2001,
+        "hits": 100000,
+        "scannedBytes": 6913336,
+        "scannedItems": 199952,
+        "maxBatchHits": 50,
+        "maxBatchBytes": 3468,
+        "maxBatchItems": 100,
+        "maxResponseBytes": 6050,
+        "maxCursorBytes": 320,
+        "elapsedMs": 29799.017
+      },
+      "cache": {
+        "bodyBytes": 18354,
+        "bodyItems": 26,
+        "layoutBytes": 45486,
+        "layoutItems": 49,
+        "lastReadBytes": 60,
+        "lastLayoutRows": 25,
+        "metadataItems": 100
+      },
+      "memory": {
+        "rss": 646041600,
+        "heapTotal": 361811968,
+        "heapUsed": 192790408,
+        "external": 21266308,
+        "arrayBuffers": 836628
+      }
+    },
+    {
+      "count": 1,
+      "mib": 1,
+      "payloadBytes": 1048576,
+      "argsBytes": 1048576,
+      "resultBytes": 1048576,
+      "index": {
+        "steps": 1,
+        "scannedBytes": 0,
+        "scannedItems": 0,
+        "ready": true
+      },
+      "coldMs": 103.017,
+      "input": {
+        "samples": 100,
+        "p50": 48.22714600000472,
+        "p95": 68.23452800000086,
+        "max": 86.42466800000693
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 0.8181909999984782,
+        "p95": 0.8908470000023954,
+        "max": 41.394513000006555
+      },
+      "resizeMs": 10.346,
+      "commitMs": 39.176,
+      "finishMs": 106.328,
+      "scan": {
+        "batches": 542,
+        "scannedBytes": 31477440,
+        "scannedItems": 94,
+        "hits": 46,
+        "maxBatchHits": 1,
+        "maxBatchBytes": 65536,
+        "maxBatchItems": 3,
+        "maxCursorBytes": 416,
+        "fullScanCount": 15,
+        "firstFullScanMs": 1733.975,
+        "complete": true,
+        "aborted": true,
+        "elapsedMs": 13253.313
+      },
+      "fullScan": {
+        "complete": true,
+        "batches": 36,
+        "hits": 3,
+        "scannedBytes": 2098492,
+        "scannedItems": 9,
+        "maxBatchHits": 1,
+        "maxBatchBytes": 65536,
+        "maxBatchItems": 4,
+        "maxResponseBytes": 742,
+        "maxCursorBytes": 416,
+        "elapsedMs": 151.314
+      },
+      "cache": {
+        "bodyBytes": 34088,
+        "bodyItems": 2,
+        "layoutBytes": 68848,
+        "layoutItems": 8,
+        "lastReadBytes": 60,
+        "lastLayoutRows": 36,
+        "metadataItems": 4
+      },
+      "memory": {
+        "rss": 708182016,
+        "heapTotal": 422256640,
+        "heapUsed": 292433880,
+        "external": 40270320,
+        "arrayBuffers": 19840640
+      }
+    },
+    {
+      "count": 1,
+      "mib": 5,
+      "payloadBytes": 5242880,
+      "argsBytes": 5242880,
+      "resultBytes": 5242880,
+      "index": {
+        "steps": 1,
+        "scannedBytes": 0,
+        "scannedItems": 0,
+        "ready": true
+      },
+      "coldMs": 128.008,
+      "input": {
+        "samples": 100,
+        "p50": 56.29045999998925,
+        "p95": 78.27683400000387,
+        "max": 148
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 0.772410999998101,
+        "p95": 0.7971430000034161,
+        "max": 0.9624719999992521
+      },
+      "resizeMs": 12.1,
+      "commitMs": 38.102,
+      "finishMs": 90.913,
+      "scan": {
+        "batches": 260,
+        "scannedBytes": 16590328,
+        "scannedItems": 12,
+        "hits": 6,
+        "maxBatchHits": 1,
+        "maxBatchBytes": 65536,
+        "maxBatchItems": 3,
+        "maxCursorBytes": 416,
+        "fullScanCount": 1,
+        "firstFullScanMs": 8511.351,
+        "complete": true,
+        "aborted": true,
+        "elapsedMs": 14479.506
+      },
+      "fullScan": {
+        "complete": true,
+        "batches": 164,
+        "hits": 3,
+        "scannedBytes": 10492220,
+        "scannedItems": 9,
+        "maxBatchHits": 1,
+        "maxBatchBytes": 65536,
+        "maxBatchItems": 4,
+        "maxResponseBytes": 742,
+        "maxCursorBytes": 416,
+        "elapsedMs": 995.213
+      },
+      "cache": {
+        "bodyBytes": 34088,
+        "bodyItems": 2,
+        "layoutBytes": 68848,
+        "layoutItems": 8,
+        "lastReadBytes": 60,
+        "lastLayoutRows": 36,
+        "metadataItems": 4
+      },
+      "memory": {
+        "rss": 732139520,
+        "heapTotal": 301641728,
+        "heapUsed": 114905752,
+        "external": 48850653,
+        "arrayBuffers": 28426463
+      }
+    }
+  ],
+  "scope": "Real file-backed SQLite, production TranscriptReader, production TuiApp input-to-render, and production scanHistory reading the same store. Controller/backend ports are intentionally fake. History is synthetic local fixture data, not a real model or real Orca run; no fixtures are presented as real provider output. Background literal search is bounded and cancellable; the search workspace retains only one page of hits (≤50 hits, ≤64 KiB body, ≤100 items) and never accumulates all matches. process memory includes fixtures and framework allocations."
+}

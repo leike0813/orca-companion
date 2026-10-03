@@ -1,0 +1,127 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
+import { scanHistory } from '../../src/application/coordinator/history-search.js';
+import type { TranscriptReadingPort } from '../../src/application/coordinator/history.js';
+import type { CommittedMessageEntry } from '../../src/domain/coordinator/session-state.js';
+import type { CoordinatorSessionId, OperationId } from '../../src/application/dto/identity.js';
+import { TranscriptReader } from '../../src/interfaces/tui/render/transcript-reader.js';
+import { createFakePorts, renderTui, settle } from './harness.js';
+
+const cleanups: (() => void)[] = [];
+afterEach(() => { for (const close of cleanups.splice(0)) close(); });
+function fixture() {
+  const opened = openCheckpointStore({ databasePath: ':memory:' });
+  if (opened.kind !== 'opened') throw new Error(opened.message);
+  const store = opened.store;
+  const entries: CommittedMessageEntry[] = [{ entryId: 'user-old', stepId: 'user-old', role: 'user', content: 'old input 中文🙂' }];
+  for (let n = 0; n < 130; n++) {
+    entries.push({ entryId: 'step-' + n, stepId: 'step-' + n, role: 'assistant', content: '', toolCalls: [{ callId: 'call-' + n,
+      name: 'read', operationId: ('op-' + n) as OperationId, mapOperationId: null, activityKind: 'query', args: { value: 'ARG_NEEDLE_' + n } }] });
+    entries.push({ entryId: 'result-' + n, stepId: 'step-' + n, role: 'tool', toolCallId: 'call-' + n, toolName: 'read',
+      content: JSON.stringify(n === 60 ? { kind: 'rejected', code: 'denied' } : { kind: 'ok', value: 'RESULT_NEEDLE_' + n }) });
+  }
+  entries.push({ entryId: 'user-new', stepId: 'user-new', role: 'user', content: 'new input 中文🙂' });
+  const saved = store.saveCheckpoint({ schemaVersion: 2, coordinatorSessionId: 'session-b' as CoordinatorSessionId, graphPosition: 'suspend',
+    committedMessages: entries, committedModelSteps: entries.filter(entry => entry.toolCalls !== undefined).map(entry => ({ stepId: entry.stepId,
+      entryId: entry.entryId, committedAt: 1, messages: [{ role: 'assistant', content: entry.content, toolCalls: entry.toolCalls }], toolCalls: entry.toolCalls!, usage: null })),
+    wakeBatches: [], lastCompactionOutcome: null });
+  if (saved.kind !== 'saved') throw new Error(saved.message);
+  while (!store.prepareHistoryInspection().ready) { /* Explicit fixture bootstrap. */ }
+  const reading: TranscriptReadingPort = {
+    inspection: { snapshot: session => Promise.resolve(store.readHistoryInspection(session)), calls: query => Promise.resolve(store.readHistoryCalls(query)),
+      users: query => Promise.resolve(store.readUserHistoryPage(query)), search: (query, signal) => scanHistory(reading, query, signal) },
+    history: query => Promise.resolve(store.readHistoryPage(query)), body: query => Promise.resolve().then(() => {
+      if (query.source.kind === 'preview') return null;
+      if (query.source.kind === 'arguments') return store.readHistoryArguments({ coordinatorSessionId: query.coordinatorSessionId,
+        entryId: query.source.entryId, stepId: query.source.stepId, callId: query.source.callId, contentRevision: 1, offset: query.offset, maxBytes: query.maxBytes });
+      const range = store.readHistoryBody({ coordinatorSessionId: query.coordinatorSessionId, entryId: query.source.entryId,
+        contentRevision: 1, offset: query.offset, maxBytes: query.maxBytes });
+      return range === null ? null : { source: query.source, ...range };
+    }), previews: () => Promise.resolve([]), pin: () => () => {}, subscribe: () => () => {},
+  };
+  cleanups.push(() => store.close());
+  return { reading, store };
+}
+async function waitFor(rendered: ReturnType<typeof renderTui>, token: string) {
+  const deadline = Date.now() + 5000;
+  while (!(rendered.lastFrame() ?? '').includes(token) && Date.now() < deadline) await settle(2);
+  expect(rendered.lastFrame()).toContain(token);
+}
+async function press(rendered: ReturnType<typeof renderTui>, input: string) {
+  rendered.stdin.write(input);
+  if (input === '\u001b') await new Promise(resolve => setTimeout(resolve, 100));
+  await settle(4);
+}
+describe('authoritative activity reading and input paths', () => {
+  it('uses one group across pages and keeps a rejected member visible while compact', async () => {
+    const { reading } = fixture(), reader = new TranscriptReader(reading);
+    cleanups.push(() => reader.dispose());
+    const newest = await reader.open('session-b', 76, 12, []);
+    const group = newest!.lines.find(line => line.activityId !== undefined);
+    expect(group?.text).toContain('rejected');
+    const oldest = await reader.read('oldest');
+    expect(oldest!.lines.find(line => line.activityId !== undefined)?.activityId).toBe(group?.activityId);
+    expect(reader.stats().lastReadBytes).toBeLessThanOrEqual(65536);
+  });
+  it('reads exact argument and result sources with whole details and preserves argument anchors', async () => {
+    const { reading } = fixture(), reader = new TranscriptReader(reading);
+    cleanups.push(() => reader.dispose());
+    reader.setDetailed(true); await reader.open('session-b', 76, 12, []);
+    const frame = await reader.read('anchor', { coordinatorSessionId: 'session-b', sequence: 2,
+      source: { kind: 'arguments', entryId: 'step-0', stepId: 'step-0', callId: 'call-0', contentRevision: 1 }, offset: 0 });
+    expect(frame!.lines.some(line => line.text.includes('ARG_NEEDLE_0'))).toBe(true);
+    expect(frame!.lines.some(line => line.text.includes('RESULT_NEEDLE_0'))).toBe(true);
+    const resized = await reader.resize(40, 12, []);
+    expect(resized!.anchor?.source.kind).toBe('arguments');
+  });
+  it('Ctrl+R adopts before sending and Esc returns the untouched chat draft', async () => {
+    const { reading } = fixture(), fake = createFakePorts();
+    cleanups.push(() => fake.closeInputStore());
+    const rendered = renderTui({ ...fake.ports, reading });
+    cleanups.push(() => rendered.unmount());
+    await waitFor(rendered, 'new input');
+    await press(rendered, 'DRAFT'); await press(rendered, '\u0012');
+    await waitFor(rendered, 'Ctrl+R'); await waitFor(rendered, 'new input');
+    expect(fake.executeCount()).toBe(0);
+    await press(rendered, '\r'); expect(fake.executeCount()).toBe(0);
+    expect(rendered.lastFrame()).not.toContain('Ctrl+R');
+    await press(rendered, '\r'); await settle(6); expect(fake.executeCount()).toBe(1);
+  });
+  it('F4 navigates complete activities and returns without sending the chat draft', async () => {
+    const { reading } = fixture(), fake = createFakePorts();
+    cleanups.push(() => fake.closeInputStore());
+    const rendered = renderTui({ ...fake.ports, reading });
+    cleanups.push(() => rendered.unmount());
+    await waitFor(rendered, 'new input');
+    await press(rendered, 'DRAFT'); await press(rendered, '\u001bOS');
+    await waitFor(rendered, 'ARG_NEEDLE_0');
+    expect(fake.executeCount()).toBe(0);
+    await press(rendered, '\u001b');
+    expect(rendered.lastFrame()).toContain('DRAFT');
+    expect(rendered.lastFrame()).not.toContain('F4 活动');
+  });
+  it('a recalled ordinary preview never becomes a pending-interaction answer', async () => {
+    const { reading, store } = fixture();
+    const RECALLED = 'RECALL_PROBE_TEXT';
+    const appended = store.appendMessage('session-b' as CoordinatorSessionId,
+      { entryId: 'user-probe', stepId: 'user-probe', role: 'user', content: RECALLED });
+    if (appended.kind !== 'saved') throw new Error(appended.message);
+    const recalls = vi.spyOn(store, 'readUserHistoryPage');
+    const fake = createFakePorts({ snapshot: { interactions: [{ interactionId: 'i-1',
+      ownerCoordinatorSessionId: 'session-b', subjectRef: { kind: 'ticket', id: 't-1' },
+      expectedRevision: 4, state: 'open' }] } });
+    cleanups.push(() => fake.closeInputStore());
+    const rendered = renderTui({ ...fake.ports, reading });
+    cleanups.push(() => rendered.unmount());
+    await waitFor(rendered, 'new input');
+    await press(rendered, '\u001b[A');
+    await waitFor(rendered, RECALLED);
+    expect(recalls).toHaveBeenCalled();
+    // 回答面板与普通历史互不相干：进入回答模式就不得带着选中的旧聊天原文。
+    await press(rendered, '\u001b[1;2D');
+    await waitFor(rendered, 'i-1');
+    await press(rendered, '\r');
+    await settle(6);
+    expect(fake.executeIntents).toEqual([]);
+  });
+});

@@ -24,6 +24,7 @@ import {
   type NativeCompactedWindowOwner,
   type NativeWindowItemRef,
   type PortableContextCapsule,
+  type ToolActivityKind,
 } from '../../domain/coordinator/session-state.js';
 import { compactWithNativeFirst, type CompactionResult } from './compaction.js';
 import {
@@ -247,8 +248,31 @@ export function entryFromResponse(
   return base;
 }
 
+/** 响应接受点唯一允许看见的注册事实：工具名，以及它是否发起副作用。 */
+export type RegisteredToolActivity = {
+  readonly name: string;
+  readonly mutating: boolean;
+};
+
 /**
- * 从模型响应里读并校验受支持的 tool calls，并为每个 call 派生可信身份。
+ * 一次已提交 call 的活动分类。
+ *
+ * 判据只有注册定义自己的 `mutating`，因此模型既不提供也无法影响这个值；注册表里没有的名字只能
+ * 来自旧历史或已失效的注册，归为 `unclassified` 而不是猜成读或写。
+ */
+export function classifyToolActivity(
+  registered: readonly RegisteredToolActivity[],
+  name: string,
+): ToolActivityKind {
+  const definition = registered.find((candidate) => candidate.name === name);
+  if (definition === undefined) {
+    return 'unclassified';
+  }
+  return definition.mutating ? 'action' : 'query';
+}
+
+/**
+ * 从模型响应里读并校验受支持的 tool calls，并为每个 call 派生可信身份与活动分类。
  *
  * 缺失或不合法时返回拒绝理由而不是补一个默认值：调用清单是「模型请求了什么」的唯一记录，
  * 猜一个 call ID 就等于允许重复副作用。`mapOperationId` 只对 `resolve_ticket` 有意义，其它工具
@@ -256,7 +280,7 @@ export function entryFromResponse(
  */
 export function parseModelToolCalls(
   value: unknown,
-  allowedNames: readonly string[],
+  registered: readonly RegisteredToolActivity[],
   derive: (callId: string) => { readonly operationId: OperationId; readonly mapOperationId: OperationId | null },
 ):
   | { readonly ok: true; readonly calls: readonly CommittedToolCall[] }
@@ -268,6 +292,7 @@ export function parseModelToolCalls(
   if (!Array.isArray(raw)) {
     return { ok: false, reason: 'tool_calls 不是数组' };
   }
+  const allowedNames = registered.map((definition) => definition.name);
   const calls: CommittedToolCall[] = [];
   for (const [index, entry] of raw.entries()) {
     if (!isRecord(entry)) {
@@ -295,6 +320,7 @@ export function parseModelToolCalls(
       args,
       operationId: identity.operationId,
       mapOperationId: name === 'resolve_ticket' ? identity.mapOperationId : null,
+      activityKind: classifyToolActivity(registered, name),
     });
   }
   return { ok: true, calls };

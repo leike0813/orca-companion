@@ -1,0 +1,24 @@
+session-long-中文规划-2026 · 执行 · blocked · 待对账 · 待答3 · 持有 session-b
+────────────────────────────────────────────────────────────────────────────────
+! reconciling · 原操作结果未知，待对账
+! Worker 状态待核验 · 另有 2 项
+  ▾ tool read_route_map · 结果 · ok                   │ 执行图侧栏 · active 1
+  │ {"kind":"ok","value":"结果边界 128"}              │ 执行图 · 验收进度不可用
+  ▾ tool read_route_map · 参数 · ok                   │ 纵向 图外 ←2 →3 · 图外 …
+  │ {"query":"查询 129","payload":129}                │    |   |    |   |   |
+  ▾ tool read_route_map · 结果 · ok                   │    o 1 o 11>@ 1 # 1 o 14
+  │ {"kind":"ok","value":"结果边界 129"}              │    +-+-+----+---+-+-+
+                                                      │ ╭──────────────────────╮
+● 活动详情与查找 · 参数、结果均从原记录读取。         │ │ 12 Composer          │
+  ▾ tool update_route_map · 参数 · unknown            │ │ reconciling · Worke… │
+  │ {"section":"destination"}                         │ │ ── 依赖关系 ──       │
+                                                      │ │ 前驱 6 · 7           │
+│ › 最新输入 保留光标与草稿                           │ │ 后继 15 · 16         │
+待答 ticket:48 · state=open · revision=7              │ ╰──────────────────────╯
+Shift+← 或 /answer 打开当前 Session 回答面板          │ 当前 wp-12 · reconcilin…
+╭────────────────────────────────────────────────────╮│ reconciling · 待对账
+│ › 普通消息                                         ││ ! reconciliation_pendin…
+│ 首尾                                               ││ ! worker_status_unverif…
+╰────────────────────────────────────────────────────╯│
+示例模型 A · 推理 不可用 · 上下文 不可用 · 图 G1·v3   │ 图标异常？选项切ASCII
+

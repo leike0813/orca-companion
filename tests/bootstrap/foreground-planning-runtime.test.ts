@@ -281,6 +281,16 @@ test.each(['pause', 'cancel', 'close', 'fence'] as const)('真实流式宿主的
   const page = await harness.host.ports.reading.history({ coordinatorSessionId: proposal.coordinatorSessionId });
   expect(page.entries.map(entry => entry.role)).toEqual(['user']);
   await expect(harness.host.ports.reading.history({ coordinatorSessionId: 'other-session' })).rejects.toThrow();
+  const inspection = harness.host.ports.reading.inspection;
+  expect(inspection).toBeDefined();
+  const historySnapshot = await inspection!.snapshot(proposal.coordinatorSessionId);
+  expect(historySnapshot.upperSequence).toBeGreaterThan(0);
+  const inputs = await inspection!.users({ coordinatorSessionId: proposal.coordinatorSessionId, direction: 'newer', upperSequence: historySnapshot.upperSequence });
+  expect(inputs.entries.map(entry => entry.role)).toEqual(['user']);
+  await expect(inspection!.snapshot('other-session')).rejects.toThrow();
+  await expect(inspection!.calls({ coordinatorSessionId: 'other-session' })).rejects.toThrow();
+  const match = await inspection!.search!({ coordinatorSessionId: proposal.coordinatorSessionId, target: 'users', literal: '__STREAM_HOST__', upperSequence: historySnapshot.upperSequence });
+  expect(match.hits).toHaveLength(1);
   if (action === 'close') harness.dispose();
   else if (action === 'fence') { now += 60_001; expect(await waitFor(() => observed.signal?.aborted === true)).toBe(true); }
   else expect((await harness.host.ports.execute({ kind: 'scope-control', action })).kind).toBe('accepted');

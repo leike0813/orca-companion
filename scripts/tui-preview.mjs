@@ -335,11 +335,45 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
         if (saved.kind === 'failed') throw new Error(saved.message);
       }
     }
+    if (process.env.ORCA_COMPANION_HISTORY_INSPECTION === '1') {
+      const messages = [{ entryId: 'inspect-user', stepId: 'inspect-user', role: 'user', content: '历史输入 中文🙂 原文' }];
+      for (let n = 0; n < 130; n++) {
+        const call = { callId: 'inspect-call-' + n, name: 'read_route_map', operationId: 'inspect-operation-' + n, mapOperationId: null,
+          activityKind: 'query', args: { query: n === 0 ? '参数边界 中文KELVINK' : '查询 ' + n, payload: n === 0 ? 'x'.repeat(1048576) : n } };
+        messages.push({ entryId: 'inspect-step-' + n, stepId: 'inspect-step-' + n, role: 'assistant', content: '', toolCalls: [call] });
+        messages.push({ entryId: 'inspect-result-' + n, stepId: 'inspect-step-' + n, role: 'tool', toolCallId: call.callId,
+          toolName: call.name, content: JSON.stringify(n === 70 ? { kind: 'rejected', code: 'fixture_rejected', message: '范围拒绝' } : { kind: 'ok', value: '结果边界 ' + n }) });
+      }
+      messages.push({ entryId: 'inspect-break', stepId: 'inspect-break', role: 'assistant', content: '活动详情与查找 · 参数、结果均从原记录读取。' });
+      messages.push({ entryId: 'inspect-action', stepId: 'inspect-action', role: 'assistant', content: '', toolCalls: [{ callId: 'inspect-action-call',
+        name: 'update_route_map', args: { section: 'destination' }, operationId: 'inspect-action-op', mapOperationId: null, activityKind: 'action' }] });
+      messages.push({ entryId: 'inspect-last-user', stepId: 'inspect-last-user', role: 'user', content: '最新输入 保留光标与草稿' });
+      for (const session of snapshot.sessions) {
+      const saved = history.store.saveCheckpoint({ schemaVersion: 2, coordinatorSessionId: session.coordinatorSessionId, graphPosition: 'suspend',
+        committedMessages: messages, committedModelSteps: messages.filter(entry => entry.toolCalls).map(entry => ({ stepId: entry.stepId, entryId: entry.entryId,
+          committedAt: 1, messages: [{ role: 'assistant', content: entry.content, toolCalls: entry.toolCalls }], toolCalls: entry.toolCalls, usage: null })),
+        wakeBatches: [], lastCompactionOutcome: null });
+      if (saved.kind !== 'saved') throw new Error(saved.message);
+      const observed = history.store.recordToolObservation({ coordinatorSessionId: session.coordinatorSessionId, entryId: 'inspect-action', stepId: 'inspect-action',
+        callId: 'inspect-action-call', operationId: 'inspect-action-op', kind: 'unknown', reason: '预览模拟响应丢失' });
+      if (observed.kind !== 'saved') throw new Error(observed.message);
+      }
+    }
+    while (!history.store.prepareHistoryInspection().ready) await new Promise(resolve => setTimeout(resolve, 0));
+    const { scanHistory } = await import('../dist/src/application/coordinator/history-search.js');
     const ports = {
       reading: {
+        inspection: {
+          snapshot: async session => history.store.readHistoryInspection(session),
+          calls: async query => history.store.readHistoryCalls(query),
+          users: async query => history.store.readUserHistoryPage(query),
+          search: (query, signal) => scanHistory(ports.reading, query, signal),
+        },
         history: async (query) => history.store.readHistoryPage(query),
         body: async (query) => {
           if (query.source.kind === 'preview') return previewStore.body(query);
+          if (query.source.kind === 'arguments') return history.store.readHistoryArguments({ coordinatorSessionId: query.coordinatorSessionId,
+            entryId: query.source.entryId, stepId: query.source.stepId, callId: query.source.callId, contentRevision: 1, offset: query.offset, maxBytes: query.maxBytes });
           const range = history.store.readHistoryBody({ coordinatorSessionId: query.coordinatorSessionId, entryId: query.source.entryId,
             contentRevision: 1, offset: query.offset, maxBytes: query.maxBytes });
           return range === null ? null : { source: query.source, offset: range.offset, end: range.end, byteLength: range.byteLength, text: range.text };

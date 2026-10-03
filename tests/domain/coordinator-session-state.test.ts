@@ -340,6 +340,40 @@ test('v1 消息数与 step 数不一致时拒绝升级，而不是丢历史或�
   }
 });
 
+test('已提交 call 的活动分类是可选闭集：缺失读回为未分类，未知取值即拒绝', () => {
+  const withCall = (call: Record<string, unknown>) =>
+    baseState({
+      committedMessages: [
+        {
+          entryId: assistantEntryId('step-1'),
+          stepId: 'step-1',
+          role: 'assistant',
+          content: '先读地图',
+          toolCalls: [call],
+        },
+      ],
+    });
+  const call = { callId: 'call-1', name: 'read_map', args: {}, operationId: 'op-1', mapOperationId: null };
+
+  const unclassified = parseCoordinatorSessionState(withCall(call));
+  expect(unclassified.ok).toBe(true);
+  if (unclassified.ok) {
+    expect(unclassified.value.committedModelSteps[0]?.toolCalls[0]?.activityKind).toBeUndefined();
+  }
+
+  const classified = parseCoordinatorSessionState(withCall({ ...call, activityKind: 'query' }));
+  expect(classified.ok).toBe(true);
+  if (classified.ok) {
+    expect(classified.value.committedMessages[0]?.toolCalls?.[0]?.activityKind).toBe('query');
+  }
+
+  const invented = parseCoordinatorSessionState(withCall({ ...call, activityKind: 'inferred' }));
+  expect(invented.ok).toBe(false);
+  if (!invented.ok) {
+    expect(invented.field).toContain('activityKind');
+  }
+});
+
 test('v1 assistant 消息上的 tool_calls 升级出确定性的 OperationId', () => {
   const legacy = legacyState({
     committedMessages: [

@@ -12,7 +12,9 @@
  * - **重放安全**：已有配对结果的 call 一律跳过。结果由 `toolResultEntryId(stepId, callId)` 定位，
  *   所以重启、重放与崩溃补齐沿用的是同一个 call 身份，不会重复发起已接受的副作用。
  *
- * 工具返回 `unknown` 时保留未配对的 call，停止循环；恢复时以原 OperationId 对账。
+ * 工具返回 `unknown` 时保留未配对的 call，停止循环；恢复时以原 OperationId 对账。节点还会在
+ * 原 fencing 仍然有效时把这次真实结果作为结构化观测落盘，让调用清单能区分「未确认」与「已观测的
+ * unknown」——观测不补配对结果、不让工具重跑，也不改写这次调用的任何身份。
  */
 
 import type {
@@ -20,7 +22,7 @@ import type {
   CoordinatorSessionRecordPort,
   FencingAssertion,
 } from '../../application/coordinator/runtime-guard.js';
-import type { CoordinatorSessionId } from '../../application/dto/identity.js';
+import type { CoordinatorSessionId, OperationId } from '../../application/dto/identity.js';
 import {
   toolResultEntryId,
   type CommittedMessageEntry,
@@ -72,6 +74,39 @@ async function invokeRegistered(
   } catch (error) {
     return { kind: 'unknown', reason: describeError(error) };
   }
+}
+
+/**
+ * 把一次真实的 `unknown` 结果记成绑定原 call 身份的观测。
+ *
+ * 三点约束：观测本身也是一次写入，因此只在原 fencing 仍有效时落盘；它不产生配对的 tool 结果条目，
+ * 恢复仍以原 OperationId 对账，旧存储没有这个端口时未配对状态已经表达「未确认」，结局不变。
+ *
+ * 返回值是观测无法落盘时的阻塞说明，其余情况为 `null`。
+ */
+function recordUnknownObservation(
+  dependencies: ToolNodeDependencies,
+  observation: {
+    readonly coordinatorSessionId: CoordinatorSessionId;
+    readonly entryId: string;
+    readonly stepId: string;
+    readonly callId: string;
+    readonly operationId: OperationId;
+    readonly reason: string;
+  },
+): string | null {
+  const write = dependencies.sessionRecords.recordToolObservation;
+  if (write === undefined) {
+    return null;
+  }
+  if (dependencies.assertFencing().kind !== 'valid') {
+    // 失去写入权就不写：权威事实仍是那条未配对的原 call，观测只是它的派生索引原料。
+    return null;
+  }
+  const recorded = write({ ...observation, kind: 'unknown' });
+  return recorded.kind === 'failed'
+    ? `无法记录 ${observation.callId} 的未知观测：${recorded.message}`
+    : null;
 }
 
 /**
@@ -131,6 +166,17 @@ export function createToolsNode(dependencies: ToolNodeDependencies) {
         mapOperationId: call.mapOperationId,
       });
       if (outcome.kind === 'unknown') {
+        const observed = recordUnknownObservation(dependencies, {
+          coordinatorSessionId,
+          entryId: step.entryId,
+          stepId: step.stepId,
+          callId: call.callId,
+          operationId: call.operationId,
+          reason: outcome.reason,
+        });
+        if (observed !== null) {
+          return blocked(observed);
+        }
         return blocked(`${call.name}(${call.callId}) 结果未知：${outcome.reason}；等待 ${call.operationId} 对账`);
       }
       const afterCall = dependencies.assertFencing();

@@ -13,6 +13,7 @@ import { PasteViewer, type PasteViewerView } from '../components/paste-viewer.js
 
 import { CommandPalette, commandReason, slashCandidates, type CommandId } from '../components/command-palette.js';
 import { Composer } from '../components/composer.js';
+import { ContextSearch, type ContextSearchView } from '../components/context-search.js';
 import { ControlBar } from '../components/control-bar.js';
 import { ProjectPanel } from '../components/project-panel.js';
 import { DialogFrame } from '../components/selection-list.js';
@@ -72,6 +73,8 @@ export type WorkspaceProps = {
   readonly terminalHeight?: number;
   readonly onTranscriptHeight?: (height: number) => void;
   readonly transcriptFrame?: TranscriptFrame | null;
+  readonly historyContext?: ContextSearchView | null;
+  readonly historyPreview?: UiDraft | null;
   readonly events: readonly SemanticEvent[];
   readonly actions: WorkspaceActions;
   readonly modelCatalog: ModelCatalog;
@@ -132,9 +135,9 @@ export function Workspace(props: WorkspaceProps) {
   useEffect(() => { if (transcriptHeight !== null) props.onTranscriptHeight?.(transcriptHeight); }, [transcriptHeight, props.onTranscriptHeight]);
   const view=props.viewModel,ui=props.ui,rows=props.terminalHeight??24;
   const {width,bodyRows,alerts,projectWidth}=workspaceLayout(view,ui,props.terminalWidth,rows);
-  const selected=ui.selectedSessionId,input=composerInputFor(ui,selected),readOnly=isComposerReadOnly(ui,selected);
+  const selected=ui.selectedSessionId,input=props.historyPreview??composerInputFor(ui,selected),readOnly=isComposerReadOnly(ui,selected);
   const overlay=ui.overlayStack.at(-1)??null;
-  const focus=overlay===null&&ui.pendingConfirmation===null&&!ui.projectPanel.open;
+  const focus=overlay===null&&ui.pendingConfirmation===null&&!ui.projectPanel.open&&!props.historyContext;
   const interactions=view.interactions.filter(i=>i.state==='open'&&i.ownerCoordinatorSessionId===selected);
   const candidates=ui.slashDismissed?[]:slashCandidates(input.text,view.scope.mode);
   const candidateRows=Math.min(candidates.length,Math.min(3,Math.max(1,rows-21)))+4;
@@ -165,9 +168,10 @@ export function Workspace(props: WorkspaceProps) {
         </Box>
         {candidates.length&&focus?<CommandPalette commands={candidates} selectedIndex={Math.min(ui.slashIndex,candidates.length-1)} onRun={props.actions.runCommand}
           availableWidth={width} maxRows={Math.min(3,Math.max(1,rows-21))} reasons={reasons} slash/>:null}
+        {props.historyContext?<ContextSearch view={props.historyContext} width={width} origin={origin}/>:null}
         {panel?<AnswerPanel view={panel} draft={input} width={width} rows={bodyRows-1-(candidates.length&&focus?candidateRows:0)} origin={origin} focused={focus} readOnly={readOnly} disabledReason={props.composerDisabledReason}/>:
         <><>{interactions.slice(0,1).map(i=><InteractionCard key={i.interactionId} interaction={i} answering={false} onEnterAnswer={props.actions.enterAnswer} availableWidth={width}/>)}</>
-        <Composer value={composerDraftFor(ui,selected)} draft={input} terminalHeight={rows} focused={focus} origin={origin} mode={ui.composerMode} readOnly={readOnly}
+        <Composer value={composerDraftFor(ui,selected)} draft={input} terminalHeight={rows} focused={focus} externalCursor={!!props.historyContext} origin={origin} mode={ui.composerMode} readOnly={readOnly}
           disabledReason={props.composerDisabledReason} newlineHint={props.newlineHint} availableWidth={width}/></>}
         <StatusLine scope={view.scope} compaction={view.compaction} maintenance={view.maintenance} blockerCount={view.blockers.length} notice={ui.notice}
           sidebarDensity={ui.sidebarDensity} execution={view.execution} availableWidth={width} model={model} graph={view.graph}/>

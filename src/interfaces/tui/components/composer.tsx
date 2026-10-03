@@ -19,6 +19,7 @@ export type ComposerProps = {
   readonly draft?: UiDraft;
   readonly terminalHeight?: number;
   readonly focused?: boolean;
+  readonly externalCursor?: boolean;
   readonly origin?: { readonly x: number; readonly y: number };
   readonly mode: ComposerMode;
   /** 该 Session 是否只读（Handoff cutover 后的 Source）。 */
@@ -41,7 +42,7 @@ export function Composer(props: ComposerProps) {
   const draft = props.draft ?? textDraft(props.value);
   const viewport = composerViewport(draft, width, props.terminalHeight ?? 24);
   // Ink 在 commit 时发布 cursor ref；本帧必须先填入位置，effect 会落后一帧。
-  setCursorPosition(props.focused === true && !props.readOnly && metrics.hasMeasured
+  if (!props.externalCursor) setCursorPosition(props.focused === true && !props.readOnly && metrics.hasMeasured
     ? { x: Math.round((props.origin?.x ?? 0) + metrics.left + 2 + Math.min(width, viewport.cursor.column)),
       y: Math.round((props.origin?.y ?? 0) + metrics.top + 2 + viewport.cursor.row) }
     : undefined);

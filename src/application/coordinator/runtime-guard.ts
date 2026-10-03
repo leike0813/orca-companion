@@ -28,6 +28,7 @@ import type {
   RuntimeIncarnationId,
 } from '../dto/identity.js';
 import type { OperationIntent } from '../dto/operation-intent.js';
+import type { HistoryToolObservation } from './history-inspection.js';
 import {
   acquireRuntimeLease,
   DEFAULT_RUNTIME_LEASE_TTL_MS,
@@ -164,6 +165,7 @@ export type CheckpointAppendPort = {
 export type CoordinatorSessionRecordPort = CheckpointRecoveryPort &
   UserMessageCommitPort &
   CheckpointAppendPort & {
+    readonly recordToolObservation?: (input: HistoryToolObservation) => CheckpointWriteResult;
     readonly updateCheckpoint: (coordinatorSessionId: CoordinatorSessionId, patch: Partial<Pick<CoordinatorSessionState, 'graphPosition' | 'lastCompactionOutcome'>>) => CheckpointWriteResult;
     readonly appendMessage: (coordinatorSessionId: CoordinatorSessionId, entry: CommittedMessageEntry) => CheckpointWriteResult;
     readonly readEntry: (coordinatorSessionId: string, entryId: string) => CommittedMessageEntry | null;

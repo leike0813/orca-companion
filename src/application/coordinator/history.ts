@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import type { CommittedMessageEntry } from '../../domain/coordinator/session-state.js';
 import type { ControllerTranscriptPage, ControllerTranscriptMessage } from '../controller-service.js';
+import type { HistoryInspectionReadingPort } from './history-inspection.js';
 
 export const HISTORY_PAGE_ITEMS = 100;
 export const HISTORY_PAGE_BYTES = 64 * 1024;
@@ -60,6 +61,7 @@ export type TranscriptStreamEvent = {
 export type TranscriptStreamObserver = (event: TranscriptStreamEvent) => void;
 export type TranscriptSourceRef =
   | { readonly kind: 'history'; readonly entryId: string; readonly contentRevision: 1 }
+  | { readonly kind: 'arguments'; readonly entryId: string; readonly stepId: string; readonly callId: string; readonly contentRevision: 1 }
   | { readonly kind: 'preview'; readonly previewId: string; readonly contentRevision: number };
 export type TranscriptPreview = {
   readonly coordinatorSessionId: string;
@@ -81,6 +83,7 @@ export type TranscriptBodyRange = Omit<HistoryBodyRange, 'entryId' | 'contentRev
 };
 /** IC-11: one bounded reading surface for authoritative and temporary sources. */
 export type TranscriptReadingPort = {
+  readonly inspection?: HistoryInspectionReadingPort;
   readonly history: (query: HistoryPageQuery) => Promise<HistoryMetadataPage>;
   readonly body: (query: TranscriptBodyQuery) => Promise<TranscriptBodyRange | null>;
   readonly previews: (coordinatorSessionId: string) => Promise<readonly TranscriptPreview[]>;
@@ -91,6 +94,7 @@ export const transcriptBodyQuerySchema = z.strictObject({
   coordinatorSessionId: z.string().min(1),
   source: z.discriminatedUnion('kind', [
     z.strictObject({ kind: z.literal('history'), entryId: z.string().min(1), contentRevision: z.literal(1) }),
+    z.strictObject({ kind: z.literal('arguments'), entryId: z.string().min(1), stepId: z.string().min(1), callId: z.string().min(1), contentRevision: z.literal(1) }),
     z.strictObject({ kind: z.literal('preview'), previewId: z.string().min(1), contentRevision: z.number().int().positive() }),
   ]),
   offset: z.number().int().nonnegative(),

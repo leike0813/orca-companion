@@ -117,6 +117,7 @@ export type TuiState = {
   readonly unreadSessionIds: readonly string[];
   readonly composerMode: ComposerMode;
   readonly expandedToolIds: readonly string[];
+  readonly detailedTranscript: boolean;
   readonly inspectorSelection: string | null;
   readonly notice: string | null;
   readonly attention: boolean;
@@ -155,6 +156,7 @@ export const initialTuiState: TuiState = {
   unreadSessionIds: [],
   composerMode: { kind: 'message' },
   expandedToolIds: [],
+  detailedTranscript: false,
   inspectorSelection: null,
   notice: null,
   attention: false,
@@ -165,6 +167,7 @@ export const initialTuiState: TuiState = {
 };
 
 export type TuiAction =
+  | { readonly kind: 'transcript-details'; readonly detailed: boolean; readonly expanded?: readonly string[] }
   | { readonly kind: 'handoff-target'; readonly command: 'handoff' | 'execution-handoff' }
   | { readonly kind: 'project-panel'; readonly panel: ProjectPanelState }
   | { readonly kind: 'icons'; readonly mode: TuiIconMode }
@@ -204,6 +207,7 @@ function clampDensity(current: SidebarDensity, allowed: SidebarDensity): Sidebar
 
 export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
   switch (action.kind) {
+    case 'transcript-details': return { ...state, detailedTranscript: action.detailed, expandedToolIds: action.expanded === undefined ? state.expandedToolIds : boundedExpansions(action.expanded) };
     case 'handoff-target': return { ...state, handoffCommand: action.command };
     case 'project-panel': return { ...state, projectPanel: action.panel };
     case 'icons': return { ...state, iconMode: action.mode };
@@ -289,7 +293,7 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         ...state,
         expandedToolIds: state.expandedToolIds.includes(action.entryId)
           ? state.expandedToolIds.filter((id) => id !== action.entryId)
-          : [...state.expandedToolIds, action.entryId],
+          : boundedExpansions([...state.expandedToolIds, action.entryId]),
       };
     case 'inspector-selected':
       return { ...state, inspectorSelection: action.workPackageId, inspectorScroll: 0 };
@@ -310,6 +314,16 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
     case 'execution-handoff-review':
       return { ...state, executionHandoffReviewId: action.handoffId };
   }
+}
+
+function boundedExpansions(ids: readonly string[]): readonly string[] {
+  const retained: string[] = []; let bytes = 0;
+  for (const id of [...ids].reverse()) {
+    const size = id.length * 2 + 64;
+    if (retained.length >= 64 || bytes + size > 256 * 1024) break;
+    retained.unshift(id); bytes += size;
+  }
+  return retained;
 }
 
 /** 当前 Session 的 composer 文本；没有草稿时为空串。 */

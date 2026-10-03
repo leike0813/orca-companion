@@ -19,6 +19,9 @@
  */
 
 import type { ControlState, CoordinationMode } from '../domain/coordination/mode.js';
+import { inspectionQuerySchema, historyCallQuerySchema, userHistoryQuerySchema, historySearchQuerySchema,
+  type HistoryInspectionSnapshot, type HistoryCallQuery, type HistoryCallPage, type UserHistoryQuery,
+  type HistorySearchQuery, type HistorySearchPage } from './coordinator/history-inspection.js';
 import { historyPageQuerySchema, transcriptBodyQuerySchema,
   type HistoryPageQuery, type HistoryMetadataPage, type TranscriptBodyQuery,
   type TranscriptBodyRange, type TranscriptPreview, type TranscriptReadingPort,
@@ -379,6 +382,10 @@ export type ControllerQuestionResult =
   | { readonly kind: 'rejected'; readonly code: string; readonly message: string };
 
 export type ControllerQuery = ControllerQuestionQuery
+  | { readonly kind: 'history-inspection'; readonly coordinatorSessionId: string }
+  | { readonly kind: 'history-calls'; readonly query: HistoryCallQuery }
+  | { readonly kind: 'user-history'; readonly query: UserHistoryQuery }
+  | { readonly kind: 'history-search'; readonly query: HistorySearchQuery; readonly signal?: AbortSignal }
   | { readonly kind: 'session-history'; readonly query: HistoryPageQuery }
   | { readonly kind: 'transcript-body'; readonly query: TranscriptBodyQuery }
   | { readonly kind: 'transcript-previews'; readonly coordinatorSessionId: string }
@@ -400,6 +407,10 @@ export type ControllerQuery = ControllerQuestionQuery
     };
 
 export type ControllerQueryResult = ControllerQuestionResult
+  | { readonly kind: 'history-inspection'; readonly snapshot: HistoryInspectionSnapshot }
+  | { readonly kind: 'history-calls'; readonly page: HistoryCallPage }
+  | { readonly kind: 'user-history'; readonly page: HistoryMetadataPage }
+  | { readonly kind: 'history-search'; readonly page: HistorySearchPage }
   | { readonly kind: 'session-history'; readonly page: HistoryMetadataPage }
   | { readonly kind: 'transcript-body'; readonly range: TranscriptBodyRange | null }
   | { readonly kind: 'transcript-previews'; readonly previews: readonly TranscriptPreview[] }
@@ -1177,6 +1188,34 @@ export function createControllerService(dependencies: ControllerServiceDependenc
 
   const query = async (input: ControllerQuery): Promise<ControllerQueryResult> => {
     switch (input.kind) {
+      case 'history-inspection': {
+        const parsed = inspectionQuerySchema.safeParse({ coordinatorSessionId: input.coordinatorSessionId });
+        if (!parsed.success) return { kind: 'rejected', code: 'invalid_history_query', message: 'Session 身份无效' };
+        const inspection = dependencies.reading?.inspection;
+        if (inspection === undefined) return { kind: 'rejected', code: 'history_unavailable', message: '调用历史读取不可用' };
+        return { kind: 'history-inspection', snapshot: await inspection.snapshot(parsed.data.coordinatorSessionId) };
+      }
+      case 'history-calls': {
+        const parsed = historyCallQuerySchema.safeParse(input.query);
+        if (!parsed.success) return { kind: 'rejected', code: 'invalid_history_query', message: '调用查询边界无效' };
+        const inspection = dependencies.reading?.inspection;
+        if (inspection === undefined) return { kind: 'rejected', code: 'history_unavailable', message: '调用历史读取不可用' };
+        return { kind: 'history-calls', page: await inspection.calls(parsed.data) };
+      }
+      case 'user-history': {
+        const parsed = userHistoryQuerySchema.safeParse(input.query);
+        if (!parsed.success) return { kind: 'rejected', code: 'invalid_history_query', message: '输入历史查询边界无效' };
+        const inspection = dependencies.reading?.inspection;
+        if (inspection === undefined) return { kind: 'rejected', code: 'history_unavailable', message: '输入历史读取不可用' };
+        return { kind: 'user-history', page: await inspection.users(parsed.data) };
+      }
+      case 'history-search': {
+        const parsed = historySearchQuerySchema.safeParse(input.query);
+        if (!parsed.success) return { kind: 'rejected', code: 'invalid_history_query', message: '搜索边界无效' };
+        const search = dependencies.reading?.inspection?.search;
+        if (search === undefined) return { kind: 'rejected', code: 'history_unavailable', message: '历史搜索不可用' };
+        return { kind: 'history-search', page: await search(parsed.data, input.signal) };
+      }
       case 'session-history': {
         const parsed = historyPageQuerySchema.safeParse(input.query);
         if (!parsed.success) return { kind: 'rejected', code: 'invalid_history_query', message: '历史查询边界无效' };

@@ -1,0 +1,40 @@
+session-long-中文规划-2026 · 执行 · blocked · 待对账 · 待答3 · 持有 session-b
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+! reconciling · 原操作结果未知，待对账
+! Worker 状态待核验 · 另有 2 项
+  │ 参数边界 中文KELVINK","payload":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│ 执行图侧栏 · active 1
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│ 执行图 · 验收进度不可用
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│ 纵向 图外 ↑0 ↓3
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│                    󰝥 1
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│           ┌────────┼────────┐
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│           │        │        │
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│           󰝥 2      󰝥 3      󰝥 4
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│        ┌──┴──┐     ├─────┐  └──┐
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│        │     │     │     │     │
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│        󰝥 5   󰝥 6   󰝥 7   󰝥 8   󰝥 9
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│        ├─────┼─────┼─────┼─────┤
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│        │     │     │     │     │
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│        󰝦 10  󰝦 11 ›󰝦 12  󰮊 13  󰝦 14
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│        └──┬──┴─────┼─────┴──┬──┘
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│           │        │        │
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│           󰝦 15     󰝦 16     󰝦 17
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│           └────────┼────────┴─────────┐
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│                    │                  │
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│                    󰝦 18               │
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│                    │                  │
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│                    ├──────────────────┘
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│                    󰝦 19
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│ ╭──────────────────────────────────────╮
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│ │ 12 Composer                          │
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│ │ reconciling · Worker unverifiable    │
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│ │ ── 依赖关系 ──                       │
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│ │ 前驱 6 · 7                           │
+  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx│ │ 后继 15 · 16                         │
+待答 ticket:48 · state=open · revision=7                                      │ ╰──────────────────────────────────────╯
+Shift+← 或 /answer 打开当前 Session 回答面板                                  │ 当前 wp-12 · reconciling · unverifiable
+╭────────────────────────────────────────────────────────────────────────────╮│ reconciling · 待对账
+│ › 普通消息                                                                 ││ ! reconciliation_pending: wp-12 等待原…
+│ 首中尾                                                                     ││ ! worker_status_unverifiable: wp-13 Wor…
+╰────────────────────────────────────────────────────────────────────────────╯│
+示例模型 A · 推理 不可用 · 上下文 不可用 · 图 G1·v3                           │ 图标异常？选项切ASCII
+

@@ -20,6 +20,7 @@ export function toolToggleLabel(entry: { readonly id: string; readonly name: str
 function Row({ line, width }: { readonly line: TranscriptLine; readonly width: number }) {
   const text = truncateToDisplayWidth(line.text, Math.max(1, width - (line.kind === 'user' || line.kind === 'tool-detail' ? 4 : 2)));
   if (line.kind === 'gap') return <Text> </Text>;
+  if (line.highlighted) return <Text inverse>{'› ' + text}</Text>;
   if (line.kind === 'user') return <Text color={tuiColors.accent} bold>{'│ ' + (line.first ? '› ' : '  ') + (text || ' ')}</Text>;
   if (line.kind === 'tool' || line.kind === 'status') return <Text color={tuiColors.warning}>{'  ' + text}</Text>;
   if (line.kind === 'tool-detail') return <Text color={tuiColors.muted}>{'  │ ' + (text || ' ')}</Text>;
@@ -34,5 +35,6 @@ export function Transcript(props: TranscriptProps) {
     : props.frame?.lines ?? [];
   if (lines.length === 0) return <Text dimColor>{props.transcript.historyStatus === 'loading' ? '正在读取对话…'
     : props.transcript.historyStatus === 'unavailable' ? '对话尚未载入' : '尚无对话记录'}</Text>;
-  return <Box flexDirection="column">{lines.slice(0, height).map(line => <Box key={line.key}><Row line={line} width={props.availableWidth}/></Box>)}</Box>;
+  const visible = props.frame?.atLatest ? lines.slice(-height) : lines.slice(0, height);
+  return <Box flexDirection="column">{visible.map(line => <Box key={line.key}><Row line={line} width={props.availableWidth}/></Box>)}</Box>;
 }

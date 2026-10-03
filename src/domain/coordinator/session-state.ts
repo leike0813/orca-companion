@@ -63,7 +63,20 @@ export type CommittedToolCall = {
   readonly operationId: OperationId;
   /** 该 call 触发的第二次独立副作用（`resolve_ticket` 的地图写入）；没有时为 `null`。 */
   readonly mapOperationId: OperationId | null;
+  /**
+   * 可信活动分类：读查询还是写动作。
+   *
+   * 它由响应接受点按**同一份**注册定义的 `mutating` 填写，模型既不提供也不影响它；注册表里查不
+   * 到的名字归为 `unclassified`，不猜成读或写。字段可选：在这条分类存在之前提交的历史没有它，
+   * 缺失是合法旧记录，按未分类读回而不是拒绝整份状态。
+   */
+  readonly activityKind?: ToolActivityKind;
 };
+
+/** 已提交 call 的活动分类闭集；读回时缺失与 `unclassified` 都不构成损坏。 */
+export const TOOL_ACTIVITY_KINDS = ['query', 'action', 'unclassified'] as const;
+
+export type ToolActivityKind = (typeof TOOL_ACTIVITY_KINDS)[number];
 
 /**
  * 一条已提交的会话消息。
@@ -267,7 +280,14 @@ const COMPACTED_STEP_FIELDS: readonly string[] = [
 
 const LEGACY_COMMITTED_STEP_FIELDS: readonly string[] = ['stepId', 'committedAt', 'messages', 'usage'];
 
-const TOOL_CALL_FIELDS: readonly string[] = ['callId', 'name', 'args', 'operationId', 'mapOperationId'];
+const TOOL_CALL_FIELDS: readonly string[] = [
+  'callId',
+  'name',
+  'args',
+  'operationId',
+  'mapOperationId',
+  'activityKind',
+];
 
 const MESSAGE_ENTRY_FIELDS: readonly string[] = [
   'entryId',
@@ -505,6 +525,14 @@ function parseToolCall(raw: unknown, field: string): IdentityResult<CommittedToo
   if (!mapOperationId.ok) {
     return mapOperationId;
   }
+  const activityRaw = raw['activityKind'];
+  if (
+    activityRaw !== undefined &&
+    (typeof activityRaw !== 'string' || !(TOOL_ACTIVITY_KINDS as readonly string[]).includes(activityRaw))
+  ) {
+    return fail(`${field}.activityKind`, `活动分类必须是 ${TOOL_ACTIVITY_KINDS.join(' / ')} 之一`);
+  }
+  const activityKind = activityRaw as ToolActivityKind | undefined;
   return {
     ok: true,
     value: {
@@ -513,6 +541,8 @@ function parseToolCall(raw: unknown, field: string): IdentityResult<CommittedToo
       args: raw['args'],
       operationId: operationId.value as OperationId,
       mapOperationId: mapOperationId.value as OperationId | null,
+      // 旧历史里没有这个字段：不补默认值，缺失本身就是「未分类」这一事实。
+      ...(activityKind === undefined ? {} : { activityKind }),
     },
   };
 }

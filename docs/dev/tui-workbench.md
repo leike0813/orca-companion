@@ -47,6 +47,8 @@ React DevTools 可检查组件树并临时调整 props；试出的值需再写�
 
 ## 采集真实终端画面
 
+第四批历史检查可用 `ORCA_COMPANION_HISTORY_INSPECTION=1 pnpm ui:preview alignment`。它使用隔离 SQLite 与生产 App，提供跨页查询活动、1MiB 参数、拒绝及 unknown 样例；全部调用是明确的预览数据。F3/F4、Ctrl+T/Ctrl+R 和召回的证据脚本为 `node artifacts/history-inspection/capture.mjs`，性能脚本为同目录 `benchmark.mjs`。运行前执行 `pnpm build`；预览不会连接真实模型或 Orca。
+
 ```sh
 pnpm build
 pnpm exec tuistory -s companion-ui --cols 120 --rows 40 -- node scripts/tui-preview.mjs long-cjk

@@ -285,8 +285,12 @@ export function createModelNode(dependencies: CoordinatorNodeDependencies) {
       });
       return { status: 'stalled', graphPosition: 'model', note: `模型调用未完整提交：${reason}` };
     };
-    const allowedNames = (dependencies.tools ?? []).map((definition) => definition.name);
-    const parsed = parseModelToolCalls(response, allowedNames, (callId) => ({
+    // 允许的名字与活动分类都取自同一份注册定义：模型不提供分类，也无法让一个写工具被记成读。
+    const registered = (dependencies.tools ?? []).map((definition) => ({
+      name: definition.name,
+      mutating: definition.mutating,
+    }));
+    const parsed = parseModelToolCalls(response, registered, (callId) => ({
       operationId: toolOperationId(stepId, callId),
       mapOperationId: toolMapOperationId(stepId, callId),
     }));

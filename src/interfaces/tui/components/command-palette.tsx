@@ -145,7 +145,8 @@ export function parseSlashInput(text: string, mode: string): SlashResolution {
 
 export const HELP_LINES = [
   'Ctrl+P 命令 · Ctrl+B 项目 · Ctrl+G 执行图检查',
-  'Ctrl+T 展开/折叠最近一条工具记录 · Shift+← 回答 · Ctrl+A/E 行首尾',
+  'Ctrl+T 整体详细 · F4 活动 · F3 查找 · Ctrl+R 输入历史',
+  'Shift+← 回答 · Ctrl+A/E 行首尾 · 空输入 ↑ 召回',
   'Esc 逐层关闭 · Ctrl+C 退出（不隐式 Pause/Cancel，危险态先确认）',
   '执行图过滤只隐藏节点，不改变拓扑顺序',
   'Enter 提交 · Alt+Enter 换行（支持解析 Shift+Enter 的终端也可使用）',

@@ -6,6 +6,7 @@ import {
   type TranscriptReadingPort, type TranscriptSourceRef,
 } from '../../../application/coordinator/history.js';
 import type { ControllerTranscriptPage } from '../../../application/controller-service.js';
+import type { HistoryCall } from '../../../application/coordinator/history-inspection.js';
 import type { TranscriptView } from '../../../application/tui/view-model.js';
 import { displayWidth, truncateToDisplayWidth } from './width.js';
 
@@ -16,6 +17,8 @@ export type TranscriptSpan = { readonly text: string; readonly style: Style };
 type Source = {
   readonly ref: TranscriptSourceRef; readonly sequence: number; readonly byteLength: number;
   readonly role: 'user' | 'assistant' | 'tool'; readonly name: string; readonly status?: TranscriptPreview['status'];
+  readonly call?: HistoryCall;
+  readonly part?: 'arguments' | 'result';
 };
 export type TranscriptAnchor = {
   readonly coordinatorSessionId: string; readonly source: TranscriptSourceRef;
@@ -24,6 +27,8 @@ export type TranscriptAnchor = {
 export type TranscriptLine = {
   readonly key: string; readonly id: string; readonly kind: 'user' | 'agent' | 'tool' | 'tool-detail' | 'gap' | 'status';
   readonly first: boolean; readonly text: string; readonly spans: readonly TranscriptSpan[];
+  readonly activityId?: string;
+  readonly highlighted?: boolean;
   readonly anchor: TranscriptAnchor; readonly end: number;
 };
 export type TranscriptFrame = {
@@ -61,8 +66,8 @@ class Cache<T> {
   get size(): number { return this.items.size; }
 }
 const utf8Length = (text: string): number => Buffer.byteLength(text, 'utf8');
-const idOf = (source: TranscriptSourceRef): string => source.kind === 'history' ? source.entryId : source.previewId;
-const sourceKey = (source: TranscriptSourceRef): string => `${source.kind}:${idOf(source)}`;
+const idOf = (source: TranscriptSourceRef): string => source.kind === 'preview' ? source.previewId : source.entryId;
+const sourceKey = (source: TranscriptSourceRef): string => `${source.kind}:${idOf(source)}${source.kind === 'arguments' ? ':' + source.callId : ''}`;
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 function rawSpan(text: string, offset: number, style: Style = 'plain'): PaintedSpan {
@@ -187,13 +192,18 @@ export class TranscriptReader {
   private width = 80;
   private height = 12;
   private expanded: readonly string[] = [];
+  private detailed = false;
+  private detailChanged = false;
+  private inspectionBytes = 0;
+  private upperSequence: number | undefined;
+  private hit: { source: TranscriptSourceRef; offset: number; end: number } | null = null;
   private sources: Source[] = [];
   private previews: readonly TranscriptPreview[] = [];
   private currentSources = new Map<string, Source>();
   private following = true;
   private current: TranscriptFrame | null = null;
   private readonly bodies = new Cache<TranscriptBodyRange>();
-  private readonly layouts = new Cache<LocalLine[]>(TRANSCRIPT_CACHE_BYTES - 512 * 1024, TRANSCRIPT_CACHE_ITEMS - 16);
+  private readonly layouts = new Cache<LocalLine[]>(TRANSCRIPT_CACHE_BYTES - 1024 * 1024, TRANSCRIPT_CACHE_ITEMS - 16);
   private readonly contexts = new Map<string, Context>();
   private previewPins = new Map<string, () => void>();
   private readBytes = 0;
@@ -202,11 +212,13 @@ export class TranscriptReader {
   constructor(port: TranscriptReadingPort) { this.port = port; }
   get frame(): TranscriptFrame | null { return this.current; }
   get atLatest(): boolean { return this.following; }
+  setDetailed(detailed: boolean): void { this.detailChanged ||= this.detailed !== detailed; this.detailed = detailed; }
+  highlight(hit: { source: TranscriptSourceRef; offset: number; end: number } | null): void { this.hit = hit; }
   stats() { return { bodyBytes: this.bodies.bytes, bodyItems: this.bodies.size,
-    layoutBytes: this.layouts.bytes + [...this.contexts].reduce((n, [key]) => n + key.length * 2 + 256, 0), layoutItems: this.layouts.size + this.contexts.size, lastReadBytes: this.readBytes,
+    layoutBytes: this.layouts.bytes + this.inspectionBytes + this.expanded.reduce((n, id) => n + id.length * 2 + 64, 0) + [...this.contexts].reduce((n, [key]) => n + key.length * 2 + 256, 0), layoutItems: this.layouts.size + this.contexts.size + (this.inspectionBytes > 0 ? 1 : 0) + (this.expanded.length > 0 ? 1 : 0), lastReadBytes: this.readBytes,
     lastLayoutRows: this.layoutRows, metadataItems: this.sources.length }; }
   dispose(): void {
-    this.generation += 1; this.bodies.clear(); this.layouts.clear(); this.contexts.clear(); this.currentSources.clear();
+    this.generation += 1; this.bodies.clear(); this.layouts.clear(); this.contexts.clear(); this.currentSources.clear(); this.inspectionBytes = 0; this.upperSequence = undefined;
     for (const release of this.previewPins.values()) release(); this.previewPins.clear();
   }
   private check(request: number): void { if (request !== this.generation) throw new StaleRead(); }
@@ -217,11 +229,25 @@ export class TranscriptReader {
       this.port.previews(this.session),
     ]);
     this.check(request); this.previews = previews;
-    const histories = page.entries.filter((entry): entry is HistoryMetadata & { role: Source['role'] } =>
+    let histories = page.entries.filter((entry): entry is HistoryMetadata & { role: Source['role'] } =>
       entry.role === 'user' || entry.role === 'assistant' || entry.role === 'tool').map((entry): Source => ({
         ref: { kind: 'history', entryId: entry.entryId, contentRevision: 1 }, sequence: entry.sequence,
         byteLength: entry.byteLength, role: entry.role, name: entry.toolName ?? 'tool',
       }));
+    const inspection = this.port.inspection;
+    if (inspection !== undefined) {
+      const snapshot = await inspection.snapshot(this.session); this.check(request);
+      if (this.following || this.upperSequence === undefined) this.upperSequence = snapshot.upperSequence;
+      if (snapshot.ready) {
+        const calls = await inspection.calls({ coordinatorSessionId: this.session, upperSequence: this.upperSequence, direction,
+          ...(sequence === undefined ? {} : direction === 'older' ? { before: { sequence, ordinal: 0 } } : { after: { sequence, ordinal: Number.MAX_SAFE_INTEGER } }) });
+        this.check(request); this.inspectionBytes = utf8Length(JSON.stringify(calls)) * 2 + 1024;
+        const refs = calls.calls.flatMap(call => this.callSources(call));
+        const paired = new Set(calls.calls.flatMap(call => call.result === null ? [] : [call.result.entryId]));
+        histories = [...histories.filter(source => !paired.has(idOf(source.ref)) &&
+          !(source.role === 'assistant' && source.byteLength === 0 && calls.calls.some(call => call.entryId === idOf(source.ref)))), ...refs];
+      }
+    }
     const from = histories[0]?.sequence ?? 0;
     const to = histories.at(-1)?.sequence ?? Infinity;
     const temporary = previews.filter(p => (p.status !== 'committed' || !this.following && this.currentSources.has(`preview:${p.previewId}`)) && p.afterSequence >= from - 1 && p.afterSequence <= to)
@@ -229,16 +255,24 @@ export class TranscriptReader {
         ? this.currentSources.get(`preview:${preview.previewId}`)!
         : { ref: { kind: 'preview', previewId: preview.previewId, contentRevision: preview.contentRevision },
           sequence: preview.afterSequence, byteLength: preview.byteLength, role: 'assistant', name: '', status: preview.status });
-    this.sources = [...histories, ...temporary].sort((a, b) => a.sequence - b.sequence ||
+    this.sources = [...histories, ...temporary].sort((a, b) => a.sequence - b.sequence || (a.call?.ordinal ?? -1) - (b.call?.ordinal ?? -1) ||
       (a.ref.kind === 'history' ? -1 : b.ref.kind === 'history' ? 1 : 0));
     return this.sources;
+  }
+  private callSources(call: HistoryCall): Source[] {
+    return [{ ref: { kind: 'arguments', entryId: call.entryId, stepId: call.stepId, callId: call.callId, contentRevision: 1 },
+      sequence: call.sequence, byteLength: call.argsByteLength, role: 'tool', name: call.name, call, part: 'arguments' },
+    ...(call.result === null ? [] : [{ ref: { kind: 'history' as const, entryId: call.result.entryId, contentRevision: 1 as const },
+      sequence: call.result.sequence, byteLength: call.result.byteLength, role: 'tool' as const, name: call.name, call, part: 'result' as const }])];
   }
   private anchor(source: Source, offset: number): TranscriptAnchor {
     return { coordinatorSessionId: this.session, source: source.ref, sequence: source.sequence, offset };
   }
   private line(source: Source, item: LocalLine, kind: TranscriptLine['kind']): TranscriptLine {
     return { ...item, key: `${sourceKey(source.ref)}:${source.ref.contentRevision}:${item.start}:${kind}`,
-      id: idOf(source.ref), kind, anchor: this.anchor(source, item.start) };
+      id: idOf(source.ref), kind, anchor: this.anchor(source, item.start),
+      ...(source.call === undefined ? {} : { activityId: source.call.activityId }),
+      ...(this.hit !== null && sourceKey(this.hit.source) === sourceKey(source.ref) && item.start < this.hit.end && item.end > this.hit.offset ? { highlighted: true } : {}) };
   }
   private async range(source: Source, block: number, request: number, keys: Set<string>): Promise<TranscriptBodyRange> {
     const immutable = source.ref.kind === 'history' || block + HISTORY_CHUNK_BYTES + 8 <= source.byteLength;
@@ -274,8 +308,8 @@ export class TranscriptReader {
       else if (marker[1]![0] === fence[0] && marker[1]!.length >= fence.length && marker[2]!.trim() === '') fence = null;
     }
     this.contexts.set(`${prefix}:${block + HISTORY_CHUNK_BYTES}`, { fence });
-    while (this.contexts.size > 16 ||
-      [...this.contexts].reduce((n, [key]) => n + key.length * 2 + 256, 0) > 512 * 1024) this.contexts.delete(this.contexts.keys().next().value!);
+    while (this.contexts.size > 14 ||
+      [...this.contexts].reduce((n, [key]) => n + key.length * 2 + 256, 0) > 384 * 1024) this.contexts.delete(this.contexts.keys().next().value!);
   }
   private async localLines(source: Source, offset: number, direction: 'start' | 'end', count: number,
     request: number, bodyKeys: Set<string>, layoutKeys: Set<string>): Promise<LocalLine[]> {
@@ -310,6 +344,13 @@ export class TranscriptReader {
     return rows;
   }
   private async neighbor(source: Source, direction: 'older' | 'newer', request: number): Promise<Source | null> {
+    if (source.ref.kind === 'arguments' && source.call !== undefined && this.port.inspection !== undefined) {
+      const page = await this.port.inspection.calls({ coordinatorSessionId: this.session, upperSequence: this.upperSequence,
+        entryId: source.call.entryId, direction, ...(direction === 'older' ? { before: { sequence: source.call.sequence, ordinal: source.call.ordinal } } : { after: { sequence: source.call.sequence, ordinal: source.call.ordinal } }) });
+      this.check(request);
+      const call = direction === 'older' ? page.calls.at(-1) : page.calls[0];
+      if (call !== undefined) return this.callSources(call)[0]!;
+    }
     const index = this.sources.findIndex(item => sourceKey(item.ref) === sourceKey(source.ref));
     const adjacent = index < 0 ? undefined : this.sources[index + (direction === 'older' ? -1 : 1)];
     if (adjacent !== undefined) return adjacent;
@@ -342,17 +383,23 @@ export class TranscriptReader {
         if (current.ref.kind === 'preview' && !nextPins.has(id)) nextPins.set(id,
           this.previewPins.get(id) ?? this.port.pin(this.session, id));
         let rows: TranscriptLine[] = [];
-        const collapsed = current.role === 'tool' && !this.expanded.includes(id);
+        const activityId = current.call?.activityId ?? id;
+        const temporary = this.hit !== null && sourceKey(this.hit.source) === sourceKey(current.ref);
+        const collapsed = current.role === 'tool' && !this.detailed && !this.expanded.includes(activityId) && !this.expanded.includes(id) && !temporary;
         if (collapsed) {
-          rows = [this.line(current, { text: truncateToDisplayWidth(`▸ tool ${current.name}`, Math.max(1, this.width - 2)),
-            spans: [], start: 0, end: current.byteLength, first: true }, 'tool')];
+          const existing = lines.some(line => line.activityId === activityId);
+          const label = current.call?.activityKind === 'query' ? '查询活动' : `tool ${current.name}`;
+          const status = current.call?.activityStatus ?? current.call?.status;
+          rows = existing && (status === undefined || status === 'ok' || status === 'unconfirmed') ? [] :
+            [this.line(current, { text: truncateToDisplayWidth(`▸ ${label}${current.call?.activityCount === undefined ? '' : ' · ' + current.call.activityCount + ' 次'}${status === undefined ? '' : ' · ' + status}`, Math.max(1, this.width - 2)),
+              spans: [], start: 0, end: current.byteLength, first: true }, 'tool')];
         } else {
           let local: LocalLine[];
           try { local = await this.localLines(current, position, direction, count - lines.length, request, bodyKeys, layoutKeys); }
           catch (error) { if (error instanceof ReadBudget) break; throw error; }
           rows = local.map(row => this.line(current!, row, current!.role === 'user' ? 'user' : current!.role === 'tool' ? 'tool-detail' : 'agent'));
           if (current.role === 'tool' && (direction === 'start' ? position === 0 : rows[0]?.anchor.offset === 0)) rows.unshift(this.line(current,
-            { text: truncateToDisplayWidth(`▾ tool ${current.name}`, Math.max(1, this.width - 2)), spans: [], start: 0, end: 0, first: true }, 'tool'));
+            { text: truncateToDisplayWidth(`▾ tool ${current.name}${current.part === undefined ? '' : ' · ' + (current.part === 'arguments' ? '参数' : '结果')}${current.call === undefined ? '' : ' · ' + current.call.status}`, Math.max(1, this.width - 2)), spans: [], start: 0, end: 0, first: true }, 'tool'));
           if (current.ref.kind === 'preview' && current.status !== 'streaming' &&
             (direction === 'end' ? position === current.byteLength : (rows.at(-1)?.end ?? 0) >= current.byteLength)) {
             rows.push(this.line(current, { text: current.status === 'not_saved' ? '流式预览不可用 · 等待完整响应' : '预览中断 · 未提交',
@@ -371,6 +418,16 @@ export class TranscriptReader {
           position = next;
         } else {
           previousRole = current.role;
+          if (collapsed && current.call?.activityKind === 'query' && this.port.inspection !== undefined) {
+            const group = await this.port.inspection.calls({ coordinatorSessionId: this.session, upperSequence: this.upperSequence,
+              activityId: current.call.activityId, direction: direction === 'start' ? 'older' : 'newer' });
+            this.check(request);
+            const edge = direction === 'start' ? group.calls.at(-1) : group.calls[0];
+            if (edge !== undefined) {
+              const groupSources = this.callSources(edge);
+              current = direction === 'start' ? groupSources.at(-1)! : groupSources[0]!;
+            }
+          }
           current = await this.neighbor(current, direction === 'start' ? 'newer' : 'older', request);
           position = current === null ? 0 : direction === 'start' ? 0 : current.byteLength;
         }
@@ -395,7 +452,7 @@ export class TranscriptReader {
     const frozen = this.currentSources.get(sourceKey(anchor.source));
     if (!this.following && frozen?.ref.contentRevision === anchor.source.contentRevision) return frozen;
     const exact = this.sources.find(item => sourceKey(item.ref) === sourceKey(anchor.source));
-    if (exact !== undefined && anchor.source.kind === 'history') return exact;
+    if (exact !== undefined && anchor.source.kind !== 'preview') return exact;
     if (anchor.source.kind === 'preview') {
       const preview = this.previews.find(item => item.previewId === idOf(anchor.source));
       if (preview !== undefined) return { ref: anchor.source, sequence: anchor.sequence,
@@ -410,7 +467,8 @@ export class TranscriptReader {
     return this.read(anchor === null ? 'latest' : 'anchor', anchor);
   }
   async resize(width: number, height: number, expanded: readonly string[]): Promise<TranscriptFrame | null> {
-    if (width === this.width && height === this.height && expanded.join('\0') === this.expanded.join('\0')) return this.current;
+    if (!this.detailChanged && width === this.width && height === this.height && expanded.join('\0') === this.expanded.join('\0')) return this.current;
+    this.detailChanged = false;
     this.width = Math.max(1, width); this.height = Math.max(1, height); this.expanded = expanded;
     return this.read(this.following ? 'latest' : 'anchor', this.current?.anchor ?? null);
   }
@@ -421,8 +479,15 @@ export class TranscriptReader {
     try {
       const sources = await this.metadata(mode === 'oldest' ? 'newer' : 'older',
         mode === 'anchor' && anchor !== null ? anchor.sequence + 1 : undefined, request);
-      const source = mode === 'anchor' && anchor !== null ? this.sourceAt(anchor)
+      let source = mode === 'anchor' && anchor !== null ? this.sourceAt(anchor)
         : mode === 'oldest' ? sources[0] : sources.at(-1);
+      if (source === undefined && anchor?.source.kind === 'arguments' && this.port.inspection !== undefined) {
+        const page = await this.port.inspection.calls({ coordinatorSessionId: this.session, entryId: anchor.source.entryId,
+          callId: anchor.source.callId, upperSequence: this.upperSequence, direction: 'newer' });
+        this.check(request);
+        const call = page.calls.find(call => call.callId === (anchor.source.kind === 'arguments' ? anchor.source.callId : ''));
+        if (call !== undefined) source = this.callSources(call)[0];
+      }
       if (mode === 'anchor' && source === undefined) throw new Error('原阅读来源不可用');
       return await this.collect(source ?? null, mode === 'anchor' && anchor !== null ? anchor.offset
         : mode === 'oldest' ? 0 : source?.byteLength ?? 0, mode === 'latest' ? 'end' : 'start', request);

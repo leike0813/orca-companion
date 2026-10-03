@@ -1,0 +1,40 @@
+session-long-中… · 执行 · blocked · 待对账 · 待答3
+──────────────────────────────────────────────────
+! reconciling · 原操作结果未知，待对账
+! Worker 状态待核验 · 另有 2 项
+  ▾ tool read_route_map · 结果 · ok
+  │ {"kind":"ok","value":"结果边界 124"}
+  ▾ tool read_route_map · 参数 · ok
+  │ {"query":"查询 125","payload":125}
+  ▾ tool read_route_map · 结果 · ok
+  │ {"kind":"ok","value":"结果边界 125"}
+  ▾ tool read_route_map · 参数 · ok
+  │ {"query":"查询 126","payload":126}
+  ▾ tool read_route_map · 结果 · ok
+  │ {"kind":"ok","value":"结果边界 126"}
+  ▾ tool read_route_map · 参数 · ok
+  │ {"query":"查询 127","payload":127}
+  ▾ tool read_route_map · 结果 · ok
+  │ {"kind":"ok","value":"结果边界 127"}
+  ▾ tool read_route_map · 参数 · ok
+  │ {"query":"查询 128","payload":128}
+  ▾ tool read_route_map · 结果 · ok
+  │ {"kind":"ok","value":"结果边界 128"}
+  ▾ tool read_route_map · 参数 · ok
+  │ {"query":"查询 129","payload":129}
+  ▾ tool read_route_map · 结果 · ok
+  │ {"kind":"ok","value":"结果边界 129"}
+
+● 活动详情与查找 · 参数、结果均从原记录读取。
+  ▾ tool update_route_map · 参数 · unknown
+  │ {"section":"destination"}
+
+│ › 最新输入 保留光标与草稿
+待答 ticket:48 · state=open · revision=7
+Shift+← 或 /answer 打开当前 Session 回答面板
+╭──────────────────────────────────────────────╮
+│ › 普通消息                                   │
+│ 首尾                                         │
+╰──────────────────────────────────────────────╯
+示例模型 A · 推理 不可用 · 上下文 不可用
+

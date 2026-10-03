@@ -1,0 +1,40 @@
+session-long-中文规划-2026 · 执行 · blocked · 待对账 · 待答3 · 持有 session-b
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+! reconciling · 原操作结果未知，待对账
+! Worker 状态待核验 · 另有 2 项
+  ▾ tool read_route_map · 结果 · ok                                           │ 执行图侧栏 · active 1
+  │ {"kind":"ok","value":"结果边界 124"}                                      │ 执行图 · 验收进度不可用
+  ▾ tool read_route_map · 参数 · ok                                           │ 纵向 图外 ↑0 ↓3
+  │ {"query":"查询 125","payload":125}                                        │                    󰝥 1
+  ▾ tool read_route_map · 结果 · ok                                           │           ┌────────┼────────┐
+  │ {"kind":"ok","value":"结果边界 125"}                                      │           │        │        │
+  ▾ tool read_route_map · 参数 · ok                                           │           󰝥 2      󰝥 3      󰝥 4
+  │ {"query":"查询 126","payload":126}                                        │        ┌──┴──┐     ├─────┐  └──┐
+  ▾ tool read_route_map · 结果 · ok                                           │        │     │     │     │     │
+  │ {"kind":"ok","value":"结果边界 126"}                                      │        󰝥 5   󰝥 6   󰝥 7   󰝥 8   󰝥 9
+  ▾ tool read_route_map · 参数 · ok                                           │        ├─────┼─────┼─────┼─────┤
+  │ {"query":"查询 127","payload":127}                                        │        │     │     │     │     │
+  ▾ tool read_route_map · 结果 · ok                                           │        󰝦 10  󰝦 11 ›󰝦 12  󰮊 13  󰝦 14
+  │ {"kind":"ok","value":"结果边界 127"}                                      │        └──┬──┴─────┼─────┴──┬──┘
+  ▾ tool read_route_map · 参数 · ok                                           │           │        │        │
+  │ {"query":"查询 128","payload":128}                                        │           󰝦 15     󰝦 16     󰝦 17
+  ▾ tool read_route_map · 结果 · ok                                           │           └────────┼────────┴─────────┐
+  │ {"kind":"ok","value":"结果边界 128"}                                      │                    │                  │
+  ▾ tool read_route_map · 参数 · ok                                           │                    󰝦 18               │
+  │ {"query":"查询 129","payload":129}                                        │                    │                  │
+  ▾ tool read_route_map · 结果 · ok                                           │                    ├──────────────────┘
+  │ {"kind":"ok","value":"结果边界 129"}                                      │                    󰝦 19
+                                                                              │ ╭──────────────────────────────────────╮
+● 活动详情与查找 · 参数、结果均从原记录读取。                                 │ │ 12 Composer                          │
+  ▾ tool update_route_map · 参数 · unknown                                    │ │ reconciling · Worker unverifiable    │
+  │ {"section":"destination"}                                                 │ │ ── 依赖关系 ──                       │
+                                                                              │ │ 前驱 6 · 7                           │
+│ › 最新输入 保留光标与草稿                                                   │ │ 后继 15 · 16                         │
+待答 ticket:48 · state=open · revision=7                                      │ ╰──────────────────────────────────────╯
+Shift+← 或 /answer 打开当前 Session 回答面板                                  │ 当前 wp-12 · reconciling · unverifiable
+╭────────────────────────────────────────────────────────────────────────────╮│ reconciling · 待对账
+│ › 普通消息                                                                 ││ ! reconciliation_pending: wp-12 等待原…
+│ 首尾                                                                       ││ ! worker_status_unverifiable: wp-13 Wor…
+╰────────────────────────────────────────────────────────────────────────────╯│
+示例模型 A · 推理 不可用 · 上下文 不可用 · 图 G1·v3                           │ 图标异常？选项切ASCII
+

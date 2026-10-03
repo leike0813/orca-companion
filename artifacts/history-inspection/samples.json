@@ -1,0 +1,2882 @@
+[
+  {
+    "name": "workspace",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "workspace-120x40-color-nerd.png",
+    "text": "workspace-120x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "project-120x40-color-nerd.png",
+    "text": "project-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "graph-120x40-color-nerd.png",
+    "text": "graph-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cancel-review-120x40-color-nerd.png",
+    "text": "cancel-review-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "return-cursor-120x40-color-nerd.png",
+    "text": "return-cursor-120x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "slash-120x40-color-nerd.png",
+    "text": "slash-120x40-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "workspace-120x40-color-ascii.png",
+    "text": "workspace-120x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "project-120x40-color-ascii.png",
+    "text": "project-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "graph-120x40-color-ascii.png",
+    "text": "graph-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cancel-review-120x40-color-ascii.png",
+    "text": "cancel-review-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "return-cursor-120x40-color-ascii.png",
+    "text": "return-cursor-120x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "slash-120x40-color-ascii.png",
+    "text": "slash-120x40-color-ascii.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "workspace-120x40-no-color-nerd.png",
+    "text": "workspace-120x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "project-120x40-no-color-nerd.png",
+    "text": "project-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "graph-120x40-no-color-nerd.png",
+    "text": "graph-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cancel-review-120x40-no-color-nerd.png",
+    "text": "cancel-review-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "return-cursor-120x40-no-color-nerd.png",
+    "text": "return-cursor-120x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "slash-120x40-no-color-nerd.png",
+    "text": "slash-120x40-no-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "workspace-120x40-no-color-ascii.png",
+    "text": "workspace-120x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "project-120x40-no-color-ascii.png",
+    "text": "project-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "graph-120x40-no-color-ascii.png",
+    "text": "graph-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cancel-review-120x40-no-color-ascii.png",
+    "text": "cancel-review-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "return-cursor-120x40-no-color-ascii.png",
+    "text": "return-cursor-120x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "slash-120x40-no-color-ascii.png",
+    "text": "slash-120x40-no-color-ascii.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "workspace-80x24-color-nerd.png",
+    "text": "workspace-80x24-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "project-80x24-color-nerd.png",
+    "text": "project-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "graph-80x24-color-nerd.png",
+    "text": "graph-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cancel-review-80x24-color-nerd.png",
+    "text": "cancel-review-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "return-cursor-80x24-color-nerd.png",
+    "text": "return-cursor-80x24-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "slash-80x24-color-nerd.png",
+    "text": "slash-80x24-color-nerd.txt",
+    "cursor": [
+      3,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "workspace-80x24-color-ascii.png",
+    "text": "workspace-80x24-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "project-80x24-color-ascii.png",
+    "text": "project-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "graph-80x24-color-ascii.png",
+    "text": "graph-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cancel-review-80x24-color-ascii.png",
+    "text": "cancel-review-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "return-cursor-80x24-color-ascii.png",
+    "text": "return-cursor-80x24-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "slash-80x24-color-ascii.png",
+    "text": "slash-80x24-color-ascii.txt",
+    "cursor": [
+      3,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "workspace-80x24-no-color-nerd.png",
+    "text": "workspace-80x24-no-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "project-80x24-no-color-nerd.png",
+    "text": "project-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "graph-80x24-no-color-nerd.png",
+    "text": "graph-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cancel-review-80x24-no-color-nerd.png",
+    "text": "cancel-review-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "return-cursor-80x24-no-color-nerd.png",
+    "text": "return-cursor-80x24-no-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "slash-80x24-no-color-nerd.png",
+    "text": "slash-80x24-no-color-nerd.txt",
+    "cursor": [
+      3,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "workspace-80x24-no-color-ascii.png",
+    "text": "workspace-80x24-no-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "project-80x24-no-color-ascii.png",
+    "text": "project-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "graph-80x24-no-color-ascii.png",
+    "text": "graph-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cancel-review-80x24-no-color-ascii.png",
+    "text": "cancel-review-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "return-cursor-80x24-no-color-ascii.png",
+    "text": "return-cursor-80x24-no-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "slash-80x24-no-color-ascii.png",
+    "text": "slash-80x24-no-color-ascii.txt",
+    "cursor": [
+      3,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "workspace-50x40-color-nerd.png",
+    "text": "workspace-50x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "project-50x40-color-nerd.png",
+    "text": "project-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "graph-50x40-color-nerd.png",
+    "text": "graph-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cancel-review-50x40-color-nerd.png",
+    "text": "cancel-review-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "return-cursor-50x40-color-nerd.png",
+    "text": "return-cursor-50x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "slash-50x40-color-nerd.png",
+    "text": "slash-50x40-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "workspace-50x40-color-ascii.png",
+    "text": "workspace-50x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "project-50x40-color-ascii.png",
+    "text": "project-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "graph-50x40-color-ascii.png",
+    "text": "graph-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cancel-review-50x40-color-ascii.png",
+    "text": "cancel-review-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "return-cursor-50x40-color-ascii.png",
+    "text": "return-cursor-50x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "slash-50x40-color-ascii.png",
+    "text": "slash-50x40-color-ascii.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "workspace-50x40-no-color-nerd.png",
+    "text": "workspace-50x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "project-50x40-no-color-nerd.png",
+    "text": "project-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "graph-50x40-no-color-nerd.png",
+    "text": "graph-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cancel-review-50x40-no-color-nerd.png",
+    "text": "cancel-review-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "return-cursor-50x40-no-color-nerd.png",
+    "text": "return-cursor-50x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "slash-50x40-no-color-nerd.png",
+    "text": "slash-50x40-no-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "workspace-50x40-no-color-ascii.png",
+    "text": "workspace-50x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "project-50x40-no-color-ascii.png",
+    "text": "project-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "graph-50x40-no-color-ascii.png",
+    "text": "graph-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cancel-review-50x40-no-color-ascii.png",
+    "text": "cancel-review-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "return-cursor-50x40-no-color-ascii.png",
+    "text": "return-cursor-50x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "slash-50x40-no-color-ascii.png",
+    "text": "slash-50x40-no-color-ascii.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "activity-compact",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "activity-compact-120x40-color-nerd.png",
+    "text": "activity-compact-120x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "activity-detailed",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "activity-detailed-120x40-color-nerd.png",
+    "text": "activity-detailed-120x40-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-navigation",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "activity-navigation-120x40-color-nerd.png",
+    "text": "activity-navigation-120x40-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-query",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "activity-query-120x40-color-nerd.png",
+    "text": "activity-query-120x40-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-arguments",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "search-arguments-120x40-color-nerd.png",
+    "text": "search-arguments-120x40-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-return-cursor",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "search-return-cursor-120x40-color-nerd.png",
+    "text": "search-return-cursor-120x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "input-history-120x40-color-nerd.png",
+    "text": "input-history-120x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-older",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "input-history-older-120x40-color-nerd.png",
+    "text": "input-history-older-120x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "input-history-return-120x40-color-nerd.png",
+    "text": "input-history-return-120x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-adopted",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "input-history-adopted-120x40-color-nerd.png",
+    "text": "input-history-adopted-120x40-color-nerd.txt",
+    "cursor": [
+      25,
+      36
+    ]
+  },
+  {
+    "name": "activity-compact",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "activity-compact-120x40-color-ascii.png",
+    "text": "activity-compact-120x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "activity-detailed",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "activity-detailed-120x40-color-ascii.png",
+    "text": "activity-detailed-120x40-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-navigation",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "activity-navigation-120x40-color-ascii.png",
+    "text": "activity-navigation-120x40-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-query",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "activity-query-120x40-color-ascii.png",
+    "text": "activity-query-120x40-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-arguments",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "search-arguments-120x40-color-ascii.png",
+    "text": "search-arguments-120x40-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-return-cursor",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "search-return-cursor-120x40-color-ascii.png",
+    "text": "search-return-cursor-120x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "input-history-120x40-color-ascii.png",
+    "text": "input-history-120x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-older",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "input-history-older-120x40-color-ascii.png",
+    "text": "input-history-older-120x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "input-history-return-120x40-color-ascii.png",
+    "text": "input-history-return-120x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-adopted",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "input-history-adopted-120x40-color-ascii.png",
+    "text": "input-history-adopted-120x40-color-ascii.txt",
+    "cursor": [
+      25,
+      36
+    ]
+  },
+  {
+    "name": "activity-compact",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "activity-compact-120x40-no-color-nerd.png",
+    "text": "activity-compact-120x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "activity-detailed",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "activity-detailed-120x40-no-color-nerd.png",
+    "text": "activity-detailed-120x40-no-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-navigation",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "activity-navigation-120x40-no-color-nerd.png",
+    "text": "activity-navigation-120x40-no-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-query",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "activity-query-120x40-no-color-nerd.png",
+    "text": "activity-query-120x40-no-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-arguments",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "search-arguments-120x40-no-color-nerd.png",
+    "text": "search-arguments-120x40-no-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-return-cursor",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "search-return-cursor-120x40-no-color-nerd.png",
+    "text": "search-return-cursor-120x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "input-history-120x40-no-color-nerd.png",
+    "text": "input-history-120x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-older",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "input-history-older-120x40-no-color-nerd.png",
+    "text": "input-history-older-120x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "input-history-return-120x40-no-color-nerd.png",
+    "text": "input-history-return-120x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-adopted",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "input-history-adopted-120x40-no-color-nerd.png",
+    "text": "input-history-adopted-120x40-no-color-nerd.txt",
+    "cursor": [
+      25,
+      36
+    ]
+  },
+  {
+    "name": "activity-compact",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "activity-compact-120x40-no-color-ascii.png",
+    "text": "activity-compact-120x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "activity-detailed",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "activity-detailed-120x40-no-color-ascii.png",
+    "text": "activity-detailed-120x40-no-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-navigation",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "activity-navigation-120x40-no-color-ascii.png",
+    "text": "activity-navigation-120x40-no-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-query",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "activity-query-120x40-no-color-ascii.png",
+    "text": "activity-query-120x40-no-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-arguments",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "search-arguments-120x40-no-color-ascii.png",
+    "text": "search-arguments-120x40-no-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-return-cursor",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "search-return-cursor-120x40-no-color-ascii.png",
+    "text": "search-return-cursor-120x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "input-history-120x40-no-color-ascii.png",
+    "text": "input-history-120x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-older",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "input-history-older-120x40-no-color-ascii.png",
+    "text": "input-history-older-120x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "input-history-return-120x40-no-color-ascii.png",
+    "text": "input-history-return-120x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-adopted",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "input-history-adopted-120x40-no-color-ascii.png",
+    "text": "input-history-adopted-120x40-no-color-ascii.txt",
+    "cursor": [
+      25,
+      36
+    ]
+  },
+  {
+    "name": "activity-compact",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "activity-compact-80x24-color-nerd.png",
+    "text": "activity-compact-80x24-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "activity-detailed",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "activity-detailed-80x24-color-nerd.png",
+    "text": "activity-detailed-80x24-color-nerd.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "activity-navigation",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "activity-navigation-80x24-color-nerd.png",
+    "text": "activity-navigation-80x24-color-nerd.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "activity-query",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "activity-query-80x24-color-nerd.png",
+    "text": "activity-query-80x24-color-nerd.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "search-arguments",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "search-arguments-80x24-color-nerd.png",
+    "text": "search-arguments-80x24-color-nerd.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "search-return-cursor",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "search-return-cursor-80x24-color-nerd.png",
+    "text": "search-return-cursor-80x24-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "input-history-80x24-color-nerd.png",
+    "text": "input-history-80x24-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history-older",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "input-history-older-80x24-color-nerd.png",
+    "text": "input-history-older-80x24-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "input-history-return-80x24-color-nerd.png",
+    "text": "input-history-return-80x24-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history-adopted",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "input-history-adopted-80x24-color-nerd.png",
+    "text": "input-history-adopted-80x24-color-nerd.txt",
+    "cursor": [
+      25,
+      20
+    ]
+  },
+  {
+    "name": "activity-compact",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "activity-compact-80x24-color-ascii.png",
+    "text": "activity-compact-80x24-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "activity-detailed",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "activity-detailed-80x24-color-ascii.png",
+    "text": "activity-detailed-80x24-color-ascii.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "activity-navigation",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "activity-navigation-80x24-color-ascii.png",
+    "text": "activity-navigation-80x24-color-ascii.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "activity-query",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "activity-query-80x24-color-ascii.png",
+    "text": "activity-query-80x24-color-ascii.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "search-arguments",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "search-arguments-80x24-color-ascii.png",
+    "text": "search-arguments-80x24-color-ascii.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "search-return-cursor",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "search-return-cursor-80x24-color-ascii.png",
+    "text": "search-return-cursor-80x24-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "input-history-80x24-color-ascii.png",
+    "text": "input-history-80x24-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history-older",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "input-history-older-80x24-color-ascii.png",
+    "text": "input-history-older-80x24-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "input-history-return-80x24-color-ascii.png",
+    "text": "input-history-return-80x24-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history-adopted",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "input-history-adopted-80x24-color-ascii.png",
+    "text": "input-history-adopted-80x24-color-ascii.txt",
+    "cursor": [
+      25,
+      20
+    ]
+  },
+  {
+    "name": "activity-compact",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "activity-compact-80x24-no-color-nerd.png",
+    "text": "activity-compact-80x24-no-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "activity-detailed",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "activity-detailed-80x24-no-color-nerd.png",
+    "text": "activity-detailed-80x24-no-color-nerd.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "activity-navigation",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "activity-navigation-80x24-no-color-nerd.png",
+    "text": "activity-navigation-80x24-no-color-nerd.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "activity-query",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "activity-query-80x24-no-color-nerd.png",
+    "text": "activity-query-80x24-no-color-nerd.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "search-arguments",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "search-arguments-80x24-no-color-nerd.png",
+    "text": "search-arguments-80x24-no-color-nerd.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "search-return-cursor",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "search-return-cursor-80x24-no-color-nerd.png",
+    "text": "search-return-cursor-80x24-no-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "input-history-80x24-no-color-nerd.png",
+    "text": "input-history-80x24-no-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history-older",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "input-history-older-80x24-no-color-nerd.png",
+    "text": "input-history-older-80x24-no-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "input-history-return-80x24-no-color-nerd.png",
+    "text": "input-history-return-80x24-no-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history-adopted",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "input-history-adopted-80x24-no-color-nerd.png",
+    "text": "input-history-adopted-80x24-no-color-nerd.txt",
+    "cursor": [
+      25,
+      20
+    ]
+  },
+  {
+    "name": "activity-compact",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "activity-compact-80x24-no-color-ascii.png",
+    "text": "activity-compact-80x24-no-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "activity-detailed",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "activity-detailed-80x24-no-color-ascii.png",
+    "text": "activity-detailed-80x24-no-color-ascii.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "activity-navigation",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "activity-navigation-80x24-no-color-ascii.png",
+    "text": "activity-navigation-80x24-no-color-ascii.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "activity-query",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "activity-query-80x24-no-color-ascii.png",
+    "text": "activity-query-80x24-no-color-ascii.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "search-arguments",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "search-arguments-80x24-no-color-ascii.png",
+    "text": "search-arguments-80x24-no-color-ascii.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "search-return-cursor",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "search-return-cursor-80x24-no-color-ascii.png",
+    "text": "search-return-cursor-80x24-no-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "input-history-80x24-no-color-ascii.png",
+    "text": "input-history-80x24-no-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history-older",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "input-history-older-80x24-no-color-ascii.png",
+    "text": "input-history-older-80x24-no-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "input-history-return-80x24-no-color-ascii.png",
+    "text": "input-history-return-80x24-no-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "input-history-adopted",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "input-history-adopted-80x24-no-color-ascii.png",
+    "text": "input-history-adopted-80x24-no-color-ascii.txt",
+    "cursor": [
+      25,
+      20
+    ]
+  },
+  {
+    "name": "activity-compact",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "activity-compact-50x40-color-nerd.png",
+    "text": "activity-compact-50x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "activity-detailed",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "activity-detailed-50x40-color-nerd.png",
+    "text": "activity-detailed-50x40-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-navigation",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "activity-navigation-50x40-color-nerd.png",
+    "text": "activity-navigation-50x40-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-query",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "activity-query-50x40-color-nerd.png",
+    "text": "activity-query-50x40-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-arguments",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "search-arguments-50x40-color-nerd.png",
+    "text": "search-arguments-50x40-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-return-cursor",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "search-return-cursor-50x40-color-nerd.png",
+    "text": "search-return-cursor-50x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "input-history-50x40-color-nerd.png",
+    "text": "input-history-50x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-older",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "input-history-older-50x40-color-nerd.png",
+    "text": "input-history-older-50x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "input-history-return-50x40-color-nerd.png",
+    "text": "input-history-return-50x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-adopted",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "input-history-adopted-50x40-color-nerd.png",
+    "text": "input-history-adopted-50x40-color-nerd.txt",
+    "cursor": [
+      25,
+      36
+    ]
+  },
+  {
+    "name": "activity-compact",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "activity-compact-50x40-color-ascii.png",
+    "text": "activity-compact-50x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "activity-detailed",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "activity-detailed-50x40-color-ascii.png",
+    "text": "activity-detailed-50x40-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-navigation",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "activity-navigation-50x40-color-ascii.png",
+    "text": "activity-navigation-50x40-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-query",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "activity-query-50x40-color-ascii.png",
+    "text": "activity-query-50x40-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-arguments",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "search-arguments-50x40-color-ascii.png",
+    "text": "search-arguments-50x40-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-return-cursor",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "search-return-cursor-50x40-color-ascii.png",
+    "text": "search-return-cursor-50x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "input-history-50x40-color-ascii.png",
+    "text": "input-history-50x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-older",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "input-history-older-50x40-color-ascii.png",
+    "text": "input-history-older-50x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "input-history-return-50x40-color-ascii.png",
+    "text": "input-history-return-50x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-adopted",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "input-history-adopted-50x40-color-ascii.png",
+    "text": "input-history-adopted-50x40-color-ascii.txt",
+    "cursor": [
+      25,
+      36
+    ]
+  },
+  {
+    "name": "activity-compact",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "activity-compact-50x40-no-color-nerd.png",
+    "text": "activity-compact-50x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "activity-detailed",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "activity-detailed-50x40-no-color-nerd.png",
+    "text": "activity-detailed-50x40-no-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-navigation",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "activity-navigation-50x40-no-color-nerd.png",
+    "text": "activity-navigation-50x40-no-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-query",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "activity-query-50x40-no-color-nerd.png",
+    "text": "activity-query-50x40-no-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-arguments",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "search-arguments-50x40-no-color-nerd.png",
+    "text": "search-arguments-50x40-no-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-return-cursor",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "search-return-cursor-50x40-no-color-nerd.png",
+    "text": "search-return-cursor-50x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "input-history-50x40-no-color-nerd.png",
+    "text": "input-history-50x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-older",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "input-history-older-50x40-no-color-nerd.png",
+    "text": "input-history-older-50x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "input-history-return-50x40-no-color-nerd.png",
+    "text": "input-history-return-50x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-adopted",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "input-history-adopted-50x40-no-color-nerd.png",
+    "text": "input-history-adopted-50x40-no-color-nerd.txt",
+    "cursor": [
+      25,
+      36
+    ]
+  },
+  {
+    "name": "activity-compact",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "activity-compact-50x40-no-color-ascii.png",
+    "text": "activity-compact-50x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "activity-detailed",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "activity-detailed-50x40-no-color-ascii.png",
+    "text": "activity-detailed-50x40-no-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-navigation",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "activity-navigation-50x40-no-color-ascii.png",
+    "text": "activity-navigation-50x40-no-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "activity-query",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "activity-query-50x40-no-color-ascii.png",
+    "text": "activity-query-50x40-no-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-arguments",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "search-arguments-50x40-no-color-ascii.png",
+    "text": "search-arguments-50x40-no-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "search-return-cursor",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "search-return-cursor-50x40-no-color-ascii.png",
+    "text": "search-return-cursor-50x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "input-history-50x40-no-color-ascii.png",
+    "text": "input-history-50x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-older",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "input-history-older-50x40-no-color-ascii.png",
+    "text": "input-history-older-50x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "input-history-return-50x40-no-color-ascii.png",
+    "text": "input-history-return-50x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "input-history-adopted",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "input-history-adopted-50x40-no-color-ascii.png",
+    "text": "input-history-adopted-50x40-no-color-ascii.txt",
+    "cursor": [
+      25,
+      36
+    ]
+  }
+]

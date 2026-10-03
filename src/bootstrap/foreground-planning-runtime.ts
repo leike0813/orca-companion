@@ -374,6 +374,7 @@ export const FOREGROUND_COORDINATOR_INSTRUCTIONS: readonly string[] = [
 
 import { readTranscriptPage, type CheckpointReadPurpose } from '../application/coordinator/history.js';
 import type { TranscriptReadingPort } from '../application/coordinator/history.js';
+import { scanHistory } from '../application/coordinator/history-search.js';
 import { createTranscriptPreviewStore } from '../adapters/storage/transcript-preview-store.js';
 
 const PLANNING_MUTATION_CATEGORIES: ReadonlySet<string> = new Set([
@@ -853,6 +854,26 @@ export async function createForegroundPlanningHost(
 
   let selectedScopeId: CoordinationScopeId | null = null;
   let scopeCheckpointStore: CheckpointStore | null = null;
+  const inspectionListeners = new Set<(sessionId: string) => void>();
+  let inspectionPreparing = false;
+  const prepareInspection = () => {
+    const checkpoints = checkpointStoreForScope();
+    if (checkpoints === null || inspectionPreparing || closed) return;
+    inspectionPreparing = true;
+    const step = () => {
+      if (closed) { inspectionPreparing = false; return; }
+      try {
+        const progress = checkpoints.prepareHistoryInspection();
+        if (!progress.ready) { setImmediate(step); return; }
+        inspectionPreparing = false;
+        const current = requireStore();
+        if (current === null || selectedScopeId === null) return;
+        const sessions = current.query({ kind: 'sessions', coordinationScopeId: selectedScopeId });
+        if (sessions.kind === 'sessions') for (const session of sessions.sessions) for (const listener of inspectionListeners) listener(session.coordinatorSessionId);
+      } catch (error) { inspectionPreparing = false; process.stderr.write('调用关联索引准备失败：' + String(error) + '\n'); }
+    };
+    setImmediate(step);
+  };
 
   const requireStore = (): BranchCoordinationStore | null => (closed ? null : store);
 
@@ -2469,10 +2490,19 @@ export async function createForegroundPlanningHost(
     return checkpoints;
   };
   const reading: TranscriptReadingPort = {
+    inspection: {
+      snapshot: sessionId => Promise.resolve(readingStore(sessionId).readHistoryInspection(sessionId)),
+      calls: query => Promise.resolve(readingStore(query.coordinatorSessionId).readHistoryCalls(query)),
+      users: query => Promise.resolve(readingStore(query.coordinatorSessionId).readUserHistoryPage(query)),
+      search: (query, signal) => scanHistory(reading, query, signal),
+    },
     history: (query) => Promise.resolve(readingStore(query.coordinatorSessionId).readHistoryPage(query)),
     body: (query) => Promise.resolve().then(() => {
       const checkpoints = readingStore(query.coordinatorSessionId);
       if (query.source.kind === 'preview') return previews.body(query);
+      if (query.source.kind === 'arguments') return checkpoints.readHistoryArguments({ coordinatorSessionId: query.coordinatorSessionId,
+        entryId: query.source.entryId, stepId: query.source.stepId, callId: query.source.callId, contentRevision: 1,
+        offset: query.offset, maxBytes: query.maxBytes });
       const range = checkpoints.readHistoryBody({ coordinatorSessionId: query.coordinatorSessionId,
         entryId: query.source.entryId, contentRevision: query.source.contentRevision, offset: query.offset, maxBytes: query.maxBytes });
       if (range === null) return null;
@@ -2484,7 +2514,8 @@ export async function createForegroundPlanningHost(
       return Promise.resolve(previews.list(sessionId));
     },
     pin: (sessionId, previewId) => { readingStore(sessionId); return previews.pin(sessionId, previewId); },
-    subscribe: (listener) => previews.subscribe(listener),
+    subscribe: (listener) => { inspectionListeners.add(listener); const release = previews.subscribe(listener);
+      return () => { inspectionListeners.delete(listener); release(); }; },
   };
   const readTranscript = (coordinatorSessionId: string, cursor: string | null = null): TranscriptLoad => {
     const checkpoints = checkpointStoreForScope();
@@ -2618,6 +2649,7 @@ export async function createForegroundPlanningHost(
       return rejected(bound.code, bound.message);
     }
     selectedScopeId = scope.coordinationScopeId;
+    prepareInspection();
     publish(null, {
       kind: 'state-changed',
       coordinationScopeId: scope.coordinationScopeId,
@@ -2660,6 +2692,7 @@ export async function createForegroundPlanningHost(
         return rejected(initialized.code, initialized.message);
       }
       selectedScopeId = proposal.coordinationScopeId as CoordinationScopeId;
+      prepareInspection();
       publish(null, {
         kind: 'state-changed',
         coordinationScopeId: proposal.coordinationScopeId,
@@ -7374,6 +7407,28 @@ export async function createForegroundPlanningHost(
 
   const ports: TuiPorts = {
     reading: {
+      inspection: {
+        snapshot: async coordinatorSessionId => {
+          const result = await controller.query({ kind: 'history-inspection', coordinatorSessionId });
+          if (result.kind !== 'history-inspection') throw new Error(result.kind === 'rejected' ? result.message : '调用历史范围无效');
+          return result.snapshot;
+        },
+        calls: async query => {
+          const result = await controller.query({ kind: 'history-calls', query });
+          if (result.kind !== 'history-calls') throw new Error(result.kind === 'rejected' ? result.message : '调用历史清单无效');
+          return result.page;
+        },
+        users: async query => {
+          const result = await controller.query({ kind: 'user-history', query });
+          if (result.kind !== 'user-history') throw new Error(result.kind === 'rejected' ? result.message : '输入历史清单无效');
+          return result.page;
+        },
+        search: async (query, signal) => {
+          const result = await controller.query({ kind: 'history-search', query, ...(signal === undefined ? {} : { signal }) });
+          if (result.kind !== 'history-search') throw new Error(result.kind === 'rejected' ? result.message : '历史搜索结果无效');
+          return result.page;
+        },
+      },
       history: async (query) => {
         const result = await controller.query({ kind: 'session-history', query });
         if (result.kind !== 'session-history') throw new Error(result.kind === 'rejected' ? result.message : '历史查询结果无效');
@@ -7420,6 +7475,7 @@ export async function createForegroundPlanningHost(
 
   // 恢复清理由宿主生命周期拥有，不在 React 挂载、重绘或 effect 中执行。
   resolveHome();
+  prepareInspection();
   if (selectedScopeId !== null) {
     const pending = inputStore.list(selectedScopeId);
     if (pending.kind === 'records') {
@@ -7453,6 +7509,7 @@ export async function createForegroundPlanningHost(
       const cleanup = previews.close();
       if (cleanup.failed > 0) process.stderr.write(`临时预览清理失败 ${String(cleanup.failed)} 项\n`);
       listeners.clear();
+      inspectionListeners.clear();
       scopeCheckpointStore?.close();
       if (uiOpened?.kind === 'opened') uiOpened.store.close();
       if (storeOpened !== null && storeOpened.kind === 'opened') {

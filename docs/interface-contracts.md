@@ -225,6 +225,14 @@ Session payload 为 v2：每条已提交消息有稳定 `entryId`；tool result 
 
 `HistoryReadPort.readHistoryPage` 使用 Session/sequence keyset，至多 100 条且 metadata 合计 64KiB；先读取长度与身份，再按剩余预算物化 metadata。`readHistoryBody` 绑定 Session、entry、revision=1 与 UTF-8 byte offset，每次至多 64KiB 正文，拒绝越界与非字符边界。两者独立读取，不加载整个 Session 后切片。
 
+历史检查的 canonical path 为 `src/application/coordinator/history-inspection.ts`。`HistoryInspectionStorePort` 的 snapshot/calls/users/arguments 只读；`prepareHistoryInspection` 由 Bootstrap 初始化生命周期分批调用，每次 ≤64KiB metadata/100 项。调用与活动索引保存原 entry/step/call/operation 身份、参数原 metadata byte range 与摘要，正文和参数不复制。schema 2 保持。参数 source 为 `arguments(entryId, stepId, callId, contentRevision=1)`，offset/end 属于参数 JSON 原文，单次范围 ≤64KiB。调用页以 `(sequence, ordinal)` keyset、固定 upperSequence、精确 entry/call 或活动身份查询，≤100 项/64KiB；users 直接按 `role=user` 和 Session 过滤，不含回答引用。
+
+分类在模型响应接受时由同一可信注册表的 `mutating` 填入 `CommittedToolCall.activityKind`；缺失分类单列。`recordToolObservation` 绑定原 Session/entry/step/call/operation，只记录经 fencing 核验的真实 unknown。相同身份重放保留首次观测，诊断理由变化不重复计数或拒绝恢复。观测绑定记录时的已提交序号，单次调用与活动摘要按同一 upperSequence 读取。无结果与无观测为 unconfirmed，配对结果优先；ok 不表示 Worker 完成。观测不补配对 tool entry，不改变恢复或副作用策略。
+
+IC-11 的 `history-inspection`、`history-calls`、`user-history`、`history-search` 与扩展 `transcript-body` 经 schema 和 Bootstrap Scope/Session 绑定查询。搜索固定已提交 upperSequence，只搜保留的正文与参数，不搜 preview；escaped literal `/iu` 提供 Unicode 简单折叠，不进行兼容归一化或扩展折叠。查询 ≤256 code points，每批正文（含跨块重叠）≤64KiB、metadata ≤100 项/64KiB、结果 ≤50 项/64KiB，工作区 ≤1MiB/64 项。游标绑定查询身份并保留精确来源位置，取消或失败不产生无匹配结论。
+
+Ctrl+T 切换整体详细，手动展开独立；F4 选择/开合活动，Esc 返回输入。F3 从最早保留记录查找，Enter 向新、Shift+Enter 向旧，Esc 恢复原阅读与展开状态。Ctrl+R 从最新普通输入向旧查找，Enter 只采用原文，再次 Enter 沿原提交管线。空草稿 ↑ 召回；未编辑预览在全文首尾才能继续 ↑/↓，越过最新或 Esc 恢复原 UiDraft。预览不持久写入，采用或文本编辑复用 IC-13；超限、读失败保留原草稿，不截断。
+
 Capsule 的替换区间在保存时绑定固定序号边界；摘要包含实际被替换的全部条目，包括交错的用户输入和工具结果。压缩前缀保留完整最新 step，同载荷重放保持原边界，后续追加不会扩大已替换区间。
 
 `CoordinatorSessionRecordPort.appendModelStep` 与 `appendToolResult` 在既有 storage 事务中读取最新 core、核验稳定条目身份并追加。相同身份与内容的重放返回 `saved`，身份相同但内容冲突返回 `failed`；等待期间受理的用户消息与 Wake Batch 保留。Workflow 使用这两个方法提交响应和工具结果，路由与消费字段维持原语义。

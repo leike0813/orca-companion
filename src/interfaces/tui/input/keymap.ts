@@ -17,6 +17,8 @@ export const GLOBAL_KEY_BINDINGS = {
 } as const;
 
 export type GlobalAction =
+  | 'search-history'
+  | 'navigate-activity'
   | 'command-palette'
   | 'toggle-sidebar'
   | 'graph-inspector'
@@ -39,6 +41,8 @@ export type KeyEventLike = {
  * 未识别的键位（包括所有普通字符）返回 `null`：调用方据此把输入交给 composer，而不是猜测意图。
  */
 export function resolveGlobalAction(input: string, key: KeyEventLike): GlobalAction | null {
+  if (['\u001bOR', '\u001b[13~'].includes(input)) return 'search-history';
+  if (['\u001bOS', '\u001b[14~'].includes(input)) return 'navigate-activity';
   if (key.shift && key.leftArrow && !key.ctrl && !key.meta) return 'enter-answer';
   if (key.ctrl === true && key.meta !== true) {
     if (input === 'p') {
