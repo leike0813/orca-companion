@@ -6,7 +6,7 @@ import { setTimeout, clearTimeout } from 'node:timers';
 import { createElement } from 'react';
 import { render } from 'ink';
 
-const scenarios = ['planning', 'execution', 'blocked', 'empty', 'long-cjk', 'answer', 'disabled', 'alignment', 'alignment-planning', 'history'];
+const scenarios = ['planning', 'execution', 'blocked', 'empty', 'long-cjk', 'answer', 'disabled', 'alignment', 'alignment-planning', 'history', 'streaming'];
 const alignmentPreview = ['alignment', 'alignment-planning'].includes(process.argv[2]);
 const prototype = process.argv[2] === '--prototype';
 const graphPrototype = process.argv[2] === '--graph-prototype';
@@ -310,9 +310,11 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
     if (previewInputs.kind !== 'opened') throw new Error(previewInputs.message);
     const { openCheckpointStore } = await import('../dist/src/adapters/storage/checkpoint-store.js');
     const { readTranscriptPage } = await import('../dist/src/application/coordinator/history.js');
-    const history = scenario === 'history' ? openCheckpointStore({ databasePath: ':memory:' }) : null;
+    const { createTranscriptPreviewStore } = await import('../dist/src/adapters/storage/transcript-preview-store.js');
+    const previewStore = createTranscriptPreviewStore();
+    const history = openCheckpointStore({ databasePath: ':memory:' });
     if (history?.kind === 'failed') throw new Error(history.message);
-    if (history?.kind === 'opened') {
+    if (history?.kind === 'opened' && scenario === 'history') {
       history.store.saveCheckpoint({ schemaVersion: 2, coordinatorSessionId: 'session-a', graphPosition: 'suspend',
         committedMessages: [], committedModelSteps: [], wakeBatches: [], lastCompactionOutcome: null });
       for (let index = 0; index < 320; index += 1) {
@@ -324,7 +326,26 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
         if (saved.kind === 'failed') throw new Error(saved.message);
       }
     }
+    if (history.kind === 'opened' && scenario !== 'history') {
+      for (const session of snapshot.sessions) {
+        const saved = history.store.saveCheckpoint({ schemaVersion: 2, coordinatorSessionId: session.coordinatorSessionId, graphPosition: 'suspend',
+          committedMessages: transcript.messages.map((message, index) => ({ ...message, entryId: `preview-${index}`, stepId: message.stepId ?? `preview-step-${index}`,
+            ...(message.role === 'tool' ? { toolCallId: `preview-call-${index}`, toolName: message.content.split('\n')[0], content: message.content.split('\n').slice(1).join('\n') } : {}) })),
+          committedModelSteps: [], wakeBatches: [], lastCompactionOutcome: null });
+        if (saved.kind === 'failed') throw new Error(saved.message);
+      }
+    }
     const ports = {
+      reading: {
+        history: async (query) => history.store.readHistoryPage(query),
+        body: async (query) => {
+          if (query.source.kind === 'preview') return previewStore.body(query);
+          const range = history.store.readHistoryBody({ coordinatorSessionId: query.coordinatorSessionId, entryId: query.source.entryId,
+            contentRevision: 1, offset: query.offset, maxBytes: query.maxBytes });
+          return range === null ? null : { source: query.source, offset: range.offset, end: range.end, byteLength: range.byteLength, text: range.text };
+        },
+        previews: async (sessionId) => previewStore.list(sessionId), pin: previewStore.pin, subscribe: previewStore.subscribe,
+      },
       questions: async (input) => input.kind === 'pending-interactions'
         ? { kind: 'pending-interactions', interactions: snapshot.interactions.filter((item) => item.ownerCoordinatorSessionId === input.coordinatorSessionId), nextCursor: null }
         : { kind: 'pending-interaction', interaction: snapshot.interactions.find((item) => item.interactionId === input.interactionId && item.ownerCoordinatorSessionId === input.coordinatorSessionId)
@@ -414,9 +435,47 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
           })
         : createElement(TuiApp, { ports, terminalWidth: process.stdout.columns ?? 80, initialScopeId: null, onExit: () => app.unmount() });
     app = render(element, { exitOnCtrlC: false, interactive: true });
+    const previewAbort = new globalThis.AbortController();
+    let previewLoop = Promise.resolve();
+    if (scenario === 'streaming') {
+      const { BaseChatModel } = await import('@langchain/core/language_models/chat_models');
+      const { AIMessageChunk } = await import('@langchain/core/messages');
+      const { ChatGenerationChunk } = await import('@langchain/core/outputs');
+      const { buildCoordinatorGraph } = await import('../dist/src/workflow/coordinator/graph.js');
+      const { projectActionableWork } = await import('../dist/src/application/coordinator/actionable-work.js');
+      class PreviewModel extends BaseChatModel {
+        _llmType() { return 'isolated-preview'; }
+        _generate() { throw new Error('preview uses stream'); }
+        bindTools() { return this; }
+        async *_streamResponseChunks(_messages, options) {
+          for (let index = 0; index < 100; index++) {
+            if (options.signal?.aborted) throw Object.assign(new Error('cancelled'), { name: 'AbortError' });
+            const text = index === 0 ? '# 流式中文阅读\n\n**稳定前缀**与尚未提交的正文。\n\n'
+              : '读取原文范围 '.repeat(160) + `\n流式段落 ${index} · 中文🙂abc\n`;
+            yield new ChatGenerationChunk({ text, message: new AIMessageChunk(text) });
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+        }
+      }
+      const graph = buildCoordinatorGraph({ model: new PreviewModel({}), checkpointer: history.store.checkpointer,
+        sessionRecords: history.store, assertFencing: () => ({ kind: 'valid', lease: {} }), newStepId: () => 'preview-stream-step',
+        buildMessages: async () => ({ messages: [], note: 'isolated preview' }),
+        streamObserver: event => previewStore.observe(event, history.store.readHistoryPage({ coordinatorSessionId: 'session-a' }).entries.at(-1)?.sequence ?? 0),
+      });
+      const work = projectActionableWork({ coordinatorSessionId: 'session-a', controlState: 'active', admitted: [],
+        observations: [{ source: { sourceKind: 'delivery', sourceId: 'preview-source', revision: 1 }, classification: 'worker_question',
+          summary: '流式阅读', ownerCoordinatorSessionId: 'session-a' }] });
+      previewLoop = new Promise(resolve => setTimeout(resolve, 500)).then(() => graph.invoke({ coordinatorSessionId: 'session-a', remainingWork: work.items,
+        deferredWork: 0, pendingToolCalls: 0 }, { configurable: { thread_id: 'preview-stream' }, signal: previewAbort.signal })).catch(error => {
+          if (!previewAbort.signal.aborted) process.stderr.write(String(error));
+        });
+    }
     try {
       await app.waitUntilExit();
     } finally {
+      previewAbort.abort();
+      await previewLoop;
+      previewStore.close();
       previewInputs.store.close();
       if (history?.kind === 'opened') history.store.close();
     }

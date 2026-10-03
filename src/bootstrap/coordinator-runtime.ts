@@ -70,6 +70,7 @@ export type StartCoordinatorRuntimeOptions = {
   readonly ttlMs?: number;
   readonly clock?: () => number;
   readonly probeTimeoutMs?: number;
+  readonly contextReadBytes?: number;
 };
 
 export type StartedCoordinatorRuntime = {
@@ -121,6 +122,7 @@ export async function startCoordinatorRuntime(
   // 3. 打开 checkpoint store。
   const opened = openCheckpointStore({
     databasePath: checkpointDatabasePath(options.gitCommonDir),
+    ...(options.contextReadBytes === undefined ? {} : { contextReadBytes: options.contextReadBytes }),
     ...(options.clock === undefined ? {} : { clock: options.clock }),
   });
   if (opened.kind === 'failed') {

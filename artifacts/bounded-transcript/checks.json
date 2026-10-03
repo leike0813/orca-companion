@@ -1,0 +1,182 @@
+[
+  {
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "source": "production TuiApp",
+    "returns": [
+      "project",
+      "graph",
+      "cancel"
+    ],
+    "cursor": "首中尾"
+  },
+  {
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "source": "production TuiApp",
+    "returns": [
+      "project",
+      "graph",
+      "cancel"
+    ],
+    "cursor": "首中尾"
+  },
+  {
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "source": "production TuiApp",
+    "returns": [
+      "project",
+      "graph",
+      "cancel"
+    ],
+    "cursor": "首中尾"
+  },
+  {
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "source": "production TuiApp",
+    "returns": [
+      "project",
+      "graph",
+      "cancel"
+    ],
+    "cursor": "首中尾"
+  },
+  {
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "source": "production TuiApp",
+    "returns": [
+      "project",
+      "graph",
+      "cancel"
+    ],
+    "cursor": "首中尾"
+  },
+  {
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "source": "production TuiApp",
+    "returns": [
+      "project",
+      "graph",
+      "cancel"
+    ],
+    "cursor": "首中尾"
+  },
+  {
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "source": "production TuiApp",
+    "returns": [
+      "project",
+      "graph",
+      "cancel"
+    ],
+    "cursor": "首中尾"
+  },
+  {
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "source": "production TuiApp",
+    "returns": [
+      "project",
+      "graph",
+      "cancel"
+    ],
+    "cursor": "首中尾"
+  },
+  {
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "source": "production TuiApp",
+    "returns": [
+      "project",
+      "graph",
+      "cancel"
+    ],
+    "cursor": "首中尾"
+  },
+  {
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "source": "production TuiApp",
+    "returns": [
+      "project",
+      "graph",
+      "cancel"
+    ],
+    "cursor": "首中尾"
+  },
+  {
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "source": "production TuiApp",
+    "returns": [
+      "project",
+      "graph",
+      "cancel"
+    ],
+    "cursor": "首中尾"
+  },
+  {
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "source": "production TuiApp",
+    "returns": [
+      "project",
+      "graph",
+      "cancel"
+    ],
+    "cursor": "首中尾"
+  }
+]

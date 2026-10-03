@@ -81,9 +81,9 @@ describe('session-interactions / Session Picker 与焦点约束', () => {
     await settle(12);
 
     const transcriptCalls = fake.calls
-      .filter((call) => call.name === 'transcript')
+      .filter((call) => call.name === 'history')
       .map((call) => call.detail);
-    expect(transcriptCalls).toEqual(['session-b']);
+    expect([...new Set(transcriptCalls)]).toEqual(['session-b']);
     expect(fake.executeCount()).toBe(0);
   });
 
@@ -169,7 +169,7 @@ describe('session-interactions / Session Picker 与焦点约束', () => {
     const fake = createFakePorts();
     const rendered = renderTui(fake.ports);
     await settle(12);
-    expect(fake.calls.filter((call) => call.name === 'transcript').map((call) => call.detail)).toEqual(['session-b']);
+    expect([...new Set(fake.calls.filter((call) => call.name === 'history').map((call) => call.detail))]).toEqual(['session-b']);
 
     fake.emit({
       eventId: 'event-session-a',
@@ -182,7 +182,7 @@ describe('session-interactions / Session Picker 与焦点约束', () => {
     await settle(2);
 
     // transcript 不切换：没有新的加载，也没有任何写入意图。
-    expect(fake.calls.filter((call) => call.name === 'transcript').map((call) => call.detail)).toEqual(['session-b']);
+    expect([...new Set(fake.calls.filter((call) => call.name === 'history').map((call) => call.detail))]).toEqual(['session-b']);
     expect(fake.executeCount()).toBe(0);
 
     // 打开 Session Picker：未读标记落在 session-a 上，选中标记仍在 session-b 上。

@@ -25,7 +25,7 @@ import {
 } from './harness.js';
 
 /** 只读端口白名单：渲染路径只允许 query 与只读 store 读取，不允许任何写。 */
-const READ_ONLY_PORTS = ['resolveHome', 'snapshot', 'transcript', 'inputStore.read', 'submissionStatus', 'modelCatalog'];
+const READ_ONLY_PORTS = ['resolveHome', 'snapshot', 'history', 'transcript-body', 'inputStore.read', 'submissionStatus', 'modelCatalog'];
 
 async function pressKey(rendered: RenderedTui, input: string): Promise<void> {
   rendered.stdin.write(input);
@@ -58,7 +58,7 @@ describe('重挂载与 resize 零业务副作用', () => {
     expect(names.every((name) => READ_ONLY_PORTS.includes(name))).toBe(true);
     // 只读加载确实发生过（不是「什么都没跑」的假绿）。
     expect(names).toContain('snapshot');
-    expect(names).toContain('transcript');
+    expect(names).toContain('history');
     // 重挂载真的重跑了挂载 effect，而不是复用了上一次的实例。
     expect(fake.calls.filter((call) => call.name === 'resolveHome')).toHaveLength(2);
 

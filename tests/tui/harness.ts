@@ -40,6 +40,7 @@ import type {
 } from '../../src/application/execution/execution-view.js';
 import { WIZARD_CHECKS } from '../../src/interfaces/tui/ports.js';
 import { openUiInputStore } from '../../src/adapters/storage/ui-input-store.js';
+import { createTranscriptReadingFixture } from '../support/transcript-reading.js';
 import type { UiInputStore } from '../../src/application/ports/ui-input-store.js';
 import type { SubmissionQuery, SubmissionStatus } from '../../src/application/coordinator/submission-status.js';
 
@@ -361,6 +362,17 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
   };
 
   const ports: TuiPorts = {
+    reading: {
+      history: (query) => {
+        calls.push({ name: 'history', detail: query.coordinatorSessionId });
+        return createTranscriptReadingFixture({ coordinatorSessionId: query.coordinatorSessionId, page: () => transcript }).history(query);
+      },
+      body: (query) => {
+        calls.push({ name: 'transcript-body', detail: query });
+        return createTranscriptReadingFixture({ coordinatorSessionId: query.coordinatorSessionId, page: () => transcript }).body(query);
+      },
+      previews: () => Promise.resolve([]), pin: () => () => {}, subscribe: () => () => {},
+    },
     questions: (input) => {
       calls.push({ name: 'questions', detail: input });
       const items = snapshot.interactions.filter((item) => item.ownerCoordinatorSessionId === input.coordinatorSessionId && item.state === 'open');

@@ -31,6 +31,7 @@ import { Sidebar } from '../components/sidebar.js';
 import { StatusLine } from '../components/status-line.js';
 import { TopBar } from '../components/top-bar.js';
 import { Transcript } from '../components/transcript.js';
+import type { TranscriptFrame } from '../render/transcript-reader.js';
 import { sidebarWidthFor, truncateToDisplayWidth } from '../render/width.js';
 import type { ExecutionAuthorizationLoad, ModelCatalog } from '../ports.js';
 import type {
@@ -70,6 +71,7 @@ export type WorkspaceProps = {
   readonly terminalWidth: number;
   readonly terminalHeight?: number;
   readonly onTranscriptHeight?: (height: number) => void;
+  readonly transcriptFrame?: TranscriptFrame | null;
   readonly events: readonly SemanticEvent[];
   readonly actions: WorkspaceActions;
   readonly modelCatalog: ModelCatalog;
@@ -158,7 +160,7 @@ export function Workspace(props: WorkspaceProps) {
     <Box ref={rowRef} flexDirection="row" height={bodyRows} flexShrink={0}>
       <Box ref={bodyRef} flexDirection="column" width={width} height={bodyRows}>
         <Box ref={transcriptRef} flexDirection="column" flexGrow={1} flexBasis={0} minHeight={1} overflow="hidden">
-          <Transcript transcript={view.transcript} expandedToolIds={ui.expandedToolIds} onToggleTool={props.actions.toggleTool} availableWidth={width}
+          <Transcript transcript={view.transcript} {...(props.transcriptFrame === undefined ? {} : { frame: props.transcriptFrame })} expandedToolIds={ui.expandedToolIds} onToggleTool={props.actions.toggleTool} availableWidth={width}
             maxLines={transcriptMetrics.hasMeasured?Math.max(1,Math.round(transcriptMetrics.height)):Math.max(1,bodyRows-12)}/>
         </Box>
         {candidates.length&&focus?<CommandPalette commands={candidates} selectedIndex={Math.min(ui.slashIndex,candidates.length-1)} onRun={props.actions.runCommand}

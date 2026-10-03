@@ -1,0 +1,1217 @@
+[
+  {
+    "name": "workspace",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "workspace-120x40-color-nerd.png",
+    "text": "workspace-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "project-120x40-color-nerd.png",
+    "text": "project-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "graph-120x40-color-nerd.png",
+    "text": "graph-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cancel-review-120x40-color-nerd.png",
+    "text": "cancel-review-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "return-cursor-120x40-color-nerd.png",
+    "text": "return-cursor-120x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "slash-120x40-color-nerd.png",
+    "text": "slash-120x40-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "workspace-120x40-color-ascii.png",
+    "text": "workspace-120x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "project-120x40-color-ascii.png",
+    "text": "project-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "graph-120x40-color-ascii.png",
+    "text": "graph-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cancel-review-120x40-color-ascii.png",
+    "text": "cancel-review-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "return-cursor-120x40-color-ascii.png",
+    "text": "return-cursor-120x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "slash-120x40-color-ascii.png",
+    "text": "slash-120x40-color-ascii.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "workspace-120x40-no-color-nerd.png",
+    "text": "workspace-120x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "project-120x40-no-color-nerd.png",
+    "text": "project-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "graph-120x40-no-color-nerd.png",
+    "text": "graph-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cancel-review-120x40-no-color-nerd.png",
+    "text": "cancel-review-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "return-cursor-120x40-no-color-nerd.png",
+    "text": "return-cursor-120x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "slash-120x40-no-color-nerd.png",
+    "text": "slash-120x40-no-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "workspace-120x40-no-color-ascii.png",
+    "text": "workspace-120x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "project-120x40-no-color-ascii.png",
+    "text": "project-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "graph-120x40-no-color-ascii.png",
+    "text": "graph-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cancel-review-120x40-no-color-ascii.png",
+    "text": "cancel-review-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "return-cursor-120x40-no-color-ascii.png",
+    "text": "return-cursor-120x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "slash-120x40-no-color-ascii.png",
+    "text": "slash-120x40-no-color-ascii.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "workspace-80x24-color-nerd.png",
+    "text": "workspace-80x24-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "project-80x24-color-nerd.png",
+    "text": "project-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "graph-80x24-color-nerd.png",
+    "text": "graph-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cancel-review-80x24-color-nerd.png",
+    "text": "cancel-review-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "return-cursor-80x24-color-nerd.png",
+    "text": "return-cursor-80x24-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "slash-80x24-color-nerd.png",
+    "text": "slash-80x24-color-nerd.txt",
+    "cursor": [
+      3,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "workspace-80x24-color-ascii.png",
+    "text": "workspace-80x24-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "project-80x24-color-ascii.png",
+    "text": "project-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "graph-80x24-color-ascii.png",
+    "text": "graph-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cancel-review-80x24-color-ascii.png",
+    "text": "cancel-review-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "return-cursor-80x24-color-ascii.png",
+    "text": "return-cursor-80x24-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "slash-80x24-color-ascii.png",
+    "text": "slash-80x24-color-ascii.txt",
+    "cursor": [
+      3,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "workspace-80x24-no-color-nerd.png",
+    "text": "workspace-80x24-no-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "project-80x24-no-color-nerd.png",
+    "text": "project-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "graph-80x24-no-color-nerd.png",
+    "text": "graph-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cancel-review-80x24-no-color-nerd.png",
+    "text": "cancel-review-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "return-cursor-80x24-no-color-nerd.png",
+    "text": "return-cursor-80x24-no-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "slash-80x24-no-color-nerd.png",
+    "text": "slash-80x24-no-color-nerd.txt",
+    "cursor": [
+      3,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "workspace-80x24-no-color-ascii.png",
+    "text": "workspace-80x24-no-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "project-80x24-no-color-ascii.png",
+    "text": "project-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "graph-80x24-no-color-ascii.png",
+    "text": "graph-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cancel-review-80x24-no-color-ascii.png",
+    "text": "cancel-review-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "return-cursor-80x24-no-color-ascii.png",
+    "text": "return-cursor-80x24-no-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "slash-80x24-no-color-ascii.png",
+    "text": "slash-80x24-no-color-ascii.txt",
+    "cursor": [
+      3,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "workspace-50x40-color-nerd.png",
+    "text": "workspace-50x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "project-50x40-color-nerd.png",
+    "text": "project-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "graph-50x40-color-nerd.png",
+    "text": "graph-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cancel-review-50x40-color-nerd.png",
+    "text": "cancel-review-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "return-cursor-50x40-color-nerd.png",
+    "text": "return-cursor-50x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "slash-50x40-color-nerd.png",
+    "text": "slash-50x40-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "workspace-50x40-color-ascii.png",
+    "text": "workspace-50x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "project-50x40-color-ascii.png",
+    "text": "project-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "graph-50x40-color-ascii.png",
+    "text": "graph-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cancel-review-50x40-color-ascii.png",
+    "text": "cancel-review-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "return-cursor-50x40-color-ascii.png",
+    "text": "return-cursor-50x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "slash-50x40-color-ascii.png",
+    "text": "slash-50x40-color-ascii.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "workspace-50x40-no-color-nerd.png",
+    "text": "workspace-50x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "project-50x40-no-color-nerd.png",
+    "text": "project-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "graph-50x40-no-color-nerd.png",
+    "text": "graph-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cancel-review-50x40-no-color-nerd.png",
+    "text": "cancel-review-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "return-cursor-50x40-no-color-nerd.png",
+    "text": "return-cursor-50x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "slash-50x40-no-color-nerd.png",
+    "text": "slash-50x40-no-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "workspace-50x40-no-color-ascii.png",
+    "text": "workspace-50x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "project",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "project-50x40-no-color-ascii.png",
+    "text": "project-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "graph-50x40-no-color-ascii.png",
+    "text": "graph-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-review",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cancel-review-50x40-no-color-ascii.png",
+    "text": "cancel-review-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "return-cursor",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "return-cursor-50x40-no-color-ascii.png",
+    "text": "return-cursor-50x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "slash-50x40-no-color-ascii.png",
+    "text": "slash-50x40-no-color-ascii.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "history-latest",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "history-latest-120x40-color-nerd.png",
+    "text": "history-latest-120x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "history-oldest",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "history-oldest-120x40-color-nerd.png",
+    "text": "history-oldest-120x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "history-next",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "history-next-120x40-color-nerd.png",
+    "text": "history-next-120x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "history-resized",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "history-resized-50x40-color-nerd.png",
+    "text": "history-resized-50x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "history-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "history-return-50x40-color-nerd.png",
+    "text": "history-return-50x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "stream-live",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "stream-live-80x24-color-nerd.png",
+    "text": "stream-live-80x24-color-nerd.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "stream-pinned",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "stream-pinned-80x24-color-nerd.png",
+    "text": "stream-pinned-80x24-color-nerd.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "name": "stream-resized",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "stream-resized-120x40-color-nerd.png",
+    "text": "stream-resized-120x40-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "name": "stream-finished",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "stream-finished-120x40-color-nerd.png",
+    "text": "stream-finished-120x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  }
+]

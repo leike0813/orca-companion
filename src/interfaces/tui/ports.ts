@@ -17,6 +17,7 @@ import type {
 } from '../../application/controller-service.js';
 import type { UiInputStore } from '../../application/ports/ui-input-store.js';
 import type { SubmissionQuery, SubmissionStatus } from '../../application/coordinator/submission-status.js';
+import type { TranscriptReadingPort } from '../../application/coordinator/history.js';
 
 export type SnapshotLoad =
   | { readonly kind: 'snapshot'; readonly snapshot: ControllerSnapshot }
@@ -57,6 +58,7 @@ export type TuiIntent =
     };
 
 export type TuiPorts = {
+  readonly reading: TranscriptReadingPort;
   readonly questions?: (input: TuiQuestionQuery) => Promise<import('../../application/controller-service.js').ControllerQuestionResult>;
   readonly inputStore: UiInputStore;
   readonly submissionStatus: (query: SubmissionQuery) => Promise<SubmissionStatus>;

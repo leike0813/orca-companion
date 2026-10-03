@@ -37,6 +37,13 @@ export type OpenCheckpointStoreResult = {
 export type OpenCheckpointStoreOptions = {
     readonly databasePath: string;
     readonly clock?: () => number;
+    /**
+     * 单次有效上下文读取的字节上限，覆盖正文、元数据、step 与 context 材料。
+     *
+     * 缺省取 `CONTEXT_READ_BYTES`；超过上限按 `context_exhausted` 阻塞，权威原文仍可分页读回，
+     * 因此预算只限制一次恢复读多少，不限制记录本身能存多大。
+     */
+    readonly contextReadBytes?: number;
 };
 type Statement = {
     run(...params: readonly unknown[]): unknown;
@@ -74,6 +81,7 @@ function headOf(state: CoordinatorSessionState): Core {
 const failed = (error: unknown): CheckpointWriteResult => ({ kind: 'failed', message: describeError(error) });
 export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCheckpointStoreResult {
     const clock = options.clock ?? Date.now;
+    const contextReadBytes = options.contextReadBytes ?? CONTEXT_READ_BYTES;
     let saver: SqliteSaver;
     try {
         mkdirSync(dirname(options.databasePath), { recursive: true });
@@ -272,7 +280,7 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
     }
     function stepsFor(id: string, entries: readonly CommittedMessageEntry[], budget = Infinity): CommittedModelStep[] {
         return entries.flatMap(entry => {
-            const row = stmt('SELECT CAST(substr(CAST(metadata AS BLOB),1,65537) AS TEXT) AS metadata FROM conversation_model_steps WHERE coordinator_session_id=? AND entry_id=?').get(id, entry.entryId) as {
+            const row = stmt('SELECT CAST(substr(CAST(metadata AS BLOB),1,?) AS TEXT) AS metadata FROM conversation_model_steps WHERE coordinator_session_id=? AND entry_id=?').get(HISTORY_PAGE_BYTES + 1, id, entry.entryId) as {
                 metadata: string;
             } | undefined;
             if (row === undefined)
@@ -286,38 +294,61 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
             return [{ ...rest, toolCalls: entry.toolCalls ?? [], messages: shapes.map(shape => ({ ...shape, content: entry.content, ...(entry.toolCalls !== undefined && 'entryId' in shape ? { toolCalls: entry.toolCalls } : {}) })) }];
         });
     }
-    function loadNativeWindowOwner(id: CoordinatorSessionId): NativeCompactedWindowOwner | null {
-        const row = stmt('SELECT owner_ref,substr(items,1,4194305) AS items FROM native_window_owners WHERE coordinator_session_id=?').get(id) as {
+    /**
+     * 一次 context 材料的读取结果：值与它实际占用的字节数。
+     *
+     * 字节数随值一起返回，正文与 step 才能共用同一个读取预算，而不是各自再算一遍。
+     */
+    type ContextMaterialRead<T> = { readonly bytes: number; readonly value: T };
+    function readNativeWindowOwner(id: CoordinatorSessionId): ContextMaterialRead<NativeCompactedWindowOwner> | null {
+        // 截断在 BLOB 上按字节进行，中文与 emoji 不会被按字符数绕过；同一行给出总字节数，
+        // 超限时在 JSON 解析前拒绝，内存里不会先出现无界文本。
+        const row = stmt('SELECT owner_ref,CAST(substr(CAST(items AS BLOB),1,?) AS TEXT) AS items,length(CAST(items AS BLOB)) AS bytes FROM native_window_owners WHERE coordinator_session_id=?').get(contextReadBytes + 1, id) as {
             owner_ref: string;
             items: string;
+            bytes: number;
         } | undefined;
         if (row === undefined)
             return null;
-        if (Buffer.byteLength(row.items) > CONTEXT_READ_BYTES)
+        if (row.bytes > contextReadBytes)
             throw new Error('context_exhausted: native window read budget');
         const owner = { ownerRef: row.owner_ref, items: JSON.parse(row.items) as NativeCompactedWindowOwner['items'] };
-        return valid({ ...empty(id), contextMaterial: { nativeWindowOwner: owner, capsule: null } }).contextMaterial?.nativeWindowOwner ?? null;
+        return { bytes: row.bytes, value: valid({ ...empty(id), contextMaterial: { nativeWindowOwner: owner, capsule: null } }).contextMaterial!.nativeWindowOwner! };
     }
-    function loadPortableCapsule(id: CoordinatorSessionId): PortableContextCapsule | null {
-        const row = stmt('SELECT capsule_id,replaced_from_step_id,replaced_to_step_id,substr(text,1,4194305) AS text FROM portable_capsules WHERE coordinator_session_id=?').get(id) as {
+    function readPortableCapsule(id: CoordinatorSessionId): ContextMaterialRead<PortableContextCapsule> | null {
+        const row = stmt('SELECT capsule_id,replaced_from_step_id,replaced_to_step_id,CAST(substr(CAST(text AS BLOB),1,?) AS TEXT) AS text,length(CAST(text AS BLOB)) AS bytes FROM portable_capsules WHERE coordinator_session_id=?').get(contextReadBytes + 1, id) as {
             capsule_id: string;
             replaced_from_step_id: string;
             replaced_to_step_id: string;
             text: string;
+            bytes: number;
         } | undefined;
         if (row === undefined)
             return null;
-        if (Buffer.byteLength(row.text) > CONTEXT_READ_BYTES)
+        if (row.bytes > contextReadBytes)
             throw new Error('context_exhausted: capsule read budget');
         const capsule: PortableContextCapsule = { kind: 'derived_context_capsule', capsuleId: row.capsule_id, replacedFromStepId: row.replaced_from_step_id, replacedToStepId: row.replaced_to_step_id, text: row.text };
-        return valid({ ...empty(id), contextMaterial: { nativeWindowOwner: null, capsule } }).contextMaterial?.capsule ?? null;
+        return { bytes: row.bytes, value: valid({ ...empty(id), contextMaterial: { nativeWindowOwner: null, capsule } }).contextMaterial!.capsule! };
+    }
+    function loadNativeWindowOwner(id: CoordinatorSessionId): NativeCompactedWindowOwner | null {
+        return readNativeWindowOwner(id)?.value ?? null;
+    }
+    function loadPortableCapsule(id: CoordinatorSessionId): PortableContextCapsule | null {
+        return readPortableCapsule(id)?.value ?? null;
     }
     function loadCheckpoint(id: CoordinatorSessionId, purpose: CheckpointReadPurpose = 'full'): CheckpointRecoveryRead {
         try {
             const head = core(id);
             if (head === null)
                 return { kind: 'absent' };
-            const nativeWindowOwner = loadNativeWindowOwner(id), capsule = loadPortableCapsule(id);
+            const ownerRead = readNativeWindowOwner(id), capsuleRead = readPortableCapsule(id);
+            const nativeWindowOwner = ownerRead?.value ?? null, capsule = capsuleRead?.value ?? null;
+            // 一次恢复读到的 context 材料与正文、step 共享同一个预算；`full` 读整段历史，
+            // context 材料仍按预算有界，否则一次恢复的内存占用就没有上限。
+            const materialBytes = (ownerRead?.bytes ?? 0) + (capsuleRead?.bytes ?? 0);
+            if (purpose !== 'full' && materialBytes > contextReadBytes)
+                throw new Error('context_exhausted: context material read budget');
+            const budget = purpose === 'full' ? Infinity : contextReadBytes - materialBytes;
             let rows: RecoveryRow[] = [];
             if (purpose === 'tools') {
                 const last = stmt('SELECT step_id FROM conversation_model_steps WHERE coordinator_session_id=? ORDER BY seq DESC LIMIT 1').get(id) as {
@@ -352,14 +383,14 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
                     }
                 }
             }
-            if (purpose !== 'full' && (rows.length > CONTEXT_READ_ITEMS || rows.reduce((n, r) => n + r.byte_length + r.metadata_length, 0) > CONTEXT_READ_BYTES))
+            if (purpose !== 'full' && (rows.length > CONTEXT_READ_ITEMS || rows.reduce((n, r) => n + r.byte_length + r.metadata_length, 0) > budget))
                 throw new Error('context_exhausted: effective history read budget exceeded');
             const entries = rows.map(row => { const entry = readEntry(id, row.entry_id); if (entry === null)
                 throw new Error('Committed entry missing'); return entry; });
             const wakes = purpose === 'full' ? (stmt('SELECT metadata FROM conversation_wakes WHERE coordinator_session_id=? ORDER BY rowid').all(id) as {
                 metadata: string;
             }[]).map(row => JSON.parse(row.metadata) as WakeBatch) : [];
-            return { kind: 'recovered', state: valid({ ...head, committedMessages: entries, committedModelSteps: stepsFor(id, entries, purpose === 'full' ? Infinity : CONTEXT_READ_BYTES - rows.reduce((sum, row) => sum + row.byte_length + row.metadata_length, 0)), wakeBatches: wakes, ...(nativeWindowOwner === null && capsule === null ? {} : { contextMaterial: { nativeWindowOwner, capsule } }) }) };
+            return { kind: 'recovered', state: valid({ ...head, committedMessages: entries, committedModelSteps: stepsFor(id, entries, budget - rows.reduce((sum, row) => sum + row.byte_length + row.metadata_length, 0)), wakeBatches: wakes, ...(nativeWindowOwner === null && capsule === null ? {} : { contextMaterial: { nativeWindowOwner, capsule } }) }) };
         }
         catch (error) {
             return { kind: 'unrecoverable', reason: describeError(error) };

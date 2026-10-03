@@ -1,6 +1,8 @@
 # TUI 调试工作台
 
-按项目工具链准备依赖后运行 `pnpm build`。预览只加载构建后的 `TuiApp` 与固定假端口，不连接模型、Orca、tracker 或协调存储；基础场景的提交和 Scope 控制显示 `preview_read_only` 拒绝，alignment 场景仅在隔离内存端口中模拟。
+按项目工具链准备依赖后运行 `pnpm build`。预览加载构建后的 `TuiApp` 与固定假端口，不连接外部 provider、Orca 或 tracker；输入与历史使用隔离内存 SQLite。基础场景的提交和 Scope 控制显示 `preview_read_only` 拒绝，alignment 场景仅在隔离内存端口中模拟。
+
+`pnpm ui:preview history` 使用隔离内存 checkpoint store，覆盖全历史 keyset 与巨型原文范围；`pnpm ui:preview streaming` 使用本地假 chat model 的真实 stream、生产 graph 和临时 preview store。两者都挂载生产 TuiApp；不连接外部 provider 或 Orca。PgUp/PgDn 逐视窗阅读，Ctrl+Home/End 直达最早/最新，Esc 在 overlay 返回后回到最新；离底更新只标记，resize 保留原文位置。采集和性能命令见 [3B 证据](../../artifacts/bounded-transcript/README.md)。
 
 在交互式终端运行 `pnpm ui:preview planning`。基础场景为 `planning`、`execution`、`blocked`、`empty`、`long-cjk`、`answer`、`disabled`，均挂载生产 `TuiApp`。`alignment` 与 `alignment-planning` 复用 20 节点及长身份夹具，增加待答/事件和可审阅的隔离假端口；仅在内存模拟意图，不装配生产 Controller、模型或 Orca。预览要求 stdin/stdout 都是 TTY；`Esc` 逐层返回，`Ctrl+C` 退出。改动源码后重新构建并启动预览。
 

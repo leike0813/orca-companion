@@ -80,7 +80,11 @@ afterEach(() => {
 });
 
 function open(): CheckpointStore {
-  const opened = openCheckpointStore({ databasePath, clock });
+  return openWith({});
+}
+
+function openWith(options: { readonly contextReadBytes?: number }): CheckpointStore {
+  const opened = openCheckpointStore({ databasePath, clock, ...options });
   if (opened.kind !== 'opened') {
     throw new Error(opened.message);
   }
@@ -186,6 +190,54 @@ test('上下文超过安全读取预算时明确拒绝，仍可分页读回原�
   expect(store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries[0]?.byteLength).toBe(CONTEXT_READ_BYTES + 1);
   const body = store.readHistoryBody({ coordinatorSessionId: SESSION_A, entryId: entry.entryId, contentRevision: 1, offset: 0 });
   expect(body?.end).toBe(HISTORY_BODY_BYTES);
+});
+
+test('注入的读取预算按字节而非字符生效：超出即阻塞，分页仍能读回完整 CJK 原文', () => {
+  // 4 万个中文字符共 12 万字节：按字符计仍在 64 KiB 内，按字节计已超预算。
+  const content = '中'.repeat(40_000);
+  expect(Buffer.byteLength(content)).toBeGreaterThan(64 * 1024);
+  expect(content.length).toBeLessThan(64 * 1024);
+  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
+  expect(store.appendMessage(SESSION_A, { entryId: 'cjk-budget', stepId: 'cjk-budget', role: 'assistant', content }).kind).toBe('saved');
+
+  const bounded = openWith({ contextReadBytes: 64 * 1024 });
+  expect(bounded.loadCheckpoint(SESSION_A, 'context').kind).toBe('unrecoverable');
+
+  const roomy = openWith({ contextReadBytes: 256 * 1024 });
+  const recovered = roomy.loadCheckpoint(SESSION_A, 'context');
+  expect(recovered.kind).toBe('recovered');
+  if (recovered.kind === 'recovered') {
+    expect(recovered.state.committedMessages.find(entry => entry.entryId === 'cjk-budget')?.content).toBe(content);
+  }
+
+  let offset = 0, original = '';
+  while (offset < Buffer.byteLength(content)) {
+    const range = bounded.readHistoryBody({ coordinatorSessionId: SESSION_A, entryId: 'cjk-budget', contentRevision: 1, offset });
+    if (range === null) throw new Error('Missing range');
+    original += range.text;
+    offset = range.end;
+  }
+  expect(original).toBe(content);
+  const page = bounded.readHistoryPage({ coordinatorSessionId: SESSION_A });
+  expect(page.entries.find(entry => entry.entryId === 'cjk-budget')?.byteLength).toBe(Buffer.byteLength(content));
+  expect(Buffer.byteLength(JSON.stringify(page.entries))).toBeLessThanOrEqual(HISTORY_BODY_BYTES);
+});
+
+test('默认读取预算容纳 5 MiB 追加响应，超限仍只阻塞单次恢复读取', () => {
+  const content = '模型回答🙂'.repeat(327_680);
+  expect(Buffer.byteLength(content)).toBe(5 * 1024 * 1024);
+  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
+  expect(store.appendMessage(SESSION_A, { entryId: 'response', stepId: 'response', role: 'assistant', content }).kind).toBe('saved');
+
+  const context = store.loadCheckpoint(SESSION_A, 'context');
+  expect(context.kind).toBe('recovered');
+  if (context.kind === 'recovered') {
+    expect(context.state.committedMessages.map(entry => entry.entryId)).toContain('response');
+  }
+  const body = store.readHistoryBody({ coordinatorSessionId: SESSION_A, entryId: 'response', contentRevision: 1, offset: 0 });
+  expect(body?.end).toBe(HISTORY_BODY_BYTES);
+  expect(body?.text).toBe(content.slice(0, body?.text.length));
+  expect(openWith({ contextReadBytes: HISTORY_BODY_BYTES }).loadCheckpoint(SESSION_A, 'context').kind).toBe('unrecoverable');
 });
 
 function step(stepId: string, content: string, at: number): CommittedModelStep {

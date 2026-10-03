@@ -373,6 +373,8 @@ export const FOREGROUND_COORDINATOR_INSTRUCTIONS: readonly string[] = [
 ];
 
 import { readTranscriptPage, type CheckpointReadPurpose } from '../application/coordinator/history.js';
+import type { TranscriptReadingPort } from '../application/coordinator/history.js';
+import { createTranscriptPreviewStore } from '../adapters/storage/transcript-preview-store.js';
 
 const PLANNING_MUTATION_CATEGORIES: ReadonlySet<string> = new Set([
   'route-map-section-update',
@@ -469,6 +471,7 @@ type LiveSession = {
   loopRunning: boolean;
   pendingWake: ProjectedActionableWorkItem[] | null;
   inFlightModelOperations: number;
+  modelAbort: AbortController | null;
 };
 
 /**
@@ -747,6 +750,8 @@ export async function createForegroundPlanningHost(
 
   const listeners = new Set<(event: SemanticEvent) => void>();
   const liveSessions = new Map<string, LiveSession>();
+  const previews = createTranscriptPreviewStore();
+  let previewCapacityUnavailable = false;
   let closed = false;
 
   const publish = (
@@ -858,7 +863,8 @@ export async function createForegroundPlanningHost(
     if (commonDirPath === null) {
       return null;
     }
-    const opened = openCheckpointStore({ databasePath: checkpointDatabasePath(commonDirPath), clock });
+    const opened = openCheckpointStore({ databasePath: checkpointDatabasePath(commonDirPath), clock,
+      ...(config === null ? {} : { contextReadBytes: config.context.maxReadBytes }) });
     if (opened.kind === 'failed') {
       return null;
     }
@@ -1715,7 +1721,16 @@ export async function createForegroundPlanningHost(
       model: session.model,
       checkpointer: session.checkpoints.checkpointer,
       sessionRecords: session.checkpoints,
-      assertFencing: () => assertFencingGeneration(requiredStore(), session.incarnation, { clock }),
+      assertFencing: () => closed || session.fencingLost ? { kind: 'fenced', code: 'released_lease' }
+        : assertFencingGeneration(requiredStore(), session.incarnation, { clock }),
+      ...(config === null ? {} : { maxResponseBytes: config.output.maxResponseBytes }),
+      streamObserver: (event) => {
+        if (closed) return;
+        const sequence = event.kind === 'started' ? session.checkpoints.readHistoryPage({ coordinatorSessionId: event.coordinatorSessionId }).entries.at(-1)?.sequence ?? 0 : 0;
+        const observed = previews.observe(event, sequence);
+        if (observed.kind === 'not_saved' && observed.reason === 'items_capacity') previewCapacityUnavailable = true;
+        if (event.kind === 'committed' || event.kind === 'started' && observed.kind === 'accepted') previewCapacityUnavailable = false;
+      },
       buildMessages: buildMessagesFor(session),
       newStepId: () => `${session.coordinatorSessionId}:step:${newId()}`,
       clock,
@@ -1751,6 +1766,7 @@ export async function createForegroundPlanningHost(
       });
       if (renewed.kind === 'rejected') {
         session.fencingLost = true;
+        session.modelAbort?.abort();
         stopHeartbeat(session);
         publish(session.coordinatorSessionId, {
           kind: 'blocked',
@@ -1886,6 +1902,7 @@ export async function createForegroundPlanningHost(
       resolveModel: async () => await modelFor(configuration),
       gitCommonDir: commonDirPath,
       coordinationStore: requiredStore(),
+      ...(config === null ? {} : { contextReadBytes: config.context.maxReadBytes }),
       ttlMs: leaseTtlMs,
       clock,
       ...(options.probeTimeoutMs === undefined ? {} : { probeTimeoutMs: options.probeTimeoutMs }),
@@ -1910,11 +1927,10 @@ export async function createForegroundPlanningHost(
       loopRunning: false,
       pendingWake: null,
       inFlightModelOperations: 0,
+      modelAbort: null,
     };
-    const withGraph: LiveSession = {
-      ...session,
-      graph: graphForSession(session),
-    };
+    session.graph = graphForSession(session);
+    const withGraph = session;
     liveSessions.set(coordinatorSessionId, withGraph);
     startHeartbeat(withGraph);
     // 同一 Session 的新 Incarnation 接管之后立刻把 Execution Coordination Lease 重指到它：租约的
@@ -2033,11 +2049,13 @@ export async function createForegroundPlanningHost(
       return;
     }
     session.loopRunning = true;
+    const modelAbort = new AbortController();
+    session.modelAbort = modelAbort;
     session.inFlightModelOperations += 1;
     try {
       syncAnsweredInteractions(session);
       let work = pendingWorkFor(session);
-      while (work.length > 0 && !session.fencingLost && session.graph !== null) {
+      while (work.length > 0 && !closed && !modelAbort.signal.aborted && !session.fencingLost && session.graph !== null) {
         const scope = selectedScopeId === null ? null : scopeRecord(selectedScopeId);
         const state = liveStateOf(session, 'tools');
         if (scope === null || state === null) {
@@ -2059,7 +2077,7 @@ export async function createForegroundPlanningHost(
             deferredWork: 0,
             pendingToolCalls: pendingToolCallsOf(state),
           },
-          { configurable: { thread_id: threadIdFor(session.coordinatorSessionId) }, ...COORDINATOR_INVOKE_DEFAULTS },
+          { configurable: { thread_id: threadIdFor(session.coordinatorSessionId) }, signal: modelAbort.signal, ...COORDINATOR_INVOKE_DEFAULTS },
         )) as {
           readonly status: string;
           readonly note: string;
@@ -2077,7 +2095,7 @@ export async function createForegroundPlanningHost(
         work = result.remainingWork.length > 0 ? result.remainingWork : pendingWorkFor(session);
       }
     } catch (error) {
-      publish(session.coordinatorSessionId, {
+      if (!closed && !modelAbort.signal.aborted) publish(session.coordinatorSessionId, {
         kind: 'blocked',
         coordinationScopeId: session.incarnation.coordinationScopeId,
         code: 'model_loop_failed',
@@ -2086,9 +2104,10 @@ export async function createForegroundPlanningHost(
     } finally {
       session.inFlightModelOperations -= 1;
       session.loopRunning = false;
+      if (session.modelAbort === modelAbort) session.modelAbort = null;
       const queued = session.pendingWake;
       session.pendingWake = null;
-      if (queued !== null && !session.fencingLost) {
+      if (queued !== null && !closed && !modelAbort.signal.aborted && !session.fencingLost) {
         void runModelLoop(session);
       }
     }
@@ -2440,6 +2459,33 @@ export async function createForegroundPlanningHost(
     return { kind: 'snapshot', snapshot: projected };
   };
 
+  const readingStore = (sessionId: string): CheckpointStore => {
+    const current = requireStore();
+    if (current === null || selectedScopeId === null) throw new Error('当前 Scope 不可读取');
+    const registrations = current.query({ kind: 'sessions', coordinationScopeId: selectedScopeId });
+    if (registrations.kind !== 'sessions' || !registrations.sessions.some(s => s.coordinatorSessionId === sessionId)) throw new Error('Session 不属于当前 Scope');
+    const checkpoints = checkpointStoreForScope();
+    if (checkpoints === null) throw new Error('checkpoint store 不可读取');
+    return checkpoints;
+  };
+  const reading: TranscriptReadingPort = {
+    history: (query) => Promise.resolve(readingStore(query.coordinatorSessionId).readHistoryPage(query)),
+    body: (query) => Promise.resolve().then(() => {
+      const checkpoints = readingStore(query.coordinatorSessionId);
+      if (query.source.kind === 'preview') return previews.body(query);
+      const range = checkpoints.readHistoryBody({ coordinatorSessionId: query.coordinatorSessionId,
+        entryId: query.source.entryId, contentRevision: query.source.contentRevision, offset: query.offset, maxBytes: query.maxBytes });
+      if (range === null) return null;
+      return { source: query.source, offset: range.offset, end: range.end, byteLength: range.byteLength, text: range.text };
+    }),
+    previews: (sessionId) => {
+      readingStore(sessionId);
+      if (previewCapacityUnavailable) return Promise.reject(new Error('流式预览容量已满，等待完整响应；原阅读位置保留'));
+      return Promise.resolve(previews.list(sessionId));
+    },
+    pin: (sessionId, previewId) => { readingStore(sessionId); return previews.pin(sessionId, previewId); },
+    subscribe: (listener) => previews.subscribe(listener),
+  };
   const readTranscript = (coordinatorSessionId: string, cursor: string | null = null): TranscriptLoad => {
     const checkpoints = checkpointStoreForScope();
     if (checkpoints === null) {
@@ -3451,6 +3497,9 @@ export async function createForegroundPlanningHost(
         readOnlyWorkerProbe,
       }),
       workers: workerStopPortFor(scopeId),
+      stopModels: (cancelledScope) => {
+        for (const live of liveSessions.values()) if (live.incarnation.coordinationScopeId === cancelledScope) live.modelAbort?.abort();
+      },
     });
     return conclude(
       startup.kind === 'started'
@@ -7181,6 +7230,7 @@ export async function createForegroundPlanningHost(
   };
 
   const controller = createControllerService({
+    reading,
     questions: (input) => {
       if (input.coordinationScopeId !== selectedScopeId) return { kind: 'rejected', code: 'stale_scope', message: '问题 Scope 不匹配' };
       const result = requiredStore().query(input);
@@ -7323,6 +7373,25 @@ export async function createForegroundPlanningHost(
   });
 
   const ports: TuiPorts = {
+    reading: {
+      history: async (query) => {
+        const result = await controller.query({ kind: 'session-history', query });
+        if (result.kind !== 'session-history') throw new Error(result.kind === 'rejected' ? result.message : '历史查询结果无效');
+        return result.page;
+      },
+      body: async (query) => {
+        const result = await controller.query({ kind: 'transcript-body', query });
+        if (result.kind !== 'transcript-body') throw new Error(result.kind === 'rejected' ? result.message : '正文查询结果无效');
+        return result.range;
+      },
+      previews: async (coordinatorSessionId) => {
+        const result = await controller.query({ kind: 'transcript-previews', coordinatorSessionId });
+        if (result.kind !== 'transcript-previews') throw new Error(result.kind === 'rejected' ? result.message : '预览查询结果无效');
+        return result.previews;
+      },
+      pin: reading.pin,
+      subscribe: reading.subscribe,
+    },
     questions: async (input) => {
       if (selectedScopeId === null) return { kind: 'rejected', code: 'stale_scope', message: '没有当前 Scope' };
       const result = await controller.query(input.kind === 'pending-interaction'
@@ -7376,10 +7445,13 @@ export async function createForegroundPlanningHost(
     close: () => {
       closed = true;
       for (const session of liveSessions.values()) {
+        session.modelAbort?.abort();
         stopHeartbeat(session);
         session.checkpoints.close();
       }
       liveSessions.clear();
+      const cleanup = previews.close();
+      if (cleanup.failed > 0) process.stderr.write(`临时预览清理失败 ${String(cleanup.failed)} 项\n`);
       listeners.clear();
       scopeCheckpointStore?.close();
       if (uiOpened?.kind === 'opened') uiOpened.store.close();

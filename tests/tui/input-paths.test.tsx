@@ -56,7 +56,7 @@ describe('容器输入路径', () => {
   test('slash 候选先采用再执行，采用过程不发送聊天', async () => {
     const fake=createFakePorts();
     const rendered=renderTui(fake.ports);
-    await waitFor(rendered,()=>fake.calls.some(call=>call.name==='transcript'));
+    await waitFor(rendered,()=>fake.calls.some(call=>call.name==='history'));
     await press(rendered,'/proj');
     expect(rendered.lastFrame()).toContain('命令候选');
     await press(rendered,ENTER);
@@ -79,7 +79,7 @@ describe('容器输入路径', () => {
   test('项目 tabs 与新事件不抢草稿，事件详情保持原 eventId', async () => {
     const fake=createFakePorts();
     const rendered=renderTui(fake.ports);
-    await waitFor(rendered,()=>fake.calls.some(call=>call.name==='transcript'));
+    await waitFor(rendered,()=>fake.calls.some(call=>call.name==='history'));
     await press(rendered,'首尾');
     await press(rendered,'\u001b[D');
     const event={eventId:'event-original',kind:'state-changed' as const,coordinationScopeId:'scope-1',coordinatorSessionId:null,revision:7,reason:'原事件'};
@@ -106,7 +106,7 @@ describe('容器输入路径', () => {
   test('Ctrl+A 行首编辑；面板 Esc 恢复聊天光标，overlay 不穿透', async () => {
     const fake = createFakePorts({ snapshot: { interactions: [OWN_QUESTION] } });
     const rendered = renderTui(fake.ports);
-    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'history'));
     await press(rendered, '首尾');
     await press(rendered, '\u001b[D');
     await press(rendered, '中');
@@ -134,7 +134,7 @@ describe('容器输入路径', () => {
         question: { text: '下一步怎么做？', options: [{ label: '继续', description: '完成实现' }, { label: '稍后' }] } } } : result;
     } };
     const rendered = renderTui(ports);
-    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'history'));
     await press(rendered, SHIFT_LEFT);
     expect(await waitFor(rendered, (frame) => frame.includes('下一步怎么做'))).toContain('下一步怎么做');
     expect(fake.executeIntents).toHaveLength(0);
@@ -151,7 +151,7 @@ describe('容器输入路径', () => {
     const fake = createFakePorts({ snapshot: { interactions: [OWN_QUESTION] } });
     const pending = Promise.withResolvers<Awaited<ReturnType<typeof fake.ports.execute>>>();
     const rendered = renderTui({ ...fake.ports, execute: (intent) => { fake.executeIntents.push(intent); return pending.promise; } });
-    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'history'));
     await press(rendered, SHIFT_LEFT);
     await waitFor(rendered, (frame) => frame.includes('回答 interaction'));
     await press(rendered, '答案');
@@ -167,7 +167,7 @@ describe('容器输入路径', () => {
   test('大粘贴在光标折叠，viewer Esc 恢复位置，发送全文', async () => {
     const fake = createFakePorts({ snapshot: { interactions: [] } });
     const rendered = renderTui(fake.ports);
-    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'history'));
     await press(rendered, '首尾');
     await press(rendered, '\u001b[D');
     const payload = '中文'.repeat(501) + '\n\n';
@@ -197,7 +197,7 @@ describe('容器输入路径', () => {
       }
       return fake.ports.questions!(query);
     } });
-    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'history'));
     await press(rendered, SHIFT_LEFT);
     await waitFor(rendered, (frame) => frame.includes('回答 interaction'));
     await press(rendered, '答案');
@@ -232,7 +232,7 @@ describe('容器输入路径', () => {
     // 默认选中带 Pending Interaction 的 session-b。
     await waitFor(
       rendered,
-      () => fake.calls.some((call) => call.name === 'transcript' && call.detail === 'session-b'),
+      () => fake.calls.some((call) => call.name === 'history' && call.detail === 'session-b'),
     );
 
     // Ctrl+P → 下移 3 次到 Session Picker → Enter 打开。
@@ -247,7 +247,7 @@ describe('容器输入路径', () => {
     await press(rendered, ARROW_UP);
     await press(rendered, ENTER);
 
-    const transcripts = fake.calls.filter((call) => call.name === 'transcript').map((call) => call.detail);
+    const transcripts = fake.calls.filter((call) => call.name === 'history').map((call) => call.detail);
     expect(transcripts).toContain('session-a');
     expect(fake.executeCount()).toBe(0);
     rendered.unmount();
@@ -302,7 +302,7 @@ describe('容器输入路径', () => {
     // 等到 Session 选择落地（InteractionCard 出现不等于选中已应用）。
     await waitFor(
       rendered,
-      () => fake.calls.some((call) => call.name === 'transcript' && call.detail === 'session-b'),
+      () => fake.calls.some((call) => call.name === 'history' && call.detail === 'session-b'),
     );
     await waitFor(rendered, (frame) => frame.includes('待答'));
     await press(rendered, SHIFT_LEFT);
@@ -324,7 +324,7 @@ test.each([0, 1])('项目详情滚到底后一次 Up 即可回退（侧栏密度
     ...session,coordinatorModelConfigurationRef:session.coordinatorModelConfigurationRef.repeat(20),
   }))}});
   const rendered = renderTui(fake.ports);
-  await waitFor(rendered, () => fake.calls.some(call => call.name === 'transcript'));
+  await waitFor(rendered, () => fake.calls.some(call => call.name === 'history'));
   for (let change = 0; change < switches; change += 1) {
     await press(rendered, CTRL_P);
     for (let step = 0; step < COMMAND_IDS.indexOf('toggle-sidebar'); step += 1) await press(rendered, ARROW_DOWN);
@@ -397,7 +397,7 @@ describe('审阅 overlay 的全局键位不穿透', () => {
       const rendered = renderComponent(
         createElement(TuiApp, { ports: fake.ports, terminalWidth: 100, initialScopeId: null, onExit }),
       );
-      await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+      await waitFor(rendered, () => fake.calls.some((call) => call.name === 'history'));
 
       await openReview(rendered, review);
       expect(await waitFor(rendered, (frame) => frame.includes(review.marker))).toContain(review.marker);
@@ -446,7 +446,7 @@ describe('严格 slash 分类：错误输入保留且不发送', () => {
       const fake = createFakePorts();
       const rendered = renderTui(fake.ports);
       // 等到 Session 选中后再输入：composer 标题会先于 sessions-loaded 出现。
-      await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+      await waitFor(rendered, () => fake.calls.some((call) => call.name === 'history'));
       await waitFor(rendered, (frame) => frame.includes('普通消息'));
 
       await press(rendered, entry.label === '空白参数' ? '\u001b[200~' + entry.keys + '\u001b[201~' : entry.keys);
@@ -464,7 +464,7 @@ describe('严格 slash 分类：错误输入保留且不发送', () => {
   test('多行命令：不发送且保留输入', async () => {
     const fake = createFakePorts();
     const rendered = renderTui(fake.ports);
-    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'transcript'));
+    await waitFor(rendered, () => fake.calls.some((call) => call.name === 'history'));
     await waitFor(rendered, (frame) => frame.includes('普通消息'));
 
     // 粘贴多行，保证正文里真的有换行而不是被当成两次输入。
@@ -497,7 +497,7 @@ describe('严格 slash 分类：错误输入保留且不发送', () => {
     const rendered = renderTui(fake.ports);
     await waitFor(
       rendered,
-      () => fake.calls.some((call) => call.name === 'transcript' && call.detail === 'session-b'),
+      () => fake.calls.some((call) => call.name === 'history' && call.detail === 'session-b'),
     );
     await waitFor(rendered, (frame) => frame.includes('待答'));
 

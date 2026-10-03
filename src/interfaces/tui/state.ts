@@ -111,7 +111,9 @@ export type TuiState = {
   readonly drafts: Readonly<Record<string, UiDraft>>;
   /** 回答草稿：按 interaction ID 与 expected revision 隔离，永不自动改绑。 */
   readonly answerDrafts: Readonly<Record<string, UiDraft>>;
+  /** 已批准原型夹具的演示位置；生产 App 使用来源锚点。 */
   readonly scrollOffsets: Readonly<Record<string, number>>;
+  readonly readingAnchors: Readonly<Record<string, import('./render/transcript-reader.js').TranscriptAnchor | null>>;
   readonly unreadSessionIds: readonly string[];
   readonly composerMode: ComposerMode;
   readonly expandedToolIds: readonly string[];
@@ -149,6 +151,7 @@ export const initialTuiState: TuiState = {
   drafts: {},
   answerDrafts: {},
   scrollOffsets: {},
+  readingAnchors: {},
   unreadSessionIds: [],
   composerMode: { kind: 'message' },
   expandedToolIds: [],
@@ -179,6 +182,7 @@ export type TuiAction =
   | { readonly kind: 'draft-changed'; readonly coordinatorSessionId: string; readonly text?: string; readonly draft?: UiDraft }
   | { readonly kind: 'answer-draft-changed'; readonly answerKey: string; readonly text?: string; readonly draft?: UiDraft }
   | { readonly kind: 'scroll-changed'; readonly coordinatorSessionId: string; readonly offset: number }
+  | { readonly kind: 'reading-anchor'; readonly coordinatorSessionId: string; readonly anchor: import('./render/transcript-reader.js').TranscriptAnchor | null }
   | { readonly kind: 'events-arrived'; readonly coordinatorSessionIds: readonly (string | null)[] }
   | { readonly kind: 'answer-mode-entered'; readonly interactionId: string; readonly expectedRevision: number }
   | { readonly kind: 'composer-mode-reset' }
@@ -245,6 +249,8 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         ...state,
         answerDrafts: { ...state.answerDrafts, [action.answerKey]: action.draft ?? textDraft(action.text ?? '') },
       };
+    case 'reading-anchor':
+      return { ...state, readingAnchors: { ...state.readingAnchors, [action.coordinatorSessionId]: action.anchor } };
     case 'scroll-changed':
       return {
         ...state,

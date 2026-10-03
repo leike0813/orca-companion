@@ -19,6 +19,10 @@
  */
 
 import type { ControlState, CoordinationMode } from '../domain/coordination/mode.js';
+import { historyPageQuerySchema, transcriptBodyQuerySchema,
+  type HistoryPageQuery, type HistoryMetadataPage, type TranscriptBodyQuery,
+  type TranscriptBodyRange, type TranscriptPreview, type TranscriptReadingPort,
+} from './coordinator/history.js';
 import type { WorkerRole } from '../domain/planning/execution-authorization.js';
 import type { WorkerLiveness } from '../domain/worker-liveness.js';
 import type { ScopeControlAction } from '../domain/coordination/scope-control.js';
@@ -375,6 +379,9 @@ export type ControllerQuestionResult =
   | { readonly kind: 'rejected'; readonly code: string; readonly message: string };
 
 export type ControllerQuery = ControllerQuestionQuery
+  | { readonly kind: 'session-history'; readonly query: HistoryPageQuery }
+  | { readonly kind: 'transcript-body'; readonly query: TranscriptBodyQuery }
+  | { readonly kind: 'transcript-previews'; readonly coordinatorSessionId: string }
   | {
       readonly kind: 'snapshot';
       readonly coordinationScopeId: CoordinationScopeId;
@@ -393,6 +400,9 @@ export type ControllerQuery = ControllerQuestionQuery
     };
 
 export type ControllerQueryResult = ControllerQuestionResult
+  | { readonly kind: 'session-history'; readonly page: HistoryMetadataPage }
+  | { readonly kind: 'transcript-body'; readonly range: TranscriptBodyRange | null }
+  | { readonly kind: 'transcript-previews'; readonly previews: readonly TranscriptPreview[] }
   | { readonly kind: 'snapshot'; readonly snapshot: ControllerSnapshot }
   | { readonly kind: 'session-transcript'; readonly transcript: ControllerTranscriptPage }
   | { readonly kind: 'submission-status'; readonly status: SubmissionStatus }
@@ -792,6 +802,7 @@ export type ControllerSubmissionStatusPort = (
 ) => Promise<SubmissionStatus> | SubmissionStatus;
 
 export type ControllerServiceDependencies = {
+  readonly reading?: TranscriptReadingPort;
   readonly questions?: (input: ControllerQuestionQuery) => Promise<ControllerQuestionResult> | ControllerQuestionResult;
   readonly snapshots: ControllerSnapshotReader;
   readonly transcript: ControllerTranscriptReader;
@@ -1166,6 +1177,27 @@ export function createControllerService(dependencies: ControllerServiceDependenc
 
   const query = async (input: ControllerQuery): Promise<ControllerQueryResult> => {
     switch (input.kind) {
+      case 'session-history': {
+        const parsed = historyPageQuerySchema.safeParse(input.query);
+        if (!parsed.success) return { kind: 'rejected', code: 'invalid_history_query', message: '历史查询边界无效' };
+        if (dependencies.reading === undefined) return { kind: 'rejected', code: 'history_unavailable', message: '历史读取不可用' };
+        return { kind: 'session-history', page: await dependencies.reading.history({
+          coordinatorSessionId: parsed.data.coordinatorSessionId,
+          ...(parsed.data.direction === undefined ? {} : { direction: parsed.data.direction }),
+          ...(parsed.data.before === undefined ? {} : { before: parsed.data.before }),
+          ...(parsed.data.after === undefined ? {} : { after: parsed.data.after }),
+        }) };
+      }
+      case 'transcript-body': {
+        const parsed = transcriptBodyQuerySchema.safeParse(input.query);
+        if (!parsed.success) return { kind: 'rejected', code: 'invalid_history_query', message: '正文查询边界无效' };
+        if (dependencies.reading === undefined) return { kind: 'rejected', code: 'history_unavailable', message: '正文读取不可用' };
+        return { kind: 'transcript-body', range: await dependencies.reading.body(parsed.data) };
+      }
+      case 'transcript-previews': {
+        if (dependencies.reading === undefined) return { kind: 'rejected', code: 'history_unavailable', message: '预览读取不可用' };
+        return { kind: 'transcript-previews', previews: await dependencies.reading.previews(input.coordinatorSessionId) };
+      }
       case 'pending-interaction':
       case 'pending-interactions':
         return dependencies.questions === undefined ? { kind: 'rejected', code: 'questions_unavailable', message: '宿主未提供问题读取能力' } : dependencies.questions(input);

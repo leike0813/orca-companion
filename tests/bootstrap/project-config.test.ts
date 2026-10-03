@@ -18,6 +18,7 @@ import {
   PROJECT_CONFIG_FILENAME,
   projectConfigPath,
 } from '../../src/bootstrap/project-config.js';
+import { CONTEXT_READ_BYTES, MODEL_RESPONSE_BYTES } from '../../src/application/coordinator/history.js';
 
 let directory = '';
 let worktree = '';
@@ -72,8 +73,36 @@ test('合法配置从 canonical worktree 加载并解析默认引用', () => {
   expect(loaded.config.tracker).toEqual({ kind: 'github', routeMapIssueNumber: 42 });
   expect(loaded.config.planning.maxMutations).toBe(3);
   expect(loaded.config.context.maxInputTokens).toBe(120_000);
+  expect(loaded.config.context.maxReadBytes).toBe(CONTEXT_READ_BYTES);
+  expect(loaded.config.output.maxResponseBytes).toBe(MODEL_RESPONSE_BYTES);
   expect(configurationByRef(loaded.config, 'planning-spare')?.model).toBe('gpt-4.1-mini');
   expect(configurationByRef(loaded.config, 'missing')).toBeNull();
+});
+
+test('读取与输出预算可显式配置，缺省与运行时界限一致', () => {
+  write({
+    ...validConfig(),
+    context: { maxInputTokens: 120_000, maxReadBytes: 4 * 1024 * 1024 },
+    output: { maxResponseBytes: 1024 * 1024 },
+  });
+
+  const loaded = loadProjectConfig({ worktreePath: worktree });
+
+  expect(loaded.kind).toBe('loaded');
+  if (loaded.kind !== 'loaded') {
+    return;
+  }
+  expect(loaded.config.context).toEqual({ maxInputTokens: 120_000, maxReadBytes: 4 * 1024 * 1024 });
+  expect(loaded.config.output.maxResponseBytes).toBe(1024 * 1024);
+});
+
+test('预算必须是有限正整数，schema 版本不因新增可缺省预算改变', () => {
+  for (const value of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 2]) {
+    expect(parseProjectConfig({ ...validConfig(), context: { maxInputTokens: 120_000, maxReadBytes: value } }).ok).toBe(false);
+    expect(parseProjectConfig({ ...validConfig(), output: { maxResponseBytes: value } }).ok).toBe(false);
+  }
+  const version = parseProjectConfig({ ...validConfig(), schemaVersion: 1, context: { maxInputTokens: 120_000, maxReadBytes: CONTEXT_READ_BYTES } });
+  expect(version.ok).toBe(true);
 });
 
 test('配置缺失是可诊断拒绝，不隐式创建配置', () => {

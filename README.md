@@ -54,7 +54,8 @@
   "defaultCoordinatorModelRef": "planning-default",
   "tracker": { "kind": "github", "routeMapIssueNumber": 42 },
   "planning": { "maxMutations": 3 },
-  "context": { "maxInputTokens": 120000 },
+  "context": { "maxInputTokens": 120000, "maxReadBytes": 16777216 },
+  "output": { "maxResponseBytes": 8388608 },
   "execution": {
     "harness": "codex",
     "workerModel": "minimax-cn/MiniMax-M3",
@@ -76,6 +77,10 @@
   Companion 的 Operation Intent 记录派生，重启与重规划都不清零。
 - `context.maxInputTokens`：一次模型输入的上下文预算；超出时按 provider 原生 → Context Capsule →
   机械 Shake 的固定顺序压缩，无法收敛即显式 `context_exhausted`。
+- `context.maxReadBytes`：一次有效上下文读回的总字节预算，缺省 16 MiB；仍保留 4096 项上限。
+  超限明确阻塞，权威原文可继续按范围阅读，不静默截断输入。
+- `output.maxResponseBytes`：单次模型输出的字节预算，缺省 8 MiB，涵盖正文、内容块与工具参数。
+  两项字节预算均须为有限正整数；输出超限会中止调用，不重试或提交部分响应。
 - `execution`（可选）：执行授权的长期策略。`harness` 与 `workerModel` 决定 Worker 角色用哪个 harness
   与模型；`codexSandbox` 决定角色级 Session 的 Codex 沙箱模式（默认 `workspace-write`，只允许写隔离
   worktree）；`permissions`、`limits`、`git`、`dependency`、`acceptedRisks` 是 Execution Authorization

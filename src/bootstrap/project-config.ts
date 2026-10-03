@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 
 import type { CoordinatorModelConfiguration } from '../application/coordinator/model-config-switch.js';
+import { CONTEXT_READ_BYTES, MODEL_RESPONSE_BYTES } from '../application/coordinator/history.js';
 import { CREDENTIAL_BEARING_FIELD_NAMES } from '../domain/coordinator/session-state.js';
 import type { IdentityResult } from '../application/dto/identity.js';
 import { DEFAULT_EXECUTION_LIMITS, type ExecutionLimits } from '../domain/planning/budget-policy.js';
@@ -38,9 +39,21 @@ export type ProjectPlanningPermissions = {
   readonly maxMutations: number;
 };
 
-/** 一次模型输入允许的上下文预算；压缩路径以它为准。 */
+/**
+ * 一次模型输入允许的上下文预算。
+ *
+ * `maxInputTokens` 是压缩路径的 token 预算；`maxReadBytes` 是同一份有效上下文允许读回的字节上限。
+ * 两者衡量不同东西：token 数决定是否需要压缩，字节数决定存储读取是否还能有界完成——压缩后仍然
+ * 超出的历史按 `context_exhausted` 阻塞，而不是裁剪原文。
+ */
 export type ProjectContextBudget = {
   readonly maxInputTokens: number;
+  readonly maxReadBytes: number;
+};
+
+/** 一次模型输出允许的字节上限；覆盖文本、内容块与工具参数。 */
+export type ProjectOutputBudget = {
+  readonly maxResponseBytes: number;
 };
 
 /**
@@ -89,6 +102,7 @@ export type ProjectConfig = {
   readonly tracker: ProjectTrackerConfiguration;
   readonly planning: ProjectPlanningPermissions;
   readonly context: ProjectContextBudget;
+  readonly output: ProjectOutputBudget;
   readonly execution: ProjectExecutionConfiguration;
 };
 
@@ -129,6 +143,9 @@ export function projectConfigPath(worktreePath: string): string {
 
 const nonEmptyString = z.string().min(1);
 
+/** 有限正安全整数：预算越界会让读取无界或模型响应无界，因此不接受 0、负数、小数与溢出值。 */
+const byteBudget = z.number().int().positive().safe();
+
 const modelConfigurationSchema = z.strictObject({
   configurationRef: nonEmptyString,
   providerIntegration: nonEmptyString,
@@ -151,7 +168,9 @@ const projectConfigSchema = z.strictObject({
   }),
   context: z.strictObject({
     maxInputTokens: z.number().int().positive(),
+    maxReadBytes: byteBudget.optional(),
   }),
+  output: z.strictObject({ maxResponseBytes: byteBudget }).optional(),
   execution: z
     .strictObject({
       harness: nonEmptyString,
@@ -287,7 +306,16 @@ export function parseProjectConfig(raw: unknown): IdentityResult<ProjectConfig> 
   if (!parsed.success) {
     return { ok: false, field: 'projectConfig', message: describeIssues(parsed.error) };
   }
-  const config: ProjectConfig = { ...parsed.data, execution: normalizeExecution(parsed.data.execution) };
+  // 读取与输出预算缺省时取应用层的同一组界限，避免配置默认值与运行时界限各自漂移。
+  const config: ProjectConfig = {
+    ...parsed.data,
+    context: {
+      maxInputTokens: parsed.data.context.maxInputTokens,
+      maxReadBytes: parsed.data.context.maxReadBytes ?? CONTEXT_READ_BYTES,
+    },
+    output: parsed.data.output ?? { maxResponseBytes: MODEL_RESPONSE_BYTES },
+    execution: normalizeExecution(parsed.data.execution),
+  };
   const refs = new Set<string>();
   for (const configuration of config.coordinatorModels) {
     if (refs.has(configuration.configurationRef)) {

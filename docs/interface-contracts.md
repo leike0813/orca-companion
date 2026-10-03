@@ -217,7 +217,9 @@ Session payload 为 v2：每条已提交消息有稳定 `entryId`；tool result 
 
 `paginate-coordinator-history` 扩展 IC-04，历史 DTO/限额的 canonical path 为 `src/application/coordinator/history.ts`。checkpoint 库 schema 为 2，旧整体 JSON 库明确拒绝打开并保留。`coordinator_sessions` 只保存控制字段；entry、16KiB UTF-8 正文块、model step metadata 与 Wake 关联追加。正文只由 entry 的块记录拥有；step 引用该 entry，不再保存另一份正文。独立的小型 summary metadata 用于有界列表，工具参数仍由原 entry 拥有。
 
-生产读取必须显式选择 `metadata`（控制）、`context`（有效输入）、`tools`（最新 step 及配对结果）、`pending`（最多 32 条未处理输入）或 `migration`（原生窗口转 Capsule 所需的有界原文）。后四种读取受 4096 条/4MiB 预算约束，超限返回 `unrecoverable/context_exhausted`；压缩区间由索引排除后才读取正文。原生窗口保存覆盖序号，之后的新消息仍进入有效上下文。`full` 与无范围 `readCommittedMessages` 只用于测试/诊断，生产不调用。
+生产读取必须显式选择 `metadata`（控制）、`context`（有效输入）、`tools`（最新 step 及配对结果）、`pending`（最多 32 条未处理输入）或 `migration`（原生窗口转 Capsule 所需的有界原文）。后四种读取受 4096 条与 `context.maxReadBytes`（缺省 16 MiB）的共同预算约束，正文、metadata、steps 与 Context Material 计入同一次读回的总额；超限返回 `unrecoverable/context_exhausted`。压缩区间由索引排除后才读取正文。原生窗口保存覆盖序号，之后的新消息仍进入有效上下文。`full` 与无范围 `readCommittedMessages` 只用于测试/诊断，生产不调用。
+
+单次模型输出受 `output.maxResponseBytes`（缺省 8 MiB）约束，文本、内容块和工具参数均计入。生产 stream 的完整响应只由 SDK end callback 提供，原子接受之前重新核验 signal/fencing；取消、输出超限或失去 fencing 不重试。Usage 仅记录单个完整非空报告，多片段或缺字段保留 null；不从分片推测合计。项目配置的两项字节预算为有限正整数，Bootstrap 注入 Scope 与 Session 的所有 store 及模型调用点。
 
 `appendMessage` 保存稳定回答引用，`updateCheckpoint` 只更新控制字段，均使用短事务；提交核验通过 `readEntry` 精确读取提交身份。`commitUserMessage`/`commitWakeBatch` 的 `state` 是控制字段和本次提交的条目或 batch，不是全历史快照。entry 的 `handled_by` 是已提交消费事实的索引，Application 仍拥有 Actionable Work 投影和调度。
 
@@ -539,6 +541,10 @@ Replanning 停止新派发并结清在途/Delivery/Interaction/Intent，建立�
 
 ## IC-11 ControllerService、Snapshot、SemanticEvent 与用户 intent
 
+`render-bounded-transcript` 的生产 TUI 使用独立 `session-history`、`transcript-body`、`transcript-previews` 查询。`TranscriptReadingPort` 的 DTO 与运行时 schema 位于 `src/application/coordinator/history.ts`：history 来源绑定 entryId/revision=1，preview 来源绑定可信 previewId/append revision；offset/end 为 UTF-8 字节位置。宿主每次核验当前 Scope 的 Session 登记。metadata 最多 100 项/64 KiB，body 每次最多 64 KiB；折叠工具只读 metadata。
+
+临时预览仅属于当前 Runtime。旧 append revision 表示同一临时文件的固定前缀，pin 只保留引用；committed 后离底阅读仍保持旧来源，显式返回最新才换成正式历史。容量/存储故障明确不可用，未接受响应不写 checkpoint。`subscribe` 只通知 Session 来源失效，合并更新；预览不进入 SemanticEvent、输入存储或 Wake。正文/布局缓存各 8 MiB/64 项，有限上下文和位置结构计入布局额度；请求代际丢弃迟到响应，失败保留旧 frame。
+
 `paginate-coordinator-history` 扩展 transcript reader：`null` 读取最新片段，`oldest` 通过首序号直达最早；其余游标为经 schema 核验的 `[SessionId, sequence, byteOffset, direction]`，跨 Session 拒绝。`ControllerTranscriptPage.nextCursor` 指向更早原文，`newerCursor` 指向更晚原文；message 携带稳定 `entryId`、sequence、offset/end 与总 byteLength。每页至多 100 条、64KiB 原文，巨型单条可跨页完整读取。正文权威和范围限额由 IC-04 拥有，Controller 与 TUI 不复制历史。
 
 - **Owner (Create)**: `m1-recover-execution`
@@ -556,6 +562,9 @@ interface ControllerService {
 type ControllerQuery =
   | { kind: 'snapshot'; coordinationScopeId: string; selectedSessionId?: string }
   | { kind: 'session-transcript'; coordinatorSessionId: string; cursor?: string }
+  | { kind: 'session-history'; query: HistoryPageQuery }
+  | { kind: 'transcript-body'; query: TranscriptBodyQuery }
+  | { kind: 'transcript-previews'; coordinatorSessionId: string }
   | { kind: 'submission-status'; coordinationScopeId: string; query: SubmissionQuery }
   | { kind: 'pending-interactions'; coordinationScopeId: string; coordinatorSessionId: string; after?: InteractionPageCursor }
   | { kind: 'pending-interaction'; coordinationScopeId: string; coordinatorSessionId: string; interactionId: string };

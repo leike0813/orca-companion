@@ -66,6 +66,7 @@ export type ScopeControlDependencies = {
   readonly store: BranchCoordinationStore;
   readonly reconciliation: ScopeReconciliationRunner;
   readonly workers: WorkerStopPort;
+  readonly stopModels?: (coordinationScopeId: CoordinationScopeId) => void;
 };
 
 export type ScopeControlRequest = {
@@ -318,6 +319,7 @@ export function createScopeControlService(dependencies: ScopeControlDependencies
       return { kind: 'rejected', code: intent.code, message: intent.message };
     }
 
+    dependencies.stopModels?.(input.coordinationScopeId);
     // 2. 再请求 Worker 停止；逐个记录三值结果，未确认的不当作已停止。
     const list = await workers.listActiveDispatches({ coordinationScopeId: input.coordinationScopeId });
     const workerStops: WorkerStopRecord[] = [];

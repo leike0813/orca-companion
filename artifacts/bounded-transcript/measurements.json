@@ -1,0 +1,268 @@
+{
+  "node": "v24.12.0",
+  "platform": "linux",
+  "baseline": "b15ff20d4fe7d42a218c7259fb0ebc793f24d2ae",
+  "measurements": [
+    {
+      "count": 1000,
+      "payloadBytes": null,
+      "coldMs": 58.72639500000014,
+      "input": {
+        "samples": 100,
+        "p50": 38.40414899999996,
+        "p95": 51.27802799999972,
+        "max": 58.2379949999995
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 5.360228000000006,
+        "p95": 9.731109999999944,
+        "max": 34.71984900000007
+      },
+      "resizeMs": 9.040863999999601,
+      "commitMs": 30.15722199999982,
+      "finishMs": 22.034182000001238,
+      "cache": {
+        "bodyBytes": 17116,
+        "bodyItems": 26,
+        "layoutBytes": 36184,
+        "layoutItems": 48,
+        "lastReadBytes": 8,
+        "lastLayoutRows": 19,
+        "metadataItems": 100
+      },
+      "memory": {
+        "rss": 302710784,
+        "heapTotal": 211251200,
+        "heapUsed": 120455520,
+        "external": 20466670,
+        "arrayBuffers": 35945
+      }
+    },
+    {
+      "count": 10000,
+      "payloadBytes": null,
+      "coldMs": 14.555448999999498,
+      "input": {
+        "samples": 100,
+        "p50": 47.91351999999824,
+        "p95": 67.77341499999966,
+        "max": 78.21612900000036
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 5.071610000000874,
+        "p95": 5.6401200000000244,
+        "max": 22.248240000000806
+      },
+      "resizeMs": 10.340769000000364,
+      "commitMs": 44.04744699999719,
+      "finishMs": 18.892017000001943,
+      "cache": {
+        "bodyBytes": 17216,
+        "bodyItems": 26,
+        "layoutBytes": 36466,
+        "layoutItems": 48,
+        "lastReadBytes": 8,
+        "lastLayoutRows": 19,
+        "metadataItems": 100
+      },
+      "memory": {
+        "rss": 422178816,
+        "heapTotal": 218652672,
+        "heapUsed": 126804224,
+        "external": 20466716,
+        "arrayBuffers": 35951
+      }
+    },
+    {
+      "count": 100000,
+      "payloadBytes": null,
+      "coldMs": 95.50701500000287,
+      "input": {
+        "samples": 100,
+        "p50": 50.35226999999577,
+        "p95": 70.56642400000419,
+        "max": 96.5996210000012
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 5.153835000004619,
+        "p95": 7.627071999995678,
+        "max": 15.621130999999878
+      },
+      "resizeMs": 7.013565000001108,
+      "commitMs": 51.46545399999741,
+      "finishMs": 12.50293899999815,
+      "cache": {
+        "bodyBytes": 17316,
+        "bodyItems": 26,
+        "layoutBytes": 38988,
+        "layoutItems": 48,
+        "lastReadBytes": 8,
+        "lastLayoutRows": 22,
+        "metadataItems": 100
+      },
+      "memory": {
+        "rss": 493273088,
+        "heapTotal": 263770112,
+        "heapUsed": 135001072,
+        "external": 20466692,
+        "arrayBuffers": 35927
+      }
+    },
+    {
+      "count": 1,
+      "mib": 1,
+      "role": "assistant",
+      "payloadBytes": 1048576,
+      "coldMs": 120.03952800000116,
+      "input": {
+        "samples": 100,
+        "p50": 48.59743000000162,
+        "p95": 68.93994099998963,
+        "max": 122.78639800000383
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 0.1282950000022538,
+        "p95": 0.15849499999603722,
+        "max": 0.18695299999671988
+      },
+      "resizeMs": 8.970001999994565,
+      "commitMs": 58.402410999988206,
+      "finishMs": 117.79163900000276,
+      "cache": {
+        "bodyBytes": 66754,
+        "bodyItems": 2,
+        "layoutBytes": 66112,
+        "layoutItems": 5,
+        "lastReadBytes": 16388,
+        "lastLayoutRows": 36,
+        "metadataItems": 2
+      },
+      "memory": {
+        "rss": 527462400,
+        "heapTotal": 262811648,
+        "heapUsed": 145843216,
+        "external": 25492936,
+        "arrayBuffers": 5065799
+      }
+    },
+    {
+      "count": 1,
+      "mib": 1,
+      "role": "tool",
+      "payloadBytes": 1048576,
+      "coldMs": 100.64787300000899,
+      "input": {
+        "samples": 100,
+        "p50": 52.44157299998915,
+        "p95": 71.4423070000048,
+        "max": 84.01426000001084
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 0.13218200000119396,
+        "p95": 0.18118900000990834,
+        "max": 0.21512100000109058
+      },
+      "resizeMs": 8.06253700000525,
+      "commitMs": 79.49584799999138,
+      "finishMs": 129.28774200000043,
+      "cache": {
+        "bodyBytes": 66754,
+        "bodyItems": 2,
+        "layoutBytes": 65736,
+        "layoutItems": 5,
+        "lastReadBytes": 16388,
+        "lastLayoutRows": 36,
+        "metadataItems": 2
+      },
+      "memory": {
+        "rss": 631042048,
+        "heapTotal": 300425216,
+        "heapUsed": 165638960,
+        "external": 25492966,
+        "arrayBuffers": 35905
+      }
+    },
+    {
+      "count": 1,
+      "mib": 5,
+      "role": "assistant",
+      "payloadBytes": 5242880,
+      "coldMs": 115.5005999999994,
+      "input": {
+        "samples": 100,
+        "p50": 61.74154099999578,
+        "p95": 86.65864300000248,
+        "max": 93.24994199999492
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 0.1295479999971576,
+        "p95": 0.17110000000684522,
+        "max": 0.1978919999965001
+      },
+      "resizeMs": 8.191787000003387,
+      "commitMs": 141.58351400001266,
+      "finishMs": 127.26576799999748,
+      "cache": {
+        "bodyBytes": 66754,
+        "bodyItems": 2,
+        "layoutBytes": 66112,
+        "layoutItems": 5,
+        "lastReadBytes": 16388,
+        "lastLayoutRows": 36,
+        "metadataItems": 2
+      },
+      "memory": {
+        "rss": 687570944,
+        "heapTotal": 329449472,
+        "heapUsed": 146728576,
+        "external": 45414051,
+        "arrayBuffers": 35908
+      }
+    },
+    {
+      "count": 1,
+      "mib": 5,
+      "role": "tool",
+      "payloadBytes": 5242880,
+      "coldMs": 110.93039799999679,
+      "input": {
+        "samples": 100,
+        "p50": 55.64162500000384,
+        "p95": 77.62454000000434,
+        "max": 93.42834299999231
+      },
+      "cachedNavigation": {
+        "samples": 100,
+        "p50": 0.13547100000141654,
+        "p95": 0.16872300000977702,
+        "max": 0.22537800000282004
+      },
+      "resizeMs": 7.4710029999987455,
+      "commitMs": 150.28434800000105,
+      "finishMs": 107.49330599998939,
+      "cache": {
+        "bodyBytes": 66754,
+        "bodyItems": 2,
+        "layoutBytes": 65736,
+        "layoutItems": 5,
+        "lastReadBytes": 16388,
+        "lastLayoutRows": 36,
+        "metadataItems": 2
+      },
+      "memory": {
+        "rss": 699768832,
+        "heapTotal": 314122240,
+        "heapUsed": 212749144,
+        "external": 45414030,
+        "arrayBuffers": 24988755
+      }
+    }
+  ],
+  "scope": "Real file-backed SQLite, production TranscriptReader, production TuiApp input-to-render; isolated query ports. Full SDK aggregation measured separately by workflow tests; process memory includes fixtures and SDK/framework allocations."
+}

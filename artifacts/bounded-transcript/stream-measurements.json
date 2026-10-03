@@ -1,0 +1,108 @@
+{
+  "change": "render-bounded-transcript",
+  "generatedBy": "artifacts/bounded-transcript/stream-benchmark.mjs",
+  "runtime": {
+    "node": "v24.12.0",
+    "platform": "linux-x64"
+  },
+  "note": "SDK 聚合、权威接受与内存数字属于流式生成成本，不属于 3B 的 100ms 输入/缓存导航门槛。",
+  "totalElapsedMs": 996.182,
+  "measurements": [
+    {
+      "label": "response-1mib",
+      "responseBytes": 1048576,
+      "responseChars": 1048572,
+      "chunkBytes": 16384,
+      "chunkCount": 64,
+      "graphStatus": "suspended",
+      "graphNote": "模型循环已结束，前台 Controller、对账与已运行 Worker 继续",
+      "timingMs": {
+        "totalGraphMs": 259.821,
+        "modelCallMs": 69.82,
+        "streamConsumeMs": 35.554,
+        "aggregateAfterChunkMs": 34.266,
+        "appendModelStepMs": 27.456,
+        "graphOverheadMs": 9.745
+      },
+      "preview": {
+        "peakBytesDuringStream": 1032196,
+        "peakRecordsDuringStream": 1,
+        "bytesAfterFinish": 1048576,
+        "recordsAfterFinish": 1,
+        "previews": [
+          {
+            "previewId": "preview:step-1:attempt-1",
+            "status": "committed",
+            "byteLength": 1048576
+          }
+        ]
+      },
+      "memory": {
+        "rssBytes": 153698304,
+        "heapUsedBytes": 51150664,
+        "heapTotalBytes": 100970496,
+        "externalBytes": 8266436,
+        "samples": 67,
+        "rssMiB": 146.58,
+        "heapUsedMiB": 48.78
+      },
+      "committedUsage": {
+        "inputTokens": 4096,
+        "outputTokens": 8192,
+        "totalTokens": 12288
+      },
+      "previewClose": {
+        "disposed": 1,
+        "failed": 0
+      }
+    },
+    {
+      "label": "response-5mib",
+      "responseBytes": 5242880,
+      "responseChars": 5242876,
+      "chunkBytes": 16384,
+      "chunkCount": 320,
+      "graphStatus": "suspended",
+      "graphNote": "模型循环已结束，前台 Controller、对账与已运行 Worker 继续",
+      "timingMs": {
+        "totalGraphMs": 425.63,
+        "modelCallMs": 322.971,
+        "streamConsumeMs": 126.217,
+        "aggregateAfterChunkMs": 196.754,
+        "appendModelStepMs": 195.746,
+        "graphOverheadMs": 15.764
+      },
+      "preview": {
+        "peakBytesDuringStream": 5226500,
+        "peakRecordsDuringStream": 1,
+        "bytesAfterFinish": 5242880,
+        "recordsAfterFinish": 1,
+        "previews": [
+          {
+            "previewId": "preview:step-1:attempt-1",
+            "status": "committed",
+            "byteLength": 5242880
+          }
+        ]
+      },
+      "memory": {
+        "rssBytes": 230789120,
+        "heapUsedBytes": 73125080,
+        "heapTotalBytes": 203472896,
+        "externalBytes": 17381531,
+        "samples": 323,
+        "rssMiB": 220.1,
+        "heapUsedMiB": 69.74
+      },
+      "committedUsage": {
+        "inputTokens": 4096,
+        "outputTokens": 8192,
+        "totalTokens": 12288
+      },
+      "previewClose": {
+        "disposed": 1,
+        "failed": 0
+      }
+    }
+  ]
+}

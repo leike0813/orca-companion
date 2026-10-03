@@ -320,6 +320,19 @@ test('恢复：先对账再恢复调度，且不重置已消耗的预算、claim
   expect(workers.stops).toEqual([]);
 });
 
+test('Cancel 先持久化意图，再中止模型并请求 Worker 停止；Pause 不取消模型', async () => {
+  const observed: string[] = [];
+  const control = createScopeControlService({ store, reconciliation: reconciliationProbe().runner,
+    stopModels: scope => { expect(scope).toBe(SCOPE); observed.push(controlState()); },
+    workers: { listActiveDispatches: () => { expect(observed).toEqual(['cancelling']); return Promise.resolve({ kind: 'listed', dispatchIds: [] }); },
+      requestStop: () => Promise.resolve('stopped') },
+  });
+  control.pause({ coordinationScopeId: SCOPE, writer });
+  expect(observed).toEqual([]);
+  await control.cancel({ coordinationScopeId: SCOPE, writer });
+  expect(observed).toEqual(['cancelling']);
+});
+
 test('只对账：走同一套对账用例，但不改控制状态、不请求停止 Worker', async () => {
   const revisionsBefore = scopeRevision();
   const workers = fakeWorkers({ kind: 'listed', dispatchIds: ['dispatch-1'] }, {});

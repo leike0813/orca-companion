@@ -12,7 +12,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, expect, test } from 'vitest';
-import { AIMessage } from '@langchain/core/messages';
+import { AIMessage, AIMessageChunk, type BaseMessage } from '@langchain/core/messages';
+import { ChatGenerationChunk } from '@langchain/core/outputs';
 
 import type { IssueTrackerGateway, TrackerIssue, TrackerReadOutcome, TrackerWriteOutcome } from '../../src/application/planning/route-map-service.js';
 import type {
@@ -150,6 +151,8 @@ async function startHarness(
     readonly repository?: string;
     readonly maxInputTokens?: number;
     readonly askUser?: boolean;
+    readonly streamGate?: Promise<void>;
+    readonly modelSignal?: (signal: AbortSignal) => void;
   } = {},
 ): Promise<Harness> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-foreground-'));
@@ -180,7 +183,23 @@ async function startHarness(
       Promise.resolve({
         CapableChatModel: class extends CapableChatModel {
           private asked = false;
-          override _generate(messages: never, options: never): never {
+          override async *_streamResponseChunks(messages: BaseMessage[], options: { readonly signal?: AbortSignal } | undefined): AsyncGenerator<ChatGenerationChunk> {
+            if (overrides.streamGate !== undefined && messages.some(message => typeof message.content === 'string' && message.content.includes('__STREAM_HOST__'))) {
+              requests.generations += 1;
+              if (options?.signal) overrides.modelSignal?.(options.signal);
+              yield new ChatGenerationChunk({ text: 'first fragment', message: new AIMessageChunk('first fragment') });
+              await Promise.race([overrides.streamGate, new Promise<never>((_, reject) => {
+                options?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('cancelled'), { name: 'AbortError' })), { once: true });
+              })]);
+              yield new ChatGenerationChunk({ text: ' final', message: new AIMessageChunk(' final') });
+              return;
+            }
+            const result = await this._generate(messages, options);
+            const message = result.generations[0]!.message;
+            yield new ChatGenerationChunk({ text: result.generations[0]!.text,
+              message: new AIMessageChunk({ content: message.content, ...(AIMessage.isInstance(message) ? { tool_calls: message.tool_calls } : {}) }) });
+          }
+          override _generate(messages: BaseMessage[], options: { readonly signal?: AbortSignal } | undefined): Promise<import('@langchain/core/outputs').ChatResult> {
             requests.generations += 1;
             requests.inputs.push((messages as readonly { readonly content: unknown }[]).map((message) => String(message.content)).join('\n'));
             if (overrides.askUser && !this.asked && requests.inputs.at(-1)?.includes('__ASK_USER__')) {
@@ -188,9 +207,9 @@ async function startHarness(
               const message = new AIMessage({ content: '', tool_calls: [{ id: 'call-question', name: 'ask_user', args: {
                 question: '下一步怎么做？', options: [{ label: '继续', description: '完成实现' }, { label: '稍后' }],
               } }] });
-              return Promise.resolve({ generations: [{ text: '', message }] }) as never;
+              return Promise.resolve({ generations: [{ text: '', message }] });
             }
-            return super._generate(messages, options) as never;
+            return super._generate(messages, options);
           }
         },
       }),
@@ -246,6 +265,43 @@ async function waitFor(check: () => boolean, timeoutMs = 2_000): Promise<boolean
   }
   return check();
 }
+
+test.each(['pause', 'cancel', 'close', 'fence'] as const)('真实流式宿主的 %s 不接受部分消息', async action => {
+  const gate = Promise.withResolvers<void>();
+  const observed: { signal: AbortSignal | null } = { signal: null };
+  const harness = await startHarness({ streamGate: gate.promise, modelSignal: value => { observed.signal = value; } });
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  await harness.host.ports.scopeSetup.initialize(proposal);
+  await harness.host.ports.execute({ kind: 'send-session-message', submissionId: globalThis.crypto.randomUUID(),
+    coordinatorSessionId: proposal.coordinatorSessionId, content: '__STREAM_HOST__' });
+  expect(await waitFor(() => observed.signal !== null)).toBe(true);
+  const previews = await harness.host.ports.reading.previews(proposal.coordinatorSessionId);
+  expect(previews).toHaveLength(1);
+  expect(previews[0]?.status).toBe('streaming');
+  const page = await harness.host.ports.reading.history({ coordinatorSessionId: proposal.coordinatorSessionId });
+  expect(page.entries.map(entry => entry.role)).toEqual(['user']);
+  await expect(harness.host.ports.reading.history({ coordinatorSessionId: 'other-session' })).rejects.toThrow();
+  if (action === 'close') harness.dispose();
+  else if (action === 'fence') { now += 60_001; expect(await waitFor(() => observed.signal?.aborted === true)).toBe(true); }
+  else expect((await harness.host.ports.execute({ kind: 'scope-control', action })).kind).toBe('accepted');
+  if (action === 'pause') {
+    expect(observed.signal?.aborted).toBe(false);
+    gate.resolve();
+    expect(await waitFor(() => modelRounds(harness) > 0)).toBe(true);
+    const complete = await harness.host.ports.reading.history({ coordinatorSessionId: proposal.coordinatorSessionId });
+    expect(complete.entries.map(entry => entry.role)).toEqual(['user', 'assistant']);
+  } else {
+    expect(observed.signal?.aborted).toBe(true);
+    gate.resolve();
+    await new Promise(resolve => setTimeout(resolve, 25));
+    const common = await resolveGitCommonDir({ repositoryPath: harness.repository, env: process.env as Record<string, string> });
+    if (common.kind !== 'resolved') throw new Error(common.message);
+    const opened = openCheckpointStore({ databasePath: checkpointDatabasePath(common.path) });
+    if (opened.kind !== 'opened') throw new Error(opened.message);
+    try { expect(opened.store.readHistoryPage({ coordinatorSessionId: proposal.coordinatorSessionId }).entries.map(entry => entry.role)).toEqual(['user']); }
+    finally { opened.store.close(); }
+  }
+});
 
 test('配置缺失与 detached HEAD 都是可诊断拒绝，且不建立任何 Session', async () => {
   const withoutConfig = await startHarness({ withConfig: false });

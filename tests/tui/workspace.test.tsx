@@ -10,9 +10,9 @@ import { textDraft } from '../../src/interfaces/tui/input/composer-editor.js';
 
 import { describe, expect, test } from 'vitest';
 import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
-import { readTranscriptPage } from '../../src/application/coordinator/history.js';
+import type { HistoryMetadataPage } from '../../src/application/coordinator/history.js';
+import { createTranscriptReadingFixture } from '../support/transcript-reading.js';
 import type { CoordinatorSessionId } from '../../src/application/dto/identity.js';
-import type { TranscriptLoad } from '../../src/interfaces/tui/ports.js';
 
 test('分页阅读、最早/最新与 Esc 保留 composer，失败保留原画面', async () => {
   const opened = openCheckpointStore({ databasePath: ':memory:' });
@@ -24,9 +24,16 @@ test('分页阅读、最早/最新与 Esc 保留 composer，失败保留原画�
     entryId: `row-${index}`, stepId: `row-${index}`, role: 'assistant', content: `历史条目 ${index}` });
   const fake = createFakePorts();
   let fail = false;
-  const ports = { ...fake.ports, transcript: (id: string, cursor: string | null): Promise<TranscriptLoad> =>
-    Promise.resolve(fail ? { kind: 'failed', code: 'offline', message: '离线' }
-      : { kind: 'transcript', transcript: readTranscriptPage(history, id, cursor) }) };
+  const ports = { ...fake.ports, reading: { ...fake.ports.reading,
+    history: (query: import('../../src/application/coordinator/history.js').HistoryPageQuery) => fail ? Promise.reject(new Error('离线')) : Promise.resolve(history.readHistoryPage(query)),
+    body: (query: import('../../src/application/coordinator/history.js').TranscriptBodyQuery) => {
+      if (fail) return Promise.reject(new Error('离线'));
+      if (query.source.kind !== 'history') return Promise.resolve(null);
+      const range = history.readHistoryBody({ coordinatorSessionId: query.coordinatorSessionId, entryId: query.source.entryId,
+        contentRevision: 1, offset: query.offset, maxBytes: query.maxBytes });
+      return Promise.resolve(range === null ? null : { source: query.source, offset: range.offset, end: range.end, byteLength: range.byteLength, text: range.text });
+    },
+  } };
   const rendered = renderTui(ports);
   try {
     await settle();
@@ -60,10 +67,14 @@ test('分页阅读、最早/最新与 Esc 保留 composer，失败保留原画�
 
 test.each(['最新请求', '切换 Session'])('分页响应迟到时不覆盖%s', async (action) => {
   const fake = createFakePorts();
-  let finish: ((value: TranscriptLoad) => void) | undefined;
-  const ports = { ...fake.ports, transcript: (id: string, cursor: string | null): Promise<TranscriptLoad> =>
-    cursor === 'oldest' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ kind: 'transcript',
-      transcript: { coordinatorSessionId: id, messages: [{ role: 'assistant', content: `最新记录 ${id}`, stepId: 'latest' }], nextCursor: 'earlier' } }) };
+  let finish: ((value: HistoryMetadataPage) => void) | undefined;
+  const readingFor = (id: string) => createTranscriptReadingFixture({ coordinatorSessionId: id,
+    messages: [{ role: 'assistant', content: `最新记录 ${id}`, stepId: 'latest' }] });
+  const ports = { ...fake.ports, reading: { ...fake.ports.reading,
+    history: (query: import('../../src/application/coordinator/history.js').HistoryPageQuery): Promise<HistoryMetadataPage> =>
+      query.direction === 'newer' && query.after === undefined ? new Promise(resolve => { finish = resolve; }) : readingFor(query.coordinatorSessionId).history(query),
+    body: (query: import('../../src/application/coordinator/history.js').TranscriptBodyQuery) => readingFor(query.coordinatorSessionId).body(query),
+  } };
   const rendered = renderTui(ports);
   try {
     await settle();
@@ -79,8 +90,8 @@ test.each(['最新请求', '切换 Session'])('分页响应迟到时不覆盖%s'
     } else {
       rendered.stdin.write('\u001b[1;5F'); await settle();
     }
-    finish?.({ kind: 'transcript', transcript: { coordinatorSessionId: 'session-b',
-      messages: [{ role: 'assistant', content: '迟到旧记录', stepId: 'old' }], nextCursor: null } });
+    finish?.(await createTranscriptReadingFixture({ coordinatorSessionId: 'session-b', messages: [{ role: 'assistant', content: '迟到旧记录', stepId: 'old' }] })
+      .history({ coordinatorSessionId: 'session-b', direction: 'newer' }));
     await settle();
     expect(rendered.lastFrame()).toContain(`最新记录 ${action === '切换 Session' ? 'session-a' : 'session-b'}`);
     expect(rendered.lastFrame()).not.toContain('迟到旧记录');

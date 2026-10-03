@@ -327,6 +327,7 @@ export type CompanionStartupRequest = {
   readonly readDeliveries: () => Promise<StartupDeliveryFacts>;
   readonly recovery: StartupRecoveryFacts;
   readonly workers: WorkerStopPort;
+  readonly stopModels?: (coordinationScopeId: CoordinationScopeId) => void;
   /** 调用方已证实的「未产生副作用」事实，透传给对账与 Resume 的对账。 */
   readonly provenNoSideEffect?: readonly ProvenNoSideEffect[];
   readonly observer?: StartupObserver;
@@ -955,6 +956,7 @@ export async function startCompanionStartup(
       store,
       reconciliation: reconciliationRunner,
       workers: request.workers,
+      ...(request.stopModels === undefined ? {} : { stopModels: request.stopModels }),
     });
     observe('scope_control_wired');
 

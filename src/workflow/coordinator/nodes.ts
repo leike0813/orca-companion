@@ -11,10 +11,11 @@
  * step 之后继续。
  */
 
-import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import type { RunnableConfig } from '@langchain/core/runnables';
 import type { RetryPolicy } from '@langchain/langgraph';
 
 import type { ProjectedActionableWorkItem } from '../../application/coordinator/actionable-work.js';
+import type { TranscriptStreamObserver } from '../../application/coordinator/history.js';
 import type {
   CheckpointRecoveryRead,
   CoordinatorSessionRecordPort,
@@ -26,11 +27,22 @@ import {
   toolMapOperationId,
   toolOperationId,
   type CommittedModelStep,
-  type ModelUsageObservation,
 } from '../../domain/coordinator/session-state.js';
 import { entryFromResponse, parseModelToolCalls } from './context.js';
+import {
+  isCancellationError,
+  isRetryableModelCallFailure,
+  publishStreamEvent,
+  streamModelCall,
+  usageOf,
+  type ModelCallFailure,
+  type StreamingModelHandle,
+} from './model-call.js';
 import type { PlanningToolDefinition } from './planning-tools.js';
 import type { CoordinatorGraphState, CoordinatorGraphUpdate } from './state.js';
+
+/** usage 的读取规则由 `model-call.ts` 拥有（流式片段的确认规则在那里），这里只做转出。 */
+export { usageOf };
 
 export const MODEL_NODE = 'model';
 export const SUSPEND_NODE = 'suspend';
@@ -45,10 +57,7 @@ export const MODEL_NODE_MAX_ATTEMPTS = 3;
  * 且未完整返回的响应不会被提交，所以重试是安全的。
  */
 export function isRetryableModelCall(error: unknown): boolean {
-  if (error instanceof Error && error.name === 'AbortError') {
-    return false;
-  }
-  return true;
+  return !isCancellationError(error);
 }
 
 /**
@@ -83,32 +92,9 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** 从模型响应上读取 provider 报告的 usage；未取得时保留 `null`，不估算。 */
-export function usageOf(response: unknown): ModelUsageObservation | null {
-  if (typeof response !== 'object' || response === null) {
-    return null;
-  }
-  const metadata = (response as { readonly usage_metadata?: unknown }).usage_metadata;
-  if (typeof metadata !== 'object' || metadata === null) {
-    return null;
-  }
-  const read = (key: string): number | null => {
-    const value = (metadata as Record<string, unknown>)[key];
-    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
-  };
-  const usage: ModelUsageObservation = {
-    inputTokens: read('input_tokens'),
-    outputTokens: read('output_tokens'),
-    totalTokens: read('total_tokens'),
-  };
-  return usage.inputTokens === null && usage.outputTokens === null && usage.totalTokens === null
-    ? null
-    : usage;
-}
-
 /** 节点需要的依赖；全部由 Bootstrap 注入，节点不构造它们。 */
 export type CoordinatorNodeDependencies = {
-  readonly model: BaseChatModel;
+  readonly model: StreamingModelHandle;
   readonly sessionRecords: CoordinatorSessionRecordPort;
   /** 每次模型调用和 checkpoint 写入紧前都回读当前 Runtime Lease。 */
   readonly assertFencing: () => FencingAssertion;
@@ -139,33 +125,72 @@ export type CoordinatorNodeDependencies = {
   readonly clock?: () => number;
   /** 退避等待由宿主注入，便于在测试与紧耦合宿主中不真实等待。 */
   readonly sleep?: (ms: number) => Promise<void>;
+  /** 把未提交的流式响应投影成临时预览；预览故障不影响模型调用。 */
+  readonly streamObserver?: TranscriptStreamObserver;
+  /** 单次模型响应的输出预算；缺省由 `MODEL_RESPONSE_BYTES` 拥有。 */
+  readonly maxResponseBytes?: number;
 };
 
 /**
- * 按策略执行一次可证明安全的模型调用。
+ * 按策略执行一次可证明安全的流式模型调用。
  *
- * 返回最后一次错误，或成功的响应。次数由策略封顶，不重试不可重试的错误。
+ * 步骤身份在调用之前产生，因此每次 attempt 的预览身份都由同一个可信 step 派生；返回最后一次失败，
+ * 或成功接受的那一个完整响应。次数由策略封顶，输出超限、取消与 fencing 失效都不重试。
  */
-async function invokeModelWithRetry(
-  model: BaseChatModel,
-  messages: readonly unknown[],
-  sleep: (ms: number) => Promise<void>,
-): Promise<{ readonly response: unknown } | { readonly error: unknown }> {
-  const maxAttempts = MODEL_NODE_RETRY_POLICY.maxAttempts ?? 1;
-  const retryOn = MODEL_NODE_RETRY_POLICY.retryOn ?? (() => true);
-  let lastError: unknown = null;
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      return { response: await model.invoke(messages as never) };
-    } catch (error) {
-      lastError = error;
-      if (!retryOn(error) || attempt === maxAttempts) {
-        break;
-      }
-      await sleep(retryBackoffMs(attempt));
+async function streamModelWithRetry(input: {
+  readonly dependencies: CoordinatorNodeDependencies;
+  readonly coordinatorSessionId: CoordinatorSessionId;
+  readonly stepId: string;
+  readonly messages: readonly unknown[];
+  readonly signal: AbortSignal | undefined;
+  readonly sleep: (ms: number) => Promise<void>;
+}): Promise<
+  | {
+      readonly kind: 'response';
+      readonly response: unknown;
+      readonly usage: ReturnType<typeof usageOf>;
+      readonly previewId: string;
     }
+  | { readonly kind: 'failed'; readonly failure: ModelCallFailure }
+> {
+  const maxAttempts = MODEL_NODE_RETRY_POLICY.maxAttempts ?? 1;
+  let lastFailure: ModelCallFailure | null = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    // 预览身份由可信 step 与本次 attempt 派生：模型无法影响它，也无法复用上一次尝试的预览。
+    const previewId = `preview:${input.stepId}:attempt-${String(attempt)}`;
+    const outcome = await streamModelCall({
+      model: input.dependencies.model,
+      messages: input.messages,
+      ...(input.signal === undefined ? {} : { signal: input.signal }),
+      ...(input.dependencies.maxResponseBytes === undefined
+        ? {}
+        : { maxResponseBytes: input.dependencies.maxResponseBytes }),
+      assertFencing: input.dependencies.assertFencing,
+      ...(input.dependencies.streamObserver === undefined
+        ? {}
+        : { streamObserver: input.dependencies.streamObserver }),
+      coordinatorSessionId: input.coordinatorSessionId,
+      previewId,
+    });
+    if (outcome.kind === 'response') {
+      return { kind: 'response', response: outcome.response, usage: outcome.usage, previewId };
+    }
+    lastFailure = outcome;
+    if (!isRetryableModelCallFailure(outcome) || attempt === maxAttempts) {
+      break;
+    }
+    await input.sleep(retryBackoffMs(attempt));
   }
-  return { error: lastError };
+  return {
+    kind: 'failed',
+    failure:
+      lastFailure ?? {
+        kind: 'failed',
+        reason: 'unconfirmed',
+        detail: '模型调用没有产生任何结果',
+        error: null,
+      },
+  };
 }
 
 function blocked(note: string): CoordinatorGraphUpdate {
@@ -188,7 +213,10 @@ function assertWritable(assertFencing: () => FencingAssertion): CoordinatorGraph
 export function createModelNode(dependencies: CoordinatorNodeDependencies) {
   const clock = dependencies.clock ?? (() => Date.now());
   const sleep = dependencies.sleep ?? defaultSleep;
-  return async (state: CoordinatorGraphState): Promise<CoordinatorGraphUpdate> => {
+  return async (
+    state: CoordinatorGraphState,
+    config?: RunnableConfig,
+  ): Promise<CoordinatorGraphUpdate> => {
     const coordinatorSessionId = state.coordinatorSessionId as CoordinatorSessionId;
     if (coordinatorSessionId.length === 0) {
       return blocked('model node 缺少 Coordinator Session 身份');
@@ -221,19 +249,42 @@ export function createModelNode(dependencies: CoordinatorNodeDependencies) {
       return blocked(`上下文维护失败：${describeError(error)}`);
     }
 
-    const call = await invokeModelWithRetry(dependencies.model, built.messages, sleep);
-    if ('error' in call) {
+    // 可信身份在调用之前产生：预览、entry 与 operation 身份都由同一个 step 派生，重试也不会换号。
+    const stepId = dependencies.newStepId();
+    const call = await streamModelWithRetry({
+      dependencies,
+      coordinatorSessionId,
+      stepId,
+      messages: built.messages,
+      signal: config?.signal,
+      sleep,
+    });
+    if (call.kind === 'failed') {
+      if (call.failure.reason === 'fenced') {
+        // 失去写入权不是「响应没拿到」，而是这个 incarnation 不能再写任何东西。
+        return blocked(call.failure.detail);
+      }
       // 未完整提交：历史停在最后一个 Committed Model Step，重启后从这里继续。
       return {
         status: 'stalled',
         graphPosition: 'model',
-        note: `模型调用未完整提交：${describeError(call.error)}`,
+        note: `模型调用未完整提交：${call.failure.detail}`,
       };
     }
     const response = call.response;
 
-    const stepId = dependencies.newStepId();
     const entryId = assistantEntryId(stepId);
+    // 这一次调用发布的预览必须在任何结局上都有终态：只有 committed 与 interrupted 两种，缺一个
+    // 就意味着临时源会一直停在 streaming，直到容量淘汰。
+    const interrupted = (reason: string): CoordinatorGraphUpdate => {
+      publishStreamEvent(dependencies.streamObserver, {
+        coordinatorSessionId,
+        previewId: call.previewId,
+        kind: 'interrupted',
+        reason,
+      });
+      return { status: 'stalled', graphPosition: 'model', note: `模型调用未完整提交：${reason}` };
+    };
     const allowedNames = (dependencies.tools ?? []).map((definition) => definition.name);
     const parsed = parseModelToolCalls(response, allowedNames, (callId) => ({
       operationId: toolOperationId(stepId, callId),
@@ -246,7 +297,13 @@ export function createModelNode(dependencies: CoordinatorNodeDependencies) {
       : `模型响应包含无法受控执行的 tool call：${parsed.reason}；响应已提交为 ${stepId}`;
     const toolCalls = parsed.ok ? parsed.calls : [];
 
-    const entry = entryFromResponse(response, { stepId, entryId, toolCalls });
+    let entry: ReturnType<typeof entryFromResponse>;
+    try {
+      entry = entryFromResponse(response, { stepId, entryId, toolCalls });
+    } catch (error) {
+      // 无法归一化的响应不是可提交的响应：写不下去，也不留下仍在 streaming 的预览。
+      return interrupted(`响应无法安全归一化：${describeError(error)}`);
+    }
     const step: CommittedModelStep = {
       stepId,
       entryId,
@@ -255,10 +312,20 @@ export function createModelNode(dependencies: CoordinatorNodeDependencies) {
       // 直接存 provider 对象在重开后会丢失角色，历史就再也读不出来了。
       messages: [entry],
       toolCalls,
-      usage: usageOf(response),
+      usage: call.usage,
     };
+    // 接受之前重新核验：模型等待期间 Scope 可能已被取消，或这个 incarnation 已被取代。
+    if (config?.signal?.aborted === true) {
+      return interrupted('调用在提交前已被取消');
+    }
     const beforeWrite = assertWritable(dependencies.assertFencing);
     if (beforeWrite !== null) {
+      publishStreamEvent(dependencies.streamObserver, {
+        coordinatorSessionId,
+        previewId: call.previewId,
+        kind: 'interrupted',
+        reason: typeof beforeWrite.note === 'string' ? beforeWrite.note : '提交前失去写入权',
+      });
       return beforeWrite;
     }
     // 从最新已提交状态追加：模型等待期间受理的用户消息不会被这次写入覆盖。
@@ -269,8 +336,21 @@ export function createModelNode(dependencies: CoordinatorNodeDependencies) {
       entry,
     });
     if (written.kind === 'failed') {
+      publishStreamEvent(dependencies.streamObserver, {
+        coordinatorSessionId,
+        previewId: call.previewId,
+        kind: 'interrupted',
+        reason: `无法提交 Committed Model Step：${written.message}`,
+      });
       return blocked(`无法提交 Committed Model Step：${written.message}`);
     }
+    // 预览到此才与权威记录合一：之前它只是未提交的临时内容。
+    publishStreamEvent(dependencies.streamObserver, {
+      coordinatorSessionId,
+      previewId: call.previewId,
+      kind: 'committed',
+      entryId,
+    });
     if (blockedNote !== null) {
       return blocked(blockedNote);
     }

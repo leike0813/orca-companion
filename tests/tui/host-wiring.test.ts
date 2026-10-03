@@ -498,10 +498,10 @@ test('规划 Handoff 的 Target 来自用户在 Session Picker 里的选择', as
   const requestedSessions: string[] = [];
   const ports: TuiPorts = {
     ...harness.host.ports,
-    transcript: async (coordinatorSessionId, cursor) => {
-      requestedSessions.push(coordinatorSessionId);
-      return await harness.host.ports.transcript(coordinatorSessionId, cursor);
-    },
+    reading: { ...harness.host.ports.reading, history: async (query) => {
+      requestedSessions.push(query.coordinatorSessionId);
+      return await harness.host.ports.reading.history(query);
+    } },
   };
   const instance = renderTui(ports);
   rendered.push(instance);

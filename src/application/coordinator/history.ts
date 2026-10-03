@@ -7,7 +7,8 @@ export const HISTORY_PAGE_ITEMS = 100;
 export const HISTORY_PAGE_BYTES = 64 * 1024;
 export const HISTORY_BODY_BYTES = 64 * 1024;
 export const HISTORY_CHUNK_BYTES = 16 * 1024;
-export const CONTEXT_READ_BYTES = 4 * 1024 * 1024;
+export const CONTEXT_READ_BYTES = 16 * 1024 * 1024;
+export const MODEL_RESPONSE_BYTES = 8 * 1024 * 1024;
 export const CONTEXT_READ_ITEMS = 4096;
 export type CheckpointReadPurpose = 'full' | 'migration' | 'metadata' | 'context' | 'tools' | 'pending';
 export type HistoryMetadata = Omit<CommittedMessageEntry, 'content' | 'toolCalls'> & {
@@ -45,6 +46,56 @@ export type HistoryReadPort = {
   readonly readHistoryBody: (query: HistoryBodyQuery) => HistoryBodyRange | null;
   readonly readEntry: (coordinatorSessionId: string, entryId: string) => CommittedMessageEntry | null;
 };
+
+/** Runtime previews are disposable; only a committed entry is authoritative. */
+export type TranscriptStreamEvent = {
+  readonly coordinatorSessionId: string;
+  readonly previewId: string;
+} & (
+  | { readonly kind: 'started' }
+  | { readonly kind: 'delta'; readonly text: string }
+  | { readonly kind: 'interrupted'; readonly reason: string }
+  | { readonly kind: 'committed'; readonly entryId: string }
+);
+export type TranscriptStreamObserver = (event: TranscriptStreamEvent) => void;
+export type TranscriptSourceRef =
+  | { readonly kind: 'history'; readonly entryId: string; readonly contentRevision: 1 }
+  | { readonly kind: 'preview'; readonly previewId: string; readonly contentRevision: number };
+export type TranscriptPreview = {
+  readonly coordinatorSessionId: string;
+  readonly previewId: string;
+  readonly contentRevision: number;
+  readonly byteLength: number;
+  readonly afterSequence: number;
+  readonly status: 'streaming' | 'interrupted' | 'committed' | 'not_saved';
+  readonly entryId: string | null;
+};
+export type TranscriptBodyQuery = {
+  readonly coordinatorSessionId: string;
+  readonly source: TranscriptSourceRef;
+  readonly offset: number;
+  readonly maxBytes: number;
+};
+export type TranscriptBodyRange = Omit<HistoryBodyRange, 'entryId' | 'contentRevision'> & {
+  readonly source: TranscriptSourceRef;
+};
+/** IC-11: one bounded reading surface for authoritative and temporary sources. */
+export type TranscriptReadingPort = {
+  readonly history: (query: HistoryPageQuery) => Promise<HistoryMetadataPage>;
+  readonly body: (query: TranscriptBodyQuery) => Promise<TranscriptBodyRange | null>;
+  readonly previews: (coordinatorSessionId: string) => Promise<readonly TranscriptPreview[]>;
+  readonly pin: (coordinatorSessionId: string, previewId: string) => () => void;
+  readonly subscribe: (listener: (coordinatorSessionId: string) => void) => () => void;
+};
+export const transcriptBodyQuerySchema = z.strictObject({
+  coordinatorSessionId: z.string().min(1),
+  source: z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('history'), entryId: z.string().min(1), contentRevision: z.literal(1) }),
+    z.strictObject({ kind: z.literal('preview'), previewId: z.string().min(1), contentRevision: z.number().int().positive() }),
+  ]),
+  offset: z.number().int().nonnegative(),
+  maxBytes: z.number().int().min(4).max(HISTORY_BODY_BYTES),
+});
 const integer = z.number().int().nonnegative();
 export const historyPageQuerySchema = z.strictObject({
   coordinatorSessionId: z.string().min(1), before: integer.optional(), after: integer.optional(),

@@ -33,9 +33,15 @@ import {
   SUSPEND_NODE,
   type CoordinatorNodeDependencies,
 } from './nodes.js';
+import type { StreamingModelHandle } from './model-call.js';
 import { createToolsNode, TOOLS_NODE } from './tool-node.js';
 
-export type CoordinatorGraphDependencies = CoordinatorNodeDependencies & {
+export type CoordinatorGraphDependencies = Omit<CoordinatorNodeDependencies, 'model'> & {
+  /**
+   * 组装入口需要的是**能绑定工具**的模型：绑定后的对象是 `RunnableBinding`，节点只消费它的流。
+   * 因此这两个类型刻意不同——把绑定结果说成 `BaseChatModel` 会让「节点需要什么」变成谎言。
+   */
+  readonly model: BaseChatModel;
   /** 由 storage adapter 提供；图只消费它，不创建它。 */
   readonly checkpointer: BaseCheckpointSaver;
   /**
@@ -79,17 +85,18 @@ export function registerPlanningTools(input: {
  *
  * 规划与执行两个族共用这一份绑定：绑定只做 schema 广告，执行永远发生在受控 tools 节点。
  *
- * 绑定后的对象仍是可 invoke 的模型：节点只依赖 `invoke`，因此这里在图的组装边界完成协议适配，
- * 不在节点里引入工具体系。模型未实现 `bindTools` 时保持原样，不伪造工具能力。
+ * 绑定后的对象是 `RunnableBinding` 而不是 `BaseChatModel`，但它同样可流式执行；节点因此只依赖
+ * 「能流式执行」这个最小形状，不在节点里引入工具体系，也不在这里把绑定结果说成 chat model。
+ * 模型未实现 `bindTools` 时保持原样，不伪造工具能力。
  */
 export function bindPlanningTools(
   model: BaseChatModel,
   definitions: readonly CoordinatorToolDefinition[],
-): BaseChatModel {
+): StreamingModelHandle {
   if (definitions.length === 0 || model.bindTools === undefined) {
     return model;
   }
-  return model.bindTools([...toBindableTools(definitions)]) as unknown as BaseChatModel;
+  return model.bindTools([...toBindableTools(definitions)]);
 }
 
 /** 有条件边：有未决 tool call 就先进 tools 节点，否则继续消费工作或挂起。 */

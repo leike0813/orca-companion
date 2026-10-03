@@ -15,6 +15,7 @@ import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/
 import { afterEach, beforeEach, expect, test } from 'vitest';
 
 import { projectActionableWork, type ProjectedActionableWorkItem, type SourceObservation } from '../../src/application/coordinator/actionable-work.js';
+import type { TranscriptStreamEvent } from '../../src/application/coordinator/history.js';
 import type { FencingAssertion } from '../../src/application/coordinator/runtime-guard.js';
 import type {
   CoordinationScopeId,
@@ -50,6 +51,7 @@ import { MODEL_NODE } from '../../src/workflow/coordinator/nodes.js';
 import { createToolsNode, TOOLS_NODE } from '../../src/workflow/coordinator/tool-node.js';
 import { userQuestionTool } from '../../src/workflow/coordinator/interaction-tools.js';
 import { FakeToolModel, type FakeToolModelTurn } from '../support/fake-tool-model.js';
+import { ScriptedStreamingChatModel } from '../support/fake-chat-model.js';
 
 const SESSION = 'session-a' as CoordinatorSessionId;
 const SCOPE = 'scope-tools' as CoordinationScopeId;
@@ -191,6 +193,8 @@ function graphWith(input: {
   readonly sessionTools?: readonly PlanningToolDefinition[];
   readonly assertFencing?: () => FencingAssertion;
   readonly seenWork?: (string | null)[];
+  readonly streamObserver?: (event: TranscriptStreamEvent) => void;
+  readonly maxResponseBytes?: number;
 }) {
   // step 身份必须跨重启唯一：entry 与 operation 身份都由它派生，重启后重号会与已提交历史冲突。
   const read = store.loadCheckpoint(SESSION);
@@ -204,6 +208,8 @@ function graphWith(input: {
     assertFencing: input.assertFencing ?? (() => ({ kind: 'valid', lease: {} as never })),
     newStepId: () => `step-${String((step += 1))}`,
     sleep: () => Promise.resolve(),
+    ...(input.streamObserver === undefined ? {} : { streamObserver: input.streamObserver }),
+    ...(input.maxResponseBytes === undefined ? {} : { maxResponseBytes: input.maxResponseBytes }),
     buildMessages: (_state, currentWork) => {
       input.seenWork?.push(currentWork === null ? null : currentWork.source.sourceId);
       return Promise.resolve({ messages: modelInput(currentWork), note: '有界输入' });
@@ -404,13 +410,15 @@ test('响应提交后崩溃：恢复沿用原 call 与同一 operationId 补齐�
     { kind: 'text', content: '两个都完成' },
   ]);
 
-  // 前四次 fencing 检查有效（模型调用前、提交响应前、第一个 call 执行前及结果落盘前），随后进程中断。
-  let checks = 0;
+  // 崩溃窗口由事实触发：第一个配对结果落盘之后，这个 incarnation 就失去写入权。这样测试不依赖
+  // 「fencing 一共被检查了几次」这种实现细节——节点多检查一次或少检查一次，断点都一样。
   const interrupted = graphWith({
     model,
     tools,
     assertFencing: () =>
-      (checks += 1) <= 4 ? { kind: 'valid', lease: {} as never } : { kind: 'fenced', code: 'stale_generation' },
+      loadState().committedMessages.some((entry) => entry.toolCallId === 'call-1')
+        ? { kind: 'fenced', code: 'stale_generation' }
+        : { kind: 'valid', lease: {} as never },
   });
   const first = await runGraph(interrupted, { remainingWork: work(1).items });
 
@@ -580,10 +588,9 @@ test('无法受控执行的 tool call 先提交响应，再以 blocked 结束并
     const toolFacts = facts();
     const harness = recordingServices(toolFacts);
     const tools = planningToolset(toolFacts, harness.services);
-    const model = {
-      invoke: () =>
-        Promise.resolve({ role: 'assistant', content: `想执行 ${scenario.label}`, tool_calls: [scenario.raw] }),
-    };
+    const model = new ScriptedStreamingChatModel([
+      { kind: 'raw_tool_calls', content: `想执行 ${scenario.label}`, toolCalls: [scenario.raw] },
+    ]);
 
     const result = await runGraph(graphWith({ model, tools }), {
       remainingWork: work(1).items,
@@ -678,4 +685,81 @@ test('工具执行期间受理的新用户消息不被旧快照覆盖，且未�
   );
   // 该工具不完成当前工作：原 Actionable Work 保持待处理，后续轮次再消费。
   expect(update.remainingWork).toEqual(work(1).items);
+});
+
+test('tool call 参数跨多个 chunk 到达时，身份只来自完整响应，chunk 与预览都不参与执行', async () => {
+  save(baseState());
+  const toolFacts = facts();
+  const harness = recordingServices(toolFacts);
+  const tools = planningToolset(toolFacts, harness.services);
+  const args = { ticketId: 'ticket-split', expectedRevision: toolFacts.scopeRevision };
+  const model = new ScriptedStreamingChatModel([
+    { kind: 'tool_calls', calls: [{ callId: 'call-split', name: 'claim_ticket', args }], splitArgs: true },
+    { kind: 'text', text: '参数是分片到达的', chunkSize: 4 },
+  ]);
+  const previews: TranscriptStreamEvent[] = [];
+  const graph = graphWith({ model, tools, streamObserver: (event) => previews.push(event) });
+
+  const result = await runGraph(graph, { remainingWork: work(1).items });
+
+  expect(result.status).toBe('suspended');
+  // 响应确实被切成多段下发：每个参数片段都是一个独立 chunk。
+  expect(model.producedChunks).toBeGreaterThan(3);
+  // 工具只被执行一次，且用的是完整响应聚合后派生的可信身份。
+  expect(harness.executed).toEqual([
+    { name: 'claim_ticket', operationId: 'op:step-1:call-split', mapOperationId: null },
+  ]);
+  const state = loadState();
+  expect(state.committedMessages[0]).toEqual({
+    entryId: 'entry:assistant:step-1',
+    stepId: 'step-1',
+    role: 'assistant',
+    content: '',
+    toolCalls: [
+      {
+        callId: 'call-split',
+        name: 'claim_ticket',
+        args,
+        operationId: 'op:step-1:call-split',
+        mapOperationId: null,
+      },
+    ],
+  });
+  expect(state.committedMessages[1]?.toolCallId).toBe('call-split');
+  // 工具参数 chunk 不含可见文本，因此预览对这次调用没有可显示内容——但工具照常被正确执行。
+  expect(previews.filter((event) => event.kind === 'delta' && event.previewId === 'preview:step-1:attempt-1')).toEqual([]);
+  expect(previews.find((event) => event.kind === 'committed')).toMatchObject({
+    kind: 'committed',
+    previewId: 'preview:step-1:attempt-1',
+    entryId: 'entry:assistant:step-1',
+  });
+});
+
+test('分片工具参数在输出预算里只计一次：原始片段与解析结果不会把同一份参数算两次', async () => {
+  save(baseState());
+  const toolFacts = facts();
+  const harness = recordingServices(toolFacts);
+  const tools = planningToolset(toolFacts, harness.services);
+  // args 足够大：一旦被计两次就越限，被计一次刚好装得下，因此这个预算是行为事实而不是实现细节。
+  const args = { ticketId: `ticket-${'x'.repeat(2048)}`, expectedRevision: toolFacts.scopeRevision };
+  const argBytes = Buffer.byteLength(JSON.stringify(args), 'utf8');
+  const model = new ScriptedStreamingChatModel([
+    { kind: 'tool_calls', calls: [{ callId: 'call-big', name: 'claim_ticket', args }], splitArgs: true },
+    { kind: 'text', text: '参数刚好装得下' },
+  ]);
+  const events: TranscriptStreamEvent[] = [];
+
+  const result = await runGraph(
+    graphWith({ model, tools, maxResponseBytes: argBytes, streamObserver: (event) => events.push(event) }),
+    { remainingWork: work(1).items },
+  );
+
+  expect(result.status).toBe('suspended');
+  expect(events.some((event) => event.kind === 'interrupted')).toBe(false);
+  expect(harness.executed).toEqual([
+    { name: 'claim_ticket', operationId: 'op:step-1:call-big', mapOperationId: null },
+  ]);
+  expect(loadState().committedMessages[0]?.toolCalls).toEqual([
+    { callId: 'call-big', name: 'claim_ticket', args, operationId: 'op:step-1:call-big', mapOperationId: null },
+  ]);
 });
