@@ -32,6 +32,7 @@ import { ModelSettingsEditor } from '../components/model-settings-editor.js';
 import { SessionPicker } from '../components/session-picker.js';
 import { Sidebar } from '../components/sidebar.js';
 import { StatusLine } from '../components/status-line.js';
+import { StatuslineSettings } from '../components/statusline-settings.js';
 import { TopBar } from '../components/top-bar.js';
 import { Transcript } from '../components/transcript.js';
 import type { TranscriptFrame } from '../render/transcript-reader.js';
@@ -43,6 +44,8 @@ import type {
   SemanticEvent,
 } from '../../../application/controller-service.js';
 import type { TuiViewModel } from '../../../application/tui/view-model.js';
+import { DEFAULT_TUI_PREFERENCES, type StatuslinePreferences } from '../../../application/configuration/tui-preferences.js';
+import type { ProjectDetailPage } from '../../../application/tui/project-presentation.js';
 import type { OverlayKind, TuiAction, TuiState } from '../state.js';
 import { composerDraftFor, composerInputFor, isComposerReadOnly, EMPTY_MODEL_SETTINGS_EDIT, type ModelSettingsEdit } from '../state.js';
 import type { UiDraft } from '../../../application/ports/ui-input-store.js';
@@ -88,6 +91,14 @@ export type WorkspaceProps = {
   readonly modelRejection: string | null;
   /** 角色模型配置端口是否已装配；未装配时编辑入口显示为不可用。缺省即未装配。 */
   readonly modelSettingsAvailable?: boolean;
+  readonly preferencesAvailable?: boolean;
+  readonly statuslineDraft?: StatuslinePreferences;
+  readonly savedStatusline?: StatuslinePreferences;
+  readonly statuslineSelection?: number;
+  readonly statuslineNotice?: string | null;
+  readonly projectDetailsPage?: ProjectDetailPage | null;
+  readonly projectDetailsKey?: string | null;
+  readonly projectDetailsNotice?: string | null;
   /** 正在查看的角色；由容器按当前 overlay 解析，组件不自己挑。 */
   readonly modelRole?: ModelRoleView | null;
   readonly paletteSelection: number;
@@ -167,18 +178,21 @@ export function Workspace(props: WorkspaceProps) {
   const interactions=view.interactions.filter(i=>i.state==='open'&&i.ownerCoordinatorSessionId===selected);
   const candidates=ui.slashDismissed?[]:slashCandidates(input.text,view.scope.mode);
   const candidateRows=Math.min(candidates.length,Math.min(3,Math.max(1,rows-21)))+4;
-  const reasons=Object.fromEntries(props.commands.flatMap(c=>{const reason=commandReason(c,{mode:view.scope.mode,selectedSessionId:selected,pasteBlocks:input.pasteBlocks.length,...(props.modelSettingsAvailable===true?{modelSettings:true}:{})});return reason?[[c,reason]]:[];}));
+  const reasons=Object.fromEntries(props.commands.flatMap(c=>{const reason=commandReason(c,{mode:view.scope.mode,selectedSessionId:selected,pasteBlocks:input.pasteBlocks.length,...(props.modelSettingsAvailable===true?{modelSettings:true}:{}),...(props.preferencesAvailable===true?{preferences:true}:{})});return reason?[[c,reason]]:[];}));
   const origin={x:rowMetrics.left+bodyMetrics.left,y:rowMetrics.top+bodyMetrics.top};
   const panel=props.answerPanel;
   const modelRef=view.sessions.find(s=>s.coordinatorSessionId===selected)?.coordinatorModelConfigurationRef;
   const model=props.modelCatalog.options.find(o=>o.configurationRef===modelRef)?.model??null;
-  const project=<ProjectPanel view={view} events={props.events} panel={ui.projectPanel} width={projectWidth} height={bodyRows}/>;
+  const project=<ProjectPanel view={view} events={props.events} panel={ui.projectPanel} width={projectWidth} height={bodyRows}
+    {...(props.projectDetailsPage===undefined?{}:{details:props.projectDetailsPage})}
+    {...(props.projectDetailsKey===undefined?{}:{detailObjectKey:props.projectDetailsKey})}
+    {...(props.projectDetailsNotice===undefined?{}:{detailNotice:props.projectDetailsNotice})}/>;
   if(overlay==='paste-viewer'&&props.pasteViewer) return <PasteViewer view={props.pasteViewer} width={props.terminalWidth} rows={rows}/>;
   return <Box flexDirection="column" height={rows-1} overflow="hidden">
     <TopBar coordinationScopeId={view.scope.coordinationScopeId} mode={view.scope.mode} controlState={view.scope.controlState}
       graphLabel={null} generation={view.graph?.generation??null} authorizationLabel={null} activeWorkPackageCount={view.execution.activeWorkPackageCount}
       reconciling={view.execution.reconciliation.pending} availableWidth={props.terminalWidth} sessionId={selected}
-      holder={view.scope.executionLeaseHolderSessionId} pendingCount={view.execution.hazards.openInteractionCount}/>
+      holder={view.scope.executionLeaseHolderSessionId} pendingCount={view.execution.hazards.openInteractionCount} {...(view.projectPresentation===undefined?{}:{presentation:view.projectPresentation})}/>
     {alerts.slice(0,2).map((s,i)=><Text key={i} color={tuiColors.warning}>{truncateToDisplayWidth('! '+s+(i===1&&alerts.length>2?' · 另有 '+(alerts.length-2)+' 项':''),props.terminalWidth)}</Text>)}
     {ui.pendingConfirmation!==null?<Box height={bodyRows} width={props.terminalWidth} justifyContent="center" flexDirection="column"><ControlBar controlState={view.scope.controlState} hazards={view.execution.hazards} pending={ui.pendingConfirmation} availableWidth={props.terminalWidth}
       rows={Math.max(10,rows-7)} tab={ui.reviewTab} scroll={ui.reviewScroll} action={ui.reviewAction}
@@ -200,7 +214,7 @@ export function Workspace(props: WorkspaceProps) {
         <Composer value={composerDraftFor(ui,selected)} draft={input} terminalHeight={rows} focused={focus} externalCursor={!!props.historyContext} origin={origin} mode={ui.composerMode} readOnly={readOnly}
           disabledReason={props.composerDisabledReason} newlineHint={props.newlineHint} availableWidth={width}/></>}
         <StatusLine scope={view.scope} compaction={view.compaction} maintenance={view.maintenance} blockerCount={view.blockers.length} notice={ui.notice}
-          sidebarDensity={ui.sidebarDensity} execution={view.execution} availableWidth={width} model={model} graph={view.graph}/>
+          sidebarDensity={ui.sidebarDensity} execution={view.execution} availableWidth={width} model={model} graph={view.graph} {...(view.projectPresentation===undefined?{}:{presentation:view.projectPresentation})} {...(props.savedStatusline===undefined?{}:{preferences:props.savedStatusline})}/>
       </Box>
       {ui.projectPanel.open?project:ui.sidebarDensity==='collapsed'?null:<Sidebar density={ui.sidebarDensity} viewModel={view} terminalWidth={props.terminalWidth} height={bodyRows} selectedId={ui.inspectorSelection} iconMode={ui.iconMode}/>}
     </Box>}
@@ -260,7 +274,14 @@ function Overlay(props: {
     case 'event-drawer':
       return <ProjectPanel view={parent.viewModel} events={parent.events} panel={{...parent.ui.projectPanel,tab:2}} width={parent.terminalWidth} height={Math.max(8,(parent.terminalHeight??24)-4)}/>;
     case 'options':
-      return <CommandPalette commands={parent.commands.filter(id=>COMMAND_METADATA[id].path.startsWith('选项 →'))} selectedIndex={parent.paletteSelection} query={parent.ui.dialogSelections.options?.query.text??''} onRun={parent.actions.runCommand} availableWidth={parent.terminalWidth} maxRows={Math.max(1,(parent.terminalHeight??24)-11)} summary={`选项 · 当前图标 ${parent.ui.iconMode}`} reasons={{statusline:'用户级状态栏设置尚未接通'}}/>;
+      return <CommandPalette commands={parent.commands.filter(id=>COMMAND_METADATA[id].path.startsWith('选项 →'))} selectedIndex={parent.paletteSelection} query={parent.ui.dialogSelections.options?.query.text??''} onRun={parent.actions.runCommand} availableWidth={parent.terminalWidth} maxRows={Math.max(1,(parent.terminalHeight??24)-11)} summary={`选项${parent.ui.iconModeUnsaved?' · 图标未保存':''} · 当前图标 ${parent.ui.iconMode}`} reasons={{...(parent.preferencesAvailable?{}:{statusline:'用户偏好端口不可用；只能使用默认显示设置'})}}/>;
+    case 'statusline-settings': {
+      const view=parent.viewModel,ui=parent.ui;
+      const mainWidth=bodyWidth(parent.terminalWidth,ui.sidebarDensity);
+      const modelRef=view.sessions.find(s=>s.coordinatorSessionId===ui.selectedSessionId)?.coordinatorModelConfigurationRef;
+      const model=parent.modelCatalog.options.find(o=>o.configurationRef===modelRef)?.model??null;
+      return <StatuslineSettings preferences={parent.statuslineDraft??DEFAULT_TUI_PREFERENCES.statusline} selected={parent.statuslineSelection??0} notice={parent.statuslineNotice??null} width={parent.terminalWidth} rows={parent.terminalHeight??24} summary={`${view.projectPresentation?.identity.repository??'仓库不可用'} · ${view.projectPresentation?.identity.fullBranchRef??'分支不可用'} · ${ui.selectedSessionId??'未选择会话'}`} statusLineProps={{scope:view.scope,compaction:view.compaction,maintenance:view.maintenance,blockerCount:view.blockers.length,notice:null,sidebarDensity:ui.sidebarDensity,availableWidth:mainWidth,execution:view.execution,model,graph:view.graph,...(view.projectPresentation===undefined?{}:{presentation:view.projectPresentation})}}/>;
+    }
     case 'help':
       return <DialogFrame title="Help · 命令与键位" summary="Scope / Session / UI" width={parent.terminalWidth} rows={Math.max(10,(parent.terminalHeight??24)-7)} footer="↑↓ 浏览 · Esc 返回"><Box flexDirection="column" overflow="hidden">{[...HELP_LINES,...parent.commands.map(id=>{const meta=COMMAND_METADATA[id];return `${meta.alias?'/'+meta.alias:meta.label} · ${meta.target} · ${meta.description}`;})].slice(parent.ui.reviewScroll,parent.ui.reviewScroll+Math.max(1,(parent.terminalHeight??24)-14)).map((line,i)=><Text key={i}>{truncateToDisplayWidth(line,Math.max(1,parent.terminalWidth-8))}</Text>)}</Box></DialogFrame>;
     case 'model-picker':

@@ -21,6 +21,7 @@ export type OverlayKind =
   | 'help'
   | 'command-palette'
   | 'options'
+  | 'statusline-settings'
   | 'graph-inspector'
   | 'session-picker'
   | 'handoff-target'
@@ -182,6 +183,8 @@ export type TuiState = {
   readonly handoffCommand: 'handoff' | 'execution-handoff';
   readonly projectPanel: ProjectPanelState;
   readonly iconMode: TuiIconMode;
+  readonly iconModeUnsaved: boolean;
+  readonly preferencesRevision: number;
   readonly inspectorTab: number;
   readonly inspectorDetail: boolean;
   readonly inspectorScroll: number;
@@ -235,6 +238,8 @@ export const initialTuiState: TuiState = {
   handoffCommand: 'handoff',
   projectPanel: { open: false, tab: 0, selectedKey: null, detail: null, scroll: 0 },
   iconMode: tuiIconMode,
+  iconModeUnsaved: false,
+  preferencesRevision: 0,
   inspectorTab: 0,
   inspectorDetail: false,
   inspectorScroll: 0,
@@ -282,6 +287,8 @@ export type TuiAction =
   | { readonly kind: 'handoff-target'; readonly command: 'handoff' | 'execution-handoff' }
   | { readonly kind: 'project-panel'; readonly panel: ProjectPanelState }
   | { readonly kind: 'icons'; readonly mode: TuiIconMode }
+  | { readonly kind: 'icons-unsaved'; readonly unsaved: boolean }
+  | { readonly kind: 'preferences-revision'; readonly revision: number }
   | { readonly kind: 'inspector-view'; readonly tab?: number; readonly detail?: boolean; readonly scroll?: number; readonly relations?: readonly string[] | null; readonly relationIndex?: number }
   | { readonly kind: 'review-view'; readonly tab?: number; readonly scroll?: number; readonly action?: number }
   | { readonly kind: 'slash-view'; readonly index: number; readonly dismissed: boolean }
@@ -327,6 +334,8 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
     case 'handoff-target': return { ...state, handoffCommand: action.command };
     case 'project-panel': return { ...state, projectPanel: action.panel };
     case 'icons': return { ...state, iconMode: action.mode };
+    case 'icons-unsaved': return { ...state, iconModeUnsaved: action.unsaved };
+    case 'preferences-revision': return { ...state, preferencesRevision: action.revision };
     case 'slash-view': return { ...state, slashIndex: action.index, slashDismissed: action.dismissed };
     case 'review-view': return { ...state, reviewTab: action.tab ?? state.reviewTab, reviewScroll: action.scroll ?? state.reviewScroll, reviewAction: action.action ?? state.reviewAction };
     case 'inspector-view': return { ...state, inspectorDetail: action.detail ?? state.inspectorDetail, inspectorTab: action.tab ?? state.inspectorTab, inspectorScroll: action.scroll ?? state.inspectorScroll, inspectorRelations: action.relations === undefined ? state.inspectorRelations : action.relations, relationIndex: action.relationIndex ?? state.relationIndex };

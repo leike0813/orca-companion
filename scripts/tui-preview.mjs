@@ -27,6 +27,7 @@ if (process.argv[2] === '--help' || process.argv[2] === '-h') {
 }
 
 const alignmentPreview = ['alignment', 'alignment-planning'].includes(process.argv[2]);
+const projectStatusPreview = process.env.ORCA_COMPANION_PROJECT_STATUSLINE === '1';
 const pendingPreview = process.env.ORCA_COMPANION_PENDING_INTERACTIONS === '1';
 const prototype = process.argv[2] === '--prototype';
 const graphPrototype = process.argv[2] === '--graph-prototype';
@@ -317,11 +318,14 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
     // The full-map fixture mounts production TuiApp; only its ports are isolated fakes.
     const previewDialogs = sharedDialogs || alignmentPreview;
     if (alignmentPreview) {
-      Object.assign(snapshot, projectPrototypeSnapshots[scenario === 'alignment-planning' ? 'answer' : 'blocked']);
+      const previewPhase = projectStatusPreview ? process.env.ORCA_COMPANION_PREVIEW_PHASE ?? 'blocked'
+        : scenario === 'alignment-planning' ? 'answer' : 'blocked';
+      if (!['planning', 'execution', 'blocked', 'answer', 'idle'].includes(previewPhase)) throw new Error('Unknown isolated preview phase');
+      Object.assign(snapshot, projectPrototypeSnapshots[previewPhase]);
       snapshot.planningHandoffs = [{ proposalId: 'fixture-planning-handoff', sourceSessionId: 'session-long-中文规划-2026', targetSessionId: 'session-b',
         phase: 'prepared', capsuleRef: 'fixture-capsule', mapRevision: snapshot.mapRevision, planRevision: 1, proposalRevision: 1 }];
       snapshot.handoffs = [{ handoffId: 'fixture-execution-handoff', sourceSessionId: 'session-b', targetSessionId: 'session-long-中文规划-2026',
-        phase: 'reviewed', graphGeneration: snapshot.graph.generation, expectedRevision: snapshot.revision,
+        phase: 'reviewed', graphGeneration: snapshot.graph?.generation ?? 1, expectedRevision: snapshot.revision,
         responsibilitySet: ['execution_coordination_lease', 'pending_interactions', 'worker_lifecycle_events'] }];
     }
     const rejected = { kind: 'rejected', code: 'preview_read_only', message: '预览只读：没有连接真实项目' };
@@ -532,7 +536,8 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
           snapshot.interactions = overview.items; snapshot.openInteractionCount = overview.openCount;
           snapshot.sessions = snapshot.sessions.map(session => ({ ...session, openInteractionCount: overview.sessionCounts.find(count => count.coordinatorSessionId === session.coordinatorSessionId)?.openCount ?? 0 }));
         }
-        return { kind: 'snapshot', snapshot: { ...snapshot, selectedSessionId } };
+        return { kind: 'snapshot', snapshot: { ...snapshot, selectedSessionId,
+          ...(projectStatusPreview ? { projectPresentation: projectStatusPorts.presentation(snapshot, selectedSessionId) } : {}) } };
       },
       transcript: async (coordinatorSessionId, cursor) => {
         try { return { kind: 'transcript', transcript: history?.kind === 'opened'
@@ -604,6 +609,11 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
       } } : { kind: 'rejected', code: rejected.code, message: rejected.message },
         approve: async () => previewDialogs ? { kind: 'accepted', revision: 8, summary: '模拟授权批准已记录；未启动执行协调' } : rejected },
     };
+    // Explicitly isolated production ports for batch seven; no user config or external services.
+    const projectStatusPorts = projectStatusPreview
+      ? await (await import('../artifacts/project-statusline/preview-ports.mjs')).createPreviewPorts(snapshot)
+      : null;
+    if (projectStatusPorts) Object.assign(ports, projectStatusPorts.ports);
     let app;
     const element = projectPrototype
       ? createElement((await import('../dist/src/interfaces/tui/project-panel-prototype.js')).ProjectPanelPrototype, {

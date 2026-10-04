@@ -154,6 +154,8 @@ async function startHarness(
     readonly askUser?: boolean;
     readonly streamGate?: Promise<void>;
     readonly modelSignal?: (signal: AbortSignal) => void;
+    readonly exactMeasure?: (input: { readonly messages: readonly unknown[]; readonly tools: readonly unknown[] }) => Promise<{ readonly used: number; readonly capacity: number } | null>;
+    readonly boundTools?: (tools: readonly unknown[]) => void;
   } = {},
 ): Promise<Harness> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-foreground-'));
@@ -180,9 +182,13 @@ async function startHarness(
     leaseTtlMs: 60_000,
     orcaProbe: fakeProbe(),
     trackerFactory: fakeTracker,
-    loadIntegration: () =>
-      Promise.resolve({
-        CapableChatModel: class extends CapableChatModel {
+    loadIntegration: () => {
+      const exactMeasure = overrides.exactMeasure;
+      class InstalledChatModel extends CapableChatModel {
+          override bindTools(tools: readonly unknown[]): import('@langchain/core/runnables').Runnable {
+            overrides.boundTools?.(tools);
+            return super.bindTools(tools);
+          }
           private asked = false;
           override async *_streamResponseChunks(messages: BaseMessage[], options: { readonly signal?: AbortSignal } | undefined): AsyncGenerator<ChatGenerationChunk> {
             if (overrides.streamGate !== undefined && messages.some(message => typeof message.content === 'string' && message.content.includes('__STREAM_HOST__'))) {
@@ -212,8 +218,17 @@ async function startHarness(
             }
             return super._generate(messages, options);
           }
-        },
-      }),
+      }
+      if (exactMeasure !== undefined) {
+        Object.assign(InstalledChatModel, {
+          companionExactContext: {
+            measure: ({ messages, tools }: { readonly messages: readonly unknown[]; readonly tools: readonly unknown[] }) =>
+              exactMeasure({ messages, tools }),
+          },
+        });
+      }
+      return Promise.resolve({ CapableChatModel: InstalledChatModel });
+    },
   });
   host.ports.subscribe((event) => {
     events.push(event);
@@ -336,12 +351,23 @@ test('配置缺失与 detached HEAD 都是可诊断拒绝，且不建立任何 S
 });
 
 test('生产工具循环创建真实问题，窄查询与回答沿用原 Session', async () => {
-  const harness = await startHarness({ askUser: true });
+  const measurements: { readonly messages: readonly unknown[]; readonly tools: readonly unknown[] }[] = [];
+  const harness = await startHarness({
+    askUser: true,
+    exactMeasure: input => {
+      measurements.push(input);
+      return Promise.resolve({ used: 37, capacity: 512 });
+    },
+  });
   const proposal = await harness.host.ports.scopeSetup.proposal();
   expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
   expect((await harness.host.ports.execute({ kind: 'send-session-message', coordinatorSessionId: proposal.coordinatorSessionId,
     submissionId: 'ask-prompt', content: '__ASK_USER__' })).kind).toBe('accepted');
   expect(await waitFor(() => harness.events.some((event) => event.kind === 'interaction-opened'))).toBe(true);
+  expect(measurements.length).toBeGreaterThan(0);
+  const afterToolStep = await harness.host.ports.snapshot(proposal.coordinatorSessionId);
+  expect(afterToolStep.kind === 'snapshot' ? afterToolStep.snapshot.projectPresentation?.context : null)
+    .toEqual({ status: 'unavailable' });
   const opened = harness.events.find((event) => event.kind === 'interaction-opened');
   if (!opened || opened.kind !== 'interaction-opened' || !harness.host.ports.questions) throw new Error('问题入口不可用');
   const page = await harness.host.ports.questions({ kind: 'pending-interactions', coordinatorSessionId: proposal.coordinatorSessionId });
@@ -826,7 +852,7 @@ test('未绑定的旧 Scope 在 Home 里作为候选出现，不按数量推断�
 });
 
 test('会话维护端口已接线：/compact 与模型切换都走既有用例并落到权威记录上', async () => {
-  const harness = await startHarness();
+  const harness = await startHarness({ exactMeasure: () => Promise.resolve({ used: 10, capacity: 100 }) });
   const proposal = await harness.host.ports.scopeSetup.proposal();
   await harness.host.ports.scopeSetup.initialize(proposal);
   await harness.host.ports.execute({
@@ -850,6 +876,7 @@ test('会话维护端口已接线：/compact 与模型切换都走既有用例�
     throw new Error('snapshot 应可读');
   }
   expect(afterCompaction.snapshot.compaction).toMatchObject({ status: 'not_needed', path: 'none' });
+  expect(afterCompaction.snapshot.projectPresentation?.context).toEqual({ status: 'unavailable' });
 
   const catalog = await harness.host.ports.modelCatalog.load(proposal.coordinatorSessionId);
   expect(catalog.options.map((option) => option.configurationRef)).toEqual([
@@ -865,6 +892,9 @@ test('会话维护端口已接线：/compact 与模型切换都走既有用例�
     nextConfigurationRef: 'planning-spare',
   });
   expect(switched).toMatchObject({ kind: 'accepted' });
+  const afterSwitch = await harness.host.ports.snapshot(proposal.coordinatorSessionId);
+  expect(afterSwitch.kind === 'snapshot' ? afterSwitch.snapshot.projectPresentation?.context : null)
+    .toEqual({ status: 'unavailable' });
 
   // 绑定落在 IC-03 的 Session registry 上：重启后按它解析模型，而不是记在进程内。
   const commonDir = await resolveGitCommonDir({
@@ -948,4 +978,98 @@ test('上下文耗尽时不再发起超窗模型请求，并把耗尽原因投�
     throw new Error('transcript 应可读');
   }
   expect(transcript.transcript.messages.map((message) => message.role)).toEqual(['user', 'user']);
+});
+
+test('精确 context 只测量准备好的完整输入和实际 bindTools defs，快照不测量且新输入使旧观察失效', async () => {
+  const measurements: { readonly messages: readonly unknown[]; readonly tools: readonly unknown[] }[] = [];
+  const boundToolSets: (readonly unknown[])[] = [];
+  const streamGate = Promise.withResolvers<void>();
+  const modelSignal: { value: AbortSignal | null } = { value: null };
+  const harness = await startHarness({
+    streamGate: streamGate.promise,
+    modelSignal: signal => { modelSignal.value = signal; },
+    boundTools: tools => { boundToolSets.push([...tools]); },
+    exactMeasure: input => {
+      measurements.push(input);
+      return Promise.resolve({ used: 37, capacity: 512 });
+    },
+  });
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  await harness.host.ports.scopeSetup.initialize(proposal);
+
+  await harness.host.ports.execute({
+    kind: 'send-session-message',
+    submissionId: 'exact-context-first',
+    coordinatorSessionId: proposal.coordinatorSessionId,
+    content: '__STREAM_HOST__ measure only the effective input',
+  });
+  expect(await waitFor(() => modelSignal.value !== null && measurements.length === 1)).toBe(true);
+  const measured = measurements[0]!;
+  expect(measured.messages.some(message => JSON.stringify(message).includes('measure only the effective input'))).toBe(true);
+  expect(measured.messages.length).toBeGreaterThan(1);
+  expect(measured.tools.length).toBeGreaterThan(0);
+  const bound = boundToolSets.at(-1);
+  expect(bound?.map(tool => (tool as { readonly name?: unknown }).name))
+    .toEqual(measured.tools.map(tool => (tool as { readonly name?: unknown }).name));
+  expect(bound?.length).toBe(measured.tools.length);
+  for (const [index, tool] of (bound ?? []).entries()) {
+    const measuredTool = measured.tools[index] as { readonly description?: unknown; readonly schema?: unknown };
+    const boundTool = tool as { readonly description?: unknown; readonly schema?: unknown };
+    expect(boundTool.description).toBe(measuredTool.description);
+    expect(boundTool.schema).toBe(measuredTool.schema);
+  }
+
+  const firstSnapshot = await harness.host.ports.snapshot(proposal.coordinatorSessionId);
+  expect(firstSnapshot.kind === 'snapshot' ? firstSnapshot.snapshot.projectPresentation?.context : null)
+    .toMatchObject({ status: 'available', used: 37, capacity: 512 });
+  expect(measurements).toHaveLength(1);
+  streamGate.resolve();
+  expect(await waitFor(() => modelRounds(harness) >= 1)).toBe(true);
+  const afterModelCommit = await harness.host.ports.snapshot(proposal.coordinatorSessionId);
+  expect(afterModelCommit.kind === 'snapshot' ? afterModelCommit.snapshot.projectPresentation?.context : null)
+    .toEqual({ status: 'unavailable' });
+
+  await harness.host.ports.execute({
+    kind: 'send-session-message',
+    submissionId: 'exact-context-second',
+    coordinatorSessionId: proposal.coordinatorSessionId,
+    content: 'the next committed user input invalidates the old observation',
+  });
+  const immediatelyAfterCommit = await harness.host.ports.snapshot(proposal.coordinatorSessionId);
+  expect(immediatelyAfterCommit.kind === 'snapshot' ? immediatelyAfterCommit.snapshot.projectPresentation?.context : null)
+    .toEqual({ status: 'unavailable' });
+  expect(await waitFor(() => modelRounds(harness) >= 2 && measurements.length === 2)).toBe(true);
+  expect(measurements[1]?.messages.some(message => JSON.stringify(message).includes('the next committed user input'))).toBe(true);
+
+});
+
+test('新输入受理后迟到的精确 context 测量不能恢复旧读数', async () => {
+  const measurementGate = Promise.withResolvers<{ used: number; capacity: number }>();
+  const streamGate = Promise.withResolvers<void>();
+  let measurements = 0;
+  let streaming = false;
+  const harness = await startHarness({
+    streamGate: streamGate.promise,
+    modelSignal: () => { streaming = true; },
+    exactMeasure: () => {
+      measurements++;
+      return measurementGate.promise;
+    },
+  });
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  await harness.host.ports.scopeSetup.initialize(proposal);
+  await harness.host.ports.execute({ kind: 'send-session-message',
+    coordinatorSessionId: proposal.coordinatorSessionId,
+    submissionId: 'context-late-first', content: '__STREAM_HOST__ original input' });
+  expect(await waitFor(() => measurements === 1)).toBe(true);
+  await harness.host.ports.execute({ kind: 'send-session-message',
+    coordinatorSessionId: proposal.coordinatorSessionId,
+    submissionId: 'context-late-second', content: 'new input accepted during measurement' });
+  measurementGate.resolve({ used: 37, capacity: 512 });
+  expect(await waitFor(() => streaming)).toBe(true);
+  const snapshot = await harness.host.ports.snapshot(proposal.coordinatorSessionId);
+  expect(snapshot.kind === 'snapshot' ? snapshot.snapshot.projectPresentation?.context : null)
+    .toEqual({ status: 'unavailable' });
+  expect(measurements).toBe(1);
+  streamGate.resolve();
 });

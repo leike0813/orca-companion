@@ -11,6 +11,7 @@
  */
 
 import type { ControlState, CoordinationMode } from '../../domain/coordination/mode.js';
+import type { ProjectPresentation } from './project-presentation.js';
 import type { WorkerRole } from '../../domain/planning/execution-authorization.js';
 import type { WorkerLiveness } from '../../domain/worker-liveness.js';
 import {
@@ -203,6 +204,7 @@ export type TuiViewModel = {
   readonly maintenance: MaintenanceView | null;
   readonly compaction: CompactionView | null;
   readonly planningHandoffs: readonly ControllerPlanningHandoffView[];
+  readonly projectPresentation?: ProjectPresentation;
 };
 
 /** 节点过滤条件：空集合表示不过滤；过滤只隐藏节点，不改变顺序或位置。 */
@@ -516,5 +518,6 @@ export function projectTuiViewModel(input: TuiViewModelInput): TuiViewModel {
     maintenance: snapshot.maintenance === null ? null : { ...snapshot.maintenance },
     compaction: snapshot.compaction === null ? null : { ...snapshot.compaction },
     planningHandoffs: snapshot.planningHandoffs.map(projectPlanningHandoffView),
+    ...(snapshot.projectPresentation === undefined ? {} : { projectPresentation: snapshot.projectPresentation }),
   };
 }

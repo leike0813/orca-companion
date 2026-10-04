@@ -18,10 +18,11 @@
 | IC-08 | `m1-execute-and-validate-work-packages` | 无；Recovery 重放同一 pipeline | Recovery、Graph evolution、TUI |
 | IC-09 | `m1-recover-execution` | `m2-wire-execution-runtime` 接通前台宿主的 Recovery 事实装配（workspace / 原终态 / 存活 / 绑定 / 替代派发）与回执解释的异步 seam | Graph evolution、TUI |
 | IC-10 | `m1-evolve-execution-graph` | 无 | ControllerService、TUI |
-| IC-11 | `m1-recover-execution` | Change 8 增加图演进 projection/commands；`m1-wire-foreground-planning-runtime` 增加消息/回答字段与事件归属；`m2-deliver-planning-tui` 增加只读投影；`m2-deliver-execution-tui` 增加执行投影、Finalizer 与执行交接投影 | CLI、两个 TUI change |
-| IC-12 | `m0-orca-control-baseline` | `m1-wire-foreground-planning-runtime` 登记精确 Home 解析；`m2-deliver-planning-tui` 增加 planning 投影与组件；`m2-deliver-execution-tui` 增加执行态字段与组件 | CLI machine output、TUI React components |
+| IC-11 | `m1-recover-execution` | Change 8 增加图演进 projection/commands；`m1-wire-foreground-planning-runtime` 增加消息/回答字段与事件归属；`m2-deliver-planning-tui` 增加只读投影；`m2-deliver-execution-tui` 增加执行投影、Finalizer 与执行交接投影；`complete-tui-project-statusline` 增加可信 metadata、全图验收摘要及有界项目详情 | CLI、TUI |
+| IC-12 | `m0-orca-control-baseline` | `m1-wire-foreground-planning-runtime` 登记精确 Home 解析；`m2-deliver-planning-tui` 增加 planning 投影与组件；`m2-deliver-execution-tui` 增加执行态字段与组件；`complete-tui-project-statusline` 接通可信展示与 IC-15 编辑/返回 | CLI machine output、TUI React components |
 | IC-13 | `protect-tui-input` | 无 | Bootstrap、TUI 输入保护与记录管理 |
 | IC-14 | `complete-tui-model-configuration` | 无 | chat model factory、模型设置、Worker launcher、`doctor` |
+| IC-15 | `complete-tui-project-statusline` | 无 | Bootstrap、TUI 展示设置 |
 
 ## IC-01 Identity、revision 与引用字段族
 
@@ -787,8 +788,8 @@ type StatusJson = {
 
 - **Home 解析**：以 Git common dir 定位 Branch Coordination State，再以当前完整 branch ref 和登记的 canonical worktree 精确匹配 Scope。无匹配则进入初始化向导；旧未绑定记录须经显式迁移 Review（`bind-scope-identity` 一次性补齐绑定后本进程才登记当前 Scope）；linked worktree（git dir 不等于 common dir）或 detached HEAD 阻塞。不得以 common dir 下 Scope 数量推断当前身份。
 - **Session 选择**：选中 Session 与 Sidebar 密度都是进程内展示态。重启后按「存在 Pending Interaction 的 Session 优先，否则最近活动」重新选择；M1 没有「上次选择」的持久来源，本 change 不新增表、文件或 migration。
-- **工作区布局**：Ctrl+B 开合固定项目面板（总览、待答列表、最近事件），100 列及以上替换原右侧区域，更窄时独占主区域。事件沿用本次启动最多 50 条的窗口，旧事件入口进入同一页签；Ctrl+G 在三档尺寸均打开只读 adaptive 检查。面板/栏目/详情/关系选择/图标均为进程内展示态，关闭恢复原会话、草稿、光标与阅读位置。
-- **命令与审阅**：Palette、slash 与 Help 共享操作元数据和可用性；上方候选采用与执行分开，不可用与错误 slash 保留输入。选择页及审阅使用固定有界框，审阅默认返回；确认沿用 IC-11 的目标/指纹/revision 校验。顶栏、单行会话核心、独立风险与项目详情消费已有可信投影，缺失数据明示不可用；用户级 custom 偏好、可信 context/effort 与共享 Validator 摘要仍需后继合同。
+- **工作区布局**：Ctrl+B 开合固定项目面板（总览、待答列表、最近事件），100 列及以上替换原右侧区域，更窄时独占主区域。事件沿用本次启动最多 50 条的窗口，旧事件入口进入同一页签；Ctrl+G 在三档尺寸均打开只读 adaptive 检查。面板/栏目/详情/关系选择均为进程内展示态，关闭恢复原会话、草稿、光标与阅读位置；图标与 statusline 的显式保存值由 IC-15 拥有。
+- **命令与审阅**：Palette、slash 与 Help 共享操作元数据和可用性；上方候选采用与执行分开，不可用与错误 slash 保留输入。选择页及审阅使用固定有界框，审阅默认返回；确认沿用 IC-11 的目标/指纹/revision 校验。顶栏、单行会话核心、独立风险与项目详情消费应用只读投影，缺失数据明示不可用；custom 和图标偏好沿 IC-15，可信 metadata 与共享验收摘要沿下述第七批扩展。
 - **信息归属**：项目总览按需要处理、额度与权限、项目资料分组；Sidebar 保留图定位编号、阶段、Worker/liveness、串行队列和风险摘要。角色/attempt、Validation/Integration、worktree/baseline/Evidence 在 Inspector 节点栏目与项目工作详情读取；Recovery 的 Segment/预算/Capsule/superseded 和 Finalizer 的门禁/只读/集成冻结/前后工作区/Evidence/Verdict 在项目工作详情读取。相关语义事件进入最近事件，完整 WorkPackageId 在详情核对，定位编号仅用于当前图版本。审阅/确认期间 Ctrl+P/B/G 不穿透；Esc 逐层返回，Ctrl+C 沿原退出流程。
 - **`StatusJson` 形状不变**：`schemaVersion` 仍为 1，字段与既有 machine DTO 一致；`status --json` 改为经同一 `ControllerSnapshot` 投影规则构造，不再自行从 store 记录逐字段映射。
 
@@ -871,6 +872,30 @@ SQLite 位于 Git common dir 的 `orca-companion/ui.sqlite`。短事务中完成
 - **IC-07/IC-08 运行依据**：Task 物化时把当时的授权身份、版本与 profile 钉进绑定。Retry 沿已有 WorkerTask 的绑定取原授权与 profile，结算按该绑定判断权限与配置，不读当前配置；旧任务缺绑定时按不可证明阻塞。Codex 启动沿用同一模型配置生成器，secret 只进子进程环境，公开 terminal 命令与 CLI 参数只含非秘密描述符；managed provider 显式声明 `requires_openai_auth=false` 以免被 Harness auth 覆盖，Harness-login 保持原认证方式，不自动 fallback。
 - **IC-09 恢复**：替代 Session 沿原 WorkerTask 绑定的 profile 派发，Validator 的修复/复验与原任务同 profile；新 Recovery Utility Task 固定创建时的授权配置。transcript 不可用或恢复预算耗尽仍按不可证明阻塞。
 - **IC-11/IC-12 界面**：模型设置提供只读 load、显式 save 与按角色显式 apply 三条意图；保存输入含目标角色、connection/model/options/capability/effort、可选新 key 与 expected revision，scope/writer/profile 身份由宿主补齐。界面只消费非秘密 snapshot，key 以遮罩显示且只存在于编辑器内存，不进 IC-13。保存不改变 Session、已批准 Manifest、Task 与预算；apply 走既有 switch 或完整授权重新审阅。异步结果仍按原 invocation/Session 归属。
+
+## 第七批 IC-11/12 展示扩展
+
+Owner 为 `complete-tui-project-statusline` 的 Extend，canonical DTO 在 `src/application/tui/project-presentation.ts`。`ControllerSnapshot.projectPresentation` 与 `TuiViewModel.projectPresentation` 消费同一形状，不在组件内复制业务判断。
+
+- **metadata 权威**：repository/fullBranchRef 来自注册 Scope；模型/provider/effort 来自选中 Session 的准确不可变 configuration；Ticket 是该 Session 精确 Claim 的 tracker summary，只查 title/ref、不读取 body。当前 Work Package 来自当前 Dispatch/Attempt。缺少来源保留 null/unavailable，effort 区分 configured/not_configured/not_supported/unavailable。
+- **context**：installed integration 的可选精确测量能力接收完整有效输入和 tools、返回实际 used 与可信 capacity；观察绑定 Session/configuration/effective input revision。每次准备真实请求都会取得新输入版本，包含当次 Actionable Work；版本校验同时检查已提交历史位置、完整 Context Material、压缩结论、系统指令、权威事实和工具定义。能力由 `ProviderIntegration.exactContext` 表达，模块导出的模型构造函数可显式提供静态 `companionExactContext.measure({model,messages,tools,signal})`；一般 `BaseChatModel` 不被当作具备精确能力。消息/tool step 接受、压缩、换模型后失效。读取快照不测量；不使用近似 tokenizer、字符估算、上一轮/累计 usage、配置读回预算替代窗口。未提供能力的 adapter 为 unavailable。
+- **验收摘要**：唯一 application owner 从当前 GraphId/generation/version 全部未 retire Work Packages 与 `currentContractSettlements` 派生 `{validatedCount,totalCount}`；精确当前合同 Validator 接受结果每包一次，状态栏/Sidebar/Inspector 共同消费。Task done、Implementation 或 integration 状态、局部窗口不能派生分子。
+- **预算**：明确类别 work-packages/implementation-attempts/recovery，各自携 consumed、limit、subject 与 approvedLimitRef。work-packages 是当前未 retire 数/maxActiveWorkPackages；implementation-attempts 读取精确包的 budget counter，recovery 复用按 businessAttemptId 汇总的 Recovery records，以上限对应的批准引用核验。缺少 ledger 或原 Task 的授权绑定显示不可用，不取 ledger 首项或当前配置上限冒充原授权。
+- **projectDetails**：Bootstrap 绑定 Scope，UI 请求精确 Session/object/seen revision/cursor。每次20项、64KiB总正文；长字段按UTF-8完整字符边界续读，游标跨对象/版本拒绝。批准后 Manifest 精确读取已批准 ID/version，候选入口独立。页面失败/失效保留原入口，迟到结果仅属于原对象；查询不产生业务动作。
+- **IC-03 详情来源**：`project-detail-session` 精确读取所选 Session 注册、active Claim 与当前执行 Lease；`project-detail-json-field` 按当前 GraphId/version 或批准 authorization ID/version 读取一个字段及其 UTF-8 范围，不向宿主传回完整 graph/Manifest。工作包 Task 与 Accepted Result 依据当前包的可信绑定关联，预算计数可按批准引用筛选。读取只复用现有 schema16 记录，不新增持久副本或迁移。
+- **补充观察**：宿主只保留当前展示 Session/revision 的既有 Recovery、Finalizer、Frontier、维护与压缩投影引用。工作详情将这些字段与存储范围接入同一20项/64KiB分页，观察不匹配则要求刷新后重读；正文和业务事实仍归原 owner，详情不启动外部观察或建立第二份持久状态。
+
+## IC-15 用户级 TUI 展示偏好
+
+- **Owner (Create)**：`complete-tui-project-statusline`
+- **Canonical paths**：`src/application/configuration/tui-preferences.ts`（schema、DTO、port）；`src/adapters/storage/tui-preferences-store.ts`（文件实现）；Bootstrap 装配 `TuiPorts.preferences`
+- **Consumers**：TUI 设置与图标选择；不提供 Coordinator 工具入口
+
+用户文件 `${XDG_CONFIG_HOME || homedir/.config}/orca-companion/tui-preferences.json`，schemaVersion1：revision、iconMode(nerd/ascii)、statusline(modelFormat model/provider-model、contextFormat used/remaining/tokens、progressFormat count/percent、budgetKey work-packages/implementation-attempts/recovery、有序唯一 fields graph/ticket/work-package/progress/budget)。默认 revision0、nerd/model/used/count/work-packages、fields=[graph]。
+
+`load()` 返回 `{kind:'loaded',preferences,writable,notice}`。文件缺失只读默认且可写；损坏/未来版本/不可读保留原文件，默认呈现且不可写。`save({expectedRevision,patch})` 的 patch 只含 icons 或 statusline 一区；短 exclusive 文件锁内重读/CAS、临时文件原子替换与回读，返回 saved/conflict（当前 preferences）/failed（安全code/message）。冲突不自动重试；锁占用失败关闭。该文件不含秘密、不进入协调/checkpoint/ui.sqlite，环境图标覆盖保持临时。
+
+custom 编辑是内存草稿，同生产 statusline 的主区域宽度、字段配色与裁切作预览。↑↓选择、Space勾选、←→顺序/格式、Enter显式保存、Esc逐层丢弃；恢复默认只改草稿。成功关闭设置/命令层并回原入口；失败/CAS保留草稿可显式重试。异步请求绑定原编辑 generation，不闭合新页或覆盖新编辑。图标即时生效，独立分区保存，失败保留本次选择与未保存提示；重启恢复最后保存值。render/effect/resize/remount 只读。
 
 ## 合同演进规则
 

@@ -18,6 +18,7 @@ import type {
   TrackerIssue,
   TrackerIssueState,
   TrackerReadOutcome,
+  TrackerIssueSummaryOutcome,
   TrackerWriteOutcome,
 } from '../../application/planning/route-map-service.js';
 import {
@@ -255,6 +256,20 @@ function parseIssue(ref: EntityRef<string>, stdout: string): TrackerReadOutcome 
   return { kind: 'read', issue };
 }
 
+function parseIssueSummary(ref: EntityRef<string>, stdout: string): TrackerIssueSummaryOutcome {
+  let value: unknown;
+  try { value = JSON.parse(stdout.trim()); } catch {
+    return { kind: 'unknown', reason: 'gh issue view 的标准输出不是合法 JSON' };
+  }
+  const record = readRecord(value);
+  if (record === undefined || readPositiveInteger(record, 'number') !== Number(ref.id)) {
+    return { kind: 'unknown', reason: 'gh issue view 未返回请求的 issue 身份' };
+  }
+  const title = readString(record, 'title');
+  if (title === null) return { kind: 'unknown', reason: 'gh issue view 缺少字符串 title' };
+  return { kind: 'read', issue: { ref, title } };
+}
+
 // ---------------------------------------------------------------------------
 // IssueTrackerGateway
 // ---------------------------------------------------------------------------
@@ -276,6 +291,22 @@ export async function readIssue(options: GhTrackerOptions, ref: EntityRef<string
     return { kind: 'unknown', reason: '输出被截断' };
   }
   return parseIssue(ref, classification.stdout.text);
+}
+
+/** Read only the compact identity needed for project metadata; never request issue body. */
+export async function readIssueSummary(
+  options: GhTrackerOptions,
+  ref: EntityRef<string>,
+): Promise<TrackerIssueSummaryOutcome> {
+  if (!SUPPORTED_REF_KINDS.has(ref.kind)) {
+    return { kind: 'unknown', reason: `不支持的 tracker 引用类型 ${ref.kind}` };
+  }
+  const classification = classifyGhRun(
+    await runGh(options, ['issue', 'view', ref.id, '--json', 'number,title']),
+  );
+  if (classification.kind !== 'completed') return readFailure(classification);
+  if (classification.stdout.truncated) return { kind: 'unknown', reason: '输出被截断' };
+  return parseIssueSummary(ref, classification.stdout.text);
 }
 
 export async function updateIssueBody(
@@ -357,6 +388,7 @@ export async function assignIssue(
 export function createGhTracker(options: GhTrackerOptions): IssueTrackerGateway {
   return {
     readIssue: async (ref) => await readIssue(options, ref),
+    readIssueSummary: async (ref) => await readIssueSummary(options, ref),
     updateIssueBody: async (input) => await updateIssueBody(options, input),
     assignIssue: async (input) => await assignIssue(options, input),
   };

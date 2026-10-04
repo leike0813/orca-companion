@@ -68,7 +68,7 @@ flowchart TB
 | Canonical path | `src/application/` |
 | 职责 | Controller 用例、准入、对账、意图、查询/命令 DTO、ports 和界面 façade |
 | 允许依赖 | `MOD-01`；由调用方注入的 ports、时钟或 ID 函数 |
-| Interface | `IC-02`–`IC-11` 与 `IC-13` 中由 Application 拥有的 ports、commands、queries 和 projections |
+| Interface | `IC-02`–`IC-11` 与 `IC-13`–`IC-15` 中由 Application 拥有的 ports、commands、queries 和 projections |
 | 禁止 | 导入具体 adapter、打开数据库、拼接 CLI argv、渲染 UI、复制外部状态机 |
 | 测试 seam | 经生产调用方使用的同一用例或 port，注入最小 fake/mock adapter |
 
@@ -117,12 +117,14 @@ Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation
 |---|---|
 | Canonical path | `src/interfaces/tui/`、`src/application/tui/view-model.ts` 与 `src/application/execution/execution-view.ts` |
 | 职责 | Ink transcript、composer、sidebar、overlay、Graph Inspector、输入映射，执行态/规划态纯展示 projection，以及执行阶段只读派生（`execution-view.ts`） |
-| 允许依赖 | `IC-11` Controller façade、`IC-12` view model 与 `IC-13` UI 输入端口；Ink/React 与 `@inkjs/ui` 展示组件 |
+| 允许依赖 | `IC-11` Controller façade、`IC-12` view model、`IC-13` UI 输入、`IC-14` 模型设置与 `IC-15` 展示偏好端口；Ink/React 与 `@inkjs/ui` 展示组件 |
 | Interface | 用户 intent、选中 Session、局部草稿/滚动/overlay 状态和渲染帧 |
 | 禁止 | 调用 Orca、打开 store、恢复模型、实现重试/准入/预算、从自由文本推断待答 interaction；`execution-view.ts` 只从 IC-03 快照与调用方读到的只读观察派生，不派发、不写、不实现对账 |
 | 测试 seam | 组件经固定 view model 与 command callbacks 测试；PTY 单独验证 TTY/CJK/resize |
 
 React 组件只拥有展示与输入协调。render、effect、resize 和重挂载只读取与查询；用户输入事件经 IC-13 保存草稿与提交快照，所有 Scope 级动作经 `ControllerService`。Bootstrap 启动核验 pending 提交并清理已受理快照，恢复过程不自动发送。
+
+第七批 `application/tui/project-presentation.ts` 是可信项目/Session metadata、有界项目详情及共享 Validator 验收摘要的 DTO owner。Bootstrap 从注册 Scope、精确 Session configuration/Claim、当前图与 Task 绑定批准事实组装，不让 UI 查询 tracker/store；context 只消费 installed integration 的精确当前输入测量能力，并在有效输入版本变化后失效。偏好 schema/port 位于 `application/configuration/tui-preferences.ts`，`storage/tui-preferences-store.ts` 以独立用户文件实现 IC-15；Bootstrap 注入窄端口，UI 只在明确保存事件提交单区 CAS patch。展示文件不进入业务/输入数据库。
 
 `render/transcript-reader.ts` 是对话阅读的唯一布局 owner：消费 IC-11 的 metadata/body/previews，维护 Session/source/revision/UTF-8 offset 锚点，并只产生可见行及前后缓冲。正文与派生布局各限 8 MiB/64 项，有限 Markdown 上下文计入派生额度。Marked 17 解析有限块；未知中段保留原文，不扫描全历史或计算全页高度。App 只协调读请求和键位，Transcript 只绘制 frame；其他 Session 仅保留标量位置。
 
@@ -345,9 +347,9 @@ sequenceDiagram
 | Module | 主要接口合同 |
 |---|---|
 | MOD-01 Domain | IC-01、IC-05–IC-10 |
-| MOD-02 Application | IC-02–IC-11、IC-13 |
+| MOD-02 Application | IC-02–IC-11、IC-13–IC-15 |
 | MOD-03 Workflow | IC-04、IC-11 |
-| MOD-04 Adapters | IC-02–IC-10、IC-13 |
+| MOD-04 Adapters | IC-02–IC-10、IC-13–IC-15 |
 | MOD-05 CLI | IC-11、IC-12 |
-| MOD-06 TUI | IC-11、IC-12、IC-13 |
-| MOD-07 Bootstrap | IC-02–IC-04、IC-11–IC-13 |
+| MOD-06 TUI | IC-11–IC-15 |
+| MOD-07 Bootstrap | IC-02–IC-04、IC-11–IC-15 |

@@ -8,6 +8,7 @@ import {
   INTEGRATION_SEPARATOR,
   MODEL_INNER_RETRY_DISABLED,
   resolveChatModel,
+  type ExactContextCapability,
   type ProviderIntegrationResolver,
 } from '../../src/adapters/agents/chat-model-factory.js';
 import type { ProviderConnection } from '../../src/domain/model-configuration.js';
@@ -29,6 +30,34 @@ const managedConnection: ProviderConnection = {
   modelOptions: { configuration: { baseURL: 'https://example.invalid/v1' } },
   credential: { kind: 'managed', credentialRef: CREDENTIAL_REF, optionPath: 'apiKey' }, codex: null,
 };
+
+test('installed integration exposes its explicit exact context capability for the resolved model', async () => {
+  const requests: Parameters<ExactContextCapability['measure']>[0][] = [];
+  class InstalledModel extends FakeListChatModel {
+    static companionExactContext: ExactContextCapability = {
+      measure: input => {
+        requests.push(input);
+        return Promise.resolve({ used: 42, capacity: 128000 });
+      },
+    };
+  }
+  const moduleResolver = createModuleIntegrationResolverAsync({ load: () => Promise.resolve({ InstalledModel }) });
+  const integration = await moduleResolver('installed#InstalledModel');
+  const result = resolveChatModel(configuration({ modelOptions: { responses: ['ok'] } }), () => integration, unusedCredentials);
+  if (result.kind !== 'resolved' || result.exactContext === null) throw new Error('exact capability missing');
+  const messages = [{ role: 'system', content: 'instructions' }, { role: 'user', content: '中文🙂' }];
+  const tools = [{ name: 'read', schema: { type: 'object' } }];
+  const observed = await result.exactContext.measure({ model: result.model, messages, tools });
+  expect(observed).toEqual({ used: 42, capacity: 128000 });
+  expect(requests[0]).toMatchObject({ model: result.model, messages, tools });
+});
+
+test('ordinary tokenizer and usage support never claim an exact context capability', async () => {
+  const resolver = createModuleIntegrationResolverAsync({ load: () => Promise.resolve({ OrdinaryModel: FakeListChatModel }) });
+  const integration = await resolver('installed#OrdinaryModel');
+  const result = resolveChatModel(configuration({ modelOptions: { responses: ['ok'] } }), () => integration, unusedCredentials);
+  expect(result).toMatchObject({ kind: 'resolved', exactContext: null });
+});
 
 test('rejects credential-bearing options before resolving a provider', () => {
   let constructed = false;

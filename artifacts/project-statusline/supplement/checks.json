@@ -1,0 +1,192 @@
+[
+  {
+    "tuple": "120x40-color-nerd",
+    "graphInspector": true,
+    "commandDirectory": true,
+    "slashCandidate": true,
+    "adoptedBeforeExecution": true,
+    "returnedToWorkspace": true
+  },
+  {
+    "tuple": "120x40-color-ascii",
+    "graphInspector": true,
+    "commandDirectory": true,
+    "slashCandidate": true,
+    "adoptedBeforeExecution": true,
+    "returnedToWorkspace": true
+  },
+  {
+    "tuple": "120x40-no-color-nerd",
+    "graphInspector": true,
+    "commandDirectory": true,
+    "slashCandidate": true,
+    "adoptedBeforeExecution": true,
+    "returnedToWorkspace": true
+  },
+  {
+    "tuple": "120x40-no-color-ascii",
+    "graphInspector": true,
+    "commandDirectory": true,
+    "slashCandidate": true,
+    "adoptedBeforeExecution": true,
+    "returnedToWorkspace": true
+  },
+  {
+    "tuple": "80x24-color-nerd",
+    "graphInspector": true,
+    "commandDirectory": true,
+    "slashCandidate": true,
+    "adoptedBeforeExecution": true,
+    "returnedToWorkspace": true
+  },
+  {
+    "tuple": "80x24-color-ascii",
+    "graphInspector": true,
+    "commandDirectory": true,
+    "slashCandidate": true,
+    "adoptedBeforeExecution": true,
+    "returnedToWorkspace": true
+  },
+  {
+    "tuple": "80x24-no-color-nerd",
+    "graphInspector": true,
+    "commandDirectory": true,
+    "slashCandidate": true,
+    "adoptedBeforeExecution": true,
+    "returnedToWorkspace": true
+  },
+  {
+    "tuple": "80x24-no-color-ascii",
+    "graphInspector": true,
+    "commandDirectory": true,
+    "slashCandidate": true,
+    "adoptedBeforeExecution": true,
+    "returnedToWorkspace": true
+  },
+  {
+    "tuple": "50x40-color-nerd",
+    "graphInspector": true,
+    "commandDirectory": true,
+    "slashCandidate": true,
+    "adoptedBeforeExecution": true,
+    "returnedToWorkspace": true
+  },
+  {
+    "tuple": "50x40-color-ascii",
+    "graphInspector": true,
+    "commandDirectory": true,
+    "slashCandidate": true,
+    "adoptedBeforeExecution": true,
+    "returnedToWorkspace": true
+  },
+  {
+    "tuple": "50x40-no-color-nerd",
+    "graphInspector": true,
+    "commandDirectory": true,
+    "slashCandidate": true,
+    "adoptedBeforeExecution": true,
+    "returnedToWorkspace": true
+  },
+  {
+    "tuple": "50x40-no-color-ascii",
+    "graphInspector": true,
+    "commandDirectory": true,
+    "slashCandidate": true,
+    "adoptedBeforeExecution": true,
+    "returnedToWorkspace": true
+  },
+  {
+    "approvedAuthorization": true,
+    "boundedPagination": true,
+    "utf8Continuation": true,
+    "resizeRetainedObject": true,
+    "nextPage": true
+  },
+  {
+    "realSecondStore": true,
+    "conflictShown": true,
+    "draftRetained": true,
+    "explicitEnterRetry": true,
+    "finalRevision": 2
+  },
+  {
+    "kind": "statusline-save-failure",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "draftRetained": true
+  },
+  {
+    "kind": "statusline-save-failure",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "draftRetained": true
+  },
+  {
+    "kind": "statusline-save-failure",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "draftRetained": true
+  },
+  {
+    "savedIcon": "ascii",
+    "restartHadNoEnvironmentOverride": true,
+    "restoredSelection": "ascii"
+  },
+  {
+    "iconSaveFailure": true,
+    "failureVisibleInOptions": true,
+    "failureVisibleInWorkspace": true,
+    "unsavedSelectionRetained": true,
+    "persistedIcon": "nerd"
+  },
+  {
+    "iconSaveRetry": true,
+    "explicitReselection": true,
+    "persistedIcon": "ascii"
+  },
+  {
+    "statuslinePatchOnly": true,
+    "transientEnvironmentIcon": "ascii",
+    "persistedIcon": "nerd",
+    "statuslineSaved": true
+  },
+  {
+    "answerComposer": true,
+    "size": [
+      120,
+      40
+    ],
+    "interactionQuestionAndChoicesVisible": true,
+    "ordinaryComposerRejected": true
+  },
+  {
+    "answerComposer": true,
+    "size": [
+      80,
+      24
+    ],
+    "interactionQuestionAndChoicesVisible": true,
+    "ordinaryComposerRejected": true
+  },
+  {
+    "answerComposer": true,
+    "size": [
+      50,
+      40
+    ],
+    "interactionQuestionAndChoicesVisible": true,
+    "ordinaryComposerRejected": true
+  }
+]

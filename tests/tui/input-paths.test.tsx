@@ -75,7 +75,7 @@ describe('容器输入路径', () => {
     await press(rendered,ENTER);
     await press(rendered,ENTER);
     expect(rendered.lastFrame()).toContain('/statusline');
-    expect(rendered.lastFrame()).toContain('尚未接通');
+    expect(rendered.lastFrame()).toContain('用户偏好端口不可用');
     expect(fake.executeCount()).toBe(0);
     rendered.unmount();
   });
@@ -324,7 +324,7 @@ describe('容器输入路径', () => {
  */
 test.each([0, 1])('项目详情滚到底后一次 Up 即可回退（侧栏密度切换 %i 次）', async (switches) => {
   const fake = createFakePorts({snapshot:{sessions:makeSnapshot().sessions.map(session=>({
-    ...session,coordinatorModelConfigurationRef:session.coordinatorModelConfigurationRef.repeat(20),
+    ...session,coordinatorModelConfigurationRef:Array.from({length:20},(_,index)=>`${session.coordinatorModelConfigurationRef}-${index}-`).join(''),
   }))}});
   const rendered = renderTui(fake.ports);
   await waitFor(rendered, () => fake.calls.some(call => call.name === 'history'));

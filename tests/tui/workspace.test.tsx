@@ -13,6 +13,9 @@ import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store
 import type { HistoryMetadataPage } from '../../src/application/coordinator/history.js';
 import { createTranscriptReadingFixture } from '../support/transcript-reading.js';
 import type { CoordinatorSessionId } from '../../src/application/dto/identity.js';
+import { PROJECT_DETAILS_MAX_PAGE_BYTES, type ProjectDetailPage, type ProjectPresentation } from '../../src/application/tui/project-presentation.js';
+import { displayWidth } from '../../src/interfaces/tui/render/width.js';
+import { projectDetailViewport } from '../../src/interfaces/tui/components/project-panel.js';
 
 test('分页阅读、最早/最新与 Esc 保留 composer，失败保留原画面', async () => {
   const opened = openCheckpointStore({ databasePath: ':memory:' });
@@ -109,7 +112,7 @@ import { handleComposerKey } from '../../src/interfaces/tui/app.js';
 import type { AnswerPanelView } from '../../src/interfaces/tui/components/answer-panel.js';
 import { COMMAND_IDS } from '../../src/interfaces/tui/components/command-palette.js';
 import { TOOL_COLLAPSED_MARKER, TOOL_EXPANDED_MARKER } from '../../src/interfaces/tui/components/transcript.js';
-import { TopBar } from '../../src/interfaces/tui/components/top-bar.js';
+import { topBarSegments, TopBar } from '../../src/interfaces/tui/components/top-bar.js';
 import { resolveGlobalAction } from '../../src/interfaces/tui/input/keymap.js';
 import type { ModelCatalog } from '../../src/interfaces/tui/ports.js';
 import { allowedSidebarDensity } from '../../src/interfaces/tui/render/width.js';
@@ -180,6 +183,9 @@ function renderWorkspace(
     readonly events?: readonly SemanticEvent[];
     readonly answerPanel?: AnswerPanelView;
     readonly disabledReason?: string;
+    readonly projectDetailsPage?: ProjectDetailPage | null;
+    readonly projectDetailsKey?: string | null;
+    readonly projectDetailsNotice?: string | null;
   } = {},
 ): RenderedTui {
   const ui = options.ui ?? uiState();
@@ -203,6 +209,9 @@ function renderWorkspace(
       newlineHint="Shift+Enter 换行"
       handoffProposal={null}
       authorizationReview={null}
+      {...(options.projectDetailsPage === undefined ? {} : { projectDetailsPage: options.projectDetailsPage })}
+      {...(options.projectDetailsKey === undefined ? {} : { projectDetailsKey: options.projectDetailsKey })}
+      {...(options.projectDetailsNotice === undefined ? {} : { projectDetailsNotice: options.projectDetailsNotice })}
       commands={COMMAND_IDS}
     />,
   );
@@ -210,10 +219,46 @@ function renderWorkspace(
 
 describe('planning-workspace / 常驻 transcript 与 composer 主视图', () => {
   test.each([[80, 24], [50, 40]])('长问题、选项和答案在 %ix%i 保留时间线与不可提交原因', async (terminalWidth, terminalHeight) => {
-    const header = renderComponent(<TopBar coordinationScopeId="scope-a" mode="execution_coordination"
-      controlState="blocked" graphLabel={null} generation={null} authorizationLabel={null}
-      activeWorkPackageCount={0} reconciling availableWidth={terminalWidth}
-      sessionId="session-long-中文规划-2026" pendingCount={3} holder="another-session-with-long-identity" />);
+    const repository = '/home/joshua/projects/orca-companion-with-a-long-directory-name';
+    const fullBranchRef = 'refs/heads/main/feature/long-branch-name';
+    const presentation = {
+      identity: {
+        repository,
+        fullBranchRef,
+      },
+      session: null,
+      ticket: null,
+      activeWorkPackage: null,
+      context: { status: 'unavailable' as const },
+      acceptance: null,
+      budgets: { workPackages: null, implementationAttempts: null, recovery: null },
+    } satisfies ProjectPresentation;
+    const topBarProps = {
+      coordinationScopeId: 'scope-a', mode: 'execution_coordination',
+      controlState: 'blocked', graphLabel: null, generation: null, authorizationLabel: null,
+      activeWorkPackageCount: 0, reconciling: false, availableWidth: terminalWidth,
+      sessionId: 'session-long-identity-with-a-stable-prefix', pendingCount: 3,
+      holder: 'another-session-with-long-identity', presentation,
+    };
+    const segments = topBarSegments(topBarProps);
+    const [repositoryPrefix, branchPrefix, sessionPrefix] = (segments[0] ?? '').split(' · ');
+    expect(repositoryPrefix).toMatch(/^\/home/u);
+    expect(branchPrefix).toMatch(/^main/u);
+    expect(sessionPrefix).toMatch(/^sessi/u);
+    expect(repositoryPrefix).toMatch(/…$/u);
+    expect(branchPrefix).toMatch(/…$/u);
+    expect(sessionPrefix).toMatch(/…$/u);
+    expect(segments).toContain('执行');
+    expect(segments).toContain('blocked');
+    expect(segments).toContain('待答3');
+    expect(displayWidth(segments.join(' · '))).toBeLessThanOrEqual(terminalWidth);
+    expect(presentation.identity.repository).toBe(repository);
+    expect(presentation.identity.fullBranchRef).toBe(fullBranchRef);
+    const mainBranchIdentity = topBarSegments({ ...topBarProps,
+      presentation: { ...presentation, identity: { ...presentation.identity, fullBranchRef: 'refs/heads/main' } } })[0];
+    expect(mainBranchIdentity?.split(' · ')[1]).toBe('main');
+
+    const header = renderComponent(<TopBar {...topBarProps} />);
     expect(header.lastFrame()).toContain('待答3');
     header.unmount();
     const interaction = { interactionId: 'i-large', ownerCoordinatorSessionId: 'session-a',
@@ -419,7 +464,7 @@ describe('planning-workspace / 信息分层', () => {
     // 「Worker Task 完成验证并被接受」由语义事件层的 state-changed reason 承载。
     const verified: SemanticEvent = {
       eventId: 'event-verified',
-      coordinatorSessionId: 'session-a',
+      coordinatorSessionId: 'session-b',
       kind: 'state-changed',
       coordinationScopeId: 'scope-1',
       revision: 9,
@@ -440,5 +485,132 @@ describe('planning-workspace / 信息分层', () => {
     const withoutEvent = renderWorkspace({ ui, events: [] });
     await settle(2);
     expect(withoutEvent.lastFrame() ?? '').not.toContain('worker-task-verified-accepted');
+  });
+
+  test('预算详情将同步返回页传入面板并按选中 Session 与 Scope revision 绑定读取', async () => {
+    const fake = createFakePorts();
+    const requests: import('../../src/application/tui/project-presentation.js').ProjectDetailQuery[] = [];
+    const page: ProjectDetailPage = {
+      objectKey: 'budget',
+      coordinatorSessionId: 'session-b',
+      revision: 7,
+      items: [{ key: 'budget', label: '批准上限', value: 'approved-budget-value', offset: 0, end: 21, byteLength: 21 }],
+      nextCursor: null,
+    };
+    const rendered = renderTui({
+      ...fake.ports,
+      projectDetails: { read: (query) => {
+          requests.push(query);
+          return Promise.resolve({ kind: 'page' as const, page });
+        } },
+    });
+    try {
+      await settle();
+      rendered.stdin.write('\u0002');
+      await settle();
+      for (let index = 0; index < 1; index += 1) {
+        rendered.stdin.write('\u001b[B');
+        await settle();
+      }
+      rendered.stdin.write('\r');
+      await settle();
+
+      expect(requests).toEqual([{
+        objectKey: 'budget',
+        coordinatorSessionId: 'session-b',
+        seenRevision: 7,
+        after: null,
+      }]);
+      expect(rendered.lastFrame()).toContain('approved-budget-value');
+      expect(rendered.lastFrame()).not.toContain('数值上限、费用与 Token usage：不可用');
+      expect(rendered.lastFrame()).not.toContain('已批准 Manifest 正文：不可用');
+    } finally {
+      rendered.unmount();
+      fake.closeInputStore();
+    }
+  });
+
+  test('更晚的项目详情页阻止同入口旧页覆盖', async () => {
+    const fake = createFakePorts();
+    const pending: Array<(result: { kind: 'page'; page: ProjectDetailPage }) => void> = [];
+    const page = (value: string): ProjectDetailPage => ({
+      objectKey: 'identity', coordinatorSessionId: 'session-b', revision: 7,
+      items: [{ key: value, label: '仓库', value, offset: 0, end: value.length, byteLength: value.length }], nextCursor: null,
+    });
+    const rendered = renderTui({
+      ...fake.ports,
+      projectDetails: { read: () => new Promise(resolve => pending.push(resolve)) },
+    });
+    try {
+      await settle();
+      rendered.stdin.write('\u0002'); await settle();
+      for (let index = 0; index < 3; index += 1) { rendered.stdin.write('\u001b[B'); await settle(); }
+      rendered.stdin.write('\r'); await settle();
+      rendered.stdin.write('\u001b'); await new Promise(resolve => setTimeout(resolve, 100)); await settle();
+      rendered.stdin.write('\r'); await settle();
+      expect(pending).toHaveLength(2);
+
+      pending[1]!({ kind: 'page', page: page('new-page') }); await settle();
+      pending[0]!({ kind: 'page', page: page('late-old-page') }); await settle();
+      expect(rendered.lastFrame()).toContain('new-page');
+      expect(rendered.lastFrame()).not.toContain('late-old-page');
+    } finally { rendered.unmount(); fake.closeInputStore(); }
+  });
+
+  test.each([
+    { coordinatorSessionId: 'session-a', revision: 7 },
+    { coordinatorSessionId: 'session-b', revision: 6 },
+  ])('详情响应不匹配 Session/revision 时保留原入口（$coordinatorSessionId / $revision）', async identity => {
+    const fake = createFakePorts();
+    const page: ProjectDetailPage = {
+      objectKey: 'budget', coordinatorSessionId: identity.coordinatorSessionId, revision: identity.revision,
+      items: [{ key: 'foreign', label: '外部详情', value: 'must-not-render', offset: 0, end: 16, byteLength: 16 }], nextCursor: null,
+    };
+    const rendered = renderTui({
+      ...fake.ports,
+      projectDetails: { read: () => Promise.resolve({ kind: 'page' as const, page }) },
+    });
+    try {
+      await settle();
+      rendered.stdin.write('\u0002'); await settle();
+      rendered.stdin.write('\u001b[B'); await settle();
+      rendered.stdin.write('\r'); await settle();
+      expect(rendered.lastFrame()).not.toContain('must-not-render');
+      expect(rendered.lastFrame()).toContain('详情响应不匹配');
+    } finally { rendered.unmount(); fake.closeInputStore(); }
+  });
+
+  test('详情页 revision 过期时显示失效状态，不泄露本地整图 fallback', () => {
+    const page: ProjectDetailPage = {
+      objectKey: 'work-package:wp-1', coordinatorSessionId: 'session-a', revision: 6,
+      items: [{ key: 'old', label: '旧依据', value: 'stale-page-secret', offset: 0, end: 17, byteLength: 17 }], nextCursor: null,
+    };
+    const viewport = projectDetailViewport(workspaceView(), [], {
+      ...initialTuiState.projectPanel, open: true, detail: 'work', selectedKey: 'work',
+    }, 80, 40, page, null, page.objectKey);
+    const visibleDetail = viewport.lines.join('\n');
+    expect(visibleDetail).not.toContain('stale-page-secret');
+    expect(visibleDetail).not.toContain('Finalizer');
+    expect(visibleDetail).toMatch(/更新|失效|不可用|重读/u);
+  });
+
+  test('详情端口读取中时保留状态入口，不显示本地整图 fallback', () => {
+    const viewport = projectDetailViewport(workspaceView(), [], {
+      ...initialTuiState.projectPanel, open: true, detail: 'work', selectedKey: 'work',
+    }, 80, 40, null, '正在读取项目详情', 'work-package:wp-1');
+    const visibleDetail = viewport.lines.join('\n');
+    expect(visibleDetail).toContain('正在读取项目详情');
+    expect(visibleDetail).not.toContain('Finalizer');
+  });
+
+  test('无详情端口时本地只读摘要保持有界', () => {
+    const viewport = projectDetailViewport(workspaceView(), [], {
+      ...initialTuiState.projectPanel, open: true, detail: 'work', selectedKey: 'work',
+    }, PROJECT_DETAILS_MAX_PAGE_BYTES, 40);
+
+    expect(viewport.lines.join('').length).toBeGreaterThan(0);
+    expect(viewport.lines.slice(viewport.offset, viewport.offset + viewport.rows).length)
+      .toBeLessThanOrEqual(viewport.rows);
+    expect(new TextEncoder().encode(viewport.lines.join('')).byteLength).toBeLessThanOrEqual(PROJECT_DETAILS_MAX_PAGE_BYTES);
   });
 });

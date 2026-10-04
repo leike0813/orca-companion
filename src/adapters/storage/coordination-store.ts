@@ -3474,6 +3474,26 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       sessionId,
     );
 
+  const readExecutionLeaseRow = (scopeId: string): LeaseRow | undefined =>
+    one<LeaseRow>(
+      db.prepare("SELECT * FROM leases WHERE coordination_scope_id = ? AND lease_kind = 'execution_coordination' AND released_at IS NULL"),
+      scopeId,
+    );
+
+  const readSessionRow = (scopeId: string, sessionId: string): SessionRow | undefined =>
+    one<SessionRow>(
+      db.prepare('SELECT * FROM session_registry WHERE coordination_scope_id = ? AND coordinator_session_id = ?'),
+      scopeId,
+      sessionId,
+    );
+
+  const readActiveTicketClaimRow = (scopeId: string, sessionId: string): TicketClaimRow | undefined =>
+    one<TicketClaimRow>(
+      db.prepare("SELECT * FROM ticket_claims WHERE coordination_scope_id = ? AND coordinator_session_id = ? AND state = 'active' ORDER BY claimed_at DESC, claim_id DESC LIMIT 1"),
+      scopeId,
+      sessionId,
+    );
+
   const readSessionRows = (scopeId: string): readonly SessionRow[] =>
     many<SessionRow>(
       db.prepare(
@@ -3521,11 +3541,17 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       operationId,
     );
 
-  const readBudgetRows = (scopeId: string): readonly BudgetRow[] =>
-    many<BudgetRow>(
-      db.prepare('SELECT * FROM budget_counters WHERE coordination_scope_id = ? ORDER BY budget_key'),
-      scopeId,
-    );
+  const readBudgetRows = (scopeId: string, approvedLimitRef?: string): readonly BudgetRow[] =>
+    approvedLimitRef === undefined
+      ? many<BudgetRow>(
+          db.prepare('SELECT * FROM budget_counters WHERE coordination_scope_id = ? ORDER BY budget_key'),
+          scopeId,
+        )
+      : many<BudgetRow>(
+          db.prepare('SELECT * FROM budget_counters WHERE coordination_scope_id = ? AND approved_limit_ref = ? ORDER BY budget_key'),
+          scopeId,
+          approvedLimitRef,
+        );
 
   const readWakeAdmissionRows = (
     scopeId: string,
@@ -3576,6 +3602,107 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       graphId,
       graphVersion,
     );
+
+  const readProjectDetailJsonField = (input: {
+    readonly scopeId: string;
+    readonly source: 'budget' | 'work';
+    readonly sourceId: string;
+    readonly sourceVersion: number;
+    readonly workPackageId?: string;
+    readonly fieldIndex: number;
+    readonly offset: number;
+    readonly maxBytes: number;
+  }): { readonly sourceFound: boolean; readonly objectFound: boolean; readonly field: { readonly key: string; readonly label: string; readonly value: string; readonly offset: number; readonly end: number; readonly byteLength: number } | null; readonly hasNext: boolean } => {
+    if (input.source !== 'budget' && input.source !== 'work') throw new HistoryBoundaryError('项目详情来源无效');
+    const sourceCte = input.source === 'budget'
+      ? `source_json AS (
+          SELECT json_object(
+            'approvedAuthorization', a.authorization_id,
+            'authorizationVersion', a.authorization_version,
+            'approvedManifest', json(a.manifest_json),
+            'consumedBudgets', json(COALESCE((SELECT json_group_array(json_object(
+              'budgetKey', b.budget_key, 'approvedLimitRef', b.approved_limit_ref, 'consumed', b.consumed
+            )) FROM budget_counters b WHERE b.coordination_scope_id = a.coordination_scope_id
+              AND b.approved_limit_ref = a.authorization_id), '[]'))
+          ) AS document, 1 AS object_found
+          FROM execution_authorizations a
+          WHERE a.coordination_scope_id = ? AND a.authorization_id = ? AND a.authorization_version = ?
+        )`
+      : `graph AS (
+          SELECT graph_json, graph_id, graph_version FROM graph_versions
+          WHERE coordination_scope_id = ? AND graph_id = ? AND graph_version = ?
+        ), packages AS (
+          SELECT json_extract(package.value, '$.workPackageId') AS package_id, package.value AS package_json
+          FROM graph, json_each(graph.graph_json, '$.workPackages') AS package
+          WHERE ? IS NULL OR json_extract(package.value, '$.workPackageId') = ?
+        ), source_json AS (
+          SELECT json_patch(json_object('graphId', graph_id, 'graphVersion', graph_version),
+            json_group_object(packages.package_id, json_patch(json(packages.package_json), json_object(
+              'tasks', json(COALESCE((SELECT json_group_array(json_object(
+                'workPackageId', binding.work_package_id, 'identity', CASE WHEN binding.worker_task_id IS NULL THEN 'legacy' ELSE 'issued' END,
+                'role', binding.role, 'workerTaskId', binding.worker_task_id, 'dispatchId', binding.dispatch_id,
+                'attemptId', binding.attempt_id, 'authorizationId', binding.authorization_id,
+                'authorizationVersion', binding.authorization_version, 'workerProfileRef', binding.worker_profile_ref,
+                'specBinding', CASE WHEN binding.spec_binding_json IS NULL THEN NULL ELSE json(binding.spec_binding_json) END,
+                'specificationUnitPath', binding.specification_unit_path, 'orcaTaskId', binding.orca_task_id,
+                'createdAt', binding.created_at
+              )) FROM materialization_bindings binding WHERE binding.coordination_scope_id = ?
+                AND binding.work_package_id = packages.package_id), '[]')),
+              'acceptedResults', json(COALESCE((SELECT json_group_array(json_object(
+                'workerTaskId', settlement.worker_task_id, 'dispatchId', settlement.dispatch_id,
+                'attemptId', settlement.attempt_id, 'role', settlement.role,
+                'contractRevision', settlement.contract_revision, 'orcaResultRef', settlement.orca_result_ref,
+                'acceptedAt', settlement.accepted_at
+              )) FROM delivery_settlements settlement WHERE settlement.coordination_scope_id = ?
+                AND settlement.worker_task_id IN (SELECT binding.worker_task_id FROM materialization_bindings binding
+                  WHERE binding.coordination_scope_id = ? AND binding.work_package_id = packages.package_id
+                    AND binding.worker_task_id IS NOT NULL)), '[]'))
+            )))) AS document,
+            CASE WHEN ? IS NULL THEN 1 ELSE EXISTS(SELECT 1 FROM packages WHERE package_id = ?) END AS object_found
+          FROM graph LEFT JOIN packages ON 1 = 1
+        )`;
+    const sourceParams = input.source === 'budget'
+      ? [input.scopeId, input.sourceId, input.sourceVersion]
+      : [input.scopeId, input.sourceId, input.sourceVersion, input.workPackageId ?? null,
+          input.workPackageId ?? null, input.scopeId, input.scopeId, input.scopeId,
+          input.workPackageId ?? null, input.workPackageId ?? null];
+    const row = one<{
+      readonly fullkey: string; readonly field_type: string;
+      readonly byte_length: number; readonly chunk: Uint8Array; readonly start_byte: Uint8Array | null; readonly has_next: number;
+      readonly source_found: number; readonly object_found: number;
+    }>(db.prepare(`WITH ${sourceCte}, fields AS (
+        SELECT tree.fullkey, tree.type AS field_type, tree.atom AS atom_value,
+          row_number() OVER (ORDER BY tree.id) - 1 AS field_index
+        FROM source_json, json_tree(source_json.document) AS tree
+        WHERE tree.type IN ('text', 'integer', 'real', 'true', 'false', 'null')
+      )
+      SELECT current.fullkey, current.field_type,
+        length(CAST(CASE current.field_type WHEN 'null' THEN '不可用' WHEN 'true' THEN 'true' WHEN 'false' THEN 'false' ELSE current.atom_value END AS BLOB)) AS byte_length,
+        substr(CAST(CASE current.field_type WHEN 'null' THEN '不可用' WHEN 'true' THEN 'true' WHEN 'false' THEN 'false' ELSE current.atom_value END AS BLOB), ?, ?) AS chunk,
+        substr(CAST(CASE current.field_type WHEN 'null' THEN '不可用' WHEN 'true' THEN 'true' WHEN 'false' THEN 'false' ELSE current.atom_value END AS BLOB), ?, 1) AS start_byte,
+        EXISTS(SELECT 1 FROM fields next WHERE next.field_index = current.field_index + 1) AS has_next,
+        (SELECT 1 FROM source_json) AS source_found, (SELECT object_found FROM source_json) AS object_found
+      FROM fields current WHERE current.field_index = ?`),
+      ...sourceParams, input.offset + 1, input.maxBytes + 4, input.offset + 1, input.fieldIndex);
+    const sourceState = one<{ readonly source_found: number; readonly object_found: number }>(db.prepare(
+      `WITH ${sourceCte} SELECT 1 AS source_found, object_found FROM source_json`,
+    ), ...sourceParams);
+    const sourceFound = sourceState !== undefined;
+    const objectFound = sourceState?.object_found === 1;
+    if (row === undefined) return { sourceFound, objectFound, field: null, hasNext: false };
+    const startByte = row.start_byte === null ? undefined : Buffer.from(row.start_byte)[0];
+    if (input.offset > row.byte_length || (input.offset < row.byte_length && startByte !== undefined && (startByte & 0xc0) === 0x80)) {
+      throw new HistoryBoundaryError('项目详情偏移必须落在 UTF-8 边界');
+    }
+    const key = row.fullkey.replace(/^\$/, '').replace(/\[(\d+)\]/g, '.$1')
+      .replace(/"((?:[^"\\]|\\.)*)"/g, (_match, key: string) => JSON.parse(`"${key}"`) as string)
+      .replace(/^\./, '');
+    const bytes = Buffer.from(row.chunk);
+    let end = Math.min(input.maxBytes, bytes.length);
+    while (end > 0 && end < bytes.length && (bytes[end]! & 0xc0) === 0x80) end -= 1;
+    return { sourceFound, objectFound, field: { key, label: key, value: new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, end)),
+      offset: input.offset, end: input.offset + end, byteLength: row.byte_length }, hasNext: row.has_next === 1 };
+  };
 
   const readGraphGenerationRows = (scopeId: string): readonly GraphGenerationRow[] =>
     many<GraphGenerationRow>(
@@ -3752,21 +3879,33 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
   const readDeliverySettlementRows = (
     scopeId: string,
     dedupeKey: string | undefined,
+    workPackageId?: string,
   ): readonly DeliverySettlementRow[] =>
-    dedupeKey === undefined
+    dedupeKey !== undefined
       ? many<DeliverySettlementRow>(
-          db.prepare(
-            `SELECT * FROM delivery_settlements
-             WHERE coordination_scope_id = ? ORDER BY accepted_at, dedupe_key`,
-          ),
-          scopeId,
-        )
-      : many<DeliverySettlementRow>(
           db.prepare(
             'SELECT * FROM delivery_settlements WHERE coordination_scope_id = ? AND dedupe_key = ?',
           ),
           scopeId,
           dedupeKey,
+        )
+      : workPackageId !== undefined
+        ? many<DeliverySettlementRow>(
+            db.prepare(`SELECT settlement.* FROM delivery_settlements AS settlement
+             WHERE settlement.coordination_scope_id = ? AND settlement.worker_task_id IN (
+               SELECT binding.worker_task_id FROM materialization_bindings AS binding
+               WHERE binding.coordination_scope_id = ? AND binding.work_package_id = ? AND binding.worker_task_id IS NOT NULL
+             ) ORDER BY settlement.accepted_at, settlement.dedupe_key`),
+            scopeId,
+            scopeId,
+            workPackageId,
+          )
+        : many<DeliverySettlementRow>(
+          db.prepare(
+            `SELECT * FROM delivery_settlements
+             WHERE coordination_scope_id = ? ORDER BY accepted_at, dedupe_key`,
+          ),
+          scopeId,
         );
 
   const readDeliveryVerdictRows = (scopeId: string): readonly DeliveryVerdictRow[] =>
@@ -4015,6 +4154,42 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           }
           return { kind: 'scope', scope: scope.value };
         }
+        case 'project-detail-session': {
+          if (!input.coordinatorSessionId) {
+            return { kind: 'rejected', code: 'invalid_query', message: 'coordinatorSessionId 必须是非空字符串' };
+          }
+          const sessionRow = readSessionRow(scopeId, input.coordinatorSessionId);
+          if (sessionRow === undefined) {
+            return { kind: 'project-detail-session', registration: null, activeClaim: null, executionLease: null };
+          }
+          const registration = decodeSessionRow(sessionRow);
+          if (!registration.ok) return { kind: 'rejected', code: 'unreadable', message: registration.message };
+          const claimRow = readActiveTicketClaimRow(scopeId, input.coordinatorSessionId);
+          const claim = claimRow === undefined ? ok<TicketClaimRecord | null>(null) : decodeTicketClaimRow(claimRow);
+          if (!claim.ok) return { kind: 'rejected', code: 'unreadable', message: claim.message };
+          const leaseRow = readExecutionLeaseRow(scopeId);
+          const lease = leaseRow === undefined ? ok<LeaseRecord | null>(null) : decodeLeaseRow(leaseRow);
+          if (!lease.ok) return { kind: 'rejected', code: 'unreadable', message: lease.message };
+          return {
+            kind: 'project-detail-session',
+            registration: registration.value,
+            activeClaim: claim.value,
+            executionLease: lease.value,
+          };
+        }
+        case 'project-detail-json-field': {
+          if (!input.sourceId || !Number.isSafeInteger(input.sourceVersion) || input.sourceVersion < 1 ||
+            !Number.isSafeInteger(input.fieldIndex) || input.fieldIndex < 0 || !Number.isSafeInteger(input.offset) ||
+            input.offset < 0 || !Number.isSafeInteger(input.maxBytes) || input.maxBytes < 4 || input.maxBytes > 65_536) {
+            return { kind: 'rejected', code: 'invalid_query', message: '项目详情 JSON 范围无效' };
+          }
+          try {
+            const field = readProjectDetailJsonField({ scopeId, ...input });
+            return { kind: 'project-detail-json-field', ...field };
+          } catch (error) {
+            return { kind: 'rejected', code: error instanceof HistoryBoundaryError ? 'invalid_utf8_offset' : 'unreadable', message: describeError(error) };
+          }
+        }
         case 'snapshot':
         case 'presentation-snapshot': {
           const row = readScopeRow(scopeId);
@@ -4110,7 +4285,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           return { kind: 'intent', intent: intent.value };
         }
         case 'budget-counters':
-          return { kind: 'budget-counters', counters: readBudgetRows(scopeId).map(decodeBudgetRow) };
+          return { kind: 'budget-counters', counters: readBudgetRows(scopeId, input.approvedLimitRef).map(decodeBudgetRow) };
         case 'wake-admissions': {
           const admissions = decodeRows(
             readWakeAdmissionRows(scopeId, input.coordinatorSessionId),
@@ -4204,7 +4379,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         }
         case 'delivery-settlements': {
           const settlements = decodeRows(
-            readDeliverySettlementRows(scopeId, input.dedupeKey),
+            readDeliverySettlementRows(scopeId, input.dedupeKey, input.workPackageId),
             decodeDeliverySettlementRow,
           );
           if (!settlements.ok) {

@@ -237,7 +237,9 @@ Transcript 只显示用户/Agent 消息和折叠 tool 记录；运行事实按�
 
 命令、别名、固定键位和帮助统一由 `src/interfaces/tui/commands.ts` 定义。修改命令搜索、审阅或异步返回时，先读 IC-11/12 的结果引用与页面绑定合同；交接使用本次提案 ID 和所见 record revision，迟到结果只影响原入口，切换 Session 由用户明确选择。
 
-最小全局键位为 `Ctrl+P` 打开 Command Palette、`Ctrl+B` 开合项目面板、`Ctrl+G` 打开 Graph Inspector、`Esc` 逐层返回，方向键与 Enter 用于导航。slash 上方候选先采用、再明确执行；审阅默认返回。Session Picker 和新事件不得自动切换 transcript、抢占 composer 或改变 Scope 级 Graph；M2 不实现自定义键位。Nerd/ASCII 可在选项中即时切换，用户级偏好尚未持久化；缺少 effort/context/验收摘要时明示不可用。
+最小全局键位为 `Ctrl+P` 打开 Command Palette、`Ctrl+B` 开合项目面板、`Ctrl+G` 打开 Graph Inspector、`Esc` 逐层返回，方向键与 Enter 用于导航。slash 上方候选先采用、再明确执行；审阅默认返回。Session Picker 和新事件不得自动切换 transcript、抢占 composer 或改变 Scope 级 Graph；M2 不实现自定义键位。用户级 Nerd/ASCII 与 statusline 偏好由 IC-15 拥有：只在明确输入意图中分区 CAS 保存，环境图标覆盖保持临时，失败保留编辑及未保存选择。render/effect/resize/remount 只读。
+
+第七批 metadata 由应用 `project-presentation.ts` 投影注册身份、选中 Session 的精确模型/Claim、当前 Dispatch Work Package 和绑定批准上限的预算，缺来源不可用。context 只接受 installed integration 对当前完整有效输入与 tools 的精确测量及可信模型窗口，并绑定 Session/configuration/输入版本；消息/tool/压缩/换模型后失效，禁止近似 tokenizer、字符估算或累计 usage 冒充。statusline、Sidebar 与 Inspector 共用当前全图未 retire 包的 Accepted Validator Result 摘要，不从局部窗口或 Task done 猜进度。项目详情只经 IC-11/12 有界端口，每页20项/64KiB，批准后 Manifest 与候选区分，旧对象/版本结果不得替换当前页。
 
 Pause、Resume 和 Cancel 都作用于整个 Coordination Scope：
 

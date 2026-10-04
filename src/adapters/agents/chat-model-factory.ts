@@ -38,9 +38,25 @@ export const MODEL_RESOLUTION_FAILURE_CODES = [
 
 export type ModelResolutionFailureCode = (typeof MODEL_RESOLUTION_FAILURE_CODES)[number];
 
+/** Explicit installed-integration capability; approximate BaseChatModel tokenizers do not qualify. */
+export type ExactContextCapability = {
+  readonly measure: (input: {
+    readonly model: BaseChatModel;
+    readonly messages: readonly unknown[];
+    readonly tools: readonly unknown[];
+    readonly signal?: AbortSignal;
+  }) => Promise<{ readonly used: number; readonly capacity: number } | null>;
+};
+
+function exactContextCapability(value: unknown): ExactContextCapability | null {
+  if (typeof value !== 'object' || value === null || !('measure' in value) || typeof value.measure !== 'function') return null;
+  return value as ExactContextCapability;
+}
+
 /** 一个已解析的 provider 集成：它自己知道如何构造 chat model。 */
 export type ProviderIntegration = {
   readonly integrationRef: string;
+  readonly exactContext?: ExactContextCapability;
   readonly createChatModel: (input: {
     readonly model: string;
     readonly modelOptions: Readonly<Record<string, unknown>>;
@@ -50,7 +66,8 @@ export type ProviderIntegration = {
 export type ProviderIntegrationResolver = (integrationRef: string) => ProviderIntegration | null;
 
 export type ResolveChatModelResult =
-  | { readonly kind: 'resolved'; readonly model: BaseChatModel; readonly configurationRef: string }
+  | { readonly kind: 'resolved'; readonly model: BaseChatModel; readonly configurationRef: string;
+      readonly exactContext: ExactContextCapability | null }
   | {
       readonly kind: 'rejected';
       readonly code: ModelResolutionFailureCode;
@@ -129,7 +146,8 @@ export function resolveChatModel(
       model: configuration.model,
       modelOptions,
     });
-    return { kind: 'resolved', model, configurationRef: configuration.configurationRef };
+    return { kind: 'resolved', model, configurationRef: configuration.configurationRef,
+      exactContext: exactContextCapability(integration.exactContext) };
   } catch {
     return {
       kind: 'rejected',
@@ -163,8 +181,12 @@ export function createModuleIntegrationResolverAsync(options: {
     if (!isConstructable(exported)) {
       return null;
     }
+    const context = exactContextCapability(
+      'companionExactContext' in exported ? exported.companionExactContext : null,
+    );
     return {
       integrationRef,
+      ...(context === null ? {} : { exactContext: context }),
       createChatModel: (input) =>
         // `model` 必须显式并入构造函数字段：集成不会从别处取模型名，漏掉它会静默落到集成自己的
         // 默认模型（OpenAI 集成即 `gpt-3.5-turbo`）上，而调用方以为配置生效了。

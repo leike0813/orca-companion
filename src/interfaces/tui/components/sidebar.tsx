@@ -15,11 +15,13 @@ export function Sidebar(props:SidebarProps) {
   const view=props.viewModel, width=sidebarWidthFor(props.density), height=props.height??32;
   const fit=(s:string)=>truncateToDisplayWidth(s,width);
   const active=view.graph?.nodes.find(n=>n.active);
+  const acceptance=view.projectPresentation?.acceptance;
   const risks=view.blockers.slice(0,2).map(b=>'! '+b.code+': '+b.message);
   if(view.execution.reconciliation.pending) risks.unshift('reconciling · 待对账');
   return <Box width={width+2} height={height} borderStyle="single" borderTop={false} borderBottom={false} borderRight={false} borderColor={tuiColors.border} flexDirection="column" paddingLeft={1} overflow="hidden">
     <Text bold color={tuiColors.accent}>{fit('执行图侧栏'+(view.scope.mode==='execution_coordination'?' · active '+view.execution.activeWorkPackageCount:''))}</Text>
-    <AdaptiveGraph graph={view.graph} selectedId={props.selectedId??null} width={width} height={Math.max(8,height-4-risks.length)} planning={view.scope.mode==='route_planning'} iconMode={props.iconMode??tuiIconMode}/>
+    <Text color={acceptance?tuiColors.success:tuiColors.muted}>{fit(acceptance?`验收 ${acceptance.validatedCount}/${acceptance.totalCount} · G${acceptance.generation} v${acceptance.version}`:'验收摘要不可用')}</Text>
+    <AdaptiveGraph graph={view.graph} selectedId={props.selectedId??null} width={width} height={Math.max(8,height-5-risks.length)} planning={view.scope.mode==='route_planning'} iconMode={props.iconMode??tuiIconMode}/>
     {active?<Text color={tuiColors.accent}>{fit('当前 '+active.shortKey+' · '+active.state+' · '+(active.liveness??'未观察'))}</Text>:null}
     {view.execution.integrationQueue.length?<Text>{fit('集成队列（串行） '+view.execution.integrationQueue.map(n=>n.workPackageId).join(' → '))}</Text>:null}
     {risks.map((s,i)=><Text key={i} color={tuiColors.error}>{fit(s)}</Text>)}

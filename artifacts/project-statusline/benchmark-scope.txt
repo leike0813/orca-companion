@@ -1,0 +1,2 @@
+Current production App and reader; shared bounded-transcript benchmark workload.
+No external model, Orca, tracker or user preferences are used.

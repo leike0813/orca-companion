@@ -19,7 +19,8 @@ import { projectHandoff, projectPlanningHandoff } from '../application/controlle
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { basename, isAbsolute, join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
@@ -51,6 +52,8 @@ import { userQuestionTool } from '../workflow/coordinator/interaction-tools.js';
 import { querySubmission, type SubmissionQuery, type SubmissionStatus } from '../application/coordinator/submission-status.js';
 import type { UiInputStore, UiInputRecord } from '../application/ports/ui-input-store.js';
 import { openUiInputStore } from '../adapters/storage/ui-input-store.js';
+import { createTuiPreferencesStore } from '../adapters/storage/tui-preferences-store.js';
+import type { ExactContextCapability } from '../adapters/agents/chat-model-factory.js';
 import { requestSessionCompaction } from '../application/coordinator/compact-session.js';
 import {
   assertSwitchable,
@@ -89,8 +92,10 @@ import {
   currentContractSettlements,
   deriveExecutionFacts,
   deriveWorkerEntries,
+  isActiveWorkPackageState,
   noExecutionObservations,
   workerStateLiveness,
+  validatorAcceptanceSummary,
   type ExecutionObservationFacts,
   type FinalizerObservationFacts,
   type FinalizerWorkspaceFacts,
@@ -98,6 +103,19 @@ import {
   type WorkerObservation,
   type WorkPackageExecutionState,
 } from '../application/execution/execution-view.js';
+import { readProjectDetailPage, type ProjectDetailField } from '../application/tui/project-details.js';
+import {
+  contextObservationSchema,
+  projectContextObservation,
+  projectDetailQuerySchema,
+  unavailableBudget,
+  type BudgetPresentation,
+  type ProjectDetailQuery,
+  type ProjectPresentation,
+  type ProjectDetailsPort,
+} from '../application/tui/project-presentation.js';
+import { toBindableTools } from '../workflow/coordinator/planning-tools.js';
+import { consumedRecoveryBudget } from '../domain/recovery/recovery-budget.js';
 import {
   activeAuthorization,
   readAcceptedAuthorizationByFingerprint,
@@ -515,6 +533,11 @@ type LiveSession = {
   incarnation: CoordinatorIncarnation;
   configuration: CoordinatorModelConfiguration;
   model: BaseChatModel;
+  exactContext: ExactContextCapability | null;
+  contextObservation: ReturnType<typeof contextObservationSchema.parse> | null;
+  effectiveInputRevision: number;
+  effectiveInputBinding: string | null;
+  boundTools: readonly PlanningToolDefinition[];
   checkpoints: CheckpointStore;
   graph: ReturnType<typeof buildCoordinatorGraph> | null;
   heartbeat: ReturnType<typeof setInterval> | null;
@@ -1090,7 +1113,7 @@ export async function createForegroundPlanningHost(
   const modelFor = async (
     configuration: CoordinatorModelConfiguration,
   ): Promise<
-    | { readonly kind: 'resolved'; readonly model: BaseChatModel }
+    | { readonly kind: 'resolved'; readonly model: BaseChatModel; readonly exactContext: ExactContextCapability | null }
     | { readonly kind: 'failed'; readonly message: string }
   > => {
     const integration = await integrationResolver(configuration.providerIntegration);
@@ -1104,7 +1127,7 @@ export async function createForegroundPlanningHost(
     // 启动）也因此只需要替换一处。
     const resolved = resolveChatModel(configuration, () => integration, credentialStore());
     return resolved.kind === 'resolved'
-      ? { kind: 'resolved', model: resolved.model }
+      ? { kind: 'resolved', model: resolved.model, exactContext: resolved.exactContext }
       : { kind: 'failed', message: resolved.message };
   };
 
@@ -1748,7 +1771,33 @@ export async function createForegroundPlanningHost(
     }
   };
 
-  const buildMessagesFor = (session: LiveSession) => (
+  const refreshEffectiveInputRevision = (
+    session: LiveSession,
+    state: CoordinatorSessionState,
+    tools: readonly ToolSchemaEntry[],
+  ): number => {
+    const tailSequence = session.checkpoints.readHistoryInspection(session.coordinatorSessionId).upperSequence;
+    const material = state.contextMaterial;
+    const binding = JSON.stringify([
+      session.configuration.configurationRef,
+      scopeRecord(session.incarnation.coordinationScopeId)?.revision ?? null,
+      tailSequence,
+      material ?? null,
+      state.lastCompactionOutcome,
+      FOREGROUND_COORDINATOR_INSTRUCTIONS,
+      authoritativeFactsFor(session),
+      tools,
+    ]);
+    if (binding !== session.effectiveInputBinding) {
+      session.effectiveInputBinding = binding;
+      session.effectiveInputRevision++;
+      session.contextObservation = null;
+    }
+    if (session.fencingLost || session.modelAbort?.signal.aborted) session.contextObservation = null;
+    return session.effectiveInputRevision;
+  };
+
+  const buildMessagesFor = (session: LiveSession) => async (
     _state: unknown,
     currentWork: ProjectedActionableWorkItem | null,
   ): Promise<{ readonly messages: readonly unknown[]; readonly note: string }> => {
@@ -1759,7 +1808,7 @@ export async function createForegroundPlanningHost(
         read.kind === 'absent' ? '该 Session 还没有可恢复的会话记录' : `会话记录不可恢复：${read.reason}`,
       );
     }
-    const tools = [...registeredToolsFor(session), ...executionToolsFor(session.coordinatorSessionId), ...sessionToolsFor(session)];
+    const tools = session.boundTools;
     const input = buildBoundedModelInput({
       segments: segmentsFromState(read.state),
       estimate: estimatorInput,
@@ -1778,6 +1827,35 @@ export async function createForegroundPlanningHost(
     }
     if (input.compaction.kind === 'compaction_degraded') {
       throw new Error(`上下文压缩未取得进展：${input.compaction.reason}`);
+    }
+    session.contextObservation = null;
+    if (session.exactContext !== null && !session.modelAbort?.signal.aborted) {
+      const currentState = liveStateOf(session, 'metadata') ?? read.state;
+      refreshEffectiveInputRevision(session, currentState, input.toolSchema);
+      // Every prepared input includes this invocation's current Actionable Work and
+      // compaction result. A fresh revision also fences measurements of another
+      // preparation, even when its durable history and tool registry are unchanged.
+      const revision = ++session.effectiveInputRevision;
+      const configurationRef = session.configuration.configurationRef;
+      const effectiveTools = toBindableTools(tools);
+      const measured = await session.exactContext.measure({
+        model: session.model,
+        messages: input.messages,
+        tools: effectiveTools,
+        ...(session.modelAbort === null ? {} : { signal: session.modelAbort.signal }),
+      }).catch(() => null);
+      const latestState = liveStateOf(session, 'metadata');
+      if (latestState !== null) refreshEffectiveInputRevision(session, latestState, toolSchemaOf(session.boundTools));
+      if (measured !== null && Number.isSafeInteger(measured.used) && measured.used >= 0 &&
+        Number.isSafeInteger(measured.capacity) && measured.capacity > 0 && measured.used <= measured.capacity &&
+        revision === session.effectiveInputRevision && configurationRef === session.configuration.configurationRef &&
+        !session.fencingLost && !session.modelAbort?.signal.aborted) {
+        session.contextObservation = contextObservationSchema.parse({
+          status: 'available', used: measured.used, capacity: measured.capacity,
+          observationId: newId(), coordinatorSessionId: session.coordinatorSessionId,
+          modelConfigurationRef: configurationRef, effectiveInputRevision: revision,
+        });
+      }
     }
     return Promise.resolve({ messages: input.messages, note: input.compaction.kind });
   };
@@ -1832,8 +1910,14 @@ export async function createForegroundPlanningHost(
   };
 
   /** 模式切换后重建工具注册表，保留同一个模型、checkpoint 与 Runtime Incarnation。 */
-  const graphForSession = (session: LiveSession): ReturnType<typeof buildCoordinatorGraph> =>
-    buildCoordinatorGraph({
+  const graphForSession = (session: LiveSession): ReturnType<typeof buildCoordinatorGraph> => {
+    const planningTools = registeredToolsFor(session);
+    const executionTools = executionToolsFor(session.coordinatorSessionId);
+    const sessionTools = sessionToolsFor(session);
+    session.boundTools = [...planningTools, ...executionTools, ...sessionTools];
+    session.contextObservation = null;
+    session.effectiveInputBinding = null;
+    return buildCoordinatorGraph({
       model: session.model,
       checkpointer: session.checkpoints.checkpointer,
       sessionRecords: session.checkpoints,
@@ -1850,11 +1934,12 @@ export async function createForegroundPlanningHost(
       buildMessages: buildMessagesFor(session),
       newStepId: () => `${session.coordinatorSessionId}:step:${newId()}`,
       clock,
-      planningTools: registeredToolsFor(session),
+      planningTools,
       recoveryTools: recoveryToolsFor(session),
-      executionTools: executionToolsFor(session.coordinatorSessionId),
-      sessionTools: sessionToolsFor(session),
+      executionTools,
+      sessionTools,
     });
+  };
 
   // ---------------------------------------------------------------------
   // Live Session 生命周期
@@ -2010,12 +2095,17 @@ export async function createForegroundPlanningHost(
       return { kind: 'failed', code: 'repository_unresolved', message: '无法解析 Git common dir' };
     }
     recoverCutoverCheckpoint(coordinatorSessionId);
+    let exactContext: ExactContextCapability | null = null;
     const started = await startCoordinatorRuntime({
       coordinationScopeId: selectedScopeId,
       coordinatorSessionId,
       runtimeIncarnationId: `${coordinatorSessionId}:${newId()}` as RuntimeIncarnationId,
       configuration,
-      resolveModel: async () => await modelFor(configuration),
+      resolveModel: async () => {
+        const resolved = await modelFor(configuration);
+        if (resolved.kind === 'resolved') exactContext = resolved.exactContext;
+        return resolved;
+      },
       gitCommonDir: commonDirPath,
       coordinationStore: requiredStore(),
       ...(config === null ? {} : { contextReadBytes: config.context.maxReadBytes }),
@@ -2036,6 +2126,11 @@ export async function createForegroundPlanningHost(
       incarnation: started.incarnation,
       configuration,
       model: started.model,
+      exactContext,
+      contextObservation: null,
+      effectiveInputRevision: 0,
+      effectiveInputBinding: null,
+      boundTools: [],
       checkpoints: started.checkpoints,
       graph: null,
       heartbeat: null,
@@ -2288,6 +2383,9 @@ export async function createForegroundPlanningHost(
           message: result.reason,
         };
       default: {
+        session.contextObservation = null;
+        session.effectiveInputBinding = null;
+        session.effectiveInputRevision++;
         publish(session.coordinatorSessionId, {
           kind: 'state-changed',
           coordinationScopeId: session.incarnation.coordinationScopeId,
@@ -2362,6 +2460,9 @@ export async function createForegroundPlanningHost(
     if (result.kind === 'blocked') {
       return rejected('compaction_blocked', result.reason);
     }
+    session.contextObservation = null;
+    session.effectiveInputBinding = null;
+    session.effectiveInputRevision++;
     publish(session.coordinatorSessionId, {
       kind: 'state-changed',
       coordinationScopeId: session.incarnation.coordinationScopeId,
@@ -2389,6 +2490,7 @@ export async function createForegroundPlanningHost(
     const session = ensured.session;
     const state = liveStateOf(session);
     let verifiedModel: BaseChatModel | null = null;
+    let verifiedExactContext: ExactContextCapability | null = null;
     let bindingRevision: number | null = null;
     const result = await switchModelConfiguration({
       coordinatorSessionId: input.coordinatorSessionId,
@@ -2427,6 +2529,7 @@ export async function createForegroundPlanningHost(
           return { kind: 'rejected', message: verification.message };
         }
         verifiedModel = resolved.model;
+        verifiedExactContext = resolved.exactContext;
         return { kind: 'verified' };
       },
       persistConfiguration: (candidate) => {
@@ -2456,6 +2559,10 @@ export async function createForegroundPlanningHost(
       ...session,
       configuration: result.configuration,
       model: verifiedModel,
+      exactContext: verifiedExactContext,
+      contextObservation: null,
+      effectiveInputRevision: session.effectiveInputRevision + 1,
+      effectiveInputBinding: null,
       graph: null,
     };
     replacement.graph = graphForSession(replacement);
@@ -2509,6 +2616,17 @@ export async function createForegroundPlanningHost(
   // 投影（snapshot / transcript）
   // ---------------------------------------------------------------------
 
+  // Only retain the selected presentation's supplementary observations, never source bodies.
+  let projectDetailObservation: {
+    readonly sessionId: string | null;
+    readonly revision: number;
+    readonly recoveries: ControllerSnapshot['recoveries'];
+    readonly finalizer: ControllerSnapshot['finalizer'];
+    readonly frontier: ControllerSnapshot['frontier'];
+    readonly maintenance: ControllerSnapshot['maintenance'];
+    readonly compaction: ControllerSnapshot['compaction'];
+  } | null = null;
+
   const readSnapshot = async (selectedSessionId: string | null): Promise<SnapshotLoad> => {
     if (blocker !== null) {
       return { kind: 'failed', code: blocker.code, message: blocker.message };
@@ -2531,13 +2649,13 @@ export async function createForegroundPlanningHost(
       graphId === null
         ? ({ kind: 'graph-versions', versions: [] } as const)
         : current.query({ kind: 'graph-versions', coordinationScopeId: selectedScopeId, graphId });
-    const authorizations = current.query({ kind: 'authorizations', coordinationScopeId: selectedScopeId });
-    const authorization =
-      authorizations.kind === 'authorizations'
-        ? authorizations.authorizations.find(
-            (entry) => entry.authorizationId === snapshot.snapshot.scope.authorizationId,
-          )
-        : undefined;
+    const scope = snapshot.snapshot.scope;
+    const authorizationRead = scope.authorizationId === null ? null : current.query({
+      kind: 'authorization', coordinationScopeId: selectedScopeId, authorizationId: scope.authorizationId,
+    });
+    const authorization = authorizationRead?.kind === 'authorization' &&
+      authorizationRead.authorization?.authorizationVersion === scope.authorizationVersion
+      ? authorizationRead.authorization : undefined;
     const selectedState =
       selectedSessionId === null
         ? null
@@ -2546,9 +2664,7 @@ export async function createForegroundPlanningHost(
     const currentVersion =
       graphId === null
         ? null
-        : (graphVersions.find((version) => version.version === snapshot.snapshot.scope.graphVersion) ??
-          graphVersions.at(-1) ??
-          null);
+        : (graphVersions.find((version) => version.version === scope.graphVersion) ?? null);
     const generation =
       snapshot.snapshot.graphGenerations.find((entry) => entry.graphId === graphId) ?? null;
     const nodes =
@@ -2568,6 +2684,87 @@ export async function createForegroundPlanningHost(
       authority: authorization?.manifest.permissions ?? null,
       recoveryBudgetLimit: authorization?.manifest.limits.maxRecoveriesPerWorkerAttempt ?? null,
     });
+    const selectedRegistration = snapshot.snapshot.sessions.find(entry => entry.coordinatorSessionId === selectedSessionId);
+    const selectedLive = selectedRegistration === undefined ? undefined : liveSessions.get(selectedRegistration.coordinatorSessionId);
+    const configuration = selectedRegistration === undefined ? null
+      : selectedLive?.configuration ?? sessionConfiguration(selectedRegistration.coordinatorSessionId);
+    if (selectedLive !== undefined && selectedState?.kind === 'recovered') {
+      refreshEffectiveInputRevision(selectedLive, selectedState.state, toolSchemaOf(selectedLive.boundTools));
+    }
+    const claim = snapshot.snapshot.ticketClaims.find(entry => entry.coordinatorSessionId === selectedSessionId && entry.state === 'active');
+    const tracker = claim === undefined ? null : trackerFor();
+    const summary = claim === undefined || tracker?.readIssueSummary === undefined ? null
+      : await tracker.readIssueSummary(claim.ticketRef).catch(() => null);
+    const activeEntries = derived.execution.frontier.filter(entry => isActiveWorkPackageState(entry.state) && entry.attemptId !== null);
+    const active = activeEntries.length === 1 ? activeEntries[0] : undefined;
+    const workPackage = currentVersion?.graph.workPackages.find(entry => entry.workPackageId === active?.workPackageId);
+    const taskBindings = snapshot.snapshot.materializationBindings.filter(entry => entry.identity === 'issued' &&
+      entry.workPackageId === active?.workPackageId && entry.attemptId === active?.attemptId && entry.role === active?.role);
+    const taskBinding = taskBindings.length === 1 ? taskBindings[0] : undefined;
+    const taskAuthorizationRead = taskBinding?.authorizationId == null ? null : current.query({
+      kind: 'authorization', coordinationScopeId: selectedScopeId, authorizationId: taskBinding.authorizationId,
+    });
+    const taskAuthorization = taskAuthorizationRead?.kind === 'authorization' &&
+      taskAuthorizationRead.authorization?.authorizationVersion === taskBinding?.authorizationVersion
+      ? taskAuthorizationRead.authorization : null;
+    const boundAuthorization = authorization !== undefined && currentVersion !== null &&
+      authorization.manifest.graph.graphId === currentVersion.graphId &&
+      authorization.manifest.graph.generation === currentVersion.generation ? authorization : null;
+    const budgetFor = (key: string, subject: string, limit: number, approvedLimitRef: string): BudgetPresentation => {
+      const counter = counters.kind === 'budget-counters' ? counters.counters.find(entry =>
+        entry.budgetKey === key && entry.approvedLimitRef === approvedLimitRef) : undefined;
+      return counter === undefined ? unavailableBudget() : {
+        status: 'available', consumed: counter.consumed, limit, subject, approvedLimitRef,
+      };
+    };
+    const acceptanceAuthorizations = [...new Set(snapshot.snapshot.materializationBindings
+      .filter(entry => entry.role === 'validator').flatMap(entry => entry.authorizationId === null ? [] : [entry.authorizationId]))]
+      .flatMap(authorizationId => {
+        const read = current.query({ kind: 'authorization', coordinationScopeId: selectedScopeId!, authorizationId });
+        return read.kind === 'authorization' && read.authorization !== null ? [read.authorization] : [];
+      });
+    const projectPresentation: ProjectPresentation = {
+      identity: { repository: scope.canonicalWorktreePath !== null && isAbsolute(scope.canonicalWorktreePath)
+        ? basename(scope.canonicalWorktreePath) : null, fullBranchRef: scope.fullBranchRef },
+      session: selectedRegistration === undefined ? null : {
+        id: selectedRegistration.coordinatorSessionId, model: configuration?.model ?? null,
+        provider: configuration?.providerConnection?.providerIntegration ?? configuration?.providerIntegration ?? null,
+        effort: configuration === null ? { status: 'unavailable' }
+          : configuration.effortCapability == null ? { status: 'not_supported' }
+          : configuration.effort == null ? { status: 'not_configured' }
+          : { status: 'configured', value: configuration.effort },
+      },
+      ticket: claim === undefined ? null : { ref: claim.ticketRef.id, title: summary?.kind === 'read' &&
+        summary.issue.ref.kind === claim.ticketRef.kind && summary.issue.ref.id === claim.ticketRef.id
+        ? summary.issue.title : '标题不可用' },
+      activeWorkPackage: taskBinding === undefined || workPackage === undefined ? null
+        : { id: workPackage.workPackageId, title: workPackage.title },
+      context: projectContextObservation(selectedLive?.contextObservation, {
+        coordinatorSessionId: selectedRegistration?.coordinatorSessionId ?? null,
+        modelConfigurationRef: selectedRegistration?.coordinatorModelConfigurationRef ?? null,
+        effectiveInputRevision: selectedLive?.effectiveInputRevision ?? null,
+      }),
+      acceptance: validatorAcceptanceSummary({ snapshot: snapshot.snapshot, graphVersion: currentVersion,
+        graphVersions, authorizations: acceptanceAuthorizations }),
+      budgets: {
+        workPackages: boundAuthorization === null || currentVersion === null ? unavailableBudget() : {
+          status: 'available', consumed: currentVersion.graph.workPackages.length,
+          limit: boundAuthorization.manifest.limits.maxActiveWorkPackages,
+          subject: currentVersion.graphId, approvedLimitRef: boundAuthorization.authorizationId,
+        },
+        implementationAttempts: workPackage === undefined || boundAuthorization === null ? unavailableBudget()
+          : budgetFor(workPackageBudgetKey(workPackage.workPackageId, 'implementationAttempts'), workPackage.workPackageId,
+            workPackage.budget.implementationAttempts, boundAuthorization.authorizationId),
+        recovery: active?.attemptId == null || taskAuthorization === null ||
+          taskAuthorization.manifest.graph.graphId !== currentVersion?.graphId ||
+          taskAuthorization.manifest.graph.generation !== currentVersion?.generation
+          ? unavailableBudget() : {
+            status: 'available', consumed: consumedRecoveryBudget(snapshot.snapshot.recoveries, active.attemptId),
+            limit: taskAuthorization.manifest.limits.maxRecoveriesPerWorkerAttempt,
+            subject: active.attemptId, approvedLimitRef: taskAuthorization.authorizationId,
+          },
+      },
+    };
     const projected: ControllerSnapshot = projectControllerSnapshot({
       snapshot: snapshot.snapshot,
       budgets: counters.kind === 'budget-counters' ? counters.counters : [],
@@ -2594,8 +2791,134 @@ export async function createForegroundPlanningHost(
         selectedState !== null && selectedState.kind === 'recovered'
           ? compactionViewOf(selectedState.state)
           : null,
+      projectPresentation,
     });
+    projectDetailObservation = {
+      sessionId: selectedSessionId, revision: projected.revision,
+      recoveries: projected.recoveries, finalizer: projected.finalizer, frontier: projected.frontier,
+      maintenance: projected.maintenance, compaction: projected.compaction,
+    };
     return { kind: 'snapshot', snapshot: projected };
+  };
+
+  function* detailFields(value: unknown, path = ''): Generator<ProjectDetailField> {
+    if (Array.isArray(value)) {
+      for (let index = 0; index < value.length; index++) yield* detailFields(value[index], `${path}.${index}`);
+    } else if (typeof value === 'object' && value !== null) {
+      for (const [key, child] of Object.entries(value)) yield* detailFields(child, path.length === 0 ? key : `${path}.${key}`);
+    } else yield { key: path, label: path, value: value === null ? '不可用'
+      : typeof value === 'string' ? value : JSON.stringify(value) ?? '不可用' };
+  }
+
+  const projectDetails: ProjectDetailsPort = {
+    read: (request: ProjectDetailQuery) => Promise.resolve().then(() => {
+      const parsed = projectDetailQuerySchema.safeParse(request);
+      const current = requireStore(), scopeId = selectedScopeId;
+      if (!parsed.success || current === null || scopeId === null) return { kind: 'unavailable', reason: '项目详情请求或 Scope 不可用' };
+      const query = parsed.data;
+      const scopeRead = current.query({ kind: 'scope', coordinationScopeId: scopeId });
+      if (scopeRead.kind !== 'scope' || scopeRead.scope === null) return { kind: 'unavailable', reason: '当前 Scope 不可读取' };
+      const scope = scopeRead.scope;
+      if (query.seenRevision !== scope.revision) return { kind: 'stale', currentRevision: scope.revision };
+      const sessionRead = current.query({ kind: 'project-detail-session', coordinationScopeId: scopeId,
+        coordinatorSessionId: query.coordinatorSessionId as CoordinatorSessionId });
+      if (sessionRead.kind !== 'project-detail-session' || sessionRead.registration === null) {
+        return { kind: 'unavailable', reason: 'Session 不属于当前 Scope' };
+      }
+      const observation = projectDetailObservation?.sessionId === query.coordinatorSessionId &&
+        projectDetailObservation.revision === scope.revision ? projectDetailObservation : null;
+      let fields: (start: { readonly index: number; readonly offset: number }) => Iterable<ProjectDetailField>;
+      let readField: ((start: { readonly index: number; readonly offset: number }, maxBytes: number) => import('../application/tui/project-details.js').ProjectDetailFieldRead) | undefined;
+      if (query.objectKey === 'identity') {
+        const registration = sessionRead.registration;
+        const configuration = liveSessions.get(registration.coordinatorSessionId)?.configuration ?? sessionConfiguration(registration.coordinatorSessionId);
+        const identity = {
+          repository: scope.canonicalWorktreePath, fullBranchRef: scope.fullBranchRef,
+          coordinationScopeId: scope.coordinationScopeId, coordinatorSessionId: registration.coordinatorSessionId,
+          configurationRef: registration.coordinatorModelConfigurationRef, model: configuration?.model ?? null,
+          provider: configuration?.providerIntegration ?? null, effort: configuration?.effort ?? null,
+          claim: sessionRead.activeClaim?.ticketRef ?? null,
+          planningCycleId: scope.planningCycleId, mapRevision: scope.mapRevision,
+          executionHolder: sessionRead.executionLease?.coordinatorSessionId ?? null,
+          maintenance: observation?.maintenance ?? null,
+          compaction: observation?.compaction ?? null,
+        };
+        fields = start => {
+          const iterator = detailFields(identity);
+          for (let index = 0; index < start.index; index++) iterator.next();
+          return iterator;
+        };
+      } else if (query.objectKey === 'budget' || query.objectKey.startsWith('approved-authorization:')) {
+        const expectedKey = scope.authorizationId === null ? null : `approved-authorization:${scope.authorizationId}@${scope.authorizationVersion}`;
+        if (query.objectKey !== 'budget' && query.objectKey !== expectedKey) return { kind: 'unavailable', reason: '批准对象已改变；请返回原入口重读' };
+        if (scope.authorizationId === null || scope.authorizationVersion === null) {
+          fields = start => {
+            const iterator = detailFields({ approvedAuthorization: null, authorizationVersion: null });
+            for (let index = 0; index < start.index; index++) iterator.next();
+            return iterator;
+          };
+        } else {
+          readField = (start, maxBytes) => {
+            const result = current.query({ kind: 'project-detail-json-field', coordinationScopeId: scopeId,
+              source: 'budget', sourceId: scope.authorizationId!, sourceVersion: scope.authorizationVersion!,
+              fieldIndex: start.index, offset: start.offset, maxBytes });
+            if (result.kind !== 'project-detail-json-field' || !result.sourceFound || !result.objectFound) {
+              return { field: null, hasNext: false, available: false,
+                unavailableReason: result.kind === 'rejected' ? result.message : '批准授权版本不可用' };
+            }
+            return { field: result.field === null ? null : { ...result.field, sourceOffset: result.field.offset }, hasNext: result.hasNext };
+          };
+          fields = () => [];
+        }
+      } else if (query.objectKey === 'work' || query.objectKey.startsWith('work-package:')) {
+        if (scope.graphId === null || scope.graphVersion === null) return { kind: 'unavailable', reason: '当前执行图不可用' };
+        const packageId = query.objectKey === 'work' ? undefined : query.objectKey.slice('work-package:'.length);
+        if (packageId !== undefined && packageId.length === 0) return { kind: 'unavailable', reason: '工作包身份无效' };
+        if (observation === null) return { kind: 'unavailable', reason: '当前会话的工作观察已失效；请刷新项目后重读' };
+        const source = current.query({ kind: 'project-detail-json-field', coordinationScopeId: scopeId,
+          source: 'work', sourceId: scope.graphId, sourceVersion: scope.graphVersion,
+          ...(packageId === undefined ? {} : { workPackageId: packageId as WorkPackageId }),
+          fieldIndex: 0, offset: 0, maxBytes: 4 });
+        if (source.kind !== 'project-detail-json-field' || !source.sourceFound || !source.objectFound) {
+          return { kind: 'unavailable', reason: '工作图版本或工作包不可用' };
+        }
+        readField = (start, maxBytes) => {
+          const supplement = detailFields({
+            recoveries: observation.recoveries,
+            finalizer: observation.finalizer,
+            frontier: observation.frontier,
+          });
+          let sourceIndex = 0;
+          for (const field of supplement) {
+            if (sourceIndex++ !== start.index) continue;
+            let byteOffset = 0, begin = 0, end = 0;
+            for (const character of field.value) {
+              const size = Buffer.byteLength(character, 'utf8');
+              if (byteOffset < start.offset && byteOffset + size > start.offset) {
+                return { field: null, hasNext: false, available: false };
+              }
+              if (byteOffset < start.offset) { begin += character.length; end = begin; }
+              else if (byteOffset + size - start.offset <= maxBytes) end += character.length;
+              else break;
+              byteOffset += size;
+            }
+            if (byteOffset < start.offset) return { field: null, hasNext: false, available: false };
+            return { field: { ...field, value: field.value.slice(begin, end),
+              sourceOffset: start.offset, byteLength: Buffer.byteLength(field.value, 'utf8') }, hasNext: true };
+          }
+          const result = current.query({ kind: 'project-detail-json-field', coordinationScopeId: scopeId,
+            source: 'work', sourceId: scope.graphId!, sourceVersion: scope.graphVersion!, ...(packageId === undefined ? {} : { workPackageId: packageId as WorkPackageId }),
+            fieldIndex: start.index - sourceIndex, offset: start.offset, maxBytes });
+          if (result.kind !== 'project-detail-json-field' || !result.sourceFound || !result.objectFound) {
+            return { field: null, hasNext: false, available: false,
+              unavailableReason: result.kind === 'rejected' ? result.message : '工作图版本或工作包不可用' };
+          }
+          return { field: result.field === null ? null : { ...result.field, sourceOffset: result.field.offset }, hasNext: result.hasNext };
+        };
+        fields = () => [];
+      } else return { kind: 'unavailable', reason: '项目详情对象不可用' };
+      return readProjectDetailPage({ query, revision: scope.revision, fields, ...(readField === undefined ? {} : { readField }) });
+    }),
   };
 
   const readingStore = (sessionId: string): CheckpointStore => {
@@ -8438,6 +8761,12 @@ export async function createForegroundPlanningHost(
         ? result : { kind: 'rejected', code: 'unreadable', message: '问题查询结果无效' };
     },
     inputStore,
+    projectDetails,
+    preferences: createTuiPreferencesStore({
+      configHome: options.env['XDG_CONFIG_HOME'] && options.env['XDG_CONFIG_HOME'].length > 0
+        ? options.env['XDG_CONFIG_HOME']
+        : join(options.env['HOME'] ?? homedir(), '.config'),
+    }),
     submissionStatus,
     snapshot: async (selectedSessionId) => await readSnapshot(selectedSessionId),
     transcript: (coordinatorSessionId, cursor) => Promise.resolve(readTranscript(coordinatorSessionId, cursor)),

@@ -1,4 +1,5 @@
 import { Box, Text } from 'ink';
+import { useMemo } from 'react';
 import type { TuiViewModel } from '../../../application/tui/view-model.js';
 import type { ControllerRecoveryView, SemanticEvent } from '../../../application/controller-service.js';
 import type { ProjectPanelState } from '../state.js';
@@ -7,6 +8,7 @@ import { truncateToDisplayWidth, wrapByDisplayWidth } from '../render/width.js';
 import { graphDetailRows } from './graph-inspector.js';
 import { finalizerRows } from './finalizer-panel.js';
 import { tuiColors } from '../theme.js';
+import { PROJECT_DETAILS_MAX_ITEMS, PROJECT_DETAILS_MAX_PAGE_BYTES, type ProjectDetailPage } from '../../../application/tui/project-presentation.js';
 
 export function recoveryRows(r:ControllerRecoveryView):readonly string[] {
   return ['recovery '+r.recoveryId+' · '+r.role+' '+r.status,
@@ -46,9 +48,9 @@ export function projectDetail(view: TuiViewModel, events: readonly SemanticEvent
     ...view.blockers.map(b => '阻塞: ' + b.code + ' · ' + b.message),
   ];
   if (key === 'work') return [
-    ...(view.graph?view.graph.nodes.flatMap(n=>[n.title+' · '+n.workPackageId+' ['+n.state+']',...graphDetailRows(n,view.graph!,0),...graphDetailRows(n,view.graph!,1),...graphDetailRows(n,view.graph!,2)]):['当前图不可用']),
-    ...view.execution.recoveries.flatMap(recoveryRows),
-    'Finalizer', ...finalizerRows(view.execution.finalizer),
+    ...(view.graph?view.graph.nodes.slice(0, PROJECT_DETAILS_MAX_ITEMS - 3).map(n=>[n.title+' · '+n.workPackageId+' ['+n.state+']',...graphDetailRows(n,view.graph!,0),...graphDetailRows(n,view.graph!,1),...graphDetailRows(n,view.graph!,2)].join('\n')):['当前图不可用']),
+    view.execution.recoveries.slice(0, PROJECT_DETAILS_MAX_ITEMS).flatMap(recoveryRows).join('\n'),
+    ['Finalizer', ...finalizerRows(view.execution.finalizer)].join('\n'),
     '历史图版本和依据全文读取：不可用',
   ];
   if (key.startsWith('event:')) {
@@ -61,17 +63,47 @@ export function projectDetail(view: TuiViewModel, events: readonly SemanticEvent
     item.questionPreview || '问题正文不可用', 'Enter 在所属会话回答，Esc 保存并返回'] : ['当前对象不可用'];
 }
 
-export function projectDetailViewport(view: TuiViewModel, events: readonly SemanticEvent[], panel: ProjectPanelState, width: number, height: number) {
+function projectDetailLines(view: TuiViewModel, events: readonly SemanticEvent[], panel: ProjectPanelState, inner: number, details?: ProjectDetailPage | null, detailNotice?: string | null, detailObjectKey?: string | null): readonly string[] {
+  if (detailObjectKey !== undefined && detailObjectKey !== null) {
+    return remoteProjectDetailLines(view, panel, inner, details, detailNotice, detailObjectKey);
+  }
+  if (panel.detail === null) return [];
+  let remaining = PROJECT_DETAILS_MAX_PAGE_BYTES;
+  const source = projectDetail(view, events, panel.detail)
+    .slice(0, PROJECT_DETAILS_MAX_ITEMS)
+    .map(line => {
+      const text = line.slice(0, Math.floor(remaining / 3));
+      remaining -= new TextEncoder().encode(text).byteLength;
+      return text;
+    });
+  return source.flatMap(line => wrapByDisplayWidth(line, inner));
+}
+
+function remoteProjectDetailLines(view: TuiViewModel, panel: ProjectPanelState, inner: number, details?: ProjectDetailPage | null, detailNotice?: string | null, detailObjectKey?: string): readonly string[] {
+  const detailsMatch=details?.objectKey===(detailObjectKey??panel.detail)&&details.coordinatorSessionId===view.selectedSessionId&&details.revision===view.scope.revision;
+  const staleBinding = details !== undefined && details !== null && !detailsMatch;
+  const status = detailNotice ?? (staleBinding ? '项目详情已失效；返回后重新读取' : '项目详情读取中或暂不可用；可返回后重试');
+  const source = detailsMatch
+    ? [...details.items.map(item=>`${item.label}: ${item.value}`),...(details.nextCursor?['PgDn 读取后续字段']:[])]
+    : detailNotice ? [] : [status];
+  return panel.detail === null ? [] : [...(detailNotice?[detailNotice]:[]),...source].flatMap(s => wrapByDisplayWidth(s, inner));
+}
+
+export function projectDetailViewport(view: TuiViewModel, events: readonly SemanticEvent[], panel: ProjectPanelState, width: number, height: number, details?: ProjectDetailPage | null, detailNotice?: string | null, detailObjectKey?: string | null, preparedLines?: readonly string[]) {
   const inner = Math.max(1, width - 4), rows = Math.max(1, height - 7);
-  const lines = panel.detail === null ? [] : projectDetail(view, events, panel.detail).flatMap(s => wrapByDisplayWidth(s, inner));
+  const lines = preparedLines ?? projectDetailLines(view, events, panel, inner, details, detailNotice, detailObjectKey);
   const maxScroll = Math.max(0, lines.length - rows);
   return {inner, rows, lines, maxScroll, offset: Math.min(panel.scroll, maxScroll)};
 }
 
-export function ProjectPanel({ view, events, panel, width, height }: {
+export function ProjectPanel({ view, events, panel, width, height, details, detailNotice, detailObjectKey }: {
   readonly view: TuiViewModel; readonly events: readonly SemanticEvent[]; readonly panel: ProjectPanelState; readonly width: number; readonly height: number;
+  readonly details?: ProjectDetailPage | null; readonly detailNotice?: string | null; readonly detailObjectKey?: string | null;
 }) {
-  const {inner,rows,lines,offset} = projectDetailViewport(view,events,panel,width,height);
+  const inner = Math.max(1, width - 4);
+  const remoteLines = useMemo(() => detailObjectKey == null ? null : remoteProjectDetailLines(view, panel, inner, details, detailNotice, detailObjectKey),
+    [detailObjectKey, detailNotice, details, inner, panel.detail, view.scope.revision, view.selectedSessionId]);
+  const {rows,lines,offset} = projectDetailViewport(view,events,panel,width,height,details,detailNotice,detailObjectKey,remoteLines ?? undefined);
   const fit = (s: string) => truncateToDisplayWidth(s, inner);
   const items = projectItems(view, events, panel.tab);
   const selected = items.findIndex(i => i.key === panel.selectedKey);

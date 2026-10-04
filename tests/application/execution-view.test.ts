@@ -35,6 +35,7 @@ import {
   deriveExecutionFacts,
   deriveWorkerEntries,
   noExecutionObservations,
+  validatorAcceptanceSummary,
   type DerivedExecutionFacts,
   type ExecutionNodeFacts,
   type ExecutionObservationFacts,
@@ -53,7 +54,9 @@ import type {
   RevisionHoldRecord,
   SessionSegmentRecord,
 } from '../../src/application/ports/branch-coordination-store.js';
-import type { RoleAuthorities, WorkerRole } from '../../src/domain/planning/execution-authorization.js';
+import type { ExecutionAuthorizationRecord, RoleAuthorities, WorkerRole } from '../../src/domain/planning/execution-authorization.js';
+import type { ExecutionGraph, GraphVersionRecord } from '../../src/domain/planning/execution-graph.js';
+import { executionManifest, executionWorkPackage } from '../support/execution-harness.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SESSION = 'session-1' as CoordinatorSessionId;
@@ -1281,4 +1284,122 @@ test('新接纳契约的角色链全部通过后才前进到集成阶段', () =>
   const entry = frontierEntry(facts, WP_A);
   expect(entry.state).toBe('waiting_integration');
   expect(entry.validation?.state).toBe('validated');
+});
+
+describe('whole-graph Validator acceptance', () => {
+  function graphVersion(version: number, parentVersion: number | null, workPackageIds: readonly string[]): GraphVersionRecord {
+    const graph: ExecutionGraph = {
+      graphId: GRAPH,
+      generation: 1 as GraphGeneration,
+      concurrencyLimit: 1,
+      workPackages: workPackageIds.map((id) => executionWorkPackage(id)),
+    };
+    return {
+      graphId: GRAPH,
+      generation: 1 as GraphGeneration,
+      version: version as GraphVersion,
+      recordKind: parentVersion === null ? 'initial' : 'accepted_revision',
+      parentVersion: parentVersion === null ? null : parentVersion as GraphVersion,
+      patchId: parentVersion === null ? null : `patch-${version}`,
+      mapRevision: 1,
+      planRevision: 1,
+      orcaRunId: 'run-1',
+      graph,
+      recordedAt: version,
+    };
+  }
+
+  function authorization(version: number): ExecutionAuthorizationRecord {
+    return {
+      coordinationScopeId: SCOPE,
+      authorizationId: 'auth-1',
+      authorizationVersion: 1,
+      manifestVersion: 2,
+      fingerprint: 'acceptance-fixture',
+      manifest: executionManifest({
+        graphId: GRAPH,
+        generation: 1 as GraphGeneration,
+        graphVersion: version,
+        coordinationScopeId: SCOPE,
+        planningCycleId: CYCLE,
+      }),
+      approvedAt: 1,
+      approvalRef: 'approval-1',
+    };
+  }
+
+  function binding(workPackageId: string, taskId: string, contractRevision: number, createdAt = 20): MaterializationBindingRecord {
+    const materialized = makeBinding(workPackageId, taskId, 'validator', createdAt);
+    if (materialized.specBinding === null) throw new Error('Validator fixture requires a specification binding');
+    return {
+      ...materialized,
+      dispatchId: `dispatch-${taskId}` as DispatchId,
+      attemptId: `attempt-${taskId}`,
+      specBinding: { ...materialized.specBinding, contractRevision },
+    };
+  }
+
+  function settlement(workPackageId: string, taskId: string, contractRevision: number): DeliverySettlementRecord {
+    return makeSettlement({
+      workPackageId,
+      orcaTaskId: taskId,
+      role: 'validator',
+      dispatchId: `dispatch-${taskId}`,
+      attemptId: `attempt-${taskId}`,
+      contractRevision,
+    });
+  }
+
+  test('counts each currently contracted package once over the current graph denominator', () => {
+    const previous = graphVersion(1, null, ['retired-package', 'package-a', 'package-b']);
+    const current = graphVersion(2, 1, ['package-a', 'package-b']);
+    const bindings = [
+      binding('package-a', 'task-a-old', 1, 5),
+      binding('package-a', 'task-a-current', 2),
+      binding('package-a', 'task-a-retry', 2),
+      binding('package-b', 'task-b-old-contract', 1, 5),
+    ];
+    const acceptanceSnapshot = snapshot({
+      materializationBindings: bindings,
+      deliverySettlements: [
+        settlement('package-a', 'task-a-old', 1),
+        settlement('package-a', 'task-a-current', 2),
+        settlement('package-a', 'task-a-retry', 2),
+        settlement('package-b', 'task-b-old-contract', 1),
+      ],
+      revisionHolds: [
+        makeRevisionHold({ workPackageId: 'package-a', sourceRef: 'revise-a', state: 'released', admittedContractRevision: 2 }),
+        makeRevisionHold({ workPackageId: 'package-b', sourceRef: 'revise-b', state: 'released', admittedContractRevision: 2 }),
+      ],
+    });
+
+    expect(validatorAcceptanceSummary({
+      snapshot: acceptanceSnapshot,
+      graphVersion: current,
+      graphVersions: [previous, current],
+      authorizations: [authorization(1), authorization(2)],
+    })).toEqual({
+      graphId: GRAPH,
+      generation: 1,
+      version: 2,
+      validatedCount: 1,
+      totalCount: 2,
+    });
+  });
+
+  test('excludes results whose authorization belongs to a different graph chain', () => {
+    const current = graphVersion(2, 1, ['package-a']);
+    const replaced = graphVersion(3, null, ['package-a']);
+    const acceptanceSnapshot = snapshot({
+      materializationBindings: [binding('package-a', 'task-a', 1)],
+      deliverySettlements: [settlement('package-a', 'task-a', 1)],
+    });
+
+    expect(validatorAcceptanceSummary({
+      snapshot: acceptanceSnapshot,
+      graphVersion: current,
+      graphVersions: [replaced, current],
+      authorizations: [authorization(3)],
+    })?.validatedCount).toBe(0);
+  });
 });

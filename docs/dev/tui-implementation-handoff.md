@@ -40,7 +40,7 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 
 ### 第二批成果及证据边界
 
-当前基线 HEAD：`8f6d1a7e6765a024191043b97fbded2d4a902207`。第六批 6A 及全部前驱已包含于 HEAD，6A 已归档到 `2026-10-04-complete-tui-command-reviews`；当前工作区为第六批 6B `complete-tui-model-configuration`，13/13任务完成、独立验收PASS，尚未提交或归档。接手先检查 `git status --short` 与当前工件，保留既有 `artifacts/pending-interactions/README.md` 改动，不要覆盖、重置或重复实现。
+当前基线 HEAD：`82f6a77`。第六批 6A/6B 及全部前驱已包含于 HEAD，6B 已归档到 `2026-10-04-complete-tui-model-configuration`，13/13任务完成、独立验收PASS。当前 active change 为第七批 `complete-tui-project-statusline`：12/12实施任务完成，最终检查和[生产证据](../../artifacts/project-statusline/README.md)已记录，[独立gpt-6-luna验收PASS](../../openspec/changes/complete-tui-project-statusline/verification.md)；实现尚未提交或归档。接手先检查 `git status --short` 与当前工件，保留未提交改动，不要覆盖、重置或重复实现。
 
 第二批已提供 grapheme 任意位置编辑、行首尾、多行有界视窗、原生光标；>1000 code points 原子粘贴及 /paste；唯一完整 UiDraft、CAS、提交快照/稳定 submissionId、单活跃提交/generation；真实 ask_user 创建/重放与精确查询；当前 Session 选项/自由回答、Esc 恢复。UI schema v2、Coordination schema 14，问题正文由 Branch Store 拥有。
 
@@ -76,8 +76,8 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 | 第四批 | 已归档9/9：活动关联/参数与结果详情、F3 transcript 搜索、Ctrl+R 普通输入历史；1千/1万/10万记录与1/5MiB完整扫描成本均已记录 |
 | 第五批 | 已归档9/9、正式验收PASS：历史问答卡片、Scope有界待答页、跨Session进入/返回及输入保护；6文件140项独立复验通过，全量与唯一失败修复后合并1514项通过、12项条件跳过；147对画面及性能见独立证据 |
 | 第六批 6A | 9/9、[正式验收PASS](../../openspec/changes/archive/2026-10-04-complete-tui-command-reviews/verification.md)，已包含于 `8f6d1a7`、已归档：同源目录/子页搜索、结构化结果与输入保护、精确交接 ID/revision、五栏授权/三栏交接审阅和显式 Session 模型目录；[生产画面与操作](../../artifacts/command-reviews/README.md)及最终检查见 change 验收记录 |
-| 第六批 6B | 当前 active：13/13、[独立验收PASS](../../openspec/changes/complete-tui-model-configuration/verification.md)；provider/model/effort、不可变 Worker Profiles、用户级 CredentialStore、Manifest2 模型限定重授权、schema16 Task 绑定和实际启动接线完成。[171对生产画面与隔离真实启动](../../artifacts/model-configuration/README.md)；全量及最终受影响复验按文件去重后1653项通过/12项条件跳过，原始全量exit 1及复验口径见验收报告；未提交、未归档 |
-| 第七批 | 当前项目固定框/状态栏层级已实现；后继补可信身份/context/metadata、用户级 custom 配置/恢复/保存失败和共享验收摘要 |
+| 第六批 6B | 13/13、[独立验收PASS](../../openspec/changes/archive/2026-10-04-complete-tui-model-configuration/verification.md)，已包含于 `82f6a77`、已归档；provider/model/effort、不可变 Worker Profiles、用户级 CredentialStore、Manifest2 模型限定重授权、schema16 Task 绑定和实际启动接线完成。[171对生产画面与隔离真实启动](../../artifacts/model-configuration/README.md)；全量及最终受影响复验按文件去重后1653项通过/12项条件跳过，原始全量exit 1及复验口径见验收报告 |
+| 第七批 | 当前 active：[complete-tui-project-statusline](../../openspec/changes/complete-tui-project-statusline/implementation-plan.md)，12/12任务完成，可信身份/context/metadata、有界项目详情、用户级custom/图标保存恢复及共享Validator摘要已实现；最终检查与[生产证据](../../artifacts/project-statusline/README.md)已记录，[独立验收PASS](../../openspec/changes/complete-tui-project-statusline/verification.md)，未提交/归档 |
 | 第八批 | 当前 adaptive/节点卡/准确导航已实现；后继补历史版本/依据有界读取与全链路验收 |
 
 [#53 性能基线](https://github.com/leike0813/orca-companion/issues/53#issuecomment-5945507505)：1000/10000/100000 条记录，输入与已缓存导航 p95≤100ms。3B使用实际 SQLite、生产阅读器与生产 App，每种100次输入/导航采样；1/5 MiB 正文与工具输出同测。冷读取、提交、finish、SDK聚合与RSS另列，限制见证据报告。
@@ -90,4 +90,4 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 
 阶段证据见 [full-map README](../../artifacts/tui-prototype-alignment/full-map/README.md)，修复后的当前证据见 [repair README](../../artifacts/tui-prototype-alignment/repair-20261003/README.md)：用途分组、三类审阅键位、位置提示及固定框/返回另存 108 对画面与同名文本，保留操作序列、18 组拦截观察及实际 cursor。原型素材和历史 verification 保留原范围，旧阶段一对文件的丢失按上面的用户反馈登记。行为测试复用现有用例，不用整屏 snapshot、像素或源码字符串门禁代替对照。
 
-真实配置仍待后继，标准布局不能称 custom 功能完成；第五批跨 Session 待答协议的独立证据见上表。纠偏批 typecheck/lint/build、change/六份主规格严格 OpenSpec、diff 和 TUI 181 项复验通过，两项隔离真实 Orca 条件检查未运行。2026-10-03 正式 [verification](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/verification.md) 结论为 **PASS**：输入分发、用途分组、区域规格与 PTY 入口已修复，限定审计的滚动预算问题复核闭合；已提交并归档。3A 单独验收全部原文分页，不据此宣称 3B 的渲染/缓存或整体性能完成。平台证据限 Ubuntu；本次没有新增 OS 输入法预编辑/候选窗人工证据，Windows 未验证。
+纠偏批只验证标准布局，模型配置由已归档 6B 完成，custom 功能由当前第七批实施；第五批跨 Session 待答协议的独立证据见上表。纠偏批 typecheck/lint/build、change/六份主规格严格 OpenSpec、diff 和 TUI 181 项复验通过，两项隔离真实 Orca 条件检查未运行。2026-10-03 正式 [verification](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/verification.md) 结论为 **PASS**：输入分发、用途分组、区域规格与 PTY 入口已修复，限定审计的滚动预算问题复核闭合；已提交并归档。3A 单独验收全部原文分页，不据此宣称 3B 的渲染/缓存或整体性能完成。平台证据限 Ubuntu；本次没有新增 OS 输入法预编辑/候选窗人工证据，Windows 未验证。

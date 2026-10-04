@@ -711,6 +711,8 @@ export type CoordinationQuery =
   | { readonly kind: 'interaction-body'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId: CoordinatorSessionId; readonly interactionId: InteractionId; readonly part: 'question' | 'answer'; readonly contentRevision: string; readonly offset: number; readonly maxBytes: number }
   | { readonly kind: 'scopes' }
   | { readonly kind: 'scope'; readonly coordinationScopeId: CoordinationScopeId }
+  | { readonly kind: 'project-detail-session'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId: CoordinatorSessionId }
+  | { readonly kind: 'project-detail-json-field'; readonly coordinationScopeId: CoordinationScopeId; readonly source: 'budget' | 'work'; readonly sourceId: string; readonly sourceVersion: number; readonly workPackageId?: WorkPackageId; readonly fieldIndex: number; readonly offset: number; readonly maxBytes: number }
   | { readonly kind: 'snapshot'; readonly coordinationScopeId: CoordinationScopeId }
   | { readonly kind: 'presentation-snapshot'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId?: CoordinatorSessionId }
   | { readonly kind: 'sessions'; readonly coordinationScopeId: CoordinationScopeId }
@@ -721,7 +723,7 @@ export type CoordinationQuery =
       readonly intentState?: IntentState;
     }
   | { readonly kind: 'intent'; readonly coordinationScopeId: CoordinationScopeId; readonly operationId: OperationId }
-  | { readonly kind: 'budget-counters'; readonly coordinationScopeId: CoordinationScopeId }
+  | { readonly kind: 'budget-counters'; readonly coordinationScopeId: CoordinationScopeId; readonly approvedLimitRef?: string }
   | {
       readonly kind: 'wake-admissions';
       readonly coordinationScopeId: CoordinationScopeId;
@@ -766,6 +768,8 @@ export type CoordinationQuery =
       readonly coordinationScopeId: CoordinationScopeId;
       /** 给出去重键时只返回该条；否则返回该 Scope 的全部结算记录。 */
       readonly dedupeKey?: string;
+      /** 项目详情按 Work Package 的物化 WorkerTask 精确投影结算。 */
+      readonly workPackageId?: WorkPackageId;
     }
   | { readonly kind: 'delivery-verdicts'; readonly coordinationScopeId: CoordinationScopeId }
   | {
@@ -828,6 +832,8 @@ export type CoordinationQueryResult =
   | { readonly kind: 'interaction-body'; readonly body: { readonly text: string; readonly offset: number; readonly end: number; readonly byteLength: number } | null }
   | { readonly kind: 'scopes'; readonly scopes: readonly ScopeRecord[] }
   | { readonly kind: 'scope'; readonly scope: ScopeRecord | null }
+  | { readonly kind: 'project-detail-session'; readonly registration: CoordinatorSessionRegistration | null; readonly activeClaim: TicketClaimRecord | null; readonly executionLease: LeaseRecord | null }
+  | { readonly kind: 'project-detail-json-field'; readonly sourceFound: boolean; readonly objectFound: boolean; readonly field: { readonly key: string; readonly label: string; readonly value: string; readonly offset: number; readonly end: number; readonly byteLength: number } | null; readonly hasNext: boolean }
   | { readonly kind: 'snapshot'; readonly snapshot: CoordinationSnapshot }
   | { readonly kind: 'presentation-snapshot'; readonly snapshot: CoordinationPresentationSnapshot }
   | { readonly kind: 'sessions'; readonly sessions: readonly CoordinatorSessionRegistration[] }

@@ -1,0 +1,385 @@
+[
+  {
+    "tuple": "120x40-color-nerd",
+    "sequence": [
+      "Ctrl+G Inspector",
+      "Esc",
+      "Ctrl+P command directory",
+      "Esc",
+      "/op",
+      "Tab adopt /options",
+      "Enter execute",
+      "Esc return"
+    ]
+  },
+  {
+    "tuple": "120x40-color-ascii",
+    "sequence": [
+      "Ctrl+G Inspector",
+      "Esc",
+      "Ctrl+P command directory",
+      "Esc",
+      "/op",
+      "Tab adopt /options",
+      "Enter execute",
+      "Esc return"
+    ]
+  },
+  {
+    "tuple": "120x40-no-color-nerd",
+    "sequence": [
+      "Ctrl+G Inspector",
+      "Esc",
+      "Ctrl+P command directory",
+      "Esc",
+      "/op",
+      "Tab adopt /options",
+      "Enter execute",
+      "Esc return"
+    ]
+  },
+  {
+    "tuple": "120x40-no-color-ascii",
+    "sequence": [
+      "Ctrl+G Inspector",
+      "Esc",
+      "Ctrl+P command directory",
+      "Esc",
+      "/op",
+      "Tab adopt /options",
+      "Enter execute",
+      "Esc return"
+    ]
+  },
+  {
+    "tuple": "80x24-color-nerd",
+    "sequence": [
+      "Ctrl+G Inspector",
+      "Esc",
+      "Ctrl+P command directory",
+      "Esc",
+      "/op",
+      "Tab adopt /options",
+      "Enter execute",
+      "Esc return"
+    ]
+  },
+  {
+    "tuple": "80x24-color-ascii",
+    "sequence": [
+      "Ctrl+G Inspector",
+      "Esc",
+      "Ctrl+P command directory",
+      "Esc",
+      "/op",
+      "Tab adopt /options",
+      "Enter execute",
+      "Esc return"
+    ]
+  },
+  {
+    "tuple": "80x24-no-color-nerd",
+    "sequence": [
+      "Ctrl+G Inspector",
+      "Esc",
+      "Ctrl+P command directory",
+      "Esc",
+      "/op",
+      "Tab adopt /options",
+      "Enter execute",
+      "Esc return"
+    ]
+  },
+  {
+    "tuple": "80x24-no-color-ascii",
+    "sequence": [
+      "Ctrl+G Inspector",
+      "Esc",
+      "Ctrl+P command directory",
+      "Esc",
+      "/op",
+      "Tab adopt /options",
+      "Enter execute",
+      "Esc return"
+    ]
+  },
+  {
+    "tuple": "50x40-color-nerd",
+    "sequence": [
+      "Ctrl+G Inspector",
+      "Esc",
+      "Ctrl+P command directory",
+      "Esc",
+      "/op",
+      "Tab adopt /options",
+      "Enter execute",
+      "Esc return"
+    ]
+  },
+  {
+    "tuple": "50x40-color-ascii",
+    "sequence": [
+      "Ctrl+G Inspector",
+      "Esc",
+      "Ctrl+P command directory",
+      "Esc",
+      "/op",
+      "Tab adopt /options",
+      "Enter execute",
+      "Esc return"
+    ]
+  },
+  {
+    "tuple": "50x40-no-color-nerd",
+    "sequence": [
+      "Ctrl+G Inspector",
+      "Esc",
+      "Ctrl+P command directory",
+      "Esc",
+      "/op",
+      "Tab adopt /options",
+      "Enter execute",
+      "Esc return"
+    ]
+  },
+  {
+    "tuple": "50x40-no-color-ascii",
+    "sequence": [
+      "Ctrl+G Inspector",
+      "Esc",
+      "Ctrl+P command directory",
+      "Esc",
+      "/op",
+      "Tab adopt /options",
+      "Enter execute",
+      "Esc return"
+    ]
+  },
+  {
+    "action": "project-budget-authorization",
+    "page": 1,
+    "key": "Enter"
+  },
+  {
+    "action": "page-down",
+    "detail": "approved authorization",
+    "continuation": "long UTF-8 value"
+  },
+  {
+    "action": "resize",
+    "from": [
+      120,
+      40
+    ],
+    "to": [
+      80,
+      24
+    ],
+    "page": 2
+  },
+  {
+    "action": "resize",
+    "from": [
+      80,
+      24
+    ],
+    "to": [
+      50,
+      40
+    ],
+    "page": 2
+  },
+  {
+    "action": "resize",
+    "from": [
+      50,
+      40
+    ],
+    "to": [
+      120,
+      40
+    ],
+    "page": 2
+  },
+  {
+    "action": "page-down",
+    "detail": "approved authorization",
+    "continuation": "next UTF-8 range"
+  },
+  {
+    "action": "open-command-directory",
+    "command": "statusline"
+  },
+  {
+    "action": "open-statusline-settings"
+  },
+  {
+    "action": "edit-statusline-draft",
+    "field": "contextFormat",
+    "operation": "right-arrow"
+  },
+  {
+    "action": "second-storage-writer",
+    "result": "saved",
+    "revision": 1,
+    "patch": "icons/ascii"
+  },
+  {
+    "action": "explicit-statusline-save",
+    "result": "conflict",
+    "retry": "user Enter required"
+  },
+  {
+    "action": "explicit-statusline-save",
+    "result": "saved",
+    "revision": 2,
+    "retainedContextFormat": "remaining"
+  },
+  {
+    "action": "open-command-directory",
+    "command": "statusline"
+  },
+  {
+    "action": "open-statusline-settings"
+  },
+  {
+    "action": "statusline-save",
+    "result": "fixture port rejected",
+    "size": [
+      120,
+      40
+    ],
+    "terminalState": "editor remains open"
+  },
+  {
+    "action": "open-command-directory",
+    "command": "statusline"
+  },
+  {
+    "action": "open-statusline-settings"
+  },
+  {
+    "action": "statusline-save",
+    "result": "fixture port rejected",
+    "size": [
+      80,
+      24
+    ],
+    "terminalState": "editor remains open"
+  },
+  {
+    "action": "open-command-directory",
+    "command": "statusline"
+  },
+  {
+    "action": "open-statusline-settings"
+  },
+  {
+    "action": "statusline-save",
+    "result": "fixture port rejected",
+    "size": [
+      50,
+      40
+    ],
+    "terminalState": "editor remains open"
+  },
+  {
+    "action": "save-icons-ascii",
+    "result": "saved",
+    "revision": 1,
+    "then": "Esc to workspace"
+  },
+  {
+    "action": "restart",
+    "environmentIconOverride": null,
+    "restoredIcon": "ascii"
+  },
+  {
+    "action": "save-icons-ascii",
+    "result": "rejected by fixture port",
+    "retry": "reselect and press Enter"
+  },
+  {
+    "action": "retry-icon-save",
+    "result": "saved",
+    "revision": 1
+  },
+  {
+    "action": "open-command-directory",
+    "command": "statusline"
+  },
+  {
+    "action": "open-statusline-settings"
+  },
+  {
+    "action": "save-statusline-with-transient-icon-override",
+    "environmentIcon": "ascii",
+    "persistedIcon": "nerd",
+    "revision": 1
+  },
+  {
+    "action": "restart-after-statusline-only-save",
+    "environmentIconOverride": null,
+    "restoredIcon": "nerd"
+  },
+  {
+    "action": "open-command-directory",
+    "query": "answer"
+  },
+  {
+    "action": "filter-command-directory",
+    "query": "answer"
+  },
+  {
+    "action": "execute-command",
+    "query": "answer"
+  },
+  {
+    "action": "open-answer-command",
+    "result": "current bound interaction panel shown",
+    "size": [
+      120,
+      40
+    ]
+  },
+  {
+    "action": "open-command-directory",
+    "query": "answer"
+  },
+  {
+    "action": "filter-command-directory",
+    "query": "answer"
+  },
+  {
+    "action": "execute-command",
+    "query": "answer"
+  },
+  {
+    "action": "open-answer-command",
+    "result": "current bound interaction panel shown",
+    "size": [
+      80,
+      24
+    ]
+  },
+  {
+    "action": "open-command-directory",
+    "query": "answer"
+  },
+  {
+    "action": "filter-command-directory",
+    "query": "answer"
+  },
+  {
+    "action": "execute-command",
+    "query": "answer"
+  },
+  {
+    "action": "open-answer-command",
+    "result": "current bound interaction panel shown",
+    "size": [
+      50,
+      40
+    ]
+  }
+]

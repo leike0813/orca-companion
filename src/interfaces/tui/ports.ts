@@ -27,6 +27,8 @@ import type {
   SaveModelSettingsInput,
   SaveModelSettingsResult,
 } from '../../application/configuration/model-settings.js';
+import type { TuiPreferencesPort } from '../../application/configuration/tui-preferences.js';
+import type { ProjectDetailsPort } from '../../application/tui/project-presentation.js';
 
 export type { ModelSettingsSnapshot, SaveModelSettingsInput, SaveModelSettingsResult };
 
@@ -92,6 +94,8 @@ export type TuiPorts = {
    * 可选：未装配的宿主按「角色模型配置未接通」显示不可用，界面不伪造候选或保存入口。
    */
   readonly modelSettings?: ModelSettingsPort;
+  readonly preferences?: TuiPreferencesPort;
+  readonly projectDetails?: ProjectDetailsPort;
 };
 
 export type TuiQuestionQuery =

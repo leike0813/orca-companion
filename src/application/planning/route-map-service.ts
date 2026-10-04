@@ -49,6 +49,17 @@ export type TrackerIssue = {
   readonly assignees: readonly string[];
 };
 
+export type TrackerIssueSummary = {
+  readonly ref: EntityRef<string>;
+  readonly title: string;
+};
+
+export type TrackerIssueSummaryOutcome =
+  | { readonly kind: 'read'; readonly issue: TrackerIssueSummary }
+  | { readonly kind: 'not_found' }
+  | { readonly kind: 'unavailable'; readonly message: string }
+  | { readonly kind: 'unknown'; readonly reason: string };
+
 /**
  * 读取结果必须能区分「确实不存在」与「不能证明读到了」：前者允许调用方继续判断，后者只允许
  * 阻塞或对账。`unavailable` 表示没有取得任何 tracker 回应，`unknown` 表示回应不可判定。
@@ -67,6 +78,8 @@ export type TrackerWriteOutcome =
 /** tracker 只能通过这个接缝访问；Companion 不接受任意 tracker 命令或凭据。 */
 export interface IssueTrackerGateway {
   readIssue(ref: EntityRef<string>): Promise<TrackerReadOutcome>;
+  /** Body-free lookup for compact project metadata; adapters may omit it when unsupported. */
+  readIssueSummary?(ref: EntityRef<string>): Promise<TrackerIssueSummaryOutcome>;
   updateIssueBody(input: { readonly ref: EntityRef<string>; readonly body: string }): Promise<TrackerWriteOutcome>;
   assignIssue(input: {
     readonly ref: EntityRef<string>;

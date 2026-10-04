@@ -5,6 +5,7 @@ import {
   assignIssue,
   createGhTracker,
   readIssue,
+  readIssueSummary,
   updateIssueBody,
   type GhTrackerOptions,
 } from '../../src/adapters/tracker/gh-tracker.js';
@@ -89,6 +90,18 @@ test('readIssue 解析 gh 的 JSON，把 OPEN 映射成 open 并沿用传入的 
     expect(outcome.issue.body).toBe('正文');
     expect(outcome.issue.assignees).toEqual(['alice', 'bob']);
   }
+});
+
+test('readIssueSummary 只查询元数据字段并返回不含正文的摘要', async () => {
+  const { runner, calls } = recordingRunner([
+    completed(JSON.stringify({ number: 42, title: '紧凑摘要', body: '不得读取的完整正文' })),
+  ]);
+
+  const outcome = await readIssueSummary(trackerOptions(runner), TICKET);
+
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.args).toEqual(['issue', 'view', '42', '--json', 'number,title']);
+  expect(outcome).toEqual({ kind: 'read', issue: { ref: TICKET, title: '紧凑摘要' } });
 });
 
 test('readIssue 把 CLOSED 映射成 closed', async () => {

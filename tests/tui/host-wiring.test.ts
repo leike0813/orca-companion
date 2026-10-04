@@ -12,7 +12,7 @@ import { chooseCommand } from './harness.js';
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -28,7 +28,10 @@ import type {
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
+  GraphGeneration,
+  PlanningCycleId,
   RuntimeIncarnationId,
+  WorkPackageId,
 } from '../../src/application/dto/identity.js';
 import type { DoctorProbe } from '../../src/bootstrap/doctor.js';
 import type { TuiPorts } from '../../src/interfaces/tui/ports.js';
@@ -38,7 +41,15 @@ import { openCoordinationStore, type CoordinationStore } from '../../src/adapter
 import { MIGRATIONS, SCHEMA_VERSION_KEY } from '../../src/adapters/storage/schema.js';
 import { CapableChatModel } from '../support/fake-chat-model.js';
 import { JsonCredentialStore } from '../../src/adapters/storage/credential-store.js';
+import { DEFAULT_TUI_PREFERENCES } from '../../src/application/configuration/tui-preferences.js';
+import { PROJECT_DETAILS_MAX_ITEMS, PROJECT_DETAILS_MAX_PAGE_BYTES } from '../../src/application/tui/project-presentation.js';
+import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
 import { loadProjectConfig } from '../../src/bootstrap/project-config.js';
+import { graphIdFor } from '../../src/application/planning/graph-generation.js';
+import { recordInitialGraph } from '../../src/application/planning/graph-history.js';
+import { DEFAULT_EXECUTION_LIMITS, budgetFromLimits } from '../../src/domain/planning/budget-policy.js';
+import type { ExecutionGraph } from '../../src/domain/planning/execution-graph.js';
+import { executionManifest } from '../support/execution-harness.js';
 import { dedupeRoleCandidates } from '../../src/interfaces/tui/components/model-picker.js';
 import { frameText, renderTui, settle, type RenderedTui } from './harness.js';
 
@@ -64,6 +75,7 @@ type Harness = {
   readonly directory: string;
   readonly host: Host;
   readonly requests: { generations: number };
+  readonly summaryReads: { readonly kind: string; readonly id: string }[];
   readonly dispose: () => void;
 };
 
@@ -141,7 +153,7 @@ function fakeProbe(): DoctorProbe {
   };
 }
 
-function fakeTracker(): IssueTrackerGateway {
+function fakeTracker(summaryReads: { readonly kind: string; readonly id: string }[] = []): IssueTrackerGateway {
   const issue: TrackerIssue = {
     ref: { kind: 'route-map', id: '7' },
     title: 'Route Map',
@@ -151,6 +163,10 @@ function fakeTracker(): IssueTrackerGateway {
   };
   return {
     readIssue: (): Promise<TrackerReadOutcome> => Promise.resolve({ kind: 'read', issue }),
+    readIssueSummary: ref => {
+      summaryReads.push(ref);
+      return Promise.resolve({ kind: 'read', issue: { ref, title: 'Route Map summary' } });
+    },
     updateIssueBody: (): Promise<TrackerWriteOutcome> => Promise.resolve({ kind: 'accepted' }),
     assignIssue: (): Promise<TrackerWriteOutcome> => Promise.resolve({ kind: 'accepted' }),
   };
@@ -161,6 +177,7 @@ async function startHost(
   requests: { generations: number } = { generations: 0 },
   directory = mkdtempSync(join(tmpdir(), 'orca-tui-wiring-')),
 ): Promise<Harness> {
+  const summaryReads: { readonly kind: string; readonly id: string }[] = [];
   const host = await createForegroundPlanningHost({
     repositoryPath: repository,
     env: { ...process.env, XDG_CONFIG_HOME: join(directory, 'config') },
@@ -172,7 +189,7 @@ async function startHost(
     heartbeatIntervalMs: 10,
     leaseTtlMs: 600_000,
     orcaProbe: fakeProbe(),
-    trackerFactory: fakeTracker,
+    trackerFactory: () => fakeTracker(summaryReads),
     loadIntegration: () =>
       Promise.resolve({
         CapableChatModel: class extends CapableChatModel {
@@ -189,6 +206,7 @@ async function startHost(
     directory,
     host,
     requests,
+    summaryReads,
     dispose: () => {
       if (!disposed) {
         disposed = true;
@@ -223,6 +241,7 @@ async function registerSession(
   repository: string,
   scopeId: CoordinationScopeId,
   coordinatorSessionId: CoordinatorSessionId,
+  coordinatorModelConfigurationRef = 'planning-default',
 ): Promise<void> {
   const store = await openStore(repository);
   try {
@@ -238,7 +257,7 @@ async function registerSession(
         fencingGeneration: 0,
       },
       coordinatorSessionId,
-      coordinatorModelConfigurationRef: 'planning-default',
+      coordinatorModelConfigurationRef,
       lifecycleState: 'registered',
     });
     if (registered.kind !== 'committed') {
@@ -388,6 +407,219 @@ test('向导创建后按当前完整 ref 与 canonical worktree 恢复', async (
   await pressKey(instance, '\r');
   expect(frameText(instance)).toContain(proposal.coordinationScopeId);
 });
+
+test('host metadata读取注册Session的配置与精确Claim摘要，不读取票据正文', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'orca-tui-project-metadata-'));
+  const repository = initializeRepository(directory);
+  const harness = await startHost(repository, { generations: 0 }, directory);
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  const scopeId = proposal.coordinationScopeId as CoordinationScopeId;
+  const sessionId = proposal.coordinatorSessionId as CoordinatorSessionId;
+  const otherSession = 'session-spare-config' as CoordinatorSessionId;
+  await registerSession(repository, scopeId, otherSession, 'planning-spare');
+
+  const store = await openStore(repository);
+  try {
+    const scope = store.query({ kind: 'scope', coordinationScopeId: scopeId });
+    if (scope.kind !== 'scope' || scope.scope === null) throw new Error('Scope 应可读');
+    const lease = acquireRuntimeLease(store, {
+      coordinationScopeId: scopeId,
+      coordinatorSessionId: sessionId,
+      runtimeIncarnationId: `${sessionId}#metadata-test` as RuntimeIncarnationId,
+      fencingGeneration: 0,
+    });
+    if (lease.kind !== 'acquired') throw new Error(`Runtime Lease 未取得：${JSON.stringify(lease)}`);
+    const writer = {
+      coordinatorSessionId: sessionId,
+      runtimeIncarnationId: `${sessionId}#metadata-test` as RuntimeIncarnationId,
+      fencingGeneration: lease.lease.fencingGeneration,
+    };
+    const claimed = store.transact({
+      kind: 'record-ticket-claim',
+      coordinationScopeId: scopeId,
+      expectedRevision: lease.revision,
+      writer,
+      ticketRef: { kind: 'decision-ticket', id: '42' },
+    });
+    if (claimed.kind !== 'committed') throw new Error(`Claim 未写入：${JSON.stringify(claimed)}`);
+  } finally {
+    store.close();
+  }
+
+  const selected = await harness.host.ports.snapshot(sessionId);
+  expect(selected.kind === 'snapshot' ? selected.snapshot.projectPresentation : null).toMatchObject({
+    session: { id: sessionId, model: 'fake-coordinator' },
+    ticket: { ref: '42', title: 'Route Map summary' },
+  });
+  expect(harness.summaryReads).toEqual([{ kind: 'decision-ticket', id: '42' }]);
+
+  const other = await harness.host.ports.snapshot(otherSession);
+  expect(other.kind === 'snapshot' ? other.snapshot.projectPresentation?.session : null)
+    .toMatchObject({ id: otherSession, model: 'fake-coordinator-spare' });
+}, 30_000);
+
+test('host projectDetails绑定Scope、Session和所见revision，并连续读取完整UTF-8详情与批准Manifest', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'orca-tui-project-details-'));
+  const repository = initializeRepository(directory);
+  const harness = await startHost(repository, { generations: 0 }, directory);
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  const scopeId = proposal.coordinationScopeId as CoordinationScopeId;
+  const sessionId = proposal.coordinatorSessionId as CoordinatorSessionId;
+  const otherSession = 'session-details-other' as CoordinatorSessionId;
+  await registerSession(repository, scopeId, otherSession, 'planning-spare');
+  const port = harness.host.ports.projectDetails;
+  if (port === undefined) throw new Error('projectDetails 端口缺失');
+  const detailsPort = port;
+
+  const store = await openStore(repository);
+  let detailsRevision = 0;
+  const graphId = graphIdFor(scopeId, 1 as GraphGeneration);
+  const generation = 1 as GraphGeneration;
+  const packages = Array.from({ length: 12 }, (_, index) => ({
+    workPackageId: `detail-wp-${String(index)}` as WorkPackageId,
+    title: index === 0 ? '界🌊'.repeat(24_000) : `Work package ${String(index)}`,
+    dependsOn: [],
+    scopeEnvelope: { include: ['src'], exclude: [] },
+    budget: budgetFromLimits(DEFAULT_EXECUTION_LIMITS),
+  }));
+  const graph: ExecutionGraph = { graphId, generation, concurrencyLimit: 1, workPackages: packages };
+  try {
+    const lease = acquireRuntimeLease(store, {
+      coordinationScopeId: scopeId,
+      coordinatorSessionId: sessionId,
+      runtimeIncarnationId: `${sessionId}#details-test` as RuntimeIncarnationId,
+      fencingGeneration: 0,
+    });
+    if (lease.kind !== 'acquired') throw new Error(`Runtime Lease 未取得：${JSON.stringify(lease)}`);
+    const writer = {
+      coordinatorSessionId: sessionId,
+      runtimeIncarnationId: `${sessionId}#details-test` as RuntimeIncarnationId,
+      fencingGeneration: lease.lease.fencingGeneration,
+    };
+    const recordedGraph = recordInitialGraph({
+      store,
+      coordinationScopeId: scopeId,
+      writer,
+      graph,
+      mapRevision: 1,
+      planRevision: 1,
+      orcaRunId: 'project-details-run',
+    });
+    if (recordedGraph.kind !== 'recorded') throw new Error(`GraphVersion 未写入：${JSON.stringify(recordedGraph)}`);
+    const currentScope = store.query({ kind: 'scope', coordinationScopeId: scopeId });
+    if (currentScope.kind !== 'scope' || currentScope.scope === null) throw new Error('Scope 应可读');
+    const approvedRisks = ['批准风险：甲🌊'.repeat(18_000)];
+    const manifest = {
+      ...executionManifest({
+        graphId,
+        generation,
+        coordinationScopeId: scopeId,
+        planningCycleId: proposal.planningCycleId as PlanningCycleId,
+      }),
+      acceptedRisks: approvedRisks,
+    };
+    const approved = store.transact({
+      kind: 'record-authorization',
+      coordinationScopeId: scopeId,
+      expectedRevision: currentScope.scope.revision,
+      writer,
+      authorizationId: 'approved-project-details',
+      authorizationVersion: 1,
+      manifestVersion: 2,
+      fingerprint: 'approved-project-details-fingerprint',
+      approvalRef: 'approved-project-details-review',
+      manifest,
+    });
+    expect(approved.kind).toBe('committed');
+    const latestScope = store.query({ kind: 'scope', coordinationScopeId: scopeId });
+    if (latestScope.kind !== 'scope' || latestScope.scope === null) throw new Error('Scope 应可读');
+    detailsRevision = latestScope.scope.revision;
+  } finally {
+    store.close();
+  }
+
+  expect((await harness.host.ports.snapshot(otherSession)).kind).toBe('snapshot');
+  const otherDetails = await detailsPort.read({ objectKey: 'work', coordinatorSessionId: otherSession, seenRevision: detailsRevision, after: null });
+  expect(otherDetails, JSON.stringify(otherDetails)).toMatchObject({ kind: 'page', page: { objectKey: 'work', coordinatorSessionId: otherSession, revision: detailsRevision } });
+  expect(await detailsPort.read({ objectKey: 'work', coordinatorSessionId: 'session-details-unknown', seenRevision: detailsRevision, after: null }))
+    .toMatchObject({ kind: 'unavailable' });
+  expect(await detailsPort.read({ objectKey: 'work', coordinatorSessionId: sessionId, seenRevision: detailsRevision - 1, after: null }))
+    .toMatchObject({ kind: 'stale', currentRevision: detailsRevision });
+
+  async function readAll(objectKey: string): Promise<readonly { readonly key: string; readonly value: string; readonly offset: number; readonly end: number; readonly byteLength: number }[]> {
+    const items: { key: string; value: string; offset: number; end: number; byteLength: number }[] = [];
+    let after: string | null = null;
+    do {
+      const result = await detailsPort.read({ objectKey, coordinatorSessionId: sessionId, seenRevision: detailsRevision, after });
+      if (result.kind !== 'page') throw new Error(`详情页读取失败：${JSON.stringify(result)}`);
+      expect(result.page).toMatchObject({ objectKey, coordinatorSessionId: sessionId, revision: detailsRevision });
+      expect(result.page.items.length).toBeLessThanOrEqual(PROJECT_DETAILS_MAX_ITEMS);
+      const encoder = new TextEncoder();
+      const byteCount = result.page.items.reduce((sum, item) =>
+        sum + encoder.encode(item.key).length + encoder.encode(item.label).length + encoder.encode(item.value).length, 0);
+      expect(byteCount).toBeLessThanOrEqual(PROJECT_DETAILS_MAX_PAGE_BYTES);
+      items.push(...result.page.items);
+      after = result.page.nextCursor;
+    } while (after !== null);
+    return items;
+  }
+
+  const selectedSnapshot = await harness.host.ports.snapshot(sessionId);
+  expect(selectedSnapshot.kind).toBe('snapshot');
+  const workItems = await readAll('work');
+  if (selectedSnapshot.kind !== 'snapshot') throw new Error('项目快照应可读');
+  expect(workItems.find(item => item.key === 'finalizer.readOnlyProfile')?.value)
+    .toBe(selectedSnapshot.snapshot.finalizer.readOnlyProfile);
+  expect(workItems.find(item => item.key === 'finalizer.gate.ready')?.value)
+    .toBe(String(selectedSnapshot.snapshot.finalizer.gate.ready));
+  expect(workItems.length).toBeGreaterThan(PROJECT_DETAILS_MAX_ITEMS);
+  const titleParts = workItems.filter(item => item.key === 'detail-wp-0.title');
+  expect(titleParts.length).toBeGreaterThan(1);
+  let expectedOffset = 0;
+  for (const item of titleParts) {
+    expect(item.offset).toBe(expectedOffset);
+    expectedOffset = item.end;
+  }
+  expect(titleParts.map(item => item.value).join('')).toBe('界🌊'.repeat(24_000));
+
+  const approvedKey = 'approved-authorization:approved-project-details@1';
+  const manifestItems = await readAll(approvedKey);
+  expect(manifestItems.find(item => item.key === 'approvedManifest.baselineHead')?.value).toBe('head-1');
+  const riskParts = manifestItems.filter(item => item.key === 'approvedManifest.acceptedRisks.0');
+  expect(riskParts.length).toBeGreaterThan(1);
+  expect(riskParts.map(item => item.value).join('')).toBe('批准风险：甲🌊'.repeat(18_000));
+  expect(await detailsPort.read({ objectKey: 'approved-authorization:candidate@1', coordinatorSessionId: sessionId,
+    seenRevision: detailsRevision, after: null })).toMatchObject({ kind: 'unavailable' });
+}, 30_000);
+
+test('用户偏好load只读，显式分区save在同一临时XDG目录跨host重启恢复', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'orca-tui-preferences-wiring-'));
+  const repository = initializeRepository(directory);
+  const configFile = join(directory, 'config', 'orca-companion', 'tui-preferences.json');
+  const first = await startHost(repository, { generations: 0 }, directory);
+  const preferences = first.host.ports.preferences;
+  if (preferences === undefined) throw new Error('preferences 端口缺失');
+
+  expect(await preferences.load()).toMatchObject({ kind: 'loaded', preferences: DEFAULT_TUI_PREFERENCES, writable: true });
+  expect(existsSync(configFile)).toBe(false);
+  expect(await preferences.save({ expectedRevision: 0, patch: { kind: 'icons', iconMode: 'ascii' } }))
+    .toMatchObject({ kind: 'saved', preferences: { revision: 1, iconMode: 'ascii' } });
+  expect(await preferences.save({ expectedRevision: 1, patch: { kind: 'statusline', statusline: {
+    ...DEFAULT_TUI_PREFERENCES.statusline, fields: ['graph', 'ticket'],
+  } } })).toMatchObject({ kind: 'saved', preferences: { revision: 2, iconMode: 'ascii', statusline: { fields: ['graph', 'ticket'] } } });
+  first.dispose();
+
+  const restarted = await startHost(repository, { generations: 0 }, directory);
+  const restored = restarted.host.ports.preferences;
+  if (restored === undefined) throw new Error('restarted preferences 端口缺失');
+  expect(await restored.load()).toMatchObject({
+    kind: 'loaded',
+    writable: true,
+    preferences: { revision: 2, iconMode: 'ascii', statusline: { fields: ['graph', 'ticket'] } },
+  });
+}, 30_000);
 
 test('链接 worktree 被拒绝恢复，并把身份不匹配的原因显示出来', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-tui-wiring-linked-'));

@@ -9,6 +9,7 @@ import { Box, Text } from 'ink';
 
 import { displayWidth, truncateToDisplayWidth } from '../render/width.js';
 import { tuiColors } from '../theme.js';
+import type { ProjectPresentation } from '../../../application/tui/project-presentation.js';
 
 export type TopBarProps = {
   readonly coordinationScopeId: string;
@@ -29,6 +30,7 @@ export type TopBarProps = {
   readonly sessionId?: string | null;
   readonly pendingCount?: number;
   readonly holder?: string | null;
+  readonly presentation?: ProjectPresentation;
 };
 
 /**
@@ -36,7 +38,17 @@ export type TopBarProps = {
  */
 export function topBarSegments(props: TopBarProps): readonly string[] {
   const fixed=[props.mode==='route_planning'?'规划':'执行',props.controlState,...(props.reconciling?['待对账']:[]),'待答'+(props.pendingCount??0)].join(' · ');
-  const identity=truncateToDisplayWidth(props.sessionId??'未选择会话',Math.max(1,props.availableWidth-displayWidth(fixed)-3));
+  const identityWidth = Math.max(1, props.availableWidth - displayWidth(fixed) - 3);
+  const separatorWidth = displayWidth(' · ');
+  const identityValues = [props.presentation?.identity.repository ?? '仓库不可用',
+    props.presentation?.identity.fullBranchRef?.replace(/^refs\/heads\//u, '') ?? '分支不可用',
+    props.sessionId ?? '未选择会话'];
+  const available = Math.max(3, identityWidth - separatorWidth * 2);
+  const sessionWidth = Math.min(displayWidth(identityValues[2]!), Math.max(1, Math.floor(available / 3)));
+  const repositoryWidth = Math.min(displayWidth(identityValues[0]!), Math.max(1, Math.floor((available - sessionWidth) / 2)));
+  const branchWidth = Math.max(1, available - sessionWidth - repositoryWidth);
+  const identity = identityValues.map((value, index) => truncateToDisplayWidth(value,
+    [repositoryWidth, branchWidth, sessionWidth][index]!, '…')).join(' · ');
   const segments = [
     identity,
     props.mode === 'route_planning' ? '规划' : '执行',

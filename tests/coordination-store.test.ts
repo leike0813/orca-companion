@@ -158,6 +158,40 @@ test('创建 Scope 从缺失状态推进到 revision 1', () => {
   }
 });
 
+test('项目详情的 Session 查询只返回精确注册、该 Session 的 active Claim 与当前执行 Lease', () => {
+  createScope();
+  activateSession();
+  expect(store.transact({ kind: 'register-session', coordinationScopeId: SCOPE, expectedRevision: revisionOf(),
+    writer: writer(SESSION_A), coordinatorSessionId: SESSION_B,
+    coordinatorModelConfigurationRef: 'profile-session-b', lifecycleState: 'registered' }).kind).toBe('committed');
+  const secondLease = store.transact({ kind: 'acquire-runtime-lease', coordinationScopeId: SCOPE,
+    expectedRevision: revisionOf(), writer: writer(SESSION_B, 0), ttlMs: 30_000 });
+  expect(secondLease.kind).toBe('committed');
+  for (const [session, ticket] of [[SESSION_A, 'ticket-a'], [SESSION_B, 'ticket-b']] as const) {
+    expect(submit(expectedRevision => ({ kind: 'record-ticket-claim', coordinationScopeId: SCOPE,
+      expectedRevision, writer: writer(session), ticketRef: { kind: 'decision-ticket', id: ticket } })).kind).toBe('committed');
+  }
+
+  expect(store.query({ kind: 'project-detail-session', coordinationScopeId: SCOPE, coordinatorSessionId: SESSION_A }))
+    .toMatchObject({ kind: 'project-detail-session', registration: { coordinatorSessionId: SESSION_A },
+      activeClaim: { coordinatorSessionId: SESSION_A, ticketRef: { id: 'ticket-a' } },
+      executionLease: null });
+  expect(store.query({ kind: 'project-detail-session', coordinationScopeId: SCOPE, coordinatorSessionId: 'unknown' as CoordinatorSessionId }))
+    .toMatchObject({ kind: 'project-detail-session', registration: null, activeClaim: null, executionLease: null });
+});
+
+test('预算读取可按批准引用筛选，不把其他授权主体的计数带入详情', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+  for (const [budgetKey, approvedLimitRef] of [['implementation-attempts:wp-a', 'auth-a'], ['recovery:wp-b', 'auth-b']] as const) {
+    expect(submit(expectedRevision => ({ kind: 'consume-budget', coordinationScopeId: SCOPE, expectedRevision,
+      writer: writer(SESSION_A), budgetKey, approvedLimitRef, amount: 1 })).kind).toBe('committed');
+  }
+  expect(store.query({ kind: 'budget-counters', coordinationScopeId: SCOPE, approvedLimitRef: 'auth-a' }))
+    .toMatchObject({ kind: 'budget-counters', counters: [{ budgetKey: 'implementation-attempts:wp-a', approvedLimitRef: 'auth-a', consumed: 1 }] });
+});
+
 test('真实问题写后回读、原操作重放与回答，Scope 摘要不复制正文', () => {
   createScope(); activateSession();
   const input = { store, coordinationScopeId: SCOPE, writer: writer(), operationId: 'ask-1' as OperationId,
@@ -926,6 +960,37 @@ test('Delivery 结算记录只保存去重键与结果引用，重放不产生�
     orcaResultRef: 'orca-task-1#def456',
   }));
   expect(nextGeneration.kind).toBe('committed');
+});
+
+test('项目详情结算查询按指定 Work Package 的物化 WorkerTask 收窄', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+  for (const [workPackageId, workerTaskId, suffix] of [
+    ['wp-detail-a', 'worker-task-a', 'a'], ['wp-detail-b', 'worker-task-b', 'b'],
+  ] as const) {
+    const dispatchId = `dispatch-${suffix}` as DispatchId;
+    expect(submit(expectedRevision => ({ kind: 'record-materialization-binding', coordinationScopeId: SCOPE,
+      expectedRevision, writer: writer(SESSION_A), workPackageId: workPackageId as WorkPackageId,
+      role: 'implementation', workerTaskId: workerTaskId as WorkerTaskId, dispatchId,
+      attemptId: `attempt-${suffix}`, worktreeId: `worktree-${suffix}`, specBinding: SPEC_BINDING,
+      specificationUnitPath: null, orcaTaskId: `orca-task-${suffix}`, launchId: `launch-${suffix}`,
+      creationOperationId: `materialize-${suffix}` as OperationId, ...AUTHORIZATION_PIN })).kind).toBe('committed');
+    expect(submit(expectedRevision => ({ kind: 'record-delivery-settlement', coordinationScopeId: SCOPE,
+      expectedRevision, writer: writer(SESSION_A), dedupeKey: `delivery-${suffix}`, deliveryId: `delivery-${suffix}`,
+      runId: 'run-1', consumerGeneration: 1, workerTaskId: workerTaskId as WorkerTaskId,
+      dispatchId, attemptId: `attempt-${suffix}`, role: 'implementation',
+      contractRevision: 1, orcaResultRef: `result-${suffix}` })).kind).toBe('committed');
+  }
+
+  expect(store.query({ kind: 'delivery-settlements', coordinationScopeId: SCOPE,
+    workPackageId: 'wp-detail-a' as WorkPackageId })).toMatchObject({
+    kind: 'delivery-settlements', settlements: [{ workerTaskId: 'worker-task-a', orcaResultRef: 'result-a' }],
+  });
+  expect(store.query({ kind: 'materialization-bindings', coordinationScopeId: SCOPE,
+    workPackageId: 'wp-detail-a' as WorkPackageId })).toMatchObject({
+    kind: 'materialization-bindings', bindings: [{ workPackageId: 'wp-detail-a', workerTaskId: 'worker-task-a' }],
+  });
 });
 
 test('Delivery Verdict 追加记录并保持确定顺序', () => {

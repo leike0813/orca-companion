@@ -74,6 +74,7 @@ import type {
 } from '../../src/application/ports/branch-coordination-store.js';
 import type { ExecutionBackend } from '../../src/application/ports/execution-backend.js';
 import type { GraphVersionRecord } from '../../src/domain/planning/execution-graph.js';
+import type { ProjectPresentation } from '../../src/application/tui/project-presentation.js';
 
 const SCOPE = 'scope-controller' as CoordinationScopeId;
 const OTHER_SCOPE = 'scope-controller-new' as CoordinationScopeId;
@@ -251,7 +252,10 @@ function readScopeRevision(): Revision {
   return scope.scope.revision;
 }
 
-function snapshotOf(coordinationScopeId: CoordinationScopeId): ControllerSnapshot {
+function snapshotOf(
+  coordinationScopeId: CoordinationScopeId,
+  projectPresentation?: ProjectPresentation,
+): ControllerSnapshot {
   const result = store.query({ kind: 'snapshot', coordinationScopeId });
   if (result.kind !== 'snapshot') {
     throw new Error('无法读取 snapshot');
@@ -279,8 +283,28 @@ function snapshotOf(coordinationScopeId: CoordinationScopeId): ControllerSnapsho
     graphVersions: [],
     authorizationGraphRef: null,
     compaction: null,
+    ...(projectPresentation === undefined ? {} : { projectPresentation }),
   });
 }
+
+test('ControllerSnapshot carries the application-owned project presentation unchanged', () => {
+  const presentation: ProjectPresentation = {
+    identity: { repository: '/workspace/repo', fullBranchRef: 'refs/heads/main' },
+    session: {
+      id: SESSION,
+      model: 'model-a',
+      provider: 'provider-a',
+      effort: { status: 'configured', value: 'high' },
+    },
+    ticket: null,
+    activeWorkPackage: null,
+    context: { status: 'unavailable' },
+    acceptance: null,
+    budgets: { workPackages: null, implementationAttempts: null, recovery: null },
+  };
+
+  expect(snapshotOf(SCOPE, presentation).projectPresentation).toBe(presentation);
+});
 
 /**
  * 组装 façade。

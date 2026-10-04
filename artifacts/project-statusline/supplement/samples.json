@@ -1,0 +1,1525 @@
+[
+  {
+    "name": "graph-inspector",
+    "state": "open",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "graph-inspector-open-120x40-color-nerd.png",
+    "text": "graph-inspector-open-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "command-directory",
+    "state": "open",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "command-directory-open-120x40-color-nerd.png",
+    "text": "command-directory-open-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "before-adopt",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "slash-candidates-before-adopt-120x40-color-nerd.png",
+    "text": "slash-candidates-before-adopt-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "adopted",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "slash-candidates-adopted-120x40-color-nerd.png",
+    "text": "slash-candidates-adopted-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "executed-options",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "slash-candidates-executed-options-120x40-color-nerd.png",
+    "text": "slash-candidates-executed-options-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "returned",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "slash-candidates-returned-120x40-color-nerd.png",
+    "text": "slash-candidates-returned-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph-inspector",
+    "state": "open",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "graph-inspector-open-120x40-color-ascii.png",
+    "text": "graph-inspector-open-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "command-directory",
+    "state": "open",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "command-directory-open-120x40-color-ascii.png",
+    "text": "command-directory-open-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "before-adopt",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "slash-candidates-before-adopt-120x40-color-ascii.png",
+    "text": "slash-candidates-before-adopt-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "adopted",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "slash-candidates-adopted-120x40-color-ascii.png",
+    "text": "slash-candidates-adopted-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "executed-options",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "slash-candidates-executed-options-120x40-color-ascii.png",
+    "text": "slash-candidates-executed-options-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "returned",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "slash-candidates-returned-120x40-color-ascii.png",
+    "text": "slash-candidates-returned-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph-inspector",
+    "state": "open",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "graph-inspector-open-120x40-no-color-nerd.png",
+    "text": "graph-inspector-open-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "command-directory",
+    "state": "open",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "command-directory-open-120x40-no-color-nerd.png",
+    "text": "command-directory-open-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "before-adopt",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "slash-candidates-before-adopt-120x40-no-color-nerd.png",
+    "text": "slash-candidates-before-adopt-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "adopted",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "slash-candidates-adopted-120x40-no-color-nerd.png",
+    "text": "slash-candidates-adopted-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "executed-options",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "slash-candidates-executed-options-120x40-no-color-nerd.png",
+    "text": "slash-candidates-executed-options-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "returned",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "slash-candidates-returned-120x40-no-color-nerd.png",
+    "text": "slash-candidates-returned-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph-inspector",
+    "state": "open",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "graph-inspector-open-120x40-no-color-ascii.png",
+    "text": "graph-inspector-open-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "command-directory",
+    "state": "open",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "command-directory-open-120x40-no-color-ascii.png",
+    "text": "command-directory-open-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "before-adopt",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "slash-candidates-before-adopt-120x40-no-color-ascii.png",
+    "text": "slash-candidates-before-adopt-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "adopted",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "slash-candidates-adopted-120x40-no-color-ascii.png",
+    "text": "slash-candidates-adopted-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "executed-options",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "slash-candidates-executed-options-120x40-no-color-ascii.png",
+    "text": "slash-candidates-executed-options-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "returned",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "slash-candidates-returned-120x40-no-color-ascii.png",
+    "text": "slash-candidates-returned-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph-inspector",
+    "state": "open",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "graph-inspector-open-80x24-color-nerd.png",
+    "text": "graph-inspector-open-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "command-directory",
+    "state": "open",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "command-directory-open-80x24-color-nerd.png",
+    "text": "command-directory-open-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "before-adopt",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "slash-candidates-before-adopt-80x24-color-nerd.png",
+    "text": "slash-candidates-before-adopt-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "adopted",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "slash-candidates-adopted-80x24-color-nerd.png",
+    "text": "slash-candidates-adopted-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "executed-options",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "slash-candidates-executed-options-80x24-color-nerd.png",
+    "text": "slash-candidates-executed-options-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "returned",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "slash-candidates-returned-80x24-color-nerd.png",
+    "text": "slash-candidates-returned-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph-inspector",
+    "state": "open",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "graph-inspector-open-80x24-color-ascii.png",
+    "text": "graph-inspector-open-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "command-directory",
+    "state": "open",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "command-directory-open-80x24-color-ascii.png",
+    "text": "command-directory-open-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "before-adopt",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "slash-candidates-before-adopt-80x24-color-ascii.png",
+    "text": "slash-candidates-before-adopt-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "adopted",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "slash-candidates-adopted-80x24-color-ascii.png",
+    "text": "slash-candidates-adopted-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "executed-options",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "slash-candidates-executed-options-80x24-color-ascii.png",
+    "text": "slash-candidates-executed-options-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "returned",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "slash-candidates-returned-80x24-color-ascii.png",
+    "text": "slash-candidates-returned-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph-inspector",
+    "state": "open",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "graph-inspector-open-80x24-no-color-nerd.png",
+    "text": "graph-inspector-open-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "command-directory",
+    "state": "open",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "command-directory-open-80x24-no-color-nerd.png",
+    "text": "command-directory-open-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "before-adopt",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "slash-candidates-before-adopt-80x24-no-color-nerd.png",
+    "text": "slash-candidates-before-adopt-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "adopted",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "slash-candidates-adopted-80x24-no-color-nerd.png",
+    "text": "slash-candidates-adopted-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "executed-options",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "slash-candidates-executed-options-80x24-no-color-nerd.png",
+    "text": "slash-candidates-executed-options-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "returned",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "slash-candidates-returned-80x24-no-color-nerd.png",
+    "text": "slash-candidates-returned-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph-inspector",
+    "state": "open",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "graph-inspector-open-80x24-no-color-ascii.png",
+    "text": "graph-inspector-open-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "command-directory",
+    "state": "open",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "command-directory-open-80x24-no-color-ascii.png",
+    "text": "command-directory-open-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "before-adopt",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "slash-candidates-before-adopt-80x24-no-color-ascii.png",
+    "text": "slash-candidates-before-adopt-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "adopted",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "slash-candidates-adopted-80x24-no-color-ascii.png",
+    "text": "slash-candidates-adopted-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "executed-options",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "slash-candidates-executed-options-80x24-no-color-ascii.png",
+    "text": "slash-candidates-executed-options-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "returned",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "slash-candidates-returned-80x24-no-color-ascii.png",
+    "text": "slash-candidates-returned-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "graph-inspector",
+    "state": "open",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "graph-inspector-open-50x40-color-nerd.png",
+    "text": "graph-inspector-open-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "command-directory",
+    "state": "open",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "command-directory-open-50x40-color-nerd.png",
+    "text": "command-directory-open-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "before-adopt",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "slash-candidates-before-adopt-50x40-color-nerd.png",
+    "text": "slash-candidates-before-adopt-50x40-color-nerd.txt",
+    "cursor": [
+      5,
+      36
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "adopted",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "slash-candidates-adopted-50x40-color-nerd.png",
+    "text": "slash-candidates-adopted-50x40-color-nerd.txt",
+    "cursor": [
+      10,
+      36
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "executed-options",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "slash-candidates-executed-options-50x40-color-nerd.png",
+    "text": "slash-candidates-executed-options-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "returned",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "slash-candidates-returned-50x40-color-nerd.png",
+    "text": "slash-candidates-returned-50x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "graph-inspector",
+    "state": "open",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "graph-inspector-open-50x40-color-ascii.png",
+    "text": "graph-inspector-open-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "command-directory",
+    "state": "open",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "command-directory-open-50x40-color-ascii.png",
+    "text": "command-directory-open-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "before-adopt",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "slash-candidates-before-adopt-50x40-color-ascii.png",
+    "text": "slash-candidates-before-adopt-50x40-color-ascii.txt",
+    "cursor": [
+      5,
+      36
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "adopted",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "slash-candidates-adopted-50x40-color-ascii.png",
+    "text": "slash-candidates-adopted-50x40-color-ascii.txt",
+    "cursor": [
+      10,
+      36
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "executed-options",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "slash-candidates-executed-options-50x40-color-ascii.png",
+    "text": "slash-candidates-executed-options-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "returned",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "slash-candidates-returned-50x40-color-ascii.png",
+    "text": "slash-candidates-returned-50x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "graph-inspector",
+    "state": "open",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "graph-inspector-open-50x40-no-color-nerd.png",
+    "text": "graph-inspector-open-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "command-directory",
+    "state": "open",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "command-directory-open-50x40-no-color-nerd.png",
+    "text": "command-directory-open-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "before-adopt",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "slash-candidates-before-adopt-50x40-no-color-nerd.png",
+    "text": "slash-candidates-before-adopt-50x40-no-color-nerd.txt",
+    "cursor": [
+      5,
+      36
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "adopted",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "slash-candidates-adopted-50x40-no-color-nerd.png",
+    "text": "slash-candidates-adopted-50x40-no-color-nerd.txt",
+    "cursor": [
+      10,
+      36
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "executed-options",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "slash-candidates-executed-options-50x40-no-color-nerd.png",
+    "text": "slash-candidates-executed-options-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "returned",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "slash-candidates-returned-50x40-no-color-nerd.png",
+    "text": "slash-candidates-returned-50x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "graph-inspector",
+    "state": "open",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "graph-inspector-open-50x40-no-color-ascii.png",
+    "text": "graph-inspector-open-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "command-directory",
+    "state": "open",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "command-directory-open-50x40-no-color-ascii.png",
+    "text": "command-directory-open-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "before-adopt",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "slash-candidates-before-adopt-50x40-no-color-ascii.png",
+    "text": "slash-candidates-before-adopt-50x40-no-color-ascii.txt",
+    "cursor": [
+      5,
+      36
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "adopted",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "slash-candidates-adopted-50x40-no-color-ascii.png",
+    "text": "slash-candidates-adopted-50x40-no-color-ascii.txt",
+    "cursor": [
+      10,
+      36
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "executed-options",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "slash-candidates-executed-options-50x40-no-color-ascii.png",
+    "text": "slash-candidates-executed-options-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "slash-candidates",
+    "state": "returned",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "slash-candidates-returned-50x40-no-color-ascii.png",
+    "text": "slash-candidates-returned-50x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "approved-authorization",
+    "state": "page-1",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "approved-authorization-page-1-120x40-color-nerd.png",
+    "text": "approved-authorization-page-1-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "approved-authorization",
+    "state": "utf8-page-2",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "approved-authorization-utf8-page-2-120x40-color-nerd.png",
+    "text": "approved-authorization-utf8-page-2-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "approved-authorization",
+    "state": "utf8-resize-from-120",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "approved-authorization-utf8-resize-from-120-80x24-color-nerd.png",
+    "text": "approved-authorization-utf8-resize-from-120-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "approved-authorization",
+    "state": "utf8-resize-from-80",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "approved-authorization-utf8-resize-from-80-50x40-color-nerd.png",
+    "text": "approved-authorization-utf8-resize-from-80-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "approved-authorization",
+    "state": "utf8-resize-from-50",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "approved-authorization-utf8-resize-from-50-120x40-color-nerd.png",
+    "text": "approved-authorization-utf8-resize-from-50-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "approved-authorization",
+    "state": "utf8-page-3",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "approved-authorization-utf8-page-3-120x40-color-nerd.png",
+    "text": "approved-authorization-utf8-page-3-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "preferences-cas",
+    "state": "draft-before-conflict",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "preferences-cas-draft-before-conflict-120x40-color-nerd.png",
+    "text": "preferences-cas-draft-before-conflict-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "preferences-cas",
+    "state": "conflict-draft-retained",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "preferences-cas-conflict-draft-retained-120x40-color-nerd.png",
+    "text": "preferences-cas-conflict-draft-retained-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "preferences-cas",
+    "state": "explicit-retry-return",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "preferences-cas-explicit-retry-return-120x40-color-nerd.png",
+    "text": "preferences-cas-explicit-retry-return-120x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "statusline-save-failed",
+    "state": "draft-retained",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "statusline-save-failed-draft-retained-120x40-color-nerd.png",
+    "text": "statusline-save-failed-draft-retained-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "statusline-save-failed",
+    "state": "draft-retained",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "statusline-save-failed-draft-retained-80x24-no-color-nerd.png",
+    "text": "statusline-save-failed-draft-retained-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "statusline-save-failed",
+    "state": "draft-retained",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "statusline-save-failed-draft-retained-50x40-color-ascii.png",
+    "text": "statusline-save-failed-draft-retained-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "icon-preference",
+    "state": "saved-workspace",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "icon-preference-saved-workspace-120x40-color-ascii.png",
+    "text": "icon-preference-saved-workspace-120x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "icon-preference",
+    "state": "restart-no-env-override",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "icon-preference-restart-no-env-override-120x40-color-ascii.png",
+    "text": "icon-preference-restart-no-env-override-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "icon-save-failed",
+    "state": "options-unsaved",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "icon-save-failed-options-unsaved-50x40-color-nerd.png",
+    "text": "icon-save-failed-options-unsaved-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "icon-save-failed",
+    "state": "workspace-notice",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "icon-save-failed-workspace-notice-50x40-color-nerd.png",
+    "text": "icon-save-failed-workspace-notice-50x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "icon-save-failed",
+    "state": "explicit-retry",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "icon-save-failed-explicit-retry-50x40-color-ascii.png",
+    "text": "icon-save-failed-explicit-retry-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "statusline-env-icon-override",
+    "state": "draft",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "statusline-env-icon-override-draft-80x24-no-color-ascii.png",
+    "text": "statusline-env-icon-override-draft-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "statusline-env-icon-override",
+    "state": "saved-workspace",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "statusline-env-icon-override-saved-workspace-80x24-no-color-ascii.png",
+    "text": "statusline-env-icon-override-saved-workspace-80x24-no-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "statusline-env-icon-override",
+    "state": "restart-no-env-override",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "statusline-env-icon-override-restart-no-env-override-80x24-no-color-nerd.png",
+    "text": "statusline-env-icon-override-restart-no-env-override-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "answer-composer-bound",
+    "state": "interaction-answer-panel",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "answer-composer-bound-interaction-answer-panel-120x40-color-nerd.png",
+    "text": "answer-composer-bound-interaction-answer-panel-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "interaction": "current pending question and choices visible"
+  },
+  {
+    "name": "answer-composer-bound",
+    "state": "interaction-answer-panel",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "answer-composer-bound-interaction-answer-panel-80x24-color-nerd.png",
+    "text": "answer-composer-bound-interaction-answer-panel-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ],
+    "interaction": "current pending question and choices visible"
+  },
+  {
+    "name": "answer-composer-bound",
+    "state": "interaction-answer-panel",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "answer-composer-bound-interaction-answer-panel-50x40-color-nerd.png",
+    "text": "answer-composer-bound-interaction-answer-panel-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ],
+    "interaction": "current pending question and choices visible"
+  }
+]

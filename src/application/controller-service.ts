@@ -80,6 +80,7 @@ import type {
 import type { ExecutionHandoffReviewFacts } from './handoff/execution-handoff.js';
 import type { HandoffReviewFacts } from './planning/planning-handoff.js';
 import type { SubmissionQuery, SubmissionStatus } from './coordinator/submission-status.js';
+import type { ProjectPresentation } from './tui/project-presentation.js';
 
 /* -------------------------------------------------------------------------- */
 /* 查询：只读快照与 transcript                                                 */
@@ -355,6 +356,8 @@ export type ControllerSnapshot = {
   readonly compaction: ControllerCompactionView | null;
   /** Route Planning Handoff 提案；界面据此展示 Review 与 cutover 入口。 */
   readonly planningHandoffs: readonly ControllerPlanningHandoffView[];
+  /** Trusted statusline/project facts; omitted when the host cannot prove them. */
+  readonly projectPresentation?: ProjectPresentation;
 };
 
 export type ControllerTranscriptMessage = {
@@ -882,6 +885,7 @@ export type ControllerSnapshotFacts = {
   readonly authorizationGraphRef: { readonly graphId: string; readonly graphVersion: number } | null;
   /** Runtime 观察到的最近一次压缩结论（IC-11 Extend）；从未观察到时为 `null`。 */
   readonly compaction: ControllerCompactionView | null;
+  readonly projectPresentation?: ProjectPresentation;
 };
 
 function projectInteraction(interaction: Omit<PendingInteractionRecord, 'answerText'> & { questionPreview?: string; answerPreview?: string }): ControllerInteractionView {
@@ -1167,6 +1171,7 @@ export function projectControllerSnapshot(facts: ControllerSnapshotFacts): Contr
     graphTopologies: facts.graphVersions.map((version) => projectGraphTopology(version, facts)),
     compaction: facts.compaction,
     planningHandoffs: facts.snapshot.planningHandoffs.map(projectPlanningHandoff),
+    ...(facts.projectPresentation === undefined ? {} : { projectPresentation: facts.projectPresentation }),
   };
 }
 

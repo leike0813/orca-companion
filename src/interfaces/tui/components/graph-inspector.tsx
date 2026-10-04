@@ -56,7 +56,7 @@ export function AdaptiveGraph({ graph, selectedId, width, height, planning, insp
   const detailBudget=Math.max(1,cardHeight-8);
   const offset=Math.min(scroll,Math.max(0,details.length-detailBudget));
   return <Box flexDirection="column" height={height} overflow="hidden">
-    <Text color={tuiColors.accent}>{fit(graph===null?'图不可用':planning?'候选图 G'+graph.generation+'·v'+graph.graphVersion+' · '+graph.nodes.length+' 节点':'执行图 · 验收进度不可用')}</Text>
+    <Text color={tuiColors.accent}>{fit(graph===null?'图不可用':(planning?'候选图':'执行图')+' G'+graph.generation+'·v'+graph.graphVersion+' · '+graph.nodes.length+' 节点')}</Text>
     <Text dimColor>{fit(detail?'完整记录 · ↑↓滚动':'纵向 '+(canvas.fullWidth>width?'图外 ←'+canvas.startX+' →'+(canvas.fullWidth-width-canvas.startX)+' · ':'')+(canvas.fullHeight>canvas.cells.length?'图外 ↑'+canvas.start+' ↓'+Math.max(0,canvas.fullHeight-canvas.start-canvas.cells.length):'全图可见'))}</Text>
     {detail?null:canvas.cells.map((line,y)=><Text key={y}>{line.map((c,x)=><Text key={x} color={c.color}>{c.spinning?<NodeSpinner mode={iconMode}/>:c.glyph??lineChars[c.mask]}</Text>)}</Text>)}
     <Box flexGrow={1}/>
@@ -74,9 +74,11 @@ export function AdaptiveGraph({ graph, selectedId, width, height, planning, insp
 export function GraphInspector(props: GraphInspectorProps) {
   const mode=props.iconMode??tuiIconMode;
   const width=Math.max(1,props.availableWidth-4);
+  const acceptance=props.view?.projectPresentation?.acceptance;
   return <Box width={props.availableWidth} height={Math.max(8,(props.rows??24)-4)} flexDirection="column" borderStyle="round" borderColor={tuiColors.border} paddingX={1}>
     <Text bold color={tuiColors.accent}>执行图检查 · Graph Inspector</Text>
-    <AdaptiveGraph graph={props.graph} selectedId={props.selectedWorkPackageId} width={width} height={Math.max(5,(props.rows??24)-8-(props.relations?1:0))} planning={props.view?.scope.mode==='route_planning'} inspector detail={props.detail??false} tab={props.tab??0} scroll={props.scroll??0} iconMode={mode}/>
+    <Text color={acceptance?tuiColors.success:tuiColors.muted}>{truncateToDisplayWidth(acceptance?`验收 ${acceptance.validatedCount}/${acceptance.totalCount} · G${acceptance.generation} v${acceptance.version}`:'验收摘要不可用',width)}</Text>
+    <AdaptiveGraph graph={props.graph} selectedId={props.selectedWorkPackageId} width={width} height={Math.max(5,(props.rows??24)-9-(props.relations?1:0))} planning={props.view?.scope.mode==='route_planning'} inspector detail={props.detail??false} tab={props.tab??0} scroll={props.scroll??0} iconMode={mode}/>
     {props.relations?<Text inverse color={tuiColors.focus}>{truncateToDisplayWidth('选择关系 '+((props.relationIndex??0)+1)+'/'+props.relations.length+': '+props.relations[props.relationIndex??0]+' · ↑↓ Enter',width)}</Text>:null}
     <Text dimColor>{truncateToDisplayWidth('↑↓ 选择 · ←→ 关系 · Enter 详情 · Tab 栏目 · Esc 返回',width)}</Text>
   </Box>;

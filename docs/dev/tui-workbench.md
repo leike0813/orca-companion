@@ -6,7 +6,7 @@
 
 在交互式终端运行 `pnpm ui:preview planning`。基础场景为 `planning`、`execution`、`blocked`、`empty`、`long-cjk`、`answer`、`disabled`，均挂载生产 `TuiApp`。`alignment` 与 `alignment-planning` 复用 20 节点及长身份夹具，增加待答/事件和可审阅的隔离假端口；仅在内存模拟意图，不装配生产 Controller、模型或 Orca。预览要求 stdin/stdout 都是 TTY；`Esc` 逐层返回，`Ctrl+C` 退出。改动源码后重新构建并启动预览。
 
-生产组件的 Ctrl+B 打开固定项目面板，Tab 切总览/待答/最近事件，Enter 下钻、Esc 返回；120 列对话保持原位，80/50 列面板独占主区域。项目待答页可显式选择跨 Session 问题，进入其回答面板；返回恢复原入口、草稿与阅读锚点。Ctrl+G 打开三档可浏览的图检查：上下选择、左右选择真实关系、多关系明确确认、Enter 详情、Tab 栏目。命令候选在输入上方，第一次 Tab/Enter 填入，第二次 Enter 执行。审阅固定框内 Tab 切概要/完整记录、上下浏览，默认返回，左右选动作后 Enter；Cancel/Exit 同时保留 y/n 明确确认，无色以“当前操作”辨识。Ctrl+P → 选项 → Enter 即时切 Nerd/ASCII，重启恢复与完整 custom 设置尚未接通。六票参照及本次证据见 [原型交接](tui-implementation-handoff.md)。
+生产组件的 Ctrl+B 打开固定项目面板，Tab 切总览/待答/最近事件，Enter 下钻、Esc 返回；120 列对话保持原位，80/50 列面板独占主区域。项目待答页可显式选择跨 Session 问题，进入其回答面板；返回恢复原入口、草稿与阅读锚点。Ctrl+G 打开三档可浏览的图检查：上下选择、左右选择真实关系、多关系明确确认、Enter 详情、Tab 栏目。命令候选在输入上方，第一次 Tab/Enter 填入，第二次 Enter 执行。审阅固定框内 Tab 切概要/完整记录、上下浏览，默认返回，左右选动作后 Enter；Cancel/Exit 同时保留 y/n 明确确认，无色以“当前操作”辨识。第七批沿 IC-15 接通 Ctrl+P → 选项的图标与状态栏保存恢复，状态和验收以 [原型交接](tui-implementation-handoff.md) 的当前任务记录为准。
 
 生产工作区将草稿、粘贴载荷与提交快照保存到仓库 Git common dir 下的 `orca-companion/ui.sqlite`。`/inputs` 打开输入记录管理：选择记录后 `r` 恢复、`v` 核验、`d` 删除；恢复不会自动发送。退出时立即保存，失败则留在界面，明确确认后才丢弃未保存输入。预览使用独立内存输入库，退出即关闭，不影响生产记录。
 
@@ -41,6 +41,10 @@ Composer 的 slash 对照直接运行 `pnpm ui:composer-prototype slash above`�
 运行 `pnpm build` 后，用 `node artifacts/model-configuration/capture.mjs release` 采集生产 App 的三档彩色/NO_COLOR、Nerd/ASCII 与连续 resize。该预览仍用隔离 fixture，不能证明模型实际启动。`node artifacts/model-configuration/real-launch.mjs` 单独在临时项目通过公开 Orca terminal 启动真实 Codex，读取精确 SessionStart/transcript 并保存非秘密启动证据；需要本机 `.env.smoke` 的显式模型和凭据，结果见 [模型配置证据](../../artifacts/model-configuration/README.md)。
 
 ## 检查组件
+
+第七批隔离生产预览先运行 `pnpm build`，使用 `ORCA_COMPANION_PROJECT_STATUSLINE=1 ORCA_COMPANION_PREVIEW_CONFIG_HOME=/tmp/companion-status-preview ORCA_COMPANION_PREVIEW_PHASE=execution pnpm ui:preview alignment`。显式 configHome 只供此预览，不读取用户配置；phase 可选 planning/execution/blocked/answer/idle。`ORCA_COMPANION_PREVIEW_SAVE_FAIL=1` 注入保存失败，保留配置草稿。metadata/context/验收摘要均为标明的 fixture，不证明真实 provider、tracker 或 Orca 能力。生产画面与当前性能证据独立保存于 `artifacts/project-statusline/`，历史原型资产保留。
+
+第七批采集分别运行 `node artifacts/project-statusline/capture.mjs` 与 `node artifacts/project-statusline/capture-supplement.mjs`：基础画面覆盖五状态与设置/返回，补采覆盖三档图检查/命令/slash采用与执行、批准后授权UTF-8续页、真实偏好文件的CAS冲突/显式重试、无环境覆盖重启和失败提示。性能命令为 `node artifacts/project-statusline/benchmark.mjs`；结果与逐票核对见 [证据说明](../../artifacts/project-statusline/README.md)。
 
 两个终端分别运行：
 

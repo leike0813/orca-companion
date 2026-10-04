@@ -21,7 +21,7 @@ export const COMMAND_METADATA = {
   "exit": {"path":"Exit","shortcut":"ctrl+c","action":"exit","alias":"exit","label":"Exit","description":"退出前台","target":"UI"},
   "project": {"path":"项目 → 总览","shortcut":"ctrl+b","action":"toggle-sidebar","alias":"project","label":"项目总览","description":"预算与身份","target":"Scope"},
   "options": {"path":"选项","shortcut":null,"action":null,"alias":"options","label":"选项","description":"图标与显示","target":"UI"},
-  "statusline": {"path":"选项 → 状态栏","shortcut":null,"action":null,"alias":"statusline","label":"状态栏设置","description":"用户级偏好未接通","target":"UI"},
+  "statusline": {"path":"选项 → 状态栏","shortcut":null,"action":null,"alias":"statusline","label":"状态栏设置","description":"自定义状态栏字段与格式","target":"UI"},
   "icons-nerd": {"path":"选项 → Nerd Fonts","shortcut":null,"action":null,"alias":null,"label":"Nerd Fonts","description":"使用字体图标","target":"UI"},
   "icons-ascii": {"path":"选项 → ASCII","shortcut":null,"action":null,"alias":null,"label":"ASCII","description":"使用 ASCII 图标","target":"UI"},
   "pending-list": {"path":"项目 → 待答列表","shortcut":null,"action":null,"alias":null,"label":"待答列表","description":"跨会话问题","target":"Scope"},
@@ -108,8 +108,8 @@ export function parseSlashInput(text: string, mode: string): SlashResolution {
   };
 }
 
-export function commandReason(command: CommandId, view: { readonly mode: string; readonly selectedSessionId: string | null; readonly pasteBlocks: number; readonly controlState?: string; readonly modelSettings?: boolean }): string | null {
-  if (command === 'statusline') return '用户级状态栏设置尚未接通';
+export function commandReason(command: CommandId, view: { readonly mode: string; readonly selectedSessionId: string | null; readonly pasteBlocks: number; readonly controlState?: string; readonly modelSettings?: boolean; readonly preferences?: boolean }): string | null {
+  if (command === 'statusline' && view.preferences !== true) return '用户偏好端口不可用；只能使用默认显示设置';
   if (command === 'model-settings' && view.modelSettings !== true) return '角色模型配置端口尚未接通';
   if (command === 'handoff' && view.mode !== 'route_planning') return '仅用于规划模式';
   if (command === 'execution-handoff' && view.mode !== 'execution_coordination') return '仅用于执行模式';

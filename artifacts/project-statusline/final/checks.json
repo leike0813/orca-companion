@@ -1,0 +1,678 @@
+[
+  {
+    "phase": "blocked",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "execution",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "answer",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "idle",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "blocked",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "execution",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "answer",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "idle",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "blocked",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "execution",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "answer",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "idle",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "blocked",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "execution",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "answer",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "idle",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "blocked",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "execution",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "answer",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "idle",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "blocked",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "execution",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "answer",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "idle",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "blocked",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "execution",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "answer",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "idle",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "blocked",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "execution",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "answer",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "idle",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "blocked",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "execution",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "answer",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "idle",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "blocked",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "execution",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "answer",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "idle",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "blocked",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "execution",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "answer",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "idle",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "blocked",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "execution",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "answer",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "phase": "idle",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "productionApp": true,
+    "isolatedPorts": true
+  },
+  {
+    "cjkCursor": true,
+    "fixedProjectFrame": true,
+    "statuslineDraftRestoreSave": true,
+    "slashReturn": true
+  },
+  {
+    "kind": "statusline-save-failure",
+    "draftRetained": true,
+    "separateHost": true
+  },
+  {
+    "savedIcon": "ascii",
+    "transientEnvironmentOverride": "nerd",
+    "persistedOverride": false
+  }
+]

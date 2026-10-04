@@ -22,7 +22,7 @@
 
 import type { WorkPackageId } from '../dto/identity.js';
 import { completedIntegrationRef } from '../integrate-work-package.js';
-import type { RoleAuthorities, WorkerRole } from '../../domain/planning/execution-authorization.js';
+import type { ExecutionAuthorizationRecord, RoleAuthorities, WorkerRole } from '../../domain/planning/execution-authorization.js';
 import type { WorkerLiveness } from '../../domain/worker-liveness.js';
 import {
   initialWorkPackageStatus,
@@ -36,6 +36,7 @@ import type {
   CoordinationSnapshot,
   DeliverySettlementRecord,
 } from '../ports/branch-coordination-store.js';
+import { graphVersionChain, type GraphVersionRecord } from '../../domain/planning/execution-graph.js';
 import { planFinalizerDispatch } from '../finalize-project.js';
 import { openInteractionCount, type CoordinationReadSnapshot } from '../ports/branch-coordination-store.js';
 
@@ -459,6 +460,76 @@ export function currentContractSettlements(input: {
         binding.workerTaskId === settlement.workerTaskId && binding.createdAt > hold.createdAt,
     ),
   );
+}
+
+export type ValidatorAcceptanceSummary = {
+  readonly graphId: string;
+  readonly generation: number;
+  readonly version: number;
+  readonly validatedCount: number;
+  readonly totalCount: number;
+};
+
+export type ValidatorAcceptanceInput = {
+  readonly snapshot: CoordinationReadSnapshot;
+  readonly graphVersion: GraphVersionRecord | null;
+  readonly graphVersions: readonly GraphVersionRecord[];
+  readonly authorizations: readonly ExecutionAuthorizationRecord[];
+};
+
+/** One shared whole-graph count of exact current-contract Validator settlements. */
+export function validatorAcceptanceSummary(input: ValidatorAcceptanceInput): ValidatorAcceptanceSummary | null {
+  const current = input.graphVersion;
+  if (current === null) return null;
+  const versions = graphVersionChain(input.graphVersions, current);
+  const taskBindings = input.snapshot.materializationBindings.filter(
+    (binding) => binding.identity === 'issued' && binding.role === 'validator' && binding.workerTaskId !== null,
+  );
+  const acceptedTasks = new Set<string>();
+
+  for (const workPackage of current.graph.workPackages) {
+    const bindings = taskBindings.filter((binding) => binding.workPackageId === workPackage.workPackageId);
+    const taskIds = new Set(bindings.map((binding) => binding.workerTaskId));
+    const settlements = currentContractSettlements({
+      snapshot: input.snapshot,
+      workPackageId: workPackage.workPackageId,
+      settlements: input.snapshot.deliverySettlements.filter((settlement) =>
+        settlement.role === 'validator' && taskIds.has(settlement.workerTaskId),
+      ),
+    });
+    for (const settlement of settlements) {
+      const binding = bindings.find((candidate) =>
+        candidate.workerTaskId === settlement.workerTaskId &&
+        candidate.dispatchId === settlement.dispatchId &&
+        candidate.attemptId === settlement.attemptId &&
+        candidate.specBinding?.contractRevision === settlement.contractRevision &&
+        candidate.createdAt <= settlement.acceptedAt &&
+        candidate.authorizationId !== null && candidate.authorizationVersion !== null,
+      );
+      if (binding === undefined || binding.authorizationId === null || binding.authorizationVersion === null) continue;
+      const authorization = input.authorizations.find((candidate) =>
+        candidate.authorizationId === binding.authorizationId &&
+        candidate.authorizationVersion === binding.authorizationVersion,
+      );
+      if (authorization === undefined ||
+        authorization.manifest.graph.graphId !== current.graphId ||
+        authorization.manifest.graph.generation !== current.generation ||
+        !versions.has(authorization.manifest.graph.version)) continue;
+      if (authorization.authorizationId !== binding.authorizationId ||
+        authorization.authorizationVersion !== binding.authorizationVersion ||
+        !authorization.manifest.workerProfiles.some((profile) => profile.role === 'validator')) continue;
+      acceptedTasks.add(workPackage.workPackageId);
+      break;
+    }
+  }
+
+  return {
+    graphId: current.graphId,
+    generation: current.generation,
+    version: current.version,
+    validatedCount: acceptedTasks.size,
+    totalCount: current.graph.workPackages.length,
+  };
 }
 
 /** 该 Work Package 已接受的最远角色；没有任何已接受结果时为 `null`。 */

@@ -80,6 +80,9 @@ import { selectedGraphNode } from './components/graph-inspector.js';
 import { preferredSessionId, sessionChoices } from './components/session-picker.js';
 import { filterChoices } from './components/selection-list.js';
 import { tuiTheme } from './theme.js';
+import { DEFAULT_TUI_PREFERENCES, type StatuslinePreferences } from '../../application/configuration/tui-preferences.js';
+import { statuslineSettingRows, updateStatuslinePreference } from './components/statusline-settings.js';
+import type { ProjectDetailPage } from '../../application/tui/project-presentation.js';
 import {
   projectTranscriptPage,
   projectTuiViewModel,
@@ -170,6 +173,7 @@ function resultNotice(result: ControllerCommandResult): string | null {
 }
 
 type AnswerMode = Extract<ComposerMode, { readonly kind: 'answer' }>;
+type ProjectDetailsUi = { readonly logicalKey: string | null; readonly objectKey: string | null; readonly page: ProjectDetailPage | null; readonly after: string | null; readonly previous: readonly (string | null)[]; readonly notice: string | null; readonly loading: boolean };
 
 function messageInputTarget(coordinationScopeId: string, coordinatorSessionId: string): UiInputTarget {
   return { kind: 'message', coordinationScopeId, coordinatorSessionId };
@@ -297,6 +301,19 @@ function TuiAppContent(props: TuiAppProps) {
   const windowSize = useWindowSize();
   const terminalWidth = windowSize.columns === undefined ? props.terminalWidth : windowSize.columns;
   const [state, setState] = useState<TuiState>(initialTuiState);
+  const [statuslineDraft, setStatuslineDraft] = useState<StatuslinePreferences>(DEFAULT_TUI_PREFERENCES.statusline);
+  const [savedStatusline, setSavedStatusline] = useState<StatuslinePreferences>(DEFAULT_TUI_PREFERENCES.statusline);
+  const [statuslineSelection, setStatuslineSelection] = useState(0);
+  const [statuslineNotice, setStatuslineNotice] = useState<string | null>(null);
+  const [preferencesWritable, setPreferencesWritable] = useState(false);
+  const [statuslineSaving, setStatuslineSaving] = useState(false);
+  const statuslineDraftRef = useRef(statuslineDraft);
+  const statuslineEditVersion = useRef(0);
+  const statuslineRequest = useRef(0);
+  const iconSaveRequest = useRef(0);
+  const preferencesRevision = useRef(0);
+  const [projectDetailsUi, setProjectDetailsUi] = useState<ProjectDetailsUi>({logicalKey:null,objectKey:null,page:null,after:null,previous:[],notice:null,loading:false});
+  const projectDetailsRequest = useRef(0);
   const navigationGeneration = useRef(0);
   const [commandInvocations] = useState(() => new CommandInvocations());
   const [events, setEvents] = useState<readonly SemanticEvent[]>([]);
@@ -451,6 +468,145 @@ function TuiAppContent(props: TuiAppProps) {
   }, []);
   noticeRef.current = (message) => {
     dispatch({ kind: 'notice', notice: message });
+  };
+
+  useEffect(() => {
+    let current = true;
+    if (ports.preferences === undefined) return () => { current = false; };
+    void ports.preferences.load().then((loaded) => {
+      if (!current) return;
+      setPreferencesWritable(loaded.writable);
+      setStatuslineNotice(loaded.notice);
+      preferencesRevision.current = loaded.preferences.revision;
+      dispatch({kind:'preferences-revision',revision:loaded.preferences.revision});
+      statuslineDraftRef.current = loaded.preferences.statusline;
+      setStatuslineDraft(loaded.preferences.statusline);
+      setSavedStatusline(loaded.preferences.statusline);
+      const iconOverride=process.env['ORCA_COMPANION_TUI_ICONS'];
+      if(iconOverride==='ascii'||iconOverride==='nerd')dispatch({kind:'icons',mode:iconOverride});
+      else if(iconOverride===undefined)dispatch({kind:'icons',mode:loaded.preferences.iconMode});
+    }).catch(() => {
+      if (current) { setPreferencesWritable(false); setStatuslineNotice('用户偏好读取失败；当前使用默认显示设置'); }
+    });
+    return () => { current = false; };
+  }, [ports.preferences, dispatch]);
+
+  const editStatusline = (next: StatuslinePreferences) => {
+    statuslineEditVersion.current++;
+    statuslineDraftRef.current = next;
+    setStatuslineDraft(next);
+  };
+
+  const applySavedPreferences = (preferences: import('../../application/configuration/tui-preferences.js').TuiPreferences) => {
+    if (preferences.revision < preferencesRevision.current) return;
+    preferencesRevision.current = preferences.revision;
+    setSavedStatusline(preferences.statusline);
+    dispatch({kind:'preferences-revision',revision:preferences.revision});
+  };
+
+  const saveStatusline = async () => {
+    const port = ports.preferences;
+    if (port === undefined || !preferencesWritable) { setStatuslineNotice('用户偏好端口不可用或只读，草稿仍保留'); return; }
+    if (statuslineSaving) return;
+    const request = ++statuslineRequest.current;
+    const editVersion = statuslineEditVersion.current;
+    const session = stateRef.current.selectedSessionId;
+    setStatuslineSaving(true);
+    setStatuslineNotice(null);
+    try {
+      const result = await port.save({expectedRevision:preferencesRevision.current,patch:{kind:'statusline',statusline:statuslineDraftRef.current}});
+      const stillOwned = request === statuslineRequest.current && stateRef.current.overlayStack.at(-1) === 'statusline-settings' && stateRef.current.selectedSessionId === session;
+      if (result.kind === 'saved') {
+        applySavedPreferences(result.preferences);
+        if (stillOwned && editVersion === statuslineEditVersion.current) {
+          setStatuslineNotice('已保存');
+          dispatch({kind:'overlay-close-all'});
+        }
+      } else if (stillOwned && result.kind === 'conflict') {
+        applySavedPreferences(result.preferences);
+        setPreferencesWritable(true);
+        setStatuslineNotice('偏好已在其他进程更新；草稿保留，再按 Enter 明确保存');
+      } else if (stillOwned && result.kind === 'failed') setStatuslineNotice(`${result.code}: ${result.message}；草稿保留，可重试`);
+    } catch {
+      if (request === statuslineRequest.current && stateRef.current.overlayStack.at(-1) === 'statusline-settings' && stateRef.current.selectedSessionId === session) setStatuslineNotice('偏好保存失败；草稿保留，可重试');
+    } finally {
+      if (request === statuslineRequest.current) setStatuslineSaving(false);
+    }
+  };
+
+  const persistIconMode = async (mode: TuiState['iconMode']) => {
+    dispatch({kind:'icons',mode});
+    const request = ++iconSaveRequest.current;
+    const port = ports.preferences;
+    if (port === undefined || !preferencesWritable) {
+      dispatch({kind:'icons-unsaved',unsaved:true});
+      dispatch({kind:'notice',notice:'图标已切换但未保存；偏好端口不可写'});
+      return;
+    }
+    dispatch({kind:'icons-unsaved',unsaved:true});
+    try {
+      const result = await port.save({expectedRevision:preferencesRevision.current,patch:{kind:'icons',iconMode:mode}});
+      if (result.kind === 'saved') {
+        applySavedPreferences(result.preferences);
+        if (request === iconSaveRequest.current) dispatch({kind:'icons-unsaved',unsaved:stateRef.current.iconMode!==mode});
+      } else if (result.kind === 'conflict') {
+        applySavedPreferences(result.preferences);
+        if (request === iconSaveRequest.current) {
+          dispatch({kind:'icons-unsaved',unsaved:true});
+          dispatch({kind:'notice',notice:'图标已切换但未保存；偏好冲突，请重新选择以重试'});
+        }
+      } else if (request === iconSaveRequest.current) {
+        dispatch({kind:'notice',notice:`图标已切换但未保存：${result.code} · ${result.message}`});
+      }
+    } catch {
+      if (request === iconSaveRequest.current) dispatch({kind:'notice',notice:'图标已切换但未保存；可重新选择以重试'});
+    }
+  };
+
+  const readProjectDetails = async (logicalKey: string, after: string | null = null, previous: readonly (string | null)[] = []) => {
+    const port=ports.projectDetails,view=viewModelRef.current,session=stateRef.current.selectedSessionId;
+    if(port===undefined||view===null||session===null){setProjectDetailsUi({logicalKey,objectKey:null,page:null,after,previous,notice:'项目详情端口或会话不可用',loading:false});return;}
+    const authorization=view.scope.authorization;
+    const objectKey=logicalKey==='budget'&&authorization!==null
+      ? `approved-authorization:${authorization.authorizationId}@${authorization.version}`
+      : logicalKey==='work'&&view.projectPresentation?.activeWorkPackage
+        ? `work-package:${view.projectPresentation.activeWorkPackage.id}`
+        : logicalKey;
+    const seenRevision=view.scope.revision,request=++projectDetailsRequest.current;
+    const existing=projectDetailsUi;
+    setProjectDetailsUi({logicalKey,objectKey,page:existing.logicalKey===logicalKey&&existing.objectKey===objectKey?existing.page:null,after,previous,notice:'正在读取项目详情…',loading:true});
+    try{
+      const result=await port.read({objectKey,coordinatorSessionId:session,seenRevision,after});
+      const currentView=viewModelRef.current;
+      const currentAuthorization=currentView?.scope.authorization;
+      const currentObjectKey=logicalKey==='budget'&&currentAuthorization!==null&&currentAuthorization!==undefined
+        ? `approved-authorization:${currentAuthorization.authorizationId}@${currentAuthorization.version}`
+        : logicalKey==='work'&&currentView?.projectPresentation?.activeWorkPackage
+          ? `work-package:${currentView.projectPresentation.activeWorkPackage.id}`
+          : logicalKey;
+      const stillOwned=request===projectDetailsRequest.current&&stateRef.current.projectPanel.open&&stateRef.current.projectPanel.detail===logicalKey&&stateRef.current.selectedSessionId===session&&stateRef.current.overlayStack.length===0;
+      if(!stillOwned)return;
+      if(currentView?.scope.revision!==seenRevision||currentObjectKey!==objectKey){
+        setProjectDetailsUi(current=>current.logicalKey===logicalKey&&current.objectKey===objectKey
+          ? {...current,page:null,notice:'项目详情依据已更新；返回后重新读取',loading:false}
+          : current);
+        return;
+      }
+      if(result.kind==='page'){
+        const page=result.page;
+        if(page.objectKey!==objectKey||page.coordinatorSessionId!==session||page.revision!==seenRevision){setProjectDetailsUi(current=>({...current,notice:'详情响应不匹配当前对象版本',loading:false}));return;}
+        setProjectDetailsUi({logicalKey,objectKey,page,after,previous,notice:null,loading:false});
+      }else if(result.kind==='stale')setProjectDetailsUi(current=>({...current,notice:`项目详情已更新（revision ${result.currentRevision}）；返回后重读`,loading:false}));
+      else setProjectDetailsUi(current=>({...current,notice:result.reason,loading:false}));
+    }catch{
+      if(request===projectDetailsRequest.current&&stateRef.current.projectPanel.open&&
+        stateRef.current.projectPanel.detail===logicalKey&&stateRef.current.selectedSessionId===session&&
+        stateRef.current.overlayStack.length===0&&viewModelRef.current?.scope.revision===seenRevision){
+        setProjectDetailsUi(current=>current.objectKey===objectKey
+          ? {...current,notice:'项目详情读取失败；可返回后重试',loading:false}
+          : current);
+      }
+    }
   };
 
   // 卸载只取消计时器：组件重挂载绝不产生新的持久写入。
@@ -883,7 +1039,7 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (slash.kind === 'command') {
-      const unavailable=commandReason(slash.command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length,...(ports.modelSettings===undefined?{}:{modelSettings:true})});
+      const unavailable=commandReason(slash.command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length,...(ports.modelSettings===undefined?{}:{modelSettings:true}),...(ports.preferences===undefined?{}:{preferences:true})});
       if(unavailable){dispatch({kind:'notice',notice:unavailable});return;}
       if (slash.command === 'paste') { await runCommandRef.current('paste'); return; }
       const generation = protection.generation(target);
@@ -1111,7 +1267,7 @@ function TuiAppContent(props: TuiAppProps) {
       const inputTarget=currentInputTarget(current,coordScopeRef.current),inputGeneration=inputTarget===null?null:protection.generation(inputTarget);
       const active=()=>generation===navigationGeneration.current&&session===stateRef.current.selectedSessionId&&(inputTarget===null||inputGeneration===protection.generation(inputTarget));
       const reject=(code:string,message:string):ControllerCommandResult=>{ if(active())dispatch({kind:'notice',notice:message});return {kind:'rejected',code,message}; };
-      const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length,...(snapshotRef.current?{controlState:snapshotRef.current.controlState}:{}),...(ports.modelSettings===undefined?{}:{modelSettings:true})});
+      const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length,...(snapshotRef.current?{controlState:snapshotRef.current.controlState}:{}),...(ports.modelSettings===undefined?{}:{modelSettings:true}),...(ports.preferences===undefined?{}:{preferences:true})});
       if(reason)return reject('command_unavailable',reason);
       const open=(overlay:OverlayKind, selectedId:string|null=null):CommandOutcome=>{
         if(!active())return {kind:'rejected',code:'navigation_changed',message:'调用入口已改变'};
@@ -1205,8 +1361,14 @@ function TuiAppContent(props: TuiAppProps) {
           }
           case 'options':return open('options','icons-'+current.iconMode);
           case 'icons-nerd':
-          case 'icons-ascii':dispatch({kind:'icons',mode:command==='icons-ascii'?'ascii':'nerd'});return {kind:'opened'};
-          case 'statusline':return reject('command_unavailable','用户级状态栏设置尚未接通');
+          case 'icons-ascii':void persistIconMode(command==='icons-ascii'?'ascii':'nerd');return {kind:'opened'};
+          case 'statusline':
+            if(ports.preferences===undefined)return reject('preferences_unavailable','用户偏好端口不可用；状态栏设置只读');
+            setStatuslineSelection(0);
+            statuslineDraftRef.current=savedStatusline;
+            setStatuslineDraft(savedStatusline);
+            setStatuslineNotice(null);
+            return open('statusline-settings');
           case 'graph-inspector':return open('graph-inspector');
           case 'toggle-sidebar':dispatch({kind:'overlay-close-all'});dispatch({kind:'sidebar-toggle',allowed:allowedSidebarDensity(terminalWidth)});return {kind:'opened'};
           case 'help':return open('help');
@@ -1241,7 +1403,7 @@ function TuiAppContent(props: TuiAppProps) {
         }
       } catch(error){return reject('command_read_failed',error instanceof Error?error.message:String(error));}
     },
-    [dispatch,events,ports,protection,requestExit,requestScopeControl,runMutation,commandInvocations,reload,terminalWidth],
+    [dispatch,events,ports,protection,requestExit,requestScopeControl,runMutation,commandInvocations,reload,terminalWidth,preferencesWritable,savedStatusline],
   );
   runCommandRef.current = runCommand;
 
@@ -2224,6 +2386,42 @@ function TuiAppContent(props: TuiAppProps) {
   useInput((input, key) => {
     if (key.eventType === 'release') return;
     if(resolveGlobalAction(input,key)==='exit'){void runCommand('exit');return;}
+    if (topOverlay() === 'statusline-settings') {
+      const current = statuslineSelection;
+      const settingRows = statuslineSettingRows(statuslineDraftRef.current);
+      const row = settingRows[current] ?? 'restore';
+      if (key.escape) {
+        statuslineRequest.current++;
+        statuslineEditVersion.current++;
+        statuslineDraftRef.current=savedStatusline;
+        setStatuslineDraft(savedStatusline);
+        setStatuslineSaving(false);
+        setStatuslineNotice(null);
+        dispatch({kind:'overlay-close-top'});
+        return;
+      }
+      if (key.upArrow || key.downArrow) { setStatuslineSelection(Math.max(0,Math.min(settingRows.length-1,current+(key.upArrow?-1:1)))); return; }
+      if (key.return) { void saveStatusline(); return; }
+      if (input === ' ') {
+        if (row === 'restore') editStatusline(DEFAULT_TUI_PREFERENCES.statusline);
+        else if (['graph','ticket','work-package','progress','budget'].includes(row)) {
+          const field = row as StatuslinePreferences['fields'][number];
+          const fields = statuslineDraftRef.current.fields.includes(field) ? statuslineDraftRef.current.fields.filter(value=>value!==field) : [...statuslineDraftRef.current.fields,field];
+          editStatusline({...statuslineDraftRef.current,fields});
+          setStatuslineSelection(statuslineSettingRows({...statuslineDraftRef.current,fields}).indexOf(field));
+        }
+        return;
+      }
+      if (key.leftArrow || key.rightArrow) {
+        if (row !== 'restore') {
+          const next = updateStatuslinePreference(statuslineDraftRef.current,row,key.leftArrow?-1:1);
+          editStatusline(next);
+          setStatuslineSelection(statuslineSettingRows(next).indexOf(row));
+        }
+        return;
+      }
+      return;
+    }
     // 待确认动作独占输入；y/n 沿原 ConfirmInput，方向键与 Enter 使用默认返回的动作栏。
     const pending = stateRef.current.pendingConfirmation;
     if (pending !== null) {
@@ -2287,7 +2485,7 @@ function TuiAppContent(props: TuiAppProps) {
         return;
       }
       const project=stateRef.current.projectPanel;
-      if(project.open){dispatch({kind:'project-panel',panel:project.detail?{...project,detail:null,scroll:0}:{...project,open:false}});return;}
+      if(project.open){projectDetailsRequest.current++;dispatch({kind:'project-panel',panel:project.detail?{...project,detail:null,scroll:0}:{...project,open:false}});return;}
       const draft=composerInputFor(stateRef.current,stateRef.current.selectedSessionId);
       if(!stateRef.current.slashDismissed&&slashCandidates(draft.text,snapshotRef.current?.mode??'route_planning').length){dispatch({kind:'slash-view',index:0,dismissed:true});return;}
       if (stateRef.current.composerMode.kind === 'answer') {
@@ -2513,11 +2711,13 @@ function TuiAppContent(props: TuiAppProps) {
     if(project.open){
       const view=viewModelRef.current;if(!view)return;
       if (project.tab === 1 && project.detail === null && (key.pageUp || key.pageDown)) { void loadScopeQuestions(key.pageUp ? -1 : 1); return; }
-      if(key.tab){const tab=(project.tab+1)%3;dispatch({kind:'project-panel',panel:{...project,tab,detail:null,selectedKey:projectItems(view,events,tab)[0]?.key??null,scroll:0}});return;}
+      if(key.tab){projectDetailsRequest.current++;const tab=(project.tab+1)%3;dispatch({kind:'project-panel',panel:{...project,tab,detail:null,selectedKey:projectItems(view,events,tab)[0]?.key??null,scroll:0}});return;}
       if(project.detail){
+        if(key.pageDown&&projectDetailsUi.page?.nextCursor){void readProjectDetails(project.detail,projectDetailsUi.page.nextCursor,[...projectDetailsUi.previous,projectDetailsUi.after].slice(-20));return;}
+        if(key.pageUp&&projectDetailsUi.previous.length){const previous=[...projectDetailsUi.previous],after=previous.pop()??null;void readProjectDetails(project.detail,after,previous);return;}
         if(key.upArrow||key.downArrow){
           const layout=workspaceLayout(view,stateRef.current,terminalWidth,windowSize.rows??process.stdout.rows??24);
-          const viewport=projectDetailViewport(view,events,project,layout.projectWidth,layout.bodyRows);
+          const viewport=projectDetailViewport(view,events,project,layout.projectWidth,layout.bodyRows,projectDetailsUi.page,projectDetailsUi.notice,projectDetailsUi.objectKey);
           dispatch({kind:'project-panel',panel:{...project,scroll:Math.max(0,Math.min(viewport.maxScroll,viewport.offset+(key.upArrow?-1:1)))}});
         }return;
       }
@@ -2530,7 +2730,9 @@ function TuiAppContent(props: TuiAppProps) {
         if(interaction?.state==='open'){
           void showAnswer(interaction, 0, 1, true);return;
         }
+        projectDetailsRequest.current++;
         dispatch({kind:'project-panel',panel:{...project,detail:item.key,selectedKey:item.key,scroll:0}});
+        if(item.key==='identity'||item.key==='budget'||item.key==='work')void readProjectDetails(item.key);
       }return;
     }
     const inputDraft=composerInputFor(stateRef.current,stateRef.current.selectedSessionId);
@@ -2539,7 +2741,7 @@ function TuiAppContent(props: TuiAppProps) {
       if(key.upArrow||key.downArrow){dispatch({kind:'slash-view',index:Math.max(0,Math.min(matches.length-1,stateRef.current.slashIndex+(key.upArrow?-1:1))),dismissed:false});return;}
       if((key.return||key.tab)&&!key.meta&&!key.shift){
         const command=matches[Math.min(stateRef.current.slashIndex,matches.length-1)];
-        if(command){const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:stateRef.current.selectedSessionId,pasteBlocks:inputDraft.pasteBlocks.length,...(ports.modelSettings===undefined?{}:{modelSettings:true})});
+        if(command){const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:stateRef.current.selectedSessionId,pasteBlocks:inputDraft.pasteBlocks.length,...(ports.modelSettings===undefined?{}:{modelSettings:true}),...(ports.preferences===undefined?{}:{preferences:true})});
           if(reason){dispatch({kind:'notice',notice:reason});return;}
           workspaceActions.composerChange(textDraft('/'+COMMAND_METADATA[command].alias));
           dispatch({kind:'slash-view',index:0,dismissed:true});
@@ -2708,6 +2910,14 @@ function TuiAppContent(props: TuiAppProps) {
       modelCatalog={modelCatalog}
       modelRejection={modelRejection}
       modelSettingsAvailable={modelSettingsPort!==undefined}
+      preferencesAvailable={ports.preferences!==undefined}
+      statuslineDraft={statuslineDraft}
+      savedStatusline={savedStatusline}
+      statuslineSelection={statuslineSelection}
+      statuslineNotice={statuslineNotice ?? (!preferencesWritable && ports.preferences !== undefined ? '偏好文件只读；无法保存' : statuslineSaving ? '正在保存…' : null)}
+      projectDetailsPage={projectDetailsUi.page}
+      projectDetailsKey={projectDetailsUi.objectKey}
+      projectDetailsNotice={projectDetailsUi.notice}
       modelRole={state.overlayStack.at(-1)==='model-role-menu'?roleMenuRole():highlightedRole()}
       modelIdentity={[viewModel.scope.coordinationScopeId,viewModel.scope.mode==='route_planning'?'规划':'执行',state.selectedSessionId??'未选择会话'].join(' · ')}
       modelSettingsEdit={state.modelSettingsEdit}
