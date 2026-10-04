@@ -410,9 +410,15 @@ describe.skipIf(!build.ok)(SUITE_NAME, () => {
         tmux(socket, ['send-keys', '-t', session, '-l', '\u001b[200~' + '中文'.repeat(501) + '\u001b[201~']);
         expect(pollPane(socket, session, (text) => text.includes('粘贴 1')).ok).toBe(true);
         tmux(socket, ['send-keys', '-t', session, 'C-p']);
-        for (let index = 0; index < 15; index++) tmux(socket, ['send-keys', '-t', session, 'Down']);
+        expect(pollPane(socket, session, (text) => text.includes('Command Palette')).ok).toBe(true);
+        tmux(socket, ['send-keys', '-t', session, '-l', 'paste']);
+        const pasteQuery = pollPane(socket, session, (text) => text.includes('搜索 › paste'));
+        expect(pasteQuery.ok, pasteQuery.text).toBe(true);
         tmux(socket, ['send-keys', '-t', session, 'Enter']);
-        expect(pollPane(socket, session, (text) => text.includes('粘贴查看')).ok).toBe(true);
+        const pasteView = pollPane(socket, session, (text) => text.includes('粘贴查看'));
+        expect(pasteView.ok, pasteView.text).toBe(true);
+        tmux(socket, ['send-keys', '-t', session, 'Escape']);
+        expect(pollPane(socket, session, (text) => text.includes('Command Palette')).ok).toBe(true);
         tmux(socket, ['send-keys', '-t', session, 'Escape']);
         expect(pollPane(socket, session, (text) => text.includes('粘贴 1')).ok).toBe(true);
         tmux(socket, ['send-keys', '-t', session, 'C-c']);

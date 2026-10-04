@@ -549,6 +549,10 @@ Replanning 停止新派发并结清在途/Delivery/Interaction/Intent，建立�
 
 ## IC-11 ControllerService、Snapshot、SemanticEvent 与用户 intent
 
+命令结果引用由 `src/application/tui/command-result.ts` 拥有；`accepted` 与 `unknown` 可携带 `resultRef`。闭合引用覆盖 Scope 控制、Session 模型绑定、规划/执行交接与授权，宿主从确定写入/回读产生 ID 和版本。`TuiPorts.commandStatus(ref)` 校验 schema 和绑定 Scope，精确读取原记录。交接必须匹配记录 revision/phase，Scope/模型绑定须匹配产生结果时的 Scope revision；后续写入覆盖事实后保持 unknown。授权按 ID/version 读取原记录。引用证明已记录事实，不证明 Worker 完成或整个执行成功。UI 的 `refreshFailed` 单独表达已受理后的展示读取失败，保留受理事实和原输入；防重发覆盖精确读取与刷新，核验只重读状态。压缩没有独立调用结果身份；无可证明引用的异常保持不可核验。
+
+`ModelCatalogPort.load(SessionId)` 精确读取当前 Scope 的该 Session，不替换为规划责任方。交接 `prepare` 返回本次 ID；`read(id)` 复用 Controller 投影；`cutover/cancel(id, expectedRecordRevision)` 校验用户所见提案版本。规划接收方异步读取事实后、review 写入前重验版本，cutover 仅沿用本次 review 的返回版本。授权审阅字段由宿主投影为 `ReviewSection[]`，批准仍只回传 fingerprint 与 Scope revision。
+
 `render-bounded-transcript` 的生产 TUI 使用独立 `session-history`、`transcript-body`、`transcript-previews` 查询。`TranscriptReadingPort` 的 DTO 与运行时 schema 位于 `src/application/coordinator/history.ts`：history 来源绑定 entryId/revision=1，preview 来源绑定可信 previewId/append revision；offset/end 为 UTF-8 字节位置。宿主每次核验当前 Scope 的 Session 登记。metadata 最多 100 项/64 KiB，body 每次最多 64 KiB；折叠工具只读 metadata。
 
 临时预览仅属于当前 Runtime。旧 append revision 表示同一临时文件的固定前缀，pin 只保留引用；committed 后离底阅读仍保持旧来源，显式返回最新才换成正式历史。容量/存储故障明确不可用，未接受响应不写 checkpoint。`subscribe` 只通知 Session 来源失效，合并更新；预览不进入 SemanticEvent、输入存储或 Wake。正文/布局缓存各 8 MiB/64 项，有限上下文和位置结构计入布局额度；请求代际丢弃迟到响应，失败保留旧 frame。

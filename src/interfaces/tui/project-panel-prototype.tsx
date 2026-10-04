@@ -190,7 +190,7 @@ export function ProjectPanelPrototype(props: Props) {
     .split('\n').flatMap((line) => wrapByDisplayWidth(line, contentWidth));
   const review: ExecutionAuthorizationLoad = {
     kind: 'review', review: {
-      fingerprint: 'fixture-manifest-51', scopeRevision: view.scope.revision,
+      sections:[],fingerprint: 'fixture-manifest-51', scopeRevision: view.scope.revision,
       candidate: { graphId: snapshot.graph?.graphId ?? 'fixture-candidate', generation: snapshot.graph?.generation ?? 1, version: 3, baselineHead: 'fixture-baseline', workPackageCount: 20 },
       manifestRows: [{ label: '对象', value: '当前 Scope 的候选图（示例）' },
         { label: '权限', value: '隔离工作区；不包含发布/部署' }, { label: '预算', value: '仅演示审阅，未连接后端' }],

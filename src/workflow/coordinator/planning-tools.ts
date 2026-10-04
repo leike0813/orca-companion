@@ -125,7 +125,7 @@ export type PlanningToolServices = {
   readonly reviewPlanningHandoff: (input: {
     readonly proposalId: string;
     readonly operationId: OperationId;
-  }) => Promise<PlanningHandoffResult>;
+  }, expectedProposalRevision?: number) => Promise<PlanningHandoffResult>;
 };
 
 /**

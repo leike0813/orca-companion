@@ -12,6 +12,7 @@ import { AnswerPanel, type AnswerPanelView } from '../components/answer-panel.js
 import { PasteViewer, type PasteViewerView } from '../components/paste-viewer.js';
 
 import { CommandPalette, commandReason, slashCandidates, type CommandId } from '../components/command-palette.js';
+import { HELP_LINES, COMMAND_METADATA } from '../commands.js';
 import { Composer } from '../components/composer.js';
 import { ContextSearch, type ContextSearchView } from '../components/context-search.js';
 import { ControlBar } from '../components/control-bar.js';
@@ -82,6 +83,7 @@ export type WorkspaceProps = {
   readonly paletteSelection: number;
   readonly composerDisabledReason: string | null;
   readonly newlineHint: string;
+  readonly executionReview?: ControllerHandoffView | null;
   readonly handoffProposal: ControllerPlanningHandoffView | null;
   readonly authorizationReview: ExecutionAuthorizationLoad | null;
   readonly commands: readonly CommandId[];
@@ -154,11 +156,11 @@ export function Workspace(props: WorkspaceProps) {
       reconciling={view.execution.reconciliation.pending} availableWidth={props.terminalWidth} sessionId={selected}
       holder={view.scope.executionLeaseHolderSessionId} pendingCount={view.execution.hazards.openInteractionCount}/>
     {alerts.slice(0,2).map((s,i)=><Text key={i} color={tuiColors.warning}>{truncateToDisplayWidth('! '+s+(i===1&&alerts.length>2?' · 另有 '+(alerts.length-2)+' 项':''),props.terminalWidth)}</Text>)}
-    {overlay!==null?<Box height={bodyRows} width={props.terminalWidth} justifyContent="center" flexDirection="column"><Overlay overlay={overlay} props={props} narrow={props.terminalWidth<100}/></Box>:
-    ui.pendingConfirmation!==null?<Box height={bodyRows} width={props.terminalWidth} justifyContent="center" flexDirection="column"><ControlBar controlState={view.scope.controlState} hazards={view.execution.hazards} pending={ui.pendingConfirmation} availableWidth={props.terminalWidth}
+    {ui.pendingConfirmation!==null?<Box height={bodyRows} width={props.terminalWidth} justifyContent="center" flexDirection="column"><ControlBar controlState={view.scope.controlState} hazards={view.execution.hazards} pending={ui.pendingConfirmation} availableWidth={props.terminalWidth}
       rows={Math.max(10,rows-7)} tab={ui.reviewTab} scroll={ui.reviewScroll} action={ui.reviewAction}
       scopeId={view.scope.coordinationScopeId} sessionCount={view.sessions.length}
       onConfirm={props.actions.confirmPending} onDismiss={props.actions.dismissPending}/></Box>:
+    overlay!==null?<Box height={bodyRows} width={props.terminalWidth} justifyContent="center" flexDirection="column"><Overlay overlay={overlay} props={props} narrow={props.terminalWidth<100}/></Box>:
     ui.projectPanel.open&&props.terminalWidth<100?project:
     <Box ref={rowRef} flexDirection="row" height={bodyRows} flexShrink={0}>
       <Box ref={bodyRef} flexDirection="column" width={width} height={bodyRows}>
@@ -195,10 +197,11 @@ function Overlay(props: {
         <CommandPalette
           commands={parent.commands}
           selectedIndex={parent.paletteSelection}
+          query={parent.ui.dialogSelections['command-palette']?.query.text??''}
           onRun={parent.actions.runCommand}
           availableWidth={parent.terminalWidth}
           summary={`${parent.ui.selectedSessionId??'未选择会话'} · ${parent.viewModel.scope.mode==='route_planning'?'规划':'执行'}`}
-          maxRows={Math.max(1,(parent.terminalHeight??24)-11)}
+          maxRows={Math.max(1,(parent.terminalHeight??24)-15)}
           reasons={Object.fromEntries(parent.commands.flatMap(command=>{const reason=commandReason(command,{mode:parent.viewModel.scope.mode,selectedSessionId:parent.ui.selectedSessionId,pasteBlocks:composerInputFor(parent.ui,parent.ui.selectedSessionId).pasteBlocks.length});return reason?[[command,reason]]:[];}))}
         />
       );
@@ -220,22 +223,27 @@ function Overlay(props: {
         <SessionPicker
           sessions={parent.viewModel.sessions}
           selectedSessionId={parent.ui.selectedSessionId}
+          {...(parent.ui.dialogSelections['session-picker']?{selection:parent.ui.dialogSelections['session-picker']}:{})}
           onSelect={parent.actions.selectSession}
           availableWidth={parent.terminalWidth}
           rows={Math.max(10,(parent.terminalHeight??24)-7)}
         />
       );
     case 'handoff-target':
-      return <SessionPicker title="选择交接收件方" sessions={parent.viewModel.sessions} selectedSessionId={null}
+      return <SessionPicker title="选择交接收件方" sessions={parent.viewModel.sessions.filter(s=>s.coordinatorSessionId !== (parent.viewModel.scope.mode==='route_planning'?parent.viewModel.sessions.find(s=>s.planningResponsible)?.coordinatorSessionId:parent.viewModel.scope.executionLeaseHolderSessionId))} selectedSessionId={null}
+        {...(parent.ui.dialogSelections['handoff-target']?{selection:parent.ui.dialogSelections['handoff-target']}:{})}
         onSelect={id=>parent.actions.selectRecipient?.(id)} availableWidth={parent.terminalWidth} rows={Math.max(10,(parent.terminalHeight??24)-7)}/>;
     case 'event-drawer':
       return <ProjectPanel view={parent.viewModel} events={parent.events} panel={{...parent.ui.projectPanel,tab:2}} width={parent.terminalWidth} height={Math.max(8,(parent.terminalHeight??24)-4)}/>;
     case 'options':
-      return <DialogFrame title="选项" summary="本次进程的显示选项" width={parent.terminalWidth} rows={Math.max(10,(parent.terminalHeight??24)-7)} footer="Enter 切换 · Esc 返回"><Text>图标 · {parent.ui.iconMode}</Text><Text inverse color={tuiColors.focus}>Enter 切换 Nerd / ASCII</Text><Text dimColor>状态栏设置：用户级偏好尚未接通</Text></DialogFrame>;
+      return <CommandPalette commands={parent.commands.filter(id=>COMMAND_METADATA[id].path.startsWith('选项 →'))} selectedIndex={parent.paletteSelection} query={parent.ui.dialogSelections.options?.query.text??''} onRun={parent.actions.runCommand} availableWidth={parent.terminalWidth} maxRows={Math.max(1,(parent.terminalHeight??24)-11)} summary={`选项 · 当前图标 ${parent.ui.iconMode}`} reasons={{statusline:'用户级状态栏设置尚未接通'}}/>;
+    case 'help':
+      return <DialogFrame title="Help · 命令与键位" summary="Scope / Session / UI" width={parent.terminalWidth} rows={Math.max(10,(parent.terminalHeight??24)-7)} footer="↑↓ 浏览 · Esc 返回"><Box flexDirection="column" overflow="hidden">{[...HELP_LINES,...parent.commands.map(id=>{const meta=COMMAND_METADATA[id];return `${meta.alias?'/'+meta.alias:meta.label} · ${meta.target} · ${meta.description}`;})].slice(parent.ui.reviewScroll,parent.ui.reviewScroll+Math.max(1,(parent.terminalHeight??24)-14)).map((line,i)=><Text key={i}>{truncateToDisplayWidth(line,Math.max(1,parent.terminalWidth-8))}</Text>)}</Box></DialogFrame>;
     case 'model-picker':
       return (
         <ModelPicker
           catalog={parent.modelCatalog}
+          {...(parent.ui.dialogSelections['model-picker']?{selection:parent.ui.dialogSelections['model-picker']}:{})}
           rejection={parent.modelRejection}
           onSelect={parent.actions.selectModel}
           availableWidth={parent.terminalWidth}
@@ -262,7 +270,7 @@ function Overlay(props: {
         <HandoffReview
           proposal={null}
           responsibleSessionId={null}
-          executionHandoff={executionHandoffUnderReview(parent)}
+          executionHandoff={parent.executionReview??executionHandoffUnderReview(parent)}
           targetAwaitingUserPrompt
           onConfirm={parent.actions.confirmExecutionHandoff}
           onCancel={parent.actions.cancelExecutionHandoff}
@@ -310,9 +318,7 @@ export function HelpNotice(): ReactElement {
   return (
     <Box flexDirection="column">
       <Text>Help</Text>
-      <Text>Ctrl+P Command Palette · Ctrl+B 项目 · Ctrl+G Graph Inspector</Text>
-      <Text>Ctrl+T 展开/折叠最近一条工具记录 · Shift+← 回答 · Ctrl+A/E 行首尾</Text>
-      <Text>Esc 逐层关闭 · Ctrl+C 退出（危险态先确认）· Cancel 需确认</Text>
+      {HELP_LINES.map(line=><Text key={line}>{line}</Text>)}
     </Box>
   );
 }

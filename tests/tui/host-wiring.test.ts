@@ -1,3 +1,5 @@
+import { COMMAND_IDS } from '../../src/interfaces/tui/commands.js';
+import { chooseCommand } from './harness.js';
 /**
  * TUI 端口 ⇄ 真实前台宿主的接线（IP-04、IP-11，`m2-deliver-planning-tui`）。
  *
@@ -324,20 +326,15 @@ async function pressKey(instance: RenderedTui, input: string): Promise<void> {
 
 /** 打开 Command Palette，下移到第 `index` 项后执行。 */
 async function runPaletteCommand(instance: RenderedTui, index: number): Promise<void> {
-  await pressKey(instance, '\u0010');
-  for (let step = 0; step < index; step += 1) {
-    await pressKey(instance, '\u001b[B');
-  }
-  await pressKey(instance, '\r');
+  await chooseCommand(instance,COMMAND_IDS[index]!);
 }
-
 /**
  * 在已打开的覆盖层里向下移动到标记为选中的那一项，直到它包含 `needle`。
  *
  * 覆盖层用箭头标注当前焦点（行首是 Ink 边框字符），因此这里读的是界面自己的焦点标记，
  * 不用按下次数猜位置。
  */
-const SELECTED_OPTION_LINE = /^[│┃|\s]*[>❯]\s/u;
+const SELECTED_OPTION_LINE = /^[│┃|\s]*[>❯›]\s/u;
 
 async function moveSelectionTo(instance: RenderedTui, needle: string): Promise<void> {
   for (let step = 0; step < 16; step += 1) {

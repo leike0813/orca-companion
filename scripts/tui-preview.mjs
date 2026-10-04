@@ -417,7 +417,9 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
       while (!history.store.prepareHistoryInspection().ready) await new Promise(resolve => setTimeout(resolve, 0));
     }
     snapshot.openInteractionCount = snapshot.interactions.filter(item => item.state === 'open').length;
+    const fixtureRef=(kind,id)=>({kind,coordinationScopeId:snapshot.coordinationScopeId,...(kind==='planning-handoff'?{proposalId:id,revision:1,phase:'prepared'}:{handoffId:id,revision:0,phase:'reviewed'})});
     const ports = {
+      commandStatus: async ref=>({kind:'accepted',revision:null,summary:'隔离 fixture 核验',resultRef:ref}),
       reading: {
         interactions: async (session, interactionIds) => branch?.kind === 'opened'
           ? questionQuery({ kind: 'interaction-summaries', coordinatorSessionId: session, interactionIds }).interactions : [],
@@ -498,13 +500,16 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
       },
       modelCatalog: { load: async () => ({ options: [{ configurationRef: 'config-a', model: previewDialogs ? '示例模型 A' : 'preview-model-a' }, { configurationRef: 'config-b', model: previewDialogs ? '示例模型 B' : 'preview-model-b' },
         ...(previewDialogs ? [{ configurationRef: 'config-rejected', model: '演示宿主拒绝的候选模型' }, { configurationRef: 'config-basic', model: '不支持 effort 的示例模型' }] : [])], currentConfigurationRef: 'config-a', switchable: true, switchBlockReason: null }) },
-      handoff: { prepareProposal: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟交接提案已准备' } : rejected,
+      handoff: { read: async id=>snapshot.planningHandoffs.find(p=>p.proposalId===id)??null,
+        prepareProposal: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟交接提案已准备',resultRef:fixtureRef('planning-handoff','fixture-planning-handoff') } : rejected,
         cutover: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟规划交接已记录；Target 等待下一条消息' } : rejected,
         cancel: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟规划交接提案已取消' } : rejected },
-      executionHandoff: { prepare: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟执行交接已准备' } : rejected,
+      executionHandoff: { read: async id=>snapshot.handoffs.find(p=>p.handoffId===id)??null,
+        prepare: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟执行交接已准备',resultRef:fixtureRef('execution-handoff','fixture-execution-handoff') } : rejected,
         review: async () => rejected, cutover: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟执行交接已记录；Target 等待下一条消息' } : rejected,
         cancel: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟执行交接提案已取消' } : rejected },
       executionAuthorization: { review: async () => previewDialogs ? { kind: 'review', review: {
+        sections:[{id:'overview',label:'概览',fields:[{label:'项目',value:snapshot.coordinationScopeId},{label:'图',value:snapshot.graph.graphId},{label:'工作包',value:'20'},{label:'门禁',value:'通过'}]},{id:'permissions',label:'权限',fields:[{label:'工作区',value:'仅隔离 worktree'},{label:'发布/部署',value:'无授权'}]},{id:'budget',label:'预算',fields:[{label:'并发',value:'1'},{label:'实现/验证',value:'每包 2 次'}]},{id:'workspace',label:'工作范围',fields:Array.from({length:8},(_,i)=>({label:'工作包 '+(i+1),value:'src/中文长路径/交互与终端验收/'+(i+1)}))},{id:'complete',label:'完整清单',fields:[{label:'fingerprint',value:'fixture-manifest-52'},{label:'Scope revision',value:'7'},{label:'Git',value:'main/origin 唯一 ref'}]}].map(section=>({...section,fields:section.fields.map(field=>({...field,group:{overview:'执行计划',permissions:'允许的操作',budget:'执行上限',workspace:'隔离工作范围',complete:'批准绑定的完整内容'}[section.id]}))})),
         fingerprint: 'fixture-manifest-52', scopeRevision: 7,
         candidate: { graphId: snapshot.graph.graphId, generation: 1, version: 3, baselineHead: 'fixture-baseline-52', workPackageCount: 20 },
         manifestRows: [

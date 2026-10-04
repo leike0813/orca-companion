@@ -18,6 +18,7 @@ export type ProjectPanelState = { readonly open: boolean; readonly tab: number; 
 
 export type SidebarDensity = 'full' | 'compact' | 'collapsed';
 export type OverlayKind =
+  | 'help'
   | 'command-palette'
   | 'options'
   | 'graph-inspector'
@@ -91,6 +92,7 @@ export type ComposerMode =
 export type TuiScreen = 'home' | 'wizard' | 'legacy-review' | 'workspace';
 
 export type TuiState = {
+  readonly dialogSelections: Readonly<Partial<Record<OverlayKind, { readonly query: UiDraft; readonly selectedId: string | null }>>>;
   readonly handoffCommand: 'handoff' | 'execution-handoff';
   readonly projectPanel: ProjectPanelState;
   readonly iconMode: TuiIconMode;
@@ -125,6 +127,7 @@ export type TuiState = {
   readonly readOnlySessionIds: readonly string[];
   /** 等待确认的动作；危险态下的 Cancel 与 Exit 需要它，Pause 从不使用它。 */
   readonly pendingConfirmation: PendingConfirmation;
+  readonly confirmationFrames: readonly {readonly pendingConfirmation:PendingConfirmation;readonly reviewTab:number;readonly reviewScroll:number;readonly reviewAction:number}[];
   /** 执行图过滤（展示态）：只隐藏节点。 */
   readonly executionFilter: ExecutionFilter;
   /** 正在审阅的 Execution Handoff 记录；`null` 表示没有。 */
@@ -132,6 +135,7 @@ export type TuiState = {
 };
 
 export const initialTuiState: TuiState = {
+  dialogSelections: {},
   handoffCommand: 'handoff',
   projectPanel: { open: false, tab: 0, selectedKey: null, detail: null, scroll: 0 },
   iconMode: tuiIconMode,
@@ -162,6 +166,7 @@ export const initialTuiState: TuiState = {
   attention: false,
   readOnlySessionIds: [],
   pendingConfirmation: null,
+  confirmationFrames:[],
   executionFilter: [],
   executionHandoffReviewId: null,
 };
@@ -171,6 +176,7 @@ export type AnswerReturnState = Pick<TuiState, 'selectedSessionId' | 'composerMo
 };
 
 export type TuiAction =
+  | { readonly kind: 'dialog-selection'; readonly overlay: OverlayKind; readonly query: UiDraft; readonly selectedId: string | null }
   | { readonly kind: 'transcript-details'; readonly detailed: boolean; readonly expanded?: readonly string[] }
   | { readonly kind: 'handoff-target'; readonly command: 'handoff' | 'execution-handoff' }
   | { readonly kind: 'project-panel'; readonly panel: ProjectPanelState }
@@ -222,7 +228,9 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
     case 'screen':
       return { ...state, screen: action.screen };
     case 'overlay-open':
-      return { ...state, overlayStack: [...state.overlayStack, action.overlay] };
+      return state.overlayStack.at(-1) === action.overlay ? state : { ...state, overlayStack: [...state.overlayStack, action.overlay] };
+    case 'dialog-selection':
+      return { ...state, dialogSelections: { ...state.dialogSelections, [action.overlay]: { query: action.query, selectedId: action.selectedId } } };
     case 'overlay-close-top':
       return { ...state, overlayStack: state.overlayStack.slice(0, -1) };
     case 'overlay-close-all':
@@ -317,9 +325,9 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         ? state
         : { ...state, readOnlySessionIds: [...state.readOnlySessionIds, action.coordinatorSessionId] };
     case 'confirmation-requested':
-      return { ...state, pendingConfirmation: action.pending, reviewTab: 0, reviewScroll: 0, reviewAction: 0 };
+      return state.pendingConfirmation?.kind===action.pending.kind?state:{ ...state, confirmationFrames:[...state.confirmationFrames,{pendingConfirmation:state.pendingConfirmation,reviewTab:state.reviewTab,reviewScroll:state.reviewScroll,reviewAction:state.reviewAction}],pendingConfirmation: action.pending, reviewTab: 0, reviewScroll: 0, reviewAction: 0 };
     case 'confirmation-dismissed':
-      return state.pendingConfirmation === null ? state : { ...state, pendingConfirmation: null };
+      return state.pendingConfirmation === null ? state : { ...state,pendingConfirmation:null,...state.confirmationFrames.at(-1),confirmationFrames:state.confirmationFrames.slice(0,-1) };
     case 'execution-filter-changed':
       return { ...state, executionFilter: action.filter };
     case 'execution-handoff-review':

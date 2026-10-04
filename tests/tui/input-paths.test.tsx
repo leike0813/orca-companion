@@ -1,3 +1,4 @@
+import { chooseCommand } from './harness.js';
 /**
  * 容器输入路径回归测试（IP-05/IP-07/IP-08）。
  *
@@ -176,11 +177,10 @@ describe('容器输入路径', () => {
     const payload = '中文'.repeat(501) + '\n\n';
     await press(rendered, '\u001b[200~' + payload + '\u001b[201~');
     expect(rendered.lastFrame()).toContain('粘贴 1');
-    await press(rendered, CTRL_P);
-    // Palette 的 /paste 与 slash 共用入口。
-    for (let index = 0; index < 15; index++) await press(rendered, ARROW_DOWN);
-    await press(rendered, ENTER);
+    await chooseCommand(rendered,'paste');
     expect(rendered.lastFrame()).toContain('粘贴查看');
+    await press(rendered, '\u001b');
+    expect(rendered.lastFrame()).toContain('搜索 › paste');
     await press(rendered, '\u001b');
     await press(rendered, '后');
     await press(rendered, ENTER);

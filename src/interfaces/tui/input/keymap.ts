@@ -6,26 +6,8 @@
  * 把它翻译成一个动作。
  */
 
-export const GLOBAL_KEY_BINDINGS = {
-  'command-palette': 'ctrl+p',
-  'toggle-sidebar': 'ctrl+b',
-  'graph-inspector': 'ctrl+g',
-  'toggle-tool': 'ctrl+t',
-  'enter-answer': 'shift+left',
-  exit: 'ctrl+c',
-  escape: 'escape',
-} as const;
-
-export type GlobalAction =
-  | 'search-history'
-  | 'navigate-activity'
-  | 'command-palette'
-  | 'toggle-sidebar'
-  | 'graph-inspector'
-  | 'toggle-tool'
-  | 'enter-answer'
-  | 'exit'
-  | 'escape';
+import { GLOBAL_KEY_BINDINGS, type GlobalAction } from '../commands.js';
+export { GLOBAL_KEY_BINDINGS, COMPOSER_SUBMIT_KEY, COMPOSER_NEWLINE_KEYS, type GlobalAction } from '../commands.js';
 
 export type KeyEventLike = {
   readonly ctrl?: boolean;
@@ -44,24 +26,7 @@ export function resolveGlobalAction(input: string, key: KeyEventLike): GlobalAct
   if (['\u001bOR', '\u001b[13~'].includes(input)) return 'search-history';
   if (['\u001bOS', '\u001b[14~'].includes(input)) return 'navigate-activity';
   if (key.shift && key.leftArrow && !key.ctrl && !key.meta) return 'enter-answer';
-  if (key.ctrl === true && key.meta !== true) {
-    if (input === 'p') {
-      return 'command-palette';
-    }
-    if (input === 'b') {
-      return 'toggle-sidebar';
-    }
-    if (input === 'g') {
-      return 'graph-inspector';
-    }
-    if (input === 't') {
-      return 'toggle-tool';
-    }
-    if (input === 'c') {
-      return 'exit';
-    }
-    return null;
-  }
+  if (key.ctrl === true && key.meta !== true) return (Object.entries(GLOBAL_KEY_BINDINGS).find(([, binding]) => binding === `ctrl+${input}`)?.[0] as GlobalAction | undefined) ?? null;
   if (key.escape === true) {
     return 'escape';
   }
@@ -69,8 +34,6 @@ export function resolveGlobalAction(input: string, key: KeyEventLike): GlobalAct
 }
 
 /** Enter 提交；终端无法区分 Shift+Enter 时回退到 Alt+Enter 换行（界面显示实际键位）。 */
-export const COMPOSER_SUBMIT_KEY = 'enter';
-export const COMPOSER_NEWLINE_KEYS = ['shift+enter', 'alt+enter'] as const;
 
 export function composerNewlineHint(altEnterRequired: boolean): string {
   return altEnterRequired ? 'Alt+Enter 换行' : 'Shift+Enter 换行';

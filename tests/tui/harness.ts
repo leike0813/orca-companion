@@ -1,3 +1,4 @@
+import type { CommandId } from '../../src/interfaces/tui/commands.js';
 /**
  * TUI 测试 harness（Owner: `m2-deliver-planning-tui`）。
  *
@@ -363,6 +364,7 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
   };
 
   const ports: TuiPorts = {
+    commandStatus: ref => Promise.resolve({kind:'accepted',revision:null,summary:'已核验',resultRef:ref}),
     reading: {
       history: (query) => {
         calls.push({ name: 'history', detail: query.coordinatorSessionId });
@@ -425,9 +427,11 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
       },
     },
     handoff: {
+      read: id => Promise.resolve(snapshot.planningHandoffs.find(p=>p.proposalId===id)??null),
       prepareProposal: () => {
         calls.push({ name: 'handoff.prepare', detail: null });
-        return Promise.resolve(accepted);
+        const p=snapshot.planningHandoffs[0];
+        return Promise.resolve(p?{...accepted,resultRef:{kind:'planning-handoff',coordinationScopeId:snapshot.coordinationScopeId,proposalId:p.proposalId,revision:p.proposalRevision,phase:p.phase}}:accepted);
       },
       cutover: (proposalId) => {
         calls.push({ name: 'handoff.cutover', detail: proposalId });
@@ -470,14 +474,17 @@ function createFakeExecutionHandoff(
 ): ExecutionHandoffIntentPort {
   const resultFor = (step: 'prepare' | 'review' | 'cutover' | 'cancel'): ControllerCommandResult =>
     options.executionHandoff?.[step] ?? accepted;
+  const records=options.snapshot?.handoffs??[];
+  const wrap=(step:'prepare'|'review'|'cutover'|'cancel',id?:string):ControllerCommandResult=>{const result=resultFor(step),record=records.find(r=>r.handoffId===id)??records[0];return result.kind==='accepted'&&record?{...result,resultRef:{kind:'execution-handoff',coordinationScopeId:'scope-1',handoffId:record.handoffId,revision:0,phase:record.phase}}:result;};
   return {
+    read:id=>Promise.resolve(records.find(r=>r.handoffId===id)??null),
     prepare: (targetCoordinatorSessionId) => {
       calls.push({ name: 'execution-handoff.prepare', detail: targetCoordinatorSessionId });
-      return Promise.resolve(resultFor('prepare'));
+      return Promise.resolve(wrap('prepare'));
     },
     review: (handoffId) => {
       calls.push({ name: 'execution-handoff.review', detail: handoffId });
-      return Promise.resolve(resultFor('review'));
+      return Promise.resolve(wrap('review',handoffId));
     },
     cutover: (handoffId) => {
       calls.push({ name: 'execution-handoff.cutover', detail: handoffId });
@@ -533,6 +540,7 @@ export function makeAuthorizationReview(
         { label: 'Coordination Scope', value: 'scope-1' },
         { label: 'Git Policy', value: 'main remotes=[origin] refs=[refs/heads/main]' },
       ],
+      sections:[{id:'overview',label:'概览',fields:[{label:'图',value:'graph-1'}]},{id:'permissions',label:'权限',fields:[]},{id:'budget',label:'预算',fields:[]},{id:'workspace',label:'工作范围',fields:[]},{id:'complete',label:'完整清单',fields:[{label:'fingerprint',value:'fingerprint-1'}]}],
       gate: { ready: true, blockers: [] },
       ...overrides,
     },
@@ -578,4 +586,13 @@ export async function settle(ticks = 6): Promise<void> {
 
 export function frameText(rendered: RenderedTui): string {
   return rendered.lastFrame() ?? '';
+}
+
+/** Explicit caller navigation and literal search; command ordering is not a test contract. */
+export async function chooseCommand(app:RenderedTui,id:CommandId):Promise<void>{
+  if(frameText(app).includes('选择交接收件方')){app.stdin.write('\u001b');await new Promise<void>(resolve=>setTimeout(resolve,60));await settle(3);}
+  if(frameText(app).includes('Command Palette')){app.stdin.write('\u001b');await new Promise<void>(resolve=>setTimeout(resolve,60));await settle(3);}
+  app.stdin.write('\u0010');await settle(3);
+  app.stdin.write(id);await settle(3);
+  app.stdin.write('\r');await settle(4);
 }

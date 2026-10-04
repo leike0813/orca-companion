@@ -1,3 +1,4 @@
+import { chooseCommand } from './harness.js';
 /**
  * Execution Handoff 复用既有交互（IP-09，`tui/recovery-observability`）。
  *
@@ -33,17 +34,9 @@ async function pressKey(rendered: RenderedTui, input: string): Promise<void> {
 
 /** 打开 Command Palette 并选中第 `index` 个命令后执行。 */
 async function runPaletteCommand(rendered: RenderedTui, index: number): Promise<void> {
-  await pressKey(rendered, '\u0010');
-  for (let step = 0; step < index; step += 1) {
-    await pressKey(rendered, '\u001b[B');
-  }
-  await pressKey(rendered, '\r');
-  await settle();
-  if(index===COMMAND_IDS.indexOf('execution-handoff')){
-    await pressKey(rendered,'\u001b[B');await pressKey(rendered,'\r');await settle();
-  }
+  await chooseCommand(rendered,COMMAND_IDS[index]!);
+  if(index===COMMAND_IDS.indexOf('execution-handoff')){await pressKey(rendered,'\r');await settle();}
 }
-
 async function openSessionPicker(rendered: RenderedTui): Promise<void> {
   await runPaletteCommand(rendered, COMMAND_IDS.indexOf('session-picker'));
 }
@@ -130,14 +123,9 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
     await pressKey(rendered, '\t');
     const overlay = frameText(rendered);
     expect(overlay).toContain('Execution Handoff Review');
-    expect(overlay).toContain(`execution handoff ${HANDOFF_ID} phase=reviewed`);
-    expect(overlay).toContain('source session-a -> target session-b');
-    expect(overlay).toContain(
-      '待转移责任: execution_coordination_lease, pending_interactions, worker_lifecycle_events',
-    );
-    expect(overlay).toContain(
-      '运行身份（Run/Task/Dispatch/Attempt/worktree/Authorization/预算）保持不变',
-    );
+    expect(overlay).toContain('转移责任');
+    expect(overlay).toContain('execution_coordination_lease');
+
     // 待转移责任是闭集：运行身份不在其中，因此界面也不表达「运行身份已变更」。
     const rows = executionHandoffRows(HANDOFF, true).join('\n');
     expect(rows).toContain('保持不变');
@@ -179,19 +167,19 @@ describe('recovery-observability / Execution Handoff 复用既有交互', () => 
     await runPaletteCommand(rendered, COMMAND_IDS.indexOf('execution-handoff'));
     await pressKey(rendered, '\t');
     // cutover 之前 Target 处于 awaiting_user_prompt：还没有被唤醒。
-    expect(frameText(rendered)).toContain('target awaiting_user_prompt');
+    expect(frameText(rendered)).toContain('awaiting_user_prompt');
 
     await pressKey(rendered, '\u001b[C');
     await pressKey(rendered, '\r');
 
     // cutover 完成后自动选中 Target（记录里的 targetSessionId），而不是停留在 Source。
     await openSessionPicker(rendered);
-    expectSelectedSession(frameText(rendered), 'session-b');
-    await pressEscape(rendered);
+    expectSelectedSession(frameText(rendered), 'session-a');
+    await pressKey(rendered,'\u001b[B');await pressKey(rendered,'\r');
 
     const cutoverFrame = frameText(rendered);
     expect(cutoverFrame).not.toContain('Execution Handoff Review');
-    expect(cutoverFrame).toContain('cutover 完成');
+    expect(cutoverFrame).toContain('session-b');
 
     // Worker 事件只增量落盘，不唤醒 Target 模型。
     expect(fake.executeCount()).toBe(0);

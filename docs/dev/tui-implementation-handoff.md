@@ -2,7 +2,7 @@
 
 > **硬约束：尊重已确认原型。任何 TUI change 必须直接引用对应定稿决议、源码和画面，并按其布局、信息层级、视觉风格、导航与返回约定实施、验收。未经用户明确批准，不得自行重新设计。交互正常或自动测试通过，不能替代原型一致性验收。**
 
-状态日期：2026-10-03。接手先核对 HEAD、工作区和当前工件；保留已有未提交改动。体验以用户当前指示和 Decision Ticket 最终决议为准；领域、模块与公共合同分别由 [CONTEXT.md](../../CONTEXT.md)、[architecture.md](../architecture.md)、[interface-contracts.md](../interface-contracts.md) 拥有。
+状态日期：2026-10-04。接手先核对 HEAD、工作区和当前工件；保留已有未提交改动。体验以用户当前指示和 Decision Ticket 最终决议为准；领域、模块与公共合同分别由 [CONTEXT.md](../../CONTEXT.md)、[architecture.md](../architecture.md)、[interface-contracts.md](../interface-contracts.md) 拥有。
 
 ## 1. 六票来源与当前范围
 
@@ -36,11 +36,11 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 | `paginate-coordinator-history`（3A） | 增量权威历史、有界有效上下文与正式 transcript 分页；证据见 [README](../../artifacts/coordinator-history/README.md) | 已包含于 `b15ff20d`，2026-10-03 已归档 | 沿用 #40 continuous 和 #41 阅读键位，三档彩色/NO_COLOR、跨页与 resize 共 45 对画面 |
 | `render-bounded-transcript`（3B） | 局部原文视窗、双缓存、来源锚点、有限 Markdown、生产流式/中止与预算；[性能与81对画面](../../artifacts/bounded-transcript/README.md)；[verification PASS](../../openspec/changes/archive/2026-10-03-render-bounded-transcript/verification.md) | 已包含于 `20f02996`；2026-10-03 已归档、主规格已同步；原验收按用户要求复用当时证据 | 六票结构沿用，三档两色/Nerd与ASCII、历史/流式/resize/返回；输入和缓存导航各100采样达到 #53 p95 |
 | `inspect-and-search-coordinator-history`（第四批） | 任务9/9；可信活动、参数/结果来源、整体详细、F4、F3 原文搜索及普通输入召回/Ctrl+R；[性能与192对画面](../../artifacts/history-inspection/README.md)，五场景完整扫描及响应门槛通过；[verification PASS](../../openspec/changes/archive/2026-10-03-inspect-and-search-coordinator-history/verification.md) | 已包含于 `69f0aa17`；2026-10-03 已归档、主规格已同步 | 沿六票定稿；完整扫描、必要检查与最终画面证据齐备 |
-| `link-tui-pending-interactions`（第五批） | 9/9；有界问题摘要与完整计数、原提问处 Q/state/A、原位详情、跨 Session 回答和原入口/草稿/锚点返回；[verification PASS](../../openspec/changes/link-tui-pending-interactions/verification.md)，[147对画面与性能](../../artifacts/pending-interactions/README.md) | `69f0aa17` 上的当前工作区实现；验收完成，未提交、未归档 | 沿六票定稿；输入/缓存导航p95通过，范围外配置与图功能留后继 |
+| `link-tui-pending-interactions`（第五批） | 9/9；有界问题摘要与完整计数、原提问处 Q/state/A、原位详情、跨 Session 回答和原入口/草稿/锚点返回；[verification PASS](../../openspec/changes/archive/2026-10-03-link-tui-pending-interactions/verification.md)，[147对画面与性能](../../artifacts/pending-interactions/README.md) | 已包含于 `abf8f0c`；2026-10-03 已归档、主规格已同步 | 沿六票定稿；输入/缓存导航p95通过，范围外配置与图功能留后继 |
 
 ### 第二批成果及证据边界
 
-当前基线 HEAD：`69f0aa1781265bb7623cb4bbb3e8ae5722e72bce`。第二批、原型纠偏、3A、3B 与第四批已包含于 HEAD；当前 dirty 工作区为第五批实现。接手先检查 `git status --short`，不要覆盖、重置或重复实现。
+当前基线 HEAD：`abf8f0c0617972f8277598dfe04257769ba86179`。第五批及全部前驱已包含于 HEAD；当前工作区为第六批 6A `complete-tui-command-reviews`。接手先检查 `git status --short`，不要覆盖、重置或重复实现。
 
 第二批已提供 grapheme 任意位置编辑、行首尾、多行有界视窗、原生光标；>1000 code points 原子粘贴及 /paste；唯一完整 UiDraft、CAS、提交快照/稳定 submissionId、单活跃提交/generation；真实 ask_user 创建/重放与精确查询；当前 Session 选项/自由回答、Esc 恢复。UI schema v2、Coordination schema 14，问题正文由 Branch Store 拥有。
 
@@ -65,7 +65,7 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 
 ## 3. 接续顺序与缺口
 
-呈现纠偏、3A、3B 与第四批已归档，#46 的第五批已实现并验收、尚未归档；后继沿用同一原型。原纠偏范围的缺口与 owner 见 [design D-10](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/design.md#d-10逐项合同缺口与后续归属)，第五批边界见 [当前 design](../../openspec/changes/link-tui-pending-interactions/design.md)。
+呈现纠偏、3A、3B、第四批和第五批均已归档；第六批按用户决定拆为连续 6A/6B，沿用同一原型。原纠偏范围的缺口与 owner 见 [design D-10](../../openspec/changes/archive/2026-10-03-align-tui-with-approved-prototypes/design.md#d-10逐项合同缺口与后续归属)，第五批边界见 [已归档 design](../../openspec/changes/archive/2026-10-03-link-tui-pending-interactions/design.md)。
 
 | 顺序 | 当前状态 / 后续职责 |
 | --- | --- |
@@ -74,8 +74,9 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 | 3A | 已归档：全历史增量读写、keyset/正文范围、分页返回和有效上下文边界 |
 | 3B | 已归档：局部视窗、稳定锚点/有界缓存、Markdown/流式与 #53 输入/缓存导航 p95；原验收复用当时既有证据 |
 | 第四批 | 已归档9/9：活动关联/参数与结果详情、F3 transcript 搜索、Ctrl+R 普通输入历史；1千/1万/10万记录与1/5MiB完整扫描成本均已记录 |
-| 第五批 | 当前工作区9/9、正式验收PASS：历史问答卡片、Scope有界待答页、跨Session进入/返回及输入保护；6文件140项独立复验通过，全量与唯一失败修复后合并1514项通过、12项条件跳过；147对画面及性能见独立证据 |
-| 第六批 | 当前命令/弹窗样式与候选已实现；后继补完整目录搜索、真实 provider/effort/角色配置及其权限 |
+| 第五批 | 已归档9/9、正式验收PASS：历史问答卡片、Scope有界待答页、跨Session进入/返回及输入保护；6文件140项独立复验通过，全量与唯一失败修复后合并1514项通过、12项条件跳过；147对画面及性能见独立证据 |
+| 第六批 6A | 当前工作区9/9、[正式验收PASS](../../openspec/changes/complete-tui-command-reviews/verification.md)，未提交、未归档：同源目录/子页搜索、结构化结果与输入保护、精确交接 ID/revision、五栏授权/三栏交接审阅和显式 Session 模型目录；[生产画面与操作](../../artifacts/command-reviews/README.md)及最终检查见 change 验收记录 |
+| 第六批 6B | 直接后继：provider/model/effort、Worker Profiles 和 Manifest 模型绑定及真实启动验证；尚未起草/实现，不计入 6A 完成范围 |
 | 第七批 | 当前项目固定框/状态栏层级已实现；后继补可信身份/context/metadata、用户级 custom 配置/恢复/保存失败和共享验收摘要 |
 | 第八批 | 当前 adaptive/节点卡/准确导航已实现；后继补历史版本/依据有界读取与全链路验收 |
 

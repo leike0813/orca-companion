@@ -58,6 +58,7 @@ export type TuiIntent =
     };
 
 export type TuiPorts = {
+  readonly commandStatus: (ref: import('../../application/tui/command-result.js').CommandResultRef) => Promise<ControllerCommandResult>;
   readonly reading: TranscriptReadingPort;
   readonly questions?: (input: TuiQuestionQuery) => Promise<import('../../application/controller-service.js').ControllerQuestionResult>;
   readonly inputStore: UiInputStore;
@@ -97,6 +98,7 @@ export type ExecutionAuthorizationView = {
     readonly workPackageCount: number;
   };
   readonly manifestRows: readonly { readonly label: string; readonly value: string }[];
+  readonly sections: readonly import('../../application/tui/command-result.js').ReviewSection[];
   readonly gate: { readonly ready: boolean; readonly blockers: readonly string[] };
 };
 
@@ -202,7 +204,7 @@ export type ModelConfigurationOption = {
 };
 
 export type ModelCatalogPort = {
-  readonly load: () => Promise<ModelCatalog>;
+  readonly load: (coordinatorSessionId: string) => Promise<ModelCatalog>;
 };
 
 /**
@@ -213,9 +215,10 @@ export type ModelCatalogPort = {
  * 必须来自用户在选择界面里的明确选择：宿主不会替用户挑一个接收方。
  */
 export type HandoffIntentPort = {
+  readonly read: (proposalId: string) => Promise<import('../../application/controller-service.js').ControllerPlanningHandoffView | null>;
   readonly prepareProposal: (targetCoordinatorSessionId: string) => Promise<ControllerCommandResult>;
-  readonly cutover: (proposalId: string) => Promise<ControllerCommandResult>;
-  readonly cancel: (proposalId: string) => Promise<ControllerCommandResult>;
+  readonly cutover: (proposalId: string, expectedRevision: number) => Promise<ControllerCommandResult>;
+  readonly cancel: (proposalId: string, expectedRevision: number) => Promise<ControllerCommandResult>;
 };
 
 /**
@@ -226,8 +229,9 @@ export type HandoffIntentPort = {
  * 由宿主从权威来源读好后提交，界面不构造它们，也不复用 `PlanningHandoffProposal`。
  */
 export type ExecutionHandoffIntentPort = {
+  readonly read: (handoffId: string) => Promise<import('../../application/controller-service.js').ControllerHandoffView | null>;
   readonly prepare: (targetCoordinatorSessionId: string) => Promise<ControllerCommandResult>;
   readonly review: (handoffId: string) => Promise<ControllerCommandResult>;
-  readonly cutover: (handoffId: string) => Promise<ControllerCommandResult>;
-  readonly cancel: (handoffId: string) => Promise<ControllerCommandResult>;
+  readonly cutover: (handoffId: string, expectedRevision: number) => Promise<ControllerCommandResult>;
+  readonly cancel: (handoffId: string, expectedRevision: number) => Promise<ControllerCommandResult>;
 };

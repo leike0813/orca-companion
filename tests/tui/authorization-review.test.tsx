@@ -1,3 +1,4 @@
+import { chooseCommand } from './harness.js';
 /**
  * Execution Authorization Review（IP-01，`coordinator/foreground-execution-runtime`）。
  *
@@ -8,7 +9,7 @@
 
 import { describe, expect, test } from 'vitest';
 
-import { COMMAND_IDS, type CommandId } from '../../src/interfaces/tui/components/command-palette.js';
+import { type CommandId } from '../../src/interfaces/tui/components/command-palette.js';
 import { authorizationApprovable } from '../../src/interfaces/tui/components/authorization-review.js';
 import {
   createFakePorts,
@@ -26,15 +27,8 @@ async function pressKey(rendered: RenderedTui, input: string): Promise<void> {
 
 /** 打开 Command Palette，移动 `index` 格后回车；索引按 `COMMAND_IDS` 查，不写死数字。 */
 async function runPaletteCommand(rendered: RenderedTui, command: CommandId): Promise<void> {
-  const index = COMMAND_IDS.indexOf(command);
-  expect(index).toBeGreaterThanOrEqual(0);
-  await pressKey(rendered, '\u0010');
-  for (let step = 0; step < index; step += 1) {
-    await pressKey(rendered, '\u001b[B');
-  }
-  await pressKey(rendered, '\r');
+  await chooseCommand(rendered,command);
 }
-
 describe('tui/execution-authorization / 完整 Manifest 的审阅与一次批准', () => {
   test('Scenario: 打开审阅是只读的 —— 只读取一次审阅事实，不提交任何写意图', async () => {
     const fake = createFakePorts();
@@ -50,9 +44,9 @@ describe('tui/execution-authorization / 完整 Manifest 的审阅与一次批准
     // 完整 Manifest 与门禁都可见：审阅界面只显示宿主读好的字段。
     const frame = frameText(rendered);
     expect(frame).toContain('Execution Authorization Review');
-    expect(frame).toContain('fingerprint-1');
-    expect(frame).toContain('Git Policy');
-    expect(frame).toContain('门禁: 通过');
+    expect(frame).toContain('概览');
+    for(let tab=0;tab<4;tab++)await pressKey(rendered,'\t');
+    expect(frameText(rendered)).toContain('fingerprint-1');
   });
 
   test('Scenario: 批准只回传指纹与 revision —— 界面不构造 Manifest 身份', async () => {

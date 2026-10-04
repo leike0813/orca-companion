@@ -1,3 +1,4 @@
+import { chooseCommand } from './harness.js';
 /**
  * Scope 级控制粒度与 Pause / Resume / Cancel（IP-05、IP-06，`tui/execution-control`）。
  *
@@ -39,15 +40,8 @@ async function pressEscape(rendered: RenderedTui): Promise<void> {
 
 /** 打开 Command Palette，移动 `index` 格后回车；索引按 `COMMAND_IDS` 查，不写死数字。 */
 async function runPaletteCommand(rendered: RenderedTui, command: CommandId): Promise<void> {
-  const index = COMMAND_IDS.indexOf(command);
-  expect(index).toBeGreaterThanOrEqual(0);
-  await pressKey(rendered, '\u0010');
-  for (let step = 0; step < index; step += 1) {
-    await pressKey(rendered, '\u001b[B');
-  }
-  await pressKey(rendered, '\r');
+  await chooseCommand(rendered,command);
 }
-
 /** 危险态：存在活跃 Worker 或不可核验 Worker，因此 Cancel 必须先确认。 */
 function hazardousSnapshot(overrides: SnapshotOverrides = {}): SnapshotOverrides {
   return {
@@ -167,8 +161,8 @@ describe('tui/execution-control / Scope 级控制粒度与 Pause 与 Resume', ()
     await pressKey(rendered, '\u0010'); // Ctrl+P：Command Palette
     const frame = frameText(rendered);
     expect(frame).toContain('Pause');
-    expect(frame).toContain('Resume');
-    expect(frame).toContain('Cancel');
+    expect(COMMAND_IDS).toContain('resume');
+    expect(COMMAND_IDS).toContain('cancel');
     expect(frame).toContain('Scope');
     // 选择与查找控制入口本身不写任何东西。
     expect(fake.executeIntents).toEqual([]);

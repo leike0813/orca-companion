@@ -34,6 +34,8 @@ Composer 的 slash 对照直接运行 `pnpm ui:composer-prototype slash above`�
 
 该弹窗原型已由用户确认定稿。[最终设计、源码归档和三档 Nerd Fonts/ASCII 样例](../../artifacts/dialog-prototype/final/README.md) 是实施规划的直接输入；不要将早期比较图当作定稿重新探索。源码归档单独保留当前工作台、假数据、依赖锁文件与合同文档。
 
+6A 生产命令验收使用 `node artifacts/command-reviews/capture.mjs`（先 build），三档彩色/NO_COLOR × Nerd/ASCII，独立搜索、语义审阅、默认返回、键位拦截与连续 resize 的证据见 [command-reviews](../../artifacts/command-reviews/README.md)。采集挂载生产 App，Controller/model/backend 为隔离 fixture；真实宿主接线由 bootstrap 测试验证。provider/effort/角色模型合同留给6B。
+
 ## 检查组件
 
 两个终端分别运行：

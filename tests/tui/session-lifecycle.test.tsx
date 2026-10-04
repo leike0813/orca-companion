@@ -1,3 +1,5 @@
+import { COMMAND_IDS } from '../../src/interfaces/tui/commands.js';
+import { chooseCommand } from './harness.js';
 /**
  * 会话维护、模型配置与 Route Planning Handoff（IP-11，`tui/session-interactions`）。
  *
@@ -35,13 +37,8 @@ async function pressKey(rendered: RenderedTui, input: string): Promise<void> {
 
 /** 打开 Command Palette 并选中第 `index` 个命令后执行。 */
 async function runPaletteCommand(rendered: RenderedTui, index: number): Promise<void> {
-  await pressKey(rendered, '\u0010');
-  for (let step = 0; step < index; step += 1) {
-    await pressKey(rendered, '\u001b[B');
-  }
-  await pressKey(rendered, '\r');
+  await chooseCommand(rendered,COMMAND_IDS[index]!);
 }
-
 describe('/compact', () => {
   test('从 Command Palette 触发时提交一次 compact-session', async () => {
     const fake = createFakePorts();
@@ -225,32 +222,12 @@ describe('Model Picker 准入', () => {
   });
 
   test('当前配置可再次确认，拒绝后的同一候选可重试', async () => {
-    const onSelect = vi.fn();
-    const rendered = renderComponent(createElement(ModelPicker, {
-      catalog: {
-        options: [
-          { configurationRef: 'config-a', model: 'model-a' },
-          { configurationRef: 'config-b', model: 'model-b' },
-        ],
-        currentConfigurationRef: 'config-a',
-        switchable: true,
-        switchBlockReason: null,
-      },
-      rejection: null,
-      onSelect,
-      availableWidth: 100,
-    }));
-    await settle(2);
-    await pressKey(rendered, '\r');
-    await pressKey(rendered, '\u001b[B');
-    await pressKey(rendered, '\r');
-    await pressKey(rendered, '\r');
-    expect(onSelect).toHaveBeenCalledTimes(3);
-    expect(onSelect).toHaveBeenNthCalledWith(1, 'config-a');
-    expect(onSelect).toHaveBeenNthCalledWith(2, 'config-b');
-    expect(onSelect).toHaveBeenNthCalledWith(3, 'config-b');
-    rendered.unmount();
-  });
+    const fake=createFakePorts({models:[{configurationRef:'config-a',model:'A'},{configurationRef:'config-b',model:'B'}],executeResult:{kind:'rejected',code:'busy',message:'暂不可切换'}});
+    const rendered=renderTui(fake.ports);
+    await settle();await chooseCommand(rendered,'model-picker');
+    await pressKey(rendered,'\r');await pressKey(rendered,'\u001b[B');await pressKey(rendered,'\r');await pressKey(rendered,'\r');
+    expect(fake.executeIntents.filter(intent=>intent.kind==='switch-model-configuration').map(intent=>intent.nextConfigurationRef)).toEqual(['config-a','config-b','config-b']);
+    rendered.unmount();  });
 
   /** 准入不满足时禁用提交。 */
   test('switchable:false 时 Model Picker 不提交切换（IP-11 要求）', async () => {
@@ -330,7 +307,7 @@ describe('Handoff Review', () => {
     expect(frame).toContain('fail closed');
   });
 
-  test('prepare → Review → cutover 后自动选中 Target', async () => {
+  test('prepare → Review → cutover 保留所选 Session', async () => {
     const fake = createFakePorts({ snapshot: { planningHandoffs: [proposal] } });
     const rendered = renderTui(fake.ports);
     await settle();
@@ -357,8 +334,7 @@ describe('Handoff Review', () => {
     ]);
     const after = frameText(rendered);
     // cutover 后进入 Target 的等待下一条 Prompt 状态。
-    expect(after).toContain('cutover');
-    expect(after).toContain('Target');
+    expect(after).toContain('session-b');
     expect(after).not.toContain('Handoff Review');
 
     rendered.unmount();

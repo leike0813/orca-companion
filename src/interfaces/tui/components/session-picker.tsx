@@ -9,7 +9,8 @@ import { Text } from 'ink';
 
 import { truncateToDisplayWidth } from '../render/width.js';
 import type { SessionSummaryView } from '../../../application/tui/view-model.js';
-import { DialogFrame, SelectionList } from './selection-list.js';
+import { DialogFrame, SearchSelectionList, type DialogSelection, type SearchChoice } from './selection-list.js';
+import { emptyDraft } from '../input/composer-editor.js';
 
 export type SessionPickerProps = {
   readonly sessions: readonly SessionSummaryView[];
@@ -18,6 +19,7 @@ export type SessionPickerProps = {
   readonly availableWidth: number;
   readonly rows?: number;
   readonly title?: string;
+  readonly selection?: DialogSelection;
 };
 
 /**
@@ -41,13 +43,18 @@ export function sessionMarker(session: SessionSummaryView): string {
   return session.openInteractionCount > 0 ? '?' : ' ';
 }
 
+export function sessionChoices(sessions: readonly SessionSummaryView[], selectedSessionId: string | null): readonly SearchChoice[] {
+  return sessions.map(session=>({label:`${sessionMarker(session)} ${session.coordinatorSessionId} · ${session.lifecycleState} · 待答 ${session.openInteractionCount}`,value:session.coordinatorSessionId,current:session.coordinatorSessionId===selectedSessionId}));
+}
+
 export function SessionPicker(props: SessionPickerProps) {
   const rows=props.rows??16;
+  const selection=props.selection??{query:emptyDraft(),selectedId:preferredSessionId(props.sessions,props.selectedSessionId)};
+  const selected=props.sessions.find(s=>s.coordinatorSessionId===selection.selectedId);
   return <DialogFrame title={props.title??'Session Picker'} summary={`当前 ${props.selectedSessionId??'未选择'} · ${props.sessions.length} 个会话`} width={props.availableWidth} rows={rows} footer="↑↓ 选择 · Enter 进入 · Esc 返回">
-    <Text dimColor>会话                                      状态 / 待答</Text>
-    <SelectionList options={props.sessions.map(session=>({
-      label:truncateToDisplayWidth(`${sessionMarker(session)} ${session.coordinatorSessionId} · ${session.lifecycleState} · 待答 ${session.openInteractionCount}`,Math.max(1,props.availableWidth-10)),
-      value:session.coordinatorSessionId,
-    }))} {...(props.selectedSessionId===null?{}:{defaultValue:props.selectedSessionId})} visibleOptionCount={Math.max(1,rows-8)} onSelect={props.onSelect}/>
+    <SearchSelectionList choices={sessionChoices(props.sessions,props.selectedSessionId)} selection={selection} width={Math.max(1,props.availableWidth-8)} rows={Math.max(1,rows-12)}/>
+    <Text dimColor>{'─'.repeat(Math.max(1,props.availableWidth-8))}</Text>
+    <Text>{truncateToDisplayWidth(selected?`会话 ${selected.coordinatorSessionId} · 配置 ${selected.coordinatorModelConfigurationRef}`:'请选择会话',Math.max(1,props.availableWidth-8))}</Text>
+    <Text dimColor>{selected?`${selected.planningResponsible?'规划责任 · ':''}${selected.holdsExecutionLease?'执行责任 · ':''}待答 ${selected.openInteractionCount}`:''}</Text>
   </DialogFrame>;
 }

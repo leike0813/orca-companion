@@ -225,6 +225,8 @@ Transcript 只显示用户/Agent 消息和折叠 tool 记录；运行事实按�
 
 修改 Coordinator 历史存储、恢复、压缩或 transcript 分页时，先读 `docs/interface-contracts.md` 的 IC-04/11/12。生产读写按目的访问增量权威记录；分页读取与有效上下文读取各自有界，正文与调度状态保持单一 owner。
 
+命令、别名、固定键位和帮助统一由 `src/interfaces/tui/commands.ts` 定义。修改命令搜索、审阅或异步返回时，先读 IC-11/12 的结果引用与页面绑定合同；交接使用本次提案 ID 和所见 record revision，迟到结果只影响原入口，切换 Session 由用户明确选择。
+
 最小全局键位为 `Ctrl+P` 打开 Command Palette、`Ctrl+B` 开合项目面板、`Ctrl+G` 打开 Graph Inspector、`Esc` 逐层返回，方向键与 Enter 用于导航。slash 上方候选先采用、再明确执行；审阅默认返回。Session Picker 和新事件不得自动切换 transcript、抢占 composer 或改变 Scope 级 Graph；M2 不实现自定义键位。Nerd/ASCII 可在选项中即时切换，用户级偏好尚未持久化；缺少 effort/context/验收摘要时明示不可用。
 
 Pause、Resume 和 Cancel 都作用于整个 Coordination Scope：

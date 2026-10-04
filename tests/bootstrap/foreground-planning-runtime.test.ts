@@ -850,7 +850,7 @@ test('会话维护端口已接线：/compact 与模型切换都走既有用例�
   }
   expect(afterCompaction.snapshot.compaction).toMatchObject({ status: 'not_needed', path: 'none' });
 
-  const catalog = await harness.host.ports.modelCatalog.load();
+  const catalog = await harness.host.ports.modelCatalog.load(proposal.coordinatorSessionId);
   expect(catalog.options.map((option) => option.configurationRef)).toEqual([
     'planning-default',
     'planning-spare',

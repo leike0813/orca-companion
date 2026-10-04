@@ -1,3 +1,5 @@
+import { commandResultRefSchema, type CommandResultRef, type ReviewSection } from '../application/tui/command-result.js';
+import { projectHandoff, projectPlanningHandoff } from '../application/controller-service.js';
 /**
  * MOD-07：前台规划进程的宿主装配
  * （Owner: `m1-wire-foreground-planning-runtime`，D3）。
@@ -1441,11 +1443,12 @@ export async function createForegroundPlanningHost(
           capsuleRef: capsule.capsuleId,
         });
       },
-      reviewPlanningHandoff: async (input) => {
+      reviewPlanningHandoff: async (input, expectedProposalRevision) => {
         const built = await handoffFacts();
         if (built.kind !== 'ok') {
           return { kind: 'rejected', failure: built.failure };
         }
+        if(expectedProposalRevision!==undefined&&!handoffVersionMatches('planning-handoff',input.proposalId,expectedProposalRevision))return {kind:'rejected',failure:{code:'stale_revision',message:'提案已变化，请重新审阅'}};
         return reviewPlanningHandoff({
           store: current,
           coordinationScopeId: scopeId,
@@ -2139,11 +2142,23 @@ export async function createForegroundPlanningHost(
   // Controller 端口
   // ---------------------------------------------------------------------
 
-  const accepted = (summary: string, revision: number | null = null): ControllerCommandResult => ({
+  const accepted = (summary: string, revision: number | null = null, resultRef?: CommandResultRef): ControllerCommandResult => ({
     kind: 'accepted',
     revision,
     summary,
+    ...(resultRef===undefined?{}:{resultRef}),
   });
+
+  const handoffResultRef = (kind:'planning-handoff'|'execution-handoff', id:string):Extract<CommandResultRef,{kind:'planning-handoff'|'execution-handoff'}>|undefined => {
+    if(selectedScopeId===null)return undefined;
+    if(kind==='planning-handoff'){
+      const read=requiredStore().query({kind,coordinationScopeId:selectedScopeId,proposalId:id});
+      return read.kind===kind&&read.handoff?{kind,coordinationScopeId:selectedScopeId,proposalId:id,revision:read.handoff.proposalRevision,phase:read.handoff.phase}:undefined;
+    }
+    const read=requiredStore().query({kind,coordinationScopeId:selectedScopeId,handoffId:id});
+    return read.kind===kind&&read.handoff?{kind,coordinationScopeId:selectedScopeId,handoffId:id,revision:read.handoff.handoffRevision,phase:read.handoff.phase}:undefined;
+  };
+  const handoffVersionMatches = (kind:'planning-handoff'|'execution-handoff', id:string, revision:number) => handoffResultRef(kind,id)?.revision===revision;
 
   const rejected = (code: string, message: string): ControllerCommandResult => ({
     kind: 'rejected',
@@ -2282,6 +2297,8 @@ export async function createForegroundPlanningHost(
     }
     const session = ensured.session;
     const state = liveStateOf(session);
+    let verifiedModel: BaseChatModel | null = null;
+    let bindingRevision: number | null = null;
     const result = await switchModelConfiguration({
       coordinatorSessionId: input.coordinatorSessionId,
       current: session.configuration,
@@ -2306,6 +2323,7 @@ export async function createForegroundPlanningHost(
       deriveCapsule: (capsuleInput) => deriveContextCapsule(capsuleInput),
       verify: async (candidate) => {
         const resolved = await modelFor(candidate);
+        if(resolved.kind==='resolved')verifiedModel=resolved.model;
         return resolved.kind === 'resolved'
           ? { kind: 'verified' }
           : { kind: 'rejected', message: resolved.message };
@@ -2319,6 +2337,7 @@ export async function createForegroundPlanningHost(
           coordinatorSessionId: input.coordinatorSessionId,
           coordinatorModelConfigurationRef: candidate.configurationRef,
         });
+        if(written.kind==='committed')bindingRevision=written.revision;
         return written.kind === 'committed'
           ? { kind: 'saved' }
           : { kind: 'failed', message: written.message };
@@ -2331,14 +2350,11 @@ export async function createForegroundPlanningHost(
     if (result.kind === 'rejected') {
       return rejected(result.code, result.message);
     }
-    const resolved = await modelFor(result.configuration);
-    if (resolved.kind === 'failed') {
-      return rejected('model_unavailable', resolved.message);
-    }
+    if (verifiedModel === null || bindingRevision === null) return {kind:'unknown',code:'model_binding_unverifiable',message:'模型切换的装配或绑定结果不可核验'};
     const replacement: LiveSession = {
       ...session,
       configuration: result.configuration,
-      model: resolved.model,
+      model: verifiedModel,
       graph: null,
     };
     replacement.graph = graphForSession(replacement);
@@ -2349,7 +2365,7 @@ export async function createForegroundPlanningHost(
       revision: 0,
       reason: `model-configuration:${result.configuration.configurationRef}`,
     });
-    return accepted(`已切换到 ${result.configuration.configurationRef}`);
+    return accepted(`已切换到 ${result.configuration.configurationRef}`,bindingRevision,{kind:'session-model',coordinationScopeId:session.incarnation.coordinationScopeId,coordinatorSessionId:input.coordinatorSessionId,configurationRef:result.configuration.configurationRef,revision:bindingRevision});
   };
 
   const pendingInteractionAnswer = async (input: {
@@ -2716,7 +2732,7 @@ export async function createForegroundPlanningHost(
       return accepted(`已创建 Coordination Scope ${proposal.coordinationScopeId}`, initialized.revision);
   };
 
-  const modelCatalog = (): ModelCatalog => {
+  const modelCatalog = (coordinatorSessionId: string): ModelCatalog => {
     const options_ =
       config === null
         ? []
@@ -2724,7 +2740,9 @@ export async function createForegroundPlanningHost(
             configurationRef: entry.configurationRef,
             model: entry.model,
           }));
-    const selected = selectedSessionOf(selectedScopeRecord());
+    const scope=selectedScopeRecord();
+    const read=scope===null?null:requireStore()?.query({kind:'sessions',coordinationScopeId:scope.coordinationScopeId});
+    const selected=read?.kind==='sessions'?read.sessions.find(s=>s.coordinatorSessionId===coordinatorSessionId)??null:null;
     const currentRef = selected === null ? null : selected.coordinatorModelConfigurationRef;
     const session = selected === null ? null : (liveSessions.get(selected.coordinatorSessionId) ?? null);
     const state = session === null ? null : liveStateOf(session);
@@ -2850,6 +2868,11 @@ export async function createForegroundPlanningHost(
   };
 
   const handoff = {
+    read: (proposalId: string) => Promise.resolve().then(() => {
+      if(selectedScopeId===null)return null;
+      const read=requiredStore().query({kind:'planning-handoff',coordinationScopeId:selectedScopeId,proposalId});
+      return read.kind==='planning-handoff'&&read.handoff?projectPlanningHandoff(read.handoff):null;
+    }),
     prepareProposal: async (targetCoordinatorSessionId: string): Promise<ControllerCommandResult> => {
       const ensured = await ensureLiveSession(targetCoordinatorSessionId as CoordinatorSessionId);
       if (ensured.kind === 'failed') {
@@ -2878,9 +2901,9 @@ export async function createForegroundPlanningHost(
       });
       return result.kind === 'rejected'
         ? rejected(result.failure.code, result.failure.message)
-        : accepted(`交接提案 ${proposalId} 已 prepare`);
+        : accepted(`交接提案 ${proposalId} 已 prepare`,null,handoffResultRef('planning-handoff',proposalId));
     },
-    cutover: async (proposalId: string): Promise<ControllerCommandResult> => {
+    cutover: async (proposalId: string, expectedRevision: number): Promise<ControllerCommandResult> => {
       const current = requireStore();
       if (current === null || selectedScopeId === null) {
         return rejected('scope_unavailable', '当前没有可用的 Coordination Scope');
@@ -2889,6 +2912,8 @@ export async function createForegroundPlanningHost(
       if (proposal.kind !== 'planning-handoff' || proposal.handoff === null) {
         return rejected('not_found', `交接提案 ${proposalId} 不存在`);
       }
+      if(!handoffVersionMatches('planning-handoff',proposalId,expectedRevision))return rejected('stale_revision','提案已变化，请重新审阅');
+      let reviewedRevision=expectedRevision;
       const reserved = resumePlanningHandoff({ store: current, coordinationScopeId: selectedScopeId });
       if (reserved.kind === 'rejected') {
         return rejected(reserved.failure.code, reserved.failure.message);
@@ -2906,10 +2931,11 @@ export async function createForegroundPlanningHost(
         const reviewed = await targetServices.reviewPlanningHandoff({
           proposalId,
           operationId: `handoff:${proposalId}:review` as OperationId,
-        });
+        },expectedRevision);
         if (reviewed.kind === 'rejected') {
           return rejected(reviewed.failure.code, reviewed.failure.message);
         }
+        reviewedRevision=reviewed.proposal.proposalRevision;
       }
       const source = await ensureLiveSession(proposal.handoff.sourceCoordinatorSessionId);
       if (source.kind === 'failed') {
@@ -2920,6 +2946,7 @@ export async function createForegroundPlanningHost(
       if (factsRead === null) {
         return rejected('scope_unavailable', '无法读取当前 map/plan 事实');
       }
+      if(!handoffVersionMatches('planning-handoff',proposalId,reviewedRevision))return rejected('stale_revision','提案已变化，请重新审阅');
       const cutover = cutoverPlanningHandoff({
         store: current,
         coordinationScopeId: selectedScopeId,
@@ -2936,9 +2963,9 @@ export async function createForegroundPlanningHost(
         handoffId: proposalId,
         phase: 'cutover',
       });
-      return accepted(`已完成 cutover：${proposalId}`);
+      return accepted(`已完成 cutover：${proposalId}`,null,handoffResultRef('planning-handoff',proposalId));
     },
-    cancel: async (proposalId: string): Promise<ControllerCommandResult> => {
+    cancel: async (proposalId: string, expectedRevision: number): Promise<ControllerCommandResult> => {
       const current = requireStore();
       if (current === null || selectedScopeId === null) {
         return rejected('scope_unavailable', '当前没有可用的 Coordination Scope');
@@ -2951,6 +2978,7 @@ export async function createForegroundPlanningHost(
       if (ensured.kind === 'failed') {
         return rejected(ensured.code, ensured.message);
       }
+      if(!handoffVersionMatches('planning-handoff',proposalId,expectedRevision))return rejected('stale_revision','提案已变化，请重新审阅');
       const cancelled = cancelPlanningHandoff({
         store: current,
         coordinationScopeId: selectedScopeId,
@@ -2959,7 +2987,7 @@ export async function createForegroundPlanningHost(
       });
       return cancelled.kind === 'rejected'
         ? rejected(cancelled.failure.code, cancelled.failure.message)
-        : accepted(`已取消交接提案 ${proposalId}`);
+        : accepted(`已取消交接提案 ${proposalId}`,null,handoffResultRef('planning-handoff',proposalId));
     },
   };
 
@@ -6747,7 +6775,8 @@ export async function createForegroundPlanningHost(
     if (action === 'resume') {
       triggerExecution(ensured.session);
     }
-    return accepted(`Scope 控制状态：${result.controlState}`, null);
+    const updated=scopeRecord(scopeId);
+    return accepted(`Scope 控制状态：${result.controlState}`,updated?.revision??null,updated?{kind:'scope',coordinationScopeId:scopeId,revision:updated.revision,controlState:updated.controlState}:undefined);
   };
 
   // ---------------------------------------------------------------------
@@ -6821,63 +6850,66 @@ export async function createForegroundPlanningHost(
   const authorizationManifestRows = (
     review: ExecutionAuthorizationReview,
     readOnlyWorker: string,
-  ): readonly { readonly label: string; readonly value: string }[] => {
+  ): {readonly manifestRows: readonly {label:string;value:string}[];readonly sections:readonly ReviewSection[]} => {
     const manifest = review.manifest;
     const limits = manifest.limits;
-    return [
-      { label: 'Coordination Scope', value: manifest.coordinationScopeId },
-      { label: 'Planning Cycle', value: manifest.planningCycleId },
+    const rows = [
+      { section: 'overview', label: 'Coordination Scope', value: manifest.coordinationScopeId },
+      { section: 'overview', label: 'Planning Cycle', value: manifest.planningCycleId },
       {
-        label: 'Destination',
+        section: 'overview', label: 'Destination',
         value: `${manifest.destinationRef.id}@${String(manifest.destinationRef.version)}`,
       },
-      { label: 'Route Map', value: `#${manifest.routeMapRef.id}@${String(manifest.routeMapRef.version)}` },
+      { section: 'overview', label: 'Route Map', value: `#${manifest.routeMapRef.id}@${String(manifest.routeMapRef.version)}` },
       {
-        label: 'Implementation Plan',
+        section: 'overview', label: 'Implementation Plan',
         value: `${manifest.implementationPlanRef.id}@${String(manifest.implementationPlanRef.version)}`,
       },
       {
-        label: 'Graph',
+        section: 'overview', label: 'Graph',
         value: `${manifest.graph.graphId} g${String(manifest.graph.generation)} v${String(manifest.graph.version)}`,
       },
-      { label: 'baseline HEAD', value: manifest.baselineHead },
-      { label: 'Orca Run', value: manifest.orcaRunId },
+      { section: 'workspace', label: 'baseline HEAD', value: manifest.baselineHead },
+      { section: 'overview', label: 'Orca Run', value: manifest.orcaRunId },
       {
-        label: 'Worker Profiles',
+        section: 'permissions', label: 'Worker Profiles',
         value: manifest.workerProfiles.map((profile) => `${profile.role}→${profile.harness}`).join(' '),
       },
       {
         // 沙箱模式必须在审阅里可见：它是「Worker 能写什么」的直接约束，放宽与否只能由用户看到后批准。
         // Capsule Utility Worker 与 Finalizer 走同一条只读 profile，且本机能否运行它由本次探针回答。
-        label: 'Worker Sandbox',
+        section: 'permissions', label: 'Worker Sandbox',
         value: `codex=${config?.execution.codexSandbox ?? DEFAULT_PROJECT_EXECUTION.codexSandbox} capsule=${CODEX_UTILITY_PERMISSION_PROFILE} finalizer=${CODEX_UTILITY_PERMISSION_PROFILE}`,
       },
       {
-        label: 'Read-only Workers',
+        section: 'permissions', label: 'Read-only Workers',
         value: readOnlyWorker,
       },
       {
-        label: 'Permissions',
+        section: 'permissions', label: 'Permissions',
         value: `planner=${String(manifest.permissions.planner)} implementation=${String(manifest.permissions.implementation)} validator=${String(manifest.permissions.validator)} finalizer=${String(manifest.permissions.finalizer)} git=${String(manifest.permissions.gitIntegration)} deps=${String(manifest.permissions.dependencyChanges)}`,
       },
       {
-        label: 'Limits',
+        section: 'budget', label: 'Limits',
         value: `active≤${String(limits.maxActiveWorkPackages)} 并发=${String(limits.concurrencyLimit)} 实现×${String(limits.implementationAttempts)} 修复×${String(limits.validatorRepairs)} 图修订×${String(limits.graphRevisions)} 规格修订×${String(limits.specificationRevisions)} 恢复×${String(limits.maxRecoveriesPerWorkerAttempt)}`,
       },
-      { label: 'Workspace', value: manifest.workspacePolicy.canonicalWorktree },
+      { section: 'workspace', label: 'Workspace', value: manifest.workspacePolicy.canonicalWorktree },
       {
-        label: 'Git Policy',
+        section: 'workspace', label: 'Git Policy',
         value: `${manifest.gitPolicy.canonicalBranch} remotes=[${manifest.gitPolicy.remotes.join(',')}] refs=[${manifest.gitPolicy.refs.join(',')}]`,
       },
       {
-        label: 'Dependency Policy',
+        section: 'permissions', label: 'Dependency Policy',
         value: `allowChanges=${String(manifest.dependencyPolicy.allowDependencyChanges)} registry=${manifest.dependencyPolicy.registry ?? 'none'}`,
       },
       {
-        label: 'Accepted Risks',
+        section: 'overview', label: 'Accepted Risks', group: '需接受的风险',
         value: manifest.acceptedRisks.length === 0 ? 'none' : manifest.acceptedRisks.join(' | '),
       },
     ];
+    const sections:ReviewSection[]=[['overview','概览','执行计划'],['permissions','权限','允许的操作'],['budget','预算','执行上限'],['workspace','工作范围','隔离工作范围']].map(([id,label,group])=>({id:id!,label:label!,fields:rows.filter(row=>row.section===id).map(row=>({label:row.label,value:row.value,group:row.group??group!}))}));
+    sections.push({id:'complete',label:'完整清单',fields:[...rows.map(({label,value})=>({label,value,group:'批准绑定的完整内容'})),{label:'Scope revision',value:String(review.scopeRevision),group:'批准绑定的完整内容'},{label:'fingerprint',value:review.fingerprint,group:'批准绑定的完整内容'}]});
+    return {manifestRows:rows.map(({label,value})=>({label,value})),sections};
   };
 
   /** 一次只读审阅；调用方要么拿到可批准的完整 Manifest，要么拿到明确的阻塞原因。 */
@@ -6917,7 +6949,7 @@ export async function createForegroundPlanningHost(
           baselineHead: reviewed.review.candidate.baselineHead,
           workPackageCount: reviewed.review.candidate.workPackageCount,
         },
-        manifestRows: authorizationManifestRows(reviewed.review, describeReadOnlyWorkerCapability(readOnlyWorker)),
+        ...authorizationManifestRows(reviewed.review, describeReadOnlyWorkerCapability(readOnlyWorker)),
         gate: { ready: gateBlockers.length === 0, blockers: gateBlockers },
       },
     };
@@ -6990,6 +7022,7 @@ export async function createForegroundPlanningHost(
     return accepted(
       `已批准 ${result.authorizationId} v${String(result.authorizationVersion)}，Scope 进入 Execution Coordination`,
       result.revision,
+      {kind:'authorization',coordinationScopeId:refreshed.facts.coordinationScopeId,authorizationId:result.authorizationId,version:result.authorizationVersion},
     );
   };
 
@@ -7076,6 +7109,11 @@ export async function createForegroundPlanningHost(
 
   /** Execution Handoff：只投影并推进 `ExecutionHandoffState`，不改动任何运行身份。 */
   const executionHandoffPort: ExecutionHandoffIntentPort = {
+    read: handoffId => Promise.resolve().then(() => {
+      if(selectedScopeId===null)return null;
+      const read=requiredStore().query({kind:'execution-handoff',coordinationScopeId:selectedScopeId,handoffId});
+      return read.kind==='execution-handoff'&&read.handoff?projectHandoff(read.handoff):null;
+    }),
     prepare: async (targetCoordinatorSessionId) => {
       const current = requireStore();
       const scopeId = selectedScopeId;
@@ -7116,7 +7154,7 @@ export async function createForegroundPlanningHost(
         capsuleRef: capsule.capsuleId,
       });
       if (result.kind === 'prepared') {
-        return accepted(`已创建执行交接 ${result.record.handoffId}`);
+        return accepted(`已创建执行交接 ${result.record.handoffId}`,null,handoffResultRef('execution-handoff',result.record.handoffId));
       }
       const failure = executionHandoffFailure(result);
       return failure === null
@@ -7180,14 +7218,14 @@ export async function createForegroundPlanningHost(
         facts,
       });
       if (result.kind === 'reviewed') {
-        return accepted(`已复核执行交接 ${handoffId}`);
+        return accepted(`已复核执行交接 ${handoffId}`,null,handoffResultRef('execution-handoff',handoffId));
       }
       const failure = executionHandoffFailure(result);
       return failure === null
         ? rejected('invalid_state', `执行交接 review 返回了非预期结果：${result.kind}`)
         : rejected(failure.code, failure.message);
     },
-    cutover: async (handoffId) => {
+    cutover: async (handoffId, expectedRevision) => {
       const current = requireStore();
       const scopeId = selectedScopeId;
       if (current === null || scopeId === null) {
@@ -7205,6 +7243,7 @@ export async function createForegroundPlanningHost(
       if (ensured.kind === 'failed') {
         return rejected(ensured.code, ensured.message);
       }
+      if(!handoffVersionMatches('execution-handoff',handoffId,expectedRevision))return rejected('stale_revision','提案已变化，请重新审阅');
       const result = cutoverExecutionHandoff({
         store: current,
         coordinationScopeId: scopeId,
@@ -7223,9 +7262,9 @@ export async function createForegroundPlanningHost(
         handoffId,
         phase: 'cutover',
       });
-      return accepted(`已完成执行交接 cutover：${handoffId}`);
+      return accepted(`已完成执行交接 cutover：${handoffId}`,null,handoffResultRef('execution-handoff',handoffId));
     },
-    cancel: async (handoffId) => {
+    cancel: async (handoffId, expectedRevision) => {
       const current = requireStore();
       const scopeId = selectedScopeId;
       if (current === null || scopeId === null) {
@@ -7243,6 +7282,7 @@ export async function createForegroundPlanningHost(
       if (ensured.kind === 'failed') {
         return rejected(ensured.code, ensured.message);
       }
+      if(!handoffVersionMatches('execution-handoff',handoffId,expectedRevision))return rejected('stale_revision','提案已变化，请重新审阅');
       const result = cancelExecutionHandoff({
         store: current,
         coordinationScopeId: scopeId,
@@ -7250,7 +7290,7 @@ export async function createForegroundPlanningHost(
         handoffId,
       });
       if (result.kind === 'cancelled') {
-        return accepted(`已取消执行交接 ${handoffId}`);
+        return accepted(`已取消执行交接 ${handoffId}`,null,handoffResultRef('execution-handoff',handoffId));
       }
       const failure = executionHandoffFailure(result);
       return failure === null
@@ -7320,10 +7360,10 @@ export async function createForegroundPlanningHost(
         return await handoff.prepareProposal(input.targetCoordinatorSessionId);
       }
       if (input.action === 'cutover') {
-        return await handoff.cutover(input.proposalId);
+        return await handoff.cutover(input.proposalId,handoffResultRef('planning-handoff',input.proposalId)?.revision??-1);
       }
       if (input.action === 'cancel') {
-        return await handoff.cancel(input.proposalId);
+        return await handoff.cancel(input.proposalId,handoffResultRef('planning-handoff',input.proposalId)?.revision??-1);
       }
       const current = requireStore();
       if (current === null || selectedScopeId === null) {
@@ -7374,9 +7414,9 @@ export async function createForegroundPlanningHost(
         case 'review':
           return await executionHandoffPort.review(input.handoffId);
         case 'cutover':
-          return await executionHandoffPort.cutover(input.handoffId);
+          return await executionHandoffPort.cutover(input.handoffId,handoffResultRef('execution-handoff',input.handoffId)?.revision??-1);
         case 'cancel':
-          return await executionHandoffPort.cancel(input.handoffId);
+          return await executionHandoffPort.cancel(input.handoffId,handoffResultRef('execution-handoff',input.handoffId)?.revision??-1);
       }
     },
     executionAuthorization: async (input) => {
@@ -7417,6 +7457,27 @@ export async function createForegroundPlanningHost(
   });
 
   const ports: TuiPorts = {
+    commandStatus: input => Promise.resolve().then(() => {
+      const parsed=commandResultRefSchema.safeParse(input);
+      if(!parsed.success)return rejected('invalid_result_ref','结果引用无效');
+      const ref=parsed.data;
+      if(selectedScopeId!==ref.coordinationScopeId)return rejected('wrong_scope','结果不属于当前 Scope');
+      let proven=false;
+      if(ref.kind==='planning-handoff'||ref.kind==='execution-handoff'){
+        const current=handoffResultRef(ref.kind,ref.kind==='planning-handoff'?ref.proposalId:ref.handoffId);
+        proven=current!==undefined&&current.revision===ref.revision&&'phase' in current&&current.phase===ref.phase;
+      }else if(ref.kind==='scope'){
+        const current=scopeRecord(selectedScopeId);
+        proven=current?.revision===ref.revision&&current.controlState===ref.controlState;
+      }else if(ref.kind==='session-model'){
+        const scope=scopeRecord(selectedScopeId),read=requiredStore().query({kind:'sessions',coordinationScopeId:selectedScopeId});
+        proven=scope?.revision===ref.revision&&read.kind==='sessions'&&read.sessions.some(s=>s.coordinatorSessionId===ref.coordinatorSessionId&&s.coordinatorModelConfigurationRef===ref.configurationRef);
+      }else if(ref.kind==='authorization'){
+        const read=requiredStore().query({kind:'authorization',coordinationScopeId:selectedScopeId,authorizationId:ref.authorizationId});
+        proven=read.kind==='authorization'&&read.authorization?.authorizationVersion===ref.version;
+      }
+      return proven?accepted('原结果已核验',null,ref):{kind:'unknown',code:'command_unverifiable',message:'权威记录不能证明原调用结果',resultRef:ref};
+    }),
     reading: {
       interactions: async (coordinatorSessionId, interactionIds) => {
         if (selectedScopeId === null) throw new Error('没有当前 Scope');
@@ -7484,7 +7545,7 @@ export async function createForegroundPlanningHost(
       };
     },
     scopeSetup,
-    modelCatalog: { load: () => Promise.resolve(modelCatalog()) },
+    modelCatalog: { load: session => Promise.resolve(modelCatalog(session)) },
     handoff,
     executionHandoff: executionHandoffPort,
     executionAuthorization: executionAuthorizationPort,

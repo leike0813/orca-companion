@@ -165,7 +165,7 @@ export function DialogPrototype(props: Props) {
     if (stackRef.current.at(-1)?.kind === 'handoff' && handoffReady) {
       busy.current = true;
       try {
-        const result = props.snapshot.mode === 'route_planning' ? await props.ports.handoff.cancel('fixture-planning-handoff-52') : await props.ports.executionHandoff.cancel('fixture-execution-handoff-52');
+        const result = props.snapshot.mode === 'route_planning' ? await props.ports.handoff.cancel('fixture-planning-handoff-52',0) : await props.ports.executionHandoff.cancel('fixture-execution-handoff-52',0);
         if (result.kind !== 'accepted') { setNotice(result.message); return; }
         setHandoffReady(false);
       } finally { busy.current = false; }
@@ -186,7 +186,7 @@ export function DialogPrototype(props: Props) {
     setNotice(null);
     busy.current = true;
     try {
-      if (kind === 'models') setCatalog(await props.ports.modelCatalog.load());
+      if (kind === 'models') setCatalog(await props.ports.modelCatalog.load(selectedSession?.coordinatorSessionId??''));
       if (kind === 'authorize') setAuthorization(await props.ports.executionAuthorization.review());
     } finally { busy.current = false; }
   };
@@ -281,7 +281,7 @@ export function DialogPrototype(props: Props) {
       if (frame.kind === 'exit') { props.onExit(); return; }
       const result = frame.kind === 'cancel' ? await props.ports.execute({ kind: 'scope-control', action: 'cancel' })
         : frame.kind === 'authorize' && load !== null ? await props.ports.executionAuthorization.approve({ fingerprint: load.fingerprint, expectedRevision: load.scopeRevision })
-          : props.snapshot.mode === 'route_planning' ? await props.ports.handoff.cutover('fixture-planning-handoff-52') : await props.ports.executionHandoff.cutover('fixture-execution-handoff-52');
+          : props.snapshot.mode === 'route_planning' ? await props.ports.handoff.cutover('fixture-planning-handoff-52',0) : await props.ports.executionHandoff.cutover('fixture-execution-handoff-52',0);
       if (result.kind === 'accepted') props.onComplete(result.summary);
       else setNotice((result.kind === 'unknown' ? '结果未知 · 先对账：' : '被拒绝：') + result.message);
     } finally { busy.current = false; }

@@ -612,9 +612,9 @@ export type ControllerCommand =
   | InitializeScopeCommand;
 
 export type ControllerCommandResult =
-  | { readonly kind: 'accepted'; readonly revision: Revision | null; readonly summary: string }
+  | { readonly kind: 'accepted'; readonly revision: Revision | null; readonly summary: string; readonly resultRef?: import('./tui/command-result.js').CommandResultRef }
   | { readonly kind: 'rejected'; readonly code: string; readonly message: string }
-  | { readonly kind: 'unknown'; readonly code: string; readonly message: string };
+  | { readonly kind: 'unknown'; readonly code: string; readonly message: string; readonly resultRef?: import('./tui/command-result.js').CommandResultRef };
 
 /* -------------------------------------------------------------------------- */
 /* 语义事件                                                                    */
@@ -896,7 +896,7 @@ function projectInteraction(interaction: Omit<PendingInteractionRecord, 'answerT
   };
 }
 
-function projectHandoff(handoff: ExecutionHandoffRecord): ControllerHandoffView {
+export function projectHandoff(handoff: ExecutionHandoffRecord): ControllerHandoffView {
   return {
     handoffId: handoff.handoffId,
     sourceSessionId: handoff.sourceSessionId,
@@ -999,7 +999,7 @@ function projectAdoption(adoption: BaselineAdoptionRecord): ControllerAdoptionVi
   };
 }
 
-function projectPlanningHandoff(handoff: PlanningHandoffRecord): ControllerPlanningHandoffView {
+export function projectPlanningHandoff(handoff: PlanningHandoffRecord): ControllerPlanningHandoffView {
   return {
     proposalId: handoff.proposalId,
     sourceSessionId: handoff.sourceCoordinatorSessionId,

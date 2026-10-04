@@ -268,6 +268,8 @@ test('成功走三阶段：派生 Capsule、复核并 cutover，规划责任转�
 
   const prepared = await harness.host.ports.handoff.prepareProposal(harness.target);
   expect(prepared.kind).toBe('accepted');
+  expect(prepared).toHaveProperty('resultRef');
+  if(prepared.kind==='accepted'&&prepared.resultRef)expect(await harness.host.ports.commandStatus(prepared.resultRef)).toMatchObject({kind:'accepted'});
 
   const store = harness.store();
   try {
@@ -278,8 +280,9 @@ test('成功走三阶段：派生 Capsule、复核并 cutover，规划责任转�
     // prepare 阶段责任仍在 Source。
     expect(responsibilityOf(store, harness.scopeId)).toBe(harness.source);
 
-    const cutover = await harness.host.ports.handoff.cutover(preparedProposal?.proposalId ?? '');
+    const cutover = await harness.host.ports.handoff.cutover(preparedProposal?.proposalId ?? '',preparedProposal?.proposalRevision??-1);
     expect(cutover.kind).toBe('accepted');
+    if(prepared.kind==='accepted'&&prepared.resultRef)expect(await harness.host.ports.commandStatus(prepared.resultRef)).toMatchObject({kind:'unknown'});
 
     expect(proposalsOf(store, harness.scopeId).at(-1)?.phase).toBe('cutover');
     expect(responsibilityOf(store, harness.scopeId)).toBe(harness.target);
@@ -330,7 +333,7 @@ test('提案引用的事实过期时 cutover 被拒绝，不转移责任', async
     });
     expect(advanced.kind).toBe('committed');
 
-    const cutover = await harness.host.ports.handoff.cutover(proposal?.proposalId ?? '');
+    const cutover = await harness.host.ports.handoff.cutover(proposal?.proposalId ?? '',proposal?.proposalRevision??-1);
 
     // 复核阶段就会拒绝：接收方读到的事实与提案引用不一致，因此不会走到 cutover。
     expect(cutover).toMatchObject({ kind: 'rejected', code: 'review_failed' });

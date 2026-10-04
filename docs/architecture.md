@@ -134,6 +134,8 @@ Composer 的纯编辑模块拥有 grapheme 光标、原子粘贴范围和有界 
 
 开发预览 `scripts/tui-preview.mjs` 只向构建后的 TUI 注入隔离假端口；主题由 `src/interfaces/tui/theme.ts` 统一提供。普通场景拒绝写入，alignment 场景在内存中模拟 accepted 以观察交接/确认后的展示，不连接生产 Bootstrap 或真实后端。
 
+命令定义由 `src/interfaces/tui/commands.ts` 拥有：目录、slash、固定键位和帮助共用，搜索查询按页面隔离并限制为256 code points。App 按对象 ID 选择，捕获调用目标、输入 generation 和页面 generation；异步结果只影响原入口。每个 mutation 目标有有界的进程内在途/unknown 防重复记录，未知结果只读应用拥有的引用，查询拒绝不能解除原 mutation 的未知状态。guard 覆盖 action、精确读取及刷新；已受理但刷新失败保留 UI `refreshFailed` 与原输入，核验只重读状态。此记录不持久化、不驱动调度；重启恢复仍由原权威记录和 IC-13 输入负责，界面不自动重试。审阅与确认逐层返回；交接成功保留当前选中 Session，用户显式选择目标会话。
+
 ### MOD-07 Bootstrap
 
 | 项目 | 合同 |

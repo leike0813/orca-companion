@@ -13,6 +13,11 @@ import { ThemeProvider } from '@inkjs/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { resolveGlobalAction } from './input/keymap.js';
+import { boundedQuery, searchCommands } from './commands.js';
+import { modelChoices, modelSwitchAdmission } from './components/model-picker.js';
+import { CommandInvocations, type CommandOutcome, type MutationOutcome } from './command-invocations.js';
+import type { ControllerPlanningHandoffView, ControllerHandoffView } from '../../application/controller-service.js';
+import type { CommandResultRef } from '../../application/tui/command-result.js';
 import type { AnswerPanelView } from './components/answer-panel.js';
 import type { PasteViewerView } from './components/paste-viewer.js';
 import type { ControllerInteractionView, ControllerQuestionResult } from '../../application/controller-service.js';
@@ -57,7 +62,8 @@ import { Workspace, workspaceLayout, type WorkspaceActions } from './screens/wor
 import { COMMAND_IDS, COMMAND_METADATA, commandReason, HELP_LINES, slashCandidates, parseSlashInput, type CommandId } from './components/command-palette.js';
 import { projectItems, projectDetailViewport } from './components/project-panel.js';
 import { selectedGraphNode } from './components/graph-inspector.js';
-import { preferredSessionId } from './components/session-picker.js';
+import { preferredSessionId, sessionChoices } from './components/session-picker.js';
+import { filterChoices } from './components/selection-list.js';
 import { tuiTheme } from './theme.js';
 import {
   projectTranscriptPage,
@@ -138,7 +144,7 @@ function useSelectionCursor(initial = 0): SelectionCursor & { readonly value: nu
 function resultNotice(result: ControllerCommandResult): string | null {
   switch (result.kind) {
     case 'accepted':
-      return null;
+      return result.summary;
     case 'rejected':
       return `${result.code}: ${result.message}`;
     case 'unknown':
@@ -274,6 +280,8 @@ function TuiAppContent(props: TuiAppProps) {
   const windowSize = useWindowSize();
   const terminalWidth = windowSize.columns === undefined ? props.terminalWidth : windowSize.columns;
   const [state, setState] = useState<TuiState>(initialTuiState);
+  const navigationGeneration = useRef(0);
+  const [commandInvocations] = useState(() => new CommandInvocations());
   const [events, setEvents] = useState<readonly SemanticEvent[]>([]);
   const [snapshot, setSnapshot] = useState<ControllerSnapshot | null>(null);
   const [transcript, setTranscript] = useState<ControllerTranscriptPage | null>(null);
@@ -318,10 +326,13 @@ function TuiAppContent(props: TuiAppProps) {
   const [confirmed, setConfirmed] = useState(false);
   const [blocker, setBlocker] = useState<string | null>(null);
   const [scopeId, setScopeId] = useState<string | null>(props.initialScopeId);
-  const paletteSelection = useSelectionCursor();
+  const modelMenuTarget = useRef<string | null>(null);
+  const historyKeyRef = useRef<(kind: 'users' | 'transcript' | 'activity') => void>(() => {});
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog>(EMPTY_MODEL_CATALOG);
   const [modelRejection, setModelRejection] = useState<string | null>(null);
-  const [handoffProposalId, setHandoffProposalId] = useState<string | null>(null);
+  const [planningReview, setPlanningReview] = useState<ControllerPlanningHandoffView | null>(null);
+  const [executionReview, setExecutionReview] = useState<ControllerHandoffView | null>(null);
+  const executionReviewRef = useRef<CommandResultRef | null>(null);
   /**
    * 正在审阅的完整 Manifest。
    *
@@ -381,6 +392,7 @@ function TuiAppContent(props: TuiAppProps) {
    * 若只有 `setState`，下一次按键读到的仍是旧渲染里的状态——`Ctrl+P` 紧跟方向键就会把命令投给 composer。
    */
   const dispatch = useCallback((action: TuiAction) => {
+    if(action.kind==='overlay-close-top'||action.kind==='overlay-close-all'||action.kind==='session-selected')navigationGeneration.current++;
     const next = reduceTuiState(stateRef.current, action);
     stateRef.current = next;
     setState(next);
@@ -403,11 +415,13 @@ function TuiAppContent(props: TuiAppProps) {
     async (selectedSessionId: string | null) => {
       const result = await ports.snapshot(selectedSessionId);
       if (result.kind === 'snapshot') {
-        if (selectedSessionId !== null && selectedSessionId !== stateRef.current.selectedSessionId) return;
+        if (selectedSessionId !== null && selectedSessionId !== stateRef.current.selectedSessionId) return true;
         setSnapshot(result.snapshot);
-        return;
+        setBlocker(null);
+        return true;
       }
       setBlocker(`${result.code}: ${result.message}`);
+      return false;
     },
     [ports],
   );
@@ -541,7 +555,7 @@ function TuiAppContent(props: TuiAppProps) {
   useEffect(() => {
     if(state.selectedSessionId===null)return;
     let active=true;
-    void ports.modelCatalog.load().then(catalog=>{ if(active) setModelCatalog(catalog); }).catch(()=>{ if(active) setModelCatalog(EMPTY_MODEL_CATALOG); });
+    void ports.modelCatalog.load(state.selectedSessionId).then(catalog=>{ if(active) setModelCatalog(catalog); }).catch(()=>{ if(active) setModelCatalog(EMPTY_MODEL_CATALOG); });
     return ()=>{active=false;};
   }, [ports, state.selectedSessionId, snapshot?.sessions.find(session=>session.coordinatorSessionId===state.selectedSessionId)?.coordinatorModelConfigurationRef]);
 
@@ -646,7 +660,7 @@ function TuiAppContent(props: TuiAppProps) {
   const snapshotRef = useRef<ControllerSnapshot | null>(null);
   snapshotRef.current = snapshot;
   /** `runCommand` 定义之前的提交路径需要它；读时取最新实现，避免互相依赖。 */
-  const runCommandRef = useRef<(command: CommandId) => Promise<void>>(() => Promise.resolve());
+  const runCommandRef = useRef<(command: CommandId) => Promise<CommandOutcome>>(() => Promise.resolve({kind:'opened'}));
   const openAnswerRef = useRef<(interactionId?: string, skipId?: string, returnToOrigin?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
   const readQuestions = useCallback(async (query: import('./ports.js').TuiQuestionQuery): Promise<import('../../application/controller-service.js').ControllerQuestionResult> => {
     if (!ports.questions) return { kind: 'rejected', code: 'questions_unavailable', message: '当前问题读取不可用' };
@@ -783,7 +797,7 @@ function TuiAppContent(props: TuiAppProps) {
   };
 
   const reload = useCallback(async () => {
-    await loadSnapshot(stateRef.current.selectedSessionId);
+    if(!await loadSnapshot(stateRef.current.selectedSessionId))throw new Error('当前状态不可读');
     const selected = stateRef.current.selectedSessionId;
     if (selected !== null) {
       await loadTranscript(selected);
@@ -819,12 +833,11 @@ function TuiAppContent(props: TuiAppProps) {
     if (slash.kind === 'command') {
       const unavailable=commandReason(slash.command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length});
       if(unavailable){dispatch({kind:'notice',notice:unavailable});return;}
-      if (slash.command === 'answer') { await openAnswerRef.current(); return; }
       if (slash.command === 'paste') { await runCommandRef.current('paste'); return; }
       const generation = protection.generation(target);
-      await runCommandRef.current(slash.command);
+      const outcome = await runCommandRef.current(slash.command);
       // 命令成功只结清这次输入；等待期间的新输入（代际变化）与清理失败都保留。
-      if (protection.generation(target) === generation) {
+      if ((outcome.kind === 'opened' || outcome.kind === 'accepted' && !outcome.refreshFailed) && protection.generation(target) === generation) {
         const cleared = protection.clearInput(target);
         if (cleared.status === 'saved') {
           dispatch(draftActionFor(target, emptyDraft()));
@@ -948,14 +961,22 @@ function TuiAppContent(props: TuiAppProps) {
     // 拒绝（含 stale revision）时保留输入内容，只提示重读。
   }, [dispatch, ports, protection, reload]);
 
+  const runMutation = useCallback(async (key: string, action: () => Promise<ControllerCommandResult>): Promise<MutationOutcome> => {
+    const generation=navigationGeneration.current, session=stateRef.current.selectedSessionId;
+    const result=await commandInvocations.run(key,async()=>{
+      const outcome=await action();
+      try{await reload();}catch{return {...outcome,refreshFailed:true};}
+      return outcome;
+    });
+    if(generation===navigationGeneration.current&&session===stateRef.current.selectedSessionId)dispatch({kind:'notice',notice:(resultNotice(result)??'')+(result.refreshFailed?'；状态刷新失败，请核验原结果':'')});
+    return result;
+  },[commandInvocations,dispatch,reload]);
   /** 提交一次 Scope 级控制意图；终态一律来自 Controller 已持久化的控制状态。 */
   const applyScopeControl = useCallback(
     async (action: 'pause' | 'resume' | 'cancel') => {
-      const result = await ports.execute({ kind: 'scope-control', action });
-      dispatch({ kind: 'notice', notice: resultNotice(result) });
-      await reload();
+      return await runMutation('scope-control:'+coordScopeRef.current,()=>ports.execute({ kind: 'scope-control', action }));
     },
-    [dispatch, ports, reload],
+    [ports, runMutation],
   );
 
   /**
@@ -965,18 +986,18 @@ function TuiAppContent(props: TuiAppProps) {
    * 确认本身不写任何控制状态，它只是提交一次与直接调用相同的意图。
    */
   const requestScopeControl = useCallback(
-    (action: 'pause' | 'resume' | 'cancel') => {
+    async (action: 'pause' | 'resume' | 'cancel'): Promise<CommandOutcome> => {
       const view = viewModelRef.current;
       if (action === 'cancel' && view === null && scopeIdRef.current !== null) {
         // Scope 已确定但执行快照尚未落地：「未知」不能读作「没有危险态」。
         dispatch({ kind: 'confirmation-requested', pending: { kind: 'cancel' } });
-        return;
+        return {kind:'opened'};
       }
       if (view !== null && requiresConfirmation(action, view.execution.hazards)) {
         dispatch({ kind: 'confirmation-requested', pending: { kind: 'cancel' } });
-        return;
+        return {kind:'opened'};
       }
-      void applyScopeControl(action);
+      return await applyScopeControl(action);
     },
     [applyScopeControl, dispatch],
   );
@@ -1029,176 +1050,139 @@ function TuiAppContent(props: TuiAppProps) {
   );
 
   const runCommand = useCallback(
-    async (command: CommandId, recipient?: string) => {
-      const current = stateRef.current;
-      const session = current.selectedSessionId;
-      const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length});
-      if(reason){dispatch({kind:'notice',notice:reason});return;}
-      if (current.overlayStack.at(-1) === 'command-palette') dispatch({ kind: 'overlay-close-top' });
-      dispatch({kind:'review-view',tab:0,scroll:0,action:0});
-      switch (command) {
-        case 'answer':
-          await openAnswerRef.current(); return;
-        case 'paste': {
-          const current = stateRef.current;
-          updatePasteViewer({ draft: composerInputFor(current, current.selectedSessionId), block: 0, scroll: 0 });
-          dispatch({ kind: 'overlay-open', overlay: 'paste-viewer' }); return;
-        }
-        case 'compact': {
-          if (session === null) {
-            dispatch({ kind: 'notice', notice: '/compact 需要先选中一个 Coordinator Session' });
-            return;
+    async (command: CommandId, recipient?: string, toggleProject = false): Promise<CommandOutcome> => {
+      const current=stateRef.current, session=current.selectedSessionId;
+      const lane=command==='compact'?'compact:'+session:command==='pause'||command==='resume'||command==='cancel'?'scope-control:'+coordScopeRef.current:(command==='handoff'||command==='execution-handoff')&&recipient!==undefined?'handoff-prepare:'+coordScopeRef.current:null;
+      const prior=lane===null?undefined:commandInvocations.peek(lane);
+      if(prior){dispatch({kind:'notice',notice:(resultNotice(prior)??'')+(prior.refreshFailed?'；请核验原结果':'')});return prior;}
+      const generation=++navigationGeneration.current;
+      const inputTarget=currentInputTarget(current,coordScopeRef.current),inputGeneration=inputTarget===null?null:protection.generation(inputTarget);
+      const active=()=>generation===navigationGeneration.current&&session===stateRef.current.selectedSessionId&&(inputTarget===null||inputGeneration===protection.generation(inputTarget));
+      const reject=(code:string,message:string):ControllerCommandResult=>{ if(active())dispatch({kind:'notice',notice:message});return {kind:'rejected',code,message}; };
+      const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length,...(snapshotRef.current?{controlState:snapshotRef.current.controlState}:{})});
+      if(reason)return reject('command_unavailable',reason);
+      const open=(overlay:OverlayKind, selectedId:string|null=null):CommandOutcome=>{
+        if(!active())return {kind:'rejected',code:'navigation_changed',message:'调用入口已改变'};
+        dispatch({kind:'review-view',tab:0,scroll:0,action:0});
+        dispatch({kind:'dialog-selection',overlay,query:emptyDraft(),selectedId});
+        dispatch({kind:'overlay-open',overlay});
+        return {kind:'opened'};
+      };
+      try {
+        switch(command){
+          case 'verify-command-results': {
+            const result=await commandInvocations.verify(async result=>{
+              if(result.kind==='accepted'&&result.refreshFailed){try{await reload();return {...result,refreshFailed:false};}catch{return result;}}
+              return result.kind==='unknown'&&result.resultRef?await ports.commandStatus(result.resultRef):result;
+            });
+            if(active())dispatch({kind:'notice',notice:resultNotice(result)});
+            return result;
           }
-          const result = await ports.execute({
-            kind: 'compact-session',
-            coordinatorSessionId: session,
-            reason: 'user-requested',
-          });
-          dispatch({ kind: 'notice', notice: resultNotice(result) });
-          await reload();
-          return;
-        }
-        case 'model-picker': {
-          setModelRejection(null);
-          setModelCatalog(await ports.modelCatalog.load());
-          dispatch({ kind: 'overlay-open', overlay: 'model-picker' });
-          return;
-        }
-        case 'handoff': {
-          if(recipient===undefined){dispatch({kind:'handoff-target',command:'handoff'});dispatch({kind:'overlay-open',overlay:'handoff-target'});return;}
-          const target=recipient;
-          const result = await ports.handoff.prepareProposal(target);
-          dispatch({ kind: 'notice', notice: resultNotice(result) });
-          if (result.kind === 'accepted') {
-            const loaded = await ports.snapshot(stateRef.current.selectedSessionId);
-            if (loaded.kind === 'snapshot') {
-              setSnapshot(loaded.snapshot);
-              setHandoffProposalId(
-                loaded.snapshot.planningHandoffs.find(
-                  (entry) => entry.phase === 'prepared' || entry.phase === 'reviewed',
-                )?.proposalId ?? null,
-              );
+          case 'command-directory': return open('command-palette',COMMAND_IDS[0]??null);
+          case 'answer': {
+            dispatch({kind:'overlay-close-all'});
+            return await openAnswerRef.current()?{kind:'opened'}:reject('question_unavailable','当前没有可回答的问题');
+          }
+          case 'paste':
+            updatePasteViewer({draft:composerInputFor(current,session),block:0,scroll:0});return open('paste-viewer');
+          case 'compact':
+            if(session===null)return reject('session_missing','未选择会话');
+            {const result=await runMutation('compact:'+session,()=>ports.execute({kind:'compact-session',coordinatorSessionId:session,reason:'user-requested'}));if(result.kind==='accepted'&&active())dispatch({kind:'overlay-close-all'});return result;}
+          case 'model-picker': {
+            if(session===null)return reject('session_missing','未选择会话');
+            const catalog=await ports.modelCatalog.load(session);
+            if(!active())return reject('navigation_changed','调用入口已改变');
+            modelMenuTarget.current=session;setModelRejection(null);setModelCatalog(catalog);
+            return open('model-picker',catalog.currentConfigurationRef??catalog.options[0]?.configurationRef??null);
+          }
+          case 'handoff':
+          case 'execution-handoff': {
+            if(recipient===undefined){
+              dispatch({kind:'handoff-target',command});
+              const source=command==='handoff'?snapshotRef.current?.sessions.find(s=>s.planningResponsible)?.coordinatorSessionId:snapshotRef.current?.executionLeaseHolderSessionId;
+              return open('handoff-target',snapshotRef.current?.sessions.find(s=>s.coordinatorSessionId!==source)?.coordinatorSessionId??null);
             }
-            dispatch({ kind: 'overlay-open', overlay: 'handoff-review' });
+            return await runMutation('handoff-prepare:'+coordScopeRef.current,async()=>{
+              const prepared=await (command==='handoff'?ports.handoff.prepareProposal(recipient):ports.executionHandoff.prepare(recipient));
+              if(prepared.kind!=='accepted')return prepared;
+              const initialRef=prepared.resultRef;
+              if(initialRef?.kind!==(command==='handoff'?'planning-handoff':'execution-handoff'))return {kind:'unknown',code:'result_ref_unavailable',message:'已受理但缺少本次提案的精确引用，请核验原结果'};
+              if(!active())return prepared;
+              let ref=initialRef;
+              try{
+                if(ref.kind==='planning-handoff'){
+                  const record=await ports.handoff.read(ref.proposalId);
+                  if(!active())return prepared;
+                  if(!record)throw new Error('本次提案暂不可读');
+                  setPlanningReview(record);
+                  open('handoff-review');
+                }else if(ref.kind==='execution-handoff'){
+                  const id=ref.handoffId,record=await ports.executionHandoff.read(id);
+                  if(!active())return prepared;
+                  if(record?.phase==='prepared'){
+                    const reviewed=await runMutation('handoff-review:'+id,()=>ports.executionHandoff.review(id));
+                    if(!active())return reviewed;
+                    if(reviewed.kind==='accepted'&&reviewed.resultRef?.kind==='execution-handoff')ref=reviewed.resultRef;
+                    else return reviewed;
+                  }
+                  const shown=await ports.executionHandoff.read(id);
+                  if(!active())return prepared;
+                  if(!shown)throw new Error('本次提案暂不可读');
+                  executionReviewRef.current=ref;setExecutionReview(shown);
+                  dispatch({kind:'execution-handoff-review',handoffId:id});
+                  open('execution-handoff-review');
+                }
+                return prepared;
+              }catch{return {kind:'unknown',code:'handoff_unreadable',message:'提案已受理，读取结果失败，请核验原提案',resultRef:ref};}
+            });
           }
-          return;
+          case 'session-picker':return open('session-picker',session??snapshotRef.current?.sessions[0]?.coordinatorSessionId??null);
+          case 'event-drawer':
+          case 'pending-list':
+          case 'project': {
+            dispatch({kind:'overlay-close-all'});
+            dispatch({kind:'project-panel',panel:{...current.projectPanel,open:toggleProject?!current.projectPanel.open:true,tab:command==='event-drawer'?2:command==='pending-list'?1:0,selectedKey:command==='event-drawer'?'event:'+events.at(-1)?.eventId:null,detail:null,scroll:0}});
+            return {kind:'opened'};
+          }
+          case 'options':return open('options','icons-'+current.iconMode);
+          case 'icons-nerd':
+          case 'icons-ascii':dispatch({kind:'icons',mode:command==='icons-ascii'?'ascii':'nerd'});return {kind:'opened'};
+          case 'statusline':return reject('command_unavailable','用户级状态栏设置尚未接通');
+          case 'graph-inspector':return open('graph-inspector');
+          case 'toggle-sidebar':dispatch({kind:'overlay-close-all'});dispatch({kind:'sidebar-toggle',allowed:allowedSidebarDensity(terminalWidth)});return {kind:'opened'};
+          case 'help':return open('help');
+          case 'pause':
+          case 'resume':
+          case 'cancel':
+            {const result=await requestScopeControl(command);if(result.kind==='accepted'&&active())dispatch({kind:'overlay-close-all'});return result;}
+          case 'authorize-execution': {
+            const loaded=await ports.executionAuthorization.review();
+            if(!active())return reject('navigation_changed','调用入口已改变');
+            setAuthorizationReview(loaded);open('authorization-review');
+            return loaded.kind==='review'?{kind:'opened'}:reject(loaded.code,loaded.message);
+          }
+          case 'filter-execution': {
+            const next=nextExecutionFilter(current.executionFilter);dispatch({kind:'execution-filter-changed',filter:next});
+            dispatch({kind:'notice',notice:'执行图过滤：'+executionFilterLabel(next)});return {kind:'opened'};
+          }
+          case 'transcript-details':dispatch({kind:'transcript-details',detailed:!current.detailedTranscript});return {kind:'opened'};
+          case 'search-history':
+          case 'navigate-activity':
+          case 'input-history':
+            dispatch({kind:'overlay-close-all'});dispatch({kind:'project-panel',panel:{...current.projectPanel,open:false}});
+            historyKeyRef.current(command==='input-history'?'users':command==='search-history'?'transcript':'activity');
+            return {kind:'opened'};
+          case 'exit':requestExit();return {kind:'opened'};
+          case 'input-record-manager': {
+            const scope=coordScopeRef.current;if(scope===null)return reject('scope_missing','尚未确定 Scope');
+            const listed=protection.list(scope);if(listed.status==='failed')return reject(listed.code,listed.message);
+            setInputManager({entries:inputManagerEntriesOf(listed.records,listed.invalidRecords),usage:listed.usage,selectedIndex:0,bodyScroll:0,bodyFocus:false,feedback:null,confirmDelete:false});
+            return open('input-record-manager');
+          }
         }
-        case 'session-picker': {
-          dispatch({ kind: 'overlay-open', overlay: 'session-picker' });
-          return;
-        }
-        case 'event-drawer':
-        case 'project':
-          dispatch({kind:'project-panel',panel:{...stateRef.current.projectPanel,open:true,tab:command==='event-drawer'?2:0,selectedKey:command==='event-drawer'?'event:'+events.at(-1)?.eventId:null,detail:null,scroll:0}});
-          return;
-        case 'options': dispatch({kind:'overlay-open',overlay:'options'}); return;
-        case 'statusline': dispatch({kind:'notice',notice:'用户级状态栏设置尚未接通'});return;
-        case 'graph-inspector':
-          dispatch({ kind: 'overlay-open', overlay: 'graph-inspector' });
-          return;
-        case 'toggle-sidebar':
-          dispatch({
-            kind: 'sidebar-toggle',
-            allowed: allowedSidebarDensity(terminalWidth),
-          });
-          return;
-        case 'help':
-          dispatch({
-            kind: 'notice',
-            notice: HELP_LINES[0] + ' · ' + COMMAND_IDS.map(id=>COMMAND_METADATA[id].alias).filter(Boolean).map(alias=>'/'+alias).join(' '),
-          });
-          return;
-        case 'pause':
-        case 'resume':
-        case 'cancel':
-          requestScopeControl(command);
-          return;
-        case 'execution-handoff': {
-          if(recipient===undefined){dispatch({kind:'handoff-target',command:'execution-handoff'});dispatch({kind:'overlay-open',overlay:'handoff-target'});return;}
-          const target=recipient;
-          const prepared = await ports.executionHandoff.prepare(target);
-          dispatch({ kind: 'notice', notice: resultNotice(prepared) });
-          if (prepared.kind !== 'accepted') {
-            return;
-          }
-          const loaded = await ports.snapshot(stateRef.current.selectedSessionId);
-          if (loaded.kind !== 'snapshot') {
-            return;
-          }
-          setSnapshot(loaded.snapshot);
-          // 待审阅的记录优先取 prepared/reviewed；没有可推进的记录时把 blocked 记录也展示出来，
-          // 否则 fail closed 只留下「没有待审阅的记录」这句无信息量的提示。
-          const candidate =
-            loaded.snapshot.handoffs.find(
-              (handoff) => handoff.phase === 'prepared' || handoff.phase === 'reviewed',
-            ) ??
-            loaded.snapshot.handoffs.find((handoff) => handoff.phase === 'blocked') ??
-            null;
-          let record = candidate;
-          if (candidate !== null && candidate.phase === 'prepared') {
-            // 复核由宿主读好权威事实后提交；失败即写入 blocked，Source 保持唯一 owner。
-            const reviewed = await ports.executionHandoff.review(candidate.handoffId);
-            dispatch({ kind: 'notice', notice: resultNotice(reviewed) });
-            const after = await ports.snapshot(stateRef.current.selectedSessionId);
-            if (after.kind === 'snapshot') {
-              setSnapshot(after.snapshot);
-              record =
-                after.snapshot.handoffs.find((handoff) => handoff.handoffId === candidate.handoffId) ??
-                candidate;
-            }
-          }
-          dispatch({ kind: 'execution-handoff-review', handoffId: record?.handoffId ?? null });
-          dispatch({ kind: 'overlay-open', overlay: 'execution-handoff-review' });
-          return;
-        }
-        case 'authorize-execution': {
-          // 审阅事实由宿主现读现算：界面只显示它、只回传指纹，不组装也不缓存第二份 Manifest。
-          const loaded = await ports.executionAuthorization.review();
-          setAuthorizationReview(loaded);
-          if (loaded.kind !== 'review') {
-            dispatch({ kind: 'notice', notice: `${loaded.code}: ${loaded.message}` });
-          }
-          dispatch({ kind: 'overlay-open', overlay: 'authorization-review' });
-          return;
-        }
-        case 'filter-execution': {
-          const next = nextExecutionFilter(stateRef.current.executionFilter);
-          dispatch({ kind: 'execution-filter-changed', filter: next });
-          dispatch({
-            kind: 'notice',
-            notice: `执行图过滤：${executionFilterLabel(next)}（只隐藏节点，不改变顺序）`,
-          });
-          return;
-        }
-        case 'exit':
-          requestExit();
-          return;
-        case 'input-record-manager': {
-          const scope = coordScopeRef.current;
-          if (scope === null) {
-            dispatch({ kind: 'notice', notice: '尚未确定 Coordination Scope，无法打开输入记录管理' });
-            return;
-          }
-          const listed = protection.list(scope);
-          if (listed.status === 'failed') {
-            dispatch({ kind: 'notice', notice: `输入记录读取失败：${listed.code} ${listed.message}` });
-            return;
-          }
-          setInputManager({
-            entries: inputManagerEntriesOf(listed.records, listed.invalidRecords),
-            usage: listed.usage,
-            selectedIndex: 0,
-            bodyScroll: 0,
-            bodyFocus: false,
-            feedback: null,
-            confirmDelete: false,
-          });
-          dispatch({ kind: 'overlay-open', overlay: 'input-record-manager' });
-          return;
-        }
-      }
+      } catch(error){return reject('command_read_failed',error instanceof Error?error.message:String(error));}
     },
-    [dispatch, events, ports, protection, reload, requestExit, requestScopeControl, terminalWidth],
+    [dispatch,events,ports,protection,requestExit,requestScopeControl,runMutation,commandInvocations,reload,terminalWidth],
   );
   runCommandRef.current = runCommand;
 
@@ -1374,110 +1358,53 @@ function TuiAppContent(props: TuiAppProps) {
   }, []);
 
   const confirmHandoff = useCallback(async () => {
-    const proposal =
-      viewModelRef.current?.planningHandoffs.find((entry) => entry.proposalId === handoffProposalId) ?? null;
-    if (proposal === null) {
-      dispatch({ kind: 'overlay-close-top' });
-      return;
+    const record=planningReview, generation=navigationGeneration.current;
+    if(!record)return;
+    const result=await runMutation('handoff:'+record.proposalId,()=>ports.handoff.cutover(record.proposalId,record.proposalRevision));
+    if(result.kind==='accepted'&&generation===navigationGeneration.current) {
+      dispatch({kind:'overlay-close-all'});
+      dispatch({kind:'session-read-only',coordinatorSessionId:record.sourceSessionId});
     }
-    const result = await ports.handoff.cutover(proposal.proposalId);
-    dispatch({ kind: 'notice', notice: resultNotice(result) });
-    if (result.kind === 'accepted') {
-      dispatch({ kind: 'overlay-close-top' });
-      // cutover 后 Source transcript 只读，并自动选中 Target（激活门由应用层判定）。
-      dispatch({ kind: 'session-read-only', coordinatorSessionId: proposal.sourceSessionId });
-      dispatch({ kind: 'session-selected', coordinatorSessionId: proposal.targetSessionId });
-      dispatch({ kind: 'notice', notice: 'cutover 完成：等待你在 Target 发送下一条普通 Prompt' });
-      await reload();
-    }
-  }, [dispatch, handoffProposalId, ports, reload]);
+  },[dispatch,planningReview,ports,runMutation]);
 
-  /** Execution Handoff 的 cutover 确认；失败即 fail closed，Source 保持唯一 owner。 */
   const confirmExecutionHandoff = useCallback(async () => {
-    const handoffId = stateRef.current.executionHandoffReviewId;
-    if (handoffId === null) {
-      dispatch({ kind: 'overlay-close-top' });
-      return;
+    const record=executionReview,ref=executionReviewRef.current,generation=navigationGeneration.current;
+    if(!record||ref?.kind!=='execution-handoff'||record.phase!=='reviewed')return;
+    const result=await runMutation('handoff:'+record.handoffId,()=>ports.executionHandoff.cutover(record.handoffId,ref.revision));
+    if(result.kind==='accepted'&&generation===navigationGeneration.current){
+      dispatch({kind:'overlay-close-all'});
+      dispatch({kind:'session-read-only',coordinatorSessionId:record.sourceSessionId});
     }
-    const record =
-      viewModelRef.current?.execution.handoffs.find((handoff) => handoff.handoffId === handoffId) ?? null;
-    if (record !== null && record.phase !== 'reviewed') {
-      // 只有复核通过的记录才允许 cutover：fail closed 由界面与宿主两层一起保证。
-      dispatch({
-        kind: 'notice',
-        notice: `交接处于 ${record.phase}，不能 cutover（Source 仍是唯一 owner）`,
-      });
-      await reload();
-      return;
-    }
-    const result = await ports.executionHandoff.cutover(handoffId);
-    dispatch({ kind: 'notice', notice: resultNotice(result) });
-    if (result.kind !== 'accepted' || record === null) {
-      await reload();
-      return;
-    }
-    dispatch({ kind: 'overlay-close-top' });
-    dispatch({ kind: 'execution-handoff-review', handoffId: null });
-    // cutover 后 Source transcript 转为只读并自动选中 Target；Target 保持 awaiting_user_prompt。
-    dispatch({ kind: 'session-read-only', coordinatorSessionId: record.sourceSessionId });
-    dispatch({ kind: 'session-selected', coordinatorSessionId: record.targetSessionId });
-    dispatch({ kind: 'notice', notice: 'cutover 完成：Target 处于 awaiting_user_prompt' });
-    await reload();
-  }, [dispatch, ports, reload]);
+  },[dispatch,executionReview,ports,runMutation]);
 
   const cancelExecutionHandoff = useCallback(async () => {
-    const handoffId = stateRef.current.executionHandoffReviewId;
-    if (handoffId !== null) {
-      const result = await ports.executionHandoff.cancel(handoffId);
-      dispatch({ kind: 'notice', notice: resultNotice(result) });
-    }
-    dispatch({ kind: 'overlay-close-top' });
-    dispatch({ kind: 'execution-handoff-review', handoffId: null });
-    await reload();
-  }, [dispatch, ports, reload]);
+    const record=executionReview,ref=executionReviewRef.current,generation=navigationGeneration.current;
+    if(!record||ref?.kind!=='execution-handoff'){dispatch({kind:'overlay-close-top'});return;}
+    const result=await runMutation('handoff:'+record.handoffId,()=>ports.executionHandoff.cancel(record.handoffId,ref.revision));
+    if(result.kind==='accepted'&&generation===navigationGeneration.current)dispatch({kind:'overlay-close-top'});
+  },[dispatch,executionReview,ports,runMutation]);
 
-  /**
-   * 批准 Execution Authorization 并原子切换到 Execution Coordination。
-   *
-   * 只回传用户在审阅里看到的指纹与 Scope revision：宿主重读全部权威输入后才写入批准与切换，因此
-   * 界面无法把「旧内容」当成批准对象，也无法跳过门禁。
-   */
   const confirmAuthorization = useCallback(async () => {
-    const load = authorizationReview;
-    if (load === null || load.kind !== 'review' || !load.review.gate.ready) {
-      dispatch({ kind: 'notice', notice: '当前没有可批准的完整 Manifest（门禁未通过或事实不可读）' });
-      return;
+    const load=authorizationReview,generation=navigationGeneration.current;
+    if(load?.kind!=='review'||!load.review.gate.ready)return;
+    const result=await runMutation('authorization:'+coordScopeRef.current,()=>ports.executionAuthorization.approve({
+      fingerprint:load.review.fingerprint,expectedRevision:load.review.scopeRevision,
+    }));
+    if(result.kind==='accepted'&&generation===navigationGeneration.current){
+      dispatch({kind:'overlay-close-all'});setAuthorizationReview(null);
     }
-    const result = await ports.executionAuthorization.approve({
-      fingerprint: load.review.fingerprint,
-      expectedRevision: load.review.scopeRevision,
-    });
-    dispatch({ kind: 'notice', notice: resultNotice(result) });
-    if (result.kind === 'accepted') {
-      dispatch({ kind: 'overlay-close-top' });
-      setAuthorizationReview(null);
-      await reload();
-      return;
-    }
-    // 拒绝或阻塞时重读审阅事实：规划引用可能已经变化，用户需要看到新指纹再决定。
-    setAuthorizationReview(await ports.executionAuthorization.review());
-  }, [authorizationReview, dispatch, ports, reload]);
+  },[authorizationReview,dispatch,ports,runMutation]);
 
   const cancelAuthorization = useCallback(() => {
-    dispatch({ kind: 'overlay-close-top' });
-    setAuthorizationReview(null);
-  }, [dispatch]);
+    dispatch({kind:'overlay-close-top'});setAuthorizationReview(null);
+  },[dispatch]);
 
   const cancelHandoff = useCallback(async () => {
-    if (handoffProposalId === null) {
-      dispatch({ kind: 'overlay-close-top' });
-      return;
-    }
-    const result = await ports.handoff.cancel(handoffProposalId);
-    dispatch({ kind: 'notice', notice: resultNotice(result) });
-    dispatch({ kind: 'overlay-close-top' });
-    await reload();
-  }, [dispatch, handoffProposalId, ports, reload]);
+    const record=planningReview,generation=navigationGeneration.current;
+    if(!record){dispatch({kind:'overlay-close-top'});return;}
+    const result=await runMutation('handoff:'+record.proposalId,()=>ports.handoff.cancel(record.proposalId,record.proposalRevision));
+    if(result.kind==='accepted'&&generation===navigationGeneration.current)dispatch({kind:'overlay-close-top'});
+  },[dispatch,planningReview,ports,runMutation]);
 
   const runChecks = useCallback(async () => {
     const verified = await ports.scopeSetup.verify();
@@ -1678,7 +1605,7 @@ function TuiAppContent(props: TuiAppProps) {
     updateHistoryContext(context); updateHistoryPreview(null); reader.highlight(null);
     void seekHistory(context, context.kind === 'users' ? 'older' : 'newer', true);
   };
-  functionKeyRef.current = action => { void beginHistoryContext(action === 'search-history' ? 'transcript' : 'activity'); };
+  functionKeyRef.current = action => { if(stateRef.current.overlayStack.length===0&&stateRef.current.pendingConfirmation===null)void runCommand(action); };
   const workspaceActions: WorkspaceActions = {
     dispatch,
     composerChange: (draft) => {
@@ -1710,7 +1637,7 @@ function TuiAppContent(props: TuiAppProps) {
       dispatch({ kind: 'session-selected', coordinatorSessionId });
       answerRequest.current++;
       updateAnswerPanel(null);
-      dispatch({ kind: 'overlay-close-top' });
+      dispatch({ kind: 'overlay-close-all' });
     },
     enterAnswer: (interactionId, expectedRevision) => {
       // 进入回答模式前先把当前草稿落盘，避免模式切换丢掉未保存输入。
@@ -1728,26 +1655,18 @@ function TuiAppContent(props: TuiAppProps) {
       void runCommand(command);
     },
     selectRecipient: (coordinatorSessionId) => {
-      dispatch({kind:'overlay-close-top'});
       void runCommand(stateRef.current.handoffCommand,coordinatorSessionId);
     },
     selectModel: (configurationRef) => {
-      void (async () => {
-        const session = stateRef.current.selectedSessionId;
-        if (session === null) {
-          return;
-        }
-        const result = await ports.execute({
-          kind: 'switch-model-configuration',
-          coordinatorSessionId: session,
-          nextConfigurationRef: configurationRef,
-        });
-        setModelRejection(result.kind === 'accepted' ? null : (resultNotice(result) ?? null));
-        if (result.kind === 'accepted') {
-          dispatch({ kind: 'overlay-close-top' });
-          await reload();
-        }
-      })();
+      const session=modelMenuTarget.current,generation=navigationGeneration.current;
+      if(!session)return;
+      const admission=modelSwitchAdmission(modelCatalog);
+      if(!admission.allowed){setModelRejection(admission.reason);return;}
+      void runMutation('model:'+session,()=>ports.execute({kind:'switch-model-configuration',coordinatorSessionId:session,nextConfigurationRef:configurationRef})).then(result=>{
+        if(generation!==navigationGeneration.current||session!==stateRef.current.selectedSessionId)return;
+        setModelRejection(result.kind==='accepted'?null:resultNotice(result));
+        if(result.kind==='accepted')dispatch({kind:'overlay-close-all'});
+      });
     },
     confirmPending: () => {
       const pending = stateRef.current.pendingConfirmation;
@@ -1777,8 +1696,23 @@ function TuiAppContent(props: TuiAppProps) {
     closeTopOverlay: () => dispatch({ kind: 'overlay-close-top' }),
   };
 
+  historyKeyRef.current = kind => { void beginHistoryContext(kind); };
+
+  const dialogChoicesFor = (overlay: OverlayKind, query: string) => {
+    if(overlay==='command-palette'||overlay==='options')return searchCommands(query).filter(id=>overlay!=='options'||COMMAND_METADATA[id].path.startsWith('选项 →')).map(value=>({value}));
+    if(overlay==='model-picker')return modelCatalog===null?[]:filterChoices(modelChoices(modelCatalog),query);
+    const scope=snapshotRef.current,source=scope?.mode==='route_planning'?scope.sessions.find(s=>s.planningResponsible)?.coordinatorSessionId:scope?.executionLeaseHolderSessionId;
+    return filterChoices(sessionChoices((viewModelRef.current?.sessions??[]).filter(s=>overlay!=='handoff-target'||s.coordinatorSessionId!==source),stateRef.current.selectedSessionId),query);
+  };
+  const changeDialogQuery = (overlay: OverlayKind, edited: UiDraft) => {
+    const text=boundedQuery(edited.text),query={...edited,text,cursor:Math.min(edited.cursor,text.length)};
+    const selected=stateRef.current.dialogSelections[overlay]?.selectedId??null,matches=dialogChoicesFor(overlay,text);
+    dispatch({kind:'dialog-selection',overlay,query,selectedId:matches.some(o=>o.value===selected)?selected:matches[0]?.value??null});
+  };
+
   useInput((input, key) => {
     if (key.eventType === 'release') return;
+    if(resolveGlobalAction(input,key)==='exit'){void runCommand('exit');return;}
     // 待确认动作独占输入；y/n 沿原 ConfirmInput，方向键与 Enter 使用默认返回的动作栏。
     const pending = stateRef.current.pendingConfirmation;
     if (pending !== null) {
@@ -1835,6 +1769,8 @@ function TuiAppContent(props: TuiAppProps) {
       }
       if(topOverlay()==='graph-inspector'&&stateRef.current.inspectorRelations){dispatch({kind:'inspector-view',relations:null});return;}
       if(topOverlay()==='graph-inspector'&&stateRef.current.inspectorDetail){dispatch({kind:'inspector-view',detail:false,scroll:0});return;}
+      if(topOverlay()==='handoff-review'){void cancelHandoff();return;}
+      if(topOverlay()==='execution-handoff-review'){void cancelExecutionHandoff();return;}
       if (stateRef.current.overlayStack.length > 0) {
         dispatch({ kind: 'overlay-close-top' });
         return;
@@ -1870,12 +1806,11 @@ function TuiAppContent(props: TuiAppProps) {
     }
     if (action === 'command-palette') {
       answerRequest.current++;
-      paletteSelection.set(0);
-      dispatch({ kind: 'overlay-open', overlay: 'command-palette' });
+      void runCommand('command-directory');
       return;
     }
     if (action === 'toggle-sidebar') {
-      dispatch({kind:'project-panel',panel:{...stateRef.current.projectPanel,open:!stateRef.current.projectPanel.open}});
+      void runCommand('project',undefined,true);
       return;
     }
     if (action === 'graph-inspector') {
@@ -1884,7 +1819,7 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (action === 'enter-answer') {
-      if (stateRef.current.screen === 'workspace') void openAnswerRef.current();
+      if (stateRef.current.screen === 'workspace') void runCommand('answer');
       return;
     }
 
@@ -1914,11 +1849,29 @@ function TuiAppContent(props: TuiAppProps) {
       handleWizardKey(input, key, { runChecks, confirmWizard });
       return;
     }
-    if (topOverlay() === 'command-palette') {
-      handlePaletteKey(key, { commands: COMMAND_IDS, cursor: paletteSelection, run: (command) => { void runCommand(command); } });
+    if(overlay==='command-palette'||overlay==='options'||overlay==='model-picker'||overlay==='session-picker'||overlay==='handoff-target'){
+      const selection=stateRef.current.dialogSelections[overlay]??{query:emptyDraft(),selectedId:null};
+      const choices=dialogChoicesFor(overlay,selection.query.text);
+      const index=choices.findIndex(o=>o.value===selection.selectedId);
+      if(key.upArrow||key.downArrow){
+        const item=choices[Math.max(0,Math.min(choices.length-1,index+(key.upArrow?-1:1)))];
+        dispatch({kind:'dialog-selection',overlay,query:selection.query,selectedId:item?.value??null});return;
+      }
+      if(key.return&&!key.meta&&!key.shift){
+        const chosen=choices.find(o=>o.value===selection.selectedId);
+        if(!chosen){dispatch({kind:'notice',notice:'请明确选择当前结果'});return;}
+        if(overlay==='command-palette'||overlay==='options')void runCommand(chosen.value as CommandId);
+        else if(overlay==='model-picker')workspaceActions.selectModel?.(chosen.value);
+        else if(overlay==='handoff-target')workspaceActions.selectRecipient?.(chosen.value);
+        else workspaceActions.selectSession(chosen.value);
+        return;
+      }
+      const edited=editComposer(selection.query,input,key);
+      if(edited!==selection.query)changeDialogQuery(overlay,edited);
       return;
     }
-    if (topOverlay() === 'model-picker') {
+    if(overlay==='help'){
+      if(key.upArrow||key.downArrow)dispatch({kind:'review-view',scroll:Math.max(0,Math.min(HELP_LINES.length+COMMAND_IDS.length-1,stateRef.current.reviewScroll+(key.upArrow?-1:1)))});
       return;
     }
     if (topOverlay() === 'graph-inspector') {
@@ -2001,7 +1954,7 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (action === 'toggle-tool') {
-      dispatch({ kind: 'transcript-details', detailed: !stateRef.current.detailedTranscript });
+      void runCommand('transcript-details');
       return;
     }
     if (topOverlay() === 'paste-viewer') {
@@ -2015,13 +1968,13 @@ function TuiAppContent(props: TuiAppProps) {
       }
       return;
     }
-    if(topOverlay()==='options'){ if(key.return)dispatch({kind:'icons',mode:stateRef.current.iconMode==='nerd'?'ascii':'nerd'});return; }
+
     if (topOverlay() !== null) {
-      if(key.tab){dispatch({kind:'review-view',tab:(stateRef.current.reviewTab+1)%3,scroll:0});return;}
+      if(key.tab){dispatch({kind:'review-view',tab:(stateRef.current.reviewTab+1)%(topOverlay()==='authorization-review'?5:3),scroll:0});return;}
       if(key.upArrow||key.downArrow){dispatch({kind:'review-view',scroll:Math.max(0,stateRef.current.reviewScroll+(key.upArrow?-1:1))});return;}
       if(key.leftArrow||key.rightArrow){dispatch({kind:'review-view',action:stateRef.current.reviewAction===0?1:0});return;}
       if(key.return){
-        if(stateRef.current.reviewAction===0){dispatch({kind:'overlay-close-top'});return;}
+        if(stateRef.current.reviewAction===0){if(topOverlay()==='handoff-review')void cancelHandoff();else if(topOverlay()==='execution-handoff-review')void cancelExecutionHandoff();else dispatch({kind:'overlay-close-top'});return;}
         if(topOverlay()==='handoff-review')void confirmHandoff();
         if(topOverlay()==='execution-handoff-review')void confirmExecutionHandoff();
         if(topOverlay()==='authorization-review')void confirmAuthorization();
@@ -2092,7 +2045,7 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (key.ctrl && input === 'r') {
-      void beginHistoryContext('users'); return;
+      void runCommand('input-history'); return;
     }
     if (action === 'search-history' || action === 'navigate-activity') { functionKeyRef.current(action); return; }
     const ordinary = stateRef.current.composerMode.kind === 'message' && readingSession !== null && !isComposerReadOnly(stateRef.current, readingSession);
@@ -2131,6 +2084,11 @@ function TuiAppContent(props: TuiAppProps) {
     const current = stateRef.current;
     if (current.screen !== 'workspace') {
       return;
+    }
+    const overlay=current.overlayStack.at(-1);
+    if(current.pendingConfirmation===null&&overlay&&['command-palette','options','session-picker','handoff-target','model-picker'].includes(overlay)){
+      const selected=current.dialogSelections[overlay]??{query:emptyDraft(),selectedId:null};
+      changeDialogQuery(overlay,editComposer(selected.query,text.replace(/\r\n?/gu,'\n'),{}));return;
     }
     if (current.pendingConfirmation !== null || current.overlayStack.length > 0 || current.projectPanel.open) {
       return;
@@ -2221,18 +2179,17 @@ function TuiAppContent(props: TuiAppProps) {
       actions={workspaceActions}
       modelCatalog={modelCatalog}
       modelRejection={modelRejection}
-      paletteSelection={paletteSelection.value}
+      paletteSelection={Math.max(0,searchCommands(state.dialogSelections[state.overlayStack.at(-1)??'command-palette']?.query.text??'').filter(id=>state.overlayStack.at(-1)!=='options'||COMMAND_METADATA[id].path.startsWith('选项 →')).indexOf(state.dialogSelections[state.overlayStack.at(-1)??'command-palette']?.selectedId as CommandId))}
       composerDisabledReason={
         viewModel.compaction?.status === 'context_exhausted'
           ? 'context_exhausted：已停止发起新的模型调用'
           : null
       }
       newlineHint="Alt+Enter 换行"
-      handoffProposal={
-        viewModel.planningHandoffs.find((entry) => entry.proposalId === handoffProposalId) ?? null
-      }
+      handoffProposal={planningReview}
+      executionReview={executionReview}
       authorizationReview={authorizationReview}
-      commands={COMMAND_IDS}
+      commands={state.overlayStack.at(-1)==='command-palette'||state.overlayStack.at(-1)==='options'?searchCommands(state.dialogSelections[state.overlayStack.at(-1)!]?.query.text??''):COMMAND_IDS}
       inputManager={inputManager}
       answerPanel={state.composerMode.kind === 'answer' ? answerPanel : null}
       pasteViewer={pasteViewer}
@@ -2289,30 +2246,6 @@ function handleWizardKey(
   }
   if (key.return === true) {
     void context.confirmWizard();
-  }
-}
-
-function handlePaletteKey(
-  key: { readonly upArrow?: boolean; readonly downArrow?: boolean; readonly return?: boolean },
-  context: {
-    readonly commands: readonly CommandId[];
-    readonly cursor: SelectionCursor;
-    readonly run: (command: CommandId) => void;
-  },
-): void {
-  if (key.upArrow === true) {
-    context.cursor.move(-1, context.commands.length - 1);
-    return;
-  }
-  if (key.downArrow === true) {
-    context.cursor.move(1, context.commands.length - 1);
-    return;
-  }
-  if (key.return === true) {
-    const command = context.commands[context.cursor.current()];
-    if (command !== undefined) {
-      context.run(command);
-    }
   }
 }
 

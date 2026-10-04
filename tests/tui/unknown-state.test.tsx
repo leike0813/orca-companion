@@ -1,3 +1,4 @@
+import { chooseCommand } from './harness.js';
 /**
  * unknown 与 unverifiable 的如实呈现（`tui/recovery-observability`「unknown 与 unverifiable 的如实呈现」）。
  *
@@ -9,7 +10,7 @@ import { describe, expect, test } from 'vitest';
 import { createElement } from 'react';
 
 import { TuiApp } from '../../src/interfaces/tui/app.js';
-import { COMMAND_IDS, type CommandId } from '../../src/interfaces/tui/components/command-palette.js';
+import { type CommandId } from '../../src/interfaces/tui/components/command-palette.js';
 import {
   createFakePorts,
   frameText,
@@ -26,14 +27,8 @@ async function press(rendered: RenderedTui, input: string): Promise<void> {
 
 /** 走 Command Palette：Ctrl+P → 按目标索引次数的 Down → Enter。 */
 async function runPaletteCommand(rendered: RenderedTui, command: CommandId): Promise<void> {
-  await press(rendered, '\u0010');
-  const index = COMMAND_IDS.indexOf(command);
-  for (let step = 0; step < index; step += 1) {
-    await press(rendered, '\u001b[B');
-  }
-  await press(rendered, '\r');
+  await chooseCommand(rendered,command);
 }
-
 describe('recovery-observability / unknown 与 unverifiable 的如实呈现', () => {
   test('Scenario: unknown 不呈现为失败', async () => {
     const fake = createFakePorts({
