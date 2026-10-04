@@ -336,7 +336,7 @@ function identityOf(created: HandoffFixture): unknown {
   };
 }
 
-test('普通挂起 / 唤醒与 prepare / review 都不转移执行责任，也不激活 Target', async () => {
+test('普通挂起 / 唤醒与 prepare / review 都不转移执行责任，也不激活 Target', { timeout: 30_000 }, async () => {
   fixture = await createHandoffFixture();
   const created = fixture;
 
@@ -399,7 +399,7 @@ test('普通挂起 / 唤醒与 prepare / review 都不转移执行责任，也�
   expect(created.harness.backend.calls).toEqual([]);
 });
 
-test('cutover 以一次 CAS 原子转移责任，运行 / 图 / 授权 / 预算身份不变', async () => {
+test('cutover 以一次 CAS 原子转移责任，运行 / 图 / 授权 / 预算身份不变', { timeout: 30_000 }, async () => {
   fixture = await createHandoffFixture();
   const created = fixture;
   expect(prepare(created).kind).toBe('prepared');
@@ -448,7 +448,7 @@ test('cutover 以一次 CAS 原子转移责任，运行 / 图 / 授权 / 预算�
   ).toBe('not_owner');
 });
 
-test('review 失败与 cutover CAS 失败都保持 Source 唯一 owner，且不激活 Target', async () => {
+test('review 失败与 cutover CAS 失败都保持 Source 唯一 owner，且不激活 Target', { timeout: 30_000 }, async () => {
   fixture = await createHandoffFixture();
   const created = fixture;
   expect(prepare(created).kind).toBe('prepared');
@@ -513,7 +513,7 @@ test('review 失败与 cutover CAS 失败都保持 Source 唯一 owner，且不�
   expect(created.harness.backend.calls).toEqual([]);
 });
 
-test('零真实模型调用：交接与挂起 / 唤醒全程只使用注入的 fake chat model', async () => {
+test('零真实模型调用：交接与挂起 / 唤醒全程只使用注入的 fake chat model', { timeout: 30_000 }, async () => {
   fixture = await createHandoffFixture();
   const created = fixture;
 

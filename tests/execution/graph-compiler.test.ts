@@ -29,6 +29,7 @@ import {
   compileGraphPatch,
   type GraphPatchCompilationResult,
 } from '../../src/domain/execution/graph-compiler.js';
+import { recoveryUtilityProfileFixture, workerProfilesFixture } from '../support/model-configurations.js';
 
 const GRAPH_ID = 'graph-1' as GraphId;
 const GENERATION = 1 as GraphGeneration;
@@ -73,7 +74,7 @@ function graphRecord(overrides?: Partial<ExecutionGraph>): GraphVersionRecord {
 
 function authorizationRecord(): ExecutionAuthorizationRecord {
   const manifest: ExecutionAuthorizationManifest = {
-    manifestVersion: 1,
+    manifestVersion: 2,
     coordinationScopeId: 'scope-1' as never,
     planningCycleId: 'cycle-1' as PlanningCycleId,
     destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
@@ -82,12 +83,8 @@ function authorizationRecord(): ExecutionAuthorizationRecord {
     graph: { graphId: GRAPH_ID, generation: GENERATION, version: 3 as GraphVersion },
     baselineHead: 'head-1',
     orcaRunId: 'run-1',
-    workerProfiles: [
-      { profileRef: { kind: 'worker-profile', id: 'p-planner' }, role: 'planner', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-impl' }, role: 'implementation', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-val' }, role: 'validator', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-fin' }, role: 'finalizer', harness: 'codex' },
-    ],
+    workerProfiles: workerProfilesFixture(),
+    recoveryUtilityProfile: recoveryUtilityProfileFixture(),
     permissions: {
       planner: true,
       implementation: true,
@@ -106,7 +103,7 @@ function authorizationRecord(): ExecutionAuthorizationRecord {
     coordinationScopeId: 'scope-1' as never,
     authorizationId: 'auth-1',
     authorizationVersion: 1,
-    manifestVersion: 1,
+    manifestVersion: 2,
     fingerprint: 'fingerprint-1',
     manifest,
     approvedAt: 1,

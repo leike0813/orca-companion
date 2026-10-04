@@ -53,7 +53,8 @@ import {
   fakeRecoveryBackend,
   type RecoveryHarness,
 } from '../support/recovery-harness.js';
-import type { OperationId, SessionSegmentId } from '../../src/application/dto/identity.js';
+import { modelConfigurationFixture } from '../support/model-configurations.js';
+import type { DispatchId, OperationId, SessionSegmentId, WorkerTaskId } from '../../src/application/dto/identity.js';
 
 const SEGMENT = 'segment:capsule-dispatch:1' as SessionSegmentId;
 const TRANSCRIPT = 'transcript:capsule-dispatch:1';
@@ -144,7 +145,7 @@ test.each(['payload', 'body'] as const)('Capsule 提取：受限派发、按 Orc
   const report = prepareCodexSession({ stateRoot, launchId, worktree });
   const launch = createCodexWorkerLaunch({
     launchId,
-    model: 'worker-model',
+    modelConfiguration: modelConfigurationFixture(),
     sandboxMode: 'read-only',
     stateRoot,
     sessionStartReporterPath: codexSessionPathsUnder(stateRoot, launchId).reporterPath,
@@ -248,13 +249,13 @@ test.each(['payload', 'body'] as const)('Capsule 提取：受限派发、按 Orc
       backendIdentityRef: 'identity-capsule',
       graphGeneration: 1,
       authorizationId: RECOVERY_AUTHORIZATION,
-      runId: 'run-capsule',
+      runId: 'run-recovery',
       consumerGeneration: 1,
       timeoutMs: 1_000,
     },
     workerLaunch: createCodexWorkerLaunch({
       launchId,
-      model: 'worker-model',
+      modelConfiguration: modelConfigurationFixture(),
       sandboxMode: 'read-only',
       stateRoot,
       sessionStartReporterPath: codexSessionPathsUnder(stateRoot, launchId).reporterPath,
@@ -417,13 +418,13 @@ test.each(['coverage', 'task', 'dispatch'] as const)('Capsule 的 %s 不匹配�
       backendIdentityRef: 'identity-capsule',
       graphGeneration: 1,
       authorizationId: RECOVERY_AUTHORIZATION,
-      runId: 'run-capsule',
+      runId: 'run-recovery',
       consumerGeneration: 1,
       timeoutMs: 1_000,
     },
     workerLaunch: createCodexWorkerLaunch({
       launchId,
-      model: 'worker-model',
+      modelConfiguration: modelConfigurationFixture(),
       sandboxMode: 'read-only',
       stateRoot,
       sessionStartReporterPath: codexSessionPathsUnder(stateRoot, launchId).reporterPath,
@@ -478,7 +479,7 @@ test('重启后续办：按信封内容回读已派发的 Worker，不再新建 
   const launchId = capsuleLaunchIdOf(SEGMENT);
   const launch = createCodexWorkerLaunch({
     launchId,
-    model: 'worker-model',
+    modelConfiguration: modelConfigurationFixture(),
     sandboxMode: 'read-only',
     stateRoot,
     sessionStartReporterPath: codexSessionPathsUnder(stateRoot, launchId).reporterPath,
@@ -541,7 +542,7 @@ test('重启后续办：按信封内容回读已派发的 Worker，不再新建 
       backendIdentityRef: 'identity-capsule',
       graphGeneration: 1,
       authorizationId: RECOVERY_AUTHORIZATION,
-      runId: 'run-capsule',
+      runId: 'run-recovery',
       consumerGeneration: 1,
       timeoutMs: 1_000,
     },
@@ -675,12 +676,14 @@ function capsuleFacts(input: {
       backendIdentityRef: 'identity-capsule',
       graphGeneration: 1,
       authorizationId: RECOVERY_AUTHORIZATION,
-      runId: 'run-capsule',
+      // 必须与已批准 Manifest 的 orcaRunId 一致：Utility 的模型授权只在该 Run 与世代内有效。
+      runId: 'run-recovery',
       consumerGeneration: 1,
       timeoutMs: 1_000,
     },
     workerHarness: 'codex',
-    workerModel: 'worker-model',
+    // 替代 Session 与 Utility Worker 的模型绑定由已批准授权解析，测试给固定结论。
+    resolveModelConfiguration: () => modelConfigurationFixture(),
     codexSandbox: 'workspace-write',
     companionStateRoot: input.companionStateRoot,
     writer: harness!.writer,
@@ -763,7 +766,7 @@ test('Capsule 派发前能力不可用：零 Orca mutation、不消耗恢复预�
   expect(backend.mutations()).toEqual([]);
 });
 
-test('已有派发时能力结论不改写身份：按原 Dispatch 读回 Capsule，不重复探测', { timeout: 30_000 }, async () => {
+test.each([true, false])('已有 Utility 派发按原模型绑定读回；缺少绑定拒绝（binding=%s）', { timeout: 30_000 }, async (hasBinding) => {
   harness = createRecoveryHarness();
   harness.recordSourceSegment({
     segmentId: SEGMENT,
@@ -784,6 +787,22 @@ test('已有派发时能力结论不改写身份：按原 Dispatch 读回 Capsul
     sourceSegmentId: SEGMENT,
     transcriptRef: TRANSCRIPT,
   });
+  if (hasBinding) {
+    const id = encodeURIComponent(SEGMENT);
+    const operations = { task: `op:capsule:${id}:task` as OperationId, workerStart: `op:capsule:${id}:worker-start` as OperationId };
+    const scope = harness.store.query({ kind: 'scope', coordinationScopeId: RECOVERY_SCOPE });
+    if (scope.kind !== 'scope' || scope.scope === null) throw new Error('scope_unreadable');
+    expect(harness.store.transact({
+      kind: 'record-materialization-binding', coordinationScopeId: RECOVERY_SCOPE,
+      expectedRevision: scope.scope.revision, writer: harness.writer,
+      workPackageId: RECOVERY_WORK_PACKAGE, role: null, recoveryUtilityRole: 'recovery_utility',
+      workerTaskId: operations.task as unknown as WorkerTaskId,
+      dispatchId: operations.workerStart as unknown as DispatchId, attemptId: operations.task,
+      worktreeId: 'worktree-capsule', specBinding: null, specificationUnitPath: null,
+      ...harness.authorizationRef(), workerProfileRef: 'profile-recovery_utility',
+      orcaTaskId: CAPSULE_TASK, creationOperationId: operations.task, launchId: capsuleLaunchIdOf(SEGMENT),
+    }).kind).toBe('committed');
+  }
   let probeCalls = 0;
   const backend = fakeRecoveryBackend({
     query: (input) => {
@@ -813,11 +832,11 @@ test('已有派发时能力结论不改写身份：按原 Dispatch 读回 Capsul
         return {
           kind: 'accepted',
           value: {
-            delivery: { deliveryId: 'delivery-capsule', runId: 'run-capsule' },
+            delivery: { deliveryId: 'delivery-capsule', runId: 'run-recovery' },
             messages: [
               {
                 messageId: 'message-capsule',
-                runId: 'run-capsule',
+                runId: 'run-recovery',
                 deliveryContract: 'current_delivery',
                 fromHandle: 'terminal-capsule',
                 toHandle: 'coordinator',
@@ -858,6 +877,6 @@ test('已有派发时能力结论不改写身份：按原 Dispatch 读回 Capsul
 
   // 既有派发就是权威事实：不探测、不新建，结论仍从原 Dispatch 的报告读出。
   expect(probeCalls).toBe(0);
-  expect(outcome.kind).toBe('extracted');
+  expect(outcome.kind).toBe(hasBinding ? 'extracted' : 'failed');
   expect(backend.mutations().filter((mutation) => mutation.operation === 'task-create')).toEqual([]);
 });

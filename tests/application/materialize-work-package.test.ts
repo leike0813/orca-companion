@@ -182,6 +182,21 @@ function isolatedWorktree(): WorktreeSummary {
   };
 }
 
+const WP_TWO = 'wp-2' as WorkPackageId;
+
+/** 第二个 Work Package 的隔离 worktree；按 Work Package 归属标记区分，不会被误认成同一个。 */
+function isolatedWorktreeFor(workPackageId: WorkPackageId): WorktreeSummary {
+  return {
+    worktreeId: `wt-${workPackageId}`,
+    path: `/tmp/worktrees/${workPackageId}`,
+    branch: `refs/heads/${workPackageId}`,
+    head: 'abcdef0123456789abcdef0123456789abcdef01',
+    displayName: worktreeNameFor(workPackageId),
+    comment: workPackageComment(workPackageId),
+    isMainWorktree: false,
+  };
+}
+
 /** 把 Scope 推进到 execution_coordination 并持有 Execution Lease。 */
 function enterExecution(): void {
   const scope = store.query({ kind: 'scope', coordinationScopeId: SCOPE });
@@ -246,6 +261,8 @@ function context(
       role,
       graphGeneration: 1,
       authorizationId: 'auth-1',
+      authorizationVersion: 1,
+      workerProfileRef: `profile-${role}`,
       runId: 'run-1',
       consumerGeneration: 1,
       backendIdentityRef: 'identity-ref',
@@ -846,6 +863,137 @@ test('Worker 启动失败后复用已绑定 Task，不创建第二个 Task', asy
     expectedRevision: revision(),
   });
   expect(second.kind).toBe('materialized');
+  expect(
+    execution.calls.filter((call) => call.kind === 'mutate' && call.operation.operation === 'task-create'),
+  ).toHaveLength(1);
+});
+
+test('重新授权只影响新 Task：新 Work Package 钉住新授权，旧 Task 的 Retry 沿用原绑定', async () => {
+  const execution = fakeBackend({ worktrees: [isolatedWorktree(), isolatedWorktreeFor(WP_TWO)] });
+  const first = await materializeWorkPackage({
+    store,
+    backend: execution.backend,
+    coordinationScopeId: SCOPE,
+    workPackageId: WP,
+    context: context('fresh-1'),
+    facts: facts(),
+    expectedRevision: revision(),
+  });
+  expect(first.kind).toBe('materialized');
+
+  // 重试沿用创建时的身份与授权：既有 Task 不因新授权重启，也不换模型绑定。
+  const retry = await materializeWorkPackage({
+    store,
+    backend: execution.backend,
+    coordinationScopeId: SCOPE,
+    workPackageId: WP,
+    context: context('fresh-2'),
+    facts: facts(),
+    expectedRevision: revision(),
+  });
+  expect(retry.kind).toBe('materialized');
+  expect(
+    execution.calls.filter((call) => call.kind === 'mutate' && call.operation.operation === 'task-create'),
+  ).toHaveLength(1);
+
+  const afterRetry = store.query({ kind: 'materialization-bindings', coordinationScopeId: SCOPE });
+  expect(afterRetry.kind === 'materialization-bindings' ? afterRetry.bindings.length : -1).toBe(1);
+  expect(afterRetry.kind === 'materialization-bindings' ? afterRetry.bindings[0]?.authorizationId : null).toBe('auth-1');
+
+  // 新的 Work Package 在新授权下物化：它的绑定是新授权与新 profile。
+  const next = await materializeWorkPackage({
+    store,
+    backend: execution.backend,
+    coordinationScopeId: SCOPE,
+    workPackageId: WP_TWO,
+    context: {
+      ...context('fresh-3'),
+      candidate: {
+        ...context('fresh-3').candidate,
+        authorizationId: 'auth-2',
+        authorizationVersion: 2,
+        workerProfileRef: 'profile-next',
+        taskEnvelope: {
+          ...context('fresh-3').candidate.taskEnvelope,
+          workerTaskId: 'worker-task-2' as never,
+          dispatchId: 'dispatch-candidate-2' as never,
+          attemptId: 'attempt-2',
+          taskContract: {
+            ...context('fresh-3').candidate.taskEnvelope.taskContract,
+            workPackageId: WP_TWO,
+          },
+        },
+      },
+      workPackage: {
+        scopeEnvelope: { include: ['src'], exclude: [] },
+        budget: budgetFromLimits(DEFAULT_EXECUTION_LIMITS),
+      },
+    },
+    facts: {
+      ...facts(),
+      selectedCandidateId: WP_TWO,
+      dependenciesSatisfied: [WP_TWO],
+      authorization: {
+        valid: true,
+        authorizationId: 'auth-2',
+        authorizationVersion: 2,
+        reason: null,
+      },
+    },
+    expectedRevision: revision(),
+  });
+  expect(next.kind).toBe('materialized');
+
+  const afterNext = store.query({ kind: 'materialization-bindings', coordinationScopeId: SCOPE });
+  expect(afterNext.kind === 'materialization-bindings' ? afterNext.bindings.length : -1).toBe(2);
+  const pinned = afterNext.kind === 'materialization-bindings'
+    ? afterNext.bindings.find((binding) => binding.workPackageId === WP_TWO)
+    : undefined;
+  expect(pinned?.authorizationId).toBe('auth-2');
+  expect(pinned?.authorizationVersion).toBe(2);
+  expect(pinned?.workerProfileRef).toEqual({ kind: 'worker-profile', id: 'profile-next' });
+});
+
+test('重新授权后不按新绑定复用旧 Task：绑定与候选授权不一致即阻塞', async () => {
+  const execution = fakeBackend({ worktrees: [isolatedWorktree()] });
+  const first = await materializeWorkPackage({
+    store,
+    backend: execution.backend,
+    coordinationScopeId: SCOPE,
+    workPackageId: WP,
+    context: context('pin-1'),
+    facts: facts(),
+    expectedRevision: revision(),
+  });
+  expect(first.kind).toBe('materialized');
+
+  const bindings = store.query({ kind: 'materialization-bindings', coordinationScopeId: SCOPE });
+  expect(bindings.kind === 'materialization-bindings' ? bindings.bindings[0]?.authorizationId : null).toBe('auth-1');
+
+  // 模型重新授权后，同一个 Task 候选改带着新授权被再次物化：绑定是创建时的事实，
+  // 拿它按新授权继续会让「实际跑过的模型」与授权记录对不上，因此必须阻塞而不是静默复用。
+  const rebound = await materializeWorkPackage({
+    store,
+    backend: execution.backend,
+    coordinationScopeId: SCOPE,
+    workPackageId: WP,
+    context: {
+      ...context('pin-2'),
+      candidate: {
+        ...context('pin-2').candidate,
+        authorizationId: 'auth-2',
+        authorizationVersion: 2,
+        workerProfileRef: 'profile-next',
+      },
+    },
+    facts: facts(),
+    expectedRevision: revision(),
+  });
+  // 绑定与候选授权对不上时物化阻塞：既有 Task 的运行依据不因重新授权改写。
+  expect(rebound.kind).toBe('blocked');
+  if (rebound.kind === 'blocked') {
+    expect(rebound.reason).toContain('物化任务的原模型授权绑定无法核验');
+  }
   expect(
     execution.calls.filter((call) => call.kind === 'mutate' && call.operation.operation === 'task-create'),
   ).toHaveLength(1);

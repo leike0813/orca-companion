@@ -20,6 +20,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, expect, test } from 'vitest';
+import { workerProfilesFixture, recoveryUtilityProfileFixture } from '../support/model-configurations.js';
 
 import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
 import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
@@ -43,7 +44,6 @@ import { DEFAULT_EXECUTION_LIMITS } from '../../src/domain/planning/budget-polic
 import { CONTROL_STATES, COORDINATION_MODES, isControlState, isCoordinationMode, type ControlState } from '../../src/domain/coordination/mode.js';
 import {
   MANIFEST_VERSION,
-  WORKER_ROLES,
   type ExecutionAuthorizationRecord,
 } from '../../src/domain/planning/execution-authorization.js';
 import type { ExecutionGraph, GraphVersionRecord } from '../../src/domain/planning/execution-graph.js';
@@ -146,11 +146,8 @@ function authorizationFixture(candidate: GraphVersionRecord): ExecutionAuthoriza
       graph: { graphId: candidate.graphId, generation: candidate.generation, version: candidate.version },
       baselineHead: 'head-1',
       orcaRunId: 'run-1',
-      workerProfiles: WORKER_ROLES.map((role) => ({
-        profileRef: { kind: 'worker-profile' as const, id: `profile-${role}` },
-        role,
-        harness: 'codex',
-      })),
+      workerProfiles: workerProfilesFixture(),
+      recoveryUtilityProfile: recoveryUtilityProfileFixture(),
       permissions: {
         planner: true,
         implementation: true,

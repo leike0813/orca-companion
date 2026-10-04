@@ -218,6 +218,8 @@ export type UtilityWorkerDispatchInput = {
     readonly workerActivate: OperationId;
   };
   readonly observeSession: UtilityWorkerSessionObserver;
+  /** 在 task-create intent 结清前持久化固定模型授权；失败保持该 lane 未决。 */
+  readonly onTaskCreated?: (orcaTaskId: string) => { readonly code: string; readonly message: string } | null;
   /**
    * 追加进 Task spec 根的可读指令（正文，不参与身份判定）。
    *
@@ -573,6 +575,7 @@ export type CapsuleDispatchInput = {
   readonly worktree: string;
   readonly operationIds: UtilityWorkerDispatchInput['operationIds'];
   readonly observeSession: UtilityWorkerDispatchInput['observeSession'];
+  readonly onTaskCreated?: UtilityWorkerDispatchInput['onTaskCreated'];
   /** host 侧独立读到的 transcript 覆盖证据；Worker 报告的 coverage 必须逐项等于它。 */
   readonly evidence: TranscriptCoverageEvidence;
   /** 等待 Capsule 报告的上界；超时按失败返回，由同一 Recovery 内的一次安全重派兜底。 */
@@ -765,6 +768,7 @@ export async function dispatchCapsuleWorker(input: CapsuleDispatchInput): Promis
       taskTitle: 'Recovery Capsule 提取（只读受限 Utility Worker）',
       operationIds: input.operationIds,
       observeSession: input.observeSession,
+      ...(input.onTaskCreated === undefined ? {} : { onTaskCreated: input.onTaskCreated }),
       instructions: recoveryCapsuleInstructions(input.envelope.transcriptRef, input.evidence),
     });
     if (created.kind !== 'dispatched') {

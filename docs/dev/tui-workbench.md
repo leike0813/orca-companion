@@ -6,7 +6,7 @@
 
 在交互式终端运行 `pnpm ui:preview planning`。基础场景为 `planning`、`execution`、`blocked`、`empty`、`long-cjk`、`answer`、`disabled`，均挂载生产 `TuiApp`。`alignment` 与 `alignment-planning` 复用 20 节点及长身份夹具，增加待答/事件和可审阅的隔离假端口；仅在内存模拟意图，不装配生产 Controller、模型或 Orca。预览要求 stdin/stdout 都是 TTY；`Esc` 逐层返回，`Ctrl+C` 退出。改动源码后重新构建并启动预览。
 
-生产组件的 Ctrl+B 打开固定项目面板，Tab 切总览/待答/最近事件，Enter 下钻、Esc 返回；120 列对话保持原位，80/50 列面板独占主区域。跨 Session 问题目前仅查看摘要，再经 Session Picker 显式切换。Ctrl+G 打开三档可浏览的图检查：上下选择、左右选择真实关系、多关系明确确认、Enter 详情、Tab 栏目。命令候选在输入上方，第一次 Tab/Enter 填入，第二次 Enter 执行。审阅固定框内 Tab 切概要/完整记录、上下浏览，默认返回，左右选动作后 Enter；Cancel/Exit 同时保留 y/n 明确确认，无色以“当前操作”辨识。Ctrl+P → 选项 → Enter 即时切 Nerd/ASCII，重启恢复与完整 custom 设置尚未接通。六票参照及本次证据见 [原型交接](tui-implementation-handoff.md)。
+生产组件的 Ctrl+B 打开固定项目面板，Tab 切总览/待答/最近事件，Enter 下钻、Esc 返回；120 列对话保持原位，80/50 列面板独占主区域。项目待答页可显式选择跨 Session 问题，进入其回答面板；返回恢复原入口、草稿与阅读锚点。Ctrl+G 打开三档可浏览的图检查：上下选择、左右选择真实关系、多关系明确确认、Enter 详情、Tab 栏目。命令候选在输入上方，第一次 Tab/Enter 填入，第二次 Enter 执行。审阅固定框内 Tab 切概要/完整记录、上下浏览，默认返回，左右选动作后 Enter；Cancel/Exit 同时保留 y/n 明确确认，无色以“当前操作”辨识。Ctrl+P → 选项 → Enter 即时切 Nerd/ASCII，重启恢复与完整 custom 设置尚未接通。六票参照及本次证据见 [原型交接](tui-implementation-handoff.md)。
 
 生产工作区将草稿、粘贴载荷与提交快照保存到仓库 Git common dir 下的 `orca-companion/ui.sqlite`。`/inputs` 打开输入记录管理：选择记录后 `r` 恢复、`v` 核验、`d` 删除；恢复不会自动发送。退出时立即保存，失败则留在界面，明确确认后才丢弃未保存输入。预览使用独立内存输入库，退出即关闭，不影响生产记录。
 
@@ -34,7 +34,11 @@ Composer 的 slash 对照直接运行 `pnpm ui:composer-prototype slash above`�
 
 该弹窗原型已由用户确认定稿。[最终设计、源码归档和三档 Nerd Fonts/ASCII 样例](../../artifacts/dialog-prototype/final/README.md) 是实施规划的直接输入；不要将早期比较图当作定稿重新探索。源码归档单独保留当前工作台、假数据、依赖锁文件与合同文档。
 
-6A 生产命令验收使用 `node artifacts/command-reviews/capture.mjs`（先 build），三档彩色/NO_COLOR × Nerd/ASCII，独立搜索、语义审阅、默认返回、键位拦截与连续 resize 的证据见 [command-reviews](../../artifacts/command-reviews/README.md)。采集挂载生产 App，Controller/model/backend 为隔离 fixture；真实宿主接线由 bootstrap 测试验证。provider/effort/角色模型合同留给6B。
+6A 生产命令验收使用 `node artifacts/command-reviews/capture.mjs`（先 build），三档彩色/NO_COLOR × Nerd/ASCII，独立搜索、语义审阅、默认返回、键位拦截与连续 resize 的证据见 [command-reviews](../../artifacts/command-reviews/README.md)。采集挂载生产 App，Controller/model/backend 为隔离 fixture；真实宿主接线由 bootstrap 测试验证。
+
+6B 模型配置使用 `/model` 或 Palette 的 Model Picker：当前 Coordinator、Planning 与 Execution 按角色分区，模型候选和水平 effort 独立选择，Tab 切区域，默认返回。未实现的 Planning Utility 与 Specification Validator 显示不可用原因。从角色页按 `e` 或通过“模型连接设置”命令编辑 provider、模型、选项与 key；编辑器中的 key 始终遮罩，不进入聊天草稿。Enter 保存新引用，保存结果明确标注尚未应用；随后显式应用 Coordinator 时走原模型切换，应用 Worker 时打开完整授权审阅，只有明确批准才改变新任务的配置。原任务的重试与恢复保留物化时的模型绑定。
+
+运行 `pnpm build` 后，用 `node artifacts/model-configuration/capture.mjs release` 采集生产 App 的三档彩色/NO_COLOR、Nerd/ASCII 与连续 resize。该预览仍用隔离 fixture，不能证明模型实际启动。`node artifacts/model-configuration/real-launch.mjs` 单独在临时项目通过公开 Orca terminal 启动真实 Codex，读取精确 SessionStart/transcript 并保存非秘密启动证据；需要本机 `.env.smoke` 的显式模型和凭据，结果见 [模型配置证据](../../artifacts/model-configuration/README.md)。
 
 ## 检查组件
 

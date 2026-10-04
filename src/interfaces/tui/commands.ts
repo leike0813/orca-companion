@@ -32,6 +32,7 @@ export const COMMAND_METADATA = {
   "command-directory": {"path":"命令目录","shortcut":"ctrl+p","action":"command-palette","alias":null,"label":"命令目录","description":"搜索操作","target":"UI"},
   'verify-command-results': {alias:null,label:'核验命令结果',description:'只读核验原调用',target:'Scope',path:'核验命令结果',shortcut:null,action:null},
   "help": {"path":"Help","shortcut":null,"action":null,"alias":"help","label":"Help","description":"命令与键位","target":"UI"},
+  "model-settings": {"path":"模型连接设置","shortcut":null,"action":null,"alias":"connections","label":"模型连接设置","description":"编辑 provider、模型、选项与 key","target":"Scope"},
 } as const satisfies Readonly<Record<string, CommandMeta>>;
 export type CommandId = keyof typeof COMMAND_METADATA;
 export const COMMAND_IDS = Object.keys(COMMAND_METADATA) as CommandId[];
@@ -107,8 +108,9 @@ export function parseSlashInput(text: string, mode: string): SlashResolution {
   };
 }
 
-export function commandReason(command: CommandId, view: { readonly mode: string; readonly selectedSessionId: string | null; readonly pasteBlocks: number; readonly controlState?: string }): string | null {
+export function commandReason(command: CommandId, view: { readonly mode: string; readonly selectedSessionId: string | null; readonly pasteBlocks: number; readonly controlState?: string; readonly modelSettings?: boolean }): string | null {
   if (command === 'statusline') return '用户级状态栏设置尚未接通';
+  if (command === 'model-settings' && view.modelSettings !== true) return '角色模型配置端口尚未接通';
   if (command === 'handoff' && view.mode !== 'route_planning') return '仅用于规划模式';
   if (command === 'execution-handoff' && view.mode !== 'execution_coordination') return '仅用于执行模式';
   if (command === 'authorize-execution' && view.mode !== 'route_planning') return '当前已在执行协调模式';

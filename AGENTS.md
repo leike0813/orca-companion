@@ -22,10 +22,11 @@ Companion 为范围明确的软件项目提供可恢复、可追踪、有预算�
 
 - 使用 TypeScript strict、ESM、Node.js 24 和 pnpm；在 `engines`、版本文件与 `packageManager` 中声明实际验证版本并提交 lockfile。
 - Coordinator agent loop 使用 `@langchain/langgraph` StateGraph；模型节点面向 LangChain `BaseChatModel`。业务规则保留在普通 TypeScript 模块中。
-- Provider integration 由用户安装并通过 `initChatModel` 或 bootstrap 注入；Companion 不设 provider allowlist、不捆绑全部 provider、不保存密钥，也不自动 fallback。`doctor` 必须核验文本、流式、tool calling、取消和可用 usage 能力，缺失必需能力时拒绝启动。
+- Provider integration 由用户安装并通过 `initChatModel` 或 bootstrap 注入；Companion 不设 provider allowlist、不捆绑全部 provider，也不自动 fallback。`doctor` 必须核验文本、流式、tool calling、取消和可用 usage 能力，缺失必需能力时拒绝启动。
+- API key 保存于用户级明文 CredentialStore（见下），项目配置、checkpoint、UI 输入存储、命令参数、诊断与证据只出现不透明 `credentialRef`。这是用户确认的取舍：它改变了本文件早期「Companion 不保存密钥」的约束。
 - Coordinator Session 使用 LangGraph SqliteSaver，`durability: sync`；Branch Coordination State 使用独立 SQLite store。
 - TUI 使用 `ink@7.1.1`、`react@19.3.0` 和 `@types/react@19.3.0`；TUI 测试可使用 `ink-testing-library@4.0.0`，但其 Ink 7/React 19 兼容性仅有本机验证。
-- 边界 DTO、CLI JSON、项目配置和持久化记录必须做运行时 schema 校验；领域类型不得依赖框架运行时对象。
+- 边界 DTO、CLI JSON、项目配置和持久化记录必须做运行时 schema 校验；领域类型不得依赖框架运行时对象。项目配置当前为 schema 2：保存 `revision`、`providerConnections`、`models` 与 `execution.workerProfiles`，不再有全局 `workerModel`；旧格式明确拒绝且不自动改写。
 - 测试使用 Vitest，不为覆盖率引入第二套运行器。
 - 保持单 npm package；只有实际发布或依赖隔离需要时才拆 package。
 - 当前支持声明以 Ubuntu 本机验证为限。Windows 仍是目标平台，但未经验证不得标记为支持。
@@ -83,7 +84,10 @@ Agent-visible tools 只提供给 Coordinator Agent。Worker 只接收 Task Envel
 | `BranchCoordinationStore` | 保存共享模式、cycle/graph/authorization 引用、Session 注册、claims、interactions、intents、leases、预算和 CAS revision。 |
 | LangGraph checkpointer | 保存单个 Session 的消息、tool steps、图位置、Wake Batch 与 Context Capsule。 |
 | `SpecificationProvider` | 检查工具原生 Specification Unit 与角色转换；M1 只实现 OpenSpec。 |
+| `CredentialStore` | 在版本控制之外保存明文 secret，只以不可变 `credentialRef` 对外；提供 metadata、CAS 保存与按引用读取。 |
 | `ControllerService` | 向 TUI/CLI 提供初始化、查询、暂停、恢复、取消、回答和事件订阅。 |
+
+`CredentialStore` 的唯一生产实例来源在 bootstrap；chat model factory、模型设置用例、Worker launcher 与 `doctor` 的凭据解析都从它取实例，不各自新建或另建路径。文件位置按 XDG 规则取 `orca-companion/credentials.json`，目录 0700、文件 0600；写入用短 exclusive 文件锁、revision CAS、临时文件原子替换与回读，锁忙与权限不安全一律结构化拒绝，不自动破锁、不 chmod 既有用户目录。
 
 Route Planning 的语义操作覆盖读取地图/frontier、创建票、设置依赖、领取、解决和按固定章节更新地图。运行协调操作覆盖状态查询、派发、回复 Worker、结算、集成、异步 `ask_user` 与非阻塞 `suspend`。按模式和当前事实动态暴露工具，handler 每次调用仍重验 scope、ownership、revision、权限和预算。
 
@@ -133,6 +137,10 @@ Coordinator Agent 与用户形成并维护 Route Map、Decision Tickets 和 Impl
 ### Execution Authorization
 
 Manifest 一次性绑定当前 Destination/地图/计划/Graph Generation、Coordination Scope、baseline HEAD、空 Orca Run、Worker Profiles、权限、预算、workspace、Git/Dependency Policy 和 accepted risks。授权后的普通派发、策略内依赖变更与受控 Git 集成不再逐次审批；发布、部署和越界外部操作仍需单独授权。
+
+Manifest 升为 v2 后，每个生产角色的 Worker Profile 必须带完整 `modelConfiguration`（连接、模型、effort 及其可信能力来源、非秘密 options 与 credentialRef），并单独绑定 Recovery Utility Profile；缺任一项即拒绝，不存在「启动时再补」的状态。执行期只换模型配置时按完整 Manifest 指纹与 Scope revision 重新批准，保持 Graph Generation、Run、权限、上限与已消耗预算，不创建 Graph Revision；Replanning、cancelling 或存在未决派发 mutation 时拒绝重新授权。旧版本 Manifest 不被当作包含模型授权。
+
+派发即固定运行依据：Task 物化时把当时的 authorizationId、authorizationVersion 与 workerProfileRef 写进 Materialization Binding。Retry 沿原 WorkerTask 的绑定取原授权与 profile；已结算与恢复读取按绑定判断，绑定缺这三项即按不可证明阻塞，不退回「当前授权」。
 
 ### Execution Graph 与 Worker 生命周期
 
@@ -184,6 +192,8 @@ Graph Patch 采用原子的 `add + revise + retire`：
 
 - `coordination.sqlite` 保存模式、Planning Cycle、当前 graph/authorization 引用、Session 注册、Ticket Claim、Pending Interaction、Operation Intent、Runtime/Execution lease、fencing、共享预算状态和 CAS revision；
 - `checkpoints.sqlite` 由 LangGraph SqliteSaver 保存每个 Session 的已提交消息/tool step、图位置、Wake Batch、Context Capsule 和 Coordinator Model Configuration binding。
+
+`coordination.sqlite` 当前为 schema 16：物化绑定新增 `authorization_id`、`authorization_version` 与 `worker_profile_ref`，写入时缺任一项即拒绝，不留下无运行依据的新行。schema 16 之前的历史行保持 `null`，需要这些事实的路径按不可证明阻塞，不按「当前授权」推断回填。
 
 UI 输入另存于同目录 `ui.sqlite`，由 IC-13 的应用端口、storage adapter 和 Bootstrap 装配拥有。草稿、冲突副本与待核验提交按 Scope/Session/回答 revision 隔离；提交先保存完整快照和稳定 submissionId，再调用业务用例。输入恢复只核验原身份，界面 render/effect/resize/remount 只读取，不持久写入或自动发送。容量满额与 CAS 冲突保留输入并经 `/inputs` 显式处理；详细合同见 `docs/interface-contracts.md` IC-13。
 

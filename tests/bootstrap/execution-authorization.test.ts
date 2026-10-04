@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, expect, test } from 'vitest';
+import { projectExecutionProfilesFixture, projectConnectionsFixture } from '../support/model-configurations.js';
 import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
 import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
 import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
@@ -107,7 +108,7 @@ function plan(): unknown {
 function policy(overrides: Partial<ProjectExecutionConfiguration> = {}): ProjectExecutionConfiguration {
   return {
     harness: 'codex',
-    workerModel: 'minimax-cn/MiniMax-M3',
+    ...projectExecutionProfilesFixture(),
     codexSandbox: 'workspace-write',
     permissions: {
       planner: true,
@@ -344,6 +345,75 @@ test('批准后进入执行：候选图绑定空 Run，批准后 Scope 原子切
   expect(authorizations()).toBe(1);
   // 批准与切换都不产生新的 Orca 副作用。
   expect(backend.mutations).toHaveLength(1);
+});
+
+test('模型重新授权追加唯一记录并保持运行图、政策和已消耗预算', async () => {
+  await recordCandidate();
+  const initial = reviewExecutionAuthorization(facts());
+  if (initial.kind !== 'review') throw new Error('initial review unavailable');
+  const approved = approveExecutionAuthorization({ ...facts(), writer,
+    fingerprint: initial.review.fingerprint, expectedRevision: initial.review.scopeRevision });
+  expect(approved.kind).toBe('approved');
+  const before = scopeRecord();
+  const nextPolicy = policy();
+  const changedPolicy = { ...nextPolicy, workerProfiles: nextPolicy.workerProfiles.map((profile) => ({
+    ...profile, profileRef: profile.profileRef + '-new',
+    modelConfiguration: { ...profile.modelConfiguration, model: 'changed-model' },
+  })), workerProfileRefs: Object.fromEntries(Object.entries(nextPolicy.workerProfileRefs)
+    .map(([role, ref]) => [role, ref + '-new'])) };
+  const review = reviewExecutionAuthorization({ ...facts(), policy: changedPolicy });
+  if (review.kind !== 'review') throw new Error('model review unavailable');
+  expect(review.review.manifest.graph).toEqual(initial.review.manifest.graph);
+  expect(review.review.manifest.permissions).toEqual(initial.review.manifest.permissions);
+  expect(review.review.manifest.limits).toEqual(initial.review.manifest.limits);
+  expect(review.review.fingerprint).not.toBe(initial.review.fingerprint);
+  expect(approveExecutionAuthorization({ ...facts(), policy: changedPolicy, writer,
+    fingerprint: review.review.fingerprint, expectedRevision: review.review.scopeRevision }).kind).toBe('approved');
+  const after = scopeRecord();
+  expect(after.authorizationId).not.toBe(before.authorizationId);
+  expect(after.graphId).toBe(before.graphId);
+  expect(after.graphVersion).toBe(before.graphVersion);
+  expect(authorizations()).toBe(2);
+});
+
+test('重复批准同一次审阅回读原记录：指针不移动、不追加授权、不派发', async () => {
+  const { backend } = await recordCandidate();
+  const reviewed = reviewExecutionAuthorization(facts());
+  if (reviewed.kind !== 'review') throw new Error('审阅失败');
+  const first = approveExecutionAuthorization({ ...facts(), writer,
+    fingerprint: reviewed.review.fingerprint, expectedRevision: reviewed.review.scopeRevision });
+  expect(first.kind).toBe('approved');
+  const afterFirst = scopeRecord();
+  expect(authorizations()).toBe(1);
+  const mutationsAfterFirst = backend.mutations.length;
+
+  // 用户在同一个界面上再次提交：审阅时的 revision 已经因这次批准前进，但这不是「计划变了」。
+  const replay = approveExecutionAuthorization({ ...facts(), writer,
+    fingerprint: reviewed.review.fingerprint, expectedRevision: reviewed.review.scopeRevision });
+  expect(replay).toMatchObject({ kind: 'approved', authorizationId: afterFirst.authorizationId });
+
+  const afterReplay = scopeRecord();
+  expect(afterReplay.revision).toBe(afterFirst.revision);
+  expect(afterReplay.authorizationId).toBe(afterFirst.authorizationId);
+  expect(afterReplay.authorizationVersion).toBe(afterFirst.authorizationVersion);
+  expect(authorizations()).toBe(1);
+  expect(backend.mutations).toHaveLength(mutationsAfterFirst);
+
+  // 配置与控制状态都变了之后，同一次审阅的重放仍然回读原记录：它不是一次新决定。
+  const paused = store.transact({
+    kind: 'record-control-state',
+    coordinationScopeId: SCOPE,
+    expectedRevision: scopeRecord().revision,
+    writer,
+    controlState: 'cancelling',
+  });
+  expect(paused.kind).toBe('committed');
+  const afterControlChange = scopeRecord();
+  const replayedAfterChange = approveExecutionAuthorization({ ...facts(), writer,
+    fingerprint: reviewed.review.fingerprint, expectedRevision: reviewed.review.scopeRevision });
+  expect(replayedAfterChange).toMatchObject({ kind: 'approved', authorizationId: afterFirst.authorizationId });
+  expect(scopeRecord().revision).toBe(afterControlChange.revision);
+  expect(authorizations()).toBe(1);
 });
 
 test('规划引用过期：指纹不符或 expected revision 过期时零写入，旧批准不触发派发', async () => {
@@ -590,14 +660,16 @@ async function openAuthorizationHost(directory: string): Promise<AuthorizationHo
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
+      revision: 0,
+      ...projectConnectionsFixture(),
       coordinatorModels: [
         {
           configurationRef: 'planning-default',
           providerIntegration: '@fake/provider#CapableChatModel',
           model: 'fake-coordinator',
           modelOptions: {},
-          credentialRefs: ['fake'],
+          credentialRefs: [],
           nativeWindowOwnerRef: null,
         },
       ],
@@ -607,7 +679,7 @@ async function openAuthorizationHost(directory: string): Promise<AuthorizationHo
       context: { maxInputTokens: 20_000 },
       execution: {
         harness: 'codex',
-        workerModel: 'minimax-cn/MiniMax-M3',
+        ...projectExecutionProfilesFixture(),
         permissions: {
           planner: true,
           implementation: true,

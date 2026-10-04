@@ -282,6 +282,13 @@ export type MaterializationBindingRecord = {
   readonly identity: MaterializationBindingIdentity;
   /** `legacy` 行为 `null`；`issued` 行必有角色。 */
   readonly role: WorkerRole | null;
+  /**
+   * Recovery Utility 派发身份（IC-03 Extend；schema 16）。
+   *
+   * 它与 `role` 互斥且恰好一列非空：Utility Task 不属于领域四主角色，却同样需要固定授权与 profile，
+   * 否则替代 Session 的模型配置只能从「当前授权」现读。
+   */
+  readonly recoveryUtilityRole: 'recovery_utility' | null;
   readonly workerTaskId: WorkerTaskId | null;
   /** 逻辑 Task Envelope 的派发身份；`legacy` 行为 `null`。 */
   readonly dispatchId: DispatchId | null;
@@ -291,6 +298,15 @@ export type MaterializationBindingRecord = {
   readonly specBinding: SpecBinding | null;
   /** Planner 的固定目标路径；其它角色与 `legacy` 行为 `null`。 */
   readonly specificationUnitPath: string | null;
+  /**
+   * 这次派发固定使用的授权身份（IC-05；schema 16）。
+   *
+   * Worker 重新授权只对新的物化 Task 生效，因此 Task 的运行依据必须在派发时钉住：`null` 表示 schema 16
+   * 之前的历史行——当时没有这项事实，读取方按不可证明阻塞，不回退到「当前授权」。
+   */
+  readonly authorizationId: string | null;
+  readonly authorizationVersion: number | null;
+  readonly workerProfileRef: EntityRef<'worker-profile'> | null;
   readonly orcaTaskId: string;
   readonly creationOperationId: OperationId;
   /**
@@ -1070,7 +1086,10 @@ export type CoordinationCommand =
   | (CoordinationCommandBase & {
       readonly kind: 'record-materialization-binding';
       readonly workPackageId: WorkPackageId;
-      readonly role: WorkerRole;
+      /** 四主角色派发；与 `recoveryUtilityRole` 互斥。 */
+      readonly role: WorkerRole | null;
+      /** Recovery Utility 派发；与 `role` 互斥。 */
+      readonly recoveryUtilityRole?: 'recovery_utility';
       readonly workerTaskId: WorkerTaskId;
       /** 逻辑 Task Envelope 的派发身份；不是 Orca `worker-start` 回执里的 dispatch。 */
       readonly dispatchId: DispatchId;
@@ -1080,6 +1099,11 @@ export type CoordinationCommand =
       readonly specBinding: SpecBinding | null;
       /** 必须与角色匹配：Planner 必填固定目标路径，其它角色必须为 `null`。 */
       readonly specificationUnitPath: string | null;
+      /** 本次派发固定使用的授权身份与 profile；缺失即拒绝写入，不留下无运行依据的新行。 */
+      readonly authorizationId: string;
+      readonly authorizationVersion: Revision;
+      /** 不透明的 profile 身份；写入时按 `worker-profile` 引用落库。 */
+      readonly workerProfileRef: string;
       readonly orcaTaskId: string;
       /** 本次派发使用的 Worker launch 身份；补记 Session Binding 时据此定位报告。 */
       readonly launchId: string;

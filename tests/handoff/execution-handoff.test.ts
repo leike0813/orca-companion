@@ -57,8 +57,13 @@ import type {
   ExecutionHandoffRecord,
 } from '../../src/application/ports/branch-coordination-store.js';
 import { HANDOFF_RESPONSIBILITIES } from '../../src/application/ports/branch-coordination-store.js';
-import { WORKER_ROLES, type ExecutionAuthorizationRecord } from '../../src/domain/planning/execution-authorization.js';
+import type { ExecutionAuthorizationRecord } from '../../src/domain/planning/execution-authorization.js';
 import type { ExecutionGraph, GraphVersionRecord } from '../../src/domain/planning/execution-graph.js';
+import {
+  profileRefFor,
+  recoveryUtilityProfileFixture,
+  workerProfilesFixture,
+} from '../support/model-configurations.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SESSION_A = 'session-a' as CoordinatorSessionId;
@@ -73,6 +78,7 @@ const WORK_PACKAGE = 'wp-1' as WorkPackageId;
 const WORKER_TASK = 'task-1' as WorkerTaskId;
 const DISPATCH = 'dispatch-1' as DispatchId;
 const SEGMENT = 'segment-1' as SessionSegmentId;
+const AUTHORIZATION_ID = 'authorization-1';
 
 let directory = '';
 let store: CoordinationStore;
@@ -195,11 +201,8 @@ function recordAuthorization(candidate: GraphVersionRecord): ExecutionAuthorizat
       graph: { graphId: candidate.graphId, generation: candidate.generation, version: candidate.version },
       baselineHead: 'head-1',
       orcaRunId: 'run-1',
-      workerProfiles: WORKER_ROLES.map((role) => ({
-        profileRef: { kind: 'worker-profile', id: `profile-${role}` },
-        role,
-        harness: 'codex',
-      })),
+      workerProfiles: workerProfilesFixture(),
+      recoveryUtilityProfile: recoveryUtilityProfileFixture(),
       permissions: {
         planner: true,
         implementation: true,
@@ -227,7 +230,7 @@ function recordAuthorization(candidate: GraphVersionRecord): ExecutionAuthorizat
     store,
     coordinationScopeId: SCOPE,
     writer: writerA,
-    authorizationId: 'authorization-1',
+    authorizationId: AUTHORIZATION_ID,
     manifest: proposed.manifest,
     currentPlanRevision: candidate.planRevision,
     approvalRef: 'approval-1',
@@ -373,6 +376,10 @@ beforeEach(() => {
     worktreeId: 'worktree-1',
     specBinding: null,
     specificationUnitPath: 'openspec/changes/wp-1',
+    // 派发即固定运行依据：这次物化用哪份授权、哪一版授权与哪个 profile 都写进绑定。
+    authorizationId: authorization.authorizationId,
+    authorizationVersion: authorization.authorizationVersion,
+    workerProfileRef: profileRefFor('planner'),
     orcaTaskId: 'orca-task-1',
     creationOperationId: 'operation-1' as OperationId,
     launchId: 'launch-1',

@@ -17,6 +17,9 @@ import {
   CODEX_UTILITY_PROFILE_CONFIG_FILE,
   CODEX_UTILITY_PROFILE_CONFIG_TOML,
 } from '../../../src/adapters/agents/codex-launch.js';
+import { codexModelArguments } from '../../../src/adapters/agents/codex-model-launcher.js';
+import { modelConfigurationFixture } from '../../support/model-configurations.js';
+import type { WorkerModelConfiguration } from '../../../src/domain/model-configuration.js';
 import {
   describeReadOnlyWorkerCapability,
   probeReadOnlyWorker,
@@ -294,4 +297,39 @@ test('来源配置合法时探针把它复制进隔离 HOME，与生产 launch �
   expect(codex.baseConfigInCodexHome.value).toBe('[projects."/tmp/x"]\ntrust_level = "trusted"\n');
   // 探针无模型调用，因此不建立 auth 链接：隔离 HOME 里只有配置与 profile。
   expect(existsSync(join(String(sandboxCalls(codex)[0]?.env['CODEX_HOME']), 'auth.json'))).toBe(false);
+});
+
+test('只读探针与正式启动共用同一个模型配置生成器，且不解析凭据', async () => {
+  const base = modelConfigurationFixture();
+  const modelConfiguration: WorkerModelConfiguration = {
+    ...base,
+    effort: 'high',
+    effortCapability: { values: ['low', 'high'], source: 'codex', optionPath: 'effort' },
+    modelOptions: { model_verbosity: 'low' },
+  };
+  const codex = fakeCodex({
+    read: (_request, sentinelPath) => completed(0, readFileSync(sentinelPath, 'utf8')),
+    write: () => completed(1, 'EROFS'),
+  });
+
+  const result = await probeReadOnlyWorker({
+    env: { PATH: '/usr/bin' },
+    runner: codex.runner,
+    timeoutMs: 5_000,
+    modelConfiguration,
+  });
+
+  expect(result.kind).toBe('available');
+  const expected = codexModelArguments(modelConfiguration).join(' ');
+  const calls = sandboxCalls(codex);
+  expect(calls.length).toBe(2);
+  for (const call of calls) {
+    // 探针与正式启动逐字共享同一组 provider/model/effort/options 参数。
+    expect(call.args.join(' ')).toContain(expected);
+    expect(call.args.join(' ')).toContain('model_reasoning_effort="high"');
+  }
+  // 探针不调用模型，因此不接受任何凭据注入路径。
+  const allArgs = calls.map((call) => call.args.join(' ')).join(' ');
+  expect(allArgs).not.toContain('env_key');
+  expect(allArgs).not.toContain('requires_openai_auth');
 });

@@ -1,0 +1,158 @@
+[
+  {
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "defaultReturn": true,
+    "saveIndependent": true,
+    "explicitReapproval": true,
+    "draft": "首中尾",
+    "source": "production TuiApp / isolated fixture ports"
+  },
+  {
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "defaultReturn": true,
+    "saveIndependent": true,
+    "explicitReapproval": true,
+    "draft": "首中尾",
+    "source": "production TuiApp / isolated fixture ports"
+  },
+  {
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "defaultReturn": true,
+    "saveIndependent": true,
+    "explicitReapproval": true,
+    "draft": "首中尾",
+    "source": "production TuiApp / isolated fixture ports"
+  },
+  {
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "defaultReturn": true,
+    "saveIndependent": true,
+    "explicitReapproval": true,
+    "draft": "首中尾",
+    "source": "production TuiApp / isolated fixture ports"
+  },
+  {
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "defaultReturn": true,
+    "saveIndependent": true,
+    "explicitReapproval": true,
+    "draft": "首中尾",
+    "source": "production TuiApp / isolated fixture ports"
+  },
+  {
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "defaultReturn": true,
+    "saveIndependent": true,
+    "explicitReapproval": true,
+    "draft": "首中尾",
+    "source": "production TuiApp / isolated fixture ports"
+  },
+  {
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "defaultReturn": true,
+    "saveIndependent": true,
+    "explicitReapproval": true,
+    "draft": "首中尾",
+    "source": "production TuiApp / isolated fixture ports"
+  },
+  {
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "defaultReturn": true,
+    "saveIndependent": true,
+    "explicitReapproval": true,
+    "draft": "首中尾",
+    "source": "production TuiApp / isolated fixture ports"
+  },
+  {
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "defaultReturn": true,
+    "saveIndependent": true,
+    "explicitReapproval": true,
+    "draft": "首中尾",
+    "source": "production TuiApp / isolated fixture ports"
+  },
+  {
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "defaultReturn": true,
+    "saveIndependent": true,
+    "explicitReapproval": true,
+    "draft": "首中尾",
+    "source": "production TuiApp / isolated fixture ports"
+  },
+  {
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "defaultReturn": true,
+    "saveIndependent": true,
+    "explicitReapproval": true,
+    "draft": "首中尾",
+    "source": "production TuiApp / isolated fixture ports"
+  },
+  {
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "defaultReturn": true,
+    "saveIndependent": true,
+    "explicitReapproval": true,
+    "draft": "首中尾",
+    "source": "production TuiApp / isolated fixture ports"
+  }
+]

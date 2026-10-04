@@ -27,7 +27,8 @@ import {
 } from '../components/input-record-manager.js';
 import { AuthorizationReview } from '../components/authorization-review.js';
 import { InteractionCard } from '../components/interaction-card.js';
-import { ModelPicker } from '../components/model-picker.js';
+import { ModelPicker, RoleModelMenu, modelRoleAdmission, modelRoles } from '../components/model-picker.js';
+import { ModelSettingsEditor } from '../components/model-settings-editor.js';
 import { SessionPicker } from '../components/session-picker.js';
 import { Sidebar } from '../components/sidebar.js';
 import { StatusLine } from '../components/status-line.js';
@@ -35,7 +36,7 @@ import { TopBar } from '../components/top-bar.js';
 import { Transcript } from '../components/transcript.js';
 import type { TranscriptFrame } from '../render/transcript-reader.js';
 import { sidebarWidthFor, truncateToDisplayWidth } from '../render/width.js';
-import type { ExecutionAuthorizationLoad, ModelCatalog } from '../ports.js';
+import type { ExecutionAuthorizationLoad, ModelCatalog, ModelRoleView } from '../ports.js';
 import type {
   ControllerHandoffView,
   ControllerPlanningHandoffView,
@@ -43,7 +44,7 @@ import type {
 } from '../../../application/controller-service.js';
 import type { TuiViewModel } from '../../../application/tui/view-model.js';
 import type { OverlayKind, TuiAction, TuiState } from '../state.js';
-import { composerDraftFor, composerInputFor, isComposerReadOnly } from '../state.js';
+import { composerDraftFor, composerInputFor, isComposerReadOnly, EMPTY_MODEL_SETTINGS_EDIT, type ModelSettingsEdit } from '../state.js';
 import type { UiDraft } from '../../../application/ports/ui-input-store.js';
 
 export type WorkspaceActions = {
@@ -55,7 +56,12 @@ export type WorkspaceActions = {
   readonly selectRecipient?: (coordinatorSessionId: string) => void;
   readonly enterAnswer: (interactionId: string, expectedRevision: number) => void;
   readonly runCommand: (command: CommandId) => void;
-  readonly selectModel: (configurationRef: string) => void;
+  /** 进入某个角色的候选菜单；不可用时由容器显示宿主给出的原因。 */
+  readonly openModelRole: () => void;
+  /** 保存当前内存编辑；只追加不可变记录，不代表应用。 */
+  readonly saveModelSettings: () => void;
+  /** 提交候选菜单的当前动作：0 返回，1 应用选择。 */
+  readonly submitModelRole: (action: number) => void;
   readonly confirmPending: () => void;
   readonly dismissPending: () => void;
   readonly confirmHandoff: () => void;
@@ -80,6 +86,10 @@ export type WorkspaceProps = {
   readonly actions: WorkspaceActions;
   readonly modelCatalog: ModelCatalog;
   readonly modelRejection: string | null;
+  /** 角色模型配置端口是否已装配；未装配时编辑入口显示为不可用。缺省即未装配。 */
+  readonly modelSettingsAvailable?: boolean;
+  /** 正在查看的角色；由容器按当前 overlay 解析，组件不自己挑。 */
+  readonly modelRole?: ModelRoleView | null;
   readonly paletteSelection: number;
   readonly composerDisabledReason: string | null;
   readonly newlineHint: string;
@@ -91,6 +101,10 @@ export type WorkspaceProps = {
   readonly inputManager?: InputRecordManagerView | null;
   readonly answerPanel?: AnswerPanelView | null;
   readonly pasteViewer?: PasteViewerView | null;
+  /** 模型弹窗沿用定稿的身份摘要：项目 / 分支 / Session。 */
+  readonly modelIdentity?: string;
+  /** 编辑器当前内存字段；`null` 表示 overlay 未打开。 */
+  readonly modelSettingsEdit?: ModelSettingsEdit | null;
 };
 
 /** overlay 未打开时的空投影：组件本身不猜记录，只渲染容器读好的内容。 */
@@ -102,6 +116,16 @@ export const EMPTY_INPUT_MANAGER: InputRecordManagerView = {
   bodyFocus: false,
   feedback: null,
   confirmDelete: false,
+};
+
+/** 角色目录尚未装载时的占位角色：明确不可用，而不是显示空白候选。 */
+const UNKNOWN_MODEL_ROLE: ModelRoleView = {
+  role: 'coordinator',
+  label: 'Coordinator',
+  group: 'current',
+  current: null,
+  candidates: [],
+  availability: { available: false, reason: '角色模型目录尚未装载' },
 };
 
 /**
@@ -143,7 +167,7 @@ export function Workspace(props: WorkspaceProps) {
   const interactions=view.interactions.filter(i=>i.state==='open'&&i.ownerCoordinatorSessionId===selected);
   const candidates=ui.slashDismissed?[]:slashCandidates(input.text,view.scope.mode);
   const candidateRows=Math.min(candidates.length,Math.min(3,Math.max(1,rows-21)))+4;
-  const reasons=Object.fromEntries(props.commands.flatMap(c=>{const reason=commandReason(c,{mode:view.scope.mode,selectedSessionId:selected,pasteBlocks:input.pasteBlocks.length});return reason?[[c,reason]]:[];}));
+  const reasons=Object.fromEntries(props.commands.flatMap(c=>{const reason=commandReason(c,{mode:view.scope.mode,selectedSessionId:selected,pasteBlocks:input.pasteBlocks.length,...(props.modelSettingsAvailable===true?{modelSettings:true}:{})});return reason?[[c,reason]]:[];}));
   const origin={x:rowMetrics.left+bodyMetrics.left,y:rowMetrics.top+bodyMetrics.top};
   const panel=props.answerPanel;
   const modelRef=view.sessions.find(s=>s.coordinatorSessionId===selected)?.coordinatorModelConfigurationRef;
@@ -202,7 +226,7 @@ function Overlay(props: {
           availableWidth={parent.terminalWidth}
           summary={`${parent.ui.selectedSessionId??'未选择会话'} · ${parent.viewModel.scope.mode==='route_planning'?'规划':'执行'}`}
           maxRows={Math.max(1,(parent.terminalHeight??24)-15)}
-          reasons={Object.fromEntries(parent.commands.flatMap(command=>{const reason=commandReason(command,{mode:parent.viewModel.scope.mode,selectedSessionId:parent.ui.selectedSessionId,pasteBlocks:composerInputFor(parent.ui,parent.ui.selectedSessionId).pasteBlocks.length});return reason?[[command,reason]]:[];}))}
+          reasons={Object.fromEntries(parent.commands.flatMap(command=>{const reason=commandReason(command,{mode:parent.viewModel.scope.mode,selectedSessionId:parent.ui.selectedSessionId,pasteBlocks:composerInputFor(parent.ui,parent.ui.selectedSessionId).pasteBlocks.length,...(parent.modelSettingsAvailable===true?{modelSettings:true}:{})});return reason?[[command,reason]]:[];}))}
         />
       );
     case 'graph-inspector':
@@ -243,10 +267,38 @@ function Overlay(props: {
       return (
         <ModelPicker
           catalog={parent.modelCatalog}
-          {...(parent.ui.dialogSelections['model-picker']?{selection:parent.ui.dialogSelections['model-picker']}:{})}
           rejection={parent.modelRejection}
-          onSelect={parent.actions.selectModel}
+          notice={parent.ui.modelSettingsNotice}
+          onOpenRole={parent.actions.openModelRole}
           availableWidth={parent.terminalWidth}
+          roleIndex={parent.ui.modelRoleIndex}
+          {...(parent.modelIdentity===undefined?{}:{identity:parent.modelIdentity})}
+          rows={Math.max(10,(parent.terminalHeight??24)-7)}
+        />
+      );
+    case 'model-role-menu':
+      return (
+        <RoleModelMenu
+          role={parent.modelRole ?? modelRoles(parent.modelCatalog)[0] ?? UNKNOWN_MODEL_ROLE}
+          menu={parent.ui.modelRoleMenu ?? { role: 'coordinator', selectedCandidateRef: null, focus: 'list', action: 0, effort: null }}
+          query={parent.ui.dialogSelections['model-role-menu']?.query.text??''}
+          admissionReason={parent.modelRole===null||parent.modelRole===undefined?null:modelRoleAdmission(parent.modelRole,parent.modelCatalog).reason}
+          notice={parent.ui.modelSettingsNotice}
+          onAction={parent.actions.submitModelRole}
+          availableWidth={parent.terminalWidth}
+          {...(parent.modelIdentity===undefined?{}:{identity:parent.modelIdentity})}
+          rows={Math.max(10,(parent.terminalHeight??24)-7)}
+        />
+      );
+    case 'model-settings-editor':
+      return (
+        <ModelSettingsEditor
+          edit={parent.modelSettingsEdit ?? EMPTY_MODEL_SETTINGS_EDIT}
+          field={parent.ui.modelSettingsField}
+          notice={parent.ui.modelSettingsNotice}
+          failing={parent.ui.modelSettingsNotice!==null&&parent.ui.modelSettingsNotice.startsWith('!')}
+          availableWidth={parent.terminalWidth}
+          {...(parent.modelIdentity===undefined?{}:{identity:parent.modelIdentity})}
           rows={Math.max(10,(parent.terminalHeight??24)-7)}
         />
       );

@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 15;
+export const SCHEMA_VERSION = 16;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -593,6 +593,30 @@ const MIGRATION_13: readonly string[] = [
   `ALTER TABLE revision_holds ADD COLUMN admitted_contract_revision INTEGER`,
 ];
 
+/**
+ * M16：物化绑定固定这次派发使用的模型授权。
+ *
+ * Worker 重新授权只影响新 Task；已经派发的 Task、它的 Retry 与同一 Validator 修复都必须沿用创建时
+ * 的授权与 profile，否则「结算时读到的模型配置」与「实际运行过的配置」会分叉。三列因此在派发意图
+ * 之前就写进绑定行，而不是在结算时去读当前授权。
+ *
+ * 旧行一律为 `NULL`，不推断回填：当时确实没有这项事实，猜一个授权等于伪造运行依据。读取方在缺少
+ * 绑定时显式阻塞，调用方重新按当前授权派发。
+ *
+ * `utility_role` 是 Recovery Utility 派发的身份：它不属于领域四主角色，因此单列而不是塞进 `role`，
+ * 否则 `WorkerRole` 的闭集会被一条辅助用途撑开。两列恰好一列为空——角色派发与 utility 派发互斥。
+ */
+const MIGRATION_16: readonly string[] = [
+  `ALTER TABLE materialization_bindings ADD COLUMN authorization_id TEXT`,
+  `ALTER TABLE materialization_bindings ADD COLUMN authorization_version INTEGER`,
+  `ALTER TABLE materialization_bindings ADD COLUMN worker_profile_ref TEXT`,
+  `ALTER TABLE materialization_bindings ADD COLUMN utility_role TEXT`,
+  // 与角色派发同一条唯一性：同一 Work Package 的同一次 Utility Attempt 不得被派发两次。
+  `CREATE UNIQUE INDEX IF NOT EXISTS materialization_bindings_utility_attempt
+     ON materialization_bindings (coordination_scope_id, work_package_id, utility_role, attempt_id)
+     WHERE utility_role IS NOT NULL AND attempt_id IS NOT NULL`,
+];
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, statements: MIGRATION_1 },
   { version: 2, statements: MIGRATION_2 },
@@ -614,6 +638,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 15, statements: [
     `CREATE INDEX pending_interaction_scope_page ON pending_interactions(coordination_scope_id, state, created_at, interaction_id)`,
   ] },
+  { version: 16, statements: MIGRATION_16 },
 ];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {

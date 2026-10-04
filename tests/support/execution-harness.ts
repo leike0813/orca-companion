@@ -31,7 +31,16 @@ import { graphIdFor } from '../../src/application/planning/graph-generation.js';
 import { loadCurrentGraph, recordInitialGraph } from '../../src/application/planning/graph-history.js';
 import { DEFAULT_EXECUTION_LIMITS, budgetFromLimits } from '../../src/domain/planning/budget-policy.js';
 import type { ExecutionGraph, GraphVersionRecord, WorkPackage } from '../../src/domain/planning/execution-graph.js';
-import type { ExecutionAuthorizationManifest } from '../../src/domain/planning/execution-authorization.js';
+import type {
+  ExecutionAuthorizationManifest,
+  WorkerProfileRef,
+} from '../../src/domain/planning/execution-authorization.js';
+import type { WorkerModelConfiguration } from '../../src/domain/model-configuration.js';
+import {
+  modelConfigurationFixture,
+  recoveryUtilityProfileFixture,
+  workerProfilesFixture,
+} from './model-configurations.js';
 
 export const EXECUTION_SCOPE = 'scope-1' as CoordinationScopeId;
 export const EXECUTION_SESSION = 'session-a' as CoordinatorSessionId;
@@ -43,6 +52,19 @@ export const EXECUTION_RUN_ID = 'run-1';
 export const EXECUTION_AUTHORIZATION_ID = 'auth-1';
 /** 默认图里唯一已接受的节点；其余节点都是未接受的可演进对象。 */
 export const EXECUTION_ACCEPTED: readonly WorkPackageId[] = ['wp-a' as WorkPackageId];
+
+/**
+ * 测试用的模型绑定。定义在 model-configurations.ts，与项目配置、Task 固定绑定和恢复路径共用同一份；
+ * 这里保留旧名字是因为多处测试已经按它取夹具。
+ */
+export function executionModelConfiguration(overrides: Partial<WorkerModelConfiguration> = {}): WorkerModelConfiguration {
+  return modelConfigurationFixture(undefined, overrides);
+}
+
+export function executionWorkerProfiles(): readonly WorkerProfileRef[] {
+  return workerProfilesFixture();
+}
+
 
 /** 模拟已走完正常 Delivery 结算的独立 Planner Task，不伪造业务完成状态。 */
 export function recordAcceptedPlannerResult(harness: ExecutionScopeHarness, workerTaskId: string): void {
@@ -112,7 +134,7 @@ export function executionManifest(input: {
   readonly limits?: ExecutionAuthorizationManifest['limits'];
 }): ExecutionAuthorizationManifest {
   return {
-    manifestVersion: 1,
+    manifestVersion: 2,
     coordinationScopeId: input.coordinationScopeId ?? EXECUTION_SCOPE,
     planningCycleId: input.planningCycleId ?? EXECUTION_CYCLE,
     destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
@@ -129,12 +151,8 @@ export function executionManifest(input: {
     },
     baselineHead: input.baselineHead ?? 'head-1',
     orcaRunId: input.orcaRunId ?? EXECUTION_RUN_ID,
-    workerProfiles: [
-      { profileRef: { kind: 'worker-profile', id: 'p-planner' }, role: 'planner', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-impl' }, role: 'implementation', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-val' }, role: 'validator', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-fin' }, role: 'finalizer', harness: 'codex' },
-    ],
+    workerProfiles: executionWorkerProfiles(),
+    recoveryUtilityProfile: recoveryUtilityProfileFixture(),
     permissions: {
       planner: true,
       implementation: true,
@@ -248,7 +266,7 @@ export function createExecutionScopeHarness(options?: {
     writer,
     authorizationId: EXECUTION_AUTHORIZATION_ID,
     authorizationVersion: 1,
-    manifestVersion: 1,
+    manifestVersion: 2,
     fingerprint: 'fingerprint-1',
     approvalRef: 'approval-1',
     manifest: executionManifest({ graphId, generation, limits }),

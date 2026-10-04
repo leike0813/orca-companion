@@ -47,7 +47,11 @@ import { recordInitialGraph } from '../../src/application/planning/graph-history
 import type { HandoffGateFacts } from '../../src/application/planning/handoff-gate.js';
 import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
 import { transitionToExecution } from '../../src/application/planning/lease-handoff.js';
-import { WORKER_ROLES, type ExecutionAuthorizationRecord } from '../../src/domain/planning/execution-authorization.js';
+import type { ExecutionAuthorizationRecord } from '../../src/domain/planning/execution-authorization.js';
+import {
+  recoveryUtilityProfileFixture,
+  workerProfilesFixture,
+} from '../support/model-configurations.js';
 import type { ExecutionGraph, GraphVersionRecord } from '../../src/domain/planning/execution-graph.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
@@ -187,11 +191,8 @@ function recordAuthorization(candidate: GraphVersionRecord): ExecutionAuthorizat
       graph: { graphId: candidate.graphId, generation: candidate.generation, version: candidate.version },
       baselineHead: 'head-1',
       orcaRunId: 'run-1',
-      workerProfiles: WORKER_ROLES.map((role) => ({
-        profileRef: { kind: 'worker-profile', id: `profile-${role}` },
-        role,
-        harness: 'codex',
-      })),
+      workerProfiles: workerProfilesFixture(),
+      recoveryUtilityProfile: recoveryUtilityProfileFixture(),
       permissions: {
         planner: true,
         implementation: true,

@@ -1556,9 +1556,19 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (!workPackageId.ok) {
         return workPackageId;
       }
-      const role = requireEnum(command['role'], WORKER_ROLES, 'role');
-      if (!role.ok) {
+      // 角色派发与 Recovery Utility 派发互斥：恰好给出其中一个身份。
+      const rawRole = command['role'];
+      const rawUtilityRole = command['recoveryUtilityRole'];
+      const isUtility = rawRole === null || rawRole === undefined;
+      const role = isUtility ? null : requireEnum(rawRole, WORKER_ROLES, 'role');
+      if (role !== null && !role.ok) {
         return role;
+      }
+      if (isUtility && rawUtilityRole !== 'recovery_utility') {
+        return fail('物化绑定必须给出 role 或 recoveryUtilityRole 之一');
+      }
+      if (!isUtility && rawUtilityRole !== undefined) {
+        return fail('role 与 recoveryUtilityRole 不能同时给出');
       }
       const workerTaskId = requireString(command['workerTaskId'], 'workerTaskId');
       if (!workerTaskId.ok) {
@@ -1586,16 +1596,32 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (specificationUnitPath !== null && !specificationUnitPath.ok) {
         return specificationUnitPath;
       }
-      // Planner 在规格产生前派发：固定目标路径必有，内容绑定必无。其它角色恰好相反。
-      if (role.value === 'planner' && (specBinding.value !== null || specificationUnitPath === null)) {
+      // Planner 在规格产生前派发：固定目标路径必有，内容绑定必无。其它角色恰好相反；
+      // Recovery Utility 既不实现规格也不产出内容绑定，两项都必须为 null。
+      if (role === null) {
+        if (specBinding.value !== null || specificationUnitPath !== null) {
+          return fail('recovery_utility 的物化绑定不得携带 Spec Binding 或 specificationUnitPath');
+        }
+      } else if (role.value === 'planner' && (specBinding.value !== null || specificationUnitPath === null)) {
         return fail('planner 的物化绑定必须带 specificationUnitPath 且 specBinding 为 null');
-      }
-      if (role.value !== 'planner' && (specBinding.value === null || specificationUnitPath !== null)) {
+      } else if (role.value !== 'planner' && (specBinding.value === null || specificationUnitPath !== null)) {
         return fail(`${role.value} 的物化绑定必须携带 specBinding 且 specificationUnitPath 为 null`);
       }
       const orcaTaskId = requireString(command['orcaTaskId'], 'orcaTaskId');
       if (!orcaTaskId.ok) {
         return orcaTaskId;
+      }
+      const authorizationId = requireString(command['authorizationId'], 'authorizationId');
+      if (!authorizationId.ok) {
+        return authorizationId;
+      }
+      const authorizationVersion = requireCount(command['authorizationVersion'], 'authorizationVersion');
+      if (!authorizationVersion.ok) {
+        return authorizationVersion;
+      }
+      const workerProfileRef = requireString(command['workerProfileRef'], 'workerProfileRef');
+      if (!workerProfileRef.ok) {
+        return workerProfileRef;
       }
       const creationOperationId = requireString(command['creationOperationId'], 'creationOperationId');
       if (!creationOperationId.ok) {
@@ -1609,13 +1635,17 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         ...base,
         kind: 'record-materialization-binding',
         workPackageId: workPackageId.value as WorkPackageId,
-        role: role.value,
+        role: role === null ? null : role.value,
+        ...(isUtility ? { recoveryUtilityRole: 'recovery_utility' as const } : {}),
         workerTaskId: workerTaskId.value as WorkerTaskId,
         dispatchId: dispatchId.value as DispatchId,
         attemptId: attemptId.value,
         worktreeId: worktreeId.value,
         specBinding: specBinding.value,
         specificationUnitPath: specificationUnitPath === null ? null : specificationUnitPath.value,
+        authorizationId: authorizationId.value,
+        authorizationVersion: authorizationVersion.value,
+        workerProfileRef: workerProfileRef.value,
         orcaTaskId: orcaTaskId.value,
         launchId: launchId.value,
         creationOperationId: creationOperationId.value as OperationId,
@@ -2562,6 +2592,10 @@ type MaterializationBindingRow = {
   readonly worktree_id: string | null;
   readonly spec_binding_json: string | null;
   readonly specification_unit_path: string | null;
+  readonly authorization_id: string | null;
+  readonly authorization_version: number | null;
+  readonly worker_profile_ref: string | null;
+  readonly utility_role: string | null;
   readonly orca_task_id: string;
   readonly launch_id: string | null;
   readonly created_at: number;
@@ -2908,19 +2942,24 @@ function decodeMaterializationBindingRow(row: MaterializationBindingRow): Decode
     creationOperationId: row.creation_operation_id as OperationId,
     createdAt: row.created_at,
   };
-  const identityColumns = [
-    row.role,
-    row.worker_task_id,
-    row.dispatch_id,
-    row.attempt_id,
-    row.worktree_id,
-  ];
+  // schema 16 之前的历史行没有模型授权事实：三列原样保留 `null`，不做推断回填。
+  const authorizationBinding = {
+    authorizationId: row.authorization_id,
+    authorizationVersion: row.authorization_version,
+    workerProfileRef: row.worker_profile_ref === null
+      ? null
+      : { kind: 'worker-profile' as const, id: row.worker_profile_ref },
+  };
+  // `role` 与 `utility_role` 合起来只占一个身份槽：角色派发与 utility 派发互斥，其余身份列一致。
+  const identityColumns = [row.worker_task_id, row.dispatch_id, row.attempt_id, row.worktree_id];
   const present = identityColumns.filter((value) => value !== null).length;
-  if (present === 0) {
+  if (present === 0 && row.role === null && row.utility_role === null) {
     return ok({
       ...base,
+      ...authorizationBinding,
       identity: 'legacy',
       role: null,
+      recoveryUtilityRole: null,
       workerTaskId: null,
       dispatchId: null,
       attemptId: null,
@@ -2935,16 +2974,30 @@ function decodeMaterializationBindingRow(row: MaterializationBindingRow): Decode
       `materialization_bindings 的身份列不完整（Work Package ${row.work_package_id}）：不推断缺失的角色或 Attempt`,
     );
   }
-  const role = decodeWorkerRole(row.role as string);
-  if (role === null) {
+  // 角色派发与 utility 派发互斥：两列都非空或都为空都是无意义状态，不做推断。
+  if ((row.role === null) === (row.utility_role === null)) {
+    return fail(
+      `materialization_bindings 的 role 与 utility_role 必须恰好一列非空（Work Package ${row.work_package_id}）`,
+    );
+  }
+  const role = row.role === null ? null : decodeWorkerRole(row.role);
+  if (row.role !== null && role === null) {
     return fail(`materialization_bindings.role 取值不受支持: ${row.role}`);
+  }
+  if (row.utility_role !== null && row.utility_role !== 'recovery_utility') {
+    return fail(`materialization_bindings.utility_role 取值不受支持: ${row.utility_role}`);
   }
   const specBinding = row.spec_binding_json === null ? null : decodeSpecBindingColumn(row.spec_binding_json);
   if (row.spec_binding_json !== null && specBinding === null) {
     return fail('materialization_bindings.spec_binding_json 不是合法的 Spec Binding');
   }
-  // Planner 在规格产生前派发，因此没有内容绑定但必须带固定目标路径；其它角色的对偶约束相同。
-  if (role === 'planner') {
+  // Planner 在规格产生前派发，因此没有内容绑定但必须带固定目标路径；其它角色的对偶约束相同；
+  // Recovery Utility 既不实现规格也不产出内容绑定。
+  if (role === null) {
+    if (specBinding !== null || row.specification_unit_path !== null) {
+      return fail('Recovery Utility 的物化绑定不得携带 Spec Binding 或 specificationUnitPath');
+    }
+  } else if (role === 'planner') {
     if (specBinding !== null || row.specification_unit_path === null) {
       return fail('Planner 的物化绑定必须带固定规格目标路径且不携带 Spec Binding');
     }
@@ -2953,8 +3006,10 @@ function decodeMaterializationBindingRow(row: MaterializationBindingRow): Decode
   }
   return ok({
     ...base,
+    ...authorizationBinding,
     identity: 'issued',
     role,
+    recoveryUtilityRole: row.utility_role === 'recovery_utility' ? 'recovery_utility' : null,
     workerTaskId: row.worker_task_id as WorkerTaskId,
     dispatchId: row.dispatch_id as DispatchId,
     attemptId: row.attempt_id,
@@ -4899,12 +4954,16 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         if (existing !== undefined) {
           const identical =
             existing.role === cmd.role &&
+            existing.utility_role === (cmd.recoveryUtilityRole ?? null) &&
             existing.worker_task_id === cmd.workerTaskId &&
             existing.dispatch_id === cmd.dispatchId &&
             existing.attempt_id === cmd.attemptId &&
             existing.worktree_id === cmd.worktreeId &&
             existing.spec_binding_json === (cmd.specBinding === null ? null : JSON.stringify(cmd.specBinding)) &&
             existing.specification_unit_path === cmd.specificationUnitPath &&
+            existing.authorization_id === cmd.authorizationId &&
+            existing.authorization_version === cmd.authorizationVersion &&
+            existing.worker_profile_ref === cmd.workerProfileRef &&
             existing.orca_task_id === cmd.orcaTaskId &&
             existing.launch_id === cmd.launchId;
           return identical
@@ -4918,8 +4977,9 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           `INSERT INTO materialization_bindings (
              coordination_scope_id, work_package_id, creation_operation_id, role, worker_task_id,
              dispatch_id, attempt_id, worktree_id, spec_binding_json, specification_unit_path,
-             orca_task_id, launch_id, created_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             authorization_id, authorization_version, worker_profile_ref, utility_role, orca_task_id,
+             launch_id, created_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).run(
           cmd.coordinationScopeId,
           cmd.workPackageId,
@@ -4931,6 +4991,10 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           cmd.worktreeId,
           cmd.specBinding === null ? null : JSON.stringify(cmd.specBinding),
           cmd.specificationUnitPath,
+          cmd.authorizationId,
+          cmd.authorizationVersion,
+          cmd.workerProfileRef,
+          cmd.recoveryUtilityRole ?? null,
           cmd.orcaTaskId,
           cmd.launchId,
           now,

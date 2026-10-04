@@ -91,6 +91,8 @@ export type MaterializeCandidateContext = {
   readonly role: WorkerRole;
   readonly graphGeneration: number;
   readonly authorizationId: string;
+  readonly authorizationVersion: number;
+  readonly workerProfileRef: string;
   readonly runId: string;
   readonly consumerGeneration: number;
   readonly backendIdentityRef: string;
@@ -229,6 +231,12 @@ function readMaterializationBinding(input: MaterializeWorkPackageInput): Materia
   );
   if (matches.length > 1) {
     return { kind: 'failed', failure: { code: 'invalid_state', message: '同一角色 Attempt 存在多个物化绑定' } };
+  }
+  const binding = matches[0];
+  if (binding !== undefined && (binding.authorizationId !== input.context.candidate.authorizationId ||
+    binding.authorizationVersion !== input.context.candidate.authorizationVersion ||
+    binding.workerProfileRef?.id !== input.context.candidate.workerProfileRef)) {
+    return { kind: 'failed', failure: { code: 'model_binding_mismatch', message: '物化任务的原模型授权绑定无法核验' } };
   }
   return { kind: 'read', binding: matches[0] ?? null };
 }
@@ -649,6 +657,9 @@ function writeBinding(
         specBinding: payload.envelope.specBinding,
         specificationUnitPath: payload.envelope.specificationUnitPath ?? null,
         launchId: input.context.candidate.launchId,
+        authorizationId: input.context.candidate.authorizationId,
+        authorizationVersion: input.context.candidate.authorizationVersion,
+        workerProfileRef: input.context.candidate.workerProfileRef,
       }),
   ) as CoordinationCommandResult;
 }

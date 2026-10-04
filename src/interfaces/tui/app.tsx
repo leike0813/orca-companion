@@ -8,13 +8,27 @@
  * - 没有 TTY 判断：那发生在挂载 Ink 之前的 `src/bootstrap/tui-entry.ts`。
  */
 
-import { Box, Text, useInput, usePaste, useWindowSize, useStdin } from 'ink';
+import { Box, Text, useInput, usePaste, useWindowSize, useStdin, type Key } from 'ink';
 import { ThemeProvider } from '@inkjs/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { resolveGlobalAction } from './input/keymap.js';
 import { boundedQuery, searchCommands } from './commands.js';
-import { modelChoices, modelSwitchAdmission } from './components/model-picker.js';
+import {
+  candidateLabel,
+  dedupeRoleCandidates,
+  effortValues,
+  modelRoleAdmission,
+  modelRoles,
+  modelSwitchAdmission,
+  selectedRoleCandidate,
+} from './components/model-picker.js';
+import {
+  editModelSettingsField,
+  formatModelOptions,
+  modelSettingsDraft,
+  visibleModelSettingsFields,
+} from './components/model-settings-editor.js';
 import { CommandInvocations, type CommandOutcome, type MutationOutcome } from './command-invocations.js';
 import type { ControllerPlanningHandoffView, ControllerHandoffView } from '../../application/controller-service.js';
 import type { CommandResultRef } from '../../application/tui/command-result.js';
@@ -50,6 +64,7 @@ import {
   nextExecutionFilter,
   reduceTuiState,
   type ComposerMode,
+  type ModelRoleMenuState,
   type OverlayKind,
   type PendingConfirmation,
   type TuiAction,
@@ -86,6 +101,8 @@ import type {
   ExecutionAuthorizationLoad,
   HomeResolution,
   ModelCatalog,
+  ModelRoleView,
+  ModelSettingsSnapshotView,
   ScopeCandidate,
   TuiPorts,
   WizardCheck,
@@ -330,6 +347,29 @@ function TuiAppContent(props: TuiAppProps) {
   const historyKeyRef = useRef<(kind: 'users' | 'transcript' | 'activity') => void>(() => {});
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog>(EMPTY_MODEL_CATALOG);
   const [modelRejection, setModelRejection] = useState<string | null>(null);
+  /**
+   * 角色模型配置的非秘密快照。
+   *
+   * 它只在打开编辑器时读一次并跟随编辑；渲染与 resize 不重读、不写入。快照本身不含任何秘密，
+   * 用户新输入的 key 另存在 `modelSettingsEdit.secret`，只在内存中。
+   */
+  const modelSettingsSnapshot = useRef<ModelSettingsSnapshotView | null>(null);
+  /**
+   * 模型弹窗的调用代次。
+   *
+   * 载入、保存与应用都是异步的：结果只允许回到发起它的那一次打开。overlay 关闭、切换 Session 或
+   * 重新打开时递增，因此迟到结果不会改写其他 Session 的选择、抢走焦点或把旧编辑写进新弹窗。
+   */
+  const modelInvocation = useRef(0);
+  /**
+   * 编辑版本与在途闸门。
+   *
+   * `modelEditVersion` 每次内存编辑变化都递增，因此「保存请求发出之后用户又改了字段」是可检测的：
+   * 迟到成功不能抹掉这些后续输入。两个闸门保证同一次编辑不会并发提交两次，也就不会重复追加记录。
+   */
+  const modelEditVersion = useRef(0);
+  const modelSaveInFlight = useRef(false);
+  const modelApplyInFlight = useRef(false);
   const [planningReview, setPlanningReview] = useState<ControllerPlanningHandoffView | null>(null);
   const [executionReview, setExecutionReview] = useState<ControllerHandoffView | null>(null);
   const executionReviewRef = useRef<CommandResultRef | null>(null);
@@ -393,7 +433,19 @@ function TuiAppContent(props: TuiAppProps) {
    */
   const dispatch = useCallback((action: TuiAction) => {
     if(action.kind==='overlay-close-top'||action.kind==='overlay-close-all'||action.kind==='session-selected')navigationGeneration.current++;
+    if (action.kind === 'model-settings-edit') modelEditVersion.current += 1;
     const next = reduceTuiState(stateRef.current, action);
+    if (action.kind === 'overlay-close-top' || action.kind === 'overlay-close-all' || action.kind === 'session-selected') {
+      // 离开模型弹窗的每一条路径（Esc、Command Palette 关闭、逐层返回、切换 Session）共用这一处：
+      // 递增调用代次让迟到结果作废，并抹除内存中的 key。此后任何位置看到的都只是遮罩。
+      modelInvocation.current += 1;
+      const edit = stateRef.current.modelSettingsEdit;
+      if (edit !== null && edit.secret !== '') {
+        stateRef.current = { ...next, modelSettingsEdit: { ...edit, secret: '' } };
+        setState(stateRef.current);
+        return;
+      }
+    }
     stateRef.current = next;
     setState(next);
   }, []);
@@ -831,7 +883,7 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (slash.kind === 'command') {
-      const unavailable=commandReason(slash.command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length});
+      const unavailable=commandReason(slash.command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length,...(ports.modelSettings===undefined?{}:{modelSettings:true})});
       if(unavailable){dispatch({kind:'notice',notice:unavailable});return;}
       if (slash.command === 'paste') { await runCommandRef.current('paste'); return; }
       const generation = protection.generation(target);
@@ -1059,7 +1111,7 @@ function TuiAppContent(props: TuiAppProps) {
       const inputTarget=currentInputTarget(current,coordScopeRef.current),inputGeneration=inputTarget===null?null:protection.generation(inputTarget);
       const active=()=>generation===navigationGeneration.current&&session===stateRef.current.selectedSessionId&&(inputTarget===null||inputGeneration===protection.generation(inputTarget));
       const reject=(code:string,message:string):ControllerCommandResult=>{ if(active())dispatch({kind:'notice',notice:message});return {kind:'rejected',code,message}; };
-      const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length,...(snapshotRef.current?{controlState:snapshotRef.current.controlState}:{})});
+      const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length,...(snapshotRef.current?{controlState:snapshotRef.current.controlState}:{}),...(ports.modelSettings===undefined?{}:{modelSettings:true})});
       if(reason)return reject('command_unavailable',reason);
       const open=(overlay:OverlayKind, selectedId:string|null=null):CommandOutcome=>{
         if(!active())return {kind:'rejected',code:'navigation_changed',message:'调用入口已改变'};
@@ -1093,7 +1145,14 @@ function TuiAppContent(props: TuiAppProps) {
             const catalog=await ports.modelCatalog.load(session);
             if(!active())return reject('navigation_changed','调用入口已改变');
             modelMenuTarget.current=session;setModelRejection(null);setModelCatalog(catalog);
-            return open('model-picker',catalog.currentConfigurationRef??catalog.options[0]?.configurationRef??null);
+            dispatch({kind:'model-role-selected',index:0});
+            dispatch({kind:'model-settings-notice',notice:null});
+            return open('model-picker',null);
+          }
+          case 'model-settings': {
+            if(modelSettingsPort===undefined)return reject('model_settings_unavailable','角色模型配置端口尚未接通');
+            await openModelSettingsEditor();
+            return {kind:'opened'};
           }
           case 'handoff':
           case 'execution-handoff': {
@@ -1606,6 +1665,448 @@ function TuiAppContent(props: TuiAppProps) {
     void seekHistory(context, context.kind === 'users' ? 'older' : 'newer', true);
   };
   functionKeyRef.current = action => { if(stateRef.current.overlayStack.length===0&&stateRef.current.pendingConfirmation===null)void runCommand(action); };
+  // ---------------------------------------------------------------------
+  // 角色模型配置（IP-06）
+  // ---------------------------------------------------------------------
+  const modelSettingsPort = ports.modelSettings;
+  const modelRoleList = (): readonly ModelRoleView[] => modelRoles(modelCatalog);
+  const highlightedRole = (): ModelRoleView | null => modelRoleList()[stateRef.current.modelRoleIndex] ?? null;
+  const roleMenuRole = (): ModelRoleView | null => {
+    const role = stateRef.current.modelRoleMenu?.role;
+    return role === undefined ? null : modelRoleList().find((entry) => entry.role === role) ?? null;
+  };
+  const openModelOverlay = (overlay: OverlayKind, selectedId: string | null = null) => {
+    dispatch({ kind: 'review-view', tab: 0, scroll: 0, action: 0 });
+    dispatch({ kind: 'dialog-selection', overlay, query: emptyDraft(), selectedId });
+    dispatch({ kind: 'overlay-open', overlay });
+  };
+  const reloadModelCatalog = async () => {
+    const session = stateRef.current.selectedSessionId;
+    if (session === null) return;
+    try {
+      setModelCatalog(await ports.modelCatalog.load(session));
+    } catch {
+      setModelCatalog(EMPTY_MODEL_CATALOG);
+    }
+  };
+  /**
+   * 关闭模型弹窗并抹除内存中的 key。
+   *
+   * 抹除发生在关闭与保存成功两条路径上，因此 overlay 栈、返回上下文和迟到的异步结果都不会再拿到
+   * 用户输入的 secret；此后任何位置看到的都是遮罩。
+   */
+  const eraseModelSecret = () => {
+    const edit = stateRef.current.modelSettingsEdit;
+    if (edit !== null && edit.secret !== '') {
+      dispatch({ kind: 'model-settings-edit', edit: { ...edit, secret: '' }, field: stateRef.current.modelSettingsField });
+    }
+  };
+  const closeModelOverlays = () => {
+    modelInvocation.current += 1;
+    eraseModelSecret();
+    modelSettingsSnapshot.current = null;
+    dispatch({ kind: 'model-role-menu', menu: null });
+    dispatch({ kind: 'model-settings-edit', edit: null });
+    dispatch({ kind: 'overlay-close-all' });
+  };
+  /** 进入某个角色的候选菜单；不可用时保持当前层并显示宿主给出的原因。 */
+  const openModelRole = (role?: ModelRoleView) => {
+    const target = role ?? highlightedRole();
+    if (target === null) {
+      dispatch({ kind: 'model-settings-notice', notice: '! 没有可用的角色' });
+      return;
+    }
+    const admission = modelRoleAdmission(target, modelCatalog);
+    if (!admission.allowed) {
+      dispatch({ kind: 'model-settings-notice', notice: '! ' + (admission.reason ?? '该角色当前不可用') });
+      return;
+    }
+    const current = target.current;
+    const candidates = dedupeRoleCandidates(target.candidates);
+    const candidate =
+      (current === null
+        ? undefined
+        : candidates.find((entry) => entry.candidateRef === current.candidateRef) ??
+          candidates.find((entry) => entry.provider === current.provider && entry.model === current.model)) ??
+      candidates[0] ??
+      null;
+    const currentEffort = current !== null && current.provider === candidate?.provider && current.model === candidate.model
+      ? current.effort : null;
+    const effort = effortValues(candidate).includes(currentEffort ?? '') ? currentEffort : null;
+    dispatch({ kind: 'model-settings-notice', notice: null });
+    dispatch({
+      kind: 'model-role-menu',
+      menu: { role: target.role, selectedCandidateRef: candidate?.candidateRef ?? null, focus: 'list', action: 0, effort },
+    });
+    openModelOverlay('model-role-menu', candidate?.candidateRef ?? null);
+  };
+  /**
+   * 载入非秘密快照并打开编辑器。
+   *
+   * 载入结果绑定本次调用代次：overlay 已关闭或已重新打开时，迟到结果直接丢弃，不会把上一个角色的
+   * 字段写进当前弹窗。
+   */
+  const openModelSettingsEditor = async (role?: ModelRoleView) => {
+    const port = modelSettingsPort;
+    if (port === undefined) {
+      dispatch({ kind: 'model-settings-notice', notice: '! model_settings_unavailable: 角色模型配置端口尚未接通' });
+      return;
+    }
+    const target = role ?? highlightedRole();
+    if (target === null) {
+      dispatch({ kind: 'model-settings-notice', notice: '! 没有可用的角色' });
+      return;
+    }
+    const invocation = (modelInvocation.current += 1);
+    const navigation = navigationGeneration.current;
+    dispatch({ kind: 'model-settings-notice', notice: null });
+    let loaded;
+    try {
+      loaded = await port.load();
+    } catch {
+      if (invocation !== modelInvocation.current || navigation !== navigationGeneration.current) return;
+      dispatch({ kind: 'model-settings-notice', notice: '! config_unreadable: 读取模型配置失败' });
+      return;
+    }
+    if (invocation !== modelInvocation.current || navigation !== navigationGeneration.current) return;
+    if (loaded.kind !== 'loaded') {
+      dispatch({ kind: 'model-settings-notice', notice: '! ' + loaded.code + ': ' + loaded.message });
+      return;
+    }
+    const binding = loaded.snapshot.roles.find((entry) => entry.role === target.role);
+    const connection =
+      binding?.connectionRef == null
+        ? undefined
+        : loaded.snapshot.connections.find((entry) => entry.connectionRef === binding.connectionRef);
+    const credential = connection?.credential ?? null;
+    const capability = binding?.effortCapability ?? null;
+    modelSettingsSnapshot.current = loaded.snapshot;
+    // 快照就位后才打开编辑器：不存在「框已打开但保存基准尚未载入」的半初始化状态。
+    dispatch({ kind: 'overlay-open', overlay: 'model-settings-editor' });
+    dispatch({
+      kind: 'model-settings-edit',
+      field: 'label',
+      edit: {
+        role: target.role,
+        label: connection?.label ?? binding?.connectionLabel ?? '',
+        providerIntegration: connection?.providerIntegration ?? binding?.providerIntegration ?? '',
+        model: binding?.model ?? '',
+        options: formatModelOptions(connection?.modelOptions ?? {}),
+        codexProviderId: connection?.codex?.providerId ?? '',
+        codexBaseUrl: connection?.codex?.baseUrl ?? '',
+        codexWireApi: connection?.codex?.wireApi ?? '',
+        credentialKind: credential?.kind ?? 'harness_login',
+        credentialRef: credential?.kind === 'managed' ? credential.credentialRef : '',
+        credentialOptionPath: credential?.kind === 'managed' ? credential.optionPath : '',
+        // 已有能力来源原样复用：界面既不发明也不静默清除它。
+        effortSource: capability?.source ?? '',
+        effortValues: capability?.values.join(',') ?? '',
+        effortOptionPath: capability?.optionPath ?? '',
+        secret: '',
+      },
+    });
+  };
+  /**
+   * 保存内存中的编辑。
+   *
+   * 保存只追加不可变记录：成功后抹除 key、逐层返回并说明尚未应用；失败时保留全部字段，只更新
+   * 结构化提示。
+   */
+  const saveModelSettings = async () => {
+    const port = modelSettingsPort;
+    const snapshot = modelSettingsSnapshot.current;
+    const edit = stateRef.current.modelSettingsEdit;
+    if (port === undefined || snapshot === null || edit === null) {
+      dispatch({
+        kind: 'model-settings-notice',
+        notice:
+          port === undefined
+            ? '! model_settings_unavailable: 角色模型配置端口尚未接通'
+            : '! config_reload_required: 编辑基于旧快照，请关闭后重新载入再保存',
+      });
+      return;
+    }
+    // 单次在途：保存期间不接受第二次提交，否则同 revision 会并发追加两条记录。
+    if (modelSaveInFlight.current) {
+      dispatch({ kind: 'model-settings-notice', notice: '! save_in_flight: 原保存仍在途，请等待结果' });
+      return;
+    }
+    modelSaveInFlight.current = true;
+    const invocation = modelInvocation.current;
+    const navigation = navigationGeneration.current;
+    const editVersion = modelEditVersion.current;
+    const savedRevision = snapshot.revision;
+    dispatch({ kind: 'model-settings-notice', notice: null });
+    const draft = modelSettingsDraft(edit, snapshot.revision);
+    if (draft.kind !== 'ok') {
+      modelSaveInFlight.current = false;
+      dispatch({ kind: 'model-settings-notice', notice: '! ' + draft.message });
+      return;
+    }
+    let result;
+    try {
+      result = await port.save(draft.input);
+    } catch {
+      modelSaveInFlight.current = false;
+      if (invocation !== modelInvocation.current || navigation !== navigationGeneration.current) return;
+      dispatch({ kind: 'model-settings-notice', notice: '! save_failed: 保存未完成，原设置保留' });
+      return;
+    }
+    modelSaveInFlight.current = false;
+    if (invocation !== modelInvocation.current || navigation !== navigationGeneration.current) return;
+    if (result.kind !== 'saved') {
+      dispatch({ kind: 'model-settings-notice', notice: '! ' + result.code + ': ' + result.message });
+      return;
+    }
+    // 用户在等待期间继续编辑：已保存的是发出请求时的快照，当前输入原样保留。
+    // 服务只追加不可变记录，因此把 CAS 基准推进到结果 revision 就足以让当前编辑再次保存——
+    // 既不丢输入、不清掉 key，也不需要关闭重开。真正的并发冲突仍由服务按实际 revision 拒绝。
+    if (modelEditVersion.current !== editVersion) {
+      modelSettingsSnapshot.current = { ...snapshot, revision: result.revision };
+      dispatch({
+        kind: 'model-settings-notice',
+        notice:
+          '原快照已保存（revision ' +
+          String(savedRevision) +
+          '）；当前编辑的保存基准已更新为 revision ' +
+          String(result.revision) +
+ '，再次 Enter 即可保存当前内容',
+      });
+      return;
+    }
+    // 保存不代表应用：抹除 key、关闭编辑器，并由用户另行显式应用。
+    eraseModelSecret();
+    modelSettingsSnapshot.current = null;
+    dispatch({ kind: 'model-settings-edit', edit: null });
+    dispatch({ kind: 'model-settings-notice', notice: '已保存新的不可变配置，尚未应用' });
+    dispatch({ kind: 'notice', notice: '模型配置已保存新的不可变记录，尚未应用' });
+    dispatch({ kind: 'overlay-close-top' });
+    void reloadModelCatalog();
+  };
+  /**
+   * 提交候选菜单的动作。
+   *
+   * 0 是返回，逐层退回模型配置页且不改变任何绑定。1 是应用选择：先由宿主保存该候选，Coordinator
+   * 再按同一 Session 走既有切换意图，Worker 角色才打开完整 Manifest 审阅——任何情况下都不会
+   * 自动批准。
+   */
+  const submitModelRole = async (action: number) => {
+    if (action === 0) {
+      dispatch({ kind: 'model-role-menu', menu: null });
+      dispatch({ kind: 'overlay-close-top' });
+      return;
+    }
+    const menu = stateRef.current.modelRoleMenu;
+    const role = roleMenuRole();
+    if (menu === null || role === null || menu.selectedCandidateRef === null) {
+      dispatch({ kind: 'model-settings-notice', notice: '! 请先选择一个模型候选' });
+      return;
+    }
+    const candidate = selectedRoleCandidate(role, menu.selectedCandidateRef);
+    const efforts = effortValues(candidate);
+    const effort = efforts.includes(menu.effort ?? '') ? menu.effort : null;
+    if (efforts.length > 0 && effort === null) {
+      dispatch({ kind: 'model-settings-notice', notice: '! effort_unsupported: 请先选择该模型支持的 effort' });
+      return;
+    }
+    const port = modelSettingsPort;
+    if (port === undefined) {
+      dispatch({ kind: 'model-settings-notice', notice: '! model_settings_unavailable: 角色模型配置端口尚未接通' });
+      return;
+    }
+    const revision = modelCatalog.configurationRevision;
+    if (revision === undefined) {
+      dispatch({ kind: 'model-settings-notice', notice: '! config_unreadable: 没有可用的配置 revision' });
+      return;
+    }
+    const session = modelMenuTarget.current ?? stateRef.current.selectedSessionId;
+    if (role.role === 'coordinator' && session === null) {
+      dispatch({ kind: 'model-settings-notice', notice: '! session_missing: 未选择 Coordinator Session' });
+      return;
+    }
+    // Coordinator 沿用既有挂起与在途操作的准入：不可切换时不必先保存候选。
+    if (role.role === 'coordinator') {
+      const admission = modelSwitchAdmission(modelCatalog);
+      if (!admission.allowed) {
+        setModelRejection(admission.reason);
+        dispatch({ kind: 'model-settings-notice', notice: '! ' + (admission.reason ?? '当前不可切换') });
+        return;
+      }
+    }
+    // 同一次选择不允许并发应用：重复 Enter 会追加重复 profile，且后到的结果可能覆盖先到的。
+    if (modelApplyInFlight.current) {
+      dispatch({ kind: 'model-settings-notice', notice: '! apply_in_flight: 原应用仍在途，请等待结果' });
+      return;
+    }
+    dispatch({ kind: 'model-settings-notice', notice: null });
+    const invocation = modelInvocation.current;
+    const navigation = navigationGeneration.current;
+    const appliedRef = menu.selectedCandidateRef;
+    const appliedEffort = effort;
+    modelApplyInFlight.current = true;
+    let saved;
+    try {
+      saved = await port.apply({ role: role.role, modelRef: menu.selectedCandidateRef, effort, expectedRevision: revision });
+    } catch {
+      modelApplyInFlight.current = false;
+      if (invocation !== modelInvocation.current || navigation !== navigationGeneration.current) return;
+      dispatch({ kind: 'model-settings-notice', notice: '! save_failed: 保存未完成，原设置保留' });
+      return;
+    }
+    modelApplyInFlight.current = false;
+    if (invocation !== modelInvocation.current || navigation !== navigationGeneration.current) return;
+    if (saved.kind !== 'saved') {
+      dispatch({ kind: 'model-settings-notice', notice: '! ' + saved.code + ': ' + saved.message });
+      return;
+    }
+    // 等待期间改了候选或 effort：已保存的是旧选择。当前选择原样保留，刷新配置基准后可直接再应用。
+    const currentMenu = stateRef.current.modelRoleMenu;
+    if (
+      currentMenu !== null &&
+      (currentMenu.selectedCandidateRef !== appliedRef || currentMenu.effort !== appliedEffort)
+    ) {
+      void reloadModelCatalog();
+      dispatch({
+        kind: 'model-settings-notice',
+        notice: '原选择已保存；当前选择尚未应用，配置基准已刷新，请再次确认应用',
+      });
+      return;
+    }
+    // Coordinator：按同一 Session 走既有切换意图，保留挂起与在途操作的原合同。
+    if (role.role === 'coordinator') {
+      if (saved.configurationRef === null) {
+        dispatch({ kind: 'model-settings-notice', notice: '! result_ref_unavailable: 已保存但缺少新配置引用，请重新选择' });
+        return;
+      }
+      const target = session;
+      const generation = navigationGeneration.current;
+      const result = await runMutation('model:' + String(target), () =>
+        ports.execute({
+          kind: 'switch-model-configuration',
+          coordinatorSessionId: String(target),
+          nextConfigurationRef: saved.configurationRef ?? '',
+        }),
+      );
+      if (generation !== navigationGeneration.current || target !== stateRef.current.selectedSessionId) return;
+      setModelRejection(result.kind === 'accepted' ? null : resultNotice(result));
+      if (result.kind === 'accepted') {
+        closeModelOverlays();
+      }
+      return;
+    }
+    // Worker 角色：profile 已保存，授权替换仍必须经过完整 Manifest 审阅与显式批准。
+    // 审阅可能失败：失败时保留当前候选选择与焦点，用户可直接重试，而不是被丢回空白页。
+    let loaded;
+    try {
+      loaded = await ports.executionAuthorization.review();
+    } catch {
+      if (invocation !== modelInvocation.current || navigation !== navigationGeneration.current) return;
+      dispatch({ kind: 'model-settings-notice', notice: '! authorization_unreadable: 审阅未完成，保留当前选择，请重试' });
+      return;
+    }
+    if (invocation !== modelInvocation.current || navigation !== navigationGeneration.current) return;
+    setAuthorizationReview(loaded);
+    dispatch({ kind: 'model-role-menu', menu: null });
+    closeModelOverlays();
+    openModelOverlay('authorization-review');
+  };
+  /**
+   * 角色候选菜单的键位。
+   *
+   * 三块区域按定稿顺序循环：候选列表 → 独立 effort → 动作。只有当所选模型自己带可信能力来源时
+   * 才存在 effort 区；没有来源时左右键不会产生任何 effort，因此无法保存虚构值。
+   */
+  const handleModelRoleMenuKey = (input: string, key: Key) => {
+    const current=stateRef.current,menu=current.modelRoleMenu;
+    if(menu===null)return;
+    const role=roleMenuRole();
+    const selection=current.dialogSelections['model-role-menu']??{query:emptyDraft(),selectedId:null};
+    const choices=dialogChoicesFor('model-role-menu',selection.query.text);
+    const candidate=()=>role===null?null:selectedRoleCandidate(role,menu.selectedCandidateRef);
+    const moveCandidate=(delta:number)=>{
+      if(choices.length===0)return;
+      const index=choices.findIndex(choice=>choice.value===selection.selectedId);
+      const next=choices[Math.max(0,Math.min(choices.length-1,index+delta))];
+      if(next===undefined)return;
+      dispatch({kind:'dialog-selection',overlay:'model-role-menu',query:selection.query,selectedId:next.value});
+      const kept=effortValues(role===null?null:selectedRoleCandidate(role,next.value)).includes(menu.effort??'');
+      dispatch({kind:'model-role-menu',menu:{...menu,selectedCandidateRef:next.value,effort:kept?menu.effort:null}});
+    };
+    if(key.tab){
+      const focuses:ModelRoleMenuState['focus'][]=effortValues(candidate()).length>0?['list','effort','actions']:['list','actions'];
+      const next=focuses[(focuses.indexOf(menu.focus)+(key.shift?focuses.length-1:1)+focuses.length)%focuses.length]??'list';
+      dispatch({kind:'model-role-menu',menu:{...menu,focus:next,action:next==='actions'?0:menu.action}});
+      return;
+    }
+    if(menu.focus==='list'){
+      if(key.upArrow){moveCandidate(-1);return;}
+      if(key.downArrow){moveCandidate(1);return;}
+    }
+    if(menu.focus==='effort'){
+      const values=effortValues(candidate());
+      if(values.length>0&&(key.leftArrow||key.rightArrow)){
+        const index=values.indexOf(menu.effort??'');
+        const next=values[(((index+(key.rightArrow?1:values.length-1))%values.length)+values.length)%values.length];
+        if(next!==undefined)dispatch({kind:'model-role-menu',menu:{...menu,effort:next}});
+        return;
+      }
+    }
+    if(menu.focus==='actions'&&(key.upArrow||key.downArrow||key.leftArrow||key.rightArrow)){
+      dispatch({kind:'model-role-menu',menu:{...menu,action:menu.action===0?1:0}});
+      return;
+    }
+    if(key.return&&!key.meta&&!key.shift){
+      if(menu.focus==='actions'){void submitModelRole(menu.action);return;}
+      const hasEffort=effortValues(candidate()).length>0;
+      dispatch({kind:'model-role-menu',menu:{...menu,focus:menu.focus==='list'?(hasEffort?'effort':'actions'):'actions',action:0}});
+      return;
+    }
+    if(menu.focus==='list'){
+      const edited=editComposer(selection.query,input,key);
+      if(edited!==selection.query){
+        // 查询收敛后必须同时移动权威选择：否则 Enter 会应用一个已经不在可见列表里的候选。
+        const text=boundedQuery(edited.text),query={...edited,text,cursor:Math.min(edited.cursor,text.length)};
+        const matches=dialogChoicesFor('model-role-menu',text);
+        const selectedId=matches.some(choice=>choice.value===selection.selectedId)?selection.selectedId:matches[0]?.value??null;
+        dispatch({kind:'dialog-selection',overlay:'model-role-menu',query,selectedId});
+        const candidate=role===null?null:selectedRoleCandidate(role,selectedId);
+        dispatch({kind:'model-role-menu',menu:{...menu,selectedCandidateRef:selectedId,effort:effortValues(candidate).includes(menu.effort??'')?menu.effort:null}});
+      }
+    }
+  };
+  /**
+   * 连接编辑器的键位。
+   *
+   * 字段值只改内存中的 ModelSettingsEdit，从不构造 UiDraft，因此不会进入 IC-13 的草稿存储、
+   * 提交快照或恢复路径。Enter 直接保存，Esc 由 overlay 关闭路径抹除 key。
+   */
+  const handleModelSettingsEditorKey = (input: string, key: Key) => {
+    const current=stateRef.current,edit=current.modelSettingsEdit;
+    if(edit===null)return;
+    // 保存在途时 Enter 不再重复提交；输入仍然可用，编辑不会被静默冻结或丢弃。
+    if(key.return&&!key.meta&&!key.shift){
+      if(modelSaveInFlight.current){dispatch({kind:'model-settings-notice',notice:'! save_in_flight: 原保存仍在途，请等待结果'});return;}
+      void saveModelSettings();
+      return;
+    }
+    if(key.upArrow||key.downArrow){
+      // 导航与渲染共用同一份可见字段：隐藏的 API Key 不会被光标指向，也不会被数进行号。
+      const fields=visibleModelSettingsFields(edit.credentialKind);
+      const cursor=Math.max(0,fields.indexOf(current.modelSettingsField));
+      const next=fields[(cursor+(key.upArrow?-1:1)+fields.length)%fields.length];
+      if(next!==undefined)dispatch({kind:'model-settings-edit',edit,field:next});
+      return;
+    }
+    const field=current.modelSettingsField;
+    if(field==='options'&&(key.leftArrow||key.rightArrow))return;
+    const next=editModelSettingsField(edit,field,input,key);
+    if(next===edit)return;
+    // 凭据来源切回 harness_login 时本次输入的 key 被清空：明确告知，不静默丢弃。
+    if(edit.secret!==''&&next.secret===''){
+      dispatch({kind:'model-settings-notice',notice:'凭据来源已切回 Harness 登录，本次输入的 API Key 已从内存清除'});
+    }
+    dispatch({kind:'model-settings-edit',edit:next,field:current.modelSettingsField});
+  };
   const workspaceActions: WorkspaceActions = {
     dispatch,
     composerChange: (draft) => {
@@ -1657,16 +2158,14 @@ function TuiAppContent(props: TuiAppProps) {
     selectRecipient: (coordinatorSessionId) => {
       void runCommand(stateRef.current.handoffCommand,coordinatorSessionId);
     },
-    selectModel: (configurationRef) => {
-      const session=modelMenuTarget.current,generation=navigationGeneration.current;
-      if(!session)return;
-      const admission=modelSwitchAdmission(modelCatalog);
-      if(!admission.allowed){setModelRejection(admission.reason);return;}
-      void runMutation('model:'+session,()=>ports.execute({kind:'switch-model-configuration',coordinatorSessionId:session,nextConfigurationRef:configurationRef})).then(result=>{
-        if(generation!==navigationGeneration.current||session!==stateRef.current.selectedSessionId)return;
-        setModelRejection(result.kind==='accepted'?null:resultNotice(result));
-        if(result.kind==='accepted')dispatch({kind:'overlay-close-all'});
-      });
+    openModelRole: () => {
+      openModelRole();
+    },
+    saveModelSettings: () => {
+      void saveModelSettings();
+    },
+    submitModelRole: (action) => {
+      void submitModelRole(action);
     },
     confirmPending: () => {
       const pending = stateRef.current.pendingConfirmation;
@@ -1693,14 +2192,26 @@ function TuiAppContent(props: TuiAppProps) {
     cancelAuthorization: () => {
       cancelAuthorization();
     },
-    closeTopOverlay: () => dispatch({ kind: 'overlay-close-top' }),
+    closeTopOverlay: () => {
+      // 逐层返回也是一条擦除路径：离开编辑器时立刻丢弃内存中的 key。
+      if (topOverlay() === 'model-settings-editor') {
+        modelInvocation.current += 1;
+        eraseModelSecret();
+        modelSettingsSnapshot.current = null;
+        dispatch({ kind: 'model-settings-edit', edit: null });
+      }
+      if (topOverlay() === 'model-role-menu') {
+        dispatch({ kind: 'model-role-menu', menu: null });
+      }
+      dispatch({ kind: 'overlay-close-top' });
+    },
   };
 
   historyKeyRef.current = kind => { void beginHistoryContext(kind); };
 
   const dialogChoicesFor = (overlay: OverlayKind, query: string) => {
     if(overlay==='command-palette'||overlay==='options')return searchCommands(query).filter(id=>overlay!=='options'||COMMAND_METADATA[id].path.startsWith('选项 →')).map(value=>({value}));
-    if(overlay==='model-picker')return modelCatalog===null?[]:filterChoices(modelChoices(modelCatalog),query);
+    if(overlay==='model-role-menu')return filterChoices(dedupeRoleCandidates(roleMenuRole()?.candidates??[]).map(candidate=>({value:candidate.candidateRef,label:candidateLabel(candidate),description:candidate.candidateRef})),query);
     const scope=snapshotRef.current,source=scope?.mode==='route_planning'?scope.sessions.find(s=>s.planningResponsible)?.coordinatorSessionId:scope?.executionLeaseHolderSessionId;
     return filterChoices(sessionChoices((viewModelRef.current?.sessions??[]).filter(s=>overlay!=='handoff-target'||s.coordinatorSessionId!==source),stateRef.current.selectedSessionId),query);
   };
@@ -1849,7 +2360,25 @@ function TuiAppContent(props: TuiAppProps) {
       handleWizardKey(input, key, { runChecks, confirmWizard });
       return;
     }
-    if(overlay==='command-palette'||overlay==='options'||overlay==='model-picker'||overlay==='session-picker'||overlay==='handoff-target'){
+    if(overlay==='model-picker'){
+      // 角色列表没有查询框：上下移动角色，Enter 进入候选菜单，e 直接编辑该角色的连接。
+      const roles=modelRoleList();
+      if(key.upArrow||key.downArrow){
+        dispatch({kind:'model-role-selected',index:Math.max(0,Math.min(roles.length-1,stateRef.current.modelRoleIndex+(key.upArrow?-1:1)))});return;
+      }
+      if(input==='e'||input==='E'){void openModelSettingsEditor();return;}
+      if(key.return&&!key.meta&&!key.shift){openModelRole();return;}
+      return;
+    }
+    if(overlay==='model-role-menu'){
+      handleModelRoleMenuKey(input,key);
+      return;
+    }
+    if(overlay==='model-settings-editor'){
+      handleModelSettingsEditorKey(input,key);
+      return;
+    }
+    if(overlay==='command-palette'||overlay==='options'||overlay==='session-picker'||overlay==='handoff-target'){
       const selection=stateRef.current.dialogSelections[overlay]??{query:emptyDraft(),selectedId:null};
       const choices=dialogChoicesFor(overlay,selection.query.text);
       const index=choices.findIndex(o=>o.value===selection.selectedId);
@@ -1861,7 +2390,6 @@ function TuiAppContent(props: TuiAppProps) {
         const chosen=choices.find(o=>o.value===selection.selectedId);
         if(!chosen){dispatch({kind:'notice',notice:'请明确选择当前结果'});return;}
         if(overlay==='command-palette'||overlay==='options')void runCommand(chosen.value as CommandId);
-        else if(overlay==='model-picker')workspaceActions.selectModel?.(chosen.value);
         else if(overlay==='handoff-target')workspaceActions.selectRecipient?.(chosen.value);
         else workspaceActions.selectSession(chosen.value);
         return;
@@ -2011,7 +2539,7 @@ function TuiAppContent(props: TuiAppProps) {
       if(key.upArrow||key.downArrow){dispatch({kind:'slash-view',index:Math.max(0,Math.min(matches.length-1,stateRef.current.slashIndex+(key.upArrow?-1:1))),dismissed:false});return;}
       if((key.return||key.tab)&&!key.meta&&!key.shift){
         const command=matches[Math.min(stateRef.current.slashIndex,matches.length-1)];
-        if(command){const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:stateRef.current.selectedSessionId,pasteBlocks:inputDraft.pasteBlocks.length});
+        if(command){const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:stateRef.current.selectedSessionId,pasteBlocks:inputDraft.pasteBlocks.length,...(ports.modelSettings===undefined?{}:{modelSettings:true})});
           if(reason){dispatch({kind:'notice',notice:reason});return;}
           workspaceActions.composerChange(textDraft('/'+COMMAND_METADATA[command].alias));
           dispatch({kind:'slash-view',index:0,dismissed:true});
@@ -2179,6 +2707,10 @@ function TuiAppContent(props: TuiAppProps) {
       actions={workspaceActions}
       modelCatalog={modelCatalog}
       modelRejection={modelRejection}
+      modelSettingsAvailable={modelSettingsPort!==undefined}
+      modelRole={state.overlayStack.at(-1)==='model-role-menu'?roleMenuRole():highlightedRole()}
+      modelIdentity={[viewModel.scope.coordinationScopeId,viewModel.scope.mode==='route_planning'?'规划':'执行',state.selectedSessionId??'未选择会话'].join(' · ')}
+      modelSettingsEdit={state.modelSettingsEdit}
       paletteSelection={Math.max(0,searchCommands(state.dialogSelections[state.overlayStack.at(-1)??'command-palette']?.query.text??'').filter(id=>state.overlayStack.at(-1)!=='options'||COMMAND_METADATA[id].path.startsWith('选项 →')).indexOf(state.dialogSelections[state.overlayStack.at(-1)??'command-palette']?.selectedId as CommandId))}
       composerDisabledReason={
         viewModel.compaction?.status === 'context_exhausted'

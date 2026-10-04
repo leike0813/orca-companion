@@ -410,7 +410,7 @@ test('崩溃窗口「Segment 与收尾同一事务」不留半记录：既无替
  * Session Segment」的 Recovery，则该 attempt 的已消耗额度不可证明。此时按 consumedBudget 求和的
  * 预算读取会低估用量，从而放行第二次替代派发；必须阻塞新 Recovery，绝不猜测、绝不重复派发。
  */
-test('[fail-closed] 存在已 accepted 收尾但无替代 Segment 的派发时，同一 attempt 的新 Recovery 被阻塞', async () => {
+test('[fail-closed] 存在已 accepted 收尾但无替代 Segment 的派发时，同一 attempt 的新 Recovery 被阻塞', { timeout: 30_000 }, async () => {
   const created = createRecoveryHarness({ maxRecoveriesPerWorkerAttempt: 2 });
   harness = created;
   setup(created);

@@ -180,13 +180,13 @@ describe('Model Picker 准入', () => {
       createElement(ModelPicker, {
         catalog,
         rejection: null,
-        onSelect: vi.fn(),
+        onOpenRole: vi.fn(),
         availableWidth: 100,
       }),
     );
     const frame = frameText(rendered);
     expect(frame).toContain('Model Picker');
-    expect(frame).toContain('config-b');
+    expect(frame).toContain('Coordinator');
     expect(frame).toContain('正在运行模型');
   });
 
@@ -196,6 +196,7 @@ describe('Model Picker 准入', () => {
         { configurationRef: 'config-a', model: 'model-a' },
         { configurationRef: 'config-b', model: 'model-b' },
       ],
+      modelSettings: {},
     });
     const rendered = renderTui(fake.ports);
     await settle();
@@ -203,10 +204,16 @@ describe('Model Picker 准入', () => {
     // paletteSelection 1 = model-picker
     await runPaletteCommand(rendered, 1);
     expect(frameText(rendered)).toContain('Model Picker');
-    expect(frameText(rendered)).toContain('config-b');
+    // 定稿布局：先按角色分区，再进入该角色的候选菜单。
+    expect(frameText(rendered)).toContain('当前会话');
+    await pressKey(rendered, '\r');
+    expect(frameText(rendered)).toContain('选择模型');
+    expect(frameText(rendered)).toContain('model-b');
     expect(fake.calls.filter((call) => call.name === 'modelCatalog')).toHaveLength(2);
 
-    // 下移到 config-b 后提交。
+    // 下移到 config-b，进入动作区并选中「应用选择」。
+    await pressKey(rendered, '\u001b[B');
+    await pressKey(rendered, '\r');
     await pressKey(rendered, '\u001b[B');
     await pressKey(rendered, '\r');
 
@@ -215,18 +222,32 @@ describe('Model Picker 准入', () => {
     expect(intent?.kind).toBe('switch-model-configuration');
     if (intent?.kind === 'switch-model-configuration') {
       expect(intent.coordinatorSessionId).toBe('session-b');
-      expect(intent.nextConfigurationRef).toBe('config-b');
+      // Coordinator 先由 apply 保存出新的不可变配置引用，再按同一 Session 切到它。
+      expect(intent.nextConfigurationRef).toBe('config-saved');
     }
 
     rendered.unmount();
   });
 
   test('当前配置可再次确认，拒绝后的同一候选可重试', async () => {
-    const fake=createFakePorts({models:[{configurationRef:'config-a',model:'A'},{configurationRef:'config-b',model:'B'}],executeResult:{kind:'rejected',code:'busy',message:'暂不可切换'}});
+    const fake=createFakePorts({models:[{configurationRef:'config-a',model:'A'},{configurationRef:'config-b',model:'B'}],modelSettings:{},executeResult:{kind:'rejected',code:'busy',message:'暂不可切换'}});
     const rendered=renderTui(fake.ports);
     await settle();await chooseCommand(rendered,'model-picker');
-    await pressKey(rendered,'\r');await pressKey(rendered,'\u001b[B');await pressKey(rendered,'\r');await pressKey(rendered,'\r');
-    expect(fake.executeIntents.filter(intent=>intent.kind==='switch-model-configuration').map(intent=>intent.nextConfigurationRef)).toEqual(['config-a','config-b','config-b']);
+    // 候选菜单以角色当前绑定为初始选择：当前配置可再次确认，被拒绝后同一候选可直接重试。
+    const apply=async()=>{await pressKey(rendered,'\r');await pressKey(rendered,'\r');await pressKey(rendered,'\u001b[B');await pressKey(rendered,'\r');};
+    // 被拒绝后候选菜单仍停在动作区；重新进入前先逐层退回到工作区，避免按键落进上一次的动作区。
+    const back=async()=>{for(let i=0;i<3;i+=1){if(!/Command Palette|Model Picker|选择模型/u.test(frameText(rendered)))break;rendered.stdin.write('\u001b');await new Promise<void>(resolve=>setTimeout(resolve,60));await settle(3);}};
+    await apply();
+    await back();
+    await chooseCommand(rendered,'model-picker');
+    await apply();
+    await back();
+    await chooseCommand(rendered,'model-picker');
+    await apply();
+    const applied=fake.calls.filter(call=>call.name==='modelSettings.apply');
+    expect(applied.map(call=>(call.detail as {modelRef:string}).modelRef)).toEqual(['config-a','config-a','config-a']);
+    // 被拒绝的切换不改变当前绑定，因此重试的仍是同一个候选。
+    expect(fake.executeIntents.filter(intent=>intent.kind==='switch-model-configuration').map(intent=>intent.nextConfigurationRef)).toEqual(['config-saved','config-saved','config-saved']);
     rendered.unmount();  });
 
   /** 准入不满足时禁用提交。 */

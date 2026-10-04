@@ -7,6 +7,25 @@ import { createElement } from 'react';
 import { render } from 'ink';
 
 const scenarios = ['planning', 'execution', 'blocked', 'empty', 'long-cjk', 'answer', 'disabled', 'alignment', 'alignment-planning', 'history', 'streaming'];
+// 只打印用法并以 0 退出：让「命令存在且可自述」成为可核验事实，不进入 TTY 分支。
+if (process.argv[2] === '--help' || process.argv[2] === '-h') {
+  process.stdout.write([
+    '用法：pnpm ui:preview [--preview-flag] [场景] [变体]',
+    '',
+    '场景：' + scenarios.join(' | '),
+    '  --prototype            连续聊天原型',
+    '  --graph-prototype      执行图原型（可追加 large 或 adaptive）',
+    '  --composer-prototype   输入原型（可追加 inline 或 above）',
+    '  --status-prototype     选项原型（可追加 current、fixed 或 custom）',
+    '  --dialog-prototype     弹窗原型（场景限 planning/execution/blocked/answer/idle）',
+    '  --project-prototype    项目面板原型（可追加 tabs、sections 或 menu）',
+    '  --help                 打印本用法',
+    '',
+    '需要 stdin 与 stdout 均为 TTY；未列出的入口场景以其自身说明为准。',
+  ].join('\n') + '\n');
+  process.exit(0);
+}
+
 const alignmentPreview = ['alignment', 'alignment-planning'].includes(process.argv[2]);
 const pendingPreview = process.env.ORCA_COMPANION_PENDING_INTERACTIONS === '1';
 const prototype = process.argv[2] === '--prototype';
@@ -418,6 +437,57 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
     }
     snapshot.openInteractionCount = snapshot.interactions.filter(item => item.state === 'open').length;
     const fixtureRef=(kind,id)=>({kind,coordinationScopeId:snapshot.coordinationScopeId,...(kind==='planning-handoff'?{proposalId:id,revision:1,phase:'prepared'}:{handoffId:id,revision:0,phase:'reviewed'})});
+    // 预览用的角色模型目录：候选、effort 能力来源与不可用原因都是显式夹具，不是生产事实。
+    const previewEffort=(values,source)=>values.length===0?null:{values,source,optionPath:'modelReasoningEffort'};
+    const previewModels=previewDialogs
+      ? [
+        {ref:'config-a',provider:'openai',model:'示例模型 A',effort:previewEffort(['low','medium','high'],'fixture:capability-a')},
+        {ref:'config-b',provider:'openai',model:'示例模型 B',effort:previewEffort(['low','medium'],'fixture:capability-b')},
+        {ref:'config-rejected',provider:'anthropic',model:'示例模型 C',effort:previewEffort(['medium','high'],'fixture:capability-c')},
+        {ref:'config-basic',provider:'example',model:'示例模型 D',effort:previewEffort([],'fixture:capability-d')},
+      ]
+      : [
+        {ref:'config-a',provider:'preview',model:'preview-model-a',effort:previewEffort(['low','medium','high'],'fixture:capability-a')},
+        {ref:'config-b',provider:'preview',model:'preview-model-b',effort:previewEffort(['low','medium'],'fixture:capability-b')},
+      ];
+    const previewCandidate=(model)=>({candidateRef:model.ref,connectionRef:'fixture-connection',provider:model.provider,model:model.model,effortCapability:model.effort});
+    const previewModelOptions=previewModels.map(model=>({configurationRef:model.ref,model:model.model,provider:model.provider,effortCapability:model.effort}));
+    const previewBoundRole=(role,label,group,modelRef,effort)=>({
+      role,label,group,
+      current:modelRef===null?null:{candidateRef:modelRef,provider:previewModels.find(m=>m.ref===modelRef)?.provider??'',model:previewModels.find(m=>m.ref===modelRef)?.model??'',effort},
+      candidates:previewModels.map(previewCandidate),
+      availability:{available:true,reason:null},
+    });
+    const previewUnavailableRole=(role,label,group,reason)=>({role,label,group,current:null,candidates:[],availability:{available:false,reason}});
+    const previewModelRoles=[
+      previewBoundRole('coordinator','Coordinator','current','config-a','high'),
+      previewUnavailableRole('planning_utility','Utility','planning','规划 Utility 没有生产生命周期：本版本不派发该角色'),
+      previewBoundRole('planner','Planner','execution','config-a','high'),
+      previewUnavailableRole('specification_validator','Spec Validator','execution','Specification Validator 没有生产生命周期：规格准入只做确定性结构检查'),
+      previewBoundRole('implementation','Implementation','execution','config-a','high'),
+      previewBoundRole('validator','Validator','execution','config-a','high'),
+      previewBoundRole('finalizer','Finalizer','execution','config-a','high'),
+      previewBoundRole('recovery_utility','Recovery Utility','execution','config-b','medium'),
+    ];
+    const previewConnection={connectionRef:'fixture-connection',label:'主连接',providerIntegration:'openai',
+      // 非秘密选项里不出现任何 key 或占位秘密；凭据只以 opaque 引用存在。
+      modelOptions:{},credential:{kind:'managed',credentialRef:'fixture-credential',optionPath:'apiKey'},
+      codex:{providerId:'openai',baseUrl:'https://api.openai.com/v1',wireApi:'responses'}};
+    const previewCapability={values:['low','medium','high'],source:'fixture:capability-a',optionPath:'modelReasoningEffort'};
+    const previewModelSettingsSnapshot={
+      revision:7,
+      roles:[
+        {role:'coordinator',bindingRef:'config-a',connectionRef:'fixture-connection',connectionLabel:'主连接',providerIntegration:'openai',model:'示例模型 A',effort:'high',effortCapability:previewCapability,harness:null},
+        {role:'planner',bindingRef:'profile-planner',connectionRef:'fixture-connection',connectionLabel:'主连接',providerIntegration:'openai',model:'示例模型 A',effort:'high',effortCapability:previewCapability,harness:'codex'},
+        {role:'implementation',bindingRef:'profile-implementation',connectionRef:'fixture-connection',connectionLabel:'主连接',providerIntegration:'openai',model:'示例模型 A',effort:'high',effortCapability:previewCapability,harness:'codex'},
+        {role:'validator',bindingRef:'profile-validator',connectionRef:'fixture-connection',connectionLabel:'主连接',providerIntegration:'openai',model:'示例模型 A',effort:'high',effortCapability:previewCapability,harness:'codex'},
+        {role:'finalizer',bindingRef:'profile-finalizer',connectionRef:'fixture-connection',connectionLabel:'主连接',providerIntegration:'openai',model:'示例模型 A',effort:'high',effortCapability:previewCapability,harness:'codex'},
+        {role:'recovery_utility',bindingRef:'profile-recovery',connectionRef:'fixture-connection',connectionLabel:'主连接',providerIntegration:'openai',model:'示例模型 B',effort:'medium',effortCapability:{values:['low','medium'],source:'fixture:capability-b',optionPath:'modelReasoningEffort'},harness:'codex'},
+      ],
+      connections:[previewConnection],
+      models:previewModels.map(model=>({modelRef:model.ref,connectionRef:'fixture-connection',model:model.model,effortCapability:model.effort})),
+      coordinatorConfigurations:previewModels.map(model=>({configurationRef:model.ref,model:model.model,effort:model.ref==='config-a'?'high':null})),
+    };
     const ports = {
       commandStatus: async ref=>({kind:'accepted',revision:null,summary:'隔离 fixture 核验',resultRef:ref}),
       reading: {
@@ -498,8 +568,18 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
         initialize: async () => rejected,
         bindLegacyIdentity: async () => rejected,
       },
-      modelCatalog: { load: async () => ({ options: [{ configurationRef: 'config-a', model: previewDialogs ? '示例模型 A' : 'preview-model-a' }, { configurationRef: 'config-b', model: previewDialogs ? '示例模型 B' : 'preview-model-b' },
-        ...(previewDialogs ? [{ configurationRef: 'config-rejected', model: '演示宿主拒绝的候选模型' }, { configurationRef: 'config-basic', model: '不支持 effort 的示例模型' }] : [])], currentConfigurationRef: 'config-a', switchable: true, switchBlockReason: null }) },
+      modelCatalog: { load: async () => ({ options: previewModelOptions, currentConfigurationRef: 'config-a', switchable: true, switchBlockReason: null,
+        configurationRevision: 7, roles: previewModelRoles }) },
+      // 预览宿主：保存只追加记录并返回新引用，授权替换仍由 executionAuthorization 审阅后批准。
+      modelSettings: previewDialogs ? {
+        load: async () => ({ kind: 'loaded', snapshot: previewModelSettingsSnapshot }),
+        save: async (input) => ({ kind: 'saved', revision: previewModelSettingsSnapshot.revision + 1,
+          configurationRef: input.role === 'coordinator' ? 'config-saved' : null,
+          profileRef: input.role === 'coordinator' ? null : 'profile-saved' }),
+        apply: async (input) => ({ kind: 'saved', revision: previewModelSettingsSnapshot.revision + 1,
+          configurationRef: input.role === 'coordinator' ? 'config-saved' : null,
+          profileRef: input.role === 'coordinator' ? null : 'profile-saved' }),
+      } : undefined,
       handoff: { read: async id=>snapshot.planningHandoffs.find(p=>p.proposalId===id)??null,
         prepareProposal: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟交接提案已准备',resultRef:fixtureRef('planning-handoff','fixture-planning-handoff') } : rejected,
         cutover: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟规划交接已记录；Target 等待下一条消息' } : rejected,

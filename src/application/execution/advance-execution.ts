@@ -119,6 +119,9 @@ export type AdvanceRoleDispatch = {
   readonly workerLaunch: WorkerLaunchStrategy;
   /** 与 `workerLaunch` 同源的 launch 身份；物化绑定据此补记 Session Binding。 */
   readonly launchId: string;
+  readonly authorizationId: string;
+  readonly authorizationVersion: number;
+  readonly workerProfileRef: string;
   readonly consumerGeneration: number;
   readonly backendIdentityRef: string;
   readonly timeoutMs: number;
@@ -803,6 +806,25 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
     return blocked(input.coordinationScopeId, 'invalid_state', '无法读取预算计数，不能在没有消耗事实的情况下派发');
   }
 
+  let dispatchAuthorizationFacts = authorizationFacts;
+  let dispatchPermissions = authorization.manifest.permissions;
+  if (dispatch.authorizationId !== authorization.authorizationId || dispatch.authorizationVersion !== authorization.authorizationVersion) {
+    const bindings = input.store.query({ kind: 'materialization-bindings', coordinationScopeId: input.coordinationScopeId });
+    const pinned = bindings.kind === 'materialization-bindings' ? bindings.bindings.find((binding) =>
+      binding.workerTaskId === dispatch.taskEnvelope.workerTaskId && binding.role === role &&
+      binding.authorizationId === dispatch.authorizationId && binding.authorizationVersion === dispatch.authorizationVersion &&
+      binding.workerProfileRef?.id === dispatch.workerProfileRef) : undefined;
+    const original = input.store.query({ kind: 'authorization', coordinationScopeId: input.coordinationScopeId, authorizationId: dispatch.authorizationId });
+    if (pinned === undefined || original.kind !== 'authorization' || original.authorization === null ||
+      original.authorization.authorizationVersion !== dispatch.authorizationVersion ||
+      original.authorization.manifest.graph.graphId !== graph.graphId || original.authorization.manifest.graph.generation !== graph.generation ||
+      original.authorization.manifest.orcaRunId !== authorization.manifest.orcaRunId) {
+      return blocked(input.coordinationScopeId, 'model_binding_unverifiable', '原 Task 的模型授权绑定无法核验');
+    }
+    dispatchAuthorizationFacts = { valid: true, authorizationId: dispatch.authorizationId, authorizationVersion: dispatch.authorizationVersion, reason: null };
+    dispatchPermissions = original.authorization.manifest.permissions;
+  }
+
   const facts: Omit<
     DispatchCandidateFacts,
     'candidateWorkPackageId' | 'candidateRole' | 'scopeEnvelope' | 'budget'
@@ -813,8 +835,8 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
     revisionPlanner: revisionPlannerPermit,
     dependenciesSatisfied: dependenciesSatisfiedOf(graph, derived.frontier),
     controlState: scope.controlState,
-    authorization: authorizationFacts,
-    authority: authorization.manifest.permissions,
+    authorization: dispatchAuthorizationFacts,
+    authority: dispatchPermissions,
     consumed,
     requiredBudgetField: dispatch.requiredBudgetField,
   };
@@ -948,7 +970,9 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
         writer: input.writer,
         role,
         graphGeneration: graph.generation,
-        authorizationId: authorization.authorizationId,
+        authorizationId: dispatch.authorizationId,
+        authorizationVersion: dispatch.authorizationVersion,
+        workerProfileRef: dispatch.workerProfileRef,
         runId: authorization.manifest.orcaRunId,
         consumerGeneration: dispatch.consumerGeneration,
         backendIdentityRef: dispatch.backendIdentityRef,

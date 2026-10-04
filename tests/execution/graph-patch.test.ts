@@ -43,6 +43,7 @@ import {
   type AdmittedGraphRevision,
 } from '../../src/application/execution/graph-patch-service.js';
 import type { GraphPatchPlannerEvidence } from '../../src/application/execution/graph-patch-planner.js';
+import { recoveryUtilityProfileFixture, workerProfilesFixture } from '../support/model-configurations.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SESSION = 'session-a' as CoordinatorSessionId;
@@ -117,7 +118,7 @@ beforeEach(() => {
     writer,
     authorizationId: 'auth-1',
     authorizationVersion: 1,
-    manifestVersion: 1,
+    manifestVersion: 2,
     fingerprint: 'fingerprint-1',
     approvalRef: 'approval-1',
     manifest: manifest(),
@@ -172,7 +173,7 @@ function initialGraph(): ExecutionGraph {
 
 function manifest(): ExecutionAuthorizationManifest {
   return {
-    manifestVersion: 1,
+    manifestVersion: 2,
     coordinationScopeId: SCOPE,
     planningCycleId: CYCLE,
     destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
@@ -181,12 +182,8 @@ function manifest(): ExecutionAuthorizationManifest {
     graph: { graphId, generation: GENERATION, version: 1 as GraphVersion },
     baselineHead: 'head-1',
     orcaRunId: RUN_ID,
-    workerProfiles: [
-      { profileRef: { kind: 'worker-profile', id: 'p-planner' }, role: 'planner', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-impl' }, role: 'implementation', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-val' }, role: 'validator', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-fin' }, role: 'finalizer', harness: 'codex' },
-    ],
+    workerProfiles: workerProfilesFixture(),
+    recoveryUtilityProfile: recoveryUtilityProfileFixture(),
     permissions: {
       planner: true,
       implementation: true,

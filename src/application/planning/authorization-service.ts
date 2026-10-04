@@ -19,9 +19,12 @@ import {
   type AuthorizationDecision,
   type ExecutionAuthorizationManifest,
   type ExecutionAuthorizationRecord,
+  type RecoveryUtilityProfile,
+  type WorkerProfileRef,
 } from '../../domain/planning/execution-authorization.js';
 import type { GraphVersionRecord } from '../../domain/planning/execution-graph.js';
-import type { CoordinationScopeId } from '../dto/identity.js';
+import { UNRESOLVED_INTENT_STATES } from '../../domain/recovery/operation-intent.js';
+import type { CoordinationScopeId, GraphVersion, Revision } from '../dto/identity.js';
 import type {
   BranchCoordinationStore,
   CoordinationCommandRejection,
@@ -33,6 +36,28 @@ export type AuthorizationFailure = {
   readonly code: string;
   readonly message: string;
 };
+
+/**
+ * 按内容指纹回读一份已经受理的授权。
+ *
+ * 宿主只拿到用户在审阅里看到的指纹与 revision：重放同一次批准时，按当前配置重新组装的 Manifest 可能已经
+ * 变了内容，因此「按指纹回读原记录」是唯一既能幂等、又不改写载荷的路径。查历史而不是当前指针，
+ * 这样指针被后续授权替换后，旧审阅仍然回到它自己的记录，既不产生写入也不移动指针。
+ */
+export function readAcceptedAuthorizationByFingerprint(input: {
+  readonly store: BranchCoordinationStore;
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly fingerprint: string;
+}): ExecutionAuthorizationRecord | null {
+  const history = input.store.query({
+    kind: 'authorizations',
+    coordinationScopeId: input.coordinationScopeId,
+  });
+  if (history.kind !== 'authorizations') {
+    return null;
+  }
+  return history.authorizations.find((record) => record.fingerprint === input.fingerprint) ?? null;
+}
 
 function rejectionMessage(rejection: CoordinationCommandRejection): string {
   return rejection.message;
@@ -145,6 +170,180 @@ export type RecordApprovalInput = {
 export type RecordApprovalResult =
   | { readonly kind: 'recorded'; readonly authorization: ExecutionAuthorizationRecord }
   | { readonly kind: 'rejected'; readonly failure: AuthorizationFailure };
+
+/** 模型限定的重新授权所接受的输入；除模型绑定与 Graph head 外没有任何可改字段。 */
+export type ModelReauthorizationInput = {
+  readonly store: BranchCoordinationStore;
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly writer: CoordinationWriter;
+  /** 审阅时读到的 Scope revision；落盘前不一致即说明这份审阅已经过期。 */
+  readonly expectedScopeRevision: Revision;
+  readonly workerProfiles: readonly WorkerProfileRef[];
+  readonly recoveryUtilityProfile: RecoveryUtilityProfile;
+  /** 实际 Graph head version；授权必须绑定它，而不是沿用批准时的旧版本。 */
+  readonly graphVersion: GraphVersion;
+  /** 调用方按完整指纹派生的授权 ID；相同内容因此得到相同 ID，不同内容不会碰撞。 */
+  readonly authorizationId: string;
+  readonly approvalRef: string;
+};
+
+/**
+ * 以当前授权为基底拼出模型限定的新 Manifest。
+ *
+ * 只有三个字段可变：角色 profiles、Recovery Utility profile 与 Graph head version。权限、上限、
+ * 政策、accepted risks、baseline HEAD、Run 与三个版本化引用原样继承——因此这次批准不重置任何预算，
+ * 也不构成 Graph Revision。
+ */
+export function modelReauthorizationManifest(input: {
+  readonly base: ExecutionAuthorizationManifest;
+  readonly workerProfiles: readonly WorkerProfileRef[];
+  readonly recoveryUtilityProfile: RecoveryUtilityProfile;
+  readonly graphVersion: GraphVersion;
+}): ProposeManifestResult {
+  const parsed = parseManifest({
+    ...input.base,
+    graph: { ...input.base.graph, version: input.graphVersion },
+    workerProfiles: input.workerProfiles,
+    recoveryUtilityProfile: input.recoveryUtilityProfile,
+  });
+  if (!parsed.ok) {
+    return { kind: 'rejected', failure: { code: parsed.field, message: parsed.message } };
+  }
+  return { kind: 'proposed', manifest: parsed.value, fingerprint: manifestFingerprint(parsed.value) };
+}
+
+/**
+ * 重新授权的准入条件：必须处在可执行协调态，且没有任何未决的副作用。
+ *
+ * `cancelling` / `cancelled` / `unverifiable` 期间模型切换会与停止流程竞态，`replanning_transition`
+ * 期间代际正在交接，此时的新授权没有稳定的 Graph head 与 scope 语义，两者都直接拒绝。
+ */
+const REJECTED_CONTROL_STATES = ['cancelling', 'cancelled', 'unverifiable', 'replanning_transition'] as const;
+
+/**
+ * 这次重新授权是否已经被受理过。
+ *
+ * 受理过的授权 ID 由完整指纹派生，所以命中历史记录之后还要按同一载荷重算指纹：ID 相同不构成证据，
+ * 异载荷重放必须被拒绝而不是被当成已受理。返回既有记录本身，不写任何东西、不推进 Scope 指针。
+ */
+function readAcceptedReauthorization(input: ModelReauthorizationInput): RecordApprovalResult | null {
+  const history = input.store.query({ kind: 'authorizations', coordinationScopeId: input.coordinationScopeId });
+  if (history.kind === 'rejected' || history.kind !== 'authorizations') {
+    return null;
+  }
+  const accepted = history.authorizations.find((record) => record.authorizationId === input.authorizationId);
+  if (accepted === undefined) {
+    return null;
+  }
+  const rebuilt = modelReauthorizationManifest({
+    base: accepted.manifest,
+    workerProfiles: input.workerProfiles,
+    recoveryUtilityProfile: input.recoveryUtilityProfile,
+    graphVersion: input.graphVersion,
+  });
+  if (rebuilt.kind !== 'proposed' || rebuilt.fingerprint !== accepted.fingerprint) {
+    return {
+      kind: 'rejected',
+      failure: {
+        code: 'authorization_payload_mismatch',
+        message: `授权 ${input.authorizationId} 已受理另一份内容：不能以异载荷重放`,
+      },
+    };
+  }
+  return { kind: 'recorded', authorization: accepted };
+}
+
+/**
+ * 记录一次模型限定的重新授权。
+ *
+ * 复用既有授权事务：Scope revision CAS、单调授权版本与完整内容指纹都在 `record-authorization`
+ * 内完成，因此重新授权与首次授权在持久事实里是同一类记录，读取方无需区分路径。
+ */
+export function recordModelReauthorization(input: ModelReauthorizationInput): RecordApprovalResult {
+  const scope = readScope(input.store, input.coordinationScopeId);
+  if (scope.kind === 'rejected') {
+    return { kind: 'rejected', failure: { code: scope.code, message: scope.message } };
+  }
+  // 重放先于一切门禁：同一份已受理的决定必须总能回读到它的记录，哪怕 Scope 之后进入 cancelling、
+  // 出现未决 mutation，或当前指针已经指向更新的授权。分支只做只读查询，既不写记录也不动指针。
+  const replayed = readAcceptedReauthorization(input);
+  if (replayed !== null) {
+    return replayed;
+  }
+  if (scope.scope.mode !== 'execution_coordination') {
+    return {
+      kind: 'rejected',
+      failure: { code: 'invalid_mode', message: '模型重新授权只在 Execution Coordination 下成立' },
+    };
+  }
+  if ((REJECTED_CONTROL_STATES as readonly string[]).includes(scope.scope.controlState)) {
+    return {
+      kind: 'rejected',
+      failure: {
+        code: scope.scope.controlState === 'replanning_transition' ? 'replanning' : 'scope_not_executable',
+        message: `控制状态 ${scope.scope.controlState} 下不接受模型重新授权`,
+      },
+    };
+  }
+  const unresolved = UNRESOLVED_INTENT_STATES.map((intentState) => input.store.query({
+    kind: 'intents',
+    coordinationScopeId: input.coordinationScopeId,
+    intentState,
+  }));
+  for (const intents of unresolved) {
+    if (intents.kind === 'rejected') {
+      return { kind: 'rejected', failure: { code: intents.code, message: intents.message } };
+    }
+    if (intents.kind !== 'intents') {
+      return { kind: 'rejected', failure: { code: 'invalid_state', message: '无法读取未决 Operation Intent' } };
+    }
+    if (intents.intents.length > 0) {
+      return {
+        kind: 'rejected',
+        failure: {
+          code: 'pending_mutation',
+          message: `仍有 ${intents.intents.length} 个未决 Operation Intent：先结清再重新授权`,
+        },
+      };
+    }
+  }
+
+  const current = activeAuthorization(input.store, input.coordinationScopeId);
+  if (current.kind === 'rejected') {
+    return { kind: 'rejected', failure: current.failure };
+  }
+  if (current.authorization === null) {
+    return { kind: 'rejected', failure: { code: 'not_authorized', message: '尚不存在可重新授权的 Execution Authorization' } };
+  }
+  if (scope.scope.revision !== input.expectedScopeRevision) {
+    return {
+      kind: 'rejected',
+      failure: {
+        code: 'stale_review',
+        message: `审阅后的 Scope 已变化（${input.expectedScopeRevision} → ${scope.scope.revision}）：请重新审阅`,
+      },
+    };
+  }
+  const rebuilt = modelReauthorizationManifest({
+    base: current.authorization.manifest,
+    workerProfiles: input.workerProfiles,
+    recoveryUtilityProfile: input.recoveryUtilityProfile,
+    graphVersion: input.graphVersion,
+  });
+  if (rebuilt.kind === 'rejected') {
+    return rebuilt;
+  }
+  return recordApproval({
+    store: input.store,
+    coordinationScopeId: input.coordinationScopeId,
+    writer: input.writer,
+    authorizationId: input.authorizationId,
+    manifest: rebuilt.manifest,
+    // 计划 revision 属于不可改字段：沿用基底里的值，让 recordApproval 仍能对当前计划做核对。
+    currentPlanRevision: current.authorization.manifest.implementationPlanRef.version,
+    approvalRef: input.approvalRef,
+  });
+}
 
 /**
  * 记录一次用户批准。

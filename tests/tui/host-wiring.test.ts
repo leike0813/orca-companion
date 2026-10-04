@@ -12,7 +12,7 @@ import { chooseCommand } from './harness.js';
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -37,6 +37,9 @@ import { coordinationDatabasePath, resolveGitCommonDir } from '../../src/bootstr
 import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
 import { MIGRATIONS, SCHEMA_VERSION_KEY } from '../../src/adapters/storage/schema.js';
 import { CapableChatModel } from '../support/fake-chat-model.js';
+import { JsonCredentialStore } from '../../src/adapters/storage/credential-store.js';
+import { loadProjectConfig } from '../../src/bootstrap/project-config.js';
+import { dedupeRoleCandidates } from '../../src/interfaces/tui/components/model-picker.js';
 import { frameText, renderTui, settle, type RenderedTui } from './harness.js';
 
 const ROUTE_MAP_BODY = [
@@ -95,14 +98,15 @@ function initializeRepository(root: string): string {
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',
           providerIntegration: '@fake/provider#CapableChatModel',
           model: 'fake-coordinator',
           modelOptions: {},
-          credentialRefs: ['fake'],
+          // 注入的假模型不需要真实凭据：凭据引用必须对应已声明的 Provider Connection，否则启动拒绝。
+          credentialRefs: [],
           nativeWindowOwnerRef: null,
         },
         {
@@ -110,7 +114,7 @@ function initializeRepository(root: string): string {
           providerIntegration: '@fake/provider#CapableChatModel',
           model: 'fake-coordinator-spare',
           modelOptions: {},
-          credentialRefs: ['fake'],
+          credentialRefs: [],
           nativeWindowOwnerRef: null,
         },
       ],
@@ -159,7 +163,7 @@ async function startHost(
 ): Promise<Harness> {
   const host = await createForegroundPlanningHost({
     repositoryPath: repository,
-    env: process.env as Record<string, string>,
+    env: { ...process.env, XDG_CONFIG_HOME: join(directory, 'config') },
     clock,
     newId: (() => {
       let counter = 0;
@@ -547,6 +551,47 @@ test('规划 Handoff 的 Target 来自用户在 Session Picker 里的选择', as
   // 该用例包含真实模型回合与真实 store 写入；并行全量套件下 5s 上限会被吃掉。
 }, 30_000);
 
+test('同 provider/model 的新连接可应用，原连接与凭据引用保留', async () => {
+  const harness = await startHost(initializeRepository(mkdtempSync(join(tmpdir(), 'orca-tui-model-connection-'))));
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  const port = harness.host.ports.modelSettings;
+  if (port === undefined) throw new Error('模型设置端口缺失');
+  for (const secret of ['fixture-key-old', 'fixture-key-new']) {
+    const config = loadProjectConfig({ worktreePath: harness.repository });
+    if (config.kind !== 'loaded') throw new Error('配置不可读');
+    expect(await port.save({
+      expectedRevision: config.config.revision,
+      role: 'planner',
+      connection: {
+        label: 'test provider', providerIntegration: '@fake/provider#CapableChatModel', modelOptions: {},
+        credential: { kind: 'managed', credentialRef: null, optionPath: 'apiKey' },
+        codex: { providerId: 'fixture', baseUrl: 'https://api.example/v1', wireApi: 'responses' },
+      },
+      model: 'same-model', effort: null, newSecret: secret,
+    })).toMatchObject({ kind: 'saved' });
+  }
+  const before = loadProjectConfig({ worktreePath: harness.repository });
+  if (before.kind !== 'loaded') throw new Error('配置不可读');
+  const latestConnection = before.config.providerConnections.at(-1);
+  const catalog = await harness.host.ports.modelCatalog.load(proposal.coordinatorSessionId);
+  const planner = catalog.roles?.find((entry) => entry.role === 'planner');
+  const choices = dedupeRoleCandidates(planner?.candidates ?? []);
+  expect(choices).toHaveLength(1);
+  expect(choices[0]?.connectionRef).toBe(latestConnection?.connectionRef);
+  expect(await port.apply({ role: 'planner', modelRef: choices[0]!.candidateRef,
+    effort: null, expectedRevision: before.config.revision })).toMatchObject({ kind: 'saved' });
+  const after = loadProjectConfig({ worktreePath: harness.repository });
+  if (after.kind !== 'loaded') throw new Error('配置不可读');
+  const applied = after.config.execution.workerProfiles.find((entry) =>
+    entry.profileRef === after.config.execution.workerProfileRefs.planner);
+  expect(applied?.modelConfiguration.connection.credential).toEqual(latestConnection?.credential);
+  expect(after.config.providerConnections.slice(0, before.config.providerConnections.length)).toEqual(before.config.providerConnections);
+  const credentials = new JsonCredentialStore({ environment: { XDG_CONFIG_HOME: join(harness.directory, 'config') } });
+  if (latestConnection?.credential.kind !== 'managed') throw new Error('测试凭据应为 managed');
+  expect(credentials.read(latestConnection.credential.credentialRef)).toMatchObject({ kind: 'resolved', secret: 'fixture-key-new' });
+});
+
 test('会话维护与模型切换在 TUI 入口上落到真实记录，而不是占位拒绝', async () => {
   const harness = await startHost(initializeRepository(mkdtempSync(join(tmpdir(), 'orca-tui-wiring-maintenance-'))));
   const proposal = await harness.host.ports.scopeSetup.proposal();
@@ -580,11 +625,24 @@ test('会话维护与模型切换在 TUI 入口上落到真实记录，而不是
   const snapshot = await harness.host.ports.snapshot(session);
   expect(snapshot.kind === 'snapshot' ? snapshot.snapshot.compaction?.status : null).toBe('not_needed');
 
-  // paletteSelection 1 = Model Picker：会话挂起且无在途模型操作，因此准入成立并真切换。
+  // paletteSelection 1 = Model Picker：先进入按角色分区的模型配置页。
   await runPaletteCommand(instance, 1);
   await settle(8);
-  expect(frameText(instance)).toContain('planning-spare');
-  await moveSelectionTo(instance, 'planning-spare');
+  expect(frameText(instance)).toContain('Model Picker · 模型配置');
+  expect(frameText(instance)).toContain('Coordinator');
+  // Enter 进入该角色的候选菜单，候选只按 provider / model 展示。
+  await pressKey(instance, '\r');
+  await settle(8);
+  expect(frameText(instance)).toContain('选择模型');
+  expect(frameText(instance)).toContain('fake-coordinator-spare');
+  // 候选行只显示 provider / model，configurationRef 不出现在界面上。
+  await moveSelectionTo(instance, 'fake-coordinator-spare');
+  // Tab 切到动作区，Right 明确选中「应用选择」，Enter 才提交。
+  await pressKey(instance, '\t');
+  await settle(4);
+  await pressKey(instance, '\u001b[C');
+  await settle(4);
+  expect(frameText(instance)).toContain('当前区域：操作按钮 · 应用选择');
   await pressKey(instance, '\r');
   await settle(16);
 
@@ -598,7 +656,26 @@ test('会话维护与模型切换在 TUI 入口上落到真实记录，而不是
       sessions.kind === 'sessions'
         ? sessions.sessions.find((entry) => entry.coordinatorSessionId === session)
         : undefined;
-    expect(registration?.coordinatorModelConfigurationRef).toBe('planning-spare');
+    // 应用只追加不可变记录：Session 绑定的是新引用，不是被选中的候选引用。
+    expect(registration?.coordinatorModelConfigurationRef).toBeTruthy();
+    expect(registration?.coordinatorModelConfigurationRef).not.toBe('planning-spare');
+    // 绑定行为按解析后的配置断言：模型取自被选候选，effort 只来自可信能力来源。
+    const projectConfig = JSON.parse(
+      readFileSync(join(harness.repository, 'orca-companion.json'), 'utf8'),
+    ) as {
+      readonly coordinatorModels: readonly {
+        readonly configurationRef: string;
+        readonly model: string;
+        readonly effort?: string | null;
+        readonly effortCapability?: { readonly values: readonly string[] } | null;
+      }[];
+    };
+    const bound = projectConfig.coordinatorModels.find(
+      (configuration) => configuration.configurationRef === registration?.coordinatorModelConfigurationRef,
+    );
+    expect(bound?.model).toBe('fake-coordinator-spare');
+    // 本项目没有声明 effort 能力来源，因此绑定不得凭空带上 effort。
+    expect(bound?.effort ?? null).toBeNull();
   } finally {
     store.close();
   }

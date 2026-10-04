@@ -56,6 +56,7 @@ import type {
 } from '../../../src/application/dto/identity.js';
 import type { ExecutionAuthorizationRecord } from '../../../src/domain/planning/execution-authorization.js';
 import type { SpecBinding } from '../../../src/domain/task-contract.js';
+import type { WorkerModelConfiguration } from '../../../src/domain/model-configuration.js';
 import { initializeCoordinationScope } from '../../../src/application/planning/initialize-scope.js';
 import { graphIdFor } from '../../../src/application/planning/graph-generation.js';
 import { buildExecutionScope, type ExecutionBackend, type ExecutionScope } from '../../../src/application/ports/execution-backend.js';
@@ -402,18 +403,30 @@ async function runGraphPatchPlannerWorker(
     `args = [${JSON.stringify(tokenHelper)}, ${JSON.stringify(envFile)}]`,
     '',
   ].join('\n'));
-  const baseStrategy = createCodexWorkerLaunch({
-    launchId: `${identity}:graph-patch-planner`, model, sandboxMode: 'read-only-local-control',
+  // 认证仍由来源 config.toml 的 token helper 命令提供，因此是 harness_login；provider 与来源配置
+  // 同源声明，启动参数由生成器从这份绑定产出，不再手工拼接 model_provider 后缀。
+  const modelConfiguration: WorkerModelConfiguration = {
+    connection: {
+      connectionRef: 'acceptance-minimax',
+      label: 'MiniMax',
+      providerIntegration: 'minimax',
+      modelOptions: {},
+      credential: { kind: 'harness_login' },
+      codex: { providerId: 'companion_minimax', baseUrl, wireApi: 'responses' },
+    },
+    modelRef: 'acceptance-model',
+    model,
+    effort: null,
+    effortCapability: null,
+    modelOptions: {},
+  };
+  const strategy = createCodexWorkerLaunch({
+    launchId: `${identity}:graph-patch-planner`,
+    modelConfiguration,
+    sandboxMode: 'read-only-local-control',
     sessionStartReporterPath: reporterPath,
     sourceCodexHome,
   });
-  const strategy = {
-    ...baseStrategy,
-    prepare: async (context: { worktreePath: string }) => {
-      const prepared = await baseStrategy.prepare(context);
-      return { ...prepared, command: `${prepared.command} -c model_provider=companion_minimax` };
-    },
-  };
   const prepared = await prepareWorkerLaunch({
     backend: runtime.backend, strategy, worktreeId: `path:${workspace}`, worktreePath: workspace,
     timeoutMs: 300_000,
@@ -595,7 +608,7 @@ if (resolved.kind === 'skip') {
           writer,
           authorizationId: EXECUTION_AUTHORIZATION_ID,
           authorizationVersion: 1,
-          manifestVersion: 1,
+          manifestVersion: 2,
           fingerprint: 'fingerprint-real-planner',
           approvalRef: `${resolved.identity}:approval`,
           manifest,

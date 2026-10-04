@@ -4,6 +4,15 @@ import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import type { PreparedTerminalStrategy } from '../../application/worker-launch.js';
+import {
+  assertLaunchableModelConfiguration,
+  buildCodexModelLaunchDescriptor,
+  codexModelLaunchCommand,
+  writeCodexModelLaunch,
+} from './codex-model-launcher.js';
+import type { CredentialStore } from '../../application/ports/credential-store.js';
+import type { WorkerModelConfiguration } from '../../domain/model-configuration.js';
+import { JsonCredentialStore } from '../storage/credential-store.js';
 
 export const CODEX_HOOK_TRUST_BYPASS_ARG = '--dangerously-bypass-hook-trust';
 export const CODEX_UTILITY_PERMISSION_PROFILE = 'utility-readonly-local-control';
@@ -83,7 +92,17 @@ function assertInsideWorktree(worktreePath: string, candidate: string): void {
 /** Codex harness 的固定 prepared-terminal 策略；调用方不能注入任意 env、argv 或 command。 */
 export function createCodexWorkerLaunch(input: {
   readonly launchId: string;
-  readonly model: string;
+  /**
+   * 已批准 Manifest 绑定的不可变模型配置。必填：启动只认这一份绑定，不再有绕过绑定的
+   * 纯 model 字符串路径。
+   */
+  readonly modelConfiguration: Readonly<WorkerModelConfiguration>;
+  /** managed 凭据的同步 store；用于准备阶段 fail closed 校验凭据存在，不参与 secret 传递。 */
+  readonly credentialStore?: CredentialStore;
+  /** 写入 descriptor 供 launcher 运行时读取的凭据文件位置；省略时按 XDG 推导。 */
+  readonly credentialStorePath?: string;
+  /** 测试可指向 fake codex 可执行文件。 */
+  readonly codexExecutable?: string;
   readonly sandboxMode: 'read-only' | 'workspace-write' | 'danger-full-access' | 'read-only-local-control';
   readonly sourceCodexHome?: string;
   /**
@@ -102,8 +121,8 @@ export function createCodexWorkerLaunch(input: {
    */
   readonly stateRoot?: string;
 }): PreparedTerminalStrategy<PreparedCodexTerminal> {
-  if (input.launchId.length === 0 || input.model.length === 0) {
-    throw new Error('Codex launchId 与 model 必须是非空字符串');
+  if (input.launchId.length === 0) {
+    throw new Error('Codex launchId 必须是非空字符串');
   }
   const digest = createHash('sha256').update(input.launchId).digest('hex').slice(0, 20);
   const title = `orca-companion:codex:${digest}`;
@@ -126,6 +145,23 @@ export function createCodexWorkerLaunch(input: {
       if (input.stateRoot === undefined) {
         assertInsideWorktree(worktreePath, stateRoot);
       }
+      // 模型配置门禁同样在写盘之前：秘密字段、非法 effort、越界保留键与不可编码选项都在这里被拒。
+      assertLaunchableModelConfiguration(input.modelConfiguration);
+      // 早期 fail closed 发生在任何写盘之前：缺凭据的 managed 启动不留状态目录，也不产出 descriptor。
+      const managedCredential =
+        input.modelConfiguration.connection.credential.kind === 'managed'
+          ? input.modelConfiguration.connection.credential
+          : null;
+      if (managedCredential !== null) {
+        // 没有传 store 时按同一个 storePath（缺省即 XDG 位置）自己建一个，绝不因「没传」跳过校验。
+        const store = input.credentialStore ?? new JsonCredentialStore(
+          input.credentialStorePath === undefined ? {} : { path: input.credentialStorePath },
+        );
+        const read = store.read(managedCredential.credentialRef);
+        if (read.kind !== 'resolved') {
+          throw new Error('Codex managed 凭据不可用：' + read.code);
+        }
+      }
       mkdirSync(stateRoot, { recursive: true });
 
       const sourceHome = resolve(input.sourceCodexHome ?? process.env['CODEX_HOME'] ?? join(homedir(), '.codex'));
@@ -146,7 +182,9 @@ export function createCodexWorkerLaunch(input: {
 
       const sourceAuth = join(sourceHome, 'auth.json');
       const auth = join(stateRoot, 'auth.json');
-      if (existsSync(sourceAuth)) {
+      // managed 凭据只用自定义 provider 的 env_key，绝不链接 auth.json，否则既有 Harness 认证会
+      // 抢在 env_key 之前生效（D06）。harness_login 与旧的直连路径保留原 auth.json 绑定。
+      if (managedCredential === null && existsSync(sourceAuth)) {
         if (existsSync(auth)) {
           if (readlinkSync(auth) !== sourceAuth) {
             throw new Error(`隔离 Codex auth 链接指向意外位置：${auth}`);
@@ -170,7 +208,8 @@ export function createCodexWorkerLaunch(input: {
                 matcher: 'startup',
                 hooks: [{
                   type: 'command',
-                  command: `node ${shellQuote(input.sessionStartReporterPath)}`,
+                  // 用宿主自己的 node 绝对路径：hook 在 Codex 自己的环境里执行，不能假设 PATH 上有 node。
+                  command: `${shellQuote(process.execPath)} ${shellQuote(input.sessionStartReporterPath)}`,
                   timeout: 10,
                 }],
               }],
@@ -188,22 +227,16 @@ export function createCodexWorkerLaunch(input: {
           })()
         : ['--sandbox', input.sandboxMode];
 
-      return Promise.resolve({
-        title,
-        stateRoot,
-        command: [
-          'env',
-          `CODEX_HOME=${shellQuote(stateRoot)}`,
-          'codex',
-          CODEX_HOOK_TRUST_BYPASS_ARG,
-          '--no-alt-screen',
-          '--ask-for-approval',
-          'never',
-          ...sandboxArguments,
-          '--model',
-          shellQuote(input.model),
-        ].join(' '),
+      const descriptor = buildCodexModelLaunchDescriptor({
+        modelConfiguration: input.modelConfiguration,
+        codexHome: stateRoot,
+        baseArguments: [CODEX_HOOK_TRUST_BYPASS_ARG, '--no-alt-screen', '--ask-for-approval', 'never'],
+        sandboxArguments,
+        ...(input.credentialStorePath === undefined ? {} : { credentialStorePath: input.credentialStorePath }),
+        ...(input.codexExecutable === undefined ? {} : { executable: input.codexExecutable }),
       });
+      const { descriptorPath, launcherPath } = writeCodexModelLaunch({ codexHome: stateRoot, descriptor });
+      return Promise.resolve({ title, stateRoot, command: codexModelLaunchCommand({ launcherPath, descriptorPath }) });
     },
   };
 }

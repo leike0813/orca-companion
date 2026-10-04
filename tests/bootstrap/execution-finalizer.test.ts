@@ -55,7 +55,14 @@ import type {
 } from '../../src/application/planning/route-map-service.js';
 import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
 import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
+import { CODEX_MODEL_LAUNCHER_FILENAME } from '../../src/adapters/agents/codex-model-launcher.js';
 import { checkpointDatabasePath } from '../../src/bootstrap/coordinator-runtime.js';
+import { executionWorkerProfiles } from '../support/execution-harness.js';
+import {
+  projectConnectionsFixture,
+  projectExecutionProfilesFixture,
+  recoveryUtilityProfileFixture,
+} from '../support/model-configurations.js';
 import { canonicalPath, coordinationDatabasePath } from '../../src/bootstrap/composition.js';
 import { COORDINATOR_SESSION_STATE_SCHEMA_VERSION } from '../../src/domain/coordinator/session-state.js';
 import type { DoctorProbe } from '../../src/bootstrap/doctor.js';
@@ -288,14 +295,14 @@ function prepareRepository(directory: string): { readonly repository: string; re
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',
           providerIntegration: '@fake/provider#CapableChatModel',
           model: 'fake-coordinator',
           modelOptions: {},
-          credentialRefs: ['fake'],
+          credentialRefs: [],
           nativeWindowOwnerRef: null,
         },
       ],
@@ -303,9 +310,10 @@ function prepareRepository(directory: string): { readonly repository: string; re
       tracker: { kind: 'github', routeMapIssueNumber: 7 },
       planning: { maxMutations: 2 },
       context: { maxInputTokens: 20_000 },
+      ...projectConnectionsFixture(),
       execution: {
         harness: 'codex',
-        workerModel: 'minimax-cn/MiniMax-M3',
+        ...projectExecutionProfilesFixture(),
         permissions: {
           planner: true,
           implementation: true,
@@ -332,7 +340,7 @@ function prepareRepository(directory: string): { readonly repository: string; re
 
 function manifestFor(head: string, repository: string): ExecutionAuthorizationManifest {
   return {
-    manifestVersion: 1,
+    manifestVersion: 2,
     coordinationScopeId: SCOPE,
     planningCycleId: CYCLE,
     destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
@@ -342,11 +350,9 @@ function manifestFor(head: string, repository: string): ExecutionAuthorizationMa
     baselineHead: head,
     orcaRunId: RUN_ID,
     workerProfiles: [
-      { profileRef: { kind: 'worker-profile', id: 'codex:planner' }, role: 'planner', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'codex:implementation' }, role: 'implementation', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'codex:validator' }, role: 'validator', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'codex:finalizer' }, role: 'finalizer', harness: 'codex' },
+      ...executionWorkerProfiles(),
     ],
+    recoveryUtilityProfile: recoveryUtilityProfileFixture(),
     permissions: {
       planner: true,
       implementation: true,
@@ -463,7 +469,7 @@ function prepareExecutionState(repository: string, head: string): void {
       writer,
       authorizationId: AUTH_ID,
       authorizationVersion: 1,
-      manifestVersion: 1,
+      manifestVersion: 2,
       fingerprint: 'fingerprint-finalizer',
       approvalRef: 'approval-finalizer',
       manifest: manifestFor(head, repository),
@@ -526,6 +532,9 @@ function prepareExecutionState(repository: string, head: string): void {
         trackingRevision: 1,
       },
       specificationUnitPath: null,
+      authorizationId: 'auth-finalizer',
+      authorizationVersion: 1,
+      workerProfileRef: 'profile-validator',
       orcaTaskId: WORKER_TASK,
       creationOperationId: 'op:materialize-task' as OperationId,
       launchId: 'launch-finalizer',
@@ -804,8 +813,27 @@ test('worker-start 结果未知时：按 Orca 列举事实对账并继续，不�
   expect(snapshot.snapshot.blockers.map((blocker) => blocker.code)).not.toContain('blocked');
 });
 
+test('Execution 授权批准重放：按原 fingerprint 只读回读，忽略过期 revision 且不触发派发', async () => {
+  const harness = await openHarness();
+  const mutationCountBefore = harness.fake.mutations.length;
+  const replay = await harness.host.ports.execute({
+    kind: 'authorization-approve',
+    fingerprint: 'fingerprint-finalizer',
+    expectedRevision: 0,
+  });
+
+  expect(replay.kind).toBe('accepted');
+  expect(harness.fake.mutations).toHaveLength(mutationCountBefore);
+});
+
 test('门禁满足时：以新的只读 Session 在 canonical worktree 派发，并比较运行前后的工作区', { timeout: TEST_TIMEOUT_MS }, async () => {
   const harness = await openHarness({ verdict: DELIVERABLE_VERDICT });
+  const catalog = await harness.host.ports.modelCatalog.load(SESSION);
+  for (const role of catalog.roles ?? []) {
+    if (role.current === null) continue;
+    const candidate = role.candidates.find((entry) => entry.candidateRef === role.current?.candidateRef);
+    expect(candidate?.model).toBe(role.current.model);
+  }
   await sendMessage(harness, '开始收尾');
   await waitFor(() => expect(workerStarts(harness)).toBe(1));
 
@@ -815,7 +843,7 @@ test('门禁满足时：以新的只读 Session 在 canonical worktree 派发，
   const terminal = harness.fake.mutations.find((mutation) => mutation.operation === 'terminal-create');
   const command = terminal?.operation === 'terminal-create' ? (terminal.command ?? '') : '';
   // 只读语义由 profile 保证（继承 `:read-only`）；启动参数不再带任何沙箱后端开关。
-  expect(command.includes('--profile utility-readonly-local-control')).toBe(true);
+  expect(command.includes(CODEX_MODEL_LAUNCHER_FILENAME)).toBe(true);
   expect(command.includes('use_legacy_landlock')).toBe(false);
 
   // 完成路径由下一个触发点接上：读回结论 → 读运行后工作区 → 比较 → 接受 verdict。

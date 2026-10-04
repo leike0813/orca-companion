@@ -1,8 +1,8 @@
 /**
- * `m1-wire-foreground-planning-runtime` D1 的行为测试：版本化项目配置。
+ * `complete-tui-model-configuration` IP-01 的行为测试：v2 项目配置。
  *
- * 这里固定三件可观察事实：合法配置能把默认 Coordinator Model Configuration 解析出来；配置缺失、
- * 内容无效与引用不存在分别给出可诊断拒绝；已知密钥字段名在配置边界即被拒绝。
+ * 固定四组可观察事实：v2 配置能把默认 Coordinator Model Configuration 解析出来；v1 与未知引用被
+ * 明确拒绝；交叉引用与快照必须自洽、effort 不得凭空出现；已知密钥字段名在配置边界即被拒绝。
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -13,9 +13,11 @@ import { afterEach, beforeEach, expect, test } from 'vitest';
 
 import {
   configurationByRef,
+  currentWorkerProfile,
   loadProjectConfig,
   parseProjectConfig,
   PROJECT_CONFIG_FILENAME,
+  PROJECT_CONFIG_SCHEMA_VERSION,
   projectConfigPath,
 } from '../../src/bootstrap/project-config.js';
 import { CONTEXT_READ_BYTES, MODEL_RESPONSE_BYTES } from '../../src/application/coordinator/history.js';
@@ -33,33 +35,90 @@ afterEach(() => {
   rmSync(directory, { recursive: true, force: true });
 });
 
-function model(configurationRef: string) {
-  return {
-    configurationRef,
-    providerIntegration: '@langchain/openai#ChatOpenAI',
-    model: 'gpt-4.1-mini',
-    modelOptions: { temperature: 0 },
-    credentialRefs: ['openai-default'],
-    nativeWindowOwnerRef: null,
-  };
-}
+const INTEGRATION = '@langchain/openai#ChatOpenAI';
 
-function validConfig() {
-  return {
-    schemaVersion: 1,
-    coordinatorModels: [model('planning-default'), model('planning-spare')],
-    defaultCoordinatorModelRef: 'planning-default',
-    tracker: { kind: 'github', routeMapIssueNumber: 42 },
-    planning: { maxMutations: 3 },
-    context: { maxInputTokens: 120_000 },
-  };
-}
+/** 凭据引用与 CredentialStore 同形：只承认 uuid，配置里不出现任何自由文本引用。 */
+const CREDENTIAL_REF = '11111111-1111-4111-8111-111111111111';
+const OTHER_CREDENTIAL_REF = '22222222-2222-4222-8222-222222222222';
+
+const effortCapability = () => ({
+  values: ['low', 'high'],
+  source: 'model-card',
+  optionPath: 'reasoningEffort',
+});
+
+const connection = (connectionRef = 'openai-conn') => ({
+  connectionRef,
+  label: 'OpenAI',
+  providerIntegration: INTEGRATION,
+  modelOptions: { temperature: 0 },
+  credential: { kind: 'managed' as const, credentialRef: CREDENTIAL_REF, optionPath: 'apiKey' },
+  codex: null,
+});
+
+const modelDefinition = (modelRef = 'gpt-4.1-mini', connectionRef = 'openai-conn') => ({
+  modelRef,
+  connectionRef,
+  model: 'gpt-4.1-mini',
+  effortCapability: effortCapability(),
+});
+
+/** 旧形状：没有连接/模型引用，表达「没有可信能力来源」。 */
+const legacyCoordinatorModel = (configurationRef = 'planning-default') => ({
+  configurationRef,
+  providerIntegration: INTEGRATION,
+  model: 'gpt-4.1-mini',
+  modelOptions: { temperature: 0 },
+  credentialRefs: [CREDENTIAL_REF],
+  nativeWindowOwnerRef: null,
+});
+
+const boundCoordinatorModel = (configurationRef = 'planning-default') => ({
+  ...legacyCoordinatorModel(configurationRef),
+  providerConnection: connection(),
+  modelRef: 'gpt-4.1-mini',
+  effortCapability: effortCapability(),
+  effort: 'high',
+});
+
+const workerProfile = (profileRef = 'planner-profile', role = 'planner') => ({
+  profileRef,
+  role,
+  harness: 'codex',
+  modelConfiguration: {
+    connection: connection(),
+    modelRef: 'gpt-4.1-mini',
+    model: 'gpt-4.1-mini',
+    effort: 'low',
+    effortCapability: effortCapability(),
+    modelOptions: {},
+  },
+});
+
+/** `execution` 一旦出现就必须自带沙箱模式与已接受风险；其余缺省项由归一化补齐。 */
+const executionBlock = (extra: Record<string, unknown> = {}) => ({
+  harness: 'codex',
+  codexSandbox: 'workspace-write',
+  acceptedRisks: [],
+  ...extra,
+});
+
+const validConfig = () => ({
+  schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
+  providerConnections: [connection()],
+  models: [modelDefinition()],
+  coordinatorModels: [boundCoordinatorModel()],
+  defaultCoordinatorModelRef: 'planning-default',
+  tracker: { kind: 'github', routeMapIssueNumber: 42 },
+  planning: { maxMutations: 3 },
+  context: { maxInputTokens: 120_000 },
+});
 
 function write(raw: unknown): void {
   writeFileSync(projectConfigPath(worktree), JSON.stringify(raw), 'utf8');
 }
 
-test('合法配置从 canonical worktree 加载并解析默认引用', () => {
+test('合法 v2 配置从 canonical worktree 加载并解析默认引用', () => {
   write(validConfig());
 
   const loaded = loadProjectConfig({ worktreePath: worktree });
@@ -70,55 +129,323 @@ test('合法配置从 canonical worktree 加载并解析默认引用', () => {
   }
   expect(loaded.path).toBe(join(worktree, PROJECT_CONFIG_FILENAME));
   expect(loaded.defaultConfiguration.configurationRef).toBe('planning-default');
+  expect(loaded.defaultConfiguration.effort).toBe('high');
   expect(loaded.config.tracker).toEqual({ kind: 'github', routeMapIssueNumber: 42 });
   expect(loaded.config.planning.maxMutations).toBe(3);
-  expect(loaded.config.context.maxInputTokens).toBe(120_000);
   expect(loaded.config.context.maxReadBytes).toBe(CONTEXT_READ_BYTES);
   expect(loaded.config.output.maxResponseBytes).toBe(MODEL_RESPONSE_BYTES);
-  expect(configurationByRef(loaded.config, 'planning-spare')?.model).toBe('gpt-4.1-mini');
   expect(configurationByRef(loaded.config, 'missing')).toBeNull();
 });
 
-test('读取与输出预算可显式配置，缺省与运行时界限一致', () => {
-  write({
+test.each([
+  'https://user:password@api.example/v1',
+  'https://user@api.example/v1',
+  'https://api.example/v1?api_key=fixture-secret',
+  'https://api.example/v1?access_token=fixture-secret',
+  'https://api.example/v1?X-API-Key=fixture-secret',
+])('连接 URL 携带凭据时在持久化边界拒绝：%s', (baseUrl) => {
+  const provider = {
+    ...connection(),
+    codex: { providerId: 'configured-provider', baseUrl, wireApi: 'responses' },
+  };
+  const config = {
     ...validConfig(),
-    context: { maxInputTokens: 120_000, maxReadBytes: 4 * 1024 * 1024 },
-    output: { maxResponseBytes: 1024 * 1024 },
+    providerConnections: [provider],
+    coordinatorModels: [{ ...boundCoordinatorModel(), providerConnection: provider }],
+  };
+  expect(parseProjectConfig(config).ok).toBe(false);
+  expect(parseProjectConfig({
+    ...validConfig(),
+    coordinatorModels: [{ ...boundCoordinatorModel(), modelOptions: { configuration: { baseURL: baseUrl } } }],
+  }).ok).toBe(false);
+});
+
+test('连接 URL 保留不含凭据的查询参数', () => {
+  const provider = {
+    ...connection(),
+    codex: { providerId: 'configured-provider', baseUrl: 'https://api.example/v1?api-version=2026-01', wireApi: 'responses' },
+  };
+  expect(parseProjectConfig({
+    ...validConfig(),
+    providerConnections: [provider],
+    coordinatorModels: [{ ...boundCoordinatorModel(), providerConnection: provider }],
+  }).ok).toBe(true);
+});
+
+test('模型设置字段可缺省：纯规划项目不需要 Worker 配置', () => {
+  write({
+    schemaVersion: 2,
+    coordinatorModels: [legacyCoordinatorModel()],
+    defaultCoordinatorModelRef: 'planning-default',
+    tracker: { kind: 'github', routeMapIssueNumber: 42 },
+    planning: { maxMutations: 3 },
+    context: { maxInputTokens: 120_000 },
   });
 
-  const loaded = loadProjectConfig({ worktreePath: worktree });
+  const parsed = parseProjectConfig({
+    schemaVersion: 2,
+    coordinatorModels: [legacyCoordinatorModel()],
+    defaultCoordinatorModelRef: 'planning-default',
+    tracker: { kind: 'github', routeMapIssueNumber: 42 },
+    planning: { maxMutations: 3 },
+    context: { maxInputTokens: 120_000 },
+  });
 
-  expect(loaded.kind).toBe('loaded');
-  if (loaded.kind !== 'loaded') {
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) {
     return;
   }
-  expect(loaded.config.context).toEqual({ maxInputTokens: 120_000, maxReadBytes: 4 * 1024 * 1024 });
-  expect(loaded.config.output.maxResponseBytes).toBe(1024 * 1024);
+  expect(parsed.value.revision).toBe(0);
+  expect(parsed.value.providerConnections).toEqual([]);
+  expect(parsed.value.models).toEqual([]);
+  expect(parsed.value.execution.workerProfiles).toEqual([]);
+  expect(parsed.value.execution.workerProfileRefs).toEqual({});
+  expect(currentWorkerProfile(parsed.value, 'planner')).toBeNull();
+  // 旧形状的 Coordinator 配置没有 effort 来源，因此不能凭空带上 effort。
+  expect(parsed.value.coordinatorModels[0]?.effort).toBeUndefined();
 });
 
-test('预算必须是有限正整数，schema 版本不因新增可缺省预算改变', () => {
-  for (const value of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 2]) {
-    expect(parseProjectConfig({ ...validConfig(), context: { maxInputTokens: 120_000, maxReadBytes: value } }).ok).toBe(false);
-    expect(parseProjectConfig({ ...validConfig(), output: { maxResponseBytes: value } }).ok).toBe(false);
+test('v1 与未知字段被拒绝，不自动重写用户项目', () => {
+  const v1 = parseProjectConfig({ ...validConfig(), schemaVersion: 1 });
+  expect(v1).toMatchObject({ ok: false, field: 'projectConfig' });
+
+  const unknownField = parseProjectConfig({ ...validConfig(), extra: true });
+  expect(unknownField.ok).toBe(false);
+
+  // workerModel 已由角色级 Worker Profile 取代，出现即拒绝而不是继续沿用。
+  const removedField = parseProjectConfig({
+    ...validConfig(),
+    execution: { harness: 'codex', workerModel: 'minimax-cn/MiniMax-M3' },
+  });
+  expect(removedField.ok).toBe(false);
+});
+
+test('重复身份与未知引用都指向具体字段', () => {
+  const duplicateConnection = parseProjectConfig({
+    ...validConfig(),
+    providerConnections: [connection(), connection()],
+  });
+  expect(duplicateConnection).toMatchObject({ ok: false, field: 'projectConfig.providerConnections' });
+
+  const duplicateModel = parseProjectConfig({
+    ...validConfig(),
+    models: [modelDefinition(), modelDefinition()],
+  });
+  expect(duplicateModel).toMatchObject({ ok: false, field: 'projectConfig.models' });
+
+  const unknownConnection = parseProjectConfig({
+    ...validConfig(),
+    models: [modelDefinition('gpt-4.1-mini', 'nope')],
+  });
+  expect(unknownConnection).toMatchObject({ ok: false });
+
+  const danglingProfile = parseProjectConfig({
+    ...validConfig(),
+    execution: executionBlock({
+      workerProfiles: [workerProfile()],
+      workerProfileRefs: { planner: 'missing' },
+    }),
+  });
+  expect(danglingProfile).toMatchObject({
+    ok: false,
+    field: 'projectConfig.execution.workerProfileRefs.planner',
+  });
+
+  const mismatchedRole = parseProjectConfig({
+    ...validConfig(),
+    execution: executionBlock({
+      workerProfiles: [workerProfile()],
+      workerProfileRefs: { validator: 'planner-profile' },
+    }),
+  });
+  expect(mismatchedRole).toMatchObject({ ok: false });
+
+  const danglingDefault = parseProjectConfig({ ...validConfig(), defaultCoordinatorModelRef: 'nope' });
+  expect(danglingDefault).toMatchObject({ ok: false, field: 'projectConfig.defaultCoordinatorModelRef' });
+});
+
+test('快照必须与被引用记录自洽：改一边即拒绝', () => {
+  const driftedModel = parseProjectConfig({
+    ...validConfig(),
+    coordinatorModels: [{ ...boundCoordinatorModel(), model: 'gpt-4.1' }],
+  });
+  expect(driftedModel).toMatchObject({ ok: false });
+
+  const driftedEffort = parseProjectConfig({
+    ...validConfig(),
+    coordinatorModels: [
+      {
+        ...boundCoordinatorModel(),
+        effortCapability: { ...effortCapability(), source: '猜测' },
+      },
+    ],
+  });
+  expect(driftedEffort).toMatchObject({ ok: false });
+
+  const driftedConnection = parseProjectConfig({
+    ...validConfig(),
+    providerConnections: [connection()],
+    coordinatorModels: [
+      { ...boundCoordinatorModel(), providerConnection: { ...connection(), label: '另一个' } },
+    ],
+  });
+  expect(driftedConnection).toMatchObject({ ok: false });
+
+  const modelWithoutConnection = parseProjectConfig({
+    ...validConfig(),
+    coordinatorModels: [
+      {
+        configurationRef: 'planning-default',
+        providerIntegration: INTEGRATION,
+        model: 'gpt-4.1-mini',
+        modelOptions: {},
+        credentialRefs: ['cred-openai'],
+        nativeWindowOwnerRef: null,
+        modelRef: 'gpt-4.1-mini',
+      },
+    ],
+  });
+  expect(modelWithoutConnection).toMatchObject({ ok: false });
+});
+
+test('effort 必须有可信能力来源，且落在支持范围内', () => {
+  const noSource = parseProjectConfig({
+    ...validConfig(),
+    coordinatorModels: [
+      {
+        configurationRef: 'planning-default',
+        providerIntegration: INTEGRATION,
+        model: 'gpt-4.1-mini',
+        modelOptions: {},
+        credentialRefs: ['cred-openai'],
+        nativeWindowOwnerRef: null,
+        effort: 'high',
+      },
+    ],
+  });
+  expect(noSource).toMatchObject({ ok: false });
+
+  const unsupported = parseProjectConfig({
+    ...validConfig(),
+    coordinatorModels: [{ ...boundCoordinatorModel(), effort: 'extreme' }],
+  });
+  expect(unsupported).toMatchObject({ ok: false });
+
+  const supported = parseProjectConfig({
+    ...validConfig(),
+    coordinatorModels: [{ ...boundCoordinatorModel(), effort: 'low' }],
+  });
+  expect(supported.ok).toBe(true);
+});
+
+test('Worker Profile 的模型引用与角色选择必须可解释', () => {
+  const valid = parseProjectConfig({
+    ...validConfig(),
+    execution: executionBlock({
+      workerProfiles: [workerProfile()],
+      workerProfileRefs: { planner: 'planner-profile' },
+    }),
+  });
+  expect(valid.ok).toBe(true);
+  if (!valid.ok) {
+    return;
   }
-  const version = parseProjectConfig({ ...validConfig(), schemaVersion: 1, context: { maxInputTokens: 120_000, maxReadBytes: CONTEXT_READ_BYTES } });
-  expect(version.ok).toBe(true);
+  expect(currentWorkerProfile(valid.value, 'planner')?.profileRef).toBe('planner-profile');
+  expect(currentWorkerProfile(valid.value, 'validator')).toBeNull();
+
+  const unknownModel = parseProjectConfig({
+    ...validConfig(),
+    execution: executionBlock({
+      workerProfiles: [
+        {
+          ...workerProfile(),
+          modelConfiguration: { ...workerProfile().modelConfiguration, modelRef: 'nope' },
+        },
+      ],
+      workerProfileRefs: { planner: 'planner-profile' },
+    }),
+  });
+  expect(unknownModel).toMatchObject({ ok: false });
+
+  const unknownRole = parseProjectConfig({
+    ...validConfig(),
+    execution: executionBlock({
+      workerProfiles: [workerProfile()],
+      workerProfileRefs: { reviewer: 'planner-profile' },
+    }),
+  });
+  expect(unknownRole).toMatchObject({ ok: false });
 });
 
-test('配置缺失是可诊断拒绝，不隐式创建配置', () => {
-  const loaded = loadProjectConfig({ worktreePath: worktree });
+test('Worker Profile 的连接快照与能力来源同样不得与被引用记录矛盾', () => {
+  const driftedConnection = parseProjectConfig({
+    ...validConfig(),
+    execution: executionBlock({
+      workerProfiles: [
+        {
+          ...workerProfile(),
+          modelConfiguration: {
+            ...workerProfile().modelConfiguration,
+            connection: {
+              ...connection(),
+              credential: { kind: 'managed', credentialRef: OTHER_CREDENTIAL_REF, optionPath: 'apiKey' },
+            },
+          },
+        },
+      ],
+      workerProfileRefs: { planner: 'planner-profile' },
+    }),
+  });
+  expect(driftedConnection).toMatchObject({ ok: false });
 
-  expect(loaded).toMatchObject({ kind: 'failed', code: 'missing' });
+  const fabricatedEffort = parseProjectConfig({
+    ...validConfig(),
+    execution: executionBlock({
+      workerProfiles: [
+        {
+          ...workerProfile(),
+          modelConfiguration: {
+            ...workerProfile().modelConfiguration,
+            effort: 'extreme',
+            effortCapability: { ...effortCapability(), values: ['low', 'high', 'extreme'] },
+          },
+        },
+      ],
+      workerProfileRefs: { planner: 'planner-profile' },
+    }),
+  });
+  expect(fabricatedEffort).toMatchObject({ ok: false });
 });
 
-test('非法 JSON 与不可读分别拒绝', () => {
+test('循环结构按拒绝返回，不向调用方抛异常', () => {
+  const modelOptions: Record<string, unknown> = { temperature: 0 };
+  modelOptions['self'] = modelOptions;
+
+  const withModelOptions = (options: Record<string, unknown>) => ({
+    ...validConfig(),
+    providerConnections: [{ ...connection(), modelOptions: options }],
+    coordinatorModels: [legacyCoordinatorModel()],
+    defaultCoordinatorModelRef: 'planning-default',
+  });
+  // 同一份配置去掉回指就完全合法，拒绝确实来自循环而不是别的规则。
+  expect(parseProjectConfig(withModelOptions({ temperature: 0 }))).toMatchObject({ ok: true });
+
+  let result: unknown = null;
+  expect(() => {
+    result = parseProjectConfig(withModelOptions(modelOptions));
+  }).not.toThrow();
+
+  expect(result).toMatchObject({ ok: false, field: 'projectConfig' });
+});
+
+test('配置缺失、非法 JSON 与不可读分别拒绝', () => {
+  expect(loadProjectConfig({ worktreePath: worktree })).toMatchObject({ kind: 'failed', code: 'missing' });
+
   writeFileSync(projectConfigPath(worktree), '{ not json', 'utf8');
   expect(loadProjectConfig({ worktreePath: worktree })).toMatchObject({ kind: 'failed', code: 'invalid' });
 
-  const directoryAsFile = join(directory, 'as-directory');
-  mkdirSync(directoryAsFile);
   const unreadable = loadProjectConfig({
-    worktreePath: directoryAsFile,
+    worktreePath: directory,
     readFile: () => {
       const error = new Error('EACCES: permission denied') as Error & { code?: string };
       error.code = 'EACCES';
@@ -128,58 +455,25 @@ test('非法 JSON 与不可读分别拒绝', () => {
   expect(unreadable).toMatchObject({ kind: 'failed', code: 'unreadable' });
 });
 
-test('schema 版本、未声明字段与越界取值都指向具体字段', () => {
-  const wrongVersion = parseProjectConfig({ ...validConfig(), schemaVersion: 2 });
-  expect(wrongVersion).toMatchObject({ ok: false, field: 'projectConfig' });
-
-  const unknownField = parseProjectConfig({ ...validConfig(), extra: true });
-  expect(unknownField.ok).toBe(false);
-
-  const zeroMutations = parseProjectConfig({
-    ...validConfig(),
-    planning: { maxMutations: 0 },
-  });
-  expect(zeroMutations.ok).toBe(true);
-
-  const negativeMutations = parseProjectConfig({
-    ...validConfig(),
-    planning: { maxMutations: -1 },
-  });
-  expect(negativeMutations.ok).toBe(false);
-
-  const badIssueNumber = parseProjectConfig({
-    ...validConfig(),
-    tracker: { kind: 'github', routeMapIssueNumber: 0 },
-  });
-  expect(badIssueNumber.ok).toBe(false);
-
-  const badBudget = parseProjectConfig({
-    ...validConfig(),
-    context: { maxInputTokens: 0 },
-  });
-  expect(badBudget.ok).toBe(false);
-});
-
-test('默认引用必须存在，且 configurationRef 唯一', () => {
-  const dangling = parseProjectConfig({ ...validConfig(), defaultCoordinatorModelRef: 'nope' });
-  expect(dangling).toMatchObject({ ok: false, field: 'projectConfig.defaultCoordinatorModelRef' });
-
-  const duplicated = parseProjectConfig({
-    ...validConfig(),
-    coordinatorModels: [model('same'), model('same')],
-    defaultCoordinatorModelRef: 'same',
-  });
-  expect(duplicated).toMatchObject({ ok: false, field: 'projectConfig.coordinatorModels' });
+test('预算越界与 tracker/planning 非法取值被拒绝', () => {
+  for (const value of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 2]) {
+    expect(
+      parseProjectConfig({ ...validConfig(), context: { maxInputTokens: 120_000, maxReadBytes: value } }).ok,
+    ).toBe(false);
+    expect(parseProjectConfig({ ...validConfig(), output: { maxResponseBytes: value } }).ok).toBe(false);
+  }
+  expect(parseProjectConfig({ ...validConfig(), planning: { maxMutations: 0 } }).ok).toBe(true);
+  expect(parseProjectConfig({ ...validConfig(), planning: { maxMutations: -1 } }).ok).toBe(false);
+  expect(
+    parseProjectConfig({ ...validConfig(), tracker: { kind: 'github', routeMapIssueNumber: 0 } }).ok,
+  ).toBe(false);
 });
 
 test('凭据只以引用出现：已知密钥字段名在配置边界被拒绝', () => {
   const nested = parseProjectConfig({
     ...validConfig(),
     coordinatorModels: [
-      {
-        ...model('planning-default'),
-        modelOptions: { headers: { Authorization: 'Bearer secret' } },
-      },
+      { ...boundCoordinatorModel(), modelOptions: { headers: { Authorization: 'Bearer secret' } } },
     ],
   });
   expect(nested).toMatchObject({ ok: false });
@@ -188,9 +482,45 @@ test('凭据只以引用出现：已知密钥字段名在配置边界被拒绝',
   }
   expect(nested.field).toContain('coordinatorModels.0.modelOptions.headers.Authorization');
 
-  const topLevel = parseProjectConfig({ ...validConfig(), apiKey: 'sk-live' });
-  expect(topLevel).toMatchObject({ ok: false, field: 'projectConfig.apiKey' });
+  const plaintextCredentialRef = 'sk-live-secret';
+  const plaintextConnection = {
+    ...connection(),
+    credential: { kind: 'managed' as const, credentialRef: plaintextCredentialRef, optionPath: 'apiKey' },
+  };
+  const plaintextReference = parseProjectConfig({
+    ...validConfig(),
+    providerConnections: [plaintextConnection],
+    coordinatorModels: [
+      {
+        ...boundCoordinatorModel(),
+        credentialRefs: [plaintextCredentialRef],
+        providerConnection: plaintextConnection,
+      },
+    ],
+  });
+  expect(plaintextReference).toMatchObject({ ok: false });
 
-  const valid = parseProjectConfig(validConfig());
-  expect(valid.ok).toBe(true);
+  const topLevel = parseProjectConfig({ ...validConfig(), apiKey: 'sk-live' });
+  // 闭合 schema 直接拒绝未声明的顶层字段，密钥在配置里没有落脚点。
+  expect(topLevel).toMatchObject({ ok: false, field: 'projectConfig' });
+});
+
+test('模型选项的凭据键名按常见拼法拒绝，规模类选项与引用字段不受影响', () => {
+  const withOptions = (options: Record<string, unknown>) => ({
+    ...validConfig(),
+    coordinatorModels: [{ ...boundCoordinatorModel(), modelOptions: options }],
+  });
+
+  for (const key of ['api_key', 'bearer_token', 'client_secret', 'x-api-key', 'OPENAI_API_KEY']) {
+    expect(parseProjectConfig(withOptions({ [key]: 'sk-live-value' })).ok).toBe(false);
+  }
+  // `token` 只在自身就是凭据名时才算命中：规模与预算类选项必须照常可用。
+  expect(parseProjectConfig(withOptions({ maxTokens: 4096, tokenBudget: 1000, max_tokens: 4096 })).ok).toBe(true);
+  expect(parseProjectConfig(withOptions({ credentialRef: 'cred-openai' })).ok).toBe(true);
+  expect(parseProjectConfig(withOptions({ headers: [{ api_key: 'value' }] })).ok).toBe(false);
+  const shared = { maxTokens: 4096 };
+  expect(parseProjectConfig(withOptions({ first: shared, second: shared })).ok).toBe(true);
+  const cyclic: Record<string, unknown> = {};
+  cyclic.self = cyclic;
+  expect(parseProjectConfig(withOptions(cyclic)).ok).toBe(false);
 });

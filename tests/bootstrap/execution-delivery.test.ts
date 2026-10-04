@@ -30,7 +30,7 @@ import {
   ackConsumedDelivery,
 } from '../../src/application/delivery/process-delivery.js';
 import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
-import { proposeManifest, recordApproval } from '../../src/application/planning/authorization-service.js';
+import { activeAuthorization, proposeManifest, recordApproval } from '../../src/application/planning/authorization-service.js';
 import { recordInitialGraph } from '../../src/application/planning/graph-history.js';
 import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
 import {
@@ -74,6 +74,7 @@ import type {
   CoordinationCommand,
   CoordinationCommandResult,
   CoordinationWriter,
+  MaterializationBindingRecord,
   SessionSegmentRecord,
 } from '../../src/application/ports/branch-coordination-store.js';
 import type {
@@ -81,12 +82,13 @@ import type {
   ExecutionMutation,
   ExecutionQuery,
 } from '../../src/application/ports/execution-backend.js';
-import type { RoleAuthorities } from '../../src/domain/planning/execution-authorization.js';
+import type { RoleAuthorities, WorkerProfileRef } from '../../src/domain/planning/execution-authorization.js';
 import type { ExecutionGraph, ScopeEnvelope } from '../../src/domain/planning/execution-graph.js';
 import type { SessionBinding, SpecBinding } from '../../src/domain/task-contract.js';
 import type { EvidenceRecord } from '../../src/domain/worker-report.js';
 import { createCompanionStartupFixture, type CompanionStartupFixture } from '../support/companion-startup-harness.js';
 import { fixedReadOnlyWorkerProbe } from '../support/read-only-worker-probe.js';
+import { executionModelConfiguration } from '../support/execution-harness.js';
 import {
   RECOVERY_SCOPE,
   RECOVERY_WORK_PACKAGE,
@@ -263,7 +265,13 @@ function createDeliveryFixture(): DeliveryFixture {
         profileRef: { kind: 'worker-profile' as const, id: `profile-${role}` },
         role,
         harness: 'codex',
+        modelConfiguration: executionModelConfiguration({ model: 'original-model' }),
       })),
+      recoveryUtilityProfile: {
+        profileRef: { kind: 'worker-profile' as const, id: 'profile-recovery-utility' },
+        harness: 'codex',
+        modelConfiguration: executionModelConfiguration({ model: 'original-model' }),
+      },
       permissions: {
         planner: true,
         implementation: true,
@@ -356,6 +364,9 @@ function createDeliveryFixture(): DeliveryFixture {
     worktreeId: WORKTREE,
     specBinding: SPEC,
     specificationUnitPath: null,
+    authorizationId: 'auth-delivery',
+    authorizationVersion: 1,
+    workerProfileRef: 'profile-validator',
     orcaTaskId: ORCA_TASK,
     creationOperationId: `op:${ORCA_TASK}:create` as OperationId,
     launchId: `launch:${ORCA_TASK}`,
@@ -981,7 +992,7 @@ test('生产事实装配读不到归属时：以结构化 blocker 呈现，不�
         canonicalWorktree: harness.directory,
         execution: null,
         workerHarness: null,
-        workerModel: null,
+        resolveModelConfiguration: () => null,
         codexSandbox: 'workspace-write',
         companionStateRoot: null,
         env: {},
@@ -1130,7 +1141,7 @@ function factsFor(input: {
             timeoutMs: 60_000,
           },
     workerHarness: 'codex',
-    workerModel: 'minimax-cn/MiniMax-M3',
+    resolveModelConfiguration: () => executionModelConfiguration({ model: 'minimax-cn/MiniMax-M3' }),
     codexSandbox: 'workspace-write',
     companionStateRoot: input.companionStateRoot,
     env: {},
@@ -1458,8 +1469,9 @@ test('生产替代派发：只复用原 Worker Profile，SessionStart 报告读�
     if ('kind' in replacement) {
       return;
     }
-    // 复用原 Profile：不从界面或模型换一个模型。
-    expect(replacement.profile).toEqual({ kind: 'reuse', profileRef: 'minimax-cn/MiniMax-M3' });
+    // 复用原 Profile：profileRef 取自该 Task 授权里的 Validator profile，不是模型名。
+    // 模型由绑定钉住的授权里的 profile 提供，替代 Session 不从界面或当前配置另取。
+    expect(replacement.profile).toEqual({ kind: 'reuse', profileRef: 'profile-validator' });
     // 复用既有的 Codex prepared-terminal 策略：替代 Session 的启动方式与常规派发同源。
     expect(replacement.workerLaunch.kind).toBe('prepared_terminal');
     // 窗口内没有 SessionStart 报告：回执解释只能失败，而不是猜一个 Binding。
@@ -1491,7 +1503,7 @@ test('生产替代派发：只复用原 Worker Profile，SessionStart 报告读�
       canonicalWorktree: fixture.harness.directory,
       execution: null,
       workerHarness: 'codex',
-      workerModel: null,
+      resolveModelConfiguration: () => null,
       codexSandbox: 'workspace-write',
       companionStateRoot: null,
       env: {},
@@ -1603,3 +1615,192 @@ test('确认结果未知但 Orca 的未确认批次已换：按事实收尾，�
   const settlements = fixture.store.query({ kind: 'delivery-settlements', coordinationScopeId: SCOPE });
   expect(settlements.kind === 'delivery-settlements' ? settlements.settlements : []).toHaveLength(1);
 });
+
+/* -------------------------------------------------------------------------- */
+/* 重新授权：旧 Task 的结算依据（IP-05 / D05）                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * 追加一次「只换模型」的重新授权。
+ *
+ * 它复制当前有效授权的全部非模型字段，只把角色 profile 换成新的模型绑定，并按新的 authorizationId
+ * 追加一条记录。返回新授权 ID：调用方随后把它当作「当前授权」继续派发，而既有物化绑定仍指向旧的。
+ */
+function reauthorizeWithNewModel(
+  fixture: DeliveryFixture,
+  authorizationId: string,
+  model: string,
+): string {
+  const current = activeAuthorization(fixture.store, SCOPE);
+  if (current.kind !== 'read' || current.authorization === null) {
+    throw new Error('无法读取当前有效授权');
+  }
+  // 换模型的重新授权绑定**当前图 head**：不新增 Graph Revision，也不迁移预算。
+  const graph = current.authorization.manifest.graph;
+  const versionRead = fixture.store.query({
+    kind: 'graph-version',
+    coordinationScopeId: SCOPE,
+    graphId: graph.graphId,
+    graphVersion: graph.version,
+  });
+  if (versionRead.kind !== 'graph-version' || versionRead.version === null) {
+    throw new Error('无法读取当前图版本');
+  }
+  const proposed = proposeManifest({
+    store: fixture.store,
+    coordinationScopeId: SCOPE,
+    candidate: versionRead.version,
+    currentPlanRevision: versionRead.version.planRevision,
+    rawManifest: {
+      ...current.authorization.manifest,
+      workerProfiles: current.authorization.manifest.workerProfiles.map((profile: WorkerProfileRef) => ({
+        ...profile,
+        modelConfiguration: executionModelConfiguration({ model }),
+      })),
+      recoveryUtilityProfile: {
+        ...current.authorization.manifest.recoveryUtilityProfile,
+        modelConfiguration: executionModelConfiguration({ model }),
+      },
+    },
+  });
+  if (proposed.kind !== 'proposed') {
+    throw new Error(`无法组装换模型的 Manifest: ${proposed.failure.message}`);
+  }
+  const approved = recordApproval({
+    store: fixture.store,
+    coordinationScopeId: SCOPE,
+    writer: fixture.writer,
+    authorizationId,
+    manifest: proposed.manifest,
+    currentPlanRevision: versionRead.version.planRevision,
+    approvalRef: `approval-${authorizationId}`,
+  });
+  if (approved.kind !== 'recorded') {
+    throw new Error(`无法批准换模型的授权: ${approved.failure.message}`);
+  }
+  return authorizationId;
+}
+
+test('重新授权后旧 Task 的 Delivery 按其物化绑定的原授权结算，不借用新授权', async () => {
+  const fixture = createDeliveryFixture();
+  // 已在途的 Validator Task：它派出时钉住的是原授权。
+  const reauthorized = reauthorizeWithNewModel(fixture, 'auth-delivery-v2', 'reauthorized-model');
+  expect(reauthorized).not.toBe(AUTHORIZATION);
+
+  const orca = fakeDeliveryBackend({ messages: [deliveryMessage(orcaWorkerDonePayload())] });
+  // 读取时「当前授权」已经是新授权：若结算偷用当前值，结果的可信性判定就与派发时依据不符。
+  const read = await readPendingDeliveries({
+    ...fixture.readInput,
+    authorizationId: reauthorized,
+    store: fixture.store,
+    backend: orca.backend,
+  });
+  if (read.kind !== 'read') {
+    throw new Error('读取本身应当成功');
+  }
+  // 原 Task 的结果仍按原 pin 核验，因此照常进入可结算列表，不因换模型被挡下。
+  expect(read.blocked ?? []).toEqual([]);
+  expect(read.pending).toHaveLength(1);
+  // 关键判据：核验用的授权身份取自该 Task 的物化绑定，不是当前的新授权。
+  expect(read.pending[0]!.trusted.authorizationId).toBe(AUTHORIZATION);
+  // 角色权限也取自该 Task 当时批准的 Manifest：换模型不追溯改变在途 Task 的权限边界。
+  const current = activeAuthorization(fixture.store, SCOPE);
+  if (current.kind !== 'read' || current.authorization === null) {
+    throw new Error('无法读取当前有效授权');
+  }
+  expect(read.pending[0]!.trusted.authority).toEqual(current.authorization.manifest.permissions);
+});
+
+// 绑定上的授权身份、授权版本与 profile 引用共同构成运行依据：三项缺任一项都不可证明，
+// 因此逐项参数化——只测其中一项会漏掉「另外两项其实也被当成可选」的实现。
+type MissingPinCase = {
+  readonly label: string;
+  readonly strip: (binding: MaterializationBindingRecord) => MaterializationBindingRecord;
+};
+
+const MISSING_PIN_CASES: readonly MissingPinCase[] = [
+  { label: 'authorizationId', strip: (b) => ({ ...b, authorizationId: null }) },
+  { label: 'authorizationVersion', strip: (b) => ({ ...b, authorizationVersion: null }) },
+  { label: 'workerProfileRef', strip: (b) => ({ ...b, workerProfileRef: null }) },
+];
+
+for (const missing of MISSING_PIN_CASES) {
+  test(`物化绑定缺少 ${missing.label}：阻塞结算，不按当前授权放行旧结果`, async () => {
+    const fixture = createDeliveryFixture();
+    const bindings = fixture.store.query({ kind: 'materialization-bindings', coordinationScopeId: SCOPE });
+    if (bindings.kind !== 'materialization-bindings') {
+      throw new Error('无法读取物化绑定');
+    }
+    // 写命令强制要求三项齐备，因此「缺一项的历史行」只能由读取侧投影表达：这里只改写这一项，
+    // 其余读取（Scope、Session Segment、图、授权）仍走真实 store。
+    const withoutPin = bindings.bindings.map(missing.strip);
+
+    const storeWithoutPin: BranchCoordinationStore = {
+      ...fixture.store,
+      query: (query: never) => {
+        const result = fixture.store.query(query);
+        return result.kind === 'materialization-bindings'
+          ? { ...result, bindings: withoutPin }
+          : result;
+      },
+    };
+
+    const orca = fakeDeliveryBackend({ messages: [deliveryMessage(orcaWorkerDonePayload())] });
+    const read = await readPendingDeliveries({
+      ...fixture.readInput,
+      store: storeWithoutPin,
+      backend: orca.backend,
+    });
+    if (read.kind !== 'read') {
+      throw new Error('读取本身应当成功');
+    }
+    // 缺任一项都无法证明结果产生于哪次授权：不回退到当前授权，那正是这条规则要防的借用。
+    expect(read.pending).toEqual([]);
+    expect(read.blocked?.map((block) => block.code)).toEqual(['authorization_pin_missing']);
+  });
+}
+
+const MISMATCHED_PIN_CASES: readonly MissingPinCase[] = [
+  {
+    label: 'authorizationVersion',
+    strip: (binding) => ({ ...binding, authorizationVersion: (binding.authorizationVersion ?? 0) + 1 }),
+  },
+  {
+    label: 'workerProfileRef',
+    strip: (binding) => ({
+      ...binding,
+      workerProfileRef: { kind: 'worker-profile', id: 'profile-planner' },
+    }),
+  },
+];
+
+for (const mismatch of MISMATCHED_PIN_CASES) {
+  test(`物化绑定的 ${mismatch.label} 与授权不一致：阻塞结算`, async () => {
+    const fixture = createDeliveryFixture();
+    const bindings = fixture.store.query({ kind: 'materialization-bindings', coordinationScopeId: SCOPE });
+    if (bindings.kind !== 'materialization-bindings') {
+      throw new Error('无法读取物化绑定');
+    }
+    const mismatched = bindings.bindings.map(mismatch.strip);
+    const storeWithMismatch: BranchCoordinationStore = {
+      ...fixture.store,
+      query: (query: never) => {
+        const result = fixture.store.query(query);
+        return result.kind === 'materialization-bindings'
+          ? { ...result, bindings: mismatched }
+          : result;
+      },
+    };
+
+    const read = await readPendingDeliveries({
+      ...fixture.readInput,
+      store: storeWithMismatch,
+      backend: fakeDeliveryBackend({ messages: [deliveryMessage(orcaWorkerDonePayload())] }).backend,
+    });
+    expect(read.kind).toBe('read');
+    if (read.kind === 'read') {
+      expect(read.pending).toEqual([]);
+      expect(read.blocked?.map((block) => block.code)).toEqual(['authorization_pin_missing']);
+    }
+  });
+}

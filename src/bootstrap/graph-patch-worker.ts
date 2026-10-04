@@ -17,6 +17,8 @@ import { graphPatchPlannerInstruction } from '../application/execution/graph-pat
 import type { BranchCoordinationStore, CoordinationWriter } from '../application/ports/branch-coordination-store.js';
 import type { ExecutionBackend } from '../application/ports/execution-backend.js';
 import type { SpecBinding } from '../domain/task-contract.js';
+import type { WorkerModelConfiguration } from '../domain/model-configuration.js';
+import type { CredentialStore } from '../application/ports/credential-store.js';
 import type { WorkerListResult } from '../adapters/orca-cli/operation-catalog.js';
 import { codexSessionPathsUnder, parseOrcaWorkerDoneLocator } from './execution-runtime.js';
 
@@ -28,7 +30,22 @@ export type GraphPatchWorkerInput = {
   readonly execution: ScopedWorkerDispatchInput['execution'];
   readonly canonicalWorktreePath: string;
   readonly companionStateRoot: string;
-  readonly workerModel: string;
+  /**
+   * 冻结的 Planner 模型配置。
+   *
+   * Graph Patch Planner 是一次真实的 Planner 派发，因此与常规 Planner Task 走同一份已批准绑定：
+   * 启动参数只由它生成，不从项目配置或界面另取一个模型。
+   */
+  readonly modelConfiguration: WorkerModelConfiguration;
+  /**
+   * 用户级凭据 store 与其文件位置。
+   *
+   * Graph Patch Planner 与常规 Planner Task 一样可能绑定 managed 凭据，因此启动准备阶段要用与
+   * Coordinator 装配、模型保存同一份 store 证明 key 存在。两项由调用方按宿主 env 注入，本模块
+   * 不自己推导路径，否则测试与隔离启动会各按一份环境解析。
+   */
+  readonly credentialStore: CredentialStore;
+  readonly credentialStorePath: string;
   readonly bindingWindowMs: number;
   readonly reportTimeoutMs: number;
 };
@@ -206,7 +223,9 @@ export async function runGraphPatchPlannerWorker(input: GraphPatchWorkerInput): 
     execution,
     workerLaunch: createCodexWorkerLaunch({
       launchId,
-      model: input.workerModel,
+      modelConfiguration: input.modelConfiguration,
+      credentialStore: input.credentialStore,
+      credentialStorePath: input.credentialStorePath,
       sandboxMode: 'read-only-local-control',
       stateRoot: paths.stateRoot,
       sessionStartReporterPath: paths.reporterPath,

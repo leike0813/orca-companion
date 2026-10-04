@@ -1,8 +1,8 @@
 # 第五批待答联动证据
 
 2026-10-03，Ubuntu；基线 `69f0aa1781265bb7623cb4bbb3e8ae5722e72bce`。
-实现为工作区中的 [link-tui-pending-interactions](../../openspec/changes/link-tui-pending-interactions/implementation-plan.md)，未提交、未归档。
-任务9/9完成；[正式规约验收](../../openspec/changes/link-tui-pending-interactions/verification.md)为PASS，
+实现见已归档的 [link-tui-pending-interactions](../../openspec/changes/archive/2026-10-03-link-tui-pending-interactions/implementation-plan.md)，已包含于 `abf8f0c0617972f8277598dfe04257769ba86179`；2026-10-03 已归档，主规格已同步。
+任务9/9完成；[正式规约验收](../../openspec/changes/archive/2026-10-03-link-tui-pending-interactions/verification.md)为PASS，
 `gpt-6-luna`独立只读复验6文件140项全部通过。
 
 生产 `TuiApp`、组件和阅读器通过 `scripts/tui-preview.mjs alignment` 运行。`ORCA_COMPANION_PENDING_INTERACTIONS=1`
@@ -85,7 +85,7 @@ UTF-8 范围、同一步多个提问的顺序、索引未就绪/缺失/读取失
 补入该字段后单独复验 `tests/application/controller-service.test.ts` 的15项全部通过。
 结合未改动的其余全量结果，最终覆盖151文件/1514项通过，条件跳过仍为6文件/12项；没有把复验重复计数。
 
-检查结果在本轮 [implementation-plan](../../openspec/changes/link-tui-pending-interactions/implementation-plan.md) 记录。
+检查结果在本轮 [implementation-plan](../../openspec/changes/archive/2026-10-03-link-tui-pending-interactions/implementation-plan.md) 记录。
 真实终端恢复由 `tests/tui/pty.test.ts` 在独立 tmux server 中测量 `stty -g` 和显式 Ctrl+C 退出，
 不是由截图推断。字节注入证明中文/emoji渲染和输入往返，没有新增真实 OS IME 预编辑/候选窗人工证据。
 本轮未启用隔离真实 Orca/provider 条件测试；Windows 未验证。

@@ -108,14 +108,14 @@ async function startHandoffHarness(options: { readonly withSourceHistory: boolea
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',
           providerIntegration: '@fake/provider#CapableChatModel',
           model: 'fake-coordinator',
           modelOptions: {},
-          credentialRefs: ['fake'],
+          credentialRefs: [],
           nativeWindowOwnerRef: null,
         },
       ],

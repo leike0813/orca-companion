@@ -1,6 +1,6 @@
 /**
  * IC-04 的 Coordinator Model Configuration 与运行中切换用例
- * （Owner: `m1-run-coordinator-sessions`）。
+ * （Owner: `m1-run-coordinator-sessions`，模型设置形状由 `complete-tui-model-configuration` IP-01 扩展）。
  *
  * 这个模块拥有配置本身的形状以及它的切换规则。配置是**用户批准的值**：它指向用户已安装的
  * provider 集成，因此 Companion 既不维护 allowlist，也没有存放凭据的字段——只有凭据引用，
@@ -11,32 +11,72 @@
  * 生效。任一步失败都保持原配置，不做自动回退，也不产生半切换状态。
  */
 
+import { z } from 'zod';
+
 import type {
   CoordinatorSessionState,
   NativeCompactedWindowOwner,
   PortableContextCapsule,
 } from '../../domain/coordinator/session-state.js';
+import {
+  effortCapabilitySchema,
+  providerConnectionSchema,
+  type EffortCapability,
+  type ProviderConnection,
+} from '../../domain/model-configuration.js';
 import type { CoordinatorSessionId } from '../dto/identity.js';
 import type { CheckpointWriteResult, CoordinatorSessionRecordPort } from './runtime-guard.js';
 import type { SuspensionState } from './suspension.js';
 
+const identity = z.string().min(1).max(2048);
+
 /**
  * 一份用户批准的 Coordinator Model Configuration。
  *
- * `credentialRefs` 只是引用：Companion 不保存密钥，也不把引用解析成值——凭据由已安装的 provider
- * 集成按用户自己的方式取得。
+ * `credentialRefs` 只是引用：Companion 不在版本控制里保存密钥，值只在用户级 CredentialStore 或
+ * 显式 Harness-login 处解析。
+ *
+ * `providerConnection`、`modelRef`、`effortCapability` 与 `effort` 是 v2 增加的可选绑定。缺省表示
+ * 「没有可信的连接或能力来源」——旧配置仍能表达，模型则只能取默认值、不能猜 effort。
+ *
+ * `providerConnection` 是**完整连接快照**而不是引用字符串：模型装配点要的是 provider 集成、非秘密
+ * modelOptions 与凭据解析方式，让每个调用方去回查项目配置会把「配置读不到」变成一次运行期故障。
+ * 它与项目配置里被引用的连接记录必须逐字段一致，交叉核验在项目配置 parser 统一完成。
  */
-export type CoordinatorModelConfiguration = {
+export const coordinatorModelConfigurationSchema = z.strictObject({
   /** 稳定引用；Session registry 里登记的就是它。 */
-  readonly configurationRef: string;
+  configurationRef: identity,
   /** 用户已安装的 provider 集成标识，例如 `@langchain/openai#ChatOpenAI`。 */
-  readonly providerIntegration: string;
-  readonly model: string;
-  readonly modelOptions: Readonly<Record<string, unknown>>;
-  readonly credentialRefs: readonly string[];
+  providerIntegration: identity,
+  model: identity,
+  modelOptions: z.record(z.string(), z.unknown()),
+  credentialRefs: z.array(identity),
   /** 该配置使用的原生压缩窗口 owner 身份；跨配置迁移的兼容判据。 */
-  readonly nativeWindowOwnerRef: string | null;
-};
+  nativeWindowOwnerRef: identity.nullable(),
+  /** 所引用 Provider Connection 的完整快照；其 connectionRef 必须指向同一条记录。 */
+  providerConnection: providerConnectionSchema.optional(),
+  /** 所引用 Model 定义的引用。 */
+  modelRef: identity.optional(),
+  /** effort 的可信能力来源；null 表示该模型没有可信的 effort 能力。 */
+  effortCapability: effortCapabilitySchema.nullable().optional(),
+  /** 选定的 effort；null 表示交给 provider 默认值。 */
+  effort: identity.nullable().optional(),
+});
+
+export type CoordinatorModelConfiguration = z.infer<typeof coordinatorModelConfigurationSchema>;
+
+/** 该配置携带的 provider 连接快照；没有可信连接时为 null。 */
+export function configurationConnection(
+  configuration: CoordinatorModelConfiguration,
+): ProviderConnection | null {
+  return configuration.providerConnection ?? null;
+}
+
+/** 该配置是否有可信 effort 能力来源；没有就不允许显式选 effort。 */
+export function isEffortSelectable(configuration: CoordinatorModelConfiguration): boolean {
+  const capability: EffortCapability | null | undefined = configuration.effortCapability;
+  return capability !== null && capability !== undefined;
+}
 
 /** 模型相关操作的在途情况；只有为零时才允许切换。 */
 export type SwitchabilityInput = {

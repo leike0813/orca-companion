@@ -36,18 +36,38 @@
 ### 项目配置：`orca-companion.json`
 
 前台规划 Runtime 从 canonical worktree 根目录读取用户维护、纳入版本控制的 `orca-companion.json`。
-它只保存**凭据引用**，不保存任何密钥值：出现已知密钥字段名时整份配置被拒绝。
+它只保存**凭据引用**，不保存任何密钥值：出现已知密钥字段名时整份配置被拒绝。`schemaVersion` 必须是 2，
+旧版本配置被明确拒绝，不会被自动改写。
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "revision": 1,
+  "providerConnections": [
+    {
+      "connectionRef": "connection-openai",
+      "label": "OpenAI",
+      "providerIntegration": "@langchain/openai#ChatOpenAI",
+      "modelOptions": { "temperature": 0 },
+      "credential": { "kind": "harness_login" },
+      "codex": null
+    }
+  ],
+  "models": [
+    {
+      "modelRef": "gpt-4.1-mini",
+      "connectionRef": "connection-openai",
+      "model": "gpt-4.1-mini",
+      "effortCapability": null
+    }
+  ],
   "coordinatorModels": [
     {
       "configurationRef": "planning-default",
       "providerIntegration": "@langchain/openai#ChatOpenAI",
       "model": "gpt-4.1-mini",
       "modelOptions": { "temperature": 0 },
-      "credentialRefs": ["openai-default"],
+      "credentialRefs": [],
       "nativeWindowOwnerRef": null
     }
   ],
@@ -58,7 +78,8 @@
   "output": { "maxResponseBytes": 8388608 },
   "execution": {
     "harness": "codex",
-    "workerModel": "minimax-cn/MiniMax-M3",
+    "workerProfiles": [],
+    "workerProfileRefs": {},
     "codexSandbox": "workspace-write",
     "permissions": { "gitIntegration": true, "dependencyChanges": false },
     "limits": { "maxActiveWorkPackages": 8, "concurrencyLimit": 1 },
@@ -69,6 +90,11 @@
 }
 ```
 
+- `revision` / `providerConnections` / `models`：模型设置的不可变记录。每次编辑追加新的 `connectionRef`、
+  `modelRef` 与 `profileRef` 并推进 `revision`，既有引用不被改写；`effortCapability` 为 `null` 表示该模型
+  没有可信的 effort 能力来源，非空时 Worker 选择必须落在它的 `values` 内，注入字段由 `optionPath` 显式
+  给出。`credential` 为 `harness_login` 或 `managed`（带 `credentialRef` 与 LangChain `optionPath`）；密钥值
+  本身存在用户级凭据文件里，不进版本控制。
 - `coordinatorModels` / `defaultCoordinatorModelRef`：可切换的 Coordinator 模型配置闭集与默认引用；
   默认引用必须存在于集合中，且 `configurationRef` 唯一。`providerIntegration` 形如 `<module>#<export>`，
   由用户已安装的 provider 集成提供，Companion 不维护 allowlist、不自动 fallback。
@@ -81,8 +107,9 @@
   超限明确阻塞，权威原文可继续按范围阅读，不静默截断输入。
 - `output.maxResponseBytes`：单次模型输出的字节预算，缺省 8 MiB，涵盖正文、内容块与工具参数。
   两项字节预算均须为有限正整数；输出超限会中止调用，不重试或提交部分响应。
-- `execution`（可选）：执行授权的长期策略。`harness` 与 `workerModel` 决定 Worker 角色用哪个 harness
-  与模型；`codexSandbox` 决定角色级 Session 的 Codex 沙箱模式（默认 `workspace-write`，只允许写隔离
+- `execution`（可选）：执行授权的长期策略。`harness` 与 `workerProfiles` 决定各 Worker 角色用哪个 harness
+  与哪份模型配置；`workerProfiles` 缺省为空，此时只能做规划，执行授权要求四个生产角色齐全。
+  `codexSandbox` 决定角色级 Session 的 Codex 沙箱模式（默认 `workspace-write`，只允许写隔离
   worktree）；`permissions`、`limits`、`git`、`dependency`、`acceptedRisks` 是 Execution Authorization
   Manifest 被审阅与批准的候选值。缺省的字段取有限默认值（`limits` 走 `budget-policy.ts` 的默认上限，
   权限默认放行四个角色），但**配置本身不是授权**：只有用户在 Execution Authorization Review 里批准的
@@ -92,18 +119,50 @@
   把 `codexSandbox` 设为 `danger-full-access` 只有在 `acceptedRisks` 里同时存在
   `codex-sandbox-danger-full-access` 时才可能通过审阅：审阅会把它作为已接受风险显示，未接受时授权被
   拒绝。Finalizer 的只读模式不受该字段影响（它始终以 `read-only` 运行，只读无法证明时交付保持 blocker）。
+  `workerProfileRefs` 是「角色当前选择引用」：执行期换模型时先保存选择，再走完整 Execution Authorization
+  重新审阅与批准，批准前不会改变正在运行的 Session、已批准授权、Task 或已消耗预算。
+
+编辑模型设置是显式的两步：**保存**只改配置，**应用**才改变运行中的 Session 或角色授权。保存时先校验
+候选（引用唯一、交叉引用一致、effort 必须落在可信能力来源内、选项里不得含明文密钥），有新 key 时先把凭据
+写入并回读，再把新的 `connectionRef`/`modelRef`/`profileRef` 以 CAS 追加进项目配置；项目保存失败保留
+你的输入，不覆盖较新配置，也不宣称已生效。
+
+### 授权与运行依据
+
+Execution Authorization Manifest 当前为 v2：除目的地、图、权限、预算与策略外，它还完整绑定四个生产角色
+各自 Worker Profile 的模型配置（连接、模型、effort 及其可信能力来源、非秘密选项与 `credentialRef`）以及
+Recovery Utility 的独立绑定。缺少任一角色绑定的授权无法证明 Worker 实际用什么模型运行，因此解析即拒绝。
+执行期只改模型配置时按完整 Manifest 指纹与 Scope revision 重新批准，不创建 Graph Revision、不重置预算；
+Replanning、cancelling 或存在未决派发时不能重新授权。
+
+每次派发会把当时的授权 ID、授权版本与 Worker Profile 写进该 Task 的物化绑定。Retry 沿原 Task 的绑定继续用
+原授权与原 profile，新角色 Task 才取当前授权；结算与恢复都按这条绑定判断权限与模型配置。缺失这三项的
+历史记录按不可证明阻塞，不退回「当前授权」。
+
+### 凭据文件
+
+用户安装 provider 集成后填写的密钥存在独立的用户级凭据文件（XDG 目录，按 XDG 变量解析），文件内容是明文的
+`credentialRef → secret` 映射，权限被拒绝时明确报错而不是放宽。项目配置、checkpoint、UI 输入存储、日志与
+提交内容里只出现 `credentialRef`：聊天模型在最后的构造点按 `credential.credentialRef` 与 `optionPath` 解析，
+Codex 启动时通过子进程环境传递，公开的 terminal 命令与回执不含密钥。保存凭据先落盘再写项目配置；后者失败
+时输入被保留，可能留下未引用的孤立密钥，但不会激活错误配置。
+
+引用不可变：每次保存生成新的 `credentialRef`，既有引用不被改写。文件写入使用短 exclusive 文件锁、
+revision CAS、0600 临时文件原子替换与回读；锁被占用、文件已被其他写者更新、目录或文件权限不安全、指向
+符号链接、内容损坏或超出大小与条目上限时都以结构化错误拒绝，不自动破锁、不修改既有用户目录权限。
 
 配置缺失、schema 无效、默认模型引用不存在或 tracker 不可达时，初始化与模型恢复都会明确拒绝，
 不会选择任意已安装模型，也不会隐式创建 Scope。
 
 ### 前台 TUI 键位与分区
 
-- `Ctrl+P` Command Palette、`Ctrl+B` 切换 Sidebar 密度、`Ctrl+G` Graph Inspector、`Esc` 逐层关闭、`Ctrl+C` 退出（不隐式 Pause/Cancel）。
+- `Ctrl+P` Command Palette、`Ctrl+B` 开合项目面板、`Ctrl+G` Graph Inspector、`Esc` 逐层关闭、`Ctrl+C` 退出（不隐式 Pause/Cancel）。
 - composer 支持中间编辑、方向键、Home/End、Ctrl+A/E 行首尾与完整字符删除；`Enter` 提交非空正文，`Alt+Enter` 换行（可靠解析 Shift+Enter 的终端也可使用）。正文视口最多六行，随光标和 resize 调整。
 - 粘贴插入光标处并立即保存。超过 1000 个 Unicode 字符的粘贴显示原子折叠块；`/paste` 或 Palette 查看完整内容，Esc 返回原位置，发送使用全文。
-- `Shift+Left`、`/answer` 或 Palette 打开当前 Session 回答面板；Shift+左右切问题，Tab 切选项与自由回答，选项 Enter 直接提交。Esc 保存回答并恢复聊天草稿。历史搜索、完整命令候选与跨 Session 回跳留给后续批次。
-- 主视图常驻顶栏 / transcript / composer / 状态行；Scope 状态、预算、执行图、Worker 与 blocker 只在 Sidebar；语义事件只在 Event Drawer。
-- 中文与中英文混排按显示宽度换行与裁切；过窄终端下 `Ctrl+G` 只提示扩宽，不用 overlay 遮挡主视图。
+- `Shift+Left`、`/answer` 或 Palette 打开当前 Session 回答面板；Shift+左右切问题，Tab 切选项与自由回答，选项 Enter 直接提交。Esc 保存回答并恢复聊天草稿；项目待答列表支持精确跨 Session 进入与原入口返回。
+- `F3` 搜索 transcript，`F4` 导航活动，`Ctrl+T` 切换详细程度，`Ctrl+R` 搜索普通输入历史。slash 上方候选先采用，下一次 Enter 才执行。
+- 主视图常驻顶栏 / transcript / composer / 状态行，默认 Sidebar 展示图与运行摘要。项目面板承载预算、授权、身份、工作依据、待答与本次启动的最近事件；100 列及以上在原 Sidebar 区域打开，窄屏独占主区域。
+- 中文与中英文混排按显示宽度换行与裁切；三档尺寸下 `Ctrl+G` 都能查看只读图邻域与节点详情。
 
 ### 执行阶段视图
 
@@ -155,8 +214,8 @@ session 内完成）、受控 Git 集成与只读 Finalizer 都在生产路径�
 - Validator 的 in-host 步骤通道：验证链由角色 Worker 在其 harness session 内完成，宿主没有可证明的
   step 通道，因此不接线；
 - 集成要求 Manifest 恰好一个获批 remote 与一个 ref，多个目标时不替用户挑一个；
-- 完整闭环尚未在真实 Orca + Worker 上通过：隔离项目已实测到 Planner 派发，但当前主机的 Codex
-  受限沙箱无法执行 shell；真实 PTY 与前台集成冒烟已运行。详情见 `docs/orca-compatibility.md`。
+- 已归档执行 TUI 的隔离验收取得真实 Delivery Verdict、Git 集成及重启恢复证据，具体版本和限制见
+  `docs/orca-compatibility.md`。当前模型配置变更的真实启动需单独核验，不由历史验收推定通过。
 
 已可用：Home 的精确 Scope 恢复与初始化向导、向 Coordinator 发送消息、回答 Pending Interaction、
 `/compact`、Model Picker 切换、Route Planning Handoff、Execution Handoff 的意图链路、Execution

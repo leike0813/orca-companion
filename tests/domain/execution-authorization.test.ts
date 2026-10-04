@@ -26,6 +26,7 @@ import {
   type ExecutionAuthorizationRecord,
   type RoleAuthorities,
 } from '../../src/domain/planning/execution-authorization.js';
+import { executionModelConfiguration } from '../support/execution-harness.js';
 
 function baseManifest(): Record<string, unknown> {
   return {
@@ -38,12 +39,17 @@ function baseManifest(): Record<string, unknown> {
     graph: { graphId: 'graph-1', generation: 1, version: 1 },
     baselineHead: 'abcdef0123456789abcdef0123456789abcdef01',
     orcaRunId: 'run-1',
-    workerProfiles: [
-      { profileRef: { kind: 'worker-profile', id: 'p-planner' }, role: 'planner', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-impl' }, role: 'implementation', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-validator' }, role: 'validator', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-finalizer' }, role: 'finalizer', harness: 'codex' },
-    ],
+    workerProfiles: WORKER_ROLES.map((role) => ({
+      profileRef: { kind: 'worker-profile', id: `p-${role}` },
+      role,
+      harness: 'codex',
+      modelConfiguration: executionModelConfiguration(),
+    })),
+    recoveryUtilityProfile: {
+      profileRef: { kind: 'worker-profile', id: 'p-recovery' },
+      harness: 'codex',
+      modelConfiguration: executionModelConfiguration(),
+    },
     permissions: {
       planner: true,
       implementation: true,
@@ -262,4 +268,68 @@ test('策略内操作直接通过，Manifest 未授权的权限项仍拒绝', ()
 
 test('默认恢复上限为 1', () => {
   expect(defaultRecoveriesPerWorkerAttempt()).toBe(1);
+});
+
+test('Manifest2 拒绝旧版本、缺模型绑定与重复角色的授权', () => {
+  expect(parseManifest({ ...baseManifest(), manifestVersion: 1 }).ok).toBe(false);
+
+  const missingModel = baseManifest();
+  (missingModel['workerProfiles'] as Record<string, unknown>[])[0] = {
+    profileRef: { kind: 'worker-profile', id: 'p-planner' },
+    role: 'planner',
+    harness: 'codex',
+  };
+  expect(parseManifest(missingModel).ok).toBe(false);
+
+  expect(parseManifest(omit(baseManifest(), 'recoveryUtilityProfile')).ok).toBe(false);
+
+  const duplicated = baseManifest();
+  const profiles = duplicated['workerProfiles'] as Record<string, unknown>[];
+  profiles[1] = { ...profiles[0]!, id: undefined, profileRef: { kind: 'worker-profile', id: 'p-planner-2' } };
+  expect(parseManifest(duplicated).ok).toBe(false);
+});
+
+test('Manifest2 不接受模型 options 中的明文秘密，但放行同前缀的非秘密项', () => {
+  const withSecret = (modelOptions: Record<string, unknown>): boolean => {
+    const raw = baseManifest();
+    const profiles = raw['workerProfiles'] as Record<string, unknown>[];
+    profiles[0] = {
+      ...profiles[0]!,
+      modelConfiguration: executionModelConfiguration({ modelOptions }),
+    };
+    return parseManifest(raw).ok;
+  };
+
+  for (const secret of ['api_key', 'bearer_token', 'client_secret', 'x-api-key']) {
+    expect(withSecret({ [secret]: 'value' })).toBe(false);
+  }
+  // 键名前缀相同但不是秘密：`maxTokens` 这类合法 option 不能被误杀。
+  expect(withSecret({ maxTokens: 4096 })).toBe(true);
+  // 数组与深嵌套同样受检：只在顶层看键会让数组里的凭据名混进授权。
+  expect(withSecret({ headers: [{ api_key: 'value' }] })).toBe(false);
+  const shared = { maxTokens: 4096 };
+  expect(withSecret({ first: shared, second: shared })).toBe(true);
+  let deep: Record<string, unknown> = {};
+  const root = deep;
+  for (let index = 0; index < 40; index += 1) {
+    const next: Record<string, unknown> = {};
+    deep.nested = next;
+    deep = next;
+  }
+  expect(withSecret(root)).toBe(false);
+});
+
+test('模型绑定进入内容指纹：换模型就是另一份授权', () => {
+  const base = manifestFixture();
+  const rebound = parseManifest({
+    ...base,
+    workerProfiles: base.workerProfiles.map((profile) =>
+      profile.role === 'implementation'
+        ? { ...profile, modelConfiguration: executionModelConfiguration({ model: 'other-model' }) }
+        : profile,
+    ),
+  });
+  expect(rebound.ok).toBe(true);
+  if (!rebound.ok) return;
+  expect(manifestFingerprint(rebound.value)).not.toBe(manifestFingerprint(base));
 });

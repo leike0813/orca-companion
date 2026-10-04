@@ -108,6 +108,19 @@ export function ReviewBody({lines,width,rows,scroll=0,tab=0,action=0,allowed,lab
     <Box flexDirection="column" flexGrow={1} overflow="hidden">{selected.map((line,index)=><Text key={index}>{line}</Text>)}</Box>
     <Text dimColor>{'─'.repeat(Math.max(1,width-8))}</Text>
     <Text dimColor>{truncateToDisplayWidth('当前操作：'+(action===0?'返回':allowed?label:'当前不可确认')+(wrapped.length>budget?' · 行 '+(start+1)+'–'+Math.min(start+budget,wrapped.length)+'/'+wrapped.length:''),Math.max(1,width-8))}</Text>
-    <Text><Text inverse={action===0} color={tuiColors.accent}> 返回 </Text>{'  '}<Text inverse={action===1&&allowed} color={allowed?tuiColors.warning:tuiColors.muted}>{allowed?` ${label} `:' 当前不可确认 '}</Text></Text>
+    <ActionRow index={action} allowed={allowed} label={label}/>
   </>;
+}
+
+/**
+ * 定稿 #52 的动作行：当前动作使用反色色块，`index` 落在 0 时永远是返回。
+ *
+ * 「当前不可确认」由宿主裁决表达为 `allowed=false`，界面只把同一动作渲染成不可用色，不另发明路径。
+ * 顺序固定为「返回 → 确认动作」，因此默认选择与 Esc 都不会改变任何绑定。
+ */
+export function ActionRow({index,allowed,label}:{readonly index:number;readonly allowed:boolean;readonly label:string}) {
+  return <Text>
+    <Text inverse={index===0} bold color={tuiColors.accent}>{' [返回] '}</Text>{'   '}
+    <Text inverse={index===1} bold color={allowed?tuiColors.warning:tuiColors.muted}>{allowed?` [${label}] `:' [当前不可确认] '}</Text>
+  </Text>;
 }

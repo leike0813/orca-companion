@@ -26,6 +26,11 @@ import {
 } from '../../application/dto/identity.js';
 import type { GraphVersionRecord } from './execution-graph.js';
 import {
+  scanModelOptionFields,
+  workerModelConfigurationSchema,
+  type WorkerModelConfiguration,
+} from '../model-configuration.js';
+import {
   DEFAULT_EXECUTION_LIMITS,
   DEFAULT_RECOVERIES_PER_WORKER_ATTEMPT,
   applyLimitDefaults,
@@ -34,7 +39,7 @@ import {
 } from './budget-policy.js';
 
 /** Manifest 的结构版本；字段集合变化时递增，读取到未知版本即拒绝。 */
-export const MANIFEST_VERSION = 1;
+export const MANIFEST_VERSION = 2;
 
 export const WORKER_ROLES = ['planner', 'implementation', 'validator', 'finalizer'] as const;
 
@@ -44,6 +49,25 @@ export type WorkerProfileRef = {
   readonly profileRef: EntityRef<'worker-profile'>;
   readonly role: WorkerRole;
   readonly harness: string;
+  /**
+   * 该角色的完整模型绑定（连接、模型、effort、非秘密 options 与 credentialRef）。
+   *
+   * Manifest2 起这是必填：缺少它的授权无法证明 Worker 实际用什么模型运行，因此解析层直接拒绝，
+   * 不存在「留到启动时再补」的状态。
+   */
+  readonly modelConfiguration: WorkerModelConfiguration;
+};
+
+/**
+ * Recovery Utility 的独立绑定（Manifest2）。
+ *
+ * 它不参与领域四主角色，但替代 Session 需要模型配置；新 Recovery Utility Task 固定创建时的授权配置，
+ * 所以授权必须自带这一份绑定，而不是从当前项目配置里现读。
+ */
+export type RecoveryUtilityProfile = {
+  readonly profileRef: EntityRef<'worker-profile'>;
+  readonly harness: string;
+  readonly modelConfiguration: WorkerModelConfiguration;
 };
 
 /** 角色权限；每一项都是显式布尔值，没有「默认允许」的解读空间。 */
@@ -91,6 +115,7 @@ export type ExecutionAuthorizationManifest = {
   readonly baselineHead: string;
   readonly orcaRunId: string;
   readonly workerProfiles: readonly WorkerProfileRef[];
+  readonly recoveryUtilityProfile: RecoveryUtilityProfile;
   readonly permissions: RoleAuthorities;
   readonly limits: ExecutionLimits;
   readonly workspacePolicy: WorkspacePolicy;
@@ -157,6 +182,36 @@ function readVersionedRef(
   return { ok: true, value: { kind: ref.value.kind, id: ref.value.id, version: version.value } };
 }
 
+function parseModelConfiguration(raw: unknown, path: string): IdentityResult<WorkerModelConfiguration> {
+  const parsed = workerModelConfigurationSchema.safeParse(raw);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const field = issue === undefined || issue.path.length === 0 ? path : `${path}.${issue.path.join('.')}`;
+    return {
+      ok: false,
+      field,
+      message: issue === undefined ? '不是合法的模型配置' : issue.message,
+    };
+  }
+  const scanned = [
+    { path: `${path}.modelOptions`, scan: scanModelOptionFields(parsed.data.modelOptions, `${path}.modelOptions`) },
+    { path: `${path}.connection.modelOptions`, scan: scanModelOptionFields(parsed.data.connection.modelOptions, `${path}.connection.modelOptions`) },
+  ];
+  for (const entry of scanned) {
+    if (entry.scan.kind === 'credential_field') {
+      return {
+        ok: false,
+        field: entry.scan.path,
+        message: '模型 options 不得携带明文秘密',
+      };
+    }
+    if (entry.scan.kind === 'unbounded') {
+      return { ok: false, field: entry.path, message: '模型 options 结构过深或成环，无法证明不含明文秘密' };
+    }
+  }
+  return { ok: true, value: parsed.data };
+}
+
 function parseWorkerProfiles(raw: unknown, path: string): IdentityResult<readonly WorkerProfileRef[]> {
   if (!Array.isArray(raw) || raw.length === 0) {
     return { ok: false, field: path, message: '至少需要一个 Worker Profile' };
@@ -179,11 +234,23 @@ function parseWorkerProfiles(raw: unknown, path: string): IdentityResult<readonl
     if (!harness.ok) {
       return harness;
     }
+    const modelConfiguration = parseModelConfiguration(record['modelConfiguration'], `${path}[${index}].modelConfiguration`);
+    if (!modelConfiguration.ok) {
+      return modelConfiguration;
+    }
     profiles.push({
       profileRef: { kind: 'worker-profile', id: profileRef.value.id },
       role: role as WorkerRole,
       harness: harness.value,
+      modelConfiguration: modelConfiguration.value,
     });
+  }
+  const seenRoles = new Set<string>();
+  for (const [index, profile] of profiles.entries()) {
+    if (seenRoles.has(profile.role)) {
+      return { ok: false, field: `${path}[${index}].role`, message: `角色 ${profile.role} 出现多次` };
+    }
+    seenRoles.add(profile.role);
   }
   const covered = new Set(profiles.map((profile) => profile.role));
   for (const role of WORKER_ROLES) {
@@ -192,6 +259,33 @@ function parseWorkerProfiles(raw: unknown, path: string): IdentityResult<readonl
     }
   }
   return { ok: true, value: profiles };
+}
+
+function parseRecoveryUtilityProfile(raw: unknown, path: string): IdentityResult<RecoveryUtilityProfile> {
+  if (typeof raw !== 'object' || raw === null) {
+    return { ok: false, field: path, message: '必须是对象' };
+  }
+  const record = raw as Record<string, unknown>;
+  const profileRef = parseEntityRef(record['profileRef'], `${path}.profileRef`, ['worker-profile']);
+  if (!profileRef.ok) {
+    return profileRef;
+  }
+  const harness = readString(record, 'harness', path);
+  if (!harness.ok) {
+    return harness;
+  }
+  const modelConfiguration = parseModelConfiguration(record['modelConfiguration'], `${path}.modelConfiguration`);
+  if (!modelConfiguration.ok) {
+    return modelConfiguration;
+  }
+  return {
+    ok: true,
+    value: {
+      profileRef: { kind: 'worker-profile', id: profileRef.value.id },
+      harness: harness.value,
+      modelConfiguration: modelConfiguration.value,
+    },
+  };
 }
 
 function parsePermissions(raw: unknown, path: string): IdentityResult<RoleAuthorities> {
@@ -381,6 +475,13 @@ export function parseManifest(raw: unknown, path = 'manifest'): IdentityResult<E
   if (!workerProfiles.ok) {
     return workerProfiles;
   }
+  const recoveryUtilityProfile = parseRecoveryUtilityProfile(
+    record['recoveryUtilityProfile'],
+    `${path}.recoveryUtilityProfile`,
+  );
+  if (!recoveryUtilityProfile.ok) {
+    return recoveryUtilityProfile;
+  }
   const permissions = parsePermissions(record['permissions'], `${path}.permissions`);
   if (!permissions.ok) {
     return permissions;
@@ -423,6 +524,7 @@ export function parseManifest(raw: unknown, path = 'manifest'): IdentityResult<E
       baselineHead: baselineHead.value,
       orcaRunId: orcaRunId.value,
       workerProfiles: workerProfiles.value,
+      recoveryUtilityProfile: recoveryUtilityProfile.value,
       permissions: permissions.value,
       limits: limits.value,
       workspacePolicy: workspacePolicy.value,

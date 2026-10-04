@@ -32,8 +32,8 @@
  * 4. ④ 退出重启：读回同一批 `(workPackageId, state, attemptId)`，不产生新的派发或集成；
  * 5. ⑤b 与 ⑥ Finalizer 终态投影与 `Ctrl+C` 前台退出。
  *
- * 所有角色共用一个模型来源（项目配置 `execution.workerModel`），因此验收要求它显式等于
- * `minimax-cn/MiniMax-M3`，并在真实 Codex Session 记录里逐角色核对。
+ * 各角色由项目 schema2 的 Worker Profile 显式绑定模型，验收先核对当前角色配置，再核对真实
+ * Codex Session；配置本身不代替启动证据。
  *
  * ## 图修订与基线补救的同链路覆盖
  *
@@ -88,6 +88,8 @@ import {
   REAL_ENV_FILE_VAR,
 } from '../support/real-env.js';
 import { REAL_LOOP_PLAN, seedRealExecutionScope } from '../support/real-execution-scope.js';
+import { currentWorkerProfile, parseProjectConfig } from '../../src/bootstrap/project-config.js';
+import type { ModelProfileRole } from '../../src/domain/model-configuration.js';
 
 const COMPANION_REPOSITORY = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const BUILT_ENTRY = join(COMPANION_REPOSITORY, 'dist', 'src', 'interfaces', 'cli', 'main.js');
@@ -1297,16 +1299,14 @@ if (gate.kind === 'skip') {
       '⑤ 授权 → 串行 Frontier → 执行态 Recovery → Finalizer（Scenario: 授权切换 / 串行推进 / Recovery 可观察 / Finalizer 终态）',
       async () => {
         expect(seededRunId.length, '播种必须给出候选图的 Orca Run').toBeGreaterThan(0);
-        const config = JSON.parse(readFileSync(join(workspace, 'orca-companion.json'), 'utf8')) as {
-          readonly execution?: {
-            readonly workerModel?: unknown;
-            readonly git?: { readonly remotes?: readonly string[]; readonly refs?: readonly string[] };
-          };
-        };
-        // 所有角色共用一个模型来源（项目配置），因此验收先钉住它，再由真实 Session 记录逐角色核对。
-        expect(config.execution?.workerModel, 'Worker 模型必须由项目配置显式给出').toBe(
-          REQUIRED_COORDINATOR_MODEL,
-        );
+        const parsedConfig = parseProjectConfig(JSON.parse(readFileSync(join(workspace, 'orca-companion.json'), 'utf8')));
+        if (!parsedConfig.ok) throw new Error('隔离项目模型配置无效：' + parsedConfig.field);
+        const config = parsedConfig.value;
+        const workerRoles: readonly ModelProfileRole[] = ['planner', 'implementation', 'validator', 'finalizer', 'recovery_utility'];
+        for (const role of workerRoles) {
+          expect(currentWorkerProfile(config, role)?.modelConfiguration.model, '角色模型必须显式绑定：' + role)
+            .toBe(REQUIRED_COORDINATOR_MODEL);
+        }
 
         // ---- 授权：在 TUI 里打开审阅并批准 ----
         const seeded = await readStatus(workspace);
@@ -1883,12 +1883,11 @@ if (gate.kind === 'skip') {
 
         // ---- 逐角色核对真实 Codex Session 的模型绑定 ----
         const models = roleSessionModels(facts);
-        // 每个真的跑起来的角色都必须落在配置声明的 Worker 模型上：模型来自唯一来源（项目配置的
-        // `execution.workerModel`，上面已核验它就是计划要求的模型），这里是逐角色的真实会话证据。记录里的
-        // id 可能带也可能不带 provider 前缀，因此按「任一侧包含另一侧」判定，而不是精确相等。
-        const expectedWorkerModel = config.execution?.workerModel;
-        expect(expectedWorkerModel, 'Worker 模型必须由项目配置显式给出').toEqual(expect.any(String));
+        // 逐角色核对真实 Session 的模型；显示名可能包含 provider 前缀。
         for (const role of ['planner', 'implementation', ...models.keys()]) {
+          const expectedWorkerModel = workerRoles.includes(role as ModelProfileRole)
+            ? currentWorkerProfile(config, role as ModelProfileRole)?.modelConfiguration.model
+            : currentWorkerProfile(config, 'planner')?.modelConfiguration.model;
           const seen = models.get(role) ?? [];
           expect(
             seen.length,

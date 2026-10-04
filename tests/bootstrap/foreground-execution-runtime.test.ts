@@ -54,7 +54,11 @@ import { recordInitialGraph } from '../../src/application/planning/graph-history
 import { ensureGraphGenerationRecord } from '../../src/application/execution/replanning-service.js';
 import { workPackageComment } from '../../src/application/materialize-work-package.js';
 import { DEFAULT_EXECUTION_LIMITS } from '../../src/domain/planning/budget-policy.js';
+import { MANIFEST_VERSION } from '../../src/domain/planning/execution-authorization.js';
 import type { ExecutionAuthorizationManifest } from '../../src/domain/planning/execution-authorization.js';
+import { EXECUTION_AUTHORIZATION_ID, executionWorkerProfiles } from '../support/execution-harness.js';
+import { projectConnectionsFixture, projectExecutionProfilesFixture } from '../support/model-configurations.js';
+import { recoveryUtilityProfileFixture } from '../support/model-configurations.js';
 import type { ExecutionGraph } from '../../src/domain/planning/execution-graph.js';
 import type { SnapshotLoad } from '../../src/interfaces/tui/ports.js';
 import { beginIntent, settleIntent } from '../../src/application/coordination/intent-service.js';
@@ -203,14 +207,14 @@ function writeProjectConfig(repository: string): void {
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',
           providerIntegration: '@fake/provider#CapableChatModel',
           model: 'fake-coordinator',
           modelOptions: {},
-          credentialRefs: ['fake'],
+          credentialRefs: [],
           nativeWindowOwnerRef: null,
         },
       ],
@@ -813,7 +817,8 @@ function prepareAdvanceState(repository: string, head: string): void {
       return read.scope.revision;
     };
     const manifest: ExecutionAuthorizationManifest = {
-      manifestVersion: 1,
+      // 与下面 `record-authorization` 写入的版本一致：Manifest2 起模型绑定与 Recovery Utility 都是必填。
+      manifestVersion: MANIFEST_VERSION,
       coordinationScopeId: EXEC_SCOPE,
       planningCycleId: EXEC_CYCLE,
       destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
@@ -822,12 +827,8 @@ function prepareAdvanceState(repository: string, head: string): void {
       graph: { graphId: EXEC_GRAPH, generation: EXEC_GENERATION, version: 1 as GraphVersion },
       baselineHead: head,
       orcaRunId: EXEC_RUN,
-      workerProfiles: [
-        { profileRef: { kind: 'worker-profile', id: 'codex:planner' }, role: 'planner', harness: 'codex' },
-        { profileRef: { kind: 'worker-profile', id: 'codex:implementation' }, role: 'implementation', harness: 'codex' },
-        { profileRef: { kind: 'worker-profile', id: 'codex:validator' }, role: 'validator', harness: 'codex' },
-        { profileRef: { kind: 'worker-profile', id: 'codex:finalizer' }, role: 'finalizer', harness: 'codex' },
-      ],
+      workerProfiles: executionWorkerProfiles(),
+      recoveryUtilityProfile: recoveryUtilityProfileFixture(),
       permissions: {
         planner: true,
         implementation: true,
@@ -849,7 +850,7 @@ function prepareAdvanceState(repository: string, head: string): void {
       writer,
       authorizationId: EXEC_AUTH,
       authorizationVersion: 1,
-      manifestVersion: 1,
+      manifestVersion: 2,
       fingerprint: 'fingerprint-advance',
       approvalRef: 'approval-advance',
       manifest,
@@ -940,14 +941,14 @@ async function openAdvanceHarness(options?: { readonly unknownWorkerStart?: bool
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',
           providerIntegration: '@fake/provider#CapableChatModel',
           model: 'fake-coordinator',
           modelOptions: {},
-          credentialRefs: ['fake'],
+          credentialRefs: [],
           nativeWindowOwnerRef: null,
         },
       ],
@@ -955,9 +956,10 @@ async function openAdvanceHarness(options?: { readonly unknownWorkerStart?: bool
       tracker: { kind: 'github', routeMapIssueNumber: 7 },
       planning: { maxMutations: 2 },
       context: { maxInputTokens: 20_000 },
+      ...projectConnectionsFixture(),
       execution: {
         harness: 'codex',
-        workerModel: 'minimax-cn/MiniMax-M3',
+        ...projectExecutionProfilesFixture(),
         permissions: {
           planner: true,
           implementation: true,
@@ -1277,12 +1279,16 @@ function binding(overrides: Partial<MaterializationBindingRecord> = {}): Materia
     workPackageId: EXEC_WP_A,
     identity: 'issued',
     role: 'planner',
+    recoveryUtilityRole: null,
     workerTaskId: 'worker-task-1' as WorkerTaskId,
     dispatchId: 'dispatch-1' as NonNullable<MaterializationBindingRecord['dispatchId']>,
     attemptId: 'attempt-1',
     worktreeId: 'worktree-1',
     specBinding: null,
     specificationUnitPath: `openspec/changes/${EXEC_WP_A}`,
+    authorizationId: EXECUTION_AUTHORIZATION_ID,
+    authorizationVersion: 1,
+    workerProfileRef: { kind: 'worker-profile', id: 'codex:planner' },
     orcaTaskId: 'task-1',
     launchId: 'worker-launch-1',
     creationOperationId: 'op-1' as OperationId,

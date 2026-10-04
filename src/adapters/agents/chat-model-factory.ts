@@ -4,7 +4,7 @@
  *
  * 这里只做一件事：把用户批准的 Coordinator Model Configuration 解析成**已安装** provider 集成的
  * 一个 chat model 实例，并把它原样交给 workflow。Companion 不维护 allowlist、不打包 provider、
- * 不保存凭据、不做 fallback；解析出来的实例就是调用路径本身，中间没有 Companion 代理层。
+ * 仅在构造时读取宿主注入的凭据、不做 fallback；解析出来的实例就是调用路径本身。
  *
  * 集成标识的形状是 `<module>#<export>`：模块与导出都由用户在配置里写死，解析失败就是启动失败，
  * 不会退到「猜一个 provider」。
@@ -13,6 +13,8 @@
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 
 import type { CoordinatorModelConfiguration } from '../../application/coordinator/model-config-switch.js';
+import type { CredentialStore } from '../../application/ports/credential-store.js';
+import { scanModelOptionFields, withModelOption } from '../../domain/model-configuration.js';
 
 /**
  * 内层重试必须关闭，否则会与 model node 的重试策略相乘（D15）。
@@ -29,6 +31,9 @@ export const MODEL_RESOLUTION_FAILURE_CODES = [
   'integration_unavailable',
   'integration_invalid',
   'construction_failed',
+  'credential_unavailable',
+  'invalid_effort',
+  'invalid_model_options',
 ] as const;
 
 export type ModelResolutionFailureCode = (typeof MODEL_RESOLUTION_FAILURE_CODES)[number];
@@ -86,7 +91,12 @@ export function chatModelOptionsFor(
 export function resolveChatModel(
   configuration: CoordinatorModelConfiguration,
   resolver: ProviderIntegrationResolver,
+  /** 凭据来源由 bootstrap 显式注入。 */
+  credentials: Pick<CredentialStore, 'read'>,
 ): ResolveChatModelResult {
+  if (scanModelOptionFields(configuration, 'configuration', true).kind !== 'clean') {
+    return { kind: 'rejected', code: 'invalid_model_options', message: '模型选项不能包含秘密或不可核验结构' };
+  }
   const integration = resolver(configuration.providerIntegration);
   if (integration === null) {
     return {
@@ -96,18 +106,35 @@ export function resolveChatModel(
     };
   }
   try {
+    const connection = configuration.providerConnection;
+    let modelOptions = { ...connection?.modelOptions, ...chatModelOptionsFor(configuration) };
+    const credential = connection?.credential;
+    if (credential?.kind === 'managed') {
+      const resolved = credentials.read(credential.credentialRef);
+      if (resolved.kind !== 'resolved') {
+        return { kind: 'rejected', code: 'credential_unavailable', message: '配置的凭据无法解析，请检查用户凭据存储' };
+      }
+      modelOptions = withModelOption(modelOptions, credential.optionPath, resolved.secret);
+    } else if (configuration.credentialRefs.length > 0 && connection === undefined) {
+      return { kind: 'rejected', code: 'credential_unavailable', message: '凭据引用缺少明确的连接绑定' };
+    }
+    if (configuration.effort !== undefined && configuration.effort !== null) {
+      const capability = configuration.effortCapability;
+      if (capability === undefined || capability === null || !capability.values.includes(configuration.effort)) {
+        return { kind: 'rejected', code: 'invalid_effort', message: '推理强度缺少可信能力来源' };
+      }
+      modelOptions = withModelOption(modelOptions, capability.optionPath, configuration.effort);
+    }
     const model = integration.createChatModel({
       model: configuration.model,
-      modelOptions: chatModelOptionsFor(configuration),
+      modelOptions,
     });
     return { kind: 'resolved', model, configurationRef: configuration.configurationRef };
-  } catch (error) {
+  } catch {
     return {
       kind: 'rejected',
       code: 'construction_failed',
-      message: `无法用配置 ${configuration.configurationRef} 构造 chat model：${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      message: '无法构造配置的 chat model，请核验连接、模型和非秘密选项',
     };
   }
 }

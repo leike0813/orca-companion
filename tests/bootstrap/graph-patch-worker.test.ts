@@ -3,7 +3,8 @@ import { expect, test } from 'vitest';
 import { beginIntent } from '../../src/application/coordination/intent-service.js';
 import type { OperationId } from '../../src/application/dto/identity.js';
 import { runGraphPatchPlannerWorker } from '../../src/bootstrap/graph-patch-worker.js';
-import { createExecutionScopeHarness, forbiddenExecutionBackend } from '../support/execution-harness.js';
+import { createExecutionScopeHarness, executionModelConfiguration, forbiddenExecutionBackend } from '../support/execution-harness.js';
+import { credentialStoreFixture } from '../support/model-configurations.js';
 
 test('Planner Task 意图未决时沿原身份阻塞，不创建第二个 Task', async () => {
   const harness = createExecutionScopeHarness();
@@ -45,7 +46,10 @@ test('Planner Task 意图未决时沿原身份阻塞，不创建第二个 Task',
         runId: 'run-1', consumerGeneration: 1, timeoutMs: 1_000,
       },
       canonicalWorktreePath: '/tmp/unused', companionStateRoot: '/tmp/unused',
-      workerModel: 'test-model', bindingWindowMs: 1_000, reportTimeoutMs: 1_000,
+      modelConfiguration: executionModelConfiguration({ model: 'test-model' }),
+      credentialStore: credentialStoreFixture(),
+      credentialStorePath: '/tmp/credentials.json',
+      bindingWindowMs: 1_000, reportTimeoutMs: 1_000,
     });
     expect(result.kind).toBe('unknown');
     expect(calls).toEqual({ query: 0, mutate: 0 });

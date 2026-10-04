@@ -6,6 +6,8 @@
  * 伪造身份或绕过缺口。本模块不要求 TTY，也不加载 Ink/React。
  */
 
+import { readFileSync } from 'node:fs';
+
 import { failureCategoryOf } from '../adapters/orca-cli/error-classification.js';
 import { createOrcaExecutionBackend } from '../adapters/orca-cli/orca-backend.js';
 import { runProcess } from '../adapters/orca-cli/process-runner.js';
@@ -14,6 +16,18 @@ import {
   probeReadOnlyWorker,
   type ReadOnlyWorkerProbeResult,
 } from '../adapters/agents/codex-read-only-probe.js';
+import {
+  createModuleIntegrationResolverAsync,
+  resolveChatModel,
+} from '../adapters/agents/chat-model-factory.js';
+import { verifyModelCapabilities } from '../adapters/agents/capability-probe.js';
+import { JsonCredentialStore } from '../adapters/storage/credential-store.js';
+import {
+  configurationByRef,
+  currentWorkerProfile,
+  loadProjectConfig,
+  type ProjectConfig,
+} from '../application/configuration/project-config.js';
 
 export const DOCTOR_SCHEMA_VERSION = 1;
 
@@ -361,6 +375,91 @@ function stepFromRejection(code: string, message: string): DoctorProbeStep<never
  * 身份探测只用 `terminal list` 已报告为存活且属于本地 host scope 的句柄；缺失 host scope 时不能读作本地。
  * 这里的身份解析是受限直通：只接受本次 `terminal list` 观察到的活动句柄，且 handle 不进入任何应用层 DTO。
  */
+/** doctor 读到的项目配置事实（IP-03 / D03）。 */
+type DoctorProjectConfigRead =
+  | { readonly kind: 'loaded'; readonly config: ProjectConfig }
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'failed'; readonly code: string; readonly message: string };
+
+/**
+ * 读取项目配置一次，供模型核验与只读探针共用。
+ *
+ * 显式三态而不是布尔值：缺配置允许跳过核验，配置存在但读不动或写坏了必须报出来。压成一个布尔值会让
+ * 「没配」与「配错了」变成同一句话，用户既无从判断该不该装 provider 集成，也看不到项目配置有问题。
+ */
+function readProjectConfigOnce(worktreePath: string): DoctorProjectConfigRead {
+  const loaded = loadProjectConfig({
+    worktreePath,
+    readFile: (target: string) => readFileSync(target, 'utf8'),
+  });
+  if (loaded.kind === 'loaded') {
+    return { kind: 'loaded', config: loaded.config };
+  }
+  return loaded.code === 'missing'
+    ? { kind: 'absent' }
+    : { kind: 'failed', code: loaded.code, message: loaded.message };
+}
+
+/**
+ * 用启动同一条路径核验已配置的 Coordinator 模型：同一工厂、同一凭据 store（按 doctor 的 env 推导）、
+ * 同一套五项能力核验。
+ *
+ * 凭据 store 刻意由本次 env 构造而不复用宿主实例：doctor 是独立的一次性命令，可能在另一个 XDG 环境
+ * 里运行，共用实例反而会读到不属于本次调用的凭据文件。
+ */
+function unreadableConfigStep(message: string): DoctorProbeStep<CoordinatorModelFacts> {
+  return {
+    ok: false,
+    status: 'capability-missing',
+    detail: `项目配置无法使用：${message}`,
+  };
+}
+
+async function verifyConfiguredCoordinatorModel(
+  config: ProjectConfig,
+  env: Readonly<Record<string, string>>,
+): Promise<DoctorProbeStep<CoordinatorModelFacts>> {
+  const configuration = configurationByRef(config, config.defaultCoordinatorModelRef);
+  if (configuration === null) {
+    return {
+      ok: false,
+      status: 'capability-missing',
+      detail: `默认 Coordinator 配置 ${config.defaultCoordinatorModelRef} 不在项目配置中`,
+    };
+  }
+  const resolver = createModuleIntegrationResolverAsync();
+  const integration = await resolver(configuration.providerIntegration);
+  if (integration === null) {
+    return {
+      ok: false,
+      status: 'capability-missing',
+      detail: `provider 集成不可用：${configuration.providerIntegration}`,
+    };
+  }
+  const resolved = resolveChatModel(
+    configuration,
+    () => integration,
+    new JsonCredentialStore({ environment: env }),
+  );
+  if (resolved.kind !== 'resolved') {
+    // 凭据解析失败与 provider 不可用都不是「能力探针没跑」，而是这份配置本身用不了：如实报不可用。
+    return { ok: false, status: 'capability-missing', detail: resolved.message };
+  }
+  const verification = await verifyModelCapabilities(resolved.model, {
+    modelRef: configuration.configurationRef,
+  });
+  return verification.kind === 'rejected'
+    ? { ok: false, status: 'capability-missing', detail: verification.message }
+    : {
+        ok: true,
+        value: {
+          modelRef: configuration.configurationRef,
+          missing: verification.report.missing,
+          details: verification.report.details,
+        },
+      };
+}
+
 export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): DoctorProbe {
   // 显式给出的协调身份与 `terminal list` 观察到的句柄同权：否则探测会先宣布「身份可用」，
   // 随后每个带身份的查询都因解析不到这个句柄而失败。
@@ -373,6 +472,10 @@ export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): 
     env: environment.env,
     resolveIdentityHandle: (ref) => (observedHandles.has(ref) ? ref : undefined),
   });
+
+  // 装配时读一次：模型核验与只读探针必须看到同一份 revision，否则 doctor 报告的默认引用与实际
+  // 核验的配置可能不是同一份。项目配置缺失只影响这两个检查，不影响 Orca 相关的其余结论。
+  const projectConfig = readProjectConfigOnce(environment.cwd);
 
   return {
     readOrcaVersion: async () => {
@@ -498,19 +601,58 @@ export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): 
       }
       return { ok: true, value: commands };
     },
+    // 显式给出 Coordinator 模型时以它为准（前台宿主已经解析过）。否则按 D03 自己从项目配置解析，
+    // 走与启动完全相同的那条路径：同一个 chat-model 工厂、同一份 env-derived CredentialStore、同一套
+    // 五项能力核验，因此 doctor 通过确实说明正式启动会拿到同一个模型。
+    //
+    // 未配置时不装配这一项：模型核验是「配置了就必查」，没有可核验的配置就不假装核验过、也不因此
+    // 判定失败。配置存在但读不动、写坏、凭据解析不了或能力缺失都装配，并如实报 capability-missing
+    // —— 这一项的失败状态沿用既有闭集，不为它新增 doctor 状态。
     ...(environment.coordinatorModel === undefined
-      ? {}
+      ? projectConfig.kind === 'absent'
+        ? {}
+        : projectConfig.kind === 'loaded'
+          ? {
+              readCoordinatorModel: () =>
+                verifyConfiguredCoordinatorModel(projectConfig.config, environment.env),
+            }
+          // 配置在但读不动或写坏：同样装配，让 doctor 如实报不可用。跳过会把「配错了」说成「没配」。
+          : { readCoordinatorModel: () => Promise.resolve(unreadableConfigStep(projectConfig.message)) }
       : { readCoordinatorModel: environment.coordinatorModel.resolve }),
     readReadOnlyWorker: async (): Promise<DoctorProbeStep<ReadOnlyWorkerFacts>> => {
-      try {
-        const result = await probeReadOnlyWorker({ env: environment.env });
-        return { ok: true, value: { capability: result.kind, detail: describeReadOnlyWorkerCapability(result) } };
-      } catch (error) {
-        // 探针连跑都跑不起来时不能说「能力可用」：这是能力缺失，而不是通过。
+      // 只读探针按 Manifest 里的 Finalizer 绑定运行：正式只读会话拿到哪组 provider/model/effort/
+      // options，探针就核验哪一组。
+      //
+      // 配置已加载却没有 Finalizer profile 时按不可用报告：项目已进入执行配置，缺角色绑定意味着只读
+      // Finalizer 拿不到可证明的模型依据，与其跑一个「不带模型设置」的探针给出看起来通过的结论，
+      // 不如如实说不可用。只有「根本没有项目配置」才退化为受限命令本身的探针，因为那时连「本应
+      // 核验哪一组」都还不存在，结论不冒充与正式启动同配置。
+      const finalizerProfile =
+        projectConfig.kind === 'loaded' ? currentWorkerProfile(projectConfig.config, 'finalizer') : null;
+      if (projectConfig.kind === 'loaded' && finalizerProfile === null) {
         return {
           ok: false,
           status: 'capability-missing',
-          detail: `只读 Worker 能力探针无法运行：${error instanceof Error ? error.message : String(error)}`,
+          detail: '项目配置没有 Finalizer Worker Profile：只读 Worker 拿不到可证明的模型绑定',
+        };
+      }
+      const modelConfiguration = finalizerProfile?.modelConfiguration ?? null;
+      try {
+        const result = await probeReadOnlyWorker({
+          env: environment.env,
+          ...(modelConfiguration === null ? {} : { modelConfiguration }),
+        });
+        return { ok: true, value: { capability: result.kind, detail: describeReadOnlyWorkerCapability(result) } };
+      } catch (error) {
+        // 探针连跑都跑不起来时不能说「能力可用」：这是能力缺失，而不是通过。
+        //
+        // 原始 error.message 会被子进程与 SDK 放大，可能带出命令行、模型参数或凭据片段。这里只报
+        // 错误类别：doctor 是给人看的诊断面，不是调试通道，细节留在日志里由调用方自己取。
+        const category = error instanceof Error ? error.name : typeof error;
+        return {
+          ok: false,
+          status: 'capability-missing',
+          detail: `只读 Worker 能力探针无法运行（${category}）`,
         };
       }
     },

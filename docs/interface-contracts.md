@@ -21,6 +21,7 @@
 | IC-11 | `m1-recover-execution` | Change 8 增加图演进 projection/commands；`m1-wire-foreground-planning-runtime` 增加消息/回答字段与事件归属；`m2-deliver-planning-tui` 增加只读投影；`m2-deliver-execution-tui` 增加执行投影、Finalizer 与执行交接投影 | CLI、两个 TUI change |
 | IC-12 | `m0-orca-control-baseline` | `m1-wire-foreground-planning-runtime` 登记精确 Home 解析；`m2-deliver-planning-tui` 增加 planning 投影与组件；`m2-deliver-execution-tui` 增加执行态字段与组件 | CLI machine output、TUI React components |
 | IC-13 | `protect-tui-input` | 无 | Bootstrap、TUI 输入保护与记录管理 |
+| IC-14 | `complete-tui-model-configuration` | 无 | chat model factory、模型设置、Worker launcher、`doctor` |
 
 ## IC-01 Identity、revision 与引用字段族
 
@@ -168,6 +169,8 @@ type CoordinationCommandResult =
 
 schema 12 起每条物化绑定还记录这次派发使用的 **Worker launch 身份**（`launchId`）：它是补记 Session Binding 的唯一定位事实（报告文件按 launchId 派生）。Session Binding 的建立分两处，共用同一份签发实现：派发路径在 `bindingWindowMs` 窗口内读 Codex SessionStart 报告；每次执行触发在推进之前对「物化绑定已 issued 且有 launchId、但图内还没有对应 Session Segment」的角色再读一次同一路径的报告（Orca Dispatch 身份按已记录的 Orca Task 从列举事实匹配，不猜），校验通过才补记 Segment，读不到就什么都不做（保持 fail-closed：Delivery 结算会以 `dispatch_record_missing` 呈现）。补记不派发新 Worker、不改 Attempt、不消耗预算。schema 12 之前写入的行没有 `launchId`：读取方在需要补记时按不可补记处理，绝不重建派生编码。
 
+schema 16 再把这次派发的**运行依据**钉进同一条记录：`authorization_id`、`authorization_version` 与 `worker_profile_ref`。换模型只影响之后物化的 Task；已派发的 Task 按这条绑定取原授权与 profile，结算与恢复据此判断权限与模型配置。写入时缺任一项即拒绝。schema 16 之前写入的行这三项为空，读取方按不可证明阻塞，不退回「当前授权」。Recovery Utility 使用独立 `utility_role`，与四主角色的 `role` 互斥；同 Scope/Work Package/Utility Attempt 的绑定唯一，领域 `WorkerRole` 闭集保持四主角色。
+
 schema 13 给修订持有（`revision_holds`）加上内容版本边界：`prior_contract_revision` 是被替换掉的契约内容版本，`admitted_contract_revision` 是重新准入接纳的版本，两者都可为空（旧行与尚未准备/结算的行）。它们回答两个此前只能靠时间戳猜的问题——「内容是否真的变了」与「修订完成前与完成后的角色结果如何区分」。两条命令与图版本事务共同维护这一边界：
 
 - `prepare-revision-hold` 只在来源与当前 pending 持有逐项一致的持有上写旧版本（没有既有 Specification Unit 时记 0）；同源重放读回同一个值，值不同即拒绝——版本边界不因重放而漂移。
@@ -277,6 +280,7 @@ type ExecutionAuthorizationManifest = {
   baselineHead: string;
   orcaRunId: string;
   workerProfiles: readonly WorkerProfileRef[];
+  recoveryUtilityProfile: RecoveryUtilityProfile;
   permissions: RoleAuthorities;
   limits: ExecutionLimits;
   workspacePolicy: WorkspacePolicy;
@@ -730,7 +734,7 @@ type ExecutionAuthorizationCommand = ControllerScopeFields &
 
 `propose-graph` 只接受 Coordinator 提出的结构化 Implementation Plan：世代、空 Orca Run、OperationId 与预算上限由宿主从权威事实补齐——`run-create` 先落 Operation Intent，再按专用协调身份读回 Run，结果不可判定时保持未决并沿用同一 OperationId 对账。`review` 是只读的：宿主从 Scope、候选图记录、世代记录、Git 身份与版本化项目配置组装完整 Manifest，返回 Manifest 正文、内容指纹、候选图引用、Scope revision 与门禁判决。`approve` 只携带该指纹与用户看到的 Scope revision：宿主重读全部权威输入、比对指纹、写入批准记录、以刚写入的授权重判门禁后同事务切换；指纹不符时零写入且不派发。这三条命令都不接受调用方提供的 scope、Run、consumer generation 或 operation identity。
 
-Execution Authorization Manifest 的长期字段（Worker Profile、角色权限、预算上限、Git 与 Dependency Policy、accepted risks）来自版本化项目配置的 `execution` 段（`src/bootstrap/project-config.ts`，见 README）；Manifest 仍是唯一的授权事实，配置只提供待批准的候选值，批准是用户对完整 Manifest 的一次决定。`execution.codexSandbox` 只影响角色级 Session 的 Codex 沙箱模式：设为 `danger-full-access` 时审阅要求 `acceptedRisks` 含 `codex-sandbox-danger-full-access`（并把该模式显示为 `Worker Sandbox` 一行），角色级派发与替代 Session 还要求**已批准 Manifest** 携带同一风险；Finalizer 始终以 `read-only` 运行。
+Execution Authorization Manifest 的长期字段（Worker Profile 及其完整模型配置、Recovery Utility Profile、角色权限、预算上限、Git 与 Dependency Policy、accepted risks）来自版本化项目配置的 `execution` 段（`src/application/configuration/project-config.ts`，见 README）；Manifest 仍是唯一的授权事实，配置只提供待批准的候选值，批准是用户对完整 Manifest 的一次决定。`execution.codexSandbox` 只影响角色级 Session 的 Codex 沙箱模式：设为 `danger-full-access` 时审阅要求 `acceptedRisks` 含 `codex-sandbox-danger-full-access`（并把该模式显示为 `Worker Sandbox` 一行），角色级派发与替代 Session 还要求**已批准 Manifest** 携带同一风险；Finalizer 始终以 `read-only` 运行。
 
 `SemanticEvent` 是 UI 可投影的封闭联合；keepalive、stderr、poll timeout、无变化 reconciliation 和诊断日志不发布。`AnswerPendingInteraction` 必须含 InteractionId、expected revision、submissionId 和 answer payload；普通 Session message 不满足 interaction。
 
@@ -841,6 +845,32 @@ SQLite 位于 Git common dir 的 `orca-companion/ui.sqlite`。短事务中完成
 - **IC-11 历史关联**：`userQuestionInteractionId(operationId)` 统一正向身份派生；已持久化 HistoryCall 的 operationId 是 reader 的关联输入。`TranscriptReadingPort.interactions` 是只读指定摘要查询；正文经同一 body 端口读取，`TranscriptSourceRef` 增加 interactionId/part/contentRevision，anchor 的 Session 即 owner。Q/A 权威继续属于 Branch Store，不写入 checkpoint 或通用事件载荷。
 - **IC-12 呈现/返回**：历史原调用处紧凑显示 Q/state/A，F4 Enter 原位开合；开放提问在活动导航内以 Shift+Left 进入同一回答管线。项目 Scope 列表 PgUp/PgDn 翻页，Enter 精确核验 owner/revision 并保存输入后进入。单次进程内返回上下文保存原 Session、来源锚点、展开模式、栏目/selectedKey/scroll 和焦点，草稿留在 IC-13。Esc 保存成功返回；受理且没有后续编辑或选题/Session变化才自动返回。显式切会话使旧返回失效；unknown/拒绝/保存失败保持原绑定与输入。消失的 selectedKey 明确显示变化，不自动选择下一题。Ctrl+R 仍是普通输入历史。
 - **读取失效**：交互事件只触发摘要重读及有界 snapshot/原锚点 refresh，不作为问题或受理权威，不开回答或抢焦点。render/effect/resize 仍无 command、副作用或持久写入。
+
+## IC-14 CredentialStore 与模型设置
+
+- **Owner (Create)**: `complete-tui-model-configuration`
+- **Canonical paths**: `src/application/ports/credential-store.ts`、`src/adapters/storage/credential-store.ts`、`src/application/configuration/model-settings.ts`、`src/domain/model-configuration.ts`
+- **Extenders (Extend)**: 无
+- **Consumers (Consume)**: chat model factory、模型设置用例、Worker launcher 与 `doctor` 的凭据解析
+
+`CredentialStore` 是同步窄端口：`metadata()` 返回 `{revision, refs}`，`read(credentialRef)` 返回 secret，`save({expectedRevision, secret})` 返回 `{revision, credentialRef}`；任何失败都是 `rejected{code,message}`，不抛异常、不回显原始异常或 secret 载荷。metadata 只含引用集合，不含 secret。
+
+文件按 XDG 规则落在 `orca-companion/credentials.json`（`XDG_CONFIG_HOME` 优先，缺省 `~/.config`），格式为 `{schemaVersion:1, revision, entries:[{credentialRef, secret}]}`。`credentialRef` 是不可变 UUID；写入在短 exclusive 文件锁内重读并做 revision CAS，随后 0600 临时文件 → fsync → rename → 目录 fsync → 回读。锁忙、revision 已变、权限不安全、符号链接、非普通文件、损坏内容与超限一律结构化拒绝：不自动破锁、不 chmod 既有用户目录、不猜测其它凭据。读上限 1 MiB、条目上限 256、单条 secret 上限 16 KiB；store 缺失按 revision 0 与空引用处理，按引用读取缺失返回 `credential_missing`。
+
+凭据是**明文**保存在这一份文件里，这是用户确认的取舍，它取代了「Companion 不保存密钥」的旧约束。隔离靠三件事：owner-only 权限、其它位置只保存不透明引用、以及严格的输出边界——项目配置、checkpoint、UI 输入存储、命令参数、诊断与证据中都不出现 secret 值。secret 只在编辑内存、CredentialStore 与必要的子进程环境中存在。
+
+`ProjectConfigurationStore`（`src/application/ports/project-configuration-store.ts`）拥有同一 namespace 的项目侧：连接的 `credentialRef` 必须是 UUID，出现已知密钥字段名即拒绝整份配置；短锁、CAS 与原子替换与凭据文件同构，但不做权限收紧——它纳入版本控制。锁内还核验既有 connection、model、Coordinator configuration 和 Worker profile 原样保留，拒绝同引用改写或删除，当前选择指针可前移。parser 核验 Coordinator 和 Worker Profile 的连接快照、模型引用及 effort 能力与被引用记录一致。两者之间没有跨文件事务，因此 `ModelSettingsService.save` 先校验候选，仅 `managed` 连接接受新 key，先写凭据并回读，再 CAS 追加 `providerConnections`/`models`/`execution.workerProfiles` 的新引用；项目保存失败保留输入，可能留下未被引用的孤立 secret，但不会激活配置。查询返回非秘密 snapshot；保存不自动应用。
+
+连接 URL 和 modelOptions 中的 URL 不得携带 userinfo 或凭据查询参数；查询参数的凭据字段判定复用领域层的密钥键名规则。普通 API 版本等非秘密查询参数保留。
+
+## `complete-tui-model-configuration` 对 IC-03/04/05/07/08/09/11/12 的扩展
+
+- **IC-03 物化绑定**：`record-materialization-binding` 增加 `authorizationId`、`authorizationVersion` 与 `workerProfileRef`（不透明字符串，落库为 `worker-profile` 引用），缺任一项即拒绝，不留下无运行依据的新行。Coordination schema 16 追加这三列，schema 16 之前的历史行保持 `null`；需要这些事实的读取方按不可证明阻塞，不按当前授权推断回填。
+- **IC-04 项目配置**：项目配置升为 schema 2，保存 `revision`、`providerConnections`、`models` 与 `execution.workerProfiles`/`workerProfileRefs`，删除全局 `workerModel`；v1 明确拒绝且不自动改写。引用唯一性与交叉引用、effort 必须有可信能力来源都由同一 parser 判定。会话模型绑定沿用既有 `update-session-model-configuration` 记录。
+- **IC-05 授权**：Manifest 升为 v2，`workerProfiles[].modelConfiguration` 为必填（连接、模型、effort 及其能力来源、非秘密 options、credentialRef），并单独绑定 `recoveryUtilityProfile`；缺任一项的授权无法证明 Worker 用什么模型运行，解析即拒绝，旧版本不被当作包含模型授权。执行期只换模型配置时以完整 Manifest 指纹与 Scope revision 重新批准，保持 Graph Generation、Run、权限、上限与已消耗预算，不创建 Graph Revision；Replanning、cancelling 或未决派发 mutation 时拒绝重新授权。
+- **IC-07/IC-08 运行依据**：Task 物化时把当时的授权身份、版本与 profile 钉进绑定。Retry 沿已有 WorkerTask 的绑定取原授权与 profile，结算按该绑定判断权限与配置，不读当前配置；旧任务缺绑定时按不可证明阻塞。Codex 启动沿用同一模型配置生成器，secret 只进子进程环境，公开 terminal 命令与 CLI 参数只含非秘密描述符；managed provider 显式声明 `requires_openai_auth=false` 以免被 Harness auth 覆盖，Harness-login 保持原认证方式，不自动 fallback。
+- **IC-09 恢复**：替代 Session 沿原 WorkerTask 绑定的 profile 派发，Validator 的修复/复验与原任务同 profile；新 Recovery Utility Task 固定创建时的授权配置。transcript 不可用或恢复预算耗尽仍按不可证明阻塞。
+- **IC-11/IC-12 界面**：模型设置提供只读 load、显式 save 与按角色显式 apply 三条意图；保存输入含目标角色、connection/model/options/capability/effort、可选新 key 与 expected revision，scope/writer/profile 身份由宿主补齐。界面只消费非秘密 snapshot，key 以遮罩显示且只存在于编辑器内存，不进 IC-13。保存不改变 Session、已批准 Manifest、Task 与预算；apply 走既有 switch 或完整授权重新审阅。异步结果仍按原 invocation/Session 归属。
 
 ## 合同演进规则
 

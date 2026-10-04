@@ -45,6 +45,7 @@ import type { CanonicalHeadFacts } from '../../src/domain/git-integration-policy
 import { DEFAULT_EXECUTION_LIMITS, budgetFromLimits } from '../../src/domain/planning/budget-policy.js';
 import type { ExecutionGraph } from '../../src/domain/planning/execution-graph.js';
 import type { ExecutionAuthorizationManifest } from '../../src/domain/planning/execution-authorization.js';
+import { modelReauthorizationManifest } from '../../src/application/planning/authorization-service.js';
 import type { TaskEnvelope } from '../../src/domain/task-contract.js';
 import {
   EXECUTION_AUTHORIZATION_ID,
@@ -214,6 +215,9 @@ function roleDispatch(input: {
   const workPackageId = input.workPackageId ?? WP;
   return {
     launchId: `worker-launch-${input.attemptId}`,
+    authorizationId: EXECUTION_AUTHORIZATION_ID,
+    authorizationVersion: 1,
+    workerProfileRef: `profile-${input.role}`,
     taskEnvelope: {
       schemaVersion: 1,
       workerTaskId: (input.workerTaskId ?? 'orca-task-1') as WorkerTaskId,
@@ -406,7 +410,7 @@ test('已有活跃 Worker 的 Work Package 让本轮不再物化', async () => {
   const execution = fakeBackend({});
   const result = await advanceExecution({
     ...advanceInput(harness, {
-      roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-1' }) },
+    roles: { planner: { ...roleDispatch({ role: 'planner', attemptId: 'attempt-1' }), authorizationId: 'auth-2', authorizationVersion: 2 } },
       observations: {
         workersEnumerated: true,
         workers: [{ dispatchId: 'dispatch-live', taskId: 'orca-task-1', workerState: 'running', terminalState: null }],
@@ -429,7 +433,16 @@ test('依赖未满足时不派发，Frontier 现状如实成为 blocker', async 
   const harness = scenario({ workPackages: [executionWorkPackage('wp-a', ['wp-b'])] });
   const execution = fakeBackend({});
   const result = await advanceExecution({
-    ...advanceInput(harness, { roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-1' }) } }),
+    // 派发候选必须声明当前授权：过期的授权身份先被模型绑定门禁挡住，根本走不到角色权限判定。
+    ...advanceInput(harness, {
+      roles: {
+        planner: {
+          ...roleDispatch({ role: 'planner', attemptId: 'attempt-1' }),
+          authorizationId: 'auth-2',
+          authorizationVersion: 2,
+        },
+      },
+    }),
     backend: execution.backend,
   });
 
@@ -641,7 +654,9 @@ test('canonical 仍等于授权 baseline 时不登记基线补救，角色 Task 
   const harness = scenario({ workPackages: [executionWorkPackage('wp-a')] });
   const execution = fakeBackend({});
   const result = await advanceExecution({
-    ...advanceInput(harness, { roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-1' }) } }),
+    ...advanceInput(harness, {
+      roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-1' }) },
+    }),
     backend: execution.backend,
   });
 
@@ -670,7 +685,7 @@ test('未授权角色时不物化，结论只说明是哪一条准入规则拒�
     writer: harness.writer,
     authorizationId: 'auth-2',
     authorizationVersion: 2,
-    manifestVersion: 1,
+    manifestVersion: 2,
     fingerprint: 'fingerprint-2',
     approvalRef: 'approval-2',
     manifest: {
@@ -682,7 +697,17 @@ test('未授权角色时不物化，结论只说明是哪一条准入规则拒�
 
   const execution = fakeBackend({});
   const result = await advanceExecution({
-    ...advanceInput(harness, { roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-1' }) } }),
+    // Scope 指针已随第二份授权推进，候选必须声明这一份：过期的授权身份会先被模型绑定门禁挡住，
+    // 根本走不到「角色未获授权」这条准入判定。断言不变，门禁也不放宽。
+    ...advanceInput(harness, {
+      roles: {
+        planner: {
+          ...roleDispatch({ role: 'planner', attemptId: 'attempt-1' }),
+          authorizationId: 'auth-2',
+          authorizationVersion: 2,
+        },
+      },
+    }),
     backend: execution.backend,
   });
 
@@ -702,7 +727,7 @@ test('授权绑定的图与当前 Graph Version 不一致时不派发', async ()
     writer: harness.writer,
     authorizationId: 'auth-2',
     authorizationVersion: 2,
-    manifestVersion: 1,
+    manifestVersion: 2,
     fingerprint: 'fingerprint-2',
     approvalRef: 'approval-2',
     // 批准绑定的是下一个 Graph Version：规划引用一旦前进，旧批准就不再适用。
@@ -932,6 +957,9 @@ function issuePlannerDispatch(
     workPackageId: WP,
     role: 'planner',
     workerTaskId: `orca-task-1${suffix}` as WorkerTaskId,
+    authorizationId: EXECUTION_AUTHORIZATION_ID,
+    authorizationVersion: 1,
+    workerProfileRef: 'profile-planner',
     dispatchId: `dispatch-planner${suffix}` as DispatchId,
     attemptId,
     worktreeId: 'worktree-1',
@@ -948,6 +976,69 @@ function issuePlannerDispatch(
 function deniedRevisionPlanner(blockers: readonly string[]): string | null {
   return blockers.find((blocker) => blocker.startsWith('revision-planner:wp-a:')) ?? null;
 }
+
+test('模型重新授权后，既有 Task 沿原绑定继续派发，无绑定的授权声明被拒绝', async () => {
+  const harness = scenario({ workPackages: [executionWorkPackage('wp-a')] });
+  // 已物化的 Planner Task 固定在第一次授权下。
+  issuePlannerDispatch(harness);
+  const original = harness.authorization();
+  const rebuilt = modelReauthorizationManifest({
+    base: original.manifest,
+    workerProfiles: original.manifest.workerProfiles,
+    recoveryUtilityProfile: original.manifest.recoveryUtilityProfile,
+    graphVersion: original.manifest.graph.version,
+  });
+  expect(rebuilt.kind).toBe('proposed');
+  if (rebuilt.kind !== 'proposed') return;
+  // 与基座同样的写法：授权指针换到第二份授权，内容只改模型绑定。
+  const approved = harness.store.transact({
+    kind: 'record-authorization',
+    coordinationScopeId: harness.scopeId,
+    expectedRevision: harness.revision(),
+    writer: harness.writer,
+    authorizationId: 'auth-2',
+    authorizationVersion: 2,
+    manifestVersion: rebuilt.manifest.manifestVersion,
+    fingerprint: rebuilt.fingerprint,
+    manifest: rebuilt.manifest,
+    approvalRef: 'approval-auth-2',
+  });
+  expect(approved.kind).toBe('committed');
+
+  // 原 Task 仍按创建时的授权与 profile 推进：新授权不追溯改变在途运行依据。
+  const inherited = await advanceExecution({
+    ...advanceInput(harness, {
+      roles: {
+        planner: {
+          ...roleDispatch({ role: 'planner', attemptId: 'attempt-1', workerTaskId: 'orca-task-1' }),
+          authorizationId: EXECUTION_AUTHORIZATION_ID,
+          authorizationVersion: 1,
+        },
+      },
+    }),
+    backend: fakeBackend({}).backend,
+  });
+  expect(inherited.kind).not.toBe('blocked');
+
+  // 没有任何绑定或授权记录支持的授权声明必须 fail closed。
+  const unverifiable = await advanceExecution({
+    ...advanceInput(harness, {
+      roles: {
+        planner: {
+          ...roleDispatch({ role: 'planner', attemptId: 'attempt-9', workerTaskId: 'orca-task-9' }),
+          authorizationId: 'auth-unknown',
+          authorizationVersion: 9,
+          workerProfileRef: 'profile-unknown',
+        },
+      },
+    }),
+    backend: fakeBackend({}).backend,
+  });
+  expect(unverifiable.kind).toBe('blocked');
+  if (unverifiable.kind === 'blocked') {
+    expect(unverifiable.code).toBe('model_binding_unverifiable');
+  }
+});
 
 test('在途修订的旧派发尚未结算时不重跑 Planner，也不触碰 Orca', async () => {
   const harness = scenario({ workPackages: [executionWorkPackage('wp-a')] });

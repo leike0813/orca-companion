@@ -40,7 +40,7 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 
 ### 第二批成果及证据边界
 
-当前基线 HEAD：`abf8f0c0617972f8277598dfe04257769ba86179`。第五批及全部前驱已包含于 HEAD；当前工作区为第六批 6A `complete-tui-command-reviews`。接手先检查 `git status --short`，不要覆盖、重置或重复实现。
+当前基线 HEAD：`8f6d1a7e6765a024191043b97fbded2d4a902207`。第六批 6A 及全部前驱已包含于 HEAD，6A 已归档到 `2026-10-04-complete-tui-command-reviews`；当前工作区为第六批 6B `complete-tui-model-configuration`，13/13任务完成、独立验收PASS，尚未提交或归档。接手先检查 `git status --short` 与当前工件，保留既有 `artifacts/pending-interactions/README.md` 改动，不要覆盖、重置或重复实现。
 
 第二批已提供 grapheme 任意位置编辑、行首尾、多行有界视窗、原生光标；>1000 code points 原子粘贴及 /paste；唯一完整 UiDraft、CAS、提交快照/稳定 submissionId、单活跃提交/generation；真实 ask_user 创建/重放与精确查询；当前 Session 选项/自由回答、Esc 恢复。UI schema v2、Coordination schema 14，问题正文由 Branch Store 拥有。
 
@@ -75,8 +75,8 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 | 3B | 已归档：局部视窗、稳定锚点/有界缓存、Markdown/流式与 #53 输入/缓存导航 p95；原验收复用当时既有证据 |
 | 第四批 | 已归档9/9：活动关联/参数与结果详情、F3 transcript 搜索、Ctrl+R 普通输入历史；1千/1万/10万记录与1/5MiB完整扫描成本均已记录 |
 | 第五批 | 已归档9/9、正式验收PASS：历史问答卡片、Scope有界待答页、跨Session进入/返回及输入保护；6文件140项独立复验通过，全量与唯一失败修复后合并1514项通过、12项条件跳过；147对画面及性能见独立证据 |
-| 第六批 6A | 当前工作区9/9、[正式验收PASS](../../openspec/changes/complete-tui-command-reviews/verification.md)，未提交、未归档：同源目录/子页搜索、结构化结果与输入保护、精确交接 ID/revision、五栏授权/三栏交接审阅和显式 Session 模型目录；[生产画面与操作](../../artifacts/command-reviews/README.md)及最终检查见 change 验收记录 |
-| 第六批 6B | 直接后继：provider/model/effort、Worker Profiles 和 Manifest 模型绑定及真实启动验证；尚未起草/实现，不计入 6A 完成范围 |
+| 第六批 6A | 9/9、[正式验收PASS](../../openspec/changes/archive/2026-10-04-complete-tui-command-reviews/verification.md)，已包含于 `8f6d1a7`、已归档：同源目录/子页搜索、结构化结果与输入保护、精确交接 ID/revision、五栏授权/三栏交接审阅和显式 Session 模型目录；[生产画面与操作](../../artifacts/command-reviews/README.md)及最终检查见 change 验收记录 |
+| 第六批 6B | 当前 active：13/13、[独立验收PASS](../../openspec/changes/complete-tui-model-configuration/verification.md)；provider/model/effort、不可变 Worker Profiles、用户级 CredentialStore、Manifest2 模型限定重授权、schema16 Task 绑定和实际启动接线完成。[171对生产画面与隔离真实启动](../../artifacts/model-configuration/README.md)；全量及最终受影响复验按文件去重后1653项通过/12项条件跳过，原始全量exit 1及复验口径见验收报告；未提交、未归档 |
 | 第七批 | 当前项目固定框/状态栏层级已实现；后继补可信身份/context/metadata、用户级 custom 配置/恢复/保存失败和共享验收摘要 |
 | 第八批 | 当前 adaptive/节点卡/准确导航已实现；后继补历史版本/依据有界读取与全链路验收 |
 

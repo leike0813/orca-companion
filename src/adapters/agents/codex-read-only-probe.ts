@@ -25,6 +25,8 @@ import {
   CODEX_UTILITY_PROFILE_CONFIG_TOML,
   assertUtilityProfileConfigCompatible,
 } from './codex-launch.js';
+import { codexModelArguments } from './codex-model-launcher.js';
+import type { WorkerModelConfiguration } from '../../domain/model-configuration.js';
 
 /** 探针失败阶段：调用方据此区分「Codex 都没有」与「有 Codex 但受限命令跑不起来」。 */
 export type ReadOnlyWorkerProbeStage =
@@ -67,6 +69,15 @@ export type ReadOnlyWorkerProbeInput = {
    * 省略时与 `createCodexWorkerLaunch` 同源解析（`CODEX_HOME` → `~/.codex`）。
    */
   readonly sourceCodexHome?: string;
+  /**
+   * 生产启动使用的同一份模型绑定。探针经**同一个配置生成器**（`codexModelArguments`）把它交给
+   * `codex sandbox`，因此秘密扫描、effort 取值校验与保留键拒绝在探针与正式启动上完全一致。
+   *
+   * 边界要说清楚：`codex sandbox` 不发起模型请求，所以探针**不解析凭据、也不证明认证可用**。
+   * 它证明的是「在这同一份 provider/model/effort/options 配置下，只读边界成立」；凭据能否真正
+   * 打通模型调用只能由真实启动证明，探针通过不蕴含这一点。
+   */
+  readonly modelConfiguration?: Readonly<WorkerModelConfiguration>;
 };
 
 type ProbeVerdict =
@@ -113,8 +124,22 @@ function parseCodexVersion(stdout: string): string | null {
 }
 
 /** `codex sandbox` 的固定调用形状：显式 profile 分层 + 显式 permission profile + 显式工作目录。 */
-function sandboxArgs(directory: string, command: readonly string[]): readonly string[] {
-  return ['sandbox', ...CODEX_UTILITY_PROFILE_ARGS, '--permission-profile', CODEX_UTILITY_PERMISSION_PROFILE, '--cd', directory, '--', ...command];
+function sandboxArgs(
+  directory: string,
+  modelArguments: readonly string[],
+  command: readonly string[],
+): readonly string[] {
+  return [
+    'sandbox',
+    ...CODEX_UTILITY_PROFILE_ARGS,
+    '--permission-profile',
+    CODEX_UTILITY_PERMISSION_PROFILE,
+    ...modelArguments,
+    '--cd',
+    directory,
+    '--',
+    ...command,
+  ];
 }
 
 async function probeOnce(input: {
@@ -124,6 +149,8 @@ async function probeOnce(input: {
   readonly env: Readonly<Record<string, string>>;
   readonly directory: string;
   readonly sentinelPath: string;
+  /** 与生产启动同源生成的模型设置；探针不调用模型，因此不解析凭据。 */
+  readonly modelArguments: readonly string[];
   /** 哨兵文件里的正文（含换行）；与最后回读逐字节比较。 */
   readonly sentinelContent: string;
 }): Promise<ProbeVerdict> {
@@ -157,7 +184,7 @@ async function probeOnce(input: {
 
   const read = await input.run({
     executable: input.executable,
-    args: sandboxArgs(input.directory, ['/bin/cat', input.sentinelPath]),
+    args: sandboxArgs(input.directory, input.modelArguments, ['/bin/cat', input.sentinelPath]),
     cwd: input.directory,
     env: sandboxEnv,
     timeoutMs: input.timeoutMs,
@@ -189,7 +216,7 @@ async function probeOnce(input: {
   // 使用当前 Node 读取实际写入 errno，避免把沙箱启动失败或其它 I/O 错误误认成拒写。
   const write = await input.run({
     executable: input.executable,
-    args: sandboxArgs(input.directory, [
+    args: sandboxArgs(input.directory, input.modelArguments, [
       process.execPath, '--input-type=commonjs', '-e',
       'try { require("node:fs").appendFileSync(process.argv[1], "injected"); } catch (error) { process.stdout.write(String(error.code)); process.exitCode = 1; }',
       input.sentinelPath,
@@ -285,7 +312,16 @@ export async function probeReadOnlyWorker(input: ReadOnlyWorkerProbeInput = {}):
     }
     assertUtilityProfileConfigCompatible(sourceConfigText);
     writeFileSync(join(codexHome, CODEX_UTILITY_PROFILE_CONFIG_FILE), CODEX_UTILITY_PROFILE_CONFIG_TOML, 'utf8');
-    const verdict = await probeOnce({ run, executable, timeoutMs, env, directory, sentinelPath, sentinelContent });
+    const verdict = await probeOnce({
+      run,
+      executable,
+      timeoutMs,
+      env,
+      directory,
+      sentinelPath,
+      sentinelContent,
+      modelArguments: input.modelConfiguration === undefined ? [] : codexModelArguments(input.modelConfiguration),
+    });
     diagnostics.push(...verdict.diagnostics);
     return { ...base, ...verdict, diagnostics };
   } catch (error) {
@@ -309,7 +345,13 @@ export async function probeReadOnlyWorker(input: ReadOnlyWorkerProbeInput = {}):
   }
 }
 
-export type ReadOnlyWorkerProbe = () => Promise<ReadOnlyWorkerProbeResult>;
+/**
+ * 生产调用点必须传入该角色已批准的完整模型绑定，探针才会核验「同一份设置」下的只读能力；
+ * 省略参数只保留给独立 doctor 做本机结构检查，不代表任何正式会话的能力结论。
+ */
+export type ReadOnlyWorkerProbe = (
+  modelConfiguration?: Readonly<WorkerModelConfiguration>,
+) => Promise<ReadOnlyWorkerProbeResult>;
 
 /**
  * 能力的可读结论：授权审阅与 doctor 共用同一段文案，避免两处各自解释同一个探针。

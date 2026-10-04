@@ -89,14 +89,15 @@ function writeProjectConfig(repository: string, options: { readonly maxInputToke
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',
           providerIntegration: '@fake/provider#CapableChatModel',
           model: 'fake-coordinator',
           modelOptions: {},
-          credentialRefs: ['fake'],
+          // 注入的假模型不需要真实凭据：凭据引用必须对应已声明的 Provider Connection，否则启动拒绝。
+          credentialRefs: [],
           nativeWindowOwnerRef: null,
         },
         {
@@ -104,7 +105,7 @@ function writeProjectConfig(repository: string, options: { readonly maxInputToke
           providerIntegration: '@fake/provider#CapableChatModel',
           model: 'fake-coordinator-spare',
           modelOptions: {},
-          credentialRefs: ['fake'],
+          credentialRefs: [],
           nativeWindowOwnerRef: null,
         },
       ],

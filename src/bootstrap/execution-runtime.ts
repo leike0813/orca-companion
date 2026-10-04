@@ -29,6 +29,7 @@ import type {
   PlanningCycleId,
   VersionedRef,
   WorkPackageId,
+  WorkerTaskId,
 } from '../application/dto/identity.js';
 import type {
   BranchCoordinationStore,
@@ -59,6 +60,7 @@ import {
   type WorkerStartReceipt,
 } from '../adapters/orca-cli/operation-catalog.js';
 import { createCodexWorkerLaunch, installCodexSessionStartReporter } from '../adapters/agents/codex-launch.js';
+import { JsonCredentialStore, credentialStorePath } from '../adapters/storage/credential-store.js';
 import {
   readOnlyWorkerUnavailableReason,
   type ReadOnlyWorkerProbe,
@@ -82,7 +84,13 @@ import { graphIdFor, startGraphGeneration, type EmptyRunAllocator } from '../app
 import { recordInitialGraph } from '../application/planning/graph-history.js';
 import { ensureGraphGenerationRecord } from '../application/execution/replanning-service.js';
 import { readScope } from '../application/planning/scope-read.js';
-import { activeAuthorization, proposeManifest, recordApproval } from '../application/planning/authorization-service.js';
+import {
+  activeAuthorization,
+  proposeManifest,
+  readAcceptedAuthorizationByFingerprint,
+  recordApproval,
+  recordModelReauthorization,
+} from '../application/planning/authorization-service.js';
 import { evaluateHandoffGate, handoffGateFacts, type HandoffGateFacts, type HandoffGateResult } from '../application/planning/handoff-gate.js';
 import { transitionToExecution } from '../application/planning/lease-handoff.js';
 import { acceptResultLaneKey, ackLaneKey } from '../application/delivery/process-delivery.js';
@@ -95,10 +103,12 @@ import type {
 import type { ClaimedResultAttribution, TrustedExecutionFacts } from '../domain/worker-result-verification.js';
 import type { TerminalLivenessFacts } from '../domain/worker-liveness.js';
 import type { SpecBinding } from '../domain/task-contract.js';
+import type { WorkerModelConfiguration } from '../domain/model-configuration.js';
 import { compileExecutionGraph, type CompilationError } from '../domain/planning/graph-compiler.js';
 import {
   MANIFEST_VERSION,
   WORKER_ROLES,
+  manifestFingerprint,
   type ExecutionAuthorizationManifest,
   type ExecutionAuthorizationRecord,
   type RoleAuthorities,
@@ -460,13 +470,6 @@ export function reviewExecutionAuthorization(
     return { kind: 'rejected', code: scopeRead.code, message: scopeRead.message };
   }
   const scope = scopeRead.scope;
-  if (scope.mode !== 'route_planning') {
-    return {
-      kind: 'rejected',
-      code: 'mode_not_route_planning',
-      message: `Scope 当前模式为 ${scope.mode}，没有可批准的执行规划产物`,
-    };
-  }
   if (scope.planningCycleId === null) {
     blockers.push({ code: 'planning_cycle_missing', message: '当前 Scope 没有 Planning Cycle' });
   }
@@ -532,11 +535,23 @@ export function reviewExecutionAuthorization(
     graph: { graphId: candidate.graphId, generation: candidate.generation, version: candidate.version },
     baselineHead: generation.baselineHead,
     orcaRunId: candidate.orcaRunId,
-    workerProfiles: WORKER_ROLES.map((role) => ({
-      profileRef: { kind: 'worker-profile', id: `${facts.policy.harness}:${role}` },
-      role,
-      harness: facts.policy.harness,
-    })),
+    workerProfiles: WORKER_ROLES.map((role) => {
+      const profile = facts.policy.workerProfiles.find((entry) => entry.profileRef === facts.policy.workerProfileRefs[role] && entry.role === role);
+      return profile === undefined ? { role } : {
+        profileRef: { kind: 'worker-profile', id: profile.profileRef },
+        role,
+        harness: profile.harness,
+        modelConfiguration: profile.modelConfiguration,
+      };
+    }),
+    recoveryUtilityProfile: (() => {
+      const profile = facts.policy.workerProfiles.find((entry) => entry.profileRef === facts.policy.workerProfileRefs.recovery_utility && entry.role === 'recovery_utility');
+      return profile === undefined ? null : {
+        profileRef: { kind: 'worker-profile', id: profile.profileRef },
+        harness: profile.harness,
+        modelConfiguration: profile.modelConfiguration,
+      };
+    })(),
     permissions: facts.policy.permissions,
     limits: facts.policy.limits,
     workspacePolicy: {
@@ -553,6 +568,36 @@ export function reviewExecutionAuthorization(
     acceptedRisks: [...facts.policy.acceptedRisks],
   };
 
+  const currentAuthorization = activeAuthorization(facts.store, facts.coordinationScopeId);
+  if (currentAuthorization.kind === 'rejected') {
+    return { kind: 'rejected', code: currentAuthorization.failure.code, message: currentAuthorization.failure.message };
+  }
+  if (scope.mode === 'execution_coordination') {
+    const snapshot = facts.store.query({ kind: 'snapshot', coordinationScopeId: facts.coordinationScopeId });
+    if (scope.controlState === 'cancelling' || scope.controlState === 'cancelled' || scope.controlState === 'replanning_transition' ||
+      snapshot.kind !== 'snapshot' || snapshot.snapshot.unresolvedIntents.length > 0 ||
+      generation.status === 'suspended' || generation.status === 'frozen') {
+      return { kind: 'rejected', code: 'model_reapproval_unavailable', message: '当前控制状态、重规划或未决副作用不允许模型重新授权' };
+    }
+    const previous = currentAuthorization.authorization;
+    if (previous === null || previous.manifest.graph.graphId !== candidate.graphId ||
+      previous.manifest.graph.generation !== candidate.generation || previous.manifest.orcaRunId !== candidate.orcaRunId) {
+      return { kind: 'rejected', code: 'authorization_binding_missing', message: '当前图没有可核验的执行授权' };
+    }
+    const manifest = {
+      ...previous.manifest,
+      graph: { ...previous.manifest.graph, version: candidate.version },
+      workerProfiles: rawManifest.workerProfiles,
+      recoveryUtilityProfile: rawManifest.recoveryUtilityProfile,
+    };
+    const parsed = proposeManifest({ store: facts.store, coordinationScopeId: facts.coordinationScopeId,
+      rawManifest: manifest, candidate, currentPlanRevision: candidate.planRevision });
+    if (parsed.kind === 'rejected') return { kind: 'rejected', code: parsed.failure.code, message: parsed.failure.message };
+    return { kind: 'review', review: { manifest: parsed.manifest, fingerprint: parsed.fingerprint,
+      candidate: candidateOf(candidate, generation), candidateRecord: candidate,
+      existingAuthorization: previous, scopeRevision: scope.revision,
+      planningCycleId: scope.planningCycleId, gate: { kind: 'allowed' } } };
+  }
   const proposed = proposeManifest({
     store: facts.store,
     coordinationScopeId: facts.coordinationScopeId,
@@ -619,6 +664,27 @@ export function reviewExecutionAuthorization(
 export function approveExecutionAuthorization(
   input: ApproveExecutionAuthorizationInput,
 ): ApproveExecutionAuthorizationResult {
+  // 重放先于任何重算与门禁：已经受理过的同一份批准只能按指纹回读它的记录。若在这里按当前配置重新
+  // 组装 Manifest，用户审阅之后配置或 Scope 控制状态的变化就会把一次重放变成新的决定。
+  // 范围限定在已进入执行协调态的记录：初始规划态那次「已写入 Manifest 但未切换模式」的批准必须重新
+  // 走门禁，否则会把它当成完成。控制状态与模式正交，因此 cancelling 也不阻断回读。
+  const scopeForReplay = readScope(input.store, input.coordinationScopeId);
+  if (scopeForReplay.kind === 'rejected') return scopeForReplay;
+  if (scopeForReplay.scope.mode === 'execution_coordination' && scopeForReplay.scope.graphId !== null) {
+    const replayed = readAcceptedAuthorizationByFingerprint({
+      store: input.store,
+      coordinationScopeId: input.coordinationScopeId,
+      fingerprint: input.fingerprint,
+    });
+    if (replayed !== null && replayed.manifest.graph.graphId === scopeForReplay.scope.graphId) {
+      return {
+        kind: 'approved',
+        revision: scopeForReplay.scope.revision,
+        authorizationId: replayed.authorizationId,
+        authorizationVersion: replayed.authorizationVersion,
+      };
+    }
+  }
   const reviewed = reviewExecutionAuthorization(input);
   if (reviewed.kind === 'blocked') {
     return {
@@ -654,9 +720,17 @@ export function approveExecutionAuthorization(
     existing.authorization !== null && existing.authorization.fingerprint === review.fingerprint
       ? existing.authorization
       : null;
+  const approvalScope = readScope(input.store, input.coordinationScopeId);
+  if (approvalScope.kind === 'rejected') return approvalScope;
   const recorded =
     reusable === null
-      ? recordApproval({
+      ? approvalScope.scope.mode === 'execution_coordination'
+        ? recordModelReauthorization({ store: input.store, coordinationScopeId: input.coordinationScopeId,
+          writer: input.writer, authorizationId: authorizationIdFor(review.manifest),
+          expectedScopeRevision: input.expectedRevision,
+          workerProfiles: review.manifest.workerProfiles, recoveryUtilityProfile: review.manifest.recoveryUtilityProfile,
+          graphVersion: review.manifest.graph.version, approvalRef: `user-approval:${review.fingerprint.slice(0, 16)}` })
+        : recordApproval({
           store: input.store,
           coordinationScopeId: input.coordinationScopeId,
           writer: input.writer,
@@ -668,6 +742,14 @@ export function approveExecutionAuthorization(
       : ({ kind: 'recorded', authorization: reusable } as const);
   if (recorded.kind === 'rejected') {
     return { kind: 'rejected', code: recorded.failure.code, message: recorded.failure.message };
+  }
+
+  const scopeAfterApproval = readScope(input.store, input.coordinationScopeId);
+  if (scopeAfterApproval.kind === 'rejected') return scopeAfterApproval;
+  if (scopeAfterApproval.scope.mode === 'execution_coordination') {
+    return { kind: 'approved', revision: scopeAfterApproval.scope.revision,
+      authorizationId: recorded.authorization.authorizationId,
+      authorizationVersion: recorded.authorization.authorizationVersion };
   }
 
   const gateFacts = handoffFactsFor({
@@ -810,9 +892,9 @@ function planRevisionOf(plan: unknown): number | null {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
-/** 授权记录 id：由候选图与图版本派生，一份候选图只有一条授权记录身份。 */
+/** 完整配置变化产生新的追加授权身份。 */
 function authorizationIdFor(manifest: ExecutionAuthorizationManifest): string {
-  return `auth:${manifest.graph.graphId}:${String(manifest.graph.version)}`;
+  return `auth:${manifest.graph.graphId}:${manifestFingerprint(manifest)}`;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1106,6 +1188,61 @@ function resolveLocator(
  * 归属身份取自 store 的 Session Segment（Controller 在派发时写入的事实），worktree 事实取自 worktree
  * 读取 seam；载荷只用来**定位**这条事实。任何一项对不上或读不到都必须阻塞，不得用载荷自报值补位。
  */
+/**
+ * 用户级凭据 store：与 Coordinator 装配、模型设置保存共用同一份 env 视图。
+ *
+ * 按调用方传入的 env 而不是 \`process.env\` 解析路径，因此隔离启动与测试只需替换这一处；
+ * 替代 Session 与新建 Utility 都用 managed 凭据，缺这一层时准备阶段无法 fail closed 证明 key 存在。
+ */
+function credentialStore(
+  env: Readonly<Record<string, string>>,
+): JsonCredentialStore {
+  return new JsonCredentialStore({ environment: env });
+}
+
+/**
+ * 物化绑定钉住的那份授权。
+ *
+ * 入口是绑定上的授权身份、授权版本与 profile 引用三项：任一缺失（schema 16 之前的历史行）、读不回，
+ * 或记录里的版本与绑定登记的不一致，都返回 \`null\` 由调用方阻塞。版本不一致尤其不能放过——那说明绑定
+ * 写下的授权身份与实际批准的那份不是同一件事，按哪一边结算都是猜。
+ */
+function pinnedAuthorizationOf(
+  store: BranchCoordinationStore,
+  coordinationScopeId: CoordinationScopeId,
+  binding: MaterializationBindingRecord,
+  role: WorkerRole,
+): { readonly authorizationId: string; readonly authorization: ExecutionAuthorizationRecord } | null {
+  // 三项必须同时齐备：授权身份、授权版本与 Worker Profile 引用共同构成这条 Task 的运行依据。
+  // 缺任一项都无法证明「这份结果产生于哪次授权、用哪个 profile」，因此一律不可证明，不做「缺版本就
+  // 当作匹配」这类兼容猜测——那会让 schema 16 之前的历史行悄悄按当前授权结算。
+  if (
+    binding.authorizationId === null ||
+    binding.authorizationVersion === null ||
+    binding.workerProfileRef === null
+  ) {
+    return null;
+  }
+  const read = store.query({
+    kind: 'authorization',
+    coordinationScopeId,
+    authorizationId: binding.authorizationId,
+  });
+  if (read.kind !== 'authorization' || read.authorization === null) {
+    return null;
+  }
+  // 绑定登记的版本必须与实际批准的那份逐字一致：不等说明绑定写下的是另一个授权身份，按哪一边结算
+  // 都是猜。
+  if (read.authorization.authorizationVersion !== binding.authorizationVersion) {
+    return null;
+  }
+  const profile = read.authorization.manifest.workerProfiles.find((entry) => entry.role === role);
+  if (profile === undefined || profile.profileRef.id !== binding.workerProfileRef.id) {
+    return null;
+  }
+  return { authorizationId: binding.authorizationId, authorization: read.authorization };
+}
+
 async function readDeliveryTrustedFacts(input: {
   readonly input: PendingDeliveryReadInput;
   readonly segments: readonly SessionSegmentRecord[];
@@ -1197,6 +1334,61 @@ async function readDeliveryTrustedFacts(input: {
       laneKey: acceptResultLaneKey(materialization.orcaTaskId),
     };
   }
+  /**
+   * 结果结算按 **Task 自己钉住的授权** 校验，而不是当前授权。
+   *
+   * 换模型的重新授权只对新的物化 Task 生效：在途 Task 带着旧授权跑完之后回到的 Delivery 必须按它
+   * 派出时的授权版本核验，否则「重新授权期间结算旧结果」会被读成新授权下的合法结果，等于让旧模型
+   * 的产出借用新模型的身份通过验收。
+   *
+   * 绑定上缺少 pin（schema 16 之前的历史行）时阻塞：没有可证明的授权身份只能按不可证明处理，不能
+   * 回退到当前授权——那正是这条规则要防止的事。
+   */
+  const pinned = pinnedAuthorizationOf(
+    input.input.store,
+    input.input.coordinationScopeId,
+    materialization,
+    segment.role,
+  );
+  if (pinned === null) {
+    return {
+      kind: 'blocked',
+      code: 'authorization_pin_missing',
+      message:
+        '物化绑定没有钉住授权身份（authorizationId=' +
+        (materialization.authorizationId ?? 'null') +
+        '，workerProfileRef=' +
+        (materialization.workerProfileRef === null ? 'null' : materialization.workerProfileRef.id) +
+        '）：无法证明这份结果是在哪次授权下产生的，不按当前授权结算',
+      laneKey: acceptResultLaneKey(materialization.orcaTaskId),
+    };
+  }
+  if (
+    pinned.authorization.manifest.coordinationScopeId !== input.input.coordinationScopeId ||
+    pinned.authorization.manifest.orcaRunId !== input.input.runId ||
+    pinned.authorization.manifest.graph.graphId !== input.input.graphId
+  ) {
+    return {
+      kind: 'blocked',
+      code: 'authorization_pin_mismatch',
+      message: '物化绑定钉住的授权不属于当前 Scope、Run 或 Graph：结果不推进当前生命周期',
+      laneKey: acceptResultLaneKey(materialization.orcaTaskId),
+    };
+  }
+  // 当前代际必须仍是这条 Task 所属的那一代：跨代旧结果只能补历史，不能推进当前生命周期。
+  if (pinned.authorization.manifest.graph.generation !== input.input.graphGeneration) {
+    return {
+      kind: 'blocked',
+      code: 'authorization_pin_mismatch',
+      message:
+        '物化绑定钉住的授权属于图代际 ' +
+        String(pinned.authorization.manifest.graph.generation) +
+        '，当前代际是 ' +
+        String(input.input.graphGeneration) +
+        '：跨代结果不推进当前生命周期',
+      laneKey: acceptResultLaneKey(materialization.orcaTaskId),
+    };
+  }
   return {
     kind: 'read',
     orcaTaskId: materialization.orcaTaskId,
@@ -1212,14 +1404,16 @@ async function readDeliveryTrustedFacts(input: {
       runId: input.input.runId,
       consumerGeneration: input.input.consumerGeneration,
       graphGeneration: input.input.graphGeneration,
-      authorizationId: input.input.authorizationId,
+      // 按 Task 派出时的授权核验；当前授权只决定「新 Task 能否派发」，不参与旧结果的可信性判定。
+      authorizationId: pinned.authorizationId,
       workerTaskId: segment.workerTaskId,
       dispatchId: segment.dispatchId,
       attemptId: segment.attemptId,
       role: segment.role,
       specBinding: worktree.specBinding,
       worktreeId: worktree.worktreeId,
-      authority: input.authority,
+      // 角色权限同样取自该 Task 当时批准的 Manifest：重新授权不追溯改变在途 Task 的权限边界。
+      authority: pinned.authorization.manifest.permissions,
       scopeEnvelope: workPackage.scopeEnvelope,
       changedPaths: worktree.changedPaths,
     },
@@ -1504,7 +1698,7 @@ export type ExecutionRecoveryFactsInput = {
   readonly execution: RecoveryExecutionContext | null;
   /** Worker Profile（harness 与模型）：替代 Session 默认复用它们，不从界面或模型填。 */
   readonly workerHarness: string | null;
-  readonly workerModel: string | null;
+  readonly resolveModelConfiguration: (subject: RecoveryFactSubject, kind: 'replacement' | 'utility') => WorkerModelConfiguration | null;
   /**
    * 替代 Session 的 Codex 沙箱模式；与常规角色派发同源（都来自已批准 Manifest 绑定的项目配置）。
    * `null` 表示当前配置的沙箱模式未被授权接受，此时替代派发不可用。
@@ -1814,8 +2008,22 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
           reason: `Worker Profile 的 harness 为 ${input.workerHarness ?? '未配置'}，本进程只能派发 codex Utility Worker`,
         };
       }
-      if (input.workerModel === null) {
-        return { kind: 'failed', reason: '项目配置没有给出 Worker 模型：Capsule Utility Worker 复用该 Profile 需要它' };
+      const operationIds = capsuleOperationIdsOf(request.segmentId);
+      const pinned = bindingsOf()?.find((entry) => entry.creationOperationId === operationIds.task) ?? null;
+      const authorizationRead = pinned === null
+        ? activeAuthorization(input.store(), scopeId)
+        : input.store().query({ kind: 'authorization', coordinationScopeId: scopeId, authorizationId: pinned.authorizationId ?? '' });
+      const authorization = authorizationRead.kind === 'read'
+        ? authorizationRead.authorization
+        : authorizationRead.kind === 'authorization'
+          ? authorizationRead.authorization
+          : null;
+      const profile = authorization?.manifest.recoveryUtilityProfile ?? null;
+      const modelConfiguration = profile?.modelConfiguration ?? null;
+      if (modelConfiguration === null || profile === null || authorization === null ||
+          (pinned !== null && (pinned.workerProfileRef?.id !== profile.profileRef.id ||
+            pinned.authorizationVersion !== authorization.authorizationVersion))) {
+        return { kind: 'failed', reason: 'Recovery Utility 缺少可核验模型授权绑定' };
       }
       if (input.companionStateRoot === null) {
         return { kind: 'failed', reason: '无法定位 Companion 私有的状态根：Utility Worker 的 SessionStart 不可证' };
@@ -1823,6 +2031,10 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
       const execution = input.execution;
       if (execution === null) {
         return { kind: 'failed', reason: '当前图的 Run / 授权 / 后端身份不可读：无法派发 Capsule Utility Worker' };
+      }
+      if (authorization.manifest.orcaRunId !== execution.runId ||
+          authorization.manifest.graph.generation !== execution.graphGeneration) {
+        return { kind: 'failed', reason: 'Recovery Utility 的模型授权不属于当前 Run 或 Graph Generation' };
       }
       const worktree = await readIsolatedWorktree(request.workPackageId as WorkPackageId);
       if (worktree.kind === 'unavailable') {
@@ -1837,7 +2049,6 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
         sourceSegmentId: request.segmentId,
         transcriptRef: request.transcriptRef,
       });
-      const operationIds = capsuleOperationIdsOf(request.segmentId);
       // 已有派发或既有意图都按原身份对账：只有确认这次会是全新派发时，能力缺失才允许阻断它。
       const priorDispatch = await findDispatchedUtilityWorker({
         backend: input.backend,
@@ -1845,8 +2056,11 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
         runId: execution.runId,
         envelope,
       });
+      if (priorDispatch !== null && (pinned === null || pinned.orcaTaskId !== priorDispatch.orcaTaskId)) {
+        return { kind: 'failed', reason: '已有 Recovery Utility Task 缺少可核验的原模型绑定' };
+      }
       if (priorDispatch === null && !capsuleIntentExists(input.store(), scopeId, operationIds)) {
-        const readOnlyBlocker = readOnlyWorkerUnavailableReason(await input.readOnlyWorkerProbe());
+        const readOnlyBlocker = readOnlyWorkerUnavailableReason(await input.readOnlyWorkerProbe(modelConfiguration));
         if (readOnlyBlocker !== null) {
           // 不进入报告等待、不建 Task/Dispatch、不消耗 Recovery 预算：只留下可诊断的能力 blocker。
           return { kind: 'failed', reason: readOnlyBlocker };
@@ -1861,10 +2075,28 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
         writer: input.writer,
         coordinationScopeId: scopeId,
         envelope,
-        execution,
+        execution: { ...execution, authorizationId: authorization.authorizationId },
+        onTaskCreated: (orcaTaskId) => {
+          const scope = input.store().query({ kind: 'scope', coordinationScopeId: scopeId });
+          if (scope.kind !== 'scope' || scope.scope === null) return { code: 'scope_unreadable', message: '无法读取 Utility Task 的 Scope' };
+          const recorded = input.store().transact({
+            kind: 'record-materialization-binding', coordinationScopeId: scopeId,
+            expectedRevision: scope.scope.revision, writer: input.writer!,
+            workPackageId: request.workPackageId as WorkPackageId, role: null, recoveryUtilityRole: 'recovery_utility',
+            workerTaskId: operationIds.task as unknown as WorkerTaskId,
+            dispatchId: operationIds.workerStart as unknown as DispatchId, attemptId: operationIds.task,
+            worktreeId: worktree.worktreeId, specBinding: null, specificationUnitPath: null,
+            authorizationId: authorization.authorizationId, authorizationVersion: authorization.authorizationVersion,
+            workerProfileRef: profile.profileRef.id, orcaTaskId, launchId, creationOperationId: operationIds.task,
+          });
+          return recorded.kind === 'rejected' ? { code: recorded.code, message: recorded.message } : null;
+        },
         workerLaunch: createCodexWorkerLaunch({
           launchId,
-          model: input.workerModel,
+          modelConfiguration,
+          // 与宿主其余派发同源：managed 凭据在准备阶段就要用同一份 env-derived store 证明存在。
+          credentialStore: credentialStore(input.env),
+          credentialStorePath: credentialStorePath({ environment: input.env }),
           // Capsule 提取只读 transcript：权限是共享的 `read-only-local-control` profile（继承
           // `:read-only`，只为本机控制通道开启网络），信封 `authority.write=false`。
           sandboxMode: 'read-only-local-control',
@@ -1978,8 +2210,10 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
           `Worker Profile 的 harness 为 ${input.workerHarness ?? '未配置'}，本进程只能派发 codex 替代 Session`,
         );
       }
-      if (input.workerModel === null) {
-        return unavailable('worker_model_unresolved', '项目配置没有给出 Worker 模型：替代 Session 复用原 Profile 需要它');
+      const modelConfiguration = input.resolveModelConfiguration(recovery, 'replacement');
+      const originalProfileRef = bindingFor(recovery)?.workerProfileRef?.id;
+      if (modelConfiguration === null || originalProfileRef === undefined) {
+        return unavailable('worker_model_unresolved', '替代 Session 缺少原任务模型授权绑定');
       }
       if (input.codexSandbox === null) {
         return unavailable(
@@ -1996,10 +2230,13 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
       const expectedCodexHome = join(paths.stateRoot, createHash('sha256').update(launchId).digest('hex').slice(0, 20));
       const dispatchStartedAt = new Date(input.clock()).toISOString();
       return {
-        profile: { kind: 'reuse', profileRef: input.workerModel },
+        profile: { kind: 'reuse', profileRef: originalProfileRef },
         workerLaunch: createCodexWorkerLaunch({
           launchId,
-          model: input.workerModel,
+          modelConfiguration,
+          // 替代 Session 沿用原 Task 的模型绑定，凭据 store 仍按本次输入的 env 解析。
+          credentialStore: credentialStore(input.env),
+          credentialStorePath: credentialStorePath({ environment: input.env }),
           sandboxMode: input.codexSandbox,
           stateRoot: paths.stateRoot,
           sessionStartReporterPath: paths.reporterPath,

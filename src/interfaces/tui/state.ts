@@ -26,6 +26,10 @@ export type OverlayKind =
   | 'handoff-target'
   | 'event-drawer'
   | 'model-picker'
+  /** 角色模型菜单：provider/model 候选 + 独立水平 effort + 默认返回动作。 */
+  | 'model-role-menu'
+  /** 角色连接编辑：同一弹窗框内的内存字段，key 只显示遮罩。 */
+  | 'model-settings-editor'
   | 'handoff-review'
   /** 执行阶段交接复用同一交互，但主题与记录是 `ExecutionHandoffState`。 */
   | 'execution-handoff-review'
@@ -88,6 +92,88 @@ export type ComposerMode =
   | { readonly kind: 'message' }
   | { readonly kind: 'answer'; readonly interactionId: string; readonly expectedRevision: number };
 
+/**
+ * 角色模型菜单的内存选择态（IP-06）。
+ *
+ * 三块区域按定稿顺序循环：候选列表 → 独立 effort → 动作。`action` 的 0 永远是返回，因此 Esc 与默认
+ * 确认都不会改变任何绑定。
+ */
+export type ModelRoleMenuState = {
+  readonly role: import('./ports.js').ModelSettingsRole;
+  readonly selectedCandidateRef: string | null;
+  readonly focus: 'list' | 'effort' | 'actions';
+  readonly action: number;
+  /** 候选自带可信能力来源时才可能有值；没有来源时恒为 `null`。 */
+  readonly effort: string | null;
+};
+
+/**
+ * 角色连接编辑的内存字段（IP-06）。
+ *
+ * 整个结构只存在于进程内内存：它不进入 IC-13 的 `UiDraft`、草稿存储或提交记录，因此 `secret`
+ * 不会随输入恢复、resize 或重挂载落盘。渲染时始终以遮罩显示，错误与日志也只带 code 和安全文案。
+ *
+ * 字段覆盖完整的 provider 连接：codex 连接、凭据来源与 SDK 字段路径，以及 effort 的可信能力来源。
+ * `credentialRef` 是 opaque 引用而非 key，保存时原样带回，因此不提供编辑入口。
+ */
+export type ModelSettingsEdit = {
+  readonly role: import('./ports.js').ModelSettingsRole;
+  readonly label: string;
+  readonly providerIntegration: string;
+  readonly model: string;
+  /** 非秘密选项，逐行 `key = value`；保存时按行解析。 */
+  readonly options: string;
+  readonly codexProviderId: string;
+  readonly codexBaseUrl: string;
+  /** 空串表示该连接不配置 codex 连接。 */
+  readonly codexWireApi: '' | 'responses' | 'chat';
+  readonly credentialKind: 'harness_login' | 'managed';
+  readonly credentialRef: string;
+  readonly credentialOptionPath: string;
+  /** 三者全空表示无可信来源；全非空才构成可保存的 effort 能力。 */
+  readonly effortSource: string;
+  readonly effortValues: string;
+  readonly effortOptionPath: string;
+  readonly secret: string;
+};
+
+/** 编辑器字段顺序；Enter 提交保存，Esc 逐层返回并保留已输入内容。 */
+export const MODEL_SETTINGS_FIELDS = [
+  'label',
+  'providerIntegration',
+  'model',
+  'options',
+  'codexProviderId',
+  'codexBaseUrl',
+  'codexWireApi',
+  'credentialKind',
+  'credentialOptionPath',
+  'effortSource',
+  'effortValues',
+  'effortOptionPath',
+  'secret',
+] as const satisfies readonly (keyof ModelSettingsEdit)[];
+export type ModelSettingsField = (typeof MODEL_SETTINGS_FIELDS)[number];
+
+/** overlay 刚打开、快照尚未返回时的空编辑；不含任何秘密。 */
+export const EMPTY_MODEL_SETTINGS_EDIT: ModelSettingsEdit = {
+  role: 'coordinator',
+  label: '',
+  providerIntegration: '',
+  model: '',
+  options: '',
+  codexProviderId: '',
+  codexBaseUrl: '',
+  codexWireApi: '',
+  credentialKind: 'harness_login',
+  credentialRef: '',
+  credentialOptionPath: '',
+  effortSource: '',
+  effortValues: '',
+  effortOptionPath: '',
+  secret: '',
+};
+
 /** `legacy-review` 是 Home 之上的旧记录迁移确认屏：未确认前不进入任何 Scope。 */
 export type TuiScreen = 'home' | 'wizard' | 'legacy-review' | 'workspace';
 
@@ -132,6 +218,16 @@ export type TuiState = {
   readonly executionFilter: ExecutionFilter;
   /** 正在审阅的 Execution Handoff 记录；`null` 表示没有。 */
   readonly executionHandoffReviewId: string | null;
+  /** 角色模型列表的高亮下标；`model-picker` overlay 独占。 */
+  readonly modelRoleIndex: number;
+  /** 角色模型菜单的选择态；`null` 表示 overlay 未打开。 */
+  readonly modelRoleMenu: ModelRoleMenuState | null;
+  /** 角色连接编辑的内存字段；`null` 表示 overlay 未打开。 */
+  readonly modelSettingsEdit: ModelSettingsEdit | null;
+  /** 编辑器当前字段；用字段身份而不是下标，隐藏字段才不会让光标指向不存在的行。 */
+  readonly modelSettingsField: ModelSettingsField;
+  /** 保存/应用的结构化结果；失败时编辑器保留全部输入。 */
+  readonly modelSettingsNotice: string | null;
 };
 
 export const initialTuiState: TuiState = {
@@ -169,6 +265,11 @@ export const initialTuiState: TuiState = {
   confirmationFrames:[],
   executionFilter: [],
   executionHandoffReviewId: null,
+  modelRoleIndex: 0,
+  modelRoleMenu: null,
+  modelSettingsEdit: null,
+  modelSettingsField: 'label',
+  modelSettingsNotice: null,
 };
 
 export type AnswerReturnState = Pick<TuiState, 'selectedSessionId' | 'composerMode' | 'projectPanel' | 'expandedToolIds' | 'detailedTranscript'> & {
@@ -208,7 +309,11 @@ export type TuiAction =
   | { readonly kind: 'confirmation-requested'; readonly pending: Exclude<PendingConfirmation, null> }
   | { readonly kind: 'confirmation-dismissed' }
   | { readonly kind: 'execution-filter-changed'; readonly filter: ExecutionFilter }
-  | { readonly kind: 'execution-handoff-review'; readonly handoffId: string | null };
+  | { readonly kind: 'execution-handoff-review'; readonly handoffId: string | null }
+  | { readonly kind: 'model-role-selected'; readonly index: number }
+  | { readonly kind: 'model-role-menu'; readonly menu: ModelRoleMenuState | null }
+  | { readonly kind: 'model-settings-edit'; readonly edit: ModelSettingsEdit | null; readonly field?: ModelSettingsField }
+  | { readonly kind: 'model-settings-notice'; readonly notice: string | null };
 
 /** 密度只允许在「宽度允许的上限」之内降级；任何动作都不会强制展开。 */
 function clampDensity(current: SidebarDensity, allowed: SidebarDensity): SidebarDensity {
@@ -332,6 +437,19 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
       return { ...state, executionFilter: action.filter };
     case 'execution-handoff-review':
       return { ...state, executionHandoffReviewId: action.handoffId };
+    case 'model-role-selected':
+      return { ...state, modelRoleIndex: action.index };
+    case 'model-role-menu':
+      return { ...state, modelRoleMenu: action.menu, modelSettingsNotice: action.menu === null ? null : state.modelSettingsNotice };
+    case 'model-settings-edit':
+      return {
+        ...state,
+        modelSettingsEdit: action.edit,
+        modelSettingsField: action.field ?? (action.edit === null ? 'label' : state.modelSettingsField),
+        modelSettingsNotice: action.edit === null ? null : state.modelSettingsNotice,
+      };
+    case 'model-settings-notice':
+      return state.modelSettingsNotice === action.notice ? state : { ...state, modelSettingsNotice: action.notice };
   }
 }
 

@@ -10,6 +10,60 @@ import {
   resolveChatModel,
   type ProviderIntegrationResolver,
 } from '../../src/adapters/agents/chat-model-factory.js';
+import type { ProviderConnection } from '../../src/domain/model-configuration.js';
+import type { CredentialStore } from '../../src/application/ports/credential-store.js';
+
+/** credentialRef 是 z.uuid，夹具必须给真 UUID，否则 schema 会先拒掉、测不到工厂自己的分支。 */
+const CREDENTIAL_REF = '11111111-2222-4333-8444-555555555555';
+
+/**
+ * 凭据端口由 bootstrap 注入，工厂不再有隐式默认实现；harness_login 的用例也要显式给一个
+ * 永不读取的 fake，避免测试又依赖本机 XDG 凭据文件。
+ */
+const unusedCredentials: Pick<CredentialStore, 'read'> = {
+  read: () => ({ kind: 'rejected', code: 'credential_missing', message: 'missing' }),
+};
+
+const managedConnection: ProviderConnection = {
+  connectionRef: 'connection:test', label: 'test', providerIntegration: 'mock#ChatModel',
+  modelOptions: { configuration: { baseURL: 'https://example.invalid/v1' } },
+  credential: { kind: 'managed', credentialRef: CREDENTIAL_REF, optionPath: 'apiKey' }, codex: null,
+};
+
+test('rejects credential-bearing options before resolving a provider', () => {
+  let constructed = false;
+  const result = resolveChatModel(configuration({ modelOptions: { headers: [{ api_key: 'secret-fixture' }] } }), () => {
+    constructed = true;
+    return null;
+  }, unusedCredentials);
+  expect(result).toMatchObject({ kind: 'rejected', code: 'invalid_model_options' });
+  expect(constructed).toBe(false);
+  expect(JSON.stringify(result)).not.toContain('secret-fixture');
+});
+
+test('injects the exact credential and independently selected effort only at model construction', () => {
+  let received: Readonly<Record<string, unknown>> | null = null;
+  const original = configuration({ providerConnection: managedConnection, credentialRefs: [CREDENTIAL_REF],
+    effort: 'high', effortCapability: { values: ['low', 'high'], source: 'verified:model', optionPath: 'reasoning.effort' } });
+  const result = resolveChatModel(original, () => ({ integrationRef: 'mock#ChatModel', createChatModel: (input) => {
+    received = input.modelOptions;
+    return new FakeListChatModel({ responses: ['ok'] });
+  } }), { read: (ref) => ref === CREDENTIAL_REF ? { kind: 'resolved', secret: 'secret-fixture' }
+    : { kind: 'rejected', code: 'credential_missing', message: 'missing' } });
+  expect(result.kind).toBe('resolved');
+  expect(received).toMatchObject({ apiKey: 'secret-fixture', reasoning: { effort: 'high' }, maxRetries: 0 });
+  expect(JSON.stringify(original)).not.toContain('secret-fixture');
+});
+
+test('rejects missing credentials and redacts provider construction failures', () => {
+  const candidate = configuration({ providerConnection: managedConnection, credentialRefs: [CREDENTIAL_REF] });
+  const resolver = () => ({ integrationRef: 'mock#ChatModel', createChatModel: () => { throw new Error('secret-fixture'); } });
+  expect(resolveChatModel(candidate, resolver, { read: () => ({ kind: 'rejected', code: 'credential_missing', message: 'missing' }) }))
+    .toMatchObject({ kind: 'rejected', code: 'credential_unavailable' });
+  const failed = resolveChatModel(candidate, resolver, { read: () => ({ kind: 'resolved', secret: 'secret-fixture' }) });
+  expect(failed).toMatchObject({ kind: 'rejected', code: 'construction_failed' });
+  expect(JSON.stringify(failed)).not.toContain('secret-fixture');
+});
 
 function configuration(overrides: Partial<CoordinatorModelConfiguration> = {}): CoordinatorModelConfiguration {
   return {
@@ -17,7 +71,7 @@ function configuration(overrides: Partial<CoordinatorModelConfiguration> = {}): 
     providerIntegration: '@langchain/openai#ChatOpenAI',
     model: 'MiniMax-M3',
     modelOptions: { temperature: 0 },
-    credentialRefs: ['env:MINIMAX_API_KEY'],
+    credentialRefs: [],
     nativeWindowOwnerRef: null,
     ...overrides,
   };
@@ -34,7 +88,7 @@ test('从配置构造的实例就是请求路径，Companion 不包装也不代�
     },
   });
 
-  const result = resolveChatModel(configuration(), resolver);
+  const result = resolveChatModel(configuration(), resolver, unusedCredentials);
 
   expect(result.kind).toBe('resolved');
   if (result.kind === 'resolved') {
@@ -57,7 +111,7 @@ test('内层重试在装配时统一关闭，避免与 model node 的重试相�
 });
 
 test('配置指向的集成不可用时拒绝，不改用其他模型或环境凭据', () => {
-  const result = resolveChatModel(configuration({ providerIntegration: '@acme/unknown#Client' }), () => null);
+  const result = resolveChatModel(configuration({ providerIntegration: '@acme/unknown#Client' }), () => null, unusedCredentials);
 
   expect(result.kind).toBe('rejected');
   if (result.kind === 'rejected') {
@@ -74,12 +128,12 @@ test('构造实例失败时以可操作诊断拒绝，而不是返回半成品',
     },
   });
 
-  const result = resolveChatModel(configuration(), resolver);
+  const result = resolveChatModel(configuration(), resolver, unusedCredentials);
 
   expect(result.kind).toBe('rejected');
   if (result.kind === 'rejected') {
     expect(result.code).toBe('construction_failed');
-    expect(result.message).toContain('缺少 baseURL');
+    expect(result.message).toContain('连接');
   }
 });
 
@@ -87,7 +141,7 @@ test('配置里只有凭据引用，没有凭据值可以落盘', () => {
   const config = configuration();
   const serialized = JSON.stringify(config);
 
-  expect(config.credentialRefs).toEqual(['env:MINIMAX_API_KEY']);
+  expect(config.credentialRefs).toEqual([]);
   expect(serialized).not.toContain('apiKey');
   expect(serialized).not.toContain('secret');
   expect(serialized).not.toContain('token');

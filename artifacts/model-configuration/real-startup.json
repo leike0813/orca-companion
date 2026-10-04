@@ -1,0 +1,95 @@
+{
+  "kind": "codex-secretless-real-launch",
+  "observedAt": "2026-10-04T04:24:52.576Z",
+  "isolation": {
+    "fixtureRootIsTemporary": true,
+    "mainProjectTouched": false,
+    "threadsTouched": false
+  },
+  "modelConfiguration": {
+    "providerId": "companion_minimax",
+    "model": "MiniMax-M3.1-Flash-Preview",
+    "effort": "low",
+    "credentialKind": "managed"
+  },
+  "secretHandling": {
+    "source": ".env.smoke",
+    "heldInMemoryOnly": true,
+    "persistedToTemporaryStore": true,
+    "printedAnywhere": false
+  },
+  "steps": [
+    {
+      "name": "git_fixture_created",
+      "ok": true
+    },
+    {
+      "name": "credential_store_written",
+      "ok": true,
+      "detail": {
+        "credentialRef": "c3159a2f-e6a5-49ee-9340-31bd6a2dac9c"
+      }
+    },
+    {
+      "name": "prepared_command_built",
+      "ok": true,
+      "detail": {
+        "commandShape": "node <path> <path>",
+        "mentionsLauncher": true,
+        "mentionsKey": false
+      }
+    },
+    {
+      "name": "terminal_created",
+      "ok": true,
+      "detail": {
+        "handle": "term_dad69ef1-bc5f-470c-94de-17efe93c8f0e"
+      }
+    },
+    {
+      "name": "tui_idle",
+      "ok": true
+    },
+    {
+      "name": "prompt_sent",
+      "ok": true,
+      "detail": {
+        "prompt": "Reply with exactly: READY"
+      }
+    },
+    {
+      "name": "session_start_reported",
+      "ok": true,
+      "detail": {
+        "hasSessionId": true,
+        "hasTranscriptPath": true
+      }
+    },
+    {
+      "name": "assistant_turn_observed",
+      "ok": true
+    },
+    {
+      "name": "session_binding_proved",
+      "ok": true,
+      "detail": {
+        "kind": "proven",
+        "reason": null
+      }
+    },
+    {
+      "name": "transcript_free_of_secret",
+      "ok": true
+    }
+  ],
+  "verdict": "launched-with-approved-binding",
+  "observedSession": {
+    "sessionId": "01a10528-6e53-7623-82a1-b2b41dc88fa5",
+    "codexHomeMatched": true,
+    "transcriptModel": "MiniMax-M3.1-Flash-Preview",
+    "transcriptEffort": "low",
+    "modelMatchesApprovedBinding": true,
+    "effortMatchesApprovedBinding": true,
+    "credentialEvidence": "key 仅存在于子进程环境；未读取、未打印、未落证据"
+  }
+}

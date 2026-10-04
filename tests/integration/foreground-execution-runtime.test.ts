@@ -47,6 +47,22 @@ const LOOP_SWITCH = 'ORCA_COMPANION_E2E_LOOP';
 /** 计划要求的 Worker 模型；凭据只留在 provider 环境变量里，本文件不读也不打印。 */
 const REQUIRED_WORKER_MODEL = 'minimax-cn/MiniMax-M3.1-Flash-Preview';
 
+type RealProjectConfig = {
+  readonly execution?: {
+    readonly workerProfiles?: readonly { readonly role: string; readonly modelConfiguration: { readonly model: string } }[];
+    readonly acceptedRisks?: unknown;
+  };
+};
+
+/** 项目 schema2 为每个生产角色固定 profile 与模型；宿主不会替用户挑一个模型。 */
+function workerModelsByRole(config: RealProjectConfig): Record<string, string> {
+  const models: Record<string, string> = {};
+  for (const profile of config.execution?.workerProfiles ?? []) {
+    models[profile.role] = profile.modelConfiguration.model;
+  }
+  return models;
+}
+
 const isolatedRepo = process.env[REPO_VAR] ?? '';
 const dedicatedIdentity = process.env[IDENTITY_VAR] ?? '';
 const enabled = isolatedRepo.length > 0 && dedicatedIdentity.length > 0;
@@ -65,11 +81,14 @@ describe.skipIf(!enabled)('前台执行运行时的真实集成冒烟', () => {
   test('宿主在隔离项目上启动：读权威事实，并在缺少候选图时拒绝批准', async () => {
     expect(isolatedRepo.startsWith('/')).toBe(true);
     expect(existsSync(join(isolatedRepo, 'orca-companion.json'))).toBe(true);
-    const config = JSON.parse(readFileSync(join(isolatedRepo, 'orca-companion.json'), 'utf8')) as {
-      readonly execution?: { readonly workerModel?: unknown };
-    };
+    const config = JSON.parse(readFileSync(join(isolatedRepo, 'orca-companion.json'), 'utf8')) as RealProjectConfig;
     // Worker 模型必须由隔离项目的配置显式给出：宿主不会替用户挑一个模型。
-    expect(config.execution?.workerModel).toBe(REQUIRED_WORKER_MODEL);
+    expect(workerModelsByRole(config)).toEqual({
+      planner: REQUIRED_WORKER_MODEL,
+      implementation: REQUIRED_WORKER_MODEL,
+      validator: REQUIRED_WORKER_MODEL,
+      finalizer: REQUIRED_WORKER_MODEL,
+    });
     const baseline = await runProcess({
       executable: 'git',
       args: ['status', '--porcelain', '--untracked-files=all'],
@@ -214,9 +233,7 @@ async function readStatus(workspace: string): Promise<StatusSnapshot> {
   return JSON.parse(stdout) as StatusSnapshot;
 }
 
-function policyOf(config: {
-  readonly execution?: { readonly workerModel?: unknown; readonly acceptedRisks?: unknown };
-}): string {
+function policyOf(config: RealProjectConfig): string {
   return JSON.stringify(config.execution ?? {});
 }
 
@@ -233,10 +250,8 @@ describe.skipIf(!loopEnabled)('真实执行闭环（一次性项目）', () => {
     async () => {
       const env = process.env as Record<string, string>;
       const configText = readFileSync(join(isolatedRepo, 'orca-companion.json'), 'utf8');
-      const config = JSON.parse(configText) as {
-        readonly execution?: { readonly workerModel?: unknown; readonly acceptedRisks?: unknown };
-      };
-      expect(config.execution?.workerModel).toBe(REQUIRED_WORKER_MODEL);
+      const config = JSON.parse(configText) as RealProjectConfig;
+      expect(workerModelsByRole(config)['validator']).toBe(REQUIRED_WORKER_MODEL);
       // 本机内核无法执行 Codex 的 Linux 沙箱（见 docs/orca-compatibility.md）：闭环显式接受 full-access
       // 风险，因此这条风险必须真的写在项目配置里，而不是测试替它放宽。
       expect(policyOf(config)).toContain(CODEX_FULL_ACCESS_RISK);

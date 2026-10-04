@@ -24,6 +24,10 @@ _Avoid_: Worker Profile, automatic routing, fallback model
 A LangChain chat-model integration that implements the common `BaseChatModel` interface and resolves one Coordinator Model Configuration without proxying requests or owning credentials. Companion does not maintain a provider allowlist; availability follows installed integrations and verified runtime capabilities.
 _Avoid_: Companion-owned provider wrapper, provider gateway, bundled provider catalog, credential store
 
+**Credential Store**:
+The single user-level file holding plaintext provider secrets outside version control, addressed only through opaque immutable credential references. Project configuration, checkpoints, UI input storage, command arguments, and evidence carry the reference; the value is resolved at the last construction point and reaches Worker processes only through their environment. Owner-only permissions, a short exclusive lock, revision compare-and-set, and atomic replacement keep it single-writer and recoverable; an unreferenced leftover secret stays an orphan rather than activating anything.
+_Avoid_: Version-controlled configuration, per-project key file, provider token cache, session credential
+
 **Coordinator Session**:
 One independently resumable LangGraph thread bound to a Coordination Scope, retaining its own coordinator conversation and loop progress across waiting, pausing, and process restarts. Coordinator Sessions never share a conversation checkpoint, and each may own at most one open Ticket Claim.
 _Avoid_: Branch Coordination State, Provider session, Worker session, process lifetime
@@ -65,7 +69,7 @@ The exclusive, recoverable authority held by one Coordinator Session to mutate a
 _Avoid_: Global project lock, Worker lease, Coordinator Session ownership
 
 **Execution Authorization Manifest**:
-The complete, versioned proposal presented for one atomic user decision before a Graph Generation may execute, binding its destination and planning artifacts to an exact Coordination Scope and baseline, Worker Profiles, role authorities, budget caps, workspace policy, and accepted risks.
+The complete, versioned proposal presented for one atomic user decision before a Graph Generation may execute, binding its destination and planning artifacts to an exact Coordination Scope and baseline, the full model configuration of every production Worker Profile plus the Recovery Utility Profile, role authorities, budget caps, workspace policy, and accepted risks. A manifest that omits a role's model binding is not an authorization to run that role, and an earlier version without those bindings is never read as one.
 _Avoid_: Partial approval, per-task approval, execution status
 
 **Execution Authorization**:
@@ -169,7 +173,7 @@ A bounded, workspace-scoped record of a command or judgment whose affected porti
 _Avoid_: Worker assertion, full transcript, permanent proof
 
 **Worker Profile**:
-A user-approved configuration that binds a Worker Role to its harness, model, reasoning settings, and execution limits.
+A user-approved configuration that binds a Worker Role to its harness and its complete model configuration: provider connection, model, reasoning effort with a trusted capability source, non-secret options, and a credential reference. Worker Profiles are immutable and append-only; editing a model setting publishes a new profile rather than rewriting an approved one.
 _Avoid_: Coordinator choice, automatic model routing
 
 **Dependency Policy**:
@@ -334,8 +338,8 @@ The just-in-time creation of one role-specific Orca Task for a Dispatch Candidat
 _Avoid_: Graph compilation, placeholder task, worker dispatch
 
 **Materialization Binding**:
-A disposable projection that associates one Worker Task with its validated Orca Task, reconstructed from the Task Envelope, Operation Intent, receipt, and live backend facts.
-_Avoid_: Binding database, graph field, guessed task match
+The durable record associating one Worker Task with its validated Orca Task, reconstructed from the Task Envelope, Operation Intent, receipt, and live backend facts, and pinned at dispatch to the exact Execution Authorization identity, version, and Worker Profile that Task runs under. A binding without that pin predates it and blocks the work it would authorize instead of falling back to whatever is current.
+_Avoid_: Binding database, graph field, guessed task match, current-authorization lookup
 
 **Graph Patch**:
 A validated, atomic set of add, revise, and retire operations appended to an Execution Graph in response to newly discovered execution information without rewriting earlier GraphVersions or runtime history.

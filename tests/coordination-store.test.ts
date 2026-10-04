@@ -615,6 +615,7 @@ test('Materialization Binding 按角色与 Attempt 读回完整派发身份，�
     orcaTaskId: 'task-1',
     launchId: 'launch-1',
     creationOperationId: 'op-1' as OperationId,
+    ...AUTHORIZATION_PIN,
   }));
   expect(recorded.kind).toBe('committed');
 
@@ -638,6 +639,10 @@ test('Materialization Binding 按角色与 Attempt 读回完整派发身份，�
   expect(read.bindings[0]?.specificationUnitPath).toBeNull();
   expect(read.bindings[0]?.orcaTaskId).toBe('task-1');
   expect(read.bindings[0]?.creationOperationId).toBe('op-1');
+  // 派发时固定的授权与 profile 是这个 Task 的运行依据，模型重新授权不会改写它。
+  expect(read.bindings[0]?.authorizationId).toBe('auth-1');
+  expect(read.bindings[0]?.authorizationVersion).toBe(1);
+  expect(read.bindings[0]?.workerProfileRef).toEqual({ kind: 'worker-profile', id: 'profile-implementation' });
   // 不复制 worktree 路径或 Orca Task 状态：绑定只保存最小索引。
   expect(Object.keys(read.bindings[0] ?? {})).not.toContain('worktreePath');
   expect(Object.keys(read.bindings[0] ?? {})).not.toContain('taskStatus');
@@ -659,9 +664,104 @@ test('Materialization Binding 按角色与 Attempt 读回完整派发身份，�
       orcaTaskId: 'task-1',
       launchId: 'launch-1',
       creationOperationId: 'op-1' as OperationId,
+      ...AUTHORIZATION_PIN,
     })).kind,
   ).toBe('committed');
   expect(bindingsOf()).toHaveLength(1);
+});
+
+test('Recovery Utility 派发固定自己的授权与 profile，且不进入四主角色', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+
+  type UtilityCommand = Extract<CoordinationCommand, { readonly kind: 'record-materialization-binding' }>;
+  // 身份与 CAS 字段由基座固定，覆盖项只描述这次派发本身。
+  type UtilityOverrides = Partial<Omit<UtilityCommand, 'expectedRevision' | 'coordinationScopeId' | 'writer'>>;
+  const utility = (expectedRevision: number, overrides: UtilityOverrides = {}): UtilityCommand => ({
+    kind: 'record-materialization-binding',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(SESSION_A),
+    workPackageId: 'wp-1' as WorkPackageId,
+    role: null,
+    recoveryUtilityRole: 'recovery_utility' as const,
+    workerTaskId: 'utility-task-1' as WorkerTaskId,
+    dispatchId: 'utility-dispatch-1' as DispatchId,
+    attemptId: 'attempt-1',
+    worktreeId: 'worktree-1',
+    specBinding: null,
+    specificationUnitPath: null,
+    orcaTaskId: 'utility-orca-1',
+    launchId: 'utility-launch-1',
+    creationOperationId: 'utility-op-1' as OperationId,
+    authorizationId: 'auth-2',
+    authorizationVersion: 2,
+    workerProfileRef: 'profile-recovery-utility',
+    ...overrides,
+  });
+
+  const firstUtility = submit((expectedRevision) => utility(expectedRevision));
+  expect(firstUtility.kind).toBe('committed');
+  const bindings = bindingsOf();
+  expect(bindings[0]?.role).toBeNull();
+  expect(bindings[0]?.recoveryUtilityRole).toBe('recovery_utility');
+  expect(bindings[0]?.authorizationId).toBe('auth-2');
+  expect(bindings[0]?.workerProfileRef).toEqual({ kind: 'worker-profile', id: 'profile-recovery-utility' });
+
+  // Utility 不得携带规格内容，也不与角色派发混用同一个身份。
+  expect(
+    submit((expectedRevision) =>
+      utility(expectedRevision, {
+        specBinding: SPEC_BINDING,
+        creationOperationId: 'utility-op-2' as OperationId,
+      }),
+    ).kind,
+  ).toBe('rejected');
+  expect(
+    submit((expectedRevision) =>
+      utility(expectedRevision, {
+        role: 'implementation',
+        creationOperationId: 'utility-op-3' as OperationId,
+      }),
+    ).kind,
+  ).toBe('rejected');
+  expect(
+    submit((expectedRevision) =>
+      utility(expectedRevision, { role: null, creationOperationId: 'utility-op-4' as OperationId }),
+    ).kind,
+  ).toBe('rejected');
+  expect(bindingsOf()).toHaveLength(1);
+});
+
+test('缺少模型授权绑定的新派发被拒绝写入', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+
+  const base = {
+    kind: 'record-materialization-binding',
+    coordinationScopeId: SCOPE,
+    writer: writer(SESSION_A),
+    workPackageId: 'wp-1' as WorkPackageId,
+    role: 'implementation',
+    workerTaskId: 'worker-task-1' as WorkerTaskId,
+    dispatchId: 'dispatch-1' as DispatchId,
+    attemptId: 'attempt-1',
+    worktreeId: 'worktree-1',
+    specBinding: SPEC_BINDING,
+    specificationUnitPath: null,
+    orcaTaskId: 'task-1',
+    launchId: 'launch-1',
+    creationOperationId: 'op-1' as OperationId,
+  } as const;
+  for (const missing of ['authorizationId', 'authorizationVersion', 'workerProfileRef'] as const) {
+    const command: Record<string, unknown> = { ...base, ...AUTHORIZATION_PIN, expectedRevision: 0 };
+    delete command[missing];
+    expect(submit(() => command as unknown as CoordinationCommand).kind).toBe('rejected');
+  }
+  expect(bindingsOf()).toEqual([]);
+  expect(submit((expectedRevision) => ({ ...base, ...AUTHORIZATION_PIN, expectedRevision })).kind).toBe('committed');
 });
 
 test('同一角色同一 Attempt 的第二次派发被唯一约束拒绝，不同 Attempt 追加为新行', () => {
@@ -691,6 +791,7 @@ test('同一角色同一 Attempt 的第二次派发被唯一约束拒绝，不�
       orcaTaskId,
       launchId: `launch-${attemptId}`,
       creationOperationId: creationOperationId as OperationId,
+      ...AUTHORIZATION_PIN,
       ...overrides,
     }));
 
@@ -726,6 +827,7 @@ test('Planner 绑定只带固定规格目标路径，其它角色必须带 Spec 
     orcaTaskId: 'task-1',
     launchId: 'launch-1',
     creationOperationId: 'op-1' as OperationId,
+    ...AUTHORIZATION_PIN,
   }));
   expect(plannerWithoutPath.kind).toBe('rejected');
 
@@ -745,6 +847,7 @@ test('Planner 绑定只带固定规格目标路径，其它角色必须带 Spec 
     orcaTaskId: 'task-1',
     launchId: 'launch-1',
     creationOperationId: 'op-1' as OperationId,
+    ...AUTHORIZATION_PIN,
   }));
   expect(implementationWithoutBinding.kind).toBe('rejected');
   expect(bindingsOf()).toEqual([]);
@@ -766,6 +869,7 @@ test('Planner 绑定只带固定规格目标路径，其它角色必须带 Spec 
       orcaTaskId: 'task-1',
       launchId: 'launch-1',
       creationOperationId: 'op-1' as OperationId,
+      ...AUTHORIZATION_PIN,
     })).kind,
   ).toBe('committed');
   expect(bindingsOf()[0]?.specificationUnitPath).toBe('openspec/changes/wp-1');
@@ -1469,6 +1573,13 @@ function bindingsOf(): readonly MaterializationBindingRecord[] {
   return result.kind === 'materialization-bindings' ? result.bindings : [];
 }
 
+/** 派发时必须钉住的模型授权身份；缺任何一项的写入由 store 拒绝。 */
+const AUTHORIZATION_PIN = {
+  authorizationId: 'auth-1',
+  authorizationVersion: 1,
+  workerProfileRef: 'profile-implementation',
+} as const;
+
 /** 替代 Session Segment：保留原 Worker Task、业务 Attempt 与角色，只换 Dispatch/Binding/Segment。 */
 const REPLACEMENT_SEGMENT = {
   segmentId: 'segment-2' as SessionSegmentId,
@@ -1710,6 +1821,10 @@ test('migration v10 → v11 保留旧物化绑定并只在缺身份时标为 leg
     expect(result.bindings[0]?.specBinding).toBeNull();
     expect(result.bindings[0]?.specificationUnitPath).toBeNull();
     expect(result.bindings[0]?.launchId).toBeNull();
+    // schema 16 新增的模型授权三列对旧行保持为空：当时没有这项事实，不做推断回填。
+    expect(result.bindings[0]?.authorizationId).toBeNull();
+    expect(result.bindings[0]?.authorizationVersion).toBeNull();
+    expect(result.bindings[0]?.workerProfileRef).toBeNull();
 
     // 新主键允许同一 Work Package 追加第二个角色的派发身份，旧行不被覆盖。
     const appended = migrated.store.transact({
@@ -1732,6 +1847,7 @@ test('migration v10 → v11 保留旧物化绑定并只在缺身份时标为 leg
       orcaTaskId: 'orca-task-1',
       launchId: 'launch-1',
       creationOperationId: 'op-1' as OperationId,
+      ...AUTHORIZATION_PIN,
     });
     expect(appended.kind).toBe('committed');
     const after = migrated.store.query({
@@ -1749,6 +1865,59 @@ test('migration v10 → v11 保留旧物化绑定并只在缺身份时标为 leg
     .get() as unknown as { readonly value: string } | undefined;
   version.close();
   expect(Number.parseInt(row?.value ?? '', 10)).toBe(SCHEMA_VERSION);
+});
+
+test('migration v15 → v16 保留已签发派发身份，模型授权列保持为空', () => {
+  const databasePath = join(directory, 'coordination-v15.sqlite');
+
+  const legacy = new DatabaseSync(databasePath);
+  legacy.exec('BEGIN IMMEDIATE');
+  for (const migration of MIGRATIONS) {
+    if (migration.version <= 15) {
+      for (const statement of migration.statements) legacy.exec(statement);
+    }
+  }
+  legacy.exec(
+    `INSERT INTO scope (coordination_scope_id, mode, control_state, planning_cycle_id, graph_id,
+       graph_version, authorization_id, authorization_version, map_revision, revision, updated_at,
+       full_branch_ref, canonical_worktree_path)
+     VALUES ('scope-v15', 'execution_coordination', 'active', 'cycle-1', 'g1', 1, 'auth-1', 1, 0, 3, 1,
+       'refs/heads/main', '/tmp/v15')`,
+  );
+  legacy.exec(
+    `INSERT INTO materialization_bindings (coordination_scope_id, work_package_id, creation_operation_id,
+       role, worker_task_id, dispatch_id, attempt_id, worktree_id, spec_binding_json,
+       specification_unit_path, orca_task_id, launch_id, created_at)
+     VALUES ('scope-v15', 'wp-1', 'op-issued', 'implementation', 'task-1', 'dispatch-1', 'attempt-1',
+       'worktree-1', '${JSON.stringify(SPEC_BINDING)}', NULL, 'orca-task-1', 'launch-1', 1)`,
+  );
+  legacy.prepare(`INSERT INTO meta (key, value) VALUES ('schema_version', '15')`).run();
+  legacy.exec('COMMIT');
+  legacy.close();
+
+  const migrated = openCoordinationStore({ databasePath, clock });
+  expect(migrated.kind).toBe('opened');
+  if (migrated.kind !== 'opened') return;
+  try {
+    const scopeId = 'scope-v15' as CoordinationScopeId;
+    const read = migrated.store.query({ kind: 'materialization-bindings', coordinationScopeId: scopeId });
+    expect(read.kind).toBe('materialization-bindings');
+    if (read.kind !== 'materialization-bindings') return;
+    const binding = read.bindings[0];
+    // 已证明的派发身份原样保留。
+    expect(binding?.identity).toBe('issued');
+    expect(binding?.role).toBe('implementation');
+    expect(binding?.attemptId).toBe('attempt-1');
+    expect(binding?.launchId).toBe('launch-1');
+    expect(binding?.specBinding?.contentDigest).toBe(SPEC_BINDING.contentDigest);
+    // 模型授权三列与 utility 身份保持为空：当时没有这项事实，不回填成当前授权或当前 profile。
+    expect(binding?.authorizationId).toBeNull();
+    expect(binding?.authorizationVersion).toBeNull();
+    expect(binding?.workerProfileRef).toBeNull();
+    expect(binding?.recoveryUtilityRole).toBeNull();
+  } finally {
+    migrated.store.close();
+  }
 });
 
 test('migration v6 → v7 保留既有数据并补齐新表', () => {

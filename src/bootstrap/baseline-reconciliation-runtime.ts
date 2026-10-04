@@ -21,6 +21,8 @@ import { workPackageOf } from '../domain/planning/execution-graph.js';
 import { readBaselineGitObservations } from '../adapters/git/baseline-observer.js';
 import { ackConsumedDelivery, settleDelivery } from '../application/delivery/process-delivery.js';
 import { codexSessionPathsUnder, parseOrcaWorkerDoneLocator } from './execution-runtime.js';
+import type { WorkerModelConfiguration } from '../domain/model-configuration.js';
+import type { CredentialStore } from '../application/ports/credential-store.js';
 
 export type BaselineReconciliationRuntimeInput = {
   readonly store: BranchCoordinationStore;
@@ -38,7 +40,21 @@ export type BaselineReconciliationRuntimeInput = {
   readonly canonicalWorktreePath: string;
   readonly repoSelector: string;
   readonly worktreePaths: ReadonlyMap<string, string>;
-  readonly workerModel: string;
+  /**
+   * 冻结的 Planner 模型配置。
+   *
+   * 基线补救是一次真实的 Planner 派发，因此与常规 Planner Task 走同一份已批准绑定：启动参数只由
+   * 它生成，不从项目配置或界面另取一个模型。
+   */
+  readonly modelConfiguration: WorkerModelConfiguration;
+  /**
+   * 用户级凭据 store 与其文件位置。
+   *
+   * 基线补救是一次真实的 Planner 派发，可能绑定 managed 凭据：启动准备阶段要用与 Coordinator
+   * 装配、模型保存同一份 store 证明 key 存在。两项由调用方按宿主 env 注入，本模块不自己推导路径。
+   */
+  readonly credentialStore: CredentialStore;
+  readonly credentialStorePath: string;
   readonly codexSandboxMode: Parameters<typeof createCodexWorkerLaunch>[0]['sandboxMode'] | null;
   readonly companionStateRoot: string;
   readonly bindingWindowMs: number;
@@ -78,7 +94,8 @@ export function createBaselineReconciliationDriver(input: BaselineReconciliation
       canonicalWorktree: input.canonicalWorktreePath,
       worktree: worktree.worktreeId,
       workerLaunch: createCodexWorkerLaunch({
-        launchId, model: input.workerModel, sandboxMode: input.codexSandboxMode,
+        launchId, modelConfiguration: input.modelConfiguration, sandboxMode: input.codexSandboxMode,
+        credentialStore: input.credentialStore, credentialStorePath: input.credentialStorePath,
         stateRoot: paths.stateRoot, sessionStartReporterPath: paths.reporterPath,
       }),
       operationIds: {

@@ -42,7 +42,11 @@ import type {
   ExecutionScope,
 } from '../../src/application/ports/execution-backend.js';
 import type { WorkerRole } from '../../src/domain/planning/execution-authorization.js';
-import { WORKER_ROLES } from '../../src/domain/planning/execution-authorization.js';
+import {
+  profileRefFor,
+  recoveryUtilityProfileFixture,
+  workerProfilesFixture,
+} from './model-configurations.js';
 import type { RoleGateFacts } from '../../src/domain/recovery/role-gate.js';
 import type { ExecutionGraph } from '../../src/domain/planning/execution-graph.js';
 import type {
@@ -334,11 +338,8 @@ export function createRecoveryHarness(options: RecoveryHarnessOptions = {}): Rec
       },
       baselineHead: 'head-recovery',
       orcaRunId: 'run-recovery',
-      workerProfiles: WORKER_ROLES.map((role) => ({
-        profileRef: { kind: 'worker-profile', id: `profile-${role}` },
-        role,
-        harness: 'codex',
-      })),
+      workerProfiles: workerProfilesFixture(),
+      recoveryUtilityProfile: recoveryUtilityProfileFixture(),
       permissions: {
         planner: true,
         implementation: true,
@@ -442,19 +443,20 @@ export function createRecoveryHarness(options: RecoveryHarnessOptions = {}): Rec
     orcaTaskId: string,
     attemptId = 'attempt-1',
   ): void => {
+    const role = options.role ?? 'validator';
     const recorded = store.transact({
       kind: 'record-materialization-binding',
       coordinationScopeId: RECOVERY_SCOPE,
       expectedRevision: revisionOf(),
       writer,
       workPackageId,
-      role: options.role ?? 'validator',
+      role,
       workerTaskId: RECOVERY_WORKER_TASK,
       dispatchId: `dispatch:${orcaTaskId}` as DispatchId,
       // 与中断 Segment 记录的业务 Attempt 同一身份：角色级物化绑定按 role + attempt 定位。
       attemptId,
       worktreeId: `worktree:${workPackageId}`,
-      specBinding: (options.role ?? 'validator') === 'planner' ? null : {
+      specBinding: role === 'planner' ? null : {
         provider: 'openspec',
         relativePath: `openspec/changes/${workPackageId}`,
         contentDigest: `digest:${workPackageId}`,
@@ -462,9 +464,14 @@ export function createRecoveryHarness(options: RecoveryHarnessOptions = {}): Rec
         contractRevision: 1,
         trackingRevision: 1,
       },
-      specificationUnitPath: (options.role ?? 'validator') === 'planner'
+      specificationUnitPath: role === 'planner'
         ? `openspec/changes/${workPackageId}`
         : null,
+      // 派发即钉住运行依据：Task 用哪份授权、哪一版授权与哪个 profile 都固定下来，
+      // 之后 Worker 换模型也不会改写这次派发的事实。
+      authorizationId: RECOVERY_AUTHORIZATION,
+      authorizationVersion: approved.authorization.authorizationVersion,
+      workerProfileRef: profileRefFor(role),
       orcaTaskId,
       creationOperationId: `op:${orcaTaskId}:create` as OperationId,
       launchId: `launch:${orcaTaskId}`,

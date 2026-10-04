@@ -23,6 +23,7 @@ import type {
   CoordinatorSessionId,
   GraphGeneration,
   GraphId,
+  OperationId,
   PlanningCycleId,
   RuntimeIncarnationId,
   WorkPackageId,
@@ -34,6 +35,7 @@ import {
   maxRecoveriesFor,
   proposeManifest,
   recordApproval,
+  recordModelReauthorization,
   recoveryAllowance,
 } from '../../src/application/planning/authorization-service.js';
 import { recordInitialGraph } from '../../src/application/planning/graph-history.js';
@@ -42,8 +44,11 @@ import type { CoordinationWriter, ScopeRecord } from '../../src/application/port
 import type {
   ExecutionAuthorizationManifest,
   ExecutionAuthorizationRecord,
+  WorkerProfileRef,
 } from '../../src/domain/planning/execution-authorization.js';
 import type { ExecutionGraph, GraphVersionRecord } from '../../src/domain/planning/execution-graph.js';
+import type { WorkerModelConfiguration } from '../../src/domain/model-configuration.js';
+import { executionModelConfiguration } from '../support/execution-harness.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SESSION_A = 'session-a' as CoordinatorSessionId;
@@ -157,7 +162,17 @@ type RawManifest = {
   graph: { graphId: string; generation: number; version: number };
   baselineHead: string;
   orcaRunId: string;
-  workerProfiles: { profileRef: { kind: string; id: string }; role: string; harness: string }[];
+  workerProfiles: {
+    profileRef: { kind: string; id: string };
+    role: string;
+    harness: string;
+    modelConfiguration: WorkerModelConfiguration;
+  }[];
+  recoveryUtilityProfile: {
+    profileRef: { kind: string; id: string };
+    harness: string;
+    modelConfiguration: WorkerModelConfiguration;
+  };
   permissions: Record<string, boolean>;
   limits?: Record<string, number>;
   workspacePolicy: { canonicalWorktree: string; worktreeIsolation: string };
@@ -168,7 +183,7 @@ type RawManifest = {
 
 function manifestFor(record: GraphVersionRecord, limits?: Record<string, number>): RawManifest {
   const base: RawManifest = {
-    manifestVersion: 1,
+    manifestVersion: 2,
     coordinationScopeId: SCOPE,
     planningCycleId: CYCLE,
     destinationRef: { kind: 'destination', id: 'd', version: 1 },
@@ -177,12 +192,17 @@ function manifestFor(record: GraphVersionRecord, limits?: Record<string, number>
     graph: { graphId: record.graphId, generation: record.generation, version: record.version },
     baselineHead: 'abc123',
     orcaRunId: 'run_x',
-    workerProfiles: [
-      { profileRef: { kind: 'worker-profile', id: 'p-planner' }, role: 'planner', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-implementation' }, role: 'implementation', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-validator' }, role: 'validator', harness: 'codex' },
-      { profileRef: { kind: 'worker-profile', id: 'p-finalizer' }, role: 'finalizer', harness: 'codex' },
-    ],
+    workerProfiles: (['planner', 'implementation', 'validator', 'finalizer'] as const).map((role) => ({
+      profileRef: { kind: 'worker-profile', id: `p-${role}` },
+      role,
+      harness: 'codex',
+      modelConfiguration: executionModelConfiguration(),
+    })),
+    recoveryUtilityProfile: {
+      profileRef: { kind: 'worker-profile', id: 'p-recovery' },
+      harness: 'codex',
+      modelConfiguration: executionModelConfiguration(),
+    },
     permissions: {
       planner: true,
       implementation: true,
@@ -281,6 +301,52 @@ function authorizations(): readonly ExecutionAuthorizationRecord[] {
     throw new Error('无法读取授权记录');
   }
   return result.authorizations;
+}
+
+/** 把测试 Scope 推进到执行协调态；重新授权只在这个状态下成立。 */
+function enterExecution(record: ExecutionAuthorizationRecord): void {
+  const entered = store.transact({
+    kind: 'transition-to-execution',
+    coordinationScopeId: SCOPE,
+    expectedRevision: scopeRecord().revision,
+    writer,
+    planningCycleId: CYCLE,
+    graphId: record.manifest.graph.graphId,
+    graphVersion: record.manifest.graph.version,
+    authorizationId: record.authorizationId,
+    authorizationVersion: record.authorizationVersion,
+  });
+  if (entered.kind === 'rejected') {
+    throw new Error(`进入执行协调态失败: ${entered.message}`);
+  }
+}
+
+function reauthorizedProfiles(model: string): readonly WorkerProfileRef[] {
+  return (['planner', 'implementation', 'validator', 'finalizer'] as const).map((role) => ({
+    profileRef: { kind: 'worker-profile', id: `p-${role}` },
+    role,
+    harness: 'codex',
+    modelConfiguration: executionModelConfiguration({ model }),
+  }));
+}
+
+function reauthorize(overrides: Partial<Parameters<typeof recordModelReauthorization>[0]> = {}) {
+  return recordModelReauthorization({
+    store,
+    coordinationScopeId: SCOPE,
+    writer,
+    expectedScopeRevision: scopeRecord().revision,
+    workerProfiles: reauthorizedProfiles('next-model'),
+    recoveryUtilityProfile: {
+      profileRef: { kind: 'worker-profile', id: 'p-recovery-next' },
+      harness: 'codex',
+      modelConfiguration: executionModelConfiguration({ model: 'next-model' }),
+    },
+    graphVersion: candidate.version,
+    authorizationId: 'auth-reapproved',
+    approvalRef: 'approval-reapproved',
+    ...overrides,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -471,6 +537,148 @@ test('批准落盘前地图或计划已变化时拒绝旧 Manifest', () => {
 // ---------------------------------------------------------------------------
 // 授权边界
 // ---------------------------------------------------------------------------
+
+test('模型限定重新授权只换模型绑定与 Graph head，其余字段与预算原样继承', () => {
+  const first = proposeAndApprove('auth-1', manifestFor(candidate, limitsWithRecoveries(2)));
+  enterExecution(first);
+
+  const result = reauthorize();
+  expect(result.kind).toBe('recorded');
+  if (result.kind !== 'recorded') return;
+
+  const next = result.authorization;
+  expect(next.authorizationVersion).toBe(first.authorizationVersion + 1);
+  expect(next.fingerprint).not.toBe(first.fingerprint);
+  expect(next.manifest.permissions).toEqual(first.manifest.permissions);
+  expect(next.manifest.limits).toEqual(first.manifest.limits);
+  expect(next.manifest.gitPolicy).toEqual(first.manifest.gitPolicy);
+  expect(next.manifest.acceptedRisks).toEqual(first.manifest.acceptedRisks);
+  expect(next.manifest.implementationPlanRef).toEqual(first.manifest.implementationPlanRef);
+  expect(next.manifest.workerProfiles.find((profile) => profile.role === 'validator')?.modelConfiguration.model).toBe(
+    'next-model',
+  );
+  expect(next.manifest.recoveryUtilityProfile.modelConfiguration.model).toBe('next-model');
+  // 旧授权仍在历史里：既有 Task 的运行依据不因新授权而改变。
+  expect(authorizations().map((record) => record.authorizationId)).toEqual(['auth-1', 'auth-reapproved']);
+});
+
+test('非执行协调态不接受模型重新授权', () => {
+  proposeAndApprove('auth-1', manifestFor(candidate, limitsWithoutRecoveries()));
+  const result = reauthorize();
+  expect(result.kind).toBe('rejected');
+  if (result.kind === 'rejected') expect(result.failure.code).toBe('invalid_mode');
+  expect(authorizations().map((record) => record.authorizationId)).toEqual(['auth-1']);
+});
+
+test('取消中与重规划过渡期间拒绝模型重新授权', () => {
+  const first = proposeAndApprove('auth-1', manifestFor(candidate, limitsWithoutRecoveries()));
+  enterExecution(first);
+  for (const [controlState, code] of [
+    ['cancelling', 'scope_not_executable'],
+    ['replanning_transition', 'replanning'],
+  ] as const) {
+    const applied = store.transact({
+      kind: 'record-control-state',
+      coordinationScopeId: SCOPE,
+      expectedRevision: scopeRecord().revision,
+      writer,
+      controlState,
+    });
+    expect(applied.kind).toBe('committed');
+    const result = reauthorize();
+    expect(result.kind).toBe('rejected');
+    if (result.kind === 'rejected') expect(result.failure.code).toBe(code);
+  }
+  expect(authorizations().map((record) => record.authorizationId)).toEqual(['auth-1']);
+});
+
+test('存在未决 Operation Intent 时拒绝模型重新授权', () => {
+  const first = proposeAndApprove('auth-1', manifestFor(candidate, limitsWithoutRecoveries()));
+  enterExecution(first);
+  const begun = store.transact({
+    kind: 'begin-intent',
+    coordinationScopeId: SCOPE,
+    expectedRevision: scopeRecord().revision,
+    writer,
+    operationId: 'op-pending' as OperationId,
+    target: { kind: 'task', id: 'wp-1' },
+    operationCategory: 'task-create',
+  });
+  expect(begun.kind).toBe('committed');
+
+  const result = reauthorize();
+  expect(result.kind).toBe('rejected');
+  if (result.kind === 'rejected') expect(result.failure.code).toBe('pending_mutation');
+
+  store.transact({
+    kind: 'settle-intent',
+    coordinationScopeId: SCOPE,
+    expectedRevision: scopeRecord().revision,
+    writer,
+    operationId: 'op-pending' as OperationId,
+    outcomeClass: 'accepted',
+  });
+  expect(reauthorize().kind).toBe('recorded');
+});
+
+test('审阅之后 Scope 变化或 Graph head 已推进时拒绝模型重新授权', () => {
+  const first = proposeAndApprove('auth-1', manifestFor(candidate, limitsWithoutRecoveries()));
+  enterExecution(first);
+  const staleReview = reauthorize({ expectedScopeRevision: scopeRecord().revision - 1 });
+  expect(staleReview.kind).toBe('rejected');
+  if (staleReview.kind === 'rejected') expect(staleReview.failure.code).toBe('stale_review');
+
+  const staleHead = reauthorize({ graphVersion: (candidate.version + 1) as typeof candidate.version });
+  expect(staleHead.kind).toBe('rejected');
+  expect(authorizations().map((record) => record.authorizationId)).toEqual(['auth-1']);
+});
+
+test('同一次重新授权被受理后重放只回读原记录，不追加第二条授权', () => {
+  const first = proposeAndApprove('auth-1', manifestFor(candidate, limitsWithoutRecoveries()));
+  enterExecution(first);
+  const reviewed = scopeRecord().revision;
+
+  const accepted = reauthorize({ expectedScopeRevision: reviewed });
+  expect(accepted.kind).toBe('recorded');
+
+  // 受理本身推进了 Scope revision；重放必须回到既有记录，而不是被判成陈旧审阅或再授权一次。
+  const replayed = reauthorize({ expectedScopeRevision: reviewed });
+  expect(replayed.kind).toBe('recorded');
+  if (accepted.kind === 'recorded' && replayed.kind === 'recorded') {
+    expect(replayed.authorization.authorizationId).toBe(accepted.authorization.authorizationId);
+    expect(replayed.authorization.authorizationVersion).toBe(accepted.authorization.authorizationVersion);
+  }
+  expect(authorizations().map((record) => record.authorizationId)).toEqual(['auth-1', 'auth-reapproved']);
+});
+
+test('相同授权 ID 的异载荷重放被拒绝，且不产生第二条记录', () => {
+  const first = proposeAndApprove('auth-1', manifestFor(candidate, limitsWithoutRecoveries()));
+  enterExecution(first);
+  const reviewed = scopeRecord().revision;
+  expect(reauthorize({ expectedScopeRevision: reviewed }).kind).toBe('recorded');
+
+  const differentPayloads = [
+    ['不同的角色模型绑定', { workerProfiles: reauthorizedProfiles('other-model') }],
+    ['不同的 Recovery Utility 绑定', {
+      recoveryUtilityProfile: {
+        profileRef: { kind: 'worker-profile' as const, id: 'p-recovery-other' },
+        harness: 'codex',
+        modelConfiguration: executionModelConfiguration({ model: 'other-model' }),
+      },
+    }],
+    ['不同的 Graph head 版本', { graphVersion: (candidate.version + 1) as typeof candidate.version }],
+    ['缺失一个生产角色', { workerProfiles: reauthorizedProfiles('next-model').slice(1) }],
+  ] as const;
+
+  for (const [, overrides] of differentPayloads) {
+    const replay = reauthorize({ expectedScopeRevision: reviewed, ...overrides });
+    expect(replay.kind).toBe('rejected');
+    if (replay.kind === 'rejected') {
+      expect(['authorization_payload_mismatch', 'candidate_missing']).toContain(replay.failure.code);
+    }
+  }
+  expect(authorizations().map((record) => record.authorizationId)).toEqual(['auth-1', 'auth-reapproved']);
+});
 
 test('策略内操作直接放行，发布与部署仍需要单独授权', () => {
   proposeAndApprove('auth-1', manifestFor(candidate, limitsWithoutRecoveries()));

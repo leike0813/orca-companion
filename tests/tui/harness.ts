@@ -27,6 +27,8 @@ import type {
   HomeResolution,
   ModelCatalog,
   ModelConfigurationOption,
+  ModelSettingsPort,
+  ModelSettingsSnapshotView,
   ScopeSetupPort,
   SnapshotLoad,
   TranscriptLoad,
@@ -40,6 +42,7 @@ import type {
   WorkPackageExecutionEntry,
 } from '../../src/application/execution/execution-view.js';
 import { WIZARD_CHECKS } from '../../src/interfaces/tui/ports.js';
+import type { EffortCapability } from '../../src/domain/model-configuration.js';
 import { openUiInputStore } from '../../src/adapters/storage/ui-input-store.js';
 import { createTranscriptReadingFixture } from '../support/transcript-reading.js';
 import type { UiInputStore } from '../../src/application/ports/ui-input-store.js';
@@ -264,6 +267,12 @@ export type FakePortsOptions = {
   readonly executeResult?: ControllerCommandResult;
   readonly models?: readonly ModelConfigurationOption[];
   readonly modelCatalog?: Partial<ModelCatalog>;
+  /**
+   * 角色模型配置端口。
+   *
+   * 省略即不装配：界面按「尚未接通」显示不可用，这与生产宿主未实现时的行为一致。
+   */
+  readonly modelSettings?: Partial<ModelSettingsPort>;
   /** Execution Handoff 各步骤的返回值；省略即 accepted。 */
   readonly executionHandoff?: Partial<Record<'prepare' | 'review' | 'cutover' | 'cancel', ControllerCommandResult>>;
   /** Execution Authorization 的审阅结果与批准结果；省略即一份门禁通过的完整 Manifest。 */
@@ -422,6 +431,7 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
           currentConfigurationRef: 'config-a',
           switchable: true,
           switchBlockReason: null,
+          configurationRevision: 7,
           ...options.modelCatalog,
         });
       },
@@ -444,6 +454,7 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
     },
     executionHandoff: createFakeExecutionHandoff(options, calls, accepted),
     executionAuthorization: createFakeExecutionAuthorization(options, calls, accepted),
+    ...(options.modelSettings === undefined ? {} : { modelSettings: createFakeModelSettings(options, calls) }),
     inputStore,
     submissionStatus: (query) => {
       calls.push({ name: 'submissionStatus', detail: query });
@@ -503,6 +514,90 @@ function createFakeExecutionHandoff(
  * `review` 记录调用并返回审阅结果；`approve` 只记录界面回传的指纹与 revision——断言「界面不构造
  * 身份」就落在这两个值上。
  */
+const FAKE_EFFORT_CAPABILITY: EffortCapability = {
+  values: ['low', 'medium', 'high'],
+  source: 'fixture:capability-a',
+  optionPath: 'modelReasoningEffort',
+};
+
+/** 预览级角色模型配置夹具：只有非秘密字段，绝不携带 key。 */
+export const FAKE_MODEL_SETTINGS_SNAPSHOT: ModelSettingsSnapshotView = {
+  revision: 7,
+  roles: [
+    {
+      role: 'coordinator',
+      bindingRef: 'config-a',
+      connectionRef: 'connection-a',
+      connectionLabel: '主连接',
+      providerIntegration: 'openai',
+      model: 'model-a',
+      effort: 'high',
+      effortCapability: FAKE_EFFORT_CAPABILITY,
+      harness: null,
+    },
+    {
+      role: 'planner',
+      bindingRef: 'profile-planner',
+      connectionRef: 'connection-a',
+      connectionLabel: '主连接',
+      providerIntegration: 'openai',
+      model: 'model-a',
+      effort: 'high',
+      effortCapability: FAKE_EFFORT_CAPABILITY,
+      harness: 'codex',
+    },
+  ],
+  connections: [
+    {
+      connectionRef: 'connection-a',
+      label: '主连接',
+      providerIntegration: 'openai',
+      modelOptions: {},
+      credential: { kind: 'managed', credentialRef: '11111111-1111-4111-8111-111111111111', optionPath: 'apiKey' },
+      codex: { providerId: 'openai', baseUrl: 'https://api.openai.com/v1', wireApi: 'responses' },
+    },
+  ],
+  models: [
+    { modelRef: 'model-a', connectionRef: 'connection-a', model: 'model-a', effortCapability: FAKE_EFFORT_CAPABILITY },
+    { modelRef: 'model-b', connectionRef: 'connection-a', model: 'model-b', effortCapability: FAKE_EFFORT_CAPABILITY },
+  ],
+  coordinatorConfigurations: [
+    { configurationRef: 'config-a', model: 'model-a', effort: 'high' },
+    { configurationRef: 'config-b', model: 'model-b', effort: 'medium' },
+  ],
+};
+
+function createFakeModelSettings(options: FakePortsOptions, calls: PortCall[]): ModelSettingsPort {
+  return {
+    load: () => {
+      calls.push({ name: 'modelSettings.load', detail: null });
+      return Promise.resolve(options.modelSettings?.load?.() ?? { kind: 'loaded', snapshot: FAKE_MODEL_SETTINGS_SNAPSHOT });
+    },
+    save: (input) => {
+      calls.push({ name: 'modelSettings.save', detail: input });
+      return Promise.resolve(
+        options.modelSettings?.save?.(input) ?? {
+          kind: 'saved',
+          revision: 8,
+          configurationRef: input.role === 'coordinator' ? 'config-saved' : null,
+          profileRef: input.role === 'coordinator' ? null : 'profile-saved',
+        },
+      );
+    },
+    apply: (input) => {
+      calls.push({ name: 'modelSettings.apply', detail: input });
+      return Promise.resolve(
+        options.modelSettings?.apply?.(input) ?? {
+          kind: 'saved',
+          revision: 8,
+          configurationRef: input.role === 'coordinator' ? 'config-saved' : null,
+          profileRef: input.role === 'coordinator' ? null : 'profile-saved',
+        },
+      );
+    },
+  };
+}
+
 function createFakeExecutionAuthorization(
   options: FakePortsOptions,
   calls: PortCall[],

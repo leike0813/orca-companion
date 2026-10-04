@@ -54,6 +54,8 @@ import { openUiInputStore } from '../adapters/storage/ui-input-store.js';
 import { requestSessionCompaction } from '../application/coordinator/compact-session.js';
 import {
   assertSwitchable,
+  configurationConnection,
+  isEffortSelectable,
   switchModelConfiguration,
   type CoordinatorModelConfiguration,
 } from '../application/coordinator/model-config-switch.js';
@@ -96,7 +98,10 @@ import {
   type WorkerObservation,
   type WorkPackageExecutionState,
 } from '../application/execution/execution-view.js';
-import { activeAuthorization } from '../application/planning/authorization-service.js';
+import {
+  activeAuthorization,
+  readAcceptedAuthorizationByFingerprint,
+} from '../application/planning/authorization-service.js';
 import { requestGraphPatch, type GraphPatchBaselineObservation } from '../application/execution/request-graph-patch.js';
 import type { GraphChangeRequest } from '../domain/execution/change-routing.js';
 import { admitSpecification, type SpecificationAdmissionResult } from '../application/specification-admission.js';
@@ -154,8 +159,24 @@ import { projectChangedPaths } from '../domain/worker-result-verification.js';
 import type {
   ExecutionAuthorizationManifest,
   ExecutionAuthorizationRecord,
+  RecoveryUtilityProfile,
+  WorkerProfileRef,
   WorkerRole,
 } from '../domain/planning/execution-authorization.js';
+import type {
+  ModelSettingsRole as DomainModelSettingsRole,
+  ModelProfileRole,
+  ProviderConnection,
+  WorkerModelConfiguration,
+} from '../domain/model-configuration.js';
+import {
+  createModelSettingsService,
+  modelSettingsSnapshot,
+  type ModelSettingsService,
+  type SaveModelSettingsResult,
+} from '../application/configuration/model-settings.js';
+import { FileProjectConfigurationStore } from '../adapters/storage/project-configuration-store.js';
+import { JsonCredentialStore, credentialStorePath } from '../adapters/storage/credential-store.js';
 import type { CanonicalHeadFacts } from '../domain/git-integration-policy.js';
 import {
   WORK_PACKAGE_BUDGET_FIELDS,
@@ -210,6 +231,10 @@ import type {
   ExecutionHandoffIntentPort,
   HomeResolution,
   ModelCatalog,
+  ModelRoleCandidate,
+  ModelRoleView,
+  ModelSettingsPort,
+  ModelSettingsRole,
   ScopeSetupPort,
   SnapshotLoad,
   TranscriptLoad,
@@ -251,8 +276,10 @@ import {
   probeReadOnlyWorker,
   readOnlyWorkerUnavailableReason,
   type ReadOnlyWorkerProbe,
+  type ReadOnlyWorkerProbeResult,
 } from '../adapters/agents/codex-read-only-probe.js';
 import { dispatchScopedWorker } from '../adapters/agents/utility-worker.js';
+import { verifyModelCapabilities } from '../adapters/agents/capability-probe.js';
 import { bindCodexSessionFromStartReport, sessionBindingIdOf } from '../adapters/agents/session-binding.js';
 import type { CodexSessionStartReport } from '../adapters/agents/codex-transcript.js';
 import type { HarnessSessionFacts } from '../adapters/agents/session-binding.js';
@@ -313,10 +340,12 @@ import {
 import { createOrcaDoctorProbe } from './doctor.js';
 import {
   PROJECT_CONFIG_FILENAME,
+  currentWorkerProfile,
   configurationByRef,
   CODEX_FULL_ACCESS_RISK,
   DEFAULT_PROJECT_EXECUTION,
   loadProjectConfig,
+  projectConfigPath,
   type CodexSandboxMode,
   type ProjectConfig,
 } from './project-config.js';
@@ -385,6 +414,24 @@ const PLANNING_MUTATION_CATEGORIES: ReadonlySet<string> = new Set([
   'ticket-claim',
   'ticket-release',
 ]);
+
+/** 角色槽位的界面标签；顺序由 `roleModelViews` 固定，界面不重排。 */
+const ROLE_LABELS: Readonly<Record<ModelSettingsRole, string>> = {
+  coordinator: 'Coordinator',
+  planner: 'Planner',
+  implementation: 'Implementation',
+  validator: 'Validator',
+  finalizer: 'Finalizer',
+  recovery_utility: 'Recovery Utility',
+  planning_utility: 'Planning Utility',
+  specification_validator: 'Specification Validator',
+};
+
+/** 没有生产生命周期的槽位固定显示不可用原因，界面原样呈现而不自行判断。 */
+const ROLE_UNAVAILABLE_REASONS = {
+  planning_utility: '规划 Utility 没有生产生命周期：本版本不派发该角色',
+  specification_validator: 'Specification Validator 没有生产生命周期：规格准入只做确定性结构检查',
+} as const satisfies Readonly<Record<'planning_utility' | 'specification_validator', string>>;
 
 export type ForegroundPlanningFailureCode =
   | 'repository_unresolved'
@@ -1026,6 +1073,20 @@ export async function createForegroundPlanningHost(
     load: (specifier) => loadIntegration(specifier),
   });
 
+  /**
+   * 用户级 CredentialStore 的唯一生产实例来源。
+   *
+   * chat-model 装配（受控凭据解析）与模型设置保存（写入新 key）必须读同一份 store，否则会出现
+   * 「刚保存的 key 在启动路径读不到」这种只在运行期出现的不一致。Worker 启动的准备阶段也用同一份
+   * store 证明 managed key 确实存在，因此它同时是模型装配、模型保存与 Worker 启动三处的凭据事实。
+   *
+   * 路径按宿主自己的 `options.env` 推导（XDG → 家目录），而不是 `process.env`：整台进程的其余
+   * 读操作都走这个 env 视图，隔离启动与测试因此只需要替换一处，也不会出现「设置按注入 env 定位、
+   * 读取按进程 env 定位」这种只在运行期暴露的错位。
+   */
+  const credentialStore = (): JsonCredentialStore =>
+    new JsonCredentialStore({ environment: options.env });
+
   const modelFor = async (
     configuration: CoordinatorModelConfiguration,
   ): Promise<
@@ -1039,7 +1100,9 @@ export async function createForegroundPlanningHost(
         message: `provider 集成不可用：${configuration.providerIntegration}`,
       };
     }
-    const resolved = resolveChatModel(configuration, () => integration);
+    // 凭据 store 与模型设置服务共用同一个实例：两条路径读同一份用户级凭据，隔离环境（测试、隔离
+    // 启动）也因此只需要替换一处。
+    const resolved = resolveChatModel(configuration, () => integration, credentialStore());
     return resolved.kind === 'resolved'
       ? { kind: 'resolved', model: resolved.model }
       : { kind: 'failed', message: resolved.message };
@@ -1060,6 +1123,34 @@ export async function createForegroundPlanningHost(
    */
   const readOnlyWorkerProbe: ReadOnlyWorkerProbe =
     options.readOnlyWorkerProbe ?? (() => probeReadOnlyWorker({ env: options.env }));
+
+  /**
+   * 用**该次派发自己的**模型配置探测只读 Worker 能力。
+   *
+   * 默认探针不带任何模型设置，因此「探针通过」只说明受限命令本身可用，不说明正式只读会话拿到
+   * 的那组 provider/model/effort/options 也能被接受。这里把 profile 传下去，让探针与正式启动走
+   * 同一个配置生成器。
+   *
+   * 注入的探针（测试、隔离启动）仍然是唯一的能力 seam：它自带结论，不该被 profile 参数改写。
+   * 因此只有**默认生产探针**才按 profile 复现，注入路径直接返回注入的结论。
+   */
+  const probeForProfile = async (
+    modelConfiguration: WorkerModelConfiguration | null,
+  ): Promise<ReadOnlyWorkerProbeResult> => {
+    if (options.readOnlyWorkerProbe !== undefined) {
+      return await options.readOnlyWorkerProbe();
+    }
+    if (modelConfiguration === null) {
+      return {
+        kind: 'unavailable',
+        stage: 'codex-version',
+        codexVersion: null,
+        profile: CODEX_UTILITY_PERMISSION_PROFILE,
+        diagnostics: ['没有可核验的模型配置：无法确认正式只读会话会拿到同一组设置'],
+      };
+    }
+    return await probeReadOnlyWorker({ env: options.env, modelConfiguration });
+  };
 
   const trackerFor = (): IssueTrackerGateway | null =>
     trackerFactory({ cwd: canonicalWorktreePath ?? options.repositoryPath, env: options.env });
@@ -2323,10 +2414,20 @@ export async function createForegroundPlanningHost(
       deriveCapsule: (capsuleInput) => deriveContextCapsule(capsuleInput),
       verify: async (candidate) => {
         const resolved = await modelFor(candidate);
-        if(resolved.kind==='resolved')verifiedModel=resolved.model;
-        return resolved.kind === 'resolved'
-          ? { kind: 'verified' }
-          : { kind: 'rejected', message: resolved.message };
+        if (resolved.kind !== 'resolved') {
+          return { kind: 'rejected', message: resolved.message };
+        }
+        // 切换必须走与启动同一条能力核验：只有结构可构造不够，缺必需能力的模型同样不接管 Session。
+        // 核验在持久化绑定之前完成，因此失败不会留下已切换的记录。
+        const verification = await verifyModelCapabilities(resolved.model, {
+          modelRef: candidate.configurationRef,
+          ...(options.probeTimeoutMs === undefined ? {} : { timeoutMs: options.probeTimeoutMs }),
+        });
+        if (verification.kind === 'rejected') {
+          return { kind: 'rejected', message: verification.message };
+        }
+        verifiedModel = resolved.model;
+        return { kind: 'verified' };
       },
       persistConfiguration: (candidate) => {
         const written = requiredStore().transact({
@@ -2732,6 +2833,164 @@ export async function createForegroundPlanningHost(
       return accepted(`已创建 Coordination Scope ${proposal.coordinationScopeId}`, initialized.revision);
   };
 
+  /**
+   * 定稿 #52 的角色槽位投影（IP-06）。
+   *
+   * 候选只来自项目配置里已保存的连接与模型：界面可以选 provider/model/effort，但不能凭空造一个。
+     * 当前绑定来自 Session registry 或已批准 Manifest；项目配置只提供候选。
+   *
+   * 规划 Utility 与 Specification Validator 没有生产生命周期，固定显示不可用原因，不并入领域四主角色。
+   */
+  const roleModelViews = (
+    coordinatorConfigurationRef: string | null,
+    approvedManifest: ExecutionAuthorizationManifest | null,
+  ): readonly ModelRoleView[] => {
+    const current = config;
+    if (current === null) {
+      return [];
+    }
+    const connections = new Map(current.providerConnections.map((entry) => [entry.connectionRef, entry]));
+    const connectionOf = (connectionRef: string | null): ProviderConnection | null =>
+      connectionRef === null ? null : connections.get(connectionRef) ?? null;
+    const providerOf = (connectionRef: string | null): string => connectionOf(connectionRef)?.providerIntegration ?? '';
+
+    /**
+     * 候选按 modelRef 去重。
+     *
+     * 同一模型可能因不同 effort 被保存成多条不可变 Coordinator configuration；把它们并成一条候选，
+     * 否则菜单里会出现「同一个模型」重复多行、而 effort 只能独立选一次。选中的 effort 由 apply 保存
+     * 成新引用，因此去重不会丢掉 effort 的可选性。
+     */
+    const modelCandidates: readonly ModelRoleCandidate[] = (() => {
+      const seen = new Set<string>();
+      const result: ModelRoleCandidate[] = [];
+      for (const model of current.models) {
+        if (seen.has(model.modelRef)) {
+          continue;
+        }
+        seen.add(model.modelRef);
+        result.push({
+          candidateRef: model.modelRef,
+          connectionRef: model.connectionRef,
+          provider: providerOf(model.connectionRef),
+          model: model.model,
+          effortCapability: model.effortCapability ?? null,
+        });
+      }
+      return result;
+    })();
+
+    /**
+     * Coordinator 当前绑定取 **Session registry 登记的那一条**，不是项目默认引用。
+     *
+     * 两者可以不同：Session 一旦建立就固定当时的 configurationRef，项目默认引用之后的编辑不会改动
+     * 既有 Session。按默认引用显示会让菜单把「还没生效的编辑」说成「当前在跑」。
+     */
+    const coordinatorConfiguration =
+      coordinatorConfigurationRef === null
+        ? null
+        : current.coordinatorModels.find((entry) => entry.configurationRef === coordinatorConfigurationRef) ?? null;
+    const coordinatorCandidates: readonly ModelRoleCandidate[] = (() => {
+      const seen = new Set<string>();
+      const result: ModelRoleCandidate[] = [];
+      const configurations = coordinatorConfiguration === null
+        ? current.coordinatorModels
+        : [coordinatorConfiguration, ...current.coordinatorModels];
+      for (const entry of configurations) {
+        const key = entry.modelRef ?? entry.configurationRef;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        const connection = configurationConnection(entry);
+        result.push({
+          candidateRef: entry.configurationRef,
+          connectionRef: connection?.connectionRef ?? null,
+          provider: connection?.providerIntegration ?? entry.providerIntegration,
+          model: entry.model,
+          effortCapability: isEffortSelectable(entry) ? (entry.effortCapability ?? null) : null,
+        });
+      }
+      return result;
+    })();
+
+    const workerView = (role: ModelProfileRole): ModelRoleView => {
+      /**
+       * 「当前绑定」是**已批准 Manifest** 里的那一项，不是项目配置里刚保存的那一项。
+       *
+       * 保存只是追加不可变 profile 并更新角色选择，它不构成授权：真正让 Worker 用哪个模型跑的是
+       * 用户批准的那份 Manifest。把 `currentWorkerProfile` 的结果当「当前」会让刚保存、尚未批准的
+       * profile 显示成正在运行——这正是 D07「保存不应用」要避免的谎报。
+       *
+       * Route Planning 尚无批准授权时当前绑定为空，项目配置只提供候选。
+       */
+      const approved =
+        approvedManifest === null
+          ? null
+          : role === 'recovery_utility'
+            ? approvedManifest.recoveryUtilityProfile
+            : approvedManifest.workerProfiles.find((profile) => profile.role === role) ?? null;
+      const profile = approved === null ? null : approved.modelConfiguration;
+      return {
+        role,
+        label: ROLE_LABELS[role],
+        group: 'execution',
+        current:
+          profile === null
+            ? null
+            : {
+                candidateRef: profile.modelRef,
+                provider: profile.connection.providerIntegration,
+                model: profile.model,
+                effort: profile.effort,
+              },
+        candidates: modelCandidates,
+        availability: { available: true, reason: null },
+      };
+    };
+    const unavailableView = (
+      role: 'planning_utility' | 'specification_validator',
+    ): ModelRoleView => ({
+      role,
+      label: ROLE_LABELS[role],
+      // 定稿把 Specification Validator 放在执行区：它校验的是已落盘的规格单元。
+      group: role === 'planning_utility' ? 'planning' : 'execution',
+      current: null,
+      candidates: [],
+      availability: { available: false, reason: ROLE_UNAVAILABLE_REASONS[role] },
+    });
+
+    // 八个槽位的顺序就是定稿顺序，界面按数组顺序渲染，因此这里必须给出同一顺序。
+    return [
+      {
+        role: 'coordinator',
+        label: ROLE_LABELS.coordinator,
+        group: 'current',
+        current:
+          coordinatorConfiguration === null
+            ? null
+            : {
+                candidateRef: coordinatorConfiguration.configurationRef,
+                provider:
+                  coordinatorConfiguration.providerConnection?.providerIntegration ??
+                  coordinatorConfiguration.providerIntegration,
+                model: coordinatorConfiguration.model,
+                effort: coordinatorConfiguration.effort ?? null,
+              },
+        candidates: coordinatorCandidates,
+        availability: { available: true, reason: null },
+      },
+      unavailableView('planning_utility'),
+      workerView('planner'),
+      unavailableView('specification_validator'),
+      workerView('implementation'),
+      workerView('validator'),
+      workerView('finalizer'),
+      workerView('recovery_utility'),
+    ];
+  };
+
+
   const modelCatalog = (coordinatorSessionId: string): ModelCatalog => {
     const options_ =
       config === null
@@ -2766,10 +3025,36 @@ export async function createForegroundPlanningHost(
       currentConfigurationRef: currentRef,
       switchable: switchable.kind === 'switchable',
       switchBlockReason: switchable.kind === 'switchable' ? null : switchable.message,
+      ...(config === null
+        ? {}
+        : {
+            roles: roleModelViews(currentRef, approvedManifestForRoleViews(scope)),
+            configurationRevision: config.revision,
+          }),
     };
   };
 
   const selectedScopeRecord = (): ScopeRecord | null => (selectedScopeId === null ? null : scopeRecord(selectedScopeId));
+
+  /**
+   * 角色投影要用的**已批准** Manifest；读不到时返回 `null`，界面据此只显示候选、不声称在运行。
+   *
+   * 这里刻意不读项目配置里的角色选择：那份是「打算用哪个」，只有用户批准过的 Manifest 才是
+   * 「Worker 实际会用哪个」。两者不一致正是重新授权未完成时应有的状态。
+   */
+  const approvedManifestForRoleViews = (
+    scope: ScopeRecord | null,
+  ): ExecutionAuthorizationManifest | null => {
+    if (scope === null) {
+      return null;
+    }
+    const current = requireStore();
+    if (current === null) {
+      return null;
+    }
+    const read = activeAuthorization(current, scope.coordinationScopeId);
+    return read.kind === 'read' ? read.authorization?.manifest ?? null : null;
+  };
 
   const selectedSessionOf = (
     scope: ScopeRecord | null,
@@ -3556,7 +3841,9 @@ export async function createForegroundPlanningHost(
         canonicalWorktree,
         execution,
         workerHarness: config?.execution.harness ?? null,
-        workerModel: config?.execution.workerModel ?? null,
+        // 恢复派发的模型依据按 subject 判定：替代 Session 沿原 Task 绑定，新建 Utility 固定当前授权。
+        resolveModelConfiguration: (subject, kind) =>
+          recoveryModelConfigurationFor(scopeId, subject, kind),
         codexSandbox: codexSandboxForDispatch(approvedRisksFor(scopeId)),
         companionStateRoot: commonDirPath === null ? null : join(commonDirPath, COMPANION_STATE_DIRECTORY),
         writer: writerFor(session.started.incarnation),
@@ -3855,6 +4142,162 @@ export async function createForegroundPlanningHost(
     return mode === 'danger-full-access' && !approvedRisks.includes(CODEX_FULL_ACCESS_RISK) ? null : mode;
   };
 
+  /**
+   * 一份授权里的角色 profile；Manifest2 起模型绑定是必填，因此「没有该角色」就是不可派发。
+   *
+   * 取值只按 role 精确匹配，不取第一条：Manifest 可以同时绑定同一 harness 的多个角色 profile，
+   * 模糊匹配会把 Planner 的模型交给 Validator。
+   */
+  const manifestProfileFor = (
+    manifest: ExecutionAuthorizationManifest,
+    role: WorkerRole,
+  ): WorkerProfileRef | null =>
+    manifest.workerProfiles.find((profile) => profile.role === role) ?? null;
+
+  /**
+   * 一次派发钉住的运行依据：授权身份、授权版本与该角色的完整 profile。
+   *
+   * 这三项一起构成 materialization binding 的 pin，缺任一项就无法证明 Worker 实际用什么运行，因此
+   * 读取失败一律返回 `null` 而不是补默认值。
+   */
+  type DispatchAuthorization = {
+    readonly authorizationId: string;
+    readonly authorizationVersion: number;
+    readonly profile: WorkerProfileRef;
+  };
+
+  /**
+   * 按**物化绑定钉住的**授权取角色 profile。
+   *
+   * 已派发 Task 的运行依据是它自己的绑定，不是当前授权：重新授权只对新 Task 生效，因此 Retry、
+   * Validator 修复、替代 Session 与结算都必须沿原绑定回到当时那份授权。绑定上的 `authorizationId`
+   * 为 `null`（schema 16 之前的历史行）时返回 `null`——没有可证明的模型依据就阻塞，不回退到当前
+   * 授权，那会让旧 Task 悄悄用新模型跑完。
+   */
+  const pinnedProfileFor = (input: {
+    readonly scopeId: CoordinationScopeId;
+    readonly binding: MaterializationBindingRecord;
+    readonly role: WorkerRole;
+  }): DispatchAuthorization | null => {
+    const current = requireStore();
+    if (
+      current === null ||
+      input.binding.identity !== 'issued' ||
+      input.binding.role !== input.role ||
+      input.binding.authorizationId === null ||
+      input.binding.authorizationVersion === null ||
+      input.binding.workerProfileRef === null
+    ) {
+      return null;
+    }
+    const read = current.query({
+      kind: 'authorization',
+      coordinationScopeId: input.scopeId,
+      authorizationId: input.binding.authorizationId,
+    });
+    if (read.kind !== 'authorization' || read.authorization === null) {
+      return null;
+    }
+    const authorization = read.authorization;
+    const profile = manifestProfileFor(authorization.manifest, input.role);
+    const scope = current.query({ kind: 'scope', coordinationScopeId: input.scopeId });
+    const generation = scope.kind === 'scope' && scope.scope !== null ? graphGenerationOf(scope.scope) : null;
+    return profile === null
+      || authorization.authorizationVersion !== input.binding.authorizationVersion
+      || profile.profileRef.id !== input.binding.workerProfileRef.id
+      || authorization.manifest.coordinationScopeId !== input.scopeId
+      || generation === null
+      || authorization.manifest.orcaRunId !== generation.orcaRunId
+      || authorization.manifest.graph.graphId !== generation.graphId
+      || authorization.manifest.graph.generation !== generation.generation
+      ? null
+      : {
+          authorizationId: input.binding.authorizationId,
+          authorizationVersion: input.binding.authorizationVersion,
+          profile,
+        };
+  };
+
+  const bindingForTask = (
+    snapshot: CoordinationSnapshot,
+    workPackageId: WorkPackageId,
+    role: WorkerRole,
+    workerTaskId: WorkerTaskId,
+  ): MaterializationBindingRecord | null =>
+    snapshot.materializationBindings.find(
+      (binding) => binding.workPackageId === workPackageId &&
+        binding.role === role &&
+        binding.workerTaskId === workerTaskId &&
+        binding.identity === 'issued',
+    ) ?? null;
+
+  /**
+   * 一次角色派发实际使用的冻结 profile 引用。
+   *
+   * 全新角色 Task 取**当前**授权的 profile；同一 Task 的重试与修复沿**原绑定**的授权。两条路径都要求
+   * profile 存在且带模型配置，缺任一项即阻塞派发：Worker 的实际运行依据不能由界面或当前配置补齐。
+   */
+  const dispatchProfileFor = (input: {
+    readonly scopeId: CoordinationScopeId;
+    readonly authorization: ExecutionAuthorizationRecord;
+    readonly role: WorkerRole;
+    /** 该 Work Package 已有物化绑定时的最新一条；`null` 表示这是该角色的首次派发。 */
+    readonly priorBinding: MaterializationBindingRecord | null;
+  }): DispatchAuthorization | null => {
+    if (input.priorBinding !== null) {
+      return pinnedProfileFor({ scopeId: input.scopeId, binding: input.priorBinding, role: input.role });
+    }
+    const profile = manifestProfileFor(input.authorization.manifest, input.role);
+    return profile === null
+      ? null
+      : {
+          authorizationId: input.authorization.authorizationId,
+          authorizationVersion: input.authorization.authorizationVersion,
+          profile,
+        };
+  };
+
+  /**
+   * Recovery 用的模型配置解析：替代 Session 沿原 Task 绑定，新建 Utility 固定当前授权的 Utility profile。
+   *
+   * `kind` 决定依据，不接受调用方指定：替代 Session 属于既有 Task 的延续，新建 Capsule Utility
+   * 是一次新的派发，两者各自绑定不同的事实来源。读不到任一侧都返回 `null`，由调用方阻塞。
+   */
+  const recoveryModelConfigurationFor = (
+    scopeId: CoordinationScopeId,
+    subject: { readonly role: WorkerRole; readonly workerTaskId: string; readonly businessAttemptId: string },
+    kind: 'replacement' | 'utility',
+  ): WorkerModelConfiguration | null => {
+    const current = requireStore();
+    if (current === null) {
+      return null;
+    }
+    if (kind === 'replacement') {
+      const bindings = current.query({ kind: 'materialization-bindings', coordinationScopeId: scopeId });
+      const binding = bindings.kind === 'materialization-bindings'
+        ? bindings.bindings.find(
+            (entry) =>
+              entry.identity === 'issued' &&
+              entry.workerTaskId === subject.workerTaskId &&
+              entry.attemptId === subject.businessAttemptId,
+          ) ?? null
+        : null;
+      return binding === null
+        ? null
+        : pinnedProfileFor({ scopeId, binding, role: subject.role })?.profile.modelConfiguration ?? null;
+    }
+    const authorization = activeAuthorization(current, scopeId);
+    if (authorization.kind === 'rejected' || authorization.authorization === null) {
+      return null;
+    }
+    return recoveryUtilityProfileOf(authorization.authorization.manifest)?.modelConfiguration ?? null;
+  };
+
+  /** Manifest2 的 Recovery Utility profile 是必填字段；读取处仍按可空处理并阻塞，不填默认值。 */
+  const recoveryUtilityProfileOf = (
+    manifest: ExecutionAuthorizationManifest,
+  ): RecoveryUtilityProfile | null => manifest.recoveryUtilityProfile ?? null;
+
   /** 当前有效授权接受的具名风险；没有有效授权时为空，因此放宽沙箱不会被误当成已批准。 */
   const approvedRisksFor = (scopeId: CoordinationScopeId): readonly string[] => {
     const current = requireStore();
@@ -3887,6 +4330,7 @@ export async function createForegroundPlanningHost(
   const roleDispatchesFor = async (input: {
     readonly scopeId: CoordinationScopeId;
     readonly graph: ExecutionGraph;
+    readonly authorization: ExecutionAuthorizationRecord;
     readonly manifest: ExecutionAuthorizationManifest;
     readonly workPackage: WorkPackage;
     readonly role: AdvanceRole;
@@ -3895,24 +4339,8 @@ export async function createForegroundPlanningHost(
     readonly backendIdentityRef: string;
     readonly canonicalWorktree: string;
   }): Promise<RoleDispatchAssembly> => {
-    if (config === null) {
-      return { kind: 'blocked', code: 'config_unavailable', message: '项目配置不可用' };
-    }
-    if (config.execution.harness !== 'codex') {
-      return {
-        kind: 'blocked',
-        code: 'worker_harness_unsupported',
-        message: `Worker Profile 的 harness 为 ${config.execution.harness}，本进程只能派发 codex Worker`,
-      };
-    }
-    const workerModel = config.execution.workerModel;
-    if (workerModel === null) {
-      return {
-        kind: 'blocked',
-        code: 'worker_model_unresolved',
-        message: '项目配置没有给出 Worker 模型（execution.workerModel）：不伪造模型派发 Worker',
-      };
-    }
+    // Worker 的实际运行依据是**已批准 Manifest 里的角色 profile**：harness、模型、effort、非秘密
+    // options 与凭据引用都随它冻结。项目配置只提供角色当前选择的 profile 引用，不构成派发授权。
     const sandboxMode = codexSandboxForDispatch(input.manifest.acceptedRisks);
     if (sandboxMode === null) {
       return {
@@ -4004,6 +4432,35 @@ export async function createForegroundPlanningHost(
         contractRevision: specBinding?.contractRevision ?? 0,
         attempt: attemptIndexOf(input.snapshot, input.workPackage.workPackageId, role),
       });
+      // 只有相同逻辑 WorkerTask 才是对现有 Task 的 retry/续派。已结算的旧 Task
+      // 与新 attempt、修订契约都使用新 Task 身份，必须由当前授权绑定。
+      const priorBinding = bindingForTask(
+        input.snapshot,
+        input.workPackage.workPackageId,
+        role,
+        identity.workerTaskId,
+      );
+      const dispatchAuthorization = dispatchProfileFor({
+        scopeId: input.scopeId,
+        authorization: input.authorization,
+        role,
+        priorBinding,
+      });
+      if (dispatchAuthorization === null) {
+        return {
+          kind: 'blocked',
+          code: 'worker_profile_unresolved',
+          message: `没有可核验的 ${role} Worker Profile 绑定（当前授权或同一 Task 的原绑定）：不伪造模型派发 Worker`,
+        };
+      }
+      const workerProfile = dispatchAuthorization.profile;
+      if (workerProfile.harness !== 'codex') {
+        return {
+          kind: 'blocked',
+          code: 'worker_harness_unsupported',
+          message: `Worker Profile 的 harness 为 ${workerProfile.harness}，本进程只能派发 codex Worker`,
+        };
+      }
       const paths = codexSessionPaths(identity.launchId);
       if (paths === null) {
         return { kind: 'blocked', code: 'state_root_unavailable', message: '无法建立 Codex Session reporter' };
@@ -4053,7 +4510,11 @@ export async function createForegroundPlanningHost(
         taskEnvelope,
         workerLaunch: createCodexWorkerLaunch({
           launchId: identity.launchId,
-          model: workerModel,
+          // 启动参数由已冻结的模型配置生成：模型、effort、provider 与 options 同源，凭据只进子进程环境。
+          modelConfiguration: workerProfile.modelConfiguration,
+          // managed 凭据在准备阶段就要证明存在：与模型装配、模型保存共用同一份 env-derived store。
+          credentialStore: credentialStore(),
+          credentialStorePath: credentialStorePath({ environment: options.env }),
           // 沙箱模式来自已批准的 Manifest 所绑定的项目配置：放宽只有在授权审阅里显式接受风险时才生效。
           sandboxMode,
           stateRoot: paths.stateRoot,
@@ -4061,6 +4522,10 @@ export async function createForegroundPlanningHost(
         }),
         // launch 身份与 workerLaunch 同源：物化绑定把它记成事实，供错过的 Session Binding 补记。
         launchId: identity.launchId,
+        // 运行依据在派发前钉住：物化把它们写进 binding，Retry、修复与结算都按它回到原授权。
+        authorizationId: dispatchAuthorization.authorizationId,
+        authorizationVersion: dispatchAuthorization.authorizationVersion,
+        workerProfileRef: workerProfile.profileRef.id,
         consumerGeneration: input.run.consumerGeneration,
         backendIdentityRef: input.backendIdentityRef,
         timeoutMs: MUTATION_TIMEOUT_MS,
@@ -4427,6 +4892,7 @@ export async function createForegroundPlanningHost(
     const dispatches = await roleDispatchesFor({
       scopeId,
       graph,
+      authorization,
       manifest: authorization.manifest,
       workPackage,
       role,
@@ -4895,7 +5361,6 @@ export async function createForegroundPlanningHost(
       : await readScopeRunScope({ scope, generation, backend, identity });
     if (current === null || scope === null || backend === null || identity === null ||
         run === null || run.kind !== 'read' || canonicalWorktreePath === null || commonDirPath === null ||
-        config === null || config.execution.harness !== 'codex' || config.execution.workerModel === null ||
         scope.graphId === null || scope.graphVersion === null) {
       return { kind: 'rejected', code: 'execution_unavailable', message: '图、Run、Codex 或 canonical 工作区不可核验' };
     }
@@ -4921,6 +5386,23 @@ export async function createForegroundPlanningHost(
         authorizationRead.kind !== 'read' || authorizationRead.authorization === null ||
         snapshotRead.kind !== 'snapshot' || budgetsRead.kind !== 'budget-counters') {
       return { kind: 'rejected', code: 'execution_unavailable', message: '图、授权、快照或预算事实不可读' };
+    }
+    // Graph Patch Planner 是一次新的 Planner 派发，因此固定**当前**授权的 Planner profile；
+    // 它不继承任何既有 Task 的绑定，因为补丁节点还没有 Task。
+    const plannerProfile = manifestProfileFor(authorizationRead.authorization.manifest, 'planner');
+    if (plannerProfile === null) {
+      return {
+        kind: 'rejected',
+        code: 'worker_profile_unresolved',
+        message: '当前已批准 Manifest 没有绑定 Planner Worker Profile：不伪造模型派发 Graph Patch Planner',
+      };
+    }
+    if (plannerProfile.harness !== 'codex') {
+      return {
+        kind: 'rejected',
+        code: 'worker_harness_unsupported',
+        message: `Planner Worker Profile 的 harness 为 ${plannerProfile.harness}，本进程只能派发 codex Worker`,
+      };
     }
     const graph = graphRead.version.graph;
     const observations = await executionObservations(scope, graph.workPackages);
@@ -5013,7 +5495,9 @@ export async function createForegroundPlanningHost(
           execution,
           canonicalWorktreePath,
           companionStateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY),
-          workerModel: config.execution.workerModel!,
+          modelConfiguration: plannerProfile.modelConfiguration,
+          credentialStore: credentialStore(),
+          credentialStorePath: credentialStorePath({ environment: options.env }),
           bindingWindowMs,
           reportTimeoutMs: 15 * 60_000,
         }),
@@ -5026,7 +5510,9 @@ export async function createForegroundPlanningHost(
           canonicalWorktreePath,
           repoSelector: `path:${canonicalWorktreePath}`,
           worktreePaths: observations.worktreePaths,
-          workerModel: config.execution.workerModel,
+          modelConfiguration: plannerProfile.modelConfiguration,
+          credentialStore: credentialStore(),
+          credentialStorePath: credentialStorePath({ environment: options.env }),
           codexSandboxMode: codexSandboxForDispatch(approvedRisksFor(scopeId)),
           companionStateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY),
           bindingWindowMs,
@@ -5735,9 +6221,6 @@ export async function createForegroundPlanningHost(
     if (scope.graphId === null || scope.graphVersion === null) {
       return;
     }
-    if (config === null || config.execution.harness !== 'codex' || config.execution.workerModel === null) {
-      return;
-    }
     const paths = finalizerCompanionPaths();
     if (paths === null || canonicalWorktreePath === null) {
       return;
@@ -5757,6 +6240,20 @@ export async function createForegroundPlanningHost(
       return;
     }
     const manifest = authorizationRead.authorization.manifest;
+    // 项目级 Finalizer 是一次新的只读派发，因此固定**当前**授权的 Finalizer profile；
+    // 它不继承任何 Work Package 的绑定。
+    const finalizerProfile = manifestProfileFor(manifest, 'finalizer');
+    if (finalizerProfile === null || finalizerProfile.harness !== 'codex') {
+      recordExecutionBlocker(
+        scopeId,
+        'finalizer',
+        'worker_profile_unresolved',
+        finalizerProfile === null
+          ? '当前已批准 Manifest 没有绑定 Finalizer Worker Profile：不伪造模型派发只读检查'
+          : `Finalizer Worker Profile 的 harness 为 ${finalizerProfile.harness}，本进程只能派发 codex Worker`,
+      );
+      return;
+    }
     const snapshotRead = current.query({ kind: 'snapshot', coordinationScopeId: scopeId });
     if (snapshotRead.kind !== 'snapshot') {
       return;
@@ -5824,7 +6321,7 @@ export async function createForegroundPlanningHost(
         return;
       }
       // 确认没有既有派发/意图之后才探测：能力不可用时零新 Task/Dispatch，交付保持 blocker。
-      const readOnlyWorker = await readOnlyWorkerProbe();
+      const readOnlyWorker = await probeForProfile(finalizerProfile.modelConfiguration);
       const readOnlyBlocker = readOnlyWorkerUnavailableReason(readOnlyWorker);
       if (readOnlyBlocker !== null) {
         recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_read_only_unavailable', readOnlyBlocker);
@@ -5870,7 +6367,10 @@ export async function createForegroundPlanningHost(
         },
         workerLaunch: createCodexWorkerLaunch({
           launchId: operationIds.launchId,
-          model: config.execution.workerModel,
+          modelConfiguration: finalizerProfile.modelConfiguration,
+          // 与常规角色派发同源：只读 Finalizer 的 managed 凭据也在准备阶段证明存在。
+          credentialStore: credentialStore(),
+          credentialStorePath: credentialStorePath({ environment: options.env }),
           // Finalizer 只读（profile 继承 `:read-only`），只为本机控制通道回报结论而开启该通道网络。
           sandboxMode: 'read-only-local-control',
           stateRoot: paths.stateRoot,
@@ -6403,7 +6903,9 @@ export async function createForegroundPlanningHost(
           timeoutMs: MUTATION_TIMEOUT_MS,
         },
         workerHarness: config?.execution.harness ?? null,
-        workerModel: config?.execution.workerModel ?? null,
+        // 与启动对账同源：替代 Session 沿原 Task 绑定，新建 Utility 固定当前授权的 Utility profile。
+        resolveModelConfiguration: (subject, kind) =>
+          recoveryModelConfigurationFor(scopeId, subject, kind),
         codexSandbox: codexSandboxForDispatch(approvedRisksFor(scopeId)),
         companionStateRoot: commonDirPath === null ? null : join(commonDirPath, COMPANION_STATE_DIRECTORY),
         writer: writerFor(session.incarnation),
@@ -6492,11 +6994,23 @@ export async function createForegroundPlanningHost(
         ? null : await readScopeRunScope({ scope, generation, backend, identity });
       if (current === null || scope === null || backend === null || identity === null || generation === null ||
           run?.kind !== 'read' || canonicalWorktreePath === null || commonDirPath === null ||
-          config?.execution.harness !== 'codex' || config.execution.workerModel === null ||
           scope.graphId === null || scope.graphVersion === null || scope.authorizationId === null ||
           graph?.kind !== 'graph-version' || graph.version === null) {
         recordExecutionBlocker(scopeId, 'baseline-reconciliation', 'baseline_facts_unavailable',
           '基线补救所需的 Scope、Run、Codex 或 canonical 工作区不可核验');
+        return;
+      }
+      // 基线补救是一次新的 Planner 派发：固定当前授权的 Planner profile，缺少它就不派发。
+      const baselineAuthorization = activeAuthorization(current, scopeId);
+      const baselineProfile =
+        baselineAuthorization.kind === 'rejected' || baselineAuthorization.authorization === null
+          ? null
+          : manifestProfileFor(baselineAuthorization.authorization.manifest, 'planner');
+      if (baselineProfile === null || baselineProfile.harness !== 'codex') {
+        recordExecutionBlocker(scopeId, 'baseline-reconciliation', 'worker_profile_unresolved',
+          baselineProfile === null
+            ? '当前已批准 Manifest 没有绑定 Planner Worker Profile：不伪造模型派发基线补救'
+            : `Planner Worker Profile 的 harness 为 ${baselineProfile.harness}，本进程只能派发 codex Worker`);
         return;
       }
       const observations = await executionObservations(scope, graph.version.graph.workPackages);
@@ -6514,7 +7028,9 @@ export async function createForegroundPlanningHost(
         },
         canonicalWorktreePath, repoSelector: `path:${canonicalWorktreePath}`,
         worktreePaths: observations.worktreePaths,
-        workerModel: config.execution.workerModel,
+        modelConfiguration: baselineProfile.modelConfiguration,
+        credentialStore: credentialStore(),
+        credentialStorePath: credentialStorePath({ environment: options.env }),
         codexSandboxMode: codexSandboxForDispatch(approvedRisksFor(scopeId)),
         companionStateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY), bindingWindowMs,
       });
@@ -6912,14 +7428,68 @@ export async function createForegroundPlanningHost(
     return {manifestRows:rows.map(({label,value})=>({label,value})),sections};
   };
 
+  /**
+   * 换模型的重新授权在什么情况下不审阅。
+   *
+   * 换绑定只改变**新** Task 的运行依据，因此在途执行必须先结清：Scope 正在重规划或正在取消时，
+   * 这份授权本身即将被整体替换，审阅一份马上作废的 Manifest 没有意义；未决的派发意图说明还有 lane
+   * 正在使用当前授权，此时「当前」既不是旧 Task 的依据、也不是新 Task 的依据。三种情况都给出明确
+   * 原因，让用户先结清再重新审阅，而不是让批准落在一份不稳定的授权上。
+   */
+  const reapprovalBlockerFor = (
+    current: BranchCoordinationStore,
+    scopeId: CoordinationScopeId,
+  ): { readonly code: string; readonly message: string } | null => {
+    const scope = scopeRecord(scopeId);
+    if (scope === null) {
+      return { code: 'scope_unavailable', message: '当前 Scope 的记录不可读' };
+    }
+    if (scope.controlState === 'cancelling' || scope.controlState === 'replanning_transition') {
+      return {
+        code: 'scope_not_stable',
+        message: `Scope 正在 ${scope.controlState === 'cancelling' ? '取消' : '重规划'}：先结清在途执行再重新授权模型`,
+      };
+    }
+    const snapshot = current.query({ kind: 'snapshot', coordinationScopeId: scopeId });
+    if (snapshot.kind !== 'snapshot') {
+      return { code: 'invalid_state', message: '协调快照不可读：无法判断是否还有未决派发' };
+    }
+    const pending = snapshot.snapshot.unresolvedIntents.filter(
+      (intent) => intent.operationCategory.startsWith('materialize-'),
+    );
+    if (pending.length > 0) {
+      return {
+        code: 'dispatch_intent_pending',
+        message: `还有 ${String(pending.length)} 条未决的 Worker 派发意图：先对账结清再重新授权模型`,
+      };
+    }
+    return null;
+  };
+
   /** 一次只读审阅；调用方要么拿到可批准的完整 Manifest，要么拿到明确的阻塞原因。 */
   const reviewAuthorizationForDisplay = async (): Promise<ExecutionAuthorizationLoad> => {
     const read = await authorizationFacts();
     if (read.kind !== 'ok') {
       return { kind: 'blocked', code: read.code, message: read.message };
     }
-    // 审阅每次重新探测：授权依赖 Capsule 与 Finalizer 两个只读角色，环境变了就不能沿用上一次的结论。
-    const readOnlyWorker = await readOnlyWorkerProbe();
+    // 换模型的重新授权在 execution 模式下审阅：Scope 正在 replanning、正在取消，或还有未决的
+    // Worker 派发意图时都不审阅。派发意图未决意味着这次授权可能正在被某条 lane 使用，此时换绑定
+    // 会让「当前授权」既不是旧 Task 的依据、也不是新 Task 的依据。
+    const current = requireStore();
+    const scopeId = selectedScopeId;
+    const reapprovalBlocked =
+      current !== null && scopeId !== null
+        ? reapprovalBlockerFor(current, scopeId)
+        : null;
+    if (reapprovalBlocked !== null) {
+      return { kind: 'blocked', code: reapprovalBlocked.code, message: reapprovalBlocked.message };
+    }
+    // 审阅每次重新探测：授权依赖 Capsule Utility 与 Finalizer 两个只读角色，环境变了就不能沿用上
+    // 一次的结论。两个角色用各自固定的模型配置探测——正式只读会话拿到什么设置，探针就核验什么。
+    const finalizerProfile = config === null ? null : currentWorkerProfile(config, 'finalizer');
+    const readOnlyWorker = await probeForProfile(
+      finalizerProfile === null ? null : finalizerProfile.modelConfiguration,
+    );
     const readOnlyBlocker = readOnlyWorkerUnavailableReason(readOnlyWorker);
     const reviewed = reviewExecutionAuthorization(read.facts);
     if (reviewed.kind === 'blocked') {
@@ -6960,6 +7530,37 @@ export async function createForegroundPlanningHost(
     readonly fingerprint: string;
     readonly expectedRevision: number;
   }): Promise<ControllerCommandResult> => {
+    // Execution-mode replay is a read of the exact reviewed fingerprint. Resolve it before tracker reads,
+    // capability probes, runtime acquisition, or stale-revision checks; the application use case applies
+    // the same rule, and the host must not turn a replay into a fresh review.
+    const current = requireStore();
+    const selectedScope = selectedScopeId === null ? null : scopeRecord(selectedScopeId);
+    if (current !== null && selectedScope?.mode === 'execution_coordination' && selectedScope.graphId !== null) {
+      const replayed = readAcceptedAuthorizationByFingerprint({
+        store: current,
+        coordinationScopeId: selectedScope.coordinationScopeId,
+        fingerprint: input.fingerprint,
+      });
+      const generation = graphGenerationOf(selectedScope);
+      if (
+        replayed !== null &&
+        generation !== null &&
+        replayed.manifest.graph.graphId === selectedScope.graphId &&
+        replayed.manifest.graph.generation === generation.generation &&
+        replayed.manifest.orcaRunId === generation.orcaRunId
+      ) {
+        return accepted(
+          `已回读授权 ${replayed.authorizationId} v${String(replayed.authorizationVersion)}`,
+          selectedScope.revision,
+          {
+            kind: 'authorization',
+            coordinationScopeId: selectedScope.coordinationScopeId,
+            authorizationId: replayed.authorizationId,
+            version: replayed.authorizationVersion,
+          },
+        );
+      }
+    }
     const read = await authorizationFacts();
     if (read.kind !== 'ok') {
       return rejected(read.code, read.message);
@@ -6988,10 +7589,14 @@ export async function createForegroundPlanningHost(
       return rejected('scope_unavailable', '无法读取授权提交前的 Scope revision');
     }
     // 批准前重查能力：审阅时的成功结论不构成本次批准的许可，环境可能在两次检查之间变化。
-    const readOnlyBlocker = readOnlyWorkerUnavailableReason(await readOnlyWorkerProbe());
+    const approveProfile = config === null ? null : currentWorkerProfile(config, 'finalizer');
+    const readOnlyBlocker = readOnlyWorkerUnavailableReason(
+      await probeForProfile(approveProfile === null ? null : approveProfile.modelConfiguration),
+    );
     if (readOnlyBlocker !== null) {
       return rejected('read_only_worker_unavailable', readOnlyBlocker);
     }
+    const modeBeforeApproval = scopeRecord(refreshed.facts.coordinationScopeId)?.mode;
     const result = approveExecutionAuthorization({
       ...refreshed.facts,
       writer: writerFor(ensured.session.incarnation),
@@ -7018,7 +7623,9 @@ export async function createForegroundPlanningHost(
     // 图在 Session 打开时按规划模式装配；授权切换后立即注册执行工具，供同一 TUI 会话使用。
     ensured.session.graph = graphForSession(ensured.session);
     // 授权切换成功是 D1 的触发点之一：切换完成后立刻按新事实推进一次，而不是等用户再发一条消息。
-    triggerExecution(ensured.session);
+    if (modeBeforeApproval === 'route_planning') {
+      triggerExecution(ensured.session);
+    }
     return accepted(
       `已批准 ${result.authorizationId} v${String(result.authorizationVersion)}，Scope 进入 Execution Coordination`,
       result.revision,
@@ -7106,6 +7713,303 @@ export async function createForegroundPlanningHost(
     review: async () => await reviewAuthorizationForDisplay(),
     approve: async (input) => await approveAuthorization(input),
   };
+
+  /**
+   * 角色模型配置端口（IP-06 / D07）。
+   *
+   * 三个动作的边界与界面无关，全部由这里保证：
+   * - `load` 只读当前项目配置并投影非秘密快照，秘密不进入返回值；
+   * - `save` 交给应用服务「先存凭据再写引用」，失败保留输入，不回退已保存的 key；
+   * - `apply` 只保存该角色的选择并返回引用，**不**改 Session、Manifest、Task 或已消耗预算。
+   */
+  /**
+   * 应用服务的唯一生产装配点：项目配置走文件 CAS，凭据走用户级 CredentialStore。
+   *
+   * 每次调用按当前 canonical worktree 重新构造，因此 canonical worktree 在本进程内变化后不会读到
+   * 另一个仓库的 store；服务本身无状态，可以随用随建。
+   */
+  const modelSettingsService = (): ModelSettingsService => {
+    if (canonicalWorktreePath === null) {
+      throw new Error('无法定位 canonical worktree：模型配置不可保存');
+    }
+    return createModelSettingsService({
+      projectStore: new FileProjectConfigurationStore({
+        configPath: projectConfigPath(canonicalWorktreePath),
+      }),
+      credentials: credentialStore(),
+    });
+  };
+
+  /**
+   * 从权威文件重读项目配置，覆盖内存副本。
+   *
+   * 保存的 revision 由存储在锁内推进，因此只有文件里的内容才是当前事实：迟到的 save 结果可能与
+   * 另一次保存交错，只认重读结果。读不回时保留原副本——宿主已经带着配置启动过，中途读失败不应该
+   * 把可用的 Scope 说成不可用。
+   */
+  const reloadProjectConfigFromDisk = (): void => {
+    if (canonicalWorktreePath === null) {
+      return;
+    }
+    const reread = loadProjectConfig({ worktreePath: canonicalWorktreePath });
+    if (reread.kind === 'loaded') {
+      config = reread.config;
+    }
+  };
+
+  /**
+   * 角色模型配置端口**始终**存在。
+   *
+   * 项目配置在宿主启动时才读出，Home 里未选择仓库、或向导尚未完成初始化 Scope 时它都是 `null`。
+   * 若按「配置就绪」决定是否装配端口，这个入口就会在向导跑完之后仍然缺席——而向导正是把配置带
+   * 进来的那条路径。因此可读性由每个动作自己守卫（读/保存/应用各自返回明确的失败），端口本身
+   * 表达的是「这个宿主支持角色模型配置」，不是「此刻恰好读得到配置」。
+   */
+  const modelSettingsPort = (): ModelSettingsPort => {
+    const service = (): ModelSettingsService | null => {
+      if (config === null || canonicalWorktreePath === null) {
+        return null;
+      }
+      return modelSettingsService();
+    };
+    return {
+      /**
+       * 只读非秘密快照。
+       *
+       * 连接升级为完整非秘密视图（providerId/baseUrl/wireApi 与凭据引用），secret 与 CredentialStore
+       * 路径都不进入返回值，因此界面重绘与 resize 拿到的始终是同一份投影。
+       */
+      load: () => {
+        // 每次打开编辑器都先读权威文件：项目配置是用户手工编辑并纳入版本控制的文件，进程内缓存
+        // 随时可能过期（外部编辑、另一次保存、切换仓库）。拿缓存当最新会让 revision 一直停在旧值，
+        // 随后每一次保存都被 CAS 拒绝，用户看到的却是「刚打开就已经冲突」。
+        const reread = canonicalWorktreePath === null
+          ? null
+          : loadProjectConfig({ worktreePath: canonicalWorktreePath });
+        if (reread !== null && reread.kind === 'loaded') {
+          config = reread.config;
+        }
+        if (reread !== null && reread.kind === 'failed') {
+          // 读不回就不给快照：拿缓存冒充最新，编辑器的 CAS 基准就是错的。
+          return Promise.resolve({
+            kind: 'failed',
+            code: reread.code === 'invalid' ? 'config_invalid' : 'config_unreadable',
+            message: reread.message,
+          });
+        }
+        const current = config;
+        if (current === null) {
+          return Promise.resolve({ kind: 'failed', code: 'config_unavailable', message: '项目配置不可用' });
+        }
+        return Promise.resolve(
+          {
+              kind: 'loaded',
+              snapshot: {
+                ...modelSettingsSnapshot(current),
+                connections: current.providerConnections.map((connection) => ({
+                  connectionRef: connection.connectionRef,
+                  label: connection.label,
+                  providerIntegration: connection.providerIntegration,
+                  modelOptions: connection.modelOptions,
+                  credential: connection.credential,
+                  codex: connection.codex,
+                })),
+              },
+            },
+        );
+      },
+      /**
+       * 保存：先写 CredentialStore 并回读，再 CAS 追加项目引用。
+       *
+       * 任何一步失败都原样返回 rejected，界面据此保留编辑内容；已写入的凭据不回滚，孤立 key 是已知
+       * 取舍——它不会被任何配置引用，因此不会激活错误的模型。
+       */
+      save: (input) => {
+        const available = service();
+        if (available === null) {
+          return Promise.resolve({
+            kind: 'rejected',
+            code: 'config_unreadable',
+            message: '项目配置不可用：请先在 Home 选择仓库或完成初始化向导',
+          });
+        }
+        const result = available.save(input);
+        // 保存推进 revision，也可能与另一次保存交错：统一从权威文件重读，内存副本不自己推进。
+        reloadProjectConfigFromDisk();
+        return Promise.resolve(result);
+      },
+      /**
+       * 显式应用。
+       *
+       * 这里**只做保存**：Worker 角色保存该角色的 profile 引用，Coordinator 角色保存选中的
+       * configurationRef。真正的生效分别由界面随后打开的完整 Manifest 审阅（Worker）与既有
+       * `switch-model-configuration` 意图（Coordinator）完成，因此 apply 不派发模型或 Worker，
+       * 也不改已消耗预算——它不做任何状态转换，界面也无需在两个动作之间回滚。
+       */
+      apply: (input) => {
+        if (input.role === 'planning_utility' || input.role === 'specification_validator') {
+          return Promise.resolve({
+            kind: 'rejected',
+            code: 'invalid_input',
+            message: ROLE_UNAVAILABLE_REASONS[input.role],
+          });
+        }
+        if (service() === null) {
+          return Promise.resolve({
+            kind: 'rejected',
+            code: 'config_unreadable',
+            message: '项目配置不可用：请先在 Home 选择仓库或完成初始化向导',
+          });
+        }
+        if (input.role === 'coordinator') {
+          return Promise.resolve(
+            saveCoordinatorConfiguration(input.modelRef, input.effort, input.expectedRevision),
+          );
+        }
+        return Promise.resolve(
+          saveRoleProfile(input.role, input.modelRef, input.effort, input.expectedRevision),
+        );
+      },
+    };
+  };
+
+  /**
+   * 按 `modelRef` 从项目配置解析完整连接并保存该角色的 profile。
+   *
+   * 界面只给模型引用，连接身份、凭据引用与 SDK 字段路径必须由宿主从已保存配置读出——凭据引用一旦
+   * 由界面重建，就有机会把 key 写进错误连接。
+   */
+  /**
+   * 把选中的 Coordinator configuration 连同本次 effort 保存成新的不可变配置。
+   *
+   * 界面在角色菜单里独立选 effort，因此「当前 configurationRef」不足以表达这次应用：同一个模型
+   * 换 effort 是一条新配置，服务会追加新引用并保留原记录。连接、modelOptions 与
+   * nativeWindowOwnerRef 取自被选中的那条既有配置，不在这里重建——凭据引用与 SDK 字段路径一旦由
+   * 宿主重新拼写，就可能落到错误的连接上。
+   *
+   * 即使 effort 没有变化也要走一遍：核验 expectedRevision 与该模型的可信能力来源，让「应用」是一次
+   * 真实的、可被 CAS 拒绝的保存，而不是一次静默的空操作。
+   */
+  const saveCoordinatorConfiguration = (
+   configurationRef: string,
+   effort: string | null,
+   expectedRevision: number,
+  ): SaveModelSettingsResult => {
+   const current = config;
+   if (current === null || canonicalWorktreePath === null) {
+     return { kind: 'rejected', code: 'config_unreadable', message: '项目配置不可用' };
+   }
+   const selected = current.coordinatorModels.find(
+     (entry) => entry.configurationRef === configurationRef,
+   );
+   if (selected === undefined) {
+     return {
+       kind: 'rejected',
+       code: 'invalid_input',
+       message: `Coordinator 配置 ${configurationRef} 不在项目配置中`,
+     };
+   }
+   // 复用被选中配置里的完整连接：credentialRef、optionPath 与 codex 三项都不重新推断。
+   const connection = configurationConnection(selected);
+   if (connection === null && selected.credentialRefs.length > 0) {
+     // 凭据引用必须对应一条已声明的连接才能解析出注入路径；没有连接却带引用，模型装配阶段同样会
+     // 拒绝，在这里提前给出同义结论，而不是保存出一条注定启动失败的新配置。
+     return {
+       kind: 'rejected',
+       code: 'invalid_input',
+       message: `Coordinator 配置 ${configurationRef} 带凭据引用但没有绑定 provider 连接`,
+     };
+   }
+   // 没有连接快照的配置是合法的 harness-login 形态：沿用它自己的 providerIntegration 与
+   // modelOptions，不在这里编造一条连接记录。
+   const connectionCandidate =
+     connection === null
+       ? {
+           label: selected.configurationRef,
+           providerIntegration: selected.providerIntegration,
+           modelOptions: {},
+           codex: null,
+           credential: { kind: 'harness_login' as const },
+         }
+       : {
+           label: connection.label,
+           providerIntegration: connection.providerIntegration,
+           modelOptions: connection.modelOptions,
+           codex: connection.codex,
+           credential: connection.credential,
+         };
+   const capability = selected.effortCapability ?? null;
+   if (effort !== null && capability?.values.includes(effort) !== true) {
+     return {
+       kind: 'rejected',
+       code: 'invalid_input',
+       message: `模型 ${selected.model} 没有支持 effort ${effort} 的可信能力来源`,
+     };
+   }
+   const result = modelSettingsService().save({
+     expectedRevision,
+     role: 'coordinator',
+     connection: connectionCandidate,
+     model: selected.model,
+     modelOptions: selected.modelOptions,
+     effortCapability: capability,
+     effort,
+     nativeWindowOwnerRef: selected.nativeWindowOwnerRef,
+   });
+   reloadProjectConfigFromDisk();
+   return result;
+  };
+
+  const saveRoleProfile = (
+    role: Exclude<DomainModelSettingsRole, 'coordinator'>,
+    modelRef: string,
+    effort: string | null,
+    expectedRevision: number,
+  ): SaveModelSettingsResult => {
+    const current = config;
+    if (current === null || canonicalWorktreePath === null) {
+      return { kind: 'rejected', code: 'config_unreadable', message: '项目配置不可用' };
+    }
+    const model = current.models.find((entry) => entry.modelRef === modelRef);
+    if (model === undefined) {
+      return { kind: 'rejected', code: 'invalid_input', message: `模型 ${modelRef} 不在项目配置中` };
+    }
+    const connection = current.providerConnections.find(
+      (entry) => entry.connectionRef === model.connectionRef,
+    );
+    if (connection === undefined) {
+      return {
+        kind: 'rejected',
+        code: 'invalid_input',
+        message: `模型 ${modelRef} 指向的连接不在项目配置中`,
+      };
+    }
+    const result = modelSettingsService().save({
+      expectedRevision,
+      role,
+      connection: {
+        label: connection.label,
+        providerIntegration: connection.providerIntegration,
+        modelOptions: connection.modelOptions,
+        codex: connection.codex,
+        credential: connection.credential,
+      },
+      model: model.model,
+      // 沿用该角色**现有 profile** 的非秘密 modelOptions，而不是只取模型定义的默认值。
+      // 丢掉它们等于让一次已经审阅过的绑定在换模型时静默重置——审阅时看到的那组 options 与真正
+      // 启动用的不是同一份，这是不可接受的漂移。选中的模型没有可信 effort 来源时也照旧写出
+      // 既有 options，effort 由上面的能力校验独立把关。
+      modelOptions: currentWorkerProfile(current, role)?.modelConfiguration.modelOptions ?? connection.modelOptions,
+      effortCapability: model.effortCapability,
+      effort,
+    });
+    // 无论成功与否都重读权威文件：迟到的 save 可能与另一次保存交错，只认文件里最新的 revision 与
+    // 记录集合，内存副本不能继续停在过期状态。
+    reloadProjectConfigFromDisk();
+    return result;
+  };
+
+  const settingsPort = modelSettingsPort();
 
   /** Execution Handoff：只投影并推进 `ExecutionHandoffState`，不改动任何运行身份。 */
   const executionHandoffPort: ExecutionHandoffIntentPort = {
@@ -7546,6 +8450,7 @@ export async function createForegroundPlanningHost(
     },
     scopeSetup,
     modelCatalog: { load: session => Promise.resolve(modelCatalog(session)) },
+    modelSettings: settingsPort,
     handoff,
     executionHandoff: executionHandoffPort,
     executionAuthorization: executionAuthorizationPort,
