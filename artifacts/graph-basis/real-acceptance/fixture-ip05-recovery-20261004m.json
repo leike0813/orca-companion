@@ -1,0 +1,19 @@
+{
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004m",
+  "name": "ip05-recovery-20261004m",
+  "baselineHead": "6aa8993f04b59c5f8256cc483d158e735bacea38",
+  "integrationRef": "ip05-recovery-20261004m-integration",
+  "integrationRemote": "https://github.com/leike0813/orca-companion-test",
+  "identity": "term_62f24548-e127-4c49-8835-aef05940d697",
+  "credentialRef": "07f2d7a9-dad4-4dc2-a373-ccd76bed4c16",
+  "credentialStorePath": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004m-xdg/orca-companion/credentials.json",
+  "acceptanceModel": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+  "coordinationScopeId": "ip05-ip05-recovery-20261004m-scope",
+  "expectedRunCreateOperationId": "run-create:ip05-ip05-recovery-20261004m-scope#g1",
+  "coordinatorBaseUrl": "http://127.0.0.1:10100/v1",
+  "coordinatorProviderIntegration": "@langchain/openai#ChatOpenAI",
+  "coordinatorWireApi": "chat",
+  "coordinatorCredential": "non-secret-sdk-placeholder-in-isolated-CredentialStore",
+  "workerCredential": "harness_login",
+  "workerWireApi": "responses"
+}

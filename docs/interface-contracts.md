@@ -170,7 +170,11 @@ type CoordinationCommandResult =
 
 schema 12 起每条物化绑定还记录这次派发使用的 **Worker launch 身份**（`launchId`）：它是补记 Session Binding 的唯一定位事实（报告文件按 launchId 派生）。Session Binding 的建立分两处，共用同一份签发实现：派发路径在 `bindingWindowMs` 窗口内读 Codex SessionStart 报告；每次执行触发在推进之前对「物化绑定已 issued 且有 launchId、但图内还没有对应 Session Segment」的角色再读一次同一路径的报告（Orca Dispatch 身份按已记录的 Orca Task 从列举事实匹配，不猜），校验通过才补记 Segment，读不到就什么都不做（保持 fail-closed：Delivery 结算会以 `dispatch_record_missing` 呈现）。补记不派发新 Worker、不改 Attempt、不消耗预算。schema 12 之前写入的行没有 `launchId`：读取方在需要补记时按不可补记处理，绝不重建派生编码。
 
+补记不依赖 Segment ID 的生成方式。相同 Work Package、角色、WorkerTask 与 Attempt 已有 Segment 时，相同实际 Orca Dispatch 不重复记录，不同 Dispatch 不复用原 launch 报告。没有 Segment 的首次补记还要求该 Orca Task 只有一个派发观察；多派发时保持未绑定。Recovery 的替代 Segment 与精确 Session 由 Recovery receipt 路径记录，不能从原物化 launch 的 SessionStart 报告补建。
+
 schema 16 再把这次派发的**运行依据**钉进同一条记录：`authorization_id`、`authorization_version` 与 `worker_profile_ref`。换模型只影响之后物化的 Task；已派发的 Task 按这条绑定取原授权与 profile，结算与恢复据此判断权限与模型配置。写入时缺任一项即拒绝。schema 16 之前写入的行这三项为空，读取方按不可证明阻塞，不退回「当前授权」。Recovery Utility 使用独立 `utility_role`，与四主角色的 `role` 互斥；同 Scope/Work Package/Utility Attempt 的绑定唯一，领域 `WorkerRole` 闭集保持四主角色。
+
+schema 17 新增 nullable `graph_versions.initial_plan_json`。`record-graph-version` 的 `initial` 记录必须同时提供通过 schema 解析的 `initialPlan`，其 `planRevision` 必须等于记录的 `planRevision`；初始计划与 v1 图记录在同一事务写入。`accepted_revision` 禁止携带或覆盖初始计划。迁移只新增可空字段，既有行维持 `null`，不从当前计划或 tracker 正文推断历史。
 
 schema 13 给修订持有（`revision_holds`）加上内容版本边界：`prior_contract_revision` 是被替换掉的契约内容版本，`admitted_contract_revision` 是重新准入接纳的版本，两者都可为空（旧行与尚未准备/结算的行）。它们回答两个此前只能靠时间戳猜的问题——「内容是否真的变了」与「修订完成前与完成后的角色结果如何区分」。两条命令与图版本事务共同维护这一边界：
 
@@ -260,7 +264,7 @@ Capsule 的替换区间在保存时绑定固定序号边界；摘要包含实际
 
 - **Owner (Create)**: `m1-plan-and-authorize-execution`
 - **Canonical paths**: `src/domain/planning/`、`src/application/planning/graph-history.ts`、`planning-handoff.ts`、`initialize-scope.ts`
-- **Extenders (Extend)**: `m1-evolve-execution-graph` 只增加 `appendAcceptedRevision`
+- **Extenders (Extend)**: `m1-evolve-execution-graph` 增加 `appendAcceptedRevision`；`complete-tui-graph-basis` 增加只读历史/依据端口，不改变 ProjectDetails revision 语义
 - **Consumers (Consume)**: Specification admission、execution、recovery、ControllerService/TUI
 
 ```ts
@@ -296,19 +300,25 @@ type ExecutionAuthorizationManifest = {
 `PlanningHandoffProposal` 持有 proposal ID、Source/Target Session、地图/计划/候选图 revision、责任集合、phase、expected revision 和可移植 Coordinator Context Capsule ref。prepare/review 不转移责任，cutover 才 CAS；它不触碰在途 Worker 或 Execution Coordination Lease。
 
 - **权威/版本**：图拓扑只经 `ExecutionGraphHistory` 追加；历史 GraphVersion 不改写。Manifest 内容变化产生新版本与新批准。Manifest 对图的绑定是**批准时刻的那张图**：GraphId 与 Generation 必须与当前图相同，绑定时刻的 GraphVersion 必须仍在当前图的追加链上（`graphVersionChain`）。图会随 accepted revision 前移，因此**不要求**绑定版本等于当前版本——要求相等会让每一次合法的图修订之后的所有派发都不成立；派发门禁（`advance-execution.ts`）、图修订请求（`request-graph-patch.ts`）与界面 readiness 投影（`controller-service.ts`）共用这一条规则。
+- **schema 17 原始计划**：初始图 v1 的 `initialPlan` 与图记录同事务保存，revision 必须相等；旧记录为 NULL 且明确缺失，修订不覆盖。`graph-version-index` 每页至多 20 条轻量 metadata；`graph-head` 精确读取指定 GraphId 的 head；`graph-version-membership` 只返回请求版本追加链上的成员事实。依据范围由 `graph-basis-range` 从指定记录读取，单次至多 64 KiB UTF-8，不能先读取整条历史再切片。
+- **schema 17 查询与正文存储**：`graph-version-index` 使用跨 generation 的 keyset metadata；`graph-head` 和 `graph-version-membership` 分别读取精确 head 与追加链成员；`graph-basis-range` 按来源判别联合定位唯一列，以 SQLite BLOB `length`/`substr` 取至多 64 KiB 范围。初始计划保留 JSON 原结构，范围读取不先把整份 JSON 编码进应用内存。代际状态只取登记的 generation row；缺失为 `not_recorded`，不按旧版本或 Scope 当前指针推断为 frozen。
+- **历史图与依据**：IC-11 的独立 `GraphBasisPort`（canonical path `src/application/tui/graph-basis.ts`，实现 `src/application/tui/graph-basis-service.ts`）拥有历史版本、拓扑、来源目录和正文范围查询。普通 Controller snapshot 只携当前拓扑。历史图只展示所选版本可证明的节点与 generation 状态，不叠加当前 frontier、Worker、预算或 Validator 汇总。保留的 Orca Task/Dispatch/Attempt 是 Work Package 级来源，属于 `retained_task`；没有版本绑定时不得按时间归属到某 GraphVersion。
+- **ProjectDetails 边界**：IC-11 第七批 ProjectDetails 继续以当前 Scope revision 绑定当前身份、工作和批准详情；不可变历史来源由 GraphBasisPort 按 graph/generation/version 或 authorization ID/version 定位，不复用 ProjectDetails 的 `seenRevision` 或快照。历史依据正文与派生布局缓存各限 8 MiB/64 项，导航返回只保存标量来源身份与位置。
 - **测试 seam**：纯 Graph Compiler 使用表格 fixture；history 使用 IC-03 adapter；tracker 使用 fake gateway 和显式真实隔离 smoke。
 
 ## IC-06 SpecificationProvider、Task Contract 与 Admission
 
 - **Owner (Create)**: `m1-admit-work-package-specifications`
 - **Canonical paths**: `src/application/ports/specification-provider.ts`、`src/application/specification-admission.ts`、`src/domain/{task-contract,worker-report}.ts`
-- **Extenders (Extend)**: `m1-evolve-execution-graph` 通过同一 provider 区分 Contract Revision 与 Tracking Revision
+- **Extenders (Extend)**: `m1-evolve-execution-graph` 通过同一 provider 区分 Contract Revision 与 Tracking Revision；`complete-tui-graph-basis` 增加可选有界文件目录/范围读取
 - **Consumers (Consume)**: Implementation、Validation、Recovery、Graph evolution
 
 ```ts
 interface SpecificationProvider {
   readUnit(input: SpecificationUnitLocator): Promise<SpecificationUnitSnapshot>;
   readRoleTransition(input: RoleTransitionQuery): Promise<RoleTransitionState>;
+  readFiles?(input: SpecificationFileListingQuery): Promise<SpecificationReadResult<SpecificationFileListing>>;
+  readFileRange?(input: SpecificationFileRangeQuery): Promise<SpecificationReadResult<SpecificationFileRange>>;
 }
 
 type SpecBinding = {
@@ -335,6 +345,8 @@ type TaskContract = {
 ```
 
 Provider 只读取工具原生 unit 与角色转换，不写业务状态、不做 plugin registry。Spec Binding 路径只用于定位，身份由内容摘要和版本确定；Tracking Revision 也生成新 snapshot，但不改变 contract content。Admission 校验结构、版本、Scope、authority、预算和绑定，不宣称语义完整。
+
+IC-11 图依据读取可选使用 `readFiles` 与 `readFileRange`。调用必须沿已记录的 `workPackageId`、`orcaTaskId`、原 `SpecificationUnitLocator` 和 `contractRevision` 绑定到同一原生 unit；目录来源 ref 同时携 task/package/locator，范围读取校验 locator、路径与已见 `sourceVersion`。tracking revision 单独显示，不使 contract binding 失效。路径越界、来源改变或 provider 缺少读取能力时返回结构化拒绝/过期状态，不选择“最新”工件。
 
 - **失败**：越界、stale binding、未知 provider version 或缺工件时阻塞并保留 worktree；不消耗实现预算或自动清理。
 - **测试 seam**：OpenSpec adapter 使用临时 worktree fixture；Application admission 经 `SpecificationProvider` fake 测试同一 interface。
@@ -511,6 +523,12 @@ Worker Session Recovery 先尝试精确恢复原 session；仅确认不可恢复
 
 Session Binding 的补记（schema 12 的 `launchId` + 每次触发对「已派发未绑定」角色的重读）在 Recovery 判定之前执行：只有绑定成立之后，「这条会话有没有结果」才有可判定的归属。
 
+补记必须同时匹配角色、WorkerTask、业务 Attempt 与当前 Orca Dispatch；相同 Attempt 的原 Segment 不能证明替代 Dispatch 已绑定。原 launch 的 SessionStart 报告仅在 Orca Task 与 Dispatch 记录能够证明原派发身份时用于补记；替代 Session 由 Recovery 保存的精确 Binding/Segment 证明。原派发报告缺少这种证明时保持未绑定，不把旧 Session 绑定到新 Dispatch。
+
+原生 Worker 回报的身份读取共用 `bootstrap/execution-runtime.ts` 的 locator。带 `_orcaLifecycleRejection` 的 Orca 消息仅是被拒绝回报的诊断，不提供可结算结果或 Finalizer Verdict；随后有效回报仍需完整匹配 Task、Dispatch、角色与证据合同。
+
+角色 Task 的物化读取按 `MaterializationBindingRecord.identity` 判定 `legacy` 缺身份记录并阻塞；`issued` 的 Recovery Utility 绑定以 `recoveryUtilityRole` 证明辅助角色，不能因四主角色列 `role:null` 误判为旧记录。Utility 绑定不被复用为主角色 Task。
+
 「会话丢失」必须由事实证明，只有两条入口可以启动或续办 Recovery：**未确认 Delivery 里没有这条 Dispatch 的结果**（结果还挂在 Orca 的 Delivery 上时会话并没有丢，结算那条 Delivery 才是它的正常完成路径；未确认 Delivery 读不到时不启动），且**同角色同业务 Attempt 还没有已接受结果**。反过来说，一条非终结的 Recovery 在原会话结果已结算后前提即不成立：续办路径 SHALL 以 `recovered` + `source_completed` 收口并 supersede 原 Segment，而不是为一条已经交付的会话再派 Utility Worker，也不占住替代派发 lane。
 
 Recovery Capsule 与 Coordinator Context Capsule 不相同。Finalizer 不依赖 Recovery Capsule，而从权威输入重跑。Pause/Resume/Cancel/Exit 是 Scope 正交控制状态。Execution Handoff 遵循 FLOW-04，不复用 PlanningHandoffProposal，也不把 suspend/Wake 当作责任转移。
@@ -546,6 +564,8 @@ type GenerationCutover = {
 ```
 
 Graph Patch 原子执行 `add + revise + retire`：add 新 ID/worktree，revise 保持未接受 WorkPackageId/worktree 并追加 Graph Revision，retire 只移出未接受节点。已派发节点先进入 revision pending，运行至可核验终态后再修订。Retry Attempt 不改 Task Contract 或 revision，只创建新 Dispatch/Attempt。
+
+`GraphChangeRequest.changeInstruction` 是必填的非空业务说明，最多 4,000 个 Unicode 码点，由 `change-routing.ts` 定义唯一上限与校验。Coordinator tool schema/parser 和 `requestGraphPatch` 在副作用前核验，完整说明经现有 DTO 接线传到 `graphPatchPlannerInstruction`；原分类声明与权限规则保持原合同，分类器不读取说明。该文本不能提供可信 Scope、Run、OperationId 或其他执行身份。
 
 Replanning 停止新派发并结清在途/Delivery/Interaction/Intent，建立新 Planning Cycle；Generation Cutover 同批切换 Planning Cycle、GraphId/Generation、Run、Authorization、budget ref 和 Execution Lease。旧完成状态不复制，旧成果只按 Baseline Adoption、Migration Material 或 Planning Reference 进入新规划。
 
@@ -643,7 +663,7 @@ type ControllerPlanningHandoffView = {
 };
 
 type ControllerSnapshotExtend = {
-  /** 调用方读到的 GraphVersion 记录投影；未提供记录时为空数组，界面据此显示 blocker 而不是猜测。 */
+  /** 当前 GraphId/Generation 的拓扑投影；历史图由独立 GraphBasisPort 按需精确读取。 */
   graphTopologies: readonly ControllerGraphTopologyView[];
   /** Session checkpoint 中最近一次压缩结论的只读投影；从未压缩时为 null。 */
   compaction: ControllerCompactionView | null;
@@ -884,6 +904,32 @@ Owner 为 `complete-tui-project-statusline` 的 Extend，canonical DTO 在 `src/
 - **projectDetails**：Bootstrap 绑定 Scope，UI 请求精确 Session/object/seen revision/cursor。每次20项、64KiB总正文；长字段按UTF-8完整字符边界续读，游标跨对象/版本拒绝。批准后 Manifest 精确读取已批准 ID/version，候选入口独立。页面失败/失效保留原入口，迟到结果仅属于原对象；查询不产生业务动作。
 - **IC-03 详情来源**：`project-detail-session` 精确读取所选 Session 注册、active Claim 与当前执行 Lease；`project-detail-json-field` 按当前 GraphId/version 或批准 authorization ID/version 读取一个字段及其 UTF-8 范围，不向宿主传回完整 graph/Manifest。工作包 Task 与 Accepted Result 依据当前包的可信绑定关联，预算计数可按批准引用筛选。读取只复用现有 schema16 记录，不新增持久副本或迁移。
 - **补充观察**：宿主只保留当前展示 Session/revision 的既有 Recovery、Finalizer、Frontier、维护与压缩投影引用。工作详情将这些字段与存储范围接入同一20项/64KiB分页，观察不匹配则要求刷新后重读；正文和业务事实仍归原 owner，详情不启动外部观察或建立第二份持久状态。
+
+## 第八批 IC-03/05/06/11/12 图历史与依据阅读扩展
+
+Owner 为 `complete-tui-graph-basis` 的 Extend。IC-05 拥有图版本与追加链权威，IC-03 schema 17 提供 metadata、membership 和正文范围查询；IC-11 的只读应用端口是 `src/application/tui/graph-basis.ts` 的 `GraphBasisPort`，实现由 `src/application/tui/graph-basis-service.ts` 拥有。此读取端口与第七批 ProjectDetails 独立；ProjectDetails 仍按当前 Scope revision 读取当前详情。
+
+`GraphBasisPort` 全部方法是 Promise 查询。每次按 Bootstrap 闭包中的 Coordination Scope 与当前 Session registry 核验调用身份；读取无需 Runtime/Execution lease，也不写协调状态、不恢复模型、不派发 Worker。来源 ref 由 `kind` 判别联合定义并按严格 schema fail closed；该 seam 只提供只读目录、精确来源与正文范围，没有通用文件编辑接口。
+
+```ts
+type GraphBasisPort = {
+  listVersions(input: { coordinatorSessionId: string; after: string | null }): Promise<BasisReadResult<{ items: readonly GraphVersionSummary[]; nextCursor: string | null }>>;
+  readVersion(input: { coordinatorSessionId: string; graph: GraphVersionRef }): Promise<BasisReadResult<{ summary: GraphVersionSummary; graph: GraphView; retiredWorkPackageIds?: readonly string[] }>>;
+  listSources(input: { coordinatorSessionId: string; graph: GraphVersionRef; workPackageId: string | null; after: string | null; orcaTaskId?: string }): Promise<BasisReadResult<{ items: readonly BasisSource[]; nextCursor: string | null }>>;
+  readSource(input: { coordinatorSessionId: string; source: BasisSourceRef; sourceVersion: string | null; offset: number; maxBytes: number }): Promise<BasisReadResult<BasisBodyRange>>;
+};
+```
+
+来源 ref 是 `kind` 判别联合；接收侧按封闭 schema 校验，未知 variant 或额外字段拒绝。Session、Scope 与 adapter 都由 Bootstrap 注入/闭包绑定，调用方不能在来源对象中指定其他 Scope。
+
+- **目录与拓扑**：跨全部代际的图版本目录每页最多 20 条，只返回 metadata；选择后精确读取指定 GraphVersion。head 由 `graph-head` 按 GraphId 读取，generation 状态来自权威记录；Scope 指针只判定当前图，不推断同代际旧版本为 frozen。membership 查询只证明所请求版本属于哪条追加链。普通 Controller snapshot 只包含当前图拓扑，不附带历史图正文。
+- **退役证明**：`readVersion.retiredWorkPackageIds` 只来自所选版本 Accepted Graph Patch 的 `retired`。缺少该证明只显示该版本未包含所选工作包，不从其它修订的存在推断退役。
+- **依据来源**：初始 Implementation Plan 从 schema 17 初始 v1 记录读取；Accepted Graph Patch 按 graph/generation/version 读取；批准 Manifest 按 authorization ID/version 读取。原始计划保留 JSON 原结构，不合成替代文本。旧行没有初始计划时显示未记录。批准时没有保存的 tracker 正文显示缺失；当前 Route Map 正文单独标记当前来源与其 sourceVersion。
+- **授权目录**：来源页顺序为计划/补丁/当前 Route Map、批准授权目录、所选 Work Package 的 retained bindings。`graph-basis-authorizations` 按 GraphId/generation 查询批准 Manifest metadata，返回 authorization ID/version 与批准时 GraphVersion，每页最多 20 项；正文另按授权 ID/version 范围读取。批准时 GraphVersion 是授权自身的运行依据，不能据此声称所选历史版本曾获授权。
+- **规格来源**：OpenSpec 文件目录与正文范围只通过可选 `SpecificationProvider.readFiles`/`readFileRange`。来源 ref 绑定 `workPackageId`、`orcaTaskId`、`SpecificationUnitLocator`、path 与 `contractRevision`；`listSources` 可指定 `orcaTaskId` 进入该 Task binding 的精确 unit。首次读取以已接纳 contract revision 证明；范围续读按文件 stat 检测变化，不在每页重算全文 digest。tasks/tracking revision 独立呈现，不改变 contract binding。`readSource` 必须与原 Materialization Binding 完全匹配，伪造 package/task/locator 被拒绝；adapter 再验证 locator 与真实 unit/worktree 路径。
+- **保留执行记录**：来源 schema 是 `z.discriminatedUnion('kind', ...)`；未知 variant 或字段拒绝。`graph-basis-bindings` 经 package Work CTE 的 Task keys 按 Work Package 分页，每页最多 20 个 Task binding；每 Task 最多投影三项：`retained_task` 原执行记录、原授权、原规格。Task/Dispatch/Attempt、Accepted Result 与证据是包级 retained records，不属于具体 GraphVersion；缺少绑定时明确显示不可证明，不按时间归属。
+- **tracker 正文**：GraphBasisService 只读取 Scope 当前配置的 `routeMapIssueRef`，经 optional `IssueTrackerGateway.readIssueBody` 返回 `TrackerBodyOutcome` 与真实 tracker sourceVersion。历史批准正文没有权威保存记录时明确显示不可用；当前 Route Map 正文单独标记当前版本，不回填为批准时快照。
+- **范围、缓存与导航**：依据正文单次最多 64 KiB UTF-8，图/依据目录每页最多 20 项。来源 cursor 严格绑定 Session、Graph、Work Package 与读取 phase。历史正文与布局缓存分别限制 8 MiB/64 项；返回上下文只保留来源身份、GraphVersion、栏目、选择和滚动等展示标量，不缓存第二份正文。迟到查询只能更新原页面身份。历史页面不使用当前 Scope snapshot 推导 frontier、Worker、预算或验收状态。项目详情原分页与当前 Scope revision 约束保持不变；IC-12 返回栈和历史来源视口不借用 ProjectDetails snapshot 或 transcript 正文缓存。
 
 ## IC-15 用户级 TUI 展示偏好
 

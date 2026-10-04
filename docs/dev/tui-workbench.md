@@ -42,9 +42,9 @@ Composer 的 slash 对照直接运行 `pnpm ui:composer-prototype slash above`�
 
 ## 检查组件
 
-第七批隔离生产预览先运行 `pnpm build`，使用 `ORCA_COMPANION_PROJECT_STATUSLINE=1 ORCA_COMPANION_PREVIEW_CONFIG_HOME=/tmp/companion-status-preview ORCA_COMPANION_PREVIEW_PHASE=execution pnpm ui:preview alignment`。显式 configHome 只供此预览，不读取用户配置；phase 可选 planning/execution/blocked/answer/idle。`ORCA_COMPANION_PREVIEW_SAVE_FAIL=1` 注入保存失败，保留配置草稿。metadata/context/验收摘要均为标明的 fixture，不证明真实 provider、tracker 或 Orca 能力。生产画面与当前性能证据独立保存于 `artifacts/project-statusline/`，历史原型资产保留。
+第七批 `complete-tui-project-statusline` 已随 `41b2f1e` 归档。其隔离预览、采集命令与证据见[归档证据说明](../../artifacts/project-statusline/README.md)；fixture 不证明真实 provider、tracker 或 Orca 能力，历史原型资产保留。
 
-第七批采集分别运行 `node artifacts/project-statusline/capture.mjs` 与 `node artifacts/project-statusline/capture-supplement.mjs`：基础画面覆盖五状态与设置/返回，补采覆盖三档图检查/命令/slash采用与执行、批准后授权UTF-8续页、真实偏好文件的CAS冲突/显式重试、无环境覆盖重启和失败提示。性能命令为 `node artifacts/project-statusline/benchmark.mjs`；结果与逐票核对见 [证据说明](../../artifacts/project-statusline/README.md)。
+第七批历史采集命令为 `node artifacts/project-statusline/capture.mjs` 与 `node artifacts/project-statusline/capture-supplement.mjs`，性能命令为 `node artifacts/project-statusline/benchmark.mjs`；结果与逐票核对见[历史证据说明](../../artifacts/project-statusline/README.md)。第八批 `complete-tui-graph-basis` 仍在实施，其历史图与依据验收状态以当前 change 工件为准。
 
 两个终端分别运行：
 

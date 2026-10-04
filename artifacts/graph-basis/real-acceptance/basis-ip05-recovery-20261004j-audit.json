@@ -1,0 +1,430 @@
+{
+  "observedAt": "2026-10-04T13:09:45.404Z",
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004j",
+  "identity": "term_e59ebba6-dca2-4347-9df5-49a60d85c1fe",
+  "coordinationScopeId": "ip05-ip05-recovery-20261004j-scope",
+  "acceptanceModel": "gpt-6-luna",
+  "purpose": "read-only production GraphBasisPort on retained real execution facts",
+  "versions": [
+    {
+      "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+      "generation": 1,
+      "version": 1,
+      "recordKind": "initial",
+      "parentVersion": null,
+      "patchId": null,
+      "mapRevision": 0,
+      "planRevision": 1,
+      "orcaRunId": "run_9b5d8a9bd4c0",
+      "recordedAt": 1791117843435,
+      "generationStatus": "candidate",
+      "current": true,
+      "packages": [
+        "ip05-ip05-recovery-20261004j-scope#g1:notes-basics",
+        "ip05-ip05-recovery-20261004j-scope#g1:readme-banner"
+      ],
+      "retiredWorkPackageIds": [],
+      "historicalRuntimeOverlay": false
+    }
+  ],
+  "sources": [
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "原始 Implementation Plan",
+      "ref": {
+        "kind": "initial_plan",
+        "graph": {
+          "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+          "generation": 1,
+          "version": 1
+        }
+      },
+      "unavailable": null,
+      "ranges": 1,
+      "byteLength": 358,
+      "sourceVersion": "{\"kind\":\"initial_plan\",\"graph\":{\"graphId\":\"ip05-ip05-recovery-20261004j-scope#g1\",\"generation\":1,\"version\":1}}",
+      "outcome": {
+        "kind": "read",
+        "end": 358,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "所选版本 Accepted Graph Patch",
+      "ref": null,
+      "unavailable": "初始版本没有图补丁",
+      "ranges": 0,
+      "byteLength": null,
+      "sourceVersion": null
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "批准时规划来源正文",
+      "ref": null,
+      "unavailable": "tracker 未提供该时刻的历史正文",
+      "ranges": 0,
+      "byteLength": null,
+      "sourceVersion": null
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "批准授权 · auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757 v1 · 批准图 v1",
+      "ref": {
+        "kind": "authorization",
+        "authorizationId": "auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757",
+        "authorizationVersion": 1
+      },
+      "unavailable": null,
+      "ranges": 5,
+      "byteLength": 4365,
+      "sourceVersion": "{\"kind\":\"authorization\",\"authorizationId\":\"auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757\",\"authorizationVersion\":1}",
+      "outcome": {
+        "kind": "read",
+        "end": 4365,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "保留执行记录 · planner · task_92ab61e27025",
+      "ref": {
+        "kind": "retained_task",
+        "workPackageId": "ip05-ip05-recovery-20261004j-scope#g1:notes-basics",
+        "orcaTaskId": "task_92ab61e27025"
+      },
+      "unavailable": null,
+      "ranges": 2,
+      "byteLength": 2011,
+      "sourceVersion": "{\"kind\":\"retained_task\",\"workPackageId\":\"ip05-ip05-recovery-20261004j-scope#g1:notes-basics\",\"orcaTaskId\":\"task_92ab61e27025\"}",
+      "outcome": {
+        "kind": "read",
+        "end": 2011,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "原批准授权 · auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757",
+      "ref": {
+        "kind": "authorization",
+        "authorizationId": "auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757",
+        "authorizationVersion": 1
+      },
+      "unavailable": null,
+      "ranges": 5,
+      "byteLength": 4365,
+      "sourceVersion": "{\"kind\":\"authorization\",\"authorizationId\":\"auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757\",\"authorizationVersion\":1}",
+      "outcome": {
+        "kind": "read",
+        "end": 4365,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "原生规格文件 · 未接纳",
+      "ref": null,
+      "unavailable": "没有已接纳规格绑定",
+      "ranges": 0,
+      "byteLength": null,
+      "sourceVersion": null
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "保留执行记录 · implementation · task_6644df964906",
+      "ref": {
+        "kind": "retained_task",
+        "workPackageId": "ip05-ip05-recovery-20261004j-scope#g1:notes-basics",
+        "orcaTaskId": "task_6644df964906"
+      },
+      "unavailable": null,
+      "ranges": 3,
+      "byteLength": 2411,
+      "sourceVersion": "{\"kind\":\"retained_task\",\"workPackageId\":\"ip05-ip05-recovery-20261004j-scope#g1:notes-basics\",\"orcaTaskId\":\"task_6644df964906\"}",
+      "outcome": {
+        "kind": "read",
+        "end": 2411,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "原批准授权 · auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757",
+      "ref": {
+        "kind": "authorization",
+        "authorizationId": "auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757",
+        "authorizationVersion": 1
+      },
+      "unavailable": null,
+      "ranges": 5,
+      "byteLength": 4365,
+      "sourceVersion": "{\"kind\":\"authorization\",\"authorizationId\":\"auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757\",\"authorizationVersion\":1}",
+      "outcome": {
+        "kind": "read",
+        "end": 4365,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "proposal.md",
+      "ref": {
+        "kind": "specification",
+        "locator": {
+          "worktreeId": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+          "relativePath": "openspec/changes/ip05-ip05-recovery-20261004j-scope-g1-notes-basics-9c38eb67"
+        },
+        "contractRevision": 4064813501694813,
+        "path": "proposal.md",
+        "workPackageId": "ip05-ip05-recovery-20261004j-scope#g1:notes-basics",
+        "orcaTaskId": "task_6644df964906"
+      },
+      "unavailable": null,
+      "ranges": 1,
+      "byteLength": 425,
+      "sourceVersion": "3883909030406086",
+      "outcome": {
+        "kind": "read",
+        "end": 425,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "specs/notes-basics/spec.md",
+      "ref": {
+        "kind": "specification",
+        "locator": {
+          "worktreeId": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+          "relativePath": "openspec/changes/ip05-ip05-recovery-20261004j-scope-g1-notes-basics-9c38eb67"
+        },
+        "contractRevision": 4064813501694813,
+        "path": "specs/notes-basics/spec.md",
+        "workPackageId": "ip05-ip05-recovery-20261004j-scope#g1:notes-basics",
+        "orcaTaskId": "task_6644df964906"
+      },
+      "unavailable": null,
+      "ranges": 1,
+      "byteLength": 976,
+      "sourceVersion": "2658987803090827",
+      "outcome": {
+        "kind": "read",
+        "end": 976,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "tasks.md",
+      "ref": {
+        "kind": "specification",
+        "locator": {
+          "worktreeId": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+          "relativePath": "openspec/changes/ip05-ip05-recovery-20261004j-scope-g1-notes-basics-9c38eb67"
+        },
+        "contractRevision": 4064813501694813,
+        "path": "tasks.md",
+        "workPackageId": "ip05-ip05-recovery-20261004j-scope#g1:notes-basics",
+        "orcaTaskId": "task_6644df964906"
+      },
+      "unavailable": null,
+      "ranges": 1,
+      "byteLength": 275,
+      "sourceVersion": "2751118742729209",
+      "outcome": {
+        "kind": "read",
+        "end": 275,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "保留执行记录 · recovery_utility · task_cef814fd1bc8",
+      "ref": {
+        "kind": "retained_task",
+        "workPackageId": "ip05-ip05-recovery-20261004j-scope#g1:notes-basics",
+        "orcaTaskId": "task_cef814fd1bc8"
+      },
+      "unavailable": null,
+      "ranges": 3,
+      "byteLength": 2511,
+      "sourceVersion": "{\"kind\":\"retained_task\",\"workPackageId\":\"ip05-ip05-recovery-20261004j-scope#g1:notes-basics\",\"orcaTaskId\":\"task_cef814fd1bc8\"}",
+      "outcome": {
+        "kind": "read",
+        "end": 2511,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "原批准授权 · auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757",
+      "ref": {
+        "kind": "authorization",
+        "authorizationId": "auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757",
+        "authorizationVersion": 1
+      },
+      "unavailable": null,
+      "ranges": 5,
+      "byteLength": 4365,
+      "sourceVersion": "{\"kind\":\"authorization\",\"authorizationId\":\"auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757\",\"authorizationVersion\":1}",
+      "outcome": {
+        "kind": "read",
+        "end": 4365,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "原生规格文件 · 未接纳",
+      "ref": null,
+      "unavailable": "没有已接纳规格绑定",
+      "ranges": 0,
+      "byteLength": null,
+      "sourceVersion": null
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "原始 Implementation Plan",
+      "ref": {
+        "kind": "initial_plan",
+        "graph": {
+          "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+          "generation": 1,
+          "version": 1
+        }
+      },
+      "unavailable": null,
+      "ranges": 1,
+      "byteLength": 358,
+      "sourceVersion": "{\"kind\":\"initial_plan\",\"graph\":{\"graphId\":\"ip05-ip05-recovery-20261004j-scope#g1\",\"generation\":1,\"version\":1}}",
+      "outcome": {
+        "kind": "read",
+        "end": 358,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "所选版本 Accepted Graph Patch",
+      "ref": null,
+      "unavailable": "初始版本没有图补丁",
+      "ranges": 0,
+      "byteLength": null,
+      "sourceVersion": null
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "批准时规划来源正文",
+      "ref": null,
+      "unavailable": "tracker 未提供该时刻的历史正文",
+      "ranges": 0,
+      "byteLength": null,
+      "sourceVersion": null
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-recovery-20261004j-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "批准授权 · auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757 v1 · 批准图 v1",
+      "ref": {
+        "kind": "authorization",
+        "authorizationId": "auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757",
+        "authorizationVersion": 1
+      },
+      "unavailable": null,
+      "ranges": 5,
+      "byteLength": 4365,
+      "sourceVersion": "{\"kind\":\"authorization\",\"authorizationId\":\"auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757\",\"authorizationVersion\":1}",
+      "outcome": {
+        "kind": "read",
+        "end": 4365,
+        "complete": true
+      }
+    }
+  ],
+  "worktrees": [
+    {
+      "worktreeId": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+      "path": "/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b"
+    }
+  ],
+  "scopeRevisionBefore": 74,
+  "coordinatorSessionId": "ip05-ip05-recovery-20261004j-scope-session",
+  "scopeRevisionAfter": 74,
+  "scopeRevisionUnchanged": true
+}

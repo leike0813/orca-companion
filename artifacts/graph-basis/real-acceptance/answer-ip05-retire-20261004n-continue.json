@@ -1,0 +1,10 @@
+{
+  "observedAt": "2026-10-04T14:41:38.944Z",
+  "interactionId": "[\"ask_user\",\"op:ip05-ip05-retire-20261004n-scope-session:step:4dd966e9-8c80-4abd-a274-2cd45901db1b:call_function_4swdv7c906pj_1\"]",
+  "expectedRevision": 143,
+  "answer": "恢复 Scope 并继续推进",
+  "input": "S-Left bound answer panel; selected option Enter",
+  "pendingCountAfter": 0,
+  "controlStateAfter": "active",
+  "operatorAssisted": true
+}

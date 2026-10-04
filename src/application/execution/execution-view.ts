@@ -20,7 +20,7 @@
  * 更细的 `repairing`、`retired`、`cancelled` 与部分 `unknown` 由权威事实经同一 DTO 提供。
  */
 
-import type { WorkPackageId } from '../dto/identity.js';
+import type { GraphVersion, WorkPackageId } from '../dto/identity.js';
 import { completedIntegrationRef } from '../integrate-work-package.js';
 import type { ExecutionAuthorizationRecord, RoleAuthorities, WorkerRole } from '../../domain/planning/execution-authorization.js';
 import type { WorkerLiveness } from '../../domain/worker-liveness.js';
@@ -36,7 +36,7 @@ import type {
   CoordinationSnapshot,
   DeliverySettlementRecord,
 } from '../ports/branch-coordination-store.js';
-import { graphVersionChain, type GraphVersionRecord } from '../../domain/planning/execution-graph.js';
+import { isGraphVersionInChain, type GraphVersionRecord } from '../../domain/planning/execution-graph.js';
 import { planFinalizerDispatch } from '../finalize-project.js';
 import { openInteractionCount, type CoordinationReadSnapshot } from '../ports/branch-coordination-store.js';
 
@@ -475,13 +475,19 @@ export type ValidatorAcceptanceInput = {
   readonly graphVersion: GraphVersionRecord | null;
   readonly graphVersions: readonly GraphVersionRecord[];
   readonly authorizations: readonly ExecutionAuthorizationRecord[];
+  /**
+   * 当前图追加链的成员事实，由宿主用存储的轻量 membership 查询注入（IP-03 / D-03）。
+   *
+   * 缺省时按记录列表现场算链，只用于不接存储的纯用例；生产装配必须提供它，否则「授权绑定版本仍在
+   * 链上」就只是从界面读到的历史推断，而不是存储证明的事实。
+   */
+  readonly approvedGraphVersions?: ReadonlySet<GraphVersion> | undefined;
 };
 
 /** One shared whole-graph count of exact current-contract Validator settlements. */
 export function validatorAcceptanceSummary(input: ValidatorAcceptanceInput): ValidatorAcceptanceSummary | null {
   const current = input.graphVersion;
   if (current === null) return null;
-  const versions = graphVersionChain(input.graphVersions, current);
   const taskBindings = input.snapshot.materializationBindings.filter(
     (binding) => binding.identity === 'issued' && binding.role === 'validator' && binding.workerTaskId !== null,
   );
@@ -500,7 +506,11 @@ export function validatorAcceptanceSummary(input: ValidatorAcceptanceInput): Val
     for (const settlement of settlements) {
       const binding = bindings.find((candidate) =>
         candidate.workerTaskId === settlement.workerTaskId &&
-        candidate.dispatchId === settlement.dispatchId &&
+        (candidate.dispatchId === settlement.dispatchId || input.snapshot.sessionSegments.some(segment =>
+          segment.workPackageId === workPackage.workPackageId && segment.role === 'validator' &&
+          segment.workerTaskId === candidate.workerTaskId && segment.attemptId === candidate.attemptId &&
+          segment.dispatchId === settlement.dispatchId && segment.verifiable,
+        )) &&
         candidate.attemptId === settlement.attemptId &&
         candidate.specBinding?.contractRevision === settlement.contractRevision &&
         candidate.createdAt <= settlement.acceptedAt &&
@@ -514,7 +524,12 @@ export function validatorAcceptanceSummary(input: ValidatorAcceptanceInput): Val
       if (authorization === undefined ||
         authorization.manifest.graph.graphId !== current.graphId ||
         authorization.manifest.graph.generation !== current.generation ||
-        !versions.has(authorization.manifest.graph.version)) continue;
+        !isGraphVersionInChain({
+          versions: input.graphVersions,
+          current,
+          candidate: authorization.manifest.graph.version,
+          approved: input.approvedGraphVersions,
+        })) continue;
       if (authorization.authorizationId !== binding.authorizationId ||
         authorization.authorizationVersion !== binding.authorizationVersion ||
         !authorization.manifest.workerProfiles.some((profile) => profile.role === 'validator')) continue;

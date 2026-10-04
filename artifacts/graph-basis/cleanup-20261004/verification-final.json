@@ -1,0 +1,19 @@
+{
+  "completedAt": "2026-10-04T15:38:03.419Z",
+  "remainingRepos": 0,
+  "remainingProjectHostSetups": 0,
+  "remainingOrcaWorktrees": 0,
+  "remainingFilesystemPaths": [],
+  "statusUnchanged": false,
+  "cleanupPassed": true,
+  "concurrentWorkspaceChangesObserved": [
+    "openspec/specs/execution/specification-admission/spec.md",
+    "openspec/specs/planning/execution-graph-compilation/spec.md",
+    "openspec/specs/testing/isolated-control-probe/spec.md",
+    "openspec/specs/tui/graph-inspection/spec.md",
+    "openspec/specs/tui/planning-workspace/spec.md",
+    "openspec/changes/complete-tui-graph-basis/ -> openspec/changes/archive/2026-10-04-complete-tui-graph-basis/"
+  ],
+  "concurrentChangesPreserved": true,
+  "archiveExists": true
+}

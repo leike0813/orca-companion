@@ -89,6 +89,7 @@ import type { EvidenceRecord } from '../../src/domain/worker-report.js';
 import { createCompanionStartupFixture, type CompanionStartupFixture } from '../support/companion-startup-harness.js';
 import { fixedReadOnlyWorkerProbe } from '../support/read-only-worker-probe.js';
 import { executionModelConfiguration } from '../support/execution-harness.js';
+import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 import {
   RECOVERY_SCOPE,
   RECOVERY_WORK_PACKAGE,
@@ -232,6 +233,7 @@ function createDeliveryFixture(): DeliveryFixture {
     coordinationScopeId: SCOPE,
     writer,
     graph: GRAPH_TOPOLOGY,
+    initialPlan: implementationPlanFor(GRAPH_TOPOLOGY, 1),
     mapRevision: mapRevisionOf(),
     planRevision: 1,
     orcaRunId: RUN,

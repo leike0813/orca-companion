@@ -19,6 +19,136 @@ import {
   settle,
   type RenderedTui,
 } from './harness.js';
+import { createFakeGraphBasis } from '../support/graph-basis.js';
+
+/* -------------------------------------------------------------------------- */
+/* 依据下钻的跨屏返回（IP-04）                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** 打开项目面板的「工作记录与依据」详情，并从末项进入依据下钻。 */
+async function enterBasisFromWorkDetails(rendered: RenderedTui): Promise<void> {
+  await press(rendered, '\u0002');
+  for (let step = 0; step < 4; step += 1) await press(rendered, '\u001b[B');
+  await press(rendered, '\r');
+  await press(rendered, '\r');
+  // 详情里的 Enter 打开依据入口页；↓ 选到「执行依据（当前图）」再进入来源目录。
+  await press(rendered, '\u001b[B');
+  await press(rendered, '\r');
+  await settle(2);
+}
+
+async function pressEscape(rendered: RenderedTui): Promise<void> {
+  rendered.stdin.write('\u001b');
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  await settle(2);
+}
+
+describe('依据下钻的返回语义', () => {
+  test('从项目工作详情进入并逐层返回：栏目、对象、草稿与 Session 都不变', async () => {
+    const fake = createFakePorts();
+    const basis = createFakeGraphBasis({
+      versions: [
+        {
+          graphId: 'graph-1',
+          generation: 1,
+          version: 2,
+          recordKind: 'initial',
+          parentVersion: null,
+          patchId: null,
+          mapRevision: 3,
+          planRevision: 3,
+          orcaRunId: 'run-1',
+          recordedAt: Date.UTC(2026, 9, 1),
+          generationStatus: 'candidate',
+          current: true,
+        },
+      ],
+      sources: [
+        {
+          id: 'plan:graph-1:1:2',
+          label: '初始 Implementation Plan',
+          ref: { kind: 'initial_plan', graph: { graphId: 'graph-1', generation: 1, version: 2 } },
+          sourceVersion: 'plan-3',
+          unavailable: null,
+        },
+      ],
+    });
+    const rendered = renderTui({ ...fake.ports, graphBasis: basis.port });
+    await settle();
+
+    // 先留一个未发送的草稿：返回后必须原样还在。
+    rendered.stdin.write('未发送的草稿');
+    await settle(2);
+
+    await enterBasisFromWorkDetails(rendered);
+    expect(frameText(rendered)).toContain('依据来源目录');
+    expect(frameText(rendered)).toContain('初始 Implementation Plan');
+
+    await pressEscape(rendered);
+    expect(frameText(rendered)).toContain('执行依据与历史图');
+    await pressEscape(rendered);
+    const back = frameText(rendered);
+    // 回到原栏目、原对象与原详情，而不是关闭项目面板。
+    expect(back).toContain('项目面板');
+    expect(back).toContain('详情');
+    expect(back).toContain('Enter 依据与历史');
+    expect(back).toContain('未发送的草稿');
+    expect(fake.executeCount()).toBe(0);
+
+    rendered.unmount();
+  });
+
+  test('从 Inspector 进入并逐层返回：选择、栏目与滚动位置保留', async () => {
+    const fake = createFakePorts();
+    const basis = createFakeGraphBasis({
+      versions: [
+        {
+          graphId: 'graph-1',
+          generation: 1,
+          version: 2,
+          recordKind: 'initial',
+          parentVersion: null,
+          patchId: null,
+          mapRevision: 3,
+          planRevision: 3,
+          orcaRunId: 'run-1',
+          recordedAt: Date.UTC(2026, 9, 1),
+          generationStatus: 'candidate',
+          current: true,
+        },
+      ],
+    });
+    const rendered = renderTui({ ...fake.ports, graphBasis: basis.port });
+    await settle();
+
+    await press(rendered, '\u0007');
+    await press(rendered, '\u001b[B');
+    expect(frameText(rendered)).toContain('2 第二个工作包');
+    await press(rendered, '\t');
+    expect(frameText(rendered)).toContain('src/b.ts');
+
+    await press(rendered, '\r');
+    expect(frameText(rendered)).toContain('Enter 打开依据与历史目录');
+    // 完整记录的末项 Enter 才进入依据：再按一次进入目录入口。
+    await press(rendered, '\r');
+    expect(frameText(rendered)).toContain('执行依据与历史图');
+    await press(rendered, '\r');
+    expect(frameText(rendered)).toContain('图版本历史');
+
+    await pressEscape(rendered);
+    expect(frameText(rendered)).toContain('执行依据与历史图');
+    await pressEscape(rendered);
+    const back = frameText(rendered);
+    expect(back).toContain('Graph Inspector');
+    // 返回后仍是同一个节点与同一个栏目。
+    expect(back).toContain('2 第二个工作包');
+    expect(back).toContain('src/b.ts');
+    expect(fake.executeCount()).toBe(0);
+
+    rendered.unmount();
+  });
+});
+
 
 async function press(rendered: RenderedTui, input: string): Promise<void> {
   rendered.stdin.write(input);
@@ -43,10 +173,10 @@ async function readWorkDetails(rendered: RenderedTui): Promise<string> {
   for (let step = 0; step < 120; step += 1) {
     const frame = frameText(rendered).replace(/[\s│]/gu, '');
     frames.push(frame);
-    if (frame.includes('历史图版本和依据全文读取')) break;
+    if (frame.includes('Enter打开依据来源与历史图版本目录')) break;
     await press(rendered, '\u001b[B');
   }
-  expect(frames.at(-1)).toContain('历史图版本和依据全文读取');
+  expect(frames.at(-1)).toContain('Enter打开依据来源与历史图版本目录');
   await press(rendered, '\u001b');
   await new Promise(resolve => setTimeout(resolve, 60));
   await press(rendered, '\u001b');

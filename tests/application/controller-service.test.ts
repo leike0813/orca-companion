@@ -73,8 +73,8 @@ import type {
   CoordinationWriter,
 } from '../../src/application/ports/branch-coordination-store.js';
 import type { ExecutionBackend } from '../../src/application/ports/execution-backend.js';
-import type { GraphVersionRecord } from '../../src/domain/planning/execution-graph.js';
 import type { ProjectPresentation } from '../../src/application/tui/project-presentation.js';
+import type { GraphVersionRecord } from '../../src/domain/planning/execution-graph.js';
 
 const SCOPE = 'scope-controller' as CoordinationScopeId;
 const OTHER_SCOPE = 'scope-controller-new' as CoordinationScopeId;
@@ -1224,17 +1224,25 @@ test('readiness 与派发门禁同规则：批准时刻的 GraphVersion 仍在�
   if (snapshotRead.kind !== 'snapshot') {
     throw new Error('无法读取 snapshot');
   }
+  // Scope 图指针是本用例唯一需要的外部事实：图历史记录本身由调用方注入，快照投影不负责读取。
+  const currentSnapshot = {
+    ...snapshotRead.snapshot,
+    scope: { ...snapshotRead.snapshot.scope, graphId, graphVersion: 2 as GraphVersion },
+  };
   const counters = store.query({ kind: 'budget-counters', coordinationScopeId: SCOPE });
   const execution = deriveExecutionFacts({
-    snapshot: snapshotRead.snapshot,
+    snapshot: currentSnapshot,
     nodes: [],
     baselineHead: null,
     authority: null,
     observations: noExecutionObservations('controller-service-test'),
   });
-  const readinessWith = (authorizationGraphVersion: number): readonly (boolean | undefined)[] =>
-    projectControllerSnapshot({
-      snapshot: snapshotRead.snapshot,
+  const readinessWith = (
+    authorizationGraphVersion: number,
+    authorizedGraphVersions?: ReadonlySet<GraphVersion>,
+  ): readonly (boolean | undefined)[] => {
+    const projected = projectControllerSnapshot({
+      snapshot: currentSnapshot,
       budgets: counters.kind === 'budget-counters' ? counters.counters : [],
       graphGeneration: null,
       frontier: execution.frontier,
@@ -1246,11 +1254,28 @@ test('readiness 与派发门禁同规则：批准时刻的 GraphVersion 仍在�
       selectedSessionId: null,
       graphVersions: [versionOne, versionTwo],
       authorizationGraphRef: { graphId, graphVersion: authorizationGraphVersion },
+      ...(authorizedGraphVersions === undefined ? {} : { authorizedGraphVersions }),
       compaction: null,
-    }).graphTopologies.map((topology) => topology.readiness.authorizationBound);
+    });
+    return projected.graphTopologies.map((topology) => topology.readiness.authorizationBound);
+  };
 
-  // 授权绑定 v1、当前图已推进到 v2：两个拓扑记录都必须读作「仍被覆盖」，因为 v1 还在追加链上。
-  expect(readinessWith(1)).toEqual([true, true]);
+  // 快照只携带 Scope 当前指向的那一张图（v2），历史版本由有界目录单独提供。
+  expect(readinessWith(1)).toHaveLength(1);
+  // 授权绑定 v1、当前图已推进到 v2：仍读作「被覆盖」，因为 v1 还在追加链上。
+  expect(readinessWith(1)).toEqual([true]);
+  // 授权绑定 v2（当前版本）：同样成立。
+  expect(readinessWith(2)).toEqual([true]);
   // 指向未来版本或其它图的引用不在链上：不成立。
-  expect(readinessWith(3)).toEqual([false, false]);
+  expect(readinessWith(3)).toEqual([false]);
+
+  // 注入存储给出的链成员事实时判定只用它：即便历史记录不全也不重新现场算链。
+  expect(readinessWith(1, new Set<GraphVersion>([1 as GraphVersion, 2 as GraphVersion]))).toEqual([true]);
+  expect(readinessWith(1, new Set<GraphVersion>([2 as GraphVersion]))).toEqual([false]);
+});
+
+test('Scope 尚未接受任何图时快照不投影任何拓扑，而不是回退到某条历史版本', () => {
+  const snapshot = snapshotOf(SCOPE);
+  expect(snapshot.graph).toBeNull();
+  expect(snapshot.graphTopologies).toEqual([]);
 });

@@ -36,6 +36,7 @@ import type { SpecBinding } from '../src/domain/task-contract.js';
 import { openCoordinationStore, type CoordinationStore } from '../src/adapters/storage/coordination-store.js';
 import { COORDINATION_TABLES, MIGRATIONS, SCHEMA_VERSION } from '../src/adapters/storage/schema.js';
 import { createUserQuestion, answerPendingInteraction } from '../src/application/coordination/pending-interaction.js';
+import { implementationPlanFor } from './support/graph-plan-fixture.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SCOPE_2 = 'scope-2' as CoordinationScopeId;
@@ -2102,6 +2103,7 @@ function recordInitialGraph(graphId: GraphId = GRAPH_ID): CoordinationCommandRes
     orcaRunId: 'run-1',
     graph: executionGraph(graphId),
     patch: null,
+    initialPlan: implementationPlanFor(executionGraph(graphId), 1),
   }));
 }
 
@@ -2120,6 +2122,7 @@ function acceptedRevisionCommand(expectedRevision: number, overrides: Record<str
     planRevision: 1,
     orcaRunId: 'run-1',
     graph: executionGraph(),
+    initialPlan: null,
     patch: {
       patchId: 'patch-1',
       operationId: 'op-1' as OperationId,
@@ -2207,6 +2210,7 @@ test('initial GraphVersion 不得携带补丁，accepted_revision 必须携带�
     planRevision: 1,
     orcaRunId: 'run-1',
     graph: executionGraph(),
+    initialPlan: implementationPlanFor(executionGraph(), 1),
     patch: {
       patchId: 'patch-illegal',
       operationId: 'op-1' as OperationId,
@@ -2931,4 +2935,283 @@ test('代际引用只在 Cutover 时整体切换：候选未授权时整笔拒�
   expect(generations.kind === 'graph-generations' ? generations.generations.map((entry) => entry.status) : null).toEqual([
     'candidate',
   ]);
+});
+
+// IC-03 Extend / IC-11：全代际图历史目录、追加链成员校验与依据正文有界读取（schema 17）。
+
+/** 登记一个候选代际并写下它的 v1，让目录能同时看到多代。 */
+function recordGeneration(graphId: GraphId, generation: number, predecessorGraphId: GraphId | null): void {
+  // 图负载里的 generation 必须与索引列一致：共用夹具 `executionGraph` 固定为第 1 代，这里按代际改写。
+  const graph = { ...executionGraph(graphId), generation: generation as GraphGeneration };
+  const registered = submit((expectedRevision) => ({
+    kind: 'record-graph-generation',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    graphId,
+    generation: generation as GraphGeneration,
+    planningCycleId: `cycle-${generation}` as PlanningCycleId,
+    orcaRunId: `run-${generation}`,
+    predecessorGraphId,
+    baselineHead: `head-${generation}`,
+  }));
+  if (registered.kind !== 'committed') {
+    throw new Error(`无法登记代际 ${generation}: ${JSON.stringify(registered)}`);
+  }
+  const recorded = submit((expectedRevision) => ({
+    kind: 'record-graph-version',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    graphId,
+    generation: generation as GraphGeneration,
+    graphVersion: 1 as GraphVersion,
+    recordKind: 'initial',
+    parentVersion: null,
+    mapRevision: 0,
+    planRevision: 1,
+    orcaRunId: `run-${generation}`,
+    graph,
+    patch: null,
+    initialPlan: implementationPlanFor(graph, 1),
+  }));
+  if (recorded.kind !== 'committed') {
+    throw new Error(`无法记录代际 ${generation} 的初始图: ${JSON.stringify(recorded)}`);
+  }
+}
+
+test('图版本目录跨全部代际分页，只认 Scope 指针所指的那一条为当前', () => {
+  createScope();
+  activateSession();
+  // 三代共 24 个版本，超过单页 20 项，用来同时验证分页上限与跨代际排序。
+  for (let generation = 1; generation <= 3; generation += 1) {
+    recordGeneration(`graph-${generation}` as GraphId, generation, generation === 1 ? null : (`graph-${generation - 1}` as GraphId));
+  }
+  // 本用例验证只读目录；历史夹具直接播种，生产追加授权/lease在图演进测试验证。
+  const database = new DatabaseSync(join(directory, 'coordination.sqlite'));
+  const append = database.prepare(`INSERT INTO graph_versions
+    (coordination_scope_id, graph_id, graph_version, graph_generation, record_kind, parent_version,
+     map_revision, plan_revision, orca_run_id, graph_json, patch_id, recorded_at)
+    VALUES (?, ?, ?, ?, 'accepted_revision', ?, 0, 1, ?, ?, ?, 1)`);
+  for (let generation = 1; generation <= 3; generation += 1) {
+    const graphId = `graph-${generation}` as GraphId;
+    for (let version = 2; version <= 8; version += 1) {
+      append.run(SCOPE, graphId, version, generation, version - 1, `run-${generation}`,
+        JSON.stringify({ ...executionGraph(graphId), generation }), `patch-${generation}-${version}`);
+    }
+  }
+  database.prepare('UPDATE scope SET graph_id = ?, graph_version = ? WHERE coordination_scope_id = ?').run('graph-1', 4, SCOPE);
+  database.close();
+
+  const seen: { graphId: string; version: number; current: boolean; status: string | null }[] = [];
+  let cursor: { generation: number; graphId: string; version: number } | undefined;
+  for (let page = 0; page < 5; page += 1) {
+    const result = store.query({
+      kind: 'graph-version-index',
+      coordinationScopeId: SCOPE,
+      ...(cursor === undefined ? {} : { after: cursor }),
+    });
+    if (result.kind !== 'graph-version-index') {
+      throw new Error(`目录第 ${page} 页不可读: ${result.kind}`);
+    }
+    expect(result.items.length).toBeLessThanOrEqual(20);
+    for (const item of result.items) {
+      seen.push({ graphId: item.graphId, version: item.version, current: item.current, status: item.generationStatus });
+    }
+    if (result.nextCursor === null) {
+      break;
+    }
+    cursor = result.nextCursor;
+  }
+
+  expect(seen).toHaveLength(24);
+  // 每页 ≤20 且无重复无遗漏。
+  expect(new Set(seen.map((entry) => `${entry.graphId}#${entry.version}`)).size).toBe(24);
+  // 目录按代际倒序：先看到最新的第 3 代。
+  expect(seen[0]?.graphId).toBe('graph-3');
+  // 当前只取 Scope 指针，与各图 head 无关。
+  expect(seen.filter((entry) => entry.current).map((entry) => `${entry.graphId}#${entry.version}`)).toEqual(['graph-1#4']);
+  // 代际状态取自 graph_generations 的真实登记值，而不是按版本新旧推断。
+  expect(new Set(seen.map((entry) => entry.status))).toEqual(new Set(['candidate']));
+});
+
+test('追加链成员校验只认连续链，出现缺口与错父指针一律拒绝', () => {
+  createScope();
+  activateSession();
+  recordGeneration(GRAPH_ID, 1, null);
+  // v2/v3 直接写库：accepted_revision 的生产路径要 Execution Coordination Lease 与批准授权，而本用例
+  // 要构造的是**库内被破坏的链**（缺口、错父指针），这些状态在正常写入下不可能出现。
+  const database = new DatabaseSync(join(directory, 'coordination.sqlite'));
+  const insertVersion = database.prepare(
+    `INSERT INTO graph_versions (coordination_scope_id, graph_id, graph_version, graph_generation, record_kind,
+       parent_version, map_revision, plan_revision, orca_run_id, graph_json, patch_id, patch_json, recorded_at)
+     VALUES ('scope-1', ?, ?, 1, 'accepted_revision', ?, 0, 1, 'run-1', ?, ?, '{"patchId":"p"}', 1)`,
+  );
+  insertVersion.run(GRAPH_ID, 2, 1, JSON.stringify(executionGraph(GRAPH_ID)), 'p-2');
+  insertVersion.run(GRAPH_ID, 3, 2, JSON.stringify(executionGraph(GRAPH_ID)), 'p-3');
+
+  const members = store.query({
+    kind: 'graph-version-membership',
+    coordinationScopeId: SCOPE,
+    graphId: GRAPH_ID,
+    head: 3 as GraphVersion,
+    versions: [3 as GraphVersion, 1 as GraphVersion],
+  });
+  expect(members.kind === 'graph-version-membership' ? members.members.map((entry) => entry.version) : null).toEqual([3, 1]);
+
+  // head 必须是真实 head：用过期 head 判定成员等于凭空扩大自己的授权范围。
+  expect(store.query({
+    kind: 'graph-version-membership',
+    coordinationScopeId: SCOPE,
+    graphId: GRAPH_ID,
+    head: 2 as GraphVersion,
+    versions: [1 as GraphVersion],
+  }).kind).toBe('rejected');
+
+  // 链上出现洞：直接删掉中间一条，聚合校验必须发现 total !== hi。
+  // 链上出现洞：删掉中间一条，聚合校验必须发现 total !== hi。
+  database.exec('DELETE FROM graph_versions WHERE graph_version = 2');
+  database.close();
+  const holed = store.query({
+    kind: 'graph-version-membership',
+    coordinationScopeId: SCOPE,
+    graphId: GRAPH_ID,
+    head: 3 as GraphVersion,
+    versions: [1 as GraphVersion, 3 as GraphVersion],
+  });
+  expect(holed.kind).toBe('rejected');
+});
+
+test('追加链父指针与前一条对不上时拒绝成员判定', () => {
+  createScope();
+  activateSession();
+  recordGeneration(GRAPH_ID, 1, null);
+  const database = new DatabaseSync(join(directory, 'coordination.sqlite'));
+  const insertVersion = database.prepare(
+    `INSERT INTO graph_versions (coordination_scope_id, graph_id, graph_version, graph_generation, record_kind,
+       parent_version, map_revision, plan_revision, orca_run_id, graph_json, patch_id, patch_json, recorded_at)
+     VALUES ('scope-1', ?, ?, 1, 'accepted_revision', ?, 0, 1, 'run-1', ?, ?, '{"patchId":"p"}', 1)`,
+  );
+  insertVersion.run(GRAPH_ID, 2, 1, JSON.stringify(executionGraph(GRAPH_ID)), 'p-2');
+  // 版本号连续，但 v2 的父指向 v1 之外：链在语义上断开，聚合的 broken 计数必须捕获。
+  insertVersion.run(GRAPH_ID, 3, 1, JSON.stringify(executionGraph(GRAPH_ID)), 'p-3');
+  database.close();
+
+  const broken = store.query({
+    kind: 'graph-version-membership',
+    coordinationScopeId: SCOPE,
+    graphId: GRAPH_ID,
+    head: 3 as GraphVersion,
+    versions: [1 as GraphVersion, 3 as GraphVersion],
+  });
+  expect(broken.kind).toBe('rejected');
+});
+
+test('原编译计划与图版本同事务保存，长中文正文按 UTF-8 边界分页可完整读回', () => {
+  createScope();
+  activateSession();
+  // 一份超长中文计划：正文远大于单页 64 KiB，且每个字符三字节，边界必然落在多字节中间。
+  const longTitle = '编'.repeat(40_000);
+  const graph = executionGraph(GRAPH_ID);
+  const plan = {
+    ...implementationPlanFor(graph, 1),
+    workPackages: [{ key: 'wp-1', title: longTitle, dependsOn: [], scopeEnvelope: { include: ['src/a.ts'], exclude: [] } }],
+  };
+  const recorded = submit((expectedRevision) => ({
+    kind: 'record-graph-version',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    graphId: GRAPH_ID,
+    generation: 1 as GraphGeneration,
+    graphVersion: 1 as GraphVersion,
+    recordKind: 'initial',
+    parentVersion: null,
+    mapRevision: 0,
+    planRevision: 1,
+    orcaRunId: 'run-1',
+    graph,
+    patch: null,
+    initialPlan: plan,
+  }));
+  expect(recorded.kind).toBe('committed');
+
+  const source = { kind: 'initial_plan' as const, graphId: GRAPH_ID, generation: 1 as GraphGeneration, version: 1 as GraphVersion };
+  let offset = 0;
+  let rebuilt = '';
+  for (let page = 0; page < 20; page += 1) {
+    const chunk = store.query({ kind: 'graph-basis-range', coordinationScopeId: SCOPE, source, offset, maxBytes: 65_536 });
+    if (chunk.kind !== 'graph-basis-range' || chunk.text === null) {
+      throw new Error(`正文第 ${page} 段不可读: ${chunk.kind}`);
+    }
+    rebuilt += chunk.text;
+    offset = chunk.end;
+    if (offset >= chunk.byteLength) {
+      break;
+    }
+  }
+  expect(JSON.parse(rebuilt)).toEqual(plan);
+
+  // 偏移越过正文末尾必须报边界错误，而不是退化成「正文缺失」。
+  const overrun = store.query({ kind: 'graph-basis-range', coordinationScopeId: SCOPE, source, offset: 10_000_000, maxBytes: 4_096 });
+  expect(overrun.kind === 'rejected' ? overrun.code : null).toBe('invalid_utf8_offset');
+
+  // 代际属于身份：拿别代的引用来读必须被拒，而不是当成「没找到」。
+  const wrongGeneration = store.query({
+    kind: 'graph-basis-range',
+    coordinationScopeId: SCOPE,
+    source: { ...source, generation: 9 as GraphGeneration },
+    offset: 0,
+    maxBytes: 4_096,
+  });
+  expect(wrongGeneration.kind === 'rejected' ? wrongGeneration.code : null).toBe('invalid_query');
+});
+
+test('schema 16 之前的初始图没有原计划，按缺失呈现且不补写', () => {
+  const databasePath = join(directory, 'coordination-legacy.sqlite');
+  const legacy = new DatabaseSync(databasePath);
+  legacy.exec('BEGIN IMMEDIATE');
+  for (const migration of MIGRATIONS) {
+    if (migration.version > 16) {
+      continue;
+    }
+    for (const statement of migration.statements) {
+      legacy.exec(statement);
+    }
+  }
+  legacy.prepare(
+    `INSERT INTO graph_versions (coordination_scope_id, graph_id, graph_version, graph_generation, record_kind,
+       parent_version, map_revision, plan_revision, orca_run_id, graph_json, recorded_at)
+     VALUES ('scope-1', ?, 1, 1, 'initial', NULL, 0, 1, 'run-1', ?, 1)`,
+  ).run(GRAPH_ID, JSON.stringify(executionGraph(GRAPH_ID)));
+  legacy.prepare(
+    `INSERT INTO scope (coordination_scope_id, mode, control_state, planning_cycle_id, graph_id, graph_version,
+       authorization_id, authorization_version, revision, updated_at)
+     VALUES ('scope-1', 'execution_coordination', 'active', 'cycle-1', ?, 1, NULL, NULL, 1, 1)`,
+  ).run(GRAPH_ID);
+  legacy.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('schema_version', '16');
+  legacy.exec('COMMIT');
+  legacy.close();
+
+  const migrated = openCoordinationStore({ databasePath, clock });
+  if (migrated.kind !== 'opened') {
+    throw new Error(`旧库无法升级: ${migrated.message}`);
+  }
+  try {
+    // 迁移后这一行仍读不出原计划：schema 17 的列存在但为 NULL，不得回填，也不得从图反推。
+    const basis = migrated.store.query({
+      kind: 'graph-basis-range',
+      coordinationScopeId: SCOPE,
+      source: { kind: 'initial_plan', graphId: GRAPH_ID, generation: 1 as GraphGeneration, version: 1 as GraphVersion },
+      offset: 0,
+      maxBytes: 4_096,
+    });
+    expect(basis.kind === 'graph-basis-range' ? basis.found : null).toBe(false);
+    expect(basis.kind === 'graph-basis-range' ? basis.byteLength : null).toBe(0);
+    // 图版本本身仍完整可读：依据缺失不等于记录丢失。
+    const versions = migrated.store.query({ kind: 'graph-versions', coordinationScopeId: SCOPE, graphId: GRAPH_ID });
+    expect(versions.kind === 'graph-versions' ? versions.versions.length : null).toBe(1);
+  } finally {
+    migrated.store.close();
+  }
 });

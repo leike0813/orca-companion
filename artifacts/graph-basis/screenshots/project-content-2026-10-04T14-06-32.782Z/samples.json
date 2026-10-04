@@ -1,0 +1,398 @@
+[
+  {
+    "name": "pending-content",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "pending-content-120x40-color-nerd.png",
+    "text": "pending-content-120x40-color-nerd.txt"
+  },
+  {
+    "name": "events-content",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "events-content-120x40-color-nerd.png",
+    "text": "events-content-120x40-color-nerd.txt"
+  },
+  {
+    "name": "event-detail",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "event-detail-120x40-color-nerd.png",
+    "text": "event-detail-120x40-color-nerd.txt"
+  },
+  {
+    "name": "pending-content",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "pending-content-120x40-color-ascii.png",
+    "text": "pending-content-120x40-color-ascii.txt"
+  },
+  {
+    "name": "events-content",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "events-content-120x40-color-ascii.png",
+    "text": "events-content-120x40-color-ascii.txt"
+  },
+  {
+    "name": "event-detail",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "event-detail-120x40-color-ascii.png",
+    "text": "event-detail-120x40-color-ascii.txt"
+  },
+  {
+    "name": "pending-content",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "pending-content-120x40-no-color-nerd.png",
+    "text": "pending-content-120x40-no-color-nerd.txt"
+  },
+  {
+    "name": "events-content",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "events-content-120x40-no-color-nerd.png",
+    "text": "events-content-120x40-no-color-nerd.txt"
+  },
+  {
+    "name": "event-detail",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "event-detail-120x40-no-color-nerd.png",
+    "text": "event-detail-120x40-no-color-nerd.txt"
+  },
+  {
+    "name": "pending-content",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "pending-content-120x40-no-color-ascii.png",
+    "text": "pending-content-120x40-no-color-ascii.txt"
+  },
+  {
+    "name": "events-content",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "events-content-120x40-no-color-ascii.png",
+    "text": "events-content-120x40-no-color-ascii.txt"
+  },
+  {
+    "name": "event-detail",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "event-detail-120x40-no-color-ascii.png",
+    "text": "event-detail-120x40-no-color-ascii.txt"
+  },
+  {
+    "name": "pending-content",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "pending-content-80x24-color-nerd.png",
+    "text": "pending-content-80x24-color-nerd.txt"
+  },
+  {
+    "name": "events-content",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "events-content-80x24-color-nerd.png",
+    "text": "events-content-80x24-color-nerd.txt"
+  },
+  {
+    "name": "event-detail",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "event-detail-80x24-color-nerd.png",
+    "text": "event-detail-80x24-color-nerd.txt"
+  },
+  {
+    "name": "pending-content",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "pending-content-80x24-color-ascii.png",
+    "text": "pending-content-80x24-color-ascii.txt"
+  },
+  {
+    "name": "events-content",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "events-content-80x24-color-ascii.png",
+    "text": "events-content-80x24-color-ascii.txt"
+  },
+  {
+    "name": "event-detail",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "event-detail-80x24-color-ascii.png",
+    "text": "event-detail-80x24-color-ascii.txt"
+  },
+  {
+    "name": "pending-content",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "pending-content-80x24-no-color-nerd.png",
+    "text": "pending-content-80x24-no-color-nerd.txt"
+  },
+  {
+    "name": "events-content",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "events-content-80x24-no-color-nerd.png",
+    "text": "events-content-80x24-no-color-nerd.txt"
+  },
+  {
+    "name": "event-detail",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "event-detail-80x24-no-color-nerd.png",
+    "text": "event-detail-80x24-no-color-nerd.txt"
+  },
+  {
+    "name": "pending-content",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "pending-content-80x24-no-color-ascii.png",
+    "text": "pending-content-80x24-no-color-ascii.txt"
+  },
+  {
+    "name": "events-content",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "events-content-80x24-no-color-ascii.png",
+    "text": "events-content-80x24-no-color-ascii.txt"
+  },
+  {
+    "name": "event-detail",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "event-detail-80x24-no-color-ascii.png",
+    "text": "event-detail-80x24-no-color-ascii.txt"
+  },
+  {
+    "name": "pending-content",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "pending-content-50x40-color-nerd.png",
+    "text": "pending-content-50x40-color-nerd.txt"
+  },
+  {
+    "name": "events-content",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "events-content-50x40-color-nerd.png",
+    "text": "events-content-50x40-color-nerd.txt"
+  },
+  {
+    "name": "event-detail",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "event-detail-50x40-color-nerd.png",
+    "text": "event-detail-50x40-color-nerd.txt"
+  },
+  {
+    "name": "pending-content",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "pending-content-50x40-color-ascii.png",
+    "text": "pending-content-50x40-color-ascii.txt"
+  },
+  {
+    "name": "events-content",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "events-content-50x40-color-ascii.png",
+    "text": "events-content-50x40-color-ascii.txt"
+  },
+  {
+    "name": "event-detail",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "event-detail-50x40-color-ascii.png",
+    "text": "event-detail-50x40-color-ascii.txt"
+  },
+  {
+    "name": "pending-content",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "pending-content-50x40-no-color-nerd.png",
+    "text": "pending-content-50x40-no-color-nerd.txt"
+  },
+  {
+    "name": "events-content",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "events-content-50x40-no-color-nerd.png",
+    "text": "events-content-50x40-no-color-nerd.txt"
+  },
+  {
+    "name": "event-detail",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "event-detail-50x40-no-color-nerd.png",
+    "text": "event-detail-50x40-no-color-nerd.txt"
+  },
+  {
+    "name": "pending-content",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "pending-content-50x40-no-color-ascii.png",
+    "text": "pending-content-50x40-no-color-ascii.txt"
+  },
+  {
+    "name": "events-content",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "events-content-50x40-no-color-ascii.png",
+    "text": "events-content-50x40-no-color-ascii.txt"
+  },
+  {
+    "name": "event-detail",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "event-detail-50x40-no-color-ascii.png",
+    "text": "event-detail-50x40-no-color-ascii.txt"
+  }
+]

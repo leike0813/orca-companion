@@ -30,7 +30,7 @@ import {
   GRAPH_GENERATION_TRANSITIONS,
   type GraphGenerationStatus,
 } from '../../domain/execution/replanning.js';
-import type { ExecutionGraph, GraphVersionRecord, GraphVersionRecordKind } from '../../domain/planning/execution-graph.js';
+import type { ExecutionGraph, GraphVersionRecord, GraphVersionRecordKind, ImplementationPlan } from '../../domain/planning/execution-graph.js';
 import type { ExecutionAuthorizationManifest, ExecutionAuthorizationRecord, WorkerRole } from '../../domain/planning/execution-authorization.js';
 import { TICKET_CLAIM_STATES, type TicketClaimState } from '../../domain/planning/ticket-claim.js';
 import type { IntentState, OperationIntent } from '../dto/operation-intent.js';
@@ -280,7 +280,7 @@ export type MaterializationBindingRecord = {
   readonly coordinationScopeId: CoordinationScopeId;
   readonly workPackageId: WorkPackageId;
   readonly identity: MaterializationBindingIdentity;
-  /** `legacy` 行为 `null`；`issued` 行必有角色。 */
+  /** `legacy` 行为 `null`；`issued` 行由主角色或 `recoveryUtilityRole` 证明身份。 */
   readonly role: WorkerRole | null;
   /**
    * Recovery Utility 派发身份（IC-03 Extend；schema 16）。
@@ -703,6 +703,97 @@ export function openInteractionCount(snapshot: CoordinationReadSnapshot): number
     : snapshot.pendingInteractions.filter(item => item.state === 'open').length;
 }
 
+/**
+ * 图版本目录的 keyset 游标（IC-03 Extend / IC-11；schema 17）。
+ *
+ * 排序键是 `(generation, graphId, version)` 倒序，因此同代际内先按 GraphId 再按版本稳定排列，翻页
+ * 不依赖 offset：追加新版本只影响它自己那一页，已翻过的页不会因为前面多了行而重复或漏项。
+ */
+export type GraphVersionIndexCursor = {
+  readonly generation: number;
+  readonly graphId: string;
+  readonly version: number;
+};
+
+/**
+ * 图版本元数据：目录、成员校验与历史详情共用的**唯一**轻量形状。
+ *
+ * 刻意不含 `graph`（拓扑正文）。历史目录要跨全部代际列出，若每项都带上编译结果，读一页就等于把
+ * 整个 Scope 的图历史反序列化一遍；拓扑按选中的那一条精确读取（`graph-version` / `graph-head`）。
+ */
+export type GraphVersionMetadata = {
+  readonly graphId: GraphId;
+  readonly generation: GraphGeneration;
+  readonly version: GraphVersion;
+  readonly recordKind: GraphVersionRecordKind;
+  readonly parentVersion: GraphVersion | null;
+  readonly patchId: string | null;
+  readonly mapRevision: Revision;
+  readonly planRevision: Revision;
+  readonly orcaRunId: string;
+  readonly recordedAt: number;
+  /**
+   * 该版本所属代际的真实状态。
+   *
+   * `null` 表示这个代际没有登记状态行——此时按「未记录」呈现，不拿 Scope 指针或版本新旧推断成
+   * `frozen`：同代际内的旧版本既不是「当前」也不因此就是冻结的。
+   */
+  readonly generationStatus: GraphGenerationStatus | null;
+  /** 是否是 Scope 当前图指针所指 GraphId 的 head。历史图不因代际状态而冒充当前图。 */
+  readonly current: boolean;
+};
+
+/**
+ * 依据正文的可读来源（IC-11；schema 17）。
+ *
+ * 只包含本库拥有的不可变记录：编译计划、补丁、批准 Manifest。原生规格文件与 tracker 正文属于
+ * 外部权威源，由各自的 adapter 读取，不在这里伪装成可读字段。
+ *
+ * 三个 variant 都以**精确身份**定位，没有 `latest` 之类的相对引用——记录一旦写入不再改写，因此
+ * 同一身份的内容永不变化，续读不会因为 Scope 又追加了版本而变成 stale。
+ */
+export type GraphBasisSourceRef =
+  | {
+      readonly kind: 'initial_plan';
+      readonly graphId: GraphId;
+      readonly generation: GraphGeneration;
+      readonly version: GraphVersion;
+    }
+  | {
+      readonly kind: 'graph_patch';
+      readonly graphId: GraphId;
+      readonly generation: GraphGeneration;
+      readonly version: GraphVersion;
+    }
+  | {
+      readonly kind: 'authorization';
+      readonly authorizationId: string;
+      readonly authorizationVersion: number;
+    };
+
+/** 保留派发记录的 keyset 游标；与写入顺序一致，且 `orcaTaskId` 在同一 `createdAt` 内唯一。 */
+export type GraphBasisBindingCursor = {
+  readonly createdAt: number;
+  readonly orcaTaskId: string;
+};
+
+/**
+ * 批准授权的目录项（IC-03 Extend；IC-11）。
+ *
+ * `graphVersion` 是**批准时刻**的图版本，不是所选历史版本的状态：一条授权只证明「它当时批准的是图的
+ * 哪一版」。把两者混为一谈会让重规划后的旧授权看起来像是给新版本签过字。
+ */
+export type GraphAuthorizationRef = {
+  readonly authorizationId: string;
+  readonly authorizationVersion: number;
+  readonly graphVersion: GraphVersion;
+};
+
+export type GraphAuthorizationCursor = {
+  readonly authorizationId: string;
+  readonly authorizationVersion: number;
+};
+
 export type CoordinationQuery =
   | { readonly kind: 'pending-interaction'; readonly coordinationScopeId: CoordinationScopeId; readonly interactionId: InteractionId; readonly coordinatorSessionId?: CoordinatorSessionId }
   | { readonly kind: 'pending-interactions'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId?: CoordinatorSessionId; readonly after?: InteractionPageCursor }
@@ -739,6 +830,84 @@ export type CoordinationQuery =
       readonly coordinationScopeId: CoordinationScopeId;
       readonly graphId: GraphId;
       readonly graphVersion: GraphVersion;
+    }
+  /**
+   * 跨全部代际的图版本目录（IC-03 Extend；schema 17）。每页最多 20 项，只读元数据。
+   *
+   * 代际不是过滤条件而是排序维度：历史目录必须能看到冻结代际，但「当前」只由 Scope 指针判定，
+   * 因此 `current` 逐项计算而不是用 `generationStatus` 反推。
+   */
+  | {
+      readonly kind: 'graph-version-index';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly after?: GraphVersionIndexCursor;
+    }
+  /** 指定 GraphId 的 head（当前接受拓扑），只读这一条的完整图体。 */
+  | {
+      readonly kind: 'graph-head';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly graphId: GraphId;
+    }
+  /**
+   * 追加链成员校验（IC-03 Extend；schema 17）。
+   *
+   * 回答「这些版本是否都还在这条图的追加链上」，只沿 `parent_version` 递归走元数据列，不加载任何
+   * `graph_json`。链上出现缺口（版本缺失或 `parentVersion` 与前一条对不上）即拒绝，不返回部分结果。
+   */
+  | {
+      readonly kind: 'graph-version-membership';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly graphId: GraphId;
+      /** 调用方读到的 head；与实际 head 不一致即拒绝，避免用过期 head 判定成员。 */
+      readonly head: GraphVersion;
+      readonly versions: readonly GraphVersion[];
+    }
+  /** 依据正文的 UTF-8 字节范围读取，每次至多 64 KiB。 */
+  | {
+      readonly kind: 'graph-basis-range';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly source: GraphBasisSourceRef;
+      readonly offset: number;
+      readonly maxBytes: number;
+    }
+  /**
+   * 单个 Work Package 的保留派发记录（IC-03 Extend；schema 17）。
+   *
+   * 按 package 精确分页，每页最多 20 条。历史详情要展示原 Task/Dispatch/Attempt、原授权与规格绑定，
+   * 但这些是 **Work Package 级**保留记录，不是所选图版本的事实——按包分页才能避免为了看一个节点
+   * 而全读 Scope 的物化绑定。
+   */
+  | {
+      readonly kind: 'graph-basis-bindings';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly workPackageId: WorkPackageId;
+      readonly after?: GraphBasisBindingCursor;
+    }
+  /**
+   * 精确读取一条保留派发记录（IC-03 Extend；schema 17）。
+   *
+   * 目录页只给出 20 条身份，要展开其中某一条的授权/规格正文时按 `(workPackageId, orcaTaskId)` 精确取，
+   * 不为一条记录重读整页，更不退化成 Scope 全量 snapshot。
+   */
+  | {
+      readonly kind: 'graph-basis-binding';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly workPackageId: WorkPackageId;
+      readonly orcaTaskId: string;
+    }
+  /**
+   * 某个图（`graphId` + 代际）的批准授权目录（IC-03 Extend；schema 17）。每页最多 20 项，只读元数据。
+   *
+   * Work Package 的保留派发记录能带出它当年的原授权，但**没有工作包的图版本**（如纯候选代际）因此拿不到
+   * 任何批准依据。这一项补上这条路径：按 manifest 里的图指针把该图的历次批准列出来，正文再按
+   * `(authorizationId, authorizationVersion)` 精确范围读取。
+   */
+  | {
+      readonly kind: 'graph-basis-authorizations';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly graphId: GraphId;
+      readonly generation: GraphGeneration;
+      readonly after?: GraphAuthorizationCursor;
     }
   | { readonly kind: 'authorizations'; readonly coordinationScopeId: CoordinationScopeId }
   | {
@@ -844,6 +1013,35 @@ export type CoordinationQueryResult =
   | { readonly kind: 'wake-admissions'; readonly admissions: readonly WakeAdmissionRecord[] }
   | { readonly kind: 'graph-versions'; readonly versions: readonly GraphVersionRecord[] }
   | { readonly kind: 'graph-version'; readonly version: GraphVersionRecord | null }
+  | {
+      readonly kind: 'graph-version-index';
+      readonly items: readonly GraphVersionMetadata[];
+      readonly nextCursor: GraphVersionIndexCursor | null;
+    }
+  | { readonly kind: 'graph-head'; readonly version: GraphVersionRecord | null }
+  | { readonly kind: 'graph-version-membership'; readonly members: readonly GraphVersionMetadata[] }
+  /**
+   * `found: false` 表示这条依据正文不可读：记录不存在，或旧行从未保留正文（schema 17 之前没有这项
+   * 事实）。两种情况都按缺失呈现，调用方不得据此推断「内容为空」。
+   */
+  | {
+      readonly kind: 'graph-basis-range';
+      readonly found: boolean;
+      readonly text: string | null;
+      readonly byteLength: number;
+      readonly end: number;
+    }
+  | {
+      readonly kind: 'graph-basis-bindings';
+      readonly bindings: readonly MaterializationBindingRecord[];
+      readonly nextCursor: GraphBasisBindingCursor | null;
+    }
+  | { readonly kind: 'graph-basis-binding'; readonly binding: MaterializationBindingRecord | null }
+  | {
+      readonly kind: 'graph-basis-authorizations';
+      readonly items: readonly GraphAuthorizationRef[];
+      readonly nextCursor: GraphAuthorizationCursor | null;
+    }
   | { readonly kind: 'authorizations'; readonly authorizations: readonly ExecutionAuthorizationRecord[] }
   | { readonly kind: 'authorization'; readonly authorization: ExecutionAuthorizationRecord | null }
   | { readonly kind: 'planning-handoffs'; readonly handoffs: readonly PlanningHandoffRecord[] }
@@ -1026,6 +1224,14 @@ export type CoordinationCommand =
        * 记得为什么变、也没人记得该冻结谁」的中间态。
        */
       readonly patch: GraphVersionPatchInput | null;
+      /**
+       * 归一化后的原 Implementation Plan（IC-03 Extend；schema 17）。
+       *
+       * `initial` **必填**且必须与 `planRevision` 一致：编译依据与编译结果同事务落盘，之后才能按原样
+       * 回读。`accepted_revision` **必须为 `null`**——修订不重写原计划，同图的后续版本要读原计划时
+       * 沿 `graphId` 回到 v1 读。
+       */
+      readonly initialPlan: ImplementationPlan | null;
       /** 与 Graph Revision 同事务登记的独立基线补救需求。 */
       readonly baselineReconciliations?: readonly {
         readonly reconciliationId: string;

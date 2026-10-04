@@ -197,7 +197,7 @@ function providerArguments(
 }
 
 /**
- * 由模型配置生成 provider/model/effort/options 的全部 `-c`/`--model` 参数。
+ * 由模型配置生成 provider/model/effort/options 的全部 `-c` 参数，供 Worker 与 sandbox 共用。
  *
  * 顺序有安全含义：用户选项在前，固定身份（provider/model/effort）与凭据（env_key）在后，因此一个
  * `modelOptions` 不能改掉凭据来源或冒用固定模型。effort 只有在配置显式给出时才注入。
@@ -207,7 +207,7 @@ export function codexModelArguments(configuration: Readonly<WorkerModelConfigura
   return [
     ...optionArguments(configuration.connection.modelOptions),
     ...optionArguments(configuration.modelOptions),
-    '--model', configuration.model,
+    '-c', `model=${JSON.stringify(configuration.model)}`,
     ...providerArguments(configuration, CODEX_MANAGED_CREDENTIAL_ENV),
     ...(configuration.effort === null ? [] : ['-c', `${CODEX_EFFORT_KEY}=${JSON.stringify(configuration.effort)}`]),
   ];

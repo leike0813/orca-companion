@@ -134,6 +134,7 @@ export async function draftGraphPatch(input: DraftGraphPatchInput): Promise<Draf
  * 一律回显输入并在 Admission 处被丢弃，模型无法通过填写它们改变提交结果。
  */
 export function graphPatchPlannerInstruction(request: GraphPatchPlannerRequest): string {
+  const { changeInstruction, ...claims } = request.changeRequest;
   const descendants =
     request.unacceptedDescendantIds.length === 0
       ? ['- 本次没有需要处置的未接受后代，descendants 为空数组。']
@@ -152,7 +153,8 @@ export function graphPatchPlannerInstruction(request: GraphPatchPlannerRequest):
     '- retire 与 revise 都只允许当前图中尚未被接受的节点；revise 的 dependsOn 与 scopeEnvelope 都是绝对值。',
     '- 依赖必须无环，Scope Envelope 的 include 不得为空，路径必须是 worktree 相对路径。',
     '',
-    `变化声明：${JSON.stringify(request.changeRequest)}`,
+    `变化说明（由请求提供，不从身份或版本推断）：${changeInstruction}`,
+    `分类声明：${JSON.stringify(claims)}`,
     `当前图快照：${JSON.stringify(request.currentGraph)}`,
     '',
     '未接受后代必须逐一处置：',

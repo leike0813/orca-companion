@@ -58,6 +58,7 @@ import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store
 import { CODEX_MODEL_LAUNCHER_FILENAME } from '../../src/adapters/agents/codex-model-launcher.js';
 import { checkpointDatabasePath } from '../../src/bootstrap/coordinator-runtime.js';
 import { executionWorkerProfiles } from '../support/execution-harness.js';
+import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 import {
   projectConnectionsFixture,
   projectExecutionProfilesFixture,
@@ -111,7 +112,10 @@ type FakeOrca = {
   readonly verdict: { value: unknown };
 };
 
-function fakeOrca(options?: { readonly workerStartUnknown?: boolean | undefined }): FakeOrca {
+function fakeOrca(options?: {
+  readonly workerStartUnknown?: boolean | undefined;
+  readonly rejectedLifecycleFirst?: boolean | undefined;
+}): FakeOrca {
   const mutations: ExecutionMutation[] = [];
   const verdict = { value: null as unknown };
   const dispatchId = 'dispatch-finalizer';
@@ -162,6 +166,14 @@ function fakeOrca(options?: { readonly workerStartUnknown?: boolean | undefined 
                   return {
                     delivery: { deliveryId: 'delivery-finalizer', runId: RUN_ID },
                     messages: [
+                      ...(options?.rejectedLifecycleFirst === true ? [{
+                        messageId: 'message-finalizer-rejected',
+                        fromHandle: dispatchId,
+                        runId: null,
+                        payload: JSON.stringify({ taskId: FINALIZER_TASK, dispatchId, outcome: 'succeeded',
+                          _orcaLifecycleRejection: { code: 'dispatch_capability_invalid', reason: 'wrong pane' } }),
+                        body: 'Orca rejected this worker_done',
+                      }] : []),
                       {
                         messageId: 'message-finalizer',
                         fromHandle: dispatchId,
@@ -434,6 +446,7 @@ function prepareExecutionState(repository: string, head: string): void {
       coordinationScopeId: SCOPE,
       writer,
       graph,
+      initialPlan: implementationPlanFor(graph, 1),
       mapRevision: 1,
       planRevision: 1,
       orcaRunId: RUN_ID,
@@ -679,13 +692,15 @@ async function openHarness(options?: {
   readonly sessionBindingWindowMs?: number;
   /** 让 worker-start 只返回 unknown，验证宿主用 Orca 事实而不是回执完成对账。 */
   readonly workerStartUnknown?: boolean | undefined;
+  readonly rejectedLifecycleFirst?: boolean;
   /** 本机只读 Worker 能力；默认「可用」，与实际受限命令无关的用例因此不依赖主机沙箱。 */
   readonly readOnlyWorkerProbe?: ReadOnlyWorkerProbe;
 }): Promise<Harness> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-finalizer-'));
   const { repository, head } = prepareRepository(directory);
   prepareExecutionState(repository, head);
-  const fake = fakeOrca({ workerStartUnknown: options?.workerStartUnknown });
+  const fake = fakeOrca({ workerStartUnknown: options?.workerStartUnknown,
+    rejectedLifecycleFirst: options?.rejectedLifecycleFirst });
   const verdict = options?.verdict;
   const drift = options?.driftOnDispatch;
   const reportSessionStart = options?.reportSessionStart ?? true;
@@ -865,10 +880,10 @@ test('门禁满足时：以新的只读 Session 在 canonical worktree 派发，
   expect(harness.fake.mutations.filter((mutation) => mutation.operation === 'task-create')).toHaveLength(1);
 });
 
-test('真实 Orca 原生载荷：结论在 body 的 JSON 被接受，交付可呈现', { timeout: TEST_TIMEOUT_MS }, async () => {
+test.each([false, true])('真实 Orca 原生载荷：有效 JSON 结论被接受，先有拒绝诊断=%s', { timeout: TEST_TIMEOUT_MS }, async (rejectedLifecycleFirst) => {
   // 真实 Codex Worker 的 worker_done 只有传输身份，结论 JSON 在 body：宿主必须按宿主签发的
   // Orca Task/Dispatch 配对本体，而不是只看 Companion claimed 形状。
-  const harness = await openHarness({ verdict: JSON.stringify(DELIVERABLE_VERDICT) });
+  const harness = await openHarness({ verdict: JSON.stringify(DELIVERABLE_VERDICT), rejectedLifecycleFirst });
   await sendMessage(harness, '开始收尾');
   await waitFor(() => expect(workerStarts(harness)).toBe(1));
   await sendMessage(harness, '继续');

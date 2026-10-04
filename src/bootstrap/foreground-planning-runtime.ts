@@ -29,6 +29,7 @@ import type {
   CoordinationScopeId,
   CoordinatorSessionId,
   DispatchId,
+  GraphVersion,
   InteractionId,
   OperationId,
   PlanningCycleId,
@@ -302,6 +303,8 @@ import { bindCodexSessionFromStartReport, sessionBindingIdOf } from '../adapters
 import type { CodexSessionStartReport } from '../adapters/agents/codex-transcript.js';
 import type { HarnessSessionFacts } from '../adapters/agents/session-binding.js';
 import { createGitIntegrationPort } from '../adapters/git/integration.js';
+import { createGraphBasisService } from '../application/tui/graph-basis-service.js';
+import type { GraphBasisPort } from '../application/tui/graph-basis.js';
 import {
   createOpenSpecProvider,
 } from '../adapters/specification/openspec/provider.js';
@@ -716,15 +719,26 @@ export function unboundRoleDispatches(input: {
     ) {
       continue;
     }
-    const observation = input.observations.workers.find((worker) => worker.taskId === binding.orcaTaskId);
+    const observations = input.observations.workers.filter((worker) => worker.taskId === binding.orcaTaskId);
+    // 同一 Task 可有 Recovery/Retry 派发；原 launch 报告不能证明它们的运行身份。
+    // 首次补记只接受唯一的 Task 派发观察，已有绑定则不把原报告用于另一 Dispatch。
+    if (observations.length !== 1) {
+      continue;
+    }
+    const observation = observations[0];
     const worktreePath = input.observations.worktreePaths.get(binding.workPackageId);
     if (observation === undefined || worktreePath === undefined) {
       continue;
     }
-    const segmentId = input.segmentIdOf(observation.dispatchId, binding.attemptId);
-    if (input.segments.some((segment) => segment.segmentId === segmentId)) {
+    const boundSegments = input.segments.filter((segment) =>
+      segment.workPackageId === binding.workPackageId && segment.role === binding.role &&
+      segment.workerTaskId === binding.workerTaskId && segment.attemptId === binding.attemptId,
+    );
+    // 相同 Dispatch 已有 Segment；不同 Dispatch 则已证明该 launch 属于另一次运行。
+    if (boundSegments.length > 0) {
       continue;
     }
+    const segmentId = input.segmentIdOf(observation.dispatchId, binding.attemptId);
     unbound.push({
       workPackageId: binding.workPackageId,
       role: binding.role,
@@ -1598,11 +1612,12 @@ export async function createForegroundPlanningHost(
         };
       }
       const graphId = scope.graphId;
-      const versions = graphId === null ? null : activeStore.query({ kind: 'graph-versions', coordinationScopeId: scopeId, graphId });
       const candidateVersion = scope.graphVersion;
+      const candidateRead = graphId === null || candidateVersion === null ? null
+        : activeStore.query({ kind: 'graph-version', coordinationScopeId: scopeId, graphId, graphVersion: candidateVersion });
       const candidate =
-        versions !== null && versions.kind === 'graph-versions' && candidateVersion !== null
-          ? (versions.versions.find((version) => version.version === candidateVersion) ?? null)
+        candidateRead?.kind === 'graph-version'
+          ? candidateRead.version
           : null;
       return {
         kind: 'ok',
@@ -2627,6 +2642,13 @@ export async function createForegroundPlanningHost(
     readonly compaction: ControllerSnapshot['compaction'];
   } | null = null;
 
+  const graphMembership = (current: BranchCoordinationStore, scope: ScopeRecord, versions: readonly number[]): ReadonlySet<GraphVersion> => {
+    if (scope.graphId === null || scope.graphVersion === null) return new Set();
+    const result = current.query({ kind: 'graph-version-membership', coordinationScopeId: scope.coordinationScopeId,
+      graphId: scope.graphId, head: scope.graphVersion, versions: [...new Set(versions)] as GraphVersion[] });
+    return result.kind === 'graph-version-membership' ? new Set(result.members.map(entry => entry.version)) : new Set();
+  };
+
   const readSnapshot = async (selectedSessionId: string | null): Promise<SnapshotLoad> => {
     if (blocker !== null) {
       return { kind: 'failed', code: blocker.code, message: blocker.message };
@@ -2645,11 +2667,9 @@ export async function createForegroundPlanningHost(
     }
     const counters = current.query({ kind: 'budget-counters', coordinationScopeId: selectedScopeId });
     const graphId = snapshot.snapshot.scope.graphId;
-    const versions =
-      graphId === null
-        ? ({ kind: 'graph-versions', versions: [] } as const)
-        : current.query({ kind: 'graph-versions', coordinationScopeId: selectedScopeId, graphId });
     const scope = snapshot.snapshot.scope;
+    const currentRead = graphId === null || scope.graphVersion === null ? null
+      : current.query({ kind: 'graph-version', coordinationScopeId: selectedScopeId, graphId, graphVersion: scope.graphVersion });
     const authorizationRead = scope.authorizationId === null ? null : current.query({
       kind: 'authorization', coordinationScopeId: selectedScopeId, authorizationId: scope.authorizationId,
     });
@@ -2660,11 +2680,8 @@ export async function createForegroundPlanningHost(
       selectedSessionId === null
         ? null
         : (checkpointStoreForScope()?.loadCheckpoint(selectedSessionId as CoordinatorSessionId, 'metadata') ?? null);
-    const graphVersions = versions.kind === 'graph-versions' ? versions.versions : [];
-    const currentVersion =
-      graphId === null
-        ? null
-        : (graphVersions.find((version) => version.version === scope.graphVersion) ?? null);
+    const currentVersion = currentRead?.kind === 'graph-version' ? currentRead.version : null;
+    const graphVersions = currentVersion === null ? [] : [currentVersion];
     const generation =
       snapshot.snapshot.graphGenerations.find((entry) => entry.graphId === graphId) ?? null;
     const nodes =
@@ -2745,7 +2762,8 @@ export async function createForegroundPlanningHost(
         effectiveInputRevision: selectedLive?.effectiveInputRevision ?? null,
       }),
       acceptance: validatorAcceptanceSummary({ snapshot: snapshot.snapshot, graphVersion: currentVersion,
-        graphVersions, authorizations: acceptanceAuthorizations }),
+        graphVersions, authorizations: acceptanceAuthorizations,
+        approvedGraphVersions: graphMembership(current, scope, acceptanceAuthorizations.map(entry => entry.manifest.graph.version)) }),
       budgets: {
         workPackages: boundAuthorization === null || currentVersion === null ? unavailableBudget() : {
           status: 'available', consumed: currentVersion.graph.workPackages.length,
@@ -2780,6 +2798,7 @@ export async function createForegroundPlanningHost(
       maintenance: null,
       selectedSessionId: selectedSessionId as CoordinatorSessionId | null,
       graphVersions,
+      authorizedGraphVersions: graphMembership(current, scope, authorization === undefined ? [] : [authorization.manifest.graph.version]),
       authorizationGraphRef:
         authorization === undefined
           ? null
@@ -3613,14 +3632,12 @@ export async function createForegroundPlanningHost(
     if (current === null || scope === null) {
       return null;
     }
-    const versions =
-      scope.graphId === null
-        ? null
-        : current.query({ kind: 'graph-versions', coordinationScopeId: scope.coordinationScopeId, graphId: scope.graphId });
     const candidateVersion = scope.graphVersion;
+    const candidateRead = scope.graphId === null || candidateVersion === null ? null
+      : current.query({ kind: 'graph-version', coordinationScopeId: scope.coordinationScopeId, graphId: scope.graphId, graphVersion: candidateVersion });
     const candidate =
-      versions !== null && versions.kind === 'graph-versions' && candidateVersion !== null
-        ? (versions.versions.find((version) => version.version === candidateVersion) ?? null)
+      candidateRead?.kind === 'graph-version'
+        ? candidateRead.version
         : null;
     void session;
     return {
@@ -8683,6 +8700,45 @@ export async function createForegroundPlanningHost(
     ...(options.events === undefined ? {} : { events: options.events }),
   });
 
+  let basisService: { readonly scopeId: CoordinationScopeId; readonly store: BranchCoordinationStore; readonly port: GraphBasisPort } | null = null;
+  const basisPort = (): GraphBasisPort | null => {
+    const current = requireStore(), scopeId = selectedScopeId;
+    if (current === null || scopeId === null) return null;
+    if (basisService?.scopeId === scopeId && basisService.store === current) return basisService.port;
+    const providers = new Map<string, ReturnType<typeof createOpenSpecProvider>>();
+    const port = createGraphBasisService({
+      store: current, coordinationScopeId: scopeId, tracker: trackerFor(),
+      routeMapIssueRef: routeMapRef()?.id ?? null,
+      specification: async binding => {
+        if (binding.worktreeId === null || binding.specBinding === null) return null;
+        const backend = backendForExecution();
+        const canonical = canonicalWorktreePath;
+        if (backend === null || canonical === null) return null;
+        const listed = await backend.query({ operation: 'worktree-list', repo: 'path:' + canonical, limit: 1000 });
+        if (listed.kind !== 'accepted') return null;
+        const results = listed.value as WorktreeListResult;
+        const matches = results.worktrees.filter(entry => entry.worktreeId === binding.worktreeId);
+        if (matches.length !== 1) return null;
+        const match = matches[0]!;
+        const key = JSON.stringify([binding.worktreeId, match.path]);
+        const cached = providers.get(key);
+        if (cached !== undefined) return cached;
+        if (providers.size >= 64) providers.delete(providers.keys().next().value!);
+        const provider = createOpenSpecProvider({ resolveWorktreeRoot: worktreeId => worktreeId === binding.worktreeId ? match.path : null });
+        providers.set(key, provider);
+        return provider;
+      },
+    });
+    basisService = { scopeId, store: current, port };
+    return port;
+  };
+  const graphBasis: GraphBasisPort = {
+    listVersions: async request => await basisPort()?.listVersions(request) ?? { kind: 'unavailable', code: 'no_scope', message: '没有当前 Scope' },
+    readVersion: async request => await basisPort()?.readVersion(request) ?? { kind: 'unavailable', code: 'no_scope', message: '没有当前 Scope' },
+    listSources: async request => await basisPort()?.listSources(request) ?? { kind: 'unavailable', code: 'no_scope', message: '没有当前 Scope' },
+    readSource: async request => await basisPort()?.readSource(request) ?? { kind: 'unavailable', code: 'no_scope', message: '没有当前 Scope' },
+  };
+
   const ports: TuiPorts = {
     commandStatus: input => Promise.resolve().then(() => {
       const parsed=commandResultRefSchema.safeParse(input);
@@ -8762,6 +8818,7 @@ export async function createForegroundPlanningHost(
     },
     inputStore,
     projectDetails,
+    graphBasis,
     preferences: createTuiPreferencesStore({
       configHome: options.env['XDG_CONFIG_HOME'] && options.env['XDG_CONFIG_HOME'].length > 0
         ? options.env['XDG_CONFIG_HOME']

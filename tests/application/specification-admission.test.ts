@@ -35,6 +35,8 @@ import {
   countRequirements,
   resolveWithinWorktree,
 } from '../../src/adapters/specification/openspec/provider.js';
+import type { SpecificationProvider } from '../../src/application/ports/specification-provider.js';
+import { SPECIFICATION_BODY_MAX_BYTES } from '../../src/application/ports/specification-provider.js';
 import { specificationUnitNameFor } from '../../src/domain/task-contract.js';
 import { workPackageBudgetKey } from '../../src/domain/dispatch-candidate.js';
 import type { RoleAuthorities } from '../../src/domain/planning/execution-authorization.js';
@@ -524,4 +526,314 @@ test('Spec Binding 的身份来自内容摘要与版本，而不是路径', () =
   expect(sameContentOtherPath.relativePath).toBe('openspec/changes/y');
   expect(sameContentOtherPath.contentDigest).toBe('digest-1');
   expect(changedContent.contentDigest).toBe('digest-2');
+});
+
+/*
+ * Requirement「Bounded native specification reading」：只读浏览的目录、范围与来源变化判定。
+ * 断言只落在结构化错码、返回的身份与正文内容上，不锁内部实现。
+ */
+
+const LOCATOR = { worktreeId: WORKTREE_ID, relativePath: `openspec/changes/${CHANGE}` } as const;
+
+async function filesOf(provider: SpecificationProvider, contractRevision: number, after: string | null = null) {
+  const read = await provider.readFiles?.({ locator: LOCATOR, contractRevision, after });
+  if (read === undefined) {
+    throw new Error('OpenSpec provider 未实现只读目录');
+  }
+  return read;
+}
+
+async function rangeOf(
+  provider: SpecificationProvider,
+  contractRevision: number,
+  path: string,
+  offset: number,
+  maxBytes: number,
+  sourceVersion: string | null = null,
+) {
+  const read = await provider.readFileRange?.({
+    locator: LOCATOR,
+    contractRevision,
+    path,
+    offset,
+    maxBytes,
+    sourceVersion,
+  });
+  if (read === undefined) {
+    throw new Error('OpenSpec provider 未实现正文范围读取');
+  }
+  return read;
+}
+
+/** 目录与正文都以已接纳的 `SpecBinding.contractRevision` 为身份。 */
+async function admittedChange(changeName: string = CHANGE) {
+  const root = makeWorktree({ changeName });
+  const provider = providerFor({ [WORKTREE_ID]: root });
+  const result = await admitSpecification(
+    admissionInput({
+      provider,
+      declaration: {
+        role: 'planner',
+        producer: { kind: 'worker', role: 'planner', sessionBindingId: 'binding-1' },
+        workPackageId: WP,
+        worktreeId: WORKTREE_ID,
+        relativePath: `openspec/changes/${changeName}`,
+        declaredVersion: 1,
+      },
+    }),
+  );
+  if (result.kind !== 'admitted') {
+    throw new Error(`OpenSpec change 未被接纳: ${result.kind}`);
+  }
+  return {
+    provider,
+    root,
+    changeDir: join(root, 'openspec', 'changes', changeName),
+    contractRevision: result.specBinding.contractRevision,
+  };
+}
+
+test('只读目录按已接纳的契约版本分页，条目给出的路径就是正文 URI', async () => {
+  const unit = await admittedChange();
+  mkdirSync(join(unit.changeDir, 'evidence'), { recursive: true });
+  for (let index = 0; index < 25; index += 1) {
+    writeFileSync(join(unit.changeDir, 'evidence', `note-${index}.md`), `证据 ${index}\n`, 'utf8');
+  }
+
+  const first = await filesOf(unit.provider, unit.contractRevision);
+  if (first.kind !== 'read') {
+    throw new Error('目录读取应成功');
+  }
+  expect(first.value.items).toHaveLength(20);
+  expect(first.value.nextCursor).not.toBeNull();
+  expect(first.value.items.every((item) => item.sourceVersion.length > 0 && item.byteLength > 0)).toBe(true);
+
+  const second = await filesOf(unit.provider, unit.contractRevision, first.value.nextCursor);
+  if (second.kind !== 'read') {
+    throw new Error('目录续读应成功');
+  }
+  expect(second.value.items).toHaveLength(9);
+  expect(second.value.nextCursor).toBeNull();
+  const all = [...first.value.items, ...second.value.items];
+  expect(new Set(all.map((item) => item.path)).size).toBe(29);
+
+  const entry = all.find((item) => item.path === 'specs/execution/spec.md');
+  expect(entry).toBeDefined();
+  const body = await rangeOf(
+    unit.provider,
+    unit.contractRevision,
+    'specs/execution/spec.md',
+    0,
+    SPECIFICATION_BODY_MAX_BYTES,
+    entry?.sourceVersion ?? null,
+  );
+  expect(body.kind === 'read' && body.value.text).toContain('### Requirement: 例子行为');
+});
+
+test('tasks 追踪变化不改契约工件，tasks.md 自己换版本', async () => {
+  const unit = await admittedChange();
+  const before = await filesOf(unit.provider, unit.contractRevision);
+  if (before.kind !== 'read') {
+    throw new Error('目录读取应成功');
+  }
+  const tasksBefore = before.value.items.find((item) => item.path === 'tasks.md');
+  const specBefore = before.value.items.find((item) => item.path === 'specs/execution/spec.md');
+
+  // 只改追踪：契约工件一个字节都没动，绑定必须继续成立。
+  writeFileSync(
+    join(unit.changeDir, 'tasks.md'),
+    ['## 1. 实现', '', '- [x] 1.1 已完成', '- [x] 1.2 未完成', '- [x] 1.3 复验完成', ''].join('\n'),
+    'utf8',
+  );
+
+  const after = await filesOf(unit.provider, unit.contractRevision);
+  if (after.kind !== 'read') {
+    throw new Error('追踪变化后契约绑定仍应可读');
+  }
+  const tasksAfter = after.value.items.find((item) => item.path === 'tasks.md');
+  const specAfter = after.value.items.find((item) => item.path === 'specs/execution/spec.md');
+  expect(tasksAfter?.sourceVersion).not.toBe(tasksBefore?.sourceVersion);
+  expect(specAfter?.sourceVersion).toBe(specBefore?.sourceVersion);
+
+  const spec = await rangeOf(
+    unit.provider,
+    unit.contractRevision,
+    'specs/execution/spec.md',
+    0,
+    SPECIFICATION_BODY_MAX_BYTES,
+    specBefore?.sourceVersion ?? null,
+  );
+  expect(spec.kind).toBe('read');
+
+  const stale = await rangeOf(
+    unit.provider,
+    unit.contractRevision,
+    'tasks.md',
+    0,
+    SPECIFICATION_BODY_MAX_BYTES,
+    tasksBefore?.sourceVersion ?? null,
+  );
+  expect(stale.kind === 'rejected' && stale.failure.code).toBe('source_version_stale');
+
+  const fresh = await rangeOf(unit.provider, unit.contractRevision, 'tasks.md', 0, SPECIFICATION_BODY_MAX_BYTES);
+  expect(fresh.kind === 'read' && fresh.value.sourceVersion).toBe(tasksAfter?.sourceVersion);
+});
+
+test('契约内容变化后按旧绑定读取被拒绝，按新版本可读', async () => {
+  const unit = await admittedChange();
+  writeFileSync(
+    join(unit.changeDir, 'specs', 'execution', 'spec.md'),
+    ['## ADDED Requirements', '', '### Requirement: 例子行为', '', '行为应当成立，并且留下证据。', ''].join('\n'),
+    'utf8',
+  );
+
+  const listed = await filesOf(unit.provider, unit.contractRevision);
+  expect(listed.kind === 'rejected' && listed.failure.code).toBe('contract_revision_changed');
+
+  const ranged = await rangeOf(unit.provider, unit.contractRevision, 'specs/execution/spec.md', 0, 1024);
+  expect(ranged.kind === 'rejected' && ranged.failure.code).toBe('contract_revision_changed');
+
+  const reopened = await unit.provider.readUnit(LOCATOR);
+  if (reopened.kind !== 'read') {
+    throw new Error('读取新版本应成功');
+  }
+  const body = await rangeOf(
+    unit.provider,
+    reopened.value.contractRevision,
+    'specs/execution/spec.md',
+    0,
+    1024,
+  );
+  expect(body.kind === 'read' && body.value.text).toContain('行为应当成立，并且留下证据。');
+});
+
+test('越界、绝对路径与符号链接一律拒绝，未列出的 unit 内文件也不暴露', async () => {
+  const unit = await admittedChange();
+  writeFileSync(join(unit.root, 'outside.md'), 'worktree 内、unit 之外\n', 'utf8');
+  symlinkSync(join(unit.root, 'outside.md'), join(unit.changeDir, 'leak.md'));
+  symlinkSync(join(unit.changeDir, 'tasks.md'), join(unit.changeDir, 'alias.md'));
+
+  const listed = await filesOf(unit.provider, unit.contractRevision);
+  if (listed.kind !== 'read') {
+    throw new Error('目录读取应成功');
+  }
+  const paths = listed.value.items.map((item) => item.path);
+  expect(paths).not.toContain('leak.md');
+  expect(paths).not.toContain('alias.md');
+
+  for (const path of ['../design.md', '/etc/hostname', 'leak.md']) {
+    const read = await rangeOf(unit.provider, unit.contractRevision, path, 0, 1024);
+    expect(read.kind === 'rejected' && read.failure.code).toBe('unit_outside_worktree');
+  }
+  // unit 内的符号链接指向已列出的工件也不放行：目录是这次阅读认定的工件集合。
+  const unlisted = await rangeOf(unit.provider, unit.contractRevision, 'alias.md', 0, 1024);
+  expect(unlisted.kind === 'rejected' && unlisted.failure.code).toBe('file_not_in_unit');
+  for (const path of ['evidence', 'not-a-file.md']) {
+    const read = await rangeOf(unit.provider, unit.contractRevision, path, 0, 1024);
+    expect(read.kind === 'rejected' && read.failure.code).toBe('file_absent');
+  }
+});
+
+test('大正文按 64 KiB 跨块分页完整读出，中文不被切断', async () => {
+  const unit = await admittedChange();
+  mkdirSync(join(unit.changeDir, 'evidence'), { recursive: true });
+  const body = `${'中文正文证据。'.repeat(60_000)}\n`;
+  writeFileSync(join(unit.changeDir, 'evidence', 'long.md'), body, 'utf8');
+  const badOffset = await rangeOf(unit.provider, unit.contractRevision, 'evidence/long.md', 1, 1024);
+  expect(badOffset.kind === 'rejected' && badOffset.failure.code).toBe('range_invalid');
+
+  const listed = await filesOf(unit.provider, unit.contractRevision);
+  if (listed.kind !== 'read') {
+    throw new Error('目录读取应成功');
+  }
+  const entry = listed.value.items.find((item) => item.path === 'evidence/long.md');
+  expect(entry?.byteLength).toBe(Buffer.byteLength(body, 'utf8'));
+
+  const pages: string[] = [];
+  let offset = 0;
+  let sourceVersion: string | null = entry?.sourceVersion ?? null;
+  for (let turn = 0; turn < 20 && offset < (entry?.byteLength ?? 0); turn += 1) {
+    const page = await rangeOf(
+      unit.provider,
+      unit.contractRevision,
+      'evidence/long.md',
+      offset,
+      SPECIFICATION_BODY_MAX_BYTES,
+      sourceVersion,
+    );
+    if (page.kind !== 'read') {
+      throw new Error(`第 ${turn + 1} 页读取失败`);
+    }
+    pages.push(page.value.text);
+    expect(page.value.byteLength).toBe(entry?.byteLength);
+    offset = page.value.end;
+    sourceVersion = page.value.sourceVersion;
+  }
+  const joined = pages.join('');
+  expect(joined).toBe(body);
+  expect(joined).not.toContain('\uFFFD');
+  expect(offset).toBe(entry?.byteLength);
+  writeFileSync(join(unit.changeDir, 'evidence', 'invalid.md'), Buffer.from([0x41, 0xe4, 0xb8]));
+  const invalidUtf8 = await rangeOf(unit.provider, unit.contractRevision, 'evidence/invalid.md', 0, 1024);
+  expect(invalidUtf8.kind).toBe('rejected');
+});
+
+test('正文上限、范围参数与不可解析的绑定各自明确拒绝', async () => {
+  const unit = await admittedChange();
+
+  const tooLarge = await rangeOf(
+    unit.provider,
+    unit.contractRevision,
+    'proposal.md',
+    0,
+    SPECIFICATION_BODY_MAX_BYTES + 1,
+  );
+  expect(tooLarge.kind === 'rejected' && tooLarge.failure.code).toBe('body_limit_exceeded');
+
+  const invalidRanges: ReadonlyArray<readonly [number, number]> = [
+    [-1, 1024],
+    [0, 0],
+    [0, 3],
+  ];
+  for (const [offset, maxBytes] of invalidRanges) {
+    const invalid = await rangeOf(unit.provider, unit.contractRevision, 'proposal.md', offset, maxBytes);
+    expect(invalid.kind === 'rejected' && invalid.failure.code).toBe('range_invalid');
+  }
+
+  const badRevision = await filesOf(unit.provider, -1);
+  expect(badRevision.kind === 'rejected' && badRevision.failure.code).toBe('contract_revision_invalid');
+
+  const beyond = await rangeOf(unit.provider, unit.contractRevision, 'proposal.md', 10_000_000, 1024);
+  expect(beyond.kind === 'rejected' && beyond.failure.code).toBe('range_invalid');
+});
+
+test('归档后的同一 unit 仍可按原绑定阅读，同名歧义不选', async () => {
+  const unit = await admittedChange();
+  const archiveRoot = join(unit.root, 'openspec', 'changes', 'archive');
+  mkdirSync(archiveRoot, { recursive: true });
+  renameSync(unit.changeDir, join(archiveRoot, `2026-09-24-${CHANGE}`));
+
+  const archived = await filesOf(unit.provider, unit.contractRevision);
+  if (archived.kind !== 'read') {
+    throw new Error('归档后仍应可读');
+  }
+  expect(archived.value.items.map((item) => item.path)).toContain('specs/execution/spec.md');
+
+  mkdirSync(join(archiveRoot, `2026-09-25-${CHANGE}`), { recursive: true });
+  const ambiguous = await filesOf(providerFor({ [WORKTREE_ID]: unit.root }), unit.contractRevision);
+  expect(ambiguous.kind === 'rejected' && ambiguous.failure.code).toBe('unit_ambiguous');
+});
+
+test('worktree 解析不出与 unit 消失各自明确拒绝', async () => {
+  const unit = await admittedChange();
+  const unresolved = await providerFor({}).readFiles?.({
+    locator: LOCATOR,
+    contractRevision: unit.contractRevision,
+    after: null,
+  });
+  expect(unresolved?.kind === 'rejected' && unresolved.failure.code).toBe('worktree_unresolved');
+
+  rmSync(unit.changeDir, { recursive: true, force: true });
+  const absent = await filesOf(unit.provider, unit.contractRevision);
+  expect(absent.kind === 'rejected' && absent.failure.code).toBe('unit_absent');
 });

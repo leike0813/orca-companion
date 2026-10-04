@@ -1,6 +1,6 @@
 # 第七批项目资料与状态栏证据
 
-实现 change：[complete-tui-project-statusline](../../openspec/changes/complete-tui-project-statusline/implementation-plan.md)，基线 `82f6a77`。12/12任务、画面采集和最终检查已完成，[独立gpt-6-luna验收PASS](../../openspec/changes/complete-tui-project-statusline/verification.md)；实现尚未提交或归档。
+实现 change：[complete-tui-project-statusline](../../openspec/changes/archive/2026-10-04-complete-tui-project-statusline/implementation-plan.md)，基线 `82f6a77`；已归档并包含于 `41b2f1e`。12/12任务、画面采集和该批最终检查已完成；[历史独立验收](../../openspec/changes/archive/2026-10-04-complete-tui-project-statusline/verification.md)记录的是该批自身范围。
 
 生产画面使用构建后的 `TuiApp`，`capture.mjs` 通过真实 PTY 挂载独立 fixture 端口，偏好使用真实 storage adapter 与临时配置目录；不会读取用户偏好或连接 provider、tracker、Orca。metadata、context 及验收数量明确为示例；可信生产接线另由宿主测试验证。`preview-ports.mjs` 只在显式隔离预览开关启用。
 

@@ -1,0 +1,13 @@
+{
+  "args": [
+    "terminal",
+    "close",
+    "--worktree",
+    "id:cc34045a-e6c3-413a-a720-3623863ebc48::/home/joshua/Workspace/Artifact/orca-companion-ip05-cutover-20261004b",
+    "--all",
+    "--json"
+  ],
+  "status": 0,
+  "stdout": "{\n  \"id\": \"de210f6b-c721-4086-8938-a6b07e54a23f\",\n  \"ok\": true,\n  \"result\": {\n    \"closed\": 1,\n    \"stopped\": 1,\n    \"retiredSurfaces\": true\n  },\n  \"_meta\": {\n    \"runtimeId\": \"34627582-8e2e-49de-b4eb-58b0b159cbd0\"\n  }\n}\n",
+  "stderr": ""
+}

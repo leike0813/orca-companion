@@ -92,6 +92,8 @@ export type SeedRealExecutionScopeInput = {
   readonly workspace: string;
   /** 专用 Orca 身份：与宿主同一约定，只接受显式声明的句柄。 */
   readonly identity: string;
+  /** Optional isolated acceptance scope; omitted by other callers to preserve their stable fixture identities. */
+  readonly coordinationScopeId?: string;
   readonly objective: string;
   readonly env: Record<string, string>;
   readonly plan?: RealLoopPlan;
@@ -133,9 +135,12 @@ export async function seedRealExecutionScope(
     if (scopes.scopes.length !== 0) {
       throw new Error('播种需要尚无 Scope 的隔离项目');
     }
-    const coordinationScopeId = 'e2e-loop-scope' as CoordinationScopeId;
-    const coordinatorSessionId = 'e2e-loop-session' as CoordinatorSessionId;
-    const planningCycleId = 'e2e-loop-cycle' as PlanningCycleId;
+    const scopeSuffix = input.coordinationScopeId;
+    if (scopeSuffix === 'e2e-loop-scope') throw new Error('isolated acceptance scope must not reuse e2e-loop-scope');
+    const coordinationScopeId = (scopeSuffix ?? 'e2e-loop-scope') as CoordinationScopeId;
+    const coordinatorSessionId = (scopeSuffix === undefined ? 'e2e-loop-session' : `${scopeSuffix}-session`) as CoordinatorSessionId;
+    const planningCycleId = (scopeSuffix === undefined ? 'e2e-loop-cycle' : `${scopeSuffix}-cycle`) as PlanningCycleId;
+    const runtimeIncarnationId = (scopeSuffix === undefined ? 'e2e-loop-incarnation' : `${scopeSuffix}-incarnation`) as RuntimeIncarnationId;
     // Scope 身份绑定 (repository, ref, canonical worktree)：分支名从 Git 读，不写死在夹具里。
     const fullBranchRef = requireCompleted(
       await runProcess({
@@ -162,7 +167,7 @@ export async function seedRealExecutionScope(
     const lease = acquireRuntimeLease(store, {
       coordinationScopeId,
       coordinatorSessionId,
-      runtimeIncarnationId: 'e2e-loop-incarnation' as RuntimeIncarnationId,
+      runtimeIncarnationId,
       fencingGeneration: 0,
     });
     if (lease.kind !== 'acquired') {
@@ -170,7 +175,7 @@ export async function seedRealExecutionScope(
     }
     const writer: CoordinationWriter = {
       coordinatorSessionId,
-      runtimeIncarnationId: 'e2e-loop-incarnation' as RuntimeIncarnationId,
+      runtimeIncarnationId,
       fencingGeneration: lease.lease.fencingGeneration,
     };
     const baselineHead = requireCompleted(

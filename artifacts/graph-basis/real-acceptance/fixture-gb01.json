@@ -1,0 +1,12 @@
+{
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-gb01",
+  "name": "gb01",
+  "baselineHead": "75370f83ca6ae87858ee64f8f4d3259f3f790e12",
+  "integrationRef": "gb01-integration",
+  "integrationRemote": "https://github.com/leike0813/orca-companion-test",
+  "identity": "term_c45a5349-e570-4ee8-9390-249c782d9aa4",
+  "credentialRef": "1371b2ba-8a94-4efb-ba2a-ad1dc3e5d408",
+  "credentialStorePath": "/home/joshua/Workspace/Artifact/orca-companion-gb01-xdg/orca-companion/credentials.json",
+  "acceptanceModel": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke"
+}

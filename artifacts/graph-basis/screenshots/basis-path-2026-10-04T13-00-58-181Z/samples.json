@@ -1,0 +1,1442 @@
+[
+  {
+    "label": "workspace-baseline",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-baseline-120x40-color-nerd.png",
+    "text": "workspace-baseline-120x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P51-project-work-detail",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-work-detail-120x40-color-nerd.png",
+    "text": "P51-project-work-detail-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-to-graph-basis",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-to-graph-basis-120x40-color-nerd.png",
+    "text": "P51-project-to-graph-basis-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-source-directory",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-source-directory-120x40-color-nerd.png",
+    "text": "P43-project-basis-source-directory-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-120x40-color-nerd.png",
+    "text": "P43-project-basis-body-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-80x24-color-nerd.png",
+    "text": "P43-project-basis-body-resize-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-50x40-color-nerd.png",
+    "text": "P43-project-basis-body-resize-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-120x40-color-nerd.png",
+    "text": "P43-project-basis-body-resize-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-baseline-120x40-color-ascii.png",
+    "text": "workspace-baseline-120x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P51-project-work-detail",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-work-detail-120x40-color-ascii.png",
+    "text": "P51-project-work-detail-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-to-graph-basis",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-to-graph-basis-120x40-color-ascii.png",
+    "text": "P51-project-to-graph-basis-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-source-directory",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-source-directory-120x40-color-ascii.png",
+    "text": "P43-project-basis-source-directory-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-120x40-color-ascii.png",
+    "text": "P43-project-basis-body-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-80x24-color-ascii.png",
+    "text": "P43-project-basis-body-resize-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-50x40-color-ascii.png",
+    "text": "P43-project-basis-body-resize-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-120x40-color-ascii.png",
+    "text": "P43-project-basis-body-resize-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-baseline-120x40-no-color-nerd.png",
+    "text": "workspace-baseline-120x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P51-project-work-detail",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-work-detail-120x40-no-color-nerd.png",
+    "text": "P51-project-work-detail-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-to-graph-basis",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-to-graph-basis-120x40-no-color-nerd.png",
+    "text": "P51-project-to-graph-basis-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-source-directory",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-source-directory-120x40-no-color-nerd.png",
+    "text": "P43-project-basis-source-directory-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-120x40-no-color-nerd.png",
+    "text": "P43-project-basis-body-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-80x24-no-color-nerd.png",
+    "text": "P43-project-basis-body-resize-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-50x40-no-color-nerd.png",
+    "text": "P43-project-basis-body-resize-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-120x40-no-color-nerd.png",
+    "text": "P43-project-basis-body-resize-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-baseline-120x40-no-color-ascii.png",
+    "text": "workspace-baseline-120x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P51-project-work-detail",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-work-detail-120x40-no-color-ascii.png",
+    "text": "P51-project-work-detail-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-to-graph-basis",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-to-graph-basis-120x40-no-color-ascii.png",
+    "text": "P51-project-to-graph-basis-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-source-directory",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-source-directory-120x40-no-color-ascii.png",
+    "text": "P43-project-basis-source-directory-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-120x40-no-color-ascii.png",
+    "text": "P43-project-basis-body-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-80x24-no-color-ascii.png",
+    "text": "P43-project-basis-body-resize-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-50x40-no-color-ascii.png",
+    "text": "P43-project-basis-body-resize-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-120x40-no-color-ascii.png",
+    "text": "P43-project-basis-body-resize-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-baseline-80x24-color-nerd.png",
+    "text": "workspace-baseline-80x24-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "label": "P51-project-work-detail",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-work-detail-80x24-color-nerd.png",
+    "text": "P51-project-work-detail-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-to-graph-basis",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-to-graph-basis-80x24-color-nerd.png",
+    "text": "P51-project-to-graph-basis-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-source-directory",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-source-directory-80x24-color-nerd.png",
+    "text": "P43-project-basis-source-directory-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-80x24-color-nerd.png",
+    "text": "P43-project-basis-body-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-80x24-color-nerd.png",
+    "text": "P43-project-basis-body-resize-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-50x40-color-nerd.png",
+    "text": "P43-project-basis-body-resize-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-120x40-color-nerd.png",
+    "text": "P43-project-basis-body-resize-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-baseline-80x24-color-ascii.png",
+    "text": "workspace-baseline-80x24-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "label": "P51-project-work-detail",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-work-detail-80x24-color-ascii.png",
+    "text": "P51-project-work-detail-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-to-graph-basis",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-to-graph-basis-80x24-color-ascii.png",
+    "text": "P51-project-to-graph-basis-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-source-directory",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-source-directory-80x24-color-ascii.png",
+    "text": "P43-project-basis-source-directory-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-80x24-color-ascii.png",
+    "text": "P43-project-basis-body-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-80x24-color-ascii.png",
+    "text": "P43-project-basis-body-resize-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-50x40-color-ascii.png",
+    "text": "P43-project-basis-body-resize-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-120x40-color-ascii.png",
+    "text": "P43-project-basis-body-resize-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-baseline-80x24-no-color-nerd.png",
+    "text": "workspace-baseline-80x24-no-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "label": "P51-project-work-detail",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-work-detail-80x24-no-color-nerd.png",
+    "text": "P51-project-work-detail-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-to-graph-basis",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-to-graph-basis-80x24-no-color-nerd.png",
+    "text": "P51-project-to-graph-basis-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-source-directory",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-source-directory-80x24-no-color-nerd.png",
+    "text": "P43-project-basis-source-directory-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-80x24-no-color-nerd.png",
+    "text": "P43-project-basis-body-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-80x24-no-color-nerd.png",
+    "text": "P43-project-basis-body-resize-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-50x40-no-color-nerd.png",
+    "text": "P43-project-basis-body-resize-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-120x40-no-color-nerd.png",
+    "text": "P43-project-basis-body-resize-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-baseline-80x24-no-color-ascii.png",
+    "text": "workspace-baseline-80x24-no-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "label": "P51-project-work-detail",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-work-detail-80x24-no-color-ascii.png",
+    "text": "P51-project-work-detail-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-to-graph-basis",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-to-graph-basis-80x24-no-color-ascii.png",
+    "text": "P51-project-to-graph-basis-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-source-directory",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-source-directory-80x24-no-color-ascii.png",
+    "text": "P43-project-basis-source-directory-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-80x24-no-color-ascii.png",
+    "text": "P43-project-basis-body-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-80x24-no-color-ascii.png",
+    "text": "P43-project-basis-body-resize-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-50x40-no-color-ascii.png",
+    "text": "P43-project-basis-body-resize-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-120x40-no-color-ascii.png",
+    "text": "P43-project-basis-body-resize-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-baseline-50x40-color-nerd.png",
+    "text": "workspace-baseline-50x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P51-project-work-detail",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-work-detail-50x40-color-nerd.png",
+    "text": "P51-project-work-detail-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-to-graph-basis",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-to-graph-basis-50x40-color-nerd.png",
+    "text": "P51-project-to-graph-basis-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-source-directory",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-source-directory-50x40-color-nerd.png",
+    "text": "P43-project-basis-source-directory-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-50x40-color-nerd.png",
+    "text": "P43-project-basis-body-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-80x24-color-nerd.png",
+    "text": "P43-project-basis-body-resize-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-50x40-color-nerd.png",
+    "text": "P43-project-basis-body-resize-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-120x40-color-nerd.png",
+    "text": "P43-project-basis-body-resize-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-baseline-50x40-color-ascii.png",
+    "text": "workspace-baseline-50x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P51-project-work-detail",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-work-detail-50x40-color-ascii.png",
+    "text": "P51-project-work-detail-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-to-graph-basis",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-to-graph-basis-50x40-color-ascii.png",
+    "text": "P51-project-to-graph-basis-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-source-directory",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-source-directory-50x40-color-ascii.png",
+    "text": "P43-project-basis-source-directory-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-50x40-color-ascii.png",
+    "text": "P43-project-basis-body-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-80x24-color-ascii.png",
+    "text": "P43-project-basis-body-resize-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-50x40-color-ascii.png",
+    "text": "P43-project-basis-body-resize-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-120x40-color-ascii.png",
+    "text": "P43-project-basis-body-resize-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-baseline-50x40-no-color-nerd.png",
+    "text": "workspace-baseline-50x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P51-project-work-detail",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-work-detail-50x40-no-color-nerd.png",
+    "text": "P51-project-work-detail-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-to-graph-basis",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-to-graph-basis-50x40-no-color-nerd.png",
+    "text": "P51-project-to-graph-basis-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-source-directory",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-source-directory-50x40-no-color-nerd.png",
+    "text": "P43-project-basis-source-directory-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-50x40-no-color-nerd.png",
+    "text": "P43-project-basis-body-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-80x24-no-color-nerd.png",
+    "text": "P43-project-basis-body-resize-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-50x40-no-color-nerd.png",
+    "text": "P43-project-basis-body-resize-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P43-project-basis-body-resize-120x40-no-color-nerd.png",
+    "text": "P43-project-basis-body-resize-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-baseline-50x40-no-color-ascii.png",
+    "text": "workspace-baseline-50x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P51-project-work-detail",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-work-detail-50x40-no-color-ascii.png",
+    "text": "P51-project-work-detail-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-to-graph-basis",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-to-graph-basis-50x40-no-color-ascii.png",
+    "text": "P51-project-to-graph-basis-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-source-directory",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-source-directory-50x40-no-color-ascii.png",
+    "text": "P43-project-basis-source-directory-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-50x40-no-color-ascii.png",
+    "text": "P43-project-basis-body-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-80x24-no-color-ascii.png",
+    "text": "P43-project-basis-body-resize-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-50x40-no-color-ascii.png",
+    "text": "P43-project-basis-body-resize-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P43-project-basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P43-project-basis-body-resize-120x40-no-color-ascii.png",
+    "text": "P43-project-basis-body-resize-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  }
+]

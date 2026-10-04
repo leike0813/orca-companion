@@ -1,0 +1,40 @@
+示例仓库 · main · session-a · 执行 · active · 待答0
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ 图版本历史                                                                                                           │
+│ 目录入口 › 版本目录                                                                                                  │
+│ › ›当前 G2·v1 scope-1#g2 · 初始图                                                                                    │
+│   代际状态 active · map 25 · plan 26 · run fixture-run-2                                                             │
+│    历史 G1·v24 scope-1#g1 · 已接受修订 fixture-patch-24                                                              │
+│   代际状态 frozen · map 25 · plan 26 · run run-1                                                                     │
+│    历史 G1·v23 scope-1#g1 · 已接受修订 fixture-patch-23                                                              │
+│   代际状态 frozen · map 24 · plan 25 · run run-1                                                                     │
+│    历史 G1·v22 scope-1#g1 · 已接受修订 fixture-patch-22                                                              │
+│   代际状态 frozen · map 23 · plan 24 · run run-1                                                                     │
+│    历史 G1·v21 scope-1#g1 · 已接受修订 fixture-patch-21                                                              │
+│   代际状态 frozen · map 22 · plan 23 · run run-1                                                                     │
+│    历史 G1·v20 scope-1#g1 · 已接受修订 fixture-patch-20                                                              │
+│   代际状态 frozen · map 21 · plan 22 · run run-1                                                                     │
+│    历史 G1·v19 scope-1#g1 · 已接受修订 fixture-patch-19                                                              │
+│   代际状态 frozen · map 20 · plan 21 · run run-1                                                                     │
+│    历史 G1·v18 scope-1#g1 · 已接受修订 fixture-patch-18                                                              │
+│   代际状态 frozen · map 19 · plan 20 · run run-1                                                                     │
+│    历史 G1·v17 scope-1#g1 · 已接受修订 fixture-patch-17                                                              │
+│   代际状态 frozen · map 18 · plan 19 · run run-1                                                                     │
+│    历史 G1·v16 scope-1#g1 · 已接受修订 fixture-patch-16                                                              │
+│   代际状态 frozen · map 17 · plan 18 · run run-1                                                                     │
+│    历史 G1·v15 scope-1#g1 · 已接受修订 fixture-patch-15                                                              │
+│   代际状态 frozen · map 16 · plan 17 · run run-1                                                                     │
+│    历史 G1·v14 scope-1#g1 · 已接受修订 fixture-patch-14                                                              │
+│   代际状态 frozen · map 15 · plan 16 · run run-1                                                                     │
+│    历史 G1·v13 scope-1#g1 · 已接受修订 fixture-patch-13                                                              │
+│   代际状态 frozen · map 14 · plan 15 · run run-1                                                                     │
+│    历史 G1·v12 scope-1#g1 · 已接受修订 fixture-patch-12                                                              │
+│   代际状态 frozen · map 13 · plan 14 · run run-1                                                                     │
+│    历史 G1·v11 scope-1#g1 · 已接受修订 fixture-patch-11                                                              │
+│   代际状态 frozen · map 12 · plan 13 · run run-1                                                                     │
+│    历史 G1·v10 scope-1#g1 · 已接受修订 fixture-patch-10                                                              │
+│   代际状态 frozen · map 11 · plan 12 · run run-1                                                                     │
+│ ↑↓ 选择 · Enter 打开该版 · PgUp/PgDn 翻页 · Esc 返回                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+

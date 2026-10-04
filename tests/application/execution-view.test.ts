@@ -1402,4 +1402,36 @@ describe('whole-graph Validator acceptance', () => {
       authorizations: [authorization(3)],
     })?.validatedCount).toBe(0);
   });
+
+  test.each([true, false])('真实 Dispatch 由精确 Session Segment 核验（verifiable=%s）', verifiable => {
+    const materialized = binding('package-a', 'task-a', 1);
+    const accepted = { ...settlement('package-a', 'task-a', 1), dispatchId: 'ctx-real' as DispatchId };
+    const segment = { ...makeSegment({ workPackageId: 'package-a', role: 'validator',
+      workerTaskId: materialized.workerTaskId!, attemptId: materialized.attemptId!, dispatchId: 'ctx-real' }), verifiable };
+    const current = graphVersion(1, null, ['package-a']);
+    expect(validatorAcceptanceSummary({ snapshot: snapshot({ materializationBindings: [materialized],
+      deliverySettlements: [accepted], sessionSegments: [segment] }), graphVersion: current,
+      graphVersions: [current], authorizations: [authorization(1)] })?.validatedCount).toBe(verifiable ? 1 : 0);
+  });
+
+  test('注入存储的链成员事实后按该集合判定，且不需要整条历史记录', () => {
+    const current = graphVersion(2, 1, ['package-a']);
+    const acceptanceSnapshot = snapshot({
+      materializationBindings: [binding('package-a', 'task-a', 1)],
+      deliverySettlements: [settlement('package-a', 'task-a', 1)],
+    });
+    const summary = (approvedGraphVersions: ReadonlySet<GraphVersion>) =>
+      validatorAcceptanceSummary({
+        snapshot: acceptanceSnapshot,
+        graphVersion: current,
+        // 历史记录只留当前版本：链成员由存储单独证明，不靠读全链重算。
+        graphVersions: [current],
+        authorizations: [authorization(1)],
+        approvedGraphVersions,
+      });
+
+    expect(summary(new Set<GraphVersion>([1 as GraphVersion, 2 as GraphVersion]))?.validatedCount).toBe(1);
+    // v1 不在链上（例如该记录已不属于本图链）时，即使授权本身有效也不算验收。
+    expect(summary(new Set<GraphVersion>([2 as GraphVersion]))?.validatedCount).toBe(0);
+  });
 });

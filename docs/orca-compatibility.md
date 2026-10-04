@@ -29,6 +29,14 @@
 
 ## 已核验
 
+### 第八批当前运行时观察（2026-10-04）
+
+Orca CLI 为 1.4.218，Codex 隔离验收为 0.159.0-alpha.3。早期现场显式绑定 `gpt-6-luna`；用户随后指定新现场使用 `minimax-cn/MiniMax-M3.1-Flash-Preview`，旧现场保持原授权绑定。前述 1.4.198 环境和历史结论保留各自范围，submodule 未升级。隔离 [gpt doctor 报告](../artifacts/graph-basis/real-acceptance/doctor-ip05-exec-20261004e.json) 与 [MiniMax doctor 报告](../artifacts/graph-basis/real-acceptance/doctor-ip05-recovery-20261004m-retry.json) 核验了公开命令、四项 M0 能力、Coordinator 模型能力与只读 Worker。
+
+当前公开 `worker-show` 的 `worker.agentTerminalHandle` 为 camelCase；`dispatch.task_id` 仍提供 Task 关联，`observation.exactWorker` 为精确绑定依据。h 的 [原始公开响应](../artifacts/graph-basis/real-acceptance/worker-ip05-exec-20261004h.json) 表明原 Worker `ctx_c5b9ab14d998` 的 exactWorker 为 true。adapter 原先读取 snake_case 导致绑定为空，现已对齐当前字段并调整既有契约测试。历史响应不可当作当前字段合同；读取缺失仍不推断存活或派发失败。
+
+Codex sandbox 与正式 Worker 共用 `-c model=...`；当前 sandbox 不接受 `--model`。当前自定义 provider 必须使用非内置 ID；隔离验收为 `companion-oauth` / `responses`。MiniMax n/o 现场已完成真实retire及同Attempt Recovery/revise，均取得独立Finalizer deliverable。原PTY驱动的两项显示断言失败已在同一暂停现场通过生产阅读复验结清，退出码保留；监督回答和完整证据见 [真实验收记录](../artifacts/graph-basis/real-acceptance/README.md)。本机兼容性不推及其它Orca版本或平台。
+
 ### CLI 与运行时基线
 
 - `orca --version` 输出 `1.4.198`；`orca status --json` 报告 `runtime.state: ready`、`runtime.reachable: true`，并给出 68 项 `capabilities`。

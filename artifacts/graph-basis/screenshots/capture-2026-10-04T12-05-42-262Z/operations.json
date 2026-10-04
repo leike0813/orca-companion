@@ -1,0 +1,1442 @@
+[
+  {
+    "name": "六票工作区基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "P47 候选与 P52 图标设置",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "命令候选先采用，再以 Enter 执行；Esc 回到 composer"
+  },
+  {
+    "name": "P52 命令目录与返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "固定弹层、候选/说明分栏及默认返回状态可见"
+  },
+  {
+    "name": "P51 项目面板栏目与返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "总览/待答/最近事件同一固定区域，关闭返回原工作区"
+  },
+  {
+    "name": "P-43 Inspector 基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "保留图画布与 Inspector 原布局"
+  },
+  {
+    "name": "全代际目录",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "真实 GraphBasisService/schema17 分页目录"
+  },
+  {
+    "name": "目录翻页",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "PgDn 取得后续版本且版本身份持续可见"
+  },
+  {
+    "name": "计划与 tracker 正文",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "计划正文来源版本与当前 Route Map 来源身份分别可见；历史正文不可用时明确标示"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "逐层 Esc 返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "│ 依据来源目录                                                                                                         │ → │ 执行依据与历史图                                                                                                     │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "P47 候选与 P52 图标设置",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "命令候选先采用，再以 Enter 执行；Esc 回到 composer"
+  },
+  {
+    "name": "P52 命令目录与返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "固定弹层、候选/说明分栏及默认返回状态可见"
+  },
+  {
+    "name": "P51 项目面板栏目与返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "总览/待答/最近事件同一固定区域，关闭返回原工作区"
+  },
+  {
+    "name": "P-43 Inspector 基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "保留图画布与 Inspector 原布局"
+  },
+  {
+    "name": "全代际目录",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "真实 GraphBasisService/schema17 分页目录"
+  },
+  {
+    "name": "目录翻页",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "PgDn 取得后续版本且版本身份持续可见"
+  },
+  {
+    "name": "计划与 tracker 正文",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "计划正文来源版本与当前 Route Map 来源身份分别可见；历史正文不可用时明确标示"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "逐层 Esc 返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "│ 依据来源目录                                                                                                         │ → │ 执行依据与历史图                                                                                                     │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "P47 候选与 P52 图标设置",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "命令候选先采用，再以 Enter 执行；Esc 回到 composer"
+  },
+  {
+    "name": "P52 命令目录与返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "固定弹层、候选/说明分栏及默认返回状态可见"
+  },
+  {
+    "name": "P51 项目面板栏目与返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "总览/待答/最近事件同一固定区域，关闭返回原工作区"
+  },
+  {
+    "name": "P-43 Inspector 基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "保留图画布与 Inspector 原布局"
+  },
+  {
+    "name": "全代际目录",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "真实 GraphBasisService/schema17 分页目录"
+  },
+  {
+    "name": "目录翻页",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "PgDn 取得后续版本且版本身份持续可见"
+  },
+  {
+    "name": "计划与 tracker 正文",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "计划正文来源版本与当前 Route Map 来源身份分别可见；历史正文不可用时明确标示"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "逐层 Esc 返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "│ 依据来源目录                                                                                                         │ → │ 执行依据与历史图                                                                                                     │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "P47 候选与 P52 图标设置",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "命令候选先采用，再以 Enter 执行；Esc 回到 composer"
+  },
+  {
+    "name": "P52 命令目录与返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "固定弹层、候选/说明分栏及默认返回状态可见"
+  },
+  {
+    "name": "P51 项目面板栏目与返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "总览/待答/最近事件同一固定区域，关闭返回原工作区"
+  },
+  {
+    "name": "P-43 Inspector 基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "保留图画布与 Inspector 原布局"
+  },
+  {
+    "name": "全代际目录",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "真实 GraphBasisService/schema17 分页目录"
+  },
+  {
+    "name": "目录翻页",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "PgDn 取得后续版本且版本身份持续可见"
+  },
+  {
+    "name": "计划与 tracker 正文",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "计划正文来源版本与当前 Route Map 来源身份分别可见；历史正文不可用时明确标示"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "逐层 Esc 返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "│ 依据来源目录                                                                                                         │ → │ 执行依据与历史图                                                                                                     │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "P47 候选与 P52 图标设置",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "命令候选先采用，再以 Enter 执行；Esc 回到 composer"
+  },
+  {
+    "name": "P52 命令目录与返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "固定弹层、候选/说明分栏及默认返回状态可见"
+  },
+  {
+    "name": "P51 项目面板栏目与返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "总览/待答/最近事件同一固定区域，关闭返回原工作区"
+  },
+  {
+    "name": "P-43 Inspector 基线",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "保留图画布与 Inspector 原布局"
+  },
+  {
+    "name": "全代际目录",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "真实 GraphBasisService/schema17 分页目录"
+  },
+  {
+    "name": "目录翻页",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "PgDn 取得后续版本且版本身份持续可见"
+  },
+  {
+    "name": "计划与 tracker 正文",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "计划正文来源版本与当前 Route Map 来源身份分别可见；历史正文不可用时明确标示"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "逐层 Esc 返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "│ 依据来源目录                                                                                                         │ → │ 执行依据与历史图                                                                                                     │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "P47 候选与 P52 图标设置",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "命令候选先采用，再以 Enter 执行；Esc 回到 composer"
+  },
+  {
+    "name": "P52 命令目录与返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "固定弹层、候选/说明分栏及默认返回状态可见"
+  },
+  {
+    "name": "P51 项目面板栏目与返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "总览/待答/最近事件同一固定区域，关闭返回原工作区"
+  },
+  {
+    "name": "P-43 Inspector 基线",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "保留图画布与 Inspector 原布局"
+  },
+  {
+    "name": "全代际目录",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "真实 GraphBasisService/schema17 分页目录"
+  },
+  {
+    "name": "目录翻页",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "PgDn 取得后续版本且版本身份持续可见"
+  },
+  {
+    "name": "计划与 tracker 正文",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "计划正文来源版本与当前 Route Map 来源身份分别可见；历史正文不可用时明确标示"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "逐层 Esc 返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "│ 依据来源目录                                                                                                         │ → │ 执行依据与历史图                                                                                                     │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "P47 候选与 P52 图标设置",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "命令候选先采用，再以 Enter 执行；Esc 回到 composer"
+  },
+  {
+    "name": "P52 命令目录与返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "固定弹层、候选/说明分栏及默认返回状态可见"
+  },
+  {
+    "name": "P51 项目面板栏目与返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "总览/待答/最近事件同一固定区域，关闭返回原工作区"
+  },
+  {
+    "name": "P-43 Inspector 基线",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "保留图画布与 Inspector 原布局"
+  },
+  {
+    "name": "全代际目录",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "真实 GraphBasisService/schema17 分页目录"
+  },
+  {
+    "name": "目录翻页",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "PgDn 取得后续版本且版本身份持续可见"
+  },
+  {
+    "name": "计划与 tracker 正文",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "计划正文来源版本与当前 Route Map 来源身份分别可见；历史正文不可用时明确标示"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "逐层 Esc 返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "│ 依据来源目录                                                                                                         │ → │ 执行依据与历史图                                                                                                     │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "P47 候选与 P52 图标设置",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "命令候选先采用，再以 Enter 执行；Esc 回到 composer"
+  },
+  {
+    "name": "P52 命令目录与返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "固定弹层、候选/说明分栏及默认返回状态可见"
+  },
+  {
+    "name": "P51 项目面板栏目与返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "总览/待答/最近事件同一固定区域，关闭返回原工作区"
+  },
+  {
+    "name": "P-43 Inspector 基线",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "保留图画布与 Inspector 原布局"
+  },
+  {
+    "name": "全代际目录",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "真实 GraphBasisService/schema17 分页目录"
+  },
+  {
+    "name": "目录翻页",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "PgDn 取得后续版本且版本身份持续可见"
+  },
+  {
+    "name": "计划与 tracker 正文",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "计划正文来源版本与当前 Route Map 来源身份分别可见；历史正文不可用时明确标示"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "逐层 Esc 返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "│ 依据来源目录                                                                                                         │ → │ 执行依据与历史图                                                                                                     │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "P47 候选与 P52 图标设置",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "命令候选先采用，再以 Enter 执行；Esc 回到 composer"
+  },
+  {
+    "name": "P52 命令目录与返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "固定弹层、候选/说明分栏及默认返回状态可见"
+  },
+  {
+    "name": "P51 项目面板栏目与返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "总览/待答/最近事件同一固定区域，关闭返回原工作区"
+  },
+  {
+    "name": "P-43 Inspector 基线",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "保留图画布与 Inspector 原布局"
+  },
+  {
+    "name": "全代际目录",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "真实 GraphBasisService/schema17 分页目录"
+  },
+  {
+    "name": "目录翻页",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "PgDn 取得后续版本且版本身份持续可见"
+  },
+  {
+    "name": "计划与 tracker 正文",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "计划正文来源版本与当前 Route Map 来源身份分别可见；历史正文不可用时明确标示"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "逐层 Esc 返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "│ 依据来源目录                                                                                                         │ → │ 执行依据与历史图                                                                                                     │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "P47 候选与 P52 图标设置",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "命令候选先采用，再以 Enter 执行；Esc 回到 composer"
+  },
+  {
+    "name": "P52 命令目录与返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "固定弹层、候选/说明分栏及默认返回状态可见"
+  },
+  {
+    "name": "P51 项目面板栏目与返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "总览/待答/最近事件同一固定区域，关闭返回原工作区"
+  },
+  {
+    "name": "P-43 Inspector 基线",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "保留图画布与 Inspector 原布局"
+  },
+  {
+    "name": "全代际目录",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "真实 GraphBasisService/schema17 分页目录"
+  },
+  {
+    "name": "目录翻页",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "PgDn 取得后续版本且版本身份持续可见"
+  },
+  {
+    "name": "计划与 tracker 正文",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "计划正文来源版本与当前 Route Map 来源身份分别可见；历史正文不可用时明确标示"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "逐层 Esc 返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "│ 依据来源目录                                                                                                         │ → │ 执行依据与历史图                                                                                                     │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "P47 候选与 P52 图标设置",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "命令候选先采用，再以 Enter 执行；Esc 回到 composer"
+  },
+  {
+    "name": "P52 命令目录与返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "固定弹层、候选/说明分栏及默认返回状态可见"
+  },
+  {
+    "name": "P51 项目面板栏目与返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "总览/待答/最近事件同一固定区域，关闭返回原工作区"
+  },
+  {
+    "name": "P-43 Inspector 基线",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "保留图画布与 Inspector 原布局"
+  },
+  {
+    "name": "全代际目录",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "真实 GraphBasisService/schema17 分页目录"
+  },
+  {
+    "name": "目录翻页",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "PgDn 取得后续版本且版本身份持续可见"
+  },
+  {
+    "name": "计划与 tracker 正文",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "计划正文来源版本与当前 Route Map 来源身份分别可见；历史正文不可用时明确标示"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "逐层 Esc 返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "│ 依据来源目录                                                                                                         │ → │ 执行依据与历史图                                                                                                     │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "P47 候选与 P52 图标设置",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "命令候选先采用，再以 Enter 执行；Esc 回到 composer"
+  },
+  {
+    "name": "P52 命令目录与返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "固定弹层、候选/说明分栏及默认返回状态可见"
+  },
+  {
+    "name": "P51 项目面板栏目与返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "总览/待答/最近事件同一固定区域，关闭返回原工作区"
+  },
+  {
+    "name": "P-43 Inspector 基线",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "保留图画布与 Inspector 原布局"
+  },
+  {
+    "name": "全代际目录",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "真实 GraphBasisService/schema17 分页目录"
+  },
+  {
+    "name": "目录翻页",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "PgDn 取得后续版本且版本身份持续可见"
+  },
+  {
+    "name": "计划与 tracker 正文",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "计划正文来源版本与当前 Route Map 来源身份分别可见；历史正文不可用时明确标示"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "来源身份与偏移保留"
+  },
+  {
+    "name": "逐层 Esc 返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "│ 依据来源目录                                                                                                         │ → │ 执行依据与历史图                                                                                                     │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ 执行图检查 · Graph Inspector                                                                                         │ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。"
+  }
+]

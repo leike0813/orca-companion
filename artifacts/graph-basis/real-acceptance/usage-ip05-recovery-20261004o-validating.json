@@ -1,0 +1,117 @@
+{
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o",
+  "materializationBindings": 4,
+  "recoveryRecords": 1,
+  "roles": [
+    {
+      "role": "implementation",
+      "sessions": 1,
+      "requests": {
+        "status": "unavailable",
+        "reason": "rollout 没有可无歧义计数的请求标识"
+      },
+      "modelIds": [
+        "minimax-cn/MiniMax-M3.1-Flash-Preview"
+      ],
+      "tokenUsage": {
+        "status": "available",
+        "inputTokens": 29639,
+        "cachedInputTokens": 19456,
+        "outputTokens": 299,
+        "measuredSessions": 1,
+        "unavailableSessions": 0
+      }
+    },
+    {
+      "role": "planner",
+      "sessions": 1,
+      "requests": {
+        "status": "unavailable",
+        "reason": "rollout 没有可无歧义计数的请求标识"
+      },
+      "modelIds": [
+        "minimax-cn/MiniMax-M3.1-Flash-Preview"
+      ],
+      "tokenUsage": {
+        "status": "available",
+        "inputTokens": 847683,
+        "cachedInputTokens": 822189,
+        "outputTokens": 13515,
+        "measuredSessions": 1,
+        "unavailableSessions": 0
+      }
+    },
+    {
+      "role": "recovery_utility",
+      "sessions": 1,
+      "requests": {
+        "status": "unavailable",
+        "reason": "rollout 没有可无歧义计数的请求标识"
+      },
+      "modelIds": [
+        "minimax-cn/MiniMax-M3.1-Flash-Preview"
+      ],
+      "tokenUsage": {
+        "status": "available",
+        "inputTokens": 86371,
+        "cachedInputTokens": 68409,
+        "outputTokens": 2239,
+        "measuredSessions": 1,
+        "unavailableSessions": 0
+      }
+    },
+    {
+      "role": "unbound",
+      "sessions": 1,
+      "requests": {
+        "status": "unavailable",
+        "reason": "rollout 没有可无歧义计数的请求标识"
+      },
+      "modelIds": [
+        "minimax-cn/MiniMax-M3.1-Flash-Preview"
+      ],
+      "tokenUsage": {
+        "status": "available",
+        "inputTokens": 513956,
+        "cachedInputTokens": 491447,
+        "outputTokens": 13788,
+        "measuredSessions": 1,
+        "unavailableSessions": 0
+      }
+    },
+    {
+      "role": "validator",
+      "sessions": 1,
+      "requests": {
+        "status": "unavailable",
+        "reason": "rollout 没有可无歧义计数的请求标识"
+      },
+      "modelIds": [
+        "minimax-cn/MiniMax-M3.1-Flash-Preview"
+      ],
+      "tokenUsage": {
+        "status": "available",
+        "inputTokens": 294395,
+        "cachedInputTokens": 275406,
+        "outputTokens": 5044,
+        "measuredSessions": 1,
+        "unavailableSessions": 0
+      }
+    }
+  ],
+  "totals": {
+    "sessions": 5,
+    "requests": {
+      "status": "unavailable",
+      "reason": "rollout 没有可无歧义计数的请求标识"
+    },
+    "tokenUsage": {
+      "inputTokens": 1772044,
+      "cachedInputTokens": 1676907,
+      "outputTokens": 34885,
+      "measuredSessions": 5,
+      "unavailableSessions": 0
+    }
+  },
+  "note": "tokenUsage 优先使用最后一个结构化累计 total_token_usage；仅单快照时才使用 last_token_usage。"
+}

@@ -1,0 +1,13 @@
+{
+  "observedAt": "2026-10-04T14:14:36.716Z",
+  "report": [
+    {
+      "id": "msg_c967049b4bc9",
+      "locator": null
+    },
+    {
+      "id": "msg_1fb36bf85543",
+      "locator": "task_d6490b5c162c"
+    }
+  ]
+}

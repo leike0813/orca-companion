@@ -35,6 +35,7 @@ import { graphIdFor } from '../../src/application/planning/graph-generation.js';
 import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
 import type { CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
 import type { ExecutionGraph, GraphVersionRecord } from '../../src/domain/planning/execution-graph.js';
+import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SESSION_A = 'session-a' as CoordinatorSessionId;
@@ -122,6 +123,7 @@ function record(
     coordinationScopeId: SCOPE,
     writer,
     graph,
+    initialPlan: implementationPlanFor(graph, revisions.planRevision),
     mapRevision: revisions.mapRevision,
     planRevision: revisions.planRevision,
     orcaRunId: revisions.orcaRunId,
@@ -231,6 +233,7 @@ test('未知 Scope 上记录被拒绝，且不留下历史', () => {
     coordinationScopeId: unknownScope,
     writer,
     graph,
+    initialPlan: implementationPlanFor(graph, 1),
     mapRevision: 0,
     planRevision: 1,
     orcaRunId: 'run-1',

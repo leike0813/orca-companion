@@ -31,7 +31,9 @@ import {
 
 const BASE_VERSION = 3 as GraphVersion;
 
-function claims(overrides: Partial<Record<keyof GraphChangeRequest, ChangeClaim>>): GraphChangeRequest {
+type RoutingOverride = Partial<Record<Exclude<keyof GraphChangeRequest, 'changeInstruction'>, ChangeClaim>>;
+
+function claims(overrides: RoutingOverride): GraphChangeRequest {
   const base: Record<string, ChangeClaim> = {
     infrastructureFailure: 'no',
     changesDependencies: 'no',
@@ -42,10 +44,15 @@ function claims(overrides: Partial<Record<keyof GraphChangeRequest, ChangeClaim>
     userRequestedReplanning: 'no',
     requiresUserChoice: 'no',
   };
-  return { workPackageId: 'wp-a' as WorkPackageId, ...base, ...overrides } as GraphChangeRequest;
+  return {
+    workPackageId: 'wp-a' as WorkPackageId,
+    changeInstruction: '调整当前工作包',
+    ...base,
+    ...overrides,
+  } as GraphChangeRequest;
 }
 
-function route(overrides: Partial<Record<keyof GraphChangeRequest, ChangeClaim>>) {
+function route(overrides: RoutingOverride) {
   return routeGraphChange({ request: claims(overrides), baseGraphVersion: BASE_VERSION });
 }
 
@@ -70,7 +77,16 @@ test.each([
     'blocked',
   ],
 ] as const)('%s → %s', (_name, overrides, expected) => {
-  expect(route(overrides as Partial<Record<keyof GraphChangeRequest, ChangeClaim>>).route).toBe(expected);
+  expect(route(overrides as RoutingOverride).route).toBe(expected);
+});
+
+test('业务说明不参与九字段分类', () => {
+  const baseline = route({ changesObjective: 'unknown' });
+  const request = claims({ changesObjective: 'unknown' });
+  expect(routeGraphChange({
+    request: { ...request, changeInstruction: '移除已废弃的工作包' },
+    baseGraphVersion: BASE_VERSION,
+  })).toEqual(baseline);
 });
 
 test('只有声明事实不足以判定时才派发 Graph Patch Planner', () => {
@@ -163,6 +179,7 @@ test('Planner 指令携带变化声明、当前图与直接受影响节点', () 
   });
 
   expect(instruction).toContain('"changesObjective":"unknown"');
+  expect(instruction).toContain('变化说明（由请求提供，不从身份或版本推断）：调整当前工作包');
   expect(instruction).toContain('"graphId":"graph-1"');
   expect(instruction).toContain('仅 add 不算处置');
 });

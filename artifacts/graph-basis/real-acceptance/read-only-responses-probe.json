@@ -1,0 +1,9 @@
+{
+  "profile": "utility-readonly-local-control",
+  "kind": "unavailable",
+  "stage": "sandbox-read",
+  "codexVersion": "0.159.0-alpha.3",
+  "diagnostics": [
+    "沙箱读取受限命令 失败（退出码 1）：Error: model_providers contains reserved built-in provider IDs: `openai`. Built-in providers cannot be overridden. Rename your custom provider (for example, `openai-custom`)."
+  ]
+}

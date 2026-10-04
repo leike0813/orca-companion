@@ -51,6 +51,7 @@ afterEach(() => {
 function claims(overrides: Partial<GraphChangeRequest> = {}): GraphChangeRequest {
   return {
     workPackageId: WP_B,
+    changeInstruction: '调整当前工作包的验收条件',
     infrastructureFailure: 'no',
     changesDependencies: 'no',
     changesScopeEnvelope: 'no',
@@ -162,6 +163,7 @@ test('语义含糊的请求派发 Planner，证据经 Admission 归一化后追�
   expect(planner.requests[0]?.baseGraphVersion).toBe(baseGraphVersion);
   expect(planner.requests[0]?.patchId).toBe('patch-1');
   expect(planner.requests[0]?.unacceptedDescendantIds).toEqual([WP_C]);
+  expect(planner.requests[0]?.changeRequest.changeInstruction).toBe('调整当前工作包的验收条件');
 
   const appliedResult = applied(result);
   expect(appliedResult.decision.route).toBe('graph_patch');
@@ -252,6 +254,17 @@ test.each([
 /* -------------------------------------------------------------------------- */
 /* 过期与越界请求零副作用                                                      */
 /* -------------------------------------------------------------------------- */
+
+test.each([' \n\t', '🦀'.repeat(4_001)])('非法变化说明在用例边界拒绝且无副作用', async (changeInstruction) => {
+  const planner = acceptedPlanner(draftPayload());
+  const result = await requestGraphPatch(dispatchInput({
+    planner: planner.port,
+    changeRequest: { ...claims({ changesObjective: 'unknown' }), changeInstruction },
+  }));
+  expect(result.kind === 'rejected' ? result.code : null).toBe('invalid_change_instruction');
+  expect(planner.requests).toHaveLength(0);
+  expect(harness.versionCount()).toBe(1);
+});
 
 test('调用方版本过期时拒绝，且不派 Planner、不写图', async () => {
   const planner = acceptedPlanner(draftPayload());

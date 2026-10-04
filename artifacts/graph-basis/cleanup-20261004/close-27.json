@@ -1,0 +1,13 @@
+{
+  "args": [
+    "terminal",
+    "close",
+    "--worktree",
+    "id:8a3cf633-c2f4-4d19-9d4a-4d8dc51f3a06::/home/joshua/Workspace/Artifact/orca-companion-gb01",
+    "--all",
+    "--json"
+  ],
+  "status": 0,
+  "stdout": "{\n  \"id\": \"94f72301-a683-46c7-917d-258bd851b5d9\",\n  \"ok\": true,\n  \"result\": {\n    \"closed\": 1,\n    \"stopped\": 1,\n    \"retiredSurfaces\": true\n  },\n  \"_meta\": {\n    \"runtimeId\": \"34627582-8e2e-49de-b4eb-58b0b159cbd0\"\n  }\n}\n",
+  "stderr": ""
+}

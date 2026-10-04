@@ -302,6 +302,14 @@ describe('快照 DTO 与 CLI 复用（IP-03 前置）', () => {
           ],
         },
         patch: null,
+        initialPlan: {
+          planRevision: 1,
+          destinationRef: { kind: 'destination', id: 'destination-status-json', version: 1 },
+          workPackages: [
+            { key: 'wp-1', title: '第一个包', dependsOn: [], scopeEnvelope: { include: ['src/a.ts'], exclude: [] } },
+            { key: 'wp-2', title: '第二个包', dependsOn: ['wp-1'], scopeEnvelope: { include: ['src/b.ts'], exclude: [] } },
+          ],
+        },
       }).kind,
     ).toBe('committed');
 

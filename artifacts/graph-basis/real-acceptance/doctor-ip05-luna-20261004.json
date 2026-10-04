@@ -1,0 +1,51 @@
+{
+  "doctorExit": 1,
+  "ok": false,
+  "checks": [
+    {
+      "id": "orca-executable",
+      "status": "ok",
+      "detail": "Orca CLI 可执行"
+    },
+    {
+      "id": "orca-version",
+      "status": "ok",
+      "detail": "Orca 版本 1.4.218"
+    },
+    {
+      "id": "runtime",
+      "status": "ok",
+      "detail": "Orca runtime 可达（state=ready）"
+    },
+    {
+      "id": "runtime-capabilities",
+      "status": "ok",
+      "detail": "已核验 4 项 M0 必需能力"
+    },
+    {
+      "id": "hosts",
+      "status": "ok",
+      "detail": "local host local"
+    },
+    {
+      "id": "coordinator-identity",
+      "status": "ok",
+      "detail": "dedicated identity resolved"
+    },
+    {
+      "id": "public-commands",
+      "status": "ok",
+      "detail": "已核验 26 个 M0 必需公开命令"
+    },
+    {
+      "id": "coordinator-model",
+      "status": "ok",
+      "detail": "Coordinator 模型 planning-default 已通过 5 项能力核验"
+    },
+    {
+      "id": "read-only-worker",
+      "status": "capability-missing",
+      "detail": "只读 Worker 能力不可用（阶段 sandbox-read，codex 0.159.0-alpha.3，profile utility-readonly-local-control）：沙箱读取受限命令 失败（退出码 2）：error: unexpected argument '--model' found"
+    }
+  ]
+}

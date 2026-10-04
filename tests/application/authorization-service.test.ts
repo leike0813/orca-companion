@@ -49,6 +49,7 @@ import type {
 import type { ExecutionGraph, GraphVersionRecord } from '../../src/domain/planning/execution-graph.js';
 import type { WorkerModelConfiguration } from '../../src/domain/model-configuration.js';
 import { executionModelConfiguration } from '../support/execution-harness.js';
+import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SESSION_A = 'session-a' as CoordinatorSessionId;
@@ -105,6 +106,7 @@ beforeEach(() => {
     coordinationScopeId: SCOPE,
     writer,
     graph,
+    initialPlan: implementationPlanFor(graph, 1),
     mapRevision: 0,
     planRevision: 1,
     orcaRunId: 'run_x',

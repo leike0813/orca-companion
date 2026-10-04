@@ -11,10 +11,131 @@
 
 import type { WorkPackageExecutionState } from '../../application/execution/execution-view.js';
 import type { UiDraft } from '../../application/ports/ui-input-store.js';
+import type { BasisSourceRef, GraphVersionRef } from '../../application/tui/graph-basis.js';
 import { emptyDraft, textDraft } from './input/composer-editor.js';
 import { tuiIconMode, type TuiIconMode } from './theme.js';
 
 export type ProjectPanelState = { readonly open: boolean; readonly tab: number; readonly selectedKey: string | null; readonly detail: string | null; readonly scroll: number };
+
+/* -------------------------------------------------------------------------- */
+/* 图历史与执行依据（IP-04）                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * 依据下钻的来源页面。
+ *
+ * 回到 Inspector 时不恢复任何字段：Inspector 的选择、栏目与滚动本来就留在 `inspector*` 里，
+ * 因此这里只记「从哪来」；从项目面板进入才需要原栏目、对象与滚动位置。
+ */
+export type BasisOrigin =
+  | { readonly kind: 'inspector' }
+  | {
+      readonly kind: 'project';
+      readonly tab: number;
+      readonly detail: string | null;
+      readonly selectedKey: string | null;
+      readonly scroll: number;
+    };
+
+/**
+ * 一层依据页面。
+ *
+ * 每层只保存展示态：光标、翻页游标与已访问的正文偏移。图版本、来源引用与正文偏移都是**精确身份**，
+ * 因此返回、续读和迟到隔离都不依赖 Scope revision。
+ */
+export type BasisFrame =
+  | { readonly kind: 'root'; readonly index: number }
+  | { readonly kind: 'versions'; readonly index: number; readonly after: string | null; readonly previous: readonly (string | null)[] }
+  | {
+      readonly kind: 'version';
+      readonly ref: GraphVersionRef;
+      readonly selection: string | null;
+      /** 历史版本沿用 Inspector 的三栏目与显式关系选择。 */
+      readonly tab: number;
+      readonly relations: readonly string[] | null;
+      readonly relationIndex: number;
+    }
+  | {
+      readonly kind: 'sources';
+      readonly graph: GraphVersionRef;
+      readonly workPackageId: string | null;
+      /** 原生规格目录帧：下钻到某个保留 Task 的真实文件目录，其余帧没有这个身份。 */
+      readonly orcaTaskId?: string;
+      readonly index: number;
+      readonly after: string | null;
+      readonly previous: readonly (string | null)[];
+    }
+  | {
+      readonly kind: 'body';
+      readonly source: BasisSourceRef;
+      readonly label: string;
+      readonly sourceVersion: string | null;
+      readonly offset: number;
+      /** 已访问的正文偏移；PgUp 只能回到真正读过的范围，不猜更早的游标。 */
+      readonly visited: readonly number[];
+      readonly scroll: number;
+    };
+
+export type BasisState = { readonly origin: BasisOrigin; readonly frames: readonly BasisFrame[] };
+
+export const BASIS_ROOT_FRAME: BasisFrame = { kind: 'root', index: 0 };
+
+/** 来源引用的稳定身份：Task、原生 unit 的具体文件、授权版本与 tracker 引用各自一把 key。 */
+export function basisSourceKey(source: BasisSourceRef): string {
+  switch (source.kind) {
+    case 'initial_plan':
+    case 'graph_patch':
+      return `${source.kind}:${source.graph.graphId}:${source.graph.generation}:${source.graph.version}`;
+    case 'authorization':
+      return `authorization:${source.authorizationId}@${source.authorizationVersion}`;
+    case 'retained_task':
+      return `retained_task:${source.workPackageId}:${source.orcaTaskId}`;
+    case 'specification':
+      // 同一 unit 的不同文件必须分开：缓存与读取身份都包含 path，否则两个文件会互相覆盖。
+      return `specification:${source.orcaTaskId}:${source.locator.worktreeId}:${source.locator.relativePath}:${source.path}:${source.contractRevision}`;
+    case 'tracker':
+      return `tracker:${source.issueRef}`;
+  }
+}
+
+export function basisStack(origin: BasisOrigin): BasisState {
+  return { origin, frames: [BASIS_ROOT_FRAME] };
+}
+
+export function basisTop(stack: BasisState): BasisFrame {
+  return stack.frames.at(-1) ?? BASIS_ROOT_FRAME;
+}
+
+/** 下钻一层；调用方只追加已经确定身份的页面，不改写下层。 */
+export function basisEnter(stack: BasisState, frame: BasisFrame): BasisState {
+  return { ...stack, frames: [...stack.frames, frame] };
+}
+
+/** 替换栈顶的展示态（光标、翻页、偏移）；页面身份不变。 */
+export function basisReplaceTop(stack: BasisState, frame: BasisFrame): BasisState {
+  return { ...stack, frames: [...stack.frames.slice(0, -1), frame] };
+}
+
+/** Esc 的逐层返回：弹出栈顶；连根页面一起弹出时返回 `null`，表示回到来源页面。 */
+export function basisBack(stack: BasisState): BasisState | null {
+  return stack.frames.length <= 1 ? null : { ...stack, frames: stack.frames.slice(0, -1) };
+}
+
+/**
+ * 页面的读取身份。
+ *
+ * 迟到的读取结果只能写回自己那一页：Session 相同但 key 不同的响应必须被丢弃，因此 key 同时包含
+ * 层级、精确图版本/来源引用与翻页游标。
+ */
+export function basisFrameKey(frame: BasisFrame): string {
+  switch (frame.kind) {
+    case 'root': return 'root';
+    case 'versions': return `versions:${frame.after ?? ''}`;
+    case 'version': return `version:${frame.ref.graphId}:${frame.ref.generation}:${frame.ref.version}`;
+    case 'sources': return `sources:${frame.graph.graphId}:${frame.graph.generation}:${frame.graph.version}:${frame.workPackageId ?? '*'}:${frame.orcaTaskId ?? '*'}:${frame.after ?? ''}`;
+    case 'body': return `body:${basisSourceKey(frame.source)}:${frame.sourceVersion ?? '-'}:${frame.offset}`;
+  }
+}
 
 export type SidebarDensity = 'full' | 'compact' | 'collapsed';
 export type OverlayKind =
@@ -231,6 +352,8 @@ export type TuiState = {
   readonly modelSettingsField: ModelSettingsField;
   /** 保存/应用的结构化结果；失败时编辑器保留全部输入。 */
   readonly modelSettingsNotice: string | null;
+  /** 依据下钻栈；`null` 表示没有打开依据或历史页面。 */
+  readonly basis: BasisState | null;
 };
 
 export const initialTuiState: TuiState = {
@@ -275,6 +398,7 @@ export const initialTuiState: TuiState = {
   modelSettingsEdit: null,
   modelSettingsField: 'label',
   modelSettingsNotice: null,
+  basis: null,
 };
 
 export type AnswerReturnState = Pick<TuiState, 'selectedSessionId' | 'composerMode' | 'projectPanel' | 'expandedToolIds' | 'detailedTranscript'> & {
@@ -320,7 +444,9 @@ export type TuiAction =
   | { readonly kind: 'model-role-selected'; readonly index: number }
   | { readonly kind: 'model-role-menu'; readonly menu: ModelRoleMenuState | null }
   | { readonly kind: 'model-settings-edit'; readonly edit: ModelSettingsEdit | null; readonly field?: ModelSettingsField }
-  | { readonly kind: 'model-settings-notice'; readonly notice: string | null };
+  | { readonly kind: 'model-settings-notice'; readonly notice: string | null }
+  /** 依据下钻栈；`frames` 为 `null` 或空表示关闭并回到来源页面。 */
+  | { readonly kind: 'basis-frames'; readonly frames: readonly BasisFrame[] | null; readonly origin?: BasisOrigin };
 
 /** 密度只允许在「宽度允许的上限」之内降级；任何动作都不会强制展开。 */
 function clampDensity(current: SidebarDensity, allowed: SidebarDensity): SidebarDensity {
@@ -459,6 +585,12 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
       };
     case 'model-settings-notice':
       return state.modelSettingsNotice === action.notice ? state : { ...state, modelSettingsNotice: action.notice };
+    // 依据栈只有展示态：reducer 不知道任何图版本、来源引用或正文内容，因此下钻、翻页与返回
+    // 在结构上就不可能写入协调事实。`origin` 缺席时沿用当前来源页面。
+    case 'basis-frames': {
+      if (action.frames === null || action.frames.length === 0) return { ...state, basis: null };
+      return { ...state, basis: { origin: action.origin ?? state.basis?.origin ?? { kind: 'inspector' }, frames: action.frames } };
+    }
   }
 }
 

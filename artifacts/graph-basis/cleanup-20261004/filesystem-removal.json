@@ -1,0 +1,40 @@
+{
+  "removedFixtureRoots": [
+    "/home/joshua/Workspace/Artifact/orca-companion-gb01",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-cutover-20261004b",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004c",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004d",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004e",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004f",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004g",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004h",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004i",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-luna-20261004",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004j",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004m",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004k",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004l",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004n"
+  ],
+  "removedWorkspaceParents": [
+    "/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004o",
+    "/home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004n",
+    "/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004m",
+    "/home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004l",
+    "/home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004k",
+    "/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j",
+    "/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i",
+    "/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004h"
+  ],
+  "removedEmptyTrashDirectories": [
+    "/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004o/.orca-worktree-trash",
+    "/home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004n/.orca-worktree-trash",
+    "/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004m/.orca-worktree-trash",
+    "/home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004l/.orca-worktree-trash",
+    "/home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004k/.orca-worktree-trash",
+    "/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/.orca-worktree-trash",
+    "/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/.orca-worktree-trash",
+    "/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004h/.orca-worktree-trash"
+  ]
+}

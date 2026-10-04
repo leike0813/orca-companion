@@ -1,0 +1,13 @@
+{
+  "args": [
+    "terminal",
+    "close",
+    "--worktree",
+    "id:71b7a557-7335-4c04-8d5a-9f030d45abcb::/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004e",
+    "--all",
+    "--json"
+  ],
+  "status": 0,
+  "stdout": "{\n  \"id\": \"485c7858-946d-4989-9fb0-0713afa88162\",\n  \"ok\": true,\n  \"result\": {\n    \"closed\": 1,\n    \"stopped\": 1,\n    \"retiredSurfaces\": true\n  },\n  \"_meta\": {\n    \"runtimeId\": \"34627582-8e2e-49de-b4eb-58b0b159cbd0\"\n  }\n}\n",
+  "stderr": ""
+}

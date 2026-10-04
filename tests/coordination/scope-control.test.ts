@@ -54,6 +54,7 @@ import {
   reentryPolicy,
   scopeControlGate,
 } from '../../src/domain/coordination/scope-control.js';
+import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 
 const SCOPE = 'scope-control' as CoordinationScopeId;
 const SESSION_A = 'session-a' as CoordinatorSessionId;
@@ -277,6 +278,10 @@ test('恢复：先对账再恢复调度，且不重置已消耗的预算、claim
     coordinationScopeId: SCOPE,
     writer,
     graph: { graphId: GRAPH_ID, generation: 1 as GraphGeneration, concurrencyLimit: 1, workPackages: [] },
+    initialPlan: implementationPlanFor(
+      { graphId: GRAPH_ID, generation: 1 as GraphGeneration, concurrencyLimit: 1, workPackages: [] },
+      1,
+    ),
     mapRevision: mapRevision(),
     planRevision: 1,
     orcaRunId: 'run-1',

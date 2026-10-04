@@ -35,6 +35,8 @@ import type { AdvanceExecutionResult } from '../../application/execution/advance
 import type { ControlState, CoordinationMode } from '../../domain/coordination/mode.js';
 import {
   CHANGE_CLAIMS,
+  isValidGraphChangeInstruction,
+  MAX_GRAPH_CHANGE_INSTRUCTION_CODE_POINTS,
   type ChangeClaim,
   type GraphChangeRequest,
 } from '../../domain/execution/change-routing.js';
@@ -275,6 +277,12 @@ const CHANGE_REQUEST_PROPERTY = {
     goalOrGlobalConstraintChanged: CHANGE_CLAIM_PROPERTY,
     userRequestedReplanning: CHANGE_CLAIM_PROPERTY,
     requiresUserChoice: CHANGE_CLAIM_PROPERTY,
+    changeInstruction: {
+      type: 'string',
+      minLength: 1,
+      maxLength: MAX_GRAPH_CHANGE_INSTRUCTION_CODE_POINTS,
+      description: `完整说明本次变化，最多 ${MAX_GRAPH_CHANGE_INSTRUCTION_CODE_POINTS} 个 Unicode 码点`,
+    },
   },
   required: [
     'workPackageId',
@@ -286,6 +294,7 @@ const CHANGE_REQUEST_PROPERTY = {
     'goalOrGlobalConstraintChanged',
     'userRequestedReplanning',
     'requiresUserChoice',
+    'changeInstruction',
   ],
 } as const;
 
@@ -312,11 +321,15 @@ function parseChangeRequest(raw: unknown): GraphChangeRequest | null {
   if (fields === null) {
     return null;
   }
-  if (Object.keys(fields).length !== CHANGE_CLAIM_FIELDS.length + 1) {
+  if (Object.keys(fields).length !== CHANGE_CLAIM_FIELDS.length + 2) {
     return null;
   }
   const workPackageId = fields['workPackageId'];
   if (workPackageId !== null && (typeof workPackageId !== 'string' || workPackageId.length === 0)) {
+    return null;
+  }
+  const changeInstruction = fields['changeInstruction'];
+  if (typeof changeInstruction !== 'string' || !isValidGraphChangeInstruction(changeInstruction)) {
     return null;
   }
   const claims: Partial<Record<(typeof CHANGE_CLAIM_FIELDS)[number], ChangeClaim>> = {};
@@ -329,6 +342,7 @@ function parseChangeRequest(raw: unknown): GraphChangeRequest | null {
   }
   return {
     workPackageId: workPackageId === null ? null : (workPackageId as WorkPackageId),
+    changeInstruction,
     ...claims,
   } as GraphChangeRequest;
 }

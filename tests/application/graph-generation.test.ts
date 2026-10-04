@@ -40,6 +40,7 @@ import { recordInitialGraph } from '../../src/application/planning/graph-history
 import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
 import type { CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
 import type { ExecutionGraph } from '../../src/domain/planning/execution-graph.js';
+import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SESSION_A = 'session-a' as CoordinatorSessionId;
@@ -177,6 +178,7 @@ test('新规划产生新世代：新 GraphId、新空 Run，且不复用前一�
     coordinationScopeId: SCOPE,
     writer,
     graph: graphFor(started.generation.graphId, started.generation.generation),
+    initialPlan: implementationPlanFor(graphFor(started.generation.graphId, started.generation.generation), 1),
     mapRevision: 0,
     planRevision: 1,
     orcaRunId: started.generation.orcaRunId,

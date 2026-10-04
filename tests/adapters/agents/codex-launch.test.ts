@@ -271,7 +271,7 @@ test('managed 凭据：子进程真实收到 provider/effort/key，秘密只出�
 
   expect(seen.env['CODEX_HOME']).toBe(prepared.stateRoot);
   expect(seen.env[CODEX_MANAGED_CREDENTIAL_ENV]).toBe(secret);
-  expect(argv).toContain('--model MiniMax-M3');
+  expect(argv).toContain('model="MiniMax-M3"');
   expect(argv).toContain('model_provider=minimax');
   expect(argv).toContain('model_providers.minimax.wire_api=responses');
   expect(argv).toContain('model_providers.minimax.env_key=' + CODEX_MANAGED_CREDENTIAL_ENV);
@@ -309,7 +309,7 @@ test('harness_login 保留原 auth.json 绑定，且不注入凭据环境变量'
   expect(seen.env[CODEX_MANAGED_CREDENTIAL_ENV]).toBeUndefined();
   expect(argv).not.toContain('env_key');
   expect(argv).not.toContain('requires_openai_auth');
-  expect(argv).toContain('--model MiniMax-M3');
+  expect(argv).toContain('model="MiniMax-M3"');
 });
 
 test('managed 凭据缺失时准备阶段 fail closed，不产出可启动会话', () => {

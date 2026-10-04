@@ -15,8 +15,10 @@
 import type { EntityRef } from '../../application/dto/identity.js';
 import type {
   IssueTrackerGateway,
+  TrackerBodyOutcome,
   TrackerIssue,
   TrackerIssueState,
+  TrackerReadFailure,
   TrackerReadOutcome,
   TrackerIssueSummaryOutcome,
   TrackerWriteOutcome,
@@ -115,7 +117,7 @@ function classifyGhRun(result: ProcessResult): GhRunOutcome {
   return { kind: 'failed', reason: `gh 退出码 ${result.exitCode}：${snippet}` };
 }
 
-function readFailure(failure: GhRunFailure): TrackerReadOutcome {
+function readFailure(failure: GhRunFailure): TrackerReadFailure {
   switch (failure.kind) {
     case 'not_found':
       return { kind: 'not_found' };
@@ -270,6 +272,30 @@ function parseIssueSummary(ref: EntityRef<string>, stdout: string): TrackerIssue
   return { kind: 'read', issue: { ref, title } };
 }
 
+/**
+ * 带版本正文的唯一解析点：除 issue 身份外，`updatedAt` 也是必需字段——没有来源版本就无法判断
+ * 正文是否已被改写，因此宁可 fail closed，也不返回一个无法标注版本的观察。
+ */
+function parseIssueBody(ref: EntityRef<string>, stdout: string): TrackerBodyOutcome {
+  let value: unknown;
+  try { value = JSON.parse(stdout.trim()); } catch {
+    return { kind: 'unknown', reason: 'gh issue view 的标准输出不是合法 JSON' };
+  }
+  const record = readRecord(value);
+  if (record === undefined || readPositiveInteger(record, 'number') !== Number(ref.id)) {
+    return { kind: 'unknown', reason: 'gh issue view 未返回请求的 issue 身份' };
+  }
+  const title = readString(record, 'title');
+  if (title === null) return { kind: 'unknown', reason: 'gh issue view 缺少字符串 title' };
+  const body = readString(record, 'body');
+  if (body === null) return { kind: 'unknown', reason: 'gh issue view 缺少字符串 body' };
+  const sourceVersion = readString(record, 'updatedAt');
+  if (sourceVersion === null || sourceVersion.trim().length === 0) {
+    return { kind: 'unknown', reason: 'gh issue view 缺少非空 updatedAt 来源版本' };
+  }
+  return { kind: 'read', value: { ref, title, body, sourceVersion } };
+}
+
 // ---------------------------------------------------------------------------
 // IssueTrackerGateway
 // ---------------------------------------------------------------------------
@@ -307,6 +333,25 @@ export async function readIssueSummary(
   if (classification.kind !== 'completed') return readFailure(classification);
   if (classification.stdout.truncated) return { kind: 'unknown', reason: '输出被截断' };
   return parseIssueSummary(ref, classification.stdout.text);
+}
+
+/**
+ * 读取当前正文并带上 `updatedAt` 版本。范围切片与缓存由调用方负责：这里只遵守既有 transport
+ * 限额，被截断的响应无法证明正文完整，直接拒绝。
+ */
+export async function readIssueBody(
+  options: GhTrackerOptions,
+  ref: EntityRef<string>,
+): Promise<TrackerBodyOutcome> {
+  if (!SUPPORTED_REF_KINDS.has(ref.kind)) {
+    return { kind: 'unknown', reason: `不支持的 tracker 引用类型 ${ref.kind}` };
+  }
+  const classification = classifyGhRun(
+    await runGh(options, ['issue', 'view', ref.id, '--json', 'number,title,body,updatedAt']),
+  );
+  if (classification.kind !== 'completed') return readFailure(classification);
+  if (classification.stdout.truncated) return { kind: 'unknown', reason: '输出被截断' };
+  return parseIssueBody(ref, classification.stdout.text);
 }
 
 export async function updateIssueBody(
@@ -389,6 +434,7 @@ export function createGhTracker(options: GhTrackerOptions): IssueTrackerGateway 
   return {
     readIssue: async (ref) => await readIssue(options, ref),
     readIssueSummary: async (ref) => await readIssueSummary(options, ref),
+    readIssueBody: async (ref) => await readIssueBody(options, ref),
     updateIssueBody: async (input) => await updateIssueBody(options, input),
     assignIssue: async (input) => await assignIssue(options, input),
   };

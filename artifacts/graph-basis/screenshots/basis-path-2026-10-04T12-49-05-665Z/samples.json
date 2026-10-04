@@ -1,0 +1,32 @@
+[
+  {
+    "label": "workspace-baseline",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-baseline-120x40-color-nerd.png",
+    "text": "workspace-baseline-120x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "failed-frame",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "failed-frame-120x40-color-nerd.png",
+    "text": "failed-frame-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  }
+]

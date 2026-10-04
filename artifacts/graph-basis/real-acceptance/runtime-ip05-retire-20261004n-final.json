@@ -1,0 +1,379 @@
+{
+  "observedAt": "2026-10-04T14:50:18.316Z",
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004n",
+  "identity": "term_0b05307b-861c-45ca-8825-e57cc8d3eda6",
+  "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+  "acceptanceModel": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+  "readOnly": true,
+  "scopeRevisionBefore": 152,
+  "graphGenerations": [
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "graphId": "ip05-ip05-retire-20261004n-scope#g1",
+      "generation": 1,
+      "planningCycleId": "ip05-ip05-retire-20261004n-scope-cycle",
+      "orcaRunId": "run_b54d29b749db",
+      "predecessorGraphId": null,
+      "baselineHead": "58dc9960508e985413c1f49a06d09b8404e82a5c",
+      "status": "candidate",
+      "createdAt": 1791123416316,
+      "updatedAt": 1791123416316
+    }
+  ],
+  "graphPatches": [
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "graphId": "ip05-ip05-retire-20261004n-scope#g1",
+      "graphVersion": 2,
+      "patchId": "graph-patch:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:op%3Aip05-ip05-retire-20261004n-scope-session%3Astep%3Ae9b12521-fe1d-4f40-ac64-a0f0eee890b4%3Acall_function_l3lt9qhka67y_1",
+      "operationId": "op:ip05-ip05-retire-20261004n-scope-session:step:e9b12521-fe1d-4f40-ac64-a0f0eee890b4:call_function_l3lt9qhka67y_1",
+      "baseGraphVersion": 1,
+      "added": [],
+      "revised": [],
+      "retired": [
+        "ip05-ip05-retire-20261004n-scope#g1:readme-banner"
+      ],
+      "descendants": [],
+      "takesOver": []
+    }
+  ],
+  "deliveryVerdicts": [
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "verdictId": "delivery-verdict:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1",
+      "verdictSequence": 1,
+      "verdict": {
+        "kind": "deliverable",
+        "evidenceRefs": [
+          "task_1fb1b2167aeb#da5bab4d848bf",
+          "task_fbd8a088eb9f#8cf8ade744241",
+          "task_cef7177fc455#4f059998b0edf",
+          "git-integration-commit:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics",
+          "git-integration-integrate:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics",
+          "git-integration-push:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics"
+        ]
+      },
+      "finalizerRole": "finalizer",
+      "sessionBindingRef": "01a1075b-1428-73e2-b843-62499eeb4ed5",
+      "recordedAt": 1791124996885
+    }
+  ],
+  "revisionHolds": [
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "workPackageId": "ip05-ip05-retire-20261004n-scope#g1:readme-banner",
+      "source": "graph_patch",
+      "sourceRef": "graph-patch:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:op%3Aip05-ip05-retire-20261004n-scope-session%3Astep%3Ae9b12521-fe1d-4f40-ac64-a0f0eee890b4%3Acall_function_l3lt9qhka67y_1",
+      "state": "released",
+      "priorContractRevision": null,
+      "admittedContractRevision": null,
+      "createdAt": 1791124759750,
+      "releasedAt": 1791124759750,
+      "releaseReason": "节点已由图修订退场，不会有后续角色或依赖工作"
+    }
+  ],
+  "baselineReconciliations": [
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "reconciliationId": "baseline-reconciliation:ip05-ip05-retire-20261004n-scope#g1:readme-banner:5cd3d421e89cf9dc7dbfcba00f6e8897581bc776",
+      "workPackageId": "ip05-ip05-retire-20261004n-scope#g1:readme-banner",
+      "role": "planner",
+      "requiredBaselineHead": "5cd3d421e89cf9dc7dbfcba00f6e8897581bc776",
+      "orcaTaskId": "task_1c9435ac594c",
+      "dispatchId": "ctx_9a3ffaf40fdd",
+      "observedHead": "5cd3d421e89cf9dc7dbfcba00f6e8897581bc776",
+      "ancestryVerified": true,
+      "targetHeadVerified": true,
+      "dirtyPathsReconciled": true,
+      "scopeReconciled": true,
+      "state": "verified",
+      "blockerRef": null,
+      "createdAt": 1791124525223,
+      "updatedAt": 1791124604679
+    }
+  ],
+  "budgetCounters": [],
+  "bindings": [
+    {
+      "identity": "issued",
+      "role": "planner",
+      "recoveryUtilityRole": null,
+      "workPackageId": "ip05-ip05-retire-20261004n-scope#g1:notes-basics",
+      "workerTaskId": "worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:planner:0:1",
+      "attemptId": "attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:planner:0:1",
+      "orcaTaskId": "task_1fb1b2167aeb",
+      "dispatchId": "dispatch:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:planner:0:1",
+      "authorizationId": "auth:ip05-ip05-retire-20261004n-scope#g1:26b451092fa70d433b5eb968e4481a6eaedd100f1eeae9c95550ee2ad36c127b",
+      "authorizationVersion": 1,
+      "workerProfileRef": {
+        "kind": "worker-profile",
+        "id": "profile-planner"
+      }
+    },
+    {
+      "identity": "issued",
+      "role": "implementation",
+      "recoveryUtilityRole": null,
+      "workPackageId": "ip05-ip05-retire-20261004n-scope#g1:notes-basics",
+      "workerTaskId": "worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:implementation:2425916540291849:1",
+      "attemptId": "attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:implementation:2425916540291849:1",
+      "orcaTaskId": "task_fbd8a088eb9f",
+      "dispatchId": "dispatch:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:implementation:2425916540291849:1",
+      "authorizationId": "auth:ip05-ip05-retire-20261004n-scope#g1:26b451092fa70d433b5eb968e4481a6eaedd100f1eeae9c95550ee2ad36c127b",
+      "authorizationVersion": 1,
+      "workerProfileRef": {
+        "kind": "worker-profile",
+        "id": "profile-implementation"
+      }
+    },
+    {
+      "identity": "issued",
+      "role": "validator",
+      "recoveryUtilityRole": null,
+      "workPackageId": "ip05-ip05-retire-20261004n-scope#g1:notes-basics",
+      "workerTaskId": "worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:validator:2425916540291849:1",
+      "attemptId": "attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:validator:2425916540291849:1",
+      "orcaTaskId": "task_cef7177fc455",
+      "dispatchId": "dispatch:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:validator:2425916540291849:1",
+      "authorizationId": "auth:ip05-ip05-retire-20261004n-scope#g1:26b451092fa70d433b5eb968e4481a6eaedd100f1eeae9c95550ee2ad36c127b",
+      "authorizationVersion": 1,
+      "workerProfileRef": {
+        "kind": "worker-profile",
+        "id": "profile-validator"
+      }
+    },
+    {
+      "identity": "issued",
+      "role": "planner",
+      "recoveryUtilityRole": null,
+      "workPackageId": "ip05-ip05-retire-20261004n-scope#g1:readme-banner",
+      "workerTaskId": "worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Areadme-banner:planner:0:1",
+      "attemptId": "attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Areadme-banner:planner:0:1",
+      "orcaTaskId": "task_2ab0889b2089",
+      "dispatchId": "dispatch:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Areadme-banner:planner:0:1",
+      "authorizationId": "auth:ip05-ip05-retire-20261004n-scope#g1:26b451092fa70d433b5eb968e4481a6eaedd100f1eeae9c95550ee2ad36c127b",
+      "authorizationVersion": 1,
+      "workerProfileRef": {
+        "kind": "worker-profile",
+        "id": "profile-planner"
+      }
+    }
+  ],
+  "segments": [
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "segmentId": "segment:ip05-ip05-retire-20261004n-scope:ctx_8bc646d10a50:attempt%3Aip05-ip05-retire-20261004n-scope%3Aip05-ip05-retire-20261004n-scope%2523g1%3A1%3Aip05-ip05-retire-20261004n-scope%2523g1%253Anotes-basics%3Aplanner%3A0%3A1",
+      "workPackageId": "ip05-ip05-retire-20261004n-scope#g1:notes-basics",
+      "role": "planner",
+      "workerTaskId": "worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:planner:0:1",
+      "dispatchId": "ctx_8bc646d10a50",
+      "attemptId": "attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:planner:0:1",
+      "sessionBindingId": "session-binding:ctx_8bc646d10a50:01a10747-1459-7640-bd56-d7fe11f85523",
+      "lastTranscriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004n/.git/orca-companion/codex/3571a74d9ef938328752/sessions/2026/10/04/rollout-2026-10-04T22-17-41-01a10747-1459-7640-bd56-d7fe11f85523.jsonl",
+      "terminalReceiptRef": null,
+      "transcriptReferenceable": true,
+      "verifiable": true,
+      "recordedAt": 1791123469527
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "segmentId": "segment:ip05-ip05-retire-20261004n-scope:ctx_6524af9f8b93:attempt%3Aip05-ip05-retire-20261004n-scope%3Aip05-ip05-retire-20261004n-scope%2523g1%3A1%3Aip05-ip05-retire-20261004n-scope%2523g1%253Anotes-basics%3Aimplementation%3A2425916540291849%3A1",
+      "workPackageId": "ip05-ip05-retire-20261004n-scope#g1:notes-basics",
+      "role": "implementation",
+      "workerTaskId": "worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:implementation:2425916540291849:1",
+      "dispatchId": "ctx_6524af9f8b93",
+      "attemptId": "attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:implementation:2425916540291849:1",
+      "sessionBindingId": "session-binding:ctx_6524af9f8b93:01a10749-18bf-7283-8c51-2977efabb7a8",
+      "lastTranscriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004n/.git/orca-companion/codex/7baf69c58d39704ebae9/sessions/2026/10/04/rollout-2026-10-04T22-19-53-01a10749-18bf-7283-8c51-2977efabb7a8.jsonl",
+      "terminalReceiptRef": null,
+      "transcriptReferenceable": true,
+      "verifiable": true,
+      "recordedAt": 1791123600334
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "segmentId": "segment:ip05-ip05-retire-20261004n-scope:ctx_cdc4e2110659:attempt%3Aip05-ip05-retire-20261004n-scope%3Aip05-ip05-retire-20261004n-scope%2523g1%3A1%3Aip05-ip05-retire-20261004n-scope%2523g1%253Anotes-basics%3Avalidator%3A2425916540291849%3A1",
+      "workPackageId": "ip05-ip05-retire-20261004n-scope#g1:notes-basics",
+      "role": "validator",
+      "workerTaskId": "worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:validator:2425916540291849:1",
+      "dispatchId": "ctx_cdc4e2110659",
+      "attemptId": "attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:validator:2425916540291849:1",
+      "sessionBindingId": "session-binding:ctx_cdc4e2110659:01a10755-961b-70c0-b182-87ba8a0ca37c",
+      "lastTranscriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004n/.git/orca-companion/codex/9caaf3d4cad971a2b3f3/sessions/2026/10/04/rollout-2026-10-04T22-33-31-01a10755-961b-70c0-b182-87ba8a0ca37c.jsonl",
+      "terminalReceiptRef": null,
+      "transcriptReferenceable": true,
+      "verifiable": true,
+      "recordedAt": 1791124419279
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "segmentId": "segment:ip05-ip05-retire-20261004n-scope:ctx_43eb2420fc76:attempt%3Aip05-ip05-retire-20261004n-scope%3Aip05-ip05-retire-20261004n-scope%2523g1%3A1%3Aip05-ip05-retire-20261004n-scope%2523g1%253Areadme-banner%3Aplanner%3A0%3A1",
+      "workPackageId": "ip05-ip05-retire-20261004n-scope#g1:readme-banner",
+      "role": "planner",
+      "workerTaskId": "worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Areadme-banner:planner:0:1",
+      "dispatchId": "ctx_43eb2420fc76",
+      "attemptId": "attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Areadme-banner:planner:0:1",
+      "sessionBindingId": "session-binding:ctx_43eb2420fc76:01a10758-e8c4-7cc3-ac18-fb3fb74e644e",
+      "lastTranscriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004n/.git/orca-companion/codex/d01563981ef6986b4412/sessions/2026/10/04/rollout-2026-10-04T22-37-09-01a10758-e8c4-7cc3-ac18-fb3fb74e644e.jsonl",
+      "terminalReceiptRef": null,
+      "transcriptReferenceable": true,
+      "verifiable": true,
+      "recordedAt": 1791124642876
+    }
+  ],
+  "settlements": [
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "dedupeKey": "[\"delivery_39ad71dc2baf\",\"run_b54d29b749db\",1,\"worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:planner:0:1\",\"ctx_8bc646d10a50\",\"attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:planner:0:1\"]",
+      "deliveryId": "delivery_39ad71dc2baf",
+      "runId": "run_b54d29b749db",
+      "consumerGeneration": 1,
+      "workerTaskId": "worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:planner:0:1",
+      "dispatchId": "ctx_8bc646d10a50",
+      "attemptId": "attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:planner:0:1",
+      "role": "planner",
+      "contractRevision": 2425916540291849,
+      "orcaResultRef": "task_1fb1b2167aeb#da5bab4d848bf",
+      "acceptedAt": 1791123566693
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "dedupeKey": "[\"delivery_cf71ea625cc7\",\"run_b54d29b749db\",1,\"worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:implementation:2425916540291849:1\",\"ctx_6524af9f8b93\",\"attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:implementation:2425916540291849:1\"]",
+      "deliveryId": "delivery_cf71ea625cc7",
+      "runId": "run_b54d29b749db",
+      "consumerGeneration": 1,
+      "workerTaskId": "worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:implementation:2425916540291849:1",
+      "dispatchId": "ctx_6524af9f8b93",
+      "attemptId": "attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:implementation:2425916540291849:1",
+      "role": "implementation",
+      "contractRevision": 2425916540291849,
+      "orcaResultRef": "task_fbd8a088eb9f#8cf8ade744241",
+      "acceptedAt": 1791124390598
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "dedupeKey": "[\"delivery_89a602996ccd\",\"run_b54d29b749db\",1,\"worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:validator:2425916540291849:1\",\"ctx_cdc4e2110659\",\"attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:validator:2425916540291849:1\"]",
+      "deliveryId": "delivery_89a602996ccd",
+      "runId": "run_b54d29b749db",
+      "consumerGeneration": 1,
+      "workerTaskId": "worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:validator:2425916540291849:1",
+      "dispatchId": "ctx_cdc4e2110659",
+      "attemptId": "attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Anotes-basics:validator:2425916540291849:1",
+      "role": "validator",
+      "contractRevision": 2425916540291849,
+      "orcaResultRef": "task_cef7177fc455#4f059998b0edf",
+      "acceptedAt": 1791124482180
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "dedupeKey": "[\"delivery_a81619663564\",\"run_b54d29b749db\",1,\"baseline-reconciliation:ip05-ip05-retire-20261004n-scope#g1:readme-banner:5cd3d421e89cf9dc7dbfcba00f6e8897581bc776\",\"ctx_9a3ffaf40fdd\",\"baseline-reconciliation:ip05-ip05-retire-20261004n-scope#g1:readme-banner:5cd3d421e89cf9dc7dbfcba00f6e8897581bc776\"]",
+      "deliveryId": "delivery_a81619663564",
+      "runId": "run_b54d29b749db",
+      "consumerGeneration": 1,
+      "workerTaskId": "baseline-reconciliation:ip05-ip05-retire-20261004n-scope#g1:readme-banner:5cd3d421e89cf9dc7dbfcba00f6e8897581bc776",
+      "dispatchId": "ctx_9a3ffaf40fdd",
+      "attemptId": "baseline-reconciliation:ip05-ip05-retire-20261004n-scope#g1:readme-banner:5cd3d421e89cf9dc7dbfcba00f6e8897581bc776",
+      "role": "planner",
+      "contractRevision": 1,
+      "orcaResultRef": "task_1c9435ac594c#ff3505dedc437",
+      "acceptedAt": 1791124603387
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "dedupeKey": "[\"delivery_4c7507e6fe6d\",\"run_b54d29b749db\",1,\"worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Areadme-banner:planner:0:1\",\"ctx_43eb2420fc76\",\"attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Areadme-banner:planner:0:1\"]",
+      "deliveryId": "delivery_4c7507e6fe6d",
+      "runId": "run_b54d29b749db",
+      "consumerGeneration": 1,
+      "workerTaskId": "worker-task:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Areadme-banner:planner:0:1",
+      "dispatchId": "ctx_43eb2420fc76",
+      "attemptId": "attempt:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:ip05-ip05-retire-20261004n-scope%23g1%3Areadme-banner:planner:0:1",
+      "role": "planner",
+      "contractRevision": 1500458354603097,
+      "orcaResultRef": "task_2ab0889b2089#b79971da52459",
+      "acceptedAt": 1791124734060
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-retire-20261004n-scope",
+      "dedupeKey": "[\"delivery_376e278cf5c4\",\"run_b54d29b749db\",1,\"graph-patch:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:op%3Aip05-ip05-retire-20261004n-scope-session%3Astep%3Ae9b12521-fe1d-4f40-ac64-a0f0eee890b4%3Acall_function_l3lt9qhka67y_1:planner-task\",\"ctx_fa2dcdf7b18a\",\"graph-patch:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:op%3Aip05-ip05-retire-20261004n-scope-session%3Astep%3Ae9b12521-fe1d-4f40-ac64-a0f0eee890b4%3Acall_function_l3lt9qhka67y_1:planner-attempt\"]",
+      "deliveryId": "delivery_376e278cf5c4",
+      "runId": "run_b54d29b749db",
+      "consumerGeneration": 1,
+      "workerTaskId": "graph-patch:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:op%3Aip05-ip05-retire-20261004n-scope-session%3Astep%3Ae9b12521-fe1d-4f40-ac64-a0f0eee890b4%3Acall_function_l3lt9qhka67y_1:planner-task",
+      "dispatchId": "ctx_fa2dcdf7b18a",
+      "attemptId": "graph-patch:ip05-ip05-retire-20261004n-scope:ip05-ip05-retire-20261004n-scope%23g1:1:op%3Aip05-ip05-retire-20261004n-scope-session%3Astep%3Ae9b12521-fe1d-4f40-ac64-a0f0eee890b4%3Acall_function_l3lt9qhka67y_1:planner-attempt",
+      "role": "planner",
+      "contractRevision": 1,
+      "orcaResultRef": "task_64593c73de09#ce1322066374b",
+      "acceptedAt": 1791124758208
+    }
+  ],
+  "workers": [
+    {
+      "dispatchId": "ctx_8bc646d10a50",
+      "result": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_8bc646d10a50",
+          "taskId": "task_1fb1b2167aeb",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_f622b7a9-9c3a-4b4b-818e-823feae4304e",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      }
+    },
+    {
+      "dispatchId": "ctx_6524af9f8b93",
+      "result": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_6524af9f8b93",
+          "taskId": "task_fbd8a088eb9f",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_6aa1210d-ad6f-499a-86ce-7d73a80b5120",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      }
+    },
+    {
+      "dispatchId": "ctx_cdc4e2110659",
+      "result": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_cdc4e2110659",
+          "taskId": "task_cef7177fc455",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_5572d8f8-437e-4a77-b035-e7106a847f9b",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      }
+    },
+    {
+      "dispatchId": "ctx_43eb2420fc76",
+      "result": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_43eb2420fc76",
+          "taskId": "task_2ab0889b2089",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_419eac7e-8ac3-4f69-ad60-20c856b905f6",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      }
+    }
+  ],
+  "recoveries": [],
+  "scopeRevisionAfter": 152,
+  "scopeRevisionUnchanged": true
+}

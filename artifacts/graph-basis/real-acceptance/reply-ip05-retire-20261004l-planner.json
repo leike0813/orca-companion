@@ -1,0 +1,42 @@
+{
+  "id": "350a5831-6333-47e5-905f-d50203954ffe",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_be06d199dfa6",
+      "run_id": "run_84745c381f09",
+      "from_handle": "run:run_84745c381f09",
+      "to_handle": "dispatch:ctx_69319ae4e0e9",
+      "subject": "Re: Question",
+      "body": "本次隔离验收的正式计划为 NOTES 基础内容：只在 NOTES.md 编写一段简短项目说明，包含一个 Markdown 标题和至少一句正文；Implementation 之后实现该文件，Validator 通过读取文件确认标题和正文。Planner 当前只在 Task Envelope 指定的 openspec/changes 目录中编写对应原生规格与 tasks.md，Impact 只列 NOTES.md，不修改 README.md 或配置，不安装依赖。文件在 baseline 中尚不存在是预期。",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": "msg_eb45cea81f4e",
+      "payload": null,
+      "created_at": "2026-10-04T13:42:40Z",
+      "delivered_at": null,
+      "delivery_contract": "current_delivery"
+    },
+    "question": {
+      "message_id": "msg_eb45cea81f4e",
+      "run_id": "run_84745c381f09",
+      "dispatch_id": "ctx_69319ae4e0e9",
+      "asker_handle": "term_ae441d90-446c-4ce6-b327-860a759039cc",
+      "status": "answered",
+      "answer_message_id": "msg_be06d199dfa6",
+      "answer_body": "本次隔离验收的正式计划为 NOTES 基础内容：只在 NOTES.md 编写一段简短项目说明，包含一个 Markdown 标题和至少一句正文；Implementation 之后实现该文件，Validator 通过读取文件确认标题和正文。Planner 当前只在 Task Envelope 指定的 openspec/changes 目录中编写对应原生规格与 tasks.md，Impact 只列 NOTES.md，不修改 README.md 或配置，不安装依赖。文件在 baseline 中尚不存在是预期。",
+      "answered_by_generation": 1,
+      "created_at": "2026-10-04T13:39:15Z",
+      "answered_at": "2026-10-04T13:42:40Z",
+      "closed_at": null
+    },
+    "duplicate": false,
+    "mutation": {
+      "requestId": "c7d5bde2-4aa2-4626-a8f3-e444b5840d33",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "34627582-8e2e-49de-b4eb-58b0b159cbd0"
+  }
+}

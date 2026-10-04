@@ -1,0 +1,98 @@
+{
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004n",
+  "materializationBindings": 4,
+  "recoveryRecords": 0,
+  "roles": [
+    {
+      "role": "implementation",
+      "sessions": 1,
+      "requests": {
+        "status": "unavailable",
+        "reason": "rollout 没有可无歧义计数的请求标识"
+      },
+      "modelIds": [
+        "minimax-cn/MiniMax-M3.1-Flash-Preview"
+      ],
+      "tokenUsage": {
+        "status": "available",
+        "inputTokens": 222625,
+        "cachedInputTokens": 195968,
+        "outputTokens": 2342,
+        "measuredSessions": 1,
+        "unavailableSessions": 0
+      }
+    },
+    {
+      "role": "planner",
+      "sessions": 2,
+      "requests": {
+        "status": "unavailable",
+        "reason": "rollout 没有可无歧义计数的请求标识"
+      },
+      "modelIds": [
+        "minimax-cn/MiniMax-M3.1-Flash-Preview"
+      ],
+      "tokenUsage": {
+        "status": "available",
+        "inputTokens": 542598,
+        "cachedInputTokens": 508391,
+        "outputTokens": 9174,
+        "measuredSessions": 2,
+        "unavailableSessions": 0
+      }
+    },
+    {
+      "role": "unbound",
+      "sessions": 3,
+      "requests": {
+        "status": "unavailable",
+        "reason": "rollout 没有可无歧义计数的请求标识"
+      },
+      "modelIds": [
+        "minimax-cn/MiniMax-M3.1-Flash-Preview"
+      ],
+      "tokenUsage": {
+        "status": "available",
+        "inputTokens": 712740,
+        "cachedInputTokens": 666006,
+        "outputTokens": 8722,
+        "measuredSessions": 3,
+        "unavailableSessions": 0
+      }
+    },
+    {
+      "role": "validator",
+      "sessions": 1,
+      "requests": {
+        "status": "unavailable",
+        "reason": "rollout 没有可无歧义计数的请求标识"
+      },
+      "modelIds": [
+        "minimax-cn/MiniMax-M3.1-Flash-Preview"
+      ],
+      "tokenUsage": {
+        "status": "available",
+        "inputTokens": 134271,
+        "cachedInputTokens": 120608,
+        "outputTokens": 4141,
+        "measuredSessions": 1,
+        "unavailableSessions": 0
+      }
+    }
+  ],
+  "totals": {
+    "sessions": 7,
+    "requests": {
+      "status": "unavailable",
+      "reason": "rollout 没有可无歧义计数的请求标识"
+    },
+    "tokenUsage": {
+      "inputTokens": 1612234,
+      "cachedInputTokens": 1490973,
+      "outputTokens": 24379,
+      "measuredSessions": 7,
+      "unavailableSessions": 0
+    }
+  },
+  "note": "tokenUsage 优先使用最后一个结构化累计 total_token_usage；仅单快照时才使用 last_token_usage。"
+}

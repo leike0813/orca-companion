@@ -54,11 +54,33 @@ export type TrackerIssueSummary = {
   readonly title: string;
 };
 
-export type TrackerIssueSummaryOutcome =
-  | { readonly kind: 'read'; readonly issue: TrackerIssueSummary }
+/**
+ * 三种非成功结局只有一份：`readIssue`、紧凑摘要和带版本正文共享它们，调用方对「不存在」与
+ * 「不能证明」的判断因此完全一致。
+ */
+export type TrackerReadFailure =
   | { readonly kind: 'not_found' }
   | { readonly kind: 'unavailable'; readonly message: string }
   | { readonly kind: 'unknown'; readonly reason: string };
+
+export type TrackerIssueSummaryOutcome =
+  | { readonly kind: 'read'; readonly issue: TrackerIssueSummary }
+  | TrackerReadFailure;
+
+/**
+ * 带来源版本的正文观察。`sourceVersion` 是 tracker 侧的不透明版本令牌（当前为 issue 的
+ * `updatedAt`），不是 Scope revision：外部正文可变，必须按它自己的版本判断新鲜度。
+ */
+export type TrackerIssueBody = {
+  readonly ref: EntityRef<string>;
+  readonly title: string;
+  readonly body: string;
+  readonly sourceVersion: string;
+};
+
+export type TrackerBodyOutcome =
+  | { readonly kind: 'read'; readonly value: TrackerIssueBody }
+  | TrackerReadFailure;
 
 /**
  * 读取结果必须能区分「确实不存在」与「不能证明读到了」：前者允许调用方继续判断，后者只允许
@@ -66,9 +88,7 @@ export type TrackerIssueSummaryOutcome =
  */
 export type TrackerReadOutcome =
   | { readonly kind: 'read'; readonly issue: TrackerIssue }
-  | { readonly kind: 'not_found' }
-  | { readonly kind: 'unavailable'; readonly message: string }
-  | { readonly kind: 'unknown'; readonly reason: string };
+  | TrackerReadFailure;
 
 export type TrackerWriteOutcome =
   | { readonly kind: 'accepted'; readonly requestId?: string }
@@ -80,6 +100,8 @@ export interface IssueTrackerGateway {
   readIssue(ref: EntityRef<string>): Promise<TrackerReadOutcome>;
   /** Body-free lookup for compact project metadata; adapters may omit it when unsupported. */
   readIssueSummary?(ref: EntityRef<string>): Promise<TrackerIssueSummaryOutcome>;
+  /** Body read tagged with the tracker's own version; adapters may omit it when unsupported. */
+  readIssueBody?(ref: EntityRef<string>): Promise<TrackerBodyOutcome>;
   updateIssueBody(input: { readonly ref: EntityRef<string>; readonly body: string }): Promise<TrackerWriteOutcome>;
   assignIssue(input: {
     readonly ref: EntityRef<string>;

@@ -1,0 +1,98 @@
+{
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004j",
+  "materializationBindings": 3,
+  "recoveryRecords": 2,
+  "roles": [
+    {
+      "role": "implementation",
+      "sessions": 1,
+      "requests": {
+        "status": "unavailable",
+        "reason": "rollout 没有可无歧义计数的请求标识"
+      },
+      "modelIds": [
+        "gpt-6-luna"
+      ],
+      "tokenUsage": {
+        "status": "unavailable",
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0,
+        "measuredSessions": 0,
+        "unavailableSessions": 1
+      }
+    },
+    {
+      "role": "planner",
+      "sessions": 1,
+      "requests": {
+        "status": "unavailable",
+        "reason": "rollout 没有可无歧义计数的请求标识"
+      },
+      "modelIds": [
+        "gpt-6-luna"
+      ],
+      "tokenUsage": {
+        "status": "available",
+        "inputTokens": 355465,
+        "cachedInputTokens": 321024,
+        "outputTokens": 3948,
+        "measuredSessions": 1,
+        "unavailableSessions": 0
+      }
+    },
+    {
+      "role": "recovery_utility",
+      "sessions": 1,
+      "requests": {
+        "status": "unavailable",
+        "reason": "rollout 没有可无歧义计数的请求标识"
+      },
+      "modelIds": [
+        "gpt-6-luna"
+      ],
+      "tokenUsage": {
+        "status": "available",
+        "inputTokens": 132427,
+        "cachedInputTokens": 104960,
+        "outputTokens": 2998,
+        "measuredSessions": 1,
+        "unavailableSessions": 0
+      }
+    },
+    {
+      "role": "unbound",
+      "sessions": 1,
+      "requests": {
+        "status": "unavailable",
+        "reason": "rollout 没有可无歧义计数的请求标识"
+      },
+      "modelIds": [
+        "gpt-6-luna"
+      ],
+      "tokenUsage": {
+        "status": "available",
+        "inputTokens": 142000,
+        "cachedInputTokens": 117760,
+        "outputTokens": 1939,
+        "measuredSessions": 1,
+        "unavailableSessions": 0
+      }
+    }
+  ],
+  "totals": {
+    "sessions": 4,
+    "requests": {
+      "status": "unavailable",
+      "reason": "rollout 没有可无歧义计数的请求标识"
+    },
+    "tokenUsage": {
+      "inputTokens": 629892,
+      "cachedInputTokens": 543744,
+      "outputTokens": 8885,
+      "measuredSessions": 3,
+      "unavailableSessions": 1
+    }
+  },
+  "note": "tokenUsage 优先使用最后一个结构化累计 total_token_usage；仅单快照时才使用 last_token_usage。"
+}

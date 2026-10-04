@@ -26,6 +26,57 @@ import {
   type RenderedTui,
   type SnapshotOverrides,
 } from './harness.js';
+import { createFakeGraphBasis } from '../support/graph-basis.js';
+
+describe('依据下钻与弹窗的层级（IP-04）', () => {
+  test('依据页打开时执行新弹窗会结束下钻，弹窗关闭后回到原工作区', async () => {
+    const fake = createFakePorts();
+    const basis = createFakeGraphBasis({
+      versions: [
+        {
+          graphId: 'graph-1',
+          generation: 1,
+          version: 2,
+          recordKind: 'initial',
+          parentVersion: null,
+          patchId: null,
+          mapRevision: 3,
+          planRevision: 3,
+          orcaRunId: 'run-1',
+          recordedAt: Date.UTC(2026, 9, 1),
+          generationStatus: 'candidate',
+          current: true,
+        },
+      ],
+    });
+    const rendered = renderTui({ ...fake.ports, graphBasis: basis.port });
+    await settle();
+
+    // 从项目面板的工作详情进入：那里没有覆盖层，因此 Ctrl+P 仍能打开新弹窗。
+    await pressKey(rendered, '\u0002');
+    for (let step = 0; step < 4; step += 1) await pressKey(rendered, '\u001b[B');
+    await pressKey(rendered, '\r');
+    await pressKey(rendered, '\r');
+    expect(frameText(rendered)).toContain('执行依据与历史图');
+
+    // 弹窗有自己的返回语义：打开即结束依据下钻，不叠加在依据页面之上。
+    await openSessionPicker(rendered);
+    expect(frameText(rendered)).toContain('Session Picker');
+    expect(frameText(rendered)).not.toContain('执行依据与历史图');
+
+    // Session Picker 下面还压着 Command Palette：Esc 逐层返回两次才回到工作区。
+    await pressEscape(rendered);
+    await pressEscape(rendered);
+    const back = frameText(rendered);
+    expect(back).not.toContain('执行依据与历史图');
+    expect(back).not.toContain('Session Picker');
+    expect(back).toContain('普通消息');
+    expect(fake.executeCount()).toBe(0);
+
+    rendered.unmount();
+  });
+});
+
 
 async function pressKey(rendered: RenderedTui, input: string): Promise<void> {
   rendered.stdin.write(input);
@@ -90,10 +141,10 @@ async function runIdentityLines(rendered: RenderedTui): Promise<string> {
   for (let step = 0; step < 100; step += 1) {
     const frame = frameText(rendered).replace(/[\s│]/gu, '');
     frames.push(frame);
-    if (frame.includes('历史图版本和依据全文读取')) break;
+    if (frame.includes('Enter打开依据来源与历史图版本目录')) break;
     await pressKey(rendered, '\u001b[B');
   }
-  expect(frames.at(-1)).toContain('历史图版本和依据全文读取');
+  expect(frames.at(-1)).toContain('Enter打开依据来源与历史图版本目录');
   await pressEscape(rendered);
   for (let step = 0; step < 3; step += 1) await pressKey(rendered, '\u001b[A');
   await pressKey(rendered, '\r');

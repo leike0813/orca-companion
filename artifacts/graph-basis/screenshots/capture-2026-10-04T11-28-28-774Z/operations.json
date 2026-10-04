@@ -1,0 +1,52 @@
+[
+  {
+    "name": "六票工作区基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "P-43 Inspector 基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "保留图画布与 Inspector 原布局"
+  },
+  {
+    "name": "全代际目录",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "真实 GraphBasisService/schema17 分页目录"
+  },
+  {
+    "name": "目录翻页",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "PgDn 取得后续版本且版本身份持续可见"
+  },
+  {
+    "name": "semantic-failure",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "error": "Error: semantic timeout (10000ms): 目标项目\n示例仓库 · main · session-a · 执行 · active · 待答0\n────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮\n│ 依据正文                                                                                                             │\n│ 目录入口 › 来源目录 · wp-a › 原始 Implementation Plan                                                                │\n│ 原始 Implementation Plan · 来源版本 {\"kind\":\"initial_plan\",\"graph\":{\"graphId\":\"scope-1#g2\",\"generation\":2,\"version\"… │\n│ {\"planRevision\":26,\"destinationRef\":{\"kind\":\"destination\",\"id\":\"destination-under-test\",\"version\":1},\"workPackages\": │\n│ [{\"key\":\"wp-1\",\"title\":\"wp-a\",\"dependsOn\":[],\"scopeEnvelope\":{\"include\":[\"src\"],\"exclude\":[]},\"requestedBudget\":{\"im │\n│ plementationAttempts\":2,\"validatorRepairs\":2,\"graphRevisions\":2,\"specificationRevisions\":2,\"maxRecoveriesPerWorkerAt │\n│ tempt\":1}},{\"key\":\"wp-2\",\"title\":\"wp-b\",\"dependsOn\":[\"wp-1\"],\"scopeEnvelope\":{\"include\":[\"src\"],\"exclude\":[]},\"reque │\n│ stedBudget\":{\"implementationAttempts\":2,\"validatorRepairs\":2,\"graphRevisions\":2,\"specificationRevisions\":2,\"maxRecov │\n│ eriesPerWorkerAttempt\":1}},{\"key\":\"wp-3\",\"title\":\"wp-c\",\"dependsOn\":[\"wp-2\"],\"scopeEnvelope\":{\"include\":[\"src\"],\"exc │\n│ lude\":[]},\"requestedBudget\":{\"implementationAttempts\":2,\"validatorRepairs\":2,\"graphRevisions\":2,\"specificationRevisi │\n│ ons\":2,\"maxRecoveriesPerWorkerAttempt\":1}}]}                                                                         │\n│ 已到本来源版本末尾                                                                                                   │\n│ ↑↓ 滚动 · PgDn 下一段 · PgUp 上一段 · Esc 返回                                                                       │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n│                                                                                                                      │\n╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯\n"
+  }
+]

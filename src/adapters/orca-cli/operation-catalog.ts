@@ -490,8 +490,7 @@ export function parseRequestShow(result: unknown): OperationParse<RequestShowRes
 }
 
 /**
- * 字段名按真实载荷登记：`dispatch` 与 `worker` 使用 snake_case（`task_id`、
- * `agent_terminal_handle`），`observation` 使用 camelCase（`status`、`exactWorker`）。
+ * 公开 worker-show 的 Worker 与 observation 字段采用当前运行时的 camelCase。
  */
 export function parseWorkerShow(result: unknown): OperationParse<WorkerShowResult> {
   const record = requireRecord(result, 'worker show');
@@ -514,7 +513,7 @@ export function parseWorkerShow(result: unknown): OperationParse<WorkerShowResul
     dispatchStatus: dispatch === undefined ? null : readString(dispatch, 'status'),
     workerState,
     workerStage: readString(worker, 'stage'),
-    agentTerminalHandle: readString(worker, 'agent_terminal_handle'),
+    agentTerminalHandle: readString(worker, 'agentTerminalHandle'),
     observationStatus: observation === undefined ? null : readString(observation, 'status'),
     exactWorker: observation === undefined ? null : readBoolean(observation, 'exactWorker'),
   });

@@ -1,0 +1,7 @@
+(node:2258359) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+doctor 不支持参数: /home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004i
+用法:
+  orca-companion [repository-path]            启动前台 TUI（需要 TTY）
+  orca-companion status [--json]              只读输出当前 Coordination Scope 状态（无 TTY 可运行）
+  orca-companion doctor                       核验 Orca 环境与 M0 必需能力（无 TTY 可运行）

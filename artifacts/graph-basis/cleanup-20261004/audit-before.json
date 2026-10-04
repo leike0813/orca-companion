@@ -1,0 +1,410 @@
+[
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004n",
+    "isMainWorktree": true,
+    "sizeKiB": 490868,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004n\nHEAD 5cd3d421e89cf9dc7dbfcba00f6e8897581bc776\nbranch refs/heads/main\n\nworktree /home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004n/wp-4297b411b9d0a932284844797ee7393b91943c1882751ad36152203cb34e08f4\nHEAD 5cd3d421e89cf9dc7dbfcba00f6e8897581bc776\nbranch refs/heads/leike0813/wp-4297b411b9d0a932284844797ee7393b91943c1882751ad36152203cb34e08f4\n\nworktree /home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004n/wp-7e5ec804b33745235b07beb10b2d42d7455272f359d5f13c39b1fdd53dc6db6c\nHEAD 5cd3d421e89cf9dc7dbfcba00f6e8897581bc776\nbranch refs/heads/leike0813/wp-7e5ec804b33745235b07beb10b2d42d7455272f359d5f13c39b1fdd53dc6db6c\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "NOTES.md",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o",
+    "isMainWorktree": true,
+    "sizeKiB": 780512,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o\nHEAD a7e21a84d7299501f0a13a8b5910ec88e228ebac\nbranch refs/heads/main\n\nworktree /home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004o/wp-0dc2af6f42c450ce56a3889a552d92aac96040f2aba4080de61048e8c120aa7f\nHEAD 154be1dcd2e7d1b5232ea78753c2177cde4ba9fe\nbranch refs/heads/leike0813/wp-0dc2af6f42c450ce56a3889a552d92aac96040f2aba4080de61048e8c120aa7f\n\nworktree /home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004o/wp-7c31ab18846f4c933ef7175575db7efcaeaab957db1c67fefa5751a1d32b0aa4\nHEAD a7e21a84d7299501f0a13a8b5910ec88e228ebac\nbranch refs/heads/leike0813/wp-7c31ab18846f4c933ef7175575db7efcaeaab957db1c67fefa5751a1d32b0aa4\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "NOTES.md",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004o/wp-7c31ab18846f4c933ef7175575db7efcaeaab957db1c67fefa5751a1d32b0aa4",
+    "isMainWorktree": false,
+    "sizeKiB": 96,
+    "statusLines": [],
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "NOTES.md",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004n/wp-4297b411b9d0a932284844797ee7393b91943c1882751ad36152203cb34e08f4",
+    "isMainWorktree": false,
+    "sizeKiB": 48,
+    "statusLines": [
+      "?? openspec/changes/ip05-ip05-retire-20261004n-scope-g1-readme-banner-4297b411/proposal.md",
+      "?? openspec/changes/ip05-ip05-retire-20261004n-scope-g1-readme-banner-4297b411/specs/project-readme/spec.md",
+      "?? openspec/changes/ip05-ip05-retire-20261004n-scope-g1-readme-banner-4297b411/tasks.md"
+    ],
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "NOTES.md",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004n/wp-7e5ec804b33745235b07beb10b2d42d7455272f359d5f13c39b1fdd53dc6db6c",
+    "isMainWorktree": false,
+    "sizeKiB": 36,
+    "statusLines": [],
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "NOTES.md",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004o/wp-0dc2af6f42c450ce56a3889a552d92aac96040f2aba4080de61048e8c120aa7f",
+    "isMainWorktree": false,
+    "sizeKiB": 68,
+    "statusLines": [],
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "NOTES.md",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004m/wp-5024538f10672a0c1ff8b9128f4ad240bbcdc1db769739821d6c05eb3d2f4ca0",
+    "isMainWorktree": false,
+    "sizeKiB": 36,
+    "statusLines": [
+      "?? NOTES.md",
+      "?? openspec/changes/ip05-ip05-recovery-20261004m-scope-g1-notes-basics-5024538f/proposal.md",
+      "?? openspec/changes/ip05-ip05-recovery-20261004m-scope-g1-notes-basics-5024538f/specs/notes-basics/spec.md",
+      "?? openspec/changes/ip05-ip05-recovery-20261004m-scope-g1-notes-basics-5024538f/tasks.md"
+    ],
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "NOTES.md",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004m",
+    "isMainWorktree": true,
+    "sizeKiB": 244604,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004m\nHEAD 6aa8993f04b59c5f8256cc483d158e735bacea38\nbranch refs/heads/main\n\nworktree /home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004m/wp-5024538f10672a0c1ff8b9128f4ad240bbcdc1db769739821d6c05eb3d2f4ca0\nHEAD 6aa8993f04b59c5f8256cc483d158e735bacea38\nbranch refs/heads/leike0813/wp-5024538f10672a0c1ff8b9128f4ad240bbcdc1db769739821d6c05eb3d2f4ca0\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "README.md",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004l",
+    "isMainWorktree": true,
+    "sizeKiB": 492892,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004l\nHEAD 2315db0a75131c798249594a93aba7f4d40878b4\nbranch refs/heads/main\n\nworktree /home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004l/wp-2827f31ead0d26e42e9a4c7f8a54748ad550bf9cd0c1880986d266fde577d335\nHEAD 2315db0a75131c798249594a93aba7f4d40878b4\nbranch refs/heads/leike0813/wp-2827f31ead0d26e42e9a4c7f8a54748ad550bf9cd0c1880986d266fde577d335\n\nworktree /home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004l/wp-ff922555ccbed6ab5f63c62226dd6201a83288e5d2f4752656bbb560fef1a0cd\nHEAD 2315db0a75131c798249594a93aba7f4d40878b4\nbranch refs/heads/leike0813/wp-ff922555ccbed6ab5f63c62226dd6201a83288e5d2f4752656bbb560fef1a0cd\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "NOTES.md",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004l/wp-2827f31ead0d26e42e9a4c7f8a54748ad550bf9cd0c1880986d266fde577d335",
+    "isMainWorktree": false,
+    "sizeKiB": 48,
+    "statusLines": [
+      "?? openspec/changes/ip05-ip05-retire-20261004l-scope-g1-readme-banner-2827f31e/proposal.md",
+      "?? openspec/changes/ip05-ip05-retire-20261004l-scope-g1-readme-banner-2827f31e/specs/readme-status/spec.md",
+      "?? openspec/changes/ip05-ip05-retire-20261004l-scope-g1-readme-banner-2827f31e/tasks.md"
+    ],
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "NOTES.md",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004l/wp-ff922555ccbed6ab5f63c62226dd6201a83288e5d2f4752656bbb560fef1a0cd",
+    "isMainWorktree": false,
+    "sizeKiB": 36,
+    "statusLines": [],
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "NOTES.md",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004k/wp-bc1f56e26cd4e12a9cb75bc87533e8cc4afb11f7cb7d010d86cf9801c75ab3ff",
+    "isMainWorktree": false,
+    "sizeKiB": 32,
+    "statusLines": [
+      "?? openspec/changes/ip05-ip05-retire-20261004k-scope-g1-notes-basics-bc1f56e2/proposal.md",
+      "?? openspec/changes/ip05-ip05-retire-20261004k-scope-g1-notes-basics-bc1f56e2/specs/notes/spec.md",
+      "?? openspec/changes/ip05-ip05-retire-20261004k-scope-g1-notes-basics-bc1f56e2/tasks.md"
+    ],
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004k",
+    "isMainWorktree": true,
+    "sizeKiB": 70832,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004k\nHEAD fad1110774dce69f51f18fc56e1f2c72e0ef5b62\nbranch refs/heads/main\n\nworktree /home/joshua/orca/workspaces/orca-companion-ip05-retire-20261004k/wp-bc1f56e26cd4e12a9cb75bc87533e8cc4afb11f7cb7d010d86cf9801c75ab3ff\nHEAD fad1110774dce69f51f18fc56e1f2c72e0ef5b62\nbranch refs/heads/leike0813/wp-bc1f56e26cd4e12a9cb75bc87533e8cc4afb11f7cb7d010d86cf9801c75ab3ff\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "README.md",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004i",
+    "isMainWorktree": true,
+    "sizeKiB": 703596,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004i\nHEAD 405231343e083b432fb0c47bd03854137e4b398d\nbranch refs/heads/main\n\nworktree /home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-f11d7be0ef7422671aaaeaf1255600978655e30519bb31d86187448f817b9072\nHEAD 4e7039c896a94fa8ffcf65858dfe6559f410eee6\nbranch refs/heads/leike0813/wp-f11d7be0ef7422671aaaeaf1255600978655e30519bb31d86187448f817b9072\n\nworktree /home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-fc01ba2e42414aba3f9bbd1db280b51a6dc5e69b1392d14bd5f97e351f2338bb\nHEAD 405231343e083b432fb0c47bd03854137e4b398d\nbranch refs/heads/leike0813/wp-fc01ba2e42414aba3f9bbd1db280b51a6dc5e69b1392d14bd5f97e351f2338bb\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "NOTES.md",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+    "isMainWorktree": false,
+    "sizeKiB": 36,
+    "statusLines": [
+      "?? NOTES.md",
+      "?? openspec/changes/ip05-ip05-recovery-20261004j-scope-g1-notes-basics-9c38eb67/proposal.md",
+      "?? openspec/changes/ip05-ip05-recovery-20261004j-scope-g1-notes-basics-9c38eb67/specs/notes-basics/spec.md",
+      "?? openspec/changes/ip05-ip05-recovery-20261004j-scope-g1-notes-basics-9c38eb67/tasks.md"
+    ],
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "NOTES.md",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-fc01ba2e42414aba3f9bbd1db280b51a6dc5e69b1392d14bd5f97e351f2338bb",
+    "isMainWorktree": false,
+    "sizeKiB": 48,
+    "statusLines": [],
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "NOTES.md",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-f11d7be0ef7422671aaaeaf1255600978655e30519bb31d86187448f817b9072",
+    "isMainWorktree": false,
+    "sizeKiB": 36,
+    "statusLines": [],
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "NOTES.md",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004j",
+    "isMainWorktree": true,
+    "sizeKiB": 244592,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004j\nHEAD fd0dd9b0ecdafbd2734d1a8744b298cbfd815fea\nbranch refs/heads/main\n\nworktree /home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b\nHEAD fd0dd9b0ecdafbd2734d1a8744b298cbfd815fea\nbranch refs/heads/leike0813/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "README.md",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004h/wp-9239a0cfa8d15f2545c8414671fa75fd7b8bcd6aa47d6c74b373d304f467076c",
+    "isMainWorktree": false,
+    "sizeKiB": 32,
+    "statusLines": [
+      "?? openspec/changes/ip05-ip05-exec-20261004h-scope-g1-notes-basics-9239a0cf/proposal.md",
+      "?? openspec/changes/ip05-ip05-exec-20261004h-scope-g1-notes-basics-9239a0cf/specs/notes-basics/spec.md",
+      "?? openspec/changes/ip05-ip05-exec-20261004h-scope-g1-notes-basics-9239a0cf/tasks.md"
+    ],
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "README.md",
+      "openspec",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004h",
+    "isMainWorktree": true,
+    "sizeKiB": 71356,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004h\nHEAD 1401a5d8170f894d24a6b59cd9f43b4403bbc036\nbranch refs/heads/main\n\nworktree /home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004h/wp-9239a0cfa8d15f2545c8414671fa75fd7b8bcd6aa47d6c74b373d304f467076c\nHEAD 1401a5d8170f894d24a6b59cd9f43b4403bbc036\nbranch refs/heads/wp-9239a0cfa8d15f2545c8414671fa75fd7b8bcd6aa47d6c74b373d304f467076c\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "README.md",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004g",
+    "isMainWorktree": true,
+    "sizeKiB": 660,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004g\nHEAD 8dc301ad156c2d4291e1c14ac870244c1a087f6b\nbranch refs/heads/main\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "README.md",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004f",
+    "isMainWorktree": true,
+    "sizeKiB": 660,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004f\nHEAD b8854a38edecf9632dcdd1e1cee950b44c8720ef\nbranch refs/heads/main\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "README.md",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004e",
+    "isMainWorktree": true,
+    "sizeKiB": 660,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004e\nHEAD bf313797b0142e949b0bd376b3e503ad28e2c084\nbranch refs/heads/main\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "README.md",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004d",
+    "isMainWorktree": true,
+    "sizeKiB": 136,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004d\nHEAD 530dda7df1457a271bcad29320ebe6e8baa5c492\nbranch refs/heads/main\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "README.md",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004c",
+    "isMainWorktree": true,
+    "sizeKiB": 136,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004c\nHEAD bb15f9b0139e9cc4136916038494525294c12e05\nbranch refs/heads/main\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "README.md",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-cutover-20261004b",
+    "isMainWorktree": true,
+    "sizeKiB": 632,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-cutover-20261004b\nHEAD ddc346638c07d7d6f152b4d864891e9e3e64c65c\nbranch refs/heads/main\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "README.md",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-ip05-luna-20261004",
+    "isMainWorktree": true,
+    "sizeKiB": 632,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-ip05-luna-20261004\nHEAD b0cb92c1fe5b2a08f7efb4b256f93eb7c4c82d58\nbranch refs/heads/main\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "README.md",
+      "orca-companion.json"
+    ]
+  },
+  {
+    "path": "/home/joshua/Workspace/Artifact/orca-companion-gb01",
+    "isMainWorktree": true,
+    "sizeKiB": 436,
+    "statusLines": [],
+    "gitWorktrees": "worktree /home/joshua/Workspace/Artifact/orca-companion-gb01\nHEAD 75370f83ca6ae87858ee64f8f4d3259f3f790e12\nbranch refs/heads/main\n\n",
+    "topLevel": [
+      ".git",
+      ".gitignore",
+      "README.md",
+      "orca-companion.json"
+    ]
+  }
+]

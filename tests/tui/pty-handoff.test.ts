@@ -8,7 +8,7 @@
  * ORCA_COMPANION_REAL_HARNESS=1 \
  * ORCA_COMPANION_REAL_REPO=<isolated-project> \
  * ORCA_COMPANION_REAL_IDENTITY=<dedicated-identity> \
- * ORCA_COMPANION_COORDINATOR_MODEL=minimax-cn/MiniMax-M3 \
+ * ORCA_COMPANION_COORDINATOR_MODEL=minimax-cn/MiniMax-M3.1-Flash-Preview \
  * pnpm exec vitest run tests/tui/pty-handoff.test.ts --no-file-parallelism
  * ```
  *
@@ -49,7 +49,7 @@ const WORKSPACE_VAR = 'ORCA_COMPANION_REAL_REPO';
 const IDENTITY_VAR = 'ORCA_COMPANION_REAL_IDENTITY';
 const MODEL_VAR = 'ORCA_COMPANION_COORDINATOR_MODEL';
 /** 计划要求的 Coordinator 模型；凭据只留在 provider 环境变量里，本文件不读也不打印。 */
-const REQUIRED_COORDINATOR_MODEL = 'minimax-cn/MiniMax-M3';
+const REQUIRED_COORDINATOR_MODEL = 'gpt-6-luna';
 
 type Gate =
   | { readonly kind: 'run'; readonly workspace: string; readonly identity: string }
@@ -76,7 +76,18 @@ function evaluateGate(): Gate {
   if (identity === undefined || identity.length === 0) {
     return { kind: 'skip', reason: `${IDENTITY_VAR} 未显式选择专用身份` };
   }
+  if (process.env[MODEL_VAR] !== REQUIRED_COORDINATOR_MODEL) {
+    return { kind: 'skip', reason: `${MODEL_VAR} 必须显式声明为 ${REQUIRED_COORDINATOR_MODEL}` };
+  }
   return { kind: 'run', workspace: resolve(workspace), identity };
+}
+
+function realChildEnvironment(): Record<string, string> {
+  const env = toChildEnvironment(process.env);
+  for (const key of Object.keys(env)) {
+    if (/^ORCA_(?:TERMINAL|WORKER|TASK|RUN)(?:_|$)/u.test(key)) delete env[key];
+  }
+  return env;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -194,7 +205,7 @@ async function readCutoverFacts(workspace: string): Promise<{
 }> {
   const commonDir = await resolveGitCommonDir({
     repositoryPath: workspace,
-    env: toChildEnvironment(process.env),
+    env: realChildEnvironment(),
   });
   if (commonDir.kind !== 'resolved') {
     throw new Error(`无法解析隔离项目的 Git common dir：${commonDir.message}`);
@@ -256,10 +267,10 @@ if (gate.kind === 'skip') {
         if (loaded.kind !== 'loaded') {
           return;
         }
-        expect(loaded.defaultConfiguration.model).toMatch(/MiniMax-M3$/u);
+        expect(loaded.defaultConfiguration.model).toBe(REQUIRED_COORDINATOR_MODEL);
 
         // 前台宿主从当前 canonical worktree 的终端中选身份；先证明它就是显式选择的专用终端。
-        const backend = createOrcaExecutionBackend({ cwd: gate.workspace, env: toChildEnvironment(process.env) });
+        const backend = createOrcaExecutionBackend({ cwd: gate.workspace, env: realChildEnvironment() });
         const listed = await backend.query({ operation: 'terminal-list', worktree: `path:${gate.workspace}` });
         expect(listed.kind).toBe('accepted');
         if (listed.kind !== 'accepted') {
@@ -283,7 +294,7 @@ if (gate.kind === 'skip') {
 
         const socket = `orca-companion-handoff-${String(process.pid)}`;
         const session = 'handoff';
-        const env: NodeJS.ProcessEnv = { ...process.env };
+      const env: NodeJS.ProcessEnv = realChildEnvironment();
         const command = [process.execPath, BUILT_ENTRY].map(quoteArgument).join(' ');
         const handoffIndex = COMMAND_IDS.indexOf('handoff');
         expect(handoffIndex).toBeGreaterThanOrEqual(0);

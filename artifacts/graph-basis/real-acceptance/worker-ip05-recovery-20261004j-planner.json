@@ -1,0 +1,200 @@
+{
+  "id": "ea440747-bcb5-49b9-a5ab-bbfaac2b8303",
+  "ok": true,
+  "result": {
+    "dispatch": {
+      "id": "ctx_e23310ca1223",
+      "runId": "run_9b5d8a9bd4c0",
+      "taskId": "task_92ab61e27025",
+      "task_id": "task_92ab61e27025",
+      "contractVersion": 1,
+      "assigneeHandle": "term_727759fd-6218-4de6-9a3c-474f5e0e1e41",
+      "assigneePaneKey": "0cf25fbb-42c0-4500-a922-47f7f9a5769f:d2c3e4e6-bf18-4c10-9e44-75d7b133ff24",
+      "processIncarnation": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b@@51569510:f28a7832-8b12-489e-ba59-425e0e05c4f7",
+      "capabilityRevokedAt": "2026-10-04T12:49:24.046Z",
+      "retryOfDispatchId": null,
+      "creatorDispatchId": null,
+      "hostScope": {
+        "kind": "local",
+        "hostId": "local"
+      },
+      "status": "completed",
+      "failureCount": 0,
+      "lastFailure": null,
+      "terminationReason": null,
+      "depth": 1,
+      "dispatchedAt": "2026-10-04 12:44:53",
+      "completedAt": "2026-10-04T12:49:24.046Z",
+      "createdAt": "2026-10-04 12:44:53",
+      "lastHeartbeatAt": null
+    },
+    "worker": {
+      "dispatchId": "ctx_e23310ca1223",
+      "runtimeEpoch": "34627582-8e2e-49de-b4eb-58b0b159cbd0",
+      "state": "succeeded",
+      "stage": "settled",
+      "worktreeId": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+      "agentTerminalHandle": "term_727759fd-6218-4de6-9a3c-474f5e0e1e41",
+      "setupState": "not_applicable",
+      "effects": [
+        {
+          "kind": "worktree",
+          "action": "reused",
+          "id": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b"
+        },
+        {
+          "kind": "setup",
+          "action": "not_applicable",
+          "state": "not_applicable"
+        },
+        {
+          "kind": "terminal",
+          "role": "agent",
+          "action": "reused",
+          "id": "term_727759fd-6218-4de6-9a3c-474f5e0e1e41"
+        },
+        {
+          "kind": "dispatch_input",
+          "role": "agent",
+          "id": "term_727759fd-6218-4de6-9a3c-474f5e0e1e41",
+          "state": "accepted"
+        }
+      ],
+      "residualResources": [],
+      "startOptions": {
+        "worktree": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+        "mode": {
+          "mode": "terminal",
+          "preferred": "terminal",
+          "reason": "user_default",
+          "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+        },
+        "resolvedWorktreeId": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+        "name": null,
+        "repo": null,
+        "baseBranch": null,
+        "terminal": "term_727759fd-6218-4de6-9a3c-474f5e0e1e41",
+        "agent": null,
+        "launch": {
+          "requested": {
+            "agent": null,
+            "model": null,
+            "effort": null
+          },
+          "effective": {
+            "agent": null,
+            "model": null,
+            "effort": null
+          }
+        },
+        "timeoutMs": 60000,
+        "setup": "not_applicable",
+        "setupSource": "existing_worktree"
+      },
+      "lastError": null,
+      "createdAt": "2026-10-04 12:44:53",
+      "updatedAt": "2026-10-04T12:49:24.047Z"
+    },
+    "projection": {
+      "id": "ctx_e23310ca1223",
+      "dispatchId": "ctx_e23310ca1223",
+      "taskId": "task_92ab61e27025",
+      "runId": "run_9b5d8a9bd4c0",
+      "role": "worker",
+      "parent": null,
+      "provider": null,
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+        "kind": "folder_or_worktree"
+      },
+      "stage": {
+        "worker": "succeeded",
+        "dispatch": "completed",
+        "detail": "settled",
+        "activity": "unknown"
+      },
+      "outcome": "succeeded",
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      },
+      "resource": {
+        "state": "external",
+        "id": "wtr_a1c1da66aaf7",
+        "ownerDispatchId": "ctx_e23310ca1223",
+        "releaseState": "not_requested",
+        "terminalState": "retained"
+      },
+      "nextAction": {
+        "kind": "none",
+        "argv": []
+      },
+      "attention": {
+        "categories": [
+          "unverifiable",
+          "root_completion"
+        ],
+        "requiresAction": true
+      }
+    },
+    "terminal": {
+      "handle": "term_727759fd-6218-4de6-9a3c-474f5e0e1e41",
+      "ptyId": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b@@51569510",
+      "incarnationId": "f28a7832-8b12-489e-ba59-425e0e05c4f7",
+      "orphaned": false,
+      "worktreeId": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+      "worktreePath": "/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+      "branch": "refs/heads/leike0813/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+      "tabId": "0cf25fbb-42c0-4500-a922-47f7f9a5769f",
+      "leafId": "d2c3e4e6-bf18-4c10-9e44-75d7b133ff24",
+      "title": "Report task outcome | wp-9c38eb670670104bdf...",
+      "connected": true,
+      "writable": true,
+      "lastOutputAt": 1791118170146,
+      "preview": "mpact is limited to NOTES.md;\nimplementation remains pending.   1 background terminal running · /ps to view · /stop to close  › Ask Codex to do anything   GPT-6-Luna high · Full Access · Context 5% used · Fast off · joshua-central                 ⚠ 3 warnings · f2 to view\nWorked for 4m 36s · 8:49 PM",
+      "executionHostId": "local",
+      "agentIdentity": "codex",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0,
+      "agentWait": null
+    },
+    "observation": {
+      "status": "live",
+      "exactWorker": true,
+      "agentWait": null
+    },
+    "terminalResource": {
+      "id": "wtr_a1c1da66aaf7",
+      "ownershipState": "external",
+      "releaseState": "not_requested",
+      "retainedReason": "external_terminal",
+      "terminalHandle": "term_727759fd-6218-4de6-9a3c-474f5e0e1e41",
+      "worktreeId": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+      "endpointId": "34627582-8e2e-49de-b4eb-58b0b159cbd0",
+      "endpointIncarnation": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b@@51569510:f28a7832-8b12-489e-ba59-425e0e05c4f7",
+      "originDispatchId": "ctx_e23310ca1223",
+      "ownerDispatchId": "ctx_e23310ca1223",
+      "releaseRequestedAt": null,
+      "releaseCompletedAt": null,
+      "releaseError": null,
+      "recoveryAttemptCount": 0,
+      "lastRecoveryAt": null,
+      "archive": {
+        "source": null,
+        "status": null
+      }
+    }
+  },
+  "_meta": {
+    "runtimeId": "34627582-8e2e-49de-b4eb-58b0b159cbd0"
+  }
+}

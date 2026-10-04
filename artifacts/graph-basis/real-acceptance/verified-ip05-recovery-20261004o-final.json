@@ -1,0 +1,25 @@
+{
+  "observedAt": "2026-10-04T14:55:02.093Z",
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o",
+  "scopeId": "ip05-ip05-recovery-20261004o-scope",
+  "patchShape": "revise",
+  "graphVersions": 2,
+  "completeBodies": 82,
+  "finalizerVerdict": "deliverable",
+  "finalizerSessionBindingRef": "01a1075b-7a66-7b80-8c2f-c24dde810ea1",
+  "exactFinalizerIdentityVisible": true,
+  "recoveries": 1,
+  "retainedTaskDispatchAttemptBindingsUnchanged": true,
+  "segmentsUnchanged": true,
+  "settlementsUnchanged": true,
+  "budgetsUnchanged": true,
+  "verdictUnchanged": true,
+  "scopePaused": true,
+  "operatorAssisted": true,
+  "originalDriverExit": 1,
+  "originalDriverFailures": [
+    "obsolete reconciliation location",
+    "side-by-side transcript interleaved into long verdict ID"
+  ],
+  "replay": "production project detail pages; production current-node Inspector separately for revise; readonly authority ports"
+}

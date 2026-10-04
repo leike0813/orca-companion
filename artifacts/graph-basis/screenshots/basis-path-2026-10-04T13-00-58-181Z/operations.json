@@ -1,0 +1,722 @@
+[
+  {
+    "name": "六票工作区基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "项目工作 → GraphBasis → 来源正文",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "生产项目面板、依据入口、Route Map 正文；内容由隔离 fixture 提供"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据逐层 Esc 返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "│ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ 项目面板 · 总览 · 详情 │ → │ 项目面板 · 总览        │ → 工作区"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "项目工作 → GraphBasis → 来源正文",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "生产项目面板、依据入口、Route Map 正文；内容由隔离 fixture 提供"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据逐层 Esc 返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "│ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ 项目面板 · 总览 · 详情 │ → │ 项目面板 · 总览        │ → 工作区"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "项目工作 → GraphBasis → 来源正文",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "生产项目面板、依据入口、Route Map 正文；内容由隔离 fixture 提供"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据逐层 Esc 返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "│ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ 项目面板 · 总览 · 详情 │ → │ 项目面板 · 总览        │ → 工作区"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "项目工作 → GraphBasis → 来源正文",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "生产项目面板、依据入口、Route Map 正文；内容由隔离 fixture 提供"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据逐层 Esc 返回",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "│ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ 项目面板 · 总览 · 详情 │ → │ 项目面板 · 总览        │ → 工作区"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "项目工作 → GraphBasis → 来源正文",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "生产项目面板、依据入口、Route Map 正文；内容由隔离 fixture 提供"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据逐层 Esc 返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "│ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ 项目面板 · 总览 · 详情 │ → │ 项目面板 · 总览        │ → 工作区"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "项目工作 → GraphBasis → 来源正文",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "生产项目面板、依据入口、Route Map 正文；内容由隔离 fixture 提供"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据逐层 Esc 返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "│ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ 项目面板 · 总览 · 详情 │ → │ 项目面板 · 总览        │ → 工作区"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "项目工作 → GraphBasis → 来源正文",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "生产项目面板、依据入口、Route Map 正文；内容由隔离 fixture 提供"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据逐层 Esc 返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "│ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ 项目面板 · 总览 · 详情 │ → │ 项目面板 · 总览        │ → 工作区"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "项目工作 → GraphBasis → 来源正文",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "生产项目面板、依据入口、Route Map 正文；内容由隔离 fixture 提供"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据逐层 Esc 返回",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "│ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ 项目面板 · 总览 · 详情 │ → │ 项目面板 · 总览        │ → 工作区"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "项目工作 → GraphBasis → 来源正文",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "生产项目面板、依据入口、Route Map 正文；内容由隔离 fixture 提供"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据逐层 Esc 返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "│ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ 项目面板 · 总览 · 详情 │ → │ 项目面板 · 总览        │ → 工作区"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "项目工作 → GraphBasis → 来源正文",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "生产项目面板、依据入口、Route Map 正文；内容由隔离 fixture 提供"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据逐层 Esc 返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "check": "│ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ 项目面板 · 总览 · 详情 │ → │ 项目面板 · 总览        │ → 工作区"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "项目工作 → GraphBasis → 来源正文",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "生产项目面板、依据入口、Route Map 正文；内容由隔离 fixture 提供"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据逐层 Esc 返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "check": "│ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ 项目面板 · 总览 · 详情 │ → │ 项目面板 · 总览        │ → 工作区"
+  },
+  {
+    "name": "六票工作区基线",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "项目工作 → GraphBasis → 来源正文",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "生产项目面板、依据入口、Route Map 正文；内容由隔离 fixture 提供"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据正文 resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "保留原来源与阅读位置；按新宽度重新排版"
+  },
+  {
+    "name": "项目依据逐层 Esc 返回",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "check": "│ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ › 请检查这次图历史与执行依据入口，保留已有对话和返回层级。                                  ╭────────────────────────╮ → │ 项目面板 · 总览 · 详情 │ → │ 项目面板 · 总览        │ → 工作区"
+  }
+]

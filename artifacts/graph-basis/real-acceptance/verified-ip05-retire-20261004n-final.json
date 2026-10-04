@@ -1,0 +1,25 @@
+{
+  "observedAt": "2026-10-04T14:55:01.677Z",
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004n",
+  "scopeId": "ip05-ip05-retire-20261004n-scope",
+  "patchShape": "retire",
+  "graphVersions": 2,
+  "completeBodies": 38,
+  "finalizerVerdict": "deliverable",
+  "finalizerSessionBindingRef": "01a1075b-1428-73e2-b843-62499eeb4ed5",
+  "exactFinalizerIdentityVisible": true,
+  "recoveries": 0,
+  "retainedTaskDispatchAttemptBindingsUnchanged": true,
+  "segmentsUnchanged": true,
+  "settlementsUnchanged": true,
+  "budgetsUnchanged": true,
+  "verdictUnchanged": true,
+  "scopePaused": true,
+  "operatorAssisted": true,
+  "originalDriverExit": 1,
+  "originalDriverFailures": [
+    "obsolete reconciliation location",
+    "side-by-side transcript interleaved into long verdict ID"
+  ],
+  "replay": "production project detail pages; production current-node Inspector separately for revise; readonly authority ports"
+}

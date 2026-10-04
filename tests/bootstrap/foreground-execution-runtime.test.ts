@@ -57,6 +57,7 @@ import { DEFAULT_EXECUTION_LIMITS } from '../../src/domain/planning/budget-polic
 import { MANIFEST_VERSION } from '../../src/domain/planning/execution-authorization.js';
 import type { ExecutionAuthorizationManifest } from '../../src/domain/planning/execution-authorization.js';
 import { EXECUTION_AUTHORIZATION_ID, executionWorkerProfiles } from '../support/execution-harness.js';
+import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 import { projectConnectionsFixture, projectExecutionProfilesFixture } from '../support/model-configurations.js';
 import { recoveryUtilityProfileFixture } from '../support/model-configurations.js';
 import type { ExecutionGraph } from '../../src/domain/planning/execution-graph.js';
@@ -788,6 +789,7 @@ function prepareAdvanceState(repository: string, head: string): void {
       coordinationScopeId: EXEC_SCOPE,
       writer,
       graph,
+      initialPlan: implementationPlanFor(graph, 1),
       mapRevision: 1,
       planRevision: 1,
       orcaRunId: EXEC_RUN,
@@ -1329,6 +1331,28 @@ test('已派发但未绑定的角色按 Task 匹配 Orca Dispatch，并只在缺
   expect(
     unboundRoleDispatches({ ...input, segments: [segment({ segmentId: 'segment:ctx-1:attempt-1' as never })] }),
   ).toEqual([]);
+  // Recovery 使用独立 Segment ID；真实运行身份已绑定时不重复签发原报告。
+  expect(unboundRoleDispatches({
+    ...input,
+    segments: [segment({ segmentId: 'recovery:replacement-segment' as never, dispatchId: 'ctx-1' as never })],
+  })).toEqual([]);
+  // 原 Task 的已知 Session 与新观察不一致，不能把原 launch 报告签给替代 Dispatch。
+  expect(unboundRoleDispatches({
+    ...input,
+    observations: observedDispatch({ dispatchId: 'ctx-replacement', taskId: 'task-1', worktreePath: '/tmp/wt' }),
+    segments: [segment({ dispatchId: 'ctx-original' as never })],
+  })).toEqual([]);
+  // 多派发属于同一 Task 时，单个物化 launch 不足以选定实际派发。
+  expect(unboundRoleDispatches({
+    ...input,
+    observations: {
+      ...input.observations,
+      workers: [...input.observations.workers, {
+        dispatchId: 'ctx-replacement', taskId: 'task-1', workerState: 'succeeded', terminalState: 'exited',
+      }],
+    },
+    segments: [],
+  })).toEqual([]);
   // 旧行没有 launchId 这项事实：不猜，不补记。
   expect(unboundRoleDispatches({ ...input, bindings: [binding({ launchId: null })], segments: [] })).toEqual([]);
   // Orca 找不到这个 Task（或没列举出 worktree）：等下一次触发，不猜 Dispatch。

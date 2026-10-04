@@ -9,6 +9,8 @@
  * ORCA_COMPANION_REAL_HARNESS=1 \
  * ORCA_COMPANION_REAL_REPO=<isolated-project> \
  * ORCA_COMPANION_REAL_IDENTITY=<dedicated-identity> \
+ * ORCA_COMPANION_REAL_SCOPE=<fixture-scope> \
+ * ORCA_COMPANION_PTY_PHASE=execution \
  * ORCA_COMPANION_COORDINATOR_MODEL=minimax-cn/MiniMax-M3.1-Flash-Preview \
  * pnpm exec vitest run tests/tui/pty-execution.test.ts --no-file-parallelism
  * ```
@@ -71,10 +73,24 @@ import { createOrcaExecutionBackend } from '../../src/adapters/orca-cli/orca-bac
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
+  GraphGeneration,
+  GraphId,
+  GraphVersion,
+  PlanningCycleId,
   RuntimeIncarnationId,
 } from '../../src/application/dto/identity.js';
 import { buildExecutionScope } from '../../src/application/ports/execution-backend.js';
+import type { CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
 import { DEFAULT_RUNTIME_LEASE_TTL_MS } from '../../src/application/coordination/lease-service.js';
+import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
+import { readScope } from '../../src/application/planning/scope-read.js';
+import {
+  beginReplanningTransition,
+  commitGenerationCutover,
+  completeReplanningTransition,
+} from '../../src/application/execution/replanning-service.js';
+import { proposeExecutionGraph } from '../../src/bootstrap/execution-runtime.js';
+import { DEFAULT_EXECUTION_LIMITS } from '../../src/domain/planning/budget-policy.js';
 import {
   createCoordinationStore,
   openRepositoryCoordinationStore,
@@ -83,11 +99,8 @@ import {
 import { toChildEnvironment } from '../../src/interfaces/cli/main.js';
 import { runStatus, type StatusSnapshot } from '../../src/interfaces/cli/status-command.js';
 import { COMMAND_IDS, type CommandId } from '../../src/interfaces/tui/components/command-palette.js';
-import {
-  mergeRealEnvFileIntoProcess,
-  REAL_ENV_FILE_VAR,
-} from '../support/real-env.js';
 import { REAL_LOOP_PLAN, seedRealExecutionScope } from '../support/real-execution-scope.js';
+import { executionManifest } from '../support/execution-harness.js';
 import { currentWorkerProfile, parseProjectConfig } from '../../src/bootstrap/project-config.js';
 import type { ModelProfileRole } from '../../src/domain/model-configuration.js';
 
@@ -96,6 +109,7 @@ const BUILT_ENTRY = join(COMPANION_REPOSITORY, 'dist', 'src', 'interfaces', 'cli
 const REAL_SWITCH = 'ORCA_COMPANION_REAL_HARNESS';
 const WORKSPACE_VAR = 'ORCA_COMPANION_REAL_REPO';
 const IDENTITY_VAR = 'ORCA_COMPANION_REAL_IDENTITY';
+const SCOPE_VAR = 'ORCA_COMPANION_REAL_SCOPE';
 /** 置 1 时要求本次图变化声明把目标节点退场，用来验收「退场」形态；默认验收「保留并修订」形态。 */
 const RETIRE_NODE_SWITCH = 'ORCA_COMPANION_PTY_RETIRE_NODE';
 const MODEL_VAR = 'ORCA_COMPANION_COORDINATOR_MODEL';
@@ -105,19 +119,31 @@ const MODEL_VAR = 'ORCA_COMPANION_COORDINATOR_MODEL';
  * 默认覆盖真实 Capsule 与替代 Session；设为 `0` 验证不中断的完整交付。两种模式各用全新隔离项目。
  */
 const RECOVERY_INTERRUPT_VAR = 'ORCA_COMPANION_PTY_RECOVERY_INTERRUPT';
+/**
+ * 只跑零 provider 成本的阶段（`ORCA_COMPANION_PTY_PHASE=cutover-only`）。
+ *
+ * ①–⑥ 都要真实派发 Codex Worker 与 Coordinator 模型；⑦ 只走生产应用用例加一次真实新 Run，
+ * 不调用任何模型。验收模型配额紧张时，用这一个开关仍能拿到真实多代际记录、前代冻结与依据正文可读的
+ * 证据，缺口按「本轮未运行」如实记录，不拿 fixture 冒充。
+ */
+const PHASE_VAR = 'ORCA_COMPANION_PTY_PHASE';
+const CUTOVER_ONLY_PHASE = 'cutover-only';
 
 /** provider 凭据的装载位置；与其它真实验收共用同一个 env 文件。 */
-const DEFAULT_ENV_FILE = join(COMPANION_REPOSITORY, '.env.smoke');
-/** 计划要求的 Coordinator 模型；凭据只留在 provider 环境变量里，本文件不读也不打印。 */
-const REQUIRED_COORDINATOR_MODEL = 'minimax-cn/MiniMax-M3.1-Flash-Preview';
+/** 计划要求的 Coordinator 模型；连接与凭据由隔离项目配置提供。 */
+const REQUIRED_COORDINATOR_MODEL = process.env[MODEL_VAR];
 /** 只读 Worker 能力缺口的稳定 token：探针与 blocker 原因共用它（`codex-read-only-probe.ts`）。 */
 const READ_ONLY_WORKER_BLOCKER = 'read_only_worker_unavailable';
 
 type Gate =
-  | { readonly kind: 'run'; readonly workspace: string; readonly identity: string }
+  | { readonly kind: 'run'; readonly workspace: string; readonly identity: string; readonly scopeId: string }
   | { readonly kind: 'skip'; readonly reason: string };
 
 function evaluateGate(): Gate {
+  const phase = process.env[PHASE_VAR];
+  if (phase !== CUTOVER_ONLY_PHASE && phase !== 'execution') {
+    return { kind: 'skip', reason: `${PHASE_VAR} 必须显式设为 cutover-only 或 execution` };
+  }
   if (process.env[REAL_SWITCH] !== '1') {
     return { kind: 'skip', reason: `${REAL_SWITCH} 未显式开启` };
   }
@@ -138,25 +164,31 @@ function evaluateGate(): Gate {
   if (identity === undefined || identity.length === 0) {
     return { kind: 'skip', reason: `${IDENTITY_VAR} 未显式选择专用身份` };
   }
+  const scopeId = process.env[SCOPE_VAR];
+  if (
+    scopeId === undefined ||
+    !/^ip05-[A-Za-z0-9_-]+-scope$/u.test(scopeId) ||
+    scopeId === 'e2e-loop-scope'
+  ) {
+    return { kind: 'skip', reason: `${SCOPE_VAR} 必须是本次 fixture 专属的 ip05-* scope ID` };
+  }
   // 模型必须由用户显式声明：错误的模型会让「真实 PTY 执行验收」跑在与计划不同的执行体上。
-  if (process.env[MODEL_VAR] !== REQUIRED_COORDINATOR_MODEL) {
-    return { kind: 'skip', reason: `${MODEL_VAR} 必须显式声明为 ${REQUIRED_COORDINATOR_MODEL}` };
+  if (REQUIRED_COORDINATOR_MODEL === undefined || REQUIRED_COORDINATOR_MODEL.trim().length === 0) {
+    return { kind: 'skip', reason: `${MODEL_VAR} 必须显式声明本次验收模型` };
   }
   if (!existsSync(BUILT_ENTRY)) {
     return { kind: 'skip', reason: '先运行 pnpm build：用例启动的是 dist 里的前台入口' };
   }
-  // 真实调用需要 provider 凭据：装载 env 文件（已存在的环境变量优先），缺凭据时明确跳过而不是让宿主
-  // 在能力核验处失败。宿主与 Worker 都从这个进程继承环境。
-  const envLoad = mergeRealEnvFileIntoProcess(
-    process.env[REAL_ENV_FILE_VAR] ?? DEFAULT_ENV_FILE,
-  );
-  if (!envLoad.hasProviderCredential) {
-    return {
-      kind: 'skip',
-      reason: `缺少 provider 凭据：请设置 OPENAI_API_KEY，或填充 ${envLoad.path}（或经 ${REAL_ENV_FILE_VAR} 指定）`,
-    };
+  return { kind: 'run', workspace: resolve(workspace), identity, scopeId };
+}
+
+/** 测试只把专用 identityRef 显式交给 backend；不继承宿主 terminal、Worker、Task 或 Run selector。 */
+function realChildEnvironment(): Record<string, string> {
+  const env = toChildEnvironment(process.env);
+  for (const key of Object.keys(env)) {
+    if (/^ORCA_(?:TERMINAL|WORKER|TASK|RUN)(?:_|$)/u.test(key)) delete env[key];
   }
-  return { kind: 'run', workspace: resolve(workspace), identity };
+  return env;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -333,7 +365,7 @@ const PANE_WIDTH = '220';
 const PANE_HEIGHT = '80';
 
 function startTui(workspace: string): void {
-  const env: NodeJS.ProcessEnv = { ...process.env };
+  const env: NodeJS.ProcessEnv = realChildEnvironment();
   const command = [process.execPath, BUILT_ENTRY].map(quoteArgument).join(' ');
   // 上一次失败的尝试可能留下同名会话；先清掉，否则 tmux 的 `duplicate session` 会掩盖真实原因。
   tmux(SOCKET, ['kill-session', '-t', SESSION]);
@@ -349,19 +381,21 @@ function startTui(workspace: string): void {
   ).toBe(true);
 }
 
-/** Palette 执行命令 = Ctrl+P → 按目标索引次数的 Down → Enter；返回覆盖层关闭后的界面文本。 */
+/** 搜索固定命令身份后确认；首次控制动作包含真实模型能力核验。 */
 function runPaletteCommand(command: CommandId): void {
-  const index = COMMAND_IDS.indexOf(command);
-  expect(index, `未知命令 ${command}`).toBeGreaterThanOrEqual(0);
+  expect(COMMAND_IDS).toContain(command);
   tmux(SOCKET, ['send-keys', '-t', SESSION, 'C-p']);
   const palette = pollPane(SOCKET, SESSION, (text) => text.includes('Command Palette'));
   expect(palette.ok, `Command Palette 未打开：\n${palette.text}`).toBe(true);
-  for (let step = 0; step < index; step += 1) {
-    tmux(SOCKET, ['send-keys', '-t', SESSION, 'Down']);
-  }
+  tmux(SOCKET, ['send-keys', '-t', SESSION, '-l', command]);
+  const matched = pollPane(SOCKET, SESSION, text => text.includes('搜索 › ' + command));
+  expect(matched.ok, `命令搜索没有呈现目标：\n${matched.text}`).toBe(true);
+  // 查询收窄后明确选中唯一结果，不依赖目录的展示顺序。
+  tmux(SOCKET, ['send-keys', '-t', SESSION, 'Down']);
+  sleepSync(100);
   tmux(SOCKET, ['send-keys', '-t', SESSION, 'Enter']);
   // 覆盖层关闭是 Enter 生效的可观察点；命令自身的异步结果由调用方继续等待。
-  const closed = pollPane(SOCKET, SESSION, (text) => !text.includes('Command Palette'));
+  const closed = pollPane(SOCKET, SESSION, (text) => !text.includes('Command Palette'), 180_000);
   expect(closed.ok, `Command Palette 未关闭：\n${closed.text}`).toBe(true);
 }
 
@@ -397,6 +431,9 @@ function submitComposerMessage(content: string): void {
  * 判定，于是声明不足以分类、只能交给 Graph Patch Planner 起草补丁。
  */
 function graphChangeInstruction(workPackageId: string): string {
+  const changeInstruction = process.env[RETIRE_NODE_SWITCH] === '1'
+    ? '这份工作已不再需要：补丁只应把该 Work Package 从图中退场（retire），不要保留它。不要新增或改动其它文件、依赖与 Scope Envelope。'
+    : '补丁只应调整该 Work Package 已有的 contract 内容（requirements、design 或验收条件），不要新增或改动其它文件、依赖与 Scope Envelope。';
   // 声明按**字面 JSON**给出：九字段的分类路由是确定性的，而「哪些字段留 unknown」决定这次请求会不会
   // 真的交给 Graph Patch Planner。用散文描述九个字段时模型可能自行改写（实测把 `unknown` 读成 `no`，
   // 于是全部声明事实都「已核验不成立」→ 路由成 `no_change`，一次补丁都不会起草）。
@@ -408,6 +445,7 @@ function graphChangeInstruction(workPackageId: string): string {
   // 单行给出：composer 是单行输入，长行按光标位置横向滚动，多行消息会让「草稿是否已提交」无从判断。
   const request = JSON.stringify({
     workPackageId,
+    changeInstruction,
     infrastructureFailure: 'unknown',
     changesDependencies: 'no',
     changesScopeEnvelope: 'no',
@@ -425,11 +463,7 @@ function graphChangeInstruction(workPackageId: string): string {
     //
     // 取舍说明（真实 Planner 自己决定补丁形态）：默认要求「保留该节点、只改 contract 内容」得到修订形态；
     // 设 `ORCA_COMPANION_PTY_RETIRE_NODE=1` 时明确要求退场，用来覆盖另一种形态。
-    (process.env[RETIRE_NODE_SWITCH] === '1'
-      ? '这份工作已不再需要：补丁只应把该 Work Package 从图中退场（retire），不要保留它。' +
-        '不要新增或改动其它文件、依赖与 Scope Envelope。'
-      : '补丁只应调整该 Work Package 已有的 contract 内容（requirements、design 或验收条件），' +
-        '不要新增或改动其它文件、依赖与 Scope Envelope。') +
+    changeInstruction +
     /**
      * 这条消息必须以模型的**最终响应**收尾，而且只在这次调用**被受理**之后收尾。
      *
@@ -472,12 +506,21 @@ if (gate.kind === 'skip') {
   const workspace = gate.workspace;
   // TypeScript 不会把外层的窄化带进嵌套函数：专用身份在这里显式取出，后续一律用它。
   const dedicatedIdentity = gate.identity;
+  const dedicatedScopeId = gate.scopeId;
   const pty = probePty();
 
   if (!pty.ok) {
     test.skip(`真实 PTY 执行阶段验收未运行：${pty.reason}`, () => {});
   } else {
     let launched = false;
+
+    /**
+     * ①–⑥ 都要真实模型调用；`cutover-only` 阶段把它们整体跳过，只留下零成本的 ⑦。
+     * 跳过的用例在报告里显示为 skipped，不会被读成通过。
+     */
+    const cutoverOnly = process.env[PHASE_VAR] === CUTOVER_ONLY_PHASE;
+    const modelPhase = cutoverOnly ? test.skip : test;
+    const cutoverPhase = cutoverOnly ? test : test.skip;
 
     // 无论用例如何结束都要拆掉这台机器上的 tmux server：留下的前台进程会继续持有 Runtime Lease。
     afterAll(() => {
@@ -546,11 +589,12 @@ if (gate.kind === 'skip') {
       const seeded = await seedRealExecutionScope({
         workspace,
         identity: dedicatedIdentity,
+        coordinationScopeId: dedicatedScopeId,
         objective: 'm2-deliver-execution-tui 真实 PTY 执行验收',
         // 双包计划：第一个包集成推进 canonical 之后，第二个包的 worktree 仍建立在授权 baseline 上，
         // 因此需要真实的 Baseline Reconciliation 才能继续（见 `advanceExecution` 的登记路径）。
         plan: REAL_LOOP_PLAN,
-        env: process.env as Record<string, string>,
+        env: realChildEnvironment(),
       });
       seededRunId = seeded.orcaRunId;
       seededBaselineHead = seeded.baselineHead;
@@ -559,7 +603,7 @@ if (gate.kind === 'skip') {
     /** 与前台宿主同一个后端：同一条身份约定、同一个 transport。 */
     const backend = createOrcaExecutionBackend({
       cwd: workspace,
-      env: toChildEnvironment(process.env),
+      env: realChildEnvironment(),
       resolveIdentityHandle: (ref) => Promise.resolve(ref === dedicatedIdentity ? ref : undefined),
     });
 
@@ -1061,19 +1105,36 @@ if (gate.kind === 'skip') {
      * V-03 把完整工作记录、Recovery 与 Finalizer 归到这里，默认 Sidebar 不再产出 recovery/finalizer
      * 分区，因此核验必须真的进入详情，而不是在普通工作区等旧分区。总览条目的顺序由原型分组决定，这里
      * 按选中标记定位「工作记录与依据」，不硬编码索引。面板只有 40 列，条目/字段会硬换行，两个节点加
-     * Recovery 与 Finalizer 可能远超一屏，所以必须真的滚到底：每按一次 Down 都轮询到界面变化（Ink 的
-     * 一帧可能落后于 send-keys），连续两次没有变化才判定到底，读到 tail（含 verdict 之后的
-     * verdictRecording）。返回前把详情滚回顶部（Esc 回列表再 Enter 重开），避免第二次读取从底部开始而
-     * 漏掉 Recovery。调用方读完用 `closeProjectPanel` 逐层退回工作区。
+     * Recovery 与 Finalizer 可能远超一屏及一个有界详情页。每按一次 Down 都轮询到界面变化（Ink 的一帧
+     * 可能落后于 send-keys），连续两次没有变化才判定当前页到底；出现生产提示 `PgDn 读取后续字段` 时
+     * 再翻页，直到最后一页。返回前把详情重开以复位滚动位置，避免下一次读取漏掉开头。调用方读完用
+     * `closeProjectPanel` 逐层退回工作区。
      */
     function readProjectWorkDetail(): string {
+      // Below 100 columns the project panel owns the main area, so transcript
+      // text cannot be interleaved into a wrapped field or long identity.
+      const before = capturePane(SOCKET, SESSION);
+      tmux(SOCKET, ['resize-window', '-t', SESSION, '-x', '80', '-y', '80']);
+      pollPane(SOCKET, SESSION, text => text !== before, 5_000);
+      try {
+        return readProjectWorkDetailPages();
+      } finally {
+        const narrow = capturePane(SOCKET, SESSION);
+        tmux(SOCKET, ['resize-window', '-t', SESSION, '-x', '220', '-y', '80']);
+        pollPane(SOCKET, SESSION, text => text !== narrow, 5_000);
+      }
+    }
+
+    function readProjectWorkDetailPages(): string {
+      const detailReady = (text: string): boolean =>
+        text.includes('项目面板 · 总览 · 详情') && !text.includes('正在读取项目详情');
       if (!capturePane(SOCKET, SESSION).includes('项目面板')) {
         tmux(SOCKET, ['send-keys', '-t', SESSION, 'C-b']);
       }
       const list = pollPane(SOCKET, SESSION, (text) => text.includes('项目面板'), 10_000);
       expect(list.ok, `项目面板未打开：\n${list.text}`).toBe(true);
       let pane = list.text;
-      if (list.text.includes('Esc 返回列表')) {
+      if (list.text.includes('项目面板 · 总览 · 详情')) {
         pane = sendKeyAndSettle('Escape', list.text, 5_000);
       }
       let collected: string | null = null;
@@ -1082,46 +1143,85 @@ if (gate.kind === 'skip') {
         if (!/› [^\n]*工作记录/u.test(pane)) {
           continue;
         }
-        pane = sendKeyAndSettle('Enter', pane, 10_000);
-        if (!pane.includes('Esc 返回列表')) {
+        tmux(SOCKET, ['send-keys', '-t', SESSION, 'Enter']);
+        const opened = pollPane(SOCKET, SESSION, detailReady, 10_000);
+        pane = opened.text;
+        if (!opened.ok) {
           continue;
         }
-        // 逐帧滚到底：连续两次无变化（scroll 已被夹到底部）才停；400 只是技术上限。
-        let scrolled = pane + '\n';
-        let unchanged = 0;
-        for (let down = 0; down < 400; down += 1) {
-          const next = sendKeyAndSettle('Down', pane, 1_000);
-          if (next === pane) {
-            unchanged += 1;
-            if (unchanged >= 2) {
-              break;
+        let allPages = '';
+        let pageCount = 0;
+        while (pageCount < 200) {
+          pageCount += 1;
+          allPages += `${pane}\n`;
+          // 每页独立滚到底：连续两次无变化说明 scroll 已被夹住，避免只读到当前视窗。
+          let unchanged = 0;
+          for (let down = 0; down < 400; down += 1) {
+            const next = sendKeyAndSettle('Down', pane, 1_000);
+            if (next === pane) {
+              unchanged += 1;
+              if (unchanged >= 2) break;
+              continue;
             }
-            continue;
+            unchanged = 0;
+            pane = next;
+            allPages += `${pane}\n`;
           }
-          unchanged = 0;
-          pane = next;
-          scrolled += pane + '\n';
+          if (!pane.includes('PgDn 读取后续字段')) {
+            if (compactPane(allPages).includes('finalizer.verdict')) collected = allPages;
+            break;
+          }
+          const previousPage = pane;
+          tmux(SOCKET, ['send-keys', '-t', SESSION, 'NPage']);
+          const nextPage = pollPane(SOCKET, SESSION,
+            text => text !== previousPage && detailReady(text), 10_000);
+          if (!nextPage.ok) break;
+          pane = nextPage.text;
         }
-        // 必须真的读到底部：Finalizer 只在「工作记录与依据」详情里出现，而 verdictRecording（或没有结论
-        // 时的「verdict 未返回」）排在 verdict 之后，只有滚到 tail 才能看到——仅命中 Finalizer 不能证明
-        // 读全了。任一不成立就退回列表继续找，避免读到别的条目或半截详情。
-        const atTail = pane.includes('verdictRecording') || pane.includes('verdict 未返回');
-        if (scrolled.includes('Finalizer') && atTail) {
-          collected = scrolled;
-          break;
-        }
-        pane = sendKeyAndSettle('Escape', pane, 5_000);
+        if (collected === null) pane = sendKeyAndSettle('Escape', pane, 5_000);
       }
       expect(
         collected,
-        `未能经真实入口读到底部（Finalizer 与 verdict tail）：\n${capturePane(SOCKET, SESSION)}`,
+        `未能经真实入口读取包含 finalizer.verdict 的完整分页详情：\n${capturePane(SOCKET, SESSION)}`,
       ).not.toBeNull();
       // 返回前滚回顶部：Esc 回列表、再 Enter 重开（打开详情时 scroll=0），避免下一次读取从底部开始。
       pane = sendKeyAndSettle('Escape', pane, 5_000);
-      if (!pane.includes('Esc 返回列表')) {
-        sendKeyAndSettle('Enter', pane, 10_000);
+      if (!pane.includes('项目面板 · 总览 · 详情')) {
+        tmux(SOCKET, ['send-keys', '-t', SESSION, 'Enter']);
+        const reopened = pollPane(SOCKET, SESSION, detailReady, 10_000);
+        expect(reopened.ok, '工作详情重开后必须加载完成').toBe(true);
       }
       return collected ?? capturePane(SOCKET, SESSION);
+    }
+
+    /** Current node runtime facts belong to Inspector, not retained Task fields. */
+    function readGraphReconciliation(workPackageId: string): string {
+      tmux(SOCKET, ['send-keys', '-t', SESSION, 'C-g']);
+      let pane = pollPane(SOCKET, SESSION, text => text.includes('Graph Inspector'), 10_000).text;
+      for (let step = 0; step < 8; step++) pane = sendKeyAndSettle('Up', pane, 250);
+      pane = sendKeyAndSettle('Tab', pane);
+      pane = sendKeyAndSettle('Tab', pane);
+      for (let step = 0; step < 8 && !compactPane(pane).includes(`节点:${workPackageId}`); step++) {
+        pane = sendKeyAndSettle('Down', pane);
+      }
+      expect(compactPane(pane), 'Inspector must select the exact current node').toContain(`节点:${workPackageId}`);
+      pane = sendKeyAndSettle('Tab', pane);
+      pane = sendKeyAndSettle('Enter', pane);
+      let collected = pane;
+      let unchanged = 0;
+      for (let step = 0; step < 100; step++) {
+        const next = sendKeyAndSettle('Down', pane, 250);
+        if (next === pane) {
+          if (++unchanged >= 2) break;
+        } else {
+          unchanged = 0;
+          pane = next;
+          collected += `\n${pane}`;
+        }
+      }
+      pane = sendKeyAndSettle('Escape', pane);
+      sendKeyAndSettle('Escape', pane);
+      return compactPane(collected);
     }
 
     /** Esc 逐层返回：详情 → 列表 → 工作区（关闭项目面板）。 */
@@ -1187,7 +1287,7 @@ if (gate.kind === 'skip') {
       return pokeTrigger();
     }
 
-    test(
+    modelPhase(
       '① 前台 TUI 在隔离项目中启动并通过双 TTY 门禁',
       async () => {
         // 前台宿主从当前 canonical worktree 的终端里选身份：先证明它会采用的正是显式声明的专用身份。
@@ -1230,7 +1330,7 @@ if (gate.kind === 'skip') {
       180_000,
     );
 
-    test(
+    modelPhase(
       '② 图摘要、授权详情与 active 计数按定稿分层（Scenario: 授权不重置工作区 / 并发上限为 1）',
       async () => {
         const pane = ensureTuiPane();
@@ -1241,14 +1341,14 @@ if (gate.kind === 'skip') {
         tmux(SOCKET,['send-keys','-t',SESSION,'C-b']);
         tmux(SOCKET,['send-keys','-t',SESSION,'Down']);
         tmux(SOCKET,['send-keys','-t',SESSION,'Enter']);
-        const detail=pollPane(SOCKET,SESSION,text=>text.includes('授权引用:'));
+        const detail=pollPane(SOCKET,SESSION,text=>text.includes('approvedAuthorization:'));
         expect(detail.ok,detail.text).toBe(true);
         // 顶栏不得虚构授权：显示的 Authorization 必须与持久化的授权记录一致。
         const authorization = status.scope.authorization;
         expect(detail.text).toContain(
           authorization === null
-            ? '尚未授权'
-            : `${authorization.id} v${String(authorization.version)}`,
+            ? 'approvedAuthorization: 不可用'
+            : authorization.id,
         );
         tmux(SOCKET,['send-keys','-t',SESSION,'Escape']);
         tmux(SOCKET,['send-keys','-t',SESSION,'Escape']);
@@ -1258,7 +1358,7 @@ if (gate.kind === 'skip') {
       90_000,
     );
 
-    test(
+    modelPhase(
       '③ Scope 级 Pause / Resume：界面显示的 control state 必须等于已持久化的状态（Scenario: Pause 不要求确认）',
       async () => {
         ensureTuiPane();
@@ -1275,10 +1375,10 @@ if (gate.kind === 'skip') {
         // 未接线时前后两次拒绝提示文本相同，状态行不提供第二个可区分信号，因此这里不再断言 observed。
         expect(displayedControlState(resumed.pane)).toBe(resumed.status.scope.controlState);
       },
-      90_000,
+      240_000,
     );
 
-    test(
+    modelPhase(
       '③ 接线：Pause 落盘为 paused 且 status --json 可读，Resume 先对账再恢复 active',
       async () => {
         ensureTuiPane();
@@ -1292,10 +1392,10 @@ if (gate.kind === 'skip') {
         expect(resumed.status.scope.controlState).toBe('active');
         expect(displayedControlState(resumed.pane)).toBe('active');
       },
-      120_000,
+      240_000,
     );
 
-    test(
+    modelPhase(
       '⑤ 授权 → 串行 Frontier → 执行态 Recovery → Finalizer（Scenario: 授权切换 / 串行推进 / Recovery 可观察 / Finalizer 终态）',
       async () => {
         expect(seededRunId.length, '播种必须给出候选图的 Orca Run').toBeGreaterThan(0);
@@ -1321,7 +1421,7 @@ if (gate.kind === 'skip') {
         expect(review.ok, `授权审阅未打开（${paneStatus(SOCKET, SESSION)}）：\n${review.text}`).toBe(true);
         // 放宽沙箱必须真的写在项目配置里并被审阅显示出来，批准才是有意为之。
         expect(review.text, '审阅必须显示 Worker Sandbox').toContain('danger-full-access');
-        expect(review.text, '门禁通过才允许批准').toContain('门禁: 通过');
+        expect(review.text, '通过准入才呈现批准动作').toContain('[批准授权]');
         tmux(SOCKET, ['send-keys', '-t', SESSION, 'Right']);
         tmux(SOCKET, ['send-keys', '-t', SESSION, 'Enter']);
         const authorized = await pollStatus(
@@ -1331,6 +1431,14 @@ if (gate.kind === 'skip') {
         );
         expect(authorized.scope.authorization).not.toBeNull();
         expect(authorized.scope.executionLeaseHolder).not.toBeNull();
+        // 持久化切换先完成，异步审阅结果再恢复原项目面板；等原弹层返回后才能逐层关闭。
+        const reviewReturned = pollPane(SOCKET, SESSION, text =>
+          !text.includes('Execution Authorization Review') &&
+          displayedControlStateOrNull(text) === authorized.scope.controlState,
+        30_000);
+        expect(reviewReturned.ok, `授权审阅未返回：\n${reviewReturned.text}`).toBe(true);
+        // 授权后总览仍可能打开；沿既有返回路径关闭项目面板，回到工作区读取执行图侧栏。
+        closeProjectPanel();
         // 授权不重置工作区：顶栏出现授权，composer 仍在。
         const authorizedPane = pollPane(SOCKET, SESSION, (text) => text.includes('执行图侧栏') && displayedControlStateOrNull(text)===authorized.scope.controlState, 30_000);
         expect(authorizedPane.ok, `界面未显示授权后的执行状态：\n${authorizedPane.text}`).toBe(true);
@@ -1646,13 +1754,11 @@ if (gate.kind === 'skip') {
         const refreshed = {
           text: refreshedPane,
           compact: compactPane(refreshedPane),
-          ok:
-            refreshedPane.includes('Finalizer') &&
-            (refreshedPane.includes('verdictRecording') || refreshedPane.includes('verdict 未返回')),
+          ok: compactPane(refreshedPane).includes('finalizer.verdict'),
         };
         expect(
           refreshed.ok,
-          `「工作记录与依据」详情未读到底部（Finalizer 与 verdict tail）：\n${refreshed.text}`,
+          `「工作记录与依据」详情未读完分页或缺少 finalizer.verdict：\n${refreshed.text}`,
         ).toBe(true);
 
         // ---- 图修订与基线补救：含糊变化声明必须走完真实 Graph Patch Planner 与独立核验 ----
@@ -1698,15 +1804,11 @@ if (gate.kind === 'skip') {
             'canonical 前进必须以 `canonical_advance` 呈现，而不是停留在待核验或冲突升级',
           ).toBe('canonical_advance');
         }
-        if (facts.baselineReconciliations.length > 0) {
-          // 「工作记录与依据」详情必须把核验中的基线显示为 reconcile 行（没有登记过补救的那次运行没有
-          // 这一行）。详情按列硬换行，因此用去掉换行与边框后的文本核对严重性与所需基线。
-          expect(
-            refreshed.compact,
-            `「工作记录与依据」详情必须把核验中的基线显示为 reconcile 行：\n${refreshed.text}`,
-          ).toContain(target);
-          // 两个基线的**精确值**由上面的持久事实断言负责，界面只核对严重性与所需基线可读。
-          expect(refreshed.compact, 'reconcile 行必须带严重性与所需基线').toMatch(
+        if (stillInGraph && facts.baselineReconciliations.length > 0) {
+          // Current runtime reconciliation is shown by Inspector. Retired nodes
+          // have historical topology and retained sources, without live overlays.
+          const reconciliation = readGraphReconciliation(target);
+          expect(reconciliation, 'reconcile 行必须带严重性与所需基线').toMatch(
             /reconcile:canonical_advance·required/u,
           );
         }
@@ -1790,13 +1892,15 @@ if (gate.kind === 'skip') {
             // 能力可用：中断必须被真实 Capsule 续办，替代 Session 是唯一可接受的终态。
             expect(recovered, `本机只读能力可用时必须取得真实 Capsule：${JSON.stringify(facts.recoveries)}`).toBe(true);
           }
-          // Recovery 的完整字段只在「工作记录与依据」详情里呈现：身份、预算、Capsule 与 Segment 都要
-          // 真的可读，而不是被省略号吃掉。
+          // Recovery 的完整字段只在「工作记录与依据」详情里呈现：身份、角色、预算、Capsule 与 Segment
+          // 都要真的可读，详情分页必须完整消费。
           expect(
             refreshed.compact,
-            `「工作记录与依据」详情未渲染 Recovery：\n${refreshed.text}`,
-          ).toContain('recovery' + (recovery?.recoveryId ?? ''));
-          expect(refreshed.compact, 'recovery 行必须点名角色与状态').toContain(recovery?.role ?? '');
+            `「工作记录与依据」详情未渲染真实 Recovery ID：\n${refreshed.text}`,
+          ).toContain(`recoveries.0.recoveryId:${recovery?.recoveryId ?? ''}`);
+          expect(refreshed.compact, 'Recovery 字段必须点名角色与状态')
+            .toContain(`recoveries.0.role:${recovery?.role ?? ''}`);
+          expect(refreshed.compact).toContain(`recoveries.0.status:${recovery?.status ?? ''}`);
           expect(refreshed.compact, 'recovery 行必须带预算').toContain('budget');
           if (!recovered) {
             // 只用这条 Recovery 自己的 blockingReason 核对：项目面板是逐行边框，全屏任意一行 `! ` 也可能是
@@ -1812,9 +1916,10 @@ if (gate.kind === 'skip') {
             expect(recovery?.capsuleRef, '续办必须绑定真实 Capsule').toEqual(expect.any(String));
             expect(recovery?.replacementSegmentId, '续办必须绑定替代 Segment').toEqual(expect.any(String));
             // 身份取持久事实，界面核验状态、Capsule 与 Segment 行。
-            expect(refreshed.compact).toContain('recovered');
-            expect(refreshed.compact).toMatch(/segment[^\n]*->/u);
-            expect(refreshed.compact).toContain('capsule');
+            expect(refreshed.compact).toContain(`recoveries.0.capsule.ref:${recovery?.capsuleRef ?? ''}`);
+            expect(refreshed.compact).toContain(
+              `recoveries.0.replacementSegmentId:${recovery?.replacementSegmentId ?? ''}`,
+            );
           }
         } else {
           // 未制造中断时不该凭空出现 Recovery：Record 只能由真实中断产生。
@@ -1853,8 +1958,8 @@ if (gate.kind === 'skip') {
           expect(
             refreshed.compact,
             `没有独立结论时不得显示 deliverable：\n${refreshed.text}`,
-          ).toContain('verdict未返回（不显示deliverable）');
-          expect(refreshed.compact).not.toContain('verdictdeliverable');
+          ).toContain('finalizer.verdict:不可用');
+          expect(refreshed.compact).not.toContain('finalizer.verdict.kind:deliverable');
         } else {
           expect(
             verdict,
@@ -1863,22 +1968,27 @@ if (gate.kind === 'skip') {
           expect(
             refreshed.compact,
             `Finalizer 结论必须在界面上如实呈现：\n${refreshed.text}`,
-          ).toContain(verdict?.kind === 'deliverable' ? 'verdictdeliverable' : 'verdictblocked');
-          // verdictRecording 排在 verdict 之后：只有真的滚到详情尾部的读取才可能看到它。
-          expect(refreshed.compact, `Finalizer 记录引用必须在详情尾部可读：\n${refreshed.text}`)
-            .toContain('verdictRecording');
+          ).toContain(`finalizer.verdict.kind:${verdict?.kind ?? ''}`);
+          expect(refreshed.compact, `Finalizer 真实结论 ID 必须可读：\n${refreshed.text}`)
+            .toContain(`finalizer.verdict.verdictId:${verdict?.verdictId ?? ''}`);
+          expect(refreshed.compact).toContain(`finalizer.verdict.sessionBindingRef:${verdict?.sessionBindingRef ?? ''}`);
           if (!interruptRecovery) {
             // 不制造中断的那次验收以 deliverable 为必达项：只读角色能跑通就应该走完整条链路。
             expect(verdict?.kind, `不中断模式必须取得 deliverable：${describeStatus(observed)}`).toBe('deliverable');
             // 只读观察属于运行中的宿主；独立 status 查询只有持久事实，无法提供该观察。
-            expect(refreshed.compact).toContain('read-onlyenforced');
+            expect(refreshed.compact).toContain('finalizer.readOnlyProfile:enforced');
           }
         }
         // Finalizer 的只读 Profile 之外，运行前后工作区事实（HEAD/index/dirty）也必须真的呈现。
         if (observed.execution.finalizer.workspace !== null) {
-          expect(refreshed.compact, `Finalizer 必须呈现运行前后的 HEAD/index/dirty：\n${refreshed.text}`)
-            .toContain('HEAD');
-          expect(refreshed.compact).toContain('dirty');
+          const { before, after } = observed.execution.finalizer.workspace;
+          expect(refreshed.compact, `Finalizer 必须呈现运行前 HEAD：\n${refreshed.text}`)
+            .toContain(`finalizer.workspace.before.head:${before.head}`);
+          expect(refreshed.compact).toContain(`finalizer.workspace.after.head:${after.head}`);
+          expect(refreshed.compact).toContain(`finalizer.workspace.before.indexRevision:${before.indexRevision}`);
+          expect(refreshed.compact).toContain(`finalizer.workspace.after.indexRevision:${after.indexRevision}`);
+          if (before.dirtyPaths.length > 0) expect(refreshed.compact).toContain('finalizer.workspace.before.dirtyPaths');
+          if (after.dirtyPaths.length > 0) expect(refreshed.compact).toContain('finalizer.workspace.after.dirtyPaths');
         }
 
         // ---- 逐角色核对真实 Codex Session 的模型绑定 ----
@@ -1917,7 +2027,7 @@ if (gate.kind === 'skip') {
       },
     );
 
-    test(
+    modelPhase(
       '④ 退出重启后界面恢复同一持久事实，且不产生新的派发或集成（Scenario: 退出后不继续推进）',
       async () => {
         ensureTuiPane();
@@ -1970,7 +2080,7 @@ if (gate.kind === 'skip') {
       240_000,
     );
 
-    test(
+    modelPhase(
       '⑤b Finalizer 未返回结论时不显示 deliverable（Scenario: 单包验证通过不等于可交付 / blocker 结论明确呈现）',
       async () => {
         const pane = ensureTuiPane();
@@ -1982,26 +2092,27 @@ if (gate.kind === 'skip') {
         const detailText = readProjectWorkDetail();
         closeProjectPanel();
         const detail = compactPane(detailText);
-        expect(detailText, `「工作记录与依据」详情未渲染 Finalizer：\n${detailText}`).toContain('Finalizer');
+        expect(detail, `「工作记录与依据」详情未渲染 finalizer 字段：\n${detailText}`).toContain('finalizer.');
         if (verdict === null) {
           // 不变量：没有独立结论时只能呈现「不显示 deliverable」，而且必须同时有可诊断的原因——
           // 只读能力缺口只是一种原因；中断模式下的 Recovery 保守持有、Worker 会话不再产生结果同样是
           // 真实的环境阻塞（见 `docs/orca-compatibility.md`）。宿主自己的 blocker 只出现在这一屏里
           // （`status --json` 读不到），因此判据取 Sidebar 的 blocker 行。
-          expect(detail).toContain('verdict未返回（不显示deliverable）');
-          expect(detail).not.toContain('verdictdeliverable');
+          expect(detail).toContain('finalizer.verdict:不可用');
+          expect(detail).not.toContain('finalizer.verdict.kind:deliverable');
           expect(blockers.length, `没有结论必须同时给出可诊断的 blocker：\n${pane}`).toBeGreaterThan(0);
           expect(blockers, `没有结论的 blocker 必须点名原因：\n${pane}`).toMatch(
-            /work-package|recovery|worker|frontier|delivery|baseline|unsettled/u,
+            /work-package|recovery|worker|frontier|delivery|baseline|unsettled/iu,
           );
           return;
         }
-        expect(detail).toContain(verdict.kind === 'deliverable' ? 'verdictdeliverable' : 'verdictblocked');
+        expect(detail).toContain(`finalizer.verdict.kind:${verdict.kind}`);
+        expect(detail).toContain(`finalizer.verdict.verdictId:${verdict.verdictId}`);
       },
       60_000,
     );
 
-    test(
+    modelPhase(
       '⑥ Ctrl+C 退出前台进程：不写 Scope 控制状态，也不产生新的派发（Scenario: Exit 不等同 Cancel / 退出后不继续推进）',
       async () => {
         ensureTuiPane();
@@ -2025,6 +2136,308 @@ if (gate.kind === 'skip') {
         expect(after.execution.workPackages.length).toBe(before.execution.workPackages.length);
       },
       90_000,
+    );
+
+    /**
+     * ⑦ Replanning Cutover 与真实多代际记录。
+     *
+     * 这一段不派发任何 Worker，也不调用模型：它走的是生产应用用例（`beginReplanningTransition` →
+     * `completeReplanningTransition` → `ensureGraphGenerationRecord` → `recordInitialGraph` →
+     * `record-authorization` → `commitGenerationCutover`）加一次真实的新 Orca Run，因此可以在配额
+     * 紧张时独立成立。断言落在持久事实上：前代被冻结、候选代际换新图/新 Run/新 WorkPackageId、Scope
+     * 引用整体切换，以及**前代冻结之后它的原始计划正文与版本链仍可按精确身份有界读回**。
+     *
+     * 依据正文走 `graph-basis-range`：这正是 TUI 历史详情要用的读端口，用例在这里先证明它对真实多代际
+     * 数据成立，界面层（IP-04）在同一份事实上验收。
+     */
+    cutoverPhase(
+      '⑦ Replanning Cutover：前代冻结、候选落在真实新 Run，前代依据仍按精确身份可读（Scenario: Generation Cutover 之后前代只作历史）',
+      async () => {
+        // ⑥ 已退出前台进程；退出不释放 Runtime Lease（产品语义）。等它过期后由本用例以新 incarnation
+        // 和更大的 fencing generation 接管——这正是「同一 Session 重启续办」的真实路径。
+        sleepSync(DEFAULT_RUNTIME_LEASE_TTL_MS + 5_000);
+
+        const env = toChildEnvironment(process.env);
+        const commonDir = await resolveGitCommonDir({ repositoryPath: workspace, env });
+        if (commonDir.kind !== 'resolved') {
+          throw new Error(`无法解析 Git common dir：${commonDir.message}`);
+        }
+        const opened = await openRepositoryCoordinationStore({ repositoryPath: workspace, env });
+        if (opened.kind !== 'opened') {
+          throw new Error(`无法打开协调状态：${opened.message}`);
+        }
+        const store = opened.store;
+        try {
+          const scopeId = (() => {
+            const scopes = store.query({ kind: 'scopes' });
+            const found = scopes.kind === 'scopes' ? scopes.scopes[0]?.coordinationScopeId : undefined;
+            if (found === undefined) throw new Error('隔离项目没有 Coordination Scope');
+            return found;
+          })();
+          const before = readScope(store, scopeId);
+          if (before.kind === 'rejected') {
+            throw new Error(`无法读取 Scope：${before.code} ${before.message}`);
+          }
+          const predecessorGraphId = before.scope.graphId;
+          if (predecessorGraphId === null) {
+            throw new Error('Cutover 前 Scope 必须已经指向一张图');
+          }
+          const predecessorPlanningCycleId = before.scope.planningCycleId;
+          if (predecessorPlanningCycleId === null) {
+            throw new Error('Cutover 前 Scope 必须已经处于一个 Planning Cycle');
+          }
+          const leases = store.query({ kind: 'leases', coordinationScopeId: scopeId });
+          if (leases.kind !== 'leases') {
+            throw new Error('无法读取租约');
+          }
+          const sessionId = leases.leases[0]?.coordinatorSessionId;
+          if (sessionId === undefined) {
+            throw new Error('隔离项目没有已注册的 Coordinator Session');
+          }
+          const highestFencing = leases.leases.reduce(
+            (highest, lease) => Math.max(highest, lease.fencingGeneration),
+            0,
+          );
+          const incarnation = 'pty-cutover-incarnation' as RuntimeIncarnationId;
+          const lease = acquireRuntimeLease(store, {
+            coordinationScopeId: scopeId,
+            coordinatorSessionId: sessionId,
+            runtimeIncarnationId: incarnation,
+            fencingGeneration: highestFencing + 1,
+          });
+          if (lease.kind !== 'acquired') {
+            throw new Error(`无法接管 Runtime Lease：${lease.kind}`);
+          }
+          const writer: CoordinationWriter = {
+            coordinatorSessionId: sessionId,
+            runtimeIncarnationId: incarnation,
+            fencingGeneration: lease.lease.fencingGeneration,
+          };
+          const revision = (): number => {
+            const read = readScope(store, scopeId);
+            if (read.kind === 'rejected') throw new Error(`无法读取 Scope：${read.message}`);
+            return read.scope.revision;
+          };
+
+          // 前代代际身份：登记过的直接读，未登记的按当前事实登记一次（与 beginReplanningTransition 同一入口）。
+          const generationRows = store.query({ kind: 'graph-generations', coordinationScopeId: scopeId });
+          const registered =
+            generationRows.kind === 'graph-generations'
+              ? generationRows.generations.find((entry) => entry.graphId === predecessorGraphId)
+              : undefined;
+          const predecessorGeneration = (registered?.generation ?? 1) as GraphGeneration;
+          const predecessorRunId = registered?.orcaRunId ?? seededRunId;
+          const predecessorBaseline =
+            registered?.baselineHead ??
+            spawnSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).stdout.trim();
+
+          // 1. 过渡：记录意图、挂起前代、结清、释放 Execution Coordination Lease 并切到新的 Planning Cycle。
+          const begun = beginReplanningTransition({
+            store,
+            coordinationScopeId: scopeId,
+            writer,
+            facts: {
+              userRequestedReplanning: true,
+              goalOrGlobalConstraintChanged: false,
+              graphRevisionsExhausted: false,
+            },
+            predecessor: {
+              graphId: predecessorGraphId,
+              generation: predecessorGeneration,
+              planningCycleId: predecessorPlanningCycleId,
+              orcaRunId: predecessorRunId,
+              baselineHead: predecessorBaseline,
+            },
+          });
+          expect(begun.kind, '重规划过渡未能开始').toBe('started');
+
+          const candidatePlanningCycleId = `${scopeId}:cycle-2` as PlanningCycleId;
+          const completed = completeReplanningTransition({
+            store,
+            coordinationScopeId: scopeId,
+            writer,
+            closure: 'drain',
+            settlement: {
+              inFlightWorkers: 0,
+              pendingDeliveries: 0,
+              openInteractions: 0,
+              unresolvedIntents: 0,
+            },
+            newPlanningCycleId: candidatePlanningCycleId,
+          });
+          expect(completed.kind, `过渡收尾未释放 Lease：${JSON.stringify(completed)}`).toBe('released');
+
+          // 2. 候选代际走生产编译路径：它自己分配空 Run（真实 Orca 副作用）、翻计划、追加初始 GraphVersion
+          // 并把归一化后的原计划与 v1 同事务落盘。这里不自己拼图，也不自己造 Run 身份。
+          const candidateBaseline = spawnSync('git', ['rev-parse', 'HEAD'], {
+            cwd: workspace,
+            encoding: 'utf8',
+          }).stdout.trim();
+          const proposed = await proposeExecutionGraph({
+            store,
+            backend,
+            coordinationScopeId: scopeId,
+            writer,
+            backendIdentityRef: dedicatedIdentity,
+            timeoutMs: 120_000,
+            // 过渡已经把 Scope 切回 route_planning，候选图与它的空 Run 都是规划侧动作。
+            authority: { kind: 'route_planning' },
+            plan: {
+              planRevision: 1,
+              destinationRef: { kind: 'destination', id: 'destination-graph-basis', version: 1 },
+              workPackages: [
+                {
+                  key: 'graph-basis-candidate',
+                  title: '图依据验收候选包',
+                  dependsOn: [],
+                  scopeEnvelope: { include: ['NOTES.md'], exclude: [] },
+                },
+              ],
+            },
+            limits: DEFAULT_EXECUTION_LIMITS,
+            baselineHead: candidateBaseline,
+            objective: `graph basis acceptance cutover (${dedicatedIdentity})`,
+          });
+          if (proposed.kind !== 'recorded') {
+            throw new Error(`候选图未编译落盘：${proposed.kind} ${JSON.stringify(proposed)}`);
+          }
+          const candidateGraphId = proposed.candidate.graphId as GraphId;
+          const candidateGeneration = proposed.candidate.generation as GraphGeneration;
+          const candidateRunId = proposed.candidate.orcaRunId;
+          expect(candidateRunId.length, '新 Run 没有可读回的 runId').toBeGreaterThan(0);
+          expect(candidateRunId, '候选代际必须落在与前代不同的真实 Run 上').not.toBe(predecessorRunId);
+          expect(candidateGraphId).not.toBe(predecessorGraphId);
+
+          // 3. 候选代际的完整授权。
+          const candidateAuthorizationId = `${dedicatedIdentity}:auth-cutover-2`;
+          const candidateAuthorization = store.transact({
+            kind: 'record-authorization',
+            coordinationScopeId: scopeId,
+            expectedRevision: revision(),
+            writer,
+            authorizationId: candidateAuthorizationId,
+            authorizationVersion: 1,
+            manifestVersion: 2,
+            fingerprint: `fingerprint-graph-basis-cutover-${candidateRunId}`,
+            approvalRef: `${dedicatedIdentity}:approval-cutover-2`,
+            manifest: executionManifest({
+              graphId: candidateGraphId,
+              generation: candidateGeneration,
+              orcaRunId: candidateRunId,
+              baselineHead: candidateBaseline,
+              coordinationScopeId: scopeId,
+              planningCycleId: candidatePlanningCycleId,
+            }),
+          });
+          if (candidateAuthorization.kind === 'rejected') {
+            throw new Error(`无法记录候选授权：${candidateAuthorization.message}`);
+          }
+
+          // 4. Cutover：一次写入冻结前代、激活候选并切换全部引用。
+          const cutover = commitGenerationCutover({
+            store,
+            coordinationScopeId: scopeId,
+            writer,
+            refs: {
+              predecessorGraphId,
+              candidateGraphId,
+              candidateGeneration,
+              candidateGraphVersion: proposed.candidate.version as GraphVersion,
+              candidateRunId,
+              planningCycleId: candidatePlanningCycleId,
+              authorizationId: candidateAuthorizationId,
+              authorizationVersion: 1,
+              baselineHead: candidateBaseline,
+              expectedRevision: revision(),
+            },
+          });
+          expect(cutover.kind, `Cutover 未提交：${JSON.stringify(cutover)}`).toBe('cutover');
+
+          // 5. 持久事实：两条代际记录各有真实状态，Scope 引用整体切到候选。
+          const after = readScope(store, scopeId);
+          if (after.kind === 'rejected') throw new Error(`无法读取切换后的 Scope：${after.message}`);
+          expect(after.scope.graphId).toBe(candidateGraphId);
+          expect(after.scope.planningCycleId).toBe(candidatePlanningCycleId);
+          expect(after.scope.mode).toBe('execution_coordination');
+          expect(after.scope.authorizationId).toBe(candidateAuthorizationId);
+
+          const generations = store.query({ kind: 'graph-generations', coordinationScopeId: scopeId });
+          if (generations.kind !== 'graph-generations') {
+            throw new Error('无法读取代际记录');
+          }
+          const byGraph = new Map(generations.generations.map((entry) => [entry.graphId, entry]));
+          expect(byGraph.get(predecessorGraphId)?.status, '前代在 Cutover 之后必须是 frozen').toBe('frozen');
+          expect(byGraph.get(candidateGraphId)?.status).toBe('active');
+          expect(byGraph.get(candidateGraphId)?.orcaRunId).toBe(candidateRunId);
+          expect(generations.generations.length, '真实多代际记录必须同时保留前后两代').toBeGreaterThanOrEqual(2);
+
+          // 6. 前代冻结之后仍然可读：版本链按精确身份分页，依据正文按 UTF-8 范围有界读回。
+          // 目录是**跨代际**的（每页最多 20 项、只读元数据）：冻结代际必须仍然出现在里面。
+          const index = store.query({ kind: 'graph-version-index', coordinationScopeId: scopeId });
+          if (index.kind !== 'graph-version-index') {
+            throw new Error(`无法读取图版本目录：${index.kind}`);
+          }
+          expect(index.items.length, '版本目录每页最多 20 项').toBeLessThanOrEqual(20);
+          const predecessorItems = index.items.filter((item) => item.graphId === predecessorGraphId);
+          expect(predecessorItems.length, '前代至少要留下初始编译版本').toBeGreaterThan(0);
+          expect(
+            predecessorItems.some((item) => item.patchId === null),
+            '前代目录里必须有初始编译版本（patchId 为 null）',
+          ).toBe(true);
+          expect(
+            index.items.some((item) => item.graphId === candidateGraphId),
+            '目录必须同时列出冻结的前代与当前候选代际',
+          ).toBe(true);
+          // 代际标签取真实状态，不用同代际旧版本冒充冻结。
+          expect(
+            predecessorItems.every((item) => item.generationStatus === 'frozen'),
+            `前代每一项都必须标成 frozen：${JSON.stringify(predecessorItems)}`,
+          ).toBe(true);
+
+          const plan = store.query({
+            kind: 'graph-basis-range',
+            coordinationScopeId: scopeId,
+            source: {
+              kind: 'initial_plan',
+              graphId: predecessorGraphId,
+              generation: predecessorGeneration,
+              version: 1 as GraphVersion,
+            },
+            offset: 0,
+            maxBytes: 64 * 1024,
+          });
+          if (plan.kind !== 'graph-basis-range') {
+            throw new Error(`无法读取前代原计划正文：${plan.kind}`);
+          }
+          expect(
+            plan.found,
+            '前代的原始计划正文必须可读：新写入的图 v1 与原计划同事务保存，读不到说明 schema 17 写入路径没接上',
+          ).toBe(true);
+          expect(plan.text ?? '').toContain('README');
+          expect(plan.text ?? '').toContain('NOTES');
+          expect(plan.byteLength).toBeGreaterThan(0);
+
+          // 7. 执行现场身份（不含任何 secret），供本批证据目录记录。
+          const worktrees = await backend.query({ operation: 'worktree-list', repo: `path:${workspace}` });
+          process.stdout.write(
+            `${JSON.stringify({
+              phase: 'cutover',
+              identity: dedicatedIdentity,
+              scopeId,
+              sessionId,
+              predecessor: { graphId: predecessorGraphId, generation: predecessorGeneration, orcaRunId: predecessorRunId },
+              candidate: { graphId: candidateGraphId, orcaRunId: candidateRunId },
+              directoryItems: index.items.length,
+              predecessorVersionCount: predecessorItems.length,
+              planBytes: plan.byteLength,
+              worktreeListReadable: worktrees.kind === 'accepted',
+            })}\n`,
+          );
+        } finally {
+          opened.close();
+        }
+      },
+      900_000,
     );
   }
 }

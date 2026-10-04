@@ -114,6 +114,22 @@ export function graphVersionChain(
   return chain;
 }
 
+/**
+ * 判定某个 GraphVersion 是否仍属于当前图的追加链，与 `graphVersionChain` 同一规则、同一份实现。
+ *
+ * `approved` 是调用方已经取得的**链成员事实**（宿主用存储的轻量 membership 查询按需得到，不必为了
+ * 一次判定把整条历史拓扑读进内存）。缺它时退回用记录列表现场算链——那是纯用例的路径；生产装配
+ * 必须注入 `approved`，否则说明授权链合法性没有被存储证明。
+ */
+export function isGraphVersionInChain(input: {
+  readonly versions: readonly GraphVersionRecord[];
+  readonly current: GraphVersionRecord;
+  readonly candidate: GraphVersion;
+  readonly approved?: ReadonlySet<GraphVersion> | undefined;
+}): boolean {
+  return (input.approved ?? graphVersionChain(input.versions, input.current)).has(input.candidate);
+}
+
 export function isGraphVersionRecordKind(raw: unknown): raw is GraphVersionRecordKind {
   return typeof raw === 'string' && (GRAPH_VERSION_RECORD_KINDS as readonly string[]).includes(raw);
 }

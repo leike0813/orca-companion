@@ -1,0 +1,28 @@
+{
+  "id": "a219869d-0cbd-4ffb-9876-647b4ae3e1d8",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_8f1aabfb0df0",
+      "run_id": "run_b54d29b749db",
+      "from_handle": "term_0b05307b-861c-45ca-8825-e57cc8d3eda6",
+      "to_handle": "dispatch:ctx_6524af9f8b93",
+      "subject": "Continue the existing Implementation task",
+      "body": "Your last model turn ended after reading the bound OpenSpec unit, without an Implementation result. Continue the same Task Envelope, specification, worktree, Dispatch and Attempt. Implement NOTES.md within its existing scope and report the required structured Worker Result using your original dispatch preamble. If blocked, ask or escalate through that preamble. Do not create a new task or change scope.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-04T14:30:29Z",
+      "delivered_at": null,
+      "delivery_contract": "current_delivery"
+    },
+    "mutation": {
+      "requestId": "392bd270-8f5e-4641-8e49-29c1e5bc4ba1",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "34627582-8e2e-49de-b4eb-58b0b159cbd0"
+  }
+}

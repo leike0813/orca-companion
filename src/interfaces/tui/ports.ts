@@ -29,6 +29,7 @@ import type {
 } from '../../application/configuration/model-settings.js';
 import type { TuiPreferencesPort } from '../../application/configuration/tui-preferences.js';
 import type { ProjectDetailsPort } from '../../application/tui/project-presentation.js';
+import type { GraphBasisPort } from '../../application/tui/graph-basis.js';
 
 export type { ModelSettingsSnapshot, SaveModelSettingsInput, SaveModelSettingsResult };
 
@@ -96,6 +97,13 @@ export type TuiPorts = {
   readonly modelSettings?: ModelSettingsPort;
   readonly preferences?: TuiPreferencesPort;
   readonly projectDetails?: ProjectDetailsPort;
+  /**
+   * 图历史与执行依据的有界只读入口（IP-04）。
+   *
+   * 可选：未装配的宿主按「依据读取未接通」显示不可用，界面不伪造版本目录、来源或正文，也不退回
+   * 当前快照猜测历史内容。阅读永远不授权执行：四个动作都是查询，没有写入口。
+   */
+  readonly graphBasis?: GraphBasisPort;
 };
 
 export type TuiQuestionQuery =

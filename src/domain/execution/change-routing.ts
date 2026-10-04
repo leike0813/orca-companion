@@ -15,6 +15,12 @@
 
 import type { GraphVersion, WorkPackageId } from '../../application/dto/identity.js';
 
+export const MAX_GRAPH_CHANGE_INSTRUCTION_CODE_POINTS = 4_000;
+
+export function isValidGraphChangeInstruction(value: string): boolean {
+  return value.trim().length > 0 && Array.from(value).length <= MAX_GRAPH_CHANGE_INSTRUCTION_CODE_POINTS;
+}
+
 export const GRAPH_CHANGE_ROUTES = [
   'retry_attempt',
   'specification_revision',
@@ -45,6 +51,8 @@ export type ChangeClaim = (typeof CHANGE_CLAIMS)[number];
 export type GraphChangeRequest = {
   /** 请求针对的 Work Package；目标级或全局变化为 `null`。 */
   readonly workPackageId: WorkPackageId | null;
+  /** 本次变化的完整业务说明；分类器不读取此字段。 */
+  readonly changeInstruction: string;
   /** 同一 Worker Task 的既定工作因基础设施原因需要重新执行。 */
   readonly infrastructureFailure: ChangeClaim;
   readonly changesDependencies: ChangeClaim;

@@ -1,0 +1,693 @@
+{
+  "observedAt": "2026-10-04T14:42:44.433Z",
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o",
+  "identity": "term_84b01d3b-3ea6-4ba0-8504-aeb08f5934b4",
+  "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+  "acceptanceModel": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+  "readOnly": true,
+  "scopeRevisionBefore": 235,
+  "graphGenerations": [
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "graphId": "ip05-ip05-recovery-20261004o-scope#g1",
+      "generation": 1,
+      "planningCycleId": "ip05-ip05-recovery-20261004o-scope-cycle",
+      "orcaRunId": "run_65b6b748b1cc",
+      "predecessorGraphId": null,
+      "baselineHead": "c68d18d1c6a2bcbde7077c818fe8e2480c086afa",
+      "status": "candidate",
+      "createdAt": 1791123481466,
+      "updatedAt": 1791123481466
+    }
+  ],
+  "graphPatches": [
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "graphId": "ip05-ip05-recovery-20261004o-scope#g1",
+      "graphVersion": 2,
+      "patchId": "graph-patch:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:op%3Aip05-ip05-recovery-20261004o-scope-session%3Astep%3Ab3964e14-cf1c-44f6-b954-d0e1aa2cfd46%3Acall_function_sd15i9ccxj6g_1",
+      "operationId": "op:ip05-ip05-recovery-20261004o-scope-session:step:b3964e14-cf1c-44f6-b954-d0e1aa2cfd46:call_function_sd15i9ccxj6g_1",
+      "baseGraphVersion": 1,
+      "added": [],
+      "revised": [
+        "ip05-ip05-recovery-20261004o-scope#g1:readme-banner"
+      ],
+      "retired": [],
+      "descendants": [],
+      "takesOver": []
+    }
+  ],
+  "deliveryVerdicts": [
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "verdictId": "delivery-verdict:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1",
+      "verdictSequence": 1,
+      "verdict": {
+        "kind": "deliverable",
+        "evidenceRefs": [
+          "git-integration-commit:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics",
+          "git-integration-integrate:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics",
+          "git-integration-push:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics",
+          "git-integration-commit:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner",
+          "git-integration-integrate:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner",
+          "git-integration-push:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner"
+        ]
+      },
+      "finalizerRole": "finalizer",
+      "sessionBindingRef": "01a1075b-7a66-7b80-8c2f-c24dde810ea1",
+      "recordedAt": 1791124869033
+    }
+  ],
+  "revisionHolds": [
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:readme-banner",
+      "source": "graph_patch",
+      "sourceRef": "graph-patch:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:op%3Aip05-ip05-recovery-20261004o-scope-session%3Astep%3Ab3964e14-cf1c-44f6-b954-d0e1aa2cfd46%3Acall_function_sd15i9ccxj6g_1",
+      "state": "released",
+      "priorContractRevision": 1449167574003137,
+      "admittedContractRevision": 1449167574003137,
+      "createdAt": 1791124395587,
+      "releasedAt": 1791124479429,
+      "releaseReason": "specification revision graph-patch:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:op%3Aip05-ip05-recovery-20261004o-scope-session%3Astep%3Ab3964e14-cf1c-44f6-b954-d0e1aa2cfd46%3Acall_function_sd15i9ccxj6g_1 已重新准入"
+    }
+  ],
+  "baselineReconciliations": [
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "reconciliationId": "baseline-reconciliation:ip05-ip05-recovery-20261004o-scope#g1:readme-banner:154be1dcd2e7d1b5232ea78753c2177cde4ba9fe",
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:readme-banner",
+      "role": "planner",
+      "requiredBaselineHead": "154be1dcd2e7d1b5232ea78753c2177cde4ba9fe",
+      "orcaTaskId": "task_e96ae31186ce",
+      "dispatchId": "ctx_d3bc37b9724a",
+      "observedHead": "154be1dcd2e7d1b5232ea78753c2177cde4ba9fe",
+      "ancestryVerified": true,
+      "targetHeadVerified": true,
+      "dirtyPathsReconciled": true,
+      "scopeReconciled": true,
+      "state": "verified",
+      "blockerRef": null,
+      "createdAt": 1791124130563,
+      "updatedAt": 1791124187763
+    }
+  ],
+  "budgetCounters": [
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "budgetKey": "work-package:ip05-ip05-recovery-20261004o-scope#g1:readme-banner:graphRevisions",
+      "approvedLimitRef": "auth:ip05-ip05-recovery-20261004o-scope#g1:9d422bba2564bd3975afbb661b543f30191e6bcea303e1f9b8e3aefe4bd999b2",
+      "consumed": 1
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "budgetKey": "work-package:ip05-ip05-recovery-20261004o-scope#g1:readme-banner:specificationRevisions",
+      "approvedLimitRef": "auth:ip05-ip05-recovery-20261004o-scope#g1:9d422bba2564bd3975afbb661b543f30191e6bcea303e1f9b8e3aefe4bd999b2",
+      "consumed": 1
+    }
+  ],
+  "bindings": [
+    {
+      "identity": "issued",
+      "role": "planner",
+      "recoveryUtilityRole": null,
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:notes-basics",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:planner:0:1",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:planner:0:1",
+      "orcaTaskId": "task_7fe035aa02d9",
+      "dispatchId": "dispatch:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:planner:0:1",
+      "authorizationId": "auth:ip05-ip05-recovery-20261004o-scope#g1:9d422bba2564bd3975afbb661b543f30191e6bcea303e1f9b8e3aefe4bd999b2",
+      "authorizationVersion": 1,
+      "workerProfileRef": {
+        "kind": "worker-profile",
+        "id": "profile-planner"
+      }
+    },
+    {
+      "identity": "issued",
+      "role": "implementation",
+      "recoveryUtilityRole": null,
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:notes-basics",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+      "orcaTaskId": "task_bde34101a34b",
+      "dispatchId": "dispatch:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+      "authorizationId": "auth:ip05-ip05-recovery-20261004o-scope#g1:9d422bba2564bd3975afbb661b543f30191e6bcea303e1f9b8e3aefe4bd999b2",
+      "authorizationVersion": 1,
+      "workerProfileRef": {
+        "kind": "worker-profile",
+        "id": "profile-implementation"
+      }
+    },
+    {
+      "identity": "issued",
+      "role": null,
+      "recoveryUtilityRole": "recovery_utility",
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:notes-basics",
+      "workerTaskId": "op:capsule:segment%3Aip05-ip05-recovery-20261004o-scope%3Actx_af240077cdcd%3Aattempt%253Aip05-ip05-recovery-20261004o-scope%253Aip05-ip05-recovery-20261004o-scope%252523g1%253A1%253Aip05-ip05-recovery-20261004o-scope%252523g1%25253Anotes-basics%253Aimplementation%253A1015219595693291%253A1:task",
+      "attemptId": "op:capsule:segment%3Aip05-ip05-recovery-20261004o-scope%3Actx_af240077cdcd%3Aattempt%253Aip05-ip05-recovery-20261004o-scope%253Aip05-ip05-recovery-20261004o-scope%252523g1%253A1%253Aip05-ip05-recovery-20261004o-scope%252523g1%25253Anotes-basics%253Aimplementation%253A1015219595693291%253A1:task",
+      "orcaTaskId": "task_c034f0baf305",
+      "dispatchId": "op:capsule:segment%3Aip05-ip05-recovery-20261004o-scope%3Actx_af240077cdcd%3Aattempt%253Aip05-ip05-recovery-20261004o-scope%253Aip05-ip05-recovery-20261004o-scope%252523g1%253A1%253Aip05-ip05-recovery-20261004o-scope%252523g1%25253Anotes-basics%253Aimplementation%253A1015219595693291%253A1:worker-start",
+      "authorizationId": "auth:ip05-ip05-recovery-20261004o-scope#g1:9d422bba2564bd3975afbb661b543f30191e6bcea303e1f9b8e3aefe4bd999b2",
+      "authorizationVersion": 1,
+      "workerProfileRef": {
+        "kind": "worker-profile",
+        "id": "profile-recovery_utility"
+      }
+    },
+    {
+      "identity": "issued",
+      "role": "validator",
+      "recoveryUtilityRole": null,
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:notes-basics",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:validator:1015219595693291:1",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:validator:1015219595693291:1",
+      "orcaTaskId": "task_9e9d2f6cf516",
+      "dispatchId": "dispatch:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:validator:1015219595693291:1",
+      "authorizationId": "auth:ip05-ip05-recovery-20261004o-scope#g1:9d422bba2564bd3975afbb661b543f30191e6bcea303e1f9b8e3aefe4bd999b2",
+      "authorizationVersion": 1,
+      "workerProfileRef": {
+        "kind": "worker-profile",
+        "id": "profile-validator"
+      }
+    },
+    {
+      "identity": "issued",
+      "role": "planner",
+      "recoveryUtilityRole": null,
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:readme-banner",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:1",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:1",
+      "orcaTaskId": "task_c130fdf8a23f",
+      "dispatchId": "dispatch:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:1",
+      "authorizationId": "auth:ip05-ip05-recovery-20261004o-scope#g1:9d422bba2564bd3975afbb661b543f30191e6bcea303e1f9b8e3aefe4bd999b2",
+      "authorizationVersion": 1,
+      "workerProfileRef": {
+        "kind": "worker-profile",
+        "id": "profile-planner"
+      }
+    },
+    {
+      "identity": "issued",
+      "role": "planner",
+      "recoveryUtilityRole": null,
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:readme-banner",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:2",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:2",
+      "orcaTaskId": "task_646843789ca4",
+      "dispatchId": "dispatch:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:2",
+      "authorizationId": "auth:ip05-ip05-recovery-20261004o-scope#g1:9d422bba2564bd3975afbb661b543f30191e6bcea303e1f9b8e3aefe4bd999b2",
+      "authorizationVersion": 1,
+      "workerProfileRef": {
+        "kind": "worker-profile",
+        "id": "profile-planner"
+      }
+    },
+    {
+      "identity": "issued",
+      "role": "implementation",
+      "recoveryUtilityRole": null,
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:readme-banner",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:implementation:1449167574003137:1",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:implementation:1449167574003137:1",
+      "orcaTaskId": "task_9264a637049e",
+      "dispatchId": "dispatch:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:implementation:1449167574003137:1",
+      "authorizationId": "auth:ip05-ip05-recovery-20261004o-scope#g1:9d422bba2564bd3975afbb661b543f30191e6bcea303e1f9b8e3aefe4bd999b2",
+      "authorizationVersion": 1,
+      "workerProfileRef": {
+        "kind": "worker-profile",
+        "id": "profile-implementation"
+      }
+    },
+    {
+      "identity": "issued",
+      "role": "validator",
+      "recoveryUtilityRole": null,
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:readme-banner",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:validator:1449167574003137:1",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:validator:1449167574003137:1",
+      "orcaTaskId": "task_c90e95af7357",
+      "dispatchId": "dispatch:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:validator:1449167574003137:1",
+      "authorizationId": "auth:ip05-ip05-recovery-20261004o-scope#g1:9d422bba2564bd3975afbb661b543f30191e6bcea303e1f9b8e3aefe4bd999b2",
+      "authorizationVersion": 1,
+      "workerProfileRef": {
+        "kind": "worker-profile",
+        "id": "profile-validator"
+      }
+    }
+  ],
+  "segments": [
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "segmentId": "segment:ip05-ip05-recovery-20261004o-scope:ctx_140abc1c4431:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Anotes-basics%3Aplanner%3A0%3A1",
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:notes-basics",
+      "role": "planner",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:planner:0:1",
+      "dispatchId": "ctx_140abc1c4431",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:planner:0:1",
+      "sessionBindingId": "session-binding:ctx_140abc1c4431:01a10748-08c0-7ce3-bf84-b27c90b91b99",
+      "lastTranscriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o/.git/orca-companion/codex/d0080de952488a88fddd/sessions/2026/10/04/rollout-2026-10-04T22-18-43-01a10748-08c0-7ce3-bf84-b27c90b91b99.jsonl",
+      "terminalReceiptRef": null,
+      "transcriptReferenceable": true,
+      "verifiable": true,
+      "recordedAt": 1791123532023
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "segmentId": "segment:ip05-ip05-recovery-20261004o-scope:ctx_af240077cdcd:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Anotes-basics%3Aimplementation%3A1015219595693291%3A1",
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:notes-basics",
+      "role": "implementation",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+      "dispatchId": "ctx_af240077cdcd",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+      "sessionBindingId": "session-binding:ctx_af240077cdcd:01a1074c-309e-7cb3-946d-b0aba993d367",
+      "lastTranscriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o/.git/orca-companion/codex/9c9fc5f587f8baa5e4e0/sessions/2026/10/04/rollout-2026-10-04T22-23-16-01a1074c-309e-7cb3-946d-b0aba993d367.jsonl",
+      "terminalReceiptRef": null,
+      "transcriptReferenceable": true,
+      "verifiable": true,
+      "recordedAt": 1791123803981
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "segmentId": "segment:recovery:ip05-ip05-recovery-20261004o-scope:segment:ip05-ip05-recovery-20261004o-scope:ctx_af240077cdcd:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Anotes-basics%3Aimplementation%3A1015219595693291%3A1:replacement",
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:notes-basics",
+      "role": "implementation",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+      "dispatchId": "ctx_5736c8016519",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+      "sessionBindingId": "session-binding:ctx_5736c8016519:01a1074d-5d2b-7c90-a9a8-b31cae922b3f",
+      "lastTranscriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o/.git/orca-companion/codex/a86e8b287debc1ed9607/sessions/2026/10/04/rollout-2026-10-04T22-24-33-01a1074d-5d2b-7c90-a9a8-b31cae922b3f.jsonl",
+      "terminalReceiptRef": null,
+      "transcriptReferenceable": true,
+      "verifiable": true,
+      "recordedAt": 1791123883995
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "segmentId": "segment:ip05-ip05-recovery-20261004o-scope:ctx_6eaa02becd99:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Anotes-basics%3Avalidator%3A1015219595693291%3A1",
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:notes-basics",
+      "role": "validator",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:validator:1015219595693291:1",
+      "dispatchId": "ctx_6eaa02becd99",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:validator:1015219595693291:1",
+      "sessionBindingId": "session-binding:ctx_6eaa02becd99:01a1074f-ccbf-7233-9c5d-bb797b6e5bc3",
+      "lastTranscriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o/.git/orca-companion/codex/d17f6bbe546c97ecddc5/sessions/2026/10/04/rollout-2026-10-04T22-27-12-01a1074f-ccbf-7233-9c5d-bb797b6e5bc3.jsonl",
+      "terminalReceiptRef": null,
+      "transcriptReferenceable": true,
+      "verifiable": true,
+      "recordedAt": 1791124040149
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "segmentId": "segment:ip05-ip05-recovery-20261004o-scope:ctx_dd8c565180d3:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Areadme-banner%3Aplanner%3A0%3A1",
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:readme-banner",
+      "role": "planner",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:1",
+      "dispatchId": "ctx_dd8c565180d3",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:1",
+      "sessionBindingId": "session-binding:ctx_dd8c565180d3:01a10752-5bc6-75f0-8d25-958680770e00",
+      "lastTranscriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o/.git/orca-companion/codex/f7ccc7101a4109d77ab7/sessions/2026/10/04/rollout-2026-10-04T22-30-00-01a10752-5bc6-75f0-8d25-958680770e00.jsonl",
+      "terminalReceiptRef": null,
+      "transcriptReferenceable": true,
+      "verifiable": true,
+      "recordedAt": 1791124207401
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "segmentId": "segment:ip05-ip05-recovery-20261004o-scope:ctx_e87fcf4516e1:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Areadme-banner%3Aplanner%3A0%3A2",
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:readme-banner",
+      "role": "planner",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:2",
+      "dispatchId": "ctx_e87fcf4516e1",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:2",
+      "sessionBindingId": "session-binding:ctx_e87fcf4516e1:01a10755-af7d-7943-9fa0-52b4022debce",
+      "lastTranscriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o/.git/orca-companion/codex/cec86a69546083e0687a/sessions/2026/10/04/rollout-2026-10-04T22-33-38-01a10755-af7d-7943-9fa0-52b4022debce.jsonl",
+      "terminalReceiptRef": null,
+      "transcriptReferenceable": true,
+      "verifiable": true,
+      "recordedAt": 1791124426389
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "segmentId": "segment:ip05-ip05-recovery-20261004o-scope:ctx_1c6a28f1710d:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Areadme-banner%3Aimplementation%3A1449167574003137%3A1",
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:readme-banner",
+      "role": "implementation",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:implementation:1449167574003137:1",
+      "dispatchId": "ctx_1c6a28f1710d",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:implementation:1449167574003137:1",
+      "sessionBindingId": "session-binding:ctx_1c6a28f1710d:01a10756-c920-75b1-9654-2307b40a083e",
+      "lastTranscriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o/.git/orca-companion/codex/cdf95948594a0e2c6420/sessions/2026/10/04/rollout-2026-10-04T22-34-50-01a10756-c920-75b1-9654-2307b40a083e.jsonl",
+      "terminalReceiptRef": null,
+      "transcriptReferenceable": true,
+      "verifiable": true,
+      "recordedAt": 1791124498092
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "segmentId": "segment:ip05-ip05-recovery-20261004o-scope:ctx_308c9893054c:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Areadme-banner%3Avalidator%3A1449167574003137%3A1",
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:readme-banner",
+      "role": "validator",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:validator:1449167574003137:1",
+      "dispatchId": "ctx_308c9893054c",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:validator:1449167574003137:1",
+      "sessionBindingId": "session-binding:ctx_308c9893054c:01a10759-5873-7142-9497-16ae0c351d66",
+      "lastTranscriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o/.git/orca-companion/codex/60b9039d9fb9093244de/sessions/2026/10/04/rollout-2026-10-04T22-37-38-01a10759-5873-7142-9497-16ae0c351d66.jsonl",
+      "terminalReceiptRef": null,
+      "transcriptReferenceable": true,
+      "verifiable": true,
+      "recordedAt": 1791124665903
+    }
+  ],
+  "settlements": [
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "dedupeKey": "[\"delivery_e6696219ce71\",\"run_65b6b748b1cc\",1,\"worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:planner:0:1\",\"ctx_140abc1c4431\",\"attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:planner:0:1\"]",
+      "deliveryId": "delivery_e6696219ce71",
+      "runId": "run_65b6b748b1cc",
+      "consumerGeneration": 1,
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:planner:0:1",
+      "dispatchId": "ctx_140abc1c4431",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:planner:0:1",
+      "role": "planner",
+      "contractRevision": 1015219595693291,
+      "orcaResultRef": "task_7fe035aa02d9#f1b078299f5ef",
+      "acceptedAt": 1791123773118
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "dedupeKey": "[\"delivery_acec863dbbe2\",\"run_65b6b748b1cc\",1,\"worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1\",\"ctx_5736c8016519\",\"attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1\"]",
+      "deliveryId": "delivery_acec863dbbe2",
+      "runId": "run_65b6b748b1cc",
+      "consumerGeneration": 1,
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+      "dispatchId": "ctx_5736c8016519",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+      "role": "implementation",
+      "contractRevision": 1015219595693291,
+      "orcaResultRef": "task_bde34101a34b#0c0bfa98c209d",
+      "acceptedAt": 1791124012470
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "dedupeKey": "[\"delivery_9646f1b1d6f7\",\"run_65b6b748b1cc\",1,\"worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:validator:1015219595693291:1\",\"ctx_6eaa02becd99\",\"attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:validator:1015219595693291:1\"]",
+      "deliveryId": "delivery_9646f1b1d6f7",
+      "runId": "run_65b6b748b1cc",
+      "consumerGeneration": 1,
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:validator:1015219595693291:1",
+      "dispatchId": "ctx_6eaa02becd99",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:validator:1015219595693291:1",
+      "role": "validator",
+      "contractRevision": 1015219595693291,
+      "orcaResultRef": "task_9e9d2f6cf516#84d40efe9cce8",
+      "acceptedAt": 1791124104809
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "dedupeKey": "[\"delivery_20c52728055b\",\"run_65b6b748b1cc\",1,\"baseline-reconciliation:ip05-ip05-recovery-20261004o-scope#g1:readme-banner:154be1dcd2e7d1b5232ea78753c2177cde4ba9fe\",\"ctx_d3bc37b9724a\",\"baseline-reconciliation:ip05-ip05-recovery-20261004o-scope#g1:readme-banner:154be1dcd2e7d1b5232ea78753c2177cde4ba9fe\"]",
+      "deliveryId": "delivery_20c52728055b",
+      "runId": "run_65b6b748b1cc",
+      "consumerGeneration": 1,
+      "workerTaskId": "baseline-reconciliation:ip05-ip05-recovery-20261004o-scope#g1:readme-banner:154be1dcd2e7d1b5232ea78753c2177cde4ba9fe",
+      "dispatchId": "ctx_d3bc37b9724a",
+      "attemptId": "baseline-reconciliation:ip05-ip05-recovery-20261004o-scope#g1:readme-banner:154be1dcd2e7d1b5232ea78753c2177cde4ba9fe",
+      "role": "planner",
+      "contractRevision": 1,
+      "orcaResultRef": "task_e96ae31186ce#4cd78b7e1f5ad",
+      "acceptedAt": 1791124186505
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "dedupeKey": "[\"delivery_116e526aae4f\",\"run_65b6b748b1cc\",1,\"worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:1\",\"ctx_dd8c565180d3\",\"attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:1\"]",
+      "deliveryId": "delivery_116e526aae4f",
+      "runId": "run_65b6b748b1cc",
+      "consumerGeneration": 1,
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:1",
+      "dispatchId": "ctx_dd8c565180d3",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:1",
+      "role": "planner",
+      "contractRevision": 1449167574003137,
+      "orcaResultRef": "task_c130fdf8a23f#06bafe5990a5a",
+      "acceptedAt": 1791124364895
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "dedupeKey": "[\"delivery_f810e08e4781\",\"run_65b6b748b1cc\",1,\"graph-patch:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:op%3Aip05-ip05-recovery-20261004o-scope-session%3Astep%3Ab3964e14-cf1c-44f6-b954-d0e1aa2cfd46%3Acall_function_sd15i9ccxj6g_1:planner-task\",\"ctx_60255680ba11\",\"graph-patch:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:op%3Aip05-ip05-recovery-20261004o-scope-session%3Astep%3Ab3964e14-cf1c-44f6-b954-d0e1aa2cfd46%3Acall_function_sd15i9ccxj6g_1:planner-attempt\"]",
+      "deliveryId": "delivery_f810e08e4781",
+      "runId": "run_65b6b748b1cc",
+      "consumerGeneration": 1,
+      "workerTaskId": "graph-patch:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:op%3Aip05-ip05-recovery-20261004o-scope-session%3Astep%3Ab3964e14-cf1c-44f6-b954-d0e1aa2cfd46%3Acall_function_sd15i9ccxj6g_1:planner-task",
+      "dispatchId": "ctx_60255680ba11",
+      "attemptId": "graph-patch:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:op%3Aip05-ip05-recovery-20261004o-scope-session%3Astep%3Ab3964e14-cf1c-44f6-b954-d0e1aa2cfd46%3Acall_function_sd15i9ccxj6g_1:planner-attempt",
+      "role": "planner",
+      "contractRevision": 1,
+      "orcaResultRef": "task_c766fafc5c16#83b3e13f5eb12",
+      "acceptedAt": 1791124394031
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "dedupeKey": "[\"delivery_99639c84d60d\",\"run_65b6b748b1cc\",1,\"worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:2\",\"ctx_e87fcf4516e1\",\"attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:2\"]",
+      "deliveryId": "delivery_99639c84d60d",
+      "runId": "run_65b6b748b1cc",
+      "consumerGeneration": 1,
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:2",
+      "dispatchId": "ctx_e87fcf4516e1",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:planner:0:2",
+      "role": "planner",
+      "contractRevision": 1449167574003137,
+      "orcaResultRef": "task_646843789ca4#c91fb0167401b",
+      "acceptedAt": 1791124474995
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "dedupeKey": "[\"delivery_726fb45d6717\",\"run_65b6b748b1cc\",1,\"worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:implementation:1449167574003137:1\",\"ctx_1c6a28f1710d\",\"attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:implementation:1449167574003137:1\"]",
+      "deliveryId": "delivery_726fb45d6717",
+      "runId": "run_65b6b748b1cc",
+      "consumerGeneration": 1,
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:implementation:1449167574003137:1",
+      "dispatchId": "ctx_1c6a28f1710d",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:implementation:1449167574003137:1",
+      "role": "implementation",
+      "contractRevision": 1449167574003137,
+      "orcaResultRef": "task_9264a637049e#1255c505f97eb",
+      "acceptedAt": 1791124636526
+    },
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "dedupeKey": "[\"delivery_4c5bc1b5bc16\",\"run_65b6b748b1cc\",1,\"worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:validator:1449167574003137:1\",\"ctx_308c9893054c\",\"attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:validator:1449167574003137:1\"]",
+      "deliveryId": "delivery_4c5bc1b5bc16",
+      "runId": "run_65b6b748b1cc",
+      "consumerGeneration": 1,
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:validator:1449167574003137:1",
+      "dispatchId": "ctx_308c9893054c",
+      "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Areadme-banner:validator:1449167574003137:1",
+      "role": "validator",
+      "contractRevision": 1449167574003137,
+      "orcaResultRef": "task_c90e95af7357#3a5c4189bfa52",
+      "acceptedAt": 1791124769147
+    }
+  ],
+  "workers": [
+    {
+      "dispatchId": "ctx_140abc1c4431",
+      "result": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_140abc1c4431",
+          "taskId": "task_7fe035aa02d9",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_b0292f5c-9462-416a-8fa6-e2d62140af83",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      }
+    },
+    {
+      "dispatchId": "ctx_af240077cdcd",
+      "result": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_af240077cdcd",
+          "taskId": "task_bde34101a34b",
+          "dispatchStatus": "failed",
+          "workerState": "failed",
+          "workerStage": "process_exited",
+          "agentTerminalHandle": "term_85deac88-68f0-4cf7-b146-c3ef0ff8d4a0",
+          "observationStatus": "exited",
+          "exactWorker": true
+        }
+      }
+    },
+    {
+      "dispatchId": "ctx_5736c8016519",
+      "result": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_5736c8016519",
+          "taskId": "task_bde34101a34b",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_92a80db4-857e-484e-955c-0193d5b3683c",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      }
+    },
+    {
+      "dispatchId": "ctx_6eaa02becd99",
+      "result": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_6eaa02becd99",
+          "taskId": "task_9e9d2f6cf516",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_259828a6-1abf-429c-b8c8-40c5304d91fe",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      }
+    },
+    {
+      "dispatchId": "ctx_dd8c565180d3",
+      "result": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_dd8c565180d3",
+          "taskId": "task_c130fdf8a23f",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_68d17a7a-9aab-42e2-b95c-6b69f65657a0",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      }
+    },
+    {
+      "dispatchId": "ctx_e87fcf4516e1",
+      "result": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_e87fcf4516e1",
+          "taskId": "task_646843789ca4",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_115b9be8-f0c8-46d5-ac82-6e95602db173",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      }
+    },
+    {
+      "dispatchId": "ctx_1c6a28f1710d",
+      "result": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_1c6a28f1710d",
+          "taskId": "task_9264a637049e",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_e56add6a-649f-47b1-a0f3-a8bb50a1674f",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      }
+    },
+    {
+      "dispatchId": "ctx_308c9893054c",
+      "result": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_308c9893054c",
+          "taskId": "task_c90e95af7357",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_9b781d62-a338-4096-b25c-c1ed9f4c5f06",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      }
+    }
+  ],
+  "recoveries": [
+    {
+      "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+      "recoveryId": "recovery:ip05-ip05-recovery-20261004o-scope:segment:ip05-ip05-recovery-20261004o-scope:ctx_af240077cdcd:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Anotes-basics%3Aimplementation%3A1015219595693291%3A1",
+      "role": "implementation",
+      "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:notes-basics",
+      "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+      "businessAttemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+      "sourceSegmentId": "segment:ip05-ip05-recovery-20261004o-scope:ctx_af240077cdcd:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Anotes-basics%3Aimplementation%3A1015219595693291%3A1",
+      "sourceDispatchId": "ctx_af240077cdcd",
+      "replacementDispatchId": "ctx_5736c8016519",
+      "replacementSegmentId": "segment:recovery:ip05-ip05-recovery-20261004o-scope:segment:ip05-ip05-recovery-20261004o-scope:ctx_af240077cdcd:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Anotes-basics%3Aimplementation%3A1015219595693291%3A1:replacement",
+      "replacementSessionBindingId": "session-binding:ctx_5736c8016519:01a1074d-5d2b-7c90-a9a8-b31cae922b3f",
+      "supersededSegmentId": null,
+      "status": "recovered",
+      "consumedBudget": 1,
+      "capsuleRef": "recovery-capsule:recovery:ip05-ip05-recovery-20261004o-scope:segment:ip05-ip05-recovery-20261004o-scope:ctx_af240077cdcd:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Anotes-basics%3Aimplementation%3A1015219595693291%3A1",
+      "prewriteOperationId": "op:recovery:ip05-ip05-recovery-20261004o-scope:segment:ip05-ip05-recovery-20261004o-scope:ctx_af240077cdcd:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Anotes-basics%3Aimplementation%3A1015219595693291%3A1:replacement-dispatch",
+      "terminalOutcome": "replaced",
+      "blockingReason": null,
+      "createdAt": 1791123819421,
+      "updatedAt": 1791123883995,
+      "sourceSegment": {
+        "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+        "segmentId": "segment:ip05-ip05-recovery-20261004o-scope:ctx_af240077cdcd:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Anotes-basics%3Aimplementation%3A1015219595693291%3A1",
+        "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:notes-basics",
+        "role": "implementation",
+        "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+        "dispatchId": "ctx_af240077cdcd",
+        "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+        "sessionBindingId": "session-binding:ctx_af240077cdcd:01a1074c-309e-7cb3-946d-b0aba993d367",
+        "lastTranscriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o/.git/orca-companion/codex/9c9fc5f587f8baa5e4e0/sessions/2026/10/04/rollout-2026-10-04T22-23-16-01a1074c-309e-7cb3-946d-b0aba993d367.jsonl",
+        "terminalReceiptRef": null,
+        "transcriptReferenceable": true,
+        "verifiable": true,
+        "recordedAt": 1791123803981
+      },
+      "replacementSegment": {
+        "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+        "segmentId": "segment:recovery:ip05-ip05-recovery-20261004o-scope:segment:ip05-ip05-recovery-20261004o-scope:ctx_af240077cdcd:attempt%3Aip05-ip05-recovery-20261004o-scope%3Aip05-ip05-recovery-20261004o-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004o-scope%2523g1%253Anotes-basics%3Aimplementation%3A1015219595693291%3A1:replacement",
+        "workPackageId": "ip05-ip05-recovery-20261004o-scope#g1:notes-basics",
+        "role": "implementation",
+        "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+        "dispatchId": "ctx_5736c8016519",
+        "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+        "sessionBindingId": "session-binding:ctx_5736c8016519:01a1074d-5d2b-7c90-a9a8-b31cae922b3f",
+        "lastTranscriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o/.git/orca-companion/codex/a86e8b287debc1ed9607/sessions/2026/10/04/rollout-2026-10-04T22-24-33-01a1074d-5d2b-7c90-a9a8-b31cae922b3f.jsonl",
+        "terminalReceiptRef": null,
+        "transcriptReferenceable": true,
+        "verifiable": true,
+        "recordedAt": 1791123883995
+      },
+      "acceptedReplacementResults": [
+        {
+          "coordinationScopeId": "ip05-ip05-recovery-20261004o-scope",
+          "dedupeKey": "[\"delivery_acec863dbbe2\",\"run_65b6b748b1cc\",1,\"worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1\",\"ctx_5736c8016519\",\"attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1\"]",
+          "deliveryId": "delivery_acec863dbbe2",
+          "runId": "run_65b6b748b1cc",
+          "consumerGeneration": 1,
+          "workerTaskId": "worker-task:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+          "dispatchId": "ctx_5736c8016519",
+          "attemptId": "attempt:ip05-ip05-recovery-20261004o-scope:ip05-ip05-recovery-20261004o-scope%23g1:1:ip05-ip05-recovery-20261004o-scope%23g1%3Anotes-basics:implementation:1015219595693291:1",
+          "role": "implementation",
+          "contractRevision": 1015219595693291,
+          "orcaResultRef": "task_bde34101a34b#0c0bfa98c209d",
+          "acceptedAt": 1791124012470
+        }
+      ],
+      "totalAttemptRecoveryConsumption": 1,
+      "approvedAttemptRecoveryLimit": 1
+    }
+  ],
+  "scopeRevisionAfter": 235,
+  "scopeRevisionUnchanged": true
+}

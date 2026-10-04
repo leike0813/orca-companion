@@ -1,0 +1,106 @@
+{
+  "id": "bbffc614-8b9c-4791-a362-b318508f7b4a",
+  "ok": true,
+  "result": {
+    "workers": [
+      {
+        "dispatchId": "ctx_e23310ca1223",
+        "taskId": "task_92ab61e27025",
+        "runId": "run_9b5d8a9bd4c0",
+        "workerState": "ready",
+        "dispatchStatus": "dispatched",
+        "agentTerminalHandle": "term_727759fd-6218-4de6-9a3c-474f5e0e1e41",
+        "terminalState": "retained",
+        "resource": {
+          "id": "wtr_a1c1da66aaf7",
+          "ownershipState": "external",
+          "releaseState": "not_requested",
+          "retainedReason": "external_terminal",
+          "terminalHandle": "term_727759fd-6218-4de6-9a3c-474f5e0e1e41",
+          "worktreeId": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+          "endpointId": "34627582-8e2e-49de-b4eb-58b0b159cbd0",
+          "endpointIncarnation": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b@@51569510:f28a7832-8b12-489e-ba59-425e0e05c4f7",
+          "originDispatchId": "ctx_e23310ca1223",
+          "ownerDispatchId": "ctx_e23310ca1223",
+          "releaseRequestedAt": null,
+          "releaseCompletedAt": null,
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": null,
+            "status": null
+          }
+        },
+        "projection": {
+          "id": "ctx_e23310ca1223",
+          "dispatchId": "ctx_e23310ca1223",
+          "taskId": "task_92ab61e27025",
+          "runId": "run_9b5d8a9bd4c0",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "533b79f7-a743-43c7-8679-46faf2dfe1dc::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004j/wp-9c38eb670670104bdf398ff723c4709a8dc9eb77981fa7c46e61ee90f2b14d6b",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "ready",
+            "dispatch": "dispatched",
+            "detail": "input_accepted",
+            "activity": "unknown"
+          },
+          "outcome": "in_progress",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "external"
+          },
+          "nextAction": {
+            "kind": "inspect",
+            "argv": [
+              "orchestration",
+              "worker-show",
+              "--dispatch",
+              "ctx_e23310ca1223"
+            ]
+          },
+          "attention": {
+            "categories": [
+              "input",
+              "unverifiable"
+            ],
+            "requiresAction": true
+          }
+        }
+      }
+    ],
+    "counts": {
+      "retained": 1
+    },
+    "page": {
+      "limit": 100,
+      "total": 1,
+      "hasMore": false,
+      "nextCursor": null
+    },
+    "scope": {
+      "run": "run_9b5d8a9bd4c0",
+      "source": "flag"
+    }
+  },
+  "_meta": {
+    "runtimeId": "34627582-8e2e-49de-b4eb-58b0b159cbd0"
+  }
+}

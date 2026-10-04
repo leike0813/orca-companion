@@ -1,0 +1,40 @@
+示例仓… · main · sessi… · 执行 · active · 待答0
+──────────────────────────────────────────────────
+╭────────────────────────────────────────────────╮
+│ 依据正文                                       │
+│ 目录入口 › 来源目录 · wp-a › 原始 Implementat… │
+│ 原始 Implementation Plan · 来源版本 {"kind":"… │
+│ {"planRevision":26,"destinationRef":{"kind":"d │
+│ estination","id":"destination-under-test","ver │
+│ sion":1},"workPackages":[{"key":"wp-1","title" │
+│ :"wp-a","dependsOn":[],"scopeEnvelope":{"inclu │
+│ de":["src"],"exclude":[]},"requestedBudget":{" │
+│ implementationAttempts":2,"validatorRepairs":2 │
+│ ,"graphRevisions":2,"specificationRevisions":2 │
+│ ,"maxRecoveriesPerWorkerAttempt":1}},{"key":"w │
+│ p-2","title":"wp-b","dependsOn":["wp-1"],"scop │
+│ eEnvelope":{"include":["src"],"exclude":[]},"r │
+│ equestedBudget":{"implementationAttempts":2,"v │
+│ alidatorRepairs":2,"graphRevisions":2,"specifi │
+│ cationRevisions":2,"maxRecoveriesPerWorkerAtte │
+│ mpt":1}},{"key":"wp-3","title":"wp-c","depends │
+│ On":["wp-2"],"scopeEnvelope":{"include":["src" │
+│ ],"exclude":[]},"requestedBudget":{"implementa │
+│ tionAttempts":2,"validatorRepairs":2,"graphRev │
+│ isions":2,"specificationRevisions":2,"maxRecov │
+│ eriesPerWorkerAttempt":1}}]}                   │
+│ 已到本来源版本末尾                             │
+│ ↑↓ 滚动 · PgDn 下一段 · PgUp 上一段 · Esc 返回 │
+│                                                │
+│                                                │
+│                                                │
+│                                                │
+│                                                │
+│                                                │
+│                                                │
+│                                                │
+│                                                │
+│                                                │
+│                                                │
+╰────────────────────────────────────────────────╯
+

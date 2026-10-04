@@ -49,6 +49,7 @@ import {
 } from './model-configurations.js';
 import type { RoleGateFacts } from '../../src/domain/recovery/role-gate.js';
 import type { ExecutionGraph } from '../../src/domain/planning/execution-graph.js';
+import { implementationPlanFor } from './graph-plan-fixture.js';
 import type {
   RecoverWorkerSessionInput,
   ReplacementSessionReceipt,
@@ -309,6 +310,7 @@ export function createRecoveryHarness(options: RecoveryHarnessOptions = {}): Rec
     coordinationScopeId: RECOVERY_SCOPE,
     writer,
     graph,
+    initialPlan: implementationPlanFor(graph, 1),
     mapRevision: mapRevisionOf(),
     planRevision: 1,
     orcaRunId: 'run-recovery',

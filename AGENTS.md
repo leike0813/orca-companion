@@ -193,7 +193,9 @@ Graph Patch 采用原子的 `add + revise + retire`：
 - `coordination.sqlite` 保存模式、Planning Cycle、当前 graph/authorization 引用、Session 注册、Ticket Claim、Pending Interaction、Operation Intent、Runtime/Execution lease、fencing、共享预算状态和 CAS revision；
 - `checkpoints.sqlite` 由 LangGraph SqliteSaver 保存每个 Session 的已提交消息/tool step、图位置、Wake Batch、Context Capsule 和 Coordinator Model Configuration binding。
 
-`coordination.sqlite` 当前为 schema 16：物化绑定新增 `authorization_id`、`authorization_version` 与 `worker_profile_ref`，写入时缺任一项即拒绝，不留下无运行依据的新行。schema 16 之前的历史行保持 `null`，需要这些事实的路径按不可证明阻塞，不按「当前授权」推断回填。
+`coordination.sqlite` 当前为 schema 17：schema 16 的物化绑定继续要求 `authorization_id`、`authorization_version` 与 `worker_profile_ref`；初始图记录新增 nullable `initial_plan_json`，初始 v1 写入必须携带与 `planRevision` 一致的归一化 Implementation Plan，并与图记录在同一事务提交。旧行保持 `null`，读取时明确显示原计划未记录，不推断回填；accepted revision 不改写原计划。
+
+图历史与依据正文遵守 IC-03/05/06/11/12：版本目录、head、追加链 membership 与依据 UTF-8 范围通过 metadata/范围查询读取；目录每页最多 20 项，正文每次最多 64 KiB。初始计划按 JSON 原结构保留，以 SQLite BLOB 范围读取，不先全文编码。generation 状态只读登记值，不能从历史身份推断 frozen。TUI 唯一只读 seam 是 `src/application/tui/graph-basis.ts` 的 `GraphBasisPort`，应用实现由 `src/application/tui/graph-basis-service.ts` 拥有。来源引用按判别联合 fail closed。原生规格 provider 的 `readFiles` 与 `readFileRange` 是可选能力，只有 task、package、Orca Task、locator 和 contract binding 精确匹配时才可读；`listSources` 可带 `orcaTaskId` 进入该 Task binding 的精确 unit，tracking revision 独立呈现。tracker 只读取配置的当前 `routeMapIssueRef`；未保存的批准时正文明确缺失。`retained_task` 是 Work Package 级保留记录，不能按时间归到某个 GraphVersion。ProjectDetails 仍绑定当前 Scope revision；历史图与依据使用独立来源身份和各自 8 MiB/64 项缓存，snapshot 只带当前拓扑。历史图不得借用当前 frontier、worker、budget 或验收事实。
 
 UI 输入另存于同目录 `ui.sqlite`，由 IC-13 的应用端口、storage adapter 和 Bootstrap 装配拥有。草稿、冲突副本与待核验提交按 Scope/Session/回答 revision 隔离；提交先保存完整快照和稳定 submissionId，再调用业务用例。输入恢复只核验原身份，界面 render/effect/resize/remount 只读取，不持久写入或自动发送。容量满额与 CAS 冲突保留输入并经 `/inputs` 显式处理；详细合同见 `docs/interface-contracts.md` IC-13。
 

@@ -1,0 +1,13 @@
+{
+  "args": [
+    "terminal",
+    "close",
+    "--worktree",
+    "id:beb8ec44-1d97-4981-9819-f670ab06932d::/home/joshua/orca/workspaces/orca-companion-ip05-recovery-20261004m/wp-5024538f10672a0c1ff8b9128f4ad240bbcdc1db769739821d6c05eb3d2f4ca0",
+    "--all",
+    "--json"
+  ],
+  "status": 0,
+  "stdout": "{\n  \"id\": \"c2b110ae-3511-4914-b309-6137edfaefbe\",\n  \"ok\": true,\n  \"result\": {\n    \"closed\": 4,\n    \"stopped\": 4,\n    \"retiredSurfaces\": true\n  },\n  \"_meta\": {\n    \"runtimeId\": \"34627582-8e2e-49de-b4eb-58b0b159cbd0\"\n  }\n}\n",
+  "stderr": ""
+}

@@ -51,7 +51,7 @@ export function projectDetail(view: TuiViewModel, events: readonly SemanticEvent
     ...(view.graph?view.graph.nodes.slice(0, PROJECT_DETAILS_MAX_ITEMS - 3).map(n=>[n.title+' · '+n.workPackageId+' ['+n.state+']',...graphDetailRows(n,view.graph!,0),...graphDetailRows(n,view.graph!,1),...graphDetailRows(n,view.graph!,2)].join('\n')):['当前图不可用']),
     view.execution.recoveries.slice(0, PROJECT_DETAILS_MAX_ITEMS).flatMap(recoveryRows).join('\n'),
     ['Finalizer', ...finalizerRows(view.execution.finalizer)].join('\n'),
-    '历史图版本和依据全文读取：不可用',
+    '↓ Enter 打开依据来源与历史图版本目录',
   ];
   if (key.startsWith('event:')) {
     const event = events.find(event=>event.eventId===key.slice(6));
@@ -127,6 +127,6 @@ export function ProjectPanel({ view, events, panel, width, height, details, deta
           <Text dimColor>{fit('  ' + item.hint)}</Text>
         </Box>)}
     </Box>
-    <Text dimColor>{fit(panel.detail ? '↑↓ 浏览 · Esc 返回列表' : (items.length>count?'显示 '+(start+1)+'–'+Math.min(items.length,start+count)+'/'+items.length+' · ':'')+'↑↓ 选择 · Enter 打开 · Esc 返回')}</Text>
+    <Text dimColor>{fit(panel.detail ? '↑↓ 浏览' + (panel.detail==='work'?' · Enter 依据与历史':'') + ' · Esc 返回列表' : (items.length>count?'显示 '+(start+1)+'–'+Math.min(items.length,start+count)+'/'+items.length+' · ':'')+'↑↓ 选择 · Enter 打开 · Esc 返回')}</Text>
   </Box>;
 }

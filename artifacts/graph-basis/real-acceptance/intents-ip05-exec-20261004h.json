@@ -1,0 +1,147 @@
+{
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004h",
+  "scope": "ip05-ip05-exec-20261004h-scope",
+  "intents": {
+    "kind": "intents",
+    "intents": [
+      {
+        "coordinationScopeId": "ip05-ip05-exec-20261004h-scope",
+        "operationId": "run-create:ip05-ip05-exec-20261004h-scope#g1",
+        "target": {
+          "kind": "orca-run",
+          "id": "ip05-ip05-exec-20261004h-scope#g1"
+        },
+        "operationCategory": "run-create",
+        "laneKey": "[\"orca-run\",\"ip05-ip05-exec-20261004h-scope#g1\",\"run-create\"]",
+        "expectedRevision": 2,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip05-ip05-exec-20261004h-scope-session",
+          "runtimeIncarnationId": "ip05-ip05-exec-20261004h-scope-incarnation"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "0a161019-ec49-44b5-83ab-78831ca6fb09",
+        "blockingReason": null,
+        "createdAt": 1791116531213,
+        "settledAt": 1791116531824
+      },
+      {
+        "coordinationScopeId": "ip05-ip05-exec-20261004h-scope",
+        "operationId": "ip05-ip05-exec-20261004h-scope:ip05-ip05-exec-20261004h-scope%23g1:1:ip05-ip05-exec-20261004h-scope%23g1%3Anotes-basics:planner:0:attempt%3Aip05-ip05-exec-20261004h-scope%3Aip05-ip05-exec-20261004h-scope%2523g1%3A1%3Aip05-ip05-exec-20261004h-scope%2523g1%253Anotes-basics%3Aplanner%3A0%3A1:worktree",
+        "target": {
+          "kind": "worktree",
+          "id": "ip05-ip05-exec-20261004h-scope#g1:notes-basics"
+        },
+        "operationCategory": "materialize-worktree",
+        "laneKey": "[\"worktree\",\"ip05-ip05-exec-20261004h-scope#g1:notes-basics\",\"materialize-worktree\"]",
+        "expectedRevision": 14,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip05-ip05-exec-20261004h-scope-session",
+          "runtimeIncarnationId": "ip05-ip05-exec-20261004h-scope-session:06a22b2e-16a1-40c9-946a-9b20d1b06788"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "473e5f7b-5792-4a40-ae63-cf1aa59820cb",
+        "blockingReason": null,
+        "createdAt": 1791116565725,
+        "settledAt": 1791116573461
+      },
+      {
+        "coordinationScopeId": "ip05-ip05-exec-20261004h-scope",
+        "operationId": "ip05-ip05-exec-20261004h-scope:ip05-ip05-exec-20261004h-scope%23g1:1:ip05-ip05-exec-20261004h-scope%23g1%3Anotes-basics:planner:0:attempt%3Aip05-ip05-exec-20261004h-scope%3Aip05-ip05-exec-20261004h-scope%2523g1%3A1%3Aip05-ip05-exec-20261004h-scope%2523g1%253Anotes-basics%3Aplanner%3A0%3A1:task",
+        "target": {
+          "kind": "task",
+          "id": "ip05-ip05-exec-20261004h-scope#g1:notes-basics"
+        },
+        "operationCategory": "materialize-task",
+        "laneKey": "[\"task\",\"ip05-ip05-exec-20261004h-scope#g1:notes-basics\",\"materialize-task\"]",
+        "expectedRevision": 16,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip05-ip05-exec-20261004h-scope-session",
+          "runtimeIncarnationId": "ip05-ip05-exec-20261004h-scope-session:06a22b2e-16a1-40c9-946a-9b20d1b06788"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "877fbdda-489d-4fad-a5ac-f373ce7cb159",
+        "blockingReason": null,
+        "createdAt": 1791116573758,
+        "settledAt": 1791116574643
+      },
+      {
+        "coordinationScopeId": "ip05-ip05-exec-20261004h-scope",
+        "operationId": "ip05-ip05-exec-20261004h-scope:ip05-ip05-exec-20261004h-scope%23g1:1:ip05-ip05-exec-20261004h-scope%23g1%3Anotes-basics:planner:0:attempt%3Aip05-ip05-exec-20261004h-scope%3Aip05-ip05-exec-20261004h-scope%2523g1%3A1%3Aip05-ip05-exec-20261004h-scope%2523g1%253Anotes-basics%3Aplanner%3A0%3A1:workerPrepare",
+        "target": {
+          "kind": "worker-task",
+          "id": "ip05-ip05-exec-20261004h-scope#g1:notes-basics"
+        },
+        "operationCategory": "materialize-worker-terminal",
+        "laneKey": "[\"worker-task\",\"ip05-ip05-exec-20261004h-scope#g1:notes-basics\",\"materialize-worker-terminal\"]",
+        "expectedRevision": 19,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip05-ip05-exec-20261004h-scope-session",
+          "runtimeIncarnationId": "ip05-ip05-exec-20261004h-scope-session:06a22b2e-16a1-40c9-946a-9b20d1b06788"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "f85dd020-4629-406b-8afc-3c9f7408770a",
+        "blockingReason": null,
+        "createdAt": 1791116574981,
+        "settledAt": 1791116575353
+      },
+      {
+        "coordinationScopeId": "ip05-ip05-exec-20261004h-scope",
+        "operationId": "ip05-ip05-exec-20261004h-scope:ip05-ip05-exec-20261004h-scope%23g1:1:ip05-ip05-exec-20261004h-scope%23g1%3Anotes-basics:planner:0:attempt%3Aip05-ip05-exec-20261004h-scope%3Aip05-ip05-exec-20261004h-scope%2523g1%3A1%3Aip05-ip05-exec-20261004h-scope%2523g1%253Anotes-basics%3Aplanner%3A0%3A1:workerStart",
+        "target": {
+          "kind": "worker-task",
+          "id": "ip05-ip05-exec-20261004h-scope#g1:notes-basics"
+        },
+        "operationCategory": "materialize-worker-start",
+        "laneKey": "[\"worker-task\",\"ip05-ip05-exec-20261004h-scope#g1:notes-basics\",\"materialize-worker-start\"]",
+        "expectedRevision": 21,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip05-ip05-exec-20261004h-scope-session",
+          "runtimeIncarnationId": "ip05-ip05-exec-20261004h-scope-session:06a22b2e-16a1-40c9-946a-9b20d1b06788"
+        },
+        "state": "blocked",
+        "outcomeClass": null,
+        "backendRequestId": null,
+        "blockingReason": "worker-start 后无法读回 exact Worker 与 prepared terminal 绑定",
+        "createdAt": 1791116579891,
+        "settledAt": null
+      }
+    ]
+  },
+  "bindings": {
+    "kind": "materialization-bindings",
+    "bindings": [
+      {
+        "coordinationScopeId": "ip05-ip05-exec-20261004h-scope",
+        "workPackageId": "ip05-ip05-exec-20261004h-scope#g1:notes-basics",
+        "orcaTaskId": "task_61f8f382e07a",
+        "creationOperationId": "ip05-ip05-exec-20261004h-scope:ip05-ip05-exec-20261004h-scope%23g1:1:ip05-ip05-exec-20261004h-scope%23g1%3Anotes-basics:planner:0:attempt%3Aip05-ip05-exec-20261004h-scope%3Aip05-ip05-exec-20261004h-scope%2523g1%3A1%3Aip05-ip05-exec-20261004h-scope%2523g1%253Anotes-basics%3Aplanner%3A0%3A1:task",
+        "createdAt": 1791116574609,
+        "authorizationId": "auth:ip05-ip05-exec-20261004h-scope#g1:4dd23f98e95a8a4014b4a841f969f30c28eac35df7c8398614593a0eb56ba90c",
+        "authorizationVersion": 1,
+        "workerProfileRef": {
+          "kind": "worker-profile",
+          "id": "profile-planner"
+        },
+        "identity": "issued",
+        "role": "planner",
+        "recoveryUtilityRole": null,
+        "workerTaskId": "worker-task:ip05-ip05-exec-20261004h-scope:ip05-ip05-exec-20261004h-scope%23g1:1:ip05-ip05-exec-20261004h-scope%23g1%3Anotes-basics:planner:0:1",
+        "dispatchId": "dispatch:ip05-ip05-exec-20261004h-scope:ip05-ip05-exec-20261004h-scope%23g1:1:ip05-ip05-exec-20261004h-scope%23g1%3Anotes-basics:planner:0:1",
+        "attemptId": "attempt:ip05-ip05-exec-20261004h-scope:ip05-ip05-exec-20261004h-scope%23g1:1:ip05-ip05-exec-20261004h-scope%23g1%3Anotes-basics:planner:0:1",
+        "worktreeId": "fa0c170c-6874-4c22-bbb6-355cd7048b08::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004h/wp-9239a0cfa8d15f2545c8414671fa75fd7b8bcd6aa47d6c74b373d304f467076c",
+        "specBinding": null,
+        "specificationUnitPath": "openspec/changes/ip05-ip05-exec-20261004h-scope-g1-notes-basics-9239a0cf",
+        "launchId": "worker-launch:ip05-ip05-exec-20261004h-scope:ip05-ip05-exec-20261004h-scope%23g1:1:ip05-ip05-exec-20261004h-scope%23g1%3Anotes-basics:planner:0:1"
+      }
+    ]
+  }
+}

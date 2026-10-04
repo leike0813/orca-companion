@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 17;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -617,6 +617,26 @@ const MIGRATION_16: readonly string[] = [
      WHERE utility_role IS NOT NULL AND attempt_id IS NOT NULL`,
 ];
 
+/**
+ * M17：初始图保留原编译计划。
+ *
+ * `graph_versions` 一直只保存编译**结果**（`graph_json`）和修订**增量**（`patch_json`）。计划正文
+ * 此前只活在 Coordinator 会话与 tracker 上，于是「这张图当初依据哪份计划编译」在会话压缩、
+ * tracker 改写或 Replanning Cutover 之后都不可回读——只剩一个孤立的 `plan_revision` 数字。历史图
+ * 详情要按原样展示编译依据，就必须在 v1 追加的同一事务里留下那份归一化计划。
+ *
+ * 一列 nullable 而不是 NOT NULL：
+ * - schema 17 之前的行当时确实没有这项事实，猜一份等于伪造依据。读取方按「依据缺失」显式呈现，
+ *   不从当前 tracker 正文或编译结果反推。
+ * - `accepted_revision` 永远不写这一列。修订不重写原计划；同图的后续版本要读原计划时沿 `graph_id`
+ *   回到 v1 读，缺失即缺失。
+ */
+const MIGRATION_17: readonly string[] = [
+  `ALTER TABLE graph_versions ADD COLUMN initial_plan_json TEXT`,
+  `CREATE INDEX graph_versions_directory
+     ON graph_versions (coordination_scope_id, graph_generation DESC, graph_id DESC, graph_version DESC)`,
+];
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, statements: MIGRATION_1 },
   { version: 2, statements: MIGRATION_2 },
@@ -639,6 +659,7 @@ export const MIGRATIONS: readonly Migration[] = [
     `CREATE INDEX pending_interaction_scope_page ON pending_interactions(coordination_scope_id, state, created_at, interaction_id)`,
   ] },
   { version: 16, statements: MIGRATION_16 },
+  { version: 17, statements: MIGRATION_17 },
 ];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {

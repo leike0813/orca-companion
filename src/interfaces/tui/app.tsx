@@ -56,6 +56,7 @@ import type {
 } from './components/input-record-manager.js';
 import {
   answerDraftKey,
+  basisBack,
   composerDraftFor,
   composerInputFor,
   executionFilterLabel,
@@ -63,7 +64,15 @@ import {
   isComposerReadOnly,
   nextExecutionFilter,
   reduceTuiState,
+  basisEnter,
+  basisFrameKey,
+  basisReplaceTop,
+  basisStack,
+  basisTop,
   type ComposerMode,
+  type BasisFrame,
+  type BasisOrigin,
+  type BasisState,
   type ModelRoleMenuState,
   type OverlayKind,
   type PendingConfirmation,
@@ -77,12 +86,29 @@ import { Workspace, workspaceLayout, type WorkspaceActions } from './screens/wor
 import { COMMAND_IDS, COMMAND_METADATA, commandReason, HELP_LINES, slashCandidates, parseSlashInput, type CommandId } from './components/command-palette.js';
 import { projectItems, projectDetailViewport } from './components/project-panel.js';
 import { selectedGraphNode } from './components/graph-inspector.js';
+import {
+  BASIS_ROOT_ENTRIES,
+  BasisBodyReader,
+  basisBodyRows,
+  basisReflowScroll,
+  basisVersionSelection,
+  type BasisBodyFrame,
+  type BasisPage,
+  type BasisViewModel,
+} from './components/graph-basis-view.js';
 import { preferredSessionId, sessionChoices } from './components/session-picker.js';
 import { filterChoices } from './components/selection-list.js';
 import { tuiTheme } from './theme.js';
 import { DEFAULT_TUI_PREFERENCES, type StatuslinePreferences } from '../../application/configuration/tui-preferences.js';
 import { statuslineSettingRows, updateStatuslinePreference } from './components/statusline-settings.js';
 import type { ProjectDetailPage } from '../../application/tui/project-presentation.js';
+import type {
+  BasisReadResult,
+  BasisBodyRange,
+  BasisSource,
+  GraphVersionSummary,
+} from '../../application/tui/graph-basis.js';
+import type { GraphView } from '../../application/tui/view-model.js';
 import {
   projectTranscriptPage,
   projectTuiViewModel,
@@ -174,6 +200,45 @@ function resultNotice(result: ControllerCommandResult): string | null {
 
 type AnswerMode = Extract<ComposerMode, { readonly kind: 'answer' }>;
 type ProjectDetailsUi = { readonly logicalKey: string | null; readonly objectKey: string | null; readonly page: ProjectDetailPage | null; readonly after: string | null; readonly previous: readonly (string | null)[]; readonly notice: string | null; readonly loading: boolean };
+
+/**
+ * 依据下钻的已读页面。
+ *
+ * 每页都带自己的读取身份与发起时的 Session：换 Session、换页或关掉页面后，迟到结果都会被
+ * `basisOwned` 拒绝，因此历史正文不会串到另一个会话或另一次翻页上。
+ */
+type BasisUi = {
+  readonly session: string | null;
+  readonly versions: BasisPage<GraphVersionSummary> | null;
+  readonly version: { readonly key: string; readonly summary: GraphVersionSummary; readonly graph: GraphView; readonly retiredWorkPackageIds?: readonly string[] } | null;
+  readonly sources: BasisPage<BasisSource> | null;
+  readonly body: BasisBodyFrame | null;
+  readonly notice: string | null;
+  readonly loading: boolean;
+};
+
+const EMPTY_BASIS_UI: BasisUi = { session: null, versions: null, version: null, sources: null, body: null, notice: null, loading: false };
+
+function basisNoticeOf<T>(result: BasisReadResult<T>): string | null {
+  if (result.kind === 'unavailable') return `${result.code}: ${result.message}`;
+  if (result.kind === 'stale') return `依据已变化：${result.message}`;
+  return null;
+}
+
+/** 依据视图的只读投影；没有打开下钻时返回 `undefined`，因此宿主未装配时完全不渲染这一层。 */
+function basisViewModel(state: TuiState, ui: BasisUi): BasisViewModel | undefined {
+  if (state.basis === null) return undefined;
+  return {
+    stack: state.basis,
+    session: ui.session,
+    versions: ui.versions,
+    version: ui.version,
+    sources: ui.sources,
+    body: ui.body,
+    notice: ui.notice,
+    loading: ui.loading,
+  };
+}
 
 function messageInputTarget(coordinationScopeId: string, coordinatorSessionId: string): UiInputTarget {
   return { kind: 'message', coordinationScopeId, coordinatorSessionId };
@@ -314,6 +379,11 @@ function TuiAppContent(props: TuiAppProps) {
   const preferencesRevision = useRef(0);
   const [projectDetailsUi, setProjectDetailsUi] = useState<ProjectDetailsUi>({logicalKey:null,objectKey:null,page:null,after:null,previous:[],notice:null,loading:false});
   const projectDetailsRequest = useRef(0);
+  const [basisUi, setBasisUi] = useState<BasisUi>(EMPTY_BASIS_UI);
+  const basisUiRef = useRef(basisUi);
+  basisUiRef.current = basisUi;
+  const basisRequest = useRef(0);
+  const [basisReader] = useState(() => new BasisBodyReader());
   const navigationGeneration = useRef(0);
   const [commandInvocations] = useState(() => new CommandInvocations());
   const [events, setEvents] = useState<readonly SemanticEvent[]>([]);
@@ -608,6 +678,390 @@ function TuiAppContent(props: TuiAppProps) {
       }
     }
   };
+
+  /* ---------------------------------------------------------------------- */
+  /* 图历史与执行依据（IP-04）                                               */
+  /* ---------------------------------------------------------------------- */
+
+  /** 依据视图的可用宽高：项目面板入口用面板尺寸，Inspector 入口用整屏尺寸。 */
+  const basisBox = (): { readonly width: number; readonly rows: number } => {
+    const stack = stateRef.current.basis;
+    const view = viewModelRef.current;
+    if (stack?.origin.kind === 'project' && view !== null) {
+      const layout = workspaceLayout(view, stateRef.current, terminalWidth, windowSize.rows ?? process.stdout.rows ?? 24);
+      return { width: Math.max(8, layout.projectWidth - 4), rows: layout.bodyRows };
+    }
+    return { width: Math.max(8, terminalWidth - 4), rows: Math.max(6, basisOverlayRows()) };
+  };
+
+  /** Inspector 覆盖层里的正文高度：与 Workspace 给覆盖层的整块高度一致，避免上下被裁。 */
+  const basisOverlayRows = (): number => {
+    const view = viewModelRef.current;
+    const rows = windowSize.rows ?? process.stdout.rows ?? 24;
+    return view === null ? Math.max(6, rows - 2) : Math.max(6, workspaceLayout(view, stateRef.current, terminalWidth, rows).bodyRows);
+  };
+
+  /** 迟到结果的三重归属校验：读取代次、Session 与页面身份必须同时成立。 */
+  const basisOwned = (request: number, session: string, key: string): boolean => {
+    if (request !== basisRequest.current) return false;
+    if (stateRef.current.selectedSessionId !== session) return false;
+    const stack = stateRef.current.basis;
+    return stack !== null && basisFrameKey(basisTop(stack)) === key;
+  };
+
+  const readBasisVersions = async (frame: Extract<BasisFrame, { kind: 'versions' }>, session: string) => {
+    const port = ports.graphBasis;
+    const key = basisFrameKey(frame);
+    const current = basisUiRef.current;
+    if (port === undefined || (current.versions?.key === key && current.session === session)) return;
+    const request = ++basisRequest.current;
+    setBasisUi((value) => ({ ...value, session, loading: true, notice: null }));
+    const result = await port.listVersions({ coordinatorSessionId: session, after: frame.after });
+    if (!basisOwned(request, session, key)) return;
+    if (result.kind !== 'read') {
+      setBasisUi((value) => ({ ...value, loading: false, notice: basisNoticeOf(result) }));
+      return;
+    }
+    const page: BasisPage<GraphVersionSummary> = { key, session, items: result.value.items, nextCursor: result.value.nextCursor };
+    setBasisUi((value) => ({ ...value, session, versions: page, loading: false, notice: null }));
+  };
+
+  const readBasisVersion = async (frame: Extract<BasisFrame, { kind: 'version' }>, session: string) => {
+    const port = ports.graphBasis;
+    const key = basisFrameKey(frame);
+    const current = basisUiRef.current;
+    if (port === undefined || (current.version?.key === key && current.session === session)) return;
+    const request = ++basisRequest.current;
+    setBasisUi((value) => ({ ...value, session, loading: true, notice: null }));
+    const result = await port.readVersion({ coordinatorSessionId: session, graph: frame.ref });
+    if (!basisOwned(request, session, key)) return;
+    if (result.kind !== 'read') {
+      setBasisUi((value) => ({ ...value, loading: false, notice: basisNoticeOf(result) }));
+      return;
+    }
+    const { summary, graph, retiredWorkPackageIds } = result.value;
+    // 身份必须与请求的精确图版本一致：不一致就明确不可用，绝不显示「相近」的另一版。
+    if (summary.graphId !== frame.ref.graphId || summary.generation !== frame.ref.generation || summary.version !== frame.ref.version) {
+      setBasisUi((value) => ({ ...value, loading: false, notice: '图版本响应与请求的精确身份不一致' }));
+      return;
+    }
+    setBasisUi((value) => ({ ...value, session, version: { key, summary, graph, ...(retiredWorkPackageIds === undefined ? {} : { retiredWorkPackageIds }) }, loading: false, notice: null }));
+  };
+
+  const readBasisSources = async (frame: Extract<BasisFrame, { kind: 'sources' }>, session: string) => {
+    const port = ports.graphBasis;
+    const key = basisFrameKey(frame);
+    const current = basisUiRef.current;
+    if (port === undefined || (current.sources?.key === key && current.session === session)) return;
+    const request = ++basisRequest.current;
+    setBasisUi((value) => ({ ...value, session, loading: true, notice: null }));
+    const result = await port.listSources({ coordinatorSessionId: session, graph: frame.graph, workPackageId: frame.workPackageId, after: frame.after, ...(frame.orcaTaskId === undefined ? {} : { orcaTaskId: frame.orcaTaskId }) });
+    if (!basisOwned(request, session, key)) return;
+    if (result.kind !== 'read') {
+      setBasisUi((value) => ({ ...value, loading: false, notice: basisNoticeOf(result) }));
+      return;
+    }
+    const page: BasisPage<BasisSource> = { key, session, items: result.value.items, nextCursor: result.value.nextCursor };
+    setBasisUi((value) => ({ ...value, session, sources: page, loading: false, notice: null }));
+  };
+
+  const applyBasisBody = (frame: Extract<BasisFrame, { kind: 'body' }>, session: string, range: BasisBodyRange) => {
+    if (frame.sourceVersion !== null && range.sourceVersion !== frame.sourceVersion) {
+      setBasisUi((value) => ({ ...value, body: null, loading: false, notice: '来源正文已变化；返回目录后重新打开' }));
+      return;
+    }
+    const bound = { ...frame, sourceVersion: range.sourceVersion };
+    const key = basisFrameKey(bound);
+    if (frame.sourceVersion === null) {
+      const stack = stateRef.current.basis;
+      if (stack === null) return;
+      dispatch({ kind: 'basis-frames', frames: basisReplaceTop(stack, bound).frames, origin: stack.origin });
+      basisReader.remember(JSON.stringify([session, key]), range);
+    }
+    const body: BasisBodyFrame = {
+      key,
+      session,
+      source: frame.source,
+      sourceVersion: range.sourceVersion,
+      offset: range.offset,
+      end: range.end,
+      lines: basisReader.layout(JSON.stringify([session, key]), range.text, basisBox().width),
+      hasMore: range.end < range.byteLength,
+      notice: null,
+    };
+    setBasisUi((value) => ({ ...value, session, body, loading: false, notice: null }));
+  };
+
+  const readBasisBody = async (frame: Extract<BasisFrame, { kind: 'body' }>, session: string) => {
+    const port = ports.graphBasis;
+    const key = basisFrameKey(frame);
+    if (port === undefined) return;
+    const cacheKey = JSON.stringify([session, key]);
+    const cached = frame.sourceVersion === null ? undefined : basisReader.cached(cacheKey);
+    // 命中缓存时直接重排当前范围：翻页返回与 resize 都不再打扰权威来源。
+    if (cached !== undefined) {
+      applyBasisBody(frame, session, cached);
+      return;
+    }
+    const request = ++basisRequest.current;
+    setBasisUi((value) => ({ ...value, session, loading: true, notice: null }));
+    const result = await basisReader.read(port, { key: cacheKey, coordinatorSessionId: session, source: frame.source, sourceVersion: frame.sourceVersion, offset: frame.offset });
+    if (!basisOwned(request, session, key)) return;
+    if (result.kind !== 'read') {
+      setBasisUi((value) => ({ ...value, loading: false, notice: basisNoticeOf(result) }));
+      return;
+    }
+    applyBasisBody(frame, session, result.value);
+  };
+
+  /** 栈顶页面缺页时才读；因此返回、翻页与 Session 切换都不会重复请求已读页面。 */
+  const syncBasis = async (stack: BasisState) => {
+    const frame = basisTop(stack);
+    const session = stateRef.current.selectedSessionId;
+    const port = ports.graphBasis;
+    if (port === undefined) {
+      setBasisUi({ ...EMPTY_BASIS_UI, notice: '依据读取端口未接通' });
+      return;
+    }
+    if (session === null) {
+      setBasisUi({ ...EMPTY_BASIS_UI, notice: '未选择会话，无法读取依据' });
+      return;
+    }
+    const request = basisRequest.current + 1;
+    try {
+      if (frame.kind === 'versions') await readBasisVersions(frame, session);
+      else if (frame.kind === 'version') await readBasisVersion(frame, session);
+      else if (frame.kind === 'sources') await readBasisSources(frame, session);
+      else if (frame.kind === 'body') await readBasisBody(frame, session);
+    } catch {
+      if (basisOwned(request, session, basisFrameKey(frame))) {
+        setBasisUi((value) => ({ ...value, loading: false, notice: '依据读取失败；返回后可重新打开' }));
+      }
+    }
+  };
+
+  const applyBasis = (stack: BasisState | null) => {
+    if (stack === null) {
+      basisRequest.current++;
+      setBasisUi(EMPTY_BASIS_UI);
+      dispatch({ kind: 'basis-frames', frames: null });
+      return;
+    }
+    dispatch({ kind: 'basis-frames', frames: stack.frames, origin: stack.origin });
+    void syncBasis(stack);
+  };
+
+  /** 关闭依据页：Inspector 入口不需要恢复字段，项目面板入口恢复原栏目、对象与滚动。 */
+  const closeBasis = () => {
+    const stack = stateRef.current.basis;
+    if (stack?.origin.kind === 'project') {
+      dispatch({ kind: 'project-panel', panel: { open: true, tab: stack.origin.tab, selectedKey: stack.origin.selectedKey, detail: stack.origin.detail, scroll: stack.origin.scroll } });
+    }
+    applyBasis(null);
+  };
+
+  /** 进入依据的入口页；端口未装配时只给结构化不可用，不打开空页面。 */
+  const openBasis = (origin: BasisOrigin) => {
+    if (ports.graphBasis === undefined) {
+      dispatch({ kind: 'notice', notice: '图依据读取端口未接通' });
+      return;
+    }
+    basisRequest.current++;
+    setBasisUi({ ...EMPTY_BASIS_UI, session: stateRef.current.selectedSessionId });
+    applyBasis(basisStack(origin));
+  };
+
+  /** 入口带过来的工作包：项目面板用当前派发对象，Inspector 用当前选中节点。 */
+  const basisEntryWorkPackageId = (): string | null => {
+    const current = stateRef.current;
+    const view = viewModelRef.current;
+    if (current.basis?.origin.kind === 'project') return view?.projectPresentation?.activeWorkPackage?.id ?? null;
+    const node = selectedGraphNode(view?.graph ?? null, current.inspectorSelection);
+    return node?.workPackageId ?? current.inspectorSelection;
+  };
+
+  const basisGraphRef = (): { graphId: string; generation: number; version: number } | null => {
+    const graph = viewModelRef.current?.graph ?? null;
+    return graph === null || graph.generation === null ? null : { graphId: graph.graphId, generation: graph.generation, version: graph.graphVersion };
+  };
+
+  const basisSourcesFrame = (frame: Extract<BasisFrame, { kind: 'sources' }>, after: string | null, previous: readonly (string | null)[], index = 0): Extract<BasisFrame, { kind: 'sources' }> => ({ ...frame, after, previous, index });
+
+  /** 依据页的键位：沿用 ↑↓/←→/Enter/PgUp/PgDn/Esc，全部只改展示态。 */
+  const handleBasisKey = (key: Key) => {
+    const stack = stateRef.current.basis;
+    if (stack === null) return;
+    const frame = basisTop(stack);
+    const ui = basisUiRef.current;
+    const vertical = key.upArrow === true ? -1 : key.downArrow === true ? 1 : 0;
+    switch (frame.kind) {
+      case 'root': {
+        if (vertical !== 0) {
+          applyBasis(basisReplaceTop(stack, { ...frame, index: Math.max(0, Math.min(BASIS_ROOT_ENTRIES.length - 1, frame.index + vertical)) }));
+          return;
+        }
+        if (key.return === true) {
+          const entry = BASIS_ROOT_ENTRIES[frame.index] ?? BASIS_ROOT_ENTRIES[0];
+          if (entry.key === 'versions') {
+            applyBasis(basisEnter(stack, { kind: 'versions', index: 0, after: null, previous: [] }));
+            return;
+          }
+          const graph = basisGraphRef();
+          if (graph === null) {
+            dispatch({ kind: 'notice', notice: '当前图不可用，无法列出执行依据' });
+            return;
+          }
+          applyBasis(basisEnter(stack, { kind: 'sources', graph, workPackageId: basisEntryWorkPackageId(), index: 0, after: null, previous: [] }));
+        }
+        return;
+      }
+      case 'versions': {
+        const page = ui.versions?.key === basisFrameKey(frame) && ui.session === stateRef.current.selectedSessionId ? ui.versions : null;
+        const items = page?.items ?? [];
+        if (vertical !== 0 && items.length > 0) {
+          applyBasis(basisReplaceTop(stack, { ...frame, index: Math.max(0, Math.min(items.length - 1, frame.index + vertical)) }));
+          return;
+        }
+        if (key.pageDown === true && page?.nextCursor != null) {
+          applyBasis(basisReplaceTop(stack, { ...frame, after: page.nextCursor, previous: [...frame.previous, frame.after].slice(-20), index: 0 }));
+          return;
+        }
+        if (key.pageUp === true && frame.previous.length > 0) {
+          const previous = frame.previous.slice(0, -1);
+          applyBasis(basisReplaceTop(stack, { ...frame, after: frame.previous.at(-1) ?? null, previous, index: 0 }));
+          return;
+        }
+        if (key.return === true) {
+          const summary = items[frame.index];
+          if (summary === undefined) return;
+          applyBasis(basisEnter(stack, { kind: 'version', ref: { graphId: summary.graphId, generation: summary.generation, version: summary.version }, selection: basisEntryWorkPackageId(), tab: 0, relations: null, relationIndex: 0 }));
+        }
+        return;
+      }
+      case 'version': {
+        const record = ui.version?.key === basisFrameKey(frame) && ui.session === stateRef.current.selectedSessionId ? ui.version : null;
+        if (key.tab === true) {
+          applyBasis(basisReplaceTop(stack, { ...frame, tab: (frame.tab + 1) % 3, relations: null }));
+          return;
+        }
+        // 多个关系目标必须显式选择，沿用 Inspector 的关系选择而不是自动跳第一个。
+        if (frame.relations !== null) {
+          if (vertical !== 0) {
+            applyBasis(basisReplaceTop(stack, { ...frame, relationIndex: Math.max(0, Math.min(frame.relations.length - 1, frame.relationIndex + vertical)) }));
+            return;
+          }
+          if (key.return === true) {
+            const id = frame.relations[frame.relationIndex];
+            const node = record?.graph.nodes.find((item) => item.workPackageId === frame.selection) ?? null;
+            const target = record?.graph.nodes.find((item) => item.workPackageId === id) ?? null;
+            if (node !== null && target !== null && (node.dependsOn.includes(target.workPackageId) || target.dependsOn.includes(node.workPackageId))) {
+              applyBasis(basisReplaceTop(stack, { ...frame, selection: target.workPackageId, relations: null, relationIndex: 0 }));
+            } else {
+              dispatch({ kind: 'notice', notice: '所选关系已改变，请重新选择' });
+              applyBasis(basisReplaceTop(stack, { ...frame, relations: null }));
+            }
+          }
+          return;
+        }
+        const ids = record === null ? [] : basisVersionSelection(record.graph, frame.selection);
+        if (vertical !== 0 && ids.length > 0) {
+          const current = frame.selection === null ? -1 : ids.indexOf(frame.selection);
+          applyBasis(basisReplaceTop(stack, { ...frame, selection: ids[Math.max(0, Math.min(ids.length - 1, current + vertical))] ?? null }));
+          return;
+        }
+        if (key.leftArrow === true || key.rightArrow === true) {
+          if (record === null || frame.selection === null) return;
+          const graph = record.graph;
+          const node = graph.nodes.find((item) => item.workPackageId === frame.selection);
+          if (node === undefined) return;
+          const targets = key.rightArrow === true ? node.dependsOn : graph.nodes.filter((item) => item.dependsOn.includes(frame.selection!)).map((item) => item.workPackageId);
+          if (targets.length === 0) return;
+          if (targets.length === 1) {
+            applyBasis(basisReplaceTop(stack, { ...frame, selection: targets[0]! }));
+            return;
+          }
+          applyBasis(basisReplaceTop(stack, { ...frame, relations: targets, relationIndex: 0 }));
+          return;
+        }
+        if (key.return === true) {
+          applyBasis(basisEnter(stack, { kind: 'sources', graph: frame.ref, workPackageId: frame.selection, index: 0, after: null, previous: [] }));
+        }
+        return;
+      }
+      case 'sources': {
+        const page = ui.sources?.key === basisFrameKey(frame) && ui.session === stateRef.current.selectedSessionId ? ui.sources : null;
+        const items = page?.items ?? [];
+        if (vertical !== 0 && items.length > 0) {
+          applyBasis(basisReplaceTop(stack, { ...frame, index: Math.max(0, Math.min(items.length - 1, frame.index + vertical)) }));
+          return;
+        }
+        if (key.pageDown === true && page?.nextCursor != null) {
+          applyBasis(basisReplaceTop(stack, basisSourcesFrame(frame, page.nextCursor, [...frame.previous, frame.after].slice(-20))));
+          return;
+        }
+        if (key.pageUp === true && frame.previous.length > 0) {
+          const previous = frame.previous.slice(0, -1);
+          applyBasis(basisReplaceTop(stack, basisSourcesFrame(frame, frame.previous.at(-1) ?? null, previous)));
+          return;
+        }
+        if (key.return === true) {
+          const source = items[frame.index];
+          if (source === undefined) return;
+          if (source.ref === null || source.unavailable !== null) {
+            // 引用仍在，但正文缺失或不可用：明确说明，不伪造内容。
+            dispatch({ kind: 'notice', notice: `${source.label}：${source.unavailable ?? '正文不可用'}` });
+            return;
+          }
+          // `path` 为空的 specification 是原生 unit 的目录来源：再下钻一层列出该保留 Task 的真实文件，
+          // 保留每个 Task 各自的规格绑定，不猜「最新」文件。Task 身份取自引用本身，不解析展示用的 id。
+          if (source.ref.kind === 'specification' && source.ref.path === '') {
+            applyBasis(basisEnter(stack, { kind: 'sources', graph: frame.graph, workPackageId: source.ref.workPackageId, orcaTaskId: source.ref.orcaTaskId, index: 0, after: null, previous: [] }));
+            return;
+          }
+          applyBasis(basisEnter(stack, { kind: 'body', source: source.ref, label: source.label, sourceVersion: source.sourceVersion, offset: 0, visited: [0], scroll: 0 }));
+        }
+        return;
+      }
+      case 'body': {
+        const page = ui.body?.key === basisFrameKey(frame) && ui.session === stateRef.current.selectedSessionId ? ui.body : null;
+        const visible = basisBodyRows(basisBox().rows);
+        if (vertical !== 0 && page !== null) {
+          const maxScroll = Math.max(0, page.lines.length - visible);
+          applyBasis(basisReplaceTop(stack, { ...frame, scroll: Math.max(0, Math.min(maxScroll, frame.scroll + vertical)) }));
+          return;
+        }
+        // 正文翻页是同一层内的范围移动：它不新增导航层，因此 Esc 一次就回到来源目录。
+        if (key.pageDown === true && page !== null && page.hasMore) {
+          applyBasis(basisReplaceTop(stack, { ...frame, offset: page.end, visited: [...frame.visited, page.end].slice(-20), scroll: 0 }));
+          return;
+        }
+        if (key.pageUp === true && frame.visited.length > 1) {
+          const visited = frame.visited.slice(0, -1);
+          applyBasis(basisReplaceTop(stack, { ...frame, offset: visited.at(-1) ?? 0, visited, scroll: 0 }));
+        }
+        return;
+      }
+    }
+  };
+
+  // resize 只重排当前正文范围：来源、偏移与 Session 都不变，也不重新读取。
+  useEffect(() => {
+    const stack = stateRef.current.basis;
+    if (stack === null) return;
+    const frame = basisTop(stack);
+    if (frame.kind !== 'body') return;
+    const key = basisFrameKey(frame);
+    const cacheKey = JSON.stringify([stateRef.current.selectedSessionId, key]);
+    const cached = basisReader.cached(cacheKey);
+    if (cached === undefined) return;
+    const lines = basisReader.layout(cacheKey, cached.text, basisBox().width);
+    const previous = basisUiRef.current.body;
+    if (previous?.key === key) {
+      const scroll = basisReflowScroll(cached.text, previous.lines, lines, frame.scroll, basisBodyRows(basisBox().rows));
+      if (scroll !== frame.scroll) dispatch({ kind: 'basis-frames', frames: basisReplaceTop(stack, { ...frame, scroll }).frames, origin: stack.origin });
+    }
+    setBasisUi((value) => (value.body?.key === key ? { ...value, body: { ...value.body, lines } } : value));
+  }, [terminalWidth, windowSize.rows]);
 
   // 卸载只取消计时器：组件重挂载绝不产生新的持久写入。
   useEffect(() => () => protection.dispose(), [protection]);
@@ -1271,6 +1725,8 @@ function TuiAppContent(props: TuiAppProps) {
       if(reason)return reject('command_unavailable',reason);
       const open=(overlay:OverlayKind, selectedId:string|null=null):CommandOutcome=>{
         if(!active())return {kind:'rejected',code:'navigation_changed',message:'调用入口已改变'};
+        // 任何新弹窗都结束依据下钻：弹窗有自己的返回语义，不叠加在依据页面之上。
+        if(stateRef.current.basis!==null)closeBasis();
         dispatch({kind:'review-view',tab:0,scroll:0,action:0});
         dispatch({kind:'dialog-selection',overlay,query:emptyDraft(),selectedId});
         dispatch({kind:'overlay-open',overlay});
@@ -2465,6 +2921,20 @@ function TuiAppContent(props: TuiAppProps) {
     }
     if (action === 'escape') {
       if (inputHistory.active || historyPreviewRef.current !== null) { inputHistory.cancel(); updateHistoryPreview(null); return; }
+      // 依据下钻先逐层返回自己的页面：Esc 不会穿透去关 overlay 或退出会话。
+      if (stateRef.current.basis !== null) {
+        const current = stateRef.current.basis;
+        const frame = basisTop(current);
+        // 历史版本里的关系候选先关掉自己，再返回上一层，与 Inspector 的 Esc 层级一致。
+        if (frame.kind === 'version' && frame.relations !== null) {
+          applyBasis(basisReplaceTop(current, { ...frame, relations: null }));
+          return;
+        }
+        const next = basisBack(current);
+        if (next === null) closeBasis();
+        else applyBasis(next);
+        return;
+      }
       answerRequest.current++;
       if (topOverlay() === 'input-record-manager') {
         if (inputManagerRef.current?.bodyFocus === true) {
@@ -2600,6 +3070,11 @@ function TuiAppContent(props: TuiAppProps) {
       if(key.upArrow||key.downArrow)dispatch({kind:'review-view',scroll:Math.max(0,Math.min(HELP_LINES.length+COMMAND_IDS.length-1,stateRef.current.reviewScroll+(key.upArrow?-1:1)))});
       return;
     }
+    // 依据页接管方向键、Enter、翻页与 Esc：它在 Inspector 或项目面板的原框内下钻，不新增键位。
+    if (stateRef.current.basis !== null) {
+      handleBasisKey(key);
+      return;
+    }
     if (topOverlay() === 'graph-inspector') {
       const current=stateRef.current;
       if(key.tab){dispatch({kind:'inspector-view',tab:(current.inspectorTab+1)%3,scroll:0});return;}
@@ -2611,7 +3086,11 @@ function TuiAppContent(props: TuiAppProps) {
           else dispatch({kind:'notice',notice:'所选关系已改变，请重新选择'});
           dispatch({kind:'inspector-view',relations:null,scroll:0});}return;
       }
-      if(key.return){dispatch({kind:'inspector-view',detail:!current.inspectorDetail,scroll:0});return;}
+      if(key.return){
+        // 完整记录的末项是依据入口：端口接通时下钻，否则仍按原语义退出完整记录。
+        if(current.inspectorDetail&&ports.graphBasis!==undefined){openBasis({kind:'inspector'});return;}
+        dispatch({kind:'inspector-view',detail:!current.inspectorDetail,scroll:0});return;
+      }
       if(current.inspectorDetail&&(key.upArrow||key.downArrow)){dispatch({kind:'inspector-view',scroll:Math.max(0,current.inspectorScroll+(key.upArrow?-1:1))});return;}
       if(key.leftArrow||key.rightArrow){const graph=viewModelRef.current?.graph??null,nodes=graph?.nodes??[],node=selectedGraphNode(graph,current.inspectorSelection);
         if(!node){dispatch({kind:'notice',notice:'所选节点已不在当前图中，请重新选择'});return;}
@@ -2713,6 +3192,7 @@ function TuiAppContent(props: TuiAppProps) {
       if (project.tab === 1 && project.detail === null && (key.pageUp || key.pageDown)) { void loadScopeQuestions(key.pageUp ? -1 : 1); return; }
       if(key.tab){projectDetailsRequest.current++;const tab=(project.tab+1)%3;dispatch({kind:'project-panel',panel:{...project,tab,detail:null,selectedKey:projectItems(view,events,tab)[0]?.key??null,scroll:0}});return;}
       if(project.detail){
+        if(key.return&&project.detail==='work'){openBasis({kind:'project',tab:project.tab,detail:project.detail,selectedKey:project.selectedKey,scroll:project.scroll});return;}
         if(key.pageDown&&projectDetailsUi.page?.nextCursor){void readProjectDetails(project.detail,projectDetailsUi.page.nextCursor,[...projectDetailsUi.previous,projectDetailsUi.after].slice(-20));return;}
         if(key.pageUp&&projectDetailsUi.previous.length){const previous=[...projectDetailsUi.previous],after=previous.pop()??null;void readProjectDetails(project.detail,after,previous);return;}
         if(key.upArrow||key.downArrow){
@@ -2894,6 +3374,7 @@ function TuiAppContent(props: TuiAppProps) {
     );
   }
 
+  const basisView = basisViewModel(state, basisUi);
   return (
     <Workspace
       viewModel={viewModel}
@@ -2918,6 +3399,8 @@ function TuiAppContent(props: TuiAppProps) {
       projectDetailsPage={projectDetailsUi.page}
       projectDetailsKey={projectDetailsUi.objectKey}
       projectDetailsNotice={projectDetailsUi.notice}
+      {...(basisView === undefined ? {} : { basisView })}
+      graphBasisAvailable={ports.graphBasis!==undefined}
       modelRole={state.overlayStack.at(-1)==='model-role-menu'?roleMenuRole():highlightedRole()}
       modelIdentity={[viewModel.scope.coordinationScopeId,viewModel.scope.mode==='route_planning'?'规划':'执行',state.selectedSessionId??'未选择会话'].join(' · ')}
       modelSettingsEdit={state.modelSettingsEdit}

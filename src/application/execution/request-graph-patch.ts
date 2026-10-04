@@ -35,6 +35,8 @@ import type { ExecutionAuthorizationRecord } from '../../domain/planning/executi
 import { authorizeOperation } from '../../domain/planning/execution-authorization.js';
 import { graphVersionChain, type GraphVersionRecord } from '../../domain/planning/execution-graph.js';
 import {
+  MAX_GRAPH_CHANGE_INSTRUCTION_CODE_POINTS,
+  isValidGraphChangeInstruction,
   routeGraphChange,
   type ChangeRoutingDecision,
   type GraphChangeRequest,
@@ -190,6 +192,10 @@ function affectedWorkPackageIdsOf(request: GraphChangeRequest): readonly WorkPac
  * Planner。`applied` 表示图版本已追加并读回确认，不表示 Worker 完成或项目可交付。
  */
 export async function requestGraphPatch(input: RequestGraphPatchInput): Promise<RequestGraphPatchResult> {
+  if (!isValidGraphChangeInstruction(input.changeRequest.changeInstruction)) {
+    return reject(input, 'invalid_change_instruction',
+      `变化说明必须为非空文本且不超过 ${MAX_GRAPH_CHANGE_INSTRUCTION_CODE_POINTS} 个 Unicode 码点`);
+  }
   const scopeRead = readScope(input.store, input.coordinationScopeId);
   if (scopeRead.kind === 'rejected') {
     return reject(input, scopeRead.code, scopeRead.message);

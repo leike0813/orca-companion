@@ -1,0 +1,130 @@
+{
+  "changeName": "complete-tui-graph-basis",
+  "changeDir": "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis",
+  "schemaName": "orchestrated-delivery",
+  "contextFiles": {
+    "proposal": [
+      "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/proposal.md"
+    ],
+    "specs": [
+      "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/specs/execution/specification-admission/spec.md",
+      "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/specs/planning/execution-graph-compilation/spec.md",
+      "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/specs/testing/isolated-control-probe/spec.md",
+      "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/specs/tui/graph-inspection/spec.md",
+      "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/specs/tui/planning-workspace/spec.md"
+    ],
+    "design": [
+      "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/design.md"
+    ],
+    "implementation-plan": [
+      "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/implementation-plan.md"
+    ],
+    "tasks": [
+      "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/tasks.md"
+    ]
+  },
+  "progress": {
+    "total": 12,
+    "complete": 12,
+    "remaining": 0
+  },
+  "tasks": [
+    {
+      "id": "1",
+      "description": "1.1 IP-01 schema17与原计划同事务保存，旧行缺失明确；运行store/graph-history测试。",
+      "done": true,
+      "sourcePath": "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/tasks.md",
+      "line": 3
+    },
+    {
+      "id": "2",
+      "description": "1.2 IP-01 metadata目录/head/membership及依据范围查询；验证20项/64KiB与跨代际。",
+      "done": true,
+      "sourcePath": "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/tasks.md",
+      "line": 4
+    },
+    {
+      "id": "3",
+      "description": "2.1 IP-02 OpenSpec目录/范围读取，contract/tracking与路径边界；运行specification-admission测试。",
+      "done": true,
+      "sourcePath": "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/tasks.md",
+      "line": 8
+    },
+    {
+      "id": "4",
+      "description": "2.2 IP-02 tracker版本正文及缓存；运行tracker测试。",
+      "done": true,
+      "sourcePath": "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/tasks.md",
+      "line": 9
+    },
+    {
+      "id": "5",
+      "description": "3.1 IP-03 GraphBasisPort/service和原计划生产写入接线；运行graph-basis/宿主测试。",
+      "done": true,
+      "sourcePath": "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/tasks.md",
+      "line": 13
+    },
+    {
+      "id": "6",
+      "description": "3.2 IP-03 snapshot收窄与当前追加链/验收摘要保持；运行controller/execution-view测试。",
+      "done": true,
+      "sourcePath": "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/tasks.md",
+      "line": 14
+    },
+    {
+      "id": "7",
+      "description": "4.1 IP-04 历史目录/选版Inspector/退役入口及来源下钻；运行graph-inspector测试。",
+      "done": true,
+      "sourcePath": "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/tasks.md",
+      "line": 18
+    },
+    {
+      "id": "8",
+      "description": "4.2 IP-04 有界正文/cache/返回/迟到隔离；运行no-side-effect及输入/返回测试。",
+      "done": true,
+      "sourcePath": "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/tasks.md",
+      "line": 19
+    },
+    {
+      "id": "9",
+      "description": "5.1 IP-05 六票生产画面与普通PTY，三档两色/两图标及全链路返回；保存新证据。",
+      "done": true,
+      "sourcePath": "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/tasks.md",
+      "line": 23
+    },
+    {
+      "id": "10",
+      "description": "5.2 IP-05 规模性能、100次输入/缓存导航p95及冷读/RSS；运行本批benchmark。",
+      "done": true,
+      "sourcePath": "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/tasks.md",
+      "line": 24
+    },
+    {
+      "id": "11",
+      "description": "5.3 IP-05 使用用户批准的模型隔离真实执行/patch/retire/restart/recovery/Replanning Cutover，保存身份与历史阅读证据；后续新现场使用minimax-cn/MiniMax-M3.1-Flash-Preview，已启动现场保持原绑定。",
+      "done": true,
+      "sourcePath": "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/tasks.md",
+      "line": 25
+    },
+    {
+      "id": "12",
+      "description": "5.4 IP-05 更新合同/当前进度和模型配置漂移；最终typecheck/lint/test/build/strict/diff通过，条件跳过单列。",
+      "done": true,
+      "sourcePath": "/home/joshua/Workspace/Code/JavaScript/orca-companion/openspec/changes/complete-tui-graph-basis/tasks.md",
+      "line": 26
+    }
+  ],
+  "taskTrackingConfigured": true,
+  "state": "all_done",
+  "instruction": "All tasks are complete! This change is ready to be archived.\nConsider running tests and reviewing the changes before archiving.",
+  "context": "Orca Companion 是 TypeScript strict、ESM、Node.js 24、pnpm 的单包项目，使用\nLangGraph JS 构建 Coordinator agent loop，使用 Ink/React 提供前台 TUI。\n根目录 AGENTS.md 定义工程边界与完成标准；CONTEXT.md 是领域术语的唯一事实源；\nGitHub Decision Tickets 与已确认 Route Map 是规划决策的权威来源。\n\nCompanion 只运行 Coordinator Agent，并通过公开 Orca CLI 调度现有 Worker Harness。\n领域规则、应用用例、workflow、Orca/agent/storage adapters、CLI/TUI 和 bootstrap\n必须保持既定依赖方向。不得直接访问 Orca 数据库、私有 RPC 或上游私有源码。\n\nchange 可以同时规划，但默认按直接前驱已归档的依赖顺序 apply、验证和 archive。\n架构合同基线使用 current-head；其余 change 使用 predecessor-contract，并在实施前核验\n直接前驱已归档、主规格存在且冻结接缝仍成立。\nm2-wire-execution-runtime 是 m2-deliver-execution-tui 的解阻塞并行项：两者可同时保持 active，\n接线 change 可在执行 TUI change 尚未归档时 apply；须先固定现有 TUI 接缝并避免同时编辑同一文件。\n接线 change 先完成执行闭环的验证与 archive，再验收执行 TUI change 的真实 PTY 任务并 archive。\nm2-repair-read-only-worker-sandbox 同样是执行 TUI 的解阻塞并行项，以已归档的\nm2-wire-execution-runtime 为直接前驱，并固定当前执行 TUI 接缝。它可在执行 TUI 未归档时\napply、验证和 archive；随后执行 TUI 补齐自身剩余真实验收再归档。\nm2-settle-in-flight-graph-revision 是执行 TUI 真实验收的修订结算解阻塞项，\n以已归档的 m2-repair-read-only-worker-sandbox 为直接前驱；它可在执行 TUI\n未归档时 apply、验证和 archive，但必须先核验共享执行接缝并串行编辑共享文件。\n\n当前 TUI 收尾 change 为 complete-tui-graph-basis，直接前驱 complete-tui-project-statusline\n已归档并包含于 41b2f1e。后续新隔离任务显式使用用户批准的\n`minimax-cn/MiniMax-M3.1-Flash-Preview` 与已核验连接；已启动现场保持原模型绑定。\nD06 真实运行证据产生前，此配置仅表示目标模型，验收状态保持未验证。\n行为验证使用 Vitest。\n真实集成只在显式选择的隔离项目和专用身份中运行。普通检查不得构建 references/orca submodule。\n",
+  "operationGuidance": [
+    "默认只实施依赖序列中第一个尚未归档的 change；m2-wire-execution-runtime、m2-repair-read-only-worker-sandbox 与 m2-settle-in-flight-graph-revision 可作为解阻塞并行项在 m2-deliver-execution-tui 尚未归档时实施，前提是各自的直接已归档前驱及共享接缝均已核验，且同一文件不被两个 agent 同时编辑。",
+    "开始编辑前执行 implementation-plan 的基线和前驱接缝检查；漂移时停止并回到规划。",
+    "不在 apply 阶段创建 verification.md。"
+  ],
+  "root": {
+    "path": "/home/joshua/Workspace/Code/JavaScript/orca-companion",
+    "source": "nearest"
+  }
+}

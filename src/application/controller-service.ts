@@ -43,7 +43,7 @@ import type {
   ReplanningClosureMode,
   SettlementFacts,
 } from '../domain/execution/replanning.js';
-import { graphVersionChain, type GraphVersionRecord } from '../domain/planning/execution-graph.js';
+import { isGraphVersionInChain, type GraphVersionRecord } from '../domain/planning/execution-graph.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
@@ -350,7 +350,12 @@ export type ControllerSnapshot = {
   readonly recoveries: readonly ControllerRecoveryView[];
   readonly graphEvolution: ControllerGraphEvolutionView;
   readonly maintenance: ControllerMaintenanceView | null;
-  /** 调用方读到的 GraphVersion 记录投影；未提供记录时为空数组。 */
+  /**
+   * Scope 当前指向的那一张图的拓扑投影（IP-03 / D-03）。
+   *
+   * 只有 Scope 图指针精确命中的那一条记录会被投影，因此长度是 0 或 1；历史代际与旧版本由独立的
+   * 有界目录与选版读取提供（`GraphBasisPort`），不随每次快照加载整条历史正文。
+   */
   readonly graphTopologies: readonly ControllerGraphTopologyView[];
   /** Runtime 最近一次观察到并交给调用方的压缩结论；从未观察到时为 `null`。 */
   readonly compaction: ControllerCompactionView | null;
@@ -872,11 +877,19 @@ export type ControllerSnapshotFacts = {
   readonly maintenance: ControllerMaintenanceView | null;
   readonly selectedSessionId: CoordinatorSessionId | null;
   /**
-   * 调用方读到的 GraphVersion 记录（IC-11 Extend）。
+   * 调用方读到的 GraphVersion 记录（IC-11 Extend；IP-03 起只要求当前图这一条）。
    *
    * 只读投影，不由本模块读取：记录不可读时调用方显式传空数组，界面显示 blocker 而不是猜测图内容。
+   * 快照只投影其中与 Scope 图指针精确相符的一条，其余版本由 `GraphBasisPort` 按需读取。
    */
   readonly graphVersions: readonly GraphVersionRecord[];
+  /**
+   * 当前图追加链的成员事实（IP-03 / D-03），由宿主用存储的轻量 membership 查询注入。
+   *
+   * 有它时 readiness 只按存储证明的成员集合判定，不再要求把整条历史拓扑读进快照；缺它时退回按
+   * `graphVersions` 现场算链，仅供不接存储的纯用例使用。
+   */
+  readonly authorizedGraphVersions?: ReadonlySet<GraphVersion> | undefined;
   /**
    * 已批准 Execution Authorization 绑定的图引用（IC-11 Extend）。
    *
@@ -1042,11 +1055,31 @@ function projectGraphTopology(
       authorizationBound:
         facts.authorizationGraphRef !== null &&
         facts.authorizationGraphRef.graphId === version.graphId &&
-        graphVersionChain(facts.graphVersions, version).has(
-          facts.authorizationGraphRef.graphVersion as GraphVersion,
-        ),
+        isGraphVersionInChain({
+          versions: facts.graphVersions,
+          current: version,
+          candidate: facts.authorizationGraphRef.graphVersion as GraphVersion,
+          approved: facts.authorizedGraphVersions,
+        }),
     },
   };
+}
+
+/**
+ * 只投影 Scope 当前指向的那一张图。
+ *
+ * 图指针缺失表示这个 Scope 还没有接受过任何图；记录与指针不匹配表示宿主没能读到当前版本。两种情况
+ * 都如实返回空数组，让界面显示 blocker，而不是退回某条历史版本。
+ */
+export function projectGraphTopologies(facts: ControllerSnapshotFacts): readonly ControllerGraphTopologyView[] {
+  const { graphId, graphVersion } = facts.snapshot.scope;
+  if (graphId === null || graphVersion === null) {
+    return [];
+  }
+  const current = facts.graphVersions.find(
+    (version) => version.graphId === graphId && version.version === graphVersion,
+  );
+  return current === undefined ? [] : [projectGraphTopology(current, facts)];
 }
 
 /**
@@ -1168,7 +1201,7 @@ export function projectControllerSnapshot(facts: ControllerSnapshotFacts): Contr
       adoptions: facts.snapshot.baselineAdoptions.map(projectAdoption),
     },
     maintenance: facts.maintenance,
-    graphTopologies: facts.graphVersions.map((version) => projectGraphTopology(version, facts)),
+    graphTopologies: projectGraphTopologies(facts),
     compaction: facts.compaction,
     planningHandoffs: facts.snapshot.planningHandoffs.map(projectPlanningHandoff),
     ...(facts.projectPresentation === undefined ? {} : { projectPresentation: facts.projectPresentation }),

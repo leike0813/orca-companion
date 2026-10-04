@@ -19,7 +19,7 @@ import type {
   CoordinationWriter,
   GraphVersionPatchInput,
 } from '../ports/branch-coordination-store.js';
-import type { ExecutionGraph, GraphVersionRecord } from '../../domain/planning/execution-graph.js';
+import type { ExecutionGraph, GraphVersionRecord, ImplementationPlan } from '../../domain/planning/execution-graph.js';
 import { readScope } from './scope-read.js';
 
 export type GraphHistoryFailure = {
@@ -32,6 +32,14 @@ export type RecordInitialGraphInput = {
   readonly coordinationScopeId: CoordinationScopeId;
   readonly writer: CoordinationWriter;
   readonly graph: ExecutionGraph;
+  /**
+   * 归一化后的原 Implementation Plan（IC-03 Extend；schema 17）。必填。
+   *
+   * 编译计划此前只活在 Coordinator 会话里，会话一压缩就再也读不回来，图记录只剩一个孤立的
+   * `planRevision` 数字。计划与编译结果同事务落盘之后，历史详情才能按原样展示「这张图当初依据什么」。
+   * 它的 `planRevision` 必须与下面的 `planRevision` 一致，由 store 在同一事务内校验。
+   */
+  readonly initialPlan: ImplementationPlan;
   readonly mapRevision: number;
   readonly planRevision: number;
   readonly orcaRunId: string;
@@ -97,6 +105,7 @@ export function recordInitialGraph(input: RecordInitialGraphInput): RecordInitia
     orcaRunId: input.orcaRunId,
     graph: input.graph,
     patch: null,
+    initialPlan: input.initialPlan,
   });
   if (recorded.kind === 'rejected') {
     return { kind: 'rejected', failure: { code: recorded.code, message: rejectionMessage(recorded) } };
@@ -228,6 +237,7 @@ export function appendAcceptedRevision(input: AppendAcceptedRevisionInput): Appe
     orcaRunId: input.orcaRunId,
     graph: input.graph,
     patch: input.patch,
+    initialPlan: null,
     ...(input.baselineReconciliations === undefined ? {} : { baselineReconciliations: input.baselineReconciliations }),
     ...(input.budgetConsumption === undefined ? {} : { budgetConsumption: input.budgetConsumption }),
   });

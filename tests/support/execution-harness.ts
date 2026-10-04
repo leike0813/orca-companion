@@ -29,6 +29,7 @@ import type { ExecutionBackend } from '../../src/application/ports/execution-bac
 import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
 import { graphIdFor } from '../../src/application/planning/graph-generation.js';
 import { loadCurrentGraph, recordInitialGraph } from '../../src/application/planning/graph-history.js';
+import { implementationPlanFor } from './graph-plan-fixture.js';
 import { DEFAULT_EXECUTION_LIMITS, budgetFromLimits } from '../../src/domain/planning/budget-policy.js';
 import type { ExecutionGraph, GraphVersionRecord, WorkPackage } from '../../src/domain/planning/execution-graph.js';
 import type {
@@ -247,6 +248,7 @@ export function createExecutionScopeHarness(options?: {
     coordinationScopeId: EXECUTION_SCOPE,
     writer,
     graph,
+    initialPlan: implementationPlanFor(graph, EXECUTION_PLAN_REVISION),
     mapRevision: EXECUTION_MAP_REVISION,
     planRevision: EXECUTION_PLAN_REVISION,
     orcaRunId: EXECUTION_RUN_ID,

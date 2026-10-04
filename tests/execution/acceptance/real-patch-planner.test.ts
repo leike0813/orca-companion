@@ -62,6 +62,7 @@ import { graphIdFor } from '../../../src/application/planning/graph-generation.j
 import { buildExecutionScope, type ExecutionBackend, type ExecutionScope } from '../../../src/application/ports/execution-backend.js';
 import { activatePreparedWorker, prepareWorkerLaunch, verifyPreparedWorker } from '../../../src/application/worker-launch.js';
 import { loadCurrentGraph, recordInitialGraph } from '../../../src/application/planning/graph-history.js';
+import { implementationPlanFor } from '../../support/graph-plan-fixture.js';
 import {
   admitGraphRevision,
   applyGraphRevision,
@@ -587,6 +588,12 @@ if (resolved.kind === 'skip') {
             concurrencyLimit: 1,
             workPackages: defaultExecutionWorkPackages(),
           },
+          initialPlan: implementationPlanFor({
+            graphId,
+            generation: 1 as GraphGeneration,
+            concurrencyLimit: 1,
+            workPackages: defaultExecutionWorkPackages(),
+          }, EXECUTION_PLAN_REVISION),
           mapRevision: EXECUTION_MAP_REVISION,
           planRevision: EXECUTION_PLAN_REVISION,
           orcaRunId: runtime.runId,
@@ -640,6 +647,7 @@ if (resolved.kind === 'skip') {
           operationId: `${resolved.identity}:op-1` as OperationId,
           changeRequest: {
             workPackageId: 'wp-b' as WorkPackageId,
+            changeInstruction: '调整 wp-b 的验收条件',
             infrastructureFailure: 'unknown',
             changesDependencies: 'no',
             changesScopeEnvelope: 'no',

@@ -197,11 +197,12 @@ function paneState(socket: string, session: string): PaneState {
 function pollPaneDead(socket: string, session: string, timeoutMs = 5_000): PaneState & { readonly ok: boolean } {
   const deadline = Date.now() + timeoutMs;
   let state = paneState(socket, session);
-  while (!state.dead && Date.now() < deadline) {
+  // PTY EOF can mark the pane dead before tmux receives the child exit status.
+  while ((!state.dead || state.status === null) && Date.now() < deadline) {
     sleepSync(100);
     state = paneState(socket, session);
   }
-  return { ...state, ok: state.dead };
+  return { ...state, ok: state.dead && state.status !== null };
 }
 
 function probeTmux(): { readonly ok: true } | { readonly ok: false; readonly reason: string } {

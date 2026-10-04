@@ -32,6 +32,7 @@ test('Planner Task 意图未决时沿原身份阻塞，不创建第二个 Task',
         operationId,
         changeRequest: {
           workPackageId: null,
+          changeInstruction: '移除不再需要的工作包',
           infrastructureFailure: 'unknown', changesDependencies: 'unknown', changesScopeEnvelope: 'unknown',
           changesObjective: 'unknown', contractContentOnly: 'unknown', goalOrGlobalConstraintChanged: 'no',
           userRequestedReplanning: 'no', requiresUserChoice: 'no',

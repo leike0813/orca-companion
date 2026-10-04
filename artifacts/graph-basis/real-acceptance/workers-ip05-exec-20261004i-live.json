@@ -1,0 +1,408 @@
+{
+  "id": "827f62d1-f1bb-4fdc-ad8b-a527521c1bb9",
+  "ok": true,
+  "result": {
+    "workers": [
+      {
+        "dispatchId": "ctx_407c64b02714",
+        "taskId": "task_0865e15bb45c",
+        "runId": "run_8fa5f708617a",
+        "workerState": "ready",
+        "dispatchStatus": "dispatched",
+        "agentTerminalHandle": "term_4fd4c9f2-ac9a-47e7-98b7-73cd43f4c5d0",
+        "terminalState": "retained",
+        "resource": {
+          "id": "wtr_747350c088e0",
+          "ownershipState": "external",
+          "releaseState": "not_requested",
+          "retainedReason": "external_terminal",
+          "terminalHandle": "term_4fd4c9f2-ac9a-47e7-98b7-73cd43f4c5d0",
+          "worktreeId": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-fc01ba2e42414aba3f9bbd1db280b51a6dc5e69b1392d14bd5f97e351f2338bb",
+          "endpointId": "34627582-8e2e-49de-b4eb-58b0b159cbd0",
+          "endpointIncarnation": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-fc01ba2e42414aba3f9bbd1db280b51a6dc5e69b1392d14bd5f97e351f2338bb@@802dd258:8ac0d361-4e27-41d8-b1fb-c56f5ad8423f",
+          "originDispatchId": "ctx_407c64b02714",
+          "ownerDispatchId": "ctx_407c64b02714",
+          "releaseRequestedAt": null,
+          "releaseCompletedAt": null,
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": null,
+            "status": null
+          }
+        },
+        "projection": {
+          "id": "ctx_407c64b02714",
+          "dispatchId": "ctx_407c64b02714",
+          "taskId": "task_0865e15bb45c",
+          "runId": "run_8fa5f708617a",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-fc01ba2e42414aba3f9bbd1db280b51a6dc5e69b1392d14bd5f97e351f2338bb",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "ready",
+            "dispatch": "dispatched",
+            "detail": "input_accepted",
+            "activity": "unknown"
+          },
+          "outcome": "in_progress",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "external"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_43d7a9af1f21",
+        "taskId": "task_b8823e97dc36",
+        "runId": "run_8fa5f708617a",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_d9c95c42-8cd8-48e1-b108-d3ddbdebee31",
+        "terminalState": "retained",
+        "resource": {
+          "id": "wtr_0834fefc646b",
+          "ownershipState": "external",
+          "releaseState": "not_requested",
+          "retainedReason": "external_terminal",
+          "terminalHandle": "term_d9c95c42-8cd8-48e1-b108-d3ddbdebee31",
+          "worktreeId": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-fc01ba2e42414aba3f9bbd1db280b51a6dc5e69b1392d14bd5f97e351f2338bb",
+          "endpointId": "34627582-8e2e-49de-b4eb-58b0b159cbd0",
+          "endpointIncarnation": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-fc01ba2e42414aba3f9bbd1db280b51a6dc5e69b1392d14bd5f97e351f2338bb@@c7ae4306:67b40d9f-7622-4d4b-9fd8-2f45cebb9013",
+          "originDispatchId": "ctx_43d7a9af1f21",
+          "ownerDispatchId": "ctx_43d7a9af1f21",
+          "releaseRequestedAt": null,
+          "releaseCompletedAt": null,
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": null,
+            "status": null
+          }
+        },
+        "projection": {
+          "id": "ctx_43d7a9af1f21",
+          "dispatchId": "ctx_43d7a9af1f21",
+          "taskId": "task_b8823e97dc36",
+          "runId": "run_8fa5f708617a",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-fc01ba2e42414aba3f9bbd1db280b51a6dc5e69b1392d14bd5f97e351f2338bb",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "external"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_5fa55fd26138",
+        "taskId": "task_4fc0016d6bba",
+        "runId": "run_8fa5f708617a",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_8639ab9c-3ef6-4b5e-abb9-f2c00f77a0d8",
+        "terminalState": "retained",
+        "resource": {
+          "id": "wtr_70fc3553be63",
+          "ownershipState": "external",
+          "releaseState": "not_requested",
+          "retainedReason": "external_terminal",
+          "terminalHandle": "term_8639ab9c-3ef6-4b5e-abb9-f2c00f77a0d8",
+          "worktreeId": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-f11d7be0ef7422671aaaeaf1255600978655e30519bb31d86187448f817b9072",
+          "endpointId": "34627582-8e2e-49de-b4eb-58b0b159cbd0",
+          "endpointIncarnation": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-f11d7be0ef7422671aaaeaf1255600978655e30519bb31d86187448f817b9072@@56e7cde0:f6653ca4-3788-4dfa-98c4-9aa7f10d9e9e",
+          "originDispatchId": "ctx_5fa55fd26138",
+          "ownerDispatchId": "ctx_5fa55fd26138",
+          "releaseRequestedAt": null,
+          "releaseCompletedAt": null,
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": null,
+            "status": null
+          }
+        },
+        "projection": {
+          "id": "ctx_5fa55fd26138",
+          "dispatchId": "ctx_5fa55fd26138",
+          "taskId": "task_4fc0016d6bba",
+          "runId": "run_8fa5f708617a",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-f11d7be0ef7422671aaaeaf1255600978655e30519bb31d86187448f817b9072",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "external"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_0afc38acc56a",
+        "taskId": "task_13f4134db520",
+        "runId": "run_8fa5f708617a",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_8de2ae96-686d-44bc-ba4b-37eba25f4f92",
+        "terminalState": "retained",
+        "resource": {
+          "id": "wtr_c9b09abc09dc",
+          "ownershipState": "external",
+          "releaseState": "not_requested",
+          "retainedReason": "external_terminal",
+          "terminalHandle": "term_8de2ae96-686d-44bc-ba4b-37eba25f4f92",
+          "worktreeId": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-f11d7be0ef7422671aaaeaf1255600978655e30519bb31d86187448f817b9072",
+          "endpointId": "34627582-8e2e-49de-b4eb-58b0b159cbd0",
+          "endpointIncarnation": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-f11d7be0ef7422671aaaeaf1255600978655e30519bb31d86187448f817b9072@@3715b58c:e63c681b-b3f7-46b8-b6b9-205f185b4185",
+          "originDispatchId": "ctx_0afc38acc56a",
+          "ownerDispatchId": "ctx_0afc38acc56a",
+          "releaseRequestedAt": null,
+          "releaseCompletedAt": null,
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": null,
+            "status": null
+          }
+        },
+        "projection": {
+          "id": "ctx_0afc38acc56a",
+          "dispatchId": "ctx_0afc38acc56a",
+          "taskId": "task_13f4134db520",
+          "runId": "run_8fa5f708617a",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-f11d7be0ef7422671aaaeaf1255600978655e30519bb31d86187448f817b9072",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "external"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_17e26e623cc0",
+        "taskId": "task_b1e79ae09488",
+        "runId": "run_8fa5f708617a",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_7c5f1c0d-08c4-4aa4-9400-67688b99ffd8",
+        "terminalState": "retained",
+        "resource": {
+          "id": "wtr_559e1c454f7b",
+          "ownershipState": "external",
+          "releaseState": "not_requested",
+          "retainedReason": "external_terminal",
+          "terminalHandle": "term_7c5f1c0d-08c4-4aa4-9400-67688b99ffd8",
+          "worktreeId": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-f11d7be0ef7422671aaaeaf1255600978655e30519bb31d86187448f817b9072",
+          "endpointId": "34627582-8e2e-49de-b4eb-58b0b159cbd0",
+          "endpointIncarnation": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-f11d7be0ef7422671aaaeaf1255600978655e30519bb31d86187448f817b9072@@a49ebc07:b90b4ff2-6930-451b-ae07-d99189d2de20",
+          "originDispatchId": "ctx_17e26e623cc0",
+          "ownerDispatchId": "ctx_17e26e623cc0",
+          "releaseRequestedAt": null,
+          "releaseCompletedAt": null,
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": null,
+            "status": null
+          }
+        },
+        "projection": {
+          "id": "ctx_17e26e623cc0",
+          "dispatchId": "ctx_17e26e623cc0",
+          "taskId": "task_b1e79ae09488",
+          "runId": "run_8fa5f708617a",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "3b0bc7d6-562c-4efd-9a81-e58c5f502718::/home/joshua/orca/workspaces/orca-companion-ip05-exec-20261004i/wp-f11d7be0ef7422671aaaeaf1255600978655e30519bb31d86187448f817b9072",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "external"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      }
+    ],
+    "counts": {
+      "retained": 5
+    },
+    "page": {
+      "limit": 100,
+      "total": 5,
+      "hasMore": false,
+      "nextCursor": null
+    },
+    "scope": {
+      "run": "run_8fa5f708617a",
+      "source": "flag"
+    }
+  },
+  "_meta": {
+    "runtimeId": "34627582-8e2e-49de-b4eb-58b0b159cbd0"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "id": "bf545176-ac3f-4605-9fa2-5eb6dbe9d857",
+  "ok": true,
+  "result": {
+    "runId": "run_84745c381f09",
+    "messages": [
+      {
+        "id": "msg_c967049b4bc9",
+        "run_id": "run_84745c381f09",
+        "from_handle": "term_8a1ce325-13ee-4134-a09e-2d22bd5e737c",
+        "to_handle": "run:run_84745c381f09",
+        "subject": "Rejected worker_done: NOTES deliverable verified",
+        "body": "Orca rejected this worker_done: The caller is not the Dispatch pane.\n\nOriginal body:\n{\"coveredWorkPackageIds\":[\"ip05-ip05-retire-20261004l-scope#g1:notes-basics\"],\"verdict\":{\"kind\":\"deliverable\",\"evidenceRefs\":[\"task_13897544fe43#03a78cc7389af\",\"task_1c1da404a0a3#a8e01c5213d58\",\"task_dd2bbbd71885#b7860f7723afc\",\"task_0eb8210be954#756659455ce46\",\"git-integration-commit:ip05-ip05-retire-20261004l-scope:ip05-ip05-retire-20261004l-scope%23g1:1:ip05-ip05-retire-20261004l-scope%23g1%3Anotes-basics\",\"git-integration-integrate:ip05-ip05-retire-20261004l-scope:ip05-ip05-retire-20261004l-scope%23g1:1:ip05-ip05-retire-20261004l-scope%23g1%3Anotes-basics\",\"git-integration-push:ip05-ip05-retire-20261004l-scope:ip05-ip05-retire-20261004l-scope%23g1:1:ip05-ip05-retire-20261004l-scope%23g1%3Anotes-basics\"]}}",
+        "type": "worker_done",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d6490b5c162c\",\"dispatchId\":\"ctx_56b92e18df40\",\"outcome\":\"succeeded\",\"_orcaLifecycleRejection\":{\"code\":\"dispatch_capability_invalid\",\"reason\":\"The caller is not the Dispatch pane.\"}}",
+        "created_at": "2026-10-04T13:53:07Z",
+        "delivered_at": null,
+        "delivery_contract": "current_delivery"
+      },
+      {
+        "id": "msg_1fb36bf85543",
+        "run_id": "run_84745c381f09",
+        "from_handle": "term_8a1ce325-13ee-4134-a09e-2d22bd5e0752",
+        "to_handle": "run:run_84745c381f09",
+        "subject": "NOTES deliverable verified",
+        "body": "{\"coveredWorkPackageIds\":[\"ip05-ip05-retire-20261004l-scope#g1:notes-basics\"],\"verdict\":{\"kind\":\"deliverable\",\"evidenceRefs\":[\"task_13897544fe43#03a78cc7389af\",\"task_1c1da404a0a3#a8e01c5213d58\",\"task_dd2bbbd71885#b7860f7723afc\",\"task_0eb8210be954#756659455ce46\",\"git-integration-commit:ip05-ip05-retire-20261004l-scope:ip05-ip05-retire-20261004l-scope%23g1:1:ip05-ip05-retire-20261004l-scope%23g1%3Anotes-basics\",\"git-integration-integrate:ip05-ip05-retire-20261004l-scope:ip05-ip05-retire-20261004l-scope%23g1:1:ip05-ip05-retire-20261004l-scope%23g1%3Anotes-basics\",\"git-integration-push:ip05-ip05-retire-20261004l-scope:ip05-ip05-retire-20261004l-scope%23g1:1:ip05-ip05-retire-20261004l-scope%23g1%3Anotes-basics\"]}}",
+        "type": "worker_done",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d6490b5c162c\",\"dispatchId\":\"ctx_56b92e18df40\",\"outcome\":\"succeeded\"}",
+        "created_at": "2026-10-04T13:53:54Z",
+        "delivered_at": null,
+        "delivery_contract": "current_delivery"
+      }
+    ],
+    "count": 2,
+    "acknowledged": null
+  },
+  "_meta": {
+    "runtimeId": "34627582-8e2e-49de-b4eb-58b0b159cbd0"
+  }
+}

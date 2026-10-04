@@ -1,0 +1,41 @@
+{
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004h",
+  "materializationBindings": 1,
+  "recoveryRecords": 0,
+  "roles": [
+    {
+      "role": "planner",
+      "sessions": 1,
+      "requests": {
+        "status": "unavailable",
+        "reason": "rollout 没有可无歧义计数的请求标识"
+      },
+      "modelIds": [
+        "gpt-6-luna"
+      ],
+      "tokenUsage": {
+        "status": "available",
+        "inputTokens": 485136,
+        "cachedInputTokens": 444160,
+        "outputTokens": 5327,
+        "measuredSessions": 1,
+        "unavailableSessions": 0
+      }
+    }
+  ],
+  "totals": {
+    "sessions": 1,
+    "requests": {
+      "status": "unavailable",
+      "reason": "rollout 没有可无歧义计数的请求标识"
+    },
+    "tokenUsage": {
+      "inputTokens": 485136,
+      "cachedInputTokens": 444160,
+      "outputTokens": 5327,
+      "measuredSessions": 1,
+      "unavailableSessions": 0
+    }
+  },
+  "note": "tokenUsage 优先使用最后一个结构化累计 total_token_usage；仅单快照时才使用 last_token_usage。"
+}

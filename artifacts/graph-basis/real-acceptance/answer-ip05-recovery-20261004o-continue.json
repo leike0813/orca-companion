@@ -1,0 +1,10 @@
+{
+  "observedAt": "2026-10-04T14:35:32.007Z",
+  "interactionId": "[\"ask_user\",\"op:ip05-ip05-recovery-20261004o-scope-session:step:01b577b6-9387-4397-af94-afd756745fec:call_function_djb6xxzt82qj_1\"]",
+  "expectedRevision": 157,
+  "answer": "解除暂停，继续推进 planner 修订",
+  "input": "S-Left bound answer panel; selected option Enter",
+  "pendingCountAfter": 0,
+  "controlStateAfter": "paused",
+  "operatorAssisted": true
+}

@@ -547,7 +547,7 @@ test('解析器对齐公开 CLI 回执形状，未知状态 fail closed', () => 
 
   const show = parseWorkerShow({
     dispatch: { id: 'ctx_1', task_id: 'task_1', run_id: 'run_1', status: 'completed' },
-    worker: { dispatch_id: 'ctx_1', state: 'succeeded', stage: 'settled', agent_terminal_handle: 'term_worker' },
+    worker: { dispatchId: 'ctx_1', state: 'succeeded', stage: 'settled', agentTerminalHandle: 'term_worker' },
     observation: { status: 'live', exactWorker: true, agentWait: null },
   });
   expect(show.ok).toBe(true);

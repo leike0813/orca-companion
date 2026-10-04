@@ -53,6 +53,7 @@ import {
   workerProfilesFixture,
 } from '../support/model-configurations.js';
 import type { ExecutionGraph, GraphVersionRecord } from '../../src/domain/planning/execution-graph.js';
+import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SESSION_A = 'session-a' as CoordinatorSessionId;
@@ -161,6 +162,7 @@ function recordCandidate(): GraphVersionRecord {
     coordinationScopeId: SCOPE,
     writer: writerA,
     graph: emptyGraph(),
+    initialPlan: implementationPlanFor(emptyGraph(), PLAN_REVISION),
     mapRevision: scopeRecord().mapRevision,
     planRevision: PLAN_REVISION,
     orcaRunId: 'run-1',

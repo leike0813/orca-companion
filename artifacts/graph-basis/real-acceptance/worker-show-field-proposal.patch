@@ -1,0 +1,30 @@
+diff --git a/src/adapters/orca-cli/operation-catalog.ts b/src/adapters/orca-cli/operation-catalog.ts
+--- a/src/adapters/orca-cli/operation-catalog.ts
++++ b/src/adapters/orca-cli/operation-catalog.ts
+@@ -492,4 +492,3 @@
+ /**
+- * 字段名按真实载荷登记：`dispatch` 与 `worker` 使用 snake_case（`task_id`、
+- * `agent_terminal_handle`），`observation` 使用 camelCase（`status`、`exactWorker`）。
++ * 公开 worker-show 的 Worker 与 observation 字段采用当前运行时的 camelCase。
+  */
+@@ -513,9 +512,9 @@
+     taskId: dispatch === undefined ? null : readString(dispatch, 'task_id'),
+     dispatchStatus: dispatch === undefined ? null : readString(dispatch, 'status'),
+     workerState,
+     workerStage: readString(worker, 'stage'),
+-    agentTerminalHandle: readString(worker, 'agent_terminal_handle'),
++    agentTerminalHandle: readString(worker, 'agentTerminalHandle'),
+     observationStatus: observation === undefined ? null : readString(observation, 'status'),
+     exactWorker: observation === undefined ? null : readBoolean(observation, 'exactWorker'),
+   });
+ }
+diff --git a/tests/orca-backend.contract.test.ts b/tests/orca-backend.contract.test.ts
+--- a/tests/orca-backend.contract.test.ts
++++ b/tests/orca-backend.contract.test.ts
+@@ -548,5 +548,5 @@
+   const show = parseWorkerShow({
+     dispatch: { id: 'ctx_1', task_id: 'task_1', run_id: 'run_1', status: 'completed' },
+-    worker: { dispatch_id: 'ctx_1', state: 'succeeded', stage: 'settled', agent_terminal_handle: 'term_worker' },
++    worker: { dispatchId: 'ctx_1', state: 'succeeded', stage: 'settled', agentTerminalHandle: 'term_worker' },
+     observation: { status: 'live', exactWorker: true, agentWait: null },
+   });

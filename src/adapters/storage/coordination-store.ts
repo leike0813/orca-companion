@@ -51,11 +51,13 @@ import { INHERITABLE_BUDGET_FIELDS } from '../../domain/execution/work-package-l
 import type {
   ExecutionGraph,
   GraphVersionRecord,
+  ImplementationPlan,
   ScopeEnvelope,
   WorkPackage,
   WorkPackageBudget,
 } from '../../domain/planning/execution-graph.js';
 import { GRAPH_VERSION_RECORD_KINDS, isGraphVersionRecordKind } from '../../domain/planning/execution-graph.js';
+import { parseImplementationPlan } from '../../domain/planning/graph-compiler.js';
 import type { SpecBinding } from '../../domain/task-contract.js';
 import {
   parseManifest,
@@ -149,12 +151,34 @@ import {
   type WakeAdmissionState,
   type WorkPackageLineageRecord,
 } from '../../application/ports/branch-coordination-store.js';
+import type {
+  GraphBasisSourceRef,
+  GraphGenerationStatus,
+  GraphVersionMetadata,
+} from '../../application/ports/branch-coordination-store.js';
 import { SCHEMA_VERSION, describeError, migrate, readSchemaVersion } from './schema.js';
 
 /** SQLite 主结果码：约束族（PRIMARY KEY / UNIQUE / NOT NULL / CHECK / FOREIGN KEY）。 */
 const SQLITE_CONSTRAINT = 19;
 
 const SETTLE_OUTCOME_CLASSES = [...INTENT_OUTCOME_CLASSES, 'unknown'] as const;
+
+/**
+ * 历史目录与依据读取的固定分页上限（IC-11；schema 17）。
+ *
+ * 与既有项目详情、待答列表同用 20 项：目录是给人逐条浏览的，超过一屏就说明该用搜索而不是继续翻页。
+ * SQL 侧一律取 `PAGE_SIZE + 1` 条，多出来的那一条只用来判断还有没有下一页，不进入返回值。
+ */
+const GRAPH_BASIS_PAGE_SIZE = 20;
+
+/** 单次依据正文读取的字节上限 64 KiB；超出的请求直接拒绝，不截断成看似完整的正文。 */
+const GRAPH_BASIS_MAX_BYTES = 65_536;
+
+/** Scope 已记录的当前图指针（`(graph_id, graph_version)` 同时为空表示还没有图）。 */
+type ScopeGraphPointer = { readonly graphId: string; readonly version: number };
+
+/** 依据来源身份与记录不一致：属于查询身份错误（`invalid_query`），不是「记录不存在」。 */
+class GraphBasisIdentityError extends Error {}
 
 export type CoordinationStore = BranchCoordinationStore & { readonly close: () => void };
 
@@ -1300,6 +1324,23 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (recordKind.value === 'accepted_revision' && patch.value === null) {
         return fail('accepted_revision 必须携带补丁元数据');
       }
+      // 原计划在边界重新解析：调用方传进来的是 unknown，落盘的必须是校验过的归一化结构。
+      // 与 recordKind 的互斥性在这里先判一次，写事务里再判一次，避免绕过归一化直接写库。
+      const initialPlanRaw = command['initialPlan'];
+      let initialPlan: ImplementationPlan | null = null;
+      if (initialPlanRaw !== null && initialPlanRaw !== undefined) {
+        const parsed = parseImplementationPlan(initialPlanRaw, 'initialPlan');
+        if (!parsed.ok) {
+          return fail(`initialPlan 无效: ${parsed.message}`);
+        }
+        initialPlan = parsed.value;
+      }
+      if (recordKind.value === 'initial' && initialPlan === null) {
+        return fail('initial GraphVersion 必须携带归一化原 Implementation Plan');
+      }
+      if (recordKind.value === 'accepted_revision' && initialPlan !== null) {
+        return fail('accepted_revision 不得写入原 Implementation Plan');
+      }
       const budgetConsumption = decodeBudgetConsumptionInput(command['budgetConsumption'], 'budgetConsumption');
       if (!budgetConsumption.ok) {
         return budgetConsumption;
@@ -1340,6 +1381,7 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         orcaRunId: orcaRunId.value,
         graph: graph.value,
         patch: patch.value,
+        initialPlan,
         baselineReconciliations,
         ...(budgetConsumption.value === undefined ? {} : { budgetConsumption: budgetConsumption.value }),
       });
@@ -2460,6 +2502,8 @@ type GraphVersionRow = {
   readonly graph_json: string;
   readonly patch_id: string | null;
   readonly patch_json: string | null;
+  /** schema 17：v1 的原编译计划；旧行与 `accepted_revision` 行为 `null`。 */
+  readonly initial_plan_json: string | null;
   readonly recorded_at: number;
 };
 
@@ -3603,6 +3647,147 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       graphVersion,
     );
 
+  /**
+   * 目录与成员查询共用的元数据投影（schema 17）。
+   *
+   * 逐列点名而不是 `SELECT *`：这里唯一的目的是**不**把 `graph_json` / `patch_json` /
+   * `initial_plan_json` 带出来。列名一旦有人加回 `gv.*`，读一页就等于反序列化整个 Scope 的图历史。
+   *
+   * `generation_status` 来自 `graph_generations`，未登记该代际时为 `null`——此时按「未记录」呈现，
+   * 不拿 Scope 指针或版本新旧推断成 `frozen`。
+   */
+  const graphMetadataColumns =
+    'gv.graph_id, gv.graph_version, gv.graph_generation, gv.record_kind, gv.parent_version,' +
+    ' gv.patch_id, gv.map_revision, gv.plan_revision, gv.orca_run_id, gv.recorded_at,' +
+    ' gg.status AS generation_status';
+
+  type GraphVersionMetadataRow = {
+    readonly graph_id: string;
+    readonly graph_version: number;
+    readonly graph_generation: number;
+    readonly record_kind: string;
+    readonly parent_version: number | null;
+    readonly patch_id: string | null;
+    readonly map_revision: number;
+    readonly plan_revision: number;
+    readonly orca_run_id: string;
+    readonly recorded_at: number;
+    readonly generation_status: string | null;
+  };
+
+  const decodeGraphMetadataRow = (
+    row: GraphVersionMetadataRow,
+    current: ScopeGraphPointer | null,
+  ): Decoded<GraphVersionMetadata> => {
+    if (!isGraphVersionRecordKind(row.record_kind)) {
+      return fail(`graph_versions.record_kind 取值不受支持: ${row.record_kind}`);
+    }
+    if (row.generation_status !== null && !GRAPH_GENERATION_STATUSES.includes(row.generation_status as GraphGenerationStatus)) {
+      return fail(`graph_generations.status 取值不受支持: ${row.generation_status}`);
+    }
+    return ok({
+      graphId: row.graph_id as GraphId,
+      generation: row.graph_generation as GraphGeneration,
+      version: row.graph_version as GraphVersion,
+      recordKind: row.record_kind,
+      parentVersion: row.parent_version === null ? null : (row.parent_version as GraphVersion),
+      patchId: row.patch_id,
+      mapRevision: row.map_revision,
+      planRevision: row.plan_revision,
+      orcaRunId: row.orca_run_id,
+      recordedAt: row.recorded_at,
+      generationStatus: row.generation_status as GraphGenerationStatus | null,
+      // 「当前」= Scope 已记录的图指针逐字段相等。指针与图版本追加在同一事务里推进，因此它指向的
+      // 必然是 head；这里读指针而不是重算 head，多一次「猜当前」就多一个能悄悄漂移的机会。
+      // 代际为 frozen 只说明这代已经切走，不改变谁是指针；同代际内的旧版本同样不是当前。
+      current: current !== null && current.graphId === row.graph_id && current.version === row.graph_version,
+    });
+  };
+
+  /** 读取 Scope 已记录的当前图指针；`null` 表示这个 Scope 还没编译过任何图。 */
+  const readScopeGraphPointer = (scopeId: string): ScopeGraphPointer | null => {
+    const row = readScopeRow(scopeId);
+    return row?.graph_id == null || row.graph_version == null
+      ? null
+      : { graphId: row.graph_id, version: row.graph_version };
+  };
+
+  /**
+   * 依据正文的精确字节范围读取（IC-11；schema 17）。
+   *
+   * 按来源 variant 定位到唯一一行与唯一一列，然后只用 `length` / `substr` 取所需字节：正文可能远大于
+   * 单页上限，先整段取进内存再切片会让「有界读取」名存实亡。三个来源都是写入后不再改写的不可变
+   * 记录，因此精确身份即内容身份——续读不会因为 Scope 又追加了版本而过期。
+   *
+   * `recordKind` 一并核对：`initial_plan` 只能来自 v1，`graph_patch` 只能来自 accepted revision，否则
+   * 同一个 `(graphId, version)` 可以指向两类正文。
+   */
+  const readGraphBasisRange = (input: {
+    readonly scopeId: string;
+    readonly source: GraphBasisSourceRef;
+    readonly offset: number;
+    readonly maxBytes: number;
+  }): { readonly found: boolean; readonly text: string | null; readonly byteLength: number; readonly end: number } => {
+    const missing = { found: false, text: null, byteLength: 0, end: input.offset };
+    type RangeRow = { readonly bytes: number; readonly chunk: Uint8Array; readonly graph_generation?: number };
+    let row: RangeRow | undefined;
+    if (input.source.kind === 'authorization') {
+      row = one<RangeRow>(
+        db.prepare(
+          `SELECT length(CAST(manifest_json AS BLOB)) AS bytes,
+             substr(CAST(manifest_json AS BLOB), ?, ?) AS chunk
+           FROM execution_authorizations
+           WHERE coordination_scope_id = ? AND authorization_id = ? AND authorization_version = ?`,
+        ),
+        input.offset + 1,
+        input.maxBytes + 4,
+        input.scopeId,
+        input.source.authorizationId,
+        input.source.authorizationVersion,
+      );
+    } else {
+      const recordKind = input.source.kind === 'initial_plan' ? 'initial' : 'accepted_revision';
+      const column = input.source.kind === 'initial_plan' ? 'initial_plan_json' : 'patch_json';
+      row = one<RangeRow>(
+        db.prepare(
+          `SELECT graph_generation,
+             length(CAST(${column} AS BLOB)) AS bytes, substr(CAST(${column} AS BLOB), ?, ?) AS chunk
+           FROM graph_versions
+           WHERE coordination_scope_id = ? AND graph_id = ? AND graph_version = ?
+             AND record_kind = ? AND ${column} IS NOT NULL`,
+        ),
+        input.offset + 1,
+        input.maxBytes + 4,
+        input.scopeId,
+        input.source.graphId,
+        input.source.version,
+        recordKind,
+      );
+    }
+    // 旧行没有保留原计划、补丁记录不匹配、或身份根本不存在：都按依据缺失呈现，不返回空正文。
+    if (row === undefined || !isNonNegativeInteger(row.bytes) || !(row.chunk instanceof Uint8Array)) {
+      return missing;
+    }
+    // 代际是身份的一部分：`(graphId, version)` 相同但代际不同意味着调用方拿着一条别代的引用来读本库
+    // 的正文。这必须显式拒绝，而不是退化成「没找到」——后者会被当作历史正文缺失呈现，掩盖身份错误。
+    if (row.graph_generation !== undefined && input.source.kind !== 'authorization' && row.graph_generation !== input.source.generation) {
+      throw new GraphBasisIdentityError(
+        `依据来源代际 ${String(input.source.generation)} 与记录的 ${row.graph_generation} 不一致`,
+      );
+    }
+    // 偏移越过正文末尾说明续读已经跑飞；报成「缺失」会让界面把翻页错误显示成历史依据没保留。
+    if (input.offset > row.bytes) {
+      throw new HistoryBoundaryError('依据正文偏移超出正文长度');
+    }
+    const bytes = Buffer.from(row.chunk);
+    if (bytes.length > 0 && (bytes[0]! & 0xc0) === 0x80) {
+      throw new HistoryBoundaryError('依据正文偏移必须位于 UTF-8 边界');
+    }
+    let end = Math.min(input.maxBytes, bytes.length);
+    while (end > 0 && end < bytes.length && (bytes[end]! & 0xc0) === 0x80) end -= 1;
+    return { found: true, text: bytes.subarray(0, end).toString('utf8'), byteLength: row.bytes, end: input.offset + end };
+  };
+
   const readProjectDetailJsonField = (input: {
     readonly scopeId: string;
     readonly source: 'budget' | 'work';
@@ -3628,6 +3813,9 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           FROM execution_authorizations a
           WHERE a.coordination_scope_id = ? AND a.authorization_id = ? AND a.authorization_version = ?
         )`
+      // `work` 来源的两个数组按 **Work Package** 聚合，刻意不按所选 GraphVersion 过滤：一个包可以跨多个
+      // GraphVersion 经历多次派发与修复，这些记录属于这个包而不是某一次拓扑。键名因此带 `retained`
+      // 前缀，避免被读成「这张图上跑过哪些 Task」——那会按时间把跨版本记录错归给某一个版本。
       : `graph AS (
           SELECT graph_json, graph_id, graph_version FROM graph_versions
           WHERE coordination_scope_id = ? AND graph_id = ? AND graph_version = ?
@@ -3638,7 +3826,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         ), source_json AS (
           SELECT json_patch(json_object('graphId', graph_id, 'graphVersion', graph_version),
             json_group_object(packages.package_id, json_patch(json(packages.package_json), json_object(
-              'tasks', json(COALESCE((SELECT json_group_array(json_object(
+              'retainedTasks', json(COALESCE((SELECT json_group_array(json_object(
                 'workPackageId', binding.work_package_id, 'identity', CASE WHEN binding.worker_task_id IS NULL THEN 'legacy' ELSE 'issued' END,
                 'role', binding.role, 'workerTaskId', binding.worker_task_id, 'dispatchId', binding.dispatch_id,
                 'attemptId', binding.attempt_id, 'authorizationId', binding.authorization_id,
@@ -3648,7 +3836,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
                 'createdAt', binding.created_at
               )) FROM materialization_bindings binding WHERE binding.coordination_scope_id = ?
                 AND binding.work_package_id = packages.package_id), '[]')),
-              'acceptedResults', json(COALESCE((SELECT json_group_array(json_object(
+              'retainedResults', json(COALESCE((SELECT json_group_array(json_object(
                 'workerTaskId', settlement.worker_task_id, 'dispatchId', settlement.dispatch_id,
                 'attemptId', settlement.attempt_id, 'role', settlement.role,
                 'contractRevision', settlement.contract_revision, 'orcaResultRef', settlement.orca_result_ref,
@@ -4314,6 +4502,281 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           }
           return { kind: 'graph-version', version: version.value };
         }
+        case 'graph-head': {
+          // 只取最大版本这一行，而不是 `graph-versions` 的整条链：当前拓扑是一个确定答案，
+          // 不该为了回答它把该图全部历史连同 graph_json 读出来。
+          const row = one<GraphVersionRow>(
+            db.prepare(
+              `SELECT * FROM graph_versions
+               WHERE coordination_scope_id = ? AND graph_id = ?
+               ORDER BY graph_version DESC LIMIT 1`,
+            ),
+            scopeId,
+            input.graphId,
+          );
+          if (row === undefined) {
+            return { kind: 'graph-head', version: null };
+          }
+          const version = decodeGraphVersionRow(row);
+          if (!version.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: version.message };
+          }
+          return { kind: 'graph-head', version: version.value };
+        }
+        case 'graph-version-index': {
+          const after = input.after;
+          if (after !== undefined && (
+            !Number.isSafeInteger(after.generation) || after.generation < 0 ||
+            !after.graphId || !Number.isSafeInteger(after.version) || after.version < 1
+          )) {
+            return { kind: 'rejected', code: 'invalid_query', message: '图版本目录游标无效' };
+          }
+          // 排序键 (generation, graphId, version) 全倒序，keyset 从最后一项之后继续：追加新版本只会
+          // 出现在它自己的那一页，已经翻过的页不会因此重复或漏项。
+          const keyset = after === undefined
+            ? ''
+            : ' AND (gv.graph_generation, gv.graph_id, gv.graph_version) < (?, ?, ?)';
+          const rows = many<GraphVersionMetadataRow>(
+            db.prepare(
+              `SELECT ${graphMetadataColumns}
+               FROM graph_versions gv
+               LEFT JOIN graph_generations gg
+                 ON gg.coordination_scope_id = gv.coordination_scope_id
+                AND gg.graph_id = gv.graph_id
+                AND gg.graph_generation = gv.graph_generation
+               WHERE gv.coordination_scope_id = ?${keyset}
+               ORDER BY gv.graph_generation DESC, gv.graph_id DESC, gv.graph_version DESC
+               LIMIT ${GRAPH_BASIS_PAGE_SIZE + 1}`,
+            ),
+            scopeId,
+            ...(after === undefined
+              ? []
+              : [after.generation, after.graphId, after.version]),
+          );
+          const currentPointer = readScopeGraphPointer(scopeId);
+          const page = rows.slice(0, GRAPH_BASIS_PAGE_SIZE);
+          const decoded = decodeRows(page, (row) => decodeGraphMetadataRow(row, currentPointer));
+          if (!decoded.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: decoded.message };
+          }
+          const last = page.at(-1);
+          return {
+            kind: 'graph-version-index',
+            items: decoded.value,
+            nextCursor: rows.length > GRAPH_BASIS_PAGE_SIZE && last !== undefined
+              ? { generation: last.graph_generation, graphId: last.graph_id, version: last.graph_version }
+              : null,
+          };
+        }
+        case 'graph-version-membership': {
+          if (!Number.isSafeInteger(input.head) || input.head < 1 || input.versions.length > 20) {
+            return { kind: 'rejected', code: 'invalid_query', message: '追加链成员身份无效' };
+          }
+          if (input.versions.some((version) => !Number.isSafeInteger(version) || version < 1)) {
+            return { kind: 'rejected', code: 'invalid_query', message: '追加链成员身份无效' };
+          }
+          // 链完整性用一条聚合在 SQLite 内证明，不把整条链读进 JS 再逐条判断：
+          //   total/lo/hi —— 版本号是 [1, hi] 内的互异整数，total === hi 即无缺口；
+          //   broken     —— v1 父为空、vN 父恰为 N-1，违例计数即断链。
+          // 无论链多长都只返回一行，因此校验不会退化成一次全链解码。
+          const chain = one<{
+            readonly total: number;
+            readonly lo: number | null;
+            readonly hi: number | null;
+            readonly broken: number;
+          }>(
+            db.prepare(
+              `SELECT COUNT(*) AS total, MIN(graph_version) AS lo, MAX(graph_version) AS hi,
+                 SUM(CASE WHEN (graph_version = 1 AND parent_version IS NOT NULL)
+                                OR (graph_version > 1 AND parent_version IS NOT graph_version - 1)
+                          THEN 1 ELSE 0 END) AS broken
+               FROM graph_versions WHERE coordination_scope_id = ? AND graph_id = ?`,
+            ),
+            scopeId,
+            input.graphId,
+          );
+          if (chain === undefined || chain.total === 0) {
+            return { kind: 'rejected', code: 'unreadable', message: `图 ${input.graphId} 没有任何 GraphVersion` };
+          }
+          const actualHead = chain.hi ?? 0;
+          if (actualHead !== input.head) {
+            return { kind: 'rejected', code: 'unreadable', message: `图 ${input.graphId} 当前 head 为 ${actualHead}，与请求的 ${input.head} 不一致` };
+          }
+          // 链必须连续：v1 的父为空，vN 的父恰为 N-1。出现缺口说明追加历史本身不可信，
+          // 这时不能用「查得到的都算成员」把洞糊过去。
+          if (chain.lo !== 1 || chain.total !== actualHead) {
+            return { kind: 'rejected', code: 'unreadable', message: `图 ${input.graphId} 的追加链在版本 ${String(chain.lo)} 至 ${actualHead} 之间存在缺口` };
+          }
+          if (chain.broken > 0) {
+            return { kind: 'rejected', code: 'unreadable', message: `图 ${input.graphId} 的追加链有 ${chain.broken} 处父指针与前一条对不上` };
+          }
+          const currentPointer = readScopeGraphPointer(scopeId);
+          const requested = [...new Set(input.versions)];
+          for (const version of requested) {
+            if (version > actualHead) {
+              return { kind: 'rejected', code: 'unreadable', message: `版本 ${version} 不在图 ${input.graphId} 的追加链上` };
+            }
+          }
+          // 链已证明无缺口，因此只取**被请求的**那 ≤20 行元数据，不回读整条链。
+          const memberRows = many<GraphVersionMetadataRow>(
+            db.prepare(
+              `SELECT ${graphMetadataColumns}
+               FROM graph_versions gv
+               LEFT JOIN graph_generations gg
+                 ON gg.coordination_scope_id = gv.coordination_scope_id
+                AND gg.graph_id = gv.graph_id
+                AND gg.graph_generation = gv.graph_generation
+               WHERE gv.coordination_scope_id = ? AND gv.graph_id = ?
+                 AND gv.graph_version IN (${requested.map(() => '?').join(',')})`,
+            ),
+            scopeId,
+            input.graphId,
+            ...requested,
+          );
+          if (memberRows.length !== requested.length) {
+            return { kind: 'rejected', code: 'unreadable', message: `图 ${input.graphId} 的追加链缺少被请求的版本` };
+          }
+          const byVersion = new Map(memberRows.map((row) => [row.graph_version, row] as const));
+          const members: GraphVersionMetadata[] = [];
+          // 按请求顺序返回：调用方多半是拿着自己的候选列表来问「这些还在链上吗」。
+          for (const version of requested) {
+            const row = byVersion.get(version);
+            if (row === undefined) {
+              return { kind: 'rejected', code: 'unreadable', message: `版本 ${version} 不在图 ${input.graphId} 的追加链上` };
+            }
+            const decoded = decodeGraphMetadataRow(row, currentPointer);
+            if (!decoded.ok) {
+              return { kind: 'rejected', code: 'unreadable', message: decoded.message };
+            }
+            members.push(decoded.value);
+          }
+          return { kind: 'graph-version-membership', members };
+        }
+        case 'graph-basis-range': {
+          if (!isNonNegativeInteger(input.offset) || !Number.isInteger(input.maxBytes) || input.maxBytes < 4 || input.maxBytes > GRAPH_BASIS_MAX_BYTES) {
+            return { kind: 'rejected', code: 'invalid_query', message: '依据正文范围无效' };
+          }
+          if (input.source.kind === 'authorization') {
+            if (!input.source.authorizationId || !Number.isSafeInteger(input.source.authorizationVersion) || input.source.authorizationVersion < 1) {
+              return { kind: 'rejected', code: 'invalid_query', message: '依据来源身份无效' };
+            }
+          } else if (!input.source.graphId || !Number.isSafeInteger(input.source.version) || input.source.version < 1) {
+            return { kind: 'rejected', code: 'invalid_query', message: '依据来源身份无效' };
+          }
+          try {
+            return { kind: 'graph-basis-range', ...readGraphBasisRange({ scopeId, source: input.source, offset: input.offset, maxBytes: input.maxBytes }) };
+          } catch (error) {
+            if (error instanceof GraphBasisIdentityError) {
+              return { kind: 'rejected', code: 'invalid_query', message: describeError(error) };
+            }
+            return { kind: 'rejected', code: error instanceof HistoryBoundaryError ? 'invalid_utf8_offset' : 'unreadable', message: describeError(error) };
+          }
+        }
+        case 'graph-basis-bindings': {
+          if (!input.workPackageId) {
+            return { kind: 'rejected', code: 'invalid_query', message: '保留派发记录缺少 Work Package 身份' };
+          }
+          const after = input.after;
+          if (after !== undefined && (!isNonNegativeInteger(after.createdAt) || !after.orcaTaskId)) {
+            return { kind: 'rejected', code: 'invalid_query', message: '保留派发记录游标无效' };
+          }
+          // 按包精确分页：历史详情只看一个节点时不必读整个 Scope 的物化绑定。
+          const keyset = after === undefined ? '' : ' AND (created_at > ? OR (created_at = ? AND orca_task_id > ?))';
+          const rows = many<MaterializationBindingRow>(
+            db.prepare(
+              `SELECT * FROM materialization_bindings
+               WHERE coordination_scope_id = ? AND work_package_id = ?${keyset}
+               ORDER BY created_at, orca_task_id
+               LIMIT ${GRAPH_BASIS_PAGE_SIZE + 1}`,
+            ),
+            scopeId,
+            input.workPackageId,
+            ...(after === undefined ? [] : [after.createdAt, after.createdAt, after.orcaTaskId]),
+          );
+          const page = rows.slice(0, GRAPH_BASIS_PAGE_SIZE);
+          const decoded = decodeRows(page, decodeMaterializationBindingRow);
+          if (!decoded.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: decoded.message };
+          }
+          const last = page.at(-1);
+          return {
+            kind: 'graph-basis-bindings',
+            bindings: decoded.value,
+            nextCursor: rows.length > GRAPH_BASIS_PAGE_SIZE && last !== undefined
+              ? { createdAt: last.created_at, orcaTaskId: last.orca_task_id }
+              : null,
+          };
+        }
+        case 'graph-basis-binding': {
+          if (!input.workPackageId || !input.orcaTaskId) {
+            return { kind: 'rejected', code: 'invalid_query', message: '保留派发记录身份无效' };
+          }
+          const row = one<MaterializationBindingRow>(
+            db.prepare(
+              `SELECT * FROM materialization_bindings
+               WHERE coordination_scope_id = ? AND work_package_id = ? AND orca_task_id = ?`,
+            ),
+            scopeId,
+            input.workPackageId,
+            input.orcaTaskId,
+          );
+          if (row === undefined) {
+            return { kind: 'graph-basis-binding', binding: null };
+          }
+          const binding = decodeMaterializationBindingRow(row);
+          if (!binding.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: binding.message };
+          }
+          return { kind: 'graph-basis-binding', binding: binding.value };
+        }
+        case 'graph-basis-authorizations': {
+          const after = input.after;
+          if (!input.graphId || !Number.isSafeInteger(input.generation) || input.generation < 0) {
+            return { kind: 'rejected', code: 'invalid_query', message: '授权目录的图身份无效' };
+          }
+          if (after !== undefined && (!after.authorizationId || !Number.isSafeInteger(after.authorizationVersion))) {
+            return { kind: 'rejected', code: 'invalid_query', message: '授权目录游标无效' };
+          }
+          // 只取 manifest 里的图指针三列，不解析也不返回 manifest 全文：目录要回答「这张图被批准过几次」，
+          // 而 Manifest 正文按精确 `(authorizationId, authorizationVersion)` 单独范围读取。
+          const keyset = after === undefined
+            ? ''
+            : ' AND (authorization_id > ? OR (authorization_id = ? AND authorization_version > ?))';
+          const rows = many<{
+            readonly authorization_id: string;
+            readonly authorization_version: number;
+            readonly bound_graph_version: number;
+          }>(
+            db.prepare(
+              `SELECT authorization_id, authorization_version,
+                 json_extract(manifest_json, '$.graph.version') AS bound_graph_version
+               FROM execution_authorizations
+               WHERE coordination_scope_id = ?
+                 AND json_extract(manifest_json, '$.graph.graphId') = ?
+                 AND json_extract(manifest_json, '$.graph.generation') = ?${keyset}
+               ORDER BY authorization_id, authorization_version
+               LIMIT ${GRAPH_BASIS_PAGE_SIZE + 1}`,
+            ),
+            scopeId,
+            input.graphId,
+            input.generation,
+            ...(after === undefined ? [] : [after.authorizationId, after.authorizationId, after.authorizationVersion]),
+          );
+          const page = rows.slice(0, GRAPH_BASIS_PAGE_SIZE);
+          const last = page.at(-1);
+          return {
+            kind: 'graph-basis-authorizations',
+            items: page.map((row) => ({
+              authorizationId: row.authorization_id,
+              authorizationVersion: row.authorization_version,
+              // 批准时刻的图版本；它与所选历史版本的关系由调用方按追加链自行判定。
+              graphVersion: row.bound_graph_version as GraphVersion,
+            })),
+            nextCursor: rows.length > GRAPH_BASIS_PAGE_SIZE && last !== undefined
+              ? { authorizationId: last.authorization_id, authorizationVersion: last.authorization_version }
+              : null,
+          };
+        }
         case 'authorizations': {
           const authorizations = decodeRows(readAuthorizationRows(scopeId), decodeAuthorizationRow);
           if (!authorizations.ok) {
@@ -4801,9 +5264,20 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           if (cmd.parentVersion !== null) {
             return fail('initial GraphVersion 不得带 parentVersion', 'constraint');
           }
+          // 编译依据与编译结果必须同事务落盘：只有图没有计划时，历史详情就只剩一个孤立的 plan_revision。
+          if (cmd.initialPlan === null) {
+            return fail('initial GraphVersion 必须携带归一化原 Implementation Plan', 'constraint');
+          }
+          if (cmd.initialPlan.planRevision !== cmd.planRevision) {
+            return fail('原 Implementation Plan 的 planRevision 必须与图记录一致', 'constraint');
+          }
         } else {
           if (cmd.patch === null) {
             return fail('accepted_revision 必须携带补丁元数据', 'constraint');
+          }
+          // 修订不重写原计划：同图后续版本要读原计划时沿 graphId 回到 v1。
+          if (cmd.initialPlan !== null) {
+            return fail('accepted_revision 不得写入原 Implementation Plan', 'constraint');
           }
           if (headVersion === null) {
             return fail('accepted_revision 必须基于已存在的 GraphVersion', 'constraint');
@@ -4821,8 +5295,8 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         db.prepare(
           `INSERT INTO graph_versions (
              coordination_scope_id, graph_id, graph_version, graph_generation, record_kind, parent_version,
-             map_revision, plan_revision, orca_run_id, graph_json, patch_id, patch_json, recorded_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             map_revision, plan_revision, orca_run_id, graph_json, patch_id, patch_json, initial_plan_json, recorded_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).run(
           cmd.coordinationScopeId,
           cmd.graphId,
@@ -4847,6 +5321,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
                 descendants: cmd.patch.descendants,
                 takesOver: cmd.patch.takesOver,
               }),
+          cmd.initialPlan === null ? null : JSON.stringify(cmd.initialPlan),
           now,
         );
         // revision pending 与图版本同事务：不存在「图已经改了，但该冻结的节点仍可派发」的窗口。

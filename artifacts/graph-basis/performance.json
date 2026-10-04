@@ -1,0 +1,411 @@
+{
+  "generatedAt": "2026-10-04T11:24:14.836Z",
+  "command": "node artifacts/graph-basis/benchmark.mjs --run",
+  "exitCode": 0,
+  "environment": {
+    "node": "v24.12.0",
+    "platform": "linux",
+    "arch": "x64",
+    "schemaVersion": 17,
+    "gitHead": "not captured"
+  },
+  "cases": [
+    {
+      "label": "1000-versions",
+      "versions": 1000,
+      "pageSize": 20,
+      "bodyBytes": 0,
+      "observedBodyBytes": 0,
+      "coldFirstPageReadMs": 1.935,
+      "fullDirectoryScan": {
+        "pages": 50,
+        "records": 1000,
+        "elapsedMs": 30.797
+      },
+      "rssBytes": {
+        "beforeFullScan": 113491968,
+        "afterFullScan": 114868224,
+        "delta": 1376256
+      },
+      "bodyFirstRangeReadMs": null,
+      "viewports": [
+        {
+          "columns": 120,
+          "rows": 40,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 16.523,
+            "p95Ms": 25.452,
+            "maxMs": 67.319
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 15.174,
+            "p95Ms": 23.419,
+            "maxMs": 29.099
+          },
+          "cachedBodyNavigationLatency": null
+        },
+        {
+          "columns": 80,
+          "rows": 24,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 11.282,
+            "p95Ms": 21.806,
+            "maxMs": 41.108
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 7.375,
+            "p95Ms": 12.627,
+            "maxMs": 22.607
+          },
+          "cachedBodyNavigationLatency": null
+        },
+        {
+          "columns": 50,
+          "rows": 40,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 7.547,
+            "p95Ms": 14.59,
+            "maxMs": 26.462
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 12.732,
+            "p95Ms": 18.704,
+            "maxMs": 22.468
+          },
+          "cachedBodyNavigationLatency": null
+        }
+      ]
+    },
+    {
+      "label": "10000-versions",
+      "versions": 10000,
+      "pageSize": 20,
+      "bodyBytes": 0,
+      "observedBodyBytes": 0,
+      "coldFirstPageReadMs": 1.048,
+      "fullDirectoryScan": {
+        "pages": 500,
+        "records": 10000,
+        "elapsedMs": 268.225
+      },
+      "rssBytes": {
+        "beforeFullScan": 394493952,
+        "afterFullScan": 406421504,
+        "delta": 11927552
+      },
+      "bodyFirstRangeReadMs": null,
+      "viewports": [
+        {
+          "columns": 120,
+          "rows": 40,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 15.989,
+            "p95Ms": 22.55,
+            "maxMs": 45.972
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 14.526,
+            "p95Ms": 18.728,
+            "maxMs": 38.103
+          },
+          "cachedBodyNavigationLatency": null
+        },
+        {
+          "columns": 80,
+          "rows": 24,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 11.724,
+            "p95Ms": 19.598,
+            "maxMs": 30.573
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 8.109,
+            "p95Ms": 13.751,
+            "maxMs": 18.33
+          },
+          "cachedBodyNavigationLatency": null
+        },
+        {
+          "columns": 50,
+          "rows": 40,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 8.202,
+            "p95Ms": 15.326,
+            "maxMs": 31.898
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 12.667,
+            "p95Ms": 24.914,
+            "maxMs": 46.545
+          },
+          "cachedBodyNavigationLatency": null
+        }
+      ]
+    },
+    {
+      "label": "100000-versions",
+      "versions": 100000,
+      "pageSize": 20,
+      "bodyBytes": 0,
+      "observedBodyBytes": 0,
+      "coldFirstPageReadMs": 0.766,
+      "fullDirectoryScan": {
+        "pages": 5000,
+        "records": 100000,
+        "elapsedMs": 2222.673
+      },
+      "rssBytes": {
+        "beforeFullScan": 534499328,
+        "afterFullScan": 616386560,
+        "delta": 81887232
+      },
+      "bodyFirstRangeReadMs": null,
+      "viewports": [
+        {
+          "columns": 120,
+          "rows": 40,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 16.286,
+            "p95Ms": 22.19,
+            "maxMs": 52.138
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 13.561,
+            "p95Ms": 17.391,
+            "maxMs": 20.231
+          },
+          "cachedBodyNavigationLatency": null
+        },
+        {
+          "columns": 80,
+          "rows": 24,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 10.993,
+            "p95Ms": 20.69,
+            "maxMs": 47.565
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 7.402,
+            "p95Ms": 13.762,
+            "maxMs": 22.128
+          },
+          "cachedBodyNavigationLatency": null
+        },
+        {
+          "columns": 50,
+          "rows": 40,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 7.316,
+            "p95Ms": 13.06,
+            "maxMs": 19.008
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 10.259,
+            "p95Ms": 18.115,
+            "maxMs": 24.976
+          },
+          "cachedBodyNavigationLatency": null
+        }
+      ]
+    },
+    {
+      "label": "1-MiB-body",
+      "versions": 1000,
+      "pageSize": 20,
+      "bodyBytes": 1048576,
+      "observedBodyBytes": 1048576,
+      "coldFirstPageReadMs": 0.597,
+      "fullDirectoryScan": {
+        "pages": 50,
+        "records": 1000,
+        "elapsedMs": 24.962
+      },
+      "rssBytes": {
+        "beforeFullScan": 684740608,
+        "afterFullScan": 684969984,
+        "delta": 229376
+      },
+      "bodyFirstRangeReadMs": 3.65,
+      "viewports": [
+        {
+          "columns": 120,
+          "rows": 40,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 15.428,
+            "p95Ms": 22.489,
+            "maxMs": 37.722
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 14.005,
+            "p95Ms": 19.577,
+            "maxMs": 29.049
+          },
+          "cachedBodyNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 13.349,
+            "p95Ms": 16.479,
+            "maxMs": 19.145
+          }
+        },
+        {
+          "columns": 80,
+          "rows": 24,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 9.898,
+            "p95Ms": 16.366,
+            "maxMs": 30.188
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 8.206,
+            "p95Ms": 15.149,
+            "maxMs": 21.269
+          },
+          "cachedBodyNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 7.067,
+            "p95Ms": 12.626,
+            "maxMs": 19.754
+          }
+        },
+        {
+          "columns": 50,
+          "rows": 40,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 7.614,
+            "p95Ms": 14.707,
+            "maxMs": 28.166
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 11.929,
+            "p95Ms": 20.336,
+            "maxMs": 25.044
+          },
+          "cachedBodyNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 10.29,
+            "p95Ms": 16.325,
+            "maxMs": 20.622
+          }
+        }
+      ]
+    },
+    {
+      "label": "5-MiB-body",
+      "versions": 1000,
+      "pageSize": 20,
+      "bodyBytes": 5242880,
+      "observedBodyBytes": 5242880,
+      "coldFirstPageReadMs": 0.787,
+      "fullDirectoryScan": {
+        "pages": 50,
+        "records": 1000,
+        "elapsedMs": 36.38
+      },
+      "rssBytes": {
+        "beforeFullScan": 767651840,
+        "afterFullScan": 767651840,
+        "delta": 0
+      },
+      "bodyFirstRangeReadMs": 3.491,
+      "viewports": [
+        {
+          "columns": 120,
+          "rows": 40,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 18.931,
+            "p95Ms": 30.134,
+            "maxMs": 44.902
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 15.131,
+            "p95Ms": 20.643,
+            "maxMs": 32.237
+          },
+          "cachedBodyNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 14.405,
+            "p95Ms": 19.422,
+            "maxMs": 23.807
+          }
+        },
+        {
+          "columns": 80,
+          "rows": 24,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 11.883,
+            "p95Ms": 21.28,
+            "maxMs": 29.834
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 8.638,
+            "p95Ms": 15.896,
+            "maxMs": 22.247
+          },
+          "cachedBodyNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 7.548,
+            "p95Ms": 13.69,
+            "maxMs": 57.844
+          }
+        },
+        {
+          "columns": 50,
+          "rows": 40,
+          "appInputFrameLatency": {
+            "samples": 100,
+            "p50Ms": 8.512,
+            "p95Ms": 17.437,
+            "maxMs": 27.591
+          },
+          "cachedVersionNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 10.878,
+            "p95Ms": 20.212,
+            "maxMs": 22.987
+          },
+          "cachedBodyNavigationLatency": {
+            "samples": 100,
+            "p50Ms": 9.941,
+            "p95Ms": 14.332,
+            "maxMs": 18.585
+          }
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Version rows are synthetic history records inserted into a temporary database after production schema migration and production v1 graph creation; this isolates directory scaling from 100,000 CAS transactions.",
+    "Large body fixtures are valid normalized ImplementationPlan JSON, accepted by the production parser and padded through the plan title to exactly 1 or 5 MiB in the schema-17 initial-plan column.",
+    "Input latency includes terminal event handling, production TuiApp state update, Ink rendering, and the next changed frame. It excludes terminal hardware flush and human-visible display scanout.",
+    "RSS is process-wide and allocator/GC sensitive; the before/after delta is descriptive and may include unrelated runtime allocations.",
+    "The report records no claim of isolated CPU unless no competing benchmark workload was active during the released slot."
+  ]
+}

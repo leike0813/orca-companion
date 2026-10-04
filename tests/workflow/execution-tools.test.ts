@@ -145,6 +145,7 @@ async function invoke(
 function changeRequest(overrides: Partial<GraphChangeRequest> = {}): GraphChangeRequest {
   return {
     workPackageId: 'wp-a' as WorkPackageId,
+    changeInstruction: '调整当前工作包',
     infrastructureFailure: 'no',
     changesDependencies: 'yes',
     changesScopeEnvelope: 'no',
@@ -355,8 +356,8 @@ test('request_graph_patch 重验写入准入，但不以 advance 预算拒绝对
   }
 });
 
-test('request_graph_patch 只转发持久化 call 身份与九个声明字段', async () => {
-  const request = changeRequest({ workPackageId: null, changesObjective: 'unknown' });
+test.each(['调整当前工作包', '🦀'.repeat(4_000)])('request_graph_patch 转发合法完整业务说明与持久化 call 身份', async (changeInstruction) => {
+  const request = changeRequest({ workPackageId: null, changesObjective: 'unknown', changeInstruction });
   const { outcome, harness } = await invoke(baseFacts(), 'request_graph_patch', {
     request,
     operationId: 'model-supplied',
@@ -380,6 +381,9 @@ test('request_graph_patch 拒绝不完整或越界的变化声明，且不触达
     { ...changeRequest(), workPackageId: 7 },
     { ...changeRequest(), changesDependencies: 'maybe' },
     { ...changeRequest(), changesObjective: true },
+    { ...changeRequest(), changeInstruction: ' \n\t' },
+    { ...changeRequest(), changeInstruction: '字'.repeat(4_001) },
+    { ...changeRequest(), changeInstruction: '🦀'.repeat(4_001) },
   ];
 
   for (const request of invalid) {
@@ -396,7 +400,7 @@ test('request_graph_patch 拒绝不完整或越界的变化声明，且不触达
   expect(missingRequest.harness.calls.requestGraphPatch).toBe(0);
 });
 
-test('request_graph_patch 的 schema 只暴露九个声明字段，不含图身份', () => {
+test('request_graph_patch 的 schema 暴露原九个分类字段与有界说明，不含图身份', () => {
   const facts = baseFacts();
   const definition = executionToolset(facts, fakeServices(facts).services).find(
     (candidate) => candidate.name === 'request_graph_patch',
@@ -405,9 +409,12 @@ test('request_graph_patch 的 schema 只暴露九个声明字段，不含图身�
   const properties = definition?.inputSchema['properties'] as Record<string, unknown>;
   expect(Object.keys(properties)).toEqual(['request']);
   const request = properties['request'] as Record<string, unknown>;
+  expect((request['required'] as string[])).toContain('changeInstruction');
+  const requestProperties = request['properties'] as Record<string, Record<string, unknown>>;
+  expect(requestProperties['changeInstruction']).toMatchObject({ type: 'string', maxLength: 4_000 });
   expect(request['additionalProperties']).toBe(false);
   const requestFields = Object.keys(request['properties'] as Record<string, unknown>);
-  expect(requestFields).toEqual([
+  expect(requestFields).toEqual(expect.arrayContaining([
     'workPackageId',
     'infrastructureFailure',
     'changesDependencies',
@@ -417,7 +424,9 @@ test('request_graph_patch 的 schema 只暴露九个声明字段，不含图身�
     'goalOrGlobalConstraintChanged',
     'userRequestedReplanning',
     'requiresUserChoice',
-  ]);
+    'changeInstruction',
+  ]));
+  expect(requestFields).toHaveLength(10);
   for (const forbidden of ['operationId', 'graphId', 'graphVersion', 'baseGraphVersion', 'patchId', 'coordinationScopeId']) {
     expect(requestFields).not.toContain(forbidden);
   }

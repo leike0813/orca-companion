@@ -104,7 +104,7 @@ import type { ClaimedResultAttribution, TrustedExecutionFacts } from '../domain/
 import type { TerminalLivenessFacts } from '../domain/worker-liveness.js';
 import type { SpecBinding } from '../domain/task-contract.js';
 import type { WorkerModelConfiguration } from '../domain/model-configuration.js';
-import { compileExecutionGraph, type CompilationError } from '../domain/planning/graph-compiler.js';
+import { compileExecutionGraph, parseImplementationPlan, type CompilationError } from '../domain/planning/graph-compiler.js';
 import {
   MANIFEST_VERSION,
   WORKER_ROLES,
@@ -264,8 +264,12 @@ export async function proposeExecutionGraph(
     return { kind: 'rejected', code: generation.code, message: generation.message, errors: [] };
   }
   const expectedGraphId = graphIdFor(input.coordinationScopeId, generation.generation as GraphGeneration);
+  const initialPlan = parseImplementationPlan(input.plan);
+  if (!initialPlan.ok) {
+    return { kind: 'rejected', code: 'invalid_plan', message: initialPlan.message, errors: [] };
+  }
   const compiled = compileExecutionGraph({
-    plan: input.plan,
+    plan: initialPlan.value,
     limits: input.limits,
     graphId: expectedGraphId,
     generation: generation.generation as GraphGeneration,
@@ -346,6 +350,7 @@ export async function proposeExecutionGraph(
     coordinationScopeId: input.coordinationScopeId,
     writer: input.writer,
     graph: compiled.graph,
+    initialPlan: initialPlan.value,
     mapRevision: scope.mapRevision,
     planRevision,
     orcaRunId: started.generation.orcaRunId,
@@ -810,15 +815,14 @@ export function nextGraphGeneration(
   if (graphId === null) {
     return { kind: 'read', generation: 1 };
   }
-  const versions = store.query({ kind: 'graph-versions', coordinationScopeId, graphId: graphId as GraphId });
-  if (versions.kind === 'rejected') {
-    return { kind: 'rejected', code: versions.code, message: versions.message };
+  const head = store.query({ kind: 'graph-head', coordinationScopeId, graphId: graphId as GraphId });
+  if (head.kind === 'rejected') {
+    return { kind: 'rejected', code: head.code, message: head.message };
   }
-  if (versions.kind !== 'graph-versions') {
+  if (head.kind !== 'graph-head') {
     return { kind: 'rejected', code: 'invalid_state', message: '无法读取 GraphVersion 历史' };
   }
-  const head = versions.versions.at(-1);
-  return { kind: 'read', generation: head === undefined ? 1 : head.generation + 1 };
+  return { kind: 'read', generation: head.version === null ? 1 : head.version.generation + 1 };
 }
 
 /** 开放 Decision Ticket 的只读投影：正文归 tracker，这里把地图章节的每一行当作一张开放票据。 */
@@ -843,14 +847,14 @@ function readCandidate(
   if (graphId === null) {
     return { kind: 'read', version: null };
   }
-  const versions = store.query({ kind: 'graph-versions', coordinationScopeId, graphId: graphId as GraphId });
-  if (versions.kind === 'rejected') {
-    return { kind: 'rejected', code: versions.code, message: versions.message };
+  const head = store.query({ kind: 'graph-head', coordinationScopeId, graphId: graphId as GraphId });
+  if (head.kind === 'rejected') {
+    return { kind: 'rejected', code: head.code, message: head.message };
   }
-  if (versions.kind !== 'graph-versions') {
+  if (head.kind !== 'graph-head') {
     return { kind: 'rejected', code: 'invalid_state', message: '无法读取 GraphVersion 历史' };
   }
-  return { kind: 'read', version: versions.versions.at(-1) ?? null };
+  return { kind: 'read', version: head.version };
 }
 
 function readGeneration(
@@ -1030,6 +1034,10 @@ export function parseOrcaWorkerDoneLocator(
     return null;
   }
   if (!isRecord(decoded)) {
+    return null;
+  }
+  // Orca 保留被拒绝的 lifecycle 回报作诊断；它不是已接受的 Worker 结果载体。
+  if ('_orcaLifecycleRejection' in decoded) {
     return null;
   }
   if ('result' in decoded) {

@@ -464,7 +464,18 @@ test('选中候选时先建立并核验 worktree，再物化一个角色级 Task
   }
 });
 
-test('既有通过核验的 worktree 被复用，不重复建立', async () => {
+test.each([false, true])('既有通过核验的 worktree 被复用，不重复建立；已有 Utility 绑定=%s', async (utilityBinding) => {
+  if (utilityBinding) {
+    const recorded = store.transact({
+      kind: 'record-materialization-binding', coordinationScopeId: SCOPE, expectedRevision: revision(), writer,
+      workPackageId: WP, role: null, recoveryUtilityRole: 'recovery_utility',
+      workerTaskId: 'utility-task' as never, dispatchId: 'utility-dispatch' as never, attemptId: 'utility-attempt',
+      worktreeId: isolatedWorktree().worktreeId, specBinding: null, specificationUnitPath: null,
+      authorizationId: 'auth-1', authorizationVersion: 1, workerProfileRef: 'profile-recovery_utility',
+      orcaTaskId: 'orca-utility-task', launchId: 'utility-launch', creationOperationId: 'utility-create' as OperationId,
+    });
+    expect(recorded.kind).toBe('committed');
+  }
   const { backend, calls } = fakeBackend({ worktrees: [isolatedWorktree()] });
   const result = await materializeWorkPackage({
     store,

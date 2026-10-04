@@ -1,0 +1,146 @@
+[
+  {
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "pendingContent": true,
+    "semanticEventContent": true,
+    "eventDetailReturn": true,
+    "source": "production TuiApp, isolated SQLite Q&A, fixture semantic events; no Orca or model"
+  },
+  {
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "pendingContent": true,
+    "semanticEventContent": true,
+    "eventDetailReturn": true,
+    "source": "production TuiApp, isolated SQLite Q&A, fixture semantic events; no Orca or model"
+  },
+  {
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "pendingContent": true,
+    "semanticEventContent": true,
+    "eventDetailReturn": true,
+    "source": "production TuiApp, isolated SQLite Q&A, fixture semantic events; no Orca or model"
+  },
+  {
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "pendingContent": true,
+    "semanticEventContent": true,
+    "eventDetailReturn": true,
+    "source": "production TuiApp, isolated SQLite Q&A, fixture semantic events; no Orca or model"
+  },
+  {
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "pendingContent": true,
+    "semanticEventContent": true,
+    "eventDetailReturn": true,
+    "source": "production TuiApp, isolated SQLite Q&A, fixture semantic events; no Orca or model"
+  },
+  {
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "pendingContent": true,
+    "semanticEventContent": true,
+    "eventDetailReturn": true,
+    "source": "production TuiApp, isolated SQLite Q&A, fixture semantic events; no Orca or model"
+  },
+  {
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "pendingContent": true,
+    "semanticEventContent": true,
+    "eventDetailReturn": true,
+    "source": "production TuiApp, isolated SQLite Q&A, fixture semantic events; no Orca or model"
+  },
+  {
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "pendingContent": true,
+    "semanticEventContent": true,
+    "eventDetailReturn": true,
+    "source": "production TuiApp, isolated SQLite Q&A, fixture semantic events; no Orca or model"
+  },
+  {
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "pendingContent": true,
+    "semanticEventContent": true,
+    "eventDetailReturn": true,
+    "source": "production TuiApp, isolated SQLite Q&A, fixture semantic events; no Orca or model"
+  },
+  {
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "pendingContent": true,
+    "semanticEventContent": true,
+    "eventDetailReturn": true,
+    "source": "production TuiApp, isolated SQLite Q&A, fixture semantic events; no Orca or model"
+  },
+  {
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "pendingContent": true,
+    "semanticEventContent": true,
+    "eventDetailReturn": true,
+    "source": "production TuiApp, isolated SQLite Q&A, fixture semantic events; no Orca or model"
+  },
+  {
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "pendingContent": true,
+    "semanticEventContent": true,
+    "eventDetailReturn": true,
+    "source": "production TuiApp, isolated SQLite Q&A, fixture semantic events; no Orca or model"
+  }
+]

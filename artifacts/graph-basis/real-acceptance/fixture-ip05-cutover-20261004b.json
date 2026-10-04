@@ -1,0 +1,18 @@
+{
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-ip05-cutover-20261004b",
+  "name": "ip05-cutover-20261004b",
+  "baselineHead": "ddc346638c07d7d6f152b4d864891e9e3e64c65c",
+  "integrationRef": "ip05-cutover-20261004b-integration",
+  "integrationRemote": "https://github.com/leike0813/orca-companion-test",
+  "identity": "term_dc1f1d09-f914-4647-968f-7d613969c644",
+  "credentialRef": "f017fe76-22cf-4784-b23d-2be679908133",
+  "credentialStorePath": "/home/joshua/Workspace/Artifact/orca-companion-ip05-cutover-20261004b-xdg/orca-companion/credentials.json",
+  "acceptanceModel": "gpt-6-luna",
+  "coordinationScopeId": "ip05-ip05-cutover-20261004b-scope",
+  "expectedRunCreateOperationId": "run-create:ip05-ip05-cutover-20261004b-scope#g1",
+  "coordinatorBaseUrl": "http://127.0.0.1:10100/v1",
+  "coordinatorProviderIntegration": "@langchain/openai#ChatOpenAI",
+  "coordinatorWireApi": "chat",
+  "coordinatorCredential": "non-secret-sdk-placeholder-in-isolated-CredentialStore",
+  "workerCredential": "harness_login"
+}

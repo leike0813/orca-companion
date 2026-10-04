@@ -1,0 +1,24 @@
+示例仓库 · main · session-a · 执行 · active · 待答0
+────────────────────────────────────────────────────────────────────────────────
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ 图版本历史                                                                   │
+│ 目录入口 › 版本目录续页                                                      │
+│ ›  历史 G1·v5 scope-1#g1 · 已接受修订 fixture-patch-5                        │
+│   代际状态 frozen · map 6 · plan 7 · run run-1                               │
+│    历史 G1·v4 scope-1#g1 · 已接受修订 fixture-patch-4                        │
+│   代际状态 frozen · map 5 · plan 6 · run run-1                               │
+│    历史 G1·v3 scope-1#g1 · 已接受修订 fixture-patch-3                        │
+│   代际状态 frozen · map 4 · plan 5 · run run-1                               │
+│    历史 G1·v2 scope-1#g1 · 已接受修订 fixture-patch-2                        │
+│   代际状态 frozen · map 3 · plan 4 · run run-1                               │
+│    历史 G1·v1 scope-1#g1 · 初始图                                            │
+│   代际状态 frozen · map 2 · plan 3 · run run-1                               │
+│    历史 G0·v1 scope-1#g0 · 初始图                                            │
+│   代际状态 frozen · map 1 · plan 1 · run fixture-run-0                       │
+│ ↑↓ 选择 · Enter 打开该版 · PgUp/PgDn 翻页 · Esc 返回                         │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

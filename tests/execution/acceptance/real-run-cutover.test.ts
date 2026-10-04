@@ -48,6 +48,7 @@ import type { CoordinationWriter } from '../../../src/application/ports/branch-c
 import { initializeCoordinationScope } from '../../../src/application/planning/initialize-scope.js';
 import { graphIdFor } from '../../../src/application/planning/graph-generation.js';
 import { loadCurrentGraph, recordInitialGraph } from '../../../src/application/planning/graph-history.js';
+import { implementationPlanFor } from '../../support/graph-plan-fixture.js';
 import { readScope } from '../../../src/application/planning/scope-read.js';
 import {
   beginReplanningTransition,
@@ -236,6 +237,12 @@ if (resolved.kind === 'skip') {
             concurrencyLimit: 1,
             workPackages: [executionWorkPackage('wp-predecessor')],
           },
+          initialPlan: implementationPlanFor({
+            graphId: predecessorGraphId,
+            generation: 1 as GraphGeneration,
+            concurrencyLimit: 1,
+            workPackages: [executionWorkPackage('wp-predecessor')],
+          }, 1),
           mapRevision: 0,
           planRevision: 1,
           orcaRunId: `${resolved.identity}:run-predecessor`,
@@ -320,6 +327,12 @@ if (resolved.kind === 'skip') {
             concurrencyLimit: 1,
             workPackages: [executionWorkPackage('wp-candidate')],
           },
+          initialPlan: implementationPlanFor({
+            graphId: candidateGraphId,
+            generation: 2 as GraphGeneration,
+            concurrencyLimit: 1,
+            workPackages: [executionWorkPackage('wp-candidate')],
+          }, 1),
           mapRevision: 0,
           planRevision: 1,
           orcaRunId,

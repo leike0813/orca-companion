@@ -5,6 +5,7 @@ import {
   assignIssue,
   createGhTracker,
   readIssue,
+  readIssueBody,
   readIssueSummary,
   updateIssueBody,
   type GhTrackerOptions,
@@ -51,6 +52,10 @@ function completed(
 
 function issueJson(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({ number: 42, title: '标题', body: '正文', state: 'OPEN', assignees: [], ...overrides });
+}
+
+function bodyJson(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({ number: 42, title: '标题', body: '正文', updatedAt: '2026-10-04T08:00:00Z', ...overrides });
 }
 
 const SPAWN_FAILED: ProcessResult = {
@@ -200,6 +205,76 @@ test('readIssue 遇到未登记的引用类型时不发出任何命令', async (
   const { runner, calls } = recordingRunner([completed(issueJson())]);
 
   const outcome = await readIssue(trackerOptions(runner), { kind: 'work-package', id: 'wp-1' });
+
+  expect(outcome.kind).toBe('unknown');
+  expect(calls).toHaveLength(0);
+});
+
+// ---------------------------------------------------------------------------
+// readIssueBody
+// ---------------------------------------------------------------------------
+
+test('readIssueBody 只请求正文与 updatedAt，并把 updatedAt 作为来源版本带回', async () => {
+  const body = '第一行\n\n## 章节\n- 中文条目，宽度按字形裁切';
+  const { runner, calls } = recordingRunner([
+    completed(bodyJson({ body, updatedAt: '2026-10-04T09:15:00Z' })),
+  ]);
+
+  const outcome = await readIssueBody(trackerOptions(runner), TICKET);
+
+  expect(calls[0]?.args).toEqual(['issue', 'view', '42', '--json', 'number,title,body,updatedAt']);
+  expect(outcome).toEqual({
+    kind: 'read',
+    value: { ref: TICKET, title: '标题', body, sourceVersion: '2026-10-04T09:15:00Z' },
+  });
+});
+
+test.each<readonly [string, string]>([
+  ['issue 身份不符', bodyJson({ number: 43 })],
+  ['number 不是正整数', bodyJson({ number: 0 })],
+  ['缺 updatedAt', bodyJson({ updatedAt: undefined })],
+  ['updatedAt 为空串', bodyJson({ updatedAt: '' })],
+  ['updatedAt 只有空白', bodyJson({ updatedAt: '   ' })],
+  ['updatedAt 不是字符串', bodyJson({ updatedAt: 1759560000 })],
+  ['缺 body', bodyJson({ body: undefined })],
+  ['输出不是 JSON 对象', '[]'],
+  ['输出不是 JSON', 'not json'],
+])('readIssueBody 在 %s 时 fail closed', async (_label, stdout) => {
+  const { runner } = recordingRunner([completed(stdout)]);
+
+  const outcome = await readIssueBody(trackerOptions(runner), TICKET);
+
+  expect(outcome.kind).toBe('unknown');
+});
+
+test('readIssueBody 在标准输出被截断时拒绝，不能证明正文完整', async () => {
+  const { runner } = recordingRunner([completed(bodyJson(), { stdoutTruncated: true })]);
+
+  const outcome = await readIssueBody(trackerOptions(runner), TICKET);
+
+  expect(outcome.kind).toBe('unknown');
+});
+
+test.each<readonly [string, ProcessResult, string]>([
+  ['issue 不存在', completed('', { exitCode: 1, stderr: 'not found' }), 'not_found'],
+  ['进程没能启动', SPAWN_FAILED, 'unavailable'],
+  ['授权错误', completed('', { exitCode: 1, stderr: 'HTTP 403: permission denied' }), 'unavailable'],
+  ['超时', timedOut(), 'unknown'],
+])('readIssueBody 在 %s 时沿用读路径分类为 %s', async (_label, result, expected) => {
+  const { runner } = recordingRunner([result]);
+
+  const outcome = await readIssueBody(trackerOptions(runner), TICKET);
+
+  expect(outcome.kind).toBe(expected);
+  if (outcome.kind === 'unavailable') {
+    expect(outcome.message).not.toContain(SECRET);
+  }
+});
+
+test('readIssueBody 遇到未登记的引用类型时不发出任何命令', async () => {
+  const { runner, calls } = recordingRunner([completed(bodyJson())]);
+
+  const outcome = await readIssueBody(trackerOptions(runner), { kind: 'work-package', id: 'wp-1' });
 
   expect(outcome.kind).toBe('unknown');
   expect(calls).toHaveLength(0);
@@ -380,4 +455,17 @@ test('createGhTracker 组合三个底层函数', async () => {
   expect(calls[0]?.args).toContain('view');
   expect(calls[1]?.args).toContain('--body');
   expect(calls[2]?.args).toContain('--add-assignee');
+});
+
+test('createGhTracker 暴露带版本的正文读取，并请求 updatedAt', async () => {
+  const { runner, calls } = recordingRunner([completed(bodyJson({ updatedAt: '2026-10-04T10:00:00Z' }))]);
+
+  const gateway = createGhTracker(trackerOptions(runner));
+  const outcome = await gateway.readIssueBody?.(TICKET);
+
+  expect(outcome).toEqual({
+    kind: 'read',
+    value: { ref: TICKET, title: '标题', body: '正文', sourceVersion: '2026-10-04T10:00:00Z' },
+  });
+  expect(calls[0]?.args).toEqual(['issue', 'view', '42', '--json', 'number,title,body,updatedAt']);
 });

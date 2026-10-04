@@ -1,0 +1,44 @@
+{
+  "completedAt": "2026-10-04T15:36:16.311Z",
+  "fixtureRepositoriesRemoved": 16,
+  "workerWorktreesRemoved": 12,
+  "worktreeCount": 28,
+  "terminalTotals": {
+    "closed": 71,
+    "stopped": 71
+  },
+  "remainingRepos": [],
+  "remainingPaths": [],
+  "originalGitStatusUnchanged": true,
+  "gitHead": "41b2f1e636c110441a0a344fc20749911b085201",
+  "originalAllocatedKiB": 3103756,
+  "archive": {
+    "archive": "/home/joshua/Workspace/Artifact/orca-companion-graph-basis-reclaimed-20261004.tar.gz",
+    "sizeBytes": 936623,
+    "worktreeCount": 28,
+    "entryCount": 1597,
+    "excluded": [
+      ".git/orca-companion/codex (credential-bearing isolated harness homes)"
+    ],
+    "testedArchive": true
+  },
+  "retainedConfigurationDirectories": [
+    "/home/joshua/Workspace/Artifact/orca-companion-gb01-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-cutover-20261004b-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004c-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004d-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004e-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004f-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004g-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004h-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-exec-20261004i-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-luna-20261004-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004j-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004m-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004o-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004k-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004l-xdg",
+    "/home/joshua/Workspace/Artifact/orca-companion-ip05-retire-20261004n-xdg"
+  ],
+  "mainProjectExists": true
+}

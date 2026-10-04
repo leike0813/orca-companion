@@ -1,0 +1,10 @@
+{
+  "archive": "/home/joshua/Workspace/Artifact/orca-companion-graph-basis-reclaimed-20261004.tar.gz",
+  "sizeBytes": 936623,
+  "worktreeCount": 28,
+  "entryCount": 1597,
+  "excluded": [
+    ".git/orca-companion/codex (credential-bearing isolated harness homes)"
+  ],
+  "testedArchive": true
+}

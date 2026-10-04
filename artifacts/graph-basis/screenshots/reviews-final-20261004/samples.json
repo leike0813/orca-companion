@@ -1,0 +1,1622 @@
+[
+  {
+    "name": "directory-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "directory-search-120x40-color-nerd.png",
+    "text": "directory-search-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "options-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "options-search-120x40-color-nerd.png",
+    "text": "options-search-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "session-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "session-search-120x40-color-nerd.png",
+    "text": "session-search-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "model-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "model-search-120x40-color-nerd.png",
+    "text": "model-search-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-overview",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-overview-120x40-color-nerd.png",
+    "text": "authorization-overview-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-permissions",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-permissions-120x40-color-nerd.png",
+    "text": "authorization-permissions-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-budget",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-budget-120x40-color-nerd.png",
+    "text": "authorization-budget-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-workspace",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-workspace-120x40-color-nerd.png",
+    "text": "authorization-workspace-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-complete",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-complete-120x40-color-nerd.png",
+    "text": "authorization-complete-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "exit-default-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "exit-default-return-120x40-color-nerd.png",
+    "text": "exit-default-return-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "handoff-overview",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "handoff-overview-120x40-color-nerd.png",
+    "text": "handoff-overview-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "handoff-responsibility",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "handoff-responsibility-120x40-color-nerd.png",
+    "text": "handoff-responsibility-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "handoff-binding",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "handoff-binding-120x40-color-nerd.png",
+    "text": "handoff-binding-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-default-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cancel-default-return-120x40-color-nerd.png",
+    "text": "cancel-default-return-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "resize-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "resize-search-80x24-color-nerd.png",
+    "text": "resize-search-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "resize-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "resize-search-50x40-color-nerd.png",
+    "text": "resize-search-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "resize-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "resize-search-120x40-color-nerd.png",
+    "text": "resize-search-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "directory-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "directory-search-120x40-color-ascii.png",
+    "text": "directory-search-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "options-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "options-search-120x40-color-ascii.png",
+    "text": "options-search-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "session-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "session-search-120x40-color-ascii.png",
+    "text": "session-search-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "model-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "model-search-120x40-color-ascii.png",
+    "text": "model-search-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-overview",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "authorization-overview-120x40-color-ascii.png",
+    "text": "authorization-overview-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "handoff-overview",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "handoff-overview-120x40-color-ascii.png",
+    "text": "handoff-overview-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-default-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cancel-default-return-120x40-color-ascii.png",
+    "text": "cancel-default-return-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "directory-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "directory-search-120x40-no-color-nerd.png",
+    "text": "directory-search-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "options-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "options-search-120x40-no-color-nerd.png",
+    "text": "options-search-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "session-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "session-search-120x40-no-color-nerd.png",
+    "text": "session-search-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "model-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "model-search-120x40-no-color-nerd.png",
+    "text": "model-search-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-overview",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "authorization-overview-120x40-no-color-nerd.png",
+    "text": "authorization-overview-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "handoff-overview",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "handoff-overview-120x40-no-color-nerd.png",
+    "text": "handoff-overview-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-default-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cancel-default-return-120x40-no-color-nerd.png",
+    "text": "cancel-default-return-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "directory-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "directory-search-120x40-no-color-ascii.png",
+    "text": "directory-search-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "options-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "options-search-120x40-no-color-ascii.png",
+    "text": "options-search-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "session-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "session-search-120x40-no-color-ascii.png",
+    "text": "session-search-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "model-search",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "model-search-120x40-no-color-ascii.png",
+    "text": "model-search-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-overview",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "authorization-overview-120x40-no-color-ascii.png",
+    "text": "authorization-overview-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "handoff-overview",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "handoff-overview-120x40-no-color-ascii.png",
+    "text": "handoff-overview-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-default-return",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cancel-default-return-120x40-no-color-ascii.png",
+    "text": "cancel-default-return-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "directory-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "directory-search-80x24-color-nerd.png",
+    "text": "directory-search-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "options-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "options-search-80x24-color-nerd.png",
+    "text": "options-search-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "session-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "session-search-80x24-color-nerd.png",
+    "text": "session-search-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "model-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "model-search-80x24-color-nerd.png",
+    "text": "model-search-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "authorization-overview",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-overview-80x24-color-nerd.png",
+    "text": "authorization-overview-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "authorization-permissions",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-permissions-80x24-color-nerd.png",
+    "text": "authorization-permissions-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "authorization-budget",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-budget-80x24-color-nerd.png",
+    "text": "authorization-budget-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "authorization-workspace",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-workspace-80x24-color-nerd.png",
+    "text": "authorization-workspace-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "authorization-complete",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-complete-80x24-color-nerd.png",
+    "text": "authorization-complete-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "exit-default-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "exit-default-return-80x24-color-nerd.png",
+    "text": "exit-default-return-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "handoff-overview",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "handoff-overview-80x24-color-nerd.png",
+    "text": "handoff-overview-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "handoff-responsibility",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "handoff-responsibility-80x24-color-nerd.png",
+    "text": "handoff-responsibility-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "handoff-binding",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "handoff-binding-80x24-color-nerd.png",
+    "text": "handoff-binding-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-default-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cancel-default-return-80x24-color-nerd.png",
+    "text": "cancel-default-return-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "directory-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "directory-search-80x24-color-ascii.png",
+    "text": "directory-search-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "options-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "options-search-80x24-color-ascii.png",
+    "text": "options-search-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "session-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "session-search-80x24-color-ascii.png",
+    "text": "session-search-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "model-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "model-search-80x24-color-ascii.png",
+    "text": "model-search-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "authorization-overview",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "authorization-overview-80x24-color-ascii.png",
+    "text": "authorization-overview-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "handoff-overview",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "handoff-overview-80x24-color-ascii.png",
+    "text": "handoff-overview-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-default-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cancel-default-return-80x24-color-ascii.png",
+    "text": "cancel-default-return-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "directory-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "directory-search-80x24-no-color-nerd.png",
+    "text": "directory-search-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "options-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "options-search-80x24-no-color-nerd.png",
+    "text": "options-search-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "session-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "session-search-80x24-no-color-nerd.png",
+    "text": "session-search-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "model-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "model-search-80x24-no-color-nerd.png",
+    "text": "model-search-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "authorization-overview",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "authorization-overview-80x24-no-color-nerd.png",
+    "text": "authorization-overview-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "handoff-overview",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "handoff-overview-80x24-no-color-nerd.png",
+    "text": "handoff-overview-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-default-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cancel-default-return-80x24-no-color-nerd.png",
+    "text": "cancel-default-return-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "directory-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "directory-search-80x24-no-color-ascii.png",
+    "text": "directory-search-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "options-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "options-search-80x24-no-color-ascii.png",
+    "text": "options-search-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "session-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "session-search-80x24-no-color-ascii.png",
+    "text": "session-search-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "model-search",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "model-search-80x24-no-color-ascii.png",
+    "text": "model-search-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "authorization-overview",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "authorization-overview-80x24-no-color-ascii.png",
+    "text": "authorization-overview-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "handoff-overview",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "handoff-overview-80x24-no-color-ascii.png",
+    "text": "handoff-overview-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "cancel-default-return",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cancel-default-return-80x24-no-color-ascii.png",
+    "text": "cancel-default-return-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "directory-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "directory-search-50x40-color-nerd.png",
+    "text": "directory-search-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "options-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "options-search-50x40-color-nerd.png",
+    "text": "options-search-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "session-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "session-search-50x40-color-nerd.png",
+    "text": "session-search-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "model-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "model-search-50x40-color-nerd.png",
+    "text": "model-search-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-overview",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-overview-50x40-color-nerd.png",
+    "text": "authorization-overview-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-permissions",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-permissions-50x40-color-nerd.png",
+    "text": "authorization-permissions-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-budget",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-budget-50x40-color-nerd.png",
+    "text": "authorization-budget-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-workspace",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-workspace-50x40-color-nerd.png",
+    "text": "authorization-workspace-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-complete",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "authorization-complete-50x40-color-nerd.png",
+    "text": "authorization-complete-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "exit-default-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "exit-default-return-50x40-color-nerd.png",
+    "text": "exit-default-return-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "handoff-overview",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "handoff-overview-50x40-color-nerd.png",
+    "text": "handoff-overview-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "handoff-responsibility",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "handoff-responsibility-50x40-color-nerd.png",
+    "text": "handoff-responsibility-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "handoff-binding",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "handoff-binding-50x40-color-nerd.png",
+    "text": "handoff-binding-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-default-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "cancel-default-return-50x40-color-nerd.png",
+    "text": "cancel-default-return-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "directory-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "directory-search-50x40-color-ascii.png",
+    "text": "directory-search-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "options-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "options-search-50x40-color-ascii.png",
+    "text": "options-search-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "session-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "session-search-50x40-color-ascii.png",
+    "text": "session-search-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "model-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "model-search-50x40-color-ascii.png",
+    "text": "model-search-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-overview",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "authorization-overview-50x40-color-ascii.png",
+    "text": "authorization-overview-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "handoff-overview",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "handoff-overview-50x40-color-ascii.png",
+    "text": "handoff-overview-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-default-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "cancel-default-return-50x40-color-ascii.png",
+    "text": "cancel-default-return-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "directory-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "directory-search-50x40-no-color-nerd.png",
+    "text": "directory-search-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "options-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "options-search-50x40-no-color-nerd.png",
+    "text": "options-search-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "session-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "session-search-50x40-no-color-nerd.png",
+    "text": "session-search-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "model-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "model-search-50x40-no-color-nerd.png",
+    "text": "model-search-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-overview",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "authorization-overview-50x40-no-color-nerd.png",
+    "text": "authorization-overview-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "handoff-overview",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "handoff-overview-50x40-no-color-nerd.png",
+    "text": "handoff-overview-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-default-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "cancel-default-return-50x40-no-color-nerd.png",
+    "text": "cancel-default-return-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "directory-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "directory-search-50x40-no-color-ascii.png",
+    "text": "directory-search-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "options-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "options-search-50x40-no-color-ascii.png",
+    "text": "options-search-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "session-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "session-search-50x40-no-color-ascii.png",
+    "text": "session-search-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "model-search",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "model-search-50x40-no-color-ascii.png",
+    "text": "model-search-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "authorization-overview",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "authorization-overview-50x40-no-color-ascii.png",
+    "text": "authorization-overview-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "handoff-overview",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "handoff-overview-50x40-no-color-ascii.png",
+    "text": "handoff-overview-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "cancel-default-return",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "cancel-default-return-50x40-no-color-ascii.png",
+    "text": "cancel-default-return-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  }
+]

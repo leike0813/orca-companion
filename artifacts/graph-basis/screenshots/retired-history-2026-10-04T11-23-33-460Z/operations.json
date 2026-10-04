@@ -1,0 +1,32 @@
+[
+  {
+    "name": "六票工作区基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "continuous 主区、composer、adaptive 图与状态栏可见"
+  },
+  {
+    "name": "P-43 Inspector 基线",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "保留图画布与 Inspector 原布局"
+  },
+  {
+    "name": "退休包历史版本",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "check": "隔离 SQLite fixture 中 G1·v2 的 accepted revision 明确退役 wp-d；非真实执行证据"
+  }
+]

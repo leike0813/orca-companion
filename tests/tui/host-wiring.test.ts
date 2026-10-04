@@ -50,6 +50,7 @@ import { recordInitialGraph } from '../../src/application/planning/graph-history
 import { DEFAULT_EXECUTION_LIMITS, budgetFromLimits } from '../../src/domain/planning/budget-policy.js';
 import type { ExecutionGraph } from '../../src/domain/planning/execution-graph.js';
 import { executionManifest } from '../support/execution-harness.js';
+import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 import { dedupeRoleCandidates } from '../../src/interfaces/tui/components/model-picker.js';
 import { frameText, renderTui, settle, type RenderedTui } from './harness.js';
 
@@ -503,6 +504,7 @@ test('host projectDetails绑定Scope、Session和所见revision，并连续读�
       coordinationScopeId: scopeId,
       writer,
       graph,
+      initialPlan: implementationPlanFor(graph, 1),
       mapRevision: 1,
       planRevision: 1,
       orcaRunId: 'project-details-run',

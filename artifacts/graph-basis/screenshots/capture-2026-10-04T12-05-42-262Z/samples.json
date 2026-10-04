@@ -1,0 +1,3242 @@
+[
+  {
+    "label": "workspace-baseline",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-baseline-120x40-color-nerd.png",
+    "text": "workspace-baseline-120x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-candidates",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P47-slash-candidates-120x40-color-nerd.png",
+    "text": "P47-slash-candidates-120x40-color-nerd.txt",
+    "cursor": [
+      5,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-adopted",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P47-slash-adopted-120x40-color-nerd.png",
+    "text": "P47-slash-adopted-120x40-color-nerd.txt",
+    "cursor": [
+      10,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-executed-P52-options",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P47-slash-executed-P52-options-120x40-color-nerd.png",
+    "text": "P47-slash-executed-P52-options-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P52-command-directory",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P52-command-directory-120x40-color-nerd.png",
+    "text": "P52-command-directory-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-overview",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-overview-120x40-color-nerd.png",
+    "text": "P51-project-overview-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-pending",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-pending-120x40-color-nerd.png",
+    "text": "P51-project-pending-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-events",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-events-120x40-color-nerd.png",
+    "text": "P51-project-events-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "inspector-baseline",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "inspector-baseline-120x40-color-nerd.png",
+    "text": "inspector-baseline-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-root",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "basis-root-120x40-color-nerd.png",
+    "text": "basis-root-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-first-page",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "all-generations-first-page-120x40-color-nerd.png",
+    "text": "all-generations-first-page-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-next-page",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "all-generations-next-page-120x40-color-nerd.png",
+    "text": "all-generations-next-page-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "current-source-directory",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "current-source-directory-120x40-color-nerd.png",
+    "text": "current-source-directory-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "plan-body-first-range",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "plan-body-first-range-120x40-color-nerd.png",
+    "text": "plan-body-first-range-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "tracker-body-pinned-continuation",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "tracker-body-pinned-continuation-120x40-color-nerd.png",
+    "text": "tracker-body-pinned-continuation-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "basis-body-resize-80x24-color-nerd.png",
+    "text": "basis-body-resize-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "basis-body-resize-50x40-color-nerd.png",
+    "text": "basis-body-resize-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "basis-body-resize-120x40-color-nerd.png",
+    "text": "basis-body-resize-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-baseline-120x40-color-ascii.png",
+    "text": "workspace-baseline-120x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-candidates",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P47-slash-candidates-120x40-color-ascii.png",
+    "text": "P47-slash-candidates-120x40-color-ascii.txt",
+    "cursor": [
+      5,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-adopted",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P47-slash-adopted-120x40-color-ascii.png",
+    "text": "P47-slash-adopted-120x40-color-ascii.txt",
+    "cursor": [
+      10,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-executed-P52-options",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P47-slash-executed-P52-options-120x40-color-ascii.png",
+    "text": "P47-slash-executed-P52-options-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P52-command-directory",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P52-command-directory-120x40-color-ascii.png",
+    "text": "P52-command-directory-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-overview",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-overview-120x40-color-ascii.png",
+    "text": "P51-project-overview-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-pending",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-pending-120x40-color-ascii.png",
+    "text": "P51-project-pending-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-events",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-events-120x40-color-ascii.png",
+    "text": "P51-project-events-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "inspector-baseline",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "inspector-baseline-120x40-color-ascii.png",
+    "text": "inspector-baseline-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-root",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "basis-root-120x40-color-ascii.png",
+    "text": "basis-root-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-first-page",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "all-generations-first-page-120x40-color-ascii.png",
+    "text": "all-generations-first-page-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-next-page",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "all-generations-next-page-120x40-color-ascii.png",
+    "text": "all-generations-next-page-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "current-source-directory",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "current-source-directory-120x40-color-ascii.png",
+    "text": "current-source-directory-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "plan-body-first-range",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "plan-body-first-range-120x40-color-ascii.png",
+    "text": "plan-body-first-range-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "tracker-body-pinned-continuation",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "tracker-body-pinned-continuation-120x40-color-ascii.png",
+    "text": "tracker-body-pinned-continuation-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "basis-body-resize-80x24-color-ascii.png",
+    "text": "basis-body-resize-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "basis-body-resize-50x40-color-ascii.png",
+    "text": "basis-body-resize-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "basis-body-resize-120x40-color-ascii.png",
+    "text": "basis-body-resize-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-baseline-120x40-no-color-nerd.png",
+    "text": "workspace-baseline-120x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-candidates",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P47-slash-candidates-120x40-no-color-nerd.png",
+    "text": "P47-slash-candidates-120x40-no-color-nerd.txt",
+    "cursor": [
+      5,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-adopted",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P47-slash-adopted-120x40-no-color-nerd.png",
+    "text": "P47-slash-adopted-120x40-no-color-nerd.txt",
+    "cursor": [
+      10,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-executed-P52-options",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P47-slash-executed-P52-options-120x40-no-color-nerd.png",
+    "text": "P47-slash-executed-P52-options-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P52-command-directory",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P52-command-directory-120x40-no-color-nerd.png",
+    "text": "P52-command-directory-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-overview",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-overview-120x40-no-color-nerd.png",
+    "text": "P51-project-overview-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-pending",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-pending-120x40-no-color-nerd.png",
+    "text": "P51-project-pending-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-events",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-events-120x40-no-color-nerd.png",
+    "text": "P51-project-events-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "inspector-baseline",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "inspector-baseline-120x40-no-color-nerd.png",
+    "text": "inspector-baseline-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-root",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "basis-root-120x40-no-color-nerd.png",
+    "text": "basis-root-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-first-page",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "all-generations-first-page-120x40-no-color-nerd.png",
+    "text": "all-generations-first-page-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-next-page",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "all-generations-next-page-120x40-no-color-nerd.png",
+    "text": "all-generations-next-page-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "current-source-directory",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "current-source-directory-120x40-no-color-nerd.png",
+    "text": "current-source-directory-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "plan-body-first-range",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "plan-body-first-range-120x40-no-color-nerd.png",
+    "text": "plan-body-first-range-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "tracker-body-pinned-continuation",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "tracker-body-pinned-continuation-120x40-no-color-nerd.png",
+    "text": "tracker-body-pinned-continuation-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "basis-body-resize-80x24-no-color-nerd.png",
+    "text": "basis-body-resize-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "basis-body-resize-50x40-no-color-nerd.png",
+    "text": "basis-body-resize-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "basis-body-resize-120x40-no-color-nerd.png",
+    "text": "basis-body-resize-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-baseline-120x40-no-color-ascii.png",
+    "text": "workspace-baseline-120x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-candidates",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P47-slash-candidates-120x40-no-color-ascii.png",
+    "text": "P47-slash-candidates-120x40-no-color-ascii.txt",
+    "cursor": [
+      5,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-adopted",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P47-slash-adopted-120x40-no-color-ascii.png",
+    "text": "P47-slash-adopted-120x40-no-color-ascii.txt",
+    "cursor": [
+      10,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-executed-P52-options",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P47-slash-executed-P52-options-120x40-no-color-ascii.png",
+    "text": "P47-slash-executed-P52-options-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P52-command-directory",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P52-command-directory-120x40-no-color-ascii.png",
+    "text": "P52-command-directory-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-overview",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-overview-120x40-no-color-ascii.png",
+    "text": "P51-project-overview-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-pending",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-pending-120x40-no-color-ascii.png",
+    "text": "P51-project-pending-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-events",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-events-120x40-no-color-ascii.png",
+    "text": "P51-project-events-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "inspector-baseline",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "inspector-baseline-120x40-no-color-ascii.png",
+    "text": "inspector-baseline-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-root",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "basis-root-120x40-no-color-ascii.png",
+    "text": "basis-root-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-first-page",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "all-generations-first-page-120x40-no-color-ascii.png",
+    "text": "all-generations-first-page-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-next-page",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "all-generations-next-page-120x40-no-color-ascii.png",
+    "text": "all-generations-next-page-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "current-source-directory",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "current-source-directory-120x40-no-color-ascii.png",
+    "text": "current-source-directory-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "plan-body-first-range",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "plan-body-first-range-120x40-no-color-ascii.png",
+    "text": "plan-body-first-range-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "tracker-body-pinned-continuation",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "tracker-body-pinned-continuation-120x40-no-color-ascii.png",
+    "text": "tracker-body-pinned-continuation-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "basis-body-resize-80x24-no-color-ascii.png",
+    "text": "basis-body-resize-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "basis-body-resize-50x40-no-color-ascii.png",
+    "text": "basis-body-resize-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "basis-body-resize-120x40-no-color-ascii.png",
+    "text": "basis-body-resize-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-baseline-80x24-color-nerd.png",
+    "text": "workspace-baseline-80x24-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "label": "P47-slash-candidates",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P47-slash-candidates-80x24-color-nerd.png",
+    "text": "P47-slash-candidates-80x24-color-nerd.txt",
+    "cursor": [
+      5,
+      20
+    ]
+  },
+  {
+    "label": "P47-slash-adopted",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P47-slash-adopted-80x24-color-nerd.png",
+    "text": "P47-slash-adopted-80x24-color-nerd.txt",
+    "cursor": [
+      10,
+      20
+    ]
+  },
+  {
+    "label": "P47-slash-executed-P52-options",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P47-slash-executed-P52-options-80x24-color-nerd.png",
+    "text": "P47-slash-executed-P52-options-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P52-command-directory",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P52-command-directory-80x24-color-nerd.png",
+    "text": "P52-command-directory-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-overview",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-overview-80x24-color-nerd.png",
+    "text": "P51-project-overview-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-pending",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-pending-80x24-color-nerd.png",
+    "text": "P51-project-pending-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-events",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-events-80x24-color-nerd.png",
+    "text": "P51-project-events-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "inspector-baseline",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "inspector-baseline-80x24-color-nerd.png",
+    "text": "inspector-baseline-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-root",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "basis-root-80x24-color-nerd.png",
+    "text": "basis-root-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "all-generations-first-page",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "all-generations-first-page-80x24-color-nerd.png",
+    "text": "all-generations-first-page-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "all-generations-next-page",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "all-generations-next-page-80x24-color-nerd.png",
+    "text": "all-generations-next-page-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "current-source-directory",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "current-source-directory-80x24-color-nerd.png",
+    "text": "current-source-directory-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "plan-body-first-range",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "plan-body-first-range-80x24-color-nerd.png",
+    "text": "plan-body-first-range-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "tracker-body-pinned-continuation",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "tracker-body-pinned-continuation-80x24-color-nerd.png",
+    "text": "tracker-body-pinned-continuation-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "basis-body-resize-80x24-color-nerd.png",
+    "text": "basis-body-resize-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "basis-body-resize-50x40-color-nerd.png",
+    "text": "basis-body-resize-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "basis-body-resize-120x40-color-nerd.png",
+    "text": "basis-body-resize-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-baseline-80x24-color-ascii.png",
+    "text": "workspace-baseline-80x24-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "label": "P47-slash-candidates",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P47-slash-candidates-80x24-color-ascii.png",
+    "text": "P47-slash-candidates-80x24-color-ascii.txt",
+    "cursor": [
+      5,
+      20
+    ]
+  },
+  {
+    "label": "P47-slash-adopted",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P47-slash-adopted-80x24-color-ascii.png",
+    "text": "P47-slash-adopted-80x24-color-ascii.txt",
+    "cursor": [
+      10,
+      20
+    ]
+  },
+  {
+    "label": "P47-slash-executed-P52-options",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P47-slash-executed-P52-options-80x24-color-ascii.png",
+    "text": "P47-slash-executed-P52-options-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P52-command-directory",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P52-command-directory-80x24-color-ascii.png",
+    "text": "P52-command-directory-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-overview",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-overview-80x24-color-ascii.png",
+    "text": "P51-project-overview-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-pending",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-pending-80x24-color-ascii.png",
+    "text": "P51-project-pending-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-events",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-events-80x24-color-ascii.png",
+    "text": "P51-project-events-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "inspector-baseline",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "inspector-baseline-80x24-color-ascii.png",
+    "text": "inspector-baseline-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-root",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "basis-root-80x24-color-ascii.png",
+    "text": "basis-root-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "all-generations-first-page",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "all-generations-first-page-80x24-color-ascii.png",
+    "text": "all-generations-first-page-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "all-generations-next-page",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "all-generations-next-page-80x24-color-ascii.png",
+    "text": "all-generations-next-page-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "current-source-directory",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "current-source-directory-80x24-color-ascii.png",
+    "text": "current-source-directory-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "plan-body-first-range",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "plan-body-first-range-80x24-color-ascii.png",
+    "text": "plan-body-first-range-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "tracker-body-pinned-continuation",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "tracker-body-pinned-continuation-80x24-color-ascii.png",
+    "text": "tracker-body-pinned-continuation-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "basis-body-resize-80x24-color-ascii.png",
+    "text": "basis-body-resize-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "basis-body-resize-50x40-color-ascii.png",
+    "text": "basis-body-resize-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "basis-body-resize-120x40-color-ascii.png",
+    "text": "basis-body-resize-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-baseline-80x24-no-color-nerd.png",
+    "text": "workspace-baseline-80x24-no-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "label": "P47-slash-candidates",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P47-slash-candidates-80x24-no-color-nerd.png",
+    "text": "P47-slash-candidates-80x24-no-color-nerd.txt",
+    "cursor": [
+      5,
+      20
+    ]
+  },
+  {
+    "label": "P47-slash-adopted",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P47-slash-adopted-80x24-no-color-nerd.png",
+    "text": "P47-slash-adopted-80x24-no-color-nerd.txt",
+    "cursor": [
+      10,
+      20
+    ]
+  },
+  {
+    "label": "P47-slash-executed-P52-options",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P47-slash-executed-P52-options-80x24-no-color-nerd.png",
+    "text": "P47-slash-executed-P52-options-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P52-command-directory",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P52-command-directory-80x24-no-color-nerd.png",
+    "text": "P52-command-directory-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-overview",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-overview-80x24-no-color-nerd.png",
+    "text": "P51-project-overview-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-pending",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-pending-80x24-no-color-nerd.png",
+    "text": "P51-project-pending-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-events",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-events-80x24-no-color-nerd.png",
+    "text": "P51-project-events-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "inspector-baseline",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "inspector-baseline-80x24-no-color-nerd.png",
+    "text": "inspector-baseline-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-root",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "basis-root-80x24-no-color-nerd.png",
+    "text": "basis-root-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "all-generations-first-page",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "all-generations-first-page-80x24-no-color-nerd.png",
+    "text": "all-generations-first-page-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "all-generations-next-page",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "all-generations-next-page-80x24-no-color-nerd.png",
+    "text": "all-generations-next-page-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "current-source-directory",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "current-source-directory-80x24-no-color-nerd.png",
+    "text": "current-source-directory-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "plan-body-first-range",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "plan-body-first-range-80x24-no-color-nerd.png",
+    "text": "plan-body-first-range-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "tracker-body-pinned-continuation",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "tracker-body-pinned-continuation-80x24-no-color-nerd.png",
+    "text": "tracker-body-pinned-continuation-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "basis-body-resize-80x24-no-color-nerd.png",
+    "text": "basis-body-resize-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "basis-body-resize-50x40-no-color-nerd.png",
+    "text": "basis-body-resize-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "basis-body-resize-120x40-no-color-nerd.png",
+    "text": "basis-body-resize-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-baseline-80x24-no-color-ascii.png",
+    "text": "workspace-baseline-80x24-no-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "label": "P47-slash-candidates",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P47-slash-candidates-80x24-no-color-ascii.png",
+    "text": "P47-slash-candidates-80x24-no-color-ascii.txt",
+    "cursor": [
+      5,
+      20
+    ]
+  },
+  {
+    "label": "P47-slash-adopted",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P47-slash-adopted-80x24-no-color-ascii.png",
+    "text": "P47-slash-adopted-80x24-no-color-ascii.txt",
+    "cursor": [
+      10,
+      20
+    ]
+  },
+  {
+    "label": "P47-slash-executed-P52-options",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P47-slash-executed-P52-options-80x24-no-color-ascii.png",
+    "text": "P47-slash-executed-P52-options-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P52-command-directory",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P52-command-directory-80x24-no-color-ascii.png",
+    "text": "P52-command-directory-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-overview",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-overview-80x24-no-color-ascii.png",
+    "text": "P51-project-overview-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-pending",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-pending-80x24-no-color-ascii.png",
+    "text": "P51-project-pending-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "P51-project-events",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-events-80x24-no-color-ascii.png",
+    "text": "P51-project-events-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "inspector-baseline",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "inspector-baseline-80x24-no-color-ascii.png",
+    "text": "inspector-baseline-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-root",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "basis-root-80x24-no-color-ascii.png",
+    "text": "basis-root-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "all-generations-first-page",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "all-generations-first-page-80x24-no-color-ascii.png",
+    "text": "all-generations-first-page-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "all-generations-next-page",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "all-generations-next-page-80x24-no-color-ascii.png",
+    "text": "all-generations-next-page-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "current-source-directory",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "current-source-directory-80x24-no-color-ascii.png",
+    "text": "current-source-directory-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "plan-body-first-range",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "plan-body-first-range-80x24-no-color-ascii.png",
+    "text": "plan-body-first-range-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "tracker-body-pinned-continuation",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "tracker-body-pinned-continuation-80x24-no-color-ascii.png",
+    "text": "tracker-body-pinned-continuation-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "basis-body-resize-80x24-no-color-ascii.png",
+    "text": "basis-body-resize-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "basis-body-resize-50x40-no-color-ascii.png",
+    "text": "basis-body-resize-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "basis-body-resize-120x40-no-color-ascii.png",
+    "text": "basis-body-resize-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-baseline-50x40-color-nerd.png",
+    "text": "workspace-baseline-50x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-candidates",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P47-slash-candidates-50x40-color-nerd.png",
+    "text": "P47-slash-candidates-50x40-color-nerd.txt",
+    "cursor": [
+      5,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-adopted",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P47-slash-adopted-50x40-color-nerd.png",
+    "text": "P47-slash-adopted-50x40-color-nerd.txt",
+    "cursor": [
+      10,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-executed-P52-options",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P47-slash-executed-P52-options-50x40-color-nerd.png",
+    "text": "P47-slash-executed-P52-options-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P52-command-directory",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P52-command-directory-50x40-color-nerd.png",
+    "text": "P52-command-directory-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-overview",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-overview-50x40-color-nerd.png",
+    "text": "P51-project-overview-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-pending",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-pending-50x40-color-nerd.png",
+    "text": "P51-project-pending-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-events",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "P51-project-events-50x40-color-nerd.png",
+    "text": "P51-project-events-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "inspector-baseline",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "inspector-baseline-50x40-color-nerd.png",
+    "text": "inspector-baseline-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-root",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "basis-root-50x40-color-nerd.png",
+    "text": "basis-root-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-first-page",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "all-generations-first-page-50x40-color-nerd.png",
+    "text": "all-generations-first-page-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-next-page",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "all-generations-next-page-50x40-color-nerd.png",
+    "text": "all-generations-next-page-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "current-source-directory",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "current-source-directory-50x40-color-nerd.png",
+    "text": "current-source-directory-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "plan-body-first-range",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "plan-body-first-range-50x40-color-nerd.png",
+    "text": "plan-body-first-range-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "tracker-body-pinned-continuation",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "tracker-body-pinned-continuation-50x40-color-nerd.png",
+    "text": "tracker-body-pinned-continuation-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "basis-body-resize-80x24-color-nerd.png",
+    "text": "basis-body-resize-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "basis-body-resize-50x40-color-nerd.png",
+    "text": "basis-body-resize-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "basis-body-resize-120x40-color-nerd.png",
+    "text": "basis-body-resize-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-baseline-50x40-color-ascii.png",
+    "text": "workspace-baseline-50x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-candidates",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P47-slash-candidates-50x40-color-ascii.png",
+    "text": "P47-slash-candidates-50x40-color-ascii.txt",
+    "cursor": [
+      5,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-adopted",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P47-slash-adopted-50x40-color-ascii.png",
+    "text": "P47-slash-adopted-50x40-color-ascii.txt",
+    "cursor": [
+      10,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-executed-P52-options",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P47-slash-executed-P52-options-50x40-color-ascii.png",
+    "text": "P47-slash-executed-P52-options-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P52-command-directory",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P52-command-directory-50x40-color-ascii.png",
+    "text": "P52-command-directory-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-overview",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-overview-50x40-color-ascii.png",
+    "text": "P51-project-overview-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-pending",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-pending-50x40-color-ascii.png",
+    "text": "P51-project-pending-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-events",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "P51-project-events-50x40-color-ascii.png",
+    "text": "P51-project-events-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "inspector-baseline",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "inspector-baseline-50x40-color-ascii.png",
+    "text": "inspector-baseline-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-root",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "basis-root-50x40-color-ascii.png",
+    "text": "basis-root-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-first-page",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "all-generations-first-page-50x40-color-ascii.png",
+    "text": "all-generations-first-page-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-next-page",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "all-generations-next-page-50x40-color-ascii.png",
+    "text": "all-generations-next-page-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "current-source-directory",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "current-source-directory-50x40-color-ascii.png",
+    "text": "current-source-directory-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "plan-body-first-range",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "plan-body-first-range-50x40-color-ascii.png",
+    "text": "plan-body-first-range-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "tracker-body-pinned-continuation",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "tracker-body-pinned-continuation-50x40-color-ascii.png",
+    "text": "tracker-body-pinned-continuation-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "basis-body-resize-80x24-color-ascii.png",
+    "text": "basis-body-resize-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "basis-body-resize-50x40-color-ascii.png",
+    "text": "basis-body-resize-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "basis-body-resize-120x40-color-ascii.png",
+    "text": "basis-body-resize-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-baseline-50x40-no-color-nerd.png",
+    "text": "workspace-baseline-50x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-candidates",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P47-slash-candidates-50x40-no-color-nerd.png",
+    "text": "P47-slash-candidates-50x40-no-color-nerd.txt",
+    "cursor": [
+      5,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-adopted",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P47-slash-adopted-50x40-no-color-nerd.png",
+    "text": "P47-slash-adopted-50x40-no-color-nerd.txt",
+    "cursor": [
+      10,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-executed-P52-options",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P47-slash-executed-P52-options-50x40-no-color-nerd.png",
+    "text": "P47-slash-executed-P52-options-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P52-command-directory",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P52-command-directory-50x40-no-color-nerd.png",
+    "text": "P52-command-directory-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-overview",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-overview-50x40-no-color-nerd.png",
+    "text": "P51-project-overview-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-pending",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-pending-50x40-no-color-nerd.png",
+    "text": "P51-project-pending-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-events",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "P51-project-events-50x40-no-color-nerd.png",
+    "text": "P51-project-events-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "inspector-baseline",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "inspector-baseline-50x40-no-color-nerd.png",
+    "text": "inspector-baseline-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-root",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "basis-root-50x40-no-color-nerd.png",
+    "text": "basis-root-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-first-page",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "all-generations-first-page-50x40-no-color-nerd.png",
+    "text": "all-generations-first-page-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-next-page",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "all-generations-next-page-50x40-no-color-nerd.png",
+    "text": "all-generations-next-page-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "current-source-directory",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "current-source-directory-50x40-no-color-nerd.png",
+    "text": "current-source-directory-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "plan-body-first-range",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "plan-body-first-range-50x40-no-color-nerd.png",
+    "text": "plan-body-first-range-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "tracker-body-pinned-continuation",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "tracker-body-pinned-continuation-50x40-no-color-nerd.png",
+    "text": "tracker-body-pinned-continuation-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "basis-body-resize-80x24-no-color-nerd.png",
+    "text": "basis-body-resize-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "basis-body-resize-50x40-no-color-nerd.png",
+    "text": "basis-body-resize-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "basis-body-resize-120x40-no-color-nerd.png",
+    "text": "basis-body-resize-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "workspace-baseline",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-baseline-50x40-no-color-ascii.png",
+    "text": "workspace-baseline-50x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-candidates",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P47-slash-candidates-50x40-no-color-ascii.png",
+    "text": "P47-slash-candidates-50x40-no-color-ascii.txt",
+    "cursor": [
+      5,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-adopted",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P47-slash-adopted-50x40-no-color-ascii.png",
+    "text": "P47-slash-adopted-50x40-no-color-ascii.txt",
+    "cursor": [
+      10,
+      36
+    ]
+  },
+  {
+    "label": "P47-slash-executed-P52-options",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P47-slash-executed-P52-options-50x40-no-color-ascii.png",
+    "text": "P47-slash-executed-P52-options-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P52-command-directory",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P52-command-directory-50x40-no-color-ascii.png",
+    "text": "P52-command-directory-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-overview",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-overview-50x40-no-color-ascii.png",
+    "text": "P51-project-overview-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-pending",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-pending-50x40-no-color-ascii.png",
+    "text": "P51-project-pending-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "P51-project-events",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "P51-project-events-50x40-no-color-ascii.png",
+    "text": "P51-project-events-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "inspector-baseline",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "inspector-baseline-50x40-no-color-ascii.png",
+    "text": "inspector-baseline-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-root",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "basis-root-50x40-no-color-ascii.png",
+    "text": "basis-root-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-first-page",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "all-generations-first-page-50x40-no-color-ascii.png",
+    "text": "all-generations-first-page-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "all-generations-next-page",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "all-generations-next-page-50x40-no-color-ascii.png",
+    "text": "all-generations-next-page-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "current-source-directory",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "current-source-directory-50x40-no-color-ascii.png",
+    "text": "current-source-directory-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "plan-body-first-range",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "plan-body-first-range-50x40-no-color-ascii.png",
+    "text": "plan-body-first-range-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "tracker-body-pinned-continuation",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "tracker-body-pinned-continuation-50x40-no-color-ascii.png",
+    "text": "tracker-body-pinned-continuation-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "basis-body-resize-80x24-no-color-ascii.png",
+    "text": "basis-body-resize-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "basis-body-resize-50x40-no-color-ascii.png",
+    "text": "basis-body-resize-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "label": "basis-body-resize",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "basis-body-resize-120x40-no-color-ascii.png",
+    "text": "basis-body-resize-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  }
+]

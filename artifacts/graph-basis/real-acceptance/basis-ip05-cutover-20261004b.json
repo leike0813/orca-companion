@@ -1,0 +1,231 @@
+{
+  "observedAt": "2026-10-04T12:20:56.159Z",
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-ip05-cutover-20261004b",
+  "identity": "term_dc1f1d09-f914-4647-968f-7d613969c644",
+  "coordinationScopeId": "ip05-ip05-cutover-20261004b-scope",
+  "acceptanceModel": "gpt-6-luna",
+  "purpose": "read-only production GraphBasisPort on retained real execution facts",
+  "versions": [
+    {
+      "graphId": "ip05-ip05-cutover-20261004b-scope#g2",
+      "generation": 2,
+      "version": 1,
+      "recordKind": "initial",
+      "parentVersion": null,
+      "patchId": null,
+      "mapRevision": 0,
+      "planRevision": 1,
+      "orcaRunId": "run_2c195b3312b0",
+      "recordedAt": 1791113433621,
+      "generationStatus": "active",
+      "current": true,
+      "packages": [
+        "ip05-ip05-cutover-20261004b-scope#g2:graph-basis-candidate"
+      ],
+      "retiredWorkPackageIds": [],
+      "historicalRuntimeOverlay": false
+    },
+    {
+      "graphId": "ip05-ip05-cutover-20261004b-scope#g1",
+      "generation": 1,
+      "version": 1,
+      "recordKind": "initial",
+      "parentVersion": null,
+      "patchId": null,
+      "mapRevision": 0,
+      "planRevision": 1,
+      "orcaRunId": "run_614647aab5d0",
+      "recordedAt": 1791113397500,
+      "generationStatus": "frozen",
+      "current": false,
+      "packages": [
+        "ip05-ip05-cutover-20261004b-scope#g1:notes-basics",
+        "ip05-ip05-cutover-20261004b-scope#g1:readme-banner"
+      ],
+      "retiredWorkPackageIds": [],
+      "historicalRuntimeOverlay": false
+    }
+  ],
+  "sources": [
+    {
+      "graph": {
+        "graphId": "ip05-ip05-cutover-20261004b-scope#g2",
+        "generation": 2,
+        "version": 1
+      },
+      "label": "原始 Implementation Plan",
+      "ref": {
+        "kind": "initial_plan",
+        "graph": {
+          "graphId": "ip05-ip05-cutover-20261004b-scope#g2",
+          "generation": 2,
+          "version": 1
+        }
+      },
+      "unavailable": null,
+      "ranges": 1,
+      "byteLength": 254,
+      "sourceVersion": "{\"kind\":\"initial_plan\",\"graph\":{\"graphId\":\"ip05-ip05-cutover-20261004b-scope#g2\",\"generation\":2,\"version\":1}}",
+      "outcome": {
+        "kind": "read",
+        "end": 254,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-cutover-20261004b-scope#g2",
+        "generation": 2,
+        "version": 1
+      },
+      "label": "所选版本 Accepted Graph Patch",
+      "ref": null,
+      "unavailable": "初始版本没有图补丁",
+      "ranges": 0,
+      "byteLength": null,
+      "sourceVersion": null
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-cutover-20261004b-scope#g2",
+        "generation": 2,
+        "version": 1
+      },
+      "label": "批准时规划来源正文",
+      "ref": null,
+      "unavailable": "tracker 未提供该时刻的历史正文",
+      "ranges": 0,
+      "byteLength": null,
+      "sourceVersion": null
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-cutover-20261004b-scope#g2",
+        "generation": 2,
+        "version": 1
+      },
+      "label": "批准授权 · term_dc1f1d09-f914-4647-968f-7d613969c644:auth-cutover-2 v1 · 批准图 v1",
+      "ref": {
+        "kind": "authorization",
+        "authorizationId": "term_dc1f1d09-f914-4647-968f-7d613969c644:auth-cutover-2",
+        "authorizationVersion": 1
+      },
+      "unavailable": null,
+      "ranges": 4,
+      "byteLength": 3502,
+      "sourceVersion": "{\"kind\":\"authorization\",\"authorizationId\":\"term_dc1f1d09-f914-4647-968f-7d613969c644:auth-cutover-2\",\"authorizationVersion\":1}",
+      "outcome": {
+        "kind": "read",
+        "end": 3502,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-cutover-20261004b-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "原始 Implementation Plan",
+      "ref": {
+        "kind": "initial_plan",
+        "graph": {
+          "graphId": "ip05-ip05-cutover-20261004b-scope#g1",
+          "generation": 1,
+          "version": 1
+        }
+      },
+      "unavailable": null,
+      "ranges": 1,
+      "byteLength": 358,
+      "sourceVersion": "{\"kind\":\"initial_plan\",\"graph\":{\"graphId\":\"ip05-ip05-cutover-20261004b-scope#g1\",\"generation\":1,\"version\":1}}",
+      "outcome": {
+        "kind": "read",
+        "end": 358,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-cutover-20261004b-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "所选版本 Accepted Graph Patch",
+      "ref": null,
+      "unavailable": "初始版本没有图补丁",
+      "ranges": 0,
+      "byteLength": null,
+      "sourceVersion": null
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-cutover-20261004b-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "批准时规划来源正文",
+      "ref": null,
+      "unavailable": "tracker 未提供该时刻的历史正文",
+      "ranges": 0,
+      "byteLength": null,
+      "sourceVersion": null
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-cutover-20261004b-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "原始 Implementation Plan",
+      "ref": {
+        "kind": "initial_plan",
+        "graph": {
+          "graphId": "ip05-ip05-cutover-20261004b-scope#g1",
+          "generation": 1,
+          "version": 1
+        }
+      },
+      "unavailable": null,
+      "ranges": 1,
+      "byteLength": 358,
+      "sourceVersion": "{\"kind\":\"initial_plan\",\"graph\":{\"graphId\":\"ip05-ip05-cutover-20261004b-scope#g1\",\"generation\":1,\"version\":1}}",
+      "outcome": {
+        "kind": "read",
+        "end": 358,
+        "complete": true
+      }
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-cutover-20261004b-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "所选版本 Accepted Graph Patch",
+      "ref": null,
+      "unavailable": "初始版本没有图补丁",
+      "ranges": 0,
+      "byteLength": null,
+      "sourceVersion": null
+    },
+    {
+      "graph": {
+        "graphId": "ip05-ip05-cutover-20261004b-scope#g1",
+        "generation": 1,
+        "version": 1
+      },
+      "label": "批准时规划来源正文",
+      "ref": null,
+      "unavailable": "tracker 未提供该时刻的历史正文",
+      "ranges": 0,
+      "byteLength": null,
+      "sourceVersion": null
+    }
+  ],
+  "worktrees": [],
+  "scopeRevisionBefore": 18,
+  "coordinatorSessionId": "ip05-ip05-cutover-20261004b-scope-session",
+  "scopeRevisionAfter": 18,
+  "scopeRevisionUnchanged": true
+}

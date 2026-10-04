@@ -282,7 +282,8 @@ export function nodeVisible(state: WorkPackageExecutionState, filter: ExecutionF
  *
  * 节点位置直接用**编译顺序的索引**：状态变化不改变 `position`，`hidden` 只表达过滤结果。调用方没有
  * 提供该 GraphVersion 记录（例如记录不可读）时返回 `null`，界面显示 blocker，而不是展示一张看起来
- * 完整但内容为空的白图。
+ * 完整但内容为空的白图。快照里的 `graphTopologies` 只含 Scope 当前图这一条（IP-03 / D-03）；历史
+ * 代际与旧版本由 `GraphBasisPort` 独立读取，不借当前运行事实，也不进入这里的投影。
  */
 export function projectGraphView(
   snapshot: ControllerSnapshot,

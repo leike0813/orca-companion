@@ -1,0 +1,12 @@
+{
+  "args": [
+    "project",
+    "setup-delete",
+    "--setup",
+    "3afbdca9-b311-4fdd-b7a3-6b77945b59d1",
+    "--json"
+  ],
+  "status": 0,
+  "ok": true,
+  "alreadyRemovedByEarlierPublicCall": true
+}

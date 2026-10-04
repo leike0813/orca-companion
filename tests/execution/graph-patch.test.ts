@@ -29,6 +29,7 @@ import type { CoordinationWriter } from '../../src/application/ports/branch-coor
 import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
 import { graphIdFor } from '../../src/application/planning/graph-generation.js';
 import { appendAcceptedRevision, loadCurrentGraph, recordInitialGraph } from '../../src/application/planning/graph-history.js';
+import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 import {
   DEFAULT_EXECUTION_LIMITS,
   budgetFromLimits,
@@ -103,6 +104,7 @@ beforeEach(() => {
     coordinationScopeId: SCOPE,
     writer,
     graph: initialGraph(),
+    initialPlan: implementationPlanFor(initialGraph(), PLAN_REVISION),
     mapRevision: MAP_REVISION,
     planRevision: PLAN_REVISION,
     orcaRunId: RUN_ID,

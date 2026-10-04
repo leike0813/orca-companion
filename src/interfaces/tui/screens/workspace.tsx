@@ -20,6 +20,7 @@ import { ProjectPanel } from '../components/project-panel.js';
 import { DialogFrame } from '../components/selection-list.js';
 import { tuiColors } from '../theme.js';
 import { GraphInspector } from '../components/graph-inspector.js';
+import { GraphBasisView, type BasisViewModel } from '../components/graph-basis-view.js';
 import { HandoffReview } from '../components/handoff-review.js';
 import {
   InputRecordManager,
@@ -99,6 +100,10 @@ export type WorkspaceProps = {
   readonly projectDetailsPage?: ProjectDetailPage | null;
   readonly projectDetailsKey?: string | null;
   readonly projectDetailsNotice?: string | null;
+  /** 依据下钻的只读投影；`undefined` 表示宿主未装配该端口。 */
+  readonly basisView?: BasisViewModel;
+  /** 图依据读取端口是否已装配；缺省即未装配，界面据此隐藏无入口的提示。 */
+  readonly graphBasisAvailable?: boolean;
   /** 正在查看的角色；由容器按当前 overlay 解析，组件不自己挑。 */
   readonly modelRole?: ModelRoleView | null;
   readonly paletteSelection: number;
@@ -183,7 +188,9 @@ export function Workspace(props: WorkspaceProps) {
   const panel=props.answerPanel;
   const modelRef=view.sessions.find(s=>s.coordinatorSessionId===selected)?.coordinatorModelConfigurationRef;
   const model=props.modelCatalog.options.find(o=>o.configurationRef===modelRef)?.model??null;
-  const project=<ProjectPanel view={view} events={props.events} panel={ui.projectPanel} width={projectWidth} height={bodyRows}
+  const project=ui.basis!==null&&props.basisView!==undefined
+    ? <GraphBasisView view={props.basisView} width={projectWidth} rows={bodyRows} iconMode={ui.iconMode} available={props.graphBasisAvailable!==false}/>
+    : <ProjectPanel view={view} events={props.events} panel={ui.projectPanel} width={projectWidth} height={bodyRows}
     {...(props.projectDetailsPage===undefined?{}:{details:props.projectDetailsPage})}
     {...(props.projectDetailsKey===undefined?{}:{detailObjectKey:props.projectDetailsKey})}
     {...(props.projectDetailsNotice===undefined?{}:{detailNotice:props.projectDetailsNotice})}/>;
@@ -244,6 +251,19 @@ function Overlay(props: {
         />
       );
     case 'graph-inspector':
+      if (parent.ui.basis !== null && parent.basisView !== undefined) {
+        // 行数必须等于这一帧真正拿到的正文高度：容器是居中布局，超出的部分会从上下两端被裁掉。
+        const layout = workspaceLayout(parent.viewModel, parent.ui, parent.terminalWidth, parent.terminalHeight ?? 24);
+        return (
+          <GraphBasisView
+            view={parent.basisView}
+            width={parent.terminalWidth}
+            rows={Math.max(8, layout.bodyRows)}
+            iconMode={parent.ui.iconMode}
+            available={parent.graphBasisAvailable !== false}
+          />
+        );
+      }
       return (
         <GraphInspector
           graph={parent.viewModel.graph}
@@ -253,6 +273,7 @@ function Overlay(props: {
           }
           narrow={props.narrow}
           view={parent.viewModel} rows={Math.max(12,(parent.terminalHeight??24)-2)} detail={parent.ui.inspectorDetail} tab={parent.ui.inspectorTab} scroll={parent.ui.inspectorScroll} relations={parent.ui.inspectorRelations} relationIndex={parent.ui.relationIndex} iconMode={parent.ui.iconMode}
+          basisEntry={parent.graphBasisAvailable !== false}
           availableWidth={parent.terminalWidth}
         />
       );

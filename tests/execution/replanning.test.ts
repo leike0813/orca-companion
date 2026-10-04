@@ -14,6 +14,7 @@ import type {
   PlanningCycleId,
 } from '../../src/application/dto/identity.js';
 import { recordInitialGraph } from '../../src/application/planning/graph-history.js';
+import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 import { recordApproval } from '../../src/application/planning/authorization-service.js';
 import {
   classifyGenerationEvent,
@@ -279,6 +280,12 @@ function recordCandidateGeneration(options: { runId?: string; workPackageId?: st
       concurrencyLimit: 1,
       workPackages: [executionWorkPackage(options.workPackageId ?? 'wp-new')],
     },
+    initialPlan: implementationPlanFor({
+      graphId: CANDIDATE_GRAPH,
+      generation: 2 as GraphGeneration,
+      concurrencyLimit: 1,
+      workPackages: [executionWorkPackage(options.workPackageId ?? 'wp-new')],
+    }, EXECUTION_PLAN_REVISION),
     mapRevision: EXECUTION_MAP_REVISION,
     planRevision: EXECUTION_PLAN_REVISION,
     orcaRunId: runId,

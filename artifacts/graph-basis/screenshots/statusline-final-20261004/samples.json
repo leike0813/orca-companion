@@ -1,0 +1,1858 @@
+[
+  {
+    "name": "workspace",
+    "phase": "blocked",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-blocked-120x40-color-nerd.png",
+    "text": "workspace-blocked-120x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-planning-120x40-color-nerd.png",
+    "text": "workspace-planning-120x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "statusline-settings",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "statusline-settings-planning-120x40-color-nerd.png",
+    "text": "statusline-settings-planning-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-budget",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "project-budget-planning-120x40-color-nerd.png",
+    "text": "project-budget-planning-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-identity",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "project-identity-planning-120x40-color-nerd.png",
+    "text": "project-identity-planning-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "execution",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-execution-120x40-color-nerd.png",
+    "text": "workspace-execution-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "answer-panel",
+    "phase": "answer",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "answer-panel-answer-120x40-color-nerd.png",
+    "text": "answer-panel-answer-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "idle",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-idle-120x40-color-nerd.png",
+    "text": "workspace-idle-120x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "blocked",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-blocked-120x40-color-ascii.png",
+    "text": "workspace-blocked-120x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-planning-120x40-color-ascii.png",
+    "text": "workspace-planning-120x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "statusline-settings",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "statusline-settings-planning-120x40-color-ascii.png",
+    "text": "statusline-settings-planning-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-budget",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "project-budget-planning-120x40-color-ascii.png",
+    "text": "project-budget-planning-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-identity",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "project-identity-planning-120x40-color-ascii.png",
+    "text": "project-identity-planning-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "execution",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-execution-120x40-color-ascii.png",
+    "text": "workspace-execution-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "answer-panel",
+    "phase": "answer",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "answer-panel-answer-120x40-color-ascii.png",
+    "text": "answer-panel-answer-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "idle",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-idle-120x40-color-ascii.png",
+    "text": "workspace-idle-120x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "blocked",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-blocked-120x40-no-color-nerd.png",
+    "text": "workspace-blocked-120x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-planning-120x40-no-color-nerd.png",
+    "text": "workspace-planning-120x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "statusline-settings",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "statusline-settings-planning-120x40-no-color-nerd.png",
+    "text": "statusline-settings-planning-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-budget",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "project-budget-planning-120x40-no-color-nerd.png",
+    "text": "project-budget-planning-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-identity",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "project-identity-planning-120x40-no-color-nerd.png",
+    "text": "project-identity-planning-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "execution",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-execution-120x40-no-color-nerd.png",
+    "text": "workspace-execution-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "answer-panel",
+    "phase": "answer",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "answer-panel-answer-120x40-no-color-nerd.png",
+    "text": "answer-panel-answer-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "idle",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-idle-120x40-no-color-nerd.png",
+    "text": "workspace-idle-120x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "blocked",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-blocked-120x40-no-color-ascii.png",
+    "text": "workspace-blocked-120x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-planning-120x40-no-color-ascii.png",
+    "text": "workspace-planning-120x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "statusline-settings",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "statusline-settings-planning-120x40-no-color-ascii.png",
+    "text": "statusline-settings-planning-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-budget",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "project-budget-planning-120x40-no-color-ascii.png",
+    "text": "project-budget-planning-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-identity",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "project-identity-planning-120x40-no-color-ascii.png",
+    "text": "project-identity-planning-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "execution",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-execution-120x40-no-color-ascii.png",
+    "text": "workspace-execution-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "answer-panel",
+    "phase": "answer",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "answer-panel-answer-120x40-no-color-ascii.png",
+    "text": "answer-panel-answer-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "idle",
+    "size": [
+      120,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-idle-120x40-no-color-ascii.png",
+    "text": "workspace-idle-120x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "blocked",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-blocked-80x24-color-nerd.png",
+    "text": "workspace-blocked-80x24-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-planning-80x24-color-nerd.png",
+    "text": "workspace-planning-80x24-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "statusline-settings",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "statusline-settings-planning-80x24-color-nerd.png",
+    "text": "statusline-settings-planning-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "project-budget",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "project-budget-planning-80x24-color-nerd.png",
+    "text": "project-budget-planning-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "project-identity",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "project-identity-planning-80x24-color-nerd.png",
+    "text": "project-identity-planning-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "execution",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-execution-80x24-color-nerd.png",
+    "text": "workspace-execution-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "answer-panel",
+    "phase": "answer",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "answer-panel-answer-80x24-color-nerd.png",
+    "text": "answer-panel-answer-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "idle",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-idle-80x24-color-nerd.png",
+    "text": "workspace-idle-80x24-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "blocked",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-blocked-80x24-color-ascii.png",
+    "text": "workspace-blocked-80x24-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-planning-80x24-color-ascii.png",
+    "text": "workspace-planning-80x24-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "statusline-settings",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "statusline-settings-planning-80x24-color-ascii.png",
+    "text": "statusline-settings-planning-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "project-budget",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "project-budget-planning-80x24-color-ascii.png",
+    "text": "project-budget-planning-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "project-identity",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "project-identity-planning-80x24-color-ascii.png",
+    "text": "project-identity-planning-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "execution",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-execution-80x24-color-ascii.png",
+    "text": "workspace-execution-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "answer-panel",
+    "phase": "answer",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "answer-panel-answer-80x24-color-ascii.png",
+    "text": "answer-panel-answer-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "idle",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-idle-80x24-color-ascii.png",
+    "text": "workspace-idle-80x24-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "blocked",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-blocked-80x24-no-color-nerd.png",
+    "text": "workspace-blocked-80x24-no-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-planning-80x24-no-color-nerd.png",
+    "text": "workspace-planning-80x24-no-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "statusline-settings",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "statusline-settings-planning-80x24-no-color-nerd.png",
+    "text": "statusline-settings-planning-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "project-budget",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "project-budget-planning-80x24-no-color-nerd.png",
+    "text": "project-budget-planning-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "project-identity",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "project-identity-planning-80x24-no-color-nerd.png",
+    "text": "project-identity-planning-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "execution",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-execution-80x24-no-color-nerd.png",
+    "text": "workspace-execution-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "answer-panel",
+    "phase": "answer",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "answer-panel-answer-80x24-no-color-nerd.png",
+    "text": "answer-panel-answer-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "idle",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-idle-80x24-no-color-nerd.png",
+    "text": "workspace-idle-80x24-no-color-nerd.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "blocked",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-blocked-80x24-no-color-ascii.png",
+    "text": "workspace-blocked-80x24-no-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-planning-80x24-no-color-ascii.png",
+    "text": "workspace-planning-80x24-no-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "statusline-settings",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "statusline-settings-planning-80x24-no-color-ascii.png",
+    "text": "statusline-settings-planning-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "project-budget",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "project-budget-planning-80x24-no-color-ascii.png",
+    "text": "project-budget-planning-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "project-identity",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "project-identity-planning-80x24-no-color-ascii.png",
+    "text": "project-identity-planning-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "execution",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-execution-80x24-no-color-ascii.png",
+    "text": "workspace-execution-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "answer-panel",
+    "phase": "answer",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "answer-panel-answer-80x24-no-color-ascii.png",
+    "text": "answer-panel-answer-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "idle",
+    "size": [
+      80,
+      24
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-idle-80x24-no-color-ascii.png",
+    "text": "workspace-idle-80x24-no-color-ascii.txt",
+    "cursor": [
+      2,
+      20
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "blocked",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-blocked-50x40-color-nerd.png",
+    "text": "workspace-blocked-50x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-planning-50x40-color-nerd.png",
+    "text": "workspace-planning-50x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "statusline-settings",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "statusline-settings-planning-50x40-color-nerd.png",
+    "text": "statusline-settings-planning-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-budget",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "project-budget-planning-50x40-color-nerd.png",
+    "text": "project-budget-planning-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-identity",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "project-identity-planning-50x40-color-nerd.png",
+    "text": "project-identity-planning-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "execution",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-execution-50x40-color-nerd.png",
+    "text": "workspace-execution-50x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "answer-panel",
+    "phase": "answer",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "answer-panel-answer-50x40-color-nerd.png",
+    "text": "answer-panel-answer-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "idle",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "workspace-idle-50x40-color-nerd.png",
+    "text": "workspace-idle-50x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "blocked",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-blocked-50x40-color-ascii.png",
+    "text": "workspace-blocked-50x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-planning-50x40-color-ascii.png",
+    "text": "workspace-planning-50x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "statusline-settings",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "statusline-settings-planning-50x40-color-ascii.png",
+    "text": "statusline-settings-planning-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-budget",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "project-budget-planning-50x40-color-ascii.png",
+    "text": "project-budget-planning-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-identity",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "project-identity-planning-50x40-color-ascii.png",
+    "text": "project-identity-planning-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "execution",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-execution-50x40-color-ascii.png",
+    "text": "workspace-execution-50x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "answer-panel",
+    "phase": "answer",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "answer-panel-answer-50x40-color-ascii.png",
+    "text": "answer-panel-answer-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "idle",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "workspace-idle-50x40-color-ascii.png",
+    "text": "workspace-idle-50x40-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "blocked",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-blocked-50x40-no-color-nerd.png",
+    "text": "workspace-blocked-50x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-planning-50x40-no-color-nerd.png",
+    "text": "workspace-planning-50x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "statusline-settings",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "statusline-settings-planning-50x40-no-color-nerd.png",
+    "text": "statusline-settings-planning-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-budget",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "project-budget-planning-50x40-no-color-nerd.png",
+    "text": "project-budget-planning-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-identity",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "project-identity-planning-50x40-no-color-nerd.png",
+    "text": "project-identity-planning-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "execution",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-execution-50x40-no-color-nerd.png",
+    "text": "workspace-execution-50x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "answer-panel",
+    "phase": "answer",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "answer-panel-answer-50x40-no-color-nerd.png",
+    "text": "answer-panel-answer-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "idle",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "nerd",
+    "png": "workspace-idle-50x40-no-color-nerd.png",
+    "text": "workspace-idle-50x40-no-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "blocked",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-blocked-50x40-no-color-ascii.png",
+    "text": "workspace-blocked-50x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-planning-50x40-no-color-ascii.png",
+    "text": "workspace-planning-50x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "statusline-settings",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "statusline-settings-planning-50x40-no-color-ascii.png",
+    "text": "statusline-settings-planning-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-budget",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "project-budget-planning-50x40-no-color-ascii.png",
+    "text": "project-budget-planning-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-identity",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "project-identity-planning-50x40-no-color-ascii.png",
+    "text": "project-identity-planning-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "execution",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-execution-50x40-no-color-ascii.png",
+    "text": "workspace-execution-50x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "answer-panel",
+    "phase": "answer",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "answer-panel-answer-50x40-no-color-ascii.png",
+    "text": "answer-panel-answer-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "workspace",
+    "phase": "idle",
+    "size": [
+      50,
+      40
+    ],
+    "color": "no-color",
+    "icons": "ascii",
+    "png": "workspace-idle-50x40-no-color-ascii.png",
+    "text": "workspace-idle-50x40-no-color-ascii.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  },
+  {
+    "name": "cjk-cursor",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "cjk-cursor-planning-120x40-color-nerd.png",
+    "text": "cjk-cursor-planning-120x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "project-overview",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "project-overview-planning-120x40-color-nerd.png",
+    "text": "project-overview-planning-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-budget",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "project-budget-planning-120x40-color-nerd.png",
+    "text": "project-budget-planning-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-budget-resize",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "project-budget-resize-planning-80x24-color-nerd.png",
+    "text": "project-budget-resize-planning-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "name": "project-budget-resize",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "project-budget-resize-planning-50x40-color-nerd.png",
+    "text": "project-budget-resize-planning-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-budget-resize",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "project-budget-resize-planning-120x40-color-nerd.png",
+    "text": "project-budget-resize-planning-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "project-identity",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "project-identity-planning-120x40-color-nerd.png",
+    "text": "project-identity-planning-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "graph-inspector",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "graph-inspector-planning-120x40-color-nerd.png",
+    "text": "graph-inspector-planning-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "statusline-editor",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "statusline-editor-planning-120x40-color-nerd.png",
+    "text": "statusline-editor-planning-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "statusline-draft",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "statusline-draft-planning-120x40-color-nerd.png",
+    "text": "statusline-draft-planning-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "statusline-defaults-draft",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "statusline-defaults-draft-planning-120x40-color-nerd.png",
+    "text": "statusline-defaults-draft-planning-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "statusline-saved-returned-draft",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "statusline-saved-returned-draft-planning-120x40-color-nerd.png",
+    "text": "statusline-saved-returned-draft-planning-120x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "name": "slash-above-draft-return",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "slash-above-draft-return-planning-120x40-color-nerd.png",
+    "text": "slash-above-draft-return-planning-120x40-color-nerd.txt",
+    "cursor": [
+      3,
+      36
+    ]
+  },
+  {
+    "name": "returned-draft-resize",
+    "phase": "planning",
+    "size": [
+      80,
+      24
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "returned-draft-resize-planning-80x24-color-nerd.png",
+    "text": "returned-draft-resize-planning-80x24-color-nerd.txt",
+    "cursor": [
+      8,
+      20
+    ]
+  },
+  {
+    "name": "returned-draft-resize",
+    "phase": "planning",
+    "size": [
+      50,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "returned-draft-resize-planning-50x40-color-nerd.png",
+    "text": "returned-draft-resize-planning-50x40-color-nerd.txt",
+    "cursor": [
+      8,
+      36
+    ]
+  },
+  {
+    "name": "returned-draft-resize",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "returned-draft-resize-planning-120x40-color-nerd.png",
+    "text": "returned-draft-resize-planning-120x40-color-nerd.txt",
+    "cursor": [
+      8,
+      36
+    ]
+  },
+  {
+    "name": "statusline-failed-save-draft-retained",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "statusline-failed-save-draft-retained-planning-120x40-color-nerd.png",
+    "text": "statusline-failed-save-draft-retained-planning-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "icon-failed-save-retained",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "icon-failed-save-retained-planning-120x40-color-ascii.png",
+    "text": "icon-failed-save-retained-planning-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "icon-saved",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "ascii",
+    "png": "icon-saved-planning-120x40-color-ascii.png",
+    "text": "icon-saved-planning-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "name": "icon-restart-env-override",
+    "phase": "planning",
+    "size": [
+      120,
+      40
+    ],
+    "color": "color",
+    "icons": "nerd",
+    "png": "icon-restart-env-override-planning-120x40-color-nerd.png",
+    "text": "icon-restart-env-override-planning-120x40-color-nerd.txt",
+    "cursor": [
+      2,
+      36
+    ]
+  }
+]

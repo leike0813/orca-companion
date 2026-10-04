@@ -1321,6 +1321,7 @@ test('接受图修订后，审批时刻的 GraphVersion 仍在追加链上，角
       takesOver: [],
       revisionPendingWorkPackageIds: [],
     },
+    initialPlan: null,
   });
   expect(revised.kind).toBe('committed');
   const scope = harness.store.query({ kind: 'scope', coordinationScopeId: harness.scopeId });

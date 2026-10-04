@@ -326,6 +326,8 @@ test('只读探针与正式启动共用同一个模型配置生成器，且不�
   for (const call of calls) {
     // 探针与正式启动逐字共享同一组 provider/model/effort/options 参数。
     expect(call.args.join(' ')).toContain(expected);
+    expect(call.args).not.toContain('--model');
+    expect(call.args).toContain(`model=${JSON.stringify(modelConfiguration.model)}`);
     expect(call.args.join(' ')).toContain('model_reasoning_effort="high"');
   }
   // 探针不调用模型，因此不接受任何凭据注入路径。

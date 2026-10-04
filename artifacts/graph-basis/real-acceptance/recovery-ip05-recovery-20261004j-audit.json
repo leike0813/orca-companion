@@ -1,0 +1,208 @@
+{
+  "observedAt": "2026-10-04T13:09:05.266Z",
+  "fixture": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004j",
+  "coordinationScopeId": "ip05-ip05-recovery-20261004j-scope",
+  "runId": "run_9b5d8a9bd4c0",
+  "readOnly": true,
+  "sources": [
+    "BranchCoordinationStore.query production port (readOnly)",
+    "ExecutionBackend.query worker-show public operation",
+    "user-provided project-details artifact for the PTY pagination diagnosis"
+  ],
+  "recoveryCount": 2,
+  "sameBusinessAttempt": true,
+  "attemptBudgets": [
+    {
+      "businessAttemptId": "attempt:ip05-ip05-recovery-20261004j-scope:ip05-ip05-recovery-20261004j-scope%23g1:1:ip05-ip05-recovery-20261004j-scope%23g1%3Anotes-basics:implementation:4064813501694813:1",
+      "recoveryCount": 2,
+      "consumed": 1,
+      "limit": 1,
+      "remaining": 0,
+      "withinLimit": true
+    }
+  ],
+  "recoveries": [
+    {
+      "recovery": {
+        "coordinationScopeId": "ip05-ip05-recovery-20261004j-scope",
+        "recoveryId": "recovery:ip05-ip05-recovery-20261004j-scope:segment:ip05-ip05-recovery-20261004j-scope:ctx_f320f1621f0b:attempt%3Aip05-ip05-recovery-20261004j-scope%3Aip05-ip05-recovery-20261004j-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004j-scope%2523g1%253Anotes-basics%3Aimplementation%3A4064813501694813%3A1",
+        "role": "implementation",
+        "workPackageId": "ip05-ip05-recovery-20261004j-scope#g1:notes-basics",
+        "workerTaskId": "worker-task:ip05-ip05-recovery-20261004j-scope:ip05-ip05-recovery-20261004j-scope%23g1:1:ip05-ip05-recovery-20261004j-scope%23g1%3Anotes-basics:implementation:4064813501694813:1",
+        "businessAttemptId": "attempt:ip05-ip05-recovery-20261004j-scope:ip05-ip05-recovery-20261004j-scope%23g1:1:ip05-ip05-recovery-20261004j-scope%23g1%3Anotes-basics:implementation:4064813501694813:1",
+        "sourceSegmentId": "segment:ip05-ip05-recovery-20261004j-scope:ctx_f320f1621f0b:attempt%3Aip05-ip05-recovery-20261004j-scope%3Aip05-ip05-recovery-20261004j-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004j-scope%2523g1%253Anotes-basics%3Aimplementation%3A4064813501694813%3A1",
+        "sourceDispatchId": "ctx_f320f1621f0b",
+        "replacementDispatchId": "ctx_059ef478ef8a",
+        "replacementSegmentId": "segment:recovery:ip05-ip05-recovery-20261004j-scope:segment:ip05-ip05-recovery-20261004j-scope:ctx_f320f1621f0b:attempt%3Aip05-ip05-recovery-20261004j-scope%3Aip05-ip05-recovery-20261004j-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004j-scope%2523g1%253Anotes-basics%3Aimplementation%3A4064813501694813%3A1:replacement",
+        "replacementSessionBindingId": "session-binding:ctx_059ef478ef8a:01a106f8-6e8e-78e1-b029-9f4d5251a654",
+        "supersededSegmentId": null,
+        "status": "recovered",
+        "consumedBudget": 1,
+        "capsuleRef": "recovery-capsule:recovery:ip05-ip05-recovery-20261004j-scope:segment:ip05-ip05-recovery-20261004j-scope:ctx_f320f1621f0b:attempt%3Aip05-ip05-recovery-20261004j-scope%3Aip05-ip05-recovery-20261004j-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004j-scope%2523g1%253Anotes-basics%3Aimplementation%3A4064813501694813%3A1",
+        "prewriteOperationId": "op:recovery:ip05-ip05-recovery-20261004j-scope:segment:ip05-ip05-recovery-20261004j-scope:ctx_f320f1621f0b:attempt%3Aip05-ip05-recovery-20261004j-scope%3Aip05-ip05-recovery-20261004j-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004j-scope%2523g1%253Anotes-basics%3Aimplementation%3A4064813501694813%3A1:replacement-dispatch",
+        "terminalOutcome": "replaced",
+        "blockingReason": null,
+        "createdAt": 1791118219557,
+        "updatedAt": 1791118316348
+      },
+      "sourceSession": {
+        "segmentId": "segment:ip05-ip05-recovery-20261004j-scope:ctx_f320f1621f0b:attempt%3Aip05-ip05-recovery-20261004j-scope%3Aip05-ip05-recovery-20261004j-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004j-scope%2523g1%253Anotes-basics%3Aimplementation%3A4064813501694813%3A1",
+        "dispatchId": "ctx_f320f1621f0b",
+        "sessionBindingId": "session-binding:ctx_f320f1621f0b:01a106f6-c055-7bc3-806c-3ab0c84dd126",
+        "transcriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004j/.git/orca-companion/codex/803487678b09c18903c1/sessions/2026/10/04/rollout-2026-10-04T20-49-56-01a106f6-c055-7bc3-806c-3ab0c84dd126.jsonl",
+        "transcriptReferenceable": true,
+        "verifiable": true
+      },
+      "replacementSession": {
+        "segmentId": "segment:recovery:ip05-ip05-recovery-20261004j-scope:segment:ip05-ip05-recovery-20261004j-scope:ctx_f320f1621f0b:attempt%3Aip05-ip05-recovery-20261004j-scope%3Aip05-ip05-recovery-20261004j-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004j-scope%2523g1%253Anotes-basics%3Aimplementation%3A4064813501694813%3A1:replacement",
+        "dispatchId": "ctx_059ef478ef8a",
+        "sessionBindingId": "session-binding:ctx_059ef478ef8a:01a106f8-6e8e-78e1-b029-9f4d5251a654",
+        "transcriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004j/.git/orca-companion/codex/f629282b28481c25a0bb/sessions/2026/10/04/rollout-2026-10-04T20-51-46-01a106f8-6e8e-78e1-b029-9f4d5251a654.jsonl",
+        "transcriptReferenceable": true,
+        "verifiable": true
+      },
+      "taskBinding": {
+        "orcaTaskId": "task_6644df964906",
+        "dispatchId": "dispatch:ip05-ip05-recovery-20261004j-scope:ip05-ip05-recovery-20261004j-scope%23g1:1:ip05-ip05-recovery-20261004j-scope%23g1%3Anotes-basics:implementation:4064813501694813:1",
+        "attemptId": "attempt:ip05-ip05-recovery-20261004j-scope:ip05-ip05-recovery-20261004j-scope%23g1:1:ip05-ip05-recovery-20261004j-scope%23g1%3Anotes-basics:implementation:4064813501694813:1",
+        "role": "implementation",
+        "authorizationId": "auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757",
+        "authorizationVersion": 1,
+        "workerProfileRef": {
+          "kind": "worker-profile",
+          "id": "profile-implementation"
+        }
+      },
+      "sourceWorker": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_f320f1621f0b",
+          "taskId": "task_6644df964906",
+          "dispatchStatus": "failed",
+          "workerState": "failed",
+          "workerStage": "process_exited",
+          "agentTerminalHandle": "term_c8fa3fac-a75f-42cd-9d0f-42b5013539cd",
+          "observationStatus": "exited",
+          "exactWorker": true
+        }
+      },
+      "replacementWorker": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_059ef478ef8a",
+          "taskId": "task_6644df964906",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_937e3d82-fce7-40ee-9e27-0142918a466e",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "acceptedResults": []
+    },
+    {
+      "recovery": {
+        "coordinationScopeId": "ip05-ip05-recovery-20261004j-scope",
+        "recoveryId": "recovery:ip05-ip05-recovery-20261004j-scope:segment:ip05-ip05-recovery-20261004j-scope:ctx_059ef478ef8a:attempt%3Aip05-ip05-recovery-20261004j-scope%3Aip05-ip05-recovery-20261004j-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004j-scope%2523g1%253Anotes-basics%3Aimplementation%3A4064813501694813%3A1",
+        "role": "implementation",
+        "workPackageId": "ip05-ip05-recovery-20261004j-scope#g1:notes-basics",
+        "workerTaskId": "worker-task:ip05-ip05-recovery-20261004j-scope:ip05-ip05-recovery-20261004j-scope%23g1:1:ip05-ip05-recovery-20261004j-scope%23g1%3Anotes-basics:implementation:4064813501694813:1",
+        "businessAttemptId": "attempt:ip05-ip05-recovery-20261004j-scope:ip05-ip05-recovery-20261004j-scope%23g1:1:ip05-ip05-recovery-20261004j-scope%23g1%3Anotes-basics:implementation:4064813501694813:1",
+        "sourceSegmentId": "segment:ip05-ip05-recovery-20261004j-scope:ctx_059ef478ef8a:attempt%3Aip05-ip05-recovery-20261004j-scope%3Aip05-ip05-recovery-20261004j-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004j-scope%2523g1%253Anotes-basics%3Aimplementation%3A4064813501694813%3A1",
+        "sourceDispatchId": "ctx_059ef478ef8a",
+        "replacementDispatchId": null,
+        "replacementSegmentId": null,
+        "replacementSessionBindingId": null,
+        "supersededSegmentId": null,
+        "status": "pending",
+        "consumedBudget": 0,
+        "capsuleRef": null,
+        "prewriteOperationId": null,
+        "terminalOutcome": null,
+        "blockingReason": "终端仍在已列举主机上存在",
+        "createdAt": 1791118378162,
+        "updatedAt": 1791118378204
+      },
+      "sourceSession": {
+        "segmentId": "segment:ip05-ip05-recovery-20261004j-scope:ctx_059ef478ef8a:attempt%3Aip05-ip05-recovery-20261004j-scope%3Aip05-ip05-recovery-20261004j-scope%2523g1%3A1%3Aip05-ip05-recovery-20261004j-scope%2523g1%253Anotes-basics%3Aimplementation%3A4064813501694813%3A1",
+        "dispatchId": "ctx_059ef478ef8a",
+        "sessionBindingId": "session-binding:ctx_059ef478ef8a:01a106f6-c055-7bc3-806c-3ab0c84dd126",
+        "transcriptRef": "/home/joshua/Workspace/Artifact/orca-companion-ip05-recovery-20261004j/.git/orca-companion/codex/803487678b09c18903c1/sessions/2026/10/04/rollout-2026-10-04T20-49-56-01a106f6-c055-7bc3-806c-3ab0c84dd126.jsonl",
+        "transcriptReferenceable": true,
+        "verifiable": true
+      },
+      "replacementSession": null,
+      "taskBinding": {
+        "orcaTaskId": "task_6644df964906",
+        "dispatchId": "dispatch:ip05-ip05-recovery-20261004j-scope:ip05-ip05-recovery-20261004j-scope%23g1:1:ip05-ip05-recovery-20261004j-scope%23g1%3Anotes-basics:implementation:4064813501694813:1",
+        "attemptId": "attempt:ip05-ip05-recovery-20261004j-scope:ip05-ip05-recovery-20261004j-scope%23g1:1:ip05-ip05-recovery-20261004j-scope%23g1%3Anotes-basics:implementation:4064813501694813:1",
+        "role": "implementation",
+        "authorizationId": "auth:ip05-ip05-recovery-20261004j-scope#g1:e76ebf50e6debf3c1d69656f65b346e50382bc16d17691da534071cfc88a3757",
+        "authorizationVersion": 1,
+        "workerProfileRef": {
+          "kind": "worker-profile",
+          "id": "profile-implementation"
+        }
+      },
+      "sourceWorker": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_059ef478ef8a",
+          "taskId": "task_6644df964906",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_937e3d82-fce7-40ee-9e27-0142918a466e",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "replacementWorker": null,
+      "acceptedResults": []
+    }
+  ],
+  "acceptedResultFinding": {
+    "acceptedResultExistsForRecoveryDispatches": false,
+    "scopeSettlements": [
+      {
+        "deliveryId": "delivery_b4b64bb65001",
+        "runId": "run_9b5d8a9bd4c0",
+        "workerTaskId": "worker-task:ip05-ip05-recovery-20261004j-scope:ip05-ip05-recovery-20261004j-scope%23g1:1:ip05-ip05-recovery-20261004j-scope%23g1%3Anotes-basics:planner:0:1",
+        "dispatchId": "ctx_e23310ca1223",
+        "attemptId": "attempt:ip05-ip05-recovery-20261004j-scope:ip05-ip05-recovery-20261004j-scope%23g1:1:ip05-ip05-recovery-20261004j-scope%23g1%3Anotes-basics:planner:0:1",
+        "role": "planner",
+        "orcaResultRef": "task_92ab61e27025#053d170ab5077",
+        "acceptedAt": 1791118175323
+      }
+    ]
+  },
+  "secondRecoveryFinding": {
+    "status": "pending",
+    "sourceDispatchId": "ctx_059ef478ef8a",
+    "sourceSessionBindingId": "session-binding:ctx_059ef478ef8a:01a106f6-c055-7bc3-806c-3ab0c84dd126",
+    "consumedBudget": 0,
+    "blockingReason": "终端仍在已列举主机上存在",
+    "replacementDispatchId": null,
+    "sourceWorker": {
+      "kind": "accepted",
+      "value": {
+        "dispatchId": "ctx_059ef478ef8a",
+        "taskId": "task_6644df964906",
+        "dispatchStatus": "completed",
+        "workerState": "succeeded",
+        "workerStage": "settled",
+        "agentTerminalHandle": "term_937e3d82-fce7-40ee-9e27-0142918a466e",
+        "observationStatus": "live",
+        "exactWorker": true
+      }
+    },
+    "interpretation": "A new Recovery record is keyed to the replacement Segment as a new source Segment within the same business Attempt. It is pending and blocked before any second replacement dispatch; its consumedBudget is zero. The observed block says the terminal still exists on a listed host."
+  },
+  "ptyPagination": {
+    "priorAttemptFailed": true,
+    "rootCause": "40-column footer clipping hid the full Esc-return text; first-frame loading also raced the reader.",
+    "independentRead": "The user-provided read-project-details probe completed all 7 pages and exposed the complete Recovery fields; this audit independently reads the production store ports.",
+    "obscuresPersistedRecoveryConclusion": false
+  }
+}

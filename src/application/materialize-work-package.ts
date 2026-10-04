@@ -216,7 +216,7 @@ function readMaterializationBinding(input: MaterializeWorkPackageInput): Materia
       failure: { code: 'invalid_state', message: '物化绑定查询返回了错误的结果种类' },
     };
   }
-  const legacy = result.bindings.find((entry) => entry.role === null);
+  const legacy = result.bindings.find((entry) => entry.identity === 'legacy');
   if (legacy !== undefined) {
     return {
       kind: 'failed',
