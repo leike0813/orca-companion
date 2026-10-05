@@ -9,6 +9,8 @@
  * 纯函数：不读时钟、不执行 Git、不碰存储。真正的副作用由用例按固定顺序发起。
  */
 
+import type { WorkPackageId } from '../application/dto/identity.js';
+import { workPackageBudgetKey } from './dispatch-candidate.js';
 import type { GitIntegrationPolicy, RoleAuthorities } from './planning/execution-authorization.js';
 
 /** 集成请求的形态闭集；未登记的形态在边界 fail closed。 */
@@ -185,4 +187,35 @@ export function classifyCanonicalHead(facts: CanonicalHeadFacts): CanonicalHeadV
     reason: 'canonical HEAD 已前进，但没有任何 Integration Operation 记录可以归属该变化',
     pauseDispatch: true,
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* 合并树复验的轮次与额度（D-03）                                              */
+/* -------------------------------------------------------------------------- */
+
+/** 集成复验的默认额度；独立于 Validator 修复预算，可配置但必须有限。 */
+export const INTEGRATION_RECONCILIATION_DEFAULT_LIMIT = 2;
+
+/** 集成复验额度在 Work Package 预算里的计数键；沿用唯一的计数键格式。 */
+export function integrationReconciliationBudgetKey(workPackageId: WorkPackageId): string {
+  return workPackageBudgetKey(workPackageId, 'integrationReconciliations');
+}
+
+export type IntegrationRoundVerdict =
+  | { readonly kind: 'allowed'; readonly round: number }
+  | { readonly kind: 'budget_exhausted'; readonly limit: number; readonly consumed: number };
+
+/**
+ * 下一轮集成复验是否在批准额度内。
+ *
+ * `consumed` 是已持久化的轮次数；只有实际取得新轮次时才递增，重启与重放都不重置。非法或缺失的
+ * 额度一律按耗尽处理，因此「上限读不到」只能表现为阻塞，而不会变成无限制。
+ */
+export function nextIntegrationRound(consumed: number, limit: number): IntegrationRoundVerdict {
+  if (!Number.isSafeInteger(consumed) || consumed < 0 || !Number.isSafeInteger(limit) || limit < 0) {
+    return { kind: 'budget_exhausted', limit, consumed };
+  }
+  return consumed < limit
+    ? { kind: 'allowed', round: consumed + 1 }
+    : { kind: 'budget_exhausted', limit, consumed };
 }

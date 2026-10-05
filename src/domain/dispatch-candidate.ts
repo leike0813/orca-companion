@@ -40,6 +40,7 @@ export const WORK_PACKAGE_BUDGET_FIELDS = [
   'validatorRepairs',
   'graphRevisions',
   'specificationRevisions',
+  'integrationReconciliations',
   'maxRecoveriesPerWorkerAttempt',
 ] as const satisfies readonly WorkPackageBudgetField[];
 
@@ -93,8 +94,8 @@ export type DispatchCandidateFacts = {
   /**
    * 处于 revision pending 的 Work Package 集合（受影响节点与其未接受后代）。
    *
-   * 这是一个**有界**集合：它只挡住被持有的节点，不改变其它节点的拓扑准入；并发上限为 1 是执行并发
-   * 上限，不是准入限制。唯一的例外是带匹配 `revisionPlanner` 许可的 Specification Planner 派发。
+   * 这是一个有界集合：只挡住被持有的节点，不改变其他节点的拓扑准入。
+   * 带匹配 `revisionPlanner` 许可的 Specification Planner 可续办本节点。
    */
   readonly revisionPending: readonly WorkPackageId[];
   /** 本次候选的受限修订 Planner 许可；`null` 表示没有。它只对本节点的 planner 派发有效。 */

@@ -13,6 +13,10 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync, type SQLInputValue, type StatementSync } from 'node:sqlite';
 import { HistoryBoundaryError } from '../../application/coordinator/history.js';
+import { integrationOperationIdsFor } from '../../application/integrate-work-package.js';
+import { INTEGRATION_RECONCILIATION_STATES, type IntegrationReconciliationRecord } from '../../application/integration-reconciliation.js';
+import { workPackageBudgetKey } from '../../domain/dispatch-candidate.js';
+import { acceptedResultMatchesTask } from '../../domain/worker-result-verification.js';
 
 import {
   findFenceViolation,
@@ -150,6 +154,7 @@ import {
   type WakeAdmissionRecord,
   type WakeAdmissionState,
   type WorkPackageLineageRecord,
+  type WorkPackageLaneReservation,
 } from '../../application/ports/branch-coordination-store.js';
 import type {
   GraphBasisSourceRef,
@@ -744,6 +749,7 @@ function decodeWorkPackageBudget(raw: unknown, field: string): Decoded<WorkPacka
     'graphRevisions',
     'specificationRevisions',
     'maxRecoveriesPerWorkerAttempt',
+    'integrationReconciliations',
   ] as const;
   const values: Record<string, number> = {};
   for (const key of keys) {
@@ -759,6 +765,7 @@ function decodeWorkPackageBudget(raw: unknown, field: string): Decoded<WorkPacka
     graphRevisions: values['graphRevisions'] ?? 0,
     specificationRevisions: values['specificationRevisions'] ?? 0,
     maxRecoveriesPerWorkerAttempt: values['maxRecoveriesPerWorkerAttempt'] ?? 0,
+    integrationReconciliations: values['integrationReconciliations'] ?? 0,
   });
 }
 
@@ -807,10 +814,6 @@ function decodeExecutionGraph(raw: unknown, field: string): Decoded<ExecutionGra
   if (!generation.ok) {
     return generation;
   }
-  const concurrencyLimit = requireCount(raw['concurrencyLimit'], `${field}.concurrencyLimit`);
-  if (!concurrencyLimit.ok) {
-    return concurrencyLimit;
-  }
   const rawWorkPackages = raw['workPackages'];
   if (!Array.isArray(rawWorkPackages)) {
     return fail(`${field}.workPackages 必须是数组`);
@@ -826,7 +829,6 @@ function decodeExecutionGraph(raw: unknown, field: string): Decoded<ExecutionGra
   return ok({
     graphId: graphId.value as GraphId,
     generation: generation.value as GraphGeneration,
-    concurrencyLimit: concurrencyLimit.value,
     workPackages,
   });
 }
@@ -863,6 +865,77 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
   };
 
   switch (kind.value) {
+    case 'register-integration-reconciliation': {
+      const fields: Record<string, string> = {};
+      for (const key of ['workPackageId', 'reconciliationId', 'validationAttemptId', 'sourceAcceptedResultRef',
+        'targetHead', 'budgetKey', 'approvedLimitRef']) {
+        const field = requireString(command[key], key);
+        if (!field.ok) return field;
+        fields[key] = field.value;
+      }
+      const round = requireCount(command['round'], 'round');
+      if (!round.ok || round.value === 0) return fail('round 必须为正安全整数');
+      return ok({ ...base, kind: kind.value, workPackageId: fields['workPackageId']! as WorkPackageId,
+        reconciliationId: fields['reconciliationId']!, round: round.value,
+        validationAttemptId: fields['validationAttemptId']!, sourceAcceptedResultRef: fields['sourceAcceptedResultRef']!,
+        targetHead: fields['targetHead']!, budgetKey: fields['budgetKey']!, approvedLimitRef: fields['approvedLimitRef']! });
+    }
+    case 'bind-integration-continuation': {
+      const id = requireString(command['reconciliationId'], 'reconciliationId');
+      if (!id.ok) return id;
+      const workPackageId = requireString(command['workPackageId'], 'workPackageId');
+      if (!workPackageId.ok) return workPackageId;
+      const orcaTaskId = requireString(command['orcaTaskId'], 'orcaTaskId');
+      if (!orcaTaskId.ok) return orcaTaskId;
+      const dispatchId = requireNullableString(command['dispatchId'], 'dispatchId');
+      if (!dispatchId.ok) return dispatchId;
+      return ok({ ...base, kind: kind.value, reconciliationId: id.value,
+        workPackageId: workPackageId.value as WorkPackageId, orcaTaskId: orcaTaskId.value,
+        dispatchId: dispatchId.value as DispatchId | null });
+    }
+    case 'settle-integration-reconciliation': {
+      const id = requireString(command['reconciliationId'], 'reconciliationId');
+      if (!id.ok) return id;
+      const workPackageId = requireString(command['workPackageId'], 'workPackageId');
+      if (!workPackageId.ok) return workPackageId;
+      const state = requireEnum(command['state'], ['validated', 'rejected', 'blocked'] as const, 'state');
+      if (!state.ok) return state;
+      const fields: Record<string, string | null> = {};
+      for (const key of ['mergedTreeRef', 'orcaTaskId', 'dispatchId', 'blockerRef']) {
+        if (command[key] === undefined) continue;
+        const field = requireNullableString(command[key], key);
+        if (!field.ok) return field;
+        fields[key] = field.value;
+      }
+      return ok({ ...base, kind: kind.value, reconciliationId: id.value, workPackageId: workPackageId.value as WorkPackageId,
+        state: state.value, ...fields });
+    }
+    case 'reserve-work-package-lane':
+    case 'release-work-package-lane': {
+      const graphId = requireString(command['graphId'], 'graphId');
+      if (!graphId.ok) return graphId;
+      const generation = requireCount(command['generation'], 'generation');
+      if (!generation.ok) return generation;
+      if (generation.value === 0) return fail('generation 必须大于 0');
+      const workPackageId = requireString(command['workPackageId'], 'workPackageId');
+      if (!workPackageId.ok) return workPackageId;
+      const lane = { ...base, graphId: graphId.value as GraphId, generation: generation.value as GraphGeneration,
+        workPackageId: workPackageId.value as WorkPackageId };
+      if (kind.value === 'release-work-package-lane') {
+        const proof = requireString(command['proofOperationId'], 'proofOperationId');
+        return proof.ok ? ok({ ...lane, kind: kind.value, proofOperationId: proof.value as OperationId }) : proof;
+      }
+      const operationId = requireString(command['operationId'], 'operationId');
+      if (!operationId.ok) return operationId;
+      const authorizationId = requireString(command['authorizationId'], 'authorizationId');
+      if (!authorizationId.ok) return authorizationId;
+      const version = requireCount(command['authorizationVersion'], 'authorizationVersion');
+      if (!version.ok) return version;
+      if (version.value === 0) return fail('authorizationVersion 必须大于 0');
+      const baseline = requireString(command['baselineHead'], 'baselineHead');
+      return baseline.ok ? ok({ ...lane, kind: kind.value, operationId: operationId.value as OperationId,
+        authorizationId: authorizationId.value, authorizationVersion: version.value, baselineHead: baseline.value }) : baseline;
+    }
     case 'create-scope': {
       const mode = requireEnum(command['mode'], COORDINATION_MODES, 'mode');
       if (!mode.ok) {
@@ -1107,12 +1180,17 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (!backendRequestId.ok) {
         return backendRequestId;
       }
+      const terminalHandle = requireNullableString(command['terminalHandle'], 'terminalHandle');
+      if (!terminalHandle.ok) {
+        return terminalHandle;
+      }
       return ok({
         ...base,
         kind: 'settle-intent',
         operationId: operationId.value as OperationId,
         outcomeClass: outcomeClass.value,
         ...(backendRequestId.value === null ? {} : { backendRequestId: backendRequestId.value }),
+        ...(terminalHandle.value === null ? {} : { terminalHandle: terminalHandle.value }),
       });
     }
     case 'block-intent': {
@@ -2468,6 +2546,7 @@ type IntentRow = {
   readonly state: string;
   readonly outcome_class: string | null;
   readonly backend_request_id: string | null;
+  readonly terminal_handle: string | null;
   readonly blocking_reason: string | null;
   readonly created_at: number;
   readonly settled_at: number | null;
@@ -3294,6 +3373,18 @@ function decodeIntentRow(row: IntentRow): Decoded<OperationIntent> {
     }
     outcomeClass = row.outcome_class as IntentOutcomeClass;
   }
+  // terminal_handle 的边界不只在校验命令：持久行本身也必须自洽，否则错行会被当成合法引用。
+  if (row.terminal_handle !== null) {
+    if (typeof row.terminal_handle !== 'string' || row.terminal_handle.length === 0) {
+      return fail('operation_intents.terminal_handle 必须是非空字符串或 NULL');
+    }
+    const terminalCategory =
+      row.operation_category === 'materialize-worker-terminal' ||
+      row.operation_category === 'worker-terminal-prepare';
+    if (row.state !== 'settled' || outcomeClass !== 'accepted' || !terminalCategory) {
+      return fail('operation_intents.terminal_handle 只允许出现在 settled accepted 的 terminal 创建/准备类意图上');
+    }
+  }
   return ok({
     coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
     operationId: row.operation_id as OperationId,
@@ -3309,6 +3400,7 @@ function decodeIntentRow(row: IntentRow): Decoded<OperationIntent> {
     state: row.state as IntentState,
     outcomeClass,
     backendRequestId: row.backend_request_id,
+    terminalHandle: row.terminal_handle,
     blockingReason: row.blocking_reason,
     createdAt: row.created_at,
     settledAt: row.settled_at,
@@ -3501,6 +3593,92 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
 
   const readScopeRow = (scopeId: string): ScopeRow | undefined =>
     one<ScopeRow>(db.prepare('SELECT * FROM scope WHERE coordination_scope_id = ?'), scopeId);
+
+  const readIntegrationReconciliations = (scopeId: string, workPackageId: string): Decoded<readonly IntegrationReconciliationRecord[]> => {
+    const rows = many<IntegrationReconciliationRecord>(db.prepare(`SELECT coordination_scope_id AS coordinationScopeId,
+      reconciliation_id AS reconciliationId, work_package_id AS workPackageId, round,
+      validation_attempt_id AS validationAttemptId, source_accepted_result_ref AS sourceAcceptedResultRef,
+      target_head AS targetHead, merged_tree_ref AS mergedTreeRef, orca_task_id AS orcaTaskId,
+      dispatch_id AS dispatchId, state, blocker_ref AS blockerRef, created_at AS createdAt, updated_at AS updatedAt
+      FROM integration_reconciliations WHERE coordination_scope_id = ? AND work_package_id = ? ORDER BY round`),
+      scopeId, workPackageId);
+    for (const row of rows) {
+      if (![row.coordinationScopeId, row.reconciliationId, row.workPackageId, row.validationAttemptId,
+        row.sourceAcceptedResultRef, row.targetHead].every(value => typeof value === 'string' && value.length > 0) ||
+        !isNonNegativeInteger(row.round) || row.round === 0 || !isNonNegativeInteger(row.createdAt) ||
+        !isNonNegativeInteger(row.updatedAt) || !INTEGRATION_RECONCILIATION_STATES.includes(row.state) ||
+        ![row.mergedTreeRef, row.orcaTaskId, row.dispatchId, row.blockerRef].every(value =>
+          value === null || (typeof value === 'string' && value.length > 0))) return fail('集成复验记录不可读');
+    }
+    return ok(rows);
+  };
+
+  const matchesTaskRow = (
+    task: { worker_task_id: string | null; attempt_id: string | null; role: string | null },
+    result: { worker_task_id: string | null; attempt_id: string | null; role: string | null },
+  ): boolean => acceptedResultMatchesTask(
+    { workerTaskId: task.worker_task_id, attemptId: task.attempt_id, role: task.role },
+    { workerTaskId: result.worker_task_id, attemptId: result.attempt_id, role: result.role },
+  );
+
+  const packageHasNoEffects = (
+    workPackageId: string, bindings: readonly MaterializationBindingRow[], intents: readonly IntentRow[],
+  ): boolean => {
+    const packageIntents = intents.filter(intent => intent.target_id === workPackageId);
+    return bindings.length === 0 && packageIntents.length > 0 &&
+      packageIntents.every(intent => intent.state === 'settled' && intent.outcome_class === 'rejected');
+  };
+
+  const releaseTerminalLanes = (scopeId: string, now: number): Decoded<null> => {
+    const scope = readScopeRow(scopeId);
+    if (scope === undefined) return fail('Scope 缺失');
+    const lanes = readLaneReservations(scopeId);
+    if (!lanes.ok) return lanes;
+    const row = scope.graph_id === null || scope.graph_version === null ? undefined
+      : readGraphVersionRow(scopeId, scope.graph_id, scope.graph_version);
+    const graph = row === undefined ? null : decodeGraphVersionRow(row);
+    if (graph !== null && !graph.ok) return graph;
+    const holds = readRevisionHoldRows(scopeId, undefined);
+    const intents = readIntentRows(scopeId);
+    const segments = readSessionSegmentRows(scopeId, undefined);
+    for (const lane of lanes.value) {
+      const retired = graph?.ok && !graph.value.graph.workPackages.some(wp => wp.workPackageId === lane.workPackageId) &&
+        holds.some(hold => hold.work_package_id === lane.workPackageId && hold.state === 'released');
+      const bindings = readMaterializationBindingRows(scopeId, lane.workPackageId);
+      if (scope.control_state !== 'cancelled' && !retired &&
+        !packageHasNoEffects(lane.workPackageId, bindings, intents)) continue;
+      if (intents.some(intent => intent.target_id === lane.workPackageId && intent.state !== 'settled')) continue;
+      const results = readDeliverySettlementRows(scopeId, undefined, lane.workPackageId);
+      if (!bindings.every(binding => results.some(result => matchesTaskRow(binding, result)) ||
+        intents.some(intent => intent.operation_category === 'worker-stop' && intent.state === 'settled' &&
+          intent.outcome_class === 'accepted' && (intent.target_id === binding.dispatch_id ||
+            segments.some(segment => matchesTaskRow(binding, segment) && segment.dispatch_id === intent.target_id))))) continue;
+      db.prepare(`UPDATE work_package_lanes SET released_at = ? WHERE coordination_scope_id = ?
+        AND graph_id = ? AND graph_generation = ? AND work_package_id = ? AND released_at IS NULL`)
+        .run(now, scopeId, lane.graphId, lane.generation, lane.workPackageId);
+    }
+    return ok(null);
+  };
+
+  const readLaneReservations = (scopeId: string): Decoded<readonly WorkPackageLaneReservation[]> => {
+    const rows = many<WorkPackageLaneReservation>(db.prepare(`SELECT
+      coordination_scope_id AS coordinationScopeId, graph_id AS graphId, graph_generation AS generation,
+      work_package_id AS workPackageId, operation_id AS operationId, authorization_id AS authorizationId,
+      authorization_version AS authorizationVersion, baseline_head AS baselineHead,
+      reserved_at AS reservedAt, released_at AS releasedAt
+      FROM work_package_lanes WHERE coordination_scope_id = ? AND released_at IS NULL ORDER BY reserved_at, work_package_id`), scopeId);
+    for (const row of rows) {
+      for (const key of ['coordinationScopeId', 'graphId', 'workPackageId', 'operationId', 'authorizationId', 'baselineHead'] as const) {
+        if (!requireString(row[key], key).ok) return fail(`lane.${key} 不可读`);
+      }
+      if (!isNonNegativeInteger(row.generation) || row.generation === 0 ||
+        !isNonNegativeInteger(row.authorizationVersion) || row.authorizationVersion === 0 ||
+        !isNonNegativeInteger(row.reservedAt) || (row.releasedAt !== null && !isNonNegativeInteger(row.releasedAt))) {
+        return fail('lane 版本或时间不可读');
+      }
+    }
+    return ok(rows);
+  };
 
   const readLeaseRows = (scopeId: string): readonly LeaseRow[] =>
     many<LeaseRow>(
@@ -4279,8 +4457,11 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       overview = { items: page.value.interactions, openCount: counts.reduce((sum, row) => sum + row.count, 0),
         sessionCounts: counts.map(row => ({ coordinatorSessionId: row.owner_coordinator_session_id, openCount: row.count })) };
     }
+    const laneReservations = readLaneReservations(scopeId);
+    if (!laneReservations.ok) return laneReservations;
     return ok({
       scope,
+      laneReservations: laneReservations.value,
       sessions: sessions.value,
       leases: leases.value,
       executionLease:
@@ -4331,6 +4512,17 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
     }
     try {
       switch (input.kind) {
+        case 'integration-reconciliations': {
+          if (!input.workPackageId) return { kind: 'rejected', code: 'invalid_query', message: '缺少包身份' };
+          const read = readIntegrationReconciliations(scopeId, input.workPackageId);
+          return read.ok ? { kind: 'integration-reconciliations', records: read.value }
+            : { kind: 'rejected', code: 'unreadable', message: read.message };
+        }
+        case 'work-package-lanes': {
+          const read = readLaneReservations(scopeId);
+          return read.ok ? { kind: 'work-package-lanes', reservations: read.value }
+            : { kind: 'rejected', code: 'unreadable', message: read.message };
+        }
         case 'scope': {
           const row = readScopeRow(scopeId);
           if (row === undefined) {
@@ -5677,7 +5869,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           cmd.orcaResultRef,
           now,
         );
-        return ok(null);
+        return releaseTerminalLanes(cmd.coordinationScopeId, now);
       }
       case 'record-delivery-verdict': {
         const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
@@ -6067,7 +6259,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           now,
           cmd.coordinationScopeId,
         );
-        return ok(null);
+        return cmd.controlState === 'cancelled' ? releaseTerminalLanes(cmd.coordinationScopeId, now) : ok(null);
       }
       case 'register-session': {
         db.prepare(
@@ -6164,6 +6356,17 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         return ok(null);
       }
       case 'begin-intent': {
+        if (cmd.operationCategory.startsWith('materialize-')) {
+          const scope = readScopeRow(cmd.coordinationScopeId);
+          if (scope?.mode !== 'execution_coordination' || scope.control_state !== 'active')
+            return fail('当前 Scope 不可物化新的角色步骤');
+        }
+        if (cmd.operationCategory === 'materialize-task') {
+          const unsettled = readMaterializationBindingRows(cmd.coordinationScopeId, cmd.target.id).find(binding =>
+            binding.utility_role === null && !readDeliverySettlementRows(cmd.coordinationScopeId, undefined).some(settlement =>
+              matchesTaskRow(binding, settlement)));
+          if (unsettled !== undefined) return fail('该 Work Package 的前一角色派发尚未结算', 'constraint');
+        }
         const laneKey = laneKeyOf(cmd.target, cmd.operationCategory);
         db.prepare(
           `INSERT INTO operation_intents (
@@ -6191,8 +6394,31 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         if (row === undefined) {
           return fail(`未登记的 OperationId ${cmd.operationId}`);
         }
+        const terminalCategory =
+          row.operation_category === 'materialize-worker-terminal' ||
+          row.operation_category === 'worker-terminal-prepare';
+        const terminalHandle = cmd.terminalHandle ?? null;
+        if (terminalHandle !== null) {
+          // 闭合校验：terminalHandle 只允许出现在 terminal 创建/准备类意图的 accepted 收尾上。
+          if (!terminalCategory) {
+            return fail('terminalHandle 只允许出现在 terminal 创建/准备类意图上', 'constraint');
+          }
+          if (cmd.outcomeClass !== 'accepted') {
+            return fail('只有 accepted 收尾才能写入 terminalHandle', 'constraint');
+          }
+        }
         if (row.state !== 'pending') {
-          return fail(`OperationId ${cmd.operationId} 处于 ${row.state}，不能按确定结果收尾`);
+          // 仅 terminal 创建/准备类意图的同值重放幂等：原 outcomeClass / backendRequestId / terminalHandle
+          // 完全一致才接受，否则维持原拒绝语义。
+          const identical =
+            terminalCategory &&
+            row.state === 'settled' &&
+            row.outcome_class === cmd.outcomeClass &&
+            row.backend_request_id === (cmd.backendRequestId ?? null) &&
+            row.terminal_handle === terminalHandle;
+          return identical
+            ? ok(null)
+            : fail(`OperationId ${cmd.operationId} 处于 ${row.state}，不能按确定结果收尾`);
         }
         const backendRequestId = cmd.backendRequestId ?? null;
         if (cmd.outcomeClass === 'unknown') {
@@ -6205,9 +6431,9 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         }
         db.prepare(
           `UPDATE operation_intents SET state = 'settled', outcome_class = ?, backend_request_id = ?,
-             settled_at = ? WHERE coordination_scope_id = ? AND operation_id = ?`,
-        ).run(cmd.outcomeClass, backendRequestId, now, cmd.coordinationScopeId, cmd.operationId);
-        return ok(null);
+             terminal_handle = ?, settled_at = ? WHERE coordination_scope_id = ? AND operation_id = ?`,
+        ).run(cmd.outcomeClass, backendRequestId, terminalHandle, now, cmd.coordinationScopeId, cmd.operationId);
+        return cmd.outcomeClass === 'rejected' ? releaseTerminalLanes(cmd.coordinationScopeId, now) : ok(null);
       }
       case 'block-intent': {
         const row = readIntentRow(cmd.coordinationScopeId, cmd.operationId);
@@ -6369,6 +6595,178 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
            VALUES (?, ?, ?, ?)
            ON CONFLICT (coordination_scope_id, budget_key) DO UPDATE SET consumed = consumed + excluded.consumed`,
         ).run(cmd.coordinationScopeId, cmd.budgetKey, cmd.approvedLimitRef, cmd.amount);
+        return ok(null);
+      }
+      case 'register-integration-reconciliation': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) return holder;
+        const records = readIntegrationReconciliations(cmd.coordinationScopeId, cmd.workPackageId);
+        if (!records.ok) return records;
+        const existing = records.value.find(record => record.reconciliationId === cmd.reconciliationId);
+        if (existing !== undefined) return existing.round === cmd.round && existing.targetHead === cmd.targetHead &&
+          existing.validationAttemptId === cmd.validationAttemptId && existing.sourceAcceptedResultRef === cmd.sourceAcceptedResultRef
+          ? ok(null) : fail('复验身份重放载荷不一致');
+        if (records.value.some(record => record.state === 'pending' || record.state === 'blocked') ||
+          cmd.round !== records.value.length + 1) return fail('先结清原集成复验轮次');
+        const scope = readScopeRow(cmd.coordinationScopeId);
+        if (scope?.mode !== 'execution_coordination' || scope.control_state !== 'active' ||
+          scope.graph_id === null || scope.graph_version === null) return fail('当前 Scope 不可集成复验');
+        const graphRow = readGraphVersionRow(cmd.coordinationScopeId, scope.graph_id, scope.graph_version);
+        if (graphRow === undefined) return fail('复验图不可读');
+        const graph = decodeGraphVersionRow(graphRow);
+        if (!graph.ok) return graph;
+        const wp = graph.value.graph.workPackages.find(record => record.workPackageId === cmd.workPackageId);
+        if (wp === undefined) return fail('复验包不属于当前图');
+        const bindings = readMaterializationBindingRows(cmd.coordinationScopeId, cmd.workPackageId);
+        const results = readDeliverySettlementRows(cmd.coordinationScopeId, undefined, cmd.workPackageId);
+        if (!results.some(result => result.role === 'validator' && result.orca_result_ref === cmd.sourceAcceptedResultRef &&
+          result.attempt_id === cmd.validationAttemptId && bindings.some(binding =>
+            matchesTaskRow(binding, result) &&
+            binding.authorization_id !== null && binding.authorization_version !== null))) return fail('原 Validator 结果与绑定不可证明');
+        if (cmd.budgetKey !== workPackageBudgetKey(cmd.workPackageId, 'integrationReconciliations')) return fail('复验预算键不匹配');
+        const budget = one<BudgetRow>(db.prepare('SELECT * FROM budget_counters WHERE coordination_scope_id = ? AND budget_key = ?'),
+          cmd.coordinationScopeId, cmd.budgetKey);
+        const authRow = readAuthorizationRow(cmd.coordinationScopeId, cmd.approvedLimitRef);
+        if (authRow === undefined) return fail('集成复验预算授权缺失');
+        const auth = decodeAuthorizationRow(authRow);
+        if (!auth.ok) return auth;
+        if (auth.value.manifest.graph.graphId !== scope.graph_id || auth.value.manifest.graph.generation !== graph.value.generation)
+          return fail('复验预算授权不属于当前图代际');
+        const lineages = decodeRows(readWorkPackageLineageRows(cmd.coordinationScopeId, cmd.workPackageId), decodeWorkPackageLineageRow);
+        if (!lineages.ok) return lineages;
+        const inherited = lineages.value.flatMap(entry => entry.inherited)
+          .filter(entry => entry.field === 'integrationReconciliations').reduce((sum, entry) => sum + entry.consumed, 0);
+        const limit = Math.min(wp.budget.integrationReconciliations, auth.value.manifest.limits.integrationReconciliations);
+        if ((budget !== undefined && budget.approved_limit_ref !== cmd.approvedLimitRef) ||
+          (budget?.consumed ?? 0) + inherited >= limit) return fail('集成复验预算不可用或已耗尽');
+        db.prepare(`INSERT INTO integration_reconciliations (coordination_scope_id, reconciliation_id,
+          work_package_id, round, validation_attempt_id, source_accepted_result_ref, target_head, state, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`).run(cmd.coordinationScopeId, cmd.reconciliationId,
+            cmd.workPackageId, cmd.round, cmd.validationAttemptId, cmd.sourceAcceptedResultRef, cmd.targetHead, now, now);
+        db.prepare(`INSERT INTO budget_counters (coordination_scope_id, budget_key, approved_limit_ref, consumed)
+          VALUES (?, ?, ?, 1) ON CONFLICT (coordination_scope_id, budget_key) DO UPDATE SET consumed = consumed + 1`)
+          .run(cmd.coordinationScopeId, cmd.budgetKey, cmd.approvedLimitRef);
+        return ok(null);
+      }
+      case 'bind-integration-continuation': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) return holder;
+        const records = readIntegrationReconciliations(cmd.coordinationScopeId, cmd.workPackageId);
+        if (!records.ok) return records;
+        const record = records.value.find(entry => entry.reconciliationId === cmd.reconciliationId);
+        if (record === undefined) return fail('复验轮次不存在');
+        if ((record.orcaTaskId !== null && record.orcaTaskId !== cmd.orcaTaskId) ||
+          (record.dispatchId !== null && record.dispatchId !== cmd.dispatchId)) return fail('续接身份不可改写');
+        if (record.state !== 'pending' && record.state !== 'blocked') {
+          return record.orcaTaskId === cmd.orcaTaskId && record.dispatchId === cmd.dispatchId
+            ? ok(null) : fail('复验终态不可补写续接身份');
+        }
+        db.prepare(`UPDATE integration_reconciliations SET orca_task_id = ?,
+          dispatch_id = COALESCE(?, dispatch_id), updated_at = ?
+          WHERE coordination_scope_id = ? AND reconciliation_id = ?`)
+          .run(cmd.orcaTaskId, cmd.dispatchId, now, cmd.coordinationScopeId, cmd.reconciliationId);
+        return ok(null);
+      }
+      case 'settle-integration-reconciliation': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) return holder;
+        const records = readIntegrationReconciliations(cmd.coordinationScopeId, cmd.workPackageId);
+        if (!records.ok) return records;
+        const record = records.value.find(entry => entry.reconciliationId === cmd.reconciliationId);
+        if (record === undefined) return fail('复验轮次不存在');
+        if ((cmd.orcaTaskId != null && record.orcaTaskId !== null && record.orcaTaskId !== cmd.orcaTaskId) ||
+          (cmd.dispatchId != null && record.dispatchId !== null && record.dispatchId !== cmd.dispatchId)) return fail('续接身份不可改写');
+        if (record.state !== 'pending' && record.state !== 'blocked') {
+          return record.state === cmd.state &&
+            (cmd.mergedTreeRef === undefined || cmd.mergedTreeRef === record.mergedTreeRef) &&
+            (cmd.orcaTaskId === undefined || cmd.orcaTaskId === record.orcaTaskId) &&
+            (cmd.dispatchId === undefined || cmd.dispatchId === record.dispatchId) &&
+            (cmd.blockerRef === undefined || cmd.blockerRef === record.blockerRef)
+            ? ok(null) : fail('复验终态不可改写');
+        }
+        if (cmd.state === 'validated' && !cmd.mergedTreeRef) return fail('通过结论缺少精确合并树');
+        db.prepare(`UPDATE integration_reconciliations SET state = ?, merged_tree_ref = COALESCE(?, merged_tree_ref),
+          orca_task_id = COALESCE(?, orca_task_id), dispatch_id = COALESCE(?, dispatch_id),
+          blocker_ref = ?, updated_at = ? WHERE coordination_scope_id = ? AND reconciliation_id = ?`)
+          .run(cmd.state, cmd.mergedTreeRef ?? null, cmd.orcaTaskId ?? null, cmd.dispatchId ?? null,
+            cmd.blockerRef ?? null, now, cmd.coordinationScopeId, cmd.reconciliationId);
+        return ok(null);
+      }
+      case 'reserve-work-package-lane': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) return holder;
+        const scope = readScopeRow(cmd.coordinationScopeId);
+        if (scope?.mode !== 'execution_coordination' || scope.control_state !== 'active' ||
+          scope.graph_id !== cmd.graphId || scope.graph_version === null) return fail('当前图不能接纳 Work Package');
+        const graphRow = readGraphVersionRow(cmd.coordinationScopeId, cmd.graphId, scope.graph_version);
+        if (graphRow === undefined) return fail('当前图不可读');
+        const graph = decodeGraphVersionRow(graphRow);
+        if (!graph.ok) return graph;
+        if (graph.value.generation !== cmd.generation ||
+          !graph.value.graph.workPackages.some(item => item.workPackageId === cmd.workPackageId)) return fail('包不属于当前图代际');
+        const reservations = readLaneReservations(cmd.coordinationScopeId);
+        if (!reservations.ok) return reservations;
+        const existing = reservations.value.find(item => item.graphId === cmd.graphId &&
+          item.generation === cmd.generation && item.workPackageId === cmd.workPackageId);
+        if (existing !== undefined) {
+          return existing.baselineHead === cmd.baselineHead && existing.operationId === cmd.operationId
+            ? ok(null) : fail('包准入身份或原基线不一致', 'constraint');
+        }
+        if (scope.authorization_id !== cmd.authorizationId || scope.authorization_version !== cmd.authorizationVersion) {
+          return fail('新包准入必须绑定当前批准授权');
+        }
+        const authRow = readAuthorizationRow(cmd.coordinationScopeId, cmd.authorizationId);
+        if (authRow === undefined) return fail('准入授权缺失');
+        const auth = decodeAuthorizationRow(authRow);
+        if (!auth.ok) return auth;
+        if (auth.value.authorizationVersion !== cmd.authorizationVersion || auth.value.manifest.graph.graphId !== cmd.graphId ||
+          auth.value.manifest.graph.generation !== cmd.generation) return fail('准入授权不属于当前代际');
+        const occupied = reservations.value.filter(item => item.graphId === cmd.graphId && item.generation === cmd.generation).length;
+        if (occupied >= auth.value.manifest.limits.maxActiveWorkPackages) return fail('并行 Work Package 额度已占满', 'constraint');
+        const previous = one<{ released_at: number | null }>(db.prepare(`SELECT released_at FROM work_package_lanes
+          WHERE coordination_scope_id = ? AND graph_id = ? AND graph_generation = ? AND work_package_id = ?`),
+          cmd.coordinationScopeId, cmd.graphId, cmd.generation, cmd.workPackageId);
+        if (previous !== undefined && readMaterializationBindingRows(cmd.coordinationScopeId, cmd.workPackageId).length > 0)
+          return fail('已有 Worker 绑定的已释放包不能重新接纳');
+        db.prepare(`INSERT INTO work_package_lanes (coordination_scope_id, graph_id, graph_generation,
+          work_package_id, operation_id, authorization_id, authorization_version, baseline_head, reserved_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (coordination_scope_id, graph_id, graph_generation, work_package_id)
+          DO UPDATE SET operation_id = excluded.operation_id, authorization_id = excluded.authorization_id,
+            authorization_version = excluded.authorization_version, baseline_head = excluded.baseline_head,
+            reserved_at = excluded.reserved_at, released_at = NULL WHERE work_package_lanes.released_at IS NOT NULL`)
+          .run(cmd.coordinationScopeId, cmd.graphId, cmd.generation,
+            cmd.workPackageId, cmd.operationId, cmd.authorizationId, cmd.authorizationVersion, cmd.baselineHead, now);
+        return ok(null);
+      }
+      case 'release-work-package-lane': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) return holder;
+        const proof = readIntentRow(cmd.coordinationScopeId, cmd.proofOperationId);
+        if (proof === undefined || proof.state !== 'settled') return fail('释放额度缺少确定结算意图');
+        const bindings = readMaterializationBindingRows(cmd.coordinationScopeId, cmd.workPackageId);
+        const segments = readSessionSegmentRows(cmd.coordinationScopeId, cmd.workPackageId);
+        const targetsPackage = (proof.target_id === cmd.workPackageId &&
+          ['work-package', 'worktree', 'task', 'worker-task'].includes(proof.target_kind)) ||
+          bindings.some(binding => binding.dispatch_id === proof.target_id || binding.worker_task_id === proof.target_id ||
+            segments.some(segment => matchesTaskRow(binding, segment) && segment.dispatch_id === proof.target_id));
+        const pushId = integrationOperationIdsFor({ scopeId: cmd.coordinationScopeId, graphId: cmd.graphId,
+          generation: cmd.generation, workPackageId: cmd.workPackageId }).push;
+        const integrated = proof.operation_category === 'git-integration' && proof.outcome_class === 'accepted' &&
+          proof.operation_id === pushId;
+        const intents = readIntentRows(cmd.coordinationScopeId);
+        const settlements = readDeliverySettlementRows(cmd.coordinationScopeId, undefined, cmd.workPackageId);
+        const allClosed = bindings.every(binding => settlements.some(result => matchesTaskRow(binding, result)) ||
+          intents.some(intent => intent.operation_category === 'worker-stop' && intent.state === 'settled' &&
+            intent.outcome_class === 'accepted' && (intent.target_id === binding.dispatch_id ||
+              segments.some(segment => matchesTaskRow(binding, segment) && segment.dispatch_id === intent.target_id))));
+        const unresolved = intents.some(intent => intent.target_id === cmd.workPackageId && intent.state !== 'settled');
+        const stopped = proof.operation_category === 'worker-stop' && proof.outcome_class === 'accepted' &&
+          allClosed && !unresolved;
+        const noEffects = proof.outcome_class === 'rejected' && packageHasNoEffects(cmd.workPackageId, bindings, intents);
+        if (!targetsPackage || (!integrated && !stopped && !noEffects)) return fail('释放额度的完成/停止依据不匹配');
+        db.prepare(`UPDATE work_package_lanes SET released_at = ? WHERE coordination_scope_id = ?
+          AND graph_id = ? AND graph_generation = ? AND work_package_id = ? AND released_at IS NULL`).run(
+          now, cmd.coordinationScopeId, cmd.graphId, cmd.generation, cmd.workPackageId);
         return ok(null);
       }
       case 'record-wake-admission': {
@@ -6550,7 +6948,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
             consumption.amount,
           );
         }
-        return ok(null);
+        return releaseTerminalLanes(cmd.coordinationScopeId, now);
       }
       case 'record-baseline-reconciliation': {
         const existing = one<BaselineReconciliationRow>(

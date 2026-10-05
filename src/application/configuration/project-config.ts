@@ -5,11 +5,13 @@
  * 默认引用、角色 Worker Profiles、tracker 地图引用、规划写入上限与上下文/输出预算。
  *
  * 它只保存凭据**引用**：明文 key 属于用户级 CredentialStore，这里没有落脚点，出现已知密钥字段名即
- * 拒绝整份配置。v2 把模型设置表达为「不可变记录 + 显式引用」：编辑只能追加新引用并推进 `revision`，
+ * 拒绝整份配置。schema 3 把模型设置表达为「不可变记录 + 显式引用」，并把执行额度收敛为
+ * `maxActiveWorkPackages`（并行包，默认 3）、`maxWorkPackages`（图容量，默认 8）与
+ * `integrationReconciliations`（集成复验，默认 2）：编辑只能追加新引用并推进 `revision`，
  * 旧记录不改写，因此已批准的 Manifest 与在途 Task 仍能按原引用读回当时的配置。
  *
  * 读取只做边界校验，不解析 provider、不访问网络、不创建目录：不可用一律是显式拒绝，绝不退到
- * 「任选一个已安装模型」或隐式创建 Scope。v1 明确拒绝，不自动重写用户项目。
+ * 「任选一个已安装模型」或隐式创建 Scope。旧 schemaVersion 明确拒绝，不自动重写用户项目。
  */
 
 import { readFileSync } from 'node:fs';
@@ -40,7 +42,7 @@ import type { DependencyPolicy, RoleAuthorities } from '../../domain/planning/ex
 
 export const PROJECT_CONFIG_FILENAME = 'orca-companion.json';
 
-export const PROJECT_CONFIG_SCHEMA_VERSION = 2;
+export const PROJECT_CONFIG_SCHEMA_VERSION = 3;
 
 /** 项目级 tracker 引用；正文仍是 tracker 的事实，这里只有「读写哪张地图」。 */
 export type ProjectTrackerConfiguration = {
@@ -210,13 +212,14 @@ const projectConfigSchema = z.strictObject({
         .partial(),
       limits: z
         .strictObject({
-          maxActiveWorkPackages: z.number().int().positive(),
-          concurrencyLimit: z.number().int().positive(),
-          implementationAttempts: z.number().int().positive(),
-          validatorRepairs: z.number().int().positive(),
-          graphRevisions: z.number().int().positive(),
-          specificationRevisions: z.number().int().positive(),
-          maxRecoveriesPerWorkerAttempt: z.number().int().positive(),
+          maxActiveWorkPackages: z.number().int().positive().safe(),
+          maxWorkPackages: z.number().int().positive().safe(),
+          integrationReconciliations: z.number().int().positive().safe(),
+          implementationAttempts: z.number().int().positive().safe(),
+          validatorRepairs: z.number().int().positive().safe(),
+          graphRevisions: z.number().int().positive().safe(),
+          specificationRevisions: z.number().int().positive().safe(),
+          maxRecoveriesPerWorkerAttempt: z.number().int().positive().safe(),
         })
         .partial(),
       git: z
@@ -257,7 +260,9 @@ function normalizeExecution(
     },
     limits: {
       maxActiveWorkPackages: raw?.limits?.maxActiveWorkPackages ?? base.limits.maxActiveWorkPackages,
-      concurrencyLimit: raw?.limits?.concurrencyLimit ?? base.limits.concurrencyLimit,
+      maxWorkPackages: raw?.limits?.maxWorkPackages ?? base.limits.maxWorkPackages,
+      integrationReconciliations:
+        raw?.limits?.integrationReconciliations ?? base.limits.integrationReconciliations,
       implementationAttempts: raw?.limits?.implementationAttempts ?? base.limits.implementationAttempts,
       validatorRepairs: raw?.limits?.validatorRepairs ?? base.limits.validatorRepairs,
       graphRevisions: raw?.limits?.graphRevisions ?? base.limits.graphRevisions,

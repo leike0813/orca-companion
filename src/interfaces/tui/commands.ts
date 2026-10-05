@@ -33,6 +33,7 @@ export const COMMAND_METADATA = {
   'verify-command-results': {alias:null,label:'核验命令结果',description:'只读核验原调用',target:'Scope',path:'核验命令结果',shortcut:null,action:null},
   "help": {"path":"Help","shortcut":null,"action":null,"alias":"help","label":"Help","description":"命令与键位","target":"UI"},
   "model-settings": {"path":"模型连接设置","shortcut":null,"action":null,"alias":"connections","label":"模型连接设置","description":"编辑 provider、模型、选项与 key","target":"Scope"},
+  "execution-settings": {"path":"执行设置","shortcut":null,"action":null,"alias":"concurrency","label":"执行并发设置","description":"默认并行包额度与批准值","target":"Scope"},
 } as const satisfies Readonly<Record<string, CommandMeta>>;
 export type CommandId = keyof typeof COMMAND_METADATA;
 export const COMMAND_IDS = Object.keys(COMMAND_METADATA) as CommandId[];
@@ -108,9 +109,10 @@ export function parseSlashInput(text: string, mode: string): SlashResolution {
   };
 }
 
-export function commandReason(command: CommandId, view: { readonly mode: string; readonly selectedSessionId: string | null; readonly pasteBlocks: number; readonly controlState?: string; readonly modelSettings?: boolean; readonly preferences?: boolean }): string | null {
+export function commandReason(command: CommandId, view: { readonly mode: string; readonly selectedSessionId: string | null; readonly pasteBlocks: number; readonly controlState?: string; readonly modelSettings?: boolean; readonly preferences?: boolean; readonly executionSettings?: boolean }): string | null {
   if (command === 'statusline' && view.preferences !== true) return '用户偏好端口不可用；只能使用默认显示设置';
   if (command === 'model-settings' && view.modelSettings !== true) return '角色模型配置端口尚未接通';
+  if (command === 'execution-settings' && view.executionSettings !== true) return '执行设置端口尚未接通';
   if (command === 'handoff' && view.mode !== 'route_planning') return '仅用于规划模式';
   if (command === 'execution-handoff' && view.mode !== 'execution_coordination') return '仅用于执行模式';
   if (command === 'authorize-execution' && view.mode !== 'route_planning') return '当前已在执行协调模式';

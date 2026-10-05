@@ -16,7 +16,8 @@ export type ProjectPresentation = {
       | { readonly status: 'not_configured' | 'not_supported' | 'unavailable' };
   } | null;
   readonly ticket: { readonly ref: string; readonly title: string } | null;
-  readonly activeWorkPackage: { readonly id: string; readonly title: string } | null;
+  /** 当前世代真实占用额度的包；多包时完整列出，不取第一个冒充唯一活动包。空数组表示执行空闲。 */
+  readonly activeWorkPackages: readonly { readonly id: string; readonly title: string }[];
   readonly context:
     | {
         readonly status: 'available';
@@ -129,4 +130,17 @@ export function unavailableBudget(): BudgetPresentation {
     subject: null,
     approvedLimitRef: null,
   };
+}
+
+/**
+ * 恰好一个活动包时返回它，否则返回 `null`。
+ *
+ * 项目详情与依据入口需要唯一对象 key；多包时没有任何依据可以挑出「那个」包，因此回落为非专属 key 或
+ * 提示，而不是取第一个冒充唯一活动包。
+ */
+export function soleActiveWorkPackage(
+  presentation: ProjectPresentation | undefined,
+): { readonly id: string; readonly title: string } | null {
+  const active = presentation?.activeWorkPackages ?? [];
+  return active.length === 1 ? active[0]! : null;
 }

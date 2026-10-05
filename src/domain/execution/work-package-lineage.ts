@@ -3,8 +3,9 @@
  * （Owner: `m1-evolve-execution-graph`，D11）。
  *
  * 当新 Work Package 明确延续一个未完成的旧责任时，这次延续必须被显式记录：旧责任已消耗的实现、修复、
- * Graph Revision 与 Specification Revision 额度随之继承，而不是被重置为新值。`maxRecoveriesPerWorkerAttempt`
- * 不在继承范围内——它是单个 Worker Attempt 的恢复次数，不是 Work Package 级的已消耗额度。
+ * Graph Revision、Specification Revision 与集成复验额度随之继承，而不是被重置为新值。
+ * `maxRecoveriesPerWorkerAttempt` 不在继承范围内——它是单个 Worker Attempt 的恢复次数，不是
+ * Work Package 级的已消耗额度。
  *
  * 继承是**记录**，不是状态复制：这里不搬运旧完成状态、不复用旧 worktree，也不让旧结果自动满足新节点。
  * 纯判定：不读时钟、不碰存储。
@@ -22,6 +23,7 @@ export const INHERITABLE_BUDGET_FIELDS = [
   'validatorRepairs',
   'graphRevisions',
   'specificationRevisions',
+  'integrationReconciliations',
 ] as const satisfies readonly WorkPackageBudgetField[];
 
 export type InheritableBudgetField = (typeof INHERITABLE_BUDGET_FIELDS)[number];

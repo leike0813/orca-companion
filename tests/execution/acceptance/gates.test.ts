@@ -242,6 +242,7 @@ test('gate.revision-not-retry：规格修订要求重新准入，重试不改 co
       validatorRepairs: 2,
       graphRevisions: 2,
       specificationRevisions: 2,
+      integrationReconciliations: 2,
       maxRecoveriesPerWorkerAttempt: 1,
     },
     acceptanceEvidence: [],

@@ -1,5 +1,34 @@
-import type { OperationId } from './dto/identity.js';
+import type { CoordinationScopeId, OperationId } from './dto/identity.js';
+import type { BranchCoordinationStore } from './ports/branch-coordination-store.js';
 import type { ExecutionBackend, ExecutionMutation } from './ports/execution-backend.js';
+
+/** 读取 prepared-terminal intent 的可核验句柄：只有查询给出确定结果才可能 none，其余缺证据一律 evidence_missing。 */
+export type KnownTerminalHandle =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'known'; readonly handle: string }
+  | { readonly kind: 'evidence_missing' };
+
+export function knownTerminalHandleFor(
+  store: BranchCoordinationStore,
+  coordinationScopeId: CoordinationScopeId,
+  operationId: OperationId,
+): KnownTerminalHandle {
+  const read = store.query({ kind: 'intent', coordinationScopeId, operationId });
+  if (read.kind !== 'intent') {
+    return { kind: 'evidence_missing' };
+  }
+  const intent = read.intent;
+  if (intent === null) {
+    return { kind: 'none' };
+  }
+  if (intent.state === 'settled' && intent.outcomeClass === 'rejected') {
+    return { kind: 'none' };
+  }
+  const handle = intent.terminalHandle;
+  return handle === null || handle === undefined
+    ? { kind: 'evidence_missing' }
+    : { kind: 'known', handle };
+}
 
 export type PreparedTerminalLaunch = {
   readonly title: string;
@@ -10,7 +39,7 @@ export type PreparedTerminalStrategy<T extends PreparedTerminalLaunch = Prepared
   readonly kind: 'prepared_terminal';
   readonly harness: string;
   readonly activation: 'none' | 'submit_draft';
-  /** 稳定资源标记；崩溃恢复时据此重定位 exact terminal，不持久化易变 handle。 */
+  /** 仅用于展示；崩溃恢复以 prepared 创建回执里的 terminal handle 为资源 owner。 */
   readonly title: string;
   readonly prepare: (input: { readonly worktreePath: string }) => Promise<T>;
 };
@@ -30,7 +59,7 @@ export type WorkerLaunchFailure =
   | { readonly kind: 'unknown'; readonly operationId: OperationId; readonly reason: string }
   | { readonly kind: 'blocked'; readonly laneKey: string; readonly reason: string };
 
-export type WorkerLaunchMutationResult = { readonly kind: 'accepted' } | WorkerLaunchFailure;
+export type WorkerLaunchMutationResult = { readonly kind: 'accepted'; readonly terminalHandle?: string } | WorkerLaunchFailure;
 
 export type PreparedTerminalBinding = {
   readonly handle: string;
@@ -101,10 +130,11 @@ async function worktreePath(
     : rejected('worktree_unverifiable', `无法按 exact id 定位 Worker worktree：${worktreeId}`);
 }
 
-async function terminalByTitle(
+async function preparedTerminal(
   backend: ExecutionBackend,
   worktreeSelector: string,
   title: string,
+  handle?: string,
 ): Promise<TerminalEntry | null | WorkerLaunchFailure> {
   const listed = await backend.query({ operation: 'terminal-list', worktree: worktreeSelector, limit: 1_000 });
   if (listed.kind === 'rejected') {
@@ -144,7 +174,7 @@ async function terminalByTitle(
       title: record['title'],
     });
   }
-  const matches = terminals.filter((terminal) => terminal.title === title);
+  const matches = terminals.filter((terminal) => handle === undefined ? terminal.title === title : terminal.handle === handle);
   if (matches.length > 1) {
     return { kind: 'blocked', laneKey: title, reason: `稳定 title 命中 ${matches.length} 个 terminal，无法确定资源归属` };
   }
@@ -157,6 +187,8 @@ export async function prepareWorkerLaunch(input: {
   readonly strategy: WorkerLaunchStrategy;
   readonly worktreeId: string;
   readonly worktreePath?: string;
+  /** Original terminal-create receipt identity, rechecked in the exact worktree. */
+  readonly knownTerminalHandle?: string;
   readonly timeoutMs: number;
   readonly createTerminal: (mutation: Extract<ExecutionMutation, { operation: 'terminal-create' }>) => Promise<WorkerLaunchMutationResult>;
 }): Promise<PreparedWorkerLaunch> {
@@ -177,11 +209,14 @@ export async function prepareWorkerLaunch(input: {
     return path;
   }
   const selector = `path:${path}`;
-  let terminal = await terminalByTitle(input.backend, selector, input.strategy.title);
+  let terminal = await preparedTerminal(input.backend, selector, input.strategy.title, input.knownTerminalHandle);
   if (terminal !== null && ('kind' in terminal)) {
     return terminal;
   }
   if (terminal === null) {
+    if (input.knownTerminalHandle !== undefined) {
+      return rejected('prepared_terminal_unavailable', '原 terminal-create 回执资源不在当前 worktree，拒绝重复创建');
+    }
     let prepared: PreparedTerminalLaunch;
     try {
       prepared = await input.strategy.prepare({ worktreePath: path });
@@ -200,7 +235,7 @@ export async function prepareWorkerLaunch(input: {
     if (created.kind !== 'accepted') {
       return created;
     }
-    terminal = await terminalByTitle(input.backend, selector, input.strategy.title);
+    terminal = await preparedTerminal(input.backend, selector, input.strategy.title, created.terminalHandle);
     if (terminal !== null && ('kind' in terminal)) {
       return terminal;
     }
@@ -229,7 +264,12 @@ export async function prepareWorkerLaunch(input: {
   };
 }
 
-/** 某些 TUI 会把 Orca 的大段 paste 留在 draft；只在读回非空 draft 时发送一次固定 Enter。 */
+/**
+ * 提交已由 Orca 写入的 prepared terminal draft。
+ *
+ * 当前 CLI 的 terminal-read 不提供 draft 字段（只有 screen tail），因此不做屏幕文本猜测：activation 为
+ * submit_draft 时直接提交一次；调用方用稳定 Operation Intent 包裹该 mutation，重放由 Intent 复用而不重发。
+ */
 export async function activatePreparedWorker(input: {
   readonly backend: ExecutionBackend;
   readonly terminal: PreparedTerminalBinding | null;
@@ -238,27 +278,7 @@ export async function activatePreparedWorker(input: {
   if (input.terminal === null || input.terminal.activation === 'none') {
     return { kind: 'accepted' };
   }
-  // worker-start 的 prompt write 与 screen 投影不是原子的；给投影一个短窗口，不把首次缺字段误判为失败。
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const read = await input.backend.query({
-      operation: 'terminal-read',
-      terminal: input.terminal.handle,
-      screen: true,
-    });
-    if (read.kind === 'rejected') {
-      return read;
-    }
-    const value = read.value as { readonly terminal?: { readonly draft?: unknown } };
-    const draft = value.terminal?.draft;
-    if (typeof draft === 'string') {
-      return draft.length === 0
-        ? { kind: 'accepted' }
-        : input.submitTerminal({ operation: 'terminal-submit', terminal: input.terminal.handle });
-    }
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
-  }
-  // 无 draft 是「无需补交」而非失败；正式会话仍必须由后续 Session Binding 证明。
-  return { kind: 'accepted' };
+  return input.submitTerminal({ operation: 'terminal-submit', terminal: input.terminal.handle });
 }
 
 /** Orca 接管后必须读回同一个 exact external terminal，才承认正式 Dispatch。 */

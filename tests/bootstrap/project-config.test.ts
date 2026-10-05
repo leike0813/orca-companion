@@ -174,7 +174,7 @@ test('连接 URL 保留不含凭据的查询参数', () => {
 
 test('模型设置字段可缺省：纯规划项目不需要 Worker 配置', () => {
   write({
-    schemaVersion: 2,
+    schemaVersion: 3,
     coordinatorModels: [legacyCoordinatorModel()],
     defaultCoordinatorModelRef: 'planning-default',
     tracker: { kind: 'github', routeMapIssueNumber: 42 },
@@ -183,7 +183,7 @@ test('模型设置字段可缺省：纯规划项目不需要 Worker 配置', () 
   });
 
   const parsed = parseProjectConfig({
-    schemaVersion: 2,
+    schemaVersion: 3,
     coordinatorModels: [legacyCoordinatorModel()],
     defaultCoordinatorModelRef: 'planning-default',
     tracker: { kind: 'github', routeMapIssueNumber: 42 },

@@ -17,6 +17,7 @@ import { acquireExecutionLease, acquireRuntimeLease } from '../../src/applicatio
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
+  DispatchId,
   GraphGeneration,
   GraphId,
   GraphVersion,
@@ -24,8 +25,15 @@ import type {
   PlanningCycleId,
   RuntimeIncarnationId,
   WorkPackageId,
+  WorkerTaskId,
 } from '../../src/application/dto/identity.js';
-import type { CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
+import type {
+  BranchCoordinationStore,
+  CoordinationSnapshot,
+  CoordinationWriter,
+  DeliverySettlementRecord,
+  MaterializationBindingRecord,
+} from '../../src/application/ports/branch-coordination-store.js';
 import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
 import { graphIdFor } from '../../src/application/planning/graph-generation.js';
 import { appendAcceptedRevision, loadCurrentGraph, recordInitialGraph } from '../../src/application/planning/graph-history.js';
@@ -43,7 +51,12 @@ import {
   graphRevisionDraftFromEvidence,
   type AdmittedGraphRevision,
 } from '../../src/application/execution/graph-patch-service.js';
-import type { GraphPatchPlannerEvidence } from '../../src/application/execution/graph-patch-planner.js';
+import type {
+  GraphPatchPlannerEvidence,
+  GraphPatchPlannerPort,
+} from '../../src/application/execution/graph-patch-planner.js';
+import { requestGraphPatch } from '../../src/application/execution/request-graph-patch.js';
+import type { GraphChangeRequest } from '../../src/domain/execution/change-routing.js';
 import { recoveryUtilityProfileFixture, workerProfilesFixture } from '../support/model-configurations.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
@@ -120,7 +133,7 @@ beforeEach(() => {
     writer,
     authorizationId: 'auth-1',
     authorizationVersion: 1,
-    manifestVersion: 2,
+    manifestVersion: 3,
     fingerprint: 'fingerprint-1',
     approvalRef: 'approval-1',
     manifest: manifest(),
@@ -168,14 +181,13 @@ function initialGraph(): ExecutionGraph {
   return {
     graphId,
     generation: GENERATION,
-    concurrencyLimit: 1,
     workPackages: [workPackage('wp-a', []), workPackage('wp-b', ['wp-a']), workPackage('wp-c', ['wp-b']), workPackage('wp-d', ['wp-a'])],
   };
 }
 
 function manifest(): ExecutionAuthorizationManifest {
   return {
-    manifestVersion: 2,
+    manifestVersion: 3,
     coordinationScopeId: SCOPE,
     planningCycleId: CYCLE,
     destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
@@ -552,4 +564,150 @@ test('补丁基线必须精确等于当前版本', () => {
   if (rejected.kind === 'rejected') {
     expect(rejected.errors.map((entry) => entry.code)).toContain('base_version_mismatch');
   }
+});
+
+/**
+ * Planner 会在执行期间与普通包并行运行；等待期间别的包可能完成 Validator 结算。补丁必须在提交前用
+ * **这一刻**的事实重新 Admission，否则一个刚被接受的节点仍会被旧快照读成未接受而被 retire/revise。
+ */
+test('Planner 等待期间其它包被接受后，基于陈旧快照的补丁被安全拒绝且不写出图版本', async () => {
+  const changeRequest: GraphChangeRequest = {
+    workPackageId: 'wp-c' as WorkPackageId,
+    changeInstruction: '退休 wp-c，由新的前置节点承接',
+    infrastructureFailure: 'no',
+    changesDependencies: 'no',
+    changesScopeEnvelope: 'no',
+    changesObjective: 'unknown',
+    contractContentOnly: 'no',
+    goalOrGlobalConstraintChanged: 'no',
+    userRequestedReplanning: 'no',
+    requiresUserChoice: 'no',
+  };
+  const retirePayload = (): Record<string, unknown> => ({
+    baseGraphVersion: current().version,
+    patchId: 'patch-parallel',
+    operationId: 'op-from-payload',
+    add: [],
+    revise: [],
+    retire: ['wp-c'],
+    descendants: [],
+    takesOver: [],
+  });
+  // 控制组：在陈旧快照（accepted 为空）下这份补丁本身合法，证明拒绝只能来自提交时刻的事实刷新。
+  const control = admitGraphRevision({
+    draft: { payload: retirePayload(), operationId: 'op-control' as OperationId, patchId: 'patch-parallel' },
+    current: current(),
+    limits: DEFAULT_EXECUTION_LIMITS,
+    authorization: authorization(),
+    acceptedWorkPackageIds: [],
+    dispatchedWorkPackageIds: [],
+  });
+  expect(control.kind).toBe('admitted');
+
+  const workerTaskId = 'worker-task-wp-c' as WorkerTaskId;
+  const binding: MaterializationBindingRecord = {
+    coordinationScopeId: SCOPE,
+    workPackageId: 'wp-c' as WorkPackageId,
+    identity: 'issued',
+    role: 'validator',
+    recoveryUtilityRole: null,
+    workerTaskId,
+    dispatchId: 'dispatch-wp-c' as DispatchId,
+    attemptId: 'attempt-wp-c',
+    worktreeId: 'worktree-wp-c',
+    specBinding: null,
+    specificationUnitPath: null,
+    authorizationId: 'auth-1',
+    authorizationVersion: 1,
+    workerProfileRef: { kind: 'worker-profile', id: 'profile-validator' },
+    orcaTaskId: 'orca-task-wp-c',
+    creationOperationId: 'op-seed' as OperationId,
+    launchId: 'launch-wp-c',
+    createdAt: now,
+  };
+  const settlement: DeliverySettlementRecord = {
+    coordinationScopeId: SCOPE,
+    dedupeKey: 'validator:wp-c',
+    deliveryId: 'delivery-wp-c',
+    runId: RUN_ID,
+    consumerGeneration: 1,
+    workerTaskId,
+    dispatchId: 'dispatch-wp-c' as DispatchId,
+    attemptId: 'attempt-wp-c',
+    role: 'validator',
+    contractRevision: 1,
+    orcaResultRef: 'orca-task-wp-c#accepted',
+    acceptedAt: now,
+  };
+
+  // Planner 在等待窗口内让 wp-c 完成 Validator 结算；之后的快照才带上这份事实。
+  let acceptedDuringAwait = false;
+  const planner: GraphPatchPlannerPort = () => {
+    acceptedDuringAwait = true;
+    return Promise.resolve({ kind: 'accepted', draftRef: 'result-1', payload: retirePayload() });
+  };
+  const storeDuringAwait: BranchCoordinationStore = {
+    query: (query) => {
+      const result = store.query(query);
+      if (!acceptedDuringAwait || result.kind !== 'snapshot') {
+        return result;
+      }
+      const snapshot: CoordinationSnapshot = {
+        ...result.snapshot,
+        materializationBindings: [...result.snapshot.materializationBindings, binding],
+        deliverySettlements: [...result.snapshot.deliverySettlements, settlement],
+      };
+      return { kind: 'snapshot', snapshot };
+    },
+    transact: (command) => store.transact(command),
+  };
+
+  // requestGraphPatch 只在 Execution Coordination 模式下成立；测试基座先切到该模式。
+  const transitioned = store.transact({
+    kind: 'transition-to-execution',
+    coordinationScopeId: SCOPE,
+    expectedRevision: scopeRevision(),
+    writer,
+    planningCycleId: CYCLE,
+    graphId,
+    graphVersion: current().version,
+    authorizationId: 'auth-1',
+    authorizationVersion: 1,
+  });
+  expect(transitioned.kind).toBe('committed');
+  // transition-to-execution 会重新签发 Execution Coordination Lease 并递增 fencing generation，
+  // 调用方必须用新代际的 writer 行动，否则会被判成陈旧进程。
+  const leaseRead = store.query({ kind: 'snapshot', coordinationScopeId: SCOPE });
+  if (leaseRead.kind !== 'snapshot' || leaseRead.snapshot.executionLease === null) {
+    throw new Error('无法读取 Execution Coordination Lease');
+  }
+  const activeWriter: CoordinationWriter = {
+    coordinatorSessionId: SESSION,
+    runtimeIncarnationId: leaseRead.snapshot.executionLease.runtimeIncarnationId,
+    fencingGeneration: leaseRead.snapshot.executionLease.fencingGeneration,
+  };
+
+  const result = await requestGraphPatch({
+    store: storeDuringAwait,
+    coordinationScopeId: SCOPE,
+    writer: activeWriter,
+    operationId: 'op-request' as OperationId,
+    patchId: 'patch-parallel',
+    changeRequest,
+    planner,
+    authorization: authorization(),
+    limits: DEFAULT_EXECUTION_LIMITS,
+    acceptedWorkPackageIds: [],
+    dispatchedWorkPackageIds: [],
+    consumedRevisions: [],
+    baselines: () => new Map(),
+    baselineReconciliation: () => Promise.resolve({ kind: 'dispatched' }),
+  });
+
+  expect(result.kind).toBe('rejected');
+  if (result.kind === 'rejected') {
+    expect(result.code).toBe('admission_rejected');
+    expect(result.errors?.map((entry) => entry.code)).toContain('accepted_node_mutation');
+  }
+  expect(versionCount()).toBe(1);
 });

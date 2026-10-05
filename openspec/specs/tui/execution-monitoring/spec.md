@@ -6,16 +6,19 @@
 ## Requirements
 
 ### Requirement: 授权后工作区连续性
-
-进入 Execution Coordination 后系统 MUST NOT 切换应用页面或重置 transcript 与 composer。顶栏 SHALL 显示 Scope control state 与风险/待答摘要；Graph Generation/version SHALL 默认进入 statusline，Execution Authorization 完整引用 SHALL 在项目详情可读，active Work Package 与执行摘要 SHALL 在 Sidebar 显示。Execution Coordination 的并发上限固定为 1，因此 active Work Package 计数 SHALL 只在 0 与 1 之间取值。进程重启后系统 SHALL 先进入 reconciling 投影，且在对账完成前 MUST NOT 推进执行。
+进入 Execution Coordination 后 SHALL 保持 transcript、composer 和焦点；顶栏显示 Scope control state 与风险摘要，Graph 和授权引用按现有区域呈现。Sidebar SHALL 显示真实活动包列表、占用数及批准额度，允许多个活动包；角色阶段和 Worker liveness SHALL 分开表达。重启 SHALL 先对账，不在对账完成前推进执行。
 
 #### Scenario: 授权不重置工作区
-- **WHEN** 用户授权 Execution Authorization Manifest 后 Scope 切换到 Execution Coordination
-- **THEN** transcript 与 composer 保持原内容与焦点，图代际/版本、授权引用和 active Work Package 计数在各自约定区域更新
+- **WHEN** 用户批准 Execution Authorization Manifest
+- **THEN** transcript、composer 与焦点 SHALL 保持，图、授权和活动包摘要按事实更新
 
 #### Scenario: 重启先对账
-- **WHEN** 前台进程退出后重新启动并发现存在活跃 Worker 或未决操作
-- **THEN** 界面先显示 reconciling，对账未完成前不出现新的派发或集成动作
+- **WHEN** 重启发现活跃 Worker 或未决操作
+- **THEN** 界面 SHALL 显示 reconciling，不重复派发或集成
+
+#### Scenario: Multiple active packages
+- **WHEN** 多个包占用批准额度
+- **THEN** 状态 JSON 和界面 SHALL 呈现完整活动 ID 列表及真实计数，不裁成单包
 
 ### Requirement: 执行图与 Frontier 投影
 

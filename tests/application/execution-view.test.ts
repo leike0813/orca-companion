@@ -48,6 +48,7 @@ import type {
   CoordinationSnapshot,
   DeliverySettlementRecord,
   DeliveryVerdictRecord,
+  WorkPackageLaneReservation,
   MaterializationBindingRecord,
   PendingInteractionRecord,
   RecoveryRecord,
@@ -115,6 +116,7 @@ const EMPTY_SNAPSHOT: CoordinationSnapshot = {
   workPackageLineages: [],
   baselineAdoptions: [],
   mutationLanes: [],
+  laneReservations: [],
 };
 
 function snapshot(overrides: Partial<CoordinationSnapshot> = {}): CoordinationSnapshot {
@@ -343,6 +345,7 @@ function makeIntent(operationId: string, state: IntentState = 'pending'): Operat
     state,
     outcomeClass: null,
     backendRequestId: null,
+    terminalHandle: null,
     blockingReason: null,
     createdAt: 10,
     settledAt: null,
@@ -1291,7 +1294,6 @@ describe('whole-graph Validator acceptance', () => {
     const graph: ExecutionGraph = {
       graphId: GRAPH,
       generation: 1 as GraphGeneration,
-      concurrencyLimit: 1,
       workPackages: workPackageIds.map((id) => executionWorkPackage(id)),
     };
     return {
@@ -1314,7 +1316,7 @@ describe('whole-graph Validator acceptance', () => {
       coordinationScopeId: SCOPE,
       authorizationId: 'auth-1',
       authorizationVersion: 1,
-      manifestVersion: 2,
+      manifestVersion: 3,
       fingerprint: 'acceptance-fixture',
       manifest: executionManifest({
         graphId: GRAPH,
@@ -1432,6 +1434,46 @@ describe('whole-graph Validator acceptance', () => {
 
     expect(summary(new Set<GraphVersion>([1 as GraphVersion, 2 as GraphVersion]))?.validatedCount).toBe(1);
     // v1 不在链上（例如该记录已不属于本图链）时，即使授权本身有效也不算验收。
-    expect(summary(new Set<GraphVersion>([2 as GraphVersion]))?.validatedCount).toBe(0);
+  expect(summary(new Set<GraphVersion>([2 as GraphVersion]))?.validatedCount).toBe(0);
+  });
+});
+
+describe('执行活动集合：生命周期与 lane reservation 的并集', () => {
+  const reservation = (
+    workPackageId: string,
+    releasedAt: number | null,
+    graphId: GraphId = GRAPH,
+  ): WorkPackageLaneReservation => ({
+    coordinationScopeId: SCOPE,
+    graphId,
+    generation: 1 as GraphGeneration,
+    workPackageId: workPackageId as WorkPackageId,
+    operationId: 'op-1' as OperationId,
+    authorizationId: 'auth-1',
+    authorizationVersion: 1,
+    baselineHead: 'head-0001',
+    reservedAt: 1,
+    releasedAt,
+  });
+
+  test('未释放的当前世代预约计入，已释放与其它世代不计入', () => {
+    const facts = derive({
+      snapshot: snapshot({
+        laneReservations: [
+          reservation(WP_B, null),
+          reservation('wp-c', 5),
+          reservation('wp-d', null, 'graph-other' as GraphId),
+        ],
+      }),
+      nodes: [
+        { workPackageId: WP_A, dependsOn: [] },
+        { workPackageId: WP_B, dependsOn: [WP_A] },
+      ],
+    });
+    // wp-a 处于 active 生命周期；wp-b 仅由「已派发但尚不可见」的预约占位，同样计入。
+    expect(facts.activeWorkPackageIds).toContain(WP_A);
+    expect(facts.activeWorkPackageIds).toContain(WP_B);
+    expect(facts.activeWorkPackageIds).not.toContain('wp-c');
+    expect(facts.activeWorkPackageIds).not.toContain('wp-d');
   });
 });

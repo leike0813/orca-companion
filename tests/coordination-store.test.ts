@@ -2068,7 +2068,6 @@ function executionGraph(graphId: GraphId = GRAPH_ID) {
   return {
     graphId,
     generation: 1 as GraphGeneration,
-    concurrencyLimit: 1,
     workPackages: [
       {
         workPackageId: 'wp-1' as WorkPackageId,
@@ -2080,6 +2079,7 @@ function executionGraph(graphId: GraphId = GRAPH_ID) {
           validatorRepairs: 2,
           graphRevisions: 2,
           specificationRevisions: 2,
+          integrationReconciliations: 2,
           maxRecoveriesPerWorkerAttempt: 1,
         },
       },
@@ -3214,4 +3214,121 @@ test('schema 16 之前的初始图没有原计划，按缺失呈现且不补写'
   } finally {
     migrated.store.close();
   }
+});
+
+test('terminal 创建类意图 accepted 落盘 terminalHandle：同值幂等、异值与错类别拒绝', () => {
+  createScope();
+  activateSession();
+
+  expect(
+    submit((expectedRevision) => ({
+      kind: 'begin-intent',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      operationId: 'op-terminal' as OperationId,
+      target: { kind: 'worker-task', id: 'wp-1' },
+      operationCategory: 'worker-terminal-prepare',
+    })).kind,
+  ).toBe('committed');
+  expect(
+    submit((expectedRevision) => ({
+      kind: 'begin-intent',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      operationId: 'op-run' as OperationId,
+      target: { kind: 'orca_run', id: 'run-1' },
+      operationCategory: 'run-create',
+    })).kind,
+  ).toBe('committed');
+
+  expect(
+    submit((expectedRevision) => ({
+      kind: 'settle-intent',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      operationId: 'op-run' as OperationId,
+      outcomeClass: 'accepted',
+      terminalHandle: 'term-x',
+    })).kind,
+  ).toBe('rejected');
+  expect(
+    submit((expectedRevision) => ({
+      kind: 'settle-intent',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      operationId: 'op-terminal' as OperationId,
+      outcomeClass: 'rejected',
+      terminalHandle: 'term-1',
+    })).kind,
+  ).toBe('rejected');
+
+  expect(
+    submit((expectedRevision) => ({
+      kind: 'settle-intent',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      operationId: 'op-terminal' as OperationId,
+      outcomeClass: 'accepted',
+      backendRequestId: 'req-1',
+      terminalHandle: 'term-1',
+    })).kind,
+  ).toBe('committed');
+  const read = store.query({ kind: 'intent', coordinationScopeId: SCOPE, operationId: 'op-terminal' as OperationId });
+  expect(read.kind === 'intent' ? read.intent?.terminalHandle : null).toBe('term-1');
+  expect(read.kind === 'intent' ? read.intent?.outcomeClass : null).toBe('accepted');
+
+  expect(
+    submit((expectedRevision) => ({
+      kind: 'settle-intent',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      operationId: 'op-terminal' as OperationId,
+      outcomeClass: 'accepted',
+      backendRequestId: 'req-1',
+      terminalHandle: 'term-1',
+    })).kind,
+  ).toBe('committed');
+  expect(
+    submit((expectedRevision) => ({
+      kind: 'settle-intent',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      operationId: 'op-terminal' as OperationId,
+      outcomeClass: 'accepted',
+      backendRequestId: 'req-1',
+      terminalHandle: 'term-2',
+    })).kind,
+  ).toBe('rejected');
+});
+
+test('持久行的 terminal_handle 与 state/category 不自洽时读取 fail closed', () => {
+  createScope();
+  activateSession();
+  expect(
+    submit((expectedRevision) => ({
+      kind: 'begin-intent',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      operationId: 'op-pending' as OperationId,
+      target: { kind: 'worker-task', id: 'wp-1' },
+      operationCategory: 'worker-terminal-prepare',
+    })).kind,
+  ).toBe('committed');
+
+  const raw = new DatabaseSync(join(directory, 'coordination.sqlite'));
+  raw
+    .prepare("UPDATE operation_intents SET terminal_handle = ? WHERE coordination_scope_id = ? AND operation_id = ?")
+    .run('term-malformed', SCOPE, 'op-pending');
+  raw.close();
+
+  const read = store.query({ kind: 'intent', coordinationScopeId: SCOPE, operationId: 'op-pending' as OperationId });
+  expect(read.kind).toBe('rejected');
 });

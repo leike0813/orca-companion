@@ -274,6 +274,9 @@ test('reconcile 只读回读，不产生新 commit 或推送', async () => {
     ref: 'refs/heads/main',
     head: snapshot.canonical,
   });
+  expect(await port.reconcile(request('push', { expectedHead: earlier }), scope('op-push'))).toMatchObject({
+    kind: 'unknown',
+  });
   // 没有新 HEAD 时只能是 unknown，不能推断已提交。
   expect(await port.reconcile(request('commit', { expectedHead: snapshot.source }), scope('op-commit'))).toMatchObject({
     kind: 'unknown',
@@ -346,4 +349,211 @@ test('push 退出码失败但远端已移动时先报 unknown，再从同一目�
   const attempt = request('push', { expectedHead: head });
   expect(await failing.run(attempt, scope('op-push'))).toMatchObject({ kind: 'unknown' });
   expect(await failing.reconcile(attempt, scope('op-push'))).toMatchObject({ kind: 'pushed', head });
+});
+
+test('canonical 前移后合并复验再 fast-forward 集成，不产生永久 FF 拒绝', async () => {
+  writeFileSync(join(source, 'feature.txt'), 'worker change\n');
+  const committed = await port.run(request('commit'), scope('op-commit'));
+  if (committed.kind !== 'committed') throw new Error('commit 步未完成');
+  // canonical 另行前进（不同文件），使 wp-1 不再是其后继。
+  writeFileSync(join(canonical, 'canonical.txt'), 'canonical side\n');
+  commitAll(canonical, 'canonical side');
+  const canonicalHead = gitAt(canonical, 'rev-parse', 'HEAD');
+
+  const merged = await port.run(
+    request('merge_canonical', { expectedHead: canonicalHead, branch: 'wp-1', sourceBranch: 'wp-1', commitMessage: null }),
+    scope('op-merge'),
+  );
+  expect(merged).toEqual({ kind: 'merge_applied', conflicts: [] });
+  // --no-commit：合并已进 index，但包 HEAD 尚未前移。
+  expect(gitAt(source, 'rev-parse', 'HEAD')).toBe(committed.head);
+  expect(await port.readTree({ worktreePath: source })).toMatchObject({ kind: 'read' });
+
+  const mergeCommit = await port.run(
+    request('merge_commit', {
+      expectedHead: committed.head,
+      expectedTree: gitAt(source, 'write-tree'),
+      branch: 'wp-1',
+      sourceBranch: 'wp-1',
+      commitMessage: 'merge canonical',
+    }),
+    scope('op-merge-commit'),
+  );
+  if (mergeCommit.kind !== 'committed') throw new Error('merge commit 步未完成');
+
+  const integrated = await port.run(
+    request('integrate_canonical', { branch: 'wp-1', expectedHead: canonicalHead }),
+    scope('op-integrate'),
+  );
+  expect(integrated).toEqual({ kind: 'integrated', head: mergeCommit.head });
+  expect(gitAt(canonical, 'rev-parse', 'HEAD')).toBe(mergeCommit.head);
+  // 是真正的 merge commit（两个父）。
+  expect(gitAt(canonical, 'rev-list', '--parents', '-n', '1', 'HEAD').split(' ')).toHaveLength(3);
+});
+
+test('分叉冲突：原 Validator 解决后提交并集成，未解决时拒绝提交且树不可核验', async () => {
+  writeFileSync(join(source, 'shared.txt'), 'source version\n');
+  const committed = await port.run(request('commit'), scope('op-commit'));
+  if (committed.kind !== 'committed') throw new Error('commit 步未完成');
+  writeFileSync(join(canonical, 'shared.txt'), 'canonical version\n');
+  commitAll(canonical, 'canonical version');
+  const canonicalHead = gitAt(canonical, 'rev-parse', 'HEAD');
+
+  const merged = await port.run(
+    request('merge_canonical', { expectedHead: canonicalHead, branch: 'wp-1', sourceBranch: 'wp-1', commitMessage: null }),
+    scope('op-merge'),
+  );
+  expect(merged.kind === 'merge_applied' ? merged.conflicts : []).toContain('shared.txt');
+  // 未解决冲突时无法写树，也无法提交。
+  expect(await port.readTree({ worktreePath: source })).toMatchObject({ kind: 'unavailable' });
+  expect(
+    await port.run(
+      // 未解决冲突时无法写出树：冲突检查先于树核对，因此这里给一个形态合法的占位树。
+      request('merge_commit', { expectedHead: committed.head, expectedTree: 'a'.repeat(40), branch: 'wp-1', sourceBranch: 'wp-1', commitMessage: 'merge' }),
+      scope('op-mc'),
+    ),
+  ).toMatchObject({ kind: 'rejected', code: 'merge_conflicts_unresolved' });
+
+  // 模拟 Validator 在授权范围内解决冲突并 stage。
+  writeFileSync(join(source, 'shared.txt'), 'resolved\n');
+  execFileSync('git', ['add', 'shared.txt'], { cwd: source, env: GIT_ENV });
+  const committed2 = await port.run(
+    request('merge_commit', {
+      expectedHead: committed.head,
+      expectedTree: gitAt(source, 'write-tree'),
+      branch: 'wp-1',
+      sourceBranch: 'wp-1',
+      commitMessage: 'merge resolved',
+    }),
+    scope('op-mc2'),
+  );
+  if (committed2.kind !== 'committed') throw new Error('merge commit 步未完成');
+
+  // 同一 OperationId 重放：HEAD 已是原 HEAD 的后继 → 按已提交认账，不重复提交。
+  expect(
+    await port.run(
+      request('merge_commit', {
+        expectedHead: committed.head,
+        expectedTree: gitAt(source, 'write-tree'),
+        branch: 'wp-1',
+        sourceBranch: 'wp-1',
+        commitMessage: 'merge resolved',
+      }),
+      scope('op-mc2'),
+    ),
+  ).toEqual({ kind: 'committed', head: committed2.head });
+
+  expect(
+    await port.run(
+      request('integrate_canonical', { branch: 'wp-1', expectedHead: canonicalHead }),
+      scope('op-integrate'),
+    ),
+  ).toEqual({ kind: 'integrated', head: committed2.head });
+});
+
+test('isAncestor 只读判断祖先关系，非法输入不可核验', async () => {
+  const base = gitAt(canonical, 'rev-parse', 'HEAD');
+  expect(await port.isAncestor({ ancestor: base, descendant: base })).toEqual({ kind: 'yes' });
+  writeFileSync(join(source, 'x.txt'), 'x\n');
+  commitAll(source, 'x');
+  const child = gitAt(source, 'rev-parse', 'HEAD');
+  expect(await port.isAncestor({ ancestor: base, descendant: child })).toEqual({ kind: 'yes' });
+  expect(await port.isAncestor({ ancestor: child, descendant: base })).toEqual({ kind: 'no' });
+  expect(await port.isAncestor({ ancestor: 'not-a-commit', descendant: base })).toMatchObject({
+    kind: 'unavailable',
+  });
+});
+
+test('merge_commit 拒绝未 stage 的工作区改动，未复验树不进入 canonical', async () => {
+  writeFileSync(join(source, 'feature.txt'), 'worker change\n');
+  const committed = await port.run(request('commit'), scope('op-commit'));
+  if (committed.kind !== 'committed') throw new Error('commit 步未完成');
+  writeFileSync(join(source, 'feature.txt'), 'unverified change\n');
+
+  const outcome = await port.run(
+    request('merge_commit', {
+      expectedHead: committed.head,
+      expectedTree: gitAt(source, 'rev-parse', 'HEAD^{tree}'),
+      branch: 'wp-1',
+      sourceBranch: 'wp-1',
+      commitMessage: 'merge',
+    }),
+    scope('op-mc'),
+  );
+
+  expect(outcome).toMatchObject({ kind: 'rejected', code: 'worktree_dirty_not_staged' });
+  expect(gitAt(source, 'rev-parse', 'HEAD')).toBe(committed.head);
+});
+
+test('merge_commit 已提交但未结算：按原 intent 对账可核验，重放不重复提交', async () => {
+  writeFileSync(join(source, 'feature.txt'), 'worker change\n');
+  const committed = await port.run(request('commit'), scope('op-commit'));
+  if (committed.kind !== 'committed') throw new Error('commit 步未完成');
+  writeFileSync(join(canonical, 'canonical.txt'), 'canonical side\n');
+  commitAll(canonical, 'canonical side');
+  const canonicalHead = gitAt(canonical, 'rev-parse', 'HEAD');
+
+  const merged = await port.run(
+    request('merge_canonical', { expectedHead: canonicalHead, branch: 'wp-1', sourceBranch: 'wp-1', commitMessage: null }),
+    scope('op-merge'),
+  );
+  expect(merged.kind).toBe('merge_applied');
+  const tree = await port.readTree({ worktreePath: source });
+  if (tree.kind !== 'read') throw new Error('无法写出已复验树');
+  const mergeCommit = await port.run(
+    request('merge_commit', {
+      expectedHead: committed.head,
+      expectedTree: tree.tree,
+      branch: 'wp-1',
+      sourceBranch: 'wp-1',
+      commitMessage: 'merge canonical',
+    }),
+    scope('op-mc'),
+  );
+  if (mergeCommit.kind !== 'committed') throw new Error('merge commit 步未完成');
+  const beforeReplay = gitAt(source, 'rev-list', '--count', 'HEAD');
+
+  expect(
+    await port.reconcile(
+      request('merge_canonical', { expectedHead: canonicalHead, branch: 'wp-1', sourceBranch: 'wp-1', commitMessage: null }),
+      scope('op-merge'),
+    ),
+  ).toEqual({ kind: 'merge_applied', conflicts: [] });
+  expect(
+    await port.reconcile(
+      request('merge_commit', {
+        expectedHead: committed.head,
+        expectedTree: tree.tree,
+        branch: 'wp-1',
+        sourceBranch: 'wp-1',
+        commitMessage: 'merge canonical',
+      }),
+      scope('op-mc'),
+    ),
+  ).toEqual({ kind: 'committed', head: mergeCommit.head });
+  expect(
+    await port.reconcile(
+      request('merge_commit', {
+        expectedHead: committed.head,
+        expectedTree: 'f'.repeat(40),
+        branch: 'wp-1',
+        sourceBranch: 'wp-1',
+        commitMessage: 'merge canonical',
+      }),
+      scope('op-mc'),
+    ),
+  ).toMatchObject({ kind: 'unknown' });
+  expect(
+    await port.run(
+      request('merge_commit', {
+        expectedHead: committed.head,
+        expectedTree: tree.tree,
+        branch: 'wp-1',
+        sourceBranch: 'wp-1',
+        commitMessage: 'merge canonical',
+      }),
+      scope('op-mc'),
+    ),
+  ).toEqual({ kind: 'committed', head: mergeCommit.head });
+  expect(gitAt(source, 'rev-list', '--count', 'HEAD')).toBe(beforeReplay);
 });

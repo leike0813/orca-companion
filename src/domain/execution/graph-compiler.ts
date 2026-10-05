@@ -383,7 +383,6 @@ export function compileGraphPatch(input: GraphPatchCompilationInput): GraphPatch
   const resultGraph: ExecutionGraph = {
     graphId: input.current.graphId,
     generation: input.current.generation,
-    concurrencyLimit: input.current.graph.concurrencyLimit,
     workPackages: [...keptWorkPackages, ...addedWorkPackages],
   };
 

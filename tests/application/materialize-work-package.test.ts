@@ -52,6 +52,10 @@ import { DEFAULT_EXECUTION_LIMITS, budgetFromLimits } from '../../src/domain/pla
 import type { RoleAuthorities, WorkerRole } from '../../src/domain/planning/execution-authorization.js';
 import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
 import { orcaDispatchIdFromReceipt, orcaTaskIdFromReceipt } from '../../src/application/ports/execution-backend.js';
+import { graphIdFor } from '../../src/application/planning/graph-generation.js';
+import { recordInitialGraph } from '../../src/application/planning/graph-history.js';
+import { executionManifest, executionWorkPackage } from '../support/execution-harness.js';
+import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SESSION_A = 'session-a' as CoordinatorSessionId;
@@ -199,26 +203,36 @@ function isolatedWorktreeFor(workPackageId: WorkPackageId): WorktreeSummary {
 
 /** 把 Scope 推进到 execution_coordination 并持有 Execution Lease。 */
 function enterExecution(): void {
+  const graph = {
+    graphId: graphIdFor(SCOPE, 1 as never),
+    generation: 1 as never,
+    workPackages: [executionWorkPackage(WP), executionWorkPackage(WP_TWO)],
+  };
+  const recorded = recordInitialGraph({
+    store, coordinationScopeId: SCOPE, writer, graph,
+    initialPlan: implementationPlanFor(graph, 3), mapRevision: 2, planRevision: 3, orcaRunId: 'run-1',
+  });
+  if (recorded.kind !== 'recorded') throw new Error('无法记录物化测试图');
+  const authorized = store.transact({
+    kind: 'record-authorization', coordinationScopeId: SCOPE, expectedRevision: revision(), writer,
+    authorizationId: 'auth-1', authorizationVersion: 1, manifestVersion: 3,
+    fingerprint: 'fingerprint-1', approvalRef: 'approval-1',
+    manifest: executionManifest({ graphId: graph.graphId, generation: graph.generation,
+      baselineHead: 'abcdef0123456789abcdef0123456789abcdef01' }),
+  });
+  if (authorized.kind !== 'committed') throw new Error(authorized.message);
   const scope = store.query({ kind: 'scope', coordinationScopeId: SCOPE });
   if (scope.kind !== 'scope' || scope.scope === null) {
     throw new Error('Scope 不存在');
   }
-  const acquired = store.transact({
-    kind: 'acquire-execution-lease',
+  const transitioned = store.transact({
+    kind: 'transition-to-execution',
     coordinationScopeId: SCOPE,
     expectedRevision: scope.scope.revision,
     writer,
-  });
-  if (acquired.kind !== 'committed') {
-    throw new Error(`无法取得 Execution Lease: ${acquired.message}`);
-  }
-  const transitioned = store.transact({
-    kind: 'update-scope-mode',
-    coordinationScopeId: SCOPE,
-    expectedRevision: acquired.revision,
-    writer,
-    mode: 'execution_coordination',
     planningCycleId: CYCLE,
+    graphId: graph.graphId, graphVersion: 1 as never,
+    authorizationId: 'auth-1', authorizationVersion: 1,
   });
   if (transitioned.kind !== 'committed') {
     throw new Error(`无法切换到 execution_coordination: ${transitioned.message}`);
@@ -497,13 +511,21 @@ test.each([false, true])('既有通过核验的 worktree 被复用，不重复�
   expect(mutations).toEqual(['task-create', 'worker-start']);
 });
 
-test('prepared-terminal 先准备隔离 harness，再把 exact terminal 交给 Orca 接管', async () => {
+test.each([
+  ['stable', 'companion:prepared:1'],
+  ['changed', 'wp-1'],
+])('prepared-terminal 显示标题 %s 时仍按 exact 句柄接管（title 不参与归属）', async (_label, terminalTitle) => {
   let terminalCreated = false;
   const { backend, calls } = fakeBackend({
     worktrees: [isolatedWorktree()],
-    mutating: (_call, mutation) => {
+    mutating: (_call, mutation, scope) => {
       if (mutation.operation === 'terminal-create') {
         terminalCreated = true;
+        return {
+          kind: 'accepted',
+          operation: { operationId: scope.operationId, target: scope.target },
+          value: { handle: 'terminal-prepared-1' },
+        };
       }
       return undefined;
     },
@@ -521,7 +543,7 @@ test('prepared-terminal 先准备隔离 harness，再把 exact terminal 交给 O
                   executionHostId: 'local',
                   worktreeId: 'wt-existing-1',
                   branch: 'refs/heads/wp-1',
-                  title: 'companion:prepared:1',
+                  title: terminalTitle,
                 }]
               : [],
             hostIds: ['local'],
@@ -533,6 +555,9 @@ test('prepared-terminal 先准备隔离 harness，再把 exact terminal 交给 O
       }
       if (query.operation === 'terminal-wait') {
         return { kind: 'accepted', value: { state: 'tui-idle' } };
+      }
+      if (query.operation === 'worker-list') {
+        return { kind: 'accepted', value: { workers: [{ taskId: 'orca-task-1', dispatchId: 'dispatch-1' }] } };
       }
       if (query.operation === 'worker-show') {
         return {
@@ -582,6 +607,100 @@ test('prepared-terminal 先准备隔离 harness，再把 exact terminal 交给 O
     operation: 'worker-start',
     terminal: 'terminal-prepared-1',
   });
+
+  const replay = await materializeWorkPackage({
+    store, backend, coordinationScopeId: SCOPE, workPackageId: WP,
+    context: context('prepared', {
+      kind: 'prepared_terminal', harness: 'codex', activation: 'submit_draft',
+      title: 'companion:prepared:1',
+      prepare: () => Promise.resolve({ title: 'companion:prepared:1', command: 'fixed-codex-launcher' }),
+    }),
+    facts: facts(), expectedRevision: revision(),
+  });
+  expect(replay.kind).toBe('materialized');
+  expect(calls.filter((call) => call.kind === 'mutate')).toHaveLength(mutations.length);
+});
+
+test('句柄已持久化时 start 失败后新尝试复用句柄，标题已变也不重复 terminal-create', async () => {
+  let terminalCreated = false;
+  let rejectFirstStart = true;
+  const { backend, calls } = fakeBackend({
+    worktrees: [isolatedWorktree()],
+    mutating: (_call, mutation, scope) => {
+      if (mutation.operation === 'terminal-create') {
+        terminalCreated = true;
+        return {
+          kind: 'accepted',
+          operation: { operationId: scope.operationId, target: scope.target },
+          value: { handle: 'terminal-prepared-1' },
+        };
+      }
+      if (mutation.operation === 'worker-start' && rejectFirstStart) {
+        rejectFirstStart = false;
+        return { kind: 'rejected', code: 'worker_start_rejected', message: 'worker 未启动' };
+      }
+      return undefined;
+    },
+    queryResult: (_call, query) => {
+      if (query.operation === 'terminal-list') {
+        return {
+          kind: 'accepted',
+          value: {
+            // 恢复时公共 terminal 的显示标题已变成 worktree 短名。
+            terminals: terminalCreated
+              ? [{
+                  handle: 'terminal-prepared-1',
+                  connected: true,
+                  writable: true,
+                  orphaned: false,
+                  executionHostId: 'local',
+                  worktreeId: 'wt-existing-1',
+                  branch: 'refs/heads/wp-1',
+                  title: 'wp-short',
+                }]
+              : [],
+            hostIds: ['local'],
+            omittedHostIds: [],
+            totalCount: terminalCreated ? 1 : 0,
+            truncated: false,
+          },
+        };
+      }
+      if (query.operation === 'terminal-wait') return { kind: 'accepted', value: { state: 'tui-idle' } };
+      if (query.operation === 'worker-show') {
+        return { kind: 'accepted', value: { dispatchId: 'dispatch-1', exactWorker: true, agentTerminalHandle: 'terminal-prepared-1' } };
+      }
+      if (query.operation === 'terminal-read') return { kind: 'accepted', value: { terminal: { draft: '[Pasted Content]' } } };
+      return undefined;
+    },
+  });
+
+  const base = context('recover', {
+    kind: 'prepared_terminal',
+    harness: 'codex',
+    activation: 'submit_draft',
+    title: 'companion:prepared:1',
+    prepare: () => Promise.resolve({ title: 'companion:prepared:1', command: 'fixed-codex-launcher' }),
+  });
+  const first = await materializeWorkPackage({
+    store, backend, coordinationScopeId: SCOPE, workPackageId: WP,
+    context: base, facts: facts(), expectedRevision: revision(),
+  });
+  expect(first.kind).toBe('rejected');
+
+  // 同一 Task 的续接尝试：workerPrepare 身份不变（复用句柄），只有 workerStart 换新身份。
+  const retry = {
+    ...base,
+    operationIds: { ...base.operationIds, workerStart: 'op-worker-recover:retry:1' as OperationId },
+  };
+  const second = await materializeWorkPackage({
+    store, backend, coordinationScopeId: SCOPE, workPackageId: WP,
+    context: retry, facts: facts(), expectedRevision: revision(),
+  });
+  expect(second.kind).toBe('materialized');
+  expect(
+    calls.filter((call) => call.kind === 'mutate' && call.operation.operation === 'terminal-create'),
+  ).toHaveLength(1);
 });
 
 test('worktree 列举未覆盖全部执行主机时拒绝物化', async () => {
@@ -864,6 +983,8 @@ test('Worker 启动失败后复用已绑定 Task，不创建第二个 Task', asy
   });
   expect(first.kind).toBe('rejected');
 
+  const held = store.query({ kind: 'work-package-lanes', coordinationScopeId: SCOPE });
+  expect(held.kind === 'work-package-lanes' ? held.reservations.length : -1).toBe(1);
   const second = await materializeWorkPackage({
     store,
     backend: execution.backend,
@@ -912,6 +1033,14 @@ test('重新授权只影响新 Task：新 Work Package 钉住新授权，旧 Tas
   expect(afterRetry.kind === 'materialization-bindings' ? afterRetry.bindings[0]?.authorizationId : null).toBe('auth-1');
 
   // 新的 Work Package 在新授权下物化：它的绑定是新授权与新 profile。
+  const authorized = store.transact({
+    kind: 'record-authorization', coordinationScopeId: SCOPE, expectedRevision: revision(), writer,
+    authorizationId: 'auth-2', authorizationVersion: 2, manifestVersion: 3,
+    fingerprint: 'fingerprint-2', approvalRef: 'approval-2',
+    manifest: executionManifest({ graphId: graphIdFor(SCOPE, 1 as never), generation: 1 as never,
+      baselineHead: 'abcdef0123456789abcdef0123456789abcdef01' }),
+  });
+  expect(authorized.kind).toBe('committed');
   const next = await materializeWorkPackage({
     store,
     backend: execution.backend,
@@ -1010,6 +1139,30 @@ test('重新授权后不按新绑定复用旧 Task：绑定与候选授权不一
   ).toHaveLength(1);
 });
 
+test('包尚未产生副作用时确定拒绝释放额度，并允许原包重新接纳', async () => {
+  let reject = true;
+  const execution = fakeBackend({ mutating: (_call, mutation) => {
+    if (mutation.operation === 'worktree-create' && reject) {
+      reject = false;
+      return { kind: 'rejected', code: 'worktree_unavailable', message: '未建立 worktree' };
+    }
+    return undefined;
+  } });
+  const dispatch = (attempt: number) => materializeWorkPackage({ store, backend: execution.backend,
+    coordinationScopeId: SCOPE, workPackageId: WP,
+    context: { ...context(`no-effects-${attempt}`), candidate: {
+      ...context(`no-effects-${attempt}`).candidate, taskEnvelope: {
+        ...context(`no-effects-${attempt}`).candidate.taskEnvelope,
+        attemptId: `attempt-${attempt}`, workerTaskId: `worker-task-${attempt}` as never,
+      },
+    } }, facts: facts(),
+    expectedRevision: revision() });
+  expect((await dispatch(1)).kind).toBe('rejected');
+  const released = store.query({ kind: 'work-package-lanes', coordinationScopeId: SCOPE });
+  expect(released.kind === 'work-package-lanes' ? released.reservations : null).toEqual([]);
+  expect((await dispatch(2)).kind).toBe('materialized');
+});
+
 test('worktree 建立回执缺身份时判为 unknown，不继续创建 Task', async () => {
   const { backend, calls } = fakeBackend({
     mutating: (call, mutation) => {
@@ -1035,6 +1188,8 @@ test('worktree 建立回执缺身份时判为 unknown，不继续创建 Task', a
   });
 
   expect(result.kind).toBe('unknown');
+  const held = store.query({ kind: 'work-package-lanes', coordinationScopeId: SCOPE });
+  expect(held.kind === 'work-package-lanes' ? held.reservations.length : -1).toBe(1);
   expect(
     calls.filter((call) => call.kind === 'mutate' && call.operation.operation === 'task-create'),
   ).toHaveLength(0);
@@ -1224,6 +1379,64 @@ test('worker-start 结果未知且 Orca 列举里没有该 Task：保持 lane �
   });
 
   expect(result.kind).toBe('unknown');
+});
+
+test('物化重放已结算的 worker-start：existing 只读回读，不再 mutate 也不非法 settle', async () => {
+  const execution = fakeBackend({
+    worktrees: [isolatedWorktree()],
+    queryResult: (_call, query) =>
+      query.operation === 'worker-list'
+        ? { kind: 'accepted', value: { workers: [{ dispatchId: 'dispatch-1', taskId: 'orca-task-1', workerState: 'running' }] } }
+        : undefined,
+  });
+  const replayContext = context('replay');
+  const startMutations = () =>
+    execution.calls.filter((call) => call.kind === 'mutate' && call.operation.operation === 'worker-start');
+
+  const first = await materializeWorkPackage({
+    store, backend: execution.backend, coordinationScopeId: SCOPE, workPackageId: WP,
+    context: replayContext, facts: facts(), expectedRevision: revision(),
+  });
+  expect(first.kind).toBe('materialized');
+  expect(startMutations()).toHaveLength(1);
+
+  const second = await materializeWorkPackage({
+    store, backend: execution.backend, coordinationScopeId: SCOPE, workPackageId: WP,
+    context: replayContext, facts: facts(), expectedRevision: revision(),
+  });
+  // 已结算的 worker-start 不再重发：existing settled accepted 只按 worker-list 事实读回。
+  expect(second.kind).toBe('materialized');
+  expect(startMutations()).toHaveLength(1);
+  const intents = store.query({ kind: 'intents', coordinationScopeId: SCOPE });
+  const starts = (intents.kind === 'intents' ? intents.intents : []).filter(
+    (entry) => entry.operationCategory === 'materialize-worker-start',
+  );
+  expect(starts.map((entry) => entry.state)).toEqual(['settled']);
+  expect(starts[0]?.outcomeClass).toBe('accepted');
+});
+
+test('物化重放已结算的 worker-start 且事实不可证：即失败 existing，不重发', async () => {
+  const execution = fakeBackend({
+    worktrees: [isolatedWorktree()],
+    // 不登记 worker-list：重放时 reconcileFacts 读不到事实。
+  });
+  const replayContext = context('replay-absent');
+  const first = await materializeWorkPackage({
+    store, backend: execution.backend, coordinationScopeId: SCOPE, workPackageId: WP,
+    context: replayContext, facts: facts(), expectedRevision: revision(),
+  });
+  expect(first.kind).toBe('materialized');
+  const before = execution.calls.filter((call) => call.kind === 'mutate' && call.operation.operation === 'worker-start').length;
+
+  const second = await materializeWorkPackage({
+    store, backend: execution.backend, coordinationScopeId: SCOPE, workPackageId: WP,
+    context: replayContext, facts: facts(), expectedRevision: revision(),
+  });
+  // 事实不可证：existing 直接失败，不重发第二次 worker-start。
+  expect(second).toMatchObject({ kind: 'blocked' });
+  expect(
+    execution.calls.filter((call) => call.kind === 'mutate' && call.operation.operation === 'worker-start').length,
+  ).toBe(before);
 });
 
 test('修订节点只在带匹配补丁许可时以 planner 角色物化，且复用原 worktree', async () => {

@@ -134,7 +134,6 @@ function graphFor(graphId: GraphId): ExecutionGraph {
   return {
     graphId,
     generation: generation(1),
-    concurrencyLimit: 1,
     workPackages: [
       {
         workPackageId: 'wp-1' as WorkPackageId,
@@ -146,6 +145,7 @@ function graphFor(graphId: GraphId): ExecutionGraph {
           validatorRepairs: 2,
           graphRevisions: 2,
           specificationRevisions: 2,
+          integrationReconciliations: 2,
           maxRecoveriesPerWorkerAttempt: 1,
         },
       },
@@ -185,7 +185,7 @@ type RawManifest = {
 
 function manifestFor(record: GraphVersionRecord, limits?: Record<string, number>): RawManifest {
   const base: RawManifest = {
-    manifestVersion: 2,
+    manifestVersion: 3,
     coordinationScopeId: SCOPE,
     planningCycleId: CYCLE,
     destinationRef: { kind: 'destination', id: 'd', version: 1 },
@@ -224,8 +224,9 @@ function manifestFor(record: GraphVersionRecord, limits?: Record<string, number>
 /** 除 maxRecoveriesPerWorkerAttempt 以外的全部上限，用来验证缺省即取默认值 1。 */
 function limitsWithoutRecoveries(): Record<string, number> {
   return {
-    maxActiveWorkPackages: 8,
-    concurrencyLimit: 1,
+    maxActiveWorkPackages: 3,
+    maxWorkPackages: 8,
+    integrationReconciliations: 2,
     implementationAttempts: 2,
     validatorRepairs: 2,
     graphRevisions: 2,
@@ -562,6 +563,47 @@ test('模型限定重新授权只换模型绑定与 Graph head，其余字段与
   expect(next.manifest.recoveryUtilityProfile.modelConfiguration.model).toBe('next-model');
   // 旧授权仍在历史里：既有 Task 的运行依据不因新授权而改变。
   expect(authorizations().map((record) => record.authorizationId)).toEqual(['auth-1', 'auth-reapproved']);
+});
+
+test('限定重新授权可只改并行额度，其他上限、图与预算消费原样保留', () => {
+  const first = proposeAndApprove('auth-1', manifestFor(candidate, limitsWithRecoveries(2)));
+  enterExecution(first);
+
+  const raised = reauthorize({ maxActiveWorkPackages: 5, authorizationId: 'auth-lanes-5' });
+  expect(raised.kind).toBe('recorded');
+  if (raised.kind !== 'recorded') return;
+
+  expect(raised.authorization.manifest.limits.maxActiveWorkPackages).toBe(5);
+  // 其余额度、图容量与集成复验不随并行额度改写。
+  expect(raised.authorization.manifest.limits).toEqual({ ...first.manifest.limits, maxActiveWorkPackages: 5 });
+  expect(raised.authorization.manifest.graph.generation).toBe(first.manifest.graph.generation);
+  expect(raised.authorization.manifest.orcaRunId).toBe(first.manifest.orcaRunId);
+  expect(raised.authorization.manifest.permissions).toEqual(first.manifest.permissions);
+
+  const lowered = reauthorize({ maxActiveWorkPackages: 1, authorizationId: 'auth-lanes-1' });
+  expect(lowered.kind).toBe('recorded');
+  if (lowered.kind !== 'recorded') return;
+  // 降低额度只改写批准值：已消耗预算与图容量不被重置。
+  expect(lowered.authorization.manifest.limits.maxActiveWorkPackages).toBe(1);
+  expect(lowered.authorization.manifest.limits.maxWorkPackages).toBe(first.manifest.limits.maxWorkPackages);
+  expect(lowered.authorization.manifest.limits.integrationReconciliations).toBe(
+    first.manifest.limits.integrationReconciliations,
+  );
+  expect(lowered.authorization.manifest.limits.maxRecoveriesPerWorkerAttempt).toBe(2);
+});
+
+test('非法并行额度在重新授权时被拒绝，不追加授权', () => {
+  const first = proposeAndApprove('auth-1', manifestFor(candidate, limitsWithRecoveries(2)));
+  enterExecution(first);
+
+  for (const value of [0, -1, 1.5, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
+    const result = reauthorize({ maxActiveWorkPackages: value });
+    expect(result.kind).toBe('rejected');
+    if (result.kind === 'rejected') {
+      expect(result.failure.code).toContain('maxActiveWorkPackages');
+    }
+  }
+  expect(authorizations().map((record) => record.authorizationId)).toEqual(['auth-1']);
 });
 
 test('非执行协调态不接受模型重新授权', () => {

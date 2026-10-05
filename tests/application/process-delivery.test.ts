@@ -115,6 +115,7 @@ function fakeBackend(script: {
   readonly deliveryId?: string;
   readonly deliveryRunId?: string | null;
   readonly taskRows?: unknown;
+  readonly deliveryMessages?: readonly unknown[];
   readonly mutating?: (call: number, mutation: ExecutionMutation) => OperationOutcome<unknown> | undefined;
 }): { readonly backend: ExecutionBackend; readonly calls: readonly Call[] } {
   const calls: Call[] = [];
@@ -130,7 +131,7 @@ function fakeBackend(script: {
           kind: 'accepted',
           value: {
             delivery: { deliveryId, runId: deliveryRunId },
-            messages: [],
+            messages: script.deliveryMessages ?? [],
             timedOut: false,
             cancelled: false,
           },
@@ -264,6 +265,8 @@ test('权威结果与本地引用落盘后才确认，且本地不保存结果�
     'query:delivery-read',
     'mutate:task-update',
     'query:task-list',
+    // 整批确认前先回读批次证明每条消息都已消费。
+    'query:delivery-read',
     'mutate:delivery-ack',
   ]);
   const settlements = settlementRows();
@@ -376,4 +379,152 @@ test('相同 OperationId 仍为 pending 时不重复发起副作用', async () =
 
   expect(result).toMatchObject({ kind: 'blocked' });
   expect(calls.some((call) => call.kind === 'mutate')).toBe(false);
+});
+
+/* -------------------------------------------------------------------------- */
+/* 整批确认守卫：同批多条结果必须都持久消费后才 ack 整批                         */
+/* -------------------------------------------------------------------------- */
+
+/** 一条 Companion 形状（带 result 与自报身份）的 worker_done 消息。 */
+function claimedMessage(input: {
+  readonly messageId: string;
+  readonly workerTaskId: string;
+  readonly dispatchId: string;
+  readonly attemptId: string;
+}): unknown {
+  return {
+    messageId: input.messageId,
+    fromHandle: 'worker',
+    type: 'worker_done',
+    payload: JSON.stringify({
+      workerTaskId: input.workerTaskId,
+      dispatchId: input.dispatchId,
+      attemptId: input.attemptId,
+      runId: 'run-1',
+      consumerGeneration: 1,
+      graphGeneration: 1,
+      authorizationId: 'auth-1',
+      role: 'implementation',
+      result: ACCEPTED_RESULT,
+    }),
+    body: 'done',
+  };
+}
+
+/** 一条 Orca 规范形状（无 result，只有 taskId/dispatchId）的 worker_done 消息。 */
+function orcaMessage(input: {
+  readonly messageId: string;
+  readonly orcaTaskId: string;
+  readonly orcaDispatchId: string;
+}): unknown {
+  return {
+    messageId: input.messageId,
+    fromHandle: 'worker',
+    type: 'worker_done',
+    payload: JSON.stringify({
+      taskId: input.orcaTaskId,
+      dispatchId: input.orcaDispatchId,
+      outcome: 'succeeded',
+      filesModified: [],
+    }),
+    body: 'done',
+  };
+}
+
+/** 预置一条其它消息的持久结算，模拟它已被别的 pipeline 消费。 */
+function seedSettlement(input: {
+  readonly dispatchId: string;
+  readonly workerTaskId: string;
+  readonly attemptId: string;
+  readonly orcaResultRef: string;
+}): void {
+  const recorded = store.transact({
+    kind: 'record-delivery-settlement',
+    coordinationScopeId: SCOPE,
+    expectedRevision: revision(),
+    writer,
+    dedupeKey: JSON.stringify(['seeded', input.dispatchId]),
+    deliveryId: 'delivery-other',
+    runId: 'run-1',
+    consumerGeneration: 1,
+    workerTaskId: input.workerTaskId as WorkerTaskId,
+    dispatchId: input.dispatchId as DispatchId,
+    attemptId: input.attemptId,
+    role: 'implementation',
+    contractRevision: SPEC.contractRevision,
+    orcaResultRef: input.orcaResultRef,
+  });
+  if (recorded.kind === 'rejected') {
+    throw new Error(`无法预置结算：${recorded.message}`);
+  }
+}
+
+test('同批还有未消费的结果消息时只结算不确认整批', async () => {
+  const { backend, calls } = fakeBackend({
+    deliveryMessages: [
+      claimedMessage({ messageId: 'm-own', workerTaskId: TASK, dispatchId: DISPATCH, attemptId: 'attempt-1' }),
+      claimedMessage({ messageId: 'm-sibling', workerTaskId: 'worker-task-2', dispatchId: 'dispatch-2', attemptId: 'attempt-2' }),
+    ],
+  });
+
+  const result = await settleDelivery(settlementInput(backend));
+
+  expect(result.kind).toBe('blocked');
+  // 本条已落盘，但整批不能确认：没有发出 delivery-ack。
+  expect(settlementRows()).toHaveLength(1);
+  expect(calls.some((call) => call.kind === 'mutate' && call.operation.operation === 'delivery-ack')).toBe(false);
+});
+
+test('同批其它消息已有持久结算（Companion 形状）时确认整批', async () => {
+  seedSettlement({
+    dispatchId: 'dispatch-2',
+    workerTaskId: 'worker-task-2',
+    attemptId: 'attempt-2',
+    orcaResultRef: 'orca-task-2#abc',
+  });
+  const { backend, calls } = fakeBackend({
+    deliveryMessages: [
+      claimedMessage({ messageId: 'm-own', workerTaskId: TASK, dispatchId: DISPATCH, attemptId: 'attempt-1' }),
+      claimedMessage({ messageId: 'm-sibling', workerTaskId: 'worker-task-2', dispatchId: 'dispatch-2', attemptId: 'attempt-2' }),
+    ],
+  });
+
+  const result = await settleDelivery(settlementInput(backend));
+
+  expect(result.kind).toBe('settled');
+  expect(calls.some((call) => call.kind === 'mutate' && call.operation.operation === 'delivery-ack')).toBe(true);
+});
+
+test('同批 Orca 规范形状的其它消息按 Task+Dispatch 结算证据确认整批', async () => {
+  seedSettlement({
+    dispatchId: 'dispatch-2',
+    workerTaskId: 'worker-task-2',
+    attemptId: 'attempt-2',
+    orcaResultRef: 'orca-task-2#def',
+  });
+  const { backend, calls } = fakeBackend({
+    deliveryMessages: [
+      claimedMessage({ messageId: 'm-own', workerTaskId: TASK, dispatchId: DISPATCH, attemptId: 'attempt-1' }),
+      orcaMessage({ messageId: 'm-sibling', orcaTaskId: 'orca-task-2', orcaDispatchId: 'dispatch-2' }),
+    ],
+  });
+
+  const result = await settleDelivery(settlementInput(backend));
+
+  expect(result.kind).toBe('settled');
+  expect(calls.some((call) => call.kind === 'mutate' && call.operation.operation === 'delivery-ack')).toBe(true);
+});
+
+test('同批存在无法定位的 worker_done 载荷时阻塞，不确认也不丢弃', async () => {
+  const { backend, calls } = fakeBackend({
+    deliveryMessages: [
+      claimedMessage({ messageId: 'm-own', workerTaskId: TASK, dispatchId: DISPATCH, attemptId: 'attempt-1' }),
+      { messageId: 'm-invalid', fromHandle: 'worker', type: 'worker_done', payload: '{}', body: 'done' },
+    ],
+  });
+
+  const result = await settleDelivery(settlementInput(backend));
+
+  expect(result.kind).toBe('blocked');
+  expect(calls.some((call) => call.kind === 'mutate' && call.operation.operation === 'delivery-ack')).toBe(false);
 });

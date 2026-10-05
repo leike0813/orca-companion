@@ -167,6 +167,7 @@ function fakeIntent(input: {
     state: input.state,
     outcomeClass: input.state === 'settled' ? 'accepted' : null,
     backendRequestId: null,
+    terminalHandle: null,
     blockingReason: input.blockingReason,
     createdAt: input.createdAt ?? 1,
     settledAt: input.state === 'settled' ? 2 : null,

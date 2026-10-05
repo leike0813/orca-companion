@@ -1,0 +1,65 @@
+[
+  {
+    "name": "execution-settings-default",
+    "columns": 120,
+    "rows": 40,
+    "png": "execution-settings-default-120x40.png",
+    "text": "execution-settings-default-120x40.txt"
+  },
+  {
+    "name": "execution-settings-saved",
+    "columns": 120,
+    "rows": 40,
+    "png": "execution-settings-saved-120x40.png",
+    "text": "execution-settings-saved-120x40.txt"
+  },
+  {
+    "name": "execution-settings-review",
+    "columns": 120,
+    "rows": 40,
+    "png": "execution-settings-review-120x40.png",
+    "text": "execution-settings-review-120x40.txt"
+  },
+  {
+    "name": "execution-settings-default",
+    "columns": 80,
+    "rows": 24,
+    "png": "execution-settings-default-80x24.png",
+    "text": "execution-settings-default-80x24.txt"
+  },
+  {
+    "name": "execution-settings-saved",
+    "columns": 80,
+    "rows": 24,
+    "png": "execution-settings-saved-80x24.png",
+    "text": "execution-settings-saved-80x24.txt"
+  },
+  {
+    "name": "execution-settings-review",
+    "columns": 80,
+    "rows": 24,
+    "png": "execution-settings-review-80x24.png",
+    "text": "execution-settings-review-80x24.txt"
+  },
+  {
+    "name": "execution-settings-default",
+    "columns": 50,
+    "rows": 40,
+    "png": "execution-settings-default-50x40.png",
+    "text": "execution-settings-default-50x40.txt"
+  },
+  {
+    "name": "execution-settings-saved",
+    "columns": 50,
+    "rows": 40,
+    "png": "execution-settings-saved-50x40.png",
+    "text": "execution-settings-saved-50x40.txt"
+  },
+  {
+    "name": "execution-settings-review",
+    "columns": 50,
+    "rows": 40,
+    "png": "execution-settings-review-50x40.png",
+    "text": "execution-settings-review-50x40.txt"
+  }
+]

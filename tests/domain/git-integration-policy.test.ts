@@ -10,8 +10,12 @@ import { expect, test } from 'vitest';
 import {
   classifyCanonicalHead,
   evaluateGitIntegration,
+  integrationReconciliationBudgetKey,
+  nextIntegrationRound,
   type GitIntegrationRequest,
 } from '../../src/domain/git-integration-policy.js';
+import { workPackageBudgetKey } from '../../src/domain/dispatch-candidate.js';
+import type { WorkPackageId } from '../../src/application/dto/identity.js';
 import type { GitIntegrationPolicy, RoleAuthorities } from '../../src/domain/planning/execution-authorization.js';
 
 const POLICY: GitIntegrationPolicy = {
@@ -130,4 +134,20 @@ test('canonical worktree 有未归属改动时暂停派发', () => {
       lastIntegrationExpectedHead: null,
     }),
   ).toMatchObject({ kind: 'unattributed_drift', pauseDispatch: true });
+});
+
+test('集成复验额度按已消耗轮次放行，耗尽后阻塞且不回退', () => {
+  expect(nextIntegrationRound(0, 2)).toEqual({ kind: 'allowed', round: 1 });
+  expect(nextIntegrationRound(1, 2)).toEqual({ kind: 'allowed', round: 2 });
+  expect(nextIntegrationRound(2, 2)).toEqual({ kind: 'budget_exhausted', limit: 2, consumed: 2 });
+  // 非法上限不能被读成无限。
+  expect(nextIntegrationRound(0, Number.NaN)).toMatchObject({ kind: 'budget_exhausted' });
+  expect(nextIntegrationRound(-1, 2)).toMatchObject({ kind: 'budget_exhausted' });
+});
+
+test('集成复验计数键与 Work Package 预算键同名同源', () => {
+  const workPackageId = 'wp-1' as WorkPackageId;
+  expect(integrationReconciliationBudgetKey(workPackageId)).toBe(
+    workPackageBudgetKey(workPackageId, 'integrationReconciliations'),
+  );
 });

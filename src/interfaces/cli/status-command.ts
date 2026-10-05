@@ -32,9 +32,10 @@ import type { CliIO } from './doctor-command.js';
  * machine DTO 的形状版本。
  *
  * `2` 增加了执行阶段快照分区（`workPackages` / `integrationQueue` / `finalizer` / `executionReconciliation`
- * 与 `workers`/`blockers` 的真实填充）；既有字段的名字与语义未变。
+ * 与 `workers`/`blockers` 的真实填充）。`3` 把单活动包字段换成完整列表 `activeWorkPackageIds`，并让
+ * `activeWorkPackageCount` 反映真实数量。
  */
-export const STATUS_SCHEMA_VERSION = 2;
+export const STATUS_SCHEMA_VERSION = 3;
 
 export type StatusSession = {
   readonly coordinatorSessionId: string;
@@ -93,7 +94,8 @@ export type StatusSnapshot = {
   }[];
   /** 执行阶段快照分区：只读投影，`status` 不调用 Orca，因此 liveness 等外部事实保持 `null`。 */
   readonly execution: {
-    readonly activeWorkPackageId: string | null;
+    /** 当前世代真实占用额度的 Work Package id 列表；完整列出，不截断为单包。 */
+    readonly activeWorkPackageIds: readonly string[];
     readonly activeWorkPackageCount: number;
     readonly workPackages: readonly WorkPackageExecutionEntry[];
     readonly integrationQueue: readonly {
@@ -262,8 +264,8 @@ export function buildStatusSnapshot(
         message: blocker.message,
       })),
       execution: {
-        activeWorkPackageId: projected.frontier.find((entry) => isActive(entry))?.workPackageId ?? null,
-        activeWorkPackageCount: projected.frontier.some((entry) => isActive(entry)) ? 1 : 0,
+        activeWorkPackageIds: [...projected.activeWorkPackageIds],
+        activeWorkPackageCount: projected.activeWorkPackageIds.length,
         workPackages: projected.frontier.map(copyFrontierEntry),
         integrationQueue: projected.frontier
           .filter((entry) => entry.state === 'waiting_integration')
@@ -285,17 +287,6 @@ export function buildStatusSnapshot(
       },
     },
   };
-}
-
-function isActive(entry: WorkPackageExecutionEntry): boolean {
-  return (
-    entry.state === 'admitting' ||
-    entry.state === 'specifying' ||
-    entry.state === 'implementing' ||
-    entry.state === 'validating' ||
-    entry.state === 'repairing' ||
-    entry.state === 'reconciling'
-  );
 }
 
 /** frontier 条目的独立副本（含数组），machine DTO 不共享 façade 的数组实例。 */

@@ -1,0 +1,81 @@
+{
+  "generatedAt": "2026-10-05T05:45:04.528Z",
+  "status": "stopped-intentionally-not-passed",
+  "note": "真实并发峰已达并核验；被测 host 在 planner->implementation 角色边界未推进，Main 已定位为 materialization_bindings.dispatch_id（逻辑派发）与 accepted settlement/segment（真实 ctx_ 派发）身份不一致。停止重复触发，保留 Scope/Tasks 供修后原 Scope 恢复。",
+  "fixture": {
+    "repository": "/tmp/orca-cc-concurrency-02",
+    "identity": "term_47830d25-fb84-43b3-afb6-3a42e889c880",
+    "configuredMaxActiveWorkPackages": 5,
+    "model": "minimax-cn/MiniMax-M3.1-Flash-Preview"
+  },
+  "scope": {
+    "coordination_scope_id": "e2e-loop-scope",
+    "mode": "execution_coordination",
+    "control_state": "active",
+    "revision": 107
+  },
+  "generations": [
+    {
+      "graphId": "e2e-loop-scope#g1",
+      "orcaRunId": "run_5fc0863c9434",
+      "status": "candidate",
+      "baselineHead": "0aa3b0a2fdd29fe8282938b7f6a49e90b522c78f"
+    }
+  ],
+  "lanes": [
+    {
+      "workPackageId": "e2e-loop-scope#g1:notes-basics",
+      "releasedAt": null
+    },
+    {
+      "workPackageId": "e2e-loop-scope#g1:readme-banner",
+      "releasedAt": null
+    }
+  ],
+  "materializationBindings": [
+    {
+      "workPackageId": "e2e-loop-scope#g1:notes-basics",
+      "role": "planner",
+      "orcaTaskId": "task_2ff713b606ef",
+      "logicalDispatchId": "dispatch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Anotes-basics:planner:0:1",
+      "attemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Anotes-basics:planner:0:1"
+    },
+    {
+      "workPackageId": "e2e-loop-scope#g1:readme-banner",
+      "role": "planner",
+      "orcaTaskId": "task_4f0b0cdf8cd2",
+      "logicalDispatchId": "dispatch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:planner:0:1",
+      "attemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:planner:0:1"
+    }
+  ],
+  "sessionSegments": [
+    {
+      "workPackageId": "e2e-loop-scope#g1:notes-basics",
+      "role": "planner",
+      "physicalDispatchId": "ctx_0933c6649044",
+      "sessionBindingId": "session-binding:ctx_0933c6649044:01a10a8b-57b7-7230-b7ce-5f890228d154"
+    },
+    {
+      "workPackageId": "e2e-loop-scope#g1:readme-banner",
+      "role": "planner",
+      "physicalDispatchId": "ctx_5db90a8c6cb1",
+      "sessionBindingId": "session-binding:ctx_5db90a8c6cb1:01a10a8b-9b6c-7622-82be-ef95ec882964"
+    }
+  ],
+  "settlements": [
+    {
+      "role": "planner",
+      "attemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:planner:0:1",
+      "orcaResultRef": "task_4f0b0cdf8cd2#fd1d78685eeca"
+    },
+    {
+      "role": "planner",
+      "attemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Anotes-basics:planner:0:1",
+      "orcaResultRef": "task_2ff713b606ef#209dde22f1267"
+    }
+  ],
+  "integrationReconciliations": 0,
+  "verdicts": 0,
+  "unsettledIntents": 0,
+  "workerTerminals": null
+}

@@ -16,6 +16,12 @@
 import type { ControlState, CoordinationMode } from '../../domain/coordination/mode.js';
 import { MAX_USER_MESSAGE_CHARS } from '../coordinator/user-message.js';
 import type { MutationLaneRecord } from '../../domain/coordination/mutation-lane.js';
+import type {
+  BindIntegrationContinuationInput,
+  IntegrationReconciliationRecord,
+  RegisterIntegrationReconciliationInput,
+  SettleIntegrationReconciliationInput,
+} from '../integration-reconciliation.js';
 import type { LeaseKind, LeaseRecord } from '../../domain/coordination/leases.js';
 import type { SourceRevisionRef } from '../../domain/coordinator/session-state.js';
 import type { DeliveryVerdict } from '../../domain/delivery-verdict.js';
@@ -666,7 +672,21 @@ export type BaselineAdoptionRecord = {
 };
 
 /** `status` 与启动对账用的单次只读投影；不触发续约、对账或任何写入。 */
+export type WorkPackageLaneReservation = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly graphId: GraphId;
+  readonly generation: GraphGeneration;
+  readonly workPackageId: WorkPackageId;
+  readonly operationId: OperationId;
+  readonly authorizationId: string;
+  readonly authorizationVersion: number;
+  readonly baselineHead: string;
+  readonly reservedAt: number;
+  readonly releasedAt: number | null;
+};
+
 export type CoordinationSnapshot = {
+  readonly laneReservations: readonly WorkPackageLaneReservation[];
   readonly scope: ScopeRecord;
   readonly sessions: readonly CoordinatorSessionRegistration[];
   readonly leases: readonly LeaseRecord[];
@@ -795,6 +815,8 @@ export type GraphAuthorizationCursor = {
 };
 
 export type CoordinationQuery =
+  | { readonly kind: 'work-package-lanes'; readonly coordinationScopeId: CoordinationScopeId }
+  | { readonly kind: 'integration-reconciliations'; readonly coordinationScopeId: CoordinationScopeId; readonly workPackageId: WorkPackageId }
   | { readonly kind: 'pending-interaction'; readonly coordinationScopeId: CoordinationScopeId; readonly interactionId: InteractionId; readonly coordinatorSessionId?: CoordinatorSessionId }
   | { readonly kind: 'pending-interactions'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId?: CoordinatorSessionId; readonly after?: InteractionPageCursor }
   | { readonly kind: 'interaction-summaries'; readonly coordinationScopeId: CoordinationScopeId; readonly coordinatorSessionId: CoordinatorSessionId; readonly interactionIds: readonly InteractionId[] }
@@ -994,6 +1016,8 @@ export type CoordinationQueryRejectionCode = 'unreadable' | 'invalid_query' | 'i
  * `*| null` 表示「记录确实不存在」，与拒绝区分开。
  */
 export type CoordinationQueryResult =
+  | { readonly kind: 'work-package-lanes'; readonly reservations: readonly WorkPackageLaneReservation[] }
+  | { readonly kind: 'integration-reconciliations'; readonly records: readonly IntegrationReconciliationRecord[] }
   | { readonly kind: 'pending-interaction'; readonly interaction: PendingInteractionDetail | null }
   | { readonly kind: 'pending-interactions'; readonly interactions: readonly InteractionSummary[]; readonly nextCursor: InteractionPageCursor | null }
   | { readonly kind: 'interaction-summaries'; readonly interactions: readonly InteractionSummary[] }
@@ -1085,6 +1109,27 @@ export type CoordinationCommandBase = {
 };
 
 export type CoordinationCommand =
+  | (RegisterIntegrationReconciliationInput & { readonly kind: 'register-integration-reconciliation' })
+  | (SettleIntegrationReconciliationInput & { readonly kind: 'settle-integration-reconciliation' })
+  | (BindIntegrationContinuationInput & { readonly kind: 'bind-integration-continuation' })
+  | (CoordinationCommandBase & {
+      readonly kind: 'reserve-work-package-lane';
+      readonly graphId: GraphId;
+      readonly generation: GraphGeneration;
+      readonly workPackageId: WorkPackageId;
+      readonly operationId: OperationId;
+      readonly authorizationId: string;
+      readonly authorizationVersion: number;
+      readonly baselineHead: string;
+    })
+  | (CoordinationCommandBase & {
+      readonly kind: 'release-work-package-lane';
+      readonly graphId: GraphId;
+      readonly generation: GraphGeneration;
+      readonly workPackageId: WorkPackageId;
+      /** 已接受 push、已确认停止或确定未发生副作用的意图；不能由模型填写。 */
+      readonly proofOperationId: OperationId;
+    })
   | (CoordinationCommandBase & {
       readonly kind: 'create-scope';
       readonly mode: CoordinationMode;
@@ -1155,6 +1200,13 @@ export type CoordinationCommand =
       readonly operationId: OperationId;
       readonly outcomeClass: 'accepted' | 'rejected' | 'unknown';
       readonly backendRequestId?: string;
+      /**
+       * terminal 创建/准备类意图的精确资源引用。
+       *
+       * 只在 `operationCategory` 为 `materialize-worker-terminal` / `worker-terminal-prepare` 且
+       * `outcomeClass === 'accepted'` 时允许写入；缺失按 null，已写入不可改写（同值幂等、异值拒绝）。
+       */
+      readonly terminalHandle?: string;
     })
   | (CoordinationCommandBase & {
       readonly kind: 'block-intent';

@@ -74,6 +74,11 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
       await rename(temporary, statusPreferencePath);
     };
     const cjk = '请规划第一版路线图：中文abc混排内容需要按显示宽度换行';
+    // 与 execution-view 的 ACTIVE_WORK_PACKAGE_STATES 对齐：预览快照必须显式给出活动包数组，
+    // 否则投影会读到 undefined（多活动 DTO 后不再有单值 activeWorkPackageId）。
+    const activeIdsOf = (frontier) => frontier
+      .filter((entry) => ['admitting', 'specifying', 'implementing', 'validating', 'repairing', 'reconciling'].includes(entry.state))
+      .map((entry) => entry.workPackageId);
     const graph = {
       graphId: 'graph-1', graphVersion: 2, generation: 1,
       nodes: [
@@ -94,6 +99,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
       sessions: [{ coordinatorSessionId: 'session-a', coordinatorModelConfigurationRef: 'config-a', lifecycleState: 'active', holdsRuntimeLease: false, holdsExecutionLease: scenario === 'execution', planningResponsible: true, openInteractionCount: 0 }],
       budgets: [],
       frontier: scenario === 'execution' ? [{ workPackageId: 'wp-1', state: 'implementing', role: 'implementation', attemptId: 'attempt-1', liveness: 'live', worktreePath: '/tmp/worktrees/wp-1', baselineHead: 'head-1', validation: null, integration: null, derivedFrom: [], blockerRefs: [] }] : [],
+      activeWorkPackageIds: scenario === 'execution' ? ['wp-1'] : [],
       workers: [],
       finalizer: { gate: { ready: false, blockers: ['no-work-packages'] }, coversWorkPackageIds: [], worktreePath: null, readOnlyProfile: 'unverified', integrationFrozen: 'unknown', workspace: null, evidenceRefs: [], verdict: null },
       executionReconciliation: { pending: scenario === 'blocked', unresolvedIntentCount: scenario === 'blocked' ? 1 : 0, activeWorkerCount: scenario === 'execution' ? 1 : 0, reasons: scenario === 'blocked' ? ['等待原操作对账'] : [] },
@@ -209,6 +215,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
           authorization: planning ? null : { authorizationId: 'auth-graph', version: 1 },
           executionLeaseHolderSessionId: planning ? null : 'session-a',
           frontier, blockers,
+          activeWorkPackageIds: activeIdsOf(frontier),
           executionReconciliation: {
             pending: blocked, unresolvedIntentCount: blocked ? 1 : 0,
             activeWorkerCount: blocked || planning ? 0 : 1,
@@ -281,6 +288,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
           frontier: executing ? [{ workPackageId: 'wp-1', state: blocked ? 'reconciling' : 'implementing', role: 'implementation',
             attemptId: 'attempt-1', liveness: blocked ? 'unverifiable' : 'live', worktreePath: '/tmp/worktrees/wp-1',
             baselineHead: 'head-1', validation: null, integration: null, derivedFrom: [], blockerRefs: blocked ? ['reconciliation_pending'] : [] }] : [],
+          activeWorkPackageIds: executing ? ['wp-1'] : [],
           finalizer: { ...snapshot.finalizer, gate: { ready: false, blockers: executing ? ['unfinished-work-packages'] : ['no-work-packages'] } },
           executionReconciliation: { pending: blocked, unresolvedIntentCount: blocked ? 1 : 0,
             activeWorkerCount: executing && !blocked ? 1 : 0, reasons: blocked ? ['等待原操作对账'] : [] },
@@ -307,6 +315,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
           graph: phase === 'idle' ? null : execution.graph,
           graphTopologies: phase === 'idle' ? [] : execution.graphTopologies,
           frontier: execution.frontier,
+          activeWorkPackageIds: activeIdsOf(execution.frontier),
           blockers: phase === 'execution' || phase === 'blocked' ? execution.blockers : [],
           workers: execution.frontier.filter((entry) => entry.role !== null).map((entry) => ({
             dispatchId: `dispatch-${entry.workPackageId}`, workerTaskId: `task-${entry.workPackageId}`,
@@ -494,6 +503,17 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
     };
     const ports = {
       commandStatus: async ref=>({kind:'accepted',revision:null,summary:'隔离 fixture 核验',resultRef:ref}),
+      // 执行并发设置入口的隔离夹具：默认值与批准值来源不同，保存只改默认值（预览不接真实 Manifest）。
+      executionSettings: (() => {
+        let value = { revision: 7, defaultMaxActiveWorkPackages: 3, approvedMaxActiveWorkPackages: 3 };
+        return {
+          load: async () => ({ kind: 'loaded', settings: { ...value } }),
+          save: async (input) => {
+            value = { ...value, revision: value.revision + 1, defaultMaxActiveWorkPackages: input.maxActiveWorkPackages };
+            return { kind: 'saved', revision: value.revision, defaultMaxActiveWorkPackages: value.defaultMaxActiveWorkPackages };
+          },
+        };
+      })(),
       reading: {
         interactions: async (session, interactionIds) => branch?.kind === 'opened'
           ? questionQuery({ kind: 'interaction-summaries', coordinatorSessionId: session, interactionIds }).interactions : [],
@@ -593,7 +613,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
         prepare: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟执行交接已准备',resultRef:fixtureRef('execution-handoff','fixture-execution-handoff') } : rejected,
         review: async () => rejected, cutover: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟执行交接已记录；Target 等待下一条消息' } : rejected,
         cancel: async () => previewDialogs ? { kind: 'accepted', revision: 7, summary: '模拟执行交接提案已取消' } : rejected },
-      executionAuthorization: { review: async () => previewDialogs ? { kind: 'review', review: {
+      executionAuthorization: { review: async () => ({ kind: 'review', review: {
         sections:[{id:'overview',label:'概览',fields:[{label:'项目',value:snapshot.coordinationScopeId},{label:'图',value:snapshot.graph.graphId},{label:'工作包',value:'20'},{label:'门禁',value:'通过'}]},{id:'permissions',label:'权限',fields:[{label:'工作区',value:'仅隔离 worktree'},{label:'发布/部署',value:'无授权'}]},{id:'budget',label:'预算',fields:[{label:'并发',value:'1'},{label:'实现/验证',value:'每包 2 次'}]},{id:'workspace',label:'工作范围',fields:Array.from({length:8},(_,i)=>({label:'工作包 '+(i+1),value:'src/中文长路径/交互与终端验收/'+(i+1)}))},{id:'complete',label:'完整清单',fields:[{label:'fingerprint',value:'fixture-manifest-52'},{label:'Scope revision',value:'7'},{label:'Git',value:'main/origin 唯一 ref'}]}].map(section=>({...section,fields:section.fields.map(field=>({...field,group:{overview:'执行计划',permissions:'允许的操作',budget:'执行上限',workspace:'隔离工作范围',complete:'批准绑定的完整内容'}[section.id]}))})),
         fingerprint: 'fixture-manifest-52', scopeRevision: 7,
         candidate: { graphId: snapshot.graph.graphId, generation: 1, version: 3, baselineHead: 'fixture-baseline-52', workPackageCount: 20 },
@@ -606,7 +626,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
           { label: '风险', value: '中断恢复仍须对账；不可核验 Worker 不重复派发' },
           ...Array.from({ length: 8 }, (_, index) => ({ label: `工作范围 ${index + 1}`, value: `src/中文长路径/交互与终端验收/工作包-${index + 1}；测试和证据随交接提交` })),
         ], gate: { ready: true, blockers: [] },
-      } } : { kind: 'rejected', code: rejected.code, message: rejected.message },
+      } }),
         approve: async () => previewDialogs ? { kind: 'accepted', revision: 8, summary: '模拟授权批准已记录；未启动执行协调' } : rejected },
     };
     // Explicitly isolated production ports for batch seven; no user config or external services.

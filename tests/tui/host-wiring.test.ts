@@ -111,7 +111,7 @@ function initializeRepository(root: string): string {
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',
@@ -485,7 +485,7 @@ test('host projectDetails绑定Scope、Session和所见revision，并连续读�
     scopeEnvelope: { include: ['src'], exclude: [] },
     budget: budgetFromLimits(DEFAULT_EXECUTION_LIMITS),
   }));
-  const graph: ExecutionGraph = { graphId, generation, concurrencyLimit: 1, workPackages: packages };
+  const graph: ExecutionGraph = { graphId, generation, workPackages: packages };
   try {
     const lease = acquireRuntimeLease(store, {
       coordinationScopeId: scopeId,
@@ -529,7 +529,7 @@ test('host projectDetails绑定Scope、Session和所见revision，并连续读�
       writer,
       authorizationId: 'approved-project-details',
       authorizationVersion: 1,
-      manifestVersion: 2,
+      manifestVersion: 3,
       fingerprint: 'approved-project-details-fingerprint',
       approvalRef: 'approved-project-details-review',
       manifest,
@@ -915,3 +915,89 @@ test('会话维护与模型切换在 TUI 入口上落到真实记录，而不是
   }
   // 该用例包含真实模型回合、压缩与配置切换；并行全量套件下 5s 上限会被吃掉。
 }, 30_000);
+
+test('执行设置端口：保存默认额度经生产 CAS，当前批准额度保持不变', async () => {
+  const repository = initializeRepository(mkdtempSync(join(tmpdir(), 'orca-exec-settings-')));
+  const harness = await startHost(repository);
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  const port = harness.host.ports.executionSettings;
+  if (port === undefined) throw new Error('executionSettings 端口缺失');
+  const scopeId = proposal.coordinationScopeId as CoordinationScopeId;
+  const sessionId = proposal.coordinatorSessionId as CoordinatorSessionId;
+
+  // 记录一个绑定当前图、额度为 2 的批准授权；它是「当前批准额度」的唯一来源。
+  const store = await openStore(repository);
+  try {
+    const graphId = graphIdFor(scopeId, 1 as GraphGeneration);
+    const generation = 1 as GraphGeneration;
+    const graph: ExecutionGraph = {
+      graphId,
+      generation,
+      workPackages: [{
+        workPackageId: 'exec-settings-wp' as WorkPackageId,
+        title: '执行设置包',
+        dependsOn: [],
+        scopeEnvelope: { include: ['src'], exclude: [] },
+        budget: budgetFromLimits(DEFAULT_EXECUTION_LIMITS),
+      }],
+    };
+    const lease = acquireRuntimeLease(store, {
+      coordinationScopeId: scopeId,
+      coordinatorSessionId: sessionId,
+      runtimeIncarnationId: `${sessionId}#exec-settings` as RuntimeIncarnationId,
+      fencingGeneration: 0,
+    });
+    if (lease.kind !== 'acquired') throw new Error(`Runtime Lease 未取得：${JSON.stringify(lease)}`);
+    const writer = {
+      coordinatorSessionId: sessionId,
+      runtimeIncarnationId: `${sessionId}#exec-settings` as RuntimeIncarnationId,
+      fencingGeneration: lease.lease.fencingGeneration,
+    };
+    const recorded = recordInitialGraph({
+      store, coordinationScopeId: scopeId, writer, graph,
+      initialPlan: implementationPlanFor(graph, 1), mapRevision: 1, planRevision: 1,
+      orcaRunId: 'exec-settings-run',
+    });
+    if (recorded.kind !== 'recorded') throw new Error(`GraphVersion 未写入：${JSON.stringify(recorded)}`);
+    const scope = store.query({ kind: 'scope', coordinationScopeId: scopeId });
+    if (scope.kind !== 'scope' || scope.scope === null) throw new Error('Scope 应可读');
+    const manifest = executionManifest({
+      graphId, generation, coordinationScopeId: scopeId,
+      planningCycleId: proposal.planningCycleId as PlanningCycleId,
+      limits: { ...DEFAULT_EXECUTION_LIMITS, maxActiveWorkPackages: 2 },
+    });
+    const approved = store.transact({
+      kind: 'record-authorization', coordinationScopeId: scopeId,
+      expectedRevision: scope.scope.revision, writer,
+      authorizationId: 'exec-settings-auth', authorizationVersion: 1, manifestVersion: 3,
+      fingerprint: 'exec-settings-fingerprint', approvalRef: 'exec-settings-review', manifest,
+    });
+    if (approved.kind !== 'committed') throw new Error(`授权未记录：${JSON.stringify(approved)}`);
+  } finally {
+    store.close();
+  }
+  await harness.host.ports.snapshot(null);
+
+  const before = await port.load();
+  expect(before.kind).toBe('loaded');
+  if (before.kind !== 'loaded') return;
+  // load 同时给出可编辑默认值与只读批准值；两者来源不同。
+  expect(before.settings.approvedMaxActiveWorkPackages).toBe(2);
+
+  const saved = await port.save({ expectedRevision: before.settings.revision, maxActiveWorkPackages: 5 });
+  expect(saved).toMatchObject({ kind: 'saved', defaultMaxActiveWorkPackages: 5 });
+
+  const after = await port.load();
+  if (after.kind !== 'loaded') throw new Error('重读执行设置失败');
+  expect(after.settings.defaultMaxActiveWorkPackages).toBe(5);
+  // 保存只改默认值：当前批准额度仍来自 Manifest，未被激活。
+  expect(after.settings.approvedMaxActiveWorkPackages).toBe(2);
+
+  // 过期 revision 冲突：默认值保持 5，不被覆盖。
+  const conflict = await port.save({ expectedRevision: before.settings.revision, maxActiveWorkPackages: 9 });
+  expect(conflict).toMatchObject({ kind: 'rejected', code: 'conflict' });
+  const still = await port.load();
+  if (still.kind !== 'loaded') throw new Error('重读执行设置失败');
+  expect(still.settings.defaultMaxActiveWorkPackages).toBe(5);
+});

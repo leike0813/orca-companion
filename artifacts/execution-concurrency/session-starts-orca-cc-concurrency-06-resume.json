@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-10-05T10:28:45.197Z",
+  "fixture": "orca-cc-concurrency-06",
+  "resumed": true,
+  "evidence": [
+    {
+      "workPackageId": "e2e-loop-scope#g1:readme-banner",
+      "round": 1,
+      "originalLaunchId": "worker-launch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:4473081389657077:1",
+      "continuationLaunchId": "worker-launch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:4473081389657077:1:round-1",
+      "originalReportPath": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-06/.git/orca-companion/codex/reporters/5b4d5810d2197eff1340.jsonl",
+      "continuationReportPath": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-06/.git/orca-companion/codex/reporters/bf91a1d57e16c99527ad.jsonl",
+      "originalSessionId": "01a10b63-6084-7291-bf15-7fc07b88ab67",
+      "continuationSessionId": "01a10b63-6084-7291-bf15-7fc07b88ab67",
+      "sameProviderSession": true,
+      "originalDispatchId": "ctx_5cb34b315bfa",
+      "continuationDispatchId": "ctx_5a9f3963ca3b"
+    }
+  ]
+}

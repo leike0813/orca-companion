@@ -128,7 +128,6 @@ function graphFixture(): ExecutionGraph {
   return {
     graphId: 'graph-1' as GraphId,
     generation: 1 as GraphGeneration,
-    concurrencyLimit: 1,
     workPackages: [],
   };
 }

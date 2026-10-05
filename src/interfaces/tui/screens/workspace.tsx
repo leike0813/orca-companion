@@ -34,6 +34,7 @@ import { SessionPicker } from '../components/session-picker.js';
 import { Sidebar } from '../components/sidebar.js';
 import { StatusLine } from '../components/status-line.js';
 import { StatuslineSettings } from '../components/statusline-settings.js';
+import { ExecutionSettings } from '../components/execution-settings.js';
 import { TopBar } from '../components/top-bar.js';
 import { Transcript } from '../components/transcript.js';
 import type { TranscriptFrame } from '../render/transcript-reader.js';
@@ -97,6 +98,14 @@ export type WorkspaceProps = {
   readonly savedStatusline?: StatuslinePreferences;
   readonly statuslineSelection?: number;
   readonly statuslineNotice?: string | null;
+  /** 执行设置端口是否已装配；未装配时入口显示为不可用。缺省即未装配。 */
+  readonly executionSettingsAvailable?: boolean;
+  readonly executionSettingsDraft?: string;
+  readonly executionSettingsSavedDefault?: number;
+  readonly executionSettingsApproved?: number | null;
+  readonly executionSettingsNotice?: string | null;
+  readonly executionSettingsSaving?: boolean;
+  readonly executionSettingsSaved?: boolean;
   readonly projectDetailsPage?: ProjectDetailPage | null;
   readonly projectDetailsKey?: string | null;
   readonly projectDetailsNotice?: string | null;
@@ -183,7 +192,7 @@ export function Workspace(props: WorkspaceProps) {
   const interactions=view.interactions.filter(i=>i.state==='open'&&i.ownerCoordinatorSessionId===selected);
   const candidates=ui.slashDismissed?[]:slashCandidates(input.text,view.scope.mode);
   const candidateRows=Math.min(candidates.length,Math.min(3,Math.max(1,rows-21)))+4;
-  const reasons=Object.fromEntries(props.commands.flatMap(c=>{const reason=commandReason(c,{mode:view.scope.mode,selectedSessionId:selected,pasteBlocks:input.pasteBlocks.length,...(props.modelSettingsAvailable===true?{modelSettings:true}:{}),...(props.preferencesAvailable===true?{preferences:true}:{})});return reason?[[c,reason]]:[];}));
+  const reasons=Object.fromEntries(props.commands.flatMap(c=>{const reason=commandReason(c,{mode:view.scope.mode,selectedSessionId:selected,pasteBlocks:input.pasteBlocks.length,...(props.modelSettingsAvailable===true?{modelSettings:true}:{}),...(props.preferencesAvailable===true?{preferences:true}:{}),...(props.executionSettingsAvailable===true?{executionSettings:true}:{})});return reason?[[c,reason]]:[];}));
   const origin={x:rowMetrics.left+bodyMetrics.left,y:rowMetrics.top+bodyMetrics.top};
   const panel=props.answerPanel;
   const modelRef=view.sessions.find(s=>s.coordinatorSessionId===selected)?.coordinatorModelConfigurationRef;
@@ -247,7 +256,7 @@ function Overlay(props: {
           availableWidth={parent.terminalWidth}
           summary={`${parent.ui.selectedSessionId??'未选择会话'} · ${parent.viewModel.scope.mode==='route_planning'?'规划':'执行'}`}
           maxRows={Math.max(1,(parent.terminalHeight??24)-15)}
-          reasons={Object.fromEntries(parent.commands.flatMap(command=>{const reason=commandReason(command,{mode:parent.viewModel.scope.mode,selectedSessionId:parent.ui.selectedSessionId,pasteBlocks:composerInputFor(parent.ui,parent.ui.selectedSessionId).pasteBlocks.length,...(parent.modelSettingsAvailable===true?{modelSettings:true}:{})});return reason?[[command,reason]]:[];}))}
+          reasons={Object.fromEntries(parent.commands.flatMap(command=>{const reason=commandReason(command,{mode:parent.viewModel.scope.mode,selectedSessionId:parent.ui.selectedSessionId,pasteBlocks:composerInputFor(parent.ui,parent.ui.selectedSessionId).pasteBlocks.length,...(parent.modelSettingsAvailable===true?{modelSettings:true}:{}),...(parent.executionSettingsAvailable===true?{executionSettings:true}:{})});return reason?[[command,reason]]:[];}))}
         />
       );
     case 'graph-inspector':
@@ -303,6 +312,19 @@ function Overlay(props: {
       const model=parent.modelCatalog.options.find(o=>o.configurationRef===modelRef)?.model??null;
       return <StatuslineSettings preferences={parent.statuslineDraft??DEFAULT_TUI_PREFERENCES.statusline} selected={parent.statuslineSelection??0} notice={parent.statuslineNotice??null} width={parent.terminalWidth} rows={parent.terminalHeight??24} summary={`${view.projectPresentation?.identity.repository??'仓库不可用'} · ${view.projectPresentation?.identity.fullBranchRef??'分支不可用'} · ${ui.selectedSessionId??'未选择会话'}`} statusLineProps={{scope:view.scope,compaction:view.compaction,maintenance:view.maintenance,blockerCount:view.blockers.length,notice:null,sidebarDensity:ui.sidebarDensity,availableWidth:mainWidth,execution:view.execution,model,graph:view.graph,...(view.projectPresentation===undefined?{}:{presentation:view.projectPresentation})}}/>;
     }
+    case 'execution-settings':
+      return (
+        <ExecutionSettings
+          draft={parent.executionSettingsDraft ?? ''}
+          savedDefault={parent.executionSettingsSavedDefault ?? 0}
+          approved={parent.executionSettingsApproved ?? null}
+          notice={parent.executionSettingsNotice ?? null}
+          saving={parent.executionSettingsSaving ?? false}
+          saved={parent.executionSettingsSaved ?? false}
+          width={parent.terminalWidth}
+          rows={parent.terminalHeight ?? 24}
+        />
+      );
     case 'help':
       return <DialogFrame title="Help · 命令与键位" summary="Scope / Session / UI" width={parent.terminalWidth} rows={Math.max(10,(parent.terminalHeight??24)-7)} footer="↑↓ 浏览 · Esc 返回"><Box flexDirection="column" overflow="hidden">{[...HELP_LINES,...parent.commands.map(id=>{const meta=COMMAND_METADATA[id];return `${meta.alias?'/'+meta.alias:meta.label} · ${meta.target} · ${meta.description}`;})].slice(parent.ui.reviewScroll,parent.ui.reviewScroll+Math.max(1,(parent.terminalHeight??24)-14)).map((line,i)=><Text key={i}>{truncateToDisplayWidth(line,Math.max(1,parent.terminalWidth-8))}</Text>)}</Box></DialogFrame>;
     case 'model-picker':

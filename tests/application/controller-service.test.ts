@@ -297,7 +297,7 @@ test('ControllerSnapshot carries the application-owned project presentation unch
       effort: { status: 'configured', value: 'high' },
     },
     ticket: null,
-    activeWorkPackage: null,
+    activeWorkPackages: [],
     context: { status: 'unavailable' },
     acceptance: null,
     budgets: { workPackages: null, implementationAttempts: null, recovery: null },
@@ -921,6 +921,7 @@ test('快照只携带可投影字段：不含 receipt、结果正文、provider 
 
   expect(Object.keys(snapshot).sort()).toEqual(
     [
+      'activeWorkPackageIds',
       'authorization',
       'blockers',
       'budgets',
@@ -1182,7 +1183,6 @@ test('readiness 与派发门禁同规则：批准时刻的 GraphVersion 仍在�
   const graph = {
     graphId,
     generation: 1 as GraphGeneration,
-    concurrencyLimit: 1,
     workPackages: [
       {
         workPackageId: 'wp-1' as WorkPackageId,
@@ -1194,6 +1194,7 @@ test('readiness 与派发门禁同规则：批准时刻的 GraphVersion 仍在�
           validatorRepairs: 2,
           graphRevisions: 2,
           specificationRevisions: 2,
+          integrationReconciliations: 2,
           maxRecoveriesPerWorkerAttempt: 1,
         },
       },

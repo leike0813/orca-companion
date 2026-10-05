@@ -132,7 +132,8 @@ function prototypeStatusSegments(props: PrototypeStatusProps): StatusSegment[] {
   const executing = props.view.scope.mode === 'execution_coordination';
   const unavailable = props.availability === 'unavailable';
   const budget = props.view.budgets.find((entry) => entry.budgetKey === preferences.budgetKey);
-  const work = props.view.graph?.frontier.find((entry) => entry.workPackageId === props.view.execution.activeWorkPackageId)
+  const activeWorkPackageId = props.view.execution.activeWorkPackageIds[0] ?? null;
+  const work = props.view.graph?.frontier.find((entry) => entry.workPackageId === activeWorkPackageId)
     ?? props.view.graph?.frontier[0];
   const progress = unavailable ? null : props.samples.progress;
   const phase = work?.state === 'implementing' ? '实现' : work?.state === 'reconciling' ? '对账' : work?.state;

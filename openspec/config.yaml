@@ -23,10 +23,10 @@ context: |
   以已归档的 m2-repair-read-only-worker-sandbox 为直接前驱；它可在执行 TUI
   未归档时 apply、验证和 archive，但必须先核验共享执行接缝并串行编辑共享文件。
 
-  当前 TUI 收尾 change 为 complete-tui-graph-basis，直接前驱 complete-tui-project-statusline
-  已归档并包含于 41b2f1e。后续新隔离任务显式使用用户批准的
+  当前 change 为 restore-configurable-execution-concurrency，直接前驱 complete-tui-graph-basis
+  已归档并包含于 055c148。后续新隔离任务显式使用用户批准的
   `minimax-cn/MiniMax-M3.1-Flash-Preview` 与已核验连接；已启动现场保持原模型绑定。
-  D06 真实运行证据产生前，此配置仅表示目标模型，验收状态保持未验证。
+  fixture 06 已取得真实并行、原 Validator Session 集成复验、Finalizer deliverable 与同 Scope 重启证据，见 artifacts/execution-concurrency。
   行为验证使用 Vitest。
   真实集成只在显式选择的隔离项目和专用身份中运行。普通检查不得构建 references/orca submodule。
 

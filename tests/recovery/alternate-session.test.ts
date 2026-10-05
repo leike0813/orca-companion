@@ -15,6 +15,7 @@ import {
   RECOVERY_WORKER_TASK,
   RECOVERY_WORK_PACKAGE,
   createRecoveryHarness,
+  readReplacementReceipt,
   type RecoveryHarness,
 } from '../support/recovery-harness.js';
 import type { DispatchId, SessionSegmentId } from '../../src/application/dto/identity.js';
@@ -29,9 +30,12 @@ import {
 import type { CapsuleExtractionOutcome } from '../../src/application/recovery/recovery-capsule.js';
 import {
   concludeWorkerSessionRecovery,
+  deriveRecoveryId,
+  deriveReplacementTerminalActivationOperationId,
   deriveReplacementSegmentId,
   recoverWorkerSession,
 } from '../../src/application/recovery/worker-session-recovery-service.js';
+import { beginIntent, settleIntent } from '../../src/application/coordination/intent-service.js';
 
 const ORCA_TASK = 'orca-task-recovery';
 const SOURCE_DISPATCH = 'dispatch-source-1' as DispatchId;
@@ -364,4 +368,85 @@ test('原 Task 未物化时不准备 prepared terminal', async () => {
 test('替代 Segment 的 ID 与原 Segment 不同', () => {
   const replacement = deriveReplacementSegmentId('recovery:scope:segment' as never);
   expect(replacement).not.toBe(SOURCE_SEGMENT);
+});
+
+test('prepared-terminal 激活已 settled accepted：重放续办而不重复提交', async () => {
+  let terminalSubmits = 0;
+  const h = createRecoveryHarness({
+    query: (input) => {
+      if (input.operation === 'worktree-list') {
+        return { kind: 'accepted', value: {
+          worktrees: [{ worktreeId: 'worktree-recovery-1', path: '/tmp/wt' }],
+          truncated: false, hostScope: { omittedHostIds: [] },
+        } };
+      }
+      if (input.operation === 'terminal-list') {
+        return { kind: 'accepted', value: {
+          terminals: [{ handle: 'terminal-prepared', connected: true, writable: true, title: 'prepared-alt' }],
+          truncated: false, omittedHostIds: [],
+        } };
+      }
+      if (input.operation === 'worker-show') {
+        return { kind: 'accepted', value: { exactWorker: true, agentTerminalHandle: 'terminal-prepared' } };
+      }
+      return undefined;
+    },
+    mutate: (input, scope) => {
+      const operation = { operationId: scope.operationId, backendRequestId: 'request-' + scope.operationId, target: scope.target };
+      if (input.operation === 'terminal-create') {
+        return { kind: 'accepted', operation, value: { handle: 'terminal-prepared' } };
+      }
+      if (input.operation === 'terminal-submit') {
+        terminalSubmits += 1;
+        return { kind: 'accepted', operation, value: {} };
+      }
+      return undefined;
+    },
+  });
+  harness = h;
+  setup(h);
+  const recoveryId = deriveRecoveryId(RECOVERY_SCOPE, SOURCE_SEGMENT);
+  const activateOperationId = deriveReplacementTerminalActivationOperationId(recoveryId);
+  const target = { kind: 'worker-task', id: RECOVERY_WORKER_TASK };
+  const revision = (): number => {
+    const read = h.store.query({ kind: 'scope', coordinationScopeId: RECOVERY_SCOPE });
+    if (read.kind !== 'scope' || read.scope === null) throw new Error('Scope 不可读');
+    return read.scope.revision;
+  };
+  // 前一次已按 accepted 收尾的激活事实：重放必须复用它，而不是当作未知或再次提交。
+  const begun = beginIntent(h.store, {
+    coordinationScopeId: RECOVERY_SCOPE,
+    operationId: activateOperationId,
+    target,
+    operationCategory: 'worker-terminal-activate',
+    writer: h.writer,
+    expectedRevision: revision(),
+  });
+  expect(begun.kind).toBe('registered');
+  const settled = settleIntent(h.store, {
+    coordinationScopeId: RECOVERY_SCOPE,
+    operationId: activateOperationId,
+    writer: h.writer,
+    expectedRevision: revision(),
+    outcome: { kind: 'accepted', operation: { operationId: activateOperationId, backendRequestId: 'seed', target }, value: {} },
+  });
+  expect(settled.kind).toBe('settled');
+
+  const result = await recoverWorkerSession(recoveryInput(h, {
+    replacement: {
+      profile: { kind: 'reuse', profileRef: 'profile-validator' },
+      workerLaunch: {
+        kind: 'prepared_terminal',
+        harness: 'codex',
+        activation: 'submit_draft',
+        title: 'prepared-alt',
+        prepare: () => Promise.resolve({ title: 'prepared-alt', command: 'codex' }),
+      },
+      interpretReceipt: readReplacementReceipt,
+    },
+  }));
+
+  // 用户可观察：续办成功，且激活不再重复提交（旧实现此处返回 unknown 并永久 block）。
+  expect(result.kind).toBe('alternate_created');
+  expect(terminalSubmits).toBe(0);
 });

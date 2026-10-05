@@ -11,7 +11,8 @@
  * 2. 读当前 GraphVersion，复验补丁基线与请求目标仍在图中；
  * 3. 拒绝重复 `patchId` 与同一 Planner lane 上的未决意图——两者都表示这次请求可能已经发生过；
  * 4. 确定性分类；分类未要求派发时直接返回路由结论，**一次副作用都不产生**；
- * 5. 派发 Planner 取来源证据 → Admission 归一化 → 唯一提交点追加，并立即推进基线补救持久记录。
+ * 5. 派发 Planner 取来源证据 → **用提交时刻的事实**重新做 Admission 归一化 → 唯一提交点追加，并立即
+ *    推进基线补救持久记录。
  *
  * 身份只来自入参：载荷里自称的 scope、graphId、operationId、patchId 在 Admission 处被丢弃，模型无法通过
  * 填写它们改变提交结果。`unknown` 一律以同一 `operationId` 返回、不做换 ID 重试，因为结果是否落地尚未
@@ -29,11 +30,11 @@ import type {
   BranchCoordinationStore,
   CoordinationWriter,
 } from '../ports/branch-coordination-store.js';
-import type { BudgetConsumption } from '../../domain/dispatch-candidate.js';
+import { WORK_PACKAGE_BUDGET_FIELDS, workPackageBudgetKey, type BudgetConsumption } from '../../domain/dispatch-candidate.js';
 import type { ExecutionLimits } from '../../domain/planning/budget-policy.js';
 import type { ExecutionAuthorizationRecord } from '../../domain/planning/execution-authorization.js';
 import { authorizeOperation } from '../../domain/planning/execution-authorization.js';
-import { graphVersionChain, type GraphVersionRecord } from '../../domain/planning/execution-graph.js';
+import { graphVersionChain, type ExecutionGraph, type GraphVersionRecord } from '../../domain/planning/execution-graph.js';
 import {
   MAX_GRAPH_CHANGE_INSTRUCTION_CODE_POINTS,
   isValidGraphChangeInstruction,
@@ -60,6 +61,7 @@ import {
 } from './baseline-reconciliation.js';
 import { loadCurrentGraph } from '../planning/graph-history.js';
 import { readScope } from '../planning/scope-read.js';
+import { currentContractSettlements } from './execution-view.js';
 
 /** 一个 Work Package 的基线观察；`null` 表示尚无 worktree（不是「基线达标」）。 */
 export type GraphPatchBaselineObservation = {
@@ -179,6 +181,73 @@ function reject(
 function affectedWorkPackageIdsOf(request: GraphChangeRequest): readonly WorkPackageId[] {
   return request.workPackageId === null ? [] : [request.workPackageId];
 }
+
+/**
+ * 提交前重读**这一刻**的 accepted / dispatched / 已消耗修订事实。
+ *
+ * Planner 是外部调用；等待期间其它 Work Package 可能完成 Validator 结算、被派发或消耗修订额度。补丁
+ * 必须基于提交时刻的事实做 Admission，否则一个在等待期间被接受的节点仍可能被旧快照读成「未接受」而
+ * 被 revise / retire，或修订额度被低估。事实仍来自 Store 的同一快照与计数，不引入第二套判定。
+ *
+ * 任一必要事实读不回来时返回 `null`：无法证明的提交必须被拒绝，而不是退回调用方带来的旧快照。
+ */
+function readSubmissionFacts(
+  input: RequestGraphPatchInput,
+  graph: ExecutionGraph,
+):
+  | {
+      readonly acceptedWorkPackageIds: readonly WorkPackageId[];
+      readonly dispatchedWorkPackageIds: readonly WorkPackageId[];
+      readonly consumedRevisions: readonly BudgetConsumption[] | undefined;
+    }
+  | null {
+  const snapshot = input.store.query({ kind: 'snapshot', coordinationScopeId: input.coordinationScopeId });
+  if (snapshot.kind !== 'snapshot') {
+    return null;
+  }
+  const facts = snapshot.snapshot;
+  const acceptedWorkPackageIds = graph.workPackages
+    .filter((workPackage) => {
+      const bindings = facts.materializationBindings.filter(
+        (binding) => binding.workPackageId === workPackage.workPackageId,
+      );
+      // 与只读投影、集成资格和 Finalizer 门禁共用同一条「当前合同结算」规则：修订中的节点不算已接受。
+      const settlements = currentContractSettlements({
+        snapshot: facts,
+        workPackageId: workPackage.workPackageId,
+        settlements: facts.deliverySettlements.filter((settlement) =>
+          bindings.some(
+            (binding) =>
+              binding.workerTaskId === settlement.workerTaskId && binding.role === settlement.role,
+          ),
+        ),
+      });
+      return settlements.some((settlement) => settlement.role === 'validator');
+    })
+    .map((workPackage) => workPackage.workPackageId);
+  const dispatchedWorkPackageIds = [
+    ...new Set(facts.materializationBindings.map((binding) => binding.workPackageId)),
+  ];
+  if (input.consumedRevisions === undefined) {
+    return { acceptedWorkPackageIds, dispatchedWorkPackageIds, consumedRevisions: undefined };
+  }
+  const counters = input.store.query({ kind: 'budget-counters', coordinationScopeId: input.coordinationScopeId });
+  if (counters.kind !== 'budget-counters') {
+    return null;
+  }
+  const consumedRevisions = graph.workPackages.flatMap((workPackage) =>
+    WORK_PACKAGE_BUDGET_FIELDS.map((field) => ({
+      workPackageId: workPackage.workPackageId,
+      field,
+      consumed:
+        counters.counters.find(
+          (counter) => counter.budgetKey === workPackageBudgetKey(workPackage.workPackageId, field),
+        )?.consumed ?? 0,
+    })),
+  );
+  return { acceptedWorkPackageIds, dispatchedWorkPackageIds, consumedRevisions };
+}
+
 /**
  * 当前 head 的追加祖先链（含 head 本身）。
  *
@@ -383,14 +452,26 @@ export async function requestGraphPatch(input: RequestGraphPatchInput): Promise<
     return { kind: 'unknown', operationId: input.operationId, patchId: input.patchId, reason: drafted.reason };
   }
 
+  // Planner 返回后，用提交时刻的事实重做 Admission：等待期间被接受的节点不能再被 revise / retire，
+  // 修订额度也不会被旧快照低估。事实读不回来时拒绝，不用调用方的旧快照提交。
+  const submissionFacts = readSubmissionFacts(input, current.graph);
+  if (submissionFacts === null) {
+    return reject(
+      input,
+      'submission_facts_unavailable',
+      '无法重读提交时刻的已结算/派发事实与修订额度：拒绝基于陈旧快照提交',
+    );
+  }
   const admitted = admitGraphRevision({
     draft: graphRevisionDraftFromEvidence(drafted.evidence),
     current,
     limits: input.limits,
     authorization: input.authorization,
-    acceptedWorkPackageIds: input.acceptedWorkPackageIds,
-    dispatchedWorkPackageIds: input.dispatchedWorkPackageIds,
-    ...(input.consumedRevisions === undefined ? {} : { consumedRevisions: input.consumedRevisions }),
+    acceptedWorkPackageIds: submissionFacts.acceptedWorkPackageIds,
+    dispatchedWorkPackageIds: submissionFacts.dispatchedWorkPackageIds,
+    ...(submissionFacts.consumedRevisions === undefined
+      ? {}
+      : { consumedRevisions: submissionFacts.consumedRevisions }),
   });
   if (admitted.kind === 'rejected') {
     return reject(input, 'admission_rejected', '补丁未通过 Admission 编译校验', admitted.errors);

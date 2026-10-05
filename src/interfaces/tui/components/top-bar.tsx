@@ -21,7 +21,7 @@ export type TopBarProps = {
   readonly generation: number | null;
   /** Execution Authorization 标签（`<id> v<version>`）；没有授权时为 `null`。 */
   readonly authorizationLabel: string | null;
-  /** active Work Package 计数；并发上限固定为 1，因此只可能是 0 或 1。 */
+  /** 占用当前批准并行额度的 Work Package 数。 */
   readonly activeWorkPackageCount: number;
   /** 存在未对账的执行事实时为 `true`：对账完成前不得显示可推进状态。 */
   readonly reconciling: boolean;

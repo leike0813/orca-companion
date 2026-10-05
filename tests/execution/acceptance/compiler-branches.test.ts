@@ -129,7 +129,7 @@ test('成环时整体拒绝', () => {
 
 test('超预算时整体拒绝', () => {
   const constrained = createExecutionScopeHarness({
-    limits: { ...DEFAULT_EXECUTION_LIMITS, maxActiveWorkPackages: 4 },
+    limits: { ...DEFAULT_EXECUTION_LIMITS, maxWorkPackages: 4 },
   });
   try {
     const payload = {

@@ -329,7 +329,7 @@ describe('execution-monitoring / 执行图与 Frontier 投影', () => {
     ]);
 
     const view = viewFor(snapshot);
-    expect(view.execution.activeWorkPackageId).toBe('wp-1');
+    expect(view.execution.activeWorkPackageIds).toEqual(['wp-1']);
     expect(view.execution.activeWorkPackageCount).toBe(1);
     expect(view.graph?.nodes.filter((node) => node.active).map((node) => node.workPackageId)).toEqual([
       'wp-1',
@@ -339,7 +339,7 @@ describe('execution-monitoring / 执行图与 Frontier 投影', () => {
 
     // 没有 active 时计数为 0，绝不会出现 2。
     const idle = viewFor(graphSnapshot([makeWorkPackageExecution('wp-3', { state: 'waiting' })]));
-    expect(idle.execution.activeWorkPackageId).toBeNull();
+    expect(idle.execution.activeWorkPackageIds).toEqual([]);
     expect(idle.execution.activeWorkPackageCount).toBe(0);
 
     const rendered = renderSidebar(snapshot);

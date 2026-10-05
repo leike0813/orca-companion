@@ -154,7 +154,6 @@ afterEach(() => {
 const GRAPH_TOPOLOGY: ExecutionGraph = {
   graphId: GRAPH,
   generation: 1 as GraphGeneration,
-  concurrencyLimit: 1,
   workPackages: [
     {
       workPackageId: WORK_PACKAGE,
@@ -166,6 +165,7 @@ const GRAPH_TOPOLOGY: ExecutionGraph = {
         validatorRepairs: 1,
         graphRevisions: 1,
         specificationRevisions: 1,
+        integrationReconciliations: 1,
         maxRecoveriesPerWorkerAttempt: 1,
       },
     },

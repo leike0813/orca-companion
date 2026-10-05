@@ -1,11 +1,12 @@
 /**
- * 执行预算上限领域行为测试（change: `m1-plan-and-authorize-execution`，Owner: IP-5）。
+ * 执行预算上限领域行为测试（change: `restore-configurable-execution-concurrency`，Owner: IP-01）。
  *
  * 覆盖 Requirement「Compilation carries budget caps and scope envelopes」下的 Scenario：
- * - 超限计划不产出可授权候选图：`assertWithinCaps` 逐项报告超限且不静默截断。
- * - 并发上限随图一并固定：默认并发上限是有限正整数。
- * 另外覆盖 `AGENTS.md` 第 7 节的有限默认值（design D6/D7/D8）、`parseExecutionLimits` 的
- * 字段闭集校验，以及 `applyLimitDefaults` 只在组装阶段补缺失字段。
+ * - 超限计划不产出可授权候选图：`assertWithinCaps` 逐项报告超限且不静默截断，图容量只由
+ *   `maxWorkPackages` 决定，并行额度不参与拓扑判定。
+ * - 默认额度是有限正安全整数：并行 3、图容量 8、集成复验 2。
+ * 另外覆盖 `parseExecutionLimits` 的字段闭集校验（1/2/3/5 合法，非法值、溢出与缺失拒绝），
+ * 以及 `applyLimitDefaults` 只在组装阶段补缺失字段。
  */
 
 import { expect, test } from 'vitest';
@@ -20,8 +21,9 @@ import {
 import type { PlannedWorkPackage, WorkPackageBudget } from '../../src/domain/planning/execution-graph.js';
 
 const DEFAULT_VALUES = {
-  maxActiveWorkPackages: 8,
-  concurrencyLimit: 1,
+  maxActiveWorkPackages: 3,
+  maxWorkPackages: 8,
+  integrationReconciliations: 2,
   implementationAttempts: 2,
   validatorRepairs: 2,
   graphRevisions: 2,
@@ -43,14 +45,15 @@ function planned(key: string, requestedBudget?: Partial<WorkPackageBudget>): Pla
   };
 }
 
-test('默认执行上限是有限正整数，取值与 AGENTS.md 第 7 节一致', () => {
-  expect(Number.isSafeInteger(DEFAULT_EXECUTION_LIMITS.concurrencyLimit)).toBe(true);
-  expect(DEFAULT_EXECUTION_LIMITS.concurrencyLimit).toBeGreaterThan(0);
+test('默认执行上限是有限正安全整数，取值与 AGENTS.md 第 7 节一致', () => {
   for (const value of Object.values(DEFAULT_EXECUTION_LIMITS)) {
     expect(Number.isSafeInteger(value)).toBe(true);
     expect(value).toBeGreaterThan(0);
   }
   expect(DEFAULT_EXECUTION_LIMITS).toEqual(DEFAULT_VALUES);
+  expect(DEFAULT_EXECUTION_LIMITS.maxActiveWorkPackages).toBe(3);
+  expect(DEFAULT_EXECUTION_LIMITS.maxWorkPackages).toBe(8);
+  expect(DEFAULT_EXECUTION_LIMITS.integrationReconciliations).toBe(2);
 });
 
 test('完整且全为正整数的上限对象通过解析', () => {
@@ -58,6 +61,16 @@ test('完整且全为正整数的上限对象通过解析', () => {
   expect(parsed.ok).toBe(true);
   if (parsed.ok) {
     expect(parsed.value).toEqual(DEFAULT_EXECUTION_LIMITS);
+  }
+});
+
+test('并行额度 1/2/3/5 都是合法配置，不设硬上限 3', () => {
+  for (const value of [1, 2, 3, 5]) {
+    const parsed = parseExecutionLimits({ ...DEFAULT_VALUES, maxActiveWorkPackages: value }, 'limits');
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.value.maxActiveWorkPackages).toBe(value);
+    }
   }
 });
 
@@ -74,27 +87,36 @@ test('缺失任一上限字段即拒绝，并指向该字段', () => {
   }
 });
 
-test('零、负数、小数、Infinity、NaN 与 null 都不是合法上限', () => {
-  const rejected: readonly unknown[] = [0, -1, 1.5, Number.POSITIVE_INFINITY, Number.NaN, null, '2'];
+test('零、负数、小数、Infinity、NaN、溢出与非数字都不是合法上限', () => {
+  const rejected: readonly unknown[] = [
+    0,
+    -1,
+    1.5,
+    Number.POSITIVE_INFINITY,
+    Number.NaN,
+    Number.MAX_SAFE_INTEGER + 1,
+    null,
+    '2',
+  ];
 
   for (const value of rejected) {
-    const parsed = parseExecutionLimits({ ...DEFAULT_VALUES, concurrencyLimit: value }, 'limits');
+    const parsed = parseExecutionLimits({ ...DEFAULT_VALUES, maxActiveWorkPackages: value }, 'limits');
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) {
-      expect(parsed.field).toContain('concurrencyLimit');
+      expect(parsed.field).toContain('maxActiveWorkPackages');
     }
   }
 });
 
 test('组装阶段只补缺失的上限，已给出的值不被覆盖', () => {
-  const raw = { concurrencyLimit: 4, maxRecoveriesPerWorkerAttempt: 3 };
+  const raw = { maxWorkPackages: 4, maxRecoveriesPerWorkerAttempt: 3 };
   const snapshot = { ...raw };
 
   const filled = applyLimitDefaults(raw);
 
   expect(filled).toEqual({
     ...DEFAULT_EXECUTION_LIMITS,
-    concurrencyLimit: 4,
+    maxWorkPackages: 4,
     maxRecoveriesPerWorkerAttempt: 3,
   });
   expect(raw).toEqual(snapshot);
@@ -106,14 +128,24 @@ test('非对象输入原样返回，不伪造上限对象', () => {
   }
 });
 
-test('超过 active Work Package 上限的计划被判为超限', () => {
+test('超过图容量上限的计划被判为超限，容量由 maxWorkPackages 决定', () => {
   const violations = assertWithinCaps({
-    limits: limits({ maxActiveWorkPackages: 2 }),
+    limits: limits({ maxWorkPackages: 2 }),
     workPackages: [planned('a'), planned('b'), planned('c')],
   });
 
-  expect(violations.map((violation) => violation.code)).toEqual(['active_work_packages_exceeded']);
+  expect(violations.map((violation) => violation.code)).toEqual(['work_package_capacity_exceeded']);
   expect(violations[0]?.workPackageKey).toBeNull();
+});
+
+test('并行额度不参与容量判定：额度 1 与 5 都不改变节点数结论', () => {
+  for (const maxActiveWorkPackages of [1, 5]) {
+    const violations = assertWithinCaps({
+      limits: limits({ maxActiveWorkPackages, maxWorkPackages: 8 }),
+      workPackages: [planned('a'), planned('b')],
+    });
+    expect(violations).toEqual([]);
+  }
 });
 
 test('声明超过上限的包预算被判为超限并指向该包', () => {

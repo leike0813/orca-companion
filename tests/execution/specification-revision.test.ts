@@ -168,6 +168,7 @@ test('修订不冒充重试：重试计划不携带 contract 变化', () => {
       validatorRepairs: 2,
       graphRevisions: 2,
       specificationRevisions: 2,
+      integrationReconciliations: 2,
       maxRecoveriesPerWorkerAttempt: 1,
     },
     acceptanceEvidence: [],

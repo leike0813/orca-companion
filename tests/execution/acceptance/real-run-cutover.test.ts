@@ -234,13 +234,11 @@ if (resolved.kind === 'skip') {
           graph: {
             graphId: predecessorGraphId,
             generation: 1 as GraphGeneration,
-            concurrencyLimit: 1,
             workPackages: [executionWorkPackage('wp-predecessor')],
           },
           initialPlan: implementationPlanFor({
             graphId: predecessorGraphId,
             generation: 1 as GraphGeneration,
-            concurrencyLimit: 1,
             workPackages: [executionWorkPackage('wp-predecessor')],
           }, 1),
           mapRevision: 0,
@@ -257,7 +255,7 @@ if (resolved.kind === 'skip') {
           writer,
           authorizationId: 'auth-real-cutover',
           authorizationVersion: 1,
-          manifestVersion: 2,
+          manifestVersion: 3,
           fingerprint: 'fingerprint-real-cutover-1',
           approvalRef: `${resolved.identity}:approval-1`,
           manifest: executionManifest({
@@ -324,13 +322,11 @@ if (resolved.kind === 'skip') {
           graph: {
             graphId: candidateGraphId,
             generation: 2 as GraphGeneration,
-            concurrencyLimit: 1,
             workPackages: [executionWorkPackage('wp-candidate')],
           },
           initialPlan: implementationPlanFor({
             graphId: candidateGraphId,
             generation: 2 as GraphGeneration,
-            concurrencyLimit: 1,
             workPackages: [executionWorkPackage('wp-candidate')],
           }, 1),
           mapRevision: 0,
@@ -347,7 +343,7 @@ if (resolved.kind === 'skip') {
           writer,
           authorizationId: 'auth-real-cutover-2',
           authorizationVersion: 2,
-          manifestVersion: 2,
+          manifestVersion: 3,
           fingerprint: 'fingerprint-real-cutover-2',
           approvalRef: `${resolved.identity}:approval-2`,
           manifest: executionManifest({

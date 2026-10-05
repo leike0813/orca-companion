@@ -208,7 +208,7 @@ function writeProjectConfig(repository: string): void {
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',
@@ -773,12 +773,12 @@ function prepareAdvanceState(repository: string, head: string): void {
       validatorRepairs: DEFAULT_EXECUTION_LIMITS.validatorRepairs,
       graphRevisions: DEFAULT_EXECUTION_LIMITS.graphRevisions,
       specificationRevisions: DEFAULT_EXECUTION_LIMITS.specificationRevisions,
+      integrationReconciliations: DEFAULT_EXECUTION_LIMITS.integrationReconciliations,
       maxRecoveriesPerWorkerAttempt: DEFAULT_EXECUTION_LIMITS.maxRecoveriesPerWorkerAttempt,
     };
     const graph: ExecutionGraph = {
       graphId: EXEC_GRAPH,
       generation: EXEC_GENERATION,
-      concurrencyLimit: DEFAULT_EXECUTION_LIMITS.concurrencyLimit,
       workPackages: [
         { workPackageId: EXEC_WP_A, title: '第一个工作包', dependsOn: [], scopeEnvelope: { include: ['src'], exclude: [] }, budget },
         { workPackageId: EXEC_WP_B, title: '第二个工作包', dependsOn: [], scopeEnvelope: { include: ['src'], exclude: [] }, budget },
@@ -852,7 +852,7 @@ function prepareAdvanceState(repository: string, head: string): void {
       writer,
       authorizationId: EXEC_AUTH,
       authorizationVersion: 1,
-      manifestVersion: 2,
+      manifestVersion: 3,
       fingerprint: 'fingerprint-advance',
       approvalRef: 'approval-advance',
       manifest,
@@ -943,7 +943,7 @@ async function openAdvanceHarness(options?: { readonly unknownWorkerStart?: bool
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',
@@ -1212,6 +1212,7 @@ function snapshotWith(input: {
     workPackageLineages: [],
     baselineAdoptions: [],
     mutationLanes: [],
+    laneReservations: [],
   };
 }
 
@@ -1228,7 +1229,6 @@ function exitedObservations(dispatchId: string): ExecutionObservationFacts {
 const INTERRUPT_GRAPH: ExecutionGraph = {
   graphId: EXEC_GRAPH,
   generation: EXEC_GENERATION,
-  concurrencyLimit: 1,
   workPackages: [
     {
       workPackageId: EXEC_WP_A,
@@ -1240,6 +1240,7 @@ const INTERRUPT_GRAPH: ExecutionGraph = {
         validatorRepairs: 1,
         specificationRevisions: 1,
         graphRevisions: 1,
+        integrationReconciliations: 1,
         maxRecoveriesPerWorkerAttempt: 1,
       },
     },

@@ -307,7 +307,7 @@ function prepareRepository(directory: string): { readonly repository: string; re
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',
@@ -352,7 +352,7 @@ function prepareRepository(directory: string): { readonly repository: string; re
 
 function manifestFor(head: string, repository: string): ExecutionAuthorizationManifest {
   return {
-    manifestVersion: 2,
+    manifestVersion: 3,
     coordinationScopeId: SCOPE,
     planningCycleId: CYCLE,
     destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
@@ -424,7 +424,6 @@ function prepareExecutionState(repository: string, head: string): void {
     const graph: ExecutionGraph = {
       graphId: GRAPH_ID,
       generation: GENERATION,
-      concurrencyLimit: DEFAULT_EXECUTION_LIMITS.concurrencyLimit,
       workPackages: [
         {
           workPackageId: WP,
@@ -436,6 +435,7 @@ function prepareExecutionState(repository: string, head: string): void {
             validatorRepairs: DEFAULT_EXECUTION_LIMITS.validatorRepairs,
             graphRevisions: DEFAULT_EXECUTION_LIMITS.graphRevisions,
             specificationRevisions: DEFAULT_EXECUTION_LIMITS.specificationRevisions,
+            integrationReconciliations: DEFAULT_EXECUTION_LIMITS.integrationReconciliations,
             maxRecoveriesPerWorkerAttempt: DEFAULT_EXECUTION_LIMITS.maxRecoveriesPerWorkerAttempt,
           },
         },
@@ -482,7 +482,7 @@ function prepareExecutionState(repository: string, head: string): void {
       writer,
       authorizationId: AUTH_ID,
       authorizationVersion: 1,
-      manifestVersion: 2,
+      manifestVersion: 3,
       fingerprint: 'fingerprint-finalizer',
       approvalRef: 'approval-finalizer',
       manifest: manifestFor(head, repository),

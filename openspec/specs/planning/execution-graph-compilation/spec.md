@@ -29,17 +29,16 @@
 - **WHEN** 候选图绑定后，其依据的地图 revision 发生变化
 - **THEN** 该候选图 SHALL 被视为过期，新的授权 SHALL 以重新编译为前提
 
-### Requirement: Compilation carries budget caps and scope envelopes
-
-编译 SHALL 为候选图的每个 Work Package 带上 Scope Envelope 与预算上限，取值只来自配置与授权输入，且 SHALL NOT 允许图内节点自行放宽。
+### Requirement: Compilation carries package budgets and graph capacity
+编译 SHALL 为每包带上 Scope Envelope 与有限预算，只取配置与授权输入。当前未 retire 包数量 SHALL 受 maxWorkPackages 限制，默认 8。并行额度 SHALL 不存入图拓扑，也 SHALL 不因额度调整产生 Graph Revision。
 
 #### Scenario: 超限计划不产出可授权候选图
-- **WHEN** 计划的预算需求超过配置上限
-- **THEN** 编译 SHALL 失败并报告超限项，SHALL NOT 静默截断或放宽上限
+- **WHEN** 计划的预算需求或节点总量超过配置上限
+- **THEN** 编译 SHALL 失败并报告超限项，不截断或放宽
 
-#### Scenario: 并发上限随图一并固定
-- **WHEN** 候选图编译完成
-- **THEN** 其中的并发上限 SHALL 为有限值，并作为后续授权的固定输入
+#### Scenario: Concurrency independent of topology
+- **WHEN** 同一计划按并行额度 1 和 5 编译
+- **THEN** SHALL 得到相同图拓扑，额度由 Manifest 绑定
 
 ### Requirement: Retained original compilation plan
 A newly recorded initial graph SHALL retain its normalized original Implementation Plan atomically with version 1. Accepted revisions SHALL NOT replace it. Older records lacking the plan SHALL remain explicitly unavailable and MUST NOT reconstruct it from current tracker content or compiled topology.

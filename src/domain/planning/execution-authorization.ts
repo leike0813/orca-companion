@@ -39,7 +39,7 @@ import {
 } from './budget-policy.js';
 
 /** Manifest 的结构版本；字段集合变化时递增，读取到未知版本即拒绝。 */
-export const MANIFEST_VERSION = 2;
+export const MANIFEST_VERSION = 3;
 
 export const WORKER_ROLES = ['planner', 'implementation', 'validator', 'finalizer'] as const;
 

@@ -7,8 +7,8 @@
  * 物化用例。
  *
  * 四条不可让步的边界：
- * - **一次一个阶段**：至多一次 `materializeWorkPackage`；Frontier 中已有 `live` 或无法核验
- *   （`unverifiable`）的 Worker 时返回 `idle`，绝不并发物化第二个 Work Package；
+ * - **一次一个阶段**：至多一次 `materializeWorkPackage`；某包已有 `live` 或无法核验
+ *   （`unverifiable`）的 Worker 时等待该包，独立包继续按批准额度准入；
  * - **身份稳定**：OperationId 由 Scope、Graph Generation、Work Package、角色、Task Contract
  *   Revision、Attempt 与步骤派生，同一 lane 上已有未决意图时优先复用它的 ID。不读时钟、不用随机数；
  * - **不换 ID 重试**：`unknown` 以原 OperationId 返回、lane 留给对账；只有 store 里确实存在的 lane
@@ -46,6 +46,7 @@ import type {
 } from '../../domain/dispatch-candidate.js';
 import { WORK_PACKAGE_BUDGET_FIELDS, workPackageBudgetKey, budgetFieldExhausted } from '../../domain/dispatch-candidate.js';
 import { frozenWorkPackageIds } from '../../domain/execution/revision-pending.js';
+import { acceptedResultMatchesTask } from '../../domain/worker-result-verification.js';
 import type { CanonicalHeadFacts } from '../../domain/git-integration-policy.js';
 import type { ExecutionGraph, WorkPackage } from '../../domain/planning/execution-graph.js';
 import { graphVersionChain } from '../../domain/planning/execution-graph.js';
@@ -57,11 +58,6 @@ import type { TaskEnvelope } from '../../domain/task-contract.js';
 import { activeAuthorization } from '../planning/authorization-service.js';
 import { readScope } from '../planning/scope-read.js';
 import { guardDispatchCandidate } from '../dispatch-guard.js';
-import {
-  planBaselineReconciliation,
-  recordBaselineReconciliation,
-  reconciliationIdFor,
-} from './baseline-reconciliation.js';
 import {
   materializeWorkPackage,
   type MaterializeOperationIds,
@@ -151,6 +147,8 @@ export type AdvanceExecutionInput = {
   readonly observations: ExecutionObservationFacts;
   /** 角色级派发装配；缺少当前候选所需角色时不派发。 */
   readonly roles: Partial<Record<WorkerRole, AdvanceRoleDispatch>>;
+  /** 宿主已完成角色装配的包；仍重新核验其准入，不替其他包派发。 */
+  readonly selectedWorkPackageId?: WorkPackageId;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -291,6 +289,83 @@ export function frontierBlockersOf(frontier: readonly WorkPackageExecutionEntry[
     (entry) =>
       `frontier:${entry.workPackageId}:${entry.state}${entry.role === null ? '' : `:${entry.role}`}`,
   );
+}
+
+/** 调度与宿主装配共用的候选选择；包级阻塞不遮住独立 lane。 */
+export function selectAdvanceCandidate(input: {
+  readonly graph: ExecutionGraph;
+  readonly snapshot: CoordinationSnapshot;
+  readonly frontier: readonly WorkPackageExecutionEntry[];
+  readonly observations: ExecutionObservationFacts;
+  readonly materializationIntents: readonly OperationIntent[];
+  readonly maxActiveWorkPackages: number;
+  readonly excludedWorkPackageIds?: ReadonlySet<string>;
+  readonly selectedWorkPackageId?: WorkPackageId;
+  readonly consumptionOf: (workPackageId: WorkPackageId) => readonly BudgetConsumption[] | null;
+}): {
+  readonly candidate: { readonly entry: WorkPackageExecutionEntry; readonly role: Exclude<WorkerRole, 'finalizer'>;
+    readonly revisionPlannerPermit: RevisionPlannerPermit | null } | null;
+  readonly blockers: readonly string[];
+} {
+  const revisions = revisionPlannerFacts(input);
+  const blockers = revisions.denials.map(item => `revision-planner:${item.workPackageId}:${item.reason}`);
+  if (!input.observations.workersEnumerated) return { candidate: null, blockers: ['worker-list:unverifiable'] };
+  const lanes = input.snapshot.laneReservations.filter(item => item.graphId === input.graph.graphId &&
+    item.generation === input.graph.generation && item.releasedAt === null);
+  const occupied = new Set(lanes.map(item => item.workPackageId as string));
+  // 生命周期事实仍覆盖尚未完成预约回读的同一调度事务。
+  for (const entry of input.frontier) {
+    if (entry.role !== null && !['accepted', 'retired', 'cancelled'].includes(entry.state)) occupied.add(entry.workPackageId);
+  }
+  for (const entry of input.frontier) {
+    if (input.excludedWorkPackageIds?.has(entry.workPackageId) ||
+      (input.selectedWorkPackageId !== undefined && entry.workPackageId !== input.selectedWorkPackageId)) continue;
+    const permit = revisions.permits.find(item => item.workPackageId === entry.workPackageId) ?? null;
+    const role = nextAdvanceRoleOf({ state: entry.state, role: entry.role, revisionPlanner: permit });
+    if (role === null || role === 'finalizer') continue;
+    if (entry.liveness === 'live' || entry.liveness === 'unverifiable') {
+      blockers.push(`worker:${entry.workPackageId}:${entry.liveness}`);
+      continue;
+    }
+    if (!occupied.has(entry.workPackageId) && occupied.size >= input.maxActiveWorkPackages) {
+      blockers.push('capacity:full');
+      continue;
+    }
+    const pending = input.snapshot.unresolvedIntents.find(item => item.target.id === entry.workPackageId);
+    if (pending !== undefined) {
+      blockers.push(`lane:${entry.workPackageId}:${pending.operationId}`);
+      continue;
+    }
+    const started = input.snapshot.materializationBindings.some(binding => {
+      if (binding.workPackageId !== entry.workPackageId || binding.identity !== 'issued' ||
+        binding.role === null || binding.attemptId === null || input.snapshot.deliverySettlements.some(settlement =>
+          acceptedResultMatchesTask(binding, settlement))) return false;
+      const ids = materializeOperationIdsFor({ coordinationScopeId: input.snapshot.scope.coordinationScopeId,
+        graphId: input.graph.graphId, graphGeneration: input.graph.generation,
+        workPackageId: binding.workPackageId, role: binding.role,
+        contractRevision: binding.specBinding?.contractRevision ?? 0, attemptId: binding.attemptId,
+        unresolvedIntents: input.materializationIntents, settledRejectedIntents: input.materializationIntents });
+      return input.materializationIntents.some(intent => intent.operationId === ids.workerStart);
+    });
+    if (started) {
+      blockers.push(`worker-start:${entry.workPackageId}:awaiting-observation`);
+      continue;
+    }
+    const workPackage = input.graph.workPackages.find(item => item.workPackageId === entry.workPackageId);
+    if (workPackage === undefined) continue;
+    const consumed = input.consumptionOf(workPackage.workPackageId);
+    if (consumed === null) {
+      blockers.push(`budget:${entry.workPackageId}:unreadable`);
+      continue;
+    }
+    if (role === 'implementation' && budgetFieldExhausted(workPackage.budget.implementationAttempts,
+      consumed.find(item => item.field === 'implementationAttempts')?.consumed ?? 0)) {
+      blockers.push(`budget-exhausted:${workPackageBudgetKey(workPackage.workPackageId, 'implementationAttempts')}`);
+      continue;
+    }
+    return { candidate: { entry, role, revisionPlannerPermit: permit }, blockers };
+  }
+  return { candidate: null, blockers: [...blockers, ...frontierBlockersOf(input.frontier)] };
 }
 
 /**
@@ -722,58 +797,15 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
     observations: input.observations,
   });
 
-  /**
-   * 并发上限为 1：已有角色级 Worker 仍在运行、或它的存活无法核验时停在这里。
-   *
-   * 「不可核验」同样阻止重复派发——把「没观察到」读成「没在跑」会立刻产生第二个 Dispatch。
-   */
-  const occupied = derived.frontier.filter(
-    (entry) => entry.liveness === 'live' || entry.liveness === 'unverifiable',
-  );
-  if (occupied.length > 0) {
-    return idle(
-      '已有活跃或无法核验的 Worker，本轮不再物化新的角色级 Task',
-      occupied.map((entry) => `worker:${entry.workPackageId}:${entry.liveness ?? 'unknown'}`),
-    );
-  }
-
-  let candidate: WorkPackageExecutionEntry | null = null;
-  let role: WorkerRole | null = null;
-  let revisionPlannerPermit: RevisionPlannerPermit | null = null;
-  const revisionPlanner = revisionPlannerFacts({
-    graph,
-    snapshot,
-    observations: input.observations,
-    consumptionOf: (workPackageId) =>
-      consumedBudgetForWorkPackage(input.store, input.coordinationScopeId, workPackageId),
+  const intents = intentsOf(input.store, input.coordinationScopeId);
+  if (intents === null) return blocked(input.coordinationScopeId, 'invalid_state', '无法读取派发意图');
+  const selection = selectAdvanceCandidate({ graph, snapshot, frontier: derived.frontier, materializationIntents: intents,
+    observations: input.observations, maxActiveWorkPackages: authorization.manifest.limits.maxActiveWorkPackages,
+    ...(input.selectedWorkPackageId === undefined ? {} : { selectedWorkPackageId: input.selectedWorkPackageId }),
+    consumptionOf: workPackageId => consumedBudgetForWorkPackage(input.store, input.coordinationScopeId, workPackageId),
   });
-  for (const entry of derived.frontier) {
-    const permit =
-      revisionPlanner.permits.find((candidatePermit) => candidatePermit.workPackageId === entry.workPackageId) ??
-      null;
-    const next = nextAdvanceRoleOf({
-      state: entry.state,
-      role: entry.role,
-      revisionPlanner: permit,
-    });
-    if (next !== null) {
-      candidate = entry;
-      role = next;
-      revisionPlannerPermit = permit;
-      break;
-    }
-  }
-  if (candidate === null || role === null) {
-    return idle(
-      'Frontier 中没有可推进的候选：没有依赖已满足且后继角色尚未派发的 Work Package',
-      [
-        ...frontierBlockersOf(derived.frontier),
-        ...revisionPlanner.denials.map(
-          (denial) => `revision-planner:${denial.workPackageId}:${denial.reason}`,
-        ),
-      ],
-    );
-  }
+  if (selection.candidate === null) return idle('没有可推进且已获准入的 Work Package', selection.blockers);
+  const { entry: candidate, role, revisionPlannerPermit } = selection.candidate;
 
   const dispatch = input.roles[role];
   if (dispatch === undefined) {
@@ -862,10 +894,6 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
     ]);
   }
 
-  const intents = intentsOf(input.store, input.coordinationScopeId);
-  if (intents === null) {
-    return blocked(input.coordinationScopeId, 'invalid_state', '无法读取未决 Operation Intent，不能签发派发身份');
-  }
   const operationIds = materializeOperationIdsFor({
     coordinationScopeId: input.coordinationScopeId,
     graphId: graph.graphId,
@@ -902,57 +930,9 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
     );
   }
 
-  /**
-   * canonical 已经前移到 Authorization baseline 之外时，先为这个 Work Package 登记 Baseline Reconciliation。
-   *
-   * Work Package 的 worktree 一律建立在 Authorization 绑定的 baseline 上（物化核验与集成的 commit 步都按
-   * 它判定），而 canonical 会随每次受控集成前移。落后基线的 worktree 无法 fast-forward 集成，也不能在
-   * 角色工作开始之后再对齐（重置会丢掉该角色的产出）。因此这里在派发**之前**登记需求：物化会先把
-   * worktree 建出来，角色 Task 由 `baseline_reconciliation_pending` 门禁挡住，直到宿主用独立 Planner
-   * Worker 把 worktree 对齐到当前基线并核验通过。
-   *
-   * 幂等：(Work Package, 目标基线) 已有记录（未终结或已核验）时不重复登记。
-   */
-  const requiredBaselineHead = input.canonicalHead.canonicalHead;
-  if (requiredBaselineHead !== authorization.manifest.baselineHead) {
-    const existing = input.store.query({
-      kind: 'baseline-reconciliations',
-      coordinationScopeId: input.coordinationScopeId,
-      workPackageId: workPackage.workPackageId,
-    });
-    if (existing.kind === 'rejected') {
-      return blocked(input.coordinationScopeId, existing.code, existing.message);
-    }
-    const reconciliationId = reconciliationIdFor(workPackage.workPackageId, requiredBaselineHead);
-    const known =
-      existing.kind === 'baseline-reconciliations' &&
-      existing.reconciliations.some((entry) => entry.reconciliationId === reconciliationId);
-    if (!known) {
-      const planned = planBaselineReconciliation({
-        workPackageId: workPackage.workPackageId,
-        requiredBaselineHead,
-        worktreeBaseHead: authorization.manifest.baselineHead,
-        // 祖先关系由随后的核验按真实 Git 事实判定；这里只登记「不是当前基线」这一需求。
-        relation: 'behind',
-      });
-      if (planned.kind === 'required') {
-        const recorded = recordBaselineReconciliation({
-          store: input.store,
-          coordinationScopeId: input.coordinationScopeId,
-          writer: input.writer,
-          plan: planned.plan,
-        });
-        if (recorded.kind === 'rejected') {
-          return blocked(input.coordinationScopeId, recorded.failure.code, recorded.failure.message);
-        }
-      }
-    }
-  }
-
-  /**
-   * 登记基线补救会推进 Scope revision（本地 CAS）：物化的期望 revision 必须取登记之后的读值，
-   * 否则这一步会以 `stale_revision` 停在门口而不是把 worktree 建出来。
-   */
+  const lane = snapshot.laneReservations.find(item => item.graphId === graph.graphId &&
+    item.generation === graph.generation && item.workPackageId === workPackage.workPackageId && item.releasedAt === null);
+  const baselineHead = lane?.baselineHead ?? input.canonicalHead.canonicalHead;
   const afterRegistration = readScope(input.store, input.coordinationScopeId);
   if (afterRegistration.kind === 'rejected') {
     return blocked(input.coordinationScopeId, afterRegistration.code, afterRegistration.message);
@@ -987,7 +967,7 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
       paths: {
         repoSelector: `path:${canonicalWorktree}`,
         canonicalWorktree,
-        baselineHead: authorization.manifest.baselineHead,
+        baselineHead,
       },
       operationIds,
       workPackage: { scopeEnvelope: workPackage.scopeEnvelope, budget: workPackage.budget },

@@ -136,7 +136,7 @@ function observingStore(inner: BranchCoordinationStore): Observed {
 }
 
 function emptyGraph(): ExecutionGraph {
-  return { graphId: GRAPH_ID, generation: 1 as GraphGeneration, concurrencyLimit: 1, workPackages: [] };
+  return { graphId: GRAPH_ID, generation: 1 as GraphGeneration, workPackages: [] };
 }
 
 function registerAndLease(sessionId: CoordinatorSessionId, incarnation: RuntimeIncarnationId): CoordinationWriter {

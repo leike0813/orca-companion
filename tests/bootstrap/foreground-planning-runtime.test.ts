@@ -89,7 +89,7 @@ function writeProjectConfig(repository: string, options: { readonly maxInputToke
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',

@@ -2,16 +2,24 @@
  * IC-05：执行预算上限（Owner: `m1-plan-and-authorize-execution`）。
  *
  * 上限是 Manifest 的字段，在这里一次性定型；后继 change 只读取与扣减，不新增字段（D7/D8）。
- * 所有上限都是有限非负整数——没有 `null`、没有 `Infinity`、没有「不限制」的表示，因此
+ * 所有上限都是有限正安全整数——没有 `null`、没有 `Infinity`、没有「不限制」的表示，因此
  * 「上限缺失」只能表现为拒绝，而不可能被读成放开。
+ *
+ * 三个「额度」各自只有一个含义：`maxActiveWorkPackages` 是并行包调度额度，
+ * `maxWorkPackages` 是当前图容量，`integrationReconciliations` 是每包集成复验次数。
+ * 图拓扑只受容量约束，不携带并行额度副本。
  */
 
 import { parseRevision, type IdentityResult } from '../../application/dto/identity.js';
 import type { WorkPackageBudget } from './execution-graph.js';
 
 export type ExecutionLimits = {
+  /** 并行 Work Package 调度额度；提高即补槽，降低只阻止新包。 */
   readonly maxActiveWorkPackages: number;
-  readonly concurrencyLimit: number;
+  /** 当前图容量：未 retire 包数量上限。 */
+  readonly maxWorkPackages: number;
+  /** 每包可用的集成复验轮次；独立于 Validator 修复预算。 */
+  readonly integrationReconciliations: number;
   readonly implementationAttempts: number;
   readonly validatorRepairs: number;
   readonly graphRevisions: number;
@@ -21,8 +29,9 @@ export type ExecutionLimits = {
 
 /** `AGENTS.md` 第 7 节的有限默认值；可配置但必须有限，且不因恢复而重置。 */
 export const DEFAULT_EXECUTION_LIMITS: ExecutionLimits = {
-  maxActiveWorkPackages: 8,
-  concurrencyLimit: 1,
+  maxActiveWorkPackages: 3,
+  maxWorkPackages: 8,
+  integrationReconciliations: 2,
   implementationAttempts: 2,
   validatorRepairs: 2,
   graphRevisions: 2,
@@ -35,7 +44,8 @@ export const DEFAULT_RECOVERIES_PER_WORKER_ATTEMPT = 1;
 
 const LIMIT_FIELDS = [
   'maxActiveWorkPackages',
-  'concurrencyLimit',
+  'maxWorkPackages',
+  'integrationReconciliations',
   'implementationAttempts',
   'validatorRepairs',
   'graphRevisions',
@@ -43,7 +53,7 @@ const LIMIT_FIELDS = [
   'maxRecoveriesPerWorkerAttempt',
 ] as const satisfies readonly (keyof ExecutionLimits)[];
 
-/** 解析 Manifest 的 `limits`：字段闭集、逐项有限、缺失即拒绝。 */
+/** 解析 Manifest 的 `limits`：字段闭集、逐项正安全整数、缺失即拒绝。 */
 export function parseExecutionLimits(raw: unknown, field: string): IdentityResult<ExecutionLimits> {
   if (typeof raw !== 'object' || raw === null) {
     return { ok: false, field, message: '必须是对象' };
@@ -55,18 +65,17 @@ export function parseExecutionLimits(raw: unknown, field: string): IdentityResul
     if (!value.ok) {
       return value;
     }
-    parsed[key] = value.value;
-  }
-  for (const key of LIMIT_FIELDS) {
-    if (parsed[key] === 0) {
-      return { ok: false, field: `${field}.${key}`, message: '上限必须是大于 0 的整数' };
+    if (!Number.isSafeInteger(value.value) || value.value <= 0) {
+      return { ok: false, field: `${field}.${key}`, message: '上限必须是大于 0 的安全整数' };
     }
+    parsed[key] = value.value;
   }
   return {
     ok: true,
     value: {
       maxActiveWorkPackages: parsed['maxActiveWorkPackages'] ?? 0,
-      concurrencyLimit: parsed['concurrencyLimit'] ?? 0,
+      maxWorkPackages: parsed['maxWorkPackages'] ?? 0,
+      integrationReconciliations: parsed['integrationReconciliations'] ?? 0,
       implementationAttempts: parsed['implementationAttempts'] ?? 0,
       validatorRepairs: parsed['validatorRepairs'] ?? 0,
       graphRevisions: parsed['graphRevisions'] ?? 0,
@@ -96,13 +105,14 @@ export function budgetFromLimits(limits: ExecutionLimits): WorkPackageBudget {
     validatorRepairs: limits.validatorRepairs,
     graphRevisions: limits.graphRevisions,
     specificationRevisions: limits.specificationRevisions,
+    integrationReconciliations: limits.integrationReconciliations,
     maxRecoveriesPerWorkerAttempt: limits.maxRecoveriesPerWorkerAttempt,
   };
 }
 
 export type BudgetViolationCode =
-  | 'active_work_packages_exceeded'
-  | 'concurrency_limit_not_finite'
+  | 'work_package_capacity_exceeded'
+  | 'work_package_capacity_invalid'
   | 'work_package_budget_exceeded';
 
 export type BudgetViolation = {
@@ -135,18 +145,18 @@ export function assertWithinCaps(input: {
   readonly activeWorkPackageCount?: number;
 }): readonly BudgetViolation[] {
   const violations: BudgetViolation[] = [];
-  if (!Number.isSafeInteger(input.limits.concurrencyLimit) || input.limits.concurrencyLimit <= 0) {
+  if (!Number.isSafeInteger(input.limits.maxWorkPackages) || input.limits.maxWorkPackages <= 0) {
     violations.push({
-      code: 'concurrency_limit_not_finite',
-      message: `并发上限必须为有限正整数，实际为 ${String(input.limits.concurrencyLimit)}`,
+      code: 'work_package_capacity_invalid',
+      message: `图容量上限必须为正安全整数，实际为 ${String(input.limits.maxWorkPackages)}`,
       workPackageKey: null,
     });
   }
   const activeCount = input.activeWorkPackageCount ?? input.workPackages.length;
-  if (activeCount > input.limits.maxActiveWorkPackages) {
+  if (activeCount > input.limits.maxWorkPackages) {
     violations.push({
-      code: 'active_work_packages_exceeded',
-      message: `Work Package 数量 ${activeCount} 超过上限 ${input.limits.maxActiveWorkPackages}`,
+      code: 'work_package_capacity_exceeded',
+      message: `Work Package 数量 ${activeCount} 超过图容量上限 ${input.limits.maxWorkPackages}`,
       workPackageKey: null,
     });
   }

@@ -26,9 +26,11 @@
 import { isUnresolvedIntentState } from '../../domain/recovery/operation-intent.js';
 import { blockLane } from '../coordination/intent-service.js';
 import {
+  ackConsumedDelivery,
   acceptResultLaneKey,
   ackLaneKey,
   settleDelivery,
+  type ConsumedDeliveryResult,
   type SettleDeliveryInput,
   type SettleDeliveryResult,
 } from '../delivery/process-delivery.js';
@@ -195,6 +197,19 @@ function ensureLaneBlocked(
 export async function replayDeliveries(input: ReplayDeliveriesInput): Promise<ReplayDeliveriesResult> {
   const settle = input.settle ?? settleDelivery;
   const outcomes: ReplayDeliveryOutcome[] = [];
+  /**
+   * 每个 deliveryId 一组：阶段 1 逐条 deferAck 结算并收集已核验消费；阶段 2 按 deliveryId 统一确认
+   * 整批。ack 的批次守卫要求批次内每条结果都已持久消费，因此「最后一条结算完成后才整批 ack」，同批
+   * 两条 stale 也不会互相等待——两条都在本轮的 consumed 里。
+   */
+  const batches = new Map<
+    string,
+    {
+      readonly anchor: PendingDelivery;
+      readonly consumed: ConsumedDeliveryResult[];
+      readonly outcomeIndexes: number[];
+    }
+  >();
 
   for (const pending of input.pending) {
     const expectedRevision = currentScopeRevision(input.store, input.coordinationScopeId);
@@ -222,6 +237,7 @@ export async function replayDeliveries(input: ReplayDeliveriesInput): Promise<Re
       delivery: pending.delivery,
       trusted: pending.trusted,
       operationIds,
+      deferAck: true,
     });
 
     if (result.kind === 'unknown') {
@@ -258,15 +274,30 @@ export async function replayDeliveries(input: ReplayDeliveriesInput): Promise<Re
     }
 
     if (result.kind === 'settled' || result.kind === 'replayed' || result.kind === 'history_only') {
+      const outcomeIndex = outcomes.length;
       outcomes.push({
         deliveryId: pending.delivery.deliveryId,
         kind: result.kind,
-        confirmed: true,
+        // 阶段 1 不确认：确认是否成功由阶段 2 的整批 ack 决定。
+        confirmed: false,
         laneKey: null,
         operationId: null,
         blockingReason: null,
         storeChanged: false,
       });
+      const group = batches.get(pending.delivery.deliveryId) ?? {
+        anchor: pending,
+        consumed: [],
+        outcomeIndexes: [],
+      };
+      group.consumed.push({
+        orcaTaskId: pending.orcaTaskId,
+        workerTaskId: pending.trusted.workerTaskId,
+        attemptId: pending.trusted.attemptId,
+        dispatchId: pending.trusted.dispatchId,
+      });
+      group.outcomeIndexes.push(outcomeIndex);
+      batches.set(pending.delivery.deliveryId, group);
       continue;
     }
 
@@ -279,6 +310,42 @@ export async function replayDeliveries(input: ReplayDeliveriesInput): Promise<Re
       blockingReason: result.failure.message,
       storeChanged: false,
     });
+  }
+
+  // 阶段 2：每个批次恰好确认一次，传入本轮已核验消费的结果；批次守卫要求其余消息都有持久证据。
+  for (const [deliveryId, group] of batches) {
+    const ackOperationId = originalOperationIds(input.store, input.coordinationScopeId, group.anchor).ack;
+    const ack = await ackConsumedDelivery({
+      store: input.store,
+      backend: input.backend,
+      writer: input.writer,
+      coordinationScopeId: input.coordinationScopeId,
+      backendIdentityRef: input.backendIdentityRef,
+      graphGeneration: input.graphGeneration,
+      authorizationId: input.authorizationId,
+      runId: input.runId,
+      consumerGeneration: input.consumerGeneration,
+      timeoutMs: input.timeoutMs,
+      deliveryId,
+      deliveryRunId: input.runId,
+      operationId: ackOperationId,
+      consumed: group.consumed,
+    });
+    for (const outcomeIndex of group.outcomeIndexes) {
+      const outcome = outcomes[outcomeIndex];
+      if (outcome === undefined) {
+        continue;
+      }
+      outcomes[outcomeIndex] =
+        ack.kind === 'acked'
+          ? { ...outcome, confirmed: true }
+          : {
+              ...outcome,
+              confirmed: false,
+              laneKey: ack.laneKey,
+              blockingReason: `批次整批确认未完成：${ack.message}`,
+            };
+    }
   }
 
   return {

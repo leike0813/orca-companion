@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 17;
+export const SCHEMA_VERSION = 19;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -45,6 +45,8 @@ export const COORDINATION_TABLES: readonly string[] = [
   'baseline_reconciliations',
   'work_package_lineages',
   'baseline_adoptions',
+  'work_package_lanes',
+  'integration_reconciliations',
 ];
 
 export type Migration = {
@@ -660,6 +662,47 @@ export const MIGRATIONS: readonly Migration[] = [
   ] },
   { version: 16, statements: MIGRATION_16 },
   { version: 17, statements: MIGRATION_17 },
+  { version: 18, statements: [
+    `CREATE TABLE integration_reconciliations (
+       coordination_scope_id TEXT NOT NULL,
+       reconciliation_id TEXT NOT NULL,
+       work_package_id TEXT NOT NULL,
+       round INTEGER NOT NULL CHECK (round > 0),
+       validation_attempt_id TEXT NOT NULL,
+       source_accepted_result_ref TEXT NOT NULL,
+       target_head TEXT NOT NULL,
+       merged_tree_ref TEXT,
+       orca_task_id TEXT,
+       dispatch_id TEXT,
+       state TEXT NOT NULL CHECK (state IN ('pending', 'validated', 'rejected', 'blocked')),
+       blocker_ref TEXT,
+       created_at INTEGER NOT NULL,
+       updated_at INTEGER NOT NULL,
+       PRIMARY KEY (coordination_scope_id, reconciliation_id),
+       UNIQUE (coordination_scope_id, work_package_id, round)
+     ) STRICT`,
+    `CREATE TABLE work_package_lanes (
+       coordination_scope_id TEXT NOT NULL,
+       graph_id TEXT NOT NULL,
+       graph_generation INTEGER NOT NULL CHECK (graph_generation > 0),
+       work_package_id TEXT NOT NULL,
+       operation_id TEXT NOT NULL,
+       authorization_id TEXT NOT NULL,
+       authorization_version INTEGER NOT NULL CHECK (authorization_version > 0),
+       baseline_head TEXT NOT NULL,
+       reserved_at INTEGER NOT NULL,
+       released_at INTEGER,
+       PRIMARY KEY (coordination_scope_id, graph_id, graph_generation, work_package_id),
+       UNIQUE (coordination_scope_id, operation_id)
+     ) STRICT`,
+    `CREATE INDEX work_package_lanes_active
+       ON work_package_lanes (coordination_scope_id, graph_id, graph_generation)
+       WHERE released_at IS NULL`,
+  ] },
+  { version: 19, statements: [
+    // terminal 创建/准备类意图的精确资源引用；历史行保持 NULL，不推断回填。
+    `ALTER TABLE operation_intents ADD COLUMN terminal_handle TEXT`,
+  ] },
 ];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {

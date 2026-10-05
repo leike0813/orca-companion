@@ -29,6 +29,7 @@ export type WorkPackageBudget = {
   readonly validatorRepairs: number;
   readonly graphRevisions: number;
   readonly specificationRevisions: number;
+  readonly integrationReconciliations: number;
   readonly maxRecoveriesPerWorkerAttempt: number;
 };
 
@@ -43,7 +44,6 @@ export type WorkPackage = {
 export type ExecutionGraph = {
   readonly graphId: GraphId;
   readonly generation: GraphGeneration;
-  readonly concurrencyLimit: number;
   readonly workPackages: readonly WorkPackage[];
 };
 

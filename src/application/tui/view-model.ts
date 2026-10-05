@@ -99,7 +99,7 @@ export type WorkPackageNodeView = {
   /** 紧凑态使用的短 key。 */
   readonly shortKey: string;
   readonly state: WorkPackageExecutionState;
-  /** 是否持有当前 Execution Frontier 位置（并发上限 1，因此最多一个节点为 `true`）。 */
+  /** 是否占用当前批准的并行包额度。 */
   readonly active: boolean;
   readonly role: WorkerRole | null;
   readonly attemptId: string | null;
@@ -133,8 +133,9 @@ export type IntegrationQueueEntryView = {
 
 /** 执行阶段整体投影：active 计数、串行 integration queue、Finalizer 与对账门。 */
 export type ExecutionProjectionView = {
-  readonly activeWorkPackageId: string | null;
-  /** 并发上限固定为 1，因此取值只可能是 0 或 1。 */
+  /** 当前世代真实占用额度的 Work Package id 列表；完整列出，不截断为单包。 */
+  readonly activeWorkPackageIds: readonly string[];
+  /** 真实活动包数量，等于 `activeWorkPackageIds.length`。 */
   readonly activeWorkPackageCount: number;
   readonly integrationQueue: readonly IntegrationQueueEntryView[];
   readonly finalizer: FinalizerView;
@@ -369,8 +370,8 @@ export function projectGraphView(
 /**
  * active Work Package 与串行 integration queue。
  *
- * 并发上限固定为 1：即使上游给出了多个 active 节点，计数也只取 0 或 1（`activeWorkPackageId` 取拓扑顺序
- * 最早的一个）；多余的 active 仍会以各自状态出现在图里，因此契约违规是可见的，而不是被悄悄抹平。
+ * 活动集合直接取自快照的 `activeWorkPackageIds`（生命周期 active 与未释放 lane reservation 的并集），
+ * 因此并发额度大于 1 时如实列出全部活动包，不取第一个冒充唯一活动包。
  */
 export function projectExecutionProjection(
   snapshot: ControllerSnapshot,
@@ -387,7 +388,6 @@ export function projectExecutionProjection(
           const entry = frontierById.get(node.workPackageId);
           return entry === undefined ? [] : [entry];
         }) ?? []);
-  const activeWorkPackageId = entries.find((entry) => isActiveWorkPackageState(entry.state))?.workPackageId ?? null;
   const integrationQueue = entries
     .filter(
       (node) =>
@@ -401,8 +401,8 @@ export function projectExecutionProjection(
     }));
 
   return {
-    activeWorkPackageId,
-    activeWorkPackageCount: activeWorkPackageId === null ? 0 : 1,
+    activeWorkPackageIds: [...snapshot.activeWorkPackageIds],
+    activeWorkPackageCount: snapshot.activeWorkPackageIds.length,
     integrationQueue,
     finalizer: snapshot.finalizer,
     reconciliation: snapshot.executionReconciliation,

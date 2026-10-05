@@ -95,7 +95,6 @@ function graphFor(graphId: GraphId, graphGeneration: GraphGeneration): Execution
   return {
     graphId,
     generation: graphGeneration,
-    concurrencyLimit: 1,
     workPackages: [
       {
         workPackageId: 'wp-1' as WorkPackageId,
@@ -107,6 +106,7 @@ function graphFor(graphId: GraphId, graphGeneration: GraphGeneration): Execution
           validatorRepairs: 2,
           graphRevisions: 2,
           specificationRevisions: 2,
+          integrationReconciliations: 2,
           maxRecoveriesPerWorkerAttempt: 1,
         },
       },

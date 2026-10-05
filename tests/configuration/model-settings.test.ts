@@ -55,7 +55,7 @@ const effortCapability = () => ({
 /** 纯规划项目：只有一条不带可信来源的旧 Coordinator 配置，revision 为 0。 */
 const baseConfig = (): ProjectConfig =>
   ({
-    schemaVersion: 2,
+    schemaVersion: 3,
     revision: 0,
     providerConnections: [],
     models: [],
@@ -88,8 +88,9 @@ const baseConfig = (): ProjectConfig =>
         dependencyChanges: false,
       },
       limits: {
-        maxActiveWorkPackages: 8,
-        concurrencyLimit: 1,
+        maxActiveWorkPackages: 3,
+        maxWorkPackages: 8,
+        integrationReconciliations: 2,
         implementationAttempts: 2,
         validatorRepairs: 2,
         graphRevisions: 2,

@@ -47,6 +47,7 @@ function candidate(): DispatchCandidateFacts {
       validatorRepairs: 2,
       graphRevisions: 2,
       specificationRevisions: 2,
+      integrationReconciliations: 2,
       maxRecoveriesPerWorkerAttempt: 1,
     },
     consumed: [],

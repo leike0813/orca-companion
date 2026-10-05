@@ -143,6 +143,8 @@ export type OverlayKind =
   | 'command-palette'
   | 'options'
   | 'statusline-settings'
+  /** 执行并发默认额度编辑：保存只改项目默认值，不影响当前批准额度。 */
+  | 'execution-settings'
   | 'graph-inspector'
   | 'session-picker'
   | 'handoff-target'

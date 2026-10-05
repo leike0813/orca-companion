@@ -139,6 +139,28 @@ test('未授权角色在任何副作用前被拒绝，且不相关的零预算�
   expect(unrelatedZeroBudget.kind).toBe('materializable');
 });
 
+test('集成复验额度耗尽只影响集成，不阻止普通角色派发', () => {
+  // 门禁只看调用方给定的 requiredBudgetField；integrationReconciliations 属于独立额度，
+  // 即使已耗尽也不能阻塞与它无关的角色。
+  const planner = evaluateDispatchCandidate(
+    facts({
+      candidateRole: 'planner',
+      requiredBudgetField: null,
+      budget: { ...facts().budget, integrationReconciliations: 0 },
+      consumed: [{ workPackageId: WP, field: 'integrationReconciliations', consumed: 2 }],
+    }),
+  );
+  const implementation = evaluateDispatchCandidate(
+    facts({
+      budget: { ...facts().budget, integrationReconciliations: 0 },
+      consumed: [{ workPackageId: WP, field: 'integrationReconciliations', consumed: 2 }],
+    }),
+  );
+
+  expect(planner.kind).toBe('materializable');
+  expect(implementation.kind).toBe('materializable');
+});
+
 test('控制状态不是 active 时不开始新的物化', () => {
   for (const controlState of ['paused', 'blocked', 'cancelled', 'replanning_transition']) {
     const decision = evaluateDispatchCandidate(facts({ controlState }));

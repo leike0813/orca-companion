@@ -19,6 +19,13 @@ import type {
   CoordinationCommandRejection,
   CoordinationWriter,
 } from '../ports/branch-coordination-store.js';
+import { orcaTerminalHandleFromReceipt } from '../ports/execution-backend.js';
+
+/** terminal 创建/准备类意图类别：只有这些收尾为 accepted 时才提取并落盘精确 handle。 */
+const TERMINAL_PREPARE_CATEGORIES: ReadonlySet<string> = new Set([
+  'materialize-worker-terminal',
+  'worker-terminal-prepare',
+]);
 
 export type BeginIntentRequest = {
   readonly coordinationScopeId: CoordinationScopeId;
@@ -200,6 +207,10 @@ export function settleIntent(store: BranchCoordinationStore, request: SettleInte
   const outcomeClass =
     request.outcome.kind === 'unknown' ? 'unknown' : request.outcome.kind === 'accepted' ? 'accepted' : 'rejected';
   const backendRequestId = backendRequestIdOf(request.outcome);
+  const terminalHandle =
+    outcomeClass === 'accepted' && TERMINAL_PREPARE_CATEGORIES.has(current.operationCategory)
+      ? orcaTerminalHandleFromReceipt(request.outcome.kind === 'accepted' ? request.outcome.value : undefined)
+      : null;
   const result = store.transact({
     kind: 'settle-intent',
     coordinationScopeId: request.coordinationScopeId,
@@ -208,6 +219,7 @@ export function settleIntent(store: BranchCoordinationStore, request: SettleInte
     operationId: request.operationId,
     outcomeClass,
     ...(backendRequestId === undefined ? {} : { backendRequestId }),
+    ...(terminalHandle === null ? {} : { terminalHandle }),
   });
   if (result.kind === 'rejected') {
     return { kind: 'rejected', rejection: result };

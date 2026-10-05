@@ -59,7 +59,6 @@ function graphRecord(overrides?: Partial<ExecutionGraph>): GraphVersionRecord {
     graph: {
       graphId: GRAPH_ID,
       generation: GENERATION,
-      concurrencyLimit: 1,
       workPackages: [
         workPackage('wp-a', []),
         workPackage('wp-b', ['wp-a']),
@@ -74,7 +73,7 @@ function graphRecord(overrides?: Partial<ExecutionGraph>): GraphVersionRecord {
 
 function authorizationRecord(): ExecutionAuthorizationRecord {
   const manifest: ExecutionAuthorizationManifest = {
-    manifestVersion: 2,
+    manifestVersion: 3,
     coordinationScopeId: 'scope-1' as never,
     planningCycleId: 'cycle-1' as PlanningCycleId,
     destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
@@ -103,7 +102,7 @@ function authorizationRecord(): ExecutionAuthorizationRecord {
     coordinationScopeId: 'scope-1' as never,
     authorizationId: 'auth-1',
     authorizationVersion: 1,
-    manifestVersion: 2,
+    manifestVersion: 3,
     fingerprint: 'fingerprint-1',
     manifest,
     approvedAt: 1,
@@ -313,16 +312,28 @@ test('成环导致拒绝', () => {
   expect(codes(result)).toContain('cycle');
 });
 
-test('超预算导致拒绝', () => {
+test('超过图容量导致拒绝，并行额度不参与', () => {
   const result = compile(
     patch({
       add: [
         { key: 'prep', title: '前置', dependsOn: [], scopeEnvelope: { include: ['src/prep'], exclude: [] } },
       ],
     }),
-    { limits: { ...DEFAULT_EXECUTION_LIMITS, maxActiveWorkPackages: 4 } },
+    { limits: { ...DEFAULT_EXECUTION_LIMITS, maxWorkPackages: 4 } },
   );
   expect(codes(result)).toContain('budget_exceeded');
+});
+
+test('同一补丁在并行额度 1 与 5 下编译结果相同', () => {
+  const input = patch({
+    revise: [
+      { workPackageId: 'wp-b', title: 'B 修订', dependsOn: [{ kind: 'existing', workPackageId: 'wp-a' }], scopeEnvelope: { include: ['src'], exclude: [] } },
+    ],
+    descendants: [{ workPackageId: 'wp-c', disposition: 'unchanged' }],
+  });
+  const low = compile(input, { limits: { ...DEFAULT_EXECUTION_LIMITS, maxActiveWorkPackages: 1 } });
+  const high = compile(input, { limits: { ...DEFAULT_EXECUTION_LIMITS, maxActiveWorkPackages: 5 } });
+  expect(JSON.stringify(high)).toBe(JSON.stringify(low));
 });
 
 test('未授权导致拒绝，授权绑定的世代不符也被拒绝', () => {

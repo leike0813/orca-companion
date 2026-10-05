@@ -46,7 +46,7 @@ import type {
   SessionSegmentRecord,
 } from '../ports/branch-coordination-store.js';
 import type { ExecutionBackend, ExecutionMutation, ExecutionScope } from '../ports/execution-backend.js';
-import { buildExecutionScope, reconcileOperation } from '../ports/execution-backend.js';
+import { buildExecutionScope, orcaTerminalHandleFromReceipt, reconcileOperation } from '../ports/execution-backend.js';
 import { beginIntent, blockLane, settleIntent } from '../coordination/intent-service.js';
 import { activeAuthorization, recoveryAllowance } from '../planning/authorization-service.js';
 import { readScope } from '../planning/scope-read.js';
@@ -65,6 +65,7 @@ import {
 import { evaluateRoleGate, roleGateRequiresCapsule, type RoleGateFacts } from '../../domain/recovery/role-gate.js';
 import {
   activatePreparedWorker,
+  knownTerminalHandleFor,
   prepareWorkerLaunch,
   verifyPreparedWorker,
   type WorkerLaunchFailure,
@@ -798,6 +799,34 @@ async function runReplacementTerminalMutation(
   if (begun.kind === 'rejected') {
     return { kind: 'blocked', laneKey: operationId, reason: begun.rejection.message };
   }
+  if (begun.kind === 'existing') {
+    // 已存在的意图是恢复重放：绝不再次 mutate，也不再次 settle，只按既有记录给出结论。
+    if (begun.intent.state === 'settled' && begun.intent.outcomeClass === 'rejected') {
+      return { kind: 'rejected', code: 'intent_already_rejected', message: '该 terminal 操作已有结算拒绝记录，未重复执行' };
+    }
+    if (begun.intent.state === 'settled' && begun.intent.outcomeClass === 'accepted') {
+      // 复用原持久化事实：激活已成功就直接承认已接受，不再重发；prepare 从原意图读回 handle。
+      if (operationCategory === 'worker-terminal-prepare') {
+        const handle = begun.intent.terminalHandle;
+        return handle === null || handle === undefined
+          ? {
+              kind: 'unknown',
+              operationId,
+              reason: '原 prepared terminal 操作已接受但缺少可核验的 terminal handle；不按 title 猜测资源',
+            }
+          : { kind: 'accepted', terminalHandle: handle };
+      }
+      return { kind: 'accepted' };
+    }
+    if (begun.intent.state === 'blocked') {
+      return { kind: 'blocked', laneKey: operationId, reason: begun.intent.blockingReason ?? '该 terminal 操作已被阻塞' };
+    }
+    return {
+      kind: 'unknown',
+      operationId,
+      reason: '该 terminal 操作仍未决，未重复执行；按原回执对账',
+    };
+  }
 
   const outcome = await input.backend.mutate(
     mutation,
@@ -833,6 +862,16 @@ async function runReplacementTerminalMutation(
       operationId,
       reason: `prepared terminal 操作结果未知（对账结论 ${reconciled.kind}），lane 保持阻塞`,
     };
+  }
+  if (mutation.operation === 'terminal-create') {
+    const handle = orcaTerminalHandleFromReceipt(outcome.value);
+    return handle === null
+      ? {
+          kind: 'unknown',
+          operationId,
+          reason: 'terminal-create 回执缺少可核验的 terminal handle；不按 title 猜测资源',
+        }
+      : { kind: 'accepted', terminalHandle: handle };
   }
   return { kind: 'accepted' };
 }
@@ -1000,14 +1039,25 @@ async function attemptAlternateSession(
     );
   }
 
+  const terminalOperationId = deriveReplacementTerminalOperationId(recovery.recoveryId);
+  const knownTerminal = knownTerminalHandleFor(input.store, input.coordinationScopeId, terminalOperationId);
+  if (knownTerminal.kind === 'evidence_missing') {
+    return blockRecovery(
+      input,
+      recovery,
+      'lane_blocked',
+      '原 prepared terminal 操作已接受但缺少可核验的 terminal handle；需要资源证据，不重复创建',
+    );
+  }
   const launch = await prepareWorkerLaunch({
     backend: input.backend,
     strategy: input.replacement.workerLaunch,
     worktreeId: input.workspace.worktreeId,
+    ...(knownTerminal.kind === 'known' ? { knownTerminalHandle: knownTerminal.handle } : {}),
     timeoutMs: input.execution.timeoutMs,
     createTerminal: (mutation) => runReplacementTerminalMutation(
       input,
-      deriveReplacementTerminalOperationId(recovery.recoveryId),
+      terminalOperationId,
       'worker-terminal-prepare',
       mutation,
     ),

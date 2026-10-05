@@ -1,0 +1,79 @@
+{
+  "generatedAt": "2026-10-05T09:48:54.580Z",
+  "fixture": "orca-cc-concurrency-06",
+  "source": "dedicated identity terminal term_e065b760-80d2-4e61-ae60-dce7c69c8ad8 (owner consumer), read-only",
+  "runCurrent": {
+    "run": {
+      "id": "run_c519360a61be",
+      "coordinatorHandle": "term_e065b760-80d2-4e61-ae60-dce7c69c8ad8"
+    }
+  },
+  "checkPeek": {
+    "deliveryId": null,
+    "count": 2,
+    "acknowledged": null,
+    "replayed": null,
+    "messages": [
+      {
+        "id": "msg_cd8fc67fde66",
+        "type": "worker_done",
+        "fromHandle": "term_c5aafecf-d858-4afe-85f4-fcb568995ca3",
+        "subject": "Validation passed: NOTES.md meets spec, acceptance command exits 0",
+        "payload": "{\"taskId\":\"task_6da3ae7af9af\",\"dispatchId\":\"ctx_bb299a9e5a97\",\"outcome\":\"succeeded\"}",
+        "createdAt": "2026-10-05T09:28:44Z",
+        "deliveredAt": null
+      },
+      {
+        "id": "msg_cce160a22279",
+        "type": "worker_done",
+        "fromHandle": "term_dcd00c73-ce95-475e-92ee-708a1f7c75c0",
+        "subject": "readme-banner validation passed: acceptance command exits 0 and fails on baseline",
+        "payload": "{\"taskId\":\"task_abf5a533718e\",\"dispatchId\":\"ctx_5cb34b315bfa\",\"outcome\":\"succeeded\"}",
+        "createdAt": "2026-10-05T09:44:59Z",
+        "deliveredAt": null
+      }
+    ]
+  },
+  "checkFull": {
+    "deliveryId": "delivery_e5cab0612dc6",
+    "count": 1,
+    "acknowledged": null,
+    "replayed": true,
+    "messages": [
+      {
+        "id": "msg_cd8fc67fde66",
+        "type": "worker_done",
+        "fromHandle": "term_c5aafecf-d858-4afe-85f4-fcb568995ca3",
+        "subject": "Validation passed: NOTES.md meets spec, acceptance command exits 0",
+        "payload": "{\"taskId\":\"task_6da3ae7af9af\",\"dispatchId\":\"ctx_bb299a9e5a97\",\"outcome\":\"succeeded\"}",
+        "createdAt": "2026-10-05T09:28:44Z",
+        "deliveredAt": null
+      }
+    ]
+  },
+  "supervisedFollowup": {
+    "note": "readme validator 的原 exact terminal 收到监督续办 prompt（用户已授权），随后真实继续验证并提交 worker_done；未伪造结果、未更换 Worker。",
+    "terminalHandle": "term_dcd00c73-ce95-475e-92ee-708a1f7c75c0",
+    "sendAccepted": true,
+    "sendBytes": 307,
+    "sendProviderNote": "provider cannot report delivery（仅表示无法回报送达，不代表未送达）",
+    "providerSessionId": "01a10b63-6084-7291-bf15-7fc07b88ab67",
+    "transcriptBytesBefore": 141822,
+    "transcriptBytesAfter": 275382,
+    "transcriptMtimeAfter": "2026-10-05T09:45:04.590Z",
+    "workerDoneMessageId": "msg_cce160a22279",
+    "workerDoneCreatedAt": "2026-10-05T09:44:59Z",
+    "workerDonePayload": "{\"taskId\":\"task_abf5a533718e\",\"dispatchId\":\"ctx_5cb34b315bfa\",\"outcome\":\"succeeded\"}"
+  },
+  "notesValidator": {
+    "workerDoneMessageId": "msg_cd8fc67fde66",
+    "workerDoneCreatedAt": "2026-10-05T09:28:44Z",
+    "workerDonePayload": "{\"taskId\":\"task_6da3ae7af9af\",\"dispatchId\":\"ctx_bb299a9e5a97\",\"outcome\":\"succeeded\"}",
+    "storeSettlement": "absent (companion never ingested at the time of reading)"
+  },
+  "runBinding": {
+    "runId": "run_c519360a61be",
+    "coordinatorHandle": "term_e065b760-80d2-4e61-ae60-dce7c69c8ad8",
+    "verdict": "owner binding intact; no run-use rebind needed"
+  }
+}

@@ -364,7 +364,7 @@ export function GraphSidebarPrototype(props: PrototypeProps) {
 
   const summary = variant === 0
     ? '▏执行图已折叠 · active ' + String(view.execution.activeWorkPackageCount) + ' · !' + String(view.blockers.length) + ' 阻塞'
-    : '▏! ' + String(view.blockers.length) + ' 阻塞 · 当前 ' + (view.execution.activeWorkPackageId ?? '无');
+    : '▏! ' + String(view.blockers.length) + ' 阻塞 · 当前 ' + (view.execution.activeWorkPackageIds.length === 0 ? '无' : view.execution.activeWorkPackageIds.join(','));
   return (
     <Box flexDirection="column" height={terminalHeight}>
       <TopBar

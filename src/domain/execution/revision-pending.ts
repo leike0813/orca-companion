@@ -25,7 +25,7 @@ export type RevisionHold = {
 export type RevisionPendingProjection = {
   /** 被冻结的节点：每个未释放持有对应的受影响节点与其未接受后代。 */
   readonly frozen: readonly WorkPackageId[];
-  /** 仍可进入 Execution Frontier 的节点；并发上限为 1 不是拓扑准入限制。 */
+  /** 仍可进入 Execution Frontier 的节点；并行额度由派发准入核验。 */
   readonly admissible: readonly WorkPackageId[];
 };
 
@@ -60,7 +60,7 @@ export function frozenWorkPackageIds(input: {
  * 投影持有期间的准入结果。
  *
  * 判定顺序刻意保持简单：先算冻结集合，再从「未接受且依赖已通过」的节点里减去冻结集合。因此无关节点
- * 继续可准入，而受影响节点及其后代既不会成为候选，也不会因为并发上限为 1 而把无关工作一起挡下。
+ * 继续可准入，受影响节点及其后代保持冻结。
  */
 export function projectRevisionPending(input: RevisionPendingInput): RevisionPendingProjection {
   const frozen = frozenWorkPackageIds(input);

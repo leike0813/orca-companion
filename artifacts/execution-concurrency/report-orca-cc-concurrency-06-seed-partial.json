@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-10-05T09:14:49.217Z",
+  "phase": "partial",
+  "fixture": {
+    "repository": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-06",
+    "identity": "term_e065b760-80d2-4e61-ae60-dce7c69c8ad8",
+    "coordinationScopeId": "e2e-loop-scope",
+    "orcaRunId": "run_c519360a61be",
+    "baselineHead": "ee6cf84fd2450d48d8ac20925e6c213bd7dc9c07",
+    "resumed": false
+  },
+  "approvedMaxActiveWorkPackages": 5,
+  "configuredMaxActiveWorkPackages": 5,
+  "observation": {
+    "maxActivePackages": 0,
+    "maxUnconcluded": 0,
+    "peakOverlap": 0,
+    "activePackageIds": []
+  },
+  "rounds": {
+    "triggers": 0,
+    "samples": 0
+  },
+  "sameOriginalIds": true,
+  "dispatchIntervals": [],
+  "workPackages": [],
+  "finalizer": null,
+  "blockers": []
+}

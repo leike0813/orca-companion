@@ -33,6 +33,42 @@ import type { GraphBasisPort } from '../../application/tui/graph-basis.js';
 
 export type { ModelSettingsSnapshot, SaveModelSettingsInput, SaveModelSettingsResult };
 
+/**
+ * 执行并发设置的只读视图。
+ *
+ * `defaultMaxActiveWorkPackages` 来自项目配置，可被保存；`approvedMaxActiveWorkPackages` 来自当前
+ * 批准的 Execution Authorization Manifest，只读，保存默认值不会改变它。没有批准执行时为 `null`。
+ */
+export type ExecutionSettingsView = {
+  /** 项目配置 revision；保存候选的 CAS 基准。 */
+  readonly revision: number;
+  readonly defaultMaxActiveWorkPackages: number;
+  readonly approvedMaxActiveWorkPackages: number | null;
+};
+
+export type ExecutionSettingsLoad =
+  | { readonly kind: 'loaded'; readonly settings: ExecutionSettingsView }
+  | { readonly kind: 'failed'; readonly code: string; readonly message: string };
+
+export type ExecutionSettingsSaveResult =
+  | { readonly kind: 'saved'; readonly revision: number; readonly defaultMaxActiveWorkPackages: number }
+  | { readonly kind: 'rejected'; readonly code: string; readonly message: string };
+
+/**
+ * 执行并发设置端口。
+ *
+ * `save` 只保存项目默认额度并保留其他配置；它**不**改变当前批准额度，也不触发任何授权。提高执行期
+ * 额度仍必须经完整 Manifest 重新审阅与批准，因此界面不在这里自行授权，而是复用既有
+ * `executionAuthorization.review/approve` 入口。
+ */
+export type ExecutionSettingsPort = {
+  readonly load: () => Promise<ExecutionSettingsLoad>;
+  readonly save: (input: {
+    readonly expectedRevision: number;
+    readonly maxActiveWorkPackages: number;
+  }) => Promise<ExecutionSettingsSaveResult>;
+};
+
 export type SnapshotLoad =
   | { readonly kind: 'snapshot'; readonly snapshot: ControllerSnapshot }
   | { readonly kind: 'failed'; readonly code: string; readonly message: string };
@@ -97,6 +133,12 @@ export type TuiPorts = {
   readonly modelSettings?: ModelSettingsPort;
   readonly preferences?: TuiPreferencesPort;
   readonly projectDetails?: ProjectDetailsPort;
+  /**
+   * 执行并发设置端口（IP-04）。
+   *
+   * 可选：未装配的宿主按「执行设置端口未接通」显示不可用，界面不伪造候选或保存入口。
+   */
+  readonly executionSettings?: ExecutionSettingsPort;
   /**
    * 图历史与执行依据的有界只读入口（IP-04）。
    *

@@ -32,6 +32,7 @@ import { loadCurrentGraph, recordInitialGraph } from '../../src/application/plan
 import { implementationPlanFor } from './graph-plan-fixture.js';
 import { DEFAULT_EXECUTION_LIMITS, budgetFromLimits } from '../../src/domain/planning/budget-policy.js';
 import type { ExecutionGraph, GraphVersionRecord, WorkPackage } from '../../src/domain/planning/execution-graph.js';
+import { MANIFEST_VERSION } from '../../src/domain/planning/execution-authorization.js';
 import type {
   ExecutionAuthorizationManifest,
   WorkerProfileRef,
@@ -135,7 +136,7 @@ export function executionManifest(input: {
   readonly limits?: ExecutionAuthorizationManifest['limits'];
 }): ExecutionAuthorizationManifest {
   return {
-    manifestVersion: 2,
+    manifestVersion: MANIFEST_VERSION,
     coordinationScopeId: input.coordinationScopeId ?? EXECUTION_SCOPE,
     planningCycleId: input.planningCycleId ?? EXECUTION_CYCLE,
     destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
@@ -240,7 +241,6 @@ export function createExecutionScopeHarness(options?: {
   const graph: ExecutionGraph = {
     graphId,
     generation,
-    concurrencyLimit: limits.concurrencyLimit,
     workPackages: options?.workPackages ?? defaultExecutionWorkPackages(),
   };
   const recorded = recordInitialGraph({
@@ -268,7 +268,7 @@ export function createExecutionScopeHarness(options?: {
     writer,
     authorizationId: EXECUTION_AUTHORIZATION_ID,
     authorizationVersion: 1,
-    manifestVersion: 2,
+    manifestVersion: MANIFEST_VERSION,
     fingerprint: 'fingerprint-1',
     approvalRef: 'approval-1',
     manifest: executionManifest({ graphId, generation, limits }),

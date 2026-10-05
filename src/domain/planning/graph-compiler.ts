@@ -135,6 +135,7 @@ const BUDGET_KEYS = [
   'validatorRepairs',
   'graphRevisions',
   'specificationRevisions',
+  'integrationReconciliations',
   'maxRecoveriesPerWorkerAttempt',
 ] as const satisfies readonly (keyof WorkPackageBudget)[];
 
@@ -361,7 +362,6 @@ export function compileExecutionGraph(input: GraphCompilationInput): Compilation
     graph: {
       graphId: input.graphId,
       generation: input.generation,
-      concurrencyLimit: input.limits.concurrencyLimit,
       workPackages,
     },
   };

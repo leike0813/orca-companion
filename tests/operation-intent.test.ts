@@ -389,3 +389,65 @@ test('对账仍不确定时阻塞该 lane，收尾后解除', async () => {
   });
   expect(afterResolve.kind).toBe('registered');
 });
+
+test('terminal 创建类意图 accepted 收尾落盘精确 handle 并可读回', () => {
+  const operationId = 'op-terminal' as OperationId;
+  const begin = beginIntent(store, {
+    coordinationScopeId: SCOPE,
+    operationId,
+    target: TARGET,
+    operationCategory: 'worker-terminal-prepare',
+    writer,
+    expectedRevision: revisionOf(),
+  });
+  expect(begin.kind).toBe('registered');
+  if (begin.kind !== 'registered') return;
+
+  const settled = settleIntent(store, {
+    coordinationScopeId: SCOPE,
+    operationId,
+    writer,
+    expectedRevision: begin.revision,
+    outcome: {
+      kind: 'accepted',
+      operation: { operationId, target: TARGET, backendRequestId: 'req-terminal' },
+      value: { terminal: { handle: 'term-1' } },
+    },
+  });
+
+  expect(settled.kind).toBe('settled');
+  if (settled.kind !== 'settled') return;
+  expect(settled.intent.terminalHandle).toBe('term-1');
+  const read = store.query({ kind: 'intent', coordinationScopeId: SCOPE, operationId });
+  expect(read.kind === 'intent' ? read.intent?.terminalHandle : null).toBe('term-1');
+});
+
+test('非 terminal 类意图即使载荷带 handle 也不落盘 terminalHandle', () => {
+  const operationId = 'op-run' as OperationId;
+  const begin = beginIntent(store, {
+    coordinationScopeId: SCOPE,
+    operationId,
+    target: TARGET,
+    operationCategory: 'run-create',
+    writer,
+    expectedRevision: revisionOf(),
+  });
+  expect(begin.kind).toBe('registered');
+  if (begin.kind !== 'registered') return;
+
+  const settled = settleIntent(store, {
+    coordinationScopeId: SCOPE,
+    operationId,
+    writer,
+    expectedRevision: begin.revision,
+    outcome: {
+      kind: 'accepted',
+      operation: { operationId, target: TARGET, backendRequestId: 'req-run' },
+      value: { handle: 'term-x' },
+    },
+  });
+
+  expect(settled.kind).toBe('settled');
+  if (settled.kind !== 'settled') return;
+  expect(settled.intent.terminalHandle).toBeNull();
+});

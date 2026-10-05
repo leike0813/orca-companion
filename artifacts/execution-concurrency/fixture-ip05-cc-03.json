@@ -1,0 +1,18 @@
+{
+  "fixture": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-03",
+  "name": "ip05-cc-03",
+  "baselineHead": "f28e7c2476bf7d013abfe186287b5ad4ead0dd1f",
+  "integrationRef": "ip05-cc-03-integration",
+  "integrationRemote": "https://github.com/leike0813/orca-companion-test",
+  "identity": "term_ac28b130-39ed-433c-a32c-ddf85305e157",
+  "credentialRef": "69e4fadc-0592-4641-b6d1-ab1bbe6493b2",
+  "credentialStorePath": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-03-xdg/orca-companion/credentials.json",
+  "acceptanceModel": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+  "maxActiveWorkPackages": 5,
+  "coordinatorBaseUrl": "http://127.0.0.1:10100/v1",
+  "coordinatorProviderIntegration": "@langchain/openai#ChatOpenAI",
+  "coordinatorWireApi": "chat",
+  "coordinatorCredential": "non-secret-sdk-placeholder-in-isolated-CredentialStore",
+  "workerCredential": "harness_login",
+  "workerWireApi": "responses"
+}

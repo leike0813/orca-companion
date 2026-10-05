@@ -1,0 +1,83 @@
+{
+  "generatedAt": "2026-10-05T07:39:48.368Z",
+  "phase": "sampled",
+  "fixture": {
+    "repository": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-03",
+    "identity": "term_ac28b130-39ed-433c-a32c-ddf85305e157",
+    "coordinationScopeId": "e2e-loop-scope",
+    "orcaRunId": "run_02ff907550cb",
+    "baselineHead": "f28e7c2476bf7d013abfe186287b5ad4ead0dd1f",
+    "resumed": true
+  },
+  "approvedMaxActiveWorkPackages": 5,
+  "configuredMaxActiveWorkPackages": 5,
+  "observation": {
+    "maxActivePackages": 1,
+    "maxUnconcluded": 0,
+    "peakOverlap": 0,
+    "activePackageIds": [
+      "e2e-loop-scope#g1:readme-banner"
+    ]
+  },
+  "rounds": {
+    "triggers": 5,
+    "samples": 18
+  },
+  "sameOriginalIds": true,
+  "dispatchIntervals": [
+    {
+      "dispatchId": "ctx_1cc7ee6f7467",
+      "start": 1791184395000,
+      "end": 1791184484729
+    },
+    {
+      "dispatchId": "ctx_d96c66d0a5fe",
+      "start": 1791184378000,
+      "end": 1791184454685
+    },
+    {
+      "dispatchId": "ctx_22006516d163",
+      "start": 1791184206000,
+      "end": 1791184251721
+    },
+    {
+      "dispatchId": "ctx_47af6d8e697e",
+      "start": 1791184188000,
+      "end": 1791184352957
+    },
+    {
+      "dispatchId": "ctx_495a78ce596f",
+      "start": 1791183982000,
+      "end": 1791184097564
+    },
+    {
+      "dispatchId": "ctx_566a3a32c9f6",
+      "start": 1791183963000,
+      "end": 1791184160363
+    }
+  ],
+  "workPackages": [
+    {
+      "workPackageId": "e2e-loop-scope#g1:notes-basics",
+      "state": "accepted",
+      "role": "validator",
+      "attemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Anotes-basics:validator:1913421051997052:1"
+    },
+    {
+      "workPackageId": "e2e-loop-scope#g1:readme-banner",
+      "state": "waiting_integration",
+      "role": "validator",
+      "attemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:1938680763008521:1"
+    }
+  ],
+  "finalizer": {
+    "verdict": null,
+    "gate": {
+      "ready": false,
+      "blockers": [
+        "finalizer-not-authorized"
+      ]
+    }
+  },
+  "blockers": []
+}

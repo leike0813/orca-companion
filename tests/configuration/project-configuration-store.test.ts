@@ -40,7 +40,7 @@ const connection = (connectionRef = 'openai-conn') => ({
 
 const baseConfig = (revision = 0): ProjectConfig =>
   ({
-    schemaVersion: 2,
+    schemaVersion: 3,
     revision,
     providerConnections: [connection()],
     models: [],
@@ -74,8 +74,9 @@ const baseConfig = (revision = 0): ProjectConfig =>
         dependencyChanges: false,
       },
       limits: {
-        maxActiveWorkPackages: 8,
-        concurrencyLimit: 1,
+        maxActiveWorkPackages: 3,
+        maxWorkPackages: 8,
+        integrationReconciliations: 2,
         implementationAttempts: 2,
         validatorRepairs: 2,
         graphRevisions: 2,
@@ -126,7 +127,7 @@ test('缺失与内容无效分别报告，读取不做任何隐式创建', () =>
   expect(store.read()).toMatchObject({ kind: 'failed', code: 'invalid' });
 });
 
-test('保存推进 revision，写回的文件仍是可正常加载的 v2 项目配置', () => {
+test('保存推进 revision，写回的文件仍是可正常加载的 schema 3 项目配置', () => {
   const saved = store.save({ expectedRevision: 0, next: baseConfig(1) });
 
   expect(saved.kind).toBe('saved');
@@ -147,6 +148,34 @@ test('保存推进 revision，写回的文件仍是可正常加载的 v2 项目�
   const second = store.save({ expectedRevision: 1, next: baseConfig(2) });
   expect(second).toMatchObject({ kind: 'saved', revision: 2 });
   expect(JSON.parse(readFileSync(configPath, 'utf8'))).toMatchObject({ revision: 2 });
+});
+
+test('并行额度 1/2/3/5 可保存，零、负数、小数与溢出被拒绝', () => {
+  const withConcurrency = (value: number): ProjectConfig => {
+    const base = baseConfig(1);
+    return {
+      ...base,
+      execution: {
+        ...base.execution,
+        limits: { ...base.execution.limits, maxActiveWorkPackages: value },
+      },
+    };
+  };
+
+  for (const value of [1, 2, 3, 5]) {
+    expect(store.save({ expectedRevision: 0, next: withConcurrency(value) })).toMatchObject({
+      kind: 'saved',
+      revision: 1,
+    });
+    rmSync(configPath, { force: true });
+  }
+
+  for (const value of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    expect(store.save({ expectedRevision: 0, next: withConcurrency(value) })).toMatchObject({
+      kind: 'failed',
+      code: 'invalid',
+    });
+  }
 });
 
 test('revision 冲突与锁忙都拒绝，且不覆盖较新的配置', () => {

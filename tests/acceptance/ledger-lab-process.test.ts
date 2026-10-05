@@ -26,7 +26,7 @@ function fixture(id = 'one', milliseconds = 1000) {
   const snapshot: Record<string, unknown> = {
     scope: { coordinationScopeId: scope, graphId: 'g1', planningCycleId: 'cycle1', controlState: 'active' },
     generations: [{ graphId: 'g1', orcaRunId: 'run1', status: 'active' }],
-    graphs: [{ graphId: 'g1', generation: 1, version: 1, recordKind: 'initial', graph: { concurrencyLimit: 3, workPackages: labels.map((label) => ({ workPackageId: nodes[label], dependsOn: deps[label]?.map((dep) => nodes[dep]) })) } }],
+    graphs: [{ graphId: 'g1', generation: 1, version: 1, recordKind: 'initial', graph: { workPackages: labels.map((label) => ({ workPackageId: nodes[label], dependsOn: deps[label]?.map((dep) => nodes[dep]) })) } }],
     bindings: [], segments: [], settlements: [], recoveries: [], holds: [], patches: [], intents: [], budgets: [], verdicts: [], authorizations: [], leases: [], lineages: [], adoptions: [], reconciliations: [], handoffs: [], planningHandoffs: [], interactions: [],
     status: { workers: [], execution: { workPackages: [] } },
   };

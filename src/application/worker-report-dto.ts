@@ -16,12 +16,14 @@ import type {
   DispatchId,
   WorkerTaskId,
 } from './dto/identity.js';
-import type { WorkerRole } from '../domain/planning/execution-authorization.js';
+import { WORKER_ROLES, type WorkerRole } from '../domain/planning/execution-authorization.js';
 import {
   TASK_CONTRACT_SCHEMA_VERSION,
   TASK_ENVELOPE_SCHEMA_VERSION,
+  type SpecBinding,
   type TaskEnvelope,
 } from '../domain/task-contract.js';
+import type { ClaimedResultAttribution } from '../domain/worker-result-verification.js';
 import {
   ESCALATION_REASONS,
   EVIDENCE_RECORD_KINDS,
@@ -185,6 +187,7 @@ function validWorkPackageBudget(value: unknown): boolean {
     'validatorRepairs',
     'graphRevisions',
     'specificationRevisions',
+    'integrationReconciliations',
     'maxRecoveriesPerWorkerAttempt',
   ].every((field) => nonNegativeInteger(value[field]));
 }
@@ -411,6 +414,166 @@ export function parseWorkerReport(
       report: report.value,
       droppedIdentityFields: dropped,
       candidateOnly: true,
+    },
+  };
+}
+
+/**
+ * 真实 Orca Worker 报告的归属 locator。
+ *
+ * 真实 Codex Worker 投递的 `worker_done` 载荷是 Orca 自己的规范形状——它给出 Orca Task 身份、Orca
+ * Dispatch 身份、结果状态与改动文件列表，**不**回显 Companion 的 Task Envelope 身份，也不带 Companion
+ * 的 `result` 正文。因此这类消息只能用于**定位**已被 Controller 记录的那次派发：归属由
+ * `materialization_bindings.orcaTaskId` 与 Session Segment 解析，而不是让 Worker 复述 Companion 身份。
+ *
+ * 这是 locator 的唯一实现（Delivery 归属装配、集成复验、基线补救与 Delivery ack 批次守卫共用），
+ * 放在应用层以便边界判定与 bootstrap 装配复用同一份解析。
+ */
+export type OrcaWorkerDoneLocator = {
+  readonly orcaTaskId: string;
+  readonly orcaDispatchId: string;
+  readonly outcome: string;
+  readonly files: readonly string[];
+  /** 结果正文的来源：Orca 消息的 `body`（Worker 的叙述）；缺失时为空串。 */
+  readonly summary: string;
+};
+
+function payloadString(source: Record<string, unknown>, field: string): string | null {
+  const value = source[field];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+export function parseOrcaWorkerDoneLocator(
+  raw: string | null,
+  body: string | null,
+): OrcaWorkerDoneLocator | null {
+  if (raw === null) {
+    return null;
+  }
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+  if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) {
+    return null;
+  }
+  const record = decoded as Record<string, unknown>;
+  // Orca 保留被拒绝的 lifecycle 回报作诊断；它不是已接受的 Worker 结果载体。
+  if ('_orcaLifecycleRejection' in record) {
+    return null;
+  }
+  if ('result' in record) {
+    // Companion 形状：交给 `parseDeliveryClaimedPayload`，这里不接管。
+    return null;
+  }
+  const orcaTaskId = payloadString(record, 'taskId');
+  const orcaDispatchId = payloadString(record, 'dispatchId');
+  const outcome = payloadString(record, 'outcome');
+  if (orcaTaskId === null || orcaDispatchId === null || outcome === null) {
+    return null;
+  }
+  const rawFiles = record['filesModified'];
+  const files = Array.isArray(rawFiles)
+    ? rawFiles.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+    : [];
+  return { orcaTaskId, orcaDispatchId, outcome, files, summary: body ?? '' };
+}
+
+/**
+ * Delivery message 载荷里**声称的**归属与结果正文（Companion 形状）。
+ *
+ * Orca 的 delivery message 只给出 payload 原文；任务/派发/尝试归属由生命周期消息的 payload JSON 承载，
+ * 因此这里把 payload 解析成 ClaimedResultAttribution（缺字段即 null，与领域类型的合同一致）与归一化后
+ * 的结果正文。它只是「声称」：归属是否成立只能由 verifyWorkerResult(claimed, trusted) 判定，其中 trusted
+ * 全部来自 store、当前图、授权与 Git。
+ */
+export type DeliveryClaimedPayload = {
+  readonly claimed: ClaimedResultAttribution;
+  readonly acceptedResult: unknown;
+};
+
+export type DeliveryPayloadParse =
+  | { readonly kind: 'parsed'; readonly payload: DeliveryClaimedPayload }
+  | { readonly kind: 'rejected'; readonly code: string; readonly message: string };
+
+function payloadCount(source: Record<string, unknown>, field: string): number | null {
+  const value = source[field];
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function payloadRole(source: Record<string, unknown>): WorkerRole | null {
+  const value = source['role'];
+  return typeof value === 'string' && (WORKER_ROLES as readonly string[]).includes(value)
+    ? (value as WorkerRole)
+    : null;
+}
+
+function payloadSpecBinding(source: Record<string, unknown>): SpecBinding | null {
+  const raw = source['specBinding'];
+  if (!isRecord(raw)) {
+    return null;
+  }
+  const provider = readNonEmptyString(raw, 'provider');
+  const relativePath = readNonEmptyString(raw, 'relativePath');
+  const contentDigest = readNonEmptyString(raw, 'contentDigest');
+  const providerVersion = readNonEmptyString(raw, 'providerVersion');
+  const contractRevision = payloadCount(raw, 'contractRevision');
+  const trackingRevision = payloadCount(raw, 'trackingRevision');
+  if (
+    provider === null ||
+    relativePath === null ||
+    contentDigest === null ||
+    providerVersion === null ||
+    contractRevision === null ||
+    trackingRevision === null
+  ) {
+    return null;
+  }
+  return { provider, relativePath, contentDigest, providerVersion, contractRevision, trackingRevision };
+}
+
+/**
+ * 解析 Companion 形状的 `worker_done` 载荷：带 `result` 正文与自报身份。
+ *
+ * 归属字段只用于**定位**，不构成信任；返回的 claimed 由 TrustedExecutionFacts 判定。Orca 规范形状
+ * （无 `result`、只有 taskId/dispatchId）由 parseOrcaWorkerDoneLocator 处理，两者互不接管。
+ */
+export function parseDeliveryClaimedPayload(raw: string | null): DeliveryPayloadParse {
+  if (raw === null) {
+    return { kind: 'rejected', code: 'payload_missing', message: 'Delivery message 没有 payload：无法判定归属与结果正文' };
+  }
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(raw) as unknown;
+  } catch {
+    return { kind: 'rejected', code: 'payload_not_json', message: 'Delivery message 的 payload 不是合法 JSON' };
+  }
+  if (!isRecord(decoded)) {
+    return { kind: 'rejected', code: 'payload_not_object', message: 'Delivery message 的 payload 不是 JSON 对象' };
+  }
+  if (!('result' in decoded)) {
+    return { kind: 'rejected', code: 'result_missing', message: 'Delivery message 的 payload 没有结果正文' };
+  }
+  const workerTaskId = readNonEmptyString(decoded, 'workerTaskId');
+  const dispatchId = readNonEmptyString(decoded, 'dispatchId');
+  return {
+    kind: 'parsed',
+    payload: {
+      claimed: {
+        runId: readNonEmptyString(decoded, 'runId'),
+        consumerGeneration: payloadCount(decoded, 'consumerGeneration'),
+        graphGeneration: payloadCount(decoded, 'graphGeneration'),
+        authorizationId: readNonEmptyString(decoded, 'authorizationId'),
+        workerTaskId: workerTaskId === null ? null : (workerTaskId as ClaimedResultAttribution['workerTaskId']),
+        dispatchId: dispatchId === null ? null : (dispatchId as ClaimedResultAttribution['dispatchId']),
+        attemptId: readNonEmptyString(decoded, 'attemptId'),
+        role: payloadRole(decoded),
+        specBinding: payloadSpecBinding(decoded),
+        worktreeId: readNonEmptyString(decoded, 'worktreeId'),
+      },
+      acceptedResult: decoded['result'],
     },
   };
 }

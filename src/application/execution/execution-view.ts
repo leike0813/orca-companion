@@ -72,8 +72,8 @@ export type WorkPackageExecutionState = (typeof WORK_PACKAGE_EXECUTION_STATES)[n
 /**
  * 处于 active（持有 Execution Frontier 位置）的阶段。
  *
- * 并发上限固定为 1，因此任一时刻最多一个 Work Package 处于这些阶段；`waiting_integration` 不属于
- * active（角色工作已结束，只等串行集成）。
+ * 并行包额度大于 1 时可有多个包同时处于这些阶段；`waiting_integration` 不属于 active（角色工作已
+ * 结束，只等串行集成），但仍有 lane reservation 时按占位计入活动集合。
  */
 export const ACTIVE_WORK_PACKAGE_STATES = [
   'admitting',
@@ -336,6 +336,13 @@ export type DeriveExecutionFactsInput = {
 
 export type DerivedExecutionFacts = {
   readonly frontier: readonly WorkPackageExecutionEntry[];
+  /**
+   * 当前世代真实占用额度的 Work Package：生命周期 active 与未释放 lane reservation 的并集。
+   *
+   * 覆盖「已派发但 Worker 尚不可见」「角色交接空隙」与「等待串行集成」；已释放 reservation 不计入。
+   * 顺序沿用稳定拓扑，超出拓扑的占位按预约顺序追加。
+   */
+  readonly activeWorkPackageIds: readonly string[];
   readonly reconciliations: readonly ReconciliationView[];
   readonly finalizer: FinalizerView;
   readonly executionReconciliation: ExecutionReconciliationGateView;
@@ -944,6 +951,27 @@ export function deriveExecutionFacts(input: DeriveExecutionFactsInput): DerivedE
     };
   });
 
+  const currentGraphId = snapshot.scope.graphId;
+  const reservedWorkPackageIds = new Set(
+    snapshot.laneReservations
+      .filter(
+        (reservation) =>
+          reservation.releasedAt === null &&
+          currentGraphId !== null &&
+          reservation.graphId === currentGraphId,
+      )
+      .map((reservation) => reservation.workPackageId as string),
+  );
+  const activeWorkPackageIds: string[] = [];
+  for (const entry of frontier) {
+    if (isActiveWorkPackageState(entry.state) || reservedWorkPackageIds.has(entry.workPackageId)) {
+      activeWorkPackageIds.push(entry.workPackageId);
+      reservedWorkPackageIds.delete(entry.workPackageId);
+    }
+  }
+  // 占位已建立但节点不在当前拓扑（例如刚 retire）：仍如实计入，不静默抹掉。
+  activeWorkPackageIds.push(...reservedWorkPackageIds);
+
   const reconciliations = snapshot.baselineReconciliations
     .map(reconciliationEntry)
     .sort((left, right) => left.reconciliationId.localeCompare(right.reconciliationId));
@@ -991,6 +1019,7 @@ export function deriveExecutionFacts(input: DeriveExecutionFactsInput): DerivedE
 
   return {
     frontier,
+    activeWorkPackageIds,
     reconciliations,
     finalizer: {
       gate: { ready: dispatch.kind === 'dispatch' && gateBlockers.length === 0, blockers: gateBlockers },

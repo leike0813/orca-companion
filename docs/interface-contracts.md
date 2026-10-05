@@ -439,7 +439,7 @@ Validator 在同一 Validation Attempt/真实 Session 内验证、范围内修�
 - **失败/幂等**：任何持久化或回读 unknown 都不 ack；重放同一 DeliveryIdentity 不产生第二正文或生命周期推进。
 - **测试 seam**：fake transport + fake Orca result store 覆盖每个崩溃窗口；真实隔离闭环验证 transport 契约而非故障注入。
 
-受控 Git 集成是同一 Owner 的副作用 pipeline：`GitIntegrationPort` 只接受固定三步，生产实现（`src/adapters/git/integration.ts`）只以 argv 数组与显式 cwd 调用 `git`，不经 shell，不 force-push、不 reset、不 rewrite 历史。
+受控 Git 集成是同一 Owner 的副作用 pipeline：`GitIntegrationPort` 接受交接提交、canonical 快进、推送，以及包内合并 canonical 与合并提交；生产实现（`src/adapters/git/integration.ts`）只以 argv 数组与显式 cwd 调用 `git`，不经 shell，不 force-push、不 reset、不 rewrite 历史。
 
 宿主、执行投影与 CLI 使用同一 `completedIntegrationRef`：仅当前 Scope/Graph Generation/Work Package 的 push 意图 settled/accepted 才表示完整集成。部分步骤在重启后沿原 OperationId 回读并继续，Finalizer 不得以部分步骤通过集成门禁。
 
@@ -471,7 +471,9 @@ type IntegrationWorkspace = { canonicalWorktreePath: string; workPackageWorktree
 
 分目标读回：每步只核验自己的目标——`commit` 在 `sourceWorktreePath` 核验并回读 source HEAD，`integrate_canonical` 在 canonical worktree 核验并回读 canonical HEAD，`push` 核验 canonical HEAD 后回读获批 `{ remote, ref }` 的目标 commit。回读不可用或与步骤自报 HEAD 不一致时阻塞该 lane；步骤 `unknown` 保持原 OperationId 对账，不换 ID 重试、不继续后续步骤。`commit` 步接受**真实 Worker 已自行提交交接成果**的情形：source HEAD 不等于所记录 expected HEAD 时，只在能证明它是 expected HEAD 的后继（`merge-base --is-ancestor`）时才按「已经提交」继续，否则仍以 `source_head_mismatch` 拒绝——历史被替换或改写过的 HEAD 不会进入集成。Finalizer 的运行前后工作区事实（HEAD、index revision、dirty paths）由 `readWorkspaceFacts` 从目标 worktree 只读产出。
 
-`openspec/changes/**`（工具原生 Specification Unit 及其归档）是**流程目录**：Planner 必须把单元写在这里、后续角色在同处勾选任务，因此它们不参与 Scope Envelope 越界判定（`envelopeCheckedPaths`）；单元身份仍由内容摘要与 Spec Binding 约束。
+既有 pending/blocked Git 意图只调用 `GitIntegrationPort.reconcile`，沿用原 OperationId 与持久化 expected HEAD；结果与目标回读一致后才结算或解除阻塞。push 对账同时核验 canonical HEAD 等于原 expected HEAD、获批 remote/ref 指向同一 commit，不能把后来产生的 HEAD 归到原操作。
+
+`openspec/` 是 **Specification Pipeline 流程目录**，包含工具原生 Specification Unit、归档、主规格与工具配置：Planner 在这里创建单元，后续角色勾选任务，工具维护配置，因此它们不参与 Scope Envelope 越界判定。普通 Worker 与集成复验统一使用 `envelopeCheckedPaths`；单元身份仍由内容摘要与 Spec Binding 约束。
 
 `dirtyPaths` 里属于 Worker Harness / agent 工具状态目录（`.agents/`、`.codex/` 等）的路径不是项目改动：它们既不构成 Scope Envelope 越界证据，也不让 canonical 工作区被算作「不干净」，更不参与 Finalizer 的运行前后比较——工具自己写技能、报告与会话材料是正常行为。项目路径仍然必须落在 Scope Envelope 内。该规则只有一处实现（`projectChangedPaths`），越界判定、canonical 干净性与 Finalizer 比较都走它。
 
@@ -815,13 +817,13 @@ type StatusJson = {
 
 `m2-deliver-execution-tui` 的 Extend 只增加执行态分区与相应组件，不新增页面、不新增键位、不改动 transcript/composer 主视图：
 
-- **`TuiViewModel.execution`**：`activeWorkPackageId`、`activeWorkPackageCount`（并发上限 1，因此只可能 0 或 1）、`integrationQueue`（串行队列，顺序取拓扑顺序）、`finalizer`、`reconciliation`（重启对账门）、`hazards`（危险态判定，含不可核验 Worker）、`recoveries`、`handoffs`。
+- **`TuiViewModel.execution`**：`activeWorkPackageIds`、`activeWorkPackageCount`（含派发待核验与集成等待占位）、`integrationQueue`（串行队列，顺序取拓扑顺序）、`finalizer`、`reconciliation`（重启对账门）、`hazards`（危险态判定，含不可核验 Worker）、`recoveries`、`handoffs`。
 - **节点布局**：`WorkPackageNodeView.position` 是编译顺序的索引，状态变化只更新标识；`hidden` 只由过滤决定。依赖缩进与紧凑态文本在 `src/interfaces/tui/render/graph-layout.ts`。
 - **Scope 级控制**（`src/interfaces/tui/components/control-bar.tsx`）：组件没有 Work Package 参数，因此结构上不存在单包控制入口。Pause 永不确认；Cancel 与 Exit 在危险态下先确认，确认后仍只提交一次意图。`cancelling` 只能来自 Controller 已持久化的控制状态。
 - **Finalizer 面板**（`src/interfaces/tui/components/finalizer-panel.tsx`）：门禁不满足、只读未核验/无法强制或运行前后工作区变化时只显示 blocker；只有被接受的 Delivery Verdict 才显示 deliverable。
 - **Execution Handoff**：复用 `handoff-review.tsx`，但主题是 `ExecutionHandoffState`（overlay `execution-handoff-review`），不复用 `PlanningHandoffProposal`。
 - **Execution Authorization Review**（`m2-wire-execution-runtime` 的 Extend，`src/interfaces/tui/components/authorization-review.tsx`，overlay `authorization-review`，Command Palette 的 `authorize-execution`）：界面只显示宿主读好的完整 Manifest 展示行、候选图引用、Scope revision、指纹与门禁判决。它不组装 Manifest、不计算指纹，也不把自由文本解释成批准；批准只回传用户看到的那份内容的指纹与 revision，门禁未通过或事实不可读时不提供批准入口。推进仍走 `execution-authorization` 命令，不新增页面与控制粒度。
-- **`StatusJson`**：`schemaVersion` 升为 **2**，新增 `execution` 分区（`workPackages`/`integrationQueue`/`activeWorkPackageCount`/`activeWorkPackageId`/`reconciliations`/`finalizer`/`executionReconciliation`）并填充既有的 `workers`/`blockers`；既有字段名与语义未变。`status` 不调用 Orca，因此其中 Worker liveness 等外部事实保持不可核验。
+- **`StatusJson`**：`schemaVersion` 为 **3**，`execution` 分区包含 `workPackages`/`integrationQueue`/`activeWorkPackageCount`/`activeWorkPackageIds`/`reconciliations`/`finalizer`/`executionReconciliation`，并填充 `workers`/`blockers`。`status` 不调用 Orca，因此其中 Worker liveness 等外部事实保持不可核验。
 
 顶层 CLI 只识别 `[repository-path]`、`status [--json]`、`doctor`。启动 TUI 前同时检查 stdin/stdout TTY；无 TTY 在挂载 Ink 前非零退出。Exit/Ctrl+C 只退出进程，不隐式 Pause/Cancel。React render/effect/resize/remount 不调用 IC-11 command。
 
@@ -887,8 +889,8 @@ SQLite 位于 Git common dir 的 `orca-companion/ui.sqlite`。短事务中完成
 ## `complete-tui-model-configuration` 对 IC-03/04/05/07/08/09/11/12 的扩展
 
 - **IC-03 物化绑定**：`record-materialization-binding` 增加 `authorizationId`、`authorizationVersion` 与 `workerProfileRef`（不透明字符串，落库为 `worker-profile` 引用），缺任一项即拒绝，不留下无运行依据的新行。Coordination schema 16 追加这三列，schema 16 之前的历史行保持 `null`；需要这些事实的读取方按不可证明阻塞，不按当前授权推断回填。
-- **IC-04 项目配置**：项目配置升为 schema 2，保存 `revision`、`providerConnections`、`models` 与 `execution.workerProfiles`/`workerProfileRefs`，删除全局 `workerModel`；v1 明确拒绝且不自动改写。引用唯一性与交叉引用、effort 必须有可信能力来源都由同一 parser 判定。会话模型绑定沿用既有 `update-session-model-configuration` 记录。
-- **IC-05 授权**：Manifest 升为 v2，`workerProfiles[].modelConfiguration` 为必填（连接、模型、effort 及其能力来源、非秘密 options、credentialRef），并单独绑定 `recoveryUtilityProfile`；缺任一项的授权无法证明 Worker 用什么模型运行，解析即拒绝，旧版本不被当作包含模型授权。执行期只换模型配置时以完整 Manifest 指纹与 Scope revision 重新批准，保持 Graph Generation、Run、权限、上限与已消耗预算，不创建 Graph Revision；Replanning、cancelling 或未决派发 mutation 时拒绝重新授权。
+- **IC-04 项目配置**：项目配置为 schema 3，保存 `revision`、`providerConnections`、`models` 与 `execution.workerProfiles`/`workerProfileRefs`，删除全局 `workerModel`；v1 明确拒绝且不自动改写。引用唯一性与交叉引用、effort 必须有可信能力来源都由同一 parser 判定。会话模型绑定沿用既有 `update-session-model-configuration` 记录。
+- **IC-05 授权**：Manifest 为 v3，`workerProfiles[].modelConfiguration` 为必填（连接、模型、effort 及其能力来源、非秘密 options、credentialRef），并单独绑定 `recoveryUtilityProfile`；缺任一项的授权无法证明 Worker 用什么模型运行，解析即拒绝，旧版本不被当作包含模型授权。执行期换模型或并行额度时以完整 Manifest 指纹与 Scope revision 重新批准，保持 Graph Generation、Run、Task、权限、其他上限与已消耗预算，不创建 Graph Revision；Replanning、cancelling 或未决派发 mutation 时拒绝重新授权。
 - **IC-07/IC-08 运行依据**：Task 物化时把当时的授权身份、版本与 profile 钉进绑定。Retry 沿已有 WorkerTask 的绑定取原授权与 profile，结算按该绑定判断权限与配置，不读当前配置；旧任务缺绑定时按不可证明阻塞。Codex 启动沿用同一模型配置生成器，secret 只进子进程环境，公开 terminal 命令与 CLI 参数只含非秘密描述符；managed provider 显式声明 `requires_openai_auth=false` 以免被 Harness auth 覆盖，Harness-login 保持原认证方式，不自动 fallback。
 - **IC-09 恢复**：替代 Session 沿原 WorkerTask 绑定的 profile 派发，Validator 的修复/复验与原任务同 profile；新 Recovery Utility Task 固定创建时的授权配置。transcript 不可用或恢复预算耗尽仍按不可证明阻塞。
 - **IC-11/IC-12 界面**：模型设置提供只读 load、显式 save 与按角色显式 apply 三条意图；保存输入含目标角色、connection/model/options/capability/effort、可选新 key 与 expected revision，scope/writer/profile 身份由宿主补齐。界面只消费非秘密 snapshot，key 以遮罩显示且只存在于编辑器内存，不进 IC-13。保存不改变 Session、已批准 Manifest、Task 与预算；apply 走既有 switch 或完整授权重新审阅。异步结果仍按原 invocation/Session 归属。
@@ -900,7 +902,7 @@ Owner 为 `complete-tui-project-statusline` 的 Extend，canonical DTO 在 `src/
 - **metadata 权威**：repository/fullBranchRef 来自注册 Scope；模型/provider/effort 来自选中 Session 的准确不可变 configuration；Ticket 是该 Session 精确 Claim 的 tracker summary，只查 title/ref、不读取 body。当前 Work Package 来自当前 Dispatch/Attempt。缺少来源保留 null/unavailable，effort 区分 configured/not_configured/not_supported/unavailable。
 - **context**：installed integration 的可选精确测量能力接收完整有效输入和 tools、返回实际 used 与可信 capacity；观察绑定 Session/configuration/effective input revision。每次准备真实请求都会取得新输入版本，包含当次 Actionable Work；版本校验同时检查已提交历史位置、完整 Context Material、压缩结论、系统指令、权威事实和工具定义。能力由 `ProviderIntegration.exactContext` 表达，模块导出的模型构造函数可显式提供静态 `companionExactContext.measure({model,messages,tools,signal})`；一般 `BaseChatModel` 不被当作具备精确能力。消息/tool step 接受、压缩、换模型后失效。读取快照不测量；不使用近似 tokenizer、字符估算、上一轮/累计 usage、配置读回预算替代窗口。未提供能力的 adapter 为 unavailable。
 - **验收摘要**：唯一 application owner 从当前 GraphId/generation/version 全部未 retire Work Packages 与 `currentContractSettlements` 派生 `{validatedCount,totalCount}`；精确当前合同 Validator 接受结果每包一次，状态栏/Sidebar/Inspector 共同消费。Task done、Implementation 或 integration 状态、局部窗口不能派生分子。
-- **预算**：明确类别 work-packages/implementation-attempts/recovery，各自携 consumed、limit、subject 与 approvedLimitRef。work-packages 是当前未 retire 数/maxActiveWorkPackages；implementation-attempts 读取精确包的 budget counter，recovery 复用按 businessAttemptId 汇总的 Recovery records，以上限对应的批准引用核验。缺少 ledger 或原 Task 的授权绑定显示不可用，不取 ledger 首项或当前配置上限冒充原授权。
+- **预算**：明确类别 work-packages/implementation-attempts/recovery，各自携 consumed、limit、subject 与 approvedLimitRef。work-packages 是当前未 retire 数/maxWorkPackages；implementation-attempts 读取精确包的 budget counter，recovery 复用按 businessAttemptId 汇总的 Recovery records，以上限对应的批准引用核验。缺少 ledger 或原 Task 的授权绑定显示不可用，不取 ledger 首项或当前配置上限冒充原授权。
 - **projectDetails**：Bootstrap 绑定 Scope，UI 请求精确 Session/object/seen revision/cursor。每次20项、64KiB总正文；长字段按UTF-8完整字符边界续读，游标跨对象/版本拒绝。批准后 Manifest 精确读取已批准 ID/version，候选入口独立。页面失败/失效保留原入口，迟到结果仅属于原对象；查询不产生业务动作。
 - **IC-03 详情来源**：`project-detail-session` 精确读取所选 Session 注册、active Claim 与当前执行 Lease；`project-detail-json-field` 按当前 GraphId/version 或批准 authorization ID/version 读取一个字段及其 UTF-8 范围，不向宿主传回完整 graph/Manifest。工作包 Task 与 Accepted Result 依据当前包的可信绑定关联，预算计数可按批准引用筛选。读取只复用现有 schema16 记录，不新增持久副本或迁移。
 - **补充观察**：宿主只保留当前展示 Session/revision 的既有 Recovery、Finalizer、Frontier、维护与压缩投影引用。工作详情将这些字段与存储范围接入同一20项/64KiB分页，观察不匹配则要求刷新后重读；正文和业务事实仍归原 owner，详情不启动外部观察或建立第二份持久状态。
@@ -942,6 +944,32 @@ type GraphBasisPort = {
 `load()` 返回 `{kind:'loaded',preferences,writable,notice}`。文件缺失只读默认且可写；损坏/未来版本/不可读保留原文件，默认呈现且不可写。`save({expectedRevision,patch})` 的 patch 只含 icons 或 statusline 一区；短 exclusive 文件锁内重读/CAS、临时文件原子替换与回读，返回 saved/conflict（当前 preferences）/failed（安全code/message）。冲突不自动重试；锁占用失败关闭。该文件不含秘密、不进入协调/checkpoint/ui.sqlite，环境图标覆盖保持临时。
 
 custom 编辑是内存草稿，同生产 statusline 的主区域宽度、字段配色与裁切作预览。↑↓选择、Space勾选、←→顺序/格式、Enter显式保存、Esc逐层丢弃；恢复默认只改草稿。成功关闭设置/命令层并回原入口；失败/CAS保留草稿可显式重试。异步请求绑定原编辑 generation，不闭合新页或覆盖新编辑。图标即时生效，独立分区保存，失败保留本次选择与未保存提示；重启恢复最后保存值。render/effect/resize/remount 只读。
+
+## 可配置执行并发扩展（restore-configurable-execution-concurrency）
+
+IC-05 的 ExecutionLimits 唯一拥有 `maxActiveWorkPackages`（并行包额度，默认3）、`maxWorkPackages`（未 retire 图容量，默认8）、`integrationReconciliations`（每包集成复验预算，默认2）；所有额度可配置且为正安全整数。ExecutionGraph 不存并发策略。配置与 Manifest 为 schema3，status JSON 为 schema3。
+
+IC-03 schema19 由 Branch Store 拥有最小包级 LaneReservation（scope/generation/package、稳定 operation identity、准入 authorization 与 baseline）。`reserve-work-package-lane` 在短事务内核验 lease/fencing/CAS、当前图与批准额度；同包重放复用原记录，未可见派发仍占用。`release-work-package-lane` 仅在终止或完整集成可证明后释放。额度降低不撤销已有包。集成复验轮次与独立预算消费在同一事务注册，绑定原 Validator Attempt/Session、原接受结果、目标 HEAD 与树证据；具体 Task/Dispatch 仍由 Orca 和物化绑定拥有。
+
+Operation Intent 的 nullable `terminalHandle` 只记录已接受 terminal-create 回执的精确资源引用，在原意图结算事务内写入，不复制终端状态。恢复时从精确 worktree 的有界列举重新核验句柄与 connected/writable；终端标题仅是显示内容。原句柄缺失、失效或列举不完整时阻塞对应 lane，不能重发已存在的 mutation。旧记录保留 null，不按屏幕、标题或时间猜回填。
+
+集成复验应用 owner 为 `src/application/integration-reconciliation.ts`，生产 Worker 接线为 `src/bootstrap/integration-reconciliation-runtime.ts`。轮次登记与额度消费同事务；`bind-integration-continuation` 在 Task 创建、Dispatch 启动后立即登记真实身份，允许未启动的 null Dispatch 补齐一次。原接受结果与目标 HEAD 不改写，通过轮次的树与续接身份也不可改写。重启以原 OperationId 和已绑定 Task/Dispatch 对账；读取失败保留不可核验状态，不当作空轮次重派。
+
+IC-07 调度按当前批准的包额度接纳多个独立包，每包角色串行。自动驱动与工具共用原子准入；unknown 仅冻结所属 lane，共享事实无法归属仍全局阻塞。新包 worktree 基于已归属当前 canonical，依赖以已集成证明为准。IC-08/09 原 Validator 续接复验保持业务 Attempt 和精确 provider Session，物理续接使用独立 Task/Dispatch，旧结果不改写。
+
+Codex 启动和续接共用 SessionStart hook（`startup|resume`）。续接报告只能由本次 launch 的精确路径读取，并核验原 provider UUID、CODEX_HOME、cwd、transcript 和当前派发观察窗口。绑定报告迟到时，共享 Scoped Worker 派发按原 Task 只读回读 Dispatch，已接受的草稿激活复用原结算事实，不重复发送；pending 或 unknown 的激活仍须对账，Worker 已绑定 terminal 本身不证明草稿已提交。
+
+续接前，Bootstrap 从原 Accepted Validator 的 Task/Dispatch 取得精确终端；后续复验轮次沿同一接受结果与业务 Attempt 读取最近已通过轮次的物理 Worker。只有精确 Worker 已终结且终端满足 `tui-idle` 时才关闭该终端，关闭意图绑定原句柄；pending/unknown 沿原 OperationId 以 `terminal-show` 的精确关闭事实对账。恢复使用原 CODEX_HOME 与 provider UUID 的 `codex resume --no-daemon`。`submit_draft` 直接提交一次 Enter，激活成功的持久化事实控制重放；首个实际 turn 产生本轮 SessionStart 报告，观察窗口从本轮派发前的持久化意图起算。
+
+Task 物化绑定的 `dispatchId` 是派发前 Task Envelope 的逻辑候选身份；真实 Orca Dispatch 由 Session Segment 证明并写入 Accepted Delivery Settlement。物化互斥与额度结算沿 `acceptedResultMatchesTask` 核对角色、WorkerTask 与业务 Attempt，不将逻辑候选 ID 与实际 Dispatch ID 比较；Delivery 准入仍核验精确物理 Dispatch。仅建立 Task 的包可沿原绑定续办；已受理的 Worker 启动意图及实时 Worker 事实阻止重复派发。
+
+IC-08 的 Delivery identity 属于整批消息。普通角色与集成续接可能同批到达；所有结果均须按精确 Task/Dispatch 结算并回读后才能确认整批。`process-delivery.ts` 统一核验批次是否可确认；角色重放先逐条结算，再确认。崩溃后重读原批次，不另存结果正文。合并提交只使用原 Validator 已复验的 index 树，提交前后核验同一 tree OID；提交后、轮次落盘前重启仍沿原意图的 expected HEAD 和轮次身份对账。
+
+集成复验报告单独声明有界 `filesModified`；冲突路径与修复文件按本包 Scope Envelope 核验。`evidence.coveredPaths` 表达验证阅读覆盖，可包含已授权 canonical 合入的其他包文件，不作为 Worker 修改声明。原 Session、Task/Dispatch 与精确树仍需独立核验。
+
+IC-11/12 提供 ExecutionSettings load/save 和显式执行期完整审阅意图，复用 ProjectConfigurationStore CAS。保存仅改默认值；当前额度只有完整 Manifest 重新批准后改变，保持图、Run、Task 绑定及预算计数。活动包 DTO 使用 `activeWorkPackageIds` 和真实 `activeWorkPackageCount`，不截断为单个包；渲染无持久副作用。
+
+重新审阅绑定当前 Graph head 与 Scope revision；批准时 head 或载荷变化以 `manifest_changed` 拒绝，同载荷重放读回原批准记录。
 
 ## 合同演进规则
 

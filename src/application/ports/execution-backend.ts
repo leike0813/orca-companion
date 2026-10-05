@@ -275,6 +275,28 @@ export function orcaDispatchIdFromReceipt(value: unknown): string | null {
   return readNestedReceiptField(value, 'dispatch', ['dispatchId', 'dispatch_id', 'id']);
 }
 
+/**
+ * terminal 创建/准备回执里的精确 terminal handle。
+ *
+ * 只认规范位置——顶层 `handle` 或 `terminal.handle`；不从 `id` 之类的近似字段猜，因为 handle 是
+ * 之后唯一可用于复用/续接的资源引用，猜错会把另一条 terminal 当成这条。
+ */
+export function orcaTerminalHandleFromReceipt(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const terminal = record['terminal'];
+  if (typeof terminal === 'object' && terminal !== null) {
+    const nested = (terminal as Record<string, unknown>)['handle'];
+    if (typeof nested === 'string' && nested.length > 0) {
+      return nested;
+    }
+  }
+  const handle = record['handle'];
+  return typeof handle === 'string' && handle.length > 0 ? handle : null;
+}
+
 /** 按原 OperationId 做一次只读对账；没有可恢复资源结果时继续阻塞。 */
 export async function reconcileOperation(
   backend: ExecutionBackend,

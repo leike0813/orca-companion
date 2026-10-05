@@ -90,6 +90,36 @@ function assertInsideWorktree(worktreePath: string, candidate: string): void {
 }
 
 /** Codex harness 的固定 prepared-terminal 策略；调用方不能注入任意 env、argv 或 command。 */
+/**
+ * 写出 SessionStart hook。Codex 只从 CODEX_HOME/hooks.json 读取 hook，因此准备与 resume 共用同一份正文；
+ * reporter 路径必须由可信宿主提供且为绝对路径，hook 用宿主自己的 node 绝对路径，不假设 PATH。
+ */
+export function writeCodexSessionStartHook(input: {
+  readonly codexHome: string;
+  readonly reporterPath: string;
+}): void {
+  if (!isAbsolute(input.reporterPath)) {
+    throw new Error('SessionStart reporter 必须是绝对路径：' + input.reporterPath);
+  }
+  writeFileSync(
+    join(input.codexHome, 'hooks.json'),
+    JSON.stringify({
+      hooks: {
+        SessionStart: [{
+          // matcher 是对 SessionStart 事件 source 的正则：只覆盖 launch 与 resume 两种来源。
+          matcher: 'startup|resume',
+          hooks: [{
+            type: 'command',
+            command: shellQuote(process.execPath) + ' ' + shellQuote(input.reporterPath),
+            timeout: 10,
+          }],
+        }],
+      },
+    }),
+    'utf8',
+  );
+}
+
 export function createCodexWorkerLaunch(input: {
   readonly launchId: string;
   /**
@@ -195,28 +225,8 @@ export function createCodexWorkerLaunch(input: {
       }
 
       if (input.sessionStartReporterPath !== undefined) {
-        if (!isAbsolute(input.sessionStartReporterPath)) {
-          throw new Error(`SessionStart reporter 必须是绝对路径：${input.sessionStartReporterPath}`);
-        }
-        // reporter 路径只由可信宿主提供（模型与 Worker 都填不了它），因此不要求它位于 worktree 内：
-        // 只读 Finalizer 的 reporter 必须留在 Git common dir 的 Companion 私有目录。
-        writeFileSync(
-          join(stateRoot, 'hooks.json'),
-          JSON.stringify({
-            hooks: {
-              SessionStart: [{
-                matcher: 'startup',
-                hooks: [{
-                  type: 'command',
-                  // 用宿主自己的 node 绝对路径：hook 在 Codex 自己的环境里执行，不能假设 PATH 上有 node。
-                  command: `${shellQuote(process.execPath)} ${shellQuote(input.sessionStartReporterPath)}`,
-                  timeout: 10,
-                }],
-              }],
-            },
-          }),
-          'utf8',
-        );
+        // reporter 路径只由可信宿主提供（模型与 Worker 都填不了它），因此不要求它位于 worktree 内。
+        writeCodexSessionStartHook({ codexHome: stateRoot, reporterPath: input.sessionStartReporterPath });
       }
 
       const sandboxArguments = input.sandboxMode === 'read-only-local-control'
@@ -237,6 +247,97 @@ export function createCodexWorkerLaunch(input: {
       });
       const { descriptorPath, launcherPath } = writeCodexModelLaunch({ codexHome: stateRoot, descriptor });
       return Promise.resolve({ title, stateRoot, command: codexModelLaunchCommand({ launcherPath, descriptorPath }) });
+    },
+  };
+}
+
+/**
+ * 复用原 session 的 Codex 启动策略：`codex resume <uuid>`。
+ *
+ * 只在原 terminal 已确认退出、且拿到原 CODEX_HOME 与精确 provider session UUID 时使用。它不安装新的
+ * SessionStart reporter、不改写原 config/auth，也不另建状态根：resume 必须读到原 session。缺少任一
+ * 事实都由调用方阻塞，绝不用 `--last`、最近 transcript 或按 cwd/mtime 猜一个 session。
+ */
+export function createCodexResumeLaunch(input: {
+  readonly launchId: string;
+  readonly modelConfiguration: Readonly<WorkerModelConfiguration>;
+  /** 原 session 的精确身份；形态非法时 descriptor 生成阶段直接拒绝。 */
+  readonly sessionId: string;
+  /** 原 session 的 CODEX_HOME；必须是可信装配给出的绝对路径。 */
+  readonly codexHome: string;
+  readonly credentialStore?: CredentialStore;
+  readonly credentialStorePath?: string;
+  readonly codexExecutable?: string;
+  readonly sandboxMode: 'read-only' | 'workspace-write' | 'danger-full-access' | 'read-only-local-control';
+  /**
+   * resume 时安装的 SessionStart reporter 绝对路径。
+   *
+   * 必须给出：只有 resume 会话自己上报 WorkerTask/Dispatch/cwd/UUID，才能证明「新的续接 Dispatch 确实
+   * 恢复了原 provider session」。报告与 reporter 由可信宿主放在 Companion 私有目录，不在原 CODEX_HOME。
+   */
+  readonly sessionStartReporterPath?: string;
+}): PreparedTerminalStrategy<PreparedCodexTerminal> {
+  if (input.launchId.length === 0) {
+    throw new Error('Codex launchId 必须是非空字符串');
+  }
+  if (!isAbsolute(input.codexHome)) {
+    throw new Error(`Codex resume 的 CODEX_HOME 必须是绝对路径：${input.codexHome}`);
+  }
+  const digest = createHash('sha256').update(input.launchId).digest('hex').slice(0, 20);
+  const title = `orca-companion:codex-resume:${digest}`;
+  return {
+    kind: 'prepared_terminal',
+    harness: 'codex',
+    activation: 'submit_draft',
+    title,
+    prepare: ({ worktreePath }) => {
+      if (!isAbsolute(worktreePath)) {
+        throw new Error(`Codex Worker worktree 必须是绝对路径：${worktreePath}`);
+      }
+      assertLaunchableModelConfiguration(input.modelConfiguration);
+      const managedCredential =
+        input.modelConfiguration.connection.credential.kind === 'managed'
+          ? input.modelConfiguration.connection.credential
+          : null;
+      if (managedCredential !== null) {
+        const store = input.credentialStore ?? new JsonCredentialStore(
+          input.credentialStorePath === undefined ? {} : { path: input.credentialStorePath },
+        );
+        const read = store.read(managedCredential.credentialRef);
+        if (read.kind !== 'resolved') {
+          throw new Error('Codex managed 凭据不可用：' + read.code);
+        }
+      }
+      // 复用原 CODEX_HOME：resume 必须读到原 session 与既有 config/auth，不能另建状态根。
+      mkdirSync(input.codexHome, { recursive: true });
+      if (input.sessionStartReporterPath !== undefined) {
+        writeCodexSessionStartHook({ codexHome: input.codexHome, reporterPath: input.sessionStartReporterPath });
+      }
+      const sandboxArguments = input.sandboxMode === 'read-only-local-control'
+        ? (() => {
+            const sourceConfig = join(input.codexHome, 'config.toml');
+            const sourceConfigText = existsSync(sourceConfig) ? readFileSync(sourceConfig, 'utf8') : '';
+            assertUtilityProfileConfigCompatible(sourceConfigText);
+            writeFileSync(join(input.codexHome, CODEX_UTILITY_PROFILE_CONFIG_FILE), CODEX_UTILITY_PROFILE_CONFIG_TOML, 'utf8');
+            return [...CODEX_UTILITY_PROFILE_ARGS];
+          })()
+        : ['--sandbox', input.sandboxMode];
+
+      const descriptor = buildCodexModelLaunchDescriptor({
+        modelConfiguration: input.modelConfiguration,
+        codexHome: input.codexHome,
+        baseArguments: [CODEX_HOOK_TRUST_BYPASS_ARG, '--no-daemon', '--no-alt-screen', '--ask-for-approval', 'never'],
+        sandboxArguments,
+        resumeSessionId: input.sessionId,
+        ...(input.credentialStorePath === undefined ? {} : { credentialStorePath: input.credentialStorePath }),
+        ...(input.codexExecutable === undefined ? {} : { executable: input.codexExecutable }),
+      });
+      const { descriptorPath, launcherPath } = writeCodexModelLaunch({ codexHome: input.codexHome, descriptor });
+      return Promise.resolve({
+        title,
+        stateRoot: input.codexHome,
+        command: codexModelLaunchCommand({ launcherPath, descriptorPath }),
+      });
     },
   };
 }

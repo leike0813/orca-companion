@@ -41,6 +41,7 @@ import type {
   FinalizerView,
   WorkPackageExecutionEntry,
 } from '../../src/application/execution/execution-view.js';
+import { isActiveWorkPackageState } from '../../src/application/execution/execution-view.js';
 import { WIZARD_CHECKS } from '../../src/interfaces/tui/ports.js';
 import type { EffortCapability } from '../../src/domain/model-configuration.js';
 import { openUiInputStore } from '../../src/adapters/storage/ui-input-store.js';
@@ -109,6 +110,10 @@ export function makeSnapshot(overrides: SnapshotOverrides = {}): ControllerSnaps
     ],
     budgets: [],
     frontier: [],
+    // 活动集合默认从 frontier 的 active 生命周期派生；lane reservation 的并集由生产投影负责。
+    activeWorkPackageIds: (overrides.frontier ?? [])
+      .filter((entry) => isActiveWorkPackageState(entry.state))
+      .map((entry) => entry.workPackageId),
     workers: [],
     finalizer: makeFinalizer(),
     executionReconciliation: {

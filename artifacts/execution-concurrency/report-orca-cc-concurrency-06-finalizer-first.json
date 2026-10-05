@@ -1,0 +1,169 @@
+{
+  "generatedAt": "2026-10-05T10:22:15.258Z",
+  "fixture": {
+    "repository": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-06",
+    "identity": "term_e065b760-80d2-4e61-ae60-dce7c69c8ad8",
+    "coordinationScopeId": "e2e-loop-scope",
+    "orcaRunId": "run_c519360a61be",
+    "baselineHead": "ee6cf84fd2450d48d8ac20925e6c213bd7dc9c07",
+    "resumed": true
+  },
+  "approvedMaxActiveWorkPackages": 5,
+  "configuredMaxActiveWorkPackages": 5,
+  "observation": {
+    "maxActivePackages": 1,
+    "maxUnconcluded": 1,
+    "peakOverlap": 2,
+    "activePackageIds": [
+      "e2e-loop-scope#g1:readme-banner"
+    ]
+  },
+  "rounds": {
+    "triggers": 10,
+    "samples": 39
+  },
+  "resumed": true,
+  "sameOriginalIds": true,
+  "sameOriginalIdsApplied": true,
+  "originalIdsBefore": {
+    "tasks": [
+      "e2e-loop-scope#g1:notes-basics|planner|task_0f4ddc1b9511",
+      "e2e-loop-scope#g1:readme-banner|planner|task_f128daad35cf"
+    ],
+    "dispatches": [
+      "e2e-loop-scope#g1:notes-basics|planner|ctx_6211ffd092d1",
+      "e2e-loop-scope#g1:readme-banner|planner|ctx_ace1d39d306c"
+    ]
+  },
+  "originalIdsAfter": {
+    "tasks": [
+      "e2e-loop-scope#g1:notes-basics|planner|task_0f4ddc1b9511",
+      "e2e-loop-scope#g1:readme-banner|planner|task_f128daad35cf"
+    ],
+    "dispatches": [
+      "e2e-loop-scope#g1:notes-basics|planner|ctx_6211ffd092d1",
+      "e2e-loop-scope#g1:readme-banner|planner|ctx_ace1d39d306c"
+    ]
+  },
+  "dispatchIntervals": [
+    {
+      "dispatchId": "ctx_36769bd896f0",
+      "start": 1791195503000,
+      "end": 1791195706573
+    },
+    {
+      "dispatchId": "ctx_5a9f3963ca3b",
+      "start": 1791193967000,
+      "end": 1791194011777
+    },
+    {
+      "dispatchId": "ctx_5cb34b315bfa",
+      "start": 1791192426000,
+      "end": 1791193499080
+    },
+    {
+      "dispatchId": "ctx_bb299a9e5a97",
+      "start": 1791192411000,
+      "end": 1791192524046
+    },
+    {
+      "dispatchId": "ctx_403a7c53c2e9",
+      "start": 1791192296000,
+      "end": 1791192349334
+    },
+    {
+      "dispatchId": "ctx_5d7cbdf016ad",
+      "start": 1791192280000,
+      "end": 1791192348473
+    },
+    {
+      "dispatchId": "ctx_ace1d39d306c",
+      "start": 1791192111000,
+      "end": 1791192257565
+    },
+    {
+      "dispatchId": "ctx_6211ffd092d1",
+      "start": 1791192092000,
+      "end": 1791192220145
+    }
+  ],
+  "workPackages": [
+    {
+      "workPackageId": "e2e-loop-scope#g1:notes-basics",
+      "state": "accepted",
+      "role": "validator",
+      "attemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Anotes-basics:validator:3821222710477181:1"
+    },
+    {
+      "workPackageId": "e2e-loop-scope#g1:readme-banner",
+      "state": "accepted",
+      "role": "validator",
+      "attemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:4473081389657077:1"
+    }
+  ],
+  "reconciliations": {
+    "e2e-loop-scope#g1:notes-basics": [],
+    "e2e-loop-scope#g1:readme-banner": [
+      {
+        "workPackageId": "e2e-loop-scope#g1:readme-banner",
+        "reconciliationId": "e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:round-1",
+        "round": 1,
+        "validationAttemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:4473081389657077:1",
+        "sourceAcceptedResultRef": "task_abf5a533718e#9e3ec7c5a21b4",
+        "targetHead": "c65ba9ea0467ba46c24ef302793b9d87dd10d9da",
+        "mergedTreeRef": "d7975bfed9d02895c547c1d643f984b0b3f5e21c",
+        "orcaTaskId": "task_73206467f8db",
+        "dispatchId": "ctx_5a9f3963ca3b",
+        "state": "validated",
+        "blockerRef": null,
+        "createdAt": 1791193955240
+      }
+    ]
+  },
+  "validatorOrigins": {
+    "e2e-loop-scope#g1:notes-basics": {
+      "attemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Anotes-basics:validator:3821222710477181:1",
+      "dispatchId": "ctx_bb299a9e5a97",
+      "sessionBindingId": "session-binding:ctx_bb299a9e5a97:01a10b63-2765-7610-aa29-05663e809732",
+      "launchId": "worker-launch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Anotes-basics:validator:3821222710477181:1",
+      "orcaTaskId": "task_6da3ae7af9af"
+    },
+    "e2e-loop-scope#g1:readme-banner": {
+      "attemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:4473081389657077:1",
+      "dispatchId": "ctx_5cb34b315bfa",
+      "sessionBindingId": "session-binding:ctx_5cb34b315bfa:01a10b63-6084-7291-bf15-7fc07b88ab67",
+      "launchId": "worker-launch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:4473081389657077:1",
+      "orcaTaskId": "task_abf5a533718e"
+    }
+  },
+  "laneEvidence": {
+    "lanes": [],
+    "approvalAuthorizationId": null,
+    "approvedMaxActiveWorkPackages": null
+  },
+  "finalizer": {
+    "verdict": {
+      "verdictId": "delivery-verdict:e2e-loop-scope:e2e-loop-scope%23g1:1",
+      "kind": "deliverable",
+      "refs": [
+        "git-integration-commit:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Anotes-basics",
+        "git-integration-integrate:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Anotes-basics",
+        "git-integration-push:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Anotes-basics",
+        "git-integration-commit:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner",
+        "git-integration-merge-canonical:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:round-1",
+        "git-integration-merge-commit:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:round-1",
+        "git-integration-integrate:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner",
+        "git-integration-push:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner"
+      ],
+      "sessionBindingRef": "01a10b92-5496-72b2-9f2d-08e9e6d1a503",
+      "recordedAt": 1791195727255
+    },
+    "gate": {
+      "ready": false,
+      "blockers": [
+        "finalizer-not-authorized"
+      ]
+    }
+  },
+  "blockers": []
+}

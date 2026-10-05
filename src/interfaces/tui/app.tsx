@@ -101,7 +101,8 @@ import { filterChoices } from './components/selection-list.js';
 import { tuiTheme } from './theme.js';
 import { DEFAULT_TUI_PREFERENCES, type StatuslinePreferences } from '../../application/configuration/tui-preferences.js';
 import { statuslineSettingRows, updateStatuslinePreference } from './components/statusline-settings.js';
-import type { ProjectDetailPage } from '../../application/tui/project-presentation.js';
+import { executionSettingsDraftValid } from './components/execution-settings.js';
+import { soleActiveWorkPackage, type ProjectDetailPage } from '../../application/tui/project-presentation.js';
 import type {
   BasisReadResult,
   BasisBodyRange,
@@ -373,6 +374,15 @@ function TuiAppContent(props: TuiAppProps) {
   const [preferencesWritable, setPreferencesWritable] = useState(false);
   const [statuslineSaving, setStatuslineSaving] = useState(false);
   const statuslineDraftRef = useRef(statuslineDraft);
+  const [executionSettingsDraft, setExecutionSettingsDraft] = useState('');
+  const [executionSettingsSavedDefault, setExecutionSettingsSavedDefault] = useState(0);
+  const [executionSettingsApproved, setExecutionSettingsApproved] = useState<number | null>(null);
+  const [executionSettingsNotice, setExecutionSettingsNotice] = useState<string | null>(null);
+  const [executionSettingsSaving, setExecutionSettingsSaving] = useState(false);
+  const [executionSettingsSaved, setExecutionSettingsSaved] = useState(false);
+  const executionSettingsDraftRef = useRef('');
+  const executionSettingsRevision = useRef(0);
+  const executionSettingsRequest = useRef(0);
   const statuslineEditVersion = useRef(0);
   const statuslineRequest = useRef(0);
   const iconSaveRequest = useRef(0);
@@ -604,6 +614,68 @@ function TuiAppContent(props: TuiAppProps) {
     }
   };
 
+  /** 打开执行设置：只读项目默认值与当前批准额度，界面不构造或推断批准额度。 */
+  const openExecutionSettings = async (): Promise<boolean> => {
+    const port = ports.executionSettings;
+    if (port === undefined) { setExecutionSettingsNotice('执行设置端口尚未接通'); return false; }
+    setExecutionSettingsNotice(null);
+    let loaded;
+    try { loaded = await port.load(); }
+    catch { setExecutionSettingsNotice('! config_unreadable: 读取执行设置失败'); return false; }
+    if (loaded.kind !== 'loaded') { setExecutionSettingsNotice('! ' + loaded.code + ': ' + loaded.message); return false; }
+    executionSettingsRevision.current = loaded.settings.revision;
+    executionSettingsDraftRef.current = String(loaded.settings.defaultMaxActiveWorkPackages);
+    setExecutionSettingsDraft(executionSettingsDraftRef.current);
+    setExecutionSettingsSavedDefault(loaded.settings.defaultMaxActiveWorkPackages);
+    setExecutionSettingsApproved(loaded.settings.approvedMaxActiveWorkPackages);
+    setExecutionSettingsSaved(false);
+    return true;
+  };
+
+  /** 从设置页显式进入完整 Manifest 审阅；只读 review，批准仍由既有确认流程完成。 */
+  const reviewExecutionSettings = async () => {
+    setExecutionSettingsNotice(null);
+    let loaded;
+    try { loaded = await ports.executionAuthorization.review(); }
+    catch { setExecutionSettingsNotice('! authorization_unreadable: 审阅未完成，请重试'); return; }
+    if (stateRef.current.overlayStack.at(-1) !== 'execution-settings') return;
+    if (loaded.kind !== 'review') { setExecutionSettingsNotice('! ' + loaded.code + ': ' + loaded.message); return; }
+    setAuthorizationReview(loaded);
+    dispatch({ kind: 'overlay-close-all' });
+    openModelOverlay('authorization-review');
+  };
+
+  /** 保存默认额度：只改项目默认值，当前批准额度不变，执行期生效仍需完整重新批准。 */
+  const saveExecutionSettings = async () => {
+    const port = ports.executionSettings;
+    if (port === undefined || executionSettingsSaving) return;
+    const draft = executionSettingsDraftRef.current;
+    if (!executionSettingsDraftValid(draft)) { setExecutionSettingsNotice('! invalid_input: 并行额度必须是正安全整数'); return; }
+    // 已保存且草稿未再编辑：重复 Enter 不再写第二次 revision。
+    if (executionSettingsSaved && draft.trim() === String(executionSettingsSavedDefault)) return;
+    const request = ++executionSettingsRequest.current;
+    setExecutionSettingsSaving(true);
+    setExecutionSettingsNotice(null);
+    try {
+      const result = await port.save({ expectedRevision: executionSettingsRevision.current, maxActiveWorkPackages: Number(draft.trim()) });
+      const stillOwned = request === executionSettingsRequest.current && stateRef.current.overlayStack.at(-1) === 'execution-settings';
+      if (result.kind === 'saved') {
+        executionSettingsRevision.current = result.revision;
+        setExecutionSettingsSavedDefault(result.defaultMaxActiveWorkPackages);
+        if (stillOwned) {
+          setExecutionSettingsSaved(true);
+          setExecutionSettingsNotice(`已保存默认值 ${String(result.defaultMaxActiveWorkPackages)}；当前批准额度不变。`);
+        }
+      } else if (stillOwned) {
+        setExecutionSettingsNotice('! ' + result.code + ': ' + result.message + '；草稿保留，可重试');
+      }
+    } catch {
+      if (request === executionSettingsRequest.current) setExecutionSettingsNotice('! save_failed: 保存未完成，草稿保留，可重试');
+    } finally {
+      if (request === executionSettingsRequest.current) setExecutionSettingsSaving(false);
+    }
+  };
+
   const persistIconMode = async (mode: TuiState['iconMode']) => {
     dispatch({kind:'icons',mode});
     const request = ++iconSaveRequest.current;
@@ -637,10 +709,11 @@ function TuiAppContent(props: TuiAppProps) {
     const port=ports.projectDetails,view=viewModelRef.current,session=stateRef.current.selectedSessionId;
     if(port===undefined||view===null||session===null){setProjectDetailsUi({logicalKey,objectKey:null,page:null,after,previous,notice:'项目详情端口或会话不可用',loading:false});return;}
     const authorization=view.scope.authorization;
+    const soleWorkPackage=soleActiveWorkPackage(view.projectPresentation);
     const objectKey=logicalKey==='budget'&&authorization!==null
       ? `approved-authorization:${authorization.authorizationId}@${authorization.version}`
-      : logicalKey==='work'&&view.projectPresentation?.activeWorkPackage
-        ? `work-package:${view.projectPresentation.activeWorkPackage.id}`
+      : logicalKey==='work'&&soleWorkPackage!==null
+        ? `work-package:${soleWorkPackage.id}`
         : logicalKey;
     const seenRevision=view.scope.revision,request=++projectDetailsRequest.current;
     const existing=projectDetailsUi;
@@ -649,10 +722,11 @@ function TuiAppContent(props: TuiAppProps) {
       const result=await port.read({objectKey,coordinatorSessionId:session,seenRevision,after});
       const currentView=viewModelRef.current;
       const currentAuthorization=currentView?.scope.authorization;
+      const currentSoleWorkPackage=soleActiveWorkPackage(currentView?.projectPresentation);
       const currentObjectKey=logicalKey==='budget'&&currentAuthorization!==null&&currentAuthorization!==undefined
         ? `approved-authorization:${currentAuthorization.authorizationId}@${currentAuthorization.version}`
-        : logicalKey==='work'&&currentView?.projectPresentation?.activeWorkPackage
-          ? `work-package:${currentView.projectPresentation.activeWorkPackage.id}`
+        : logicalKey==='work'&&currentSoleWorkPackage!==null
+          ? `work-package:${currentSoleWorkPackage.id}`
           : logicalKey;
       const stillOwned=request===projectDetailsRequest.current&&stateRef.current.projectPanel.open&&stateRef.current.projectPanel.detail===logicalKey&&stateRef.current.selectedSessionId===session&&stateRef.current.overlayStack.length===0;
       if(!stillOwned)return;
@@ -875,7 +949,7 @@ function TuiAppContent(props: TuiAppProps) {
   const basisEntryWorkPackageId = (): string | null => {
     const current = stateRef.current;
     const view = viewModelRef.current;
-    if (current.basis?.origin.kind === 'project') return view?.projectPresentation?.activeWorkPackage?.id ?? null;
+    if (current.basis?.origin.kind === 'project') return soleActiveWorkPackage(view?.projectPresentation)?.id ?? null;
     const node = selectedGraphNode(view?.graph ?? null, current.inspectorSelection);
     return node?.workPackageId ?? current.inspectorSelection;
   };
@@ -1493,7 +1567,7 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (slash.kind === 'command') {
-      const unavailable=commandReason(slash.command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length,...(ports.modelSettings===undefined?{}:{modelSettings:true}),...(ports.preferences===undefined?{}:{preferences:true})});
+      const unavailable=commandReason(slash.command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length,...(ports.modelSettings===undefined?{}:{modelSettings:true}),...(ports.preferences===undefined?{}:{preferences:true}),...(ports.executionSettings===undefined?{}:{executionSettings:true})});
       if(unavailable){dispatch({kind:'notice',notice:unavailable});return;}
       if (slash.command === 'paste') { await runCommandRef.current('paste'); return; }
       const generation = protection.generation(target);
@@ -1721,7 +1795,7 @@ function TuiAppContent(props: TuiAppProps) {
       const inputTarget=currentInputTarget(current,coordScopeRef.current),inputGeneration=inputTarget===null?null:protection.generation(inputTarget);
       const active=()=>generation===navigationGeneration.current&&session===stateRef.current.selectedSessionId&&(inputTarget===null||inputGeneration===protection.generation(inputTarget));
       const reject=(code:string,message:string):ControllerCommandResult=>{ if(active())dispatch({kind:'notice',notice:message});return {kind:'rejected',code,message}; };
-      const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length,...(snapshotRef.current?{controlState:snapshotRef.current.controlState}:{}),...(ports.modelSettings===undefined?{}:{modelSettings:true}),...(ports.preferences===undefined?{}:{preferences:true})});
+      const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:session,pasteBlocks:composerInputFor(current,session).pasteBlocks.length,...(snapshotRef.current?{controlState:snapshotRef.current.controlState}:{}),...(ports.modelSettings===undefined?{}:{modelSettings:true}),...(ports.preferences===undefined?{}:{preferences:true}),...(ports.executionSettings===undefined?{}:{executionSettings:true})});
       if(reason)return reject('command_unavailable',reason);
       const open=(overlay:OverlayKind, selectedId:string|null=null):CommandOutcome=>{
         if(!active())return {kind:'rejected',code:'navigation_changed',message:'调用入口已改变'};
@@ -1825,6 +1899,12 @@ function TuiAppContent(props: TuiAppProps) {
             setStatuslineDraft(savedStatusline);
             setStatuslineNotice(null);
             return open('statusline-settings');
+          case 'execution-settings': {
+            if(ports.executionSettings===undefined)return reject('execution_settings_unavailable','执行设置端口尚未接通');
+            const ready=await openExecutionSettings();
+            if(!active())return reject('navigation_changed','调用入口已改变');
+            return ready?open('execution-settings'):{kind:'rejected',code:'execution_settings_unreadable',message:'执行设置读取失败，未打开编辑页'};
+          }
           case 'graph-inspector':return open('graph-inspector');
           case 'toggle-sidebar':dispatch({kind:'overlay-close-all'});dispatch({kind:'sidebar-toggle',allowed:allowedSidebarDensity(terminalWidth)});return {kind:'opened'};
           case 'help':return open('help');
@@ -2842,6 +2922,32 @@ function TuiAppContent(props: TuiAppProps) {
   useInput((input, key) => {
     if (key.eventType === 'release') return;
     if(resolveGlobalAction(input,key)==='exit'){void runCommand('exit');return;}
+    if (topOverlay() === 'execution-settings') {
+      if (key.escape) {
+        executionSettingsRequest.current++;
+        setExecutionSettingsSaving(false);
+        setExecutionSettingsNotice(null);
+        dispatch({kind:'overlay-close-top'});
+        return;
+      }
+      if (key.return && !key.meta && !key.shift) { void saveExecutionSettings(); return; }
+      if (input === 'r' || input === 'R') { void reviewExecutionSettings(); return; }
+      if (key.backspace || key.delete) {
+        executionSettingsDraftRef.current = executionSettingsDraftRef.current.slice(0, -1);
+        setExecutionSettingsDraft(executionSettingsDraftRef.current);
+        setExecutionSettingsNotice(null);
+        setExecutionSettingsSaved(false);
+        return;
+      }
+      if (/^[0-9]$/u.test(input)) {
+        executionSettingsDraftRef.current = executionSettingsDraftRef.current + input;
+        setExecutionSettingsDraft(executionSettingsDraftRef.current);
+        setExecutionSettingsNotice(null);
+        setExecutionSettingsSaved(false);
+        return;
+      }
+      return;
+    }
     if (topOverlay() === 'statusline-settings') {
       const current = statuslineSelection;
       const settingRows = statuslineSettingRows(statuslineDraftRef.current);
@@ -3221,7 +3327,7 @@ function TuiAppContent(props: TuiAppProps) {
       if(key.upArrow||key.downArrow){dispatch({kind:'slash-view',index:Math.max(0,Math.min(matches.length-1,stateRef.current.slashIndex+(key.upArrow?-1:1))),dismissed:false});return;}
       if((key.return||key.tab)&&!key.meta&&!key.shift){
         const command=matches[Math.min(stateRef.current.slashIndex,matches.length-1)];
-        if(command){const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:stateRef.current.selectedSessionId,pasteBlocks:inputDraft.pasteBlocks.length,...(ports.modelSettings===undefined?{}:{modelSettings:true}),...(ports.preferences===undefined?{}:{preferences:true})});
+        if(command){const reason=commandReason(command,{mode:snapshotRef.current?.mode??'route_planning',selectedSessionId:stateRef.current.selectedSessionId,pasteBlocks:inputDraft.pasteBlocks.length,...(ports.modelSettings===undefined?{}:{modelSettings:true}),...(ports.preferences===undefined?{}:{preferences:true}),...(ports.executionSettings===undefined?{}:{executionSettings:true})});
           if(reason){dispatch({kind:'notice',notice:reason});return;}
           workspaceActions.composerChange(textDraft('/'+COMMAND_METADATA[command].alias));
           dispatch({kind:'slash-view',index:0,dismissed:true});
@@ -3392,6 +3498,13 @@ function TuiAppContent(props: TuiAppProps) {
       modelRejection={modelRejection}
       modelSettingsAvailable={modelSettingsPort!==undefined}
       preferencesAvailable={ports.preferences!==undefined}
+      executionSettingsAvailable={ports.executionSettings!==undefined}
+      executionSettingsDraft={executionSettingsDraft}
+      executionSettingsSavedDefault={executionSettingsSavedDefault}
+      executionSettingsApproved={executionSettingsApproved}
+      executionSettingsNotice={executionSettingsNotice}
+      executionSettingsSaving={executionSettingsSaving}
+      executionSettingsSaved={executionSettingsSaved}
       statuslineDraft={statuslineDraft}
       savedStatusline={savedStatusline}
       statuslineSelection={statuslineSelection}

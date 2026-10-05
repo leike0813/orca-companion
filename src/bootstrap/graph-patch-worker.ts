@@ -11,7 +11,6 @@ import { readDeliveryBatch } from '../adapters/orca-cli/delivery-reader.js';
 import { dispatchScopedWorker, type ScopedWorkerDispatchInput } from '../adapters/agents/utility-worker.js';
 import { ackConsumedDelivery, settleDelivery } from '../application/delivery/process-delivery.js';
 import type { DispatchId, OperationId, WorkerTaskId } from '../application/dto/identity.js';
-import { workerStateLiveness } from '../application/execution/execution-view.js';
 import type { GraphPatchPlannerOutcome, GraphPatchPlannerRequest } from '../application/execution/graph-patch-planner.js';
 import { graphPatchPlannerInstruction } from '../application/execution/graph-patch-planner.js';
 import type { BranchCoordinationStore, CoordinationWriter } from '../application/ports/branch-coordination-store.js';
@@ -199,17 +198,6 @@ export async function runGraphPatchPlannerWorker(input: GraphPatchWorkerInput): 
     });
     if (bound.kind !== 'bound') return { kind: 'unknown', reason: `Planner Session Binding 不可核验：${bound.message}` };
     resumed = { orcaTaskId, dispatchId: dispatch.dispatchId };
-  } else {
-    if ((workers.value as WorkerListResult).workers.some((worker) => workerStateLiveness(worker.workerState) !== 'exited')) {
-      return { kind: 'rejected', code: 'worker_in_flight', message: '存在运行中或不可核验的 Worker，不能开始 Graph Patch Planner' };
-    }
-    const pending = await readDeliveryBatch(input.backend, {
-      backendIdentityRef: execution.backendIdentityRef, runId: execution.runId,
-      types: ['worker_done'], timeoutMs: execution.timeoutMs,
-    });
-    if (pending.kind !== 'accepted' || pending.value.delivery !== null || pending.value.messages.length > 0) {
-      return { kind: 'rejected', code: 'delivery_pending', message: '存在未确认或不可读的 Delivery，先完成对账' };
-    }
   }
   const dispatchStartedAt = new Date().toISOString();
   const dispatched = resumed === null ? await dispatchScopedWorker({

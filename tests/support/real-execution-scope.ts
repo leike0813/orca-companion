@@ -25,6 +25,7 @@ import type {
 } from '../../src/application/dto/identity.js';
 import type { CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
 import { DEFAULT_EXECUTION_LIMITS } from '../../src/domain/planning/budget-policy.js';
+import type { ExecutionLimits } from '../../src/domain/planning/budget-policy.js';
 import { openRepositoryCoordinationStore, resolveGitCommonDir } from '../../src/bootstrap/composition.js';
 import { checkpointDatabasePath } from '../../src/bootstrap/coordinator-runtime.js';
 import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
@@ -97,6 +98,13 @@ export type SeedRealExecutionScopeInput = {
   readonly objective: string;
   readonly env: Record<string, string>;
   readonly plan?: RealLoopPlan;
+  /**
+   * 候选图编译用的上限；同时决定并行包额度。
+   *
+   * 调度真正读取的是 Execution Authorization Manifest 的 `limits`（来自项目配置），这里传入的只是
+   * 为了让候选图的节点预算与图容量和项目配置一致；并发验收显式传入比默认 3 更大的额度。
+   */
+  readonly limits?: ExecutionLimits;
 };
 
 function requireCompleted(result: Awaited<ReturnType<typeof runProcess>>, what: string): string {
@@ -197,7 +205,7 @@ export async function seedRealExecutionScope(
       timeoutMs: 60_000,
       authority: { kind: 'route_planning' },
       plan: input.plan ?? REAL_LOOP_PLAN,
-      limits: DEFAULT_EXECUTION_LIMITS,
+      limits: input.limits ?? DEFAULT_EXECUTION_LIMITS,
       baselineHead,
       objective: input.objective,
     });

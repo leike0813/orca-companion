@@ -94,8 +94,8 @@ describe('execution-monitoring / Work Package 生命周期与串行 integration 
     const snapshot = makeSnapshot(SERIAL_FRONTIER);
     const viewModel = viewModelFor(snapshot);
 
-    // 并发上限 1：即使有多个候选，也只有一个节点持有 Frontier 位置。
-    expect(viewModel.execution.activeWorkPackageId).toBe('wp-1');
+    // 只有一个节点处于 active 生命周期：活动列表完整列出它，不截断也不补位。
+    expect(viewModel.execution.activeWorkPackageIds).toEqual(['wp-1']);
     expect(viewModel.execution.activeWorkPackageCount).toBe(1);
     expect(
       (viewModel.graph?.nodes ?? []).filter((node) => node.active).map((node) => node.workPackageId),

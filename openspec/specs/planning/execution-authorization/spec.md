@@ -54,15 +54,15 @@ Execution Authorization Manifest SHALL 一次性绑定 Destination、Route Map �
 - **THEN** SHALL 产生新版本的 Manifest 与新的用户批准，执行 SHALL NOT 直接沿用旧授权
 
 ### Requirement: Model-bound authorization and explicit model reapproval
-Manifest v2 SHALL 完整绑定各生产角色的不可变 profile、harness、provider connection、model、effort、非秘密 options 与 credentialRef。执行期更新 SHALL 仅改变模型配置并经完整 Manifest 指纹和 Scope revision 重新批准；SHALL 保持 Graph Generation、Run、权限、上限、政策、已消耗预算，不创建 Graph Revision。Replanning、cancelling 或未决派发 mutation SHALL 拒绝重新授权。
+Manifest v3 SHALL 完整绑定各生产角色的不可变模型配置、并行包额度、图容量与集成复验预算。执行期限定更新 SHALL 仅改变模型配置或并行额度，并经完整指纹和 Scope revision 重新批准；SHALL 保持 Graph Generation、Run、其他权限、政策和预算消费，不创建 Graph Revision。取消、重规划和未决 mutation SHALL 拒绝重新授权。
 
 #### Scenario: 重新批准生效于新任务
 - **WHEN** 用户保存配置后审阅并批准完整新 Manifest
-- **THEN** 追加唯一授权记录且原子推进当前指针，新物化 Task 使用新 profile，既有 Task 不重启，预算不重置
+- **THEN** SHALL 追加唯一授权并推进当前指针；既有 Task 不重启且预算不重置
 
 #### Scenario: 陈旧审阅或重复批准
-- **WHEN** 配置、graph head 或 Scope revision 在审阅后变化，或重复提交原批准
-- **THEN** 陈旧输入拒绝且无部分更新；同一已受理操作回读原记录，不重复授权或派发
+- **WHEN** graph head 或 Scope revision 在审阅后变化，或重复提交原批准
+- **THEN** 陈旧输入 SHALL 无部分更新地拒绝，同载荷重放 SHALL 回读原记录
 
 ### Requirement: Materialized tasks retain exact model authorization
 Task 在派发意图前 SHALL 持久化原 authorization id/version/profile；Retry、替代 Session 和同一 Validator 修复 SHALL 使用原配置。新 Recovery Utility Task SHALL 固定创建时配置。历史结果 SHALL 只在对应物化绑定、当前 scope/run/generation/contract/attempt 均核验后结算，缺失绑定 SHALL 阻塞。

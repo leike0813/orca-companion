@@ -1,0 +1,26 @@
+{
+  "generatedAt": "2026-10-05T07:07:49.501Z",
+  "fixture": "ip05-cc-03",
+  "note": "two planner dispatches sampled from public worker-show while the fresh run was live",
+  "intervals": [
+    {
+      "dispatchId": "ctx_566a3a32c9f6",
+      "taskId": "task_3e68f96fdf75",
+      "status": "dispatched",
+      "dispatchedAt": "2026-10-05 07:06:03",
+      "completedAt": null,
+      "start": 1791183963000,
+      "end": 1791184069233
+    },
+    {
+      "dispatchId": "ctx_495a78ce596f",
+      "taskId": "task_70c33e980be1",
+      "status": "dispatched",
+      "dispatchedAt": "2026-10-05 07:06:22",
+      "completedAt": null,
+      "start": 1791183982000,
+      "end": 1791184069499
+    }
+  ],
+  "peakOverlap": 2
+}

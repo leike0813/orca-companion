@@ -6,35 +6,45 @@
  * 未验证结果零副作用、越界请求被拒绝、授权内的普通集成按固定顺序执行并核验 expected HEAD。
  */
 
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
 import { afterEach, beforeEach, expect, test } from 'vitest';
 
-import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
-import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
+import type { CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
+import {
+  createExecutionScopeHarness,
+  executionWorkPackage,
+  type ExecutionScopeHarness,
+} from '../support/execution-harness.js';
 import { beginIntent, settleIntent } from '../../src/application/coordination/intent-service.js';
 import type {
   CoordinationScopeId,
-  CoordinatorSessionId,
+  DispatchId,
   OperationId,
-  PlanningCycleId,
-  RuntimeIncarnationId,
+  ValidationAttemptId,
   WorkPackageId,
+  WorkerTaskId,
 } from '../../src/application/dto/identity.js';
 import {
   integrateWorkPackage,
+  type GitAncestryRead,
   type GitIntegrationPort,
   type GitReadbackTarget,
   type GitStepOutcome,
   type GitStepRequest,
   type IntegrateWorkPackageInput,
 } from '../../src/application/integrate-work-package.js';
-import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
+import type {
+  IntegrationReconciliationContext,
+  IntegrationReconciliationOutcome,
+  IntegrationReconciliationRecord,
+  IntegrationReconciliationRequest,
+  IntegrationReconciliationStore,
+} from '../../src/application/integration-reconciliation.js';
+import { integrationReconciliationBudgetKey } from '../../src/domain/git-integration-policy.js';
+import { integrationReconciliationId } from '../../src/application/integration-reconciliation.js';
 import type { CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
 import type { ExecutionScope } from '../../src/application/ports/execution-backend.js';
 import type { GitIntegrationPolicy, RoleAuthorities } from '../../src/domain/planning/execution-authorization.js';
+import type { SessionBinding } from '../../src/domain/task-contract.js';
 import {
   initialWorkPackageStatus,
   withValidationStatus,
@@ -42,8 +52,6 @@ import {
 } from '../../src/domain/work-package-status.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
-const SESSION_A = 'session-a' as CoordinatorSessionId;
-const CYCLE = 'cycle-1' as PlanningCycleId;
 const WP = 'wp-1' as WorkPackageId;
 
 const AUTHORITY: RoleAuthorities = {
@@ -65,12 +73,24 @@ const POLICY: GitIntegrationPolicy = {
 const BASELINE = 'aaaa00000000000000000000000000000000000000';
 const COMMIT_HEAD = 'bbbb00000000000000000000000000000000000000';
 const INTEGRATED_HEAD = 'cccc00000000000000000000000000000000000000';
+const MERGED_HEAD = 'dddd00000000000000000000000000000000000000';
+const MERGED_TREE = 'eeee00000000000000000000000000000000000000';
 
-let directory = '';
+const SESSION_BINDING: SessionBinding = {
+  harness: 'codex',
+  role: 'validator',
+  workerTaskId: 'task-1' as WorkerTaskId,
+  dispatchId: 'dispatch-1' as DispatchId,
+  attemptId: 'attempt-1',
+  providerSessionId: 'provider-session-1',
+  transcriptRef: '/tmp/validator-transcript.jsonl',
+  observedAt: '2026-01-01T00:00:00.000Z',
+};
+
 let store: CoordinationStore;
 let writer: CoordinationWriter;
-
-const clock = (): number => 1_000;
+let graphId = '';
+let harness: ExecutionScopeHarness;
 
 /** 记录型 fake Git 端口：按目标推进 HEAD，并可按步骤注入拒绝或 unknown。 */
 function fakePort(script: {
@@ -86,6 +106,14 @@ function fakePort(script: {
   readonly readHead?: (target: GitReadbackTarget) => string | undefined;
   readonly readUnavailable?: (target: GitReadbackTarget) => boolean;
   readonly reconcileAs?: (step: GitStepRequest) => GitStepOutcome;
+  /** 祖先关系探针的返回值；默认 `yes`，使未装配复验的普通路径与旧行为一致。 */
+  readonly ancestor?: GitAncestryRead;
+  /** 按调用顺序消费的祖先关系结果；耗尽后回落到 `ancestor`。 */
+  readonly ancestorQueue?: readonly GitAncestryRead[];
+  /** merge_canonical 报告的冲突路径。 */
+  readonly mergeConflicts?: readonly string[];
+  /** 合并树的回读值；默认不可用（未装配复验时不会被调用）。 */
+  readonly tree?: string;
 } = {}): {
   readonly port: GitIntegrationPort;
   readonly requests: readonly GitStepRequest[];
@@ -95,6 +123,7 @@ function fakePort(script: {
   const requests: GitStepRequest[] = [];
   const scopes: ExecutionScope[] = [];
   const reads: GitReadbackTarget[] = [];
+  const ancestorQueue = [...(script.ancestorQueue ?? [])];
   const unknown = (request: GitStepRequest): GitStepOutcome => ({
     kind: 'unknown',
     reason: `无法对账 ${request.step}`,
@@ -115,12 +144,21 @@ function fakePort(script: {
       if (injected === 'unknown') {
         return Promise.resolve({ kind: 'unknown', reason: 'transport' });
       }
-      const head = script.headFor?.(request) ?? (request.step === 'commit' ? COMMIT_HEAD : INTEGRATED_HEAD);
+      const head =
+        script.headFor?.(request) ??
+        (request.step === 'commit' ? COMMIT_HEAD : request.step === 'merge_commit' ? MERGED_HEAD : INTEGRATED_HEAD);
       if (request.step === 'push') {
         heads.remote = head;
         return Promise.resolve({ kind: 'pushed', remote: request.remote ?? 'origin', ref: request.ref ?? 'refs/heads/main', head });
       }
       if (request.step === 'commit') {
+        heads.source = head;
+        return Promise.resolve({ kind: 'committed', head });
+      }
+      if (request.step === 'merge_canonical') {
+        return Promise.resolve({ kind: 'merge_applied', conflicts: script.mergeConflicts ?? [] });
+      }
+      if (request.step === 'merge_commit') {
         heads.source = head;
         return Promise.resolve({ kind: 'committed', head });
       }
@@ -143,6 +181,13 @@ function fakePort(script: {
       const observed = script.readHead?.(target) ?? heads[target.kind];
       return Promise.resolve({ kind: 'read', head: observed });
     },
+    isAncestor: () => Promise.resolve(ancestorQueue.shift() ?? script.ancestor ?? { kind: 'yes' }),
+    readTree: () =>
+      Promise.resolve(
+        script.tree === undefined
+          ? { kind: 'unavailable', reason: '未装配集成复验时的树回读' }
+          : { kind: 'read', tree: script.tree },
+      ),
   };
   return { port, requests, scopes, reads };
 }
@@ -171,6 +216,7 @@ function input(port: GitIntegrationPort, overrides: Partial<IntegrateWorkPackage
     writer,
     expectedRevision: revision(),
     backendIdentityRef: 'identity-ref',
+    graphId,
     graphGeneration: 1,
     authorizationId: 'auth-1',
     runId: 'run-1',
@@ -185,6 +231,7 @@ function input(port: GitIntegrationPort, overrides: Partial<IntegrateWorkPackage
     workspace: { canonicalWorktreePath: '/tmp/orca-canonical', workPackageWorktreePath: '/tmp/orca-wp-1' },
     baselineHead: BASELINE,
     commitMessage: 'feat: wp-1',
+    reconciliation: null,
     operationIds: {
       commit: 'op-commit' as OperationId,
       integrate: 'op-integrate' as OperationId,
@@ -195,52 +242,16 @@ function input(port: GitIntegrationPort, overrides: Partial<IntegrateWorkPackage
 }
 
 beforeEach(() => {
-  directory = mkdtempSync(join(tmpdir(), 'orca-integrate-'));
-  const opened = openCoordinationStore({ databasePath: join(directory, 'coordination.sqlite'), clock });
-  if (opened.kind !== 'opened') {
-    throw new Error(opened.message);
-  }
-  store = opened.store;
-  const initialized = initializeCoordinationScope({
-    store,
-    coordinationScopeId: SCOPE,
-    coordinatorSessionId: SESSION_A,
-    coordinatorModelConfigurationRef: 'model-config-1',
-    planningCycleId: CYCLE,
-    fullBranchRef: 'refs/heads/main',
-    canonicalWorktreePath: '/tmp/orca-test-worktree',
-  });
-  if (initialized.kind !== 'initialized') {
-    throw new Error('无法创建测试 Scope');
-  }
-  const acquired = acquireRuntimeLease(store, {
-    coordinationScopeId: SCOPE,
-    coordinatorSessionId: SESSION_A,
-    runtimeIncarnationId: 'inc-a' as RuntimeIncarnationId,
-    fencingGeneration: 0,
-  });
-  if (acquired.kind !== 'acquired') {
-    throw new Error('无法取得 Runtime Lease');
-  }
-  writer = {
-    coordinatorSessionId: SESSION_A,
-    runtimeIncarnationId: 'inc-a' as RuntimeIncarnationId,
-    fencingGeneration: acquired.lease.fencingGeneration,
-  };
-  const lease = store.transact({
-    kind: 'acquire-execution-lease',
-    coordinationScopeId: SCOPE,
-    expectedRevision: revision(),
-    writer,
-  });
-  if (lease.kind !== 'committed') {
-    throw new Error(`无法取得 Execution Lease: ${lease.message}`);
-  }
+  // 真实执行协调态基座：模式、图引用、授权与 Execution Lease 同批生效，满足 runIntentStep 的
+  // active Scope/当前图/当前包/持有核验。
+  harness = createExecutionScopeHarness({ workPackages: [executionWorkPackage('wp-1')] });
+  store = harness.store;
+  writer = harness.writer;
+  graphId = harness.graphId;
 });
 
 afterEach(() => {
-  store.close();
-  rmSync(directory, { recursive: true, force: true });
+  harness.close();
 });
 
 test('仅完成实现但尚未通过验证时不执行任何 Git 操作', async () => {
@@ -388,6 +399,23 @@ test('回读 HEAD 不可用时不完成 intent', async () => {
   expect(requests.map((request) => request.step)).toEqual(['commit']);
 });
 
+test('push 未决后按原 OperationId 只读对账并收尾，不重复推送', async () => {
+  const first = fakePort({ mutating: request => request.step === 'push' ? 'unknown' : undefined });
+  expect((await integrateWorkPackage(input(first.port))).kind).toBe('unknown');
+  const replay = fakePort({
+    initialHeads: { source: COMMIT_HEAD, canonical: INTEGRATED_HEAD, remote: INTEGRATED_HEAD },
+    reconcileAs: request => request.step === 'push'
+      ? { kind: 'pushed', remote: 'origin', ref: 'refs/heads/main', head: INTEGRATED_HEAD }
+      : { kind: 'unknown', reason: 'unexpected step' },
+  });
+  const result = await integrateWorkPackage(input(replay.port));
+  expect(result.kind).toBe('integrated');
+  expect(replay.requests).toHaveLength(0);
+  expect(replay.scopes.map(scope => scope.operationId)).toEqual(['op-push']);
+  const read = store.query({ kind: 'intent', coordinationScopeId: SCOPE, operationId: 'op-push' as OperationId });
+  expect(read.kind === 'intent' ? read.intent : null).toMatchObject({ state: 'settled', outcomeClass: 'accepted' });
+});
+
 test('相同 OperationId 已结算时不重复执行 Git 副作用', async () => {
   const first = fakePort();
   expect((await integrateWorkPackage(input(first.port))).kind).toBe('integrated');
@@ -444,6 +472,386 @@ test('相同 OperationId 仍为 pending 时不重复执行 Git 副作用', async
 
   const result = await integrateWorkPackage(input(port));
 
-  expect(result).toMatchObject({ kind: 'blocked' });
+  expect(result).toMatchObject({ kind: 'unknown', operationId: 'op-commit' });
   expect(requests).toHaveLength(0);
+});
+
+/** 记录型 fake 集成复验存储：与生产 port 同语义（稳定身份登记 + 额度上限 + CAS 结算）。 */
+function fakeReconciliationStore(
+  initial: readonly IntegrationReconciliationRecord[] = [],
+  limit = 2,
+): { readonly store: IntegrationReconciliationStore; readonly records: IntegrationReconciliationRecord[] } {
+  const records: IntegrationReconciliationRecord[] = [...initial];
+  let revision = 1;
+  const store: IntegrationReconciliationStore = {
+    register: (request) => {
+      const existing = records.find((entry) => entry.reconciliationId === request.reconciliationId);
+      if (existing !== undefined) {
+        return { kind: 'existing', record: existing, revision };
+      }
+      if (records.length >= limit) {
+        return { kind: 'rejected', code: 'budget_exhausted', message: '集成复验额度已耗尽' };
+      }
+      const record: IntegrationReconciliationRecord = {
+        coordinationScopeId: request.coordinationScopeId,
+        workPackageId: request.workPackageId,
+        reconciliationId: request.reconciliationId,
+        round: request.round,
+        validationAttemptId: request.validationAttemptId,
+        sourceAcceptedResultRef: request.sourceAcceptedResultRef,
+        targetHead: request.targetHead,
+        mergedTreeRef: null,
+        orcaTaskId: null,
+        dispatchId: null,
+        state: 'pending',
+        blockerRef: null,
+        createdAt: 1,
+        updatedAt: 1,
+      };
+      records.push(record);
+      revision += 1;
+      return { kind: 'registered', record, revision };
+    },
+    settle: (request) => {
+      const index = records.findIndex((entry) => entry.reconciliationId === request.reconciliationId);
+      const current = records[index];
+      if (current === undefined) {
+        return { kind: 'rejected', code: 'not_found', message: '轮次不存在' };
+      }
+      if (current.state !== 'pending') {
+        return current.state === request.state
+          ? { kind: 'settled', record: current }
+          : { kind: 'rejected', code: 'invalid_state', message: '轮次已结算为 ' + current.state };
+      }
+      const updated: IntegrationReconciliationRecord = {
+        ...current,
+        state: request.state,
+        mergedTreeRef: request.mergedTreeRef ?? null,
+        orcaTaskId: request.orcaTaskId ?? null,
+        dispatchId: request.dispatchId ?? null,
+        blockerRef: request.blockerRef ?? null,
+        updatedAt: current.updatedAt + 1,
+      };
+      records[index] = updated;
+      revision += 1;
+      return { kind: 'settled', record: updated };
+    },
+    bindContinuation: (request) => {
+      const index = records.findIndex((entry) => entry.reconciliationId === request.reconciliationId);
+      const current = records[index];
+      if (current === undefined) {
+        return { kind: 'rejected', code: 'not_found', message: '轮次不存在' };
+      }
+      const updated: IntegrationReconciliationRecord = {
+        ...current,
+        orcaTaskId: request.orcaTaskId,
+        dispatchId: request.dispatchId,
+        updatedAt: current.updatedAt + 1,
+      };
+      records[index] = updated;
+      revision += 1;
+      return { kind: 'bound', record: updated };
+    },
+    list: (_coordinationScopeId, workPackageId) => ({
+      kind: 'records',
+      records: records.filter((entry) => entry.workPackageId === workPackageId),
+    }),
+  };
+  return { store, records };
+}
+
+function reconciliationContext(
+  store: IntegrationReconciliationStore,
+  runner: (request: IntegrationReconciliationRequest) => Promise<IntegrationReconciliationOutcome>,
+  limit = 2,
+): IntegrationReconciliationContext {
+  return {
+    store,
+    runner,
+    validationAttemptId: 'validation-1' as ValidationAttemptId,
+    sourceAcceptedResultRef: 'orca-task-1#abc',
+    sessionBinding: SESSION_BINDING,
+    limit,
+    budgetKey: integrationReconciliationBudgetKey(WP),
+    approvedLimitRef: 'auth-1',
+    // Context 回调在集成用例测试里用 no-op：accept/ack 的取舍由各轮次断言驱动，不在此处另建 Pipeline。
+    acceptResult: () => Promise.resolve({ kind: 'accepted' }),
+    acknowledgeResult: () => Promise.resolve({ kind: 'acknowledged' }),
+  };
+}
+
+const validatedOutcome: IntegrationReconciliationOutcome = {
+  kind: 'validated',
+  evidence: [],
+  sessionBinding: SESSION_BINDING,
+  orcaTaskId: 'orca-task-reconcile-1',
+  dispatchId: 'dispatch-reconcile-1' as DispatchId,
+  treeRef: MERGED_TREE,
+  filesModified: [],
+  deliveryId: 'delivery-reconcile-1',
+  deliveryRunId: 'run-1',
+};
+
+test('canonical 前移后合并、原 Validator 复验、普通提交，再 fast-forward 集成', async () => {
+  const { port, requests } = fakePort({ ancestorQueue: [{ kind: 'no' }, { kind: 'yes' }], tree: MERGED_TREE });
+  const { store: reconciliationStore, records } = fakeReconciliationStore();
+  const runnerRequests: IntegrationReconciliationRequest[] = [];
+  const runner = (request: IntegrationReconciliationRequest): Promise<IntegrationReconciliationOutcome> => {
+    runnerRequests.push(request);
+    return Promise.resolve(validatedOutcome);
+  };
+
+  const result = await integrateWorkPackage(
+    input(port, { reconciliation: reconciliationContext(reconciliationStore, runner) }),
+  );
+
+  expect(result).toEqual({ kind: 'integrated', head: INTEGRATED_HEAD, steps: ['commit', 'integrate_canonical', 'push'] });
+  expect(requests.map((request) => request.step)).toEqual([
+    'commit',
+    'merge_canonical',
+    'merge_commit',
+    'integrate_canonical',
+    'push',
+  ]);
+  expect(runnerRequests).toHaveLength(1);
+  expect(runnerRequests[0]?.targetHead).toBe(BASELINE);
+  expect(runnerRequests[0]?.continuation.existingTaskId).toBeNull();
+  expect(records).toHaveLength(1);
+  expect(records[0]).toMatchObject({
+    round: 1,
+    state: 'validated',
+    mergedTreeRef: MERGED_TREE,
+    orcaTaskId: 'orca-task-reconcile-1',
+    dispatchId: 'dispatch-reconcile-1',
+    targetHead: BASELINE,
+  });
+});
+
+test('集成复验额度耗尽时阻塞，不建立外部资源也不重置', async () => {
+  const { port, requests } = fakePort({ ancestorQueue: [{ kind: 'no' }] });
+  const { store: reconciliationStore, records } = fakeReconciliationStore([], 0);
+
+  const result = await integrateWorkPackage(
+    input(port, {
+      reconciliation: reconciliationContext(reconciliationStore, () => Promise.resolve(validatedOutcome), 0),
+    }),
+  );
+
+  expect(result).toMatchObject({ kind: 'blocked' });
+  expect(requests.map((request) => request.step)).toEqual(['commit']);
+  expect(records).toHaveLength(0);
+});
+
+test('复验 session 丢失时阻塞该轮，且不产生 merge commit', async () => {
+  const { port, requests } = fakePort({ ancestorQueue: [{ kind: 'no' }] });
+  const { store: reconciliationStore, records } = fakeReconciliationStore();
+
+  const result = await integrateWorkPackage(
+    input(port, {
+      reconciliation: reconciliationContext(reconciliationStore, () =>
+        Promise.resolve({ kind: 'session_lost', reason: 'provider session 不可核验' })),
+    }),
+  );
+
+  expect(result).toMatchObject({ kind: 'blocked' });
+  expect(requests.map((request) => request.step)).toEqual(['commit', 'merge_canonical']);
+  expect(records[0]?.state).toBe('blocked');
+});
+
+test('Git 步骤 unknown 只阻塞不结算轮次，重启后按原 OperationId 对账续办', async () => {
+  let reconciles = 0;
+  const { port } = fakePort({
+    // 第一次探针报「非祖先」后 unknown 阻塞；第二次先续办 pending 轮次，完成后探针报祖先即可终止。
+    ancestorQueue: [{ kind: 'no' }, { kind: 'yes' }],
+    tree: MERGED_TREE,
+    mutating: (request) => (request.step === 'merge_canonical' ? 'unknown' : undefined),
+    reconcileAs: (request) => {
+      if (request.step !== 'merge_canonical') {
+        return { kind: 'unknown', reason: '未预期的对账步骤' };
+      }
+      reconciles += 1;
+      return reconciles >= 2 ? { kind: 'merge_applied', conflicts: [] } : { kind: 'unknown', reason: 'transport' };
+    },
+  });
+  const { store: reconciliationStore, records } = fakeReconciliationStore();
+  const runner = (): Promise<IntegrationReconciliationOutcome> => Promise.resolve(validatedOutcome);
+
+  const first = await integrateWorkPackage(
+    input(port, { reconciliation: reconciliationContext(reconciliationStore, runner) }),
+  );
+  expect(first).toMatchObject({ kind: 'unknown' });
+  expect(records).toHaveLength(1);
+  // unknown 不结算轮次：保持 pending，lane 阻塞可在下一次触发时对账。
+  expect(records[0]?.state).toBe('pending');
+
+  const second = await integrateWorkPackage(
+    input(port, { reconciliation: reconciliationContext(reconciliationStore, runner) }),
+  );
+  expect(second.kind).toBe('integrated');
+  expect(records).toHaveLength(1);
+  expect(records[0]?.state).toBe('validated');
+});
+
+test('未完成的复验轮次重启后沿用原 round，不重复消耗额度或新建轮次', async () => {
+  // pending 轮次先被续办，之后探针报祖先即终止，不新建第二轮。
+  const { port } = fakePort({ ancestorQueue: [{ kind: 'yes' }], tree: MERGED_TREE });
+  const pending: IntegrationReconciliationRecord = {
+    coordinationScopeId: SCOPE,
+    workPackageId: WP,
+    reconciliationId: integrationReconciliationId({
+      coordinationScopeId: SCOPE,
+      graphId,
+      graphGeneration: 1,
+      workPackageId: WP,
+      round: 1,
+    }),
+    round: 1,
+    validationAttemptId: 'validation-1',
+    sourceAcceptedResultRef: 'orca-task-1#abc',
+    targetHead: BASELINE,
+    mergedTreeRef: null,
+    orcaTaskId: null,
+    dispatchId: null,
+    state: 'pending',
+    blockerRef: null,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const { store: reconciliationStore, records } = fakeReconciliationStore([pending]);
+  const runnerRequests: IntegrationReconciliationRequest[] = [];
+
+  const result = await integrateWorkPackage(
+    input(port, {
+      reconciliation: reconciliationContext(reconciliationStore, (request) => {
+        runnerRequests.push(request);
+        return Promise.resolve(validatedOutcome);
+      }),
+    }),
+  );
+
+  expect(result.kind).toBe('integrated');
+  expect(records).toHaveLength(1);
+  expect(records[0]?.round).toBe(1);
+  expect(records[0]?.state).toBe('validated');
+  expect(runnerRequests).toHaveLength(1);
+});
+
+test('pending 轮次固定原 targetHead 先结清，再以新额度轮次追新 canonical，不覆盖原载荷', async () => {
+  const CANONICAL_AHEAD = 'ffff00000000000000000000000000000000000000';
+  const { port, requests } = fakePort({
+    ancestorQueue: [{ kind: 'no' }, { kind: 'yes' }],
+    tree: MERGED_TREE,
+    initialHeads: { canonical: CANONICAL_AHEAD },
+  });
+  const pending: IntegrationReconciliationRecord = {
+    coordinationScopeId: SCOPE,
+    workPackageId: WP,
+    reconciliationId: integrationReconciliationId({
+      coordinationScopeId: SCOPE,
+      graphId,
+      graphGeneration: 1,
+      workPackageId: WP,
+      round: 1,
+    }),
+    round: 1,
+    validationAttemptId: 'validation-1',
+    sourceAcceptedResultRef: 'orca-task-1#abc',
+    // 原轮次目标固定在更早的 canonical；此时 canonical 已前移到 CANONICAL_AHEAD。
+    targetHead: BASELINE,
+    mergedTreeRef: null,
+    orcaTaskId: null,
+    dispatchId: null,
+    state: 'pending',
+    blockerRef: null,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const { store: reconciliationStore, records } = fakeReconciliationStore([pending]);
+  const runnerRequests: IntegrationReconciliationRequest[] = [];
+
+  const result = await integrateWorkPackage(
+    input(port, {
+      reconciliation: reconciliationContext(reconciliationStore, (request) => {
+        runnerRequests.push(request);
+        return Promise.resolve(validatedOutcome);
+      }),
+    }),
+  );
+
+  expect(result.kind).toBe('integrated');
+  expect(records).toHaveLength(2);
+  // 第一轮沿原目标结清，绝不把当前 canonical 覆盖到原轮次上。
+  expect(records[0]).toMatchObject({ round: 1, targetHead: BASELINE, state: 'validated' });
+  // 第二轮才以新额度追当前 canonical。
+  expect(records[1]).toMatchObject({ round: 2, targetHead: CANONICAL_AHEAD, state: 'validated' });
+  expect(runnerRequests.map((request) => request.targetHead)).toEqual([BASELINE, CANONICAL_AHEAD]);
+  // 两轮各自 merge_canonical + merge_commit，随后一次 integrate/push。
+  expect(requests.map((request) => request.step)).toEqual([
+    'commit',
+    'merge_canonical',
+    'merge_commit',
+    'merge_canonical',
+    'merge_commit',
+    'integrate_canonical',
+    'push',
+  ]);
+});
+
+test('accept 未持久化时保持阻塞：不产生 merge commit 也不集成', async () => {
+  const { port, requests } = fakePort({ ancestorQueue: [{ kind: 'no' }], tree: MERGED_TREE });
+  const { store: reconciliationStore, records } = fakeReconciliationStore();
+  const context: IntegrationReconciliationContext = {
+    ...reconciliationContext(reconciliationStore, () => Promise.resolve(validatedOutcome)),
+    acceptResult: () => Promise.resolve({ kind: 'blocked', reason: 'accept 未持久化' }),
+  };
+
+  const result = await integrateWorkPackage(input(port, { reconciliation: context }));
+
+  expect(result).toMatchObject({ kind: 'blocked' });
+  // accept 先于 merge_commit：失败即停在原地，不提交、不集成。
+  expect(requests.map((request) => request.step)).toEqual(['commit', 'merge_canonical']);
+  expect(records[0]?.state).not.toBe('validated');
+});
+
+test('validated 轮次 ack 未决时恢复先补 ack，不重跑 Worker 或 merge', async () => {
+  const { port, requests } = fakePort({ ancestorQueue: [{ kind: 'yes' }], tree: MERGED_TREE });
+  const validated: IntegrationReconciliationRecord = {
+    coordinationScopeId: SCOPE,
+    workPackageId: WP,
+    reconciliationId: integrationReconciliationId({
+      coordinationScopeId: SCOPE,
+      graphId,
+      graphGeneration: 1,
+      workPackageId: WP,
+      round: 1,
+    }),
+    round: 1,
+    validationAttemptId: 'validation-1',
+    sourceAcceptedResultRef: 'orca-task-1#abc',
+    targetHead: BASELINE,
+    mergedTreeRef: MERGED_TREE,
+    orcaTaskId: 'orca-task-1',
+    dispatchId: 'dispatch-1',
+    state: 'validated',
+    blockerRef: null,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const { store: reconciliationStore } = fakeReconciliationStore([validated]);
+  let ackBlocked = true;
+  const context: IntegrationReconciliationContext = {
+    ...reconciliationContext(reconciliationStore, () => Promise.reject(new Error('本用例不应再派发 Worker'))),
+    acknowledgeResult: () =>
+      Promise.resolve(ackBlocked ? { kind: 'blocked', reason: 'ack 未决' } : { kind: 'acknowledged' }),
+  };
+
+  const first = await integrateWorkPackage(input(port, { reconciliation: context }));
+  expect(first).toMatchObject({ kind: 'blocked' });
+  // 只回读原轮次，不重跑 merge。
+  expect(requests.map((request) => request.step)).toEqual(['commit']);
+
+  ackBlocked = false;
+  const second = await integrateWorkPackage(input(port, { reconciliation: context }));
+  expect(second.kind).toBe('integrated');
+  expect(requests.map((request) => request.step)).toEqual(['commit', 'integrate_canonical', 'push']);
 });

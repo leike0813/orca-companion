@@ -65,8 +65,16 @@ The explicit, durable Coordination Scope mode entered only after the initial Exe
 _Avoid_: Coordinator Session mode, Worker Coordination Mode, Route Planning Mode, any Worker dispatch
 
 **Execution Coordination Lease**:
-The exclusive, recoverable authority held by one Coordinator Session to mutate and advance the current Execution Graph within a Coordination Scope. Other Coordinator Sessions may observe the execution but cannot materialize tasks, consume lifecycle events, spend shared budgets, or apply graph changes.
+The exclusive, recoverable authority held by one Coordinator Session to mutate and advance the current Execution Graph within a Coordination Scope. Its holder may coordinate multiple independent Work Packages concurrently; other Sessions may observe but cannot materialize tasks, consume lifecycle events, spend shared budgets, or apply graph changes.
 _Avoid_: Global project lock, Worker lease, Coordinator Session ownership
+
+**Work Package Lane**:
+One admitted Work Package occupying the user's approved parallel capacity from admission through verified integration or terminal closure. Its roles run in sequence; waiting for a result, reconciliation, or integration still occupies that capacity.
+_Avoid_: Worker count, graph capacity, Execution Coordination Lease
+
+**Integration Reconciliation**:
+A bounded round in which a Work Package incorporates an attributable canonical advancement and its original Validator Session resolves permitted conflicts and validates the resulting tree. It preserves the original Validation Attempt and accepted result while recording the new round's evidence.
+_Avoid_: Worker retry, Validator repair, new Validation Attempt, baseline adoption
 
 **Execution Authorization Manifest**:
 The complete, versioned proposal presented for one atomic user decision before a Graph Generation may execute, binding its destination and planning artifacts to an exact Coordination Scope and baseline, the full model configuration of every production Worker Profile plus the Recovery Utility Profile, role authorities, budget caps, workspace policy, and accepted risks. A manifest that omits a role's model binding is not an authorization to run that role, and an earlier version without those bindings is never read as one.

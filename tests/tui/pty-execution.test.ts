@@ -2317,7 +2317,7 @@ if (gate.kind === 'skip') {
             writer,
             authorizationId: candidateAuthorizationId,
             authorizationVersion: 1,
-            manifestVersion: 2,
+            manifestVersion: 3,
             fingerprint: `fingerprint-graph-basis-cutover-${candidateRunId}`,
             approvalRef: `${dedicatedIdentity}:approval-cutover-2`,
             manifest: executionManifest({

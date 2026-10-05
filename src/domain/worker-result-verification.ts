@@ -30,6 +30,15 @@ export type ClaimedResultAttribution = {
   readonly worktreeId: string | null;
 };
 
+/** 已接受结果归属同一角色 Task/业务 Attempt；真实 Dispatch 已在 Delivery 准入时由 Session Segment 核验。 */
+export function acceptedResultMatchesTask(
+  task: { readonly workerTaskId: string | null; readonly attemptId: string | null; readonly role: string | null },
+  result: { readonly workerTaskId: string | null; readonly attemptId: string | null; readonly role: string | null },
+): boolean {
+  return task.workerTaskId !== null && task.attemptId !== null && task.role !== null &&
+    task.workerTaskId === result.workerTaskId && task.attemptId === result.attemptId && task.role === result.role;
+}
+
 /** Controller 从 Execution Scope、图记录与 store 读到的当前事实。 */
 export type TrustedExecutionFacts = {
   readonly runId: string;

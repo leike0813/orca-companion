@@ -585,13 +585,11 @@ if (resolved.kind === 'skip') {
           graph: {
             graphId,
             generation: 1 as GraphGeneration,
-            concurrencyLimit: 1,
             workPackages: defaultExecutionWorkPackages(),
           },
           initialPlan: implementationPlanFor({
             graphId,
             generation: 1 as GraphGeneration,
-            concurrencyLimit: 1,
             workPackages: defaultExecutionWorkPackages(),
           }, EXECUTION_PLAN_REVISION),
           mapRevision: EXECUTION_MAP_REVISION,
@@ -615,7 +613,7 @@ if (resolved.kind === 'skip') {
           writer,
           authorizationId: EXECUTION_AUTHORIZATION_ID,
           authorizationVersion: 1,
-          manifestVersion: 2,
+          manifestVersion: 3,
           fingerprint: 'fingerprint-real-planner',
           approvalRef: `${resolved.identity}:approval`,
           manifest,

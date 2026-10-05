@@ -409,7 +409,7 @@ test('prepare 后候选图从无到有时提案过期', () => {
     mapRevision: proposal.mapRevision,
     planRevision: proposal.planRevision,
     orcaRunId: 'run-new',
-    graph: { graphId: 'graph-new' as GraphId, generation: 1 as never, concurrencyLimit: 1, workPackages: [] },
+    graph: { graphId: 'graph-new' as GraphId, generation: 1 as never, workPackages: [] },
     recordedAt: 1,
   };
   const reviewed = review(reviewFacts({ candidate }));

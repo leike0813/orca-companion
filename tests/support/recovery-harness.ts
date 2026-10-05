@@ -244,6 +244,8 @@ export type RecoveryHarnessOptions = {
   readonly role?: WorkerRole;
   /** 只读查询脚本：生产事实装配（worktree/worker/terminal 列举）需要给出登记的载荷形状。 */
   readonly query?: (input: ExecutionQuery) => ExecutionQueryResult | undefined;
+  /** mutation 脚本：prepared-terminal 的 create/submit 回执需要给出 handle 等可核验载荷。 */
+  readonly mutate?: (input: ExecutionMutation, scope: ExecutionScope) => OperationOutcome<unknown> | undefined;
 };
 
 export function createRecoveryHarness(options: RecoveryHarnessOptions = {}): RecoveryHarness {
@@ -302,7 +304,6 @@ export function createRecoveryHarness(options: RecoveryHarnessOptions = {}): Rec
   const graph: ExecutionGraph = {
     graphId: RECOVERY_GRAPH,
     generation: 1 as GraphGeneration,
-    concurrencyLimit: 1,
     workPackages: [],
   };
   const candidate = recordInitialGraph({
@@ -402,7 +403,10 @@ export function createRecoveryHarness(options: RecoveryHarnessOptions = {}): Rec
     throw new Error(`无法更新 Scope 引用: ${refs.message}`);
   }
 
-  const backend = fakeRecoveryBackend(options.query === undefined ? {} : { query: options.query });
+  const backend = fakeRecoveryBackend({
+    ...(options.query === undefined ? {} : { query: options.query }),
+    ...(options.mutate === undefined ? {} : { mutate: options.mutate }),
+  });
 
   const recordSourceSegment = (segment: SourceSegmentInput): SessionSegmentRecord => {
     const recorded = store.transact({

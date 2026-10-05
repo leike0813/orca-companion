@@ -24,23 +24,40 @@ import {
   type ExecutionAuthority,
   type ExecutionScope,
 } from './ports/execution-backend.js';
-import { beginIntent, blockLane, settleIntent } from './coordination/intent-service.js';
+import { beginIntent, blockLane, resolveLane, settleIntent } from './coordination/intent-service.js';
 import { readScope } from './planning/scope-read.js';
 import {
   evaluateGitIntegration,
   type GitIntegrationDecision,
   type GitIntegrationRequest,
 } from '../domain/git-integration-policy.js';
+import { nextIntegrationRound } from '../domain/git-integration-policy.js';
 import type { GitIntegrationPolicy, RoleAuthorities } from '../domain/planning/execution-authorization.js';
 import type { WorkPackageStatus } from '../domain/work-package-status.js';
+import {
+  runIntegrationReconciliationRound,
+  type IntegrationReconciliationContext,
+} from './integration-reconciliation.js';
 
 /** 集成步骤闭集；顺序即数组顺序。 */
 export const GIT_INTEGRATION_STEPS = ['commit', 'integrate_canonical', 'push'] as const;
 
 export type GitIntegrationStep = (typeof GIT_INTEGRATION_STEPS)[number];
 
+/**
+ * 合并树复验的两个 Git 步骤。
+ *
+ * 它们不进入 GIT_INTEGRATION_STEPS 的线性顺序：只在 canonical 已前移时按有限轮次执行，每步都先登记
+ * Operation Intent 再执行，重放只按同一 OperationId 对账。
+ */
+export const GIT_RECONCILIATION_STEPS = ['merge_canonical', 'merge_commit'] as const;
+
+export type GitReconciliationStep = (typeof GIT_RECONCILIATION_STEPS)[number];
+
+export type GitStepKind = GitIntegrationStep | GitReconciliationStep;
+
 export type GitStepRequest = {
-  readonly step: GitIntegrationStep;
+  readonly step: GitStepKind;
   readonly workPackageId: WorkPackageId;
   /** 精确 Worker worktree：commit 步的 cwd 与 source 读回目标。 */
   readonly sourceWorktreePath: string;
@@ -56,6 +73,8 @@ export type GitStepRequest = {
   readonly remote: string | null;
   readonly ref: string | null;
   readonly expectedHead: string;
+  /** 已复验的精确树 OID；merge_commit 步必填：提交前/后都必须与它一致，错误树不得进入 canonical。 */
+  readonly expectedTree?: string | null;
   readonly commitMessage: string | null;
 };
 
@@ -69,10 +88,25 @@ export type GitHeadRead =
   | { readonly kind: 'read'; readonly head: string }
   | { readonly kind: 'unavailable'; readonly reason: string };
 
+/** 祖先关系只读探针：`unavailable` 表示无法证明，不能当作 `no`。 */
+export type GitAncestryRead =
+  | { readonly kind: 'yes' }
+  | { readonly kind: 'no' }
+  | { readonly kind: 'unavailable'; readonly reason: string };
+
+/** 精确树读回：合并复验要绑定的是 worktree 当前 index 的树 OID。 */
+export type GitTreeRead =
+  | { readonly kind: 'read'; readonly tree: string }
+  | { readonly kind: 'unavailable'; readonly reason: string };
+
 export type GitStepOutcome =
   | { readonly kind: 'committed'; readonly head: string }
   | { readonly kind: 'integrated'; readonly head: string }
   | { readonly kind: 'pushed'; readonly remote: string; readonly ref: string; readonly head: string }
+  /** `merge_canonical`：已在包 worktree 内把 canonical HEAD 合并进 index（`--no-commit`）。 */
+  | { readonly kind: 'merge_applied'; readonly conflicts: readonly string[] }
+  /** `merge_canonical`：canonical 已是包 HEAD 的祖先，无需合并。 */
+  | { readonly kind: 'already_merged' }
   | { readonly kind: 'rejected'; readonly code: string; readonly message: string }
   | { readonly kind: 'unknown'; readonly reason: string };
 
@@ -88,6 +122,13 @@ export type GitIntegrationPort = {
   readonly reconcile: (request: GitStepRequest, scope: ExecutionScope) => Promise<GitStepOutcome>;
   /** 只读回读指定目标的 HEAD。 */
   readonly readHead: (target: GitReadbackTarget) => Promise<GitHeadRead>;
+  /** 只读判断祖先关系；无法核验时必须返回 `unavailable`，不得推断成 `no`。 */
+  readonly isAncestor: (input: {
+    readonly ancestor: string;
+    readonly descendant: string;
+  }) => Promise<GitAncestryRead>;
+  /** 只读回读 worktree 当前 index 的精确树 OID。 */
+  readonly readTree: (input: { readonly worktreePath: string }) => Promise<GitTreeRead>;
 };
 
 /** 集成涉及的两个精确 worktree；canonical 路径只用于构造 adapter。 */
@@ -146,6 +187,8 @@ export type IntegrateWorkPackageInput = {
   readonly writer: CoordinationWriter;
   readonly expectedRevision: number;
   readonly backendIdentityRef: string;
+  /** 当前图身份；合并复验轮次的稳定身份与运行依据从这里派生。 */
+  readonly graphId: string;
   readonly graphGeneration: number;
   readonly authorizationId: string;
   readonly runId: string;
@@ -164,6 +207,13 @@ export type IntegrateWorkPackageInput = {
   readonly baselineHead: string;
   readonly commitMessage: string;
   readonly operationIds: IntegrationOperationIds;
+  /**
+   * 合并树复验的装配；`null` 表示本进程没有复验能力。
+   *
+   * 只有装配存在时，canonical 前移才会走「合并 → 原 Validator 复验 → 普通 merge commit → fast-forward」
+   * 的有界轮次；没有装配时保持旧的确定性行为（canonical 不是祖先即拒绝），不静默降级成未复验的集成。
+   */
+  readonly reconciliation: IntegrationReconciliationContext | null;
 };
 
 export type IntegrationFailure = {
@@ -344,7 +394,164 @@ export async function integrateWorkPackage(
 
   const completed: GitIntegrationStep[] = [];
 
+  /**
+   * 合并树复验轮次。
+   *
+   * canonical 已前移时，在包 worktree 里合并当前已归属的 canonical HEAD，由原 Validator Session 复验
+   * 精确合并树，再创建普通 merge commit 使 canonical 成为其后继；随后 `merge --ff-only` 才能推进
+   * canonical。每轮独立有限，且集成整体串行（本函数只处理一个包）。canonical 再次前移时用下一轮
+   * 处理；额度耗尽即阻塞，不重置、不跳过复验。
+   */
+  const reconcileRounds = async (): Promise<
+    | { readonly kind: 'ok'; readonly canonicalHead: string }
+    | { readonly kind: 'result'; readonly result: IntegrateWorkPackageResult }
+  > => {
+    const reconciliation = input.reconciliation;
+    if (reconciliation === null) {
+      return {
+        kind: 'result',
+        result: rejection('reconciliation_unavailable', 'canonical 已前移但没有可用的集成复验装配'),
+      };
+    }
+    let canonicalHead = canonicalExpectedHead ?? sourceExpectedHead;
+    for (;;) {
+      const listed = reconciliation.store.list(input.coordinationScopeId, input.workPackageId);
+      if (listed.kind === 'rejected') {
+        return {
+          kind: 'result',
+          result: {
+            kind: 'blocked',
+            laneKey: input.workPackageId,
+            reason: '无法读取集成复验轮次：' + listed.message,
+          },
+        };
+      }
+      const existingRounds = listed.records;
+      // pending 与 blocked 都是「未完成但可续办」的轮次；只有 validated/rejected 是终态。
+      const unfinished = [...existingRounds]
+        .reverse()
+        .find((entry) => entry.state === 'pending' || entry.state === 'blocked');
+      let roundNumber: number;
+      let roundTargetHead: string;
+      if (unfinished !== undefined) {
+        // 恢复未完成轮次：targetHead 固定为原记录值，绝不覆盖成当前 canonical——同一天然身份若用不同
+        // 载荷重放会被 store 拒绝而永久阻塞。先沿原目标结清该轮，再用下一额度轮次追新 head。
+        roundNumber = unfinished.round;
+        roundTargetHead = unfinished.targetHead;
+      } else {
+        const ancestry = await input.port.isAncestor({
+          ancestor: canonicalHead,
+          descendant: sourceExpectedHead,
+        });
+        if (ancestry.kind === 'unavailable') {
+          return {
+            kind: 'result',
+            result: {
+              kind: 'blocked',
+              laneKey: input.workPackageId,
+              reason: `无法核验 canonical HEAD 与包 HEAD 的祖先关系：${ancestry.reason}`,
+            },
+          };
+        }
+        if (ancestry.kind === 'yes') {
+          // 已完成但 ack 未决的轮次必须在恢复时补 ack；ack 幂等，未决时保持阻塞，不继续下一步。
+          const validated = [...existingRounds].reverse().find((entry) => entry.state === 'validated');
+          if (validated !== undefined) {
+            const acknowledged = await reconciliation.acknowledgeResult(validated);
+            if (acknowledged.kind === 'blocked') {
+              return {
+                kind: 'result',
+                result: { kind: 'blocked', laneKey: input.workPackageId, reason: acknowledged.reason },
+              };
+            }
+          }
+          return { kind: 'ok', canonicalHead };
+        }
+        const verdict = nextIntegrationRound(existingRounds.length, reconciliation.limit);
+        if (verdict.kind === 'budget_exhausted') {
+          return {
+            kind: 'result',
+            result: {
+              kind: 'blocked',
+              laneKey: input.workPackageId,
+              reason: '集成复验预算已耗尽（' + String(existingRounds.length) + '/' + String(reconciliation.limit) + '）',
+            },
+          };
+        }
+        roundNumber = verdict.round;
+        roundTargetHead = canonicalHead;
+      }
+      const round = await runIntegrationReconciliationRound({
+        port: input.port,
+        reconciliation,
+        store: input.store,
+        writer: input.writer,
+        coordinationScopeId: input.coordinationScopeId,
+        graphId: input.graphId,
+        graphGeneration: input.graphGeneration,
+        authorizationId: input.authorizationId,
+        runId: input.runId,
+        consumerGeneration: input.consumerGeneration,
+        backendIdentityRef: input.backendIdentityRef,
+        timeoutMs: input.timeoutMs,
+        workPackageId: input.workPackageId,
+        worktreePath: input.workspace.workPackageWorktreePath,
+        canonicalHead: roundTargetHead,
+        round: roundNumber,
+        commitMessage: input.commitMessage,
+      });
+      if (round.kind === 'completed') {
+        // 合并提交让包 HEAD 前移；canonical 也可能在这段时间里再次前移，因此每轮都重新读取。
+        if (round.packageHead.length > 0) {
+          sourceExpectedHead = round.packageHead;
+        }
+        const after = await input.port.readHead({ kind: 'canonical' });
+        if (after.kind === 'unavailable') {
+          return {
+            kind: 'result',
+            result: {
+              kind: 'blocked',
+              laneKey: input.workPackageId,
+              reason: `无法回读 canonical HEAD：${after.reason}`,
+            },
+          };
+        }
+        canonicalHead = after.head;
+        continue;
+      }
+      if (round.kind === 'unknown') {
+        return { kind: 'result', result: { kind: 'unknown', operationId: round.operationId, reason: round.reason } };
+      }
+      if (round.kind === 'rejected') {
+        return { kind: 'result', result: rejection(round.code, round.message) };
+      }
+      if (round.kind === 'budget_exhausted') {
+        return {
+          kind: 'result',
+          result: {
+            kind: 'blocked',
+            laneKey: input.workPackageId,
+            reason: `集成复验预算已耗尽（${String(round.consumed)}/${String(round.limit)}）`,
+          },
+        };
+      }
+      return { kind: 'result', result: { kind: 'blocked', laneKey: round.laneKey, reason: round.reason } };
+    }
+  };
+
+  let roundsDone = input.reconciliation === null;
+
   for (const step of GIT_INTEGRATION_STEPS) {
+    // commit 之后、integrate 之前完成所有需要的合并树复验；这样 integrate 的 expected HEAD 一定是
+    // 复验完成后重新归属的 canonical HEAD。
+    if (step === 'integrate_canonical' && !roundsDone) {
+      roundsDone = true;
+      const reconciled = await reconcileRounds();
+      if (reconciled.kind === 'result') {
+        return reconciled.result;
+      }
+      canonicalExpectedHead = reconciled.canonicalHead;
+    }
     const operationId = operationIdFor[step];
     const priorIntent = input.store.query({
       kind: 'intent',
@@ -389,25 +596,27 @@ export async function integrateWorkPackage(
           reason: `意图 ${operationId} 缺少或不匹配 expected HEAD`,
         };
       }
-      if (begun.intent.state !== 'settled' || begun.intent.outcomeClass !== 'accepted') {
+      if (begun.intent.state === 'settled' && begun.intent.outcomeClass !== 'accepted') {
         return {
           kind: 'blocked',
           laneKey: begun.intent.laneKey,
           reason: `意图 ${operationId} 尚无已接受的确定结果（${begun.intent.state}）`,
         };
       }
-      const replayReadback = readbackFor(step);
-      const read = await input.port.readHead(replayReadback);
-      if (read.kind === 'unavailable') {
-        return {
-          kind: 'blocked',
-          laneKey: target.id,
-          reason: `无法回读 ${readbackLabel(replayReadback)}：${read.reason}`,
-        };
+      if (begun.intent.state === 'settled') {
+        const replayReadback = readbackFor(step);
+        const read = await input.port.readHead(replayReadback);
+        if (read.kind === 'unavailable') {
+          return {
+            kind: 'blocked',
+            laneKey: target.id,
+            reason: `无法回读 ${readbackLabel(replayReadback)}：${read.reason}`,
+          };
+        }
+        recordExpectedHead(step, read.head);
+        completed.push(step);
+        continue;
       }
-      recordExpectedHead(step, read.head);
-      completed.push(step);
-      continue;
     }
 
     const request: GitStepRequest = {
@@ -418,12 +627,14 @@ export async function integrateWorkPackage(
       sourceBranch: input.request.sourceBranch,
       remote: approvedRemote,
       ref: approvedRef,
-      expectedHead: expectedHeadFor(step),
+      expectedHead: persistedExpectedHead ?? expectedHeadFor(step),
       commitMessage: step === 'commit' ? input.commitMessage : null,
     };
     const scope = executionScope(input, operationId, target, revision.scope.revision);
-    let outcome = await input.port.run(request, scope);
-    if (outcome.kind === 'unknown') {
+    let outcome = begun.kind === 'existing'
+      ? await input.port.reconcile(request, scope)
+      : await input.port.run(request, scope);
+    if (outcome.kind === 'unknown' && begun.kind !== 'existing') {
       outcome = await input.port.reconcile(request, scope);
     }
     const asOutcome = asOperationOutcome(outcome, operationId, target);
@@ -491,13 +702,18 @@ export async function integrateWorkPackage(
         reason: `步骤 ${step} 后回读 ${readbackLabel(readback)} 与步骤报告不一致，无法归属该变化`,
       };
     }
-    const settled = settleIntent(input.store, {
-      coordinationScopeId: input.coordinationScopeId,
-      operationId,
-      writer: input.writer,
-      expectedRevision: settledRevision.scope.revision,
-      outcome: asOutcome,
-    });
+    const settled = begun.kind === 'existing' && begun.intent.state === 'blocked'
+      ? resolveLane(input.store, {
+          coordinationScopeId: input.coordinationScopeId, operationId, writer: input.writer,
+          expectedRevision: settledRevision.scope.revision, outcomeClass: 'accepted',
+        })
+      : settleIntent(input.store, {
+          coordinationScopeId: input.coordinationScopeId,
+          operationId,
+          writer: input.writer,
+          expectedRevision: settledRevision.scope.revision,
+          outcome: asOutcome,
+        });
     if (settled.kind === 'rejected') {
       return { kind: 'blocked', laneKey: target.id, reason: settled.rejection.message };
     }

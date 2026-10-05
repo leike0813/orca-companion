@@ -21,9 +21,10 @@ import type {
   CoordinationScopeId,
   DispatchId,
   OperationId,
+  WorkPackageId,
   WorkerTaskId,
 } from '../dto/identity.js';
-import type { DeliveryBatch } from '../dto/operation-outcome.js';
+import type { DeliveryBatch, DeliveryMessage } from '../dto/operation-outcome.js';
 import { laneKeyOf } from '../dto/operation-intent.js';
 import type {
   BranchCoordinationStore,
@@ -34,6 +35,7 @@ import type { ExecutionBackend, ExecutionAuthority, ExecutionMutation } from '..
 import { buildExecutionScope, reconcileOperation } from '../ports/execution-backend.js';
 import { beginIntent, blockLane, settleIntent } from '../coordination/intent-service.js';
 import { readScope } from '../planning/scope-read.js';
+import { parseDeliveryClaimedPayload, parseOrcaWorkerDoneLocator } from '../worker-report-dto.js';
 import {
   verifyWorkerResult,
   type ClaimedResultAttribution,
@@ -83,7 +85,7 @@ function canonicalJson(value: unknown): string {
 }
 
 /** Orca 可能把 `--result` 存成对象或 JSON 文本；两种形态都归一成同一个值再比较。 */
-function normalizeResultValue(raw: unknown): unknown {
+export function normalizeResultValue(raw: unknown): unknown {
   if (typeof raw !== 'string') {
     return raw;
   }
@@ -178,6 +180,13 @@ export type SettleDeliveryInput = {
   };
   readonly trusted: TrustedExecutionFacts;
   readonly operationIds: SettlementOperationIds;
+  /**
+   * 只结算不确认：调用方负责在整批消息都持久消费后再统一 ack。
+   *
+   * 缺省（false）保持既有行为——本条结算后立即尝试确认整批。批量重放用两阶段，逐条以 deferAck
+   * 结算，最后一次按 deliveryId 统一确认。
+   */
+  readonly deferAck?: boolean;
 };
 
 export type SettleDeliveryFailure = {
@@ -427,11 +436,255 @@ async function deliveryAlreadyAcked(input: SettleDeliveryInput, deliveryId: stri
   return again.value.delivery?.deliveryId !== deliveryId;
 }
 
+/**
+ * 一次已核验的消费。
+ *
+ * 带 Orca Task 身份的（Orca 规范形状）与带 WorkerTask/Attempt 身份的（Companion claimed 形状）都由
+ * 同一份记录表达；`dispatchId` 是实际被记录的 Dispatch，两种形状共用。
+ */
+export type ConsumedDeliveryResult = {
+  readonly orcaTaskId: string | null;
+  readonly workerTaskId: string | null;
+  readonly attemptId: string | null;
+  readonly dispatchId: string;
+};
+
+type BatchReadinessInput = {
+  readonly store: BranchCoordinationStore;
+  readonly backend: ExecutionBackend;
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly backendIdentityRef: string;
+  readonly runId: string;
+  readonly consumerGeneration: number;
+  readonly deliveryId: string;
+  readonly consumed: readonly ConsumedDeliveryResult[];
+};
+
+/**
+ * 批次内一条结果消息的稳定身份（闭集）。
+ *
+ * 两种公开形状都只用于**定位**：Orca 规范形状给出 Orca Task + Dispatch；Companion claimed 形状给出
+ * WorkerTask + Dispatch + Attempt。两者都拿不到时返回 null，调用方必须阻塞而不是丢弃无效载荷。
+ */
+type MessageIdentity =
+  | { readonly kind: 'orca'; readonly orcaTaskId: string; readonly dispatchId: string }
+  | {
+      readonly kind: 'claimed';
+      readonly workerTaskId: string;
+      readonly dispatchId: string;
+      readonly attemptId: string;
+    };
+
+function messageIdentity(message: DeliveryMessage): MessageIdentity | null {
+  const locator = parseOrcaWorkerDoneLocator(message.payload, message.body);
+  if (locator !== null) {
+    return { kind: 'orca', orcaTaskId: locator.orcaTaskId, dispatchId: locator.orcaDispatchId };
+  }
+  const parsed = parseDeliveryClaimedPayload(message.payload);
+  if (parsed.kind !== 'parsed') {
+    return null;
+  }
+  const { workerTaskId, dispatchId, attemptId } = parsed.payload.claimed;
+  if (workerTaskId === null || dispatchId === null || attemptId === null) {
+    return null;
+  }
+  return { kind: 'claimed', workerTaskId, dispatchId, attemptId };
+}
+
+function consumedKeys(entry: ConsumedDeliveryResult): readonly string[] {
+  const keys: string[] = [];
+  if (entry.orcaTaskId !== null) {
+    keys.push(`orca\u0000${entry.orcaTaskId}\u0000${entry.dispatchId}`);
+  }
+  if (entry.workerTaskId !== null && entry.attemptId !== null) {
+    keys.push(`claimed\u0000${entry.workerTaskId}\u0000${entry.dispatchId}\u0000${entry.attemptId}`);
+  }
+  return keys;
+}
+
+function identityKey(identity: MessageIdentity): string {
+  return identity.kind === 'orca'
+    ? `orca\u0000${identity.orcaTaskId}\u0000${identity.dispatchId}`
+    : `claimed\u0000${identity.workerTaskId}\u0000${identity.dispatchId}\u0000${identity.attemptId}`;
+}
+
+/** 一次读取的持久事实快照；判定期间只读一次，避免每条消息重复全库查询。 */
+type DurableConsumptionFacts = {
+  readonly settlements: readonly DeliverySettlementRecord[];
+  readonly validatedIntegrationKeys: ReadonlySet<string>;
+  readonly verifiedBaselineKeys: ReadonlySet<string>;
+};
+
+function readConsumptionFacts(
+  input: Pick<BatchReadinessInput, 'store' | 'coordinationScopeId'>,
+): DurableConsumptionFacts {
+  const settlementsRead = input.store.query({
+    kind: 'delivery-settlements',
+    coordinationScopeId: input.coordinationScopeId,
+  });
+  const settlements = settlementsRead.kind === 'delivery-settlements' ? settlementsRead.settlements : [];
+
+  const validatedIntegrationKeys = new Set<string>();
+  for (const workPackageId of currentWorkPackageIds(input)) {
+    const read = input.store.query({
+      kind: 'integration-reconciliations',
+      coordinationScopeId: input.coordinationScopeId,
+      workPackageId,
+    });
+    if (read.kind !== 'integration-reconciliations') {
+      continue;
+    }
+    for (const record of read.records) {
+      if (record.state === 'validated' && record.orcaTaskId !== null && record.dispatchId !== null) {
+        validatedIntegrationKeys.add(`${record.orcaTaskId}\u0000${record.dispatchId}`);
+      }
+    }
+  }
+
+  const verifiedBaselineKeys = new Set<string>();
+  const baselineRead = input.store.query({ kind: 'baseline-reconciliations', coordinationScopeId: input.coordinationScopeId });
+  if (baselineRead.kind === 'baseline-reconciliations') {
+    for (const record of baselineRead.reconciliations) {
+      if (record.state === 'verified' && record.orcaTaskId !== null && record.dispatchId !== null) {
+        verifiedBaselineKeys.add(`${record.orcaTaskId}\u0000${record.dispatchId}`);
+      }
+    }
+  }
+  return { settlements, validatedIntegrationKeys, verifiedBaselineKeys };
+}
+
+/**
+ * 持久消费证据：普通角色结算（精确 DispatchId + Run/consumer + 形状匹配的稳定身份），或匹配的
+ * validated 集成轮次 / verified 基线补救（都按 Orca Task + Dispatch）。
+ */
+function durableConsumed(
+  input: Pick<BatchReadinessInput, 'runId' | 'consumerGeneration'>,
+  facts: DurableConsumptionFacts,
+  identity: MessageIdentity,
+): boolean {
+  const settlementMatch = facts.settlements.some(
+    (settlement) =>
+      settlement.dispatchId === identity.dispatchId &&
+      settlement.runId === input.runId &&
+      settlement.consumerGeneration === input.consumerGeneration &&
+      (identity.kind === 'orca'
+        ? settlement.orcaResultRef.startsWith(identity.orcaTaskId + '#')
+        : settlement.workerTaskId === identity.workerTaskId && settlement.attemptId === identity.attemptId),
+  );
+  if (settlementMatch) {
+    return true;
+  }
+  if (identity.kind === 'orca') {
+    const key = `${identity.orcaTaskId}\u0000${identity.dispatchId}`;
+    return facts.validatedIntegrationKeys.has(key) || facts.verifiedBaselineKeys.has(key);
+  }
+  return false;
+}
+
+/**
+ * 当前批次是否可以整批确认。
+ *
+ * `delivery-ack` 只接受 `deliveryId`，所以确认的单位是**整个批次**：批次里只要还有一条结果消息没有
+ * 被持久消费，就绝不能确认，否则会把别的 pipeline 尚未落盘的报告一起 ack 掉。判定只读，不创建
+ * intent、不改任何状态。
+ *
+ * - 目标批次已前移（id 不同，或已无未确认批次）时只表示「要确认的原 identity 不在当前批次」，按同
+ *   ID 对账继续，不需要为它证明批次内容；
+ * - 批次内每条 `worker_done` 都必须已消费：要么是本轮调用方明确核验过的 `consumed`，要么在 Store
+ *   里有对应持久事实。无法定位的载荷一律阻塞，不丢弃。
+ */
+async function batchAckReadiness(
+  input: BatchReadinessInput,
+): Promise<{ readonly ready: true } | { readonly ready: false; readonly reason: string }> {
+  const batchRead = await input.backend.query({
+    operation: 'delivery-read',
+    backendIdentityRef: input.backendIdentityRef,
+    runId: input.runId,
+    types: ['worker_done'],
+  });
+  if (batchRead.kind !== 'accepted' || !isDeliveryBatchValue(batchRead.value)) {
+    return { ready: false, reason: '无法回读当前未确认批次：不确认' };
+  }
+  const batch = batchRead.value;
+  if (batch.delivery === null || batch.delivery.deliveryId !== input.deliveryId) {
+    return { ready: true };
+  }
+  const facts = readConsumptionFacts(input);
+  const consumed = new Set(input.consumed.flatMap((entry) => consumedKeys(entry)));
+  for (const message of batch.messages) {
+    if (message.type !== 'worker_done') {
+      continue;
+    }
+    const identity = messageIdentity(message);
+    if (identity === null) {
+      return { ready: false, reason: '批次内存在无法定位的 worker_done 消息：不确认' };
+    }
+    if (consumed.has(identityKey(identity))) {
+      continue;
+    }
+    if (durableConsumed(input, facts, identity)) {
+      continue;
+    }
+    return { ready: false, reason: `批次内 ${identity.dispatchId} 尚未落盘为已消费：不确认整批` };
+  }
+  return { ready: true };
+}
+
+/** 当前图未 retire 的 Work Package；集成复验轮次按包查询。 */
+function currentWorkPackageIds(
+  input: Pick<BatchReadinessInput, 'store' | 'coordinationScopeId'>,
+): readonly WorkPackageId[] {
+  const scope = readScope(input.store, input.coordinationScopeId);
+  if (scope.kind === 'rejected') {
+    return [];
+  }
+  const { graphId, graphVersion } = scope.scope;
+  if (graphId === null || graphVersion === null) {
+    return [];
+  }
+  const graph = input.store.query({
+    kind: 'graph-version',
+    coordinationScopeId: input.coordinationScopeId,
+    graphId,
+    graphVersion,
+  });
+  return graph.kind === 'graph-version' && graph.version !== null
+    ? graph.version.graph.workPackages.map((workPackage) => workPackage.workPackageId)
+    : [];
+}
+
+/** 本次正在结算的这条消息可作为已消费（含 history_only）；同批其余消息仍须有持久证据。 */
+function ownConsumed(input: SettleDeliveryInput): readonly ConsumedDeliveryResult[] {
+  return [
+    {
+      orcaTaskId: input.orcaTaskId,
+      workerTaskId: input.trusted.workerTaskId,
+      attemptId: input.trusted.attemptId,
+      dispatchId: input.trusted.dispatchId,
+    },
+  ];
+}
+
 async function confirmDelivery(
   input: SettleDeliveryInput,
   deliveryId: string,
   deliveryRunId: string | null,
+  consumed: readonly ConsumedDeliveryResult[],
 ): Promise<SettleDeliveryResult | null> {
+  // 整批确认前先证明批次内每条结果消息都已持久消费：未齐时只返回 blocked，不创建 ack intent。
+  const readiness = await batchAckReadiness({
+    store: input.store,
+    backend: input.backend,
+    coordinationScopeId: input.coordinationScopeId,
+    backendIdentityRef: input.backendIdentityRef,
+    runId: input.runId,
+    consumerGeneration: input.consumerGeneration,
+    deliveryId,
+    consumed,
+  });
+  if (!readiness.ready) {
+    return { kind: 'blocked', laneKey: ackLaneKey(deliveryId), reason: readiness.reason };
+  }
   const ack = await runSettlementMutation(input, input.operationIds.ack, ackTarget(deliveryId), {
     operation: 'delivery-ack',
     deliveryId,
@@ -508,6 +761,10 @@ export type AckConsumedDeliveryInput = {
   readonly timeoutMs: number;
   readonly deliveryId: string;
   readonly deliveryRunId: string | null;
+  /** 已核验的稳定 ack OperationId；缺省按 deliveryId 派生。同 ID 对账沿用调用方给出的原身份。 */
+  readonly operationId?: OperationId;
+  /** 本轮已核验消费的结果（taskId + 实际 dispatchId）；同批其余消息仍须有持久证据。 */
+  readonly consumed?: readonly ConsumedDeliveryResult[];
 };
 
 export type AckConsumedDeliveryResult =
@@ -533,7 +790,21 @@ export async function ackConsumedDelivery(
 ): Promise<AckConsumedDeliveryResult> {
   const target = ackTarget(input.deliveryId);
   const laneKey = ackLaneKey(input.deliveryId);
-  const operationId = `delivery-ack:${input.deliveryId}` as OperationId;
+  const operationId = input.operationId ?? (`delivery-ack:${input.deliveryId}` as OperationId);
+  // 整批确认前先证明批次内每条结果消息都已持久消费：未齐时只返回 blocked，不创建 ack intent。
+  const readiness = await batchAckReadiness({
+    store: input.store,
+    backend: input.backend,
+    coordinationScopeId: input.coordinationScopeId,
+    backendIdentityRef: input.backendIdentityRef,
+    runId: input.runId,
+    consumerGeneration: input.consumerGeneration,
+    deliveryId: input.deliveryId,
+    consumed: input.consumed ?? [],
+  });
+  if (!readiness.ready) {
+    return { kind: 'blocked', code: 'batch_not_consumed', message: readiness.reason, laneKey };
+  }
   const revisionRead = readScope(input.store, input.coordinationScopeId);
   if (revisionRead.kind === 'rejected') {
     return { kind: 'blocked', code: revisionRead.code, message: revisionRead.message, laneKey };
@@ -696,7 +967,9 @@ export async function settleDelivery(input: SettleDeliveryInput): Promise<Settle
 
   // 旧代际 / 旧尝试：确认该 Delivery，但只补历史，不写入结果引用。
   if (verification.kind === 'stale_generation' || verification.kind === 'stale_attempt') {
-    const confirmed = await confirmDelivery(input, deliveryIdentity.deliveryId, deliveryIdentity.runId);
+    const confirmed = input.deferAck === true
+      ? null
+      : await confirmDelivery(input, deliveryIdentity.deliveryId, deliveryIdentity.runId, ownConsumed(input));
     return confirmed ?? { kind: 'history_only', verification };
   }
 
@@ -710,7 +983,9 @@ export async function settleDelivery(input: SettleDeliveryInput): Promise<Settle
     if ('code' in readback) {
       return { kind: 'blocked', laneKey: acceptLaneKey, reason: readback.message };
     }
-    const confirmed = await confirmDelivery(input, deliveryIdentity.deliveryId, deliveryIdentity.runId);
+    const confirmed = input.deferAck === true
+      ? null
+      : await confirmDelivery(input, deliveryIdentity.deliveryId, deliveryIdentity.runId, ownConsumed(input));
     return confirmed ?? { kind: 'replayed', settlement: existing.settlement };
   }
 
@@ -771,7 +1046,9 @@ export async function settleDelivery(input: SettleDeliveryInput): Promise<Settle
   }
 
   // 步骤 6：最后确认。
-  const confirmed = await confirmDelivery(input, deliveryIdentity.deliveryId, deliveryIdentity.runId);
+  const confirmed = input.deferAck === true
+    ? null
+    : await confirmDelivery(input, deliveryIdentity.deliveryId, deliveryIdentity.runId, ownConsumed(input));
   if (confirmed !== null) {
     return confirmed;
   }

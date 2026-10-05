@@ -1,0 +1,119 @@
+{
+  "generatedAt": "2026-10-05T09:59:33.340Z",
+  "fixture": "orca-cc-concurrency-06",
+  "purpose": "sameUUID + validated round + accepted tree proof；独立 artifact，避免被新 host 的 partial 覆盖。",
+  "safeSessionStart": {
+    "originalValidator": {
+      "launchId": "worker-launch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:4473081389657077:1",
+      "reportPath": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-06/.git/orca-companion/codex/reporters/5b4d5810d2197eff1340.jsonl",
+      "exists": true,
+      "sessionId": "01a10b63-6084-7291-bf15-7fc07b88ab67",
+      "observedAt": "2026-10-05T09:27:09.645Z",
+      "codexHome": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-06/.git/orca-companion/codex/5b4d5810d2197eff1340",
+      "cwd": "/home/joshua/orca/workspaces/orca-cc-concurrency-06/wp-c0e65d235a978487562a464c2dc62a3996d88e55372d63cecb980935a0fa54c1"
+    },
+    "continuation": {
+      "launchId": "worker-launch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:4473081389657077:1:round-1",
+      "reportPath": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-06/.git/orca-companion/codex/reporters/bf91a1d57e16c99527ad.jsonl",
+      "exists": true,
+      "sessionId": "01a10b63-6084-7291-bf15-7fc07b88ab67",
+      "observedAt": "2026-10-05T09:52:49.147Z",
+      "codexHome": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-06/.git/orca-companion/codex/5b4d5810d2197eff1340",
+      "cwd": "/home/joshua/orca/workspaces/orca-cc-concurrency-06/wp-c0e65d235a978487562a464c2dc62a3996d88e55372d63cecb980935a0fa54c1"
+    }
+  },
+  "roundRecord": {
+    "workPackageId": "e2e-loop-scope#g1:readme-banner",
+    "round": 1,
+    "state": "validated",
+    "targetHead": "c65ba9ea0467ba46c24ef302793b9d87dd10d9da",
+    "mergedTreeRef": "d7975bfed9d02895c547c1d643f984b0b3f5e21c",
+    "orcaTaskId": "task_73206467f8db",
+    "dispatchId": "ctx_5a9f3963ca3b",
+    "validationAttemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:4473081389657077:1",
+    "blockerRef": null,
+    "createdAt": 1791193955240,
+    "updatedAt": 1791194013778
+  },
+  "acceptedTree": {
+    "mergedTreeRef": "d7975bfed9d02895c547c1d643f984b0b3f5e21c",
+    "canonicalHead": "87a3d1c26e0c666351915ee79a1b6df74077df32",
+    "remoteIntegrationRef": "87a3d1c26e0c666351915ee79a1b6df74077df32\trefs/heads/ip05-cc-06-integration",
+    "validatorSettlements": [
+      {
+        "role": "planner",
+        "attemptIdTail": "3Anotes-basics:planner:0:1",
+        "orcaResultRef": "task_0f4ddc1b9511#79c867cbac7ea"
+      },
+      {
+        "role": "planner",
+        "attemptIdTail": "Areadme-banner:planner:0:1",
+        "orcaResultRef": "task_f128daad35cf#7a009c8cd1cb1"
+      },
+      {
+        "role": "implementation",
+        "attemptIdTail": "ntation:3821222710477181:1",
+        "orcaResultRef": "task_c894bd059d7d#f3ae63f0133d5"
+      },
+      {
+        "role": "implementation",
+        "attemptIdTail": "ntation:4473081389657077:1",
+        "orcaResultRef": "task_a89d1a932f23#472e006115236"
+      },
+      {
+        "role": "validator",
+        "attemptIdTail": "lidator:3821222710477181:1",
+        "orcaResultRef": "task_6da3ae7af9af#4d919c93fb376"
+      },
+      {
+        "role": "validator",
+        "attemptIdTail": "lidator:4473081389657077:1",
+        "orcaResultRef": "task_abf5a533718e#9e3ec7c5a21b4"
+      }
+    ],
+    "sessionSegments": [
+      {
+        "workPackageId": "1:notes-basics",
+        "role": "planner",
+        "dispatchId": "ctx_6211ffd092d1",
+        "sessionBindingId": "session-binding:ctx_6211ffd092d1:01a10b5e-4805-71d0-88bd-7df5188f7c5e"
+      },
+      {
+        "workPackageId": ":readme-banner",
+        "role": "planner",
+        "dispatchId": "ctx_ace1d39d306c",
+        "sessionBindingId": "session-binding:ctx_ace1d39d306c:01a10b5e-8ec9-7f33-9231-49d76b49d02e"
+      },
+      {
+        "workPackageId": "1:notes-basics",
+        "role": "implementation",
+        "dispatchId": "ctx_5d7cbdf016ad",
+        "sessionBindingId": "session-binding:ctx_5d7cbdf016ad:01a10b61-282c-7fc3-8055-106d55f5cdd6"
+      },
+      {
+        "workPackageId": ":readme-banner",
+        "role": "implementation",
+        "dispatchId": "ctx_403a7c53c2e9",
+        "sessionBindingId": "session-binding:ctx_403a7c53c2e9:01a10b61-64a7-72a1-8a75-30bfcd235294"
+      },
+      {
+        "workPackageId": "1:notes-basics",
+        "role": "validator",
+        "dispatchId": "ctx_bb299a9e5a97",
+        "sessionBindingId": "session-binding:ctx_bb299a9e5a97:01a10b63-2765-7610-aa29-05663e809732"
+      },
+      {
+        "workPackageId": ":readme-banner",
+        "role": "validator",
+        "dispatchId": "ctx_5cb34b315bfa",
+        "sessionBindingId": "session-binding:ctx_5cb34b315bfa:01a10b63-6084-7291-bf15-7fc07b88ab67"
+      }
+    ]
+  },
+  "checks": {
+    "sameProviderSession": true,
+    "validationAttemptMatchesOriginal": true,
+    "continuationTaskDiffers": true,
+    "mergedTreeRecorded": true
+  }
+}

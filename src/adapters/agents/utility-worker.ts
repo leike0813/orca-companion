@@ -25,15 +25,17 @@ import {
   buildExecutionScope,
   orcaDispatchIdFromReceipt,
   orcaTaskIdFromReceipt,
+  orcaTerminalHandleFromReceipt,
   reconcileOperation,
 } from '../../application/ports/execution-backend.js';
 import {
   activatePreparedWorker,
+  knownTerminalHandleFor,
   prepareWorkerLaunch,
   verifyPreparedWorker,
   type WorkerLaunchStrategy,
 } from '../../application/worker-launch.js';
-import { beginIntent, blockLane, settleIntent } from '../../application/coordination/intent-service.js';
+import { beginIntent, blockLane, resolveLane, settleIntent } from '../../application/coordination/intent-service.js';
 import { readDeliveryBatch } from '../orca-cli/delivery-reader.js';
 import type { DeliveryMessage } from '../../application/dto/operation-outcome.js';
 import type { RecoveryCapsule } from '../../application/recovery/recovery-capsule.js';
@@ -325,6 +327,25 @@ async function runProtected(
   if (revision === null) {
     return { kind: 'blocked', laneKey: category, reason: '无法读取 Scope revision' };
   }
+  /**
+   * 统一的 beforeSettle 执行：任何「事实已证明副作用发生」的路径（accepted、unknown+facts、
+   * 以及恢复重放）都必须先落 callbacks（如 onDispatchStarted / onTaskCreated），失败即阻塞 lane。
+   */
+  const checkBeforeSettle = (value: unknown): ProtectedMutation | null => {
+    const failure = beforeSettle?.(value) ?? null;
+    if (failure === null) return null;
+    const blockRevision = freshRevision(input.store, input.coordinationScopeId);
+    if (blockRevision !== null) {
+      blockLane(input.store, {
+        coordinationScopeId: input.coordinationScopeId,
+        operationId,
+        writer: input.writer,
+        expectedRevision: blockRevision,
+        reason: failure.message,
+      });
+    }
+    return { kind: 'blocked', laneKey: category, reason: failure.message };
+  };
   const begun = beginIntent(input.store, {
     coordinationScopeId: input.coordinationScopeId,
     operationId,
@@ -350,25 +371,63 @@ async function runProtected(
   if (begun.kind === 'rejected') {
     return { kind: 'blocked', laneKey: category, reason: begun.rejection.message };
   }
+  if (begun.kind === 'existing') {
+    // 已存在的意图是恢复重放：绝不再次 mutate；settled accepted 只读回读，pending/blocked 按原 ID 对账。
+    if (begun.intent.state === 'settled' && begun.intent.outcomeClass === 'rejected') {
+      return { kind: 'rejected', code: 'intent_already_rejected', message: '该操作已有结算拒绝记录，未重复执行' };
+    }
+    const facts: { readonly kind: 'observed'; readonly value: unknown } | { readonly kind: 'unobserved' } =
+      reconcileFacts === undefined ? { kind: 'unobserved' } : await reconcileFacts();
+    if (facts.kind === 'observed') {
+      if (begun.intent.state === 'settled') {
+        // 读回成立即复用原结果；beforeSettle 复核在重放路径上同样要跑。
+        const blocked = checkBeforeSettle(facts.value);
+        if (blocked !== null) return blocked;
+        return { kind: 'accepted', value: facts.value, operationId };
+      }
+      // pending / blocked：按原身份收尾为 accepted（blocked 用 resolveLane），不重复消费。
+      const blockedPending = checkBeforeSettle(facts.value);
+      if (blockedPending !== null) return blockedPending;
+      const settleRevision = freshRevision(input.store, input.coordinationScopeId);
+      if (settleRevision !== null) {
+        const finished =
+          begun.intent.state === 'blocked'
+            ? resolveLane(input.store, {
+                coordinationScopeId: input.coordinationScopeId,
+                operationId,
+                writer: input.writer,
+                expectedRevision: settleRevision,
+                outcomeClass: 'accepted',
+              })
+            : settleIntent(input.store, {
+                coordinationScopeId: input.coordinationScopeId,
+                operationId,
+                writer: input.writer,
+                expectedRevision: settleRevision,
+                outcome: { kind: 'accepted', operation: { operationId, target }, value: facts.value },
+              });
+        if (finished.kind === 'settled') {
+          return { kind: 'accepted', value: facts.value, operationId };
+        }
+      }
+      return { kind: 'blocked', laneKey: category, reason: '事实已证明副作用发生，但原意图无法收尾' };
+    }
+    if (begun.intent.state === 'blocked') {
+      return { kind: 'blocked', laneKey: category, reason: begun.intent.blockingReason ?? '该操作已被阻塞' };
+    }
+    return {
+      kind: 'unknown',
+      operationId,
+      reason: '该操作已有意图记录且事实不可证，未重复执行；按原回执对账',
+    };
+  }
   const outcome = await input.backend.mutate(
     mutation,
     scopeOf(input, operationId, target, revision),
   );
-  if (outcome.kind === 'accepted' && beforeSettle !== undefined) {
-    const failure = beforeSettle(outcome.value);
-    if (failure !== null) {
-      const blockRevision = freshRevision(input.store, input.coordinationScopeId);
-      if (blockRevision !== null) {
-        blockLane(input.store, {
-          coordinationScopeId: input.coordinationScopeId,
-          operationId,
-          writer: input.writer,
-          expectedRevision: blockRevision,
-          reason: failure.message,
-        });
-      }
-      return { kind: 'blocked', laneKey: category, reason: failure.message };
-    }
+  if (outcome.kind === 'accepted') {
+    const blocked = checkBeforeSettle(outcome.value);
+    if (blocked !== null) return blocked;
   }
   const settled = settleIntent(input.store, {
     coordinationScopeId: input.coordinationScopeId,
@@ -387,6 +446,9 @@ async function runProtected(
     const facts: { readonly kind: 'observed'; readonly value: unknown } | { readonly kind: 'unobserved' } =
       reconcileFacts === undefined ? { kind: 'unobserved' } : await reconcileFacts();
     if (facts.kind === 'observed') {
+      // 结果未知但事实已证明发生：先落 callbacks（Task/ctx），再按同 ID 收尾 accepted。
+      const blocked = checkBeforeSettle(facts.value);
+      if (blocked !== null) return blocked;
       const settledByFacts = settleIntent(input.store, {
         coordinationScopeId: input.coordinationScopeId,
         operationId,
@@ -443,11 +505,24 @@ export async function dispatchScopedWorker(input: ScopedWorkerDispatchInput): Pr
     if (orcaTaskId === null) return { kind: 'unknown', operationId: created.operationId, reason: 'task-create 回执缺少可核验的 task id' };
   }
 
+  const knownTerminal = knownTerminalHandleFor(
+    input.store,
+    input.coordinationScopeId,
+    input.operationIds.workerPrepare,
+  );
+  if (knownTerminal.kind === 'evidence_missing') {
+    return {
+      kind: 'blocked',
+      laneKey: 'worker-terminal-prepare',
+      reason: '原 prepared terminal 操作已接受但缺少可核验的 terminal handle；需要资源证据，不重复创建',
+    };
+  }
   const launch = await prepareWorkerLaunch({
     backend: input.backend,
     strategy: input.workerLaunch,
     worktreeId: input.worktree,
     ...(input.worktree.startsWith('path:') ? { worktreePath: input.worktree.slice('path:'.length) } : {}),
+    ...(knownTerminal.kind === 'known' ? { knownTerminalHandle: knownTerminal.handle } : {}),
     timeoutMs: input.execution.timeoutMs,
     createTerminal: async (mutation) => {
       const prepared = await runProtected(
@@ -457,7 +532,17 @@ export async function dispatchScopedWorker(input: ScopedWorkerDispatchInput): Pr
         'worker-terminal-prepare',
         mutation,
       );
-      return prepared.kind === 'accepted' ? { kind: 'accepted' as const } : prepared;
+      if (prepared.kind !== 'accepted') {
+        return prepared;
+      }
+      const handle = orcaTerminalHandleFromReceipt(prepared.value);
+      return handle === null
+        ? {
+            kind: 'unknown' as const,
+            operationId: prepared.operationId,
+            reason: 'terminal-create 回执缺少可核验的 terminal handle；不按 title 猜测资源',
+          }
+        : { kind: 'accepted' as const, terminalHandle: handle };
     },
   });
   if (launch.kind !== 'ready') {
@@ -530,6 +615,24 @@ export async function dispatchScopedWorker(input: ScopedWorkerDispatchInput): Pr
         taskTarget,
         'worker-terminal-activate',
         mutation,
+        undefined,
+        () => {
+          // activate 是不可重发的终态动作：只复用「已 settled accepted」的结算事实，绝不重发，也不凭
+          // worker-show 放宽 pending/unknown（worker-start 在 submit 前就已绑定 terminal）。
+          const read = input.store.query({
+            kind: 'intent',
+            coordinationScopeId: input.coordinationScopeId,
+            operationId: input.operationIds.workerActivate,
+          });
+          return Promise.resolve(
+            read.kind === 'intent' &&
+              read.intent !== null &&
+              read.intent.state === 'settled' &&
+              read.intent.outcomeClass === 'accepted'
+              ? { kind: 'observed', value: {} }
+              : { kind: 'unobserved' },
+          );
+        },
       );
       return submitted.kind === 'accepted' ? { kind: 'accepted' as const } : submitted;
     },

@@ -57,7 +57,7 @@ export function StatusLine(props: StatusLineProps) {
     else if (field === 'ticket' && presentation?.ticket) extras.push({text:`票 ${presentation.ticket.ref}`,color:tuiColors.focus,ticket:presentation.ticket});
     else if (field === 'ticket' && presentation === undefined) extras.push({text:'规划票不可用',color:tuiColors.focus});
     else if (field === 'ticket' && presentation?.ticket === null) extras.push({text:'未领取规划票',color:tuiColors.focus});
-    else if (field === 'work-package') extras.push({text:presentation===undefined?'执行工作包不可用':presentation.activeWorkPackage===null?'执行空闲':`执行 WP ${presentation.activeWorkPackage.id} ${presentation.activeWorkPackage.title}`,color:tuiColors.accent});
+    else if (field === 'work-package') extras.push({text:presentation===undefined?'执行工作包不可用':presentation.activeWorkPackages.length===0?'执行空闲':presentation.activeWorkPackages.length===1?`执行 WP ${presentation.activeWorkPackages[0]!.id} ${presentation.activeWorkPackages[0]!.title}`:`执行 ${presentation.activeWorkPackages.length} 包 · ${presentation.activeWorkPackages.map(p=>p.id).join(',')}`,color:tuiColors.accent});
     else if (field === 'progress' && accepted) extras.push({text:preferences.progressFormat === 'percent'
       ? accepted.totalCount === 0 ? '验收 尚无工作包' : `验收 ${Math.floor(accepted.validatedCount * 100 / accepted.totalCount)}%`
       : `验收 ${accepted.validatedCount}/${accepted.totalCount}`,color:tuiColors.success});

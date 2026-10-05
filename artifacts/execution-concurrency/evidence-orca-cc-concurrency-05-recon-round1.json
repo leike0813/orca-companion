@@ -1,0 +1,111 @@
+{
+  "generatedAt": "2026-10-05T08:18:23.800Z",
+  "fixture": "orca-cc-concurrency-05",
+  "note": "round 1 blocked: 无法观察到该 Utility Worker 的精确 harness session 事实（worker-start accepted 但 fresh binding unavailable）。宿主已按具体 pid 停止，Worker/round/预算保留，未 reseed。",
+  "round": {
+    "workPackageId": "e2e-loop-scope#g1:readme-banner",
+    "round": 1,
+    "state": "blocked",
+    "targetHead": "995c3f946fd204b8c50b46d44ce277429c0819c4",
+    "mergedTreeRef": null,
+    "orcaTaskId": "task_01c570265956",
+    "dispatchId": "ctx_c45aa200a089",
+    "blockerRef": "无法观察到该 Utility Worker 的精确 harness session 事实",
+    "createdAt": 1791188127038,
+    "updatedAt": 1791188294361
+  },
+  "originalValidator": {
+    "launchId": "worker-launch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:3622696963060115:1",
+    "orcaTaskId": "task_8464030e67f4",
+    "attemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:3622696963060115:1",
+    "sessionStart": {
+      "launchId": "worker-launch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:3622696963060115:1",
+      "reportPath": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-05/.git/orca-companion/codex/reporters/49f9ad5516157f31c0a3.jsonl",
+      "exists": true,
+      "raw": {
+        "sessionId": "01a10b1f-b454-75c0-9392-3bb75ca956f6",
+        "transcriptPath": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-05/.git/orca-companion/codex/49f9ad5516157f31c0a3/sessions/2026/10/05/rollout-2026-10-05T16-13-09-01a10b1f-b454-75c0-9392-3bb75ca956f6.jsonl",
+        "codexHome": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-05/.git/orca-companion/codex/49f9ad5516157f31c0a3",
+        "cwd": "/home/joshua/orca/workspaces/orca-cc-concurrency-05/wp-c0e65d235a978487562a464c2dc62a3996d88e55372d63cecb980935a0fa54c1",
+        "observedAt": "2026-10-05T08:13:14.726Z"
+      }
+    }
+  },
+  "continuation": {
+    "launchId": "worker-launch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:3622696963060115:1:round-1",
+    "sessionStart": {
+      "launchId": "worker-launch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:3622696963060115:1:round-1",
+      "reportPath": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-05/.git/orca-companion/codex/reporters/daca570712282f4ff394.jsonl",
+      "exists": false,
+      "raw": null
+    }
+  },
+  "continuationIntents": [
+    {
+      "operation_category": "git-integration",
+      "state": "settled",
+      "outcome_class": "accepted",
+      "operation_id": "git-integration-merge-canonical:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:round-1",
+      "backend_request_id": null
+    },
+    {
+      "operation_category": "task-create",
+      "state": "settled",
+      "outcome_class": "accepted",
+      "operation_id": "integration-reconciliation-task:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:round-1",
+      "backend_request_id": "5d933f98-c536-4bd3-a043-593734cfadde"
+    },
+    {
+      "operation_category": "worker-terminal-prepare",
+      "state": "settled",
+      "outcome_class": "accepted",
+      "operation_id": "integration-reconciliation-task:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:round-1:terminal",
+      "backend_request_id": "6b91f722-c106-4bb2-9575-5723b7139b8d"
+    },
+    {
+      "operation_category": "worker-start",
+      "state": "settled",
+      "outcome_class": "accepted",
+      "operation_id": "integration-reconciliation-task:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:round-1:worker-start",
+      "backend_request_id": null
+    }
+  ],
+  "segments": [
+    {
+      "work_package_id": "e2e-loop-scope#g1:notes-basics",
+      "role": "planner",
+      "dispatch_id": "ctx_638bd3fda90f"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:readme-banner",
+      "role": "planner",
+      "dispatch_id": "ctx_e8bbbbbc5900"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:notes-basics",
+      "role": "implementation",
+      "dispatch_id": "ctx_fad9388c80f1"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:readme-banner",
+      "role": "implementation",
+      "dispatch_id": "ctx_86a79ba23435"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:notes-basics",
+      "role": "validator",
+      "dispatch_id": "ctx_441e0456bbb3"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:readme-banner",
+      "role": "validator",
+      "dispatch_id": "ctx_9d77183f5b9f"
+    }
+  ],
+  "budget": [
+    {
+      "budget_key": "work-package:e2e-loop-scope#g1:readme-banner:integrationReconciliations",
+      "consumed": 1
+    }
+  ]
+}

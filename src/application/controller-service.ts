@@ -338,6 +338,8 @@ export type ControllerSnapshot = {
   readonly budgets: readonly ControllerBudgetView[];
   /** Execution Frontier 投影；顺序与编译后的稳定拓扑一致。 */
   readonly frontier: readonly ControllerFrontierEntry[];
+  /** 当前世代真实占用额度的 Work Package id；active 生命周期与未释放 lane reservation 的并集。 */
+  readonly activeWorkPackageIds: readonly string[];
   readonly workers: readonly ControllerWorkerEntry[];
   /** Finalizer 门禁、只读条件、工作区与最近一次被接受的 Delivery Verdict（IC-11 Extend）。 */
   readonly finalizer: FinalizerView;
@@ -1171,6 +1173,7 @@ export function projectControllerSnapshot(facts: ControllerSnapshotFacts): Contr
       derivedFrom: [...entry.derivedFrom],
       blockerRefs: [...entry.blockerRefs],
     })),
+    activeWorkPackageIds: [...facts.execution.activeWorkPackageIds],
     workers: facts.workers.map((worker) => ({ ...worker })),
     finalizer: {
       ...facts.execution.finalizer,

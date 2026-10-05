@@ -660,7 +660,7 @@ async function openAuthorizationHost(directory: string): Promise<AuthorizationHo
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       revision: 0,
       ...projectConnectionsFixture(),
       coordinatorModels: [

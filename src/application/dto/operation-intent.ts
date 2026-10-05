@@ -43,6 +43,13 @@ export type OperationIntent = {
   /** 只有收尾后的意图才有结果分类；未决与阻塞都是 `null`。 */
   readonly outcomeClass: IntentOutcomeClass | null;
   readonly backendRequestId: string | null;
+  /**
+   * terminal 创建/准备类意图的精确资源引用；其它 mutation 与未收尾意图为 `null`。
+   *
+   * 只由 store 在 `materialize-worker-terminal` / `worker-terminal-prepare` 收尾为 accepted 时同事务写入，
+   * 之后不可改写。它是运行时复用/续接该 terminal 的唯一本地事实，不是 Orca terminal 状态的镜像。
+   */
+  readonly terminalHandle: string | null;
   readonly blockingReason: string | null;
   readonly createdAt: number;
   readonly settledAt: number | null;

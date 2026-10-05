@@ -6,7 +6,8 @@
  * - 编译失败即拒绝候选图：schema、重复 key、悬空/自引用、环路、Scope Envelope 与预算超限逐项失败，
  *   且失败结果没有 `graph` 字段。
  * 以及 Requirement「Compilation carries budget caps and scope envelopes」：编译产物的预算来自 limits，
- * 并发上限随图固定。另覆盖 `parseImplementationPlan` 的边界（缺省 `requestedBudget` 不落字段、负数拒绝）。
+ * 图容量由 `maxWorkPackages` 约束、并行额度不进入拓扑。另覆盖 `parseImplementationPlan` 的边界
+ * （缺省 `requestedBudget` 不落字段、负数拒绝）。
  */
 
 import { expect, test } from 'vitest';
@@ -176,16 +177,25 @@ test('Scope Envelope 里的空字符串路径在 schema 层即被拒绝', () => 
   }
 });
 
-test('编译成功时每个 Work Package 带有限预算，并发上限随图固定', () => {
-  const limits: ExecutionLimits = { ...DEFAULT_EXECUTION_LIMITS, concurrencyLimit: 1 };
+test('编译成功时每个 Work Package 带有限预算，含集成复验额度', () => {
+  const limits: ExecutionLimits = { ...DEFAULT_EXECUTION_LIMITS, integrationReconciliations: 4 };
 
   const graph = compileGraph(plan([workPackage('a'), workPackage('b', ['a'])]), limits);
 
-  expect(graph.concurrencyLimit).toBe(limits.concurrencyLimit);
   for (const item of graph.workPackages) {
     expect(item.budget).toEqual(budgetFromLimits(limits));
+    expect(item.budget.integrationReconciliations).toBe(4);
     expect(item.budget.maxRecoveriesPerWorkerAttempt).toBe(limits.maxRecoveriesPerWorkerAttempt);
   }
+});
+
+test('并行额度不进入图拓扑：额度 1 与 5 编译出相同结果', () => {
+  const rawPlan = plan([workPackage('a'), workPackage('b', ['a']), workPackage('c', ['a', 'b'])]);
+
+  const low = compileGraph(rawPlan, { ...DEFAULT_EXECUTION_LIMITS, maxActiveWorkPackages: 1 });
+  const high = compileGraph(rawPlan, { ...DEFAULT_EXECUTION_LIMITS, maxActiveWorkPackages: 5 });
+
+  expect(JSON.stringify(high)).toBe(JSON.stringify(low));
 });
 
 test('parseImplementationPlan 接受字段完整的计划', () => {

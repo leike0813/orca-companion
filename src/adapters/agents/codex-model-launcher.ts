@@ -36,6 +36,9 @@ export const CODEX_MODEL_DESCRIPTOR_FILENAME = 'codex-model-launch.json';
 /** descriptor 版本；结构变化时递增，旧 descriptor 一律 fail closed。 */
 export const CODEX_MODEL_DESCRIPTOR_VERSION = 1;
 
+/** Codex session 身份（UUID 或 session name）的安全形态；不匹配的一律拒绝，不拼进 argv。 */
+export const SAFE_CODEX_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
 /**
  * managed 凭据注入 child env 时使用的环境变量「名称」（不是值）。名称本身不是秘密，可以写进
  * descriptor 与 `config.toml`；真正的 key 只在 launcher 运行时从凭据文件读出并放进子进程环境。
@@ -251,6 +254,12 @@ export function buildCodexModelLaunchDescriptor(input: {
   readonly sandboxArguments: readonly string[];
   readonly credentialStorePath?: string;
   readonly executable?: string;
+  /**
+   * 已有 session 的精确身份；给出时启动命令变成 `codex resume <session-id> ...`。
+   *
+   * 只接受安全形态：session 身份来自可证明的 Session Binding，不是模型或调用方自由填写的值。
+   */
+  readonly resumeSessionId?: string;
 }): CodexModelLaunchDescriptor {
   const { modelConfiguration } = input;
   if (!isAbsolute(input.codexHome)) {
@@ -258,7 +267,11 @@ export function buildCodexModelLaunchDescriptor(input: {
   }
   const credential = modelConfiguration.connection.credential;
   const managed = credential.kind === 'managed' ? credential : null;
+  if (input.resumeSessionId !== undefined && !SAFE_CODEX_SESSION_ID.test(input.resumeSessionId)) {
+    throw new Error('Codex resume session ID 形态非法，拒绝启动');
+  }
   const args = [
+    ...(input.resumeSessionId === undefined ? [] : ['resume', input.resumeSessionId]),
     ...input.baseArguments,
     ...input.sandboxArguments,
     ...codexModelArguments(modelConfiguration),

@@ -30,7 +30,7 @@ function repositoryWithConfig(contents: string): string {
 }
 
 const VALID_CONFIG = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   revision: 0,
   coordinatorModels: [
     {

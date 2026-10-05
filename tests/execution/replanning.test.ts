@@ -277,13 +277,11 @@ function recordCandidateGeneration(options: { runId?: string; workPackageId?: st
     graph: {
       graphId: CANDIDATE_GRAPH,
       generation: 2 as GraphGeneration,
-      concurrencyLimit: 1,
       workPackages: [executionWorkPackage(options.workPackageId ?? 'wp-new')],
     },
     initialPlan: implementationPlanFor({
       graphId: CANDIDATE_GRAPH,
       generation: 2 as GraphGeneration,
-      concurrencyLimit: 1,
       workPackages: [executionWorkPackage(options.workPackageId ?? 'wp-new')],
     }, EXECUTION_PLAN_REVISION),
     mapRevision: EXECUTION_MAP_REVISION,

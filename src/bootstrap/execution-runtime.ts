@@ -41,6 +41,13 @@ import type {
 import { readDeliveryBatch } from '../adapters/orca-cli/delivery-reader.js';
 import { ackConsumedDelivery } from '../application/delivery/process-delivery.js';
 import {
+  parseDeliveryClaimedPayload,
+  parseOrcaWorkerDoneLocator,
+  type DeliveryClaimedPayload,
+  type DeliveryPayloadParse,
+  type OrcaWorkerDoneLocator,
+} from '../application/worker-report-dto.js';
+import {
   capsuleRefOf,
   readRecoveryCapsuleBody,
   writeRecoveryCapsuleBody,
@@ -579,7 +586,8 @@ export function reviewExecutionAuthorization(
   }
   if (scope.mode === 'execution_coordination') {
     const snapshot = facts.store.query({ kind: 'snapshot', coordinationScopeId: facts.coordinationScopeId });
-    if (scope.controlState === 'cancelling' || scope.controlState === 'cancelled' || scope.controlState === 'replanning_transition' ||
+    if (scope.controlState === 'cancelling' || scope.controlState === 'cancelled' || scope.controlState === 'unverifiable' ||
+      scope.controlState === 'replanning_transition' ||
       snapshot.kind !== 'snapshot' || snapshot.snapshot.unresolvedIntents.length > 0 ||
       generation.status === 'suspended' || generation.status === 'frozen') {
       return { kind: 'rejected', code: 'model_reapproval_unavailable', message: '当前控制状态、重规划或未决副作用不允许模型重新授权' };
@@ -594,6 +602,8 @@ export function reviewExecutionAuthorization(
       graph: { ...previous.manifest.graph, version: candidate.version },
       workerProfiles: rawManifest.workerProfiles,
       recoveryUtilityProfile: rawManifest.recoveryUtilityProfile,
+      // 重新授权只允许改动并行包额度；它随完整指纹与 CAS 一起批准，不构成 Graph Revision。
+      limits: { ...previous.manifest.limits, maxActiveWorkPackages: facts.policy.limits.maxActiveWorkPackages },
     };
     const parsed = proposeManifest({ store: facts.store, coordinationScopeId: facts.coordinationScopeId,
       rawManifest: manifest, candidate, currentPlanRevision: candidate.planRevision });
@@ -734,7 +744,9 @@ export function approveExecutionAuthorization(
           writer: input.writer, authorizationId: authorizationIdFor(review.manifest),
           expectedScopeRevision: input.expectedRevision,
           workerProfiles: review.manifest.workerProfiles, recoveryUtilityProfile: review.manifest.recoveryUtilityProfile,
-          graphVersion: review.manifest.graph.version, approvalRef: `user-approval:${review.fingerprint.slice(0, 16)}` })
+          graphVersion: review.manifest.graph.version,
+          maxActiveWorkPackages: input.policy.limits.maxActiveWorkPackages,
+          approvalRef: `user-approval:${review.fingerprint.slice(0, 16)}` })
         : recordApproval({
           store: input.store,
           coordinationScopeId: input.coordinationScopeId,
@@ -941,160 +953,11 @@ export type DeliveryWorktreeFactReader = (input: {
 }) => Promise<DeliveryWorktreeFacts | ExecutionFactUnavailable>;
 
 /**
- * Delivery message 载荷里**声称的**归属与结果正文。
- *
- * Orca 的 delivery message 只给出 `payload` 原文；任务/派发/尝试归属由生命周期消息的 payload JSON
- * 承载，因此这里把 payload 解析成 `ClaimedResultAttribution`（缺字段即 `null`，与领域类型的合同一致）
- * 与归一化后的结果正文。它只是「声称」：归属是否成立只能由 `verifyWorkerResult(claimed, trusted)` 判定，
- * 其中 `trusted` 全部来自 store、当前图、授权与 Git。
+ * locator 与 claimed payload 解析的唯一实现在应用层（`application/worker-report-dto`）；这里只保留
+ * 既有 bootstrap 导出面，避免任何 bootstrap 装配路径复制第二份解析。
  */
-export type DeliveryClaimedPayload = {
-  readonly claimed: ClaimedResultAttribution;
-  readonly acceptedResult: unknown;
-};
-
-export type DeliveryPayloadParse =
-  | { readonly kind: 'parsed'; readonly payload: DeliveryClaimedPayload }
-  | { readonly kind: 'rejected'; readonly code: string; readonly message: string };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** payload 里的非空字符串；空串与缺字段都返回 `null`——空串不是身份。 */
-function readPayloadString(source: Record<string, unknown>, field: string): string | null {
-  const value = source[field];
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function readPayloadCount(source: Record<string, unknown>, field: string): number | null {
-  const value = source[field];
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
-}
-
-function readPayloadRole(source: Record<string, unknown>): WorkerRole | null {
-  const value = source['role'];
-  return typeof value === 'string' && (WORKER_ROLES as readonly string[]).includes(value)
-    ? (value as WorkerRole)
-    : null;
-}
-
-function readPayloadSpecBinding(source: Record<string, unknown>): SpecBinding | null {
-  const raw = source['specBinding'];
-  if (!isRecord(raw)) {
-    return null;
-  }
-  const provider = readPayloadString(raw, 'provider');
-  const relativePath = readPayloadString(raw, 'relativePath');
-  const contentDigest = readPayloadString(raw, 'contentDigest');
-  const providerVersion = readPayloadString(raw, 'providerVersion');
-  const contractRevision = readPayloadCount(raw, 'contractRevision');
-  const trackingRevision = readPayloadCount(raw, 'trackingRevision');
-  if (
-    provider === null ||
-    relativePath === null ||
-    contentDigest === null ||
-    providerVersion === null ||
-    contractRevision === null ||
-    trackingRevision === null
-  ) {
-    return null;
-  }
-  return { provider, relativePath, contentDigest, providerVersion, contractRevision, trackingRevision };
-}
-
-/**
- * 真实 Orca Worker 报告的归属 locator。
- *
- * 真实 Codex Worker 投递的 `worker_done` 载荷是 Orca 自己的规范形状——它给出 Orca Task 身份、Orca
- * Dispatch 身份、结果状态与改动文件列表，**不**回显 Companion 的 Task Envelope 身份，也不带 Companion
- * 的 `result` 正文。因此这类消息只能用于**定位**已被 Controller 记录的那次派发：归属由
- * `materialization_bindings.orcaTaskId` 与 Session Segment 解析，而不是让 Worker 复述 Companion 身份。
- */
-export type OrcaWorkerDoneLocator = {
-  readonly orcaTaskId: string;
-  readonly orcaDispatchId: string;
-  readonly outcome: string;
-  readonly files: readonly string[];
-  /** 结果正文的来源：Orca 消息的 `body`（Worker 的叙述）；缺失时为空串。 */
-  readonly summary: string;
-};
-
-export function parseOrcaWorkerDoneLocator(
-  raw: string | null,
-  body: string | null,
-): OrcaWorkerDoneLocator | null {
-  if (raw === null) {
-    return null;
-  }
-  let decoded: unknown;
-  try {
-    decoded = JSON.parse(raw) as unknown;
-  } catch {
-    return null;
-  }
-  if (!isRecord(decoded)) {
-    return null;
-  }
-  // Orca 保留被拒绝的 lifecycle 回报作诊断；它不是已接受的 Worker 结果载体。
-  if ('_orcaLifecycleRejection' in decoded) {
-    return null;
-  }
-  if ('result' in decoded) {
-    // Companion 形状：交给 `parseDeliveryClaimedPayload`，这里不接管。
-    return null;
-  }
-  const orcaTaskId = readPayloadString(decoded, 'taskId');
-  const orcaDispatchId = readPayloadString(decoded, 'dispatchId');
-  const outcome = readPayloadString(decoded, 'outcome');
-  if (orcaTaskId === null || orcaDispatchId === null || outcome === null) {
-    return null;
-  }
-  const rawFiles = decoded['filesModified'];
-  const files = Array.isArray(rawFiles)
-    ? rawFiles.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
-    : [];
-  return { orcaTaskId, orcaDispatchId, outcome, files, summary: body ?? '' };
-}
-
-export function parseDeliveryClaimedPayload(raw: string | null): DeliveryPayloadParse {
-  if (raw === null) {
-    return { kind: 'rejected', code: 'payload_missing', message: 'Delivery message 没有 payload：无法判定归属与结果正文' };
-  }
-  let decoded: unknown;
-  try {
-    decoded = JSON.parse(raw) as unknown;
-  } catch {
-    return { kind: 'rejected', code: 'payload_not_json', message: 'Delivery message 的 payload 不是合法 JSON' };
-  }
-  if (!isRecord(decoded)) {
-    return { kind: 'rejected', code: 'payload_not_object', message: 'Delivery message 的 payload 不是 JSON 对象' };
-  }
-  if (!('result' in decoded)) {
-    return { kind: 'rejected', code: 'result_missing', message: 'Delivery message 的 payload 没有结果正文' };
-  }
-  const workerTaskId = readPayloadString(decoded, 'workerTaskId');
-  const dispatchId = readPayloadString(decoded, 'dispatchId');
-  return {
-    kind: 'parsed',
-    payload: {
-      claimed: {
-        runId: readPayloadString(decoded, 'runId'),
-        consumerGeneration: readPayloadCount(decoded, 'consumerGeneration'),
-        graphGeneration: readPayloadCount(decoded, 'graphGeneration'),
-        authorizationId: readPayloadString(decoded, 'authorizationId'),
-        // 非空字符串已经过校验；这里的断言只补身份 brand，不改变取值。
-        workerTaskId: workerTaskId === null ? null : (workerTaskId as ClaimedResultAttribution['workerTaskId']),
-        dispatchId: dispatchId === null ? null : (dispatchId as ClaimedResultAttribution['dispatchId']),
-        attemptId: readPayloadString(decoded, 'attemptId'),
-        role: readPayloadRole(decoded),
-        specBinding: readPayloadSpecBinding(decoded),
-        worktreeId: readPayloadString(decoded, 'worktreeId'),
-      },
-      acceptedResult: decoded['result'],
-    },
-  };
-}
+export { parseOrcaWorkerDoneLocator, parseDeliveryClaimedPayload };
+export type { OrcaWorkerDoneLocator, DeliveryClaimedPayload, DeliveryPayloadParse };
 
 export type PendingDeliveryReadInput = {
   readonly store: BranchCoordinationStore;
@@ -1598,6 +1461,29 @@ export async function readPendingDeliveries(
       record.dispatchId === intake.locator.orcaDispatchId,
     )) {
       continue;
+    }
+    // 集成复验的续接 Task/Dispatch 绑定在轮次记录上，由集成复验 runner 自己 accept/ack；它不是图上的
+    // 角色物化绑定。按精确 Task/Dispatch 匹配当前图的 Work Package 轮次（pending/validated）后跳过
+    // 通用角色 Delivery 重放，避免误报缺失绑定或全局阻塞。
+    if (intake.kind === 'locator') {
+      const matchedIntegration = versionRead.version.graph.workPackages.some((workPackage) => {
+        const read = input.store.query({
+          kind: 'integration-reconciliations',
+          coordinationScopeId: input.coordinationScopeId,
+          workPackageId: workPackage.workPackageId,
+        });
+        return (
+          read.kind === 'integration-reconciliations' &&
+          read.records.some((record) =>
+            (record.state === 'pending' || record.state === 'validated' || record.state === 'blocked') &&
+            record.orcaTaskId === intake.locator.orcaTaskId &&
+            record.dispatchId === intake.locator.orcaDispatchId,
+          )
+        );
+      });
+      if (matchedIntegration) {
+        continue;
+      }
     }
     const facts = await readDeliveryTrustedFacts({
       input,

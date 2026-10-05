@@ -270,7 +270,7 @@ test('默认恢复上限为 1', () => {
   expect(defaultRecoveriesPerWorkerAttempt()).toBe(1);
 });
 
-test('Manifest2 拒绝旧版本、缺模型绑定与重复角色的授权', () => {
+test('Manifest3 拒绝旧版本、缺模型绑定与重复角色的授权', () => {
   expect(parseManifest({ ...baseManifest(), manifestVersion: 1 }).ok).toBe(false);
 
   const missingModel = baseManifest();
@@ -289,7 +289,7 @@ test('Manifest2 拒绝旧版本、缺模型绑定与重复角色的授权', () =
   expect(parseManifest(duplicated).ok).toBe(false);
 });
 
-test('Manifest2 不接受模型 options 中的明文秘密，但放行同前缀的非秘密项', () => {
+test('Manifest3 不接受模型 options 中的明文秘密，但放行同前缀的非秘密项', () => {
   const withSecret = (modelOptions: Record<string, unknown>): boolean => {
     const raw = baseManifest();
     const profiles = raw['workerProfiles'] as Record<string, unknown>[];

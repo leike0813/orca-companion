@@ -13,7 +13,7 @@ Companion 为范围明确的软件项目提供可恢复、可追踪、有预算�
 首版边界：
 
 - 一个本机 Companion 进程可管理当前 Coordination Scope；Route Planning 可有多个独立 Coordinator Session，Execution Coordination 只有一个 lease holder。
-- Execution Coordination 并发上限为 1；每个 Work Package 使用隔离 worktree。
+- Execution Coordination 的并行 Work Package 额度由用户配置（默认 3），每包使用隔离 worktree；同包角色串行，canonical 集成串行。
 - Coordinator Harness 自己承载 LangGraph agent loop、Coordinator 会话、受控工具和 TUI，不依附 Codex、Claude Code 或 OMP。
 - Worker Harness 提供 coding Worker 的模型、认证、代码操作和真实会话；Companion 不重新实现 coding harness、provider gateway、终端模拟器或 worktree manager。
 - M0–M2 不提供 headless 执行、后台 controller、远程 attach、无人值守运行或上层机器驱动协议。
@@ -26,7 +26,7 @@ Companion 为范围明确的软件项目提供可恢复、可追踪、有预算�
 - API key 保存于用户级明文 CredentialStore（见下），项目配置、checkpoint、UI 输入存储、命令参数、诊断与证据只出现不透明 `credentialRef`。这是用户确认的取舍：它改变了本文件早期「Companion 不保存密钥」的约束。
 - Coordinator Session 使用 LangGraph SqliteSaver，`durability: sync`；Branch Coordination State 使用独立 SQLite store。
 - TUI 使用 `ink@7.1.1`、`react@19.3.0` 和 `@types/react@19.3.0`；TUI 测试可使用 `ink-testing-library@4.0.0`，但其 Ink 7/React 19 兼容性仅有本机验证。
-- 边界 DTO、CLI JSON、项目配置和持久化记录必须做运行时 schema 校验；领域类型不得依赖框架运行时对象。项目配置当前为 schema 2：保存 `revision`、`providerConnections`、`models` 与 `execution.workerProfiles`，不再有全局 `workerModel`；旧格式明确拒绝且不自动改写。
+- 边界 DTO、CLI JSON、项目配置和持久化记录必须做运行时 schema 校验；领域类型不得依赖框架运行时对象。项目配置当前为 schema 3：保存 `revision`、`providerConnections`、`models` 与 `execution.workerProfiles`，不再有全局 `workerModel`；旧格式明确拒绝且不自动改写。
 - 测试使用 Vitest，不为覆盖率引入第二套运行器。
 - 保持单 npm package；只有实际发布或依赖隔离需要时才拆 package。
 - 当前支持声明以 Ubuntu 本机验证为限。Windows 仍是目标平台，但未经验证不得标记为支持。
@@ -138,7 +138,7 @@ Coordinator Agent 与用户形成并维护 Route Map、Decision Tickets 和 Impl
 
 Manifest 一次性绑定当前 Destination/地图/计划/Graph Generation、Coordination Scope、baseline HEAD、空 Orca Run、Worker Profiles、权限、预算、workspace、Git/Dependency Policy 和 accepted risks。授权后的普通派发、策略内依赖变更与受控 Git 集成不再逐次审批；发布、部署和越界外部操作仍需单独授权。
 
-Manifest 升为 v2 后，每个生产角色的 Worker Profile 必须带完整 `modelConfiguration`（连接、模型、effort 及其可信能力来源、非秘密 options 与 credentialRef），并单独绑定 Recovery Utility Profile；缺任一项即拒绝，不存在「启动时再补」的状态。执行期只换模型配置时按完整 Manifest 指纹与 Scope revision 重新批准，保持 Graph Generation、Run、权限、上限与已消耗预算，不创建 Graph Revision；Replanning、cancelling 或存在未决派发 mutation 时拒绝重新授权。旧版本 Manifest 不被当作包含模型授权。
+Manifest 当前为 v3，每个生产角色的 Worker Profile 必须带完整 `modelConfiguration`（连接、模型、effort 及其可信能力来源、非秘密 options 与 credentialRef），并单独绑定 Recovery Utility Profile；缺任一项即拒绝，不存在「启动时再补」的状态。执行期换模型或并行额度时按完整 Manifest 指纹与 Scope revision 重新批准，保持 Graph Generation、Run、Task、权限、其他上限与已消耗预算，不创建 Graph Revision；降低额度后在途包继续，空槽回收至新额度后再接纳新包。Replanning、cancelling 或存在未决派发 mutation 时拒绝重新授权。旧版本 Manifest 不被当作包含模型授权。
 
 派发即固定运行依据：Task 物化时把当时的 authorizationId、authorizationVersion 与 workerProfileRef 写进 Materialization Binding。Retry 沿原 WorkerTask 的绑定取原授权与 profile；已结算与恢复读取按绑定判断，绑定缺这三项即按不可证明阻塞，不退回「当前授权」。
 
@@ -168,7 +168,7 @@ Graph Patch 采用原子的 `add + revise + retire`：
 
 历史 GraphVersion 不改写。Specification Revision 只改变同一 Work Package 的 contract content；Retry Attempt 保持 WorkerTask/contract/revision 不变，只创建新 Dispatch/Attempt。已派发 Worker 遇到 revision request 时进入 `revision pending`，运行至可核验终态后再修订，不因修订意图直接杀死。
 
-默认最多 8 个 active Work Package、每包 2 次实现尝试、2 次 Validator 修复、2 次 Graph Revision 和每包 2 次 Specification Revision，并发 1；配置可调整但必须有限。重启、恢复、Patch 或重规划不得重置已消耗预算。只有实际取得 usage 时才报告费用。
+默认图容量 `maxWorkPackages=8`，并行包额度 `maxActiveWorkPackages=3`；每包 2 次实现尝试、2 次 Validator 修复、2 次集成复验、2 次 Graph Revision 和 2 次 Specification Revision。所有配置均为正安全整数，并行额度无硬上限 3。重启、恢复、Patch 或重规划不得重置已消耗预算。只有实际取得 usage 时才报告费用。
 
 ### Replanning
 
@@ -193,7 +193,7 @@ Graph Patch 采用原子的 `add + revise + retire`：
 - `coordination.sqlite` 保存模式、Planning Cycle、当前 graph/authorization 引用、Session 注册、Ticket Claim、Pending Interaction、Operation Intent、Runtime/Execution lease、fencing、共享预算状态和 CAS revision；
 - `checkpoints.sqlite` 由 LangGraph SqliteSaver 保存每个 Session 的已提交消息/tool step、图位置、Wake Batch、Context Capsule 和 Coordinator Model Configuration binding。
 
-`coordination.sqlite` 当前为 schema 17：schema 16 的物化绑定继续要求 `authorization_id`、`authorization_version` 与 `worker_profile_ref`；初始图记录新增 nullable `initial_plan_json`，初始 v1 写入必须携带与 `planRevision` 一致的归一化 Implementation Plan，并与图记录在同一事务提交。旧行保持 `null`，读取时明确显示原计划未记录，不推断回填；accepted revision 不改写原计划。
+`coordination.sqlite` 当前为 schema 19：物化绑定要求 `authorization_id`、`authorization_version` 与 `worker_profile_ref`；初始图记录 nullable `initial_plan_json`，初始 v1 写入必须携带与 `planRevision` 一致的归一化 Implementation Plan，并与图记录在同一事务提交。旧行保持 `null`，读取时明确显示原计划未记录，不推断回填；accepted revision 不改写原计划。prepared terminal 的原创建回执句柄随 Operation Intent 结算保存；恢复在精确 worktree 内重新核验该资源，显示标题不承担身份语义。原句柄缺失或失效时阻塞，不能重发已接受的创建操作。
 
 图历史与依据正文遵守 IC-03/05/06/11/12：版本目录、head、追加链 membership 与依据 UTF-8 范围通过 metadata/范围查询读取；目录每页最多 20 项，正文每次最多 64 KiB。初始计划按 JSON 原结构保留，以 SQLite BLOB 范围读取，不先全文编码。generation 状态只读登记值，不能从历史身份推断 frozen。TUI 唯一只读 seam 是 `src/application/tui/graph-basis.ts` 的 `GraphBasisPort`，应用实现由 `src/application/tui/graph-basis-service.ts` 拥有。来源引用按判别联合 fail closed。原生规格 provider 的 `readFiles` 与 `readFileRange` 是可选能力，只有 task、package、Orca Task、locator 和 contract binding 精确匹配时才可读；`listSources` 可带 `orcaTaskId` 进入该 Task binding 的精确 unit，tracking revision 独立呈现。tracker 只读取配置的当前 `routeMapIssueRef`；未保存的批准时正文明确缺失。`retained_task` 是 Work Package 级保留记录，不能按时间归到某个 GraphVersion。ProjectDetails 仍绑定当前 Scope revision；历史图与依据使用独立来源身份和各自 8 MiB/64 项缓存，snapshot 只带当前拓扑。历史图不得借用当前 frontier、worker、budget 或验收事实。
 
@@ -205,7 +205,7 @@ UiDraft.text 是唯一展开载荷，cursor 位于 grapheme 边界，折叠粘�
 
 副作用前先持久化 Operation Intent，再执行外部 mutation，最后写后核验并完成 intent。外部响应丢失、receipt 缺失或 transport 故障不证明动作未发生；恢复时以原 OperationId、scope、receipt 和实时资源对账，仍不确定则阻塞对应 mutation lane。
 
-Delivery 处理顺序固定为：读取但不 ack → 校验身份与版本 → 去重 → 写入对应权威事实或本地记录并回读 → ack。不得先确认再落业务结果，也不建立复制所有来源的通用 inbox。
+Delivery 处理顺序固定为：读取但不 ack → 校验身份与版本 → 去重 → 写入对应权威事实或本地记录并回读 → ack。同批多个结果先逐条结算，整批结果均已消费后才确认；普通角色与集成续接共用应用层的批次确认检查。不建立复制所有来源的通用 inbox。
 
 Coordinator 无可执行工作时调用 `suspend`，结束模型 loop 但不停止前台 Controller、Worker 和确定性对账。Controller 从 durable Actionable Work 推导是否恢复模型；普通进度、keepalive、长轮询超时和无变化对账不唤醒模型。
 
@@ -229,7 +229,7 @@ LangGraph checkpoint、SQLite 和 Orca receipt 都不提供跨系统 exactly-onc
 
 TUI 实施必须先读 [原型交接](docs/dev/tui-implementation-handoff.md) 所指的六票定稿决议、源码和画面，按已批准的布局、层级、配色、导航及返回约定验收；修改设计须获用户明确批准。自动检查与交互正常不能代替逐票画面对照。
 
-TUI 以选中 Coordinator Session 的 continuous transcript 与 composer 为主视图。右侧 adaptive sidebar 展示当前图、节点卡、Worker/liveness、串行队列与 blocker。项目面板承载预算/授权、身份、工作依据、待答列表和最近事件；100 列及以上使用原 sidebar 区域，对话宽度与位置不变，更窄时独占主区域，关闭恢复原工作区。Graph Inspector 在三档尺寸都支持只读邻域、详情与明确关系选择。
+TUI 以选中 Coordinator Session 的 continuous transcript 与 composer 为主视图。右侧 adaptive sidebar 展示当前图、节点卡、Worker/liveness、并行包与集成队列、blocker。项目面板承载预算/授权、身份、工作依据、待答列表和最近事件；100 列及以上使用原 sidebar 区域，对话宽度与位置不变，更窄时独占主区域，关闭恢复原工作区。Graph Inspector 在三档尺寸都支持只读邻域、详情与明确关系选择。
 
 Transcript 只显示用户/Agent 消息和折叠 tool 记录；运行事实按上述区域分层，语义事件进入项目面板最近事件（本次启动最多 50 条），诊断噪声只进日志。Pending Interaction 显示紧凑入口，Shift+Left 或 `/answer` 打开当前 Session 底部面板，回答 composer 必须绑定 interaction ID 与 expected revision；普通聊天不能满足待答问题。项目待答页支持精确跨 Session 进入；返回上下文只保存原 Session、来源锚点、栏目/选择/滚动与焦点，草稿仍由 IC-13 保存。Esc 保存成功或原提交确定受理且没有后来编辑才返回；手工切会话使旧返回失效。Ctrl+A/E 为行首尾，Enter 提交，Alt+Enter 换行；新问题不得抢焦点。
 
@@ -260,7 +260,7 @@ Pause、Resume 和 Cancel 都作用于整个 Coordination Scope：
 
 ### M1：跑通有界协调闭环
 
-实现 Branch Coordination Store、Coordinator Session checkpointer、LangGraph 原生 loop、受控工具、Route Planning、Execution Authorization、Execution Graph、即时 Task 物化、Codex Worker Harness 和串行执行。跑通规划、规格、实现、Validator 同会话修复、Finalizer、恢复、Patch/Revision 与 Replanning；先用 fake backend 验证故障路径，再用真实 Orca 验证必要契约。
+实现 Branch Coordination Store、Coordinator Session checkpointer、LangGraph 原生 loop、受控工具、Route Planning、Execution Authorization、Execution Graph、即时 Task 物化、Codex Worker Harness 和有界并行执行。跑通规划、规格、实现、Validator 同会话修复、Finalizer、恢复、Patch/Revision 与 Replanning；先用 fake backend 验证故障路径，再用真实 Orca 验证必要契约。
 
 ### M2：提供前台 TUI
 
@@ -268,7 +268,7 @@ Pause、Resume 和 Cancel 都作用于整个 Coordination Scope：
 
 ### M3：按使用结果扩展
 
-串行流程稳定后再评估并行 Worker、多 Worker Harness、后台 controller、remote attach、Windows 支持或上游原生集成。届时先解决写入隔离、控制链路和集成验收，不以预建基础设施证明项目价值。
+并行流程稳定后再评估多 Worker Harness、后台 controller、remote attach、Windows 支持或上游原生集成。届时先解决写入隔离、控制链路和集成验收，不以预建基础设施证明项目价值。
 
 ## 11. 验证与完成标准
 

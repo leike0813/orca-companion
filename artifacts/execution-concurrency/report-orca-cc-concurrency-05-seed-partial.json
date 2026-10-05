@@ -1,0 +1,89 @@
+{
+  "generatedAt": "2026-10-05T08:18:20.547Z",
+  "phase": "sampled",
+  "fixture": {
+    "repository": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-05",
+    "identity": "term_f515338f-f266-4d0e-a179-355e47ac0506",
+    "coordinationScopeId": "e2e-loop-scope",
+    "orcaRunId": "run_770dd03c646e",
+    "baselineHead": "7783eb009226596f436e0b2dbd0615e50e56d373",
+    "resumed": false
+  },
+  "approvedMaxActiveWorkPackages": 5,
+  "configuredMaxActiveWorkPackages": 5,
+  "observation": {
+    "maxActivePackages": 2,
+    "maxUnconcluded": 2,
+    "peakOverlap": 0,
+    "activePackageIds": [
+      "e2e-loop-scope#g1:notes-basics",
+      "e2e-loop-scope#g1:readme-banner"
+    ]
+  },
+  "rounds": {
+    "triggers": 5,
+    "samples": 96
+  },
+  "sameOriginalIds": true,
+  "dispatchIntervals": [
+    {
+      "dispatchId": "ctx_c45aa200a089",
+      "start": 1791188136000,
+      "end": 1791188298833
+    },
+    {
+      "dispatchId": "ctx_9d77183f5b9f",
+      "start": 1791187991000,
+      "end": 1791188101413
+    },
+    {
+      "dispatchId": "ctx_441e0456bbb3",
+      "start": 1791187975000,
+      "end": 1791188054462
+    },
+    {
+      "dispatchId": "ctx_86a79ba23435",
+      "start": 1791187892000,
+      "end": 1791187945926
+    },
+    {
+      "dispatchId": "ctx_fad9388c80f1",
+      "start": 1791187875000,
+      "end": 1791187932683
+    },
+    {
+      "dispatchId": "ctx_e8bbbbbc5900",
+      "start": 1791187711000,
+      "end": 1791187852208
+    },
+    {
+      "dispatchId": "ctx_638bd3fda90f",
+      "start": 1791187694000,
+      "end": 1791187796301
+    }
+  ],
+  "workPackages": [
+    {
+      "workPackageId": "e2e-loop-scope#g1:notes-basics",
+      "state": "accepted",
+      "role": "validator",
+      "attemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Anotes-basics:validator:3161928545426006:1"
+    },
+    {
+      "workPackageId": "e2e-loop-scope#g1:readme-banner",
+      "state": "waiting_integration",
+      "role": "validator",
+      "attemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:3622696963060115:1"
+    }
+  ],
+  "finalizer": {
+    "verdict": null,
+    "gate": {
+      "ready": false,
+      "blockers": [
+        "finalizer-not-authorized"
+      ]
+    }
+  },
+  "blockers": []
+}

@@ -8,6 +8,7 @@ import { afterEach, expect, test } from 'vitest';
 import {
   CODEX_UTILITY_PERMISSION_PROFILE,
   CODEX_UTILITY_PROFILE_CONFIG_TOML,
+  createCodexResumeLaunch,
   createCodexWorkerLaunch,
   installCodexSessionStartReporter,
 } from '../../../src/adapters/agents/codex-launch.js';
@@ -83,6 +84,8 @@ test('Codex prepared-terminal 只写 worktree 内隔离状态，并固定 trust 
   expect(existsSync(join(prepared.stateRoot, 'auth.json'))).toBe(true);
   expect(readlinkSync(join(prepared.stateRoot, 'auth.json'))).toBe(join(sourceHome, 'auth.json'));
   expect(readFileSync(join(prepared.stateRoot, 'hooks.json'), 'utf8')).toContain(reporter);
+  // SessionStart matcher 必须同时覆盖 launch 与 resume 两种 source，否则 resume 不会上报绑定。
+  expect(readFileSync(join(prepared.stateRoot, 'hooks.json'), 'utf8')).toContain('startup|resume');
 });
 
 test('Utility Codex 使用只读文件系统与本机控制通道 profile', async () => {
@@ -161,6 +164,7 @@ test('只读 Finalizer 的状态根与 reporter 留在 canonical worktree 之外
   expect(prepared.stateRoot.startsWith(privateState)).toBe(true);
   expect(descriptorArgs(prepared.stateRoot)).toContain('--sandbox read-only');
   expect(readFileSync(join(prepared.stateRoot, 'hooks.json'), 'utf8')).toContain(reporter);
+  expect(readFileSync(join(prepared.stateRoot, 'hooks.json'), 'utf8')).toContain('startup|resume');
   // 只读检查的工作区里不得出现任何 Companion 状态：否则前后工作区比较会把自己的状态当成变化。
   expect(existsSync(join(worktree, '.companion'))).toBe(false);
 });
@@ -564,4 +568,42 @@ test('写不成合法 TOML 的值被拒绝，而不是产出静默失效的参�
   let deep: unknown = 1;
   for (let index = 0; index < 12; index += 1) deep = { nested: deep };
   expect(codexConfigValue(deep)).toBeNull();
+});
+
+test('Codex resume 复用原 CODEX_HOME，argv 以 resume <uuid> 开头', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'companion-codex-resume-'));
+  roots.push(root);
+  const codexHome = join(root, 'original-codex-home');
+  const worktree = join(root, 'worktree');
+  mkdirSync(codexHome, { recursive: true });
+  mkdirSync(worktree, { recursive: true });
+  writeFileSync(join(codexHome, 'config.toml'), 'model = "x"\n', 'utf8');
+
+  const strategy = createCodexResumeLaunch({
+    launchId: 'reconcile:wp-1:round-1',
+    modelConfiguration: modelConfigurationFixture(),
+    sessionId: '11111111-1111-1111-1111-111111111111',
+    codexHome,
+    sandboxMode: 'workspace-write',
+  });
+  const prepared = await strategy.prepare({ worktreePath: worktree });
+
+  expect(prepared.stateRoot).toBe(codexHome);
+  const args = descriptorArgs(codexHome);
+  expect(args.startsWith('resume 11111111-1111-1111-1111-111111111111')).toBe(true);
+  expect(args).toContain('--sandbox workspace-write');
+});
+
+test('Codex resume 拒绝形态非法的 session ID，不落到任何启动参数上', () => {
+  const root = mkdtempSync(join(tmpdir(), 'companion-codex-resume-bad-'));
+  roots.push(root);
+  const strategy = createCodexResumeLaunch({
+    launchId: 'reconcile:wp-1:round-1',
+    modelConfiguration: modelConfigurationFixture(),
+    sessionId: 'bad id; rm -rf /',
+    codexHome: root,
+    sandboxMode: 'workspace-write',
+  });
+  expect(() => strategy.prepare({ worktreePath: root })).toThrow();
+  expect(existsSync(join(root, 'codex-model-launch.json'))).toBe(false);
 });

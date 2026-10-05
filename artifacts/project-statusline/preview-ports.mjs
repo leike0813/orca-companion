@@ -16,7 +16,7 @@ export async function createPreviewPorts(snapshot) {
       session: id ? { id, model: id === 'session-b' ? '示例模型 B' : '示例模型 A', provider: '示例 provider',
         effort: id === 'session-b' ? { status: 'not_configured' } : { status: 'configured', value: 'high' } } : null,
       ticket: !executing && current.graph ? { ref: '#48', title: '状态栏展示与偏好（隔离示例）' } : null,
-      activeWorkPackage: active ? { id: active.workPackageId, title: current.graphTopologies[0]?.nodes.find(node => node.workPackageId === active.workPackageId)?.title ?? active.workPackageId } : null,
+      activeWorkPackages: active ? [{ id: active.workPackageId, title: current.graphTopologies[0]?.nodes.find(node => node.workPackageId === active.workPackageId)?.title ?? active.workPackageId }] : [],
       context: current.controlState === 'blocked' || id === 'session-b' ? { status: 'unavailable' }
         : { status: 'available', used: 62000, capacity: 100000, observationId: 'fixture-exact-context',
           coordinatorSessionId: id, modelConfigurationRef: 'config-a', effectiveInputRevision: 1 },

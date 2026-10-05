@@ -198,6 +198,8 @@ type BackendScript = {
   readonly deliveryId?: string;
   readonly deliveryRunId?: string | null;
   readonly taskRows?: unknown;
+  /** 模拟 Orca 队列：一次 delivery-ack 之后，当前未确认批次前移。 */
+  readonly advanceOnAck?: boolean;
 };
 
 /** 记录型 fake backend：delivery-read 返回稳定批次，task-list 返回可回读结果，mutation 默认接受。 */
@@ -210,6 +212,7 @@ function fakeBackend(script: BackendScript = {}): {
   const mutations: ExecutionMutation[] = [];
   const deliveryId = script.deliveryId ?? 'delivery-1';
   const deliveryRunId = script.deliveryRunId === undefined ? 'run-1' : script.deliveryRunId;
+  const acked = { value: false };
   const backend: ExecutionBackend = {
     query: (input: ExecutionQuery): Promise<ExecutionQueryResult> => {
       queries.push(input);
@@ -217,7 +220,7 @@ function fakeBackend(script: BackendScript = {}): {
         return Promise.resolve({
           kind: 'accepted',
           value: {
-            delivery: { deliveryId, runId: deliveryRunId },
+            delivery: acked.value ? null : { deliveryId, runId: deliveryRunId },
             messages: [],
             timedOut: false,
             cancelled: false,
@@ -234,6 +237,9 @@ function fakeBackend(script: BackendScript = {}): {
     },
     mutate: (input: ExecutionMutation, scope: ExecutionScope): Promise<OperationOutcome<unknown>> => {
       mutations.push(input);
+      if (input.operation === 'delivery-ack' && script.advanceOnAck === true) {
+        acked.value = true;
+      }
       return Promise.resolve({
         kind: 'accepted',
         operation: { operationId: scope.operationId, target: scope.target },
@@ -535,4 +541,70 @@ test('lane 已被占用时 blockedLaneKeys 与 store 中未决 intent 的 laneKe
   expect(
     unresolved.intents.some((intent) => intent.laneKey === lane && intent.operationId === holder),
   ).toBe(true);
+});
+
+/* -------------------------------------------------------------------------- */
+/* 同批多结果：旧 bug 是逐条结算时第一条 ack 会把第二条挤走                        */
+/* -------------------------------------------------------------------------- */
+
+test('同批两条普通 role 共享 deliveryId：两条 settlement 都落盘，且只 ack 一次', async () => {
+  const backend = fakeBackend({
+    advanceOnAck: true,
+    taskRows: [
+      { id: 'orca-task-1', status: 'completed', result: ACCEPTED_RESULT },
+      { id: 'orca-task-2', status: 'completed', result: ACCEPTED_RESULT },
+    ],
+  });
+  // 两条同批消息共享 deliveryId；accept/ack 候选 ID 由调用方按 lane 给出，因此这里显式区分。
+  const pending = [
+    {
+      ...pendingDelivery('orca-task-1', 'delivery-1'),
+      operationIds: { acceptResult: 'accept-1' as OperationId, ack: 'ack-1' as OperationId },
+    },
+    {
+      ...pendingDelivery('orca-task-2', 'delivery-1'),
+      operationIds: { acceptResult: 'accept-2' as OperationId, ack: 'ack-2' as OperationId },
+    },
+  ];
+
+  const result = await replayDeliveries(replayInput(backend.backend, pending));
+
+  expect(result.kind).toBe('replayed');
+  if (result.kind !== 'replayed') {
+    return;
+  }
+  // 旧行为会在第一条结算后 ack 整批，第二条读到已前移的批次而 delivery_mismatch 丢结果。
+  expect(result.outcomes.map((outcome) => outcome.kind)).toEqual(['settled', 'settled']);
+  expect(result.outcomes.every((outcome) => outcome.confirmed)).toBe(true);
+  expect(result.unconfirmed).toEqual([]);
+  expect(settlementCount()).toBe(2);
+  expect(backend.mutations.filter((mutation) => mutation.operation === 'delivery-ack')).toHaveLength(1);
+});
+
+test('同批两条 stale 共享 deliveryId：都只补历史且只 ack 一次，不死锁', async () => {
+  const backend = fakeBackend({ advanceOnAck: true });
+  const stale = (pending: PendingDelivery): PendingDelivery => ({
+    ...pending,
+    delivery: {
+      ...pending.delivery,
+      claimed: { ...pending.delivery.claimed, runId: 'run-0' },
+    },
+  });
+  const pending = [
+    stale(pendingDelivery('orca-task-1', 'delivery-1')),
+    stale(pendingDelivery('orca-task-2', 'delivery-1')),
+  ];
+
+  const result = await replayDeliveries(replayInput(backend.backend, pending));
+
+  expect(result.kind).toBe('replayed');
+  if (result.kind !== 'replayed') {
+    return;
+  }
+  expect(result.outcomes.map((outcome) => outcome.kind)).toEqual(['history_only', 'history_only']);
+  expect(result.outcomes.every((outcome) => outcome.confirmed)).toBe(true);
+  expect(result.unconfirmed).toEqual([]);
+  expect(settlementCount()).toBe(0);
+  expect(backend.mutations.filter((mutation) => mutation.operation === 'delivery-ack')).toHaveLength(1);
+  expect(backend.mutations.filter((mutation) => mutation.operation === 'task-update')).toHaveLength(0);
 });

@@ -2,6 +2,20 @@
 
 记录 Companion 依赖的 Orca 侧事实：上游源码快照、本机运行时版本、已经核验的能力，以及尚未验证的部分。运行时能力必须通过当前安装的 Orca 版本核验，不能从 submodule 源码推断。
 
+## 当前执行约束（2026-10-05）
+
+并行 Work Package 额度由用户配置并通过 Manifest 批准，默认 3，图容量默认 8。新包以已归属的当前 canonical HEAD 建立隔离 worktree，既有包保留准入基线。canonical 集成串行；分叉包先在包内合并 canonical，再续接原 Validator Session 复验精确合并树。Graph Patch Planner 有独立的单例派发约束，普通包不等待整个 Run 静止。
+
+本次现场确认 terminal 显示标题会被 shell/TUI 改写为 worktree 名称，不能作为恢复身份。当前 prepared-terminal 路径保存原创建回执句柄并在精确 worktree 内重验；缺原资源证明时阻塞，已接受的 terminal 创建操作不重复执行。
+
+Codex 的 SessionStart hook 共用 `startup|resume` matcher；官方事件的 source 区分新启动和恢复，单独匹配 startup 无法取得续接报告（[官方 hook 合同](https://learn.chatgpt.com/docs/hooks#sessionstart)）。续接必须读取本次 launch 的报告，核验原 provider UUID、CODEX_HOME、cwd、transcript 与观察时间。已接受的 Worker 启动按原 Task 读回 Dispatch，激活按原结算事实复用；会话报告迟到不会重复创建终端、启动或提交草稿。
+
+本次运行时为 Orca 1.4.218、Codex 0.160.0。公开 `terminal read --screen --json` 不提供 `draft` 字段；prepared Worker 的 `submit_draft` 策略直接提交一次 Enter，由持久化激活意图控制重放。隔离探针确认：原 Validator 终结且终端 `tui-idle` 后，按精确句柄关闭原终端，再用 `codex resume <UUID> --no-daemon` 可以保持原 provider UUID；新的 SessionStart 报告在首个实际 turn 后产生。探针身份和公共响应摘要见 [恢复探针](../artifacts/execution-concurrency/provider-resume-probe.json)。
+
+隔离 fixture 06 使用 `minimax-cn/MiniMax-M3.1-Flash-Preview`，批准并行额度 5，公共 Worker 起止区间的重叠峰为 2；两包同准入基线、原 Validator 同 UUID 的合并树复验、Finalizer `deliverable` 与同 Scope 重启均已通过。完整证据见 [并发验收](../artifacts/execution-concurrency/README.md)。模型服务的 529 与未决 push 的恢复失败记录保留；最终沿原操作身份结算，未重复推送。
+
+以下带日期的现场记录保留当时行为及证据；其中并发 1、固定授权基线和全 Run 静止的描述不代表当前调度约束。
+
 ## 上游源码快照
 
 | 项 | 值 |

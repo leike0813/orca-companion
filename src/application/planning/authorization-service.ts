@@ -171,7 +171,13 @@ export type RecordApprovalResult =
   | { readonly kind: 'recorded'; readonly authorization: ExecutionAuthorizationRecord }
   | { readonly kind: 'rejected'; readonly failure: AuthorizationFailure };
 
-/** 模型限定的重新授权所接受的输入；除模型绑定与 Graph head 外没有任何可改字段。 */
+/**
+ * 限定的重新授权所接受的输入。
+ *
+ * 只有三类字段可变：角色模型绑定、Recovery Utility 绑定与并行包额度；Graph head 也必须给出实际
+ * 版本，授权才能绑定到它。权限、图容量、集成复验、政策与预算消费都原样继承，因此这次批准不重置
+ * 任何预算，也不构成 Graph Revision。
+ */
 export type ModelReauthorizationInput = {
   readonly store: BranchCoordinationStore;
   readonly coordinationScopeId: CoordinationScopeId;
@@ -182,29 +188,42 @@ export type ModelReauthorizationInput = {
   readonly recoveryUtilityProfile: RecoveryUtilityProfile;
   /** 实际 Graph head version；授权必须绑定它，而不是沿用批准时的旧版本。 */
   readonly graphVersion: GraphVersion;
+  /**
+   * 可选的并行包额度更新。
+   *
+   * 给出时只改 Manifest 的 `limits.maxActiveWorkPackages`；未给出时沿用基底里的值。它与模型绑定走
+   * 同一条完整指纹与 CAS 路径，因此不存在「只补差量、不重新批准」的任意 patch。
+   */
+  readonly maxActiveWorkPackages?: number;
   /** 调用方按完整指纹派生的授权 ID；相同内容因此得到相同 ID，不同内容不会碰撞。 */
   readonly authorizationId: string;
   readonly approvalRef: string;
 };
 
 /**
- * 以当前授权为基底拼出模型限定的新 Manifest。
+ * 以当前授权为基底拼出限定的新 Manifest。
  *
- * 只有三个字段可变：角色 profiles、Recovery Utility profile 与 Graph head version。权限、上限、
- * 政策、accepted risks、baseline HEAD、Run 与三个版本化引用原样继承——因此这次批准不重置任何预算，
- * 也不构成 Graph Revision。
+ * 只有角色 profiles、Recovery Utility profile、Graph head version 与并行包额度可变。其余权限、
+ * 政策、accepted risks、baseline HEAD、Run、图容量、集成复验与预算消费原样继承——因此这次批准不
+ * 重置任何预算，也不构成 Graph Revision。
  */
 export function modelReauthorizationManifest(input: {
   readonly base: ExecutionAuthorizationManifest;
   readonly workerProfiles: readonly WorkerProfileRef[];
   readonly recoveryUtilityProfile: RecoveryUtilityProfile;
   readonly graphVersion: GraphVersion;
+  readonly maxActiveWorkPackages?: number;
 }): ProposeManifestResult {
+  const limits =
+    input.maxActiveWorkPackages === undefined
+      ? input.base.limits
+      : { ...input.base.limits, maxActiveWorkPackages: input.maxActiveWorkPackages };
   const parsed = parseManifest({
     ...input.base,
     graph: { ...input.base.graph, version: input.graphVersion },
     workerProfiles: input.workerProfiles,
     recoveryUtilityProfile: input.recoveryUtilityProfile,
+    limits,
   });
   if (!parsed.ok) {
     return { kind: 'rejected', failure: { code: parsed.field, message: parsed.message } };
@@ -240,6 +259,9 @@ function readAcceptedReauthorization(input: ModelReauthorizationInput): RecordAp
     workerProfiles: input.workerProfiles,
     recoveryUtilityProfile: input.recoveryUtilityProfile,
     graphVersion: input.graphVersion,
+    ...(input.maxActiveWorkPackages === undefined
+      ? {}
+      : { maxActiveWorkPackages: input.maxActiveWorkPackages }),
   });
   if (rebuilt.kind !== 'proposed' || rebuilt.fingerprint !== accepted.fingerprint) {
     return {
@@ -329,6 +351,9 @@ export function recordModelReauthorization(input: ModelReauthorizationInput): Re
     workerProfiles: input.workerProfiles,
     recoveryUtilityProfile: input.recoveryUtilityProfile,
     graphVersion: input.graphVersion,
+    ...(input.maxActiveWorkPackages === undefined
+      ? {}
+      : { maxActiveWorkPackages: input.maxActiveWorkPackages }),
   });
   if (rebuilt.kind === 'rejected') {
     return rebuilt;

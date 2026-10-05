@@ -28,7 +28,7 @@
 | 命令 | 说明 |
 | --- | --- |
 | `orca-companion [repository-path]` | 启动前台 TUI。**需要交互式终端**：stdin 或 stdout 无 TTY 时在挂载 Ink 之前以退出码 2 拒绝，诊断写 stderr |
-| `orca-companion status [--json]` | 只读输出当前 Coordination Scope 状态（`schemaVersion: 2`，含执行快照分区）；无 TTY 可运行 |
+| `orca-companion status [--json]` | 只读输出当前 Coordination Scope 状态（`schemaVersion: 3`，含执行快照分区）；无 TTY 可运行 |
 | `orca-companion doctor` | 核验 Orca 环境与能力；无 TTY 可运行 |
 
 不存在 `run`、`resume`、`tui` 子命令；传入它们会以非零状态被拒绝并指出受支持入口。
@@ -36,12 +36,12 @@
 ### 项目配置：`orca-companion.json`
 
 前台规划 Runtime 从 canonical worktree 根目录读取用户维护、纳入版本控制的 `orca-companion.json`。
-它只保存**凭据引用**，不保存任何密钥值：出现已知密钥字段名时整份配置被拒绝。`schemaVersion` 必须是 2，
+它只保存**凭据引用**，不保存任何密钥值：出现已知密钥字段名时整份配置被拒绝。`schemaVersion` 必须是 3，
 旧版本配置被明确拒绝，不会被自动改写。
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "revision": 1,
   "providerConnections": [
     {
@@ -82,7 +82,7 @@
     "workerProfileRefs": {},
     "codexSandbox": "workspace-write",
     "permissions": { "gitIntegration": true, "dependencyChanges": false },
-    "limits": { "maxActiveWorkPackages": 8, "concurrencyLimit": 1 },
+    "limits": { "maxActiveWorkPackages": 3, "maxWorkPackages": 8, "integrationReconciliations": 2 },
     "git": { "remotes": ["origin"], "refs": ["refs/heads/main"] },
     "dependency": { "allowDependencyChanges": false, "registry": null },
     "acceptedRisks": []
@@ -129,10 +129,16 @@
 
 ### 授权与运行依据
 
-Execution Authorization Manifest 当前为 v2：除目的地、图、权限、预算与策略外，它还完整绑定四个生产角色
+Command Palette 的“执行设置”或 `/concurrency` 可保存并行包额度，默认 3，允许任意正安全整数。
+`execution.limits.maxActiveWorkPackages` 是并行额度，`maxWorkPackages` 是未退场图容量（默认 8），
+`integrationReconciliations` 是每包集成复验预算（默认 2）。保存只改项目默认值；执行中须重新审阅并批准
+完整 Manifest 才生效。降低额度会等待在途包集成或终止后回收空槽，不停止已有 Worker。同包角色按顺序执行，
+独立包可并行，canonical 集成始终串行；分支分歧由原 Validator 会话复验合并树。
+
+Execution Authorization Manifest 当前为 v3：除目的地、图、权限、预算与策略外，它还完整绑定四个生产角色
 各自 Worker Profile 的模型配置（连接、模型、effort 及其可信能力来源、非秘密选项与 `credentialRef`）以及
 Recovery Utility 的独立绑定。缺少任一角色绑定的授权无法证明 Worker 实际用什么模型运行，因此解析即拒绝。
-执行期只改模型配置时按完整 Manifest 指纹与 Scope revision 重新批准，不创建 Graph Revision、不重置预算；
+执行期改变模型配置或并行额度时按完整 Manifest 指纹与 Scope revision 重新批准，不创建 Graph Revision、不重置预算；
 Replanning、cancelling 或存在未决派发时不能重新授权。
 
 每次派发会把当时的授权 ID、授权版本与 Worker Profile 写进该 Task 的物化绑定。Retry 沿原 Task 的绑定继续用
@@ -180,10 +186,10 @@ revision CAS、0600 临时文件原子替换与回读；锁被占用、文件已
 授权进入 Execution Coordination 后不切换页面：顶栏与 Sidebar 换成执行投影，transcript 与 composer
 保持原内容与焦点。
 
-- 顶栏：Graph Generation、Execution Authorization、Scope 控制状态、active Work Package 计数（并发上限
-  固定为 1，因此只可能是 0 或 1），重启后未完成对账时显示 `reconciling`。
+- 顶栏：Graph Generation、Execution Authorization、Scope 控制状态、并行 Work Package 计数；
+  重启后未完成对账时显示 `reconciling`。
 - Sidebar（完整态）：稳定拓扑的执行图（`position` 由编译顺序决定，状态变化不重排；过滤只隐藏节点）、当前
-  active Work Package 的角色/attempt/liveness/worktree/baseline、Validation 与 Evidence、串行
+  active Work Package 的真实列表与计数、各包的角色/attempt/liveness/worktree/baseline、Validation 与 Evidence、串行
   integration queue、Recovery 详情（替代 Segment、coverage、剩余预算、superseded、结果引用）、Finalizer
   门禁与 Delivery Verdict、预算与 blocker。紧凑态只保留图关系、短 key、关键状态与告警；折叠态只在顶栏留计数。
 - 生命周期（`specifying`/`implementing`/`validating`/`waiting_integration`/…) 与 Worker liveness
@@ -200,7 +206,7 @@ revision CAS、0600 临时文件原子替换与回读；锁被占用、文件已
 
 ### 当前未接线的能力（fail closed）
 
-执行运行时已接线：授权、串行 Frontier 推进、Delivery 结算、Validator（由角色 Worker 在自己的 harness
+执行运行时已接线：授权、并行 Frontier 推进、Delivery 结算、Validator（由角色 Worker 在自己的 harness
 session 内完成）、受控 Git 集成与只读 Finalizer 都在生产路径上，Scope 级 Pause/Resume/Cancel 也会真实
 落盘（Resume 先对账再恢复调度）。以下事实仍缺权威来源，界面会显示结构化 blocker 或如实显示为未知，
 而不是假装成功：

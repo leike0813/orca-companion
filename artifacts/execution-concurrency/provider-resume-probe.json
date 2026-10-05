@@ -1,0 +1,49 @@
+{
+  "probe": "provider-resume-same-uuid",
+  "date": "2026-10-05",
+  "scope": "e2e-loop-scope",
+  "runId": "run_770dd03c646e",
+  "originalUUID": "01a10b1f-b454-75c0-9392-3bb75ca956f6",
+  "codexHome": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-05/.git/orca-companion/codex/49f9ad5516157f31c0a3",
+  "worktree": "/home/joshua/orca/workspaces/orca-cc-concurrency-05/wp-c0e65d235a978487562a464c2dc62a3996d88e55372d63cecb980935a0fa54c1",
+  "originalOwner": {
+    "dispatchId": "ctx_9d77183f5b9f",
+    "taskId": "task_8464030e67f4",
+    "agentTerminalHandle": "term_1d6801cb-314a-484c-a161-bdd06ae8b692",
+    "workerState": "succeeded",
+    "idleCheck": "terminal wait --for tui-idle satisfied",
+    "typedClose": { "handle": "term_1d6801cb-314a-484c-a161-bdd06ae8b692", "ptyKilled": true },
+    "publicReadback": { "handle": "term_1d6801cb-314a-484c-a161-bdd06ae8b692", "connected": false, "writable": false }
+  },
+  "probeTerminal": {
+    "agentTerminalHandle": "term_3528317b-3dce-4e16-ac79-c490da1240d9",
+    "command": "codex resume <originalUUID> --no-daemon (isolated model launcher, harness_login)",
+    "flags": ["--no-daemon", "--dangerously-bypass-hook-trust", "--no-alt-screen", "--ask-for-approval never"],
+    "firstTurn": "terminal send --text '只回复OK' --enter -> prompt.stages [input_accepted, turn_started]",
+    "typedClose": { "handle": "term_3528317b-3dce-4e16-ac79-c490da1240d9", "ptyKilled": true },
+    "publicReadback": { "handle": "term_3528317b-3dce-4e16-ac79-c490da1240d9", "connected": false, "writable": false }
+  },
+  "freshSessionStartReport": {
+    "independentReporter": true,
+    "sessionId": "01a10b1f-b454-75c0-9392-3bb75ca956f6",
+    "cwdMatchesWorktree": true,
+    "codexHomeMatches": true,
+    "sameUUID": true,
+    "firedOnFirstTurnOnly": true
+  },
+  "rolloutMetadata": {
+    "sessionMetaId": "01a10b1f-b454-75c0-9392-3bb75ca956f6",
+    "forkedFromId": null,
+    "noFork": true
+  },
+  "conclusion": {
+    "resumeSameUUIDRequires": [
+      "release original owner via typed terminal-close (stable OperationId + unknown reconcile by id)",
+      "codex resume <uuid> --no-daemon"
+    ],
+    "sessionStartFiresOnFirstTurnNotOnIdleResume": true,
+    "orcaWorkerStartDoesNotResumeOrFork": true,
+    "forkCause": "original session owner still live (shared daemon/terminal)"
+  },
+  "notIncluded": ["original rollout content", "provider credentials or capabilities", "secret material"]
+}

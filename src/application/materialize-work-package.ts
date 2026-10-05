@@ -38,13 +38,15 @@ import type {
 import {
   orcaDispatchIdFromReceipt,
   orcaTaskIdFromReceipt,
+  orcaTerminalHandleFromReceipt,
   reconcileOperation,
 } from './ports/execution-backend.js';
-import { beginIntent, blockLane, settleIntent } from './coordination/intent-service.js';
+import { beginIntent, blockLane, resolveLane, settleIntent } from './coordination/intent-service.js';
 import { readScope } from './planning/scope-read.js';
 import { parseTaskEnvelope } from './worker-report-dto.js';
 import {
   activatePreparedWorker,
+  knownTerminalHandleFor,
   prepareWorkerLaunch,
   verifyPreparedWorker,
   type WorkerLaunchFailure,
@@ -119,10 +121,7 @@ export type MaterializeWorktreePaths = {
   /** canonical worktree 的绝对路径；只用于核验，不落盘。 */
   readonly canonicalWorktree: string;
   /**
-   * 当前 Authorization 绑定的 exact baseline HEAD；worktree 必须建立在它上面并在建立后核验回它。
-   *
-   * 不能拿 canonical 分支当 base：分支会随每次受控集成前移，而每个 Work Package 的 base 与基线补救
-   * 判定都以授权 baseline 为准（`integrateWorkPackage` 的 commit 步同样按它核验来源 HEAD）。
+   * 包准入时固定的 exact HEAD；新包取已归属当前 canonical，已有包的后续角色沿用原占位基线。
    */
   readonly baselineHead: string;
 };
@@ -361,6 +360,43 @@ export async function materializeWorkPackage(
   if (listed.kind === 'failed') {
     return { kind: 'rejected', failure: listed.failure };
   }
+  // 准入先于任何外部 mutation；pending start 尚不可见时也持有同一包额度。
+  if (current.scope.graphId === null) {
+    return { kind: 'rejected', failure: { code: 'invalid_state', message: '当前 Scope 没有 Execution Graph' } };
+  }
+  const lanes = input.store.query({ kind: 'work-package-lanes', coordinationScopeId: input.coordinationScopeId });
+  if (lanes.kind !== 'work-package-lanes') {
+    return { kind: 'rejected', failure: { code: 'invalid_state', message: '包准入状态不可读' } };
+  }
+  const occupied = lanes.reservations.find(lane => lane.graphId === current.scope.graphId &&
+    lane.generation === candidate.graphGeneration && lane.workPackageId === input.workPackageId);
+  if (occupied === undefined) {
+    const refreshed = readScope(input.store, input.coordinationScopeId);
+    if (refreshed.kind === 'rejected') return { kind: 'rejected', failure: { code: refreshed.code, message: refreshed.message } };
+    const graphRead = current.scope.graphVersion === null ? null : input.store.query({
+      kind: 'graph-version', coordinationScopeId: input.coordinationScopeId,
+      graphId: current.scope.graphId, graphVersion: current.scope.graphVersion,
+    });
+    if (graphRead?.kind !== 'graph-version' || graphRead.version === null ||
+      graphRead.version.generation !== candidate.graphGeneration) {
+      return { kind: 'rejected', failure: { code: 'invalid_state', message: '派发代际与当前图不一致' } };
+    }
+    const admitted = input.store.transact({
+      kind: 'reserve-work-package-lane', coordinationScopeId: input.coordinationScopeId,
+      expectedRevision: refreshed.scope.revision, writer: candidate.writer,
+      graphId: current.scope.graphId, generation: graphRead.version.generation,
+      workPackageId: input.workPackageId,
+      operationId: `work-package-lane:${[input.coordinationScopeId, current.scope.graphId,
+        String(candidate.graphGeneration), input.workPackageId].map(encodeURIComponent).join(':')}` as OperationId,
+      authorizationId: candidate.authorizationId, authorizationVersion: candidate.authorizationVersion,
+      baselineHead: paths.baselineHead,
+    });
+    if (admitted.kind === 'rejected') {
+      return { kind: 'rejected', failure: { code: admitted.code, message: admitted.message } };
+    }
+  } else if (occupied.baselineHead !== paths.baselineHead) {
+    return { kind: 'rejected', failure: { code: 'baseline_mismatch', message: '派发必须沿用包准入时的基线' } };
+  }
   const existing = listed.worktrees.find((worktree) =>
     worktreeMatches(worktree, input.workPackageId, paths.canonicalWorktree),
   );
@@ -378,8 +414,7 @@ export async function materializeWorkPackage(
         repo: paths.repoSelector,
         name: worktreeNameFor(input.workPackageId),
         comment: workPackageComment(input.workPackageId),
-        // Orca 的 `--base-branch` 接受 ref 或 commit：这里传授权 baseline 的 exact commit，worktree
-        // 因而始终建立在授权基线上，而不是当前（可能已被集成推进的）canonical 分支尖端。
+        // 传准入时固定的 exact commit；已有包后续角色沿用同一基线。
         baseBranch: paths.baselineHead,
       },
       interpretWorktreeCreation,
@@ -488,22 +523,38 @@ export async function materializeWorkPackage(
     orcaTaskId = task.taskId;
   }
 
+  // 复用共享 helper：查询不可读、pending/blocked、或 accepted 但缺句柄都 fail closed 为 evidence_missing。
+  const knownTerminal = knownTerminalHandleFor(input.store, input.coordinationScopeId, operationIds.workerPrepare);
+  if (knownTerminal.kind === 'evidence_missing') {
+    return {
+      kind: 'blocked',
+      laneKey: input.workPackageId,
+      reason: '原 terminal-create 操作已接受但缺少可核验句柄：不以 title 猜回，拒绝重复创建',
+    };
+  }
   const launch = await prepareWorkerLaunch({
     backend: input.backend,
     strategy: candidate.workerLaunch,
     worktreeId: worktree.worktreeId,
     worktreePath: worktree.path,
     timeoutMs: candidate.timeoutMs,
+    // 重放时用原 worker-prepare 意图记录的真实 terminal 句柄重定位；有句柄即绕过 title/create。
+    ...(knownTerminal.kind === 'known' ? { knownTerminalHandle: knownTerminal.handle } : {}),
     createTerminal: async (mutation) => {
-      const prepared = await runMutation(
+      const prepared = await runMutation<{ readonly kind: 'terminal-created'; readonly terminalHandle: string }>(
         input,
         operationIds.workerPrepare,
         'worker-terminal',
         mutation,
-        () => ({ kind: 'terminal-created' as const }),
+        (value) => {
+          const terminalHandle = orcaTerminalHandleFromReceipt(value.value);
+          return terminalHandle === null
+            ? { code: 'invalid_receipt', message: 'terminal-create 回执缺少可核验的 terminal handle' }
+            : { kind: 'terminal-created' as const, terminalHandle };
+        },
       );
       return prepared.kind === 'terminal-created'
-        ? { kind: 'accepted' as const }
+        ? { kind: 'accepted' as const, terminalHandle: prepared.terminalHandle }
         : materializeLaunchFailure(prepared.result);
     },
   });
@@ -582,6 +633,17 @@ export async function materializeWorkPackage(
         'worker-activate',
         mutation,
         () => ({ kind: 'worker-activated' as const }),
+        undefined,
+        () => {
+          const read = input.store.query({
+            kind: 'intent', coordinationScopeId: input.coordinationScopeId,
+            operationId: operationIds.workerActivate,
+          });
+          return Promise.resolve(read.kind === 'intent' && read.intent?.state === 'settled' &&
+            read.intent.outcomeClass === 'accepted'
+            ? { kind: 'observed' as const, value: {} }
+            : { kind: 'unobserved' as const });
+        },
       );
       return submitted.kind === 'worker-activated'
         ? { kind: 'accepted' as const }
@@ -835,6 +897,89 @@ async function runMutation<T extends { readonly kind: string }>(
       kind: 'failed',
       result: { kind: 'blocked', laneKey: input.workPackageId, reason: begun.rejection.message },
     };
+  }
+
+  /**
+   * 重放已存在的意图：绝不重发外部 mutation，也绝不重复 settle。
+   *
+   * - settled accepted：只按事实读回（reconcileFacts），读不到即证明不了原副作用；
+   * - settled rejected：原样回带该结论；
+   * - pending / blocked：只按同一 OperationId 对账，证明成立才收尾，否则保持阻塞。
+   */
+  if (begun.kind === 'existing') {
+    if (begun.intent.state === 'settled' && begun.intent.outcomeClass === 'rejected') {
+      return {
+        kind: 'failed',
+        result: {
+          kind: 'rejected',
+          failure: { code: 'intent_settled_rejected', message: '意图 ' + operationId + ' 已结算为 rejected' },
+        },
+      };
+    }
+    const facts: { readonly kind: 'observed'; readonly value: unknown } | { readonly kind: 'unobserved' } =
+      reconcileFacts === undefined ? { kind: 'unobserved' } : await reconcileFacts();
+    if (facts.kind === 'unobserved') {
+      return {
+        kind: 'failed',
+        result: {
+          kind: 'blocked',
+          laneKey: input.workPackageId,
+          reason: '意图 ' + operationId + ' 已存在但缺少可核验的读回事实',
+        },
+      };
+    }
+    const acceptedOperation: Extract<OperationOutcome<unknown>, { kind: 'accepted' }> = {
+      kind: 'accepted',
+      operation: { operationId, target },
+      value: facts.value,
+    };
+    const interpreted = interpret(acceptedOperation);
+    if ('code' in interpreted) {
+      return { kind: 'failed', result: { kind: 'blocked', laneKey: input.workPackageId, reason: interpreted.message } };
+    }
+    // 与 accepted 正常路径一致：收尾前重跑 beforeSettle（例如 prepare 的 exact worker 接管核验）。
+    const preSettlementFailure = await beforeSettle?.(interpreted);
+    if (preSettlementFailure != null) {
+      const blockedRevision = freshRevision();
+      if (typeof blockedRevision === 'number') {
+        blockLane(input.store, {
+          coordinationScopeId: input.coordinationScopeId,
+          operationId,
+          writer: input.context.candidate.writer,
+          expectedRevision: blockedRevision,
+          reason: preSettlementFailure.message,
+        });
+      }
+      return { kind: 'failed', result: { kind: 'unknown', operationId, reason: preSettlementFailure.message } };
+    }
+    if (begun.intent.state !== 'settled') {
+      const settleRevision = freshRevision();
+      if (typeof settleRevision === 'number') {
+        const closed =
+          begun.intent.state === 'blocked'
+            ? resolveLane(input.store, {
+                coordinationScopeId: input.coordinationScopeId,
+                operationId,
+                writer: input.context.candidate.writer,
+                expectedRevision: settleRevision,
+                outcomeClass: 'accepted',
+              })
+            : settleIntent(input.store, {
+                coordinationScopeId: input.coordinationScopeId,
+                operationId,
+                writer: input.context.candidate.writer,
+                expectedRevision: settleRevision,
+                outcome: acceptedOperation,
+              });
+        if (closed.kind === 'rejected') {
+          return {
+            kind: 'failed',
+            result: { kind: 'blocked', laneKey: input.workPackageId, reason: closed.rejection.message },
+          };
+        }
+      }
+    }
+    return interpreted;
   }
 
   const outcome = await input.backend.mutate(

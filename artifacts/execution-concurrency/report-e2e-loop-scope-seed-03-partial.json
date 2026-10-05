@@ -1,0 +1,212 @@
+{
+  "generatedAt": "2026-10-05T07:17:26.179Z",
+  "phase": "stopped-on-blocker",
+  "note": "fixture 03 真实运行在 readme-banner 集成复验 round 1 被 blocked 后按指示停止宿主测试；真实 Worker 与 round1 记录保留未改。",
+  "rootCauseCorrection": "blocked 原因不是现场真实越权，也不是 add/add 冲突：普通 Worker 范围判定 SSOT envelopeCheckedPaths 会把整个 openspec/ 与工具目录过滤为 scope 外，而集成复验的续接 runtime 绕过了该 SSOT，才把 openspec/config.yaml 误判为越权修改（旧规则不一致，production bug）。round1 blocked 记录保留不改，仅更正原因。",
+  "fixture": {
+    "repository": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-03",
+    "identity": "term_ac28b130-39ed-433c-a32c-ddf85305e157",
+    "coordinationScopeId": "e2e-loop-scope",
+    "orcaRunId": "run_02ff907550cb",
+    "baselineHead": "f28e7c2476bf7d013abfe186287b5ad4ead0dd1f",
+    "resumed": false
+  },
+  "approvedMaxActiveWorkPackages": 5,
+  "configuredMaxActiveWorkPackages": 5,
+  "observation": {
+    "maxActivePackages": 2,
+    "peakOverlap": 2,
+    "publicSource": "orca orchestration worker-list + worker-show (dispatchedAt/completedAt)"
+  },
+  "dispatchIntervals": [
+    {
+      "dispatchId": "ctx_1cc7ee6f7467",
+      "taskId": "task_6ba62e47d8af",
+      "status": "completed",
+      "dispatchedAt": "2026-10-05 07:13:15",
+      "completedAt": "2026-10-05T07:14:44.729Z",
+      "start": 1791184395000,
+      "end": 1791184484729
+    },
+    {
+      "dispatchId": "ctx_d96c66d0a5fe",
+      "taskId": "task_43c26f6895ae",
+      "status": "completed",
+      "dispatchedAt": "2026-10-05 07:12:58",
+      "completedAt": "2026-10-05T07:14:14.685Z",
+      "start": 1791184378000,
+      "end": 1791184454685
+    },
+    {
+      "dispatchId": "ctx_22006516d163",
+      "taskId": "task_a55962e6259d",
+      "status": "completed",
+      "dispatchedAt": "2026-10-05 07:10:06",
+      "completedAt": "2026-10-05T07:10:51.721Z",
+      "start": 1791184206000,
+      "end": 1791184251721
+    },
+    {
+      "dispatchId": "ctx_47af6d8e697e",
+      "taskId": "task_a5669ff5e41c",
+      "status": "completed",
+      "dispatchedAt": "2026-10-05 07:09:48",
+      "completedAt": "2026-10-05T07:12:32.957Z",
+      "start": 1791184188000,
+      "end": 1791184352957
+    },
+    {
+      "dispatchId": "ctx_495a78ce596f",
+      "taskId": "task_70c33e980be1",
+      "status": "completed",
+      "dispatchedAt": "2026-10-05 07:06:22",
+      "completedAt": "2026-10-05T07:08:17.564Z",
+      "start": 1791183982000,
+      "end": 1791184097564
+    },
+    {
+      "dispatchId": "ctx_566a3a32c9f6",
+      "taskId": "task_3e68f96fdf75",
+      "status": "completed",
+      "dispatchedAt": "2026-10-05 07:06:03",
+      "completedAt": "2026-10-05T07:09:20.363Z",
+      "start": 1791183963000,
+      "end": 1791184160363
+    }
+  ],
+  "scope": {
+    "mode": "execution_coordination",
+    "control_state": "active",
+    "revision": 147
+  },
+  "bindings": [
+    {
+      "work_package_id": "e2e-loop-scope#g1:notes-basics",
+      "role": "planner",
+      "orca_task_id": "task_3e68f96fdf75"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:readme-banner",
+      "role": "planner",
+      "orca_task_id": "task_70c33e980be1"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:notes-basics",
+      "role": "implementation",
+      "orca_task_id": "task_a5669ff5e41c"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:readme-banner",
+      "role": "implementation",
+      "orca_task_id": "task_a55962e6259d"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:notes-basics",
+      "role": "validator",
+      "orca_task_id": "task_43c26f6895ae"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:readme-banner",
+      "role": "validator",
+      "orca_task_id": "task_6ba62e47d8af"
+    }
+  ],
+  "settlements": [
+    {
+      "role": "planner",
+      "attempt_id": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:planner:0:1",
+      "orca_result_ref": "task_70c33e980be1#4fdb09491831b"
+    },
+    {
+      "role": "planner",
+      "attempt_id": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Anotes-basics:planner:0:1",
+      "orca_result_ref": "task_3e68f96fdf75#4671582eb2891"
+    },
+    {
+      "role": "implementation",
+      "attempt_id": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:implementation:1938680763008521:1",
+      "orca_result_ref": "task_a55962e6259d#d9911399e2a21"
+    },
+    {
+      "role": "implementation",
+      "attempt_id": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Anotes-basics:implementation:1913421051997052:1",
+      "orca_result_ref": "task_a5669ff5e41c#0f9c3a3bfeed9"
+    },
+    {
+      "role": "validator",
+      "attempt_id": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Anotes-basics:validator:1913421051997052:1",
+      "orca_result_ref": "task_43c26f6895ae#83092623af9f7"
+    },
+    {
+      "role": "validator",
+      "attempt_id": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:1938680763008521:1",
+      "orca_result_ref": "task_6ba62e47d8af#c3f832e93f40e"
+    }
+  ],
+  "sessionSegments": [
+    {
+      "work_package_id": "e2e-loop-scope#g1:notes-basics",
+      "role": "planner",
+      "dispatch_id": "ctx_566a3a32c9f6",
+      "session_binding_id": "session-binding:ctx_566a3a32c9f6:01a10ae2-38e2-7462-8924-737706c24e73"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:readme-banner",
+      "role": "planner",
+      "dispatch_id": "ctx_495a78ce596f",
+      "session_binding_id": "session-binding:ctx_495a78ce596f:01a10ae2-8a69-7ba2-b634-8e65fcdd427b"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:notes-basics",
+      "role": "implementation",
+      "dispatch_id": "ctx_47af6d8e697e",
+      "session_binding_id": "session-binding:ctx_47af6d8e697e:01a10ae5-ac78-7f62-a97d-e33734b1d7d2"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:readme-banner",
+      "role": "implementation",
+      "dispatch_id": "ctx_22006516d163",
+      "session_binding_id": "session-binding:ctx_22006516d163:01a10ae5-f1dd-7d01-a1b5-9824de6c0c0d"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:notes-basics",
+      "role": "validator",
+      "dispatch_id": "ctx_d96c66d0a5fe",
+      "session_binding_id": "session-binding:ctx_d96c66d0a5fe:01a10ae8-9074-7ab3-8ef3-0aa5a10b0219"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:readme-banner",
+      "role": "validator",
+      "dispatch_id": "ctx_1cc7ee6f7467",
+      "session_binding_id": "session-binding:ctx_1cc7ee6f7467:01a10ae8-d3d5-71b3-aa17-d9cea4537a5f"
+    }
+  ],
+  "reconciliationRounds": [
+    {
+      "work_package_id": "e2e-loop-scope#g1:readme-banner",
+      "round": 1,
+      "state": "blocked",
+      "validation_attempt_id": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:1938680763008521:1",
+      "source_accepted_result_ref": "task_6ba62e47d8af#c3f832e93f40e",
+      "target_head": "b2e34208b9dfdf82731d5891f17d93fbee5edbdd",
+      "merged_tree_ref": null,
+      "orca_task_id": null,
+      "dispatch_id": null,
+      "blocker_ref": "复验路径超出授权范围：openspec/config.yaml"
+    }
+  ],
+  "budgetCounters": [
+    {
+      "budget_key": "work-package:e2e-loop-scope#g1:readme-banner:integrationReconciliations",
+      "consumed": 1,
+      "approved_limit_ref": "auth:e2e-loop-scope#g1:0d527c5977cab7c8446a578c62d553537029ff2d7524c62fa38ff2621bc68c27"
+    }
+  ],
+  "verdicts": 0,
+  "unsettledIntents": 0,
+  "hostBlocker": {
+    "code": "lane_blocked",
+    "source": "host snapshot",
+    "message": "集成复验需要升级（scope）：复验路径超出授权范围：openspec/config.yaml"
+  }
+}

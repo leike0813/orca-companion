@@ -41,9 +41,9 @@ import { pendingWorkFromHistory, type ProjectedActionableWorkItem } from '../app
 import {
   advanceExecution,
   consumedBudgetForWorkPackage,
+  selectAdvanceCandidate,
   nextAdvanceRoleOf,
   revisionPlannerFacts,
-  frontierBlockersOf,
   plannerDeliveryAfterHold,
   type AdvanceExecutionResult,
   type AdvanceRoleDispatch,
@@ -102,7 +102,6 @@ import {
   type FinalizerWorkspaceFacts,
   type WorkerEntryView,
   type WorkerObservation,
-  type WorkPackageExecutionState,
 } from '../application/execution/execution-view.js';
 import { readProjectDetailPage, type ProjectDetailField } from '../application/tui/project-details.js';
 import {
@@ -195,6 +194,12 @@ import {
   type SaveModelSettingsResult,
 } from '../application/configuration/model-settings.js';
 import { FileProjectConfigurationStore } from '../adapters/storage/project-configuration-store.js';
+import { createExecutionSettingsService } from '../application/configuration/execution-settings.js';
+import { readScope } from '../application/planning/scope-read.js';
+import { acceptedResultMatchesTask } from '../domain/worker-result-verification.js';
+import { branchIntegrationReconciliationStore,
+  type IntegrationReconciliationContext } from '../application/integration-reconciliation.js';
+import { createIntegrationReconciliationRuntime, createIntegrationReconciliationSettlement } from './integration-reconciliation-runtime.js';
 import { JsonCredentialStore, credentialStorePath } from '../adapters/storage/credential-store.js';
 import type { CanonicalHeadFacts } from '../domain/git-integration-policy.js';
 import {
@@ -314,7 +319,7 @@ import { readDeliveryBatch } from '../adapters/orca-cli/delivery-reader.js';
 import { readBaselineGitObservations, readWorkspaceFacts } from '../adapters/git/baseline-observer.js';
 import { runGraphPatchPlannerWorker } from './graph-patch-worker.js';
 import { createBaselineReconciliationDriver } from './baseline-reconciliation-runtime.js';
-import type { RunSummary, WorkerListResult } from '../adapters/orca-cli/operation-catalog.js';
+import type { RunSummary, WorkerListResult, WorkerShowResult } from '../adapters/orca-cli/operation-catalog.js';
 import type { DeliveryMessage } from '../application/dto/operation-outcome.js';
 import { workPackageComment } from '../application/materialize-work-package.js';
 import { createGhTracker } from '../adapters/tracker/gh-tracker.js';
@@ -393,15 +398,6 @@ const MUTATION_TIMEOUT_MS = 60_000;
  * 跑」与「已经卡住」在界面上可区分——真实运行里两种情况的界面曾经完全一样。
  */
 const TRIGGER_STALL_REPORT_MS = 300_000;
-
-/**
- * 图修订请求等待 Run 静止的上限与轮询间隔。
- *
- * Graph Patch Planner 是一个角色级 Worker（并发上限 1），派发前必须等当前角色收尾；等待有界，超时后
- * 仍以结构化拒绝回答，模型可以稍后再请求。
- */
-const GRAPH_PATCH_QUIET_WAIT_MS = 10 * 60_000;
-const GRAPH_PATCH_QUIET_POLL_MS = 5_000;
 
 /**
  * 等待 Codex SessionStart 报告的时间窗。
@@ -2754,8 +2750,15 @@ export async function createForegroundPlanningHost(
       ticket: claim === undefined ? null : { ref: claim.ticketRef.id, title: summary?.kind === 'read' &&
         summary.issue.ref.kind === claim.ticketRef.kind && summary.issue.ref.id === claim.ticketRef.id
         ? summary.issue.title : '标题不可用' },
-      activeWorkPackage: taskBinding === undefined || workPackage === undefined ? null
-        : { id: workPackage.workPackageId, title: workPackage.title },
+      activeWorkPackages: [...new Set([
+        ...activeEntries.map(entry => entry.workPackageId),
+        ...snapshot.snapshot.laneReservations.filter(entry => entry.graphId === scope.graphId &&
+          entry.generation === currentVersion?.generation && entry.releasedAt === null)
+          .map(entry => entry.workPackageId),
+      ])].flatMap(id => {
+        const entry = currentVersion?.graph.workPackages.find(node => node.workPackageId === id);
+        return entry === undefined ? [] : [{ id, title: entry.title }];
+      }),
       context: projectContextObservation(selectedLive?.contextObservation, {
         coordinatorSessionId: selectedRegistration?.coordinatorSessionId ?? null,
         modelConfigurationRef: selectedRegistration?.coordinatorModelConfigurationRef ?? null,
@@ -2767,7 +2770,7 @@ export async function createForegroundPlanningHost(
       budgets: {
         workPackages: boundAuthorization === null || currentVersion === null ? unavailableBudget() : {
           status: 'available', consumed: currentVersion.graph.workPackages.length,
-          limit: boundAuthorization.manifest.limits.maxActiveWorkPackages,
+          limit: boundAuthorization.manifest.limits.maxWorkPackages,
           subject: currentVersion.graphId, approvedLimitRef: boundAuthorization.authorizationId,
         },
         implementationAttempts: workPackage === undefined || boundAuthorization === null ? unavailableBudget()
@@ -4678,6 +4681,7 @@ export async function createForegroundPlanningHost(
     readonly run: { readonly runId: string; readonly consumerGeneration: number };
     readonly backendIdentityRef: string;
     readonly canonicalWorktree: string;
+    readonly baselineHead: string;
   }): Promise<RoleDispatchAssembly> => {
     // Worker 的实际运行依据是**已批准 Manifest 里的角色 profile**：harness、模型、effort、非秘密
     // options 与凭据引用都随它冻结。项目配置只提供角色当前选择的 profile 引用，不构成派发授权。
@@ -4823,7 +4827,9 @@ export async function createForegroundPlanningHost(
             include: [...input.workPackage.scopeEnvelope.include],
             exclude: [...input.workPackage.scopeEnvelope.exclude],
           },
-          baselineHead: input.manifest.baselineHead,
+          baselineHead: input.snapshot.laneReservations.find(lane => lane.graphId === input.graph.graphId &&
+            lane.generation === input.graph.generation && lane.workPackageId === input.workPackage.workPackageId)?.baselineHead
+            ?? input.baselineHead,
           authority: input.manifest.permissions,
           budget: input.workPackage.budget,
           acceptanceEvidence: evidence,
@@ -5056,7 +5062,9 @@ export async function createForegroundPlanningHost(
    * 顺序固定：先判「本 Session 是否有推进权」，再读图、授权、Run、观察与 Git 事实；任何一项读不回来
    * 都停在 blocker，绝不带默认值继续。roles 只装配当前候选的三个角色级派发。
    */
-  const advanceInputFor = async (session: LiveSession): Promise<AdvanceInputAssembly> => {
+  const advanceInputFor = async (
+    session: LiveSession, excludedWorkPackageIds: ReadonlySet<string> = new Set(),
+  ): Promise<AdvanceInputAssembly> => {
     const scopeId = session.incarnation.coordinationScopeId;
     const current = requireStore();
     if (current === null) {
@@ -5148,50 +5156,20 @@ export async function createForegroundPlanningHost(
       recoveryBudgetLimit: authorization.manifest.limits.maxRecoveriesPerWorkerAttempt,
     });
     publishLivenessChanges(scopeId, derived.workers);
-    // 受限修订 Planner 许可与执行驱动同源：两侧都调同一个纯函数，因此候选不可能出现两种说法。
-    const revisionPlanner = revisionPlannerFacts({
-      graph,
-      snapshot,
-      observations,
-      consumptionOf: (workPackageId) =>
-        consumedBudgetForWorkPackage(current, scopeId, workPackageId),
+    const materializationIntents = current.query({ kind: 'intents', coordinationScopeId: scopeId });
+    if (materializationIntents.kind !== 'intents') {
+      return { kind: 'blocked', code: 'intents_unreadable', message: '派发意图不可读' };
+    }
+    const selection = selectAdvanceCandidate({ graph, snapshot, frontier: derived.execution.frontier,
+      materializationIntents: materializationIntents.intents,
+      observations, maxActiveWorkPackages: authorization.manifest.limits.maxActiveWorkPackages,
+      excludedWorkPackageIds,
+      consumptionOf: workPackageId => consumedBudgetForWorkPackage(current, scopeId, workPackageId),
     });
-    const permitOf = (workPackageId: string) =>
-      revisionPlanner.permits.find((permit) => permit.workPackageId === workPackageId) ?? null;
-    const roleOf = (candidate: {
-      readonly workPackageId: string;
-      readonly state: WorkPackageExecutionState;
-      readonly role: WorkerRole | null;
-    }): AdvanceRole | null => {
-      const next = nextAdvanceRoleOf({
-        state: candidate.state,
-        role: candidate.role,
-        revisionPlanner: permitOf(candidate.workPackageId),
-      });
-      // 项目级 Finalizer 不属于 Frontier 角色：它由独立的只读派发路径拥有。
-      return next === 'finalizer' ? null : next;
-    };
-    const entry = derived.execution.frontier.find((candidate) => roleOf(candidate) !== null);
-    if (entry === undefined) {
-      /**
-       * 「没有候选」必须带上原因才能被诊断：Frontier 的现状与受限修订 Planner 的拒绝理由都如实列出。
-       * 执行驱动的同名分支用同一份投影与同一个纯函数，因此这里不会出现第二种说法。
-       */
-      return {
-        kind: 'idle',
-        reason: 'Frontier 中没有可推进的候选',
-        blockers: [
-          ...frontierBlockersOf(derived.execution.frontier),
-          ...revisionPlanner.denials.map(
-            (denial) => `revision-planner:${denial.workPackageId}:${denial.reason}`,
-          ),
-        ],
-      };
+    if (selection.candidate === null) {
+      return { kind: 'idle', reason: 'Frontier 中没有已获准入的可推进候选', blockers: selection.blockers };
     }
-    const role = roleOf(entry);
-    if (role === null) {
-      return { kind: 'blocked', code: 'invalid_state', message: '候选的下一角色在装配期间不可读' };
-    }
+    const { entry, role, revisionPlannerPermit: revisionPermit } = selection.candidate;
     const workPackage = graph.workPackages.find(
       (candidate) => candidate.workPackageId === entry.workPackageId,
     );
@@ -5202,7 +5180,6 @@ export async function createForegroundPlanningHost(
         message: `Graph Version ${String(scope.graphVersion)} 不含 Work Package ${entry.workPackageId}`,
       };
     }
-    const revisionPermit = permitOf(workPackage.workPackageId);
     const head = await readCanonicalHeadFacts({
       scopeId,
       baselineHead: authorization.manifest.baselineHead,
@@ -5226,7 +5203,8 @@ export async function createForegroundPlanningHost(
         writer: writerFor(session.incarnation),
       });
       if (preparation !== null) {
-        return { kind: 'blocked', code: preparation.code, message: preparation.message };
+        recordExecutionBlocker(scopeId, `admission:${entry.workPackageId}`, preparation.code, preparation.message);
+        return await advanceInputFor(session, new Set([...excludedWorkPackageIds, entry.workPackageId]));
       }
     }
     const dispatches = await roleDispatchesFor({
@@ -5240,10 +5218,13 @@ export async function createForegroundPlanningHost(
       run,
       backendIdentityRef: identity,
       canonicalWorktree: canonicalWorktreePath,
+      baselineHead: head.facts.canonicalHead,
     });
     if (dispatches.kind === 'blocked') {
-      return dispatches;
+      recordExecutionBlocker(scopeId, `admission:${entry.workPackageId}`, dispatches.code, dispatches.message);
+      return await advanceInputFor(session, new Set([...excludedWorkPackageIds, entry.workPackageId]));
     }
+    clearExecutionBlocker(scopeId, `admission:${entry.workPackageId}`);
     /**
      * 准备阶段可能已经写过共享事实（准备旧内容版本、登记基线补救），本 Scope 的 CAS 计数随之推进：
      * 交给执行驱动的期望 revision 必须是**那之后**读到的值，否则这一步会以 `stale_revision` 停在门口，
@@ -5266,6 +5247,7 @@ export async function createForegroundPlanningHost(
         canonicalHead: head.facts,
         observations,
         roles: dispatches.roles,
+        selectedWorkPackageId: workPackage.workPackageId,
       },
     };
   };
@@ -5480,9 +5462,11 @@ export async function createForegroundPlanningHost(
     }
   };
 
-  const advanceExecutionOnce = async (session: LiveSession): Promise<AdvanceExecutionResult> => {
+  const advanceExecutionOnce = async (
+    session: LiveSession, excludedWorkPackageIds: ReadonlySet<string> = new Set(),
+  ): Promise<AdvanceExecutionResult & { readonly attemptedWorkPackageId?: WorkPackageId }> => {
     const scopeId = session.incarnation.coordinationScopeId;
-    const assembled = await advanceInputFor(session);
+    const assembled = await advanceInputFor(session, excludedWorkPackageIds);
     if (assembled.kind === 'idle') {
       // 装配阶段的空闲同样必须可观察：只清掉 blocker 会留下「一片静止且没有原因」，届时分不清是在等
       // Worker、等依赖还是被修订许可挡住。带上原因时按同一约定记录，无原因时才是真的没有可说的。
@@ -5499,12 +5483,16 @@ export async function createForegroundPlanningHost(
     }
     const dispatchStartedAt = new Date().toISOString();
     const result = await advanceExecution(assembled.input);
+    const dispatchStage = `dispatch:${assembled.input.selectedWorkPackageId}`;
     if (result.kind === 'progressed') {
+      clearExecutionBlocker(scopeId, dispatchStage);
       const sessionFailure = await recordRoleSession({ session, assembled, result, dispatchStartedAt });
       if (sessionFailure !== null) {
-        recordExecutionBlocker(scopeId, 'advance', sessionFailure.code, sessionFailure.message);
-        return { kind: 'blocked', laneKey: scopeId, code: sessionFailure.code, message: sessionFailure.message };
+        recordExecutionBlocker(scopeId, `binding:${result.workPackageId}`, sessionFailure.code, sessionFailure.message);
+        // Task 已签发且占位已落盘；该包等待绑定，不妨碍其他包继续准入。
+        return result;
       }
+      clearExecutionBlocker(scopeId, `binding:${result.workPackageId}`);
       clearExecutionBlocker(scopeId, 'advance');
       publish(session.coordinatorSessionId, {
         kind: 'state-changed',
@@ -5515,14 +5503,14 @@ export async function createForegroundPlanningHost(
       return result;
     }
     if (result.kind === 'blocked') {
-      recordExecutionBlocker(scopeId, 'advance', result.code, `${result.laneKey} 上的 lane 保持阻塞：${result.message}`);
+      recordExecutionBlocker(scopeId, dispatchStage, result.code, `${result.laneKey} 上的 lane 保持阻塞：${result.message}`);
     }
     if (result.kind === 'idle') {
       // 空闲也必须可观察：Scope 处于执行模式、授权与 Run 齐备时，「什么都没有发生」本身就是需要
       // 看见的事实——否则界面上只剩一片静止，谁也不知道是等 Worker、等依赖还是被门禁挡住。
       recordExecutionBlocker(
         scopeId,
-        'advance',
+        dispatchStage,
         result.blockers.length > 0 ? result.blockers[0]! : 'advance_idle',
         result.reason,
       );
@@ -5530,12 +5518,14 @@ export async function createForegroundPlanningHost(
     if (result.kind === 'unknown') {
       recordExecutionBlocker(
         scopeId,
-        'advance',
+        dispatchStage,
         'dispatch_unknown',
         `${result.operationId} 的结果未知：${result.reason}；重启后只按该 OperationId 对账`,
       );
     }
-    return result;
+    return { ...result, ...(assembled.input.selectedWorkPackageId === undefined ? {} : {
+      attemptedWorkPackageId: assembled.input.selectedWorkPackageId,
+    }) };
   };
 
   /**
@@ -5600,88 +5590,6 @@ export async function createForegroundPlanningHost(
     };
   };
 
-  /** 图变化只从当前图、授权、Git 与 Orca 事实组装；模型只能提交变化声明。 */
-  /**
-   * 等待一个静止的 Run，并在此期间结清未确认 Delivery。
-   *
-   * Graph Patch Planner 自己就是一个 Worker（并发上限 1），它的派发门禁要求整个 Run 静止且没有未确认
-   * Delivery；而携带图变化声明的用户消息本身就是触发点（`sessionMessages` 先推进 Frontier 再唤醒模型），
-   * 因此消息一到往往就有角色在跑。这里按同一个对账用例（Scope 控制服务的 `reconcile`：对账 + 重放未确认
-   * Delivery）有界等待，而不是把请求直接拒掉——否则用户的图修订请求在健康链路里永远无法生效。
-   *
-   * 等待期间每轮都做一次对账：Delivery 只在启动 / Resume 的重放里结算，真实运行里一次请求重试时，上一次
-   * Planner 收尾留下的未确认批次让门禁只回 `delivery_pending`，而那时已经没有任何角色在跑。
-   */
-  const waitForQuietRunForGraphPatch = async (session: LiveSession): Promise<boolean> => {
-    const deadline = Date.now() + GRAPH_PATCH_QUIET_WAIT_MS;
-    const scopeId = session.incarnation.coordinationScopeId;
-    for (;;) {
-      if (closed || session.fencingLost) {
-        return false;
-      }
-      const current = requireStore();
-      const scope = scopeRecord(scopeId);
-      // 每轮都先结算可结算的 Delivery：门禁要求它与「Run 静止」同时成立，且结算是幂等的。
-      const service = scopeControlService();
-      const reconciled = service === null
-        ? null
-        : await service.reconcile({
-            coordinationScopeId: scopeId,
-            writer: writerFor(session.incarnation),
-          });
-      const graphNow = current === null || scope === null || scope.graphId === null || scope.graphVersion === null
-        ? null
-        : current.query({
-            kind: 'graph-version',
-            coordinationScopeId: scopeId,
-            graphId: scope.graphId,
-            graphVersion: scope.graphVersion,
-          });
-      const quiet =
-        scope !== null && current !== null && graphNow !== null &&
-        graphNow.kind === 'graph-version' && graphNow.version !== null &&
-        await runIsQuietForGraphPatch(scope, graphNow.version.graph.workPackages);
-      if (quiet && reconciled !== null && reconciled.kind === 'reconciled') {
-        // 对账会写 store 并可能改变观察：确认仍然静止才算满足门禁。
-        const after = requireStore();
-        const scopeAfter = scopeRecord(scopeId);
-        const graphAfter = after === null || scopeAfter === null || scopeAfter.graphId === null || scopeAfter.graphVersion === null
-          ? null
-          : after.query({
-              kind: 'graph-version',
-              coordinationScopeId: scopeId,
-              graphId: scopeAfter.graphId,
-              graphVersion: scopeAfter.graphVersion,
-            });
-        if (
-          scopeAfter !== null && after !== null && graphAfter !== null &&
-          graphAfter.kind === 'graph-version' && graphAfter.version !== null &&
-          await runIsQuietForGraphPatch(scopeAfter, graphAfter.version.graph.workPackages)
-        ) {
-          return true;
-        }
-      }
-      if (Date.now() >= deadline) {
-        return false;
-      }
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, GRAPH_PATCH_QUIET_POLL_MS);
-      });
-    }
-  };
-
-  /** Run 静止 = 每个 Worker 的存活结论都是已退出；列举不可用或未知取值都不算静止。 */
-  const runIsQuietForGraphPatch = async (
-    scope: ScopeRecord,
-    nodes: readonly { readonly workPackageId: string }[],
-  ): Promise<boolean> => {
-    const observations = await executionObservations(scope, nodes);
-    return (
-      observations.workersEnumerated &&
-      observations.unavailableReasons.length === 0 &&
-      observations.workers.every((worker) => workerStateLiveness(worker.workerState) === 'exited')
-    );
-  };
 
   const requestGraphPatchForSession = async (
     session: LiveSession,
@@ -5689,7 +5597,7 @@ export async function createForegroundPlanningHost(
     operationId: OperationId,
   ): Promise<ExecutionToolOutcome> => {
     // 用户消息可能同时触发一次 Frontier 推进与模型工具调用；先等那次受控推进结清。
-    await executionTriggerInFlight.get(session.coordinatorSessionId)?.promise;
+    await executionTriggerInFlight.get(session.incarnation.coordinationScopeId)?.promise;
     const scopeId = session.incarnation.coordinationScopeId;
     const current = requireStore();
     const scope = scopeRecord(scopeId);
@@ -5704,16 +5612,8 @@ export async function createForegroundPlanningHost(
         scope.graphId === null || scope.graphVersion === null) {
       return { kind: 'rejected', code: 'execution_unavailable', message: '图、Run、Codex 或 canonical 工作区不可核验' };
     }
-    if (graphPatchPlannerInFlight.has(session.coordinatorSessionId)) {
+    if (graphPatchPlannerInFlight.has(scopeId)) {
       return { kind: 'rejected', code: 'planner_in_flight', message: '同一 Session 已有 Graph Patch Planner 请求在途' };
-    }
-    // 先等到 Run 静止并结清未确认 Delivery：Planner 的派发门禁要求两者同时成立。
-    if (!(await waitForQuietRunForGraphPatch(session))) {
-      return {
-        kind: 'rejected',
-        code: 'worker_in_flight',
-        message: `等待 Run 静止超时（${String(GRAPH_PATCH_QUIET_WAIT_MS)}ms）：图修订需要一个没有在跑 Worker、且 Delivery 已结清的 Run`,
-      };
     }
     const graphRead = current.query({
       kind: 'graph-version', coordinationScopeId: scopeId,
@@ -5775,7 +5675,7 @@ export async function createForegroundPlanningHost(
       timeoutMs: MUTATION_TIMEOUT_MS,
     };
     const patchId = derivedKey('graph-patch', [scopeId, graph.graphId, String(graphRead.version.version), operationId]);
-    graphPatchPlannerInFlight.add(session.coordinatorSessionId);
+    graphPatchPlannerInFlight.add(scopeId);
     let graphApplied = false;
     try {
       const result = await requestGraphPatch({
@@ -5889,7 +5789,7 @@ export async function createForegroundPlanningHost(
         ? { kind: 'unknown', reason: `${result.operationId}: ${message}` }
         : { kind: 'rejected', code: result.code, message };
     } finally {
-      graphPatchPlannerInFlight.delete(session.coordinatorSessionId);
+      graphPatchPlannerInFlight.delete(scopeId);
       if (graphApplied) triggerExecution(session);
     }
   };
@@ -5990,7 +5890,7 @@ export async function createForegroundPlanningHost(
         if (session === null) {
           return { kind: 'rejected', code: 'session_unavailable', message: '该 Session 不在本进程中运行' };
         }
-        return executionOutcomeOf(await advanceExecutionOnce(session));
+        return executionOutcomeOf(await serializeExecutionTurn(session, () => advanceExecutionOnce(session)));
       },
       requestGraphPatch: async ({ request, operationId }) => {
         const session = sessionOf();
@@ -6281,7 +6181,25 @@ export async function createForegroundPlanningHost(
    * 事实按固定顺序读取：模式与租约 → 图与授权 → 观察（精确 worktree）→ 验证事实 → Git Policy。
    * 任一不可读或不可归属都停在 blocker，不做部分集成，也不以界面状态代替判定。
    */
-  const integrateAcceptedWorkPackage = async (session: LiveSession): Promise<void> => {
+  const releaseIntegratedLanes = (session: LiveSession, snapshot: CoordinationSnapshot, graph: ExecutionGraph): void => {
+    const current = requireStore();
+    if (current === null) return;
+    const scopeId = session.incarnation.coordinationScopeId;
+    for (const lane of snapshot.laneReservations.filter(entry => entry.graphId === graph.graphId &&
+      entry.generation === graph.generation && entry.releasedAt === null)) {
+      const proof = completedIntegrationRef(snapshot, lane.workPackageId);
+      if (proof === null) continue;
+      const fresh = readScope(current, scopeId);
+      if (fresh.kind === 'rejected') return;
+      const released = current.transact({ kind: 'release-work-package-lane', coordinationScopeId: scopeId,
+        expectedRevision: fresh.scope.revision, writer: writerFor(session.incarnation),
+        graphId: graph.graphId, generation: graph.generation, workPackageId: lane.workPackageId,
+        proofOperationId: proof });
+      if (released.kind === 'rejected') recordExecutionBlocker(scopeId, 'integration', released.code, released.message);
+    }
+  };
+
+  const integrateAcceptedWorkPackage = async (session: LiveSession, selectedWorkPackageId: WorkPackageId): Promise<void> => {
     const scopeId = session.incarnation.coordinationScopeId;
     const current = requireStore();
     if (current === null) {
@@ -6321,17 +6239,21 @@ export async function createForegroundPlanningHost(
     }
     const snapshot = snapshotRead.snapshot;
     const candidate = graph.workPackages.find(
+      // 集成完成与占位释放之间崩溃时，由下方的持久 proof 回收占位。
       (workPackage) =>
+        workPackage.workPackageId === selectedWorkPackageId &&
         establishedStatusOf(snapshot, workPackage.workPackageId).validation.kind === 'validated' &&
         completedIntegrationRef(snapshot, workPackage.workPackageId) === null,
     );
     if (candidate === undefined) {
+      releaseIntegratedLanes(session, snapshot, graph);
       return;
     }
+    const integrationStage = `integration:${candidate.workPackageId}`;
     const backend = backendForExecution();
     const port = integrationPortFor();
     if (backend === null || port === null) {
-      recordExecutionBlocker(scopeId, 'integration', 'backend_unavailable', '无法建立 Orca ExecutionBackend 或受控 Git 端口');
+      recordExecutionBlocker(scopeId, integrationStage, 'backend_unavailable', '无法建立 Orca ExecutionBackend 或受控 Git 端口');
       return;
     }
     const identity = await readCoordinatorIdentityRef();
@@ -6348,7 +6270,7 @@ export async function createForegroundPlanningHost(
     if (worktreePath === undefined) {
       recordExecutionBlocker(
         scopeId,
-        'integration',
+        integrationStage,
         'worktree_unresolved',
         `Work Package ${candidate.workPackageId} 没有可定位的隔离 worktree：无法核验提交来源`,
       );
@@ -6359,7 +6281,7 @@ export async function createForegroundPlanningHost(
       return;
     }
     if (run.kind === 'unreadable') {
-      recordExecutionBlocker(scopeId, 'integration', run.code, run.message);
+      recordExecutionBlocker(scopeId, integrationStage, run.code, run.message);
       return;
     }
     // 唯一的获批 remote/ref：Manifest 列出多个时本进程不能替用户挑一个，因此停在 blocker。
@@ -6373,7 +6295,7 @@ export async function createForegroundPlanningHost(
     ) {
       recordExecutionBlocker(
         scopeId,
-        'integration',
+        integrationStage,
         'git_target_unapproved',
         'Manifest 没有恰好一个获批 remote 与一个获批 ref：集成目标只能来自用户批准的范围',
       );
@@ -6388,7 +6310,7 @@ export async function createForegroundPlanningHost(
     if (worktreeListing.kind !== 'accepted') {
       recordExecutionBlocker(
         scopeId,
-        'integration',
+        integrationStage,
         'integration_source_unreadable',
         `无法列举 worktree 以定位集成源分支：${worktreeListing.code} ${worktreeListing.message}`,
       );
@@ -6401,26 +6323,106 @@ export async function createForegroundPlanningHost(
     if (sourceBranch === null) {
       recordExecutionBlocker(
         scopeId,
-        'integration',
+        integrationStage,
         'integration_source_unreadable',
         `Work Package ${candidate.workPackageId} 的隔离 worktree 没有可读分支：集成源无从核验`,
       );
       return;
     }
+    const status = establishedStatusOf(snapshot, candidate.workPackageId);
+    let reconciliation: IntegrationReconciliationContext | null = null;
+    if (status.validation.kind === 'validated') {
+      const validation = status.validation;
+      const accepted = snapshot.deliverySettlements.find(result => result.role === 'validator' &&
+        result.attemptId === validation.validationAttemptId && result.orcaResultRef === validation.acceptedResultRef);
+      const originalBinding = accepted === undefined ? undefined : snapshot.materializationBindings.find(binding =>
+        binding.identity === 'issued' && binding.workPackageId === candidate.workPackageId &&
+        acceptedResultMatchesTask(binding, accepted));
+      if (accepted !== undefined && originalBinding?.workerTaskId != null && originalBinding.dispatchId !== null &&
+        originalBinding.launchId !== null && originalBinding.authorizationId !== null) {
+        const paths = codexSessionPaths(originalBinding.launchId);
+        const originalAuthorization = current.query({ kind: 'authorization', coordinationScopeId: scopeId,
+          authorizationId: originalBinding.authorizationId });
+        const originalProfile = originalAuthorization.kind === 'authorization' &&
+          originalAuthorization.authorization?.authorizationVersion === originalBinding.authorizationVersion
+          ? manifestProfileFor(originalAuthorization.authorization.manifest, 'validator') : null;
+        if (paths !== null && originalProfile !== null && originalBinding.workerProfileRef !== null &&
+          originalProfile.profileRef.id === originalBinding.workerProfileRef.id) {
+          const originalCodexHome = join(paths.stateRoot, createHash('sha256').update(originalBinding.launchId).digest('hex').slice(0, 20));
+          const proven = await sessionBindingFromStartReport({ reportPath: paths.reportPath,
+            harness: 'codex', role: 'validator', workerTaskId: originalBinding.workerTaskId,
+            dispatchId: accepted.dispatchId, attemptId: accepted.attemptId, workspace: worktreePath,
+            expectedCodexHome: originalCodexHome, dispatchStartedAt: new Date(originalBinding.createdAt).toISOString(), waitMs: 0 });
+          if (proven.kind === 'bound') {
+            const ownerRead = await backend.query({ operation: 'worker-show', dispatchId: accepted.dispatchId });
+            const owner = ownerRead.kind === 'accepted' ? ownerRead.value as WorkerShowResult : null;
+            const originalOwner = owner?.dispatchId === accepted.dispatchId &&
+              owner.taskId === originalBinding.orcaTaskId && owner.agentTerminalHandle !== null
+              ? { dispatchId: accepted.dispatchId, terminalHandle: owner.agentTerminalHandle }
+              : undefined;
+            const budgetKey = workPackageBudgetKey(candidate.workPackageId, 'integrationReconciliations');
+            const counters = current.query({ kind: 'budget-counters', coordinationScopeId: scopeId });
+            if (counters.kind === 'budget-counters') reconciliation = {
+              store: branchIntegrationReconciliationStore(current),
+              ...createIntegrationReconciliationSettlement({ store: current, backend,
+                originalProviderSessionId: proven.binding.providerSessionId,
+                writer: writerFor(session.incarnation), coordinationScopeId: scopeId,
+                execution: { backendIdentityRef: identity, graphGeneration: graph.generation,
+                  authorizationId: originalBinding.authorizationId, runId: run.runId,
+                  consumerGeneration: run.consumerGeneration, timeoutMs: MUTATION_TIMEOUT_MS },
+                isClosed: () => closed || session.fencingLost,
+              }),
+              isClosed: () => closed || session.fencingLost,
+              validationAttemptId: accepted.attemptId as IntegrationReconciliationContext['validationAttemptId'],
+              sourceAcceptedResultRef: accepted.orcaResultRef, sessionBinding: proven.binding,
+              limit: candidate.budget.integrationReconciliations, budgetKey,
+              approvedLimitRef: counters.counters.find(counter => counter.budgetKey === budgetKey)?.approvedLimitRef
+                ?? originalBinding.authorizationId,
+              runner: createIntegrationReconciliationRuntime({ store: current, backend,
+                reconciliationStore: branchIntegrationReconciliationStore(current),
+                writer: writerFor(session.incarnation), coordinationScopeId: scopeId,
+                execution: { backendIdentityRef: identity, graphGeneration: graph.generation,
+                  authorizationId: originalBinding.authorizationId, runId: run.runId,
+                  consumerGeneration: run.consumerGeneration, timeoutMs: MUTATION_TIMEOUT_MS },
+                originalBinding: proven.binding, originalCodexHome,
+                ...(originalOwner === undefined ? {} : { originalOwner }),
+                originalMaterializationBinding: {
+                  launchId: originalBinding.launchId,
+                  ...(originalBinding.worktreeId === null ? {} : { worktreeId: originalBinding.worktreeId }),
+                  workerProfileRef: originalBinding.workerProfileRef.id,
+                  specificationUnitPath: originalBinding.specificationUnitPath,
+                },
+                modelConfiguration: originalProfile.modelConfiguration, credentialStore: credentialStore(),
+                credentialStorePath: credentialStorePath({ environment: options.env }),
+                sandboxMode: codexSandboxForDispatch(approvedRisksFor(scopeId)),
+                companionStateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY), canonicalWorktreePath,
+                workPackage: candidate, bindingWindowMs, resultTimeoutMs: 5 * 60_000,
+                isClosed: () => closed || session.fencingLost,
+              }),
+            };
+          }
+        }
+      }
+    }
+    const refreshedScope = scopeRecord(scopeId);
+    if (refreshedScope === null || refreshedScope.graphId !== graph.graphId || refreshedScope.graphVersion !== scope.graphVersion ||
+      refreshedScope.controlState !== 'active') return;
     const result = await integrateWorkPackage({
       port,
       store: current,
       coordinationScopeId: scopeId,
       writer: writerFor(session.incarnation),
-      expectedRevision: scope.revision,
+      expectedRevision: refreshedScope.revision,
       backendIdentityRef: identity,
+      graphId: graph.graphId,
       graphGeneration: graph.generation,
       authorizationId: authorizationRead.authorization.authorizationId,
       runId: run.runId,
       consumerGeneration: run.consumerGeneration,
       timeoutMs: MUTATION_TIMEOUT_MS,
       workPackageId: candidate.workPackageId,
-      status: establishedStatusOf(snapshot, candidate.workPackageId),
+      status,
+      reconciliation,
       executionLeaseHeldByCurrentSession: true,
       authority: manifest.permissions,
       policy: manifest.gitPolicy,
@@ -6445,6 +6447,8 @@ export async function createForegroundPlanningHost(
       }),
     });
     if (result.kind === 'integrated') {
+      const after = current.query({ kind: 'snapshot', coordinationScopeId: scopeId });
+      if (after.kind === 'snapshot') releaseIntegratedLanes(session, after.snapshot, graph);
       clearExecutionBlocker(scopeId, 'integration');
       publish(session.coordinatorSessionId, {
         kind: 'state-changed',
@@ -6457,14 +6461,43 @@ export async function createForegroundPlanningHost(
     if (result.kind === 'unknown') {
       recordExecutionBlocker(
         scopeId,
-        'integration',
+        integrationStage,
         'integration_unknown',
         `${result.operationId} 的结果未知（${result.reason}）：lane 保持阻塞，重启后只按原 OperationId 对账`,
       );
       return;
     }
     const message = result.kind === 'rejected' ? `${result.failure.code}: ${result.failure.message}` : result.reason;
-    recordExecutionBlocker(scopeId, 'integration', result.kind === 'rejected' ? result.failure.code : 'lane_blocked', message);
+    recordExecutionBlocker(scopeId, integrationStage, result.kind === 'rejected' ? result.failure.code : 'lane_blocked', message);
+  };
+
+  const integratePendingWorkPackages = async (session: LiveSession): Promise<void> => {
+    const scopeId = session.incarnation.coordinationScopeId;
+    const current = requireStore();
+    const scope = scopeRecord(scopeId);
+    if (current === null || scope?.graphId == null || scope.graphVersion === null) return;
+    const read = current.query({ kind: 'graph-version', coordinationScopeId: scopeId,
+      graphId: scope.graphId, graphVersion: scope.graphVersion });
+    if (read.kind !== 'graph-version' || read.version === null) return;
+    const graph = read.version.graph;
+    for (const wp of graph.workPackages) {
+      if (closed || session.fencingLost) return;
+      const before = current.query({ kind: 'snapshot', coordinationScopeId: scopeId });
+      if (before.kind !== 'snapshot') return;
+      // canonical mutation 结果未知时先沿原包对账；源 worktree 未知不冻结其他包。
+      const canonicalIntent = before.snapshot.unresolvedIntents.find(intent => graph.workPackages.some(node => {
+        const ids = integrationOperationIdsFor({ scopeId, graphId: graph.graphId, generation: graph.generation,
+          workPackageId: node.workPackageId });
+        return intent.operationId === ids.integrate || intent.operationId === ids.push;
+      }));
+      if (canonicalIntent !== undefined && canonicalIntent.target.id !== wp.workPackageId) continue;
+      try {
+        await integrateAcceptedWorkPackage(session, wp.workPackageId);
+      } catch (error: unknown) {
+        recordExecutionBlocker(scopeId, `integration:${wp.workPackageId}`, 'integration_failed',
+          error instanceof Error ? error.message : String(error));
+      }
+    }
   };
 
   /* ------------------------------------------------------------------------ */
@@ -6621,6 +6654,8 @@ export async function createForegroundPlanningHost(
     if (unintegrated.length > 0) {
       return;
     }
+    if (snapshot.laneReservations.some(entry => entry.graphId === graph.graphId &&
+      entry.generation === graph.generation && entry.releasedAt === null)) return;
     const identity = await readCoordinatorIdentityRef();
     const generation = graphGenerationOf(scope);
     const backend = backendForExecution();
@@ -7277,40 +7312,9 @@ export async function createForegroundPlanningHost(
   };
 
   /**
-   * 一个触发点的一次执行推进。
-   *
-   * 触发点固定为宿主命令与事件处理：启动对账完成后、授权切换成功后、Resume 成功后，以及一次集成 /
-   * Finalizer 结论落地后。这里**一次最多推进一个阶段**：`progressed` 意味着刚刚签发过一次外部
-   * mutation，而 Worker 是否已经出现在 `worker-list` 里要到下一次触发点才重新读取，因此在同一个
-   * 触发点里再推进一次有可能对同一个候选再发一次 `worker-start`。并发上限为 1 的判定在
-   * `advanceExecution` 内部，本函数不复制它。
+   * 在独立等待通道续办包级基线补救；其他包继续经原子准入推进。
    */
-  const runExecutionTrigger = async (session: LiveSession): Promise<void> => {
-    if (closed) {
-      return;
-    }
-    if (session.fencingLost) {
-      recordExecutionBlocker(
-        session.incarnation.coordinationScopeId,
-        'advance',
-        'fencing_lost',
-        '本 Session 已失去 Runtime Lease 的 fencing：不推进执行',
-      );
-      return;
-    }
-    if (graphPatchPlannerInFlight.has(session.coordinatorSessionId)) {
-      // Graph Patch Planner 在途时执行推进要等它收尾——这个「等」本身必须写在界面上，否则静止的
-      // Scope 只能显示结果，显示不出原因。
-      recordExecutionBlocker(
-        session.incarnation.coordinationScopeId,
-        'advance',
-        'graph_patch_planner_in_flight',
-        'Graph Patch Planner 在途：本轮不推进执行',
-      );
-      return;
-    }
-    // 补记错过的 Session Binding：它是这条派发之后所有归属（Delivery、Recovery、Validator 结果）的前提。
-    await reconcileUnboundRoleSessions(session);
+  const runPendingBaselineReconciliations = async (session: LiveSession): Promise<void> => {
     const scopeId = session.incarnation.coordinationScopeId;
     const current = requireStore();
     const snapshot = current?.query({ kind: 'snapshot', coordinationScopeId: scopeId });
@@ -7379,12 +7383,12 @@ export async function createForegroundPlanningHost(
         if (path === undefined) {
           recordExecutionBlocker(scopeId, 'baseline-reconciliation', 'worktree_unverifiable',
             `${record.workPackageId} 的隔离 worktree 不可读`);
-          return;
+          continue;
         }
         const observed = await readWorkspaceFacts({ worktreePath: path, env: options.env });
         if (observed.kind !== 'observed') {
           recordExecutionBlocker(scopeId, 'baseline-reconciliation', 'worktree_unverifiable', observed.reason);
-          return;
+          continue;
         }
         const progress = await driver({
           reconciliationId: record.reconciliationId, workPackageId: record.workPackageId,
@@ -7395,7 +7399,7 @@ export async function createForegroundPlanningHost(
           if (progress.kind === 'blocked') {
             recordExecutionBlocker(scopeId, 'baseline-reconciliation', 'baseline_blocked', progress.reason);
           }
-          return;
+          continue;
         }
         publish(session.coordinatorSessionId, {
           kind: 'state-changed', coordinationScopeId: scopeId,
@@ -7405,16 +7409,85 @@ export async function createForegroundPlanningHost(
       }
       clearExecutionBlocker(scopeId, 'baseline-reconciliation');
     }
-    // 确认中断的 Session 先续办：它是「这个 Work Package 当前该做什么」的前提。
-    if (await recoverLostWorkerSession(session)) {
+  };
+
+  const runExecutionTrigger = async (session: LiveSession): Promise<void> => {
+    if (closed) {
       return;
+    }
+    if (session.fencingLost) {
+      recordExecutionBlocker(
+        session.incarnation.coordinationScopeId,
+        'advance',
+        'fencing_lost',
+        '本 Session 已失去 Runtime Lease 的 fencing：不推进执行',
+      );
+      return;
+    }
+    // 补记错过的 Session Binding：它是这条派发之后所有归属（Delivery、Recovery、Validator 结果）的前提。
+    await reconcileUnboundRoleSessions(session);
+    const scopeId = session.incarnation.coordinationScopeId;
+    const current = requireStore();
+    const snapshot = current?.query({ kind: 'snapshot', coordinationScopeId: scopeId });
+    const scope = scopeRecord(scopeId);
+    const graph = current !== null && scope?.graphId !== null && scope?.graphId !== undefined &&
+      scope.graphVersion !== null
+      ? current.query({
+          kind: 'graph-version', coordinationScopeId: scopeId,
+          graphId: scope.graphId, graphVersion: scope.graphVersion,
+        }) : null;
+    const currentIds = graph?.kind === 'graph-version' && graph.version !== null
+      ? new Set(graph.version.graph.workPackages.map((workPackage) => workPackage.workPackageId)) : null;
+    const pendingBaselines = snapshot?.kind === 'snapshot'
+      ? snapshot.snapshot.baselineReconciliations.filter((record) =>
+          record.state === 'required' && (currentIds === null || currentIds.has(record.workPackageId))) : [];
+    if (pendingBaselines.length > 0 && !baselineInFlight.has(scopeId)) {
+      const revisionBefore = scopeRecord(scopeId)?.revision;
+      const baseline = Promise.resolve().then(() => runPendingBaselineReconciliations(session))
+        .catch((error: unknown) => recordExecutionBlocker(scopeId, 'baseline-reconciliation', 'baseline_failed',
+          error instanceof Error ? error.message : String(error)))
+        .finally(() => {
+          baselineInFlight.delete(scopeId);
+          if (!closed && scopeRecord(scopeId)?.revision !== revisionBefore) triggerExecution(session);
+        });
+      baselineInFlight.set(scopeId, baseline);
+    }
+    if (!recoveryInFlight.has(scopeId)) {
+      const revisionBefore = scopeRecord(scopeId)?.revision;
+      const recovery = Promise.resolve().then(() => recoverLostWorkerSession(session))
+        .catch((error: unknown) => recordExecutionBlocker(scopeId, 'recovery', 'recovery_failed',
+          error instanceof Error ? error.message : String(error)))
+        .finally(() => {
+          recoveryInFlight.delete(scopeId);
+          if (!closed && scopeRecord(scopeId)?.revision !== revisionBefore) triggerExecution(session);
+        });
+      recoveryInFlight.set(scopeId, recovery);
     }
     settleRetiredRevisionHolds(session);
     // 重新准入通过的在途修订先结算持有：它是后续角色、集成与 Finalizer 门禁的前提。
     settleAdmittedRevisionHolds(session);
-    await integrateAcceptedWorkPackage(session);
-    await runFinalizerForScope(session);
-    await advanceExecutionOnce(session);
+    // 每轮至多尝试当前图节点数；每次派发后重新读取准入与当前角色，填充可用额度。
+    const width = graph?.kind === 'graph-version' ? graph.version?.graph.workPackages.length ?? 0 : 0;
+    const excluded = new Set<string>();
+    for (let index = 0; index < width && !closed; index += 1) {
+      const advanced = await advanceExecutionOnce(session, excluded);
+      if (advanced.kind === 'progressed') continue;
+      if (advanced.attemptedWorkPackageId === undefined) break;
+      excluded.add(advanced.attemptedWorkPackageId);
+    }
+    if (!integrationInFlight.has(scopeId)) {
+      await runFinalizerForScope(session);
+      // 合并树复验等待 Worker 时，其他包仍可派发；同一 Scope 的 canonical 集成保持唯一在途。
+      const revisionBefore = scopeRecord(scopeId)?.revision;
+      const integration = Promise.resolve().then(() => integratePendingWorkPackages(session))
+        .catch((error: unknown) => recordExecutionBlocker(scopeId, 'integration', 'integration_failed',
+          error instanceof Error ? error.message : String(error)))
+        .finally(() => {
+          integrationInFlight.delete(scopeId);
+          if (!closed && scopeRecord(scopeId)?.revision !== revisionBefore) triggerExecution(session);
+        });
+      integrationInFlight.set(scopeId, integration);
+    }
   };
 
   /**
@@ -7425,46 +7498,39 @@ export async function createForegroundPlanningHost(
    * Scope 静默时没有下一个触发点（没有 Delivery、没有用户消息、也没有已运行 Worker），只记一句「稍后
    * 再说」会让整条链路永久停在原地——真实运行里图补丁落地后正是这样停住的。
    */
-  const executionTriggerInFlight = new Map<string, { readonly promise: Promise<void>; readonly startedAt: number }>();
-  /** 在途推进期间到达的触发请求：收尾后按一次收尾补齐，不丢工作也不并发。 */
+  const executionTriggerInFlight = new Map<string, { readonly promise: Promise<unknown>; readonly startedAt: number }>();
   const pendingTriggerReruns = new Set<string>();
-  /** Graph Patch Planner 与普通 Frontier 派发共享并发上限；它的受控工具调用期间不交错推进。 */
+  const integrationInFlight = new Map<string, Promise<void>>();
+  const baselineInFlight = new Map<string, Promise<void>>();
+  const recoveryInFlight = new Map<string, Promise<unknown>>();
+  /** Graph Patch Planner 自身单例；它不占用其他包的角色派发通道。 */
   const graphPatchPlannerInFlight = new Set<string>();
+  const serializeExecutionTurn = async <T>(session: LiveSession, execute: () => Promise<T>): Promise<T> => {
+    const key = session.incarnation.coordinationScopeId;
+    const preceding = executionTriggerInFlight.get(key)?.promise ?? Promise.resolve();
+    const promise = preceding.catch(() => undefined).then(execute);
+    executionTriggerInFlight.set(key, { promise, startedAt: Date.now() });
+    try { return await promise; }
+    finally {
+      if (executionTriggerInFlight.get(key)?.promise === promise) {
+        executionTriggerInFlight.delete(key);
+        if (pendingTriggerReruns.delete(key)) triggerExecution(session);
+      }
+    }
+  };
   const triggerExecution = (session: LiveSession): void => {
-    const sessionKey = session.coordinatorSessionId;
-    if (executionTriggerInFlight.has(sessionKey)) {
-      pendingTriggerReruns.add(sessionKey);
-      // 在途推进长期不结束时也要说出来：否则界面上只剩一片静止，看不出是「还在跑」还是「已经卡住」。
-      const existing = executionTriggerInFlight.get(sessionKey);
-      const elapsedMs = existing === undefined ? 0 : Date.now() - existing.startedAt;
-      if (elapsedMs >= TRIGGER_STALL_REPORT_MS) {
-        recordExecutionBlocker(
-          session.incarnation.coordinationScopeId,
-          'advance',
-          'advance_trigger_stalled',
-          `上一次执行推进已运行 ${String(Math.round(elapsedMs / 1000))}s 仍未结束：本轮触发排在它之后`,
-        );
+    const key = session.incarnation.coordinationScopeId;
+    const existing = executionTriggerInFlight.get(key);
+    if (existing !== undefined) {
+      pendingTriggerReruns.add(key);
+      if (Date.now() - existing.startedAt >= TRIGGER_STALL_REPORT_MS) {
+        recordExecutionBlocker(key, 'advance', 'advance_trigger_stalled', '上一次执行推进仍在运行，本轮排在它之后');
       }
       return;
     }
-    const running = runExecutionTrigger(session)
-      .catch((error: unknown) => {
-        // 抛出的推进不能只留在被丢弃的 promise 里：记录成 blocker，界面与对账都看得见。
-        const message = error instanceof Error ? error.message : String(error);
-        recordExecutionBlocker(
-          session.incarnation.coordinationScopeId,
-          'advance',
-          'advance_trigger_failed',
-          `执行推进抛出异常：${message}`,
-        );
-      })
-      .finally(() => {
-        executionTriggerInFlight.delete(sessionKey);
-        if (pendingTriggerReruns.delete(sessionKey)) {
-          triggerExecution(session);
-        }
-      });
-    executionTriggerInFlight.set(sessionKey, { promise: running, startedAt: Date.now() });
+    void serializeExecutionTurn(session, () => runExecutionTrigger(session)).catch((error: unknown) => {
+      recordExecutionBlocker(key, 'advance', 'advance_trigger_failed', error instanceof Error ? error.message : String(error));
+    });
   };
 
   /**
@@ -7596,7 +7662,7 @@ export async function createForegroundPlanningHost(
     // 否则一个在途 mutation 的 intent 会被自己的对账判成未决而阻塞整条 lane。因此先等在途推进收尾
     // （有界），再交给既有的对账用例。
     if (action === 'resume') {
-      const inFlight = executionTriggerInFlight.get(ensured.session.coordinatorSessionId);
+      const inFlight = executionTriggerInFlight.get(ensured.session.incarnation.coordinationScopeId);
       if (inFlight !== undefined) {
         const { promise, resolve } = Promise.withResolvers<'settled' | 'timeout'>();
         const timer = setTimeout(() => resolve('timeout'), RESUME_IN_FLIGHT_WAIT_MS);
@@ -7747,7 +7813,7 @@ export async function createForegroundPlanningHost(
       },
       {
         section: 'budget', label: 'Limits',
-        value: `active≤${String(limits.maxActiveWorkPackages)} 并发=${String(limits.concurrencyLimit)} 实现×${String(limits.implementationAttempts)} 修复×${String(limits.validatorRepairs)} 图修订×${String(limits.graphRevisions)} 规格修订×${String(limits.specificationRevisions)} 恢复×${String(limits.maxRecoveriesPerWorkerAttempt)}`,
+        value: `并行≤${String(limits.maxActiveWorkPackages)} 工作包≤${String(limits.maxWorkPackages)} 实现×${String(limits.implementationAttempts)} 修复×${String(limits.validatorRepairs)} 集成复验×${String(limits.integrationReconciliations)} 图修订×${String(limits.graphRevisions)} 规格修订×${String(limits.specificationRevisions)} 恢复×${String(limits.maxRecoveriesPerWorkerAttempt)}`,
       },
       { section: 'workspace', label: 'Workspace', value: manifest.workspacePolicy.canonicalWorktree },
       {
@@ -7964,6 +8030,9 @@ export async function createForegroundPlanningHost(
     ensured.session.graph = graphForSession(ensured.session);
     // 授权切换成功是 D1 的触发点之一：切换完成后立刻按新事实推进一次，而不是等用户再发一条消息。
     if (modeBeforeApproval === 'route_planning') {
+      triggerExecution(ensured.session);
+    }
+    if (modeBeforeApproval === 'execution_coordination') {
       triggerExecution(ensured.session);
     }
     return accepted(
@@ -8350,6 +8419,33 @@ export async function createForegroundPlanningHost(
   };
 
   const settingsPort = modelSettingsPort();
+
+  const executionSettingsPort: NonNullable<TuiPorts['executionSettings']> = {
+    load: () => Promise.resolve().then(() => {
+      if (canonicalWorktreePath === null) return { kind: 'failed', code: 'repository_unresolved', message: '尚未选择项目' };
+      const loaded = createExecutionSettingsService({ projectStore: new FileProjectConfigurationStore({
+        configPath: projectConfigPath(canonicalWorktreePath),
+      }) }).load();
+      if (loaded.kind === 'rejected') return { kind: 'failed', code: loaded.code, message: loaded.message };
+      reloadProjectConfigFromDisk();
+      const current = requireStore();
+      const approved = current === null || selectedScopeId === null ? null : activeAuthorization(current, selectedScopeId);
+      return { kind: 'loaded', settings: {
+        revision: loaded.revision,
+        defaultMaxActiveWorkPackages: loaded.defaultMaxActiveWorkPackages,
+        approvedMaxActiveWorkPackages: approved?.kind === 'read'
+          ? approved.authorization?.manifest.limits.maxActiveWorkPackages ?? null : null,
+      } };
+    }),
+    save: input => Promise.resolve().then(() => {
+      if (canonicalWorktreePath === null) return { kind: 'rejected', code: 'repository_unresolved', message: '尚未选择项目' };
+      const result = createExecutionSettingsService({ projectStore: new FileProjectConfigurationStore({
+        configPath: projectConfigPath(canonicalWorktreePath),
+      }) }).save(input);
+      reloadProjectConfigFromDisk();
+      return result;
+    }),
+  };
 
   /** Execution Handoff：只投影并推进 `ExecutionHandoffState`，不改动任何运行身份。 */
   const executionHandoffPort: ExecutionHandoffIntentPort = {
@@ -8837,6 +8933,7 @@ export async function createForegroundPlanningHost(
     scopeSetup,
     modelCatalog: { load: session => Promise.resolve(modelCatalog(session)) },
     modelSettings: settingsPort,
+    executionSettings: executionSettingsPort,
     handoff,
     executionHandoff: executionHandoffPort,
     executionAuthorization: executionAuthorizationPort,

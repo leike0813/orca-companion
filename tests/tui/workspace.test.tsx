@@ -228,7 +228,7 @@ describe('planning-workspace / 常驻 transcript 与 composer 主视图', () => 
       },
       session: null,
       ticket: null,
-      activeWorkPackage: null,
+      activeWorkPackages: [],
       context: { status: 'unavailable' as const },
       acceptance: null,
       budgets: { workPackages: null, implementationAttempts: null, recovery: null },

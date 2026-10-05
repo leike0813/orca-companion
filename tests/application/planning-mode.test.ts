@@ -109,7 +109,7 @@ function registerSession(
 }
 
 function emptyGraph(): ExecutionGraph {
-  return { graphId: GRAPH_ID, generation: 1 as GraphGeneration, concurrencyLimit: 1, workPackages: [] };
+  return { graphId: GRAPH_ID, generation: 1 as GraphGeneration, workPackages: [] };
 }
 
 /** 最小合法候选图：所有 Work Package 都未开始（空图）。 */

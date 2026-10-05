@@ -1,0 +1,105 @@
+{
+  "generatedAt": "2026-10-05T07:52:52.082Z",
+  "fixture": "orca-cc-concurrency-04",
+  "note": "round 1 blocked on utility harness session unavailable; physical continuation Task/ctx are persisted in the round record.",
+  "round": {
+    "workPackageId": "e2e-loop-scope#g1:readme-banner",
+    "round": 1,
+    "state": "blocked",
+    "targetHead": "95a5620fdb9a000fbab89ebddcb6577de403d07d",
+    "mergedTreeRef": null,
+    "orcaTaskId": "task_c92d991e9fc9",
+    "dispatchId": "ctx_c0826b266cec",
+    "blockerRef": "无法观察到该 Utility Worker 的精确 harness session 事实",
+    "createdAt": 1791186646097,
+    "updatedAt": 1791186675540
+  },
+  "originalValidator": {
+    "launchId": "worker-launch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:691758111904786:1",
+    "orcaTaskId": "task_84764b754281",
+    "attemptId": "attempt:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:691758111904786:1",
+    "sessionStart": {
+      "launchId": "worker-launch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:691758111904786:1",
+      "reportPath": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-04/.git/orca-companion/codex/reporters/886c45cc7ce2a69bc7bc.jsonl",
+      "exists": true,
+      "sessionId": "01a10b09-a735-7131-8061-66629b5d122d"
+    }
+  },
+  "continuation": {
+    "launchId": "worker-launch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:691758111904786:1:round-1",
+    "sessionStart": {
+      "launchId": "worker-launch:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:validator:691758111904786:1:round-1",
+      "reportPath": "/home/joshua/.cache/orca-acceptance/fixtures/orca-cc-concurrency-04/.git/orca-companion/codex/reporters/e6e278c8ef3bb0717aac.jsonl",
+      "exists": false,
+      "sessionId": null
+    }
+  },
+  "continuationIntents": [
+    {
+      "operation_category": "git-integration",
+      "state": "settled",
+      "outcome_class": "accepted",
+      "operation_id": "git-integration-merge-canonical:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:round-1",
+      "backend_request_id": null
+    },
+    {
+      "operation_category": "task-create",
+      "state": "settled",
+      "outcome_class": "accepted",
+      "operation_id": "integration-reconciliation-task:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:round-1",
+      "backend_request_id": "e844a70b-a7cf-46f2-9c06-8f32cb63e084"
+    },
+    {
+      "operation_category": "worker-terminal-prepare",
+      "state": "settled",
+      "outcome_class": "accepted",
+      "operation_id": "integration-reconciliation-task:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:round-1:terminal",
+      "backend_request_id": "e9c0881d-9425-4fa5-a142-ed789f3c5c6b"
+    },
+    {
+      "operation_category": "worker-start",
+      "state": "settled",
+      "outcome_class": "accepted",
+      "operation_id": "integration-reconciliation-task:e2e-loop-scope:e2e-loop-scope%23g1:1:e2e-loop-scope%23g1%3Areadme-banner:round-1:worker-start",
+      "backend_request_id": "44deba66-d064-4e9f-9a99-ee245bda1d19"
+    }
+  ],
+  "segments": [
+    {
+      "work_package_id": "e2e-loop-scope#g1:notes-basics",
+      "role": "planner",
+      "dispatch_id": "ctx_7ac639306a27"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:readme-banner",
+      "role": "planner",
+      "dispatch_id": "ctx_c6caffe1179a"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:notes-basics",
+      "role": "implementation",
+      "dispatch_id": "ctx_c94fdc28943e"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:readme-banner",
+      "role": "implementation",
+      "dispatch_id": "ctx_b731a73aa964"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:notes-basics",
+      "role": "validator",
+      "dispatch_id": "ctx_405ad809dc6e"
+    },
+    {
+      "work_package_id": "e2e-loop-scope#g1:readme-banner",
+      "role": "validator",
+      "dispatch_id": "ctx_d71649b2ae71"
+    }
+  ],
+  "budget": [
+    {
+      "budget_key": "work-package:e2e-loop-scope#g1:readme-banner:integrationReconciliations",
+      "consumed": 1
+    }
+  ]
+}

@@ -277,9 +277,9 @@ test('恢复：先对账再恢复调度，且不重置已消耗的预算、claim
     store,
     coordinationScopeId: SCOPE,
     writer,
-    graph: { graphId: GRAPH_ID, generation: 1 as GraphGeneration, concurrencyLimit: 1, workPackages: [] },
+    graph: { graphId: GRAPH_ID, generation: 1 as GraphGeneration, workPackages: [] },
     initialPlan: implementationPlanFor(
-      { graphId: GRAPH_ID, generation: 1 as GraphGeneration, concurrencyLimit: 1, workPackages: [] },
+      { graphId: GRAPH_ID, generation: 1 as GraphGeneration, workPackages: [] },
       1,
     ),
     mapRevision: mapRevision(),

@@ -1,0 +1,33 @@
+{
+  "generatedAt": "2026-10-05T10:10:16.498Z",
+  "fixture": "orca-cc-concurrency-06",
+  "modelRef": "planning-default",
+  "providerIntegration": "@langchain/openai#ChatOpenAI",
+  "resolvedKind": "resolved",
+  "requiredCapabilities": [
+    "text_generation",
+    "streaming",
+    "tool_calling",
+    "cancellation",
+    "usage"
+  ],
+  "verificationKind": "rejected",
+  "capabilities": {
+    "text_generation": true,
+    "streaming": true,
+    "tool_calling": false,
+    "cancellation": true,
+    "usage": true
+  },
+  "missing": [
+    "tool_calling"
+  ],
+  "details": [
+    "text_generation: 文本生成返回非空响应",
+    "streaming: 流式输出产生首个 chunk",
+    "tool_calling: tool calling 失败：529 Provider error 529: 当前服务集群负载较高，请稍后重试，感谢您的耐心等待。 (2064)",
+    "cancellation: 以已取消的 signal 调用被拒绝",
+    "usage: 响应包含可用 usage 元数据"
+  ],
+  "message": "注入的模型缺少必需能力：tool_calling"
+}

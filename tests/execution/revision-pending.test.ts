@@ -40,7 +40,6 @@ function graph(): ExecutionGraph {
   return {
     graphId: 'graph-1' as GraphId,
     generation: 1 as GraphGeneration,
-    concurrencyLimit: 1,
     workPackages: [
       workPackage(WP_A, []),
       workPackage(WP_B, [WP_A]),

@@ -22,6 +22,12 @@ flowchart LR
 
 Companion 是单个前台进程，只运行 Coordinator Agent。Orca 拥有 Run、Task、Dispatch、Worker、Delivery、receipt 与 Accepted Worker Result；Worker Harness 拥有 provider session 和 transcript；Git 拥有代码、HEAD 与 worktree；issue tracker 拥有 Route Map 和 Decision Ticket。`coordination.sqlite` 与 `checkpoints.sqlite` 分别保存协调事实和 Coordinator Session checkpoint；`ui.sqlite` 独立保存尚未发送或待核验的用户输入。
 
+Execution Coordination 的唯一 lease holder 可同时协调多个独立 Work Package。`ExecutionLimits.maxActiveWorkPackages` 是用户可配置的并行包额度（默认 3），`maxWorkPackages` 是图容量（默认 8）；同包角色顺序推进，canonical 集成串行。额度属于已批准 Manifest，ExecutionGraph 只描述工作与预算。
+
+schema 19 的 Branch Store 在副作用前原子登记包级 lane，直到可证明集成或终止才释放；unknown 和待恢复的包继续占位。自动触发与 Coordinator 工具共用 `application/execution/advance-execution.ts` 的选包规则和事务准入。Bootstrap 只串行化 Scope 的短派发步骤，等待包级补救或合并复验时允许其他包继续推进。terminal 创建回执的精确句柄与原 Operation Intent 同事务结算；恢复重新核验原资源，不依赖可变显示标题，也不重新执行已接受的操作。
+
+`application/integration-reconciliation.ts` 拥有稳定复验轮次、独立预算与 Git 意图；`bootstrap/integration-reconciliation-runtime.ts` 通过新的真实 Task/Dispatch 续接原 Validator provider Session。先在包内合并 canonical，再验证精确合并树，最后由 Controller 提交并快进 canonical。设置用例 `application/configuration/execution-settings.ts` 复用配置 CAS；保存默认值与批准执行期 Manifest 是两个明确用户意图，批准不重置图、Run 或已消费预算。
+
 ## 模块依赖
 
 ```mermaid
@@ -190,7 +196,7 @@ flowchart LR
 | Coordinator Session | `checkpoints.sqlite` | 已提交消息/tool step、图位置、Wake Batch、Context Capsule |
 | UI 输入 | `ui.sqlite` | 按 Scope/Session/回答 revision 隔离的草稿、冲突副本、待核验提交；不形成业务受理事实 |
 | Provider secret | 用户级 CredentialStore 文件 | 永不落其它位置；其它地方只保存 `credentialRef` |
-| 模型与连接设置 | 项目 `orca-companion.json`（schema 2） | 追加式 `providerConnections`、`models`、角色 Worker Profiles 与当前选择引用 |
+| 模型与连接设置 | 项目 `orca-companion.json`（schema 3） | 追加式 `providerConnections`、`models`、角色 Worker Profiles 与当前选择引用 |
 | Worker Harness session/transcript | Worker Harness | 精确 Session Binding、Segment 与 transcript 引用 |
 
 ## 跨接缝流程
@@ -342,7 +348,7 @@ sequenceDiagram
   A->>A: 重算完整 Manifest 指纹与 Scope revision，重新审阅与批准
 ```
 
-保存与应用分开：保存只改配置，Session、已批准 Manifest、Task 与已消耗预算不变。两个文件之间没有跨文件事务，凭据先落盘；项目引用保存失败时保留输入，可能留下未被引用的孤立 secret，但不会激活任何配置。执行期只换模型配置时按完整指纹重新批准，不创建 Graph Revision、不重置预算。详见 `IC-04`、`IC-05`、`IC-11`。
+保存与应用分开：保存只改配置，Session、已批准 Manifest、Task 与已消耗预算不变。两个文件之间没有跨文件事务，凭据先落盘；项目引用保存失败时保留输入，可能留下未被引用的孤立 secret，但不会激活任何配置。执行期更新模型配置或并行额度时按当前 Graph head、完整指纹和 Scope revision 重新批准，不创建 Graph Revision、不重置预算。详见 `IC-04`、`IC-05`、`IC-11`。
 
 ## 合同导航
 

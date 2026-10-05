@@ -229,7 +229,7 @@ describe('快照 DTO 与 CLI 复用（IP-03 前置）', () => {
     expect(snapshot.execution.workPackages).toEqual([]);
     expect(snapshot.execution.integrationQueue).toEqual([]);
     expect(snapshot.execution.activeWorkPackageCount).toBe(0);
-    expect(snapshot.execution.activeWorkPackageId).toBeNull();
+    expect(snapshot.execution.activeWorkPackageIds).toEqual([]);
     expect(snapshot.execution.finalizer.gate.ready).toBe(false);
     // 没有未决操作也没有活跃 Worker：不需要先对账。
     expect(snapshot.execution.executionReconciliation.pending).toBe(false);
@@ -271,7 +271,6 @@ describe('快照 DTO 与 CLI 复用（IP-03 前置）', () => {
         graph: {
           graphId,
           generation: 1 as GraphGeneration,
-          concurrencyLimit: 1,
           workPackages: [
             {
               workPackageId: 'wp-1' as WorkPackageId,
@@ -284,6 +283,7 @@ describe('快照 DTO 与 CLI 复用（IP-03 前置）', () => {
                 graphRevisions: 2,
                 specificationRevisions: 2,
                 maxRecoveriesPerWorkerAttempt: 1,
+                integrationReconciliations: 2,
               },
             },
             {
@@ -297,6 +297,7 @@ describe('快照 DTO 与 CLI 复用（IP-03 前置）', () => {
                 graphRevisions: 2,
                 specificationRevisions: 2,
                 maxRecoveriesPerWorkerAttempt: 1,
+                integrationReconciliations: 2,
               },
             },
           ],
@@ -324,7 +325,7 @@ describe('快照 DTO 与 CLI 复用（IP-03 前置）', () => {
     // CLI 不调用 Orca：没有列举执行主机，因此存活结论只能是不可核验，而不是「已退出」。
     expect(snapshot.execution.workPackages[0]?.liveness).toBeNull();
     expect(snapshot.execution.activeWorkPackageCount).toBe(1);
-    expect(snapshot.execution.activeWorkPackageId).toBe('wp-1');
+    expect(snapshot.execution.activeWorkPackageIds).toEqual(['wp-1']);
     // 门禁：包尚未通过验证，因此不派发 Finalizer。
     expect(snapshot.execution.finalizer.gate.ready).toBe(false);
     expect(snapshot.execution.finalizer.gate.blockers.length).toBeGreaterThan(0);
