@@ -1,0 +1,2454 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "empty",
+      "title": "空账单",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json",
+        "csv"
+      ],
+      "input": [],
+      "expectedJson": {
+        "totalCents": 0,
+        "byCategory": [],
+        "largePayments": [],
+        "duplicateGroups": []
+      }
+    },
+    {
+      "id": "standard",
+      "title": "常规统计、阈值与类别别名",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json",
+        "csv"
+      ],
+      "thresholdCents": 5000,
+      "input": [
+        {
+          "id": "a1",
+          "category": "餐饮",
+          "merchant": "Star Cafe",
+          "amountCents": 12000
+        },
+        {
+          "id": "b2",
+          "category": "交通",
+          "merchant": "Metro",
+          "amountCents": 3400
+        },
+        {
+          "id": "c3",
+          "category": "餐饮",
+          "merchant": "Noodle Bar",
+          "amountCents": 5000
+        },
+        {
+          "id": "d4",
+          "category": "grocery",
+          "merchant": "Fresh Mart",
+          "amountCents": 8600
+        },
+        {
+          "id": "e5",
+          "category": "grocery",
+          "merchant": "Fresh Mart",
+          "amountCents": 2000
+        }
+      ],
+      "expectedJson": {
+        "totalCents": 31000,
+        "byCategory": [
+          {
+            "category": "餐饮",
+            "count": 2,
+            "totalCents": 17000
+          },
+          {
+            "category": "交通",
+            "count": 1,
+            "totalCents": 3400
+          },
+          {
+            "category": "grocery",
+            "count": 2,
+            "totalCents": 10600
+          }
+        ],
+        "largePayments": [
+          "a1",
+          "c3",
+          "d4"
+        ],
+        "duplicateGroups": []
+      }
+    },
+    {
+      "id": "threshold-equal",
+      "title": "金额等于阈值计入大额支出",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json",
+        "csv"
+      ],
+      "thresholdCents": 5000,
+      "input": [
+        {
+          "id": "p1",
+          "category": "x",
+          "merchant": "M1",
+          "amountCents": 4999
+        },
+        {
+          "id": "p2",
+          "category": "x",
+          "merchant": "M2",
+          "amountCents": 5000
+        },
+        {
+          "id": "p3",
+          "category": "y",
+          "merchant": "M3",
+          "amountCents": 5001
+        }
+      ],
+      "expectedJson": {
+        "totalCents": 15000,
+        "byCategory": [
+          {
+            "category": "x",
+            "count": 2,
+            "totalCents": 9999
+          },
+          {
+            "category": "y",
+            "count": 1,
+            "totalCents": 5001
+          }
+        ],
+        "largePayments": [
+          "p2",
+          "p3"
+        ],
+        "duplicateGroups": []
+      }
+    },
+    {
+      "id": "threshold-zero",
+      "title": "阈值 0 的边界",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json",
+        "csv"
+      ],
+      "thresholdCents": 0,
+      "input": [
+        {
+          "id": "z1",
+          "category": "c",
+          "merchant": "M1",
+          "amountCents": 0
+        },
+        {
+          "id": "z2",
+          "category": "c",
+          "merchant": "M2",
+          "amountCents": 1
+        }
+      ],
+      "expectedJson": {
+        "totalCents": 1,
+        "byCategory": [
+          {
+            "category": "c",
+            "count": 2,
+            "totalCents": 1
+          }
+        ],
+        "largePayments": [
+          "z1",
+          "z2"
+        ],
+        "duplicateGroups": []
+      }
+    },
+    {
+      "id": "duplicate-groups",
+      "title": "同商户同金额的疑似重复组",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json",
+        "csv"
+      ],
+      "thresholdCents": 5000,
+      "input": [
+        {
+          "id": "g1",
+          "category": "c",
+          "merchant": "Dup",
+          "amountCents": 7000
+        },
+        {
+          "id": "g2",
+          "category": "c",
+          "merchant": "Dup",
+          "amountCents": 7000
+        },
+        {
+          "id": "g3",
+          "category": "d",
+          "merchant": "Dup",
+          "amountCents": 8000
+        },
+        {
+          "id": "g4",
+          "category": "d",
+          "merchant": "Dup",
+          "amountCents": 8000
+        },
+        {
+          "id": "g5",
+          "category": "d",
+          "merchant": "Other",
+          "amountCents": 8000
+        }
+      ],
+      "expectedJson": {
+        "totalCents": 38000,
+        "byCategory": [
+          {
+            "category": "c",
+            "count": 2,
+            "totalCents": 14000
+          },
+          {
+            "category": "d",
+            "count": 3,
+            "totalCents": 24000
+          }
+        ],
+        "largePayments": [
+          "g1",
+          "g2",
+          "g3",
+          "g4",
+          "g5"
+        ],
+        "duplicateGroups": [
+          [
+            "g1",
+            "g2"
+          ],
+          [
+            "g3",
+            "g4"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "unicode",
+      "title": "Unicode 类别与商户",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json",
+        "csv"
+      ],
+      "thresholdCents": 5000,
+      "input": [
+        {
+          "id": "u1",
+          "category": "日本",
+          "merchant": "寿司🍣",
+          "amountCents": 6000
+        },
+        {
+          "id": "u2",
+          "category": "中文",
+          "merchant": "书店",
+          "amountCents": 100
+        },
+        {
+          "id": "u3",
+          "category": "日本",
+          "merchant": "ラーメン",
+          "amountCents": 200
+        }
+      ],
+      "expectedJson": {
+        "totalCents": 6300,
+        "byCategory": [
+          {
+            "category": "中文",
+            "count": 1,
+            "totalCents": 100
+          },
+          {
+            "category": "日本",
+            "count": 2,
+            "totalCents": 6200
+          }
+        ],
+        "largePayments": [
+          "u1"
+        ],
+        "duplicateGroups": []
+      }
+    },
+    {
+      "id": "alias-collision",
+      "title": "别名碰撞：餐饮与 food（及交通与 travel）合并，各版本用显式 golden",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json",
+        "csv"
+      ],
+      "thresholdCents": 5000,
+      "input": [
+        {
+          "id": "c1",
+          "category": "餐饮",
+          "merchant": "Star Cafe",
+          "amountCents": 3000
+        },
+        {
+          "id": "c2",
+          "category": "food",
+          "merchant": "Bistro",
+          "amountCents": 4000
+        },
+        {
+          "id": "c3",
+          "category": "交通",
+          "merchant": "Metro",
+          "amountCents": 1500
+        },
+        {
+          "id": "c4",
+          "category": "travel",
+          "merchant": "Rail",
+          "amountCents": 2500
+        },
+        {
+          "id": "c5",
+          "category": "misc",
+          "merchant": "Shop",
+          "amountCents": 6000
+        }
+      ],
+      "expectedJson": {
+        "totalCents": 17000,
+        "byCategory": [
+          {
+            "category": "餐饮",
+            "count": 1,
+            "totalCents": 3000
+          },
+          {
+            "category": "food",
+            "count": 1,
+            "totalCents": 4000
+          },
+          {
+            "category": "交通",
+            "count": 1,
+            "totalCents": 1500
+          },
+          {
+            "category": "travel",
+            "count": 1,
+            "totalCents": 2500
+          },
+          {
+            "category": "misc",
+            "count": 1,
+            "totalCents": 6000
+          }
+        ],
+        "largePayments": [
+          "c5"
+        ],
+        "duplicateGroups": []
+      },
+      "expectedJsonByVersion": {
+        "initial": {
+          "totalCents": 17000,
+          "byCategory": [
+            {
+              "category": "餐饮",
+              "count": 1,
+              "totalCents": 3000
+            },
+            {
+              "category": "food",
+              "count": 1,
+              "totalCents": 4000
+            },
+            {
+              "category": "交通",
+              "count": 1,
+              "totalCents": 1500
+            },
+            {
+              "category": "travel",
+              "count": 1,
+              "totalCents": 2500
+            },
+            {
+              "category": "misc",
+              "count": 1,
+              "totalCents": 6000
+            }
+          ],
+          "largePayments": [
+            "c5"
+          ],
+          "duplicateGroups": []
+        },
+        "revised": {
+          "totalCents": 17000,
+          "byCategory": [
+            {
+              "category": "food",
+              "count": 2,
+              "totalCents": 7000
+            },
+            {
+              "category": "travel",
+              "count": 2,
+              "totalCents": 4000
+            },
+            {
+              "category": "misc",
+              "count": 1,
+              "totalCents": 6000
+            }
+          ],
+          "largePayments": [
+            "c5"
+          ],
+          "duplicateGroups": []
+        },
+        "privacy": {
+          "totalCents": 17000,
+          "byCategory": [
+            {
+              "category": "food",
+              "count": 2,
+              "totalCents": 7000
+            },
+            {
+              "category": "travel",
+              "count": 2,
+              "totalCents": 4000
+            },
+            {
+              "category": "misc",
+              "count": 1,
+              "totalCents": 6000
+            }
+          ],
+          "largePayments": [
+            "c5"
+          ],
+          "duplicateGroups": []
+        }
+      }
+    },
+    {
+      "id": "control-chars",
+      "title": "ID 含 NUL：结构化比较不得把拼接误读为相等",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "thresholdCents": 5000,
+      "input": [
+        {
+          "id": "x\u0000y",
+          "category": "c",
+          "merchant": "m1",
+          "amountCents": 6000
+        },
+        {
+          "id": "x",
+          "category": "c",
+          "merchant": "m2",
+          "amountCents": 100
+        },
+        {
+          "id": "y",
+          "category": "c",
+          "merchant": "m3",
+          "amountCents": 100
+        },
+        {
+          "id": "d\u0000a",
+          "category": "dup",
+          "merchant": "Dup",
+          "amountCents": 100
+        },
+        {
+          "id": "d\u0000b",
+          "category": "dup",
+          "merchant": "Dup",
+          "amountCents": 100
+        }
+      ],
+      "expectedJson": {
+        "totalCents": 6400,
+        "byCategory": [
+          {
+            "category": "c",
+            "count": 3,
+            "totalCents": 6200
+          },
+          {
+            "category": "dup",
+            "count": 2,
+            "totalCents": 200
+          }
+        ],
+        "largePayments": [
+          "x\u0000y"
+        ],
+        "duplicateGroups": [
+          [
+            "d\u0000a",
+            "d\u0000b"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "csv-quotes",
+      "title": "CSV 引号、逗号与内嵌换行",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "csv"
+      ],
+      "lineEnding": "lf",
+      "thresholdCents": 5000,
+      "input": [
+        {
+          "id": "q1",
+          "category": "a",
+          "merchant": "Acme, Inc.",
+          "amountCents": 3000
+        },
+        {
+          "id": "q2",
+          "category": "a",
+          "merchant": "Bob \"The Boss\"",
+          "amountCents": 10000
+        },
+        {
+          "id": "q3",
+          "category": "b",
+          "merchant": "Line1\nLine2",
+          "amountCents": 7000
+        }
+      ]
+    },
+    {
+      "id": "csv-crlf",
+      "title": "显式 CRLF 行尾",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "csv"
+      ],
+      "lineEnding": "crlf",
+      "thresholdCents": 5000,
+      "input": [
+        {
+          "id": "r1",
+          "category": "c",
+          "merchant": "M1",
+          "amountCents": 100
+        },
+        {
+          "id": "r2",
+          "category": "c",
+          "merchant": "M2",
+          "amountCents": 200
+        }
+      ]
+    },
+    {
+      "id": "limits-100",
+      "title": "记录数上限 100",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json",
+        "csv"
+      ],
+      "thresholdCents": 5000,
+      "input": [
+        {
+          "id": "r000",
+          "category": "c",
+          "merchant": "m000",
+          "amountCents": 4950
+        },
+        {
+          "id": "r001",
+          "category": "c",
+          "merchant": "m001",
+          "amountCents": 4951
+        },
+        {
+          "id": "r002",
+          "category": "c",
+          "merchant": "m002",
+          "amountCents": 4952
+        },
+        {
+          "id": "r003",
+          "category": "c",
+          "merchant": "m003",
+          "amountCents": 4953
+        },
+        {
+          "id": "r004",
+          "category": "c",
+          "merchant": "m004",
+          "amountCents": 4954
+        },
+        {
+          "id": "r005",
+          "category": "c",
+          "merchant": "m005",
+          "amountCents": 4955
+        },
+        {
+          "id": "r006",
+          "category": "c",
+          "merchant": "m006",
+          "amountCents": 4956
+        },
+        {
+          "id": "r007",
+          "category": "c",
+          "merchant": "m007",
+          "amountCents": 4957
+        },
+        {
+          "id": "r008",
+          "category": "c",
+          "merchant": "m008",
+          "amountCents": 4958
+        },
+        {
+          "id": "r009",
+          "category": "c",
+          "merchant": "m009",
+          "amountCents": 4959
+        },
+        {
+          "id": "r010",
+          "category": "c",
+          "merchant": "m010",
+          "amountCents": 4960
+        },
+        {
+          "id": "r011",
+          "category": "c",
+          "merchant": "m011",
+          "amountCents": 4961
+        },
+        {
+          "id": "r012",
+          "category": "c",
+          "merchant": "m012",
+          "amountCents": 4962
+        },
+        {
+          "id": "r013",
+          "category": "c",
+          "merchant": "m013",
+          "amountCents": 4963
+        },
+        {
+          "id": "r014",
+          "category": "c",
+          "merchant": "m014",
+          "amountCents": 4964
+        },
+        {
+          "id": "r015",
+          "category": "c",
+          "merchant": "m015",
+          "amountCents": 4965
+        },
+        {
+          "id": "r016",
+          "category": "c",
+          "merchant": "m016",
+          "amountCents": 4966
+        },
+        {
+          "id": "r017",
+          "category": "c",
+          "merchant": "m017",
+          "amountCents": 4967
+        },
+        {
+          "id": "r018",
+          "category": "c",
+          "merchant": "m018",
+          "amountCents": 4968
+        },
+        {
+          "id": "r019",
+          "category": "c",
+          "merchant": "m019",
+          "amountCents": 4969
+        },
+        {
+          "id": "r020",
+          "category": "c",
+          "merchant": "m020",
+          "amountCents": 4970
+        },
+        {
+          "id": "r021",
+          "category": "c",
+          "merchant": "m021",
+          "amountCents": 4971
+        },
+        {
+          "id": "r022",
+          "category": "c",
+          "merchant": "m022",
+          "amountCents": 4972
+        },
+        {
+          "id": "r023",
+          "category": "c",
+          "merchant": "m023",
+          "amountCents": 4973
+        },
+        {
+          "id": "r024",
+          "category": "c",
+          "merchant": "m024",
+          "amountCents": 4974
+        },
+        {
+          "id": "r025",
+          "category": "c",
+          "merchant": "m025",
+          "amountCents": 4975
+        },
+        {
+          "id": "r026",
+          "category": "c",
+          "merchant": "m026",
+          "amountCents": 4976
+        },
+        {
+          "id": "r027",
+          "category": "c",
+          "merchant": "m027",
+          "amountCents": 4977
+        },
+        {
+          "id": "r028",
+          "category": "c",
+          "merchant": "m028",
+          "amountCents": 4978
+        },
+        {
+          "id": "r029",
+          "category": "c",
+          "merchant": "m029",
+          "amountCents": 4979
+        },
+        {
+          "id": "r030",
+          "category": "c",
+          "merchant": "m030",
+          "amountCents": 4980
+        },
+        {
+          "id": "r031",
+          "category": "c",
+          "merchant": "m031",
+          "amountCents": 4981
+        },
+        {
+          "id": "r032",
+          "category": "c",
+          "merchant": "m032",
+          "amountCents": 4982
+        },
+        {
+          "id": "r033",
+          "category": "c",
+          "merchant": "m033",
+          "amountCents": 4983
+        },
+        {
+          "id": "r034",
+          "category": "c",
+          "merchant": "m034",
+          "amountCents": 4984
+        },
+        {
+          "id": "r035",
+          "category": "c",
+          "merchant": "m035",
+          "amountCents": 4985
+        },
+        {
+          "id": "r036",
+          "category": "c",
+          "merchant": "m036",
+          "amountCents": 4986
+        },
+        {
+          "id": "r037",
+          "category": "c",
+          "merchant": "m037",
+          "amountCents": 4987
+        },
+        {
+          "id": "r038",
+          "category": "c",
+          "merchant": "m038",
+          "amountCents": 4988
+        },
+        {
+          "id": "r039",
+          "category": "c",
+          "merchant": "m039",
+          "amountCents": 4989
+        },
+        {
+          "id": "r040",
+          "category": "c",
+          "merchant": "m040",
+          "amountCents": 4990
+        },
+        {
+          "id": "r041",
+          "category": "c",
+          "merchant": "m041",
+          "amountCents": 4991
+        },
+        {
+          "id": "r042",
+          "category": "c",
+          "merchant": "m042",
+          "amountCents": 4992
+        },
+        {
+          "id": "r043",
+          "category": "c",
+          "merchant": "m043",
+          "amountCents": 4993
+        },
+        {
+          "id": "r044",
+          "category": "c",
+          "merchant": "m044",
+          "amountCents": 4994
+        },
+        {
+          "id": "r045",
+          "category": "c",
+          "merchant": "m045",
+          "amountCents": 4995
+        },
+        {
+          "id": "r046",
+          "category": "c",
+          "merchant": "m046",
+          "amountCents": 4996
+        },
+        {
+          "id": "r047",
+          "category": "c",
+          "merchant": "m047",
+          "amountCents": 4997
+        },
+        {
+          "id": "r048",
+          "category": "c",
+          "merchant": "m048",
+          "amountCents": 4998
+        },
+        {
+          "id": "r049",
+          "category": "c",
+          "merchant": "m049",
+          "amountCents": 4999
+        },
+        {
+          "id": "r050",
+          "category": "c",
+          "merchant": "m050",
+          "amountCents": 5000
+        },
+        {
+          "id": "r051",
+          "category": "c",
+          "merchant": "m051",
+          "amountCents": 5001
+        },
+        {
+          "id": "r052",
+          "category": "c",
+          "merchant": "m052",
+          "amountCents": 5002
+        },
+        {
+          "id": "r053",
+          "category": "c",
+          "merchant": "m053",
+          "amountCents": 5003
+        },
+        {
+          "id": "r054",
+          "category": "c",
+          "merchant": "m054",
+          "amountCents": 5004
+        },
+        {
+          "id": "r055",
+          "category": "c",
+          "merchant": "m055",
+          "amountCents": 5005
+        },
+        {
+          "id": "r056",
+          "category": "c",
+          "merchant": "m056",
+          "amountCents": 5006
+        },
+        {
+          "id": "r057",
+          "category": "c",
+          "merchant": "m057",
+          "amountCents": 5007
+        },
+        {
+          "id": "r058",
+          "category": "c",
+          "merchant": "m058",
+          "amountCents": 5008
+        },
+        {
+          "id": "r059",
+          "category": "c",
+          "merchant": "m059",
+          "amountCents": 5009
+        },
+        {
+          "id": "r060",
+          "category": "c",
+          "merchant": "m060",
+          "amountCents": 5010
+        },
+        {
+          "id": "r061",
+          "category": "c",
+          "merchant": "m061",
+          "amountCents": 5011
+        },
+        {
+          "id": "r062",
+          "category": "c",
+          "merchant": "m062",
+          "amountCents": 5012
+        },
+        {
+          "id": "r063",
+          "category": "c",
+          "merchant": "m063",
+          "amountCents": 5013
+        },
+        {
+          "id": "r064",
+          "category": "c",
+          "merchant": "m064",
+          "amountCents": 5014
+        },
+        {
+          "id": "r065",
+          "category": "c",
+          "merchant": "m065",
+          "amountCents": 5015
+        },
+        {
+          "id": "r066",
+          "category": "c",
+          "merchant": "m066",
+          "amountCents": 5016
+        },
+        {
+          "id": "r067",
+          "category": "c",
+          "merchant": "m067",
+          "amountCents": 5017
+        },
+        {
+          "id": "r068",
+          "category": "c",
+          "merchant": "m068",
+          "amountCents": 5018
+        },
+        {
+          "id": "r069",
+          "category": "c",
+          "merchant": "m069",
+          "amountCents": 5019
+        },
+        {
+          "id": "r070",
+          "category": "c",
+          "merchant": "m070",
+          "amountCents": 5020
+        },
+        {
+          "id": "r071",
+          "category": "c",
+          "merchant": "m071",
+          "amountCents": 5021
+        },
+        {
+          "id": "r072",
+          "category": "c",
+          "merchant": "m072",
+          "amountCents": 5022
+        },
+        {
+          "id": "r073",
+          "category": "c",
+          "merchant": "m073",
+          "amountCents": 5023
+        },
+        {
+          "id": "r074",
+          "category": "c",
+          "merchant": "m074",
+          "amountCents": 5024
+        },
+        {
+          "id": "r075",
+          "category": "c",
+          "merchant": "m075",
+          "amountCents": 5025
+        },
+        {
+          "id": "r076",
+          "category": "c",
+          "merchant": "m076",
+          "amountCents": 5026
+        },
+        {
+          "id": "r077",
+          "category": "c",
+          "merchant": "m077",
+          "amountCents": 5027
+        },
+        {
+          "id": "r078",
+          "category": "c",
+          "merchant": "m078",
+          "amountCents": 5028
+        },
+        {
+          "id": "r079",
+          "category": "c",
+          "merchant": "m079",
+          "amountCents": 5029
+        },
+        {
+          "id": "r080",
+          "category": "c",
+          "merchant": "m080",
+          "amountCents": 5030
+        },
+        {
+          "id": "r081",
+          "category": "c",
+          "merchant": "m081",
+          "amountCents": 5031
+        },
+        {
+          "id": "r082",
+          "category": "c",
+          "merchant": "m082",
+          "amountCents": 5032
+        },
+        {
+          "id": "r083",
+          "category": "c",
+          "merchant": "m083",
+          "amountCents": 5033
+        },
+        {
+          "id": "r084",
+          "category": "c",
+          "merchant": "m084",
+          "amountCents": 5034
+        },
+        {
+          "id": "r085",
+          "category": "c",
+          "merchant": "m085",
+          "amountCents": 5035
+        },
+        {
+          "id": "r086",
+          "category": "c",
+          "merchant": "m086",
+          "amountCents": 5036
+        },
+        {
+          "id": "r087",
+          "category": "c",
+          "merchant": "m087",
+          "amountCents": 5037
+        },
+        {
+          "id": "r088",
+          "category": "c",
+          "merchant": "m088",
+          "amountCents": 5038
+        },
+        {
+          "id": "r089",
+          "category": "c",
+          "merchant": "m089",
+          "amountCents": 5039
+        },
+        {
+          "id": "r090",
+          "category": "c",
+          "merchant": "m090",
+          "amountCents": 5040
+        },
+        {
+          "id": "r091",
+          "category": "c",
+          "merchant": "m091",
+          "amountCents": 5041
+        },
+        {
+          "id": "r092",
+          "category": "c",
+          "merchant": "m092",
+          "amountCents": 5042
+        },
+        {
+          "id": "r093",
+          "category": "c",
+          "merchant": "m093",
+          "amountCents": 5043
+        },
+        {
+          "id": "r094",
+          "category": "c",
+          "merchant": "m094",
+          "amountCents": 5044
+        },
+        {
+          "id": "r095",
+          "category": "c",
+          "merchant": "m095",
+          "amountCents": 5045
+        },
+        {
+          "id": "r096",
+          "category": "c",
+          "merchant": "m096",
+          "amountCents": 5046
+        },
+        {
+          "id": "r097",
+          "category": "c",
+          "merchant": "m097",
+          "amountCents": 5047
+        },
+        {
+          "id": "r098",
+          "category": "c",
+          "merchant": "m098",
+          "amountCents": 5048
+        },
+        {
+          "id": "r099",
+          "category": "c",
+          "merchant": "m099",
+          "amountCents": 5049
+        }
+      ],
+      "expectedJson": {
+        "totalCents": 499950,
+        "byCategory": [
+          {
+            "category": "c",
+            "count": 100,
+            "totalCents": 499950
+          }
+        ],
+        "largePayments": [
+          "r050",
+          "r051",
+          "r052",
+          "r053",
+          "r054",
+          "r055",
+          "r056",
+          "r057",
+          "r058",
+          "r059",
+          "r060",
+          "r061",
+          "r062",
+          "r063",
+          "r064",
+          "r065",
+          "r066",
+          "r067",
+          "r068",
+          "r069",
+          "r070",
+          "r071",
+          "r072",
+          "r073",
+          "r074",
+          "r075",
+          "r076",
+          "r077",
+          "r078",
+          "r079",
+          "r080",
+          "r081",
+          "r082",
+          "r083",
+          "r084",
+          "r085",
+          "r086",
+          "r087",
+          "r088",
+          "r089",
+          "r090",
+          "r091",
+          "r092",
+          "r093",
+          "r094",
+          "r095",
+          "r096",
+          "r097",
+          "r098",
+          "r099"
+        ],
+        "duplicateGroups": []
+      }
+    },
+    {
+      "id": "default-threshold",
+      "title": "省略 --threshold-cents 时使用合同默认 5000",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "invoke": {
+        "omitFlags": [
+          "--threshold-cents"
+        ]
+      },
+      "input": [
+        {
+          "id": "t1",
+          "category": "c",
+          "merchant": "m1",
+          "amountCents": 5000
+        },
+        {
+          "id": "t2",
+          "category": "c",
+          "merchant": "m2",
+          "amountCents": 4999
+        }
+      ],
+      "expectedJson": {
+        "totalCents": 9999,
+        "byCategory": [
+          {
+            "category": "c",
+            "count": 2,
+            "totalCents": 9999
+          }
+        ],
+        "largePayments": [
+          "t1"
+        ],
+        "duplicateGroups": []
+      }
+    },
+    {
+      "id": "default-line-ending",
+      "title": "省略 --line-ending 时使用合同默认 lf",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "csv"
+      ],
+      "lineEnding": "lf",
+      "invoke": {
+        "omitFlags": [
+          "--line-ending"
+        ]
+      },
+      "thresholdCents": 5000,
+      "input": [
+        {
+          "id": "l1",
+          "category": "c",
+          "merchant": "M1",
+          "amountCents": 100
+        },
+        {
+          "id": "l2",
+          "category": "c",
+          "merchant": "M2",
+          "amountCents": 200
+        }
+      ]
+    },
+    {
+      "id": "default-format",
+      "title": "省略 --format 时使用合同默认 json（需 docs 确认 format 可选）",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "invoke": {
+        "omitFlags": [
+          "--format"
+        ]
+      },
+      "thresholdCents": 5000,
+      "input": [
+        {
+          "id": "f1",
+          "category": "c",
+          "merchant": "M",
+          "amountCents": 10
+        }
+      ],
+      "expectedJson": {
+        "totalCents": 10,
+        "byCategory": [
+          {
+            "category": "c",
+            "count": 1,
+            "totalCents": 10
+          }
+        ],
+        "largePayments": [],
+        "duplicateGroups": []
+      }
+    },
+    {
+      "id": "invalid-json-parse",
+      "title": "非法 JSON 文本",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "invoke": {
+        "rawInput": "{ not json"
+      },
+      "expectErrorKind": "json"
+    },
+    {
+      "id": "invalid-not-array",
+      "title": "账单不是数组",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "invoke": {
+        "rawInput": "{\"a\":1}"
+      },
+      "expectErrorKind": "ledger"
+    },
+    {
+      "id": "invalid-records-101",
+      "title": "记录数超过上限 101",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "o000",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o001",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o002",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o003",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o004",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o005",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o006",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o007",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o008",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o009",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o010",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o011",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o012",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o013",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o014",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o015",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o016",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o017",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o018",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o019",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o020",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o021",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o022",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o023",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o024",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o025",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o026",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o027",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o028",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o029",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o030",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o031",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o032",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o033",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o034",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o035",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o036",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o037",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o038",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o039",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o040",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o041",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o042",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o043",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o044",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o045",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o046",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o047",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o048",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o049",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o050",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o051",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o052",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o053",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o054",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o055",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o056",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o057",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o058",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o059",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o060",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o061",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o062",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o063",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o064",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o065",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o066",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o067",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o068",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o069",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o070",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o071",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o072",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o073",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o074",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o075",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o076",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o077",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o078",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o079",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o080",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o081",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o082",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o083",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o084",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o085",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o086",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o087",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o088",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o089",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o090",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o091",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o092",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o093",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o094",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o095",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o096",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o097",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o098",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o099",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "o100",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        }
+      ],
+      "expectErrorKind": "ledger"
+    },
+    {
+      "id": "invalid-duplicate-id",
+      "title": "记录 id 重复",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "d1",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        },
+        {
+          "id": "d1",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 2
+        }
+      ],
+      "expectErrorKind": "ledger"
+    },
+    {
+      "id": "invalid-missing-field",
+      "title": "缺少 merchant 字段",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "m1",
+          "category": "c",
+          "amountCents": 1
+        }
+      ],
+      "expectErrorKind": "ledger"
+    },
+    {
+      "id": "invalid-blank-field",
+      "title": "merchant 只有空白",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "b1",
+          "category": "c",
+          "merchant": "   ",
+          "amountCents": 1
+        }
+      ],
+      "expectErrorKind": "ledger"
+    },
+    {
+      "id": "invalid-field-type",
+      "title": "amountCents 不是数字",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "t1",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": "100"
+        }
+      ],
+      "expectErrorKind": "ledger"
+    },
+    {
+      "id": "invalid-amount-negative",
+      "title": "负金额",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "n1",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": -1
+        }
+      ],
+      "expectErrorKind": "ledger"
+    },
+    {
+      "id": "invalid-amount-fraction",
+      "title": "小数金额",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "f1",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 12.5
+        }
+      ],
+      "expectErrorKind": "ledger"
+    },
+    {
+      "id": "invalid-amount-over-max",
+      "title": "金额超过上限",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "o1",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1000001
+        }
+      ],
+      "expectErrorKind": "ledger"
+    },
+    {
+      "id": "invalid-amount-unsafe",
+      "title": "金额不是安全整数",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "invoke": {
+        "rawInput": "[{\"id\":\"s1\",\"category\":\"c\",\"merchant\":\"m\",\"amountCents\":1e300}]"
+      },
+      "expectErrorKind": "ledger"
+    },
+    {
+      "id": "invalid-arg-threshold-text",
+      "title": "阈值不是数字",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "a1",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        }
+      ],
+      "invoke": {
+        "thresholdToken": "abc"
+      },
+      "expectErrorKind": "arguments"
+    },
+    {
+      "id": "invalid-arg-threshold-negative",
+      "title": "阈值为负",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "a1",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        }
+      ],
+      "invoke": {
+        "thresholdToken": "-1"
+      },
+      "expectErrorKind": "arguments"
+    },
+    {
+      "id": "invalid-arg-threshold-fraction",
+      "title": "阈值是小数",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "a1",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        }
+      ],
+      "invoke": {
+        "thresholdToken": "5000.5"
+      },
+      "expectErrorKind": "arguments"
+    },
+    {
+      "id": "invalid-arg-threshold-over-max",
+      "title": "阈值超过上限",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "a1",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        }
+      ],
+      "invoke": {
+        "thresholdToken": "1000001"
+      },
+      "expectErrorKind": "arguments"
+    },
+    {
+      "id": "invalid-arg-format",
+      "title": "未知输出格式",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "a1",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        }
+      ],
+      "invoke": {
+        "formatToken": "xml"
+      },
+      "expectErrorKind": "arguments"
+    },
+    {
+      "id": "invalid-arg-missing-value",
+      "title": "flag 缺少取值",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "a1",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        }
+      ],
+      "invoke": {
+        "omitFlags": [
+          "--format"
+        ],
+        "extraArgs": [
+          "--format"
+        ]
+      },
+      "expectErrorKind": "arguments"
+    },
+    {
+      "id": "invalid-arg-duplicate",
+      "title": "重复 flag",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "a1",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        }
+      ],
+      "invoke": {
+        "extraArgs": [
+          "--format",
+          "csv"
+        ]
+      },
+      "expectErrorKind": "arguments"
+    },
+    {
+      "id": "invalid-arg-unknown",
+      "title": "未知 flag",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "input": [
+        {
+          "id": "a1",
+          "category": "c",
+          "merchant": "m",
+          "amountCents": 1
+        }
+      ],
+      "invoke": {
+        "extraArgs": [
+          "--unknown"
+        ]
+      },
+      "expectErrorKind": "arguments"
+    },
+    {
+      "id": "missing-input",
+      "title": "输入文件不存在",
+      "versions": [
+        "initial",
+        "revised",
+        "privacy"
+      ],
+      "formats": [
+        "json"
+      ],
+      "invoke": {
+        "missingInput": true
+      },
+      "expectErrorKind": "read"
+    }
+  ]
+}

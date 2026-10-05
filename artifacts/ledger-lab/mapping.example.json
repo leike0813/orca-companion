@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "coordinationScopeId": "ledger-lab-20261005-scope",
+  "controlLanes": {
+    "task_utility_01": "coordination",
+    "task_finalizer_01": "coordination"
+  },
+  "graphs": [
+    {
+      "graphId": "graph-20261005-a",
+      "nodes": {
+        "S": "wp-s-input",
+        "A": "wp-a-stats",
+        "B": "wp-b-audit",
+        "C1": "wp-c1-rows",
+        "C2": "wp-c2-csv",
+        "J": "wp-j-report",
+        "D": "wp-d-cli",
+        "R": "wp-r-text",
+        "F": "wp-f-normalize"
+      },
+      "lanes": {
+        "wp-s-input": "coordination",
+        "wp-a-stats": "statistics",
+        "wp-b-audit": "audit",
+        "wp-c1-rows": "export",
+        "wp-c2-csv": "export",
+        "wp-j-report": "coordination",
+        "wp-d-cli": "coordination",
+        "wp-r-text": "coordination",
+        "wp-f-normalize": "statistics"
+      }
+    },
+    {
+      "graphId": "graph-20261005-b",
+      "nodes": {
+        "S": "wp-s2-input",
+        "F": "wp-f2-normalize",
+        "A": "wp-a2-stats",
+        "B": "wp-b2-audit",
+        "C1": "wp-c1-2-rows",
+        "C2": "wp-c2-2-csv",
+        "J": "wp-j2-report",
+        "D": "wp-d2-cli"
+      },
+      "lanes": {
+        "wp-s2-input": "coordination",
+        "wp-f2-normalize": "statistics",
+        "wp-a2-stats": "statistics",
+        "wp-b2-audit": "audit",
+        "wp-c1-2-rows": "export",
+        "wp-c2-2-csv": "export",
+        "wp-j2-report": "coordination",
+        "wp-d2-cli": "coordination"
+      }
+    }
+  ]
+}

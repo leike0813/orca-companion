@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "coordinationScopeId": "ledger-lab-20261005-scope",
+  "entries": [
+    {
+      "scenarioId": "planning",
+      "kind": "note",
+      "at": "2026-10-05T02:20:00Z",
+      "text": "首次规划形成统计、审计、导出三条 lane，J 为局部汇合，D 为最终汇合。",
+      "refs": ["mapping:graph-20261005-a"]
+    },
+    {
+      "scenarioId": "local-block",
+      "kind": "start",
+      "at": "2026-10-05T02:45:00Z",
+      "text": "导出 lane 需要 CSV 行尾验收材料，Companion 提问，先不提供。",
+      "refs": ["interaction:pending-3"]
+    },
+    {
+      "scenarioId": "local-block",
+      "kind": "end",
+      "at": "2026-10-05T03:05:00Z",
+      "text": "提供 lf 行尾材料后 C2 解除阻塞并验收。",
+      "refs": ["interaction:pending-3"]
+    },
+    {
+      "scenarioId": "specification-revision",
+      "kind": "missed",
+      "at": "2026-10-05T03:20:00Z",
+      "text": "C1 已经 Accepted 之后才提交排序修订，窗口错过。",
+      "refs": []
+    },
+    {
+      "scenarioId": "recovery",
+      "kind": "blocked",
+      "at": "2026-10-05T03:40:00Z",
+      "text": "关闭终端后替代 Session 已起，但 transcript 不可用，恢复阻塞。",
+      "refs": ["recovery:rec-1"]
+    },
+    {
+      "scenarioId": "planning",
+      "kind": "assessment",
+      "at": "2026-10-05T04:10:00Z",
+      "text": "清晰度: 图与 blocker 的表达清楚，模块划分与预期一致。",
+      "rating": 4
+    },
+    {
+      "scenarioId": "local-block",
+      "kind": "assessment",
+      "at": "2026-10-05T04:12:00Z",
+      "text": "干预次数: 局部阻塞期间只需回答一次材料请求，其余自动推进。",
+      "rating": 4
+    },
+    {
+      "scenarioId": "finalizer",
+      "kind": "assessment",
+      "at": "2026-10-05T04:15:00Z",
+      "text": "可复跑性: 换模型重跑后依赖结构基本一致。",
+      "rating": 3
+    }
+  ]
+}
