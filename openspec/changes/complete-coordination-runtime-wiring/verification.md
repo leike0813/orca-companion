@@ -4,7 +4,7 @@
 
 - Change：`complete-coordination-runtime-wiring`
 - 输入实现 HEAD：`adab77f`（`feat(coordinator): wire replanning, validation, wake and budget paths into production`；直接前驱为 `88d908ae2d5e7d798e207875242df72394cee274`）
-- 最终验收 HEAD：本文件所在提交；相对 `adab77f` 只含 verification.md，无产品代码改动
+- 最终验收 HEAD：`2af806f`（相对 `adab77f` 只含 verification.md，无产品代码改动）
 - 验收 Agent：MiniMax-M3.1-Flash-Preview（主代理，按 `openspec instructions verification` 执行；未由独立验收子代理复核）
 
 ## 结论
