@@ -28,6 +28,7 @@ import {
   type SettlementFacts,
   type TransitionStartFacts,
 } from '../../domain/execution/replanning.js';
+import { loadPlanningCycleCandidate } from '../planning/graph-history.js';
 import { readScope } from '../planning/scope-read.js';
 
 export type ReplanningFailure = {
@@ -140,13 +141,17 @@ export function beginReplanningTransition(input: {
   if (!scope.ok) {
     return { kind: 'rejected', failure: scope.failure };
   }
-  const decision = planReplanningTransition({
-    controlState: scope.scope.controlState,
-    transitionAlreadyActive: false,
-    ...input.facts,
-  });
-  if (decision.kind === 'rejected') {
-    return { kind: 'rejected', failure: { code: decision.code, message: decision.message } };
+  // 已经处于过渡中时，这是同一次过渡的**恢复**而非第二次进入：崩溃或重启后重放必须能继续，而不是
+  // 被「已处于过渡中」拒之门外。首次进入仍然要求显式触发条件。
+  if (scope.scope.controlState !== 'replanning_transition') {
+    const decision = planReplanningTransition({
+      controlState: scope.scope.controlState,
+      transitionAlreadyActive: false,
+      ...input.facts,
+    });
+    if (decision.kind === 'rejected') {
+      return { kind: 'rejected', failure: { code: decision.code, message: decision.message } };
+    }
   }
 
   // 前代身份先校验再落盘意图：否则一次身份不符的拒绝会把 Scope 永久留在 replanning_transition。
@@ -200,16 +205,25 @@ export function beginReplanningTransition(input: {
   if (!current.ok) {
     return { kind: 'rejected', failure: current.failure };
   }
-  const suspended = input.store.transact({
-    kind: 'advance-graph-generation',
+  // 已挂起的前代在恢复重放时不重复推进（`suspended → suspended` 不是合法迁移）。
+  const statusRead = input.store.query({
+    kind: 'graph-generation',
     coordinationScopeId: input.coordinationScopeId,
-    expectedRevision: current.scope.revision,
-    writer: input.writer,
     graphId: predecessorGraphId,
-    status: 'suspended',
   });
-  if (suspended.kind === 'rejected') {
-    return { kind: 'rejected', failure: { code: suspended.code, message: suspended.message } };
+  const alreadySuspended = statusRead.kind === 'graph-generation' && statusRead.generation?.status === 'suspended';
+  if (!alreadySuspended) {
+    const suspended = input.store.transact({
+      kind: 'advance-graph-generation',
+      coordinationScopeId: input.coordinationScopeId,
+      expectedRevision: current.scope.revision,
+      writer: input.writer,
+      graphId: predecessorGraphId,
+      status: 'suspended',
+    });
+    if (suspended.kind === 'rejected') {
+      return { kind: 'rejected', failure: { code: suspended.code, message: suspended.message } };
+    }
   }
   return { kind: 'started', predecessorGraphId, suspended: true };
 }
@@ -240,6 +254,18 @@ export function completeReplanningTransition(input: {
   readonly workerStopsConfirmed?: boolean;
   readonly newPlanningCycleId: PlanningCycleId;
 }): CompleteReplanningTransitionResult {
+  const scope = scopeOf(input.store, input.coordinationScopeId);
+  if (!scope.ok) return { kind: 'rejected', failure: scope.failure };
+  if (scope.scope.controlState !== 'replanning_transition') {
+    const generation = scope.scope.graphId === null ? null : input.store.query({ kind: 'graph-generation',
+      coordinationScopeId: input.coordinationScopeId, graphId: scope.scope.graphId });
+    if (scope.scope.mode === 'route_planning' && scope.scope.controlState === 'active' &&
+      scope.scope.planningCycleId === input.newPlanningCycleId && generation?.kind === 'graph-generation' &&
+      generation.generation?.status === 'suspended') {
+      return { kind: 'released', leaseReleased: false, planningCycleId: input.newPlanningCycleId };
+    }
+    return { kind: 'rejected', failure: { code: 'transition_required', message: '收尾需要已开始的 Replanning Transition' } };
+  }
   const verdict = replanningClosure(input.closure);
   const gaps = settlementGaps(input.settlement);
   if (gaps.length > 0) {
@@ -252,10 +278,6 @@ export function completeReplanningTransition(input: {
     return { kind: 'waiting', gaps };
   }
 
-  const scope = scopeOf(input.store, input.coordinationScopeId);
-  if (!scope.ok) {
-    return { kind: 'rejected', failure: scope.failure };
-  }
   const lease = activeExecutionLease(input.store, input.coordinationScopeId);
   let leaseReleased = false;
   if (lease !== undefined) {
@@ -388,40 +410,82 @@ export function cancelReplanningTransition(input: {
     return { kind: 'blocked', reason: decision.reason };
   }
 
-  const resumed = input.store.transact({
-    kind: 'advance-graph-generation',
+  // 恢复重放时三步可能已经各自完成过：已 active 的代际不再推进，已由本 Session 持有的 Lease 不再重取。
+  const statusRead = input.store.query({
+    kind: 'graph-generation',
     coordinationScopeId: input.coordinationScopeId,
-    expectedRevision: scope.scope.revision,
-    writer: input.writer,
     graphId: input.suspendedGraphId,
-    status: 'active',
   });
-  if (resumed.kind === 'rejected') {
-    return { kind: 'rejected', failure: { code: resumed.code, message: resumed.message } };
+  const alreadyActive = statusRead.kind === 'graph-generation' && statusRead.generation?.status === 'active';
+  if (!alreadyActive) {
+    const resumed = input.store.transact({
+      kind: 'advance-graph-generation',
+      coordinationScopeId: input.coordinationScopeId,
+      expectedRevision: scope.scope.revision,
+      writer: input.writer,
+      graphId: input.suspendedGraphId,
+      status: 'active',
+    });
+    if (resumed.kind === 'rejected') {
+      return { kind: 'rejected', failure: { code: resumed.code, message: resumed.message } };
+    }
   }
 
   const current = scopeOf(input.store, input.coordinationScopeId);
   if (!current.ok) {
     return { kind: 'rejected', failure: current.failure };
   }
-  const acquired = input.store.transact({
-    kind: 'acquire-execution-lease',
-    coordinationScopeId: input.coordinationScopeId,
-    expectedRevision: current.scope.revision,
-    writer: input.writer,
-  });
-  if (acquired.kind === 'rejected') {
-    return { kind: 'rejected', failure: { code: acquired.code, message: acquired.message } };
+  const existingLease = activeExecutionLease(input.store, input.coordinationScopeId);
+  if (existingLease === undefined) {
+    const acquired = input.store.transact({
+      kind: 'acquire-execution-lease',
+      coordinationScopeId: input.coordinationScopeId,
+      expectedRevision: current.scope.revision,
+      writer: input.writer,
+    });
+    if (acquired.kind === 'rejected') {
+      return { kind: 'rejected', failure: { code: acquired.code, message: acquired.message } };
+    }
+  } else if (existingLease.coordinatorSessionId !== input.writer.coordinatorSessionId) {
+    return {
+      kind: 'rejected',
+      failure: { code: 'constraint', message: 'Execution Coordination Lease 由其它 Coordinator Session 持有' },
+    };
   }
 
   const active = scopeOf(input.store, input.coordinationScopeId);
   if (!active.ok) {
     return { kind: 'rejected', failure: active.failure };
   }
+  // 过渡已收尾到 route_planning 时取消也要把模式恢复回执行协调，否则会留下「route_planning +
+  // 执行代际已激活」的混合态。恢复使用被挂起代际自己的 Planning Cycle。
+  if (active.scope.mode !== 'execution_coordination') {
+    const suspendedCycle =
+      statusRead.kind === 'graph-generation' ? statusRead.generation?.planningCycleId ?? null : null;
+    const restoreCycle = suspendedCycle ?? active.scope.planningCycleId;
+    if (restoreCycle === null) {
+      return { kind: 'rejected', failure: { code: 'invalid_state', message: '被挂起代际缺少 Planning Cycle，无法恢复执行协调' } };
+    }
+    const restoredMode = input.store.transact({
+      kind: 'update-scope-mode',
+      coordinationScopeId: input.coordinationScopeId,
+      expectedRevision: active.scope.revision,
+      writer: input.writer,
+      mode: 'execution_coordination',
+      planningCycleId: restoreCycle,
+    });
+    if (restoredMode.kind === 'rejected') {
+      return { kind: 'rejected', failure: { code: restoredMode.code, message: restoredMode.message } };
+    }
+  }
+  const restored = scopeOf(input.store, input.coordinationScopeId);
+  if (!restored.ok) {
+    return { kind: 'rejected', failure: restored.failure };
+  }
   const control = input.store.transact({
     kind: 'record-control-state',
     coordinationScopeId: input.coordinationScopeId,
-    expectedRevision: active.scope.revision,
+    expectedRevision: restored.scope.revision,
     writer: input.writer,
     controlState: 'active',
   });
@@ -429,4 +493,131 @@ export function cancelReplanningTransition(input: {
     return { kind: 'rejected', failure: { code: control.code, message: control.message } };
   }
   return { kind: 'cancelled', resumedGraphId: input.suspendedGraphId };
+}
+
+/**
+ * 从 Scope 当前事实开始重规划过渡。
+ *
+ * 前代代际身份由 Scope 指针指向的代际记录派生，调用方只提交触发条件：界面与对话入口不需要自己拼
+ * `graphId/generation/planningCycleId/orcaRunId/baselineHead`，也避免把「当前图」猜成「最新图」。
+ * Scope 尚无图时按无前代处理。
+ */
+export function beginReplanningFromScope(input: {
+  readonly store: BranchCoordinationStore;
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly writer: CoordinationWriter;
+  readonly facts: Omit<TransitionStartFacts, 'controlState' | 'transitionAlreadyActive'>;
+}): BeginReplanningTransitionResult {
+  const scope = scopeOf(input.store, input.coordinationScopeId);
+  if (!scope.ok) {
+    return { kind: 'rejected', failure: scope.failure };
+  }
+  let predecessor: {
+    readonly graphId: GraphId;
+    readonly generation: GraphGeneration;
+    readonly planningCycleId: PlanningCycleId;
+    readonly orcaRunId: string;
+    readonly baselineHead: string;
+  } | null = null;
+  if (scope.scope.graphId !== null) {
+    const read = input.store.query({
+      kind: 'graph-generation',
+      coordinationScopeId: input.coordinationScopeId,
+      graphId: scope.scope.graphId,
+    });
+    if (read.kind !== 'graph-generation' || read.generation === null) {
+      return {
+        kind: 'rejected',
+        failure: { code: 'invalid_state', message: `当前图 ${scope.scope.graphId} 缺少代际身份，无法挂起` },
+      };
+    }
+    predecessor = {
+      graphId: read.generation.graphId,
+      generation: read.generation.generation,
+      planningCycleId: read.generation.planningCycleId,
+      orcaRunId: read.generation.orcaRunId,
+      baselineHead: read.generation.baselineHead,
+    };
+  }
+  return beginReplanningTransition({ ...input, predecessor });
+}
+
+export type CandidateCutoverRefsResult =
+  | { readonly kind: 'ready'; readonly refs: CandidateGenerationRefs }
+  | { readonly kind: 'blocked'; readonly reason: string }
+  | { readonly kind: 'rejected'; readonly failure: ReplanningFailure };
+
+/**
+ * 为当前 Planning Cycle 的候选代际组装 Cutover 引用集合。
+ *
+ * 候选必须精确落在本 Cycle 的候选代际上（见 `loadPlanningCycleCandidate`），并且存在一份与候选图、
+ * 图版本、Run、基线与 Cycle 完全匹配的已批准 Manifest：缺任一项即 `blocked`，不猜「最新的那份授权」。
+ * refusal 与 `validateCutoverRefs` 同一判定，因此界面拿到的 refs 可以直接交给 `commitGenerationCutover`。
+ */
+export function cutoverRefsForCandidate(input: {
+  readonly store: BranchCoordinationStore;
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly planningCycleId: PlanningCycleId;
+}): CandidateCutoverRefsResult {
+  const scope = scopeOf(input.store, input.coordinationScopeId);
+  if (!scope.ok) {
+    return { kind: 'rejected', failure: scope.failure };
+  }
+  if (scope.scope.planningCycleId !== input.planningCycleId) {
+    return {
+      kind: 'blocked',
+      reason: `Scope 当前 Planning Cycle 是 ${scope.scope.planningCycleId ?? '未设置'}，不是 ${input.planningCycleId}`,
+    };
+  }
+  const candidate = loadPlanningCycleCandidate({
+    store: input.store,
+    coordinationScopeId: input.coordinationScopeId,
+    planningCycleId: input.planningCycleId,
+  });
+  if (candidate.kind === 'rejected') {
+    return { kind: 'rejected', failure: candidate.failure };
+  }
+  if (candidate.kind === 'absent') {
+    return { kind: 'blocked', reason: `Planning Cycle ${input.planningCycleId} 尚无候选图` };
+  }
+  const generation = candidate.generation;
+  if (generation.predecessorGraphId === null) {
+    return { kind: 'blocked', reason: '候选代际没有前代，Cutover 不成立' };
+  }
+  const authorizations = input.store.query({
+    kind: 'authorizations',
+    coordinationScopeId: input.coordinationScopeId,
+  });
+  if (authorizations.kind !== 'authorizations') {
+    return { kind: 'rejected', failure: { code: 'invalid_state', message: '无法读取 Execution Authorization 历史' } };
+  }
+  const approved = authorizations.authorizations.filter(
+    (record) =>
+      record.manifest.graph.graphId === generation.graphId &&
+      record.manifest.graph.version === candidate.version.version &&
+      record.manifest.planningCycleId === input.planningCycleId &&
+      record.manifest.orcaRunId === generation.orcaRunId &&
+      record.manifest.baselineHead === generation.baselineHead,
+  );
+  if (approved.length === 0) {
+    return { kind: 'blocked', reason: '候选代际尚无与图、Run 与基线完全匹配的已批准 Manifest' };
+  }
+  if (approved.length > 1) {
+    return { kind: 'blocked', reason: `候选代际存在 ${approved.length} 份匹配的已批准 Manifest，无法确定引用` };
+  }
+  const authorization = approved[0]!;
+  const refs: CandidateGenerationRefs = {
+    predecessorGraphId: generation.predecessorGraphId,
+    candidateGraphId: generation.graphId,
+    candidateGeneration: generation.generation,
+    candidateGraphVersion: candidate.version.version,
+    candidateRunId: generation.orcaRunId,
+    planningCycleId: generation.planningCycleId,
+    authorizationId: authorization.authorizationId,
+    authorizationVersion: authorization.authorizationVersion,
+    baselineHead: generation.baselineHead,
+    expectedRevision: scope.scope.revision,
+  };
+  const validation = validateCutoverRefs(refs);
+  return validation.kind === 'blocked' ? { kind: 'blocked', reason: validation.reason } : { kind: 'ready', refs };
 }

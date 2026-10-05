@@ -15,6 +15,7 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import type { CoordinatorModelConfiguration } from '../../application/coordinator/model-config-switch.js';
 import type { CredentialStore } from '../../application/ports/credential-store.js';
 import { scanModelOptionFields, withModelOption } from '../../domain/model-configuration.js';
+import type { NativeWindowItemRef } from '../../domain/coordinator/session-state.js';
 
 /**
  * 内层重试必须关闭，否则会与 model node 的重试策略相乘（D15）。
@@ -53,10 +54,61 @@ function exactContextCapability(value: unknown): ExactContextCapability | null {
   return value as ExactContextCapability;
 }
 
+/**
+ * Provider 原生压缩能力。
+ *
+ * 输入是**完整有效输入与 tools**，输出是不透明窗口项与 provider 报告的规模；Companion 不解析、
+ * 不重写这些项。这是集成显式导出的能力，不读 `BaseChatModel` 私有字段，也不从 tokenizer 反推。
+ * 返回 `null` 表示本次没有可用的原生压缩（例如 provider 拒绝），调用方按「无进展」处理。
+ */
+export type NativeCompactionCapability = {
+  readonly compact: (input: {
+    readonly messages: readonly unknown[];
+    readonly tools: readonly unknown[];
+    readonly signal?: AbortSignal;
+  }) => Promise<NativeCompactionResult | null>;
+};
+
+export type NativeCompactionResult = {
+  readonly ownerRef: string;
+  /** 不透明窗口项：身份与位置由 Companion 记录，内容原样携带、永不解析。 */
+  readonly items: readonly NativeWindowItemRef[];
+  readonly compactedTokens: number;
+};
+
+/**
+ * 缓存保活能力。
+ *
+ * `intervalMs` 是 provider 提供的可信间隔（正安全整数），宿主按它调度；动作接收 `AbortSignal`，
+ * 控制状态变化、出现真实工作、失去 fencing 或退出时立即让位。没有这个能力的集成一律 unavailable。
+ */
+export type KeepaliveCapability = {
+  readonly intervalMs: number;
+  readonly keepalive: (input: { readonly signal: AbortSignal }) => Promise<boolean>;
+};
+
+function nativeCompactionCapability(value: unknown): NativeCompactionCapability | null {
+  if (typeof value !== 'object' || value === null) return null;
+  return typeof (value as { readonly compact?: unknown }).compact === 'function'
+    ? (value as NativeCompactionCapability)
+    : null;
+}
+
+function keepaliveCapability(value: unknown): KeepaliveCapability | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const intervalMs = (value as { readonly intervalMs?: unknown }).intervalMs;
+  const action = (value as { readonly keepalive?: unknown }).keepalive;
+  if (typeof intervalMs !== 'number' || !Number.isSafeInteger(intervalMs) || intervalMs <= 0) return null;
+  if (typeof action !== 'function') return null;
+  return value as KeepaliveCapability;
+}
+
 /** 一个已解析的 provider 集成：它自己知道如何构造 chat model。 */
 export type ProviderIntegration = {
   readonly integrationRef: string;
   readonly exactContext?: ExactContextCapability;
+  readonly nativeCompaction?: NativeCompactionCapability;
+  readonly keepalive?: KeepaliveCapability;
   readonly createChatModel: (input: {
     readonly model: string;
     readonly modelOptions: Readonly<Record<string, unknown>>;
@@ -67,7 +119,9 @@ export type ProviderIntegrationResolver = (integrationRef: string) => ProviderIn
 
 export type ResolveChatModelResult =
   | { readonly kind: 'resolved'; readonly model: BaseChatModel; readonly configurationRef: string;
-      readonly exactContext: ExactContextCapability | null }
+      readonly exactContext: ExactContextCapability | null;
+      readonly nativeCompaction: NativeCompactionCapability | null;
+      readonly keepalive: KeepaliveCapability | null }
   | {
       readonly kind: 'rejected';
       readonly code: ModelResolutionFailureCode;
@@ -147,7 +201,9 @@ export function resolveChatModel(
       modelOptions,
     });
     return { kind: 'resolved', model, configurationRef: configuration.configurationRef,
-      exactContext: exactContextCapability(integration.exactContext) };
+      exactContext: exactContextCapability(integration.exactContext),
+      nativeCompaction: nativeCompactionCapability(integration.nativeCompaction),
+      keepalive: keepaliveCapability(integration.keepalive) };
   } catch {
     return {
       kind: 'rejected',
@@ -184,9 +240,17 @@ export function createModuleIntegrationResolverAsync(options: {
     const context = exactContextCapability(
       'companionExactContext' in exported ? exported.companionExactContext : null,
     );
+    const nativeCompaction = nativeCompactionCapability(
+      'companionNativeCompaction' in exported ? exported.companionNativeCompaction : null,
+    );
+    const keepalive = keepaliveCapability(
+      'companionKeepalive' in exported ? exported.companionKeepalive : null,
+    );
     return {
       integrationRef,
       ...(context === null ? {} : { exactContext: context }),
+      ...(nativeCompaction === null ? {} : { nativeCompaction }),
+      ...(keepalive === null ? {} : { keepalive }),
       createChatModel: (input) =>
         // `model` 必须显式并入构造函数字段：集成不会从别处取模型名，漏掉它会静默落到集成自己的
         // 默认模型（OpenAI 集成即 `gpt-3.5-turbo`）上，而调用方以为配置生效了。

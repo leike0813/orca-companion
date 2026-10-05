@@ -16,6 +16,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 import type { CoordinationScopeId, OperationId, WorkPackageId } from './dto/identity.js';
 import type {
@@ -231,13 +232,18 @@ function readMaterializationBinding(input: MaterializeWorkPackageInput): Materia
   if (matches.length > 1) {
     return { kind: 'failed', failure: { code: 'invalid_state', message: '同一角色 Attempt 存在多个物化绑定' } };
   }
-  const binding = matches[0];
+  const sameTask = result.bindings.filter(entry => entry.role === input.context.candidate.role &&
+    entry.workerTaskId === input.context.candidate.taskEnvelope.workerTaskId);
+  if (new Set(sameTask.map(entry => entry.orcaTaskId)).size > 1) {
+    return { kind: 'failed', failure: { code: 'task_binding_conflict', message: '同一 WorkerTask 对应多个 Orca Task' } };
+  }
+  const binding = matches[0] ?? sameTask.at(-1);
   if (binding !== undefined && (binding.authorizationId !== input.context.candidate.authorizationId ||
     binding.authorizationVersion !== input.context.candidate.authorizationVersion ||
     binding.workerProfileRef?.id !== input.context.candidate.workerProfileRef)) {
     return { kind: 'failed', failure: { code: 'model_binding_mismatch', message: '物化任务的原模型授权绑定无法核验' } };
   }
-  return { kind: 'read', binding: matches[0] ?? null };
+  return { kind: 'read', binding: binding ?? null };
 }
 
 /**
@@ -320,8 +326,13 @@ export async function materializeWorkPackage(
       },
     };
   }
+  const bindingRead = readMaterializationBinding(input);
+  if (bindingRead.kind === 'failed') {
+    return { kind: 'blocked', laneKey: input.workPackageId, reason: bindingRead.failure.message };
+  }
   const decision = evaluateDispatchCandidate({
     ...input.facts,
+    ...(bindingRead.binding?.attemptId === candidate.taskEnvelope.attemptId ? { requiredBudgetField: null } : {}),
     candidateWorkPackageId: input.workPackageId,
     candidateRole: candidate.role,
     scopeEnvelope: workPackage.scopeEnvelope,
@@ -497,9 +508,44 @@ export async function materializeWorkPackage(
   }
 
   // 步骤 4-6：先复用已记录的 Task；没有绑定时才创建，并在 intent 结算前记录绑定。
-  const bindingRead = readMaterializationBinding(input);
-  if (bindingRead.kind === 'failed') {
-    return { kind: 'blocked', laneKey: input.workPackageId, reason: bindingRead.failure.message };
+  let retryOfDispatchId: string | undefined;
+  const retrySnapshot = input.store.query({ kind: 'snapshot', coordinationScopeId: input.coordinationScopeId });
+  if (retrySnapshot.kind !== 'snapshot') return { kind: 'blocked', laneKey: input.workPackageId, reason: 'Attempt 归属不可读' };
+  const priorBindings = retrySnapshot.snapshot.materializationBindings.filter(entry => entry.workerTaskId === candidate.taskEnvelope.workerTaskId &&
+    entry.role === candidate.role && entry.attemptId !== candidate.taskEnvelope.attemptId);
+  const prior = priorBindings.at(-1);
+  if (prior !== undefined) {
+    const snapshot = retrySnapshot;
+    const segment = snapshot.kind === 'snapshot' ? snapshot.snapshot.sessionSegments.find(entry =>
+      entry.workerTaskId === prior.workerTaskId && entry.attemptId === prior.attemptId && entry.role === prior.role) : undefined;
+    const settled = snapshot.kind === 'snapshot' ? snapshot.snapshot.deliverySettlements.find(entry =>
+      entry.workerTaskId === prior.workerTaskId && entry.attemptId === prior.attemptId && entry.dispatchId === segment?.dispatchId) : undefined;
+    if (candidate.role !== 'implementation' || segment === undefined || settled?.outcome !== 'failed') {
+      return { kind: 'rejected', failure: { code: 'retry_unproven', message: 'Retry 需要原实现 Attempt 的确定失败结算及精确 Dispatch' } };
+    }
+    const tasks = await input.backend.query({ operation: 'task-list', backendIdentityRef: candidate.backendIdentityRef, runId: candidate.runId, brief: false });
+    const rows = tasks.kind === 'accepted' && typeof tasks.value === 'object' && tasks.value !== null && 'tasks' in tasks.value && Array.isArray(tasks.value.tasks)
+      ? tasks.value.tasks as unknown[] : [];
+    const task = rows.find(entry => typeof entry === 'object' && entry !== null && 'id' in entry && entry.id === prior.orcaTaskId);
+    let raw: unknown;
+    try { raw = typeof task === 'object' && task !== null && 'spec' in task && typeof task.spec === 'string' ? JSON.parse(task.spec) : null; }
+    catch { raw = null; }
+    const firstBinding = priorBindings[0]!;
+    if (firstBinding.dispatchId === null || firstBinding.attemptId === null) {
+      return { kind: 'blocked', laneKey: input.workPackageId, reason: '原 Task 的 Attempt 身份不完整' };
+    }
+    const original = parseTaskEnvelope(raw, { workerTaskId: candidate.taskEnvelope.workerTaskId,
+      dispatchId: firstBinding.dispatchId, attemptId: firstBinding.attemptId, role: candidate.role });
+    if (original.kind === 'rejected' || !isDeepStrictEqual(original.envelope.taskContract, finalEnvelope.envelope.taskContract) ||
+      !isDeepStrictEqual(original.envelope.specBinding, finalEnvelope.envelope.specBinding) ||
+      !isDeepStrictEqual(original.envelope.authority, finalEnvelope.envelope.authority) ||
+      !isDeepStrictEqual(original.envelope.budget, finalEnvelope.envelope.budget) ||
+      !isDeepStrictEqual(original.envelope.workspace, finalEnvelope.envelope.workspace)) {
+      return { kind: 'blocked', laneKey: input.workPackageId, reason: '原 Task Envelope 无法核验或 Retry 改变了已冻结契约' };
+    }
+    retryOfDispatchId = segment.dispatchId;
+    const saved = recordMaterializationBinding(input, prior.orcaTaskId, prior.creationOperationId, finalEnvelope.envelope, worktree.worktreeId);
+    if (saved !== null) return { kind: 'rejected', failure: saved };
   }
   let orcaTaskId = bindingRead.binding?.orcaTaskId ?? null;
   if (orcaTaskId === null) {
@@ -569,6 +615,7 @@ export async function materializeWorkPackage(
     {
       operation: 'worker-start',
       taskId: orcaTaskId,
+      ...(retryOfDispatchId === undefined ? {} : { retryOfDispatchId }),
       worktree: worktree.worktreeId,
       ...launch.worker,
     },
@@ -606,11 +653,12 @@ export async function materializeWorkPackage(
           continue;
         }
         const record = worker as Record<string, unknown>;
-        if (record['taskId'] !== orcaTaskId) {
+        if (record['taskId'] !== orcaTaskId || retrySnapshot.snapshot.sessionSegments.some(segment =>
+          segment.workerTaskId === candidate.taskEnvelope.workerTaskId && segment.attemptId !== candidate.taskEnvelope.attemptId && segment.dispatchId === record['dispatchId'])) {
           continue;
         }
-        const candidate = record['dispatchId'];
-        dispatchId = typeof candidate === 'string' && candidate.length > 0 ? candidate : null;
+        const observedDispatch = record['dispatchId'];
+        dispatchId = typeof observedDispatch === 'string' && observedDispatch.length > 0 ? observedDispatch : null;
         break;
       }
       if (typeof dispatchId !== 'string' || dispatchId.length === 0) {

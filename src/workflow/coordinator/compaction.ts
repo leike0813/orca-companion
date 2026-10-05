@@ -18,6 +18,7 @@ import {
   type NativeCompactionAvailability,
   type NativeWindowCarry,
 } from './state.js';
+import type { MechanicalShakeArtifact } from '../../domain/coordinator/session-state.js';
 
 /** 超过这个字符数的消息内容会被机械 Shake 视为「重量级」。 */
 export const SHAKE_HEAVY_CONTENT_CHARS = 2_000;
@@ -74,6 +75,58 @@ export function mechanicalShake(segments: readonly HistorySegment[]): readonly H
     });
     return replaced ? { kind: 'messages', stepId: segment.stepId, messages } : segment;
   });
+}
+
+/**
+ * 机械 Shake 的稳定边界身份。
+ *
+ * 由「历史尾部序号 + configuration + Capsule / 原生窗口身份」组成，刻意**不含**
+ * `lastCompactionOutcome`：写入结论会让身份漂移，同一边界因此会重复 Shake。
+ */
+export function mechanicalShakeSourceRevision(input: {
+  readonly tailSequence: number;
+  readonly configurationRef: string;
+  readonly capsuleId: string | null;
+  readonly nativeOwnerRef: string | null;
+}): string {
+  return JSON.stringify([input.tailSequence, input.configurationRef, input.capsuleId, input.nativeOwnerRef]);
+}
+
+/** 一次 Shake 实际替换掉重量级内容的 step；有界，且是持久化产物里唯一需要保存的部分。 */
+export function shakenStepIds(segments: readonly HistorySegment[]): readonly string[] {
+  const ids: string[] = [];
+  for (const segment of segments) {
+    if (segment.kind !== 'messages') {
+      continue;
+    }
+    if (segment.messages.some((message) => messageContentLength(message) > SHAKE_HEAVY_CONTENT_CHARS)) {
+      ids.push(segment.stepId);
+    }
+  }
+  return ids;
+}
+
+export type MechanicalShakeResolution = {
+  readonly kind: 'fresh' | 'reapplied';
+  /** 本次输入采用的片段；`reapplied` 时已经带替换后的占位符。 */
+  readonly segments: readonly HistorySegment[];
+};
+
+/**
+ * 同一稳定边界至多尝试一次 Shake。
+ *
+ * 命中已保存的产物时**重建**确定性结果而不是再尝试一次：产物只保存边界与被 elide 的 step，
+ * 原文仍由已提交历史唯一拥有，重启后读到同一结论。
+ */
+export function resolveMechanicalShake(input: {
+  readonly artifact: MechanicalShakeArtifact | null;
+  readonly sourceRevision: string;
+  readonly segments: readonly HistorySegment[];
+}): MechanicalShakeResolution {
+  if (input.artifact !== null && input.artifact.sourceRevision === input.sourceRevision) {
+    return { kind: 'reapplied', segments: mechanicalShake(input.segments) };
+  }
+  return { kind: 'fresh', segments: input.segments };
 }
 
 export type CompactionRequest = {

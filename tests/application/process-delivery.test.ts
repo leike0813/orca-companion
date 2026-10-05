@@ -198,7 +198,11 @@ function settlementInput(backend: ExecutionBackend, overrides: Partial<SettleDel
   };
 }
 
-function settlementRows(): readonly { readonly orcaResultRef: string }[] {
+function settlementRows(): readonly {
+  readonly orcaResultRef: string;
+  readonly outcome: 'succeeded' | 'failed' | null;
+  readonly validationVerdict: 'passed' | 'failed' | null;
+}[] {
   const result = store.query({ kind: 'delivery-settlements', coordinationScopeId: SCOPE });
   if (result.kind !== 'delivery-settlements') {
     throw new Error('无法读取结算记录');
@@ -527,4 +531,122 @@ test('同批存在无法定位的 worker_done 载荷时阻塞，不确认也不�
 
   expect(result.kind).toBe('blocked');
   expect(calls.some((call) => call.kind === 'mutate' && call.operation.operation === 'delivery-ack')).toBe(false);
+});
+
+/* -------------------------------------------------------------------------- */
+/* 严格结果结论：只有成功结果才构成已接受角色成果                           */
+/* -------------------------------------------------------------------------- */
+
+const EVIDENCE_BASE = { evidenceId: 'ev-1', kind: 'command', coveredPaths: ['src/a.ts'], command: 'pnpm test' };
+const SUCCEEDED_IMPLEMENTATION = {
+  summary: '实现完成',
+  evidence: [{ ...EVIDENCE_BASE, summary: '测试通过', outcome: 'passed' }],
+};
+const FAILED_IMPLEMENTATION = {
+  summary: '实现失败',
+  evidence: [{ ...EVIDENCE_BASE, summary: '测试失败', outcome: 'failed' }],
+};
+
+test('成功实现结果以 succeeded 结算', async () => {
+  const { backend } = fakeBackend({
+    taskRows: [{ id: 'orca-task-1', status: 'completed', result: SUCCEEDED_IMPLEMENTATION }],
+  });
+
+  const settled = await settleDelivery(
+    settlementInput(backend, {
+      delivery: { deliveryId: 'delivery-1', claimed: CLAIMED, acceptedResult: SUCCEEDED_IMPLEMENTATION },
+    }),
+  );
+
+  expect(settled.kind).toBe('settled');
+  expect(settlementRows()[0]?.outcome).toBe('succeeded');
+});
+
+test('失败实现结果以 failed 结算：保留确定失败事实，不构成已接受成功', async () => {
+  const { backend } = fakeBackend({
+    taskRows: [{ id: 'orca-task-1', status: 'completed', result: FAILED_IMPLEMENTATION }],
+  });
+
+  const settled = await settleDelivery(
+    settlementInput(backend, {
+      delivery: { deliveryId: 'delivery-1', claimed: CLAIMED, acceptedResult: FAILED_IMPLEMENTATION },
+    }),
+  );
+
+  expect(settled.kind).toBe('settled');
+  expect(settlementRows()[0]?.outcome).toBe('failed');
+});
+
+test('Validator 只有成功状态、没有可核验证据时不写结论', async () => {
+  const locatorOnly = { outcome: 'succeeded', filesModified: [], summary: '看起来没问题' };
+  const { backend } = fakeBackend({
+    taskRows: [{ id: 'orca-task-1', status: 'completed', result: locatorOnly }],
+  });
+
+  const settled = await settleDelivery(
+    settlementInput(backend, {
+      trusted: { ...TRUSTED, role: 'validator' },
+      delivery: {
+        deliveryId: 'delivery-1',
+        claimed: { ...CLAIMED, role: 'validator' },
+        acceptedResult: locatorOnly,
+      },
+    }),
+  );
+
+  expect(settled.kind).toBe('settled');
+  expect(settlementRows()[0]?.outcome).toBeNull();
+  expect(settlementRows()[0]?.validationVerdict).toBeNull();
+});
+
+function questionMessage(messageId: string): unknown {
+  return {
+    messageId,
+    fromHandle: 'worker',
+    type: 'question',
+    payload: JSON.stringify({ question: '需要确认范围吗？' }),
+    body: 'need-decision',
+  };
+}
+
+test('混合批次里未消费的 Worker 提问阻塞整批确认，Wake 准入消费后才确认', async () => {
+  const first = fakeBackend({
+    deliveryMessages: [
+      claimedMessage({ messageId: 'm-own', workerTaskId: TASK, dispatchId: DISPATCH, attemptId: 'attempt-1' }),
+      questionMessage('m-question'),
+    ],
+  });
+
+  const blocked = await settleDelivery(settlementInput(first.backend));
+
+  expect(blocked.kind).toBe('blocked');
+  // 普通结果已落盘，但提问没有持久消费证据：整批不能确认。
+  expect(settlementRows()).toHaveLength(1);
+  expect(first.calls.some((call) => call.kind === 'mutate' && call.operation.operation === 'delivery-ack')).toBe(false);
+
+  const admitted = store.transact({
+    kind: 'record-wake-admission',
+    coordinationScopeId: SCOPE,
+    expectedRevision: revision(),
+    writer,
+    wakeBatchId: 'wake:m-question',
+    admissionState: 'admitted',
+    sourceRevisions: [{ sourceKind: 'worker-question', sourceId: 'm-question', revision: 1 }],
+  });
+  expect(admitted.kind).toBe('committed');
+
+  const replay = fakeBackend({
+    deliveryMessages: [
+      claimedMessage({ messageId: 'm-own', workerTaskId: TASK, dispatchId: DISPATCH, attemptId: 'attempt-1' }),
+      questionMessage('m-question'),
+    ],
+  });
+  const settled = await settleDelivery(
+    settlementInput(replay.backend, {
+      operationIds: { acceptResult: 'op-accept-2' as OperationId, ack: 'op-ack-2' as OperationId },
+    }),
+  );
+
+  expect(settled.kind).toBe('replayed');
+  expect(replay.calls.some((call) => call.kind === 'mutate' && call.operation.operation === 'delivery-ack')).toBe(true);
 });

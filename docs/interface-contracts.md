@@ -122,6 +122,7 @@ interface ExecutionBackend {
 
 - **结果语义**：`accepted` 包含外部系统记录的确定失败；`rejected` 只表示能证明请求未产生副作用；响应丢失、超时或 receipt 不足为 `unknown`。
 - **顺序/幂等**：遵循 FLOW-01；unknown 仅以同一 OperationId/OperationRef 查询或 `--retry-request` 对账。
+- **答复对账**：`request-show` 的可选原始 `receipt` 透传到 `ReconcileResult`；`completed` 只表示有确定结果。Worker reply 必须核验原 question ID 与 answered 回执才结算成功，确定失败结算为 rejected，缺失回执仍保留阻塞及原 backend request 引用。
 - **取消**：进程取消只取消等待；除非能证明请求未发送，否则结果仍是 unknown。
 - **测试 seam**：应用测试使用 fake `ExecutionBackend`；adapter contract test 覆盖 argv、stdout/stderr、schema、error passthrough；真实 Orca 只在隔离项目和专用身份验证。
 
@@ -176,6 +177,8 @@ schema 16 再把这次派发的**运行依据**钉进同一条记录：`authoriz
 
 schema 17 新增 nullable `graph_versions.initial_plan_json`。`record-graph-version` 的 `initial` 记录必须同时提供通过 schema 解析的 `initialPlan`，其 `planRevision` 必须等于记录的 `planRevision`；初始计划与 v1 图记录在同一事务写入。`accepted_revision` 禁止携带或覆盖初始计划。迁移只新增可空字段，既有行维持 `null`，不从当前计划或 tracker 正文推断历史。
 
+schema 20 用 partial unique index 强制每个 Scope/Session 只有一个 active Claim；迁移发现既有重复时回滚并拒绝打开，不替用户选择保留票。`session_registry.blocked_reason_json` 保存 Session blocked 的结构化原因。`delivery_settlements.outcome` 与 `validation_verdict` 的历史缺失值保持 null，缺少成功证明不推进生命周期。物化绑定支持同一创建操作下多个 Attempt，原 Task、合同和授权保持固定。`admit-validation-step` 按稳定 stepId 同事务保存修复准入并累计 validatorRepairs，重放只读既有准入；实现尝试随派发准入原子扣减。预算继承沿持久 Work Package Lineage 累计，重新授权、重启与代际切换保持已消耗额度。计数保留首次授权锚点；只有同图、同代际、同 Run 且该预算上限相同的重新授权可继续消费原计数，展示与准入都读取该责任的有效累计值。
+
 schema 13 给修订持有（`revision_holds`）加上内容版本边界：`prior_contract_revision` 是被替换掉的契约内容版本，`admitted_contract_revision` 是重新准入接纳的版本，两者都可为空（旧行与尚未准备/结算的行）。它们回答两个此前只能靠时间戳猜的问题——「内容是否真的变了」与「修订完成前与完成后的角色结果如何区分」。两条命令与图版本事务共同维护这一边界：
 
 - `prepare-revision-hold` 只在来源与当前 pending 持有逐项一致的持有上写旧版本（没有既有 Specification Unit 时记 0）；同源重放读回同一个值，值不同即拒绝——版本边界不因重放而漂移。
@@ -223,7 +226,7 @@ type CoordinatorSessionState = {
 
 Session payload 为 v2：每条已提交消息有稳定 `entryId`；tool result 包含配对的 `toolCallId` 与名称，assistant call 的可信 `OperationId` 在模型响应提交时由宿主分配；`lastCompactionOutcome` 是该 Session 最近一次维护结果。普通用户消息以 `submissionId` 与 WakeBatch 原子落盘后补记 source admission；交互回答正文属于 IC-03。
 
-`paginate-coordinator-history` 扩展 IC-04，历史 DTO/限额的 canonical path 为 `src/application/coordinator/history.ts`。checkpoint 库 schema 为 2，旧整体 JSON 库明确拒绝打开并保留。`coordinator_sessions` 只保存控制字段；entry、16KiB UTF-8 正文块、model step metadata 与 Wake 关联追加。正文只由 entry 的块记录拥有；step 引用该 entry，不再保存另一份正文。独立的小型 summary metadata 用于有界列表，工具参数仍由原 entry 拥有。
+`paginate-coordinator-history` 扩展 IC-04，历史 DTO/限额的 canonical path 为 `src/application/coordinator/history.ts`。checkpoint 库 schema 为 3，schema 2 以短事务升级，旧整体 JSON 库明确拒绝打开并保留。`coordinator_sessions` 只保存控制字段；entry、16KiB UTF-8 正文块、model step metadata 与 Wake 关联追加。正文只由 entry 的块记录拥有；step 引用该 entry，不再保存另一份正文。独立的小型 summary metadata 用于有界列表，工具参数仍由原 entry 拥有。Mechanical Shake 的尝试身份与派生压缩载荷单独持久保存，原始消息和模型历史保持追加。
 
 生产读取必须显式选择 `metadata`（控制）、`context`（有效输入）、`tools`（最新 step 及配对结果）、`pending`（最多 32 条未处理输入）或 `migration`（原生窗口转 Capsule 所需的有界原文）。后四种读取受 4096 条与 `context.maxReadBytes`（缺省 16 MiB）的共同预算约束，正文、metadata、steps 与 Context Material 计入同一次读回的总额；超限返回 `unrecoverable/context_exhausted`。压缩区间由索引排除后才读取正文。原生窗口保存覆盖序号，之后的新消息仍进入有效上下文。`full` 与无范围 `readCommittedMessages` 只用于测试/诊断，生产不调用。
 
@@ -233,7 +236,7 @@ Session payload 为 v2：每条已提交消息有稳定 `entryId`；tool result 
 
 `HistoryReadPort.readHistoryPage` 使用 Session/sequence keyset，至多 100 条且 metadata 合计 64KiB；先读取长度与身份，再按剩余预算物化 metadata。`readHistoryBody` 绑定 Session、entry、revision=1 与 UTF-8 byte offset，每次至多 64KiB 正文，拒绝越界与非字符边界。两者独立读取，不加载整个 Session 后切片。
 
-历史检查的 canonical path 为 `src/application/coordinator/history-inspection.ts`。`HistoryInspectionStorePort` 的 snapshot/calls/users/arguments 只读；`prepareHistoryInspection` 由 Bootstrap 初始化生命周期分批调用，每次 ≤64KiB metadata/100 项。调用与活动索引保存原 entry/step/call/operation 身份、参数原 metadata byte range 与摘要，正文和参数不复制。schema 2 保持。参数 source 为 `arguments(entryId, stepId, callId, contentRevision=1)`，offset/end 属于参数 JSON 原文，单次范围 ≤64KiB。调用页以 `(sequence, ordinal)` keyset、固定 upperSequence、精确 entry/call 或活动身份查询，≤100 项/64KiB；users 直接按 `role=user` 和 Session 过滤，不含回答引用。
+历史检查的 canonical path 为 `src/application/coordinator/history-inspection.ts`。`HistoryInspectionStorePort` 的 snapshot/calls/users/arguments 只读；`prepareHistoryInspection` 由 Bootstrap 初始化生命周期分批调用，每次 ≤64KiB metadata/100 项。调用与活动索引保存原 entry/step/call/operation 身份、参数原 metadata byte range 与摘要，正文和参数不复制。参数 source 为 `arguments(entryId, stepId, callId, contentRevision=1)`，offset/end 属于参数 JSON 原文，单次范围 ≤64KiB。调用页以 `(sequence, ordinal)` keyset、固定 upperSequence、精确 entry/call 或活动身份查询，≤100 项/64KiB；users 直接按 `role=user` 和 Session 过滤，不含回答引用。
 
 分类在模型响应接受时由同一可信注册表的 `mutating` 填入 `CommittedToolCall.activityKind`；缺失分类单列。`recordToolObservation` 绑定原 Session/entry/step/call/operation，只记录经 fencing 核验的真实 unknown。相同身份重放保留首次观测，诊断理由变化不重复计数或拒绝恢复。观测绑定记录时的已提交序号，单次调用与活动摘要按同一 upperSequence 读取。无结果与无观测为 unconfirmed，配对结果优先；ok 不表示 Worker 完成。观测不补配对 tool entry，不改变恢复或副作用策略。
 
@@ -245,7 +248,7 @@ Capsule 的替换区间在保存时绑定固定序号边界；摘要包含实际
 
 `CoordinatorSessionRecordPort.appendModelStep` 与 `appendToolResult` 在既有 storage 事务中读取最新 core、核验稳定条目身份并追加。相同身份与内容的重放返回 `saved`，身份相同但内容冲突返回 `failed`；等待期间受理的用户消息与 Wake Batch 保留。Workflow 使用这两个方法提交响应和工具结果，路由与消费字段维持原语义。
 
-`request_graph_patch` 的 `ok` 工具结果可以携带 `completedWorkSource`（完整 source kind/id/revision），表示该次用户工作已由受理动作处理。拒绝、unknown 与未落盘结果不带此字段；宿主按精确来源重建待处理工作，不再把同一声明交给模型。该字段只允许出现在 tool 消息中，旧 checkpoint 缺失字段仍可读。
+受理当前工作的 `ok` 工具结果可以携带 `completedWorkSource`（完整 source kind/id/revision），表示该次工作已处理。拒绝、unknown 与未落盘结果不带此字段；宿主按精确来源重建待处理工作。该字段只允许出现在 tool 消息中。外部 Actionable Work 通过 `commitWakeBatch` 同事务追加带 `workSource` 的 system 来源引用条目，不复制外部正文；Worker 问答、已确认的角色失败与项目交付结论按精确来源完成或由最终 assistant 响应消费。
 
 | 字段 | 合同 |
 |---|---|
@@ -256,6 +259,8 @@ Capsule 的替换区间在保存时绑定固定序号边界；摘要包含实际
 | Context Capsule | Coordinator 历史的派生可移植摘要；不是 Recovery Capsule 或业务权威 |
 
 恢复遵循 FLOW-02：取得 Runtime Lease → 读 checkpoint → 对账 pending intent → 投影 Actionable Work → 同步写 Wake Batch → IC-03 写 source admission → 模型 loop。无 Actionable Work 时 suspend；maintenance 不创建 Wake Batch 或 Committed Model Step。
+
+已安装的 provider integration 可显式提供 `nativeCompaction` 与带可信 `intervalMs` 的 `keepalive` 能力；缺失能力按 unavailable 呈现。`context.keepaliveEnabled` 默认为 false，前台维护定时器只在当前 fencing、active 控制状态及无 Actionable Work 时调用保活，每次挂起至多 8 个 cycle；新工作、控制状态变化、失去租约或退出会中止它。Mechanical Shake 的源版本与派生产物先持久保存，恢复同一有效输入边界时复用原产物，不重复 shake。
 
 - **失败**：checkpoint 不可恢复时阻塞同一 Session，不创建替代 Session；跨库中途崩溃按 WakeBatchId/source revision 补齐。
 - **测试 seam**：LangGraph SqliteSaver 使用临时 `checkpoints.sqlite`；fake model 测试提交/重放；不少于 100 个连续工具调用验证无固定业务 step 上限。
@@ -434,7 +439,9 @@ Delivery 消息的载荷有两条登记形状，归属的**唯一**权威都是 
 - **Companion 形状**：载荷带 `result` 正文与全套归属字段（`workerTaskId`/`dispatchId`/`attemptId`/`role`/`runId`/`consumerGeneration`/`graphGeneration`/`authorizationId`/`specBinding`/`worktreeId`），逐项与已记录的 Session Segment / 物化绑定核对。
 - **Orca 规范形状**（真实 Codex Worker 实际投递的 `worker_done` 载荷）：只带 `taskId`/`dispatchId`/`outcome`/`filesModified`，叙述在消息 `body`。这种消息只作为 **locator**：`materialization_bindings.orcaTaskId` 定位 Orca Task 与角色，Session Segment 按 Orca Dispatch 定位同一次派发，两者必须逐项一致（Work Package / 角色 / Attempt / Task），任一不一致或定位不到即阻塞。归属字段由解析出的记录重建，结果正文归一化为 `{ outcome, filesModified, summary }` 后写回 Orca Task 并回读核验——不要求 Worker 回显 Companion 身份。
 
-Validator 在同一 Validation Attempt/真实 Session 内验证、范围内修复、复验；代码变化使受影响 Evidence Record 失效。Finalizer 使用新只读项目级 Session，从权威输入重跑并给出 Delivery Verdict。
+Validator 在同一 Validation Attempt/真实 Session 内验证、范围内修复、复验；代码变化使受影响 Evidence Record 失效。`src/application/run-validation.ts` 拥有步骤顺序和修复准入，`src/bootstrap/validation-runtime.ts` 将步骤接到原 Task/Dispatch/Attempt 的 `orca orchestration ask/reply` 通道。Worker 按 Envelope 明示的 typed JSON 提交步骤并等待宿主许可；修复先按稳定 stepId 持久准入及扣预算，再回复许可。许可前核验精确 worktree 干净，将固定 HEAD 保存于原答复 Intent；修复后以该 HEAD 回读提交、暂存、未暂存和未跟踪路径，联合 Worker 报告核验范围并使证据失效。基线缺失或 Git 事实不可读即停止。`validation_attempts` 只保存固定 Session 身份、不可变的初始有效修复消耗、有序消息引用（最多 20 项）和终止许可问题引用；消息正文仍由 Orca 拥有。恢复按原顺序从有界 inbox 回读引用，缺失即阻塞，步骤重新核验精确 transcript 与该次 SessionStart 身份。成功结算要求原 Attempt 的 finish 答复已确定受理，重放不重扣修复预算。普通提问经 Wake admission 处理，步骤报告经确定性 Validator 通道处理，两者都在写入消费证明后才确认整批 Delivery。
+
+Finalizer 使用新只读项目级 Session，从当前 Run 的成功角色结算与完整 push 意图读取项目依据，项目级绑定的 Spec Binding 为 null。结果要求精确 Task/Dispatch/Attempt、发送者与 canonical 工作区只读证明；先记录 Verdict，再写 Orca Accepted Result 与本地 settlement，读回后确认 Delivery，最后准入交付 Wake。恢复缺少原运行的只读证明时保持阻塞。
 
 - **失败/幂等**：任何持久化或回读 unknown 都不 ack；重放同一 DeliveryIdentity 不产生第二正文或生命周期推进。
 - **测试 seam**：fake transport + fake Orca result store 覆盖每个崩溃窗口；真实隔离闭环验证 transport 契约而非故障注入。
@@ -570,6 +577,10 @@ Graph Patch 原子执行 `add + revise + retire`：add 新 ID/worktree，revise 
 `GraphChangeRequest.changeInstruction` 是必填的非空业务说明，最多 4,000 个 Unicode 码点，由 `change-routing.ts` 定义唯一上限与校验。Coordinator tool schema/parser 和 `requestGraphPatch` 在副作用前核验，完整说明经现有 DTO 接线传到 `graphPatchPlannerInstruction`；原分类声明与权限规则保持原合同，分类器不读取说明。该文本不能提供可信 Scope、Run、OperationId 或其他执行身份。
 
 Replanning 停止新派发并结清在途/Delivery/Interaction/Intent，建立新 Planning Cycle；Generation Cutover 同批切换 Planning Cycle、GraphId/Generation、Run、Authorization、budget ref 和 Execution Lease。旧完成状态不复制，旧成果只按 Baseline Adoption、Migration Material 或 Planning Reference 进入新规划。
+
+前台 Controller 与 Coordinator 语义工具共用 begin/complete/cancel 入口；结清条件由当前 Run、Worker、Delivery、Interaction 和 Intent 事实派生。新 Cycle 提交后，以稳定 Cycle 身份准入 `replanning_ready` Wake。批准带 predecessor 的候选图必须走 Generation Cutover，事务中冻结前代并取得新代际 Execution Lease。取消只在完整审阅并重新批准挂起代际的原 Manifest、保持原 Run/任务/预算且对账完成后恢复；默认审阅新 Cycle 的候选，显式 `suspended_generation` 审阅恢复依据。恢复前经原 OperationId 选择并读回原 Orca Run，unknown 不换身份重发。
+
+`src/bootstrap/plan-continuations.ts` 在建立候选 Run 前回读旧图成员、Orca Accepted Worker Result 摘要、已结算 push 意图与真实 Git 基线关系；任一声明不可证明即停止。Baseline Adoption 的集成 commit 必须属于候选基线且其影响路径保持适用；Migration Material 的引用进入新 Task Envelope 的只读输入，新包仍以新 worktree 开始并独立验收。Lineage 使用旧责任的有效累计消耗，不接受计划自填计数。
 
 - **失败/版本**：所有 patch 以 baseGraphVersion + expected revision + OperationId 提交，任一步失败不追加 history；Cutover 前可取消，Cutover 后前代永久冻结。
 - **测试 seam**：纯 compiler/patch normalization 使用表格测试；history/CAS 使用 IC-03；真实 Orca 只验证隔离候选 Run binding。

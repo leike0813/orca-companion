@@ -176,7 +176,91 @@ export type CoordinatorSessionRecordPort = CheckpointRecoveryPort &
 
 export type ResumeIncarnationRequest = IncarnationRequest & {
   readonly checkpoints: CheckpointRecoveryPort;
+  /** 可注入时钟：blocked 写入前的 fencing 复核不读隐藏的真实时间。 */
+  readonly clock?: () => number;
 };
+
+export type BlockCoordinatorSessionInput = {
+  /** 稳定阻塞码，例如 `checkpoint_unrecoverable`。 */
+  readonly code: string;
+  /** 诊断用阻塞原因；不参与身份判定。 */
+  readonly message: string;
+  readonly clock?: () => number;
+};
+
+/** 判定某个 Session 是否正是该 Scope 的 Execution Coordination Lease holder。 */
+function holdsExecutionLease(
+  store: BranchCoordinationStore,
+  incarnation: CoordinatorIncarnation,
+): boolean {
+  const leases = store.query({ kind: 'leases', coordinationScopeId: incarnation.coordinationScopeId });
+  if (leases.kind !== 'leases') {
+    return false;
+  }
+  return leases.leases.some(
+    (lease) =>
+      lease.kind === 'execution_coordination' &&
+      lease.coordinatorSessionId === incarnation.coordinatorSessionId &&
+      lease.releasedAt === null,
+  );
+}
+
+/**
+ * 把一个 Coordinator Session 持久登记为 blocked。
+ *
+ * 复用于恢复路径（checkpoint 不可恢复）与宿主读取路径（有效状态不可读）。每次调用都**重新核验**
+ * fencing：被取代的 incarnation 不写任何控制状态。Session 侧原因直接经 `update-session-lifecycle`
+ * 落盘（`blocked` 必须携带结构化 `blockingReason`）；只有当该 Session 正是 Execution Coordination
+ * Lease holder 时才把整个 Scope 记为 `blocked`，否则不影响其它规划 Session。写入失败不抛出——阻塞
+ * 事实本身已由调用方判定，登记失败不能反过来掩盖它。
+ */
+export function blockCoordinatorSession(
+  store: BranchCoordinationStore,
+  incarnation: CoordinatorIncarnation,
+  input: BlockCoordinatorSessionInput,
+): void {
+  if (assertFencingGeneration(store, incarnation, {
+    ...(input.clock === undefined ? {} : { clock: input.clock }),
+  }).kind === 'fenced') {
+    return;
+  }
+  const scope = store.query({ kind: 'scope', coordinationScopeId: incarnation.coordinationScopeId });
+  const revision = scope.kind === 'scope' && scope.scope !== null ? scope.scope.revision : null;
+  if (revision === null) {
+    return;
+  }
+  try {
+    store.transact({
+      kind: 'update-session-lifecycle',
+      coordinationScopeId: incarnation.coordinationScopeId,
+      expectedRevision: revision,
+      writer: writerFor(incarnation),
+      coordinatorSessionId: incarnation.coordinatorSessionId,
+      lifecycleState: 'blocked',
+      blockingReason: { code: input.code, message: input.message },
+    });
+  } catch {
+    // 登记失败不掩盖阻塞事实：调用方仍然收到 blocked。
+  }
+  if (!holdsExecutionLease(store, incarnation)) {
+    return;
+  }
+  const current = store.query({ kind: 'scope', coordinationScopeId: incarnation.coordinationScopeId });
+  if (current.kind !== 'scope' || current.scope === null) {
+    return;
+  }
+  try {
+    store.transact({
+      kind: 'record-control-state',
+      coordinationScopeId: incarnation.coordinationScopeId,
+      expectedRevision: current.scope.revision,
+      writer: writerFor(incarnation),
+      controlState: 'blocked',
+    });
+  } catch {
+    // CAS 竞争或写入拒绝都不改变「调用方已判定阻塞」这一事实。
+  }
+}
 
 export type ResumeIncarnationResult =
   | {
@@ -334,7 +418,9 @@ function readUnresolvedIntents(
  * 以同一身份恢复一个 Session 的 Runtime Incarnation。
  *
  * 顺序固定：取得 Runtime Lease（被 fence 或已被占用即拒绝）→ 读回 checkpoint（不可恢复即阻塞）
- * → 读回未决 Operation Intent 供上层投影 Actionable Work。全程不写协调状态、不转移任何所有权。
+ * → 读回未决 Operation Intent 供上层投影 Actionable Work。阻塞时经 `blockCoordinatorSession` 登记
+ * Session 原因，并在该 Session 是 Execution Coordination Lease holder 时记 Scope `blocked`；
+ * 其余情况不写协调状态、不转移任何所有权。
  */
 export function resumeIncarnation(
   store: BranchCoordinationStore,
@@ -349,16 +435,23 @@ export function resumeIncarnation(
   }
 
   const read = request.checkpoints.loadCheckpoint(request.coordinatorSessionId, 'metadata');
-  const block = (reason: string): ResumeIncarnationResult => ({
-    kind: 'blocked',
-    coordinatorSessionId: request.coordinatorSessionId,
-    reason,
-    error: new CheckpointUnrecoverableError({
-      coordinationScopeId: request.coordinationScopeId,
+  const block = (reason: string): ResumeIncarnationResult => {
+    blockCoordinatorSession(store, acquired.incarnation, {
+      code: 'checkpoint_unrecoverable',
+      message: reason,
+      ...(request.clock === undefined ? {} : { clock: request.clock }),
+    });
+    return {
+      kind: 'blocked',
       coordinatorSessionId: request.coordinatorSessionId,
       reason,
-    }),
-  });
+      error: new CheckpointUnrecoverableError({
+        coordinationScopeId: request.coordinationScopeId,
+        coordinatorSessionId: request.coordinatorSessionId,
+        reason,
+      }),
+    };
+  };
 
   if (read.kind === 'unrecoverable') {
     return block(read.reason);

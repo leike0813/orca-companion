@@ -10,6 +10,7 @@
  */
 
 import type { EvidenceRequirement } from './task-contract.js';
+import type { WorkerRole } from './planning/execution-authorization.js';
 
 export const EVIDENCE_RECORD_KINDS = ['command', 'inspection', 'review'] as const;
 
@@ -56,6 +57,125 @@ export type WorkerEscalation = {
 };
 
 export type WorkerReport = WorkerResult | WorkerQuestion | WorkerEscalation;
+
+/**
+ * 一份角色结果的成败结论。
+ *
+ * 这是「能否推进生命周期」的唯一判据：只有 `succeeded` 才算已接受的角色成果。`failed` 是确定失败，
+ * `inconclusive` 是缺失可核验证明——两者都不推进，也不构成项目可交付。
+ */
+export const WORKER_OUTCOMES = ['succeeded', 'failed', 'inconclusive'] as const;
+
+export type WorkerOutcome = (typeof WORKER_OUTCOMES)[number];
+
+const SUCCEEDED_OUTCOME_TOKENS = new Set(['succeeded', 'success', 'completed', 'ok', 'passed']);
+const FAILED_OUTCOME_TOKENS = new Set(['failed', 'failure', 'error', 'rejected', 'aborted', 'cancelled']);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeOutcomeToken(value: unknown): WorkerOutcome | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const token = value.trim().toLowerCase();
+  if (SUCCEEDED_OUTCOME_TOKENS.has(token)) {
+    return 'succeeded';
+  }
+  return FAILED_OUTCOME_TOKENS.has(token) ? 'failed' : null;
+}
+
+/**
+ * 从证据记录推出结论：空证据不可证明成功，任一条失败即失败，全部通过才算成功。
+ *
+ * 缺 `outcome` 字段、非对象或未知取值一律 `inconclusive`：本函数不做「看起来像成功」的猜测。
+ */
+function evidenceOutcome(evidence: readonly unknown[]): WorkerOutcome {
+  if (evidence.length === 0) {
+    return 'inconclusive';
+  }
+  const records = evidence.filter(isRecord);
+  if (records.length !== evidence.length) {
+    return 'inconclusive';
+  }
+  const outcomes = records.map((record) => record['outcome']);
+  if (outcomes.some((outcome) => outcome !== 'passed' && outcome !== 'failed')) {
+    return 'inconclusive';
+  }
+  return outcomes.includes('failed') ? 'failed' : 'succeeded';
+}
+
+/** `summary` 正文里的结构化结论：Companion 的 evidence 数组，或显式 verdict。 */
+function structuredOutcome(summary: unknown): WorkerOutcome | null {
+  if (typeof summary !== 'string' || summary.length === 0) {
+    return null;
+  }
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(summary) as unknown;
+  } catch {
+    return null;
+  }
+  if (!isRecord(decoded)) {
+    return null;
+  }
+  if (Array.isArray(decoded['evidence'])) {
+    return evidenceOutcome(decoded['evidence']);
+  }
+  const verdict = decoded['verdict'];
+  if (isRecord(verdict)) {
+    return normalizeOutcomeToken(verdict['kind']) ?? normalizeOutcomeToken(verdict['outcome']);
+  }
+  return normalizeOutcomeToken(verdict);
+}
+
+/**
+ * 严格判定一份归一化角色结果的成败（IC-08）。
+ *
+ * 载荷只有两种登记形状：Companion 的 `result` 正文（带 `evidence` 数组）与 Orca 的 locator 形状
+ * （带 `outcome` 状态与 `summary` 正文）。判定顺序固定：先看结构化证据，再看 locator 状态 token。
+ *
+ * Validator 的「通过」必须带可核验证据：只有 locator `outcome=succeeded`、却没有任何证据或结构化
+ * verdict 时返回 `inconclusive`，缺失证明不得被读成验证通过。
+ */
+export function deriveWorkerOutcome(raw: unknown, role: WorkerRole): WorkerOutcome {
+  if (!isRecord(raw)) {
+    return 'inconclusive';
+  }
+  if (Array.isArray(raw['evidence'])) {
+    return evidenceOutcome(raw['evidence']);
+  }
+  const structured = structuredOutcome(raw['summary']);
+  if (structured !== null) {
+    return structured;
+  }
+  const token = normalizeOutcomeToken(raw['outcome']);
+  if (token === null) {
+    return 'inconclusive';
+  }
+  if (role === 'validator' && token === 'succeeded') {
+    return 'inconclusive';
+  }
+  return token;
+}
+
+/**
+ * 一条已持久化的角色结算是否构成「已接受的成功结果」。
+ *
+ * 只承认显式 `succeeded`。`null`/`undefined` 是 schema 迁移前的历史行或缺失证明：修复前它们被一概
+ * 当作成功，因此这里按不可证明处理，绝不推断回填。
+ */
+export function settlementAdvancesLifecycle(record: { readonly outcome?: unknown }): boolean {
+  return record.outcome === 'succeeded';
+}
+
+/** 只保留推进生命周期的结算；归属与历史投影仍可读全量。 */
+export function advancingSettlements<T extends { readonly outcome?: unknown }>(
+  settlements: readonly T[],
+): readonly T[] {
+  return settlements.filter(settlementAdvancesLifecycle);
+}
 
 /** 只判定报告形状，不判定归属：归属校验属于 Controller 的接管路径。 */
 export function isWorkerResult(report: WorkerReport): report is WorkerResult {

@@ -22,6 +22,7 @@ import {
   type TrustedExecutionFacts,
   type WorkerResultVerification,
 } from '../domain/worker-result-verification.js';
+import type { WorkerOutcome } from '../domain/worker-report.js';
 
 /** 一次尝试的结局；`session_lost` 表示 harness session 已不可继续。 */
 export const WORKER_ATTEMPT_OUTCOMES = [
@@ -47,6 +48,13 @@ export type RetryAttemptPlan = {
   readonly retryOfDispatchId: DispatchId;
   readonly taskContract: TaskContract;
   readonly specBinding: SpecBinding;
+  /**
+   * 本次 Task 的契约身份（Planner 用当前修订持有的 `patchId`，其余角色用已接纳 Spec Binding 派生）。
+   *
+   * Retry 必须沿用同一个值：它是「同一契约」的唯一可核验表达。缺失时为 `null`，由调用方按不可证明
+   * 阻塞，不在 attempt 与 revision 之间猜。
+   */
+  readonly taskRevisionRef: string | null;
   readonly budget: WorkerBudget;
   readonly consumedBudgets: readonly BudgetConsumption[];
   /** 新尝试独立于原 session：不伪装成原 Attempt 的继续。 */
@@ -83,6 +91,8 @@ export type RecordWorkerResultInput = {
   readonly retry: RetryFacts;
   readonly taskContract: TaskContract;
   readonly specBinding: SpecBinding;
+  /** 本次 Task 的契约身份；Planner 传当前 `revisionHold.patchId`（首次派发用固定初始值）。 */
+  readonly taskRevisionRef?: string | null;
   readonly budget: WorkerBudget;
   readonly consumedBudgets: readonly BudgetConsumption[];
 };
@@ -95,10 +105,29 @@ function planFor(input: RecordWorkerResultInput): RetryAttemptPlan {
     retryOfDispatchId: input.retry.retryOfDispatchId,
     taskContract: input.taskContract,
     specBinding: input.specBinding,
+    taskRevisionRef: input.taskRevisionRef ?? null,
     budget: input.budget,
     consumedBudgets: input.consumedBudgets,
     independentFromPreviousSession: true,
   };
+}
+
+/**
+ * 把一份已持久化的角色结果结论映射成尝试结局；`inconclusive` 不构成尝试结局。
+ *
+ * 宿主只应以本函数的返回值调用 `decideWorkerResultRecording`：`succeeded` 是完成、`failed` 是结论性
+ * 失败。缺证据（`inconclusive`）返回 `null`——那时既不能记成功、也不能按失败重试，必须阻塞并先补齐
+ * 可核验证明。
+ */
+export function attemptOutcomeFromWorkerOutcome(outcome: WorkerOutcome): WorkerAttemptOutcome | null {
+  switch (outcome) {
+    case 'succeeded':
+      return 'completed';
+    case 'failed':
+      return 'conclusive_failure';
+    case 'inconclusive':
+      return null;
+  }
 }
 
 /**

@@ -25,7 +25,7 @@ Specification Revision SHALL 只替换尚未接受的同一 Work Package 的 con
 
 ### Requirement: revision_pending 只冻结受影响节点与其未接受后代
 
-当修订或退休需求在 Worker Task 已派发时被报告，系统 SHALL 只把受影响 Work Package 及其未接受后代置为 revision pending；无关节点 MUST NOT 被冻结，且并发上限为 1 MUST NOT 被解释为对无关节点的拓扑准入限制。受影响 Work Package 的当前 Worker SHALL 运行至可核验终态，其后 MUST NOT 派发后续角色或依赖工作。旧结果 MUST NOT 越过该持有或已完成集成继续推进。
+当修订或退休需求在 Worker Task 已派发时被报告，系统 SHALL 只把受影响 Work Package 及其未接受后代置为 revision pending；无关节点 MUST NOT 被冻结，且并行额度 MUST NOT 被解释为对无关节点的拓扑准入限制。受影响 Work Package 的当前 Worker SHALL 运行至可核验终态，其后 MUST NOT 派发后续角色或依赖工作。旧结果 MUST NOT 越过该持有或已完成集成继续推进。
 
 #### Scenario: 无关节点保持可准入
 

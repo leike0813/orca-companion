@@ -26,6 +26,7 @@ import {
   type SettleIntentResult,
 } from '../src/application/coordination/intent-service.js';
 import { acquireRuntimeLease } from '../src/application/coordination/lease-service.js';
+import { replyWorkerQuestion } from '../src/application/coordination/reply-worker-question.js';
 import { openCoordinationStore, type CoordinationStore } from '../src/adapters/storage/coordination-store.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
@@ -39,6 +40,40 @@ let writer: CoordinationWriter;
 let now = 5_000;
 
 const clock = (): number => now;
+
+test.each([
+  { receipt: undefined, expected: 'unknown' },
+  { receipt: { ok: false, code: 'denied', message: 'denied' }, expected: 'rejected' },
+  { receipt: { message: { id: 'answer-1' }, question: { message_id: 'question-1', status: 'answered' } }, expected: 'accepted' },
+])('Worker reply 恢复只按原请求回执结算：$expected', async ({ receipt, expected }) => {
+  let completed = false;
+  let mutations = 0;
+  const backend: ExecutionBackend = {
+    query: () => Promise.resolve({ kind: 'accepted', value: {
+      requestId: 'request-reply', state: completed ? 'completed' : 'pending', receipt,
+    } }),
+    mutate: (_mutation, scope) => {
+      mutations += 1;
+      return Promise.resolve({ kind: 'unknown', operation: {
+        operationId: scope.operationId, target: scope.target, backendRequestId: 'request-reply',
+      }, reason: 'response_lost' });
+    },
+  };
+  const input = () => ({
+    store, backend, writer, coordinationScopeId: SCOPE, coordinatorSessionId: SESSION,
+    runtimeIncarnationId: INCARNATION, fencingGeneration: writer.fencingGeneration,
+    authority: { kind: 'route_planning' as const }, backendIdentityRef: 'identity-ref',
+    timeoutMs: 5_000, messageId: 'question-1', body: 'answer',
+    operationId: 'reply-1' as OperationId, expectedRevision: revisionOf(),
+  });
+  expect((await replyWorkerQuestion(input())).kind).toBe('blocked');
+  const pending = store.query({ kind: 'intent', coordinationScopeId: SCOPE, operationId: 'reply-1' as OperationId });
+  expect(pending.kind === 'intent' && pending.intent?.backendRequestId).toBe('request-reply');
+  completed = true;
+  expect((await replyWorkerQuestion(input())).kind).toBe(expected);
+  expect((await replyWorkerQuestion(input())).kind).toBe(expected);
+  expect(mutations).toBe(1);
+});
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'orca-intent-'));

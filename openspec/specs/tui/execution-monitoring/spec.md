@@ -1,7 +1,7 @@
 # tui/execution-monitoring Specification
 
 ## Purpose
-定义执行授权后工作区的连续性、执行图与 Frontier 投影，以及单 active Work Package 生命周期与串行 integration queue 的可观察行为。
+定义执行授权后工作区的连续性、执行图与 Frontier 投影，以及有界并行 Work Package 生命周期与串行 integration queue 的可观察行为。
 
 ## Requirements
 
@@ -22,7 +22,7 @@
 
 ### Requirement: 执行图与 Frontier 投影
 
-Sidebar SHALL 以有界 adaptive 图和分区节点卡展示当前图的稳定拓扑与选中邻域、Execution Frontier、阶段、Worker/liveness、串行队列和 attention；角色、attempt、Validation/Integration、worktree、baseline 与 Evidence SHALL 在 Inspector 的执行依据、工作范围、完整身份栏目及项目工作详情可读，预算 SHALL 在项目预算详情可读。并发上限固定为 1，系统 SHALL 在任一时刻最多投影一个 active Work Package，其余候选 Work Package SHALL 作为排队或 waiting 状态出现在当前图中。Graph 节点 SHALL 使用编译后的稳定拓扑位置，状态变化 MUST NOT 重排；过滤 SHALL 只隐藏节点而不改变相对顺序。紧凑态 SHALL 保留图关系、当前图版本的定位编号、关键状态与告警；编号 MUST NOT 冒充 WorkPackageId，完整身份 SHALL 从详情读取。折叠态 SHALL 保留全局风险与待答提示，完整当前图 SHALL 由显式 Inspector 有界浏览。
+Sidebar SHALL 以有界 adaptive 图和分区节点卡展示当前图的稳定拓扑与选中邻域、Execution Frontier、阶段、Worker/liveness、串行队列和 attention；角色、attempt、Validation/Integration、worktree、baseline 与 Evidence SHALL 在 Inspector 的执行依据、工作范围、完整身份栏目及项目工作详情可读，预算 SHALL 在项目预算详情可读。并行额度 SHALL 来自已批准 Manifest 的 `maxActiveWorkPackages`，默认 3，接受任意正安全整数；系统 SHALL 投影全部真实活动包、占用数与批准额度，其余候选 SHALL 显示为排队或 waiting。降低额度后仍在运行的包 SHALL 保持可见，空槽回收至新额度后再接纳新包。Graph 节点 SHALL 使用编译后的稳定拓扑位置，状态变化 MUST NOT 重排；过滤 SHALL 只隐藏节点而不改变相对顺序。紧凑态 SHALL 保留图关系、当前图版本的定位编号、关键状态与告警；编号 MUST NOT 冒充 WorkPackageId，完整身份 SHALL 从详情读取。折叠态 SHALL 保留全局风险与待答提示，完整当前图 SHALL 由显式 Inspector 有界浏览。
 
 #### Scenario: 状态变化不重排节点
 - **WHEN** 某个 Work Package 从 implementing 变为 validating
@@ -36,21 +36,21 @@ Sidebar SHALL 以有界 adaptive 图和分区节点卡展示当前图的稳定�
 - **WHEN** 用户按状态过滤执行图节点
 - **THEN** 不匹配的节点被隐藏，剩余节点的相对顺序与位置保持不变
 
-#### Scenario: 并发上限为 1
+#### Scenario: 按批准额度呈现活动包
 - **WHEN** 存在多个可派发的候选 Work Package
-- **THEN** 界面最多把一个 Work Package 显示为 active，其余显示为排队或 waiting
+- **THEN** 界面显示获准进入 Frontier 的全部活动包及批准额度，其余显示为排队或 waiting
 
 ### Requirement: Work Package 生命周期与串行 integration queue 投影
 
-系统 SHALL 将 Work Package 投影为 waiting、ready/admitting、specifying、implementing、validating、repairing、waiting integration、reconciling、revision pending、blocked/unknown、accepted/retired/cancelled 中的一种，并 SHALL 单独显示 Worker liveness 为 `live`、`exited` 或 `unverifiable`。Execution Frontier SHALL 串行推进：一个 Work Package 完成其全部角色后，下一个才进入 active；integration queue SHALL 明确表达串行。canonical 前进、轻微 reconciliation 与严重冲突升级 SHALL 作为不同状态呈现。
+系统 SHALL 将 Work Package 投影为 waiting、ready/admitting、specifying、implementing、validating、repairing、waiting integration、reconciling、revision pending、blocked/unknown、accepted/retired/cancelled 中的一种，并 SHALL 单独显示 Worker liveness 为 `live`、`exited` 或 `unverifiable`。Execution Frontier SHALL 按批准额度并行推进隔离 worktree 中的包，同包角色 SHALL 串行；integration queue 与 canonical 集成 SHALL 串行。canonical 前进、轻微 reconciliation 与严重冲突升级 SHALL 作为不同状态呈现。
 
-#### Scenario: 单 active Work Package 串行推进
-- **WHEN** 一个 Work Package 正在 implementing，同时另一个 Work Package 的依赖已满足
-- **THEN** 前一个保持 active，后一个显示为 waiting 或排队，不出现第二个 active Work Package
+#### Scenario: 空槽接纳独立包
+- **WHEN** 一个 Work Package 正在 implementing，另一个包依赖已满足且批准额度有空槽
+- **THEN** 前一个保持 active，后一个可在独立 worktree 中进入 active
 
 #### Scenario: 完成后排队进入集成
 - **WHEN** active Work Package 通过验证并进入 waiting integration
-- **THEN** 该包显示为 waiting integration，并按串行顺序进入集成而不与其他包重叠
+- **THEN** 该包显示为 waiting integration，canonical 集成按串行顺序执行，其他包可继续角色工作
 
 #### Scenario: liveness 与生命周期分别显示
 - **WHEN** active Work Package 的 Worker 暂时不可达但未确认退出

@@ -120,6 +120,8 @@ type OperationOutcome<T> =
 
 首个 Worker Harness 是 Codex。Planner、Implementation、Validator 和 Finalizer 使用角色隔离 Session；Validator 在同一任务的“验证—范围内修复—复验”内复用同一真实 Session。Finalizer 使用新的只读项目级 Session。精确 Session Binding 由 Worker Harness Adapter 验证，不能按 cwd/mtime 猜最新 transcript，也不能用 terminal 输出冒充 provider transcript。
 
+Validator 修复许可绑定原 worktree 的干净 HEAD，并随原答复 Intent 持久保存；实际修复范围由该 HEAD 之后的提交与未提交 Git 路径核验，Worker 自报路径只作补充。基线、范围或精确 Session 不可证明时停止验证链。
+
 Worker Session 中断时必须显式记录 Session Segment。需要恢复 Validator 上下文时，由受限 Utility Worker 从精确 transcript 生成 Recovery Capsule；替代 Session 仍属于原 Validation Attempt，并受独立且有限的 Recovery Budget 约束。transcript 不可用或预算耗尽时阻塞，不能伪称保持原会话。
 
 ## 7. Route Planning 与 Execution Coordination
@@ -190,10 +192,10 @@ Graph Patch 采用原子的 `add + revise + retire`：
 
 在 Git common dir 的 Companion 私有目录使用两个独立 SQLite store：
 
-- `coordination.sqlite` 保存模式、Planning Cycle、当前 graph/authorization 引用、Session 注册、Ticket Claim、Pending Interaction、Operation Intent、Runtime/Execution lease、fencing、共享预算状态和 CAS revision；
-- `checkpoints.sqlite` 由 LangGraph SqliteSaver 保存每个 Session 的已提交消息/tool step、图位置、Wake Batch、Context Capsule 和 Coordinator Model Configuration binding。
+- `coordination.sqlite` 保存模式、Planning Cycle、当前 graph/authorization 引用、Session 注册及 Coordinator Model Configuration binding、Ticket Claim、Pending Interaction、Operation Intent、Runtime/Execution lease、fencing、共享预算状态和 CAS revision；
+- `checkpoints.sqlite` 由 LangGraph SqliteSaver 保存每个 Session 的已提交消息/tool step、图位置、Wake Batch 与 Context Capsule。
 
-`coordination.sqlite` 当前为 schema 19：物化绑定要求 `authorization_id`、`authorization_version` 与 `worker_profile_ref`；初始图记录 nullable `initial_plan_json`，初始 v1 写入必须携带与 `planRevision` 一致的归一化 Implementation Plan，并与图记录在同一事务提交。旧行保持 `null`，读取时明确显示原计划未记录，不推断回填；accepted revision 不改写原计划。prepared terminal 的原创建回执句柄随 Operation Intent 结算保存；恢复在精确 worktree 内重新核验该资源，显示标题不承担身份语义。原句柄缺失或失效时阻塞，不能重发已接受的创建操作。
+`coordination.sqlite` 当前为 schema 20：每个 Scope/Session 只有一个 active Ticket Claim；Session blocked 保存结构化原因，损坏的执行 Lease holder 同时阻塞 Scope。角色结算保存明确 outcome 与 Validator verdict，历史缺失值按不可证明处理。实现尝试随派发准入、Validator 修复随稳定步骤准入原子计费，重放不重复扣预算。物化绑定要求 `authorization_id`、`authorization_version` 与 `worker_profile_ref`；同一契约 Retry 保持 Task 和授权，只追加 Attempt/Dispatch 绑定。初始图记录 nullable `initial_plan_json`，初始 v1 写入必须携带与 `planRevision` 一致的归一化 Implementation Plan，并与图记录在同一事务提交。旧行保持 `null`，读取时明确显示原计划未记录，不推断回填；accepted revision 不改写原计划。prepared terminal 的原创建回执句柄随 Operation Intent 结算保存；恢复在精确 worktree 内重新核验该资源，显示标题不承担身份语义。原句柄缺失或失效时阻塞，不能重发已接受的创建操作。
 
 图历史与依据正文遵守 IC-03/05/06/11/12：版本目录、head、追加链 membership 与依据 UTF-8 范围通过 metadata/范围查询读取；目录每页最多 20 项，正文每次最多 64 KiB。初始计划按 JSON 原结构保留，以 SQLite BLOB 范围读取，不先全文编码。generation 状态只读登记值，不能从历史身份推断 frozen。TUI 唯一只读 seam 是 `src/application/tui/graph-basis.ts` 的 `GraphBasisPort`，应用实现由 `src/application/tui/graph-basis-service.ts` 拥有。来源引用按判别联合 fail closed。原生规格 provider 的 `readFiles` 与 `readFileRange` 是可选能力，只有 task、package、Orca Task、locator 和 contract binding 精确匹配时才可读；`listSources` 可带 `orcaTaskId` 进入该 Task binding 的精确 unit，tracking revision 独立呈现。tracker 只读取配置的当前 `routeMapIssueRef`；未保存的批准时正文明确缺失。`retained_task` 是 Work Package 级保留记录，不能按时间归到某个 GraphVersion。ProjectDetails 仍绑定当前 Scope revision；历史图与依据使用独立来源身份和各自 8 MiB/64 项缓存，snapshot 只带当前拓扑。历史图不得借用当前 frontier、worker、budget 或验收事实。
 

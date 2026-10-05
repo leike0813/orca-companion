@@ -637,6 +637,8 @@ test('Planner 等待期间其它包被接受后，基于陈旧快照的补丁被
     role: 'validator',
     contractRevision: 1,
     orcaResultRef: 'orca-task-wp-c#accepted',
+    outcome: null,
+    validationVerdict: null,
     acceptedAt: now,
   };
 

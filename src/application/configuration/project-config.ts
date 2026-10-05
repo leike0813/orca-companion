@@ -65,6 +65,12 @@ export type ProjectPlanningPermissions = {
 export type ProjectContextBudget = {
   readonly maxInputTokens: number;
   readonly maxReadBytes: number;
+  /**
+   * 是否启用 provider 缓存保活；缺省关闭。
+   *
+   * 启用后宿主仍须拿到 provider 提供的可信间隔才调度，没有该能力时保持不可用而不是猜测节奏。
+   */
+  readonly keepaliveEnabled?: boolean;
 };
 
 /** 一次模型输出允许的字节上限；覆盖文本、内容块与工具参数。 */
@@ -191,6 +197,7 @@ const projectConfigSchema = z.strictObject({
   context: z.strictObject({
     maxInputTokens: z.number().int().positive(),
     maxReadBytes: byteBudget.optional(),
+    keepaliveEnabled: z.boolean().optional(),
   }),
   output: z.strictObject({ maxResponseBytes: byteBudget }).optional(),
   execution: z
@@ -547,6 +554,7 @@ export function parseProjectConfig(raw: unknown): IdentityResult<ProjectConfig> 
     context: {
       maxInputTokens: parsed.data.context.maxInputTokens,
       maxReadBytes: parsed.data.context.maxReadBytes ?? CONTEXT_READ_BYTES,
+      keepaliveEnabled: parsed.data.context.keepaliveEnabled ?? false,
     },
     output: parsed.data.output ?? { maxResponseBytes: MODEL_RESPONSE_BYTES },
     execution: normalizeExecution(parsed.data.execution),

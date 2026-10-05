@@ -53,7 +53,7 @@ import {
   fakeRecoveryBackend,
   type RecoveryHarness,
 } from '../support/recovery-harness.js';
-import { modelConfigurationFixture } from '../support/model-configurations.js';
+import { credentialStoreFixture, modelConfigurationFixture } from '../support/model-configurations.js';
 import type { DispatchId, OperationId, SessionSegmentId, WorkerTaskId } from '../../src/application/dto/identity.js';
 
 const SEGMENT = 'segment:capsule-dispatch:1' as SessionSegmentId;
@@ -146,6 +146,7 @@ test.each(['payload', 'body'] as const)('Capsule 提取：受限派发、按 Orc
   const launch = createCodexWorkerLaunch({
     launchId,
     modelConfiguration: modelConfigurationFixture(),
+    credentialStore: credentialStoreFixture(),
     sandboxMode: 'read-only',
     stateRoot,
     sessionStartReporterPath: codexSessionPathsUnder(stateRoot, launchId).reporterPath,
@@ -256,6 +257,7 @@ test.each(['payload', 'body'] as const)('Capsule 提取：受限派发、按 Orc
     workerLaunch: createCodexWorkerLaunch({
       launchId,
       modelConfiguration: modelConfigurationFixture(),
+      credentialStore: credentialStoreFixture(),
       sandboxMode: 'read-only',
       stateRoot,
       sessionStartReporterPath: codexSessionPathsUnder(stateRoot, launchId).reporterPath,
@@ -425,6 +427,7 @@ test.each(['coverage', 'task', 'dispatch'] as const)('Capsule 的 %s 不匹配�
     workerLaunch: createCodexWorkerLaunch({
       launchId,
       modelConfiguration: modelConfigurationFixture(),
+      credentialStore: credentialStoreFixture(),
       sandboxMode: 'read-only',
       stateRoot,
       sessionStartReporterPath: codexSessionPathsUnder(stateRoot, launchId).reporterPath,
@@ -480,6 +483,7 @@ test('重启后续办：按信封内容回读已派发的 Worker，不再新建 
   const launch = createCodexWorkerLaunch({
     launchId,
     modelConfiguration: modelConfigurationFixture(),
+    credentialStore: credentialStoreFixture(),
     sandboxMode: 'read-only',
     stateRoot,
     sessionStartReporterPath: codexSessionPathsUnder(stateRoot, launchId).reporterPath,
@@ -691,6 +695,7 @@ function capsuleFacts(input: {
     clock: () => Date.now(),
     bindingWindowMs: 50,
     readOnlyWorkerProbe: input.probe,
+    credentialStore: credentialStoreFixture(),
   });
 }
 

@@ -25,11 +25,70 @@ import { assertWithinCaps, budgetFromLimits } from './budget-policy.js';
 import type {
   ExecutionGraph,
   ImplementationPlan,
+  PlannedAdoption,
+  PlannedLineage,
   PlannedWorkPackage,
   ScopeEnvelope,
   WorkPackage,
   WorkPackageBudget,
 } from './execution-graph.js';
+
+const PLANNED_ADOPTION_KINDS = ['baseline_adoption', 'migration_material', 'planning_reference'] as const;
+
+function parsePlannedAdoption(raw: unknown, field: string): IdentityResult<PlannedAdoption> {
+  if (!isRecord(raw)) {
+    return { ok: false, field, message: '必须是对象' };
+  }
+  const kind = raw['kind'];
+  if (typeof kind !== 'string' || !(PLANNED_ADOPTION_KINDS as readonly string[]).includes(kind)) {
+    return { ok: false, field: `${field}.kind`, message: '取值不受支持' };
+  }
+  const adoptedResultRef = parseStableId(raw['adoptedResultRef'], `${field}.adoptedResultRef`);
+  if (!adoptedResultRef.ok) {
+    return adoptedResultRef;
+  }
+  const baselineHead = parseStableId(raw['baselineHead'], `${field}.baselineHead`);
+  if (!baselineHead.ok) {
+    return baselineHead;
+  }
+  const evidenceRefs = parsePathList(raw['evidenceRefs'], `${field}.evidenceRefs`);
+  if (!evidenceRefs.ok) {
+    return evidenceRefs;
+  }
+  let integrationRef: string | undefined;
+  if (raw['integrationRef'] !== undefined) {
+    const parsed = parseStableId(raw['integrationRef'], `${field}.integrationRef`);
+    if (!parsed.ok) {
+      return parsed;
+    }
+    integrationRef = parsed.value;
+  }
+  return {
+    ok: true,
+    value: {
+      kind: kind as PlannedAdoption['kind'],
+      adoptedResultRef: adoptedResultRef.value,
+      baselineHead: baselineHead.value,
+      ...(integrationRef === undefined ? {} : { integrationRef }),
+      evidenceRefs: evidenceRefs.value,
+    },
+  };
+}
+
+function parsePlannedLineage(raw: unknown, field: string): IdentityResult<PlannedLineage> {
+  if (!isRecord(raw)) {
+    return { ok: false, field, message: '必须是对象' };
+  }
+  const priorWorkPackageId = parseStableId(raw['priorWorkPackageId'], `${field}.priorWorkPackageId`);
+  if (!priorWorkPackageId.ok) {
+    return priorWorkPackageId;
+  }
+  const priorGraphId = parseStableId(raw['priorGraphId'], `${field}.priorGraphId`);
+  if (!priorGraphId.ok) {
+    return priorGraphId;
+  }
+  return { ok: true, value: { priorWorkPackageId: priorWorkPackageId.value, priorGraphId: priorGraphId.value } };
+}
 
 export type GraphCompilationInput = {
   /** 未解析的计划：编译边界自己做运行时校验，不信任类型标注。 */
@@ -188,12 +247,30 @@ function parsePlannedWorkPackage(raw: unknown, field: string): IdentityResult<Pl
   if (!requestedBudget.ok) {
     return requestedBudget;
   }
+  let adoption: PlannedAdoption | undefined;
+  if (raw['adoption'] !== undefined) {
+    const parsed = parsePlannedAdoption(raw['adoption'], `${field}.adoption`);
+    if (!parsed.ok) {
+      return parsed;
+    }
+    adoption = parsed.value;
+  }
+  let lineage: PlannedLineage | undefined;
+  if (raw['lineage'] !== undefined) {
+    const parsed = parsePlannedLineage(raw['lineage'], `${field}.lineage`);
+    if (!parsed.ok) {
+      return parsed;
+    }
+    lineage = parsed.value;
+  }
   const planned: PlannedWorkPackage = {
     key: key.value,
     title: title.value,
     dependsOn: dependsOn.value,
     scopeEnvelope: scopeEnvelope.value,
     ...(raw['requestedBudget'] === undefined ? {} : { requestedBudget: requestedBudget.value }),
+    ...(adoption === undefined ? {} : { adoption }),
+    ...(lineage === undefined ? {} : { lineage }),
   };
   return { ok: true, value: planned };
 }

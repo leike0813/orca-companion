@@ -53,7 +53,7 @@ import {
   writeRecoveryCapsuleBody,
 } from '../application/recovery/recovery-capsule.js';
 import { deriveRecoveryId } from '../application/recovery/worker-session-recovery-service.js';
-import type { DeliveryMessage } from '../application/dto/operation-outcome.js';
+import type { DeliveryBatch, DeliveryMessage } from '../application/dto/operation-outcome.js';
 import {
   buildExecutionScope,
   type ExecutionAuthority,
@@ -67,7 +67,8 @@ import {
   type WorkerStartReceipt,
 } from '../adapters/orca-cli/operation-catalog.js';
 import { createCodexWorkerLaunch, installCodexSessionStartReporter } from '../adapters/agents/codex-launch.js';
-import { JsonCredentialStore, credentialStorePath } from '../adapters/storage/credential-store.js';
+import { credentialStorePath } from '../adapters/storage/credential-store.js';
+import type { CredentialStore } from '../application/ports/credential-store.js';
 import {
   readOnlyWorkerUnavailableReason,
   type ReadOnlyWorkerProbe,
@@ -91,6 +92,8 @@ import { graphIdFor, startGraphGeneration, type EmptyRunAllocator } from '../app
 import { recordInitialGraph } from '../application/planning/graph-history.js';
 import { ensureGraphGenerationRecord } from '../application/execution/replanning-service.js';
 import { readScope } from '../application/planning/scope-read.js';
+import { loadPlanningCycleCandidate } from '../application/planning/graph-history.js';
+import type { ScopeRecord } from '../application/ports/branch-coordination-store.js';
 import {
   activeAuthorization,
   proposeManifest,
@@ -111,7 +114,21 @@ import type { ClaimedResultAttribution, TrustedExecutionFacts } from '../domain/
 import type { TerminalLivenessFacts } from '../domain/worker-liveness.js';
 import type { SpecBinding } from '../domain/task-contract.js';
 import type { WorkerModelConfiguration } from '../domain/model-configuration.js';
-import { compileExecutionGraph, parseImplementationPlan, type CompilationError } from '../domain/planning/graph-compiler.js';
+import {
+  compileExecutionGraph,
+  parseImplementationPlan,
+  workPackageIdFor,
+  type CompilationError,
+} from '../domain/planning/graph-compiler.js';
+import {
+  preflightPlanContinuations,
+  recordPlanContinuations,
+  type PlanContinuationFacts,
+} from '../application/execution/baseline-adoption.js';
+import {
+  createPlanContinuationFactReader,
+  type PlanContinuationFactReaderFactory,
+} from './plan-continuations.js';
 import {
   MANIFEST_VERSION,
   WORKER_ROLES,
@@ -165,6 +182,12 @@ export type ProposeExecutionGraphInput = {
   readonly limits: ProjectExecutionConfiguration['limits'];
   readonly baselineHead: string;
   readonly objective: string;
+  /**
+   * canonical worktree 的只读 Git 证据来源。缺省时 Baseline Adoption 无法证明证据仍适用，按矛盾事实阻塞。
+   */
+  readonly canonicalWorktreePath?: string;
+  /** 生产事实读取器的装配注入；缺省用 `createPlanContinuationFactReader` 从 backend/store/Git 回读。 */
+  readonly planContinuationFacts?: PlanContinuationFactReaderFactory;
 };
 
 export type ProposeExecutionGraphResult =
@@ -310,6 +333,48 @@ export async function proposeExecutionGraph(
       reason: '既有 Run 创建结果尚不能证明无副作用，必须以原 OperationId 对账',
     };
   }
+  // 采用/延续声明的整份预检必须发生在建立空 Run（真实副作用）与任何落盘之前：任一节点不可采用时，
+  // 不产生 Run、不写图记录。事实按 Work Package 记忆，预检与落盘看到同一份事实。
+  const declarationNodes = initialPlan.value.workPackages.filter(
+    (planned) => planned.adoption !== undefined || planned.lineage !== undefined,
+  );
+  const factsByWorkPackageId = new Map<WorkPackageId, PlanContinuationFacts>();
+  if (declarationNodes.length > 0) {
+    const reader = (input.planContinuationFacts ?? createPlanContinuationFactReader)({
+      store: input.store,
+      backend: input.backend,
+      coordinationScopeId: input.coordinationScopeId,
+      backendIdentityRef: input.backendIdentityRef,
+      baselineHead: input.baselineHead,
+      plan: initialPlan.value,
+      graph: compiled.graph,
+      canonicalWorktreePath: input.canonicalWorktreePath ?? null,
+    });
+    for (const planned of declarationNodes) {
+      const workPackageId = workPackageIdFor(compiled.graph.graphId, planned.key);
+      const facts = await reader(workPackageId);
+      if (facts === null) {
+        return {
+          kind: 'rejected',
+          code: 'continuation_facts_unreadable',
+          message: `Work Package ${planned.key} 的采用/延续事实不可读`,
+          errors: [],
+        };
+      }
+      factsByWorkPackageId.set(workPackageId, facts);
+    }
+    const preflight = preflightPlanContinuations({
+      graph: compiled.graph,
+      plan: initialPlan.value,
+      factsFor: (workPackageId) => factsByWorkPackageId.get(workPackageId) ?? null,
+    });
+    if (preflight.kind === 'blocked') {
+      return { kind: 'rejected', code: 'continuation_conflict', message: preflight.reason, errors: [] };
+    }
+    if (preflight.kind === 'rejected') {
+      return { kind: 'rejected', code: preflight.failure.code, message: preflight.failure.message, errors: [] };
+    }
+  }
   const operationId = runCreateOperationId(input.coordinationScopeId, generation.generation, prior.length);
 
   const started = await startGraphGeneration({
@@ -364,6 +429,23 @@ export async function proposeExecutionGraph(
   });
   if (version.kind === 'rejected') {
     return { kind: 'rejected', code: version.failure.code, message: version.failure.message, errors: [] };
+  }
+  // 预检已通过，这里把采用/延续记录与图记录一起补齐；同样的 factsFor 保证判定与预检一致。
+  const continuations = recordPlanContinuations({
+    store: input.store,
+    coordinationScopeId: input.coordinationScopeId,
+    writer: input.writer,
+    graph: compiled.graph,
+    plan: initialPlan.value,
+    factsFor: (workPackageId) => factsByWorkPackageId.get(workPackageId) ?? null,
+  });
+  if (continuations.kind !== 'recorded') {
+    return {
+      kind: 'rejected',
+      code: continuations.kind === 'blocked' ? 'continuation_conflict' : continuations.failure.code,
+      message: continuations.kind === 'blocked' ? continuations.reason : continuations.failure.message,
+      errors: [],
+    };
   }
   return {
     kind: 'recorded',
@@ -485,7 +567,7 @@ export function reviewExecutionAuthorization(
   if (scope.planningCycleId === null) {
     blockers.push({ code: 'planning_cycle_missing', message: '当前 Scope 没有 Planning Cycle' });
   }
-  const candidateRead = readCandidate(facts.store, facts.coordinationScopeId, scope.graphId);
+  const candidateRead = readReviewCandidate(facts.store, scope);
   if (candidateRead.kind === 'rejected') {
     return { kind: 'rejected', code: candidateRead.code, message: candidateRead.message };
   }
@@ -495,18 +577,14 @@ export function reviewExecutionAuthorization(
       message: '当前还没有被接受编译的候选 Execution Graph：先编译正式 Implementation Plan',
     });
   }
-  const generationRead = readGeneration(facts.store, facts.coordinationScopeId, scope.graphId);
-  if (generationRead.kind === 'rejected') {
-    return { kind: 'rejected', code: generationRead.code, message: generationRead.message };
-  }
-  if (candidateRead.version !== null && generationRead.record === null) {
+  if (candidateRead.version !== null && candidateRead.generation === null) {
     blockers.push({
       code: 'generation_record_missing',
       message: `候选图 ${candidateRead.version.graphId} 没有世代记录：baseline HEAD 与 Run 绑定缺失`,
     });
   }
   const candidate = candidateRead.version;
-  const generation = generationRead.record;
+  const generation = candidateRead.generation;
   if (blockers.length > 0 || candidate === null || generation === null || scope.planningCycleId === null) {
     return { kind: 'blocked', blockers };
   }
@@ -887,6 +965,47 @@ function readGeneration(
   return { kind: 'read', record: read.generation };
 }
 
+/**
+ * 审阅与批准要绑定的候选图。
+ *
+ * Route Planning 期间的候选是**本 Planning Cycle 的候选代际**，而不是 Scope 仍指向的前代：重规划过渡
+ * 期间 Scope 指针还在被挂起的旧图上，按它审阅会批准一份已经不属于本次规划的图。Execution Coordination
+ * 中的重新授权绑定当前活动代际，它的身份就是 Scope 指针本身。
+ */
+function readReviewCandidate(
+  store: BranchCoordinationStore,
+  scope: ScopeRecord,
+):
+  | {
+      readonly kind: 'read';
+      readonly version: GraphVersionRecord | null;
+      readonly generation: GraphGenerationRecord | null;
+    }
+  | { readonly kind: 'rejected'; readonly code: string; readonly message: string } {
+  if (scope.mode === 'route_planning' && scope.planningCycleId !== null) {
+    const cycle = loadPlanningCycleCandidate({
+      store,
+      coordinationScopeId: scope.coordinationScopeId,
+      planningCycleId: scope.planningCycleId,
+    });
+    if (cycle.kind === 'rejected') {
+      return { kind: 'rejected', code: cycle.failure.code, message: cycle.failure.message };
+    }
+    return cycle.kind === 'loaded'
+      ? { kind: 'read', version: cycle.version, generation: cycle.generation }
+      : { kind: 'read', version: null, generation: null };
+  }
+  const candidate = readCandidate(store, scope.coordinationScopeId, scope.graphId);
+  if (candidate.kind === 'rejected') {
+    return candidate;
+  }
+  const generation = readGeneration(store, scope.coordinationScopeId, scope.graphId);
+  if (generation.kind === 'rejected') {
+    return generation;
+  }
+  return { kind: 'read', version: candidate.version, generation: generation.record };
+}
+
 function candidateOf(version: GraphVersionRecord, generation: GraphGenerationRecord): ExecutionGraphCandidate {
   return {
     graphId: version.graphId,
@@ -944,6 +1063,7 @@ export type DeliveryWorktreeFacts = {
 };
 
 export type DeliveryWorktreeFactReader = (input: {
+  readonly acceptedResult: unknown;
   readonly workPackageId: WorkPackageId;
   readonly binding: MaterializationBindingRecord;
   readonly segment: SessionSegmentRecord;
@@ -974,6 +1094,19 @@ export type PendingDeliveryReadInput = {
   readonly timeoutMs: number;
   /** 物化记录里没有的 worktree 事实读取 seam；生产读 `worktree-list` + Git，测试注入 fake。 */
   readonly readWorktreeFacts: DeliveryWorktreeFactReader;
+  /** 项目级结果由其专属验收 owner 消费，包结果继续走普通角色管线。 */
+  readonly consumeProjectResult?: (message: DeliveryMessage, batch: DeliveryBatch) => Promise<'ignored' | 'consumed' | 'blocked'>;
+  /**
+   * 非终态 Worker 消息（`question` / `escalation`）的耐久消费 seam。
+   *
+   * 这类消息不承载结果正文，却需要协调者介入；把它们当作进度消息确认会让问题永久丢失。因此宿主
+   * 必须证明它们已经被耐久消费（例如落成待答交互、唤醒模型或校验归属）才能确认该批次。缺这个 seam
+   * 时整条 Delivery lane 阻塞，绝不 progress-ack。
+   */
+  readonly onWorkerMessage?: (
+    message: DeliveryMessage,
+    batch: DeliveryBatch,
+  ) => Promise<'consumed' | 'blocked'>;
 };
 
 /** 读一条消息需要的事实：全部来自 store、当前图、授权与 Git；任一不可读即阻塞，不猜。 */
@@ -1059,18 +1192,6 @@ function resolveLocator(
  * 归属身份取自 store 的 Session Segment（Controller 在派发时写入的事实），worktree 事实取自 worktree
  * 读取 seam；载荷只用来**定位**这条事实。任何一项对不上或读不到都必须阻塞，不得用载荷自报值补位。
  */
-/**
- * 用户级凭据 store：与 Coordinator 装配、模型设置保存共用同一份 env 视图。
- *
- * 按调用方传入的 env 而不是 \`process.env\` 解析路径，因此隔离启动与测试只需替换这一处；
- * 替代 Session 与新建 Utility 都用 managed 凭据，缺这一层时准备阶段无法 fail closed 证明 key 存在。
- */
-function credentialStore(
-  env: Readonly<Record<string, string>>,
-): JsonCredentialStore {
-  return new JsonCredentialStore({ environment: env });
-}
-
 /**
  * 物化绑定钉住的那份授权。
  *
@@ -1162,7 +1283,9 @@ async function readDeliveryTrustedFacts(input: {
             entry.workerTaskId === segment.workerTaskId &&
             entry.attemptId === segment.attemptId,
           )
-        : binding.bindings.find((entry) => entry.orcaTaskId === resolved.binding.orcaTaskId)) ?? null
+        // locator 形状已经按 Dispatch→Segment→绑定逐项核验过：同一 Task 现在可有多个 Attempt，
+        // 按 orcaTaskId 重取会命中该 Task 的第一条旧 Attempt 绑定，必须复用精确解析出的那一条。
+        : resolved.binding) ?? null
     : null;
   if (materialization === null) {
     return {
@@ -1182,6 +1305,7 @@ async function readDeliveryTrustedFacts(input: {
     };
   }
   const worktree = await input.input.readWorktreeFacts({
+    acceptedResult: input.intake.acceptedResult,
     workPackageId: segment.workPackageId,
     binding: materialization,
     segment,
@@ -1339,13 +1463,47 @@ function isResultDeliveryMessage(message: DeliveryMessage): boolean {
   return message.type === 'worker_done';
 }
 
+/** Orca 的非终态 Worker 消息类型：需要协调者介入，确认前必须证明已经耐久消费。 */
+const NON_TERMINAL_WORKER_MESSAGE_TYPES = ['question', 'escalation'] as const;
+
+function isNonTerminalWorkerMessage(message: DeliveryMessage): boolean {
+  return message.type !== null && (NON_TERMINAL_WORKER_MESSAGE_TYPES as readonly string[]).includes(message.type);
+}
+
+/** 未证明已消费的 Worker 问题/升级消息对应的 lane 阻塞；不确认批次，问题才不会丢失。 */
+async function unconsumedWorkerMessage(
+  input: PendingDeliveryReadInput,
+  messages: readonly DeliveryMessage[],
+  batch: DeliveryBatch,
+  deliveryId: string,
+): Promise<{ readonly code: string; readonly message: string; readonly laneKey: string | null } | null> {
+  if (input.onWorkerMessage === undefined) {
+    return {
+      code: 'worker_message_unconsumed',
+      message: `Delivery ${deliveryId} 含 Worker 问题/升级消息，但没有耐久消费 seam：不确认批次，问题才不会丢失`,
+      laneKey: ackLaneKey(deliveryId),
+    };
+  }
+  for (const message of messages) {
+    const verdict = await input.onWorkerMessage(message, batch);
+    if (verdict !== 'consumed') {
+      return {
+        code: 'worker_message_unconsumed',
+        message: `Delivery ${deliveryId} 的 Worker 消息 ${message.messageId} 未证明已耐久消费：不确认批次`,
+        laneKey: ackLaneKey(deliveryId),
+      };
+    }
+  }
+  return null;
+}
+
 export async function readPendingDeliveries(
   input: PendingDeliveryReadInput,
 ): Promise<PendingDeliveryRead> {
   const batchRead = await readDeliveryBatch(input.backend, {
     backendIdentityRef: input.backendIdentityRef,
     runId: input.runId,
-    types: ['worker_done'],
+    types: ['worker_done', 'question', 'escalation'],
     timeoutMs: input.timeoutMs,
   });
   if (batchRead.kind !== 'accepted') {
@@ -1364,6 +1522,15 @@ export async function readPendingDeliveries(
     };
   }
   const deliveryId = batch.delivery.deliveryId;
+  // 问题/升级消息不承载结果，却需要协调者介入：先证明它们已耐久消费，再谈本批次的确认或结算。
+  // 任一条无法证明即整批阻塞，结果消息留到下一轮，问题不丢失、批次也不被误确认。
+  const workerMessages = batch.messages.filter((message) => isNonTerminalWorkerMessage(message));
+  if (workerMessages.length > 0) {
+    const unconsumed = await unconsumedWorkerMessage(input, workerMessages, batch, deliveryId);
+    if (unconsumed !== null) {
+      return { kind: 'read', pending: [], blocked: [unconsumed] };
+    }
+  }
   // Orca 的未确认批次里可能只有进度消息（`heartbeat`），结果消息（`worker_done`）在它被确认之后才会
   // 成为当前批次。进度消息不承载结果，也没有可落盘的权威事实；把它当成「装配失败」会把整条
   // Delivery lane 永久阻塞，而真实的结果消息永远排在它后面。因此这里按事实区分二者。
@@ -1417,6 +1584,7 @@ export async function readPendingDeliveries(
 
   const pending: PendingDelivery[] = [];
   const blocked: { readonly code: string; readonly message: string; readonly laneKey: string | null }[] = [];
+  let projectResultsConsumed = 0;
   for (const message of resultMessages) {
     if (message.runId !== null && message.runId !== input.runId) {
       blocked.push({
@@ -1424,6 +1592,12 @@ export async function readPendingDeliveries(
         message: `Delivery ${deliveryId} 属于 Run ${message.runId}，不是当前 Run ${input.runId}`,
         laneKey: ackLaneKey(deliveryId),
       });
+      continue;
+    }
+    const project = await input.consumeProjectResult?.(message, batch) ?? 'ignored';
+    if (project === 'consumed') { projectResultsConsumed += 1; continue; }
+    if (project === 'blocked') {
+      blocked.push({ code: 'project_result_unconsumed', message: '项目级结果尚未完成持久结算', laneKey: ackLaneKey(deliveryId) });
       continue;
     }
     const parsed = parseDeliveryClaimedPayload(message.payload);
@@ -1515,7 +1689,8 @@ export async function readPendingDeliveries(
     });
   }
   return blocked.length === 0
-    ? { kind: 'read', pending }
+    ? { kind: 'read', pending, ...(projectResultsConsumed === resultMessages.length
+        ? { progressAcks: [{ deliveryId, runId: batch.delivery.runId }] } : {}) }
     : { kind: 'read', pending, blocked };
 }
 
@@ -1612,6 +1787,8 @@ export type ExecutionRecoveryFactsInput = {
    * 可信身份；缺失时不派发（fail closed），其余 Recovery 事实仍照常装配。
    */
   readonly writer?: CoordinationWriter | undefined;
+  /** 宿主 bootstrap 注入的唯一凭据 store；恢复派发不再按 env 另建实例。 */
+  readonly credentialStore: CredentialStore;
   readonly env: Readonly<Record<string, string>>;
   readonly clock: () => number;
   /** SessionStart 报告的等待窗口。 */
@@ -1988,8 +2165,8 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
         workerLaunch: createCodexWorkerLaunch({
           launchId,
           modelConfiguration,
-          // 与宿主其余派发同源：managed 凭据在准备阶段就要用同一份 env-derived store 证明存在。
-          credentialStore: credentialStore(input.env),
+          // 与宿主其余派发同源：managed 凭据用 bootstrap 注入的唯一实例证明存在。
+          credentialStore: input.credentialStore,
           credentialStorePath: credentialStorePath({ environment: input.env }),
           // Capsule 提取只读 transcript：权限是共享的 `read-only-local-control` profile（继承
           // `:read-only`，只为本机控制通道开启网络），信封 `authority.write=false`。
@@ -2128,8 +2305,8 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
         workerLaunch: createCodexWorkerLaunch({
           launchId,
           modelConfiguration,
-          // 替代 Session 沿用原 Task 的模型绑定，凭据 store 仍按本次输入的 env 解析。
-          credentialStore: credentialStore(input.env),
+          // 替代 Session 沿用原 Task 的模型绑定，凭据 store 用 bootstrap 注入的唯一实例。
+          credentialStore: input.credentialStore,
           credentialStorePath: credentialStorePath({ environment: input.env }),
           sandboxMode: input.codexSandbox,
           stateRoot: paths.stateRoot,

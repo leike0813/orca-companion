@@ -514,7 +514,7 @@ export type ScopeControlCommand = ControllerScopeFields & {
 export type ExecutionAuthorizationCommand = ControllerScopeFields &
   (
     | { readonly kind: 'execution-authorization'; readonly action: 'propose-graph'; readonly plan: unknown }
-    | { readonly kind: 'execution-authorization'; readonly action: 'review' }
+    | { readonly kind: 'execution-authorization'; readonly action: 'review'; readonly target?: 'current' | 'suspended_generation' }
     | {
         readonly kind: 'execution-authorization';
         readonly action: 'approve';

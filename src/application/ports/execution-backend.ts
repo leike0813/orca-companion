@@ -33,6 +33,37 @@ export type ExecutionAuthority =
       readonly consumerGeneration: number;
     };
 
+export type ReplyReceipt = {
+  readonly messageId: string;
+  readonly questionMessageId: string | null;
+  readonly questionStatus: 'answered' | 'not_a_question';
+  readonly duplicate: boolean;
+};
+
+/** 原始 reply 回执的唯一 parser；直接响应与 request-show 的原回执共用。 */
+export function parseReplyReceipt(value: unknown):
+  | { readonly ok: true; readonly value: ReplyReceipt }
+  | { readonly ok: false; readonly message: string } {
+  const record = typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown> : null;
+  const message = record?.['message'];
+  const messageId = typeof message === 'object' && message !== null && 'id' in message ? message.id : null;
+  if (typeof messageId !== 'string' || messageId.length === 0) {
+    return { ok: false, message: 'reply: 回执缺少 message.id' };
+  }
+  const question = record?.['question'];
+  if (question === undefined || question === null) {
+    return { ok: true, value: { messageId, questionMessageId: null, questionStatus: 'not_a_question', duplicate: false } };
+  }
+  if (typeof question !== 'object' || Array.isArray(question) || !('status' in question) ||
+      question.status !== 'answered' || !('message_id' in question) ||
+      typeof question.message_id !== 'string' || question.message_id.length === 0) {
+    return { ok: false, message: 'reply: question 缺少身份或尚未 answered' };
+  }
+  return { ok: true, value: { messageId, questionMessageId: question.message_id,
+    questionStatus: 'answered', duplicate: record?.['duplicate'] === true } };
+}
+
 export type ExecutionScope = {
   readonly coordinationScopeId: string;
   readonly coordinatorSessionId: string;
@@ -102,7 +133,19 @@ export type ExecutionQuery =
       readonly timeoutMs?: number;
       readonly readMode?: 'default' | 'peek' | 'all';
     }
-  | { readonly operation: 'request-show'; readonly requestId: string };
+  | { readonly operation: 'request-show'; readonly requestId: string }
+  /**
+   * 有界读取某条协调身份的原始 mailbox 行（含已确认的原 question message 正文）。
+   *
+   * 只按精确 terminal handle 读取，`limit` 必须落在 1..20；Orca `inbox` 没有 Run/message
+   * selector，因此这里不假装能按 ID 查询：调用方在有界页里按 Run/messageId 过滤，页里找不到就是
+   * `unavailable`，绝不退化成跨 terminal 的全库读取。
+   */
+  | {
+      readonly operation: 'message-inbox';
+      readonly backendIdentityRef: string;
+      readonly limit?: number;
+    };
 
 /** 变更操作。身份与 operationId 只能来自 controller 签发的 ExecutionScope。 */
 export type ExecutionMutation =
@@ -157,7 +200,17 @@ export type ExecutionMutation =
   | { readonly operation: 'worker-stop'; readonly dispatchId: string }
   | { readonly operation: 'worker-abandon'; readonly dispatchId: string }
   | { readonly operation: 'worker-release'; readonly dispatchId: string }
-  | { readonly operation: 'delivery-ack'; readonly deliveryId: string; readonly runId?: string };
+  | { readonly operation: 'delivery-ack'; readonly deliveryId: string; readonly runId?: string }
+  /**
+   * 答复一条 Worker question（或普通 message）。只承载已由 Controller 决定的正文，不接受任意
+   * 自由文本之外的语义；`messageId` 是被答复的原 message，答复必须用原 message id 恢复。
+   */
+  | {
+      readonly operation: 'reply';
+      readonly messageId: string;
+      readonly body: string;
+      readonly runId?: string;
+    };
 
 export type ExecutionOperation = ExecutionQuery | ExecutionMutation;
 
@@ -320,6 +373,7 @@ export async function reconcileOperation(
     return {
       kind: 'settled',
       operation,
+      ...('receipt' in value ? { receipt: (value as { readonly receipt: unknown }).receipt } : {}),
       statement:
         typeof interpretation === 'string' && interpretation.length > 0
           ? interpretation

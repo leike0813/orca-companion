@@ -31,12 +31,18 @@ import type {
   RecoveryTerminalOutcome,
   ReplacementSegmentInput,
   SessionSegmentRecord,
+  SessionLifecycleState,
 } from '../src/application/ports/branch-coordination-store.js';
 import type { SpecBinding } from '../src/domain/task-contract.js';
+import { workPackageBudgetKey } from '../src/domain/dispatch-candidate.js';
+import { DEFAULT_EXECUTION_LIMITS } from '../src/domain/planning/budget-policy.js';
+import type { ExecutionAuthorizationManifest } from '../src/domain/planning/execution-authorization.js';
 import { openCoordinationStore, type CoordinationStore } from '../src/adapters/storage/coordination-store.js';
 import { COORDINATION_TABLES, MIGRATIONS, SCHEMA_VERSION } from '../src/adapters/storage/schema.js';
 import { createUserQuestion, answerPendingInteraction } from '../src/application/coordination/pending-interaction.js';
 import { implementationPlanFor } from './support/graph-plan-fixture.js';
+import { workerProfilesFixture, recoveryUtilityProfileFixture } from './support/model-configurations.js';
+import { sessionBindingIdOf } from '../src/adapters/agents/session-binding.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SCOPE_2 = 'scope-2' as CoordinationScopeId;
@@ -633,6 +639,9 @@ test('Materialization Binding 按角色与 Attempt 读回完整派发身份，�
   createScope();
   activateSession();
   acquireExecutionLease();
+  // 真实执行图与授权：Implementation Attempt 的接纳会 fail closed 地校验并扣减实现预算。
+  expect(recordInitialGraph().kind).toBe('committed');
+  recordAuthorization();
 
   const recorded = submit((expectedRevision) => ({
     kind: 'record-materialization-binding',
@@ -779,7 +788,7 @@ test('缺少模型授权绑定的新派发被拒绝写入', () => {
     coordinationScopeId: SCOPE,
     writer: writer(SESSION_A),
     workPackageId: 'wp-1' as WorkPackageId,
-    role: 'implementation',
+    role: 'validator',
     workerTaskId: 'worker-task-1' as WorkerTaskId,
     dispatchId: 'dispatch-1' as DispatchId,
     attemptId: 'attempt-1',
@@ -834,11 +843,12 @@ test('同一角色同一 Attempt 的第二次派发被唯一约束拒绝，不�
   // 同一角色同一 Attempt 换一个 Task：这是重复派发，约束拒绝而不是覆盖既有身份。
   expect(bind('attempt-1', 'op-2', 'task-2').kind).toBe('rejected');
   expect(bindingsOf()).toHaveLength(1);
-  // 同一 OperationId 指向另一组内容：身份冲突，同样拒绝。
-  expect(bind('attempt-2', 'op-1', 'task-1').kind).toBe('rejected');
-  expect(bindingsOf()).toHaveLength(1);
-  expect(bind('attempt-2', 'op-3', 'task-3').kind).toBe('committed');
+  // 复用同一个 Task 创建操作、换一个新 Attempt：这是普通 Retry 的合法绑定，追加为新行。
+  expect(bind('attempt-2', 'op-1', 'task-1').kind).toBe('committed');
   expect(bindingsOf().map((binding) => binding.attemptId)).toEqual(['attempt-1', 'attempt-2']);
+  // 已存在 Attempt 再换一组身份派发：仍被角色 Attempt 唯一约束拒绝。
+  expect(bind('attempt-2', 'op-3', 'task-3').kind).toBe('rejected');
+  expect(bindingsOf()).toHaveLength(2);
 });
 
 test('Planner 绑定只带固定规格目标路径，其它角色必须带 Spec Binding', () => {
@@ -973,7 +983,7 @@ test('项目详情结算查询按指定 Work Package 的物化 WorkerTask 收窄
     const dispatchId = `dispatch-${suffix}` as DispatchId;
     expect(submit(expectedRevision => ({ kind: 'record-materialization-binding', coordinationScopeId: SCOPE,
       expectedRevision, writer: writer(SESSION_A), workPackageId: workPackageId as WorkPackageId,
-      role: 'implementation', workerTaskId: workerTaskId as WorkerTaskId, dispatchId,
+      role: 'validator', workerTaskId: workerTaskId as WorkerTaskId, dispatchId,
       attemptId: `attempt-${suffix}`, worktreeId: `worktree-${suffix}`, specBinding: SPEC_BINDING,
       specificationUnitPath: null, orcaTaskId: `orca-task-${suffix}`, launchId: `launch-${suffix}`,
       creationOperationId: `materialize-${suffix}` as OperationId, ...AUTHORIZATION_PIN })).kind).toBe('committed');
@@ -1408,6 +1418,30 @@ function interactionOwner(interactionId: string): CoordinatorSessionId | null {
   return found?.ownerCoordinatorSessionId ?? null;
 }
 
+function recordTicketClaim(ticketId: string, owner: CoordinatorSessionId): void {
+  const recorded = submit((expectedRevision) => ({
+    kind: 'record-ticket-claim',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(owner),
+    ticketRef: { kind: 'decision_ticket', id: ticketId },
+  }));
+  if (recorded.kind !== 'committed') {
+    throw new Error(`无法登记 Ticket Claim: ${recorded.message}`);
+  }
+}
+
+function ticketClaimOwner(ticketId: string): CoordinatorSessionId | null {
+  const snapshot = store.query({ kind: 'snapshot', coordinationScopeId: SCOPE });
+  if (snapshot.kind !== 'snapshot') {
+    return null;
+  }
+  return (
+    snapshot.snapshot.ticketClaims.find((claim) => claim.ticketRef.id === ticketId)
+      ?.coordinatorSessionId ?? null
+  );
+}
+
 function recordOpenInteraction(interactionId: string, owner: CoordinatorSessionId): void {
   const recorded = submit((expectedRevision) => ({
     kind: 'record-pending-interaction',
@@ -1455,6 +1489,7 @@ test('cutover 在一次调用内转移 Execution Lease 与 open interaction 责�
   createScope();
   activateSession();
   acquireExecutionLease();
+  recordTicketClaim('ticket-claim-1', SESSION_A);
   recordOpenInteraction('interaction-open', SESSION_A);
   recordOpenInteraction('interaction-answered', SESSION_A);
   answerInteraction('interaction-answered');
@@ -1471,6 +1506,8 @@ test('cutover 在一次调用内转移 Execution Lease 与 open interaction 责�
   const after = activeExecutionLease();
   expect(after.holder).toBe(SESSION_B);
   expect(after.generation).toBeGreaterThan(before.generation);
+  // 活跃 Ticket Claim 随执行责任一起转移，不留在 Source 变成第二个所有权来源。
+  expect(ticketClaimOwner('ticket-claim-1')).toBe(SESSION_B);
   // open 的责任随执行责任转给 Target；已回答的历史不动。
   expect(interactionOwner('interaction-open')).toBe(SESSION_B);
   expect(interactionOwner('interaction-answered')).toBe(SESSION_A);
@@ -1479,6 +1516,57 @@ test('cutover 在一次调用内转移 Execution Lease 与 open interaction 责�
   if (handoff.kind === 'execution-handoff' && handoff.handoff !== null) {
     expect(handoff.handoff.phase).toBe('cutover');
     expect(handoff.handoff.handoffRevision).toBe(3);
+  }
+});
+
+test('cutover 在 Target 已持有另一活跃 Claim 时整笔拒绝，Lease、interaction 与 claim 均不变', () => {
+  createScope();
+  activateSession();
+  // 第二个 Session 由 Source 登记，再自己取得 Runtime Lease，才能成为可写的 Claim 所有者。
+  expect(
+    store.transact({
+      kind: 'register-session',
+      coordinationScopeId: SCOPE,
+      expectedRevision: revisionOf(),
+      writer: writer(SESSION_A),
+      coordinatorSessionId: SESSION_B,
+      coordinatorModelConfigurationRef: 'profile-session-b',
+      lifecycleState: 'registered',
+    }).kind,
+  ).toBe('committed');
+  expect(
+    store.transact({
+      kind: 'acquire-runtime-lease',
+      coordinationScopeId: SCOPE,
+      expectedRevision: revisionOf(),
+      writer: writer(SESSION_B, 0),
+      ttlMs: 30_000,
+    }).kind,
+  ).toBe('committed');
+  acquireExecutionLease();
+  recordTicketClaim('ticket-source', SESSION_A);
+  recordTicketClaim('ticket-target', SESSION_B);
+  recordOpenInteraction('interaction-open', SESSION_A);
+
+  submit((expectedRevision) => handoffCommand(expectedRevision, null, 'prepared'));
+  submit((expectedRevision) => handoffCommand(expectedRevision, 1, 'reviewed'));
+  const before = activeExecutionLease();
+
+  const cutover = cutoverHandoff(revisionOf(), 2);
+  expect(cutover.kind).toBe('rejected');
+  if (cutover.kind === 'rejected') {
+    expect(cutover.code).toBe('constraint');
+  }
+
+  // 目标已持票时整笔回滚：Source 仍是唯一执行责任方，两张票的归属都保持原样。
+  expect(activeExecutionLease().holder).toBe(SESSION_A);
+  expect(activeExecutionLease().generation).toBe(before.generation);
+  expect(interactionOwner('interaction-open')).toBe(SESSION_A);
+  expect(ticketClaimOwner('ticket-source')).toBe(SESSION_A);
+  expect(ticketClaimOwner('ticket-target')).toBe(SESSION_B);
+  const handoff = store.query({ kind: 'execution-handoff', coordinationScopeId: SCOPE, handoffId: 'handoff-1' });
+  if (handoff.kind === 'execution-handoff' && handoff.handoff !== null) {
+    expect(handoff.handoff.phase).toBe('reviewed');
   }
 });
 
@@ -1903,7 +1991,7 @@ test('migration v10 → v11 保留旧物化绑定并只在缺身份时标为 leg
         fencingGeneration: 1,
       },
       workPackageId: 'wp-1' as WorkPackageId,
-      role: 'implementation',
+      role: 'validator',
       workerTaskId: 'worker-task-1' as WorkerTaskId,
       dispatchId: 'dispatch-1' as DispatchId,
       attemptId: 'attempt-1',
@@ -1984,6 +2072,86 @@ test('migration v15 → v16 保留已签发派发身份，模型授权列保持�
   } finally {
     migrated.store.close();
   }
+});
+
+test('record-validation-attempt 记录有界游标：绑定按角色身份证明、按序追加、terminal 一次写入', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+
+  const bind = submit((expectedRevision) => ({
+    kind: 'record-materialization-binding',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(SESSION_A),
+    workPackageId: 'wp-1' as WorkPackageId,
+    role: 'validator',
+    workerTaskId: 'worker-task-1' as WorkerTaskId,
+    // Task Envelope 预发的本地 alias，与 Orca 实际 dispatch 不是同一个值。
+    dispatchId: 'envelope-dispatch-1' as DispatchId,
+    attemptId: 'attempt-1',
+    worktreeId: 'worktree-1',
+    specBinding: SPEC_BINDING,
+    specificationUnitPath: null,
+    orcaTaskId: 'orca-task-1',
+    launchId: 'launch-1',
+    creationOperationId: 'op-binding-1' as OperationId,
+    ...AUTHORIZATION_PIN,
+  }));
+  expect(bind.kind).toBe('committed');
+
+  const providerSessionId = 'provider-session-1';
+  const actualDispatchId = 'dispatch-orca-1' as DispatchId;
+  const segment = submit((expectedRevision) => ({
+    kind: 'record-session-segment',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(SESSION_A),
+    segmentId: 'segment-va-1' as SessionSegmentId,
+    workPackageId: 'wp-1' as WorkPackageId,
+    role: 'validator',
+    workerTaskId: 'worker-task-1' as WorkerTaskId,
+    dispatchId: actualDispatchId,
+    attemptId: 'attempt-1',
+    sessionBindingId: sessionBindingIdOf(actualDispatchId, providerSessionId),
+    lastTranscriptRef: 'transcript:1',
+    terminalReceiptRef: null,
+    transcriptReferenceable: true,
+    verifiable: true,
+  }));
+  expect(segment.kind).toBe('committed');
+
+  const record = (overrides: Record<string, unknown>): CoordinationCommandResult =>
+    submit((expectedRevision) => ({
+      kind: 'record-validation-attempt',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(SESSION_A),
+      validationAttemptId: 'attempt-1',
+      workPackageId: 'wp-1' as WorkPackageId,
+      workerTaskId: 'worker-task-1' as WorkerTaskId,
+      dispatchId: actualDispatchId,
+      providerSessionId,
+      initialRepairConsumed: 0,
+      messageIds: ['m1'],
+      ...overrides,
+    }));
+
+  expect(record({}).kind).toBe('committed');
+  expect(store.query({ kind: 'validation-attempt', coordinationScopeId: SCOPE, dispatchId: actualDispatchId }))
+    .toMatchObject({ kind: 'validation-attempt', attempt: { messageIds: ['m1'], terminalQuestionMessageId: null } });
+  expect(record({ messageIds: ['m1', 'm2'] }).kind).toBe('committed');
+  expect(record({ messageIds: ['m1', 'm2'] }).kind).toBe('committed');
+  expect(record({ messageIds: ['m2'] }).kind).toBe('rejected');
+  expect(record({ messageIds: ['m1', 'm2'], providerSessionId: 'other-session' }).kind).toBe('rejected');
+  expect(record({ messageIds: ['m1', 'm2'], initialRepairConsumed: 1 }).kind).toBe('rejected');
+  expect(record({ messageIds: ['m1', 'm2'], workerTaskId: 'worker-task-other' }).kind).toBe('rejected');
+  expect(record({ messageIds: ['m1', 'm2'], terminalQuestionMessageId: 'q1' }).kind).toBe('committed');
+  expect(record({ messageIds: ['m1', 'm2'], terminalQuestionMessageId: 'q2' }).kind).toBe('rejected');
+  expect(store.query({ kind: 'validation-attempt', coordinationScopeId: SCOPE, dispatchId: actualDispatchId }))
+    .toMatchObject({ kind: 'validation-attempt', attempt: { messageIds: ['m1', 'm2'], terminalQuestionMessageId: 'q1', initialRepairConsumed: 0, providerSessionId } });
+  expect(store.query({ kind: 'validation-attempt', coordinationScopeId: SCOPE, dispatchId: 'missing' as DispatchId }))
+    .toEqual({ kind: 'validation-attempt', attempt: null });
 });
 
 test('migration v6 → v7 保留既有数据并补齐新表', () => {
@@ -3331,4 +3499,410 @@ test('持久行的 terminal_handle 与 state/category 不自洽时读取 fail cl
 
   const read = store.query({ kind: 'intent', coordinationScopeId: SCOPE, operationId: 'op-pending' as OperationId });
   expect(read.kind).toBe('rejected');
+});
+
+/* -------------------------------------------------------------------------- */
+/* schema 20：Session blocked、Session 级 Claim 上限、Delivery 结论、预算接纳    */
+/* -------------------------------------------------------------------------- */
+
+/** 一份满足 Manifest v3 必填绑定的最小授权正文，用于预算接纳路径。 */
+function implementationManifest(graphId: GraphId = GRAPH_ID): ExecutionAuthorizationManifest {
+  return {
+    manifestVersion: 3,
+    coordinationScopeId: SCOPE,
+    planningCycleId: 'cycle-1' as PlanningCycleId,
+    destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
+    routeMapRef: { kind: 'route-map', id: 'map-1', version: 0 },
+    implementationPlanRef: { kind: 'implementation-plan', id: 'plan-1', version: 1 },
+    graph: { graphId, generation: 1 as GraphGeneration, version: 1 as GraphVersion },
+    baselineHead: 'head-1',
+    orcaRunId: 'run-1',
+    workerProfiles: workerProfilesFixture(),
+    recoveryUtilityProfile: recoveryUtilityProfileFixture(),
+    permissions: {
+      planner: true,
+      implementation: true,
+      validator: true,
+      finalizer: true,
+      gitIntegration: false,
+      dependencyChanges: false,
+    },
+    limits: DEFAULT_EXECUTION_LIMITS,
+    workspacePolicy: { canonicalWorktree: '/work', worktreeIsolation: 'per_work_package' },
+    gitPolicy: { canonicalBranch: 'main', remotes: [], refs: [], allowForcePush: false },
+    dependencyPolicy: { allowDependencyChanges: false, registry: null },
+    acceptedRisks: [],
+  };
+}
+
+function recordAuthorization(graphId: GraphId = GRAPH_ID): void {
+  const recorded = submit((expectedRevision) => ({
+    kind: 'record-authorization',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    authorizationId: 'auth-1',
+    authorizationVersion: 1,
+    manifestVersion: 3,
+    fingerprint: 'fingerprint-1',
+    approvalRef: 'approval-1',
+    manifest: implementationManifest(graphId),
+  }));
+  if (recorded.kind !== 'committed') {
+    throw new Error('无法记录测试授权: ' + recorded.message);
+  }
+}
+
+function implementationBindingCommand(
+  expectedRevision: number,
+  attemptId: string,
+  creationOperationId: string,
+): CoordinationCommand {
+  return {
+    kind: 'record-materialization-binding',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(SESSION_A),
+    workPackageId: 'wp-1' as WorkPackageId,
+    role: 'implementation',
+    workerTaskId: 'worker-task-1' as WorkerTaskId,
+    dispatchId: ('dispatch-' + attemptId) as DispatchId,
+    attemptId,
+    worktreeId: 'worktree-1',
+    specBinding: SPEC_BINDING,
+    specificationUnitPath: null,
+    orcaTaskId: 'orca-task-1',
+    launchId: 'launch-' + attemptId,
+    creationOperationId: creationOperationId as OperationId,
+    ...AUTHORIZATION_PIN,
+  };
+}
+
+function implementationAttemptsConsumed(): number {
+  const result = store.query({ kind: 'budget-counters', coordinationScopeId: SCOPE });
+  return result.kind === 'budget-counters'
+    ? result.counters.find(
+        (counter) => counter.budgetKey === workPackageBudgetKey('wp-1' as WorkPackageId, 'implementationAttempts'),
+      )?.consumed ?? 0
+    : -1;
+}
+
+function validatorRepairsConsumed(): number {
+  const result = store.query({ kind: 'budget-counters', coordinationScopeId: SCOPE });
+  return result.kind === 'budget-counters'
+    ? result.counters.find(
+        (counter) => counter.budgetKey === workPackageBudgetKey('wp-1' as WorkPackageId, 'validatorRepairs'),
+      )?.consumed ?? 0
+    : -1;
+}
+
+test('Implementation Attempt 接纳消费一次 implementationAttempts，重放与同 Task Retry 不误扣', () => {
+  createScope();
+  activateSession();
+  expect(recordInitialGraph().kind).toBe('committed');
+  recordAuthorization();
+  acquireExecutionLease();
+
+  expect(submit((revision) => implementationBindingCommand(revision, 'attempt-1', 'op-impl-1')).kind).toBe('committed');
+  expect(implementationAttemptsConsumed()).toBe(1);
+  expect(submit((revision) => implementationBindingCommand(revision, 'attempt-1', 'op-impl-1')).kind).toBe('committed');
+  expect(implementationAttemptsConsumed()).toBe(1);
+  expect(submit((revision) => implementationBindingCommand(revision, 'attempt-2', 'op-impl-2')).kind).toBe('committed');
+  expect(implementationAttemptsConsumed()).toBe(2);
+  expect(submit((revision) => implementationBindingCommand(revision, 'attempt-3', 'op-impl-3')).kind).toBe('rejected');
+  expect(implementationAttemptsConsumed()).toBe(2);
+  expect(bindingsOf()).toHaveLength(2);
+  expect(bindingsOf().map((binding) => binding.attemptId)).toEqual(['attempt-1', 'attempt-2']);
+});
+
+test.each([false, true])('重新授权后新 Task 保留已消耗实现预算，预算上限变化=%s', (changedLimit) => {
+  createScope(); activateSession();
+  expect(recordInitialGraph().kind).toBe('committed');
+  recordAuthorization(); acquireExecutionLease();
+  expect(submit(revision => implementationBindingCommand(revision, 'attempt-1', 'op-impl-1')).kind).toBe('committed');
+  const base = implementationManifest(GRAPH_ID);
+  expect(submit(expectedRevision => ({ kind: 'record-authorization', coordinationScopeId: SCOPE,
+    expectedRevision, writer: writer(), authorizationId: 'auth-2', authorizationVersion: 2,
+    manifestVersion: 3, fingerprint: 'fingerprint-2', approvalRef: 'approval-2',
+    manifest: { ...base, limits: { ...base.limits, implementationAttempts: changedLimit ? 3 : 2 } } })).kind).toBe('committed');
+  const recorded = submit(revision => ({
+    kind: 'record-materialization-binding', coordinationScopeId: SCOPE, expectedRevision: revision, writer: writer(),
+    workPackageId: 'wp-1' as WorkPackageId, role: 'implementation', workerTaskId: 'worker-task-2' as WorkerTaskId,
+    dispatchId: 'dispatch-2' as DispatchId, attemptId: 'attempt-2', worktreeId: 'worktree-1', specBinding: SPEC_BINDING,
+    specificationUnitPath: null, orcaTaskId: 'orca-task-2', launchId: 'launch-2', creationOperationId: 'op-impl-2' as OperationId,
+    authorizationId: 'auth-2', authorizationVersion: 2, workerProfileRef: 'profile-implementation' }));
+  expect(recorded.kind).toBe(changedLimit ? 'rejected' : 'committed');
+  expect(implementationAttemptsConsumed()).toBe(changedLimit ? 1 : 2);
+});
+
+test('admit-validation-step 按 stepId 幂等扣减 validatorRepairs 并可按 stepId 对账', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+
+  const admit = (stepId: string, repairOrdinal: number, overrides: Record<string, unknown> = {}): CoordinationCommandResult =>
+    submit((expectedRevision) => ({
+      kind: 'admit-validation-step',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(SESSION_A),
+      stepId,
+      workPackageId: 'wp-1' as WorkPackageId,
+      workerTaskId: 'worker-task-1' as WorkerTaskId,
+      dispatchId: 'dispatch-1' as DispatchId,
+      validationAttemptId: 'attempt-1',
+      repairOrdinal,
+      approvedLimitRef: 'auth-1',
+      approvedLimit: 2,
+      ...overrides,
+    }));
+
+  expect(admit('validator-repair:1', 1).kind).toBe('committed');
+  expect(validatorRepairsConsumed()).toBe(1);
+  expect(admit('validator-repair:1', 1).kind).toBe('committed');
+  expect(validatorRepairsConsumed()).toBe(1);
+  expect(admit('validator-repair:1', 1, { workerTaskId: 'worker-task-other' }).kind).toBe('rejected');
+  expect(admit('validator-repair:2', 2).kind).toBe('committed');
+  expect(validatorRepairsConsumed()).toBe(2);
+  expect(admit('validator-repair:3', 3).kind).toBe('rejected');
+  expect(validatorRepairsConsumed()).toBe(2);
+
+  expect(store.query({ kind: 'validation-step-admission', coordinationScopeId: SCOPE, stepId: 'validator-repair:1' }))
+    .toMatchObject({ kind: 'validation-step-admission', admission: { stepId: 'validator-repair:1', repairOrdinal: 1 } });
+  expect(store.query({ kind: 'validation-step-admission', coordinationScopeId: SCOPE, stepId: 'validator-repair:missing' }))
+    .toEqual({ kind: 'validation-step-admission', admission: null });
+});
+
+test('同一 Session 至多一个活跃 Ticket Claim，释放后可再认领', () => {
+  createScope();
+  activateSession();
+  const claim = (ticketId: string): CoordinationCommandResult =>
+    submit((expectedRevision) => ({
+      kind: 'record-ticket-claim',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      ticketRef: { kind: 'decision-ticket', id: ticketId },
+    }));
+
+  expect(claim('ticket-1').kind).toBe('committed');
+  const second = claim('ticket-2');
+  expect(second.kind).toBe('rejected');
+  if (second.kind === 'rejected') {
+    expect(second.code).toBe('constraint');
+  }
+  const snapshot = store.query({ kind: 'snapshot', coordinationScopeId: SCOPE });
+  expect(snapshot.kind === 'snapshot' ? snapshot.snapshot.ticketClaims.filter((claim) => claim.state === 'active') : [])
+    .toHaveLength(1);
+
+  expect(submit((expectedRevision) => ({
+    kind: 'release-ticket-claim',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    ticketRef: { kind: 'decision-ticket', id: 'ticket-1' },
+    finalState: 'released',
+  })).kind).toBe('committed');
+  expect(claim('ticket-2').kind).toBe('committed');
+});
+
+test('Session blocked 持久化结构化原因，非 blocked 状态清除原因', () => {
+  createScope();
+  activateSession();
+  const lifecycle = (
+    state: SessionLifecycleState,
+    blockingReason?: { readonly code: string; readonly message: string },
+  ): CoordinationCommandResult =>
+    submit((expectedRevision) => ({
+      kind: 'update-session-lifecycle',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(),
+      coordinatorSessionId: SESSION_A,
+      lifecycleState: state,
+      ...(blockingReason === undefined ? {} : { blockingReason }),
+    }));
+
+  expect(lifecycle('blocked').kind).toBe('rejected');
+  expect(lifecycle('blocked', { code: 'checkpoint_corrupt', message: 'checkpoint 损坏' }).kind).toBe('committed');
+  const blocked = store.query({ kind: 'sessions', coordinationScopeId: SCOPE });
+  expect(blocked.kind === 'sessions' ? blocked.sessions[0] : null).toMatchObject({
+    lifecycleState: 'blocked',
+    blockedReason: { code: 'checkpoint_corrupt', message: 'checkpoint 损坏' },
+  });
+  expect(lifecycle('active').kind).toBe('committed');
+  const active = store.query({ kind: 'sessions', coordinationScopeId: SCOPE });
+  expect(active.kind === 'sessions' ? active.sessions[0] : null).toMatchObject({
+    lifecycleState: 'active',
+    blockedReason: null,
+  });
+  expect(store.transact({
+    kind: 'register-session',
+    coordinationScopeId: SCOPE,
+    expectedRevision: revisionOf(),
+    writer: writer(),
+    coordinatorSessionId: SESSION_B,
+    coordinatorModelConfigurationRef: 'profile-b',
+    lifecycleState: 'blocked',
+  })).toMatchObject({ kind: 'rejected' });
+});
+
+test('Delivery 结算保存结果成败与验证结论，非 validator 不得给出验证结论', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+  const settlement = (overrides: Record<string, unknown>): CoordinationCommandResult =>
+    submit((expectedRevision) => ({
+      kind: 'record-delivery-settlement',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(SESSION_A),
+      dedupeKey: 'dedupe-1',
+      deliveryId: 'delivery-1',
+      runId: 'run-1',
+      consumerGeneration: 1,
+      workerTaskId: 'worker-task-1' as WorkerTaskId,
+      dispatchId: 'dispatch-1' as DispatchId,
+      attemptId: 'attempt-1',
+      role: 'implementation',
+      contractRevision: 1,
+      orcaResultRef: 'result-1',
+      ...overrides,
+    }));
+
+  expect(settlement({ outcome: 'succeeded' }).kind).toBe('committed');
+  const read = store.query({ kind: 'delivery-settlements', coordinationScopeId: SCOPE });
+  expect(read.kind === 'delivery-settlements' ? read.settlements[0] : null).toMatchObject({
+    outcome: 'succeeded',
+    validationVerdict: null,
+  });
+  expect(settlement({ dedupeKey: 'dedupe-2', deliveryId: 'delivery-2', role: 'validator', validationVerdict: 'passed' }).kind)
+    .toBe('committed');
+  expect(settlement({ dedupeKey: 'dedupe-3', deliveryId: 'delivery-3', validationVerdict: 'passed' }).kind)
+    .toBe('rejected');
+});
+
+test('migration v19 → v20 拒绝同一 Session 的重复活跃 Claim 并整体回滚', () => {
+  const databasePath = join(directory, 'coordination-v19-dupe.sqlite');
+  const legacy = new DatabaseSync(databasePath);
+  legacy.exec('BEGIN IMMEDIATE');
+  for (const migration of MIGRATIONS) {
+    if (migration.version > 19) continue;
+    for (const statement of migration.statements) {
+      legacy.exec(statement);
+    }
+  }
+  legacy.prepare(
+    `INSERT INTO scope (
+       coordination_scope_id, mode, control_state, planning_cycle_id, graph_id, graph_version,
+       authorization_id, authorization_version, map_revision, revision, updated_at,
+       full_branch_ref, canonical_worktree_path
+     ) VALUES ('scope-dupe', 'route_planning', 'active', 'cycle-1', NULL, NULL, NULL, NULL, 0, 1, 1,
+       'refs/heads/dupe', '/tmp/dupe')`,
+  ).run();
+  for (const ticket of ['ticket-1', 'ticket-2']) {
+    legacy.prepare(
+      `INSERT INTO ticket_claims (
+         coordination_scope_id, ticket_kind, ticket_id, coordinator_session_id, state, claimed_at
+       ) VALUES ('scope-dupe', 'decision-ticket', ?, 'session-a', 'active', 1)`,
+    ).run(ticket);
+  }
+  legacy.prepare(`INSERT INTO meta (key, value) VALUES ('schema_version', '19')`).run();
+  legacy.exec('COMMIT');
+  legacy.close();
+
+  const opened = openCoordinationStore({ databasePath, clock });
+  expect(opened.kind).toBe('failed');
+  if (opened.kind === 'failed') {
+    expect(opened.code).toBe('migration_failed');
+  }
+
+  const check = new DatabaseSync(databasePath, { readOnly: true });
+  const claims = check.prepare(`SELECT COUNT(*) AS n FROM ticket_claims WHERE state = 'active'`).get() as
+    | { readonly n: number }
+    | undefined;
+  expect(claims?.n).toBe(2);
+  const version = check.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get() as
+    | { readonly value: string }
+    | undefined;
+  expect(version?.value).toBe('19');
+  check.close();
+});
+
+test('migration v19 → v20 补齐 Session 原因、Delivery 结论与修复步骤表', () => {
+  const databasePath = join(directory, 'coordination-v19.sqlite');
+  const legacy = new DatabaseSync(databasePath);
+  legacy.exec('BEGIN IMMEDIATE');
+  for (const migration of MIGRATIONS) {
+    if (migration.version > 19) continue;
+    for (const statement of migration.statements) {
+      legacy.exec(statement);
+    }
+  }
+  legacy.prepare(
+    `INSERT INTO scope (
+       coordination_scope_id, mode, control_state, planning_cycle_id, graph_id, graph_version,
+       authorization_id, authorization_version, map_revision, revision, updated_at,
+       full_branch_ref, canonical_worktree_path
+     ) VALUES ('scope-v19', 'route_planning', 'active', 'cycle-1', NULL, NULL, NULL, NULL, 0, 1, 1,
+       'refs/heads/v19', '/tmp/v19')`,
+  ).run();
+  legacy.prepare(
+    `INSERT INTO session_registry (
+       coordination_scope_id, coordinator_session_id, coordinator_model_configuration_ref,
+       lifecycle_state, registered_at
+     ) VALUES ('scope-v19', 'session-a', 'profile-a', 'registered', 1)`,
+  ).run();
+  legacy.prepare(
+    `INSERT INTO materialization_bindings (
+       coordination_scope_id, work_package_id, creation_operation_id, role, worker_task_id, dispatch_id,
+       attempt_id, worktree_id, spec_binding_json, specification_unit_path, authorization_id,
+       authorization_version, worker_profile_ref, utility_role, orca_task_id, launch_id, created_at
+     ) VALUES ('scope-v19', 'wp-1', 'op-legacy', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+       NULL, NULL, NULL, 'orca-task-legacy', NULL, 1)`,
+  ).run();
+  legacy.prepare(
+    `INSERT INTO delivery_settlements (
+       coordination_scope_id, dedupe_key, delivery_id, run_id, consumer_generation, worker_task_id,
+       dispatch_id, attempt_id, role, contract_revision, orca_result_ref, accepted_at
+     ) VALUES ('scope-v19', 'dedupe-legacy', 'delivery-legacy', 'run-1', 1, 'worker-task-legacy',
+       'dispatch-legacy', 'attempt-legacy', 'implementation', 1, 'result-legacy', 1)`,
+  ).run();
+  legacy.prepare(`INSERT INTO meta (key, value) VALUES ('schema_version', '19')`).run();
+  legacy.exec('COMMIT');
+  legacy.close();
+
+  const migrated = openCoordinationStore({ databasePath, clock });
+  expect(migrated.kind).toBe('opened');
+  if (migrated.kind !== 'opened') return;
+  try {
+    const scopeId = 'scope-v19' as CoordinationScopeId;
+    const sessions = migrated.store.query({ kind: 'sessions', coordinationScopeId: scopeId });
+    expect(sessions.kind === 'sessions' ? sessions.sessions[0] : null).toMatchObject({
+      lifecycleState: 'registered',
+      blockedReason: null,
+    });
+    const settlements = migrated.store.query({ kind: 'delivery-settlements', coordinationScopeId: scopeId });
+    expect(settlements.kind === 'delivery-settlements' ? settlements.settlements[0] : null).toMatchObject({
+      orcaResultRef: 'result-legacy',
+      outcome: null,
+      validationVerdict: null,
+    });
+    const bindings = migrated.store.query({
+      kind: 'materialization-bindings',
+      coordinationScopeId: scopeId,
+      workPackageId: 'wp-1' as WorkPackageId,
+    });
+    expect(bindings.kind === 'materialization-bindings' ? bindings.bindings[0] : null).toMatchObject({
+      identity: 'legacy',
+      orcaTaskId: 'orca-task-legacy',
+    });
+    expect(migrated.store.query({
+      kind: 'validation-step-admission',
+      coordinationScopeId: scopeId,
+      stepId: 'unknown-step',
+    })).toEqual({ kind: 'validation-step-admission', admission: null });
+  } finally {
+    migrated.store.close();
+  }
 });

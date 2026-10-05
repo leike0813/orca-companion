@@ -92,7 +92,8 @@ const WORKER_TASK = 'orca-task-finalizer' as WorkerTaskId;
 const FINALIZER_TASK = 'finalizer-task-1';
 /** 等待触发点结论的时间上界；fake backend 全同步，这里只防「什么都没发生」。 */
 const TEST_WAIT_MS = 3_000;
-const TEST_TIMEOUT_MS = 20_000;
+// CPU 争用（并行跑整套测试时）下真实 Git/SQLite 装置会更慢：给足 30s 而不是刚好 20s。
+const TEST_TIMEOUT_MS = 30_000;
 /** 与生产一致：Finalizer 的 Codex 状态根与 SessionStart 报告都在 Git common dir 的私有目录里。 */
 const COMPANION_STATE_DIRECTORY = 'orca-companion';
 /** 与生产一致的可接受结论：证据引用必须落在既有权威结果里。 */
@@ -110,9 +111,12 @@ type FakeOrca = {
   readonly mutations: readonly ExecutionMutation[];
   /** Finalizer 的结论载荷；`null` 表示读不回（未产生或不可读）。 */
   readonly verdict: { value: unknown };
+  /** task-update 写入、task-list 回读的 Orca Task 记录。 */
+  readonly task: { readonly status: string | null; readonly result: unknown };
 };
 
-function fakeOrca(options?: {
+function fakeOrca(options: {
+  readonly canonicalWorktreePath: string;
   readonly workerStartUnknown?: boolean | undefined;
   readonly rejectedLifecycleFirst?: boolean | undefined;
 }): FakeOrca {
@@ -120,11 +124,14 @@ function fakeOrca(options?: {
   const verdict = { value: null as unknown };
   const dispatchId = 'dispatch-finalizer';
   const terminals: { handle: string; title: string }[] = [];
-  /** 从 task-create 的 spec 里读回 Controller 签发的身份：结论载荷按它配对。 */
-  const envelope = { workerTaskId: '' };
+  /** task-update 写入的 Orca Task 记录；task-list 是它的回读事实。 */
+  const task = { status: null as string | null, result: undefined as unknown };
+  /** delivery-ack 之后未确认批次里不再有这条 Delivery。 */
+  const acked = { value: false };
   return {
     mutations,
     verdict,
+    task,
     backend: {
       query: (input: ExecutionQuery) => {
         switch (input.operation) {
@@ -134,9 +141,23 @@ function fakeOrca(options?: {
               value: { run: { runId: RUN_ID, consumerGeneration: 1 } },
             });
           case 'worktree-list':
+            // canonical worktree 身份用于项目级 Finalizer 的物化绑定：必须真的列举出来，否则绑定不可核验。
             return Promise.resolve({
               kind: 'accepted' as const,
-              value: { worktrees: [], totalCount: 0, truncated: false, hostScope: null },
+              value: {
+                worktrees: [{
+                  worktreeId: 'worktree-canonical',
+                  path: options.canonicalWorktreePath,
+                  branch: 'main',
+                  head: null,
+                  displayName: null,
+                  comment: null,
+                  isMainWorktree: true,
+                }],
+                totalCount: 1,
+                truncated: false,
+                hostScope: { hostIds: ['host-local'], omittedHostIds: [] },
+              },
             });
           case 'worker-list':
             // worker-start 结果未知时，Orca 的列举事实是唯一能证明副作用的来源。
@@ -158,49 +179,29 @@ function fakeOrca(options?: {
             return Promise.resolve({
               kind: 'accepted' as const,
               value: (() => {
-                if (verdict.value === null) {
+                if (verdict.value === null || acked.value) {
                   return { delivery: null, messages: [], timedOut: false, cancelled: false };
                 }
-                // 字符串结论＝真实 Codex Worker 的 Orca 原生形状：payload 只有传输身份，正文在 body。
-                if (typeof verdict.value === 'string') {
-                  return {
-                    delivery: { deliveryId: 'delivery-finalizer', runId: RUN_ID },
-                    messages: [
-                      ...(options?.rejectedLifecycleFirst === true ? [{
-                        messageId: 'message-finalizer-rejected',
-                        fromHandle: dispatchId,
-                        runId: null,
-                        payload: JSON.stringify({ taskId: FINALIZER_TASK, dispatchId, outcome: 'succeeded',
-                          _orcaLifecycleRejection: { code: 'dispatch_capability_invalid', reason: 'wrong pane' } }),
-                        body: 'Orca rejected this worker_done',
-                      }] : []),
-                      {
-                        messageId: 'message-finalizer',
-                        fromHandle: dispatchId,
-                        runId: null,
-                        payload: JSON.stringify({
-                          taskId: FINALIZER_TASK,
-                          dispatchId,
-                          outcome: 'succeeded',
-                        }),
-                        body: verdict.value,
-                      },
-                    ],
-                    timedOut: false,
-                    cancelled: false,
-                  };
-                }
+                // 真实 Codex Worker 的 Orca 原生形状：payload 只有宿主可核验的 Task/Dispatch 传输身份，
+                // 结论 JSON 在 body。发送者 handle 是该 Dispatch 的 terminal，由 worker-show 核验。
+                const body = typeof verdict.value === 'string' ? verdict.value : JSON.stringify(verdict.value);
                 return {
                   delivery: { deliveryId: 'delivery-finalizer', runId: RUN_ID },
                   messages: [
+                    ...(options?.rejectedLifecycleFirst === true ? [{
+                      messageId: 'message-finalizer-rejected',
+                      fromHandle: 'terminal-finalizer',
+                      runId: null,
+                      payload: JSON.stringify({ taskId: FINALIZER_TASK, dispatchId, outcome: 'succeeded',
+                        _orcaLifecycleRejection: { code: 'dispatch_capability_invalid', reason: 'wrong pane' } }),
+                      body: 'Orca rejected this worker_done',
+                    }] : []),
                     {
                       messageId: 'message-finalizer',
-                      fromHandle: dispatchId,
+                      fromHandle: 'terminal-finalizer',
                       runId: null,
-                      payload: JSON.stringify({
-                        workerTaskId: envelope.workerTaskId,
-                        result: verdict.value,
-                      }),
+                      payload: JSON.stringify({ taskId: FINALIZER_TASK, dispatchId, outcome: 'succeeded' }),
+                      body,
                     },
                   ],
                   timedOut: false,
@@ -229,7 +230,22 @@ function fakeOrca(options?: {
           case 'worker-show':
             return Promise.resolve({
               kind: 'accepted' as const,
-              value: { exactWorker: true, agentTerminalHandle: terminals[0]?.handle ?? null },
+              value: {
+                exactWorker: true,
+                dispatchId,
+                taskId: FINALIZER_TASK,
+                agentTerminalHandle: terminals[0]?.handle ?? null,
+              },
+            });
+          case 'task-list':
+            // Orca 记录结果后的回读事实：status=completed 且 result 与写入一致，结算才可被接受。
+            return Promise.resolve({
+              kind: 'accepted' as const,
+              value: {
+                tasks: task.status === null
+                  ? []
+                  : [{ id: FINALIZER_TASK, status: task.status, result: task.result }],
+              },
             });
           default:
             return Promise.resolve({
@@ -248,9 +264,16 @@ function fakeOrca(options?: {
             value,
           });
         if (input.operation === 'task-create') {
-          const parsed = JSON.parse(input.spec ?? '{}') as { readonly workerTaskId?: unknown };
-          envelope.workerTaskId = typeof parsed.workerTaskId === 'string' ? parsed.workerTaskId : '';
           return accepted({ id: FINALIZER_TASK, spec: input.spec ?? '' });
+        }
+        if (input.operation === 'task-update') {
+          task.status = input.status;
+          task.result = input.result;
+          return accepted({ ok: true });
+        }
+        if (input.operation === 'delivery-ack') {
+          acked.value = true;
+          return accepted({ ok: true });
         }
         if (input.operation === 'terminal-create') {
           terminals.push({ handle: 'terminal-finalizer', title: input.title ?? '' });
@@ -520,6 +543,9 @@ function prepareExecutionState(repository: string, head: string): void {
         role,
         contractRevision: 1,
         orcaResultRef: `orca-result:${role}`,
+        // 成功 fixture：新契约下角色结论必须显式成功，才构成已接受角色成果。
+        outcome: 'succeeded',
+        ...(role === 'validator' ? { validationVerdict: 'passed' as const } : {}),
       });
       if (settled.kind === 'rejected') {
         throw new Error(`无法记录 ${role} 结算：${settled.message}`);
@@ -699,7 +725,8 @@ async function openHarness(options?: {
   const directory = mkdtempSync(join(tmpdir(), 'orca-finalizer-'));
   const { repository, head } = prepareRepository(directory);
   prepareExecutionState(repository, head);
-  const fake = fakeOrca({ workerStartUnknown: options?.workerStartUnknown,
+  const fake = fakeOrca({ canonicalWorktreePath: canonicalPath(repository),
+    workerStartUnknown: options?.workerStartUnknown,
     rejectedLifecycleFirst: options?.rejectedLifecycleFirst });
   const verdict = options?.verdict;
   const drift = options?.driftOnDispatch;
@@ -773,6 +800,19 @@ async function waitFor(assertion: () => void): Promise<void> {
 
 function workerStarts(harness: Harness): number {
   return harness.fake.mutations.filter((mutation) => mutation.operation === 'worker-start').length;
+}
+
+/** 只读打开本 Scope 的 Coordination Store，读取耐久事实（不写、不迁移）。 */
+function readStore(harness: Harness): CoordinationStore {
+  const opened = openCoordinationStore({
+    databasePath: coordinationDatabasePath(join(harness.repository, '.git')),
+    clock: () => 1_000,
+    readOnly: true,
+  });
+  if (opened.kind !== 'opened') {
+    throw new Error(`无法只读打开 Coordination Store：${opened.message}`);
+  }
+  return opened.store;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -878,6 +918,59 @@ test('门禁满足时：以新的只读 Session 在 canonical worktree 派发，
   });
   // 只派发一次：第二个触发点只读回结论，不产生第二次 Task。
   expect(harness.fake.mutations.filter((mutation) => mutation.operation === 'task-create')).toHaveLength(1);
+
+  // Orca 侧确实记录了「已接受结果」：task-update 写成的 status=completed 与归一化结果可由 task-list 回读。
+  expect(harness.fake.task.status).toBe('completed');
+  expect(harness.fake.task.result).toEqual({
+    verdict: DELIVERABLE_VERDICT.verdict,
+    coveredWorkPackageIds: [WP],
+  });
+
+  const store = readStore(harness);
+  try {
+    // 耐久事实：项目级 Finalizer 的物化绑定与 Delivery 结算都必须落盘，且只在 Orca 结果被接受之后。
+    // verdict 与 settlement 是两笔提交：先等结算可见，再断言其余字段，避免读到中间态。
+    await waitFor(() => {
+      const waitRead = store.query({ kind: 'snapshot', coordinationScopeId: SCOPE });
+      expect(waitRead.kind === 'snapshot'
+        ? waitRead.snapshot.deliverySettlements.some((entry) => entry.role === 'finalizer')
+        : false).toBe(true);
+    });
+    const read = store.query({ kind: 'snapshot', coordinationScopeId: SCOPE });
+    expect(read.kind).toBe('snapshot');
+    if (read.kind !== 'snapshot') throw new Error('快照应当可读');
+    const binding = read.snapshot.materializationBindings.find((entry) => entry.role === 'finalizer');
+    expect(binding?.orcaTaskId).toBe(FINALIZER_TASK);
+    expect(String(binding?.workPackageId)).toBe(String(SCOPE));
+    expect(binding?.specBinding).toBeNull();
+    expect(binding?.specificationUnitPath).toBeNull();
+    expect(binding?.authorizationId).toBe(AUTH_ID);
+    expect(binding?.workerProfileRef).not.toBeNull();
+    const settlement = read.snapshot.deliverySettlements.find((entry) => entry.role === 'finalizer');
+    expect(settlement?.dispatchId).toBe('dispatch-finalizer');
+    expect(settlement?.outcome).toBe('succeeded');
+    expect(settlement?.orcaResultRef.startsWith(`${FINALIZER_TASK}#`)).toBe(true);
+    expect(read.snapshot.deliveryVerdicts.some((entry) => entry.verdict.kind === 'deliverable')).toBe(true);
+
+    // ACK 只在结果被接受并结算之后发生：Orca 先收到 task-update，随后才是 delivery-ack。
+    await waitFor(() => expect(harness.fake.mutations.some((mutation) => mutation.operation === 'delivery-ack')).toBe(true));
+    const acceptIndex = harness.fake.mutations.findIndex((mutation) => mutation.operation === 'task-update');
+    const ackIndex = harness.fake.mutations.findIndex((mutation) => mutation.operation === 'delivery-ack');
+    expect(acceptIndex).toBeGreaterThanOrEqual(0);
+    expect(ackIndex).toBeGreaterThan(acceptIndex);
+
+    // 交付结论进入 Actionable Work：Wake Batch 只在结算完成后才准入。
+    await waitFor(() => {
+      const admissions = store.query({
+        kind: 'wake-admissions',
+        coordinationScopeId: SCOPE,
+        coordinatorSessionId: SESSION,
+      });
+      expect(admissions.kind === 'wake-admissions' ? admissions.admissions.length : 0).toBeGreaterThan(0);
+    });
+  } finally {
+    store.close();
+  }
 });
 
 test.each([false, true])('真实 Orca 原生载荷：有效 JSON 结论被接受，先有拒绝诊断=%s', { timeout: TEST_TIMEOUT_MS }, async (rejectedLifecycleFirst) => {

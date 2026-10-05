@@ -96,6 +96,13 @@ export type CommittedMessageEntry = {
   readonly toolName?: string;
   /** 工具结果已处理的工作源；只有受理且结果已提交时存在。 */
   readonly completedWorkSource?: SourceRevisionRef;
+  /**
+   * 外部 Actionable Work 的稳定引用；只有 system 引用条目携带它。
+   *
+   * 它的存在就是「这条外部工作已经唤醒并进入历史」的证据，正文仍由来源按引用只读取得；
+   * 对应工具结果以 `completedWorkSource` 精确消费同一条工作，不靠时间或顺序匹配。
+   */
+  readonly workSource?: SourceRevisionRef;
 };
 
 /**
@@ -167,10 +174,24 @@ export type PortableContextCapsule = {
   readonly text: string;
 };
 
-/** 两类压缩产物分开归属：任一方缺失或不可用都不损坏另一方。 */
+/** 三类上下文产物分开归属：任一方缺失或不可用都不损坏另一方。 */
 export type ContextMaterial = {
   readonly nativeWindowOwner: NativeCompactedWindowOwner | null;
   readonly capsule: PortableContextCapsule | null;
+  /**
+   * 最近一次机械 Shake 的尝试标记；没有尝试过时缺省。
+   *
+   * 它只记录**稳定边界身份**与被替代的 step，不复制上下文正文：派生产物由确定性规则从已提交
+   * 历史重建，原始历史因此永远可读。同一 `sourceRevision` 边界至多尝试一次，重启后依然有效。
+   */
+  readonly mechanicalShake?: MechanicalShakeArtifact;
+};
+
+/** 机械 Shake 的稳定边界身份；不含 `lastCompactionOutcome`，否则每次写入都会让身份漂移而重复。 */
+export type MechanicalShakeArtifact = {
+  readonly sourceRevision: string;
+  /** 本次 Shake 实际替换掉重量级内容的 step；有界，且可用于诊断被 elide 的区间。 */
+  readonly shakenStepIds: readonly string[];
 };
 
 /** 压缩路径的封闭取值；`none` 表示本次没有压缩。 */
@@ -240,6 +261,16 @@ export function toolResultEntryId(stepId: string, callId: string): string {
   return `entry:tool:${stepId}:${callId}`;
 }
 
+/**
+ * 外部 Actionable Work 引用条目的稳定身份。
+ *
+ * 由 `SourceRevisionRef` 一一派生，因此同一条工作在任何重放、重启与补齐路径上都落成同一个
+ * entry；工具结果据此精确消费它，而不是靠顺序猜「哪条工作已经处理过」。
+ */
+export function workEntryId(source: SourceRevisionRef): string {
+  return `entry:work:${source.sourceKind}:${source.sourceId}:${source.revision}`;
+}
+
 export function toolOperationId(stepId: string, callId: string): OperationId {
   return `op:${stepId}:${callId}` as OperationId;
 }
@@ -298,6 +329,7 @@ const MESSAGE_ENTRY_FIELDS: readonly string[] = [
   'toolCallId',
   'toolName',
   'completedWorkSource',
+  'workSource',
 ];
 
 const LEGACY_MESSAGE_FIELDS: readonly string[] = ['role', 'content', 'toolCalls'];
@@ -316,7 +348,9 @@ const SOURCE_REVISION_FIELDS: readonly string[] = ['sourceKind', 'sourceId', 're
 
 const ACTIONABLE_WORK_FIELDS: readonly string[] = ['workKind', 'workId', 'summary'];
 
-const CONTEXT_MATERIAL_FIELDS: readonly string[] = ['nativeWindowOwner', 'capsule'];
+const CONTEXT_MATERIAL_FIELDS: readonly string[] = ['nativeWindowOwner', 'capsule', 'mechanicalShake'];
+
+const MECHANICAL_SHAKE_FIELDS: readonly string[] = ['sourceRevision', 'shakenStepIds'];
 
 const NATIVE_WINDOW_OWNER_FIELDS: readonly string[] = ['ownerRef', 'items'];
 
@@ -581,6 +615,9 @@ function parseMessageEntry(raw: unknown, field: string): IdentityResult<Committe
     if (raw['completedWorkSource'] !== undefined) {
       return fail(`${field}.completedWorkSource`, '只有 tool 结果可标记已处理的工作源');
     }
+    if (raw['workSource'] !== undefined) {
+      return fail(`${field}.workSource`, '只有 system 引用条目可携带外部工作源');
+    }
     const callsRaw = raw['toolCalls'];
     if (callsRaw === undefined) {
       return { ok: true, value: base };
@@ -619,7 +656,26 @@ function parseMessageEntry(raw: unknown, field: string): IdentityResult<Committe
     } };
   }
 
-  if (raw['toolCalls'] !== undefined || raw['toolCallId'] !== undefined || raw['toolName'] !== undefined || raw['completedWorkSource'] !== undefined) {
+  if (role === 'system') {
+    if (
+      raw['toolCalls'] !== undefined ||
+      raw['toolCallId'] !== undefined ||
+      raw['toolName'] !== undefined ||
+      raw['completedWorkSource'] !== undefined
+    ) {
+      return fail(field, 'system 消息不接受工具配对字段');
+    }
+    const workSource = raw['workSource'] === undefined
+      ? null
+      : parseSourceRevisionRef(raw['workSource'], `${field}.workSource`);
+    if (workSource !== null && !workSource.ok) return workSource;
+    return {
+      ok: true,
+      value: workSource === null ? base : { ...base, workSource: workSource.value },
+    };
+  }
+
+  if (raw['toolCalls'] !== undefined || raw['toolCallId'] !== undefined || raw['toolName'] !== undefined || raw['completedWorkSource'] !== undefined || raw['workSource'] !== undefined) {
     return fail(field, `${role} 消息不接受工具配对字段`);
   }
   return { ok: true, value: base };
@@ -994,10 +1050,55 @@ function parseContextMaterial(raw: unknown, field: string): IdentityResult<Conte
   if (!capsule.ok) {
     return capsule;
   }
-  if (owner.value === null && capsule.value === null) {
-    return fail(field, '两类压缩产物不能同时缺失；没有上下文产物时不应写入该字段');
+  const shakeRaw = raw['mechanicalShake'];
+  const shake =
+    shakeRaw === undefined || shakeRaw === null
+      ? ({ ok: true, value: undefined } as IdentityResult<MechanicalShakeArtifact | undefined>)
+      : parseMechanicalShakeArtifact(shakeRaw, `${field}.mechanicalShake`);
+  if (!shake.ok) {
+    return shake;
   }
-  return { ok: true, value: { nativeWindowOwner: owner.value, capsule: capsule.value } };
+  if (owner.value === null && capsule.value === null && shake.value === undefined) {
+    return fail(field, '上下文产物不能同时缺失；没有产物时不应写入该字段');
+  }
+  return {
+    ok: true,
+    value: {
+      nativeWindowOwner: owner.value,
+      capsule: capsule.value,
+      ...(shake.value === undefined ? {} : { mechanicalShake: shake.value }),
+    },
+  };
+}
+
+function parseMechanicalShakeArtifact(
+  raw: unknown,
+  field: string,
+): IdentityResult<MechanicalShakeArtifact> {
+  if (!isRecord(raw)) {
+    return fail(field, '必须是对象');
+  }
+  const closed = requireClosedFields(raw, MECHANICAL_SHAKE_FIELDS, field);
+  if (!closed.ok) {
+    return closed;
+  }
+  const sourceRevision = requireNonEmptyString(raw['sourceRevision'], `${field}.sourceRevision`);
+  if (!sourceRevision.ok) {
+    return sourceRevision;
+  }
+  const stepsRaw = requireArray(raw['shakenStepIds'], `${field}.shakenStepIds`);
+  if (!stepsRaw.ok) {
+    return stepsRaw;
+  }
+  const shakenStepIds: string[] = [];
+  for (const [index, candidate] of stepsRaw.value.entries()) {
+    const step = requireNonEmptyString(candidate, `${field}.shakenStepIds.${index}`);
+    if (!step.ok) {
+      return step;
+    }
+    shakenStepIds.push(step.value);
+  }
+  return { ok: true, value: { sourceRevision: sourceRevision.value, shakenStepIds } };
 }
 
 type SessionStateFields = {

@@ -13,6 +13,7 @@ import type { CoordinatorSessionId } from '../../src/application/dto/identity.js
 import type { WakeAdmissionRecord } from '../../src/application/ports/branch-coordination-store.js';
 import type { SourceRevisionRef } from '../../src/domain/coordinator/session-state.js';
 import type { CommittedMessageEntry } from '../../src/domain/coordinator/session-state.js';
+import type { ControlState } from '../../src/domain/coordination/mode.js';
 
 const SESSION = 'session-a' as CoordinatorSessionId;
 const OTHER_SESSION = 'session-b' as CoordinatorSessionId;
@@ -58,7 +59,7 @@ function admitted(...sources: readonly SourceRevisionRef[]): WakeAdmissionRecord
 }
 
 function project(observations: readonly SourceObservation[], options: {
-  readonly controlState?: 'active' | 'paused' | 'cancelled';
+  readonly controlState?: ControlState;
   readonly admittedRecords?: readonly WakeAdmissionRecord[];
   readonly limit?: number;
 } = {}) {
@@ -91,6 +92,9 @@ test('每个分类都被显式判定过是否可行动', () => {
   expect(actionable).toEqual([
     'worker_question',
     'worker_escalation',
+    'delivery_verdict',
+    'worker_failure',
+    'replanning_ready',
     'pending_interaction',
     'user_message',
     'unattributed_drift',
@@ -134,14 +138,25 @@ test('同一 source 的更高 revision 仍然形成新工作', () => {
   expect(projection.items).toHaveLength(1);
 });
 
-test('暂停或取消期间不产生 Actionable Work', () => {
+test('非 active 控制状态不恢复模型', () => {
   const observations = [observation('worker_escalation', 'dispatch-1')];
 
-  for (const controlState of ['paused', 'cancelled'] as const) {
+  for (const controlState of ['paused', 'blocked', 'unverifiable', 'replanning_transition', 'cancelling', 'cancelled'] as const) {
     const projection = project(observations, { controlState });
     expect(projection.items).toEqual([]);
     expect(projection.suppressedBy).toBe('control_state');
   }
+});
+
+test('Worker 工作引用可恢复，完成标记只消费精确来源', () => {
+  const workSource = { sourceKind: 'worker-question', sourceId: 'message-1', revision: 1 };
+  const entries: CommittedMessageEntry[] = [{ role: 'system', entryId: 'work-1', stepId: 'wake-1',
+    content: 'Worker 问题引用', workSource }];
+  expect(pendingWorkFromHistory(entries, new Map())).toEqual([{ source: workSource,
+    workKind: 'worker_question', summary: 'Worker 问题引用' }]);
+  entries.push({ role: 'tool', entryId: 'result-1', stepId: 'reply-1', content: '{"kind":"ok"}',
+    toolCallId: 'reply-1', toolName: 'reply_worker', completedWorkSource: workSource });
+  expect(pendingWorkFromHistory(entries, new Map())).toEqual([]);
 });
 
 test('投影有界且顺序稳定，超出的部分留给下一次而不是丢弃', () => {

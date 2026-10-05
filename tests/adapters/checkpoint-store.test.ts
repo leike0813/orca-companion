@@ -18,6 +18,7 @@ import {
   toolResultEntryId,
   userEntryId,
   userStepId,
+  workEntryId,
   type CommittedModelStep,
   type CommittedMessageEntry,
   type CoordinatorSessionState,
@@ -287,9 +288,13 @@ function wakeBatch(wakeBatchId: string, coordinatorSessionId: CoordinatorSession
     coordinationScopeId: 'scope-1',
     coordinatorSessionId,
     sourceRevisions: [{ sourceKind: 'delivery', sourceId: 'delivery-1', revision: 2 }],
-    actionableWork: [{ workKind: 'worker_question', workId: 'dispatch-1', summary: '问题' }],
+    actionableWork: [{ workKind: 'worker_question', workId: 'delivery-1', summary: '问题' }],
   };
 }
+
+/** 外部 source 在 Wake Batch 里对应的 system 引用条目身份。 */
+const EXTERNAL_WORK = { sourceKind: 'delivery', sourceId: 'delivery-1', revision: 2 } as const;
+const EXTERNAL_WORK_ENTRY = workEntryId(EXTERNAL_WORK);
 
 function rawDatabase(): DatabaseSync {
   return new DatabaseSync(databasePath);
@@ -501,7 +506,11 @@ test('用户消息与它的 Wake Batch 在同一次写入落盘，并从零建�
   const read = store.loadCheckpoint(SESSION_A);
   expect(read.kind).toBe('recovered');
   if (read.kind === 'recovered') {
-    expect(read.state.committedMessages).toEqual(result.state.committedMessages);
+    // 外部 source 的 system 引用条目与 Wake Batch 同事务落盘；返回的本次提交状态不含它是既有契约。
+    expect(read.state.committedMessages).toEqual([
+      ...result.state.committedMessages,
+      expect.objectContaining({ entryId: EXTERNAL_WORK_ENTRY, role: 'system', workSource: EXTERNAL_WORK }),
+    ]);
     expect(read.state.wakeBatches).toEqual(result.state.wakeBatches);
   }
 });
@@ -553,6 +562,7 @@ test('用户消息追加到既有会话历史，已提交 step 不受影响', ()
     userEntryId('submission-1'),
     assistantEntryId('step-1'),
     userEntryId('submission-2'),
+    EXTERNAL_WORK_ENTRY,
   ]);
   expect(recovered.state.committedModelSteps.map((entry) => entry.stepId)).toEqual(['step-1']);
   expect(result.state.graphPosition).toBe('model');
@@ -680,6 +690,7 @@ test('追加模型响应从最新已提交状态出发：等待期间受理的�
       userEntryId('submission-1'),
       assistantEntryId('step-1'),
       userEntryId('submission-late'),
+      EXTERNAL_WORK_ENTRY,
       assistantEntryId('step-2'),
     ]);
     expect(read.state.committedModelSteps.map((entry) => entry.stepId)).toEqual(['step-1', 'step-2']);
@@ -779,4 +790,109 @@ test('会话记录不存在时追加失败，不隐式创建会话', () => {
   });
   expect(result.kind).toBe('failed');
   expect(store.loadCheckpoint(SESSION_B)).toEqual({ kind: 'absent' });
+});
+
+test('readWakeBatch 精确有界读取 batch；首次会话读不存在的 batch 返回 null 且不写入', () => {
+  // 首次会话：还没有任何 checkpoint，读一条 batch 就是 `null`，不隐式建库、不产生记录。
+  expect(store.readWakeBatch(SESSION_A, 'wake-1')).toBeNull();
+  expect(store.loadCheckpoint(SESSION_A)).toEqual({ kind: 'absent' });
+
+  const batch = wakeBatch('wake-1', SESSION_A);
+  expect(store.commitWakeBatch(batch).kind).toBe('committed');
+  expect(store.readWakeBatch(SESSION_A, 'wake-1')).toEqual(batch);
+  expect(store.readWakeBatch(SESSION_A, 'missing')).toBeNull();
+});
+
+test('外部 Wake Batch 与 system 引用条目同事务落盘，工具结果按 work entry 精确消费', () => {
+  expect(store.commitWakeBatch(wakeBatch('wake-1', SESSION_A)).kind).toBe('committed');
+
+  const entry = store.readEntry(SESSION_A, EXTERNAL_WORK_ENTRY);
+  expect(entry).toMatchObject({ role: 'system', workSource: EXTERNAL_WORK });
+  expect(entry?.content.length).toBeLessThanOrEqual(240);
+
+  const pending = store.loadCheckpoint(SESSION_A, 'pending');
+  expect(pending.kind).toBe('recovered');
+  if (pending.kind === 'recovered') {
+    expect(pending.state.committedMessages.map(message => message.entryId)).toContain(EXTERNAL_WORK_ENTRY);
+  }
+
+  // 工具结果以同一 source 身份消费该 work entry：pending 读取不再包含它。
+  expect(
+    store.appendMessage(SESSION_A, {
+      entryId: 'entry:tool:consume',
+      stepId: 'consume',
+      role: 'tool',
+      content: 'ok',
+      toolCallId: 'call-1',
+      toolName: 'read',
+      completedWorkSource: EXTERNAL_WORK,
+    }).kind,
+  ).toBe('saved');
+  const after = store.loadCheckpoint(SESSION_A, 'pending');
+  if (after.kind === 'recovered') {
+    expect(after.state.committedMessages.map(message => message.entryId)).not.toContain(EXTERNAL_WORK_ENTRY);
+  }
+});
+
+test('只有精确 workId 匹配的 source 才建外部条目：纯 sourceRevision 的激活标记不唤醒模型', () => {
+  const activation: WakeBatch = {
+    wakeBatchId: 'wake-activation',
+    coordinationScopeId: 'scope-1',
+    coordinatorSessionId: SESSION_A,
+    sourceRevisions: [{ sourceKind: 'execution-handoff-activation', sourceId: 'handoff-1', revision: 3 }],
+    actionableWork: [],
+  };
+  expect(store.commitWakeBatch(activation).kind).toBe('committed');
+  expect(
+    store.readEntry(
+      SESSION_A,
+      workEntryId({ sourceKind: 'execution-handoff-activation', sourceId: 'handoff-1', revision: 3 }),
+    ),
+  ).toBeNull();
+  const pending = store.loadCheckpoint(SESSION_A, 'pending');
+  if (pending.kind === 'recovered') {
+    expect(pending.state.committedMessages).toHaveLength(0);
+  }
+});
+
+test('机械 Shake 产物跨重开保留、可显式清除，且不覆盖原文', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
+  const artifact = { sourceRevision: '["boundary"]', shakenStepIds: ['step-1'] };
+  expect(store.saveMechanicalShake(SESSION_A, artifact).kind).toBe('saved');
+  expect(store.loadMechanicalShake(SESSION_A)).toEqual(artifact);
+
+  const read = store.loadCheckpoint(SESSION_A);
+  expect(read.kind).toBe('recovered');
+  if (read.kind === 'recovered') {
+    expect(read.state.contextMaterial?.mechanicalShake).toEqual(artifact);
+    // 派生产物不覆盖原文：被 Shake 的 step 仍逐字可读。
+    expect(read.state.committedMessages.some(message => message.stepId === 'step-1')).toBe(true);
+  }
+
+  expect(store.clearMechanicalShake(SESSION_A).kind).toBe('saved');
+  expect(store.loadMechanicalShake(SESSION_A)).toBeNull();
+});
+
+test('v2 库无损升级到当前 schema：既有会话与正文保留，版本号写回当前值', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
+  store.close();
+  const raw = rawDatabase();
+  raw.prepare('UPDATE checkpoint_meta SET value = ? WHERE key = ?').run('2', 'checkpoint_schema_version');
+  raw.close();
+
+  const upgraded = openWith({});
+  const read = upgraded.loadCheckpoint(SESSION_A);
+  expect(read.kind).toBe('recovered');
+  if (read.kind === 'recovered') {
+    expect(read.state.committedMessages.map(message => message.entryId)).toEqual([
+      userEntryId('submission-1'),
+      assistantEntryId('step-1'),
+    ]);
+  }
+  const verify = new DatabaseSync(databasePath);
+  const version = verify
+    .prepare("SELECT value FROM checkpoint_meta WHERE key = 'checkpoint_schema_version'")
+    .get() as { value: string };
+  verify.close();
+  expect(Number(version.value)).toBe(CHECKPOINT_SCHEMA_VERSION);
 });

@@ -46,6 +46,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { createCodexWorkerLaunch } from '../../../src/adapters/agents/codex-launch.js';
+import { credentialStoreFixture } from '../../support/model-configurations.js';
 import {
   inspectCodexTranscript,
   proveCodexTranscript,
@@ -747,6 +748,7 @@ async function startPreparedCodexWorker(input: {
       effortCapability: null,
       modelOptions: {},
     },
+    credentialStore: credentialStoreFixture(),
     sandboxMode: input.sandboxMode,
     sessionStartReporterPath: join(input.fixture.projectDir, '.companion', 'session-start.mjs'),
   });

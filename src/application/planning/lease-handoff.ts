@@ -15,6 +15,7 @@ import type { ExecutionAuthorizationRecord } from '../../domain/planning/executi
 import type { CoordinationScopeId, PlanningCycleId } from '../dto/identity.js';
 import type { BranchCoordinationStore, CoordinationWriter } from '../ports/branch-coordination-store.js';
 import { readScope } from './scope-read.js';
+import { commitGenerationCutover, cutoverRefsForCandidate } from '../execution/replanning-service.js';
 import {
   evaluateHandoffGate,
   type HandoffBlocker,
@@ -62,6 +63,24 @@ export function transitionToExecution(input: TransitionToExecutionInput): Transi
       code: 'invalid_state',
       message: `Scope 当前模式为 ${scope.scope.mode}，不能再次切换`,
     };
+  }
+
+  const generation = input.store.query({ kind: 'graph-generation',
+    coordinationScopeId: input.coordinationScopeId, graphId: candidate.graphId });
+  if (generation.kind === 'rejected') return generation;
+  if (generation.kind === 'graph-generation' && generation.generation?.predecessorGraphId != null) {
+    const refs = cutoverRefsForCandidate({ store: input.store, coordinationScopeId: input.coordinationScopeId,
+      planningCycleId: generation.generation.planningCycleId });
+    if (refs.kind === 'blocked') return { kind: 'rejected', code: 'cutover_blocked', message: refs.reason };
+    if (refs.kind === 'rejected') return { kind: 'rejected', code: refs.failure.code, message: refs.failure.message };
+    if (refs.refs.authorizationId !== authorization.authorizationId || refs.refs.authorizationVersion !== authorization.authorizationVersion)
+      return { kind: 'rejected', code: 'authorization_changed', message: 'Cutover 引用与刚批准的授权不一致' };
+    const cutover = commitGenerationCutover({ store: input.store, coordinationScopeId: input.coordinationScopeId,
+      writer: input.writer, refs: refs.refs });
+    if (cutover.kind === 'blocked') return { kind: 'rejected', code: 'cutover_blocked', message: cutover.reason };
+    if (cutover.kind === 'rejected') return { kind: 'rejected', code: cutover.failure.code, message: cutover.failure.message };
+    const after = readScope(input.store, input.coordinationScopeId);
+    return after.kind === 'rejected' ? after : { kind: 'transitioned', revision: after.scope.revision, authorization };
   }
 
   const transitioned = input.store.transact({

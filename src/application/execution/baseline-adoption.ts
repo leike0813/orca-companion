@@ -29,6 +29,8 @@ import {
   type WorkPackageLineage,
 } from '../../domain/execution/work-package-lineage.js';
 import { readScope } from '../planning/scope-read.js';
+import { workPackageIdFor } from '../../domain/planning/graph-compiler.js';
+import type { ExecutionGraph, ImplementationPlan, PlannedAdoption } from '../../domain/planning/execution-graph.js';
 
 export type AdoptionFailure = {
   readonly code: string;
@@ -342,4 +344,179 @@ export function adoptionRecords(
     ...(workPackageId === undefined ? {} : { workPackageId }),
   });
   return result.kind === 'baseline-adoptions' ? result.adoptions : [];
+}
+
+/** 一个声明节点需要宿主回读的事实：证据是否适用、被引用的接受记录是否存在，以及旧责任当前消耗。 */
+export type PlanContinuationFacts = {
+  readonly acceptedResultRecorded: boolean;
+  readonly evidenceStillApplicable: boolean;
+  readonly conflictingFacts: readonly string[];
+  readonly materialReadOnly: boolean;
+  readonly newWorktreeBasedOnBaseline: boolean;
+  /** 旧责任**当前**的已消耗计数；由宿主用 `effectiveBudgetConsumption` 回读，计划里没有填入新值的位置。 */
+  readonly priorConsumed: readonly BudgetConsumption[];
+};
+
+export type RecordPlanContinuationsResult =
+  | { readonly kind: 'recorded'; readonly adoptions: number; readonly lineages: number }
+  | { readonly kind: 'blocked'; readonly reason: string }
+  | { readonly kind: 'rejected'; readonly failure: AdoptionFailure };
+
+/** 只读预检结论；`ok` 只表示「可以落盘」，不表示旧成果已满足新工作。 */
+export type PlanContinuationPreflight =
+  | { readonly kind: 'ok' }
+  | { readonly kind: 'blocked'; readonly reason: string }
+  | { readonly kind: 'rejected'; readonly failure: AdoptionFailure };
+
+/** 由计划声明与宿主回读事实组装一次采用请求；预检与落盘共用同一构造。 */
+function adoptionRequestOf(
+  workPackageId: WorkPackageId,
+  adoption: PlannedAdoption,
+  facts: PlanContinuationFacts,
+): AdoptionRequest {
+  return {
+    workPackageId,
+    kind: adoption.kind,
+    adoptedResultRef: adoption.adoptedResultRef,
+    baselineHead: adoption.baselineHead,
+    integrationRef: adoption.integrationRef ?? null,
+    acceptedResultRecorded: facts.acceptedResultRecorded,
+    evidenceRefs: adoption.evidenceRefs,
+    evidenceStillApplicable: facts.evidenceStillApplicable,
+    conflictingFacts: facts.conflictingFacts,
+    materialReadOnly: facts.materialReadOnly,
+    newWorktreeBasedOnBaseline: facts.newWorktreeBasedOnBaseline,
+  };
+}
+
+/**
+ * 只读预检全部采用/延续声明。
+ *
+ * 外部副作用（建立空 Run）与部分落盘都必须发生在整份计划已被判定之后；因此这个判定不写任何记录，
+ * 只复用 `evaluateAdoptionRequest` 与 `planLineage` 的既有规则。
+ */
+export function preflightPlanContinuations(input: {
+  readonly graph: ExecutionGraph;
+  readonly plan: ImplementationPlan;
+  readonly factsFor: (workPackageId: WorkPackageId) => PlanContinuationFacts | null;
+}): PlanContinuationPreflight {
+  for (const planned of input.plan.workPackages) {
+    if (planned.adoption === undefined && planned.lineage === undefined) {
+      continue;
+    }
+    const workPackageId = workPackageIdFor(input.graph.graphId, planned.key);
+    const facts = input.factsFor(workPackageId);
+    if (facts === null) {
+      return {
+        kind: 'rejected',
+        failure: { code: 'invalid_state', message: `Work Package ${planned.key} 的采用/延续事实不可读` },
+      };
+    }
+    if (facts.conflictingFacts.length > 0) {
+      return { kind: 'blocked', reason: facts.conflictingFacts.join('；') };
+    }
+    if (planned.adoption !== undefined) {
+      const decision = evaluateAdoptionRequest(adoptionRequestOf(workPackageId, planned.adoption, facts));
+      if (decision.kind === 'rejected') {
+        return { kind: 'rejected', failure: decision.failure };
+      }
+      if (decision.kind === 'blocked') {
+        return { kind: 'blocked', reason: decision.reason };
+      }
+    }
+    if (planned.lineage !== undefined) {
+      const lineage = planLineage({
+        workPackageId,
+        priorWorkPackageId: planned.lineage.priorWorkPackageId as WorkPackageId,
+        priorGraphId: planned.lineage.priorGraphId as GraphId,
+        priorConsumed: facts.priorConsumed,
+      });
+      if (lineage.kind === 'rejected') {
+        return { kind: 'rejected', failure: { code: lineage.code, message: lineage.message } };
+      }
+    }
+  }
+  return { kind: 'ok' };
+}
+
+/**
+ * 把新 Plan 里的采用/延续声明落盘。
+ *
+ * 这是声明与既有采用/lineage 用例之间的唯一接线：计划只给出引用与种类，宿主为每个节点回读证据、
+ * 事实与旧责任消耗，再走 `evaluateAdoptionRequest` → `recordBaselineAdoption` 与
+ * `recordWorkPackageLineage`。任一节点判定为拒绝即整体拒绝；矛盾事实导致的阻塞如实返回，不继续记录。
+ */
+export function recordPlanContinuations(input: {
+  readonly store: BranchCoordinationStore;
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly writer: CoordinationWriter;
+  readonly graph: ExecutionGraph;
+  readonly plan: ImplementationPlan;
+  readonly factsFor: (workPackageId: WorkPackageId) => PlanContinuationFacts | null;
+}): RecordPlanContinuationsResult {
+  // 先整体预检，再落盘：任一节点不可采用时不留下部分记录。
+  const preflight = preflightPlanContinuations({
+    graph: input.graph,
+    plan: input.plan,
+    factsFor: input.factsFor,
+  });
+  if (preflight.kind === 'blocked') {
+    return { kind: 'blocked', reason: preflight.reason };
+  }
+  if (preflight.kind === 'rejected') {
+    return { kind: 'rejected', failure: preflight.failure };
+  }
+  let adoptions = 0;
+  let lineages = 0;
+  for (const planned of input.plan.workPackages) {
+    if (planned.adoption === undefined && planned.lineage === undefined) {
+      continue;
+    }
+    const workPackageId = workPackageIdFor(input.graph.graphId, planned.key);
+    const facts = input.factsFor(workPackageId);
+    if (facts === null) {
+      return {
+        kind: 'rejected',
+        failure: { code: 'invalid_state', message: `Work Package ${planned.key} 的采用/延续事实不可读` },
+      };
+    }
+    if (planned.adoption !== undefined) {
+      const request = adoptionRequestOf(workPackageId, planned.adoption, facts);
+      const decision = evaluateAdoptionRequest(request);
+      if (decision.kind === 'rejected') {
+        return { kind: 'rejected', failure: decision.failure };
+      }
+      if (decision.kind === 'blocked') {
+        return { kind: 'blocked', reason: decision.reason };
+      }
+      const recorded = recordBaselineAdoption({
+        store: input.store,
+        coordinationScopeId: input.coordinationScopeId,
+        writer: input.writer,
+        adoptionId: `${workPackageId}:${planned.adoption.kind}:${planned.adoption.adoptedResultRef}`,
+        decision,
+        request,
+      });
+      if (recorded.kind === 'rejected') {
+        return { kind: 'rejected', failure: recorded.failure };
+      }
+      adoptions += 1;
+    }
+    if (planned.lineage !== undefined) {
+      const recorded = recordWorkPackageLineage({
+        store: input.store,
+        coordinationScopeId: input.coordinationScopeId,
+        writer: input.writer,
+        workPackageId,
+        priorWorkPackageId: planned.lineage.priorWorkPackageId as WorkPackageId,
+        priorGraphId: planned.lineage.priorGraphId as GraphId,
+        priorConsumed: facts.priorConsumed,
+      });
+      if (recorded.kind === 'rejected') {
+        return { kind: 'rejected', failure: recorded.failure };
+      }
+      lineages += 1;
+    }
+  }
+  return { kind: 'recorded', adoptions, lineages };
 }

@@ -8,10 +8,22 @@ import type { CoordinatorSessionRecordPort, CheckpointRecoveryRead, CheckpointWr
 import type { WakeCheckpointCommit } from '../../application/coordinator/wake-admission.js';
 import { HistoryBoundaryError, HISTORY_CHUNK_BYTES, HISTORY_PAGE_BYTES, HISTORY_PAGE_ITEMS, HISTORY_BODY_BYTES, CONTEXT_READ_BYTES, CONTEXT_READ_ITEMS, historyBodyQuerySchema, historyPageQuerySchema, type CheckpointReadPurpose, type HistoryReadPort, type HistoryMetadata, type HistoryMetadataPage, type TranscriptBodyRange } from '../../application/coordinator/history.js';
 import { historyArgumentsQuerySchema, historyCallQuerySchema, userHistoryQuerySchema, type HistoryArgumentsQuery, type HistoryCall, type HistoryCallPage, type HistoryCallQuery, type HistoryInspectionSnapshot, type HistoryInspectionStorePort, type HistoryToolObservation } from '../../application/coordinator/history-inspection.js';
-import { COORDINATOR_SESSION_STATE_SCHEMA_VERSION, parseCoordinatorSessionState, userEntryId, userStepId, type NativeCompactedWindowOwner, type PortableContextCapsule, type CommittedMessageEntry, type CommittedModelStep, type CoordinatorSessionState, type WakeBatch } from '../../domain/coordinator/session-state.js';
+import { COORDINATOR_SESSION_STATE_SCHEMA_VERSION, parseCoordinatorSessionState, userEntryId, userStepId, workEntryId, type MechanicalShakeArtifact, type NativeCompactedWindowOwner, type PortableContextCapsule, type CommittedMessageEntry, type CommittedModelStep, type CoordinatorSessionState, type WakeBatch } from '../../domain/coordinator/session-state.js';
 import { activityStatusOf, createMetadataScanState, scanMetadataBytes, scanMetadataText, tallyOf, TOOL_CALL_SCAN_CHUNK_BYTES, type ActivityTally, type CallStatus, type MetadataScanState, type ToolCallSpan } from './history-inspection-index.js';
 import { describeError } from './schema.js';
-export const CHECKPOINT_SCHEMA_VERSION = 2;
+export const CHECKPOINT_SCHEMA_VERSION = 3;
+
+/** 可无损升级到当前版本的前驱库 schema；旧库按 `CREATE TABLE IF NOT EXISTS` 补齐后写回新版本号。 */
+const UPGRADABLE_CHECKPOINT_SCHEMA_VERSIONS: ReadonlySet<number> = new Set([2, CHECKPOINT_SCHEMA_VERSION]);
+
+/** 一次 Wake Batch metadata 读取的有界上限；超过即拒绝，不为了读一条 batch 拉进无界正文。 */
+const WAKE_BATCH_METADATA_BYTES = 64 * 1024;
+
+/** system 引用条目承载的 summary 上限；正文由来源按引用只读取得，不把它复制进历史。 */
+const WORK_ENTRY_SUMMARY_CHARS = 240;
+
+/** 内部来源：它们的引用条目由 user-message / interaction 各自的提交路径拥有，不在 putWake 里重复建条目。 */
+const INTERNAL_WAKE_SOURCE_KINDS: ReadonlySet<string> = new Set(['user-message', 'interaction-answer']);
 export type CommittedMessageRange = {
     readonly replacedFromStepId: string;
     readonly replacedToStepId: string;
@@ -26,7 +38,12 @@ export type CheckpointStore = CoordinatorSessionRecordPort & HistoryReadPort & H
     clearNativeWindowOwner(id: CoordinatorSessionId): CheckpointWriteResult;
     savePortableCapsule(id: CoordinatorSessionId, capsule: PortableContextCapsule): CheckpointWriteResult;
     loadPortableCapsule(id: CoordinatorSessionId): PortableContextCapsule | null;
+    saveMechanicalShake(id: CoordinatorSessionId, artifact: MechanicalShakeArtifact): CheckpointWriteResult;
+    loadMechanicalShake(id: CoordinatorSessionId): MechanicalShakeArtifact | null;
+    clearMechanicalShake(id: CoordinatorSessionId): CheckpointWriteResult;
     commitWakeBatch(batch: WakeBatch): WakeCheckpointCommit;
+    /** 精确有界读取一条 Wake Batch 的 metadata：用户消息重放沿原 batch 保持 activationSource 与外部证据。 */
+    readWakeBatch(id: CoordinatorSessionId, wakeBatchId: string): WakeBatch | null;
     close(): void;
 };
 export type CheckpointStoreOpenFailureCode = 'unreadable' | 'schema_version_unsupported' | 'migration_failed';
@@ -116,7 +133,8 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
         const version = hasMeta === undefined ? undefined : stmt("SELECT value FROM checkpoint_meta WHERE key='checkpoint_schema_version'").get() as {
             value: string;
         } | undefined;
-        if ((version === undefined && stmt("SELECT name FROM sqlite_master WHERE name='coordinator_sessions'").get() !== undefined) || (version !== undefined && Number(version.value) !== CHECKPOINT_SCHEMA_VERSION)) {
+        const existingSchemaVersion = version === undefined ? null : Number(version.value);
+        if ((version === undefined && stmt("SELECT name FROM sqlite_master WHERE name='coordinator_sessions'").get() !== undefined) || (existingSchemaVersion !== null && !UPGRADABLE_CHECKPOINT_SCHEMA_VERSIONS.has(existingSchemaVersion))) {
             db.close();
             return { kind: 'failed', code: 'schema_version_unsupported', message: 'Unsupported checkpoint schema ' + (version?.value ?? 'missing') };
         }
@@ -133,6 +151,8 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
                 'CREATE TABLE IF NOT EXISTS conversation_wakes (coordinator_session_id TEXT NOT NULL,wake_batch_id TEXT NOT NULL,metadata TEXT NOT NULL,PRIMARY KEY(coordinator_session_id,wake_batch_id)) STRICT;',
                 'CREATE TABLE IF NOT EXISTS native_window_owners (coordinator_session_id TEXT PRIMARY KEY,owner_ref TEXT NOT NULL,items TEXT NOT NULL,through_seq INTEGER NOT NULL,updated_at INTEGER NOT NULL) STRICT;',
                 'CREATE TABLE IF NOT EXISTS portable_capsules (coordinator_session_id TEXT PRIMARY KEY,capsule_id TEXT NOT NULL,replaced_from_step_id TEXT NOT NULL,replaced_to_step_id TEXT NOT NULL,text TEXT NOT NULL,from_seq INTEGER NOT NULL,to_seq INTEGER NOT NULL,updated_at INTEGER NOT NULL) STRICT;',
+                // 机械 Shake 的尝试标记：只存稳定边界身份与被替代的 step，派生产物由确定性规则重建。
+                'CREATE TABLE IF NOT EXISTS mechanical_shake_artifacts (coordinator_session_id TEXT PRIMARY KEY,source_revision TEXT NOT NULL,shaken_step_ids TEXT NOT NULL,through_seq INTEGER NOT NULL,updated_at INTEGER NOT NULL) STRICT;',
                 // 派生调用索引（design D-03）：只保存可信身份与原 metadata 中的字节范围，参数与结果仍只有一份权威原文。
                 'CREATE TABLE IF NOT EXISTS history_call_index (coordinator_session_id TEXT NOT NULL,entry_id TEXT NOT NULL,step_id TEXT NOT NULL,seq INTEGER NOT NULL,ordinal INTEGER NOT NULL,call_id TEXT NOT NULL,name TEXT NOT NULL,operation_id TEXT NOT NULL,activity_kind TEXT NOT NULL,activity_id TEXT NOT NULL,args_start INTEGER NOT NULL,args_end INTEGER NOT NULL,PRIMARY KEY(coordinator_session_id,entry_id,call_id)) STRICT;',
                 'CREATE INDEX IF NOT EXISTS history_call_index_page ON history_call_index(coordinator_session_id,seq,ordinal);',
@@ -152,7 +172,8 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
                 'CREATE TABLE IF NOT EXISTS history_inspection_progress (coordinator_session_id TEXT PRIMARY KEY,indexed_through_seq INTEGER NOT NULL,open_activity_id TEXT,updated_at INTEGER NOT NULL) STRICT;',
                 'CREATE TABLE IF NOT EXISTS history_inspection_scans (coordinator_session_id TEXT NOT NULL,entry_id TEXT NOT NULL,state TEXT NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(coordinator_session_id,entry_id)) STRICT;',
             ].join('\n'));
-            stmt("INSERT OR IGNORE INTO checkpoint_meta VALUES('checkpoint_schema_version',?)").run(String(CHECKPOINT_SCHEMA_VERSION));
+            // 旧库（v2）按上面的 `CREATE TABLE IF NOT EXISTS` 无损补齐后写回当前版本号；既有行不动。
+            stmt("INSERT INTO checkpoint_meta VALUES('checkpoint_schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(String(CHECKPOINT_SCHEMA_VERSION));
         });
         // 打开时补齐会话水位行：只读会话注册表，不碰任何历史正文或 metadata。
         atomic(() => {
@@ -494,7 +515,7 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
         const seq = (stmt('SELECT seq FROM conversation_entries WHERE coordinator_session_id=? ORDER BY seq DESC LIMIT 1').get(id) as {
             seq: number;
         } | undefined)?.seq ?? 0;
-        const { content, ...meta } = entry, summary = { ...meta }, bytes = Buffer.from(content, 'utf8'), work = entry.role === 'user' || entry.entryId.startsWith('entry:interaction-answer:');
+        const { content, ...meta } = entry, summary = { ...meta }, bytes = Buffer.from(content, 'utf8'), work = entry.role === 'user' || entry.entryId.startsWith('entry:interaction-answer:') || (entry.role === 'system' && entry.workSource !== undefined);
         delete summary.toolCalls;
         if (Buffer.byteLength(JSON.stringify(summary)) > HISTORY_PAGE_BYTES)
             throw new Error('History metadata exceeds page budget');
@@ -506,9 +527,9 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
         indexCommittedEntry(id, seq + 1, entry, metadataJson, content);
         const source = entry.completedWorkSource;
         if (source !== undefined) {
-            const target = source.sourceKind === 'user-message' ? userEntryId(source.sourceId) : source.sourceKind === 'interaction-answer' ? 'entry:interaction-answer:' + source.sourceId : null;
-            if (target !== null)
-                stmt('UPDATE conversation_entries SET handled_by=? WHERE coordinator_session_id=? AND entry_id=? AND handled_by IS NULL').run(entry.entryId, id, target);
+            // 外部工作按稳定 work entry 身份消费；user / interaction 各自沿用既有身份，不另建引用条目。
+            const target = source.sourceKind === 'user-message' ? userEntryId(source.sourceId) : source.sourceKind === 'interaction-answer' ? 'entry:interaction-answer:' + source.sourceId : workEntryId(source);
+            stmt('UPDATE conversation_entries SET handled_by=? WHERE coordinator_session_id=? AND entry_id=? AND handled_by IS NULL').run(entry.entryId, id, target);
         }
         else if (entry.role === 'assistant' && (entry.toolCalls?.length ?? 0) === 0) {
             stmt('UPDATE conversation_entries SET handled_by=? WHERE coordinator_session_id=? AND seq=(SELECT seq FROM conversation_entries WHERE coordinator_session_id=? AND work_input=1 AND handled_by IS NULL ORDER BY seq LIMIT 1)').run(entry.entryId, id, id);
@@ -604,16 +625,32 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
     function loadPortableCapsule(id: CoordinatorSessionId): PortableContextCapsule | null {
         return readPortableCapsule(id)?.value ?? null;
     }
+    function readMechanicalShake(id: CoordinatorSessionId): ContextMaterialRead<MechanicalShakeArtifact> | null {
+        const row = stmt('SELECT source_revision,CAST(substr(CAST(shaken_step_ids AS BLOB),1,?) AS TEXT) AS steps,length(CAST(shaken_step_ids AS BLOB)) AS bytes FROM mechanical_shake_artifacts WHERE coordinator_session_id=?').get(contextReadBytes + 1, id) as {
+            source_revision: string;
+            steps: string;
+            bytes: number;
+        } | undefined;
+        if (row === undefined)
+            return null;
+        if (row.bytes > contextReadBytes)
+            throw new Error('context_exhausted: mechanical shake read budget');
+        const artifact: MechanicalShakeArtifact = { sourceRevision: row.source_revision, shakenStepIds: JSON.parse(row.steps) as MechanicalShakeArtifact['shakenStepIds'] };
+        return { bytes: row.bytes, value: valid({ ...empty(id), contextMaterial: { nativeWindowOwner: null, capsule: null, mechanicalShake: artifact } }).contextMaterial!.mechanicalShake! };
+    }
+    function loadMechanicalShake(id: CoordinatorSessionId): MechanicalShakeArtifact | null {
+        return readMechanicalShake(id)?.value ?? null;
+    }
     function loadCheckpoint(id: CoordinatorSessionId, purpose: CheckpointReadPurpose = 'full'): CheckpointRecoveryRead {
         try {
             const head = core(id);
             if (head === null)
                 return { kind: 'absent' };
-            const ownerRead = readNativeWindowOwner(id), capsuleRead = readPortableCapsule(id);
-            const nativeWindowOwner = ownerRead?.value ?? null, capsule = capsuleRead?.value ?? null;
+            const ownerRead = readNativeWindowOwner(id), capsuleRead = readPortableCapsule(id), shakeRead = readMechanicalShake(id);
+            const nativeWindowOwner = ownerRead?.value ?? null, capsule = capsuleRead?.value ?? null, mechanicalShake = shakeRead?.value ?? null;
             // 一次恢复读到的 context 材料与正文、step 共享同一个预算；`full` 读整段历史，
             // context 材料仍按预算有界，否则一次恢复的内存占用就没有上限。
-            const materialBytes = (ownerRead?.bytes ?? 0) + (capsuleRead?.bytes ?? 0);
+            const materialBytes = (ownerRead?.bytes ?? 0) + (capsuleRead?.bytes ?? 0) + (shakeRead?.bytes ?? 0);
             if (purpose !== 'full' && materialBytes > contextReadBytes)
                 throw new Error('context_exhausted: context material read budget');
             const budget = purpose === 'full' ? Infinity : contextReadBytes - materialBytes;
@@ -658,7 +695,7 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
             const wakes = purpose === 'full' ? (stmt('SELECT metadata FROM conversation_wakes WHERE coordinator_session_id=? ORDER BY rowid').all(id) as {
                 metadata: string;
             }[]).map(row => JSON.parse(row.metadata) as WakeBatch) : [];
-            return { kind: 'recovered', state: valid({ ...head, committedMessages: entries, committedModelSteps: stepsFor(id, entries, budget - rows.reduce((sum, row) => sum + row.byte_length + row.metadata_length, 0)), wakeBatches: wakes, ...(nativeWindowOwner === null && capsule === null ? {} : { contextMaterial: { nativeWindowOwner, capsule } }) }) };
+            return { kind: 'recovered', state: valid({ ...head, committedMessages: entries, committedModelSteps: stepsFor(id, entries, budget - rows.reduce((sum, row) => sum + row.byte_length + row.metadata_length, 0)), wakeBatches: wakes, ...(nativeWindowOwner === null && capsule === null && mechanicalShake === null ? {} : { contextMaterial: { nativeWindowOwner, capsule, ...(mechanicalShake === null ? {} : { mechanicalShake }) } }) }) };
         }
         catch (error) {
             return { kind: 'unrecoverable', reason: describeError(error) };
@@ -685,7 +722,64 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
             return false;
         }
         stmt('INSERT INTO conversation_wakes VALUES(?,?,?)').run(id, batch.wakeBatchId, JSON.stringify(batch));
+        insertExternalWorkEntries(batch);
         return true;
+    }
+    /**
+     * 外部 Actionable Work 的 system 引用条目：与 Wake Batch 同事务落盘，因此「工作已唤醒」与
+     * 「哪一批唤醒」不可能分成两条独立事实。内容只保存有界 summary，正文仍由来源按引用只读取得；
+     * user-message / interaction-answer 由各自的提交路径拥有，不在这里重复建条目。
+     */
+    function insertExternalWorkEntries(batch: WakeBatch): void {
+        // 只有 `actionableWork` 里存在精确 `workId` 匹配的 source 才是模型工作：仅带 sourceRevision 的
+        // activation marker（如 `execution-handoff-activation`）或将来新增的 typed validator step 都
+        // 没有可判定工作，一律跳过而不是造一条推测性的外部条目。
+        const summaries = new Map(batch.actionableWork.map(work => [work.workId, work]));
+        const matchedKinds = new Map<string, Set<string>>();
+        for (const source of batch.sourceRevisions) {
+            if (INTERNAL_WAKE_SOURCE_KINDS.has(source.sourceKind) || !summaries.has(source.sourceId))
+                continue;
+            const kinds = matchedKinds.get(source.sourceId) ?? new Set<string>();
+            kinds.add(source.sourceKind);
+            matchedKinds.set(source.sourceId, kinds);
+        }
+        for (const [sourceId, kinds] of matchedKinds) {
+            // 同一 workId 命中多个 sourceKind：无法判定归属，fail closed 而不是猜一条。
+            if (kinds.size > 1)
+                throw new Error('Ambiguous actionable work source kind: ' + sourceId);
+        }
+        const written = new Set<string>();
+        for (const source of batch.sourceRevisions) {
+            const work = summaries.get(source.sourceId);
+            if (INTERNAL_WAKE_SOURCE_KINDS.has(source.sourceKind) || work === undefined)
+                continue;
+            const entryId = workEntryId(source);
+            if (written.has(entryId))
+                continue;
+            written.add(entryId);
+            insertEntry(batch.coordinatorSessionId, {
+                entryId,
+                stepId: entryId,
+                role: 'system',
+                content: work.summary.slice(0, WORK_ENTRY_SUMMARY_CHARS),
+                workSource: source,
+            });
+        }
+    }
+    function readWakeBatch(id: CoordinatorSessionId, wakeBatchId: string): WakeBatch | null {
+        // 首次会话还没有任何记录时不抛错：读一条不存在的 batch 就是 `null`，不产生任何写入。
+        // 只有已存在却损坏的 core 才 fail closed（`core(id)` 会抛结构化错误）。
+        if (core(id) === null)
+            return null;
+        const row = stmt('SELECT metadata,length(CAST(metadata AS BLOB)) AS bytes FROM conversation_wakes WHERE coordinator_session_id=? AND wake_batch_id=?').get(id, wakeBatchId) as {
+            metadata: string;
+            bytes: number;
+        } | undefined;
+        if (row === undefined)
+            return null;
+        if (row.bytes > WAKE_BATCH_METADATA_BYTES)
+            throw new Error('Wake Batch metadata exceeds 64KiB budget');
+        return valid({ ...empty(id), wakeBatches: [JSON.parse(row.metadata) as WakeBatch] }).wakeBatches[0]!;
     }
     const resultState = (id: CoordinatorSessionId, entries: readonly CommittedMessageEntry[] = [], wakes: readonly WakeBatch[] = []): CoordinatorSessionState => valid({ ...requireCore(id), committedMessages: entries, committedModelSteps: [], wakeBatches: wakes });
     // ---------------------------------------------------------------- 历史检查读取面
@@ -1057,6 +1151,7 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
         catch (error) {
             return failed(error);
         } },
+        readWakeBatch,
         commitWakeBatch(batch) { try {
             return atomic(() => { const id = batch.coordinatorSessionId as CoordinatorSessionId; ensureCore(id); const fresh = putWake(batch); return { kind: fresh ? 'committed' : 'already-committed', state: resultState(id, [], [batch]) }; });
         }
@@ -1100,7 +1195,7 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
         readHistoryPage(input) { return metadataPage(historyPageQuerySchema.parse(input)); },
         readUserHistoryPage(input) { return metadataPage({ ...userHistoryQuerySchema.parse(input), role: 'user' }); },
         readHistoryInspection, readHistoryCalls, readHistoryArguments, prepareHistoryInspection, recordToolObservation,
-        loadNativeWindowOwner, loadPortableCapsule,
+        loadNativeWindowOwner, loadPortableCapsule, loadMechanicalShake,
         saveNativeWindowOwner(id, owner) { try {
             requireCore(id);
             valid({ ...empty(id), contextMaterial: { nativeWindowOwner: owner, capsule: null } });
@@ -1134,6 +1229,24 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
         } },
         clearNativeWindowOwner(id) { try {
             stmt('DELETE FROM native_window_owners WHERE coordinator_session_id=?').run(id);
+            return { kind: 'saved' };
+        }
+        catch (error) {
+            return failed(error);
+        } },
+        saveMechanicalShake(id, artifact) { try {
+            requireCore(id);
+            valid({ ...empty(id), contextMaterial: { nativeWindowOwner: null, capsule: null, mechanicalShake: artifact } });
+            atomic(() => { const bound = stmt('SELECT seq FROM conversation_entries WHERE coordinator_session_id=? ORDER BY seq DESC LIMIT 1').get(id) as {
+                seq: number;
+            } | undefined; stmt('INSERT INTO mechanical_shake_artifacts VALUES(?,?,?,?,?) ON CONFLICT(coordinator_session_id) DO UPDATE SET source_revision=excluded.source_revision,shaken_step_ids=excluded.shaken_step_ids,through_seq=excluded.through_seq,updated_at=excluded.updated_at').run(id, artifact.sourceRevision, JSON.stringify(artifact.shakenStepIds), bound?.seq ?? 0, clock()); });
+            return { kind: 'saved' };
+        }
+        catch (error) {
+            return failed(error);
+        } },
+        clearMechanicalShake(id) { try {
+            stmt('DELETE FROM mechanical_shake_artifacts WHERE coordinator_session_id=?').run(id);
             return { kind: 'saved' };
         }
         catch (error) {

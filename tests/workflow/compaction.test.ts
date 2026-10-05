@@ -3,7 +3,10 @@ import { expect, test } from 'vitest';
 import {
   compactWithNativeFirst,
   mechanicalShake,
+  mechanicalShakeSourceRevision,
+  resolveMechanicalShake,
   SHAKE_HEAVY_CONTENT_CHARS,
+  shakenStepIds,
   type CompactionRequest,
 } from '../../src/workflow/coordinator/compaction.js';
 import type { HistorySegment, NativeCompactionAvailability } from '../../src/workflow/coordinator/state.js';
@@ -206,4 +209,38 @@ test('机械 Shake 把重量级内容换成可恢复占位符，轻量消息原�
     expect((second.messages[0] as { readonly content: string }).content).toBe('light');
   }
   expect(estimate(shaken)).toBeLessThan(estimate(segments));
+});
+
+test('同一稳定边界至多一次 Shake：命中已保存产物时重建同一结果，边界变化才重新尝试', () => {
+  const heavy = [messages('step-1', 'a'.repeat(SHAKE_HEAVY_CONTENT_CHARS + 500))];
+  const sourceRevision = mechanicalShakeSourceRevision({
+    tailSequence: 3,
+    configurationRef: 'cfg-1',
+    capsuleId: null,
+    nativeOwnerRef: null,
+  });
+
+  const fresh = resolveMechanicalShake({ artifact: null, sourceRevision, segments: heavy });
+  expect(fresh.kind).toBe('fresh');
+  expect(fresh.segments).toBe(heavy);
+
+  const artifact = { sourceRevision, shakenStepIds: shakenStepIds(heavy) };
+  expect(artifact.shakenStepIds).toEqual(['step-1']);
+  const reapplied = resolveMechanicalShake({ artifact, sourceRevision, segments: heavy });
+  expect(reapplied.kind).toBe('reapplied');
+  expect(estimate(reapplied.segments)).toBeLessThan(estimate(heavy));
+
+  // 历史尾部或 configuration 变化即产生新边界：允许重新尝试一次。
+  const changed = resolveMechanicalShake({
+    artifact,
+    sourceRevision: mechanicalShakeSourceRevision({
+      tailSequence: 4,
+      configurationRef: 'cfg-1',
+      capsuleId: null,
+      nativeOwnerRef: null,
+    }),
+    segments: heavy,
+  });
+  expect(changed.kind).toBe('fresh');
+  expect(changed.segments).toBe(heavy);
 });

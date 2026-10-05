@@ -33,7 +33,7 @@ export type OperationIntent = {
   readonly operationCategory: string;
   readonly laneKey: string;
   readonly expectedRevision: Revision;
-  /** Git Integration Operation 的 HEAD 前置条件；其它 mutation 为 `null`。 */
+  /** Git 集成的 HEAD 前置条件或 Validator 修复许可前的固定 HEAD；其它 mutation 为 `null`。 */
   readonly expectedHead: string | null;
   readonly initiatedBy: {
     readonly coordinatorSessionId: CoordinatorSessionId;

@@ -64,9 +64,21 @@ export type { LeaseKind, LeaseRecord };
 export { TICKET_CLAIM_STATES };
 export type { TicketClaimState };
 
-export const SESSION_LIFECYCLE_STATES = ['registered', 'active', 'cancelled'] as const;
+export const SESSION_LIFECYCLE_STATES = ['registered', 'active', 'blocked', 'cancelled'] as const;
 
 export type SessionLifecycleState = (typeof SESSION_LIFECYCLE_STATES)[number];
+
+/**
+ * Session 持久阻塞的结构化原因。
+ *
+ * `code` 是稳定的机器可读分类（例如 checkpoint 损坏、上下文耗尽、共享 checkpoint 不可恢复），`message`
+ * 是人类可读的说明。持久化的是「为什么被阻塞」这一事实本身；清除阻塞只能经显式 `update-session-lifecycle`，
+ * 启动时不自动清除。
+ */
+export type SessionBlockingReason = {
+  readonly code: string;
+  readonly message: string;
+};
 
 export const PENDING_INTERACTION_STATES = ['open', 'answered', 'cancelled'] as const;
 
@@ -99,6 +111,8 @@ export type CoordinatorSessionRegistration = {
   readonly coordinatorSessionId: CoordinatorSessionId;
   readonly coordinatorModelConfigurationRef: string;
   readonly lifecycleState: SessionLifecycleState;
+  /** `blocked` 时必有结构化原因；其它状态一律为 `null`。 */
+  readonly blockedReason: SessionBlockingReason | null;
   readonly registeredAt: number;
 };
 
@@ -168,6 +182,46 @@ export type BudgetCounterRecord = {
   readonly budgetKey: string;
   readonly approvedLimitRef: string;
   readonly consumed: number;
+};
+
+/**
+ * 一条持久准入的 Validator 修复步骤（schema 20）。
+ *
+ * 它是「这次修复是否已经扣过预算」的唯一本地证据：`stepId` 稳定，重放读取既有行即可判定，不需要
+ * 时钟或再次扣减。这里不保存修复内容或证据——那些归 Worker 结果与 Orca。
+ */
+export type ValidationStepAdmissionRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly stepId: string;
+  readonly workPackageId: WorkPackageId;
+  readonly workerTaskId: WorkerTaskId;
+  readonly dispatchId: DispatchId;
+  readonly validationAttemptId: string;
+  readonly repairOrdinal: number;
+  readonly budgetKey: string;
+  readonly approvedLimitRef: string;
+  readonly admittedAt: number;
+};
+
+/**
+ * 一条 Validator Validation Attempt 的有界游标记录（schema 20）。
+ *
+ * 它是「这条验证链已经消费了多少修复额度、已经回读过哪些 message」的最小持久事实：不含任何消息正文或
+ * 第二份验证状态机。`initialRepairConsumed` 在首次写入后不可变，`messageIds` 只允许按序追加（最多 20 项），
+ * `terminalQuestionMessageId` 只在拿到 finish/refuse 许可后一次性记录。`providerSessionId` 是固定的
+ * session 身份，与物化绑定、Session Segment 的 session binding 一致。
+ */
+export type ValidationAttemptRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly validationAttemptId: string;
+  readonly workPackageId: WorkPackageId;
+  readonly workerTaskId: WorkerTaskId;
+  readonly dispatchId: DispatchId;
+  readonly providerSessionId: string;
+  readonly initialRepairConsumed: number;
+  readonly messageIds: readonly string[];
+  readonly terminalQuestionMessageId: string | null;
+  readonly updatedAt: number;
 };
 
 /**
@@ -331,6 +385,16 @@ export type MaterializationBindingRecord = {
  * 一行同时是稳定去重键与 `AcceptedWorkerResultRef`：去重键是主键，结果是 Orca 的结果引用。
  * 它**不**保存 Accepted Worker Result 正文，也不复制 Orca 的 Task/Dispatch 状态。
  */
+/** Worker 结果的规范化成败。 */
+export const DELIVERY_SETTLEMENT_OUTCOMES = ['succeeded', 'failed'] as const;
+
+export type DeliverySettlementOutcome = (typeof DELIVERY_SETTLEMENT_OUTCOMES)[number];
+
+/** Validator 的规范化验证结论。 */
+export const DELIVERY_VALIDATION_VERDICTS = ['passed', 'failed'] as const;
+
+export type DeliveryValidationVerdict = (typeof DELIVERY_VALIDATION_VERDICTS)[number];
+
 export type DeliverySettlementRecord = {
   readonly coordinationScopeId: CoordinationScopeId;
   readonly dedupeKey: string;
@@ -343,6 +407,13 @@ export type DeliverySettlementRecord = {
   readonly role: WorkerRole;
   readonly contractRevision: number;
   readonly orcaResultRef: string;
+  /**
+   * Worker 结果的规范化成败；`null` 表示本行没有这项事实（schema 20 之前的旧行），读取方必须精确复核，
+   * 不得把缺失当成成功。
+   */
+  readonly outcome: DeliverySettlementOutcome | null;
+  /** Validator 结论；非 validator 角色与旧行均为 `null`。 */
+  readonly validationVerdict: DeliveryValidationVerdict | null;
   readonly acceptedAt: number;
 };
 
@@ -838,6 +909,16 @@ export type CoordinationQuery =
   | { readonly kind: 'intent'; readonly coordinationScopeId: CoordinationScopeId; readonly operationId: OperationId }
   | { readonly kind: 'budget-counters'; readonly coordinationScopeId: CoordinationScopeId; readonly approvedLimitRef?: string }
   | {
+      readonly kind: 'validation-step-admission';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly stepId: string;
+    }
+  | {
+      readonly kind: 'validation-attempt';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly dispatchId: DispatchId;
+    }
+  | {
       readonly kind: 'wake-admissions';
       readonly coordinationScopeId: CoordinationScopeId;
       readonly coordinatorSessionId?: CoordinatorSessionId;
@@ -1034,6 +1115,14 @@ export type CoordinationQueryResult =
   | { readonly kind: 'intents'; readonly intents: readonly OperationIntent[] }
   | { readonly kind: 'intent'; readonly intent: OperationIntent | null }
   | { readonly kind: 'budget-counters'; readonly counters: readonly BudgetCounterRecord[] }
+  | {
+      readonly kind: 'validation-step-admission';
+      readonly admission: ValidationStepAdmissionRecord | null;
+    }
+  | {
+      readonly kind: 'validation-attempt';
+      readonly attempt: ValidationAttemptRecord | null;
+    }
   | { readonly kind: 'wake-admissions'; readonly admissions: readonly WakeAdmissionRecord[] }
   | { readonly kind: 'graph-versions'; readonly versions: readonly GraphVersionRecord[] }
   | { readonly kind: 'graph-version'; readonly version: GraphVersionRecord | null }
@@ -1167,6 +1256,18 @@ export type CoordinationCommand =
       /** 目标配置引用；必须已由调用方用项目配置核验过存在与可用。 */
       readonly coordinatorModelConfigurationRef: string;
     })
+  | (CoordinationCommandBase & {
+      /**
+       * 持久推进一个 Session 的生命周期状态。
+       *
+       * `blocked` 必须携带结构化 `blockingReason`（非空 `code` 与 `message`）；其它状态必须省略原因，
+       * 写入即清除既有阻塞事实。启动流程绝不自动解除阻塞：恢复必须先重新核验原因。
+       */
+      readonly kind: 'update-session-lifecycle';
+      readonly coordinatorSessionId: CoordinatorSessionId;
+      readonly lifecycleState: SessionLifecycleState;
+      readonly blockingReason?: SessionBlockingReason | null;
+    })
   | (CoordinationCommandBase & { readonly kind: 'record-ticket-claim'; readonly ticketRef: EntityRef<string> })
   | (CoordinationCommandBase & {
       readonly kind: 'release-ticket-claim';
@@ -1229,6 +1330,46 @@ export type CoordinationCommand =
       readonly budgetKey: string;
       readonly approvedLimitRef: string;
       readonly amount: number;
+    })
+  | (CoordinationCommandBase & {
+      /**
+       * Validator 修复步骤的持久准入：以稳定 `stepId` 记录一次修复步骤，并在同一事务里扣减
+       * `validatorRepairs`。
+       *
+       * 重放同一个 `stepId` 是幂等成功，绝不重复扣减；`approvedLimitRef` 是授权 id，`approvedLimit` 是
+       * `min(Work Package 预算, Manifest 上限)`，由调用方从已批准事实读出。越界消费按 `constraint` 拒绝，
+       * 因此「修复前扣减」与「可证明没有接纳」是同一个原子事实。
+       */
+      readonly kind: 'admit-validation-step';
+      readonly stepId: string;
+      readonly workPackageId: WorkPackageId;
+      readonly workerTaskId: WorkerTaskId;
+      readonly dispatchId: DispatchId;
+      readonly validationAttemptId: string;
+      /** 1 基绝对修复序号；只用于核对 stepId 的来源，不参与幂等键。 */
+      readonly repairOrdinal: number;
+      readonly approvedLimitRef: string;
+      readonly approvedLimit: number;
+    })
+  | (CoordinationCommandBase & {
+      /**
+       * 写入一条 Validation Attempt 的有界游标。
+       *
+       * 身份（Task/Dispatch/Attempt/Work Package/固定 provider session）首次写入后不可变；`messageIds` 是
+       * 整列覆盖式写入的有序列表，必须保留既有前缀、最多 20 项且无重复；`terminalQuestionMessageId` 只在
+       * 拿到 finish/refuse 许可后从 `null` 写一次，之后不可改写。写入者必须是 Execution Coordination Lease
+       * 持有者并被 fence，且物化绑定与 Session Segment 必须能证明这条绑定。
+       */
+      readonly kind: 'record-validation-attempt';
+      readonly validationAttemptId: string;
+      readonly workPackageId: WorkPackageId;
+      readonly workerTaskId: WorkerTaskId;
+      readonly dispatchId: DispatchId;
+      readonly providerSessionId: string;
+      readonly initialRepairConsumed: number;
+      readonly messageIds: readonly string[];
+      /** 省略表示不改写既有值；给出值只在既有值为 `null` 时被接纳。 */
+      readonly terminalQuestionMessageId?: string | null;
     })
   | (CoordinationCommandBase & {
       readonly kind: 'record-wake-admission';
@@ -1386,6 +1527,10 @@ export type CoordinationCommand =
       readonly contractRevision: number;
       /** Orca 侧结果引用；本地不保存结果正文。 */
       readonly orcaResultRef: string;
+      /** Worker 结果的规范化成败；省略或 `null` 表示本行没有这项结论。 */
+      readonly outcome?: DeliverySettlementOutcome | null;
+      /** Validator 结论；只有 validator 角色的结算应给出，其它角色省略。 */
+      readonly validationVerdict?: DeliveryValidationVerdict | null;
     })
   | (CoordinationCommandBase & {
       readonly kind: 'record-delivery-verdict';

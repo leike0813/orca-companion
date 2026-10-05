@@ -137,6 +137,8 @@ export async function startCoordinatorRuntime(
     runtimeIncarnationId: options.runtimeIncarnationId,
     checkpoints,
     ...(options.ttlMs === undefined ? {} : { ttlMs: options.ttlMs }),
+    // blocked 写入前的 fencing 复核必须与租约使用同一个时钟：注入测试时钟时否则会被误判为过期。
+    ...(options.clock === undefined ? {} : { clock: options.clock }),
   });
   if (resumed.kind !== 'resumed') {
     checkpoints.close();

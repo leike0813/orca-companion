@@ -29,7 +29,9 @@ import { laneKeyOf } from '../dto/operation-intent.js';
 import type {
   BranchCoordinationStore,
   CoordinationWriter,
+  DeliverySettlementOutcome,
   DeliverySettlementRecord,
+  DeliveryValidationVerdict,
 } from '../ports/branch-coordination-store.js';
 import type { ExecutionBackend, ExecutionAuthority, ExecutionMutation } from '../ports/execution-backend.js';
 import { buildExecutionScope, reconcileOperation } from '../ports/execution-backend.js';
@@ -42,6 +44,8 @@ import {
   type TrustedExecutionFacts,
   type WorkerResultVerification,
 } from '../../domain/worker-result-verification.js';
+import { deriveWorkerOutcome } from '../../domain/worker-report.js';
+import { attemptOutcomeFromWorkerOutcome } from '../record-worker-result.js';
 
 /**
  * 稳定去重键。
@@ -180,6 +184,8 @@ export type SettleDeliveryInput = {
   };
   readonly trusted: TrustedExecutionFacts;
   readonly operationIds: SettlementOperationIds;
+  /** 本轮已由宿主 callback 消费的非结果消息 messageId；整批确认必须看见它们。 */
+  readonly consumedMessageIds?: readonly string[];
   /**
    * 只结算不确认：调用方负责在整批消息都持久消费后再统一 ack。
    *
@@ -199,6 +205,8 @@ export type SettleDeliveryResult =
       readonly kind: 'settled';
       readonly dedupeKey: string;
       readonly orcaResultRef: string;
+      /** 本份角色结果的规范化成败；`null` 表示缺证据。下游只允许 `succeeded` 推进生命周期。 */
+      readonly outcome?: DeliverySettlementOutcome | null;
       readonly verification: WorkerResultVerification;
     }
   /** 重放已结算的 Delivery：回读既有 Orca 结果后确认，不产生第二份正文或第二行记录。 */
@@ -209,15 +217,18 @@ export type SettleDeliveryResult =
   | { readonly kind: 'unknown'; readonly operationId: OperationId; readonly reason: string }
   | { readonly kind: 'blocked'; readonly laneKey: string; readonly reason: string };
 
+type SettlementMutationContext = Pick<SettleDeliveryInput, 'store' | 'backend' | 'coordinationScopeId' | 'writer' |
+  'backendIdentityRef' | 'graphGeneration' | 'authorizationId' | 'runId' | 'consumerGeneration' | 'timeoutMs'>;
+
 function freshRevision(
-  input: SettleDeliveryInput,
+  input: SettlementMutationContext,
 ): number | SettleDeliveryFailure {
   const read = readScope(input.store, input.coordinationScopeId);
   return read.kind === 'rejected' ? { code: read.code, message: read.message } : read.scope.revision;
 }
 
 function executionScope(
-  input: SettleDeliveryInput,
+  input: SettlementMutationContext,
   operationId: OperationId,
   target: { readonly kind: string; readonly id: string },
   expectedRevision: number,
@@ -245,7 +256,9 @@ function executionScope(
 
 /** 回读核验：Orca 必须能证明它记录了这份结果，否则不确认 Delivery。 */
 async function verifyResultReadback(
-  input: SettleDeliveryInput,
+  input: Pick<SettleDeliveryInput, 'backend' | 'backendIdentityRef' | 'runId' | 'orcaTaskId'> & {
+    readonly delivery: { readonly acceptedResult: unknown };
+  },
 ): Promise<{ readonly kind: 'verified'; readonly orcaResultRef: string } | SettleDeliveryFailure> {
   const listed = await input.backend.query({
     operation: 'task-list',
@@ -316,7 +329,7 @@ export function ackLaneKey(deliveryId: string): string {
 }
 
 async function runSettlementMutation(
-  input: SettleDeliveryInput,
+  input: SettlementMutationContext,
   operationId: OperationId,
   target: { readonly kind: string; readonly id: string },
   mutation: ExecutionMutation,
@@ -416,6 +429,21 @@ async function runSettlementMutation(
   return { kind: 'accepted' };
 }
 
+/** 项目级 Finalizer 已经通过自身验收门；写 Orca 结果仍复用同一 Intent 与回读规则。 */
+export async function recordAcceptedTaskResult(input: SettlementMutationContext & {
+  readonly orcaTaskId: string;
+  readonly acceptedResult: unknown;
+  readonly operationId: OperationId;
+}): Promise<{ readonly kind: 'recorded'; readonly orcaResultRef: string } | SettleDeliveryResult> {
+  const accepted = await runSettlementMutation(input, input.operationId, acceptResultTarget(input.orcaTaskId), {
+    operation: 'task-update', taskId: input.orcaTaskId, status: 'completed', result: input.acceptedResult,
+  });
+  if (accepted.kind === 'failed') return accepted.result;
+  const readback = await verifyResultReadback({ ...input, delivery: { acceptedResult: input.acceptedResult } });
+  return 'code' in readback ? { kind: 'blocked', laneKey: acceptResultLaneKey(input.orcaTaskId), reason: readback.message }
+    : { kind: 'recorded', orcaResultRef: readback.orcaResultRef };
+}
+
 /** 确认 Delivery；未确认是默认行为，只有这里能推进它。 */
 /**
  * 事实对账：这条 Delivery 已经不在未确认批次里了吗？
@@ -458,6 +486,8 @@ type BatchReadinessInput = {
   readonly consumerGeneration: number;
   readonly deliveryId: string;
   readonly consumed: readonly ConsumedDeliveryResult[];
+  /** 本轮由宿主 callback 明确消费掉的非结果消息（question/escalation）messageId。 */
+  readonly consumedMessageIds?: readonly string[];
 };
 
 /**
@@ -513,6 +543,10 @@ type DurableConsumptionFacts = {
   readonly settlements: readonly DeliverySettlementRecord[];
   readonly validatedIntegrationKeys: ReadonlySet<string>;
   readonly verifiedBaselineKeys: ReadonlySet<string>;
+  /** 已落盘的 Worker question / escalation 消费准入键：`<sourceKind>\u0000<messageId>`。 */
+  readonly wakeAdmissionKeys: ReadonlySet<string>;
+  /** 已有已接受结算的 Orca Task + Dispatch 键：其上的旧 question/escalation 只作历史。 */
+  readonly settledTaskDispatches: ReadonlySet<string>;
 };
 
 function readConsumptionFacts(
@@ -523,6 +557,15 @@ function readConsumptionFacts(
     coordinationScopeId: input.coordinationScopeId,
   });
   const settlements = settlementsRead.kind === 'delivery-settlements' ? settlementsRead.settlements : [];
+
+  // 已接受结算的 Task+Dispatch：同一次派发的旧 Attempt 迟到 question 是历史，不属于当前唤醒。
+  const settledTaskDispatches = new Set<string>();
+  for (const settlement of settlements) {
+    const hashIndex = settlement.orcaResultRef.indexOf('#');
+    if (hashIndex > 0) {
+      settledTaskDispatches.add(`${settlement.orcaResultRef.slice(0, hashIndex)}\u0000${settlement.dispatchId}`);
+    }
+  }
 
   const validatedIntegrationKeys = new Set<string>();
   for (const workPackageId of currentWorkPackageIds(input)) {
@@ -550,7 +593,43 @@ function readConsumptionFacts(
       }
     }
   }
-  return { settlements, validatedIntegrationKeys, verifiedBaselineKeys };
+
+  // 非结果消息（Worker question / escalation）由宿主的 Wake 准入证明已消费；读取端只看已落盘的
+  // 准入记录，不把「本轮内存里读过」当成持久事实。
+  const wakeAdmissionKeys = new Set<string>();
+  const wakeRead = input.store.query({ kind: 'wake-admissions', coordinationScopeId: input.coordinationScopeId });
+  if (wakeRead.kind === 'wake-admissions') {
+    for (const admission of wakeRead.admissions) {
+      for (const source of admission.sourceRevisions) {
+        if (source.revision >= 1 &&
+          (source.sourceKind === 'worker-question' || source.sourceKind === 'worker-escalation')) {
+          wakeAdmissionKeys.add(`${source.sourceKind}\u0000${source.sourceId}`);
+        }
+      }
+    }
+  }
+  return { settlements, validatedIntegrationKeys, verifiedBaselineKeys, wakeAdmissionKeys, settledTaskDispatches };
+}
+
+/** question/escalation 载荷里可用于精确归属的 Task/Dispatch；两种登记形状都接受。 */
+function questionLocator(message: DeliveryMessage): { readonly orcaTaskId: string; readonly dispatchId: string } | null {
+  if (message.payload === null) {
+    return null;
+  }
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(message.payload) as unknown;
+  } catch {
+    return null;
+  }
+  if (!isRecord(decoded)) {
+    return null;
+  }
+  const taskId = decoded['taskId'] ?? decoded['orcaTaskId'];
+  const dispatchId = decoded['dispatchId'] ?? decoded['orcaDispatchId'];
+  return typeof taskId === 'string' && taskId.length > 0 && typeof dispatchId === 'string' && dispatchId.length > 0
+    ? { orcaTaskId: taskId, dispatchId }
+    : null;
 }
 
 /**
@@ -600,7 +679,7 @@ async function batchAckReadiness(
     operation: 'delivery-read',
     backendIdentityRef: input.backendIdentityRef,
     runId: input.runId,
-    types: ['worker_done'],
+    types: ['worker_done', 'question', 'escalation'],
   });
   if (batchRead.kind !== 'accepted' || !isDeliveryBatchValue(batchRead.value)) {
     return { ready: false, reason: '无法回读当前未确认批次：不确认' };
@@ -611,7 +690,28 @@ async function batchAckReadiness(
   }
   const facts = readConsumptionFacts(input);
   const consumed = new Set(input.consumed.flatMap((entry) => consumedKeys(entry)));
+  const consumedMessageIds = new Set(input.consumedMessageIds ?? []);
   for (const message of batch.messages) {
+    // 非结果消息：Worker 提问与升级也必须已有持久消费证明，否则整个批次不能确认——哪怕普通结果
+    // 已经落盘（混合批次里把未消费的问题一起 ack 掉，等于把问题永久丢弃）。
+    if (message.type === 'question' || message.type === 'escalation') {
+      const sourceKind = message.type === 'question' ? 'worker-question' : 'worker-escalation';
+      if (consumedMessageIds.has(message.messageId)) {
+        continue;
+      }
+      if (facts.wakeAdmissionKeys.has(`${sourceKind}\u0000${message.messageId}`)) {
+        continue;
+      }
+      // 该 Task/Dispatch 已有已接受结算：这条旧 question 只作历史消费，不允许伪造新的 Wake。
+      const locator = questionLocator(message);
+      if (locator !== null && facts.settledTaskDispatches.has(`${locator.orcaTaskId}\u0000${locator.dispatchId}`)) {
+        continue;
+      }
+      return {
+        ready: false,
+        reason: `批次内 ${message.messageId} 的 Worker ${message.type === 'question' ? '提问' : '升级'}尚未落盘为已消费：不确认整批`,
+      };
+    }
     if (message.type !== 'worker_done') {
       continue;
     }
@@ -681,6 +781,7 @@ async function confirmDelivery(
     consumerGeneration: input.consumerGeneration,
     deliveryId,
     consumed,
+    ...(input.consumedMessageIds === undefined ? {} : { consumedMessageIds: input.consumedMessageIds }),
   });
   if (!readiness.ready) {
     return { kind: 'blocked', laneKey: ackLaneKey(deliveryId), reason: readiness.reason };
@@ -765,6 +866,8 @@ export type AckConsumedDeliveryInput = {
   readonly operationId?: OperationId;
   /** 本轮已核验消费的结果（taskId + 实际 dispatchId）；同批其余消息仍须有持久证据。 */
   readonly consumed?: readonly ConsumedDeliveryResult[];
+  /** 本轮已由宿主 callback 消费的非结果消息 messageId；混合批次确认必须看见它们。 */
+  readonly consumedMessageIds?: readonly string[];
 };
 
 export type AckConsumedDeliveryResult =
@@ -801,6 +904,7 @@ export async function ackConsumedDelivery(
     consumerGeneration: input.consumerGeneration,
     deliveryId: input.deliveryId,
     consumed: input.consumed ?? [],
+    ...(input.consumedMessageIds === undefined ? {} : { consumedMessageIds: input.consumedMessageIds }),
   });
   if (!readiness.ready) {
     return { kind: 'blocked', code: 'batch_not_consumed', message: readiness.reason, laneKey };
@@ -990,6 +1094,18 @@ export async function settleDelivery(input: SettleDeliveryInput): Promise<Settle
   }
 
   // 步骤 4：在 Orca 记录 Accepted Worker Result。
+  //
+  // 「记录成功」与「结果成功」是两件事：`outcome` 是这份角色结果自身的成败结论，先于任何外部
+  // mutation 从载荷严格推出，并随结算一起持久化。下游只允许 `succeeded` 推进生命周期。
+  const workerRole = verification.attribution.role;
+  const workerOutcome = deriveWorkerOutcome(input.delivery.acceptedResult, workerRole);
+  // 唯一 accept 路径复用 `record-worker-result` 的结论→尝试结局映射：只有 `completed` 才是成功，
+  // `conclusive_failure` 是确定失败，缺证据（`null`）不构成尝试结局、不写结论。
+  const attemptOutcome = attemptOutcomeFromWorkerOutcome(workerOutcome);
+  const outcome: DeliverySettlementOutcome | null =
+    attemptOutcome === 'completed' ? 'succeeded' : attemptOutcome === 'conclusive_failure' ? 'failed' : null;
+  const validationVerdict: DeliveryValidationVerdict | null =
+    attemptOutcome === 'completed' ? 'passed' : attemptOutcome === 'conclusive_failure' ? 'failed' : null;
   const accepted = await runSettlementMutation(
     input,
     input.operationIds.acceptResult,
@@ -1014,8 +1130,8 @@ export async function settleDelivery(input: SettleDeliveryInput): Promise<Settle
   if (typeof persistRevision !== 'number') {
     return { kind: 'blocked', laneKey: acceptLaneKey, reason: persistRevision.message };
   }
-  const recorded = input.store.transact({
-    kind: 'record-delivery-settlement',
+  const settlementCommand = {
+    kind: 'record-delivery-settlement' as const,
     coordinationScopeId: input.coordinationScopeId,
     expectedRevision: persistRevision,
     writer: input.writer,
@@ -1029,7 +1145,10 @@ export async function settleDelivery(input: SettleDeliveryInput): Promise<Settle
     role: verification.attribution.role,
     contractRevision: input.trusted.specBinding.contractRevision,
     orcaResultRef: readback.orcaResultRef,
-  });
+    outcome,
+    ...(workerRole === 'validator' && validationVerdict !== null ? { validationVerdict } : {}),
+  };
+  const recorded = input.store.transact(settlementCommand);
   if (recorded.kind === 'rejected') {
     return { kind: 'blocked', laneKey: acceptLaneKey, reason: recorded.message };
   }
@@ -1052,5 +1171,5 @@ export async function settleDelivery(input: SettleDeliveryInput): Promise<Settle
   if (confirmed !== null) {
     return confirmed;
   }
-  return { kind: 'settled', dedupeKey, orcaResultRef: readback.orcaResultRef, verification };
+  return { kind: 'settled', dedupeKey, orcaResultRef: readback.orcaResultRef, outcome, verification };
 }

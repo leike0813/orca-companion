@@ -36,6 +36,7 @@ import type {
   CoordinationSnapshot,
   DeliverySettlementRecord,
 } from '../ports/branch-coordination-store.js';
+import { settlementAdvancesLifecycle } from '../../domain/worker-report.js';
 import { isGraphVersionInChain, type GraphVersionRecord } from '../../domain/planning/execution-graph.js';
 import { planFinalizerDispatch } from '../finalize-project.js';
 import { openInteractionCount, type CoordinationReadSnapshot } from '../ports/branch-coordination-store.js';
@@ -306,6 +307,8 @@ export type ExecutionObservationFacts = {
   readonly unavailableReasons: readonly string[];
   /** Finalizer 运行条件的外部观察；没有生产者时为 `null`。 */
   readonly finalizer: FinalizerObservationFacts | null;
+  /** 由当前 Attempt 的持久修复许可推导，恢复后仍可投影 repairing。 */
+  readonly repairingAttemptIds?: ReadonlySet<string>;
 };
 
 export function noExecutionObservations(reason: string): ExecutionObservationFacts {
@@ -509,7 +512,7 @@ export function validatorAcceptanceSummary(input: ValidatorAcceptanceInput): Val
       settlements: input.snapshot.deliverySettlements.filter((settlement) =>
         settlement.role === 'validator' && taskIds.has(settlement.workerTaskId),
       ),
-    });
+    }).filter(settlementAdvancesLifecycle);
     for (const settlement of settlements) {
       const binding = bindings.find((candidate) =>
         candidate.workerTaskId === settlement.workerTaskId &&
@@ -558,7 +561,7 @@ export function validatorAcceptanceSummary(input: ValidatorAcceptanceInput): Val
 function furthestAcceptedRole(settlements: readonly DeliverySettlementRecord[]): WorkerRole | null {
   let furthest: WorkerRole | null = null;
   for (const role of WORKER_ROLE_ORDER) {
-    if (settlements.some((settlement) => settlement.role === role)) {
+    if (settlements.some((settlement) => settlement.role === role && settlementAdvancesLifecycle(settlement))) {
       furthest = role;
     }
   }
@@ -570,7 +573,20 @@ function latestSettlementFor(
   role: WorkerRole,
 ): DeliverySettlementRecord | null {
   return settlements
-    .filter((settlement) => settlement.role === role)
+    .filter((settlement) => settlement.role === role && settlementAdvancesLifecycle(settlement))
+    .reduce<DeliverySettlementRecord | null>(
+      (latest, current) => (latest === null || current.acceptedAt >= latest.acceptedAt ? current : latest),
+      null,
+    );
+}
+
+/** 该角色上最新一条明确不成功的结算（失败或缺证据）；没有时为 `null`。 */
+function latestStoppedSettlementFor(
+  settlements: readonly DeliverySettlementRecord[],
+  role: WorkerRole,
+): DeliverySettlementRecord | null {
+  return settlements
+    .filter((settlement) => settlement.role === role && !settlementAdvancesLifecycle(settlement))
     .reduce<DeliverySettlementRecord | null>(
       (latest, current) => (latest === null || current.acceptedAt >= latest.acceptedAt ? current : latest),
       null,
@@ -692,6 +708,34 @@ function deriveWorkPackage(
 
   // 4. 已接受的最远角色决定阶段。
   const furthest = furthestAcceptedRole(workflow.settlements);
+
+  // 4a. 下一个角色已有明确不成功的结算（失败或缺证据），且该角色没有在跑的 Worker：
+  // 该节点既不前进也不「等待」——它停在 blocked，由宿主按正常 Retry 或阻塞处理。
+  if (running.length === 0) {
+    const expectedNext: WorkerRole | null =
+      furthest === null
+        ? 'planner'
+        : furthest === 'planner'
+          ? 'implementation'
+          : furthest === 'implementation'
+            ? 'validator'
+            : null;
+    const stopped = expectedNext === null ? null : latestStoppedSettlementFor(workflow.settlements, expectedNext);
+    if (stopped !== null) {
+      const outcome = (stopped as { readonly outcome?: unknown }).outcome;
+      return {
+        ...phase('blocked', {
+          role: expectedNext,
+          attemptId: stopped.attemptId,
+          derivedFrom: [`settlement:${stopped.dedupeKey}`],
+          blockerRefs: [`settlement:${stopped.dedupeKey}:${String(outcome)}`],
+        }),
+        worktreePath,
+        liveness: null,
+      };
+    }
+  }
+
   let current: Phase = phase('waiting');
   if (furthest === 'validator') {
     const settlement = latestSettlementFor(workflow.settlements, 'validator');
@@ -740,7 +784,8 @@ function deriveWorkPackage(
   const runningEntry = running.at(-1) ?? null;
   if (runningEntry !== null) {
     current = {
-      ...phase(ROLE_PHASE[runningEntry.dispatch.role], {
+      ...phase(runningEntry.dispatch.role === 'validator' && observations.repairingAttemptIds?.has(runningEntry.dispatch.attemptId ?? '')
+        ? 'repairing' : ROLE_PHASE[runningEntry.dispatch.role], {
         role: runningEntry.dispatch.role,
         attemptId: runningEntry.dispatch.attemptId,
         derivedFrom: [`worker-live:${runningEntry.dispatch.attemptId}`],

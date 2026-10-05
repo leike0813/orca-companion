@@ -727,7 +727,7 @@ function deliveryBlockers(
  * 启动序列与 Resume 都用它：读取（`readPending`）→ 前驱唯一 pipeline（`replayDeliveries`）→
  * 显式拒绝或「已重放 + 无法装配的那些」。**不**第二套读取、去重或结算路径。
  */
-async function replayPendingDeliveries(input: {
+export async function replayPendingDeliveries(input: {
   readonly store: BranchCoordinationStore;
   readonly backend: ExecutionBackend;
   readonly coordinationScopeId: CoordinationScopeId;

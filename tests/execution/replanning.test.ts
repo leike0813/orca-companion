@@ -13,9 +13,10 @@ import type {
   GraphVersion,
   PlanningCycleId,
 } from '../../src/application/dto/identity.js';
-import { recordInitialGraph } from '../../src/application/planning/graph-history.js';
+import { loadPlanningCycleCandidate, recordInitialGraph } from '../../src/application/planning/graph-history.js';
 import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 import { recordApproval } from '../../src/application/planning/authorization-service.js';
+import { transitionToExecution } from '../../src/application/planning/lease-handoff.js';
 import {
   classifyGenerationEvent,
   isGenerationRecoverable,
@@ -29,9 +30,11 @@ import {
 } from '../../src/domain/execution/replanning.js';
 import {
   beginReplanningTransition,
+  beginReplanningFromScope,
   cancelReplanningTransition,
   commitGenerationCutover,
   completeReplanningTransition,
+  cutoverRefsForCandidate,
   ensureGraphGenerationRecord,
 } from '../../src/application/execution/replanning-service.js';
 import {
@@ -209,6 +212,20 @@ test('drain 模式下未结清就等待，结清后才释放 Lease 并建立新 
   expect(scope.planningCycleId).toBe(NEXT_CYCLE);
   expect(scope.controlState).toBe('active');
   expect(executionLeaseHolder()).toBeNull();
+  expect(completeReplanningTransition({ store: harness.store, coordinationScopeId: harness.scopeId,
+    writer: harness.writer, closure: 'drain',
+    settlement: { inFlightWorkers: 0, pendingDeliveries: 0, openInteractions: 0, unresolvedIntents: 0 },
+    newPlanningCycleId: NEXT_CYCLE })).toMatchObject({ kind: 'released', leaseReleased: false });
+});
+
+test('未开始重规划时不能经收尾入口释放执行 Lease', () => {
+  const result = completeReplanningTransition({ store: harness.store, coordinationScopeId: harness.scopeId,
+    writer: harness.writer, closure: 'drain',
+    settlement: { inFlightWorkers: 0, pendingDeliveries: 0, openInteractions: 0, unresolvedIntents: 0 },
+    newPlanningCycleId: NEXT_CYCLE });
+  expect(result).toMatchObject({ kind: 'rejected', failure: { code: 'transition_required' } });
+  expect(scopeState().mode).toBe('execution_coordination');
+  expect(executionLeaseHolder()).not.toBeNull();
 });
 
 test('cancel-and-reconcile 在停止未确认时保持 cancelling，不伪造已停止', () => {
@@ -494,4 +511,121 @@ test('新代际使用全新的 Graph、Run 与 WorkPackageId', () => {
   const candidatePackages = versions.kind === 'graph-versions' ? versions.versions[0]?.graph.workPackages : [];
   expect(candidatePackages?.map((entry) => entry.workPackageId)).toEqual(['wp-new']);
   expect(EXECUTION_GENERATION).toBe(1);
+});
+
+test('重复开始过渡是可重入的恢复，不重新挂起也不产生第二份事实', () => {
+  expect(begin().kind).toBe('started');
+  expect(generationStatus(harness.graphId)).toBe('suspended');
+
+  const replay = begin();
+  expect(replay.kind).toBe('started');
+  expect(generationStatus(harness.graphId)).toBe('suspended');
+  expect(scopeState().controlState).toBe('replanning_transition');
+});
+
+test('beginReplanningFromScope 从 Scope 代际记录派生前代身份', () => {
+  // 生产路径在建立世代时就登记代际记录；基座没有代际记录时该入口 fail closed，因此这里先补齐。
+  const ensured = ensureGraphGenerationRecord({
+    store: harness.store,
+    coordinationScopeId: harness.scopeId,
+    writer: harness.writer,
+    graphId: harness.graphId,
+    generation: harness.generation,
+    planningCycleId: EXECUTION_CYCLE,
+    orcaRunId: EXECUTION_RUN_ID,
+    predecessorGraphId: null,
+    baselineHead: 'head-1',
+  });
+  expect(ensured.kind).toBe('recorded');
+  const started = beginReplanningFromScope({
+    store: harness.store,
+    coordinationScopeId: harness.scopeId,
+    writer: harness.writer,
+    facts: {
+      userRequestedReplanning: true,
+      goalOrGlobalConstraintChanged: false,
+      graphRevisionsExhausted: false,
+    },
+  });
+  expect(started).toMatchObject({ kind: 'started', predecessorGraphId: harness.graphId, suspended: true });
+  expect(generationStatus(harness.graphId)).toBe('suspended');
+});
+
+test('取消重放两次仍返回已取消，不重复推进代际或重取 Lease', () => {
+  begin();
+  const cancel = () =>
+    cancelReplanningTransition({
+      store: harness.store,
+      coordinationScopeId: harness.scopeId,
+      writer: harness.writer,
+      suspendedGraphId: harness.graphId,
+      refreshedAuthorization: { authorizationId: EXECUTION_AUTHORIZATION_ID, authorizationVersion: 1 },
+      reconciliationResolved: true,
+    });
+  expect(cancel().kind).toBe('cancelled');
+  expect(cancel().kind).toBe('cancelled');
+  expect(generationStatus(harness.graphId)).toBe('active');
+  expect(executionLeaseHolder()).toBe(harness.writer.coordinatorSessionId);
+});
+
+test('候选审阅精确落在当前 Planning Cycle 的候选代际，而不是 Scope 前代', () => {
+  prepareForCutover();
+  const candidate = loadPlanningCycleCandidate({
+    store: harness.store,
+    coordinationScopeId: harness.scopeId,
+    planningCycleId: NEXT_CYCLE,
+  });
+  expect(candidate.kind).toBe('loaded');
+  if (candidate.kind !== 'loaded') {
+    return;
+  }
+  expect(candidate.generation.graphId).toBe(CANDIDATE_GRAPH);
+  expect(candidate.generation.status).toBe('candidate');
+  expect(candidate.version.version).toBe(1);
+
+  // 前代仍被 Scope 指针指向，但不再是候选代际。
+  expect(
+    loadPlanningCycleCandidate({ store: harness.store, coordinationScopeId: harness.scopeId, planningCycleId: EXECUTION_CYCLE }),
+  ).toEqual({ kind: 'absent' });
+
+  const refs = cutoverRefsForCandidate({
+    store: harness.store,
+    coordinationScopeId: harness.scopeId,
+    planningCycleId: NEXT_CYCLE,
+  });
+  expect(refs).toEqual({ kind: 'ready', refs: cutoverRefs() });
+});
+
+test('候选图缺少匹配的已批准 Manifest 时 Cutover 引用集合保持 blocked', () => {
+  begin();
+  completeReplanningTransition({
+    store: harness.store,
+    coordinationScopeId: harness.scopeId,
+    writer: harness.writer,
+    closure: 'drain',
+    settlement: { inFlightWorkers: 0, pendingDeliveries: 0, openInteractions: 0, unresolvedIntents: 0 },
+    newPlanningCycleId: NEXT_CYCLE,
+  });
+  expect(
+    cutoverRefsForCandidate({ store: harness.store, coordinationScopeId: harness.scopeId, planningCycleId: NEXT_CYCLE }),
+  ).toMatchObject({ kind: 'blocked' });
+});
+
+test('批准后的模式切换使用 Cutover，原子冻结前代并接手新代际 Lease', () => {
+  prepareForCutover();
+  const candidate = harness.store.query({ kind: 'graph-version', coordinationScopeId: harness.scopeId,
+    graphId: CANDIDATE_GRAPH, graphVersion: 1 as GraphVersion });
+  const authorization = harness.store.query({ kind: 'authorization', coordinationScopeId: harness.scopeId,
+    authorizationId: CANDIDATE_AUTH });
+  if (candidate.kind !== 'graph-version' || candidate.version === null || authorization.kind !== 'authorization' || authorization.authorization === null)
+    throw new Error('候选授权不可读');
+  expect(transitionToExecution({ store: harness.store, coordinationScopeId: harness.scopeId,
+    planningCycleId: NEXT_CYCLE, writer: harness.writer, gateFacts: { openDecisionTickets: 0,
+      fogPresent: false, unresolvedInteractions: 0, unresolvedMutations: 0,
+      currentMapRevision: EXECUTION_MAP_REVISION, currentPlanRevision: EXECUTION_PLAN_REVISION,
+      candidate: candidate.version, authorization: authorization.authorization } })).toMatchObject({ kind: 'transitioned' });
+  expect(scopeState()).toMatchObject({ mode: 'execution_coordination', graphId: CANDIDATE_GRAPH, authorizationId: CANDIDATE_AUTH });
+  expect(generationStatus(harness.graphId)).toBe('frozen');
+  expect(generationStatus(CANDIDATE_GRAPH)).toBe('active');
+  expect(executionLeaseHolder()).toBe(harness.writer.coordinatorSessionId);
 });

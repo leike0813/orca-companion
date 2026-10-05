@@ -4,9 +4,10 @@
  *
  * 这个用例把一条验证链固定在同一个真实 harness session 内：每一步都要求返回可核验的 Session
  * Binding，任何一步给出不同的 session 都按「session 丢失」处理，而不是把新 session 当作原
- * Validation Attempt 的继续。session 丢失只产生 blocker，或交给调用方按正常 Retry Attempt 重开
- * ——本 change 没有 Worker Session Recovery 能力，因此这里不生成 Capsule、不记录也不消耗
- * Recovery Budget。
+ * Validation Attempt 的继续。session 丢失只产生 blocker，或交给调用方按正常 Retry Attempt 重开；
+ * 需要恢复 Validator 上下文时，由既有的 Worker Session Recovery 路径从精确 transcript 生成
+ * Recovery Capsule 并消耗独立的有限 Recovery Budget——本模块自己不生成 Capsule，也不读写或
+ * 消耗 Recovery Budget。
  *
  * 修复只在已授权范围与修复预算内直接执行：改动路径必须落在 Scope Envelope 内，需要设计或依赖变更
  * 时以 Worker Escalation 上报。修复触及某条 Evidence Record 覆盖的路径时，该记录立即失效，验证
@@ -100,9 +101,57 @@ export type RunValidationInput = {
   readonly evidence: readonly EvidenceRecord[];
   /** 有限循环上限；与修复预算共同保证链一定终止。 */
   readonly maxSteps: number;
+  /**
+   * 修复步骤前的持久预算/准入。缺省表示调用方不在这一步扣减；一旦提供，`rejected`/`unknown` 都会
+   * 阻止这次修复被派发。
+   */
+  readonly admitStep?: AdmitValidationStep;
 };
 
-export type ValidationBlockCode = 'session_lost' | 'budget_exhausted' | 'evidence_missing' | 'invalid_state';
+export type ValidationBlockCode =
+  | 'session_lost'
+  | 'budget_exhausted'
+  | 'evidence_missing'
+  | 'invalid_state'
+  | 'admission_rejected'
+  | 'admission_unknown';
+
+/**
+ * 修复步骤的稳定身份：同一 Validation Attempt 的重放必须派生出同一个值，重放才不会重复扣预算，
+ * unknown 对账也才能落回同一条 Operation Intent。
+ */
+export function validationRepairStepId(input: {
+  readonly dispatchId: DispatchId;
+  readonly validationAttemptId: ValidationAttemptId;
+  /** 该次修复在整条验证链中的 1 基绝对序号（含此前已消耗的修复）。 */
+  readonly repairOrdinal: number;
+}): string {
+  return `validator-repair:${input.dispatchId}:${input.validationAttemptId}:${input.repairOrdinal}`;
+}
+
+/**
+ * 修复前持久预算/准入的输入。`stepId` 稳定，宿主据此在持久层做原子接纳与扣减。
+ *
+ * `rejected` 表示可证明没有接纳这次修复；`unknown` 表示验收结果不确定，此时必须保持阻塞并按同一
+ * `stepId` 对账，绝不能继续派发修复。
+ */
+export type ValidationStepAdmissionRequest = {
+  readonly stepId: string;
+  readonly kind: 'repair';
+  readonly workPackageId: WorkPackageId;
+  readonly workerTaskId: WorkerTaskId;
+  readonly dispatchId: DispatchId;
+  readonly validationAttemptId: ValidationAttemptId;
+  readonly repairIntent: RepairIntent;
+  readonly repairOrdinal: number;
+};
+
+export type ValidationStepAdmission =
+  | { readonly kind: 'admitted' }
+  | { readonly kind: 'rejected'; readonly reason: string }
+  | { readonly kind: 'unknown'; readonly reason: string };
+
+export type AdmitValidationStep = (request: ValidationStepAdmissionRequest) => Promise<ValidationStepAdmission>;
 
 export type RunValidationResult =
   | {
@@ -312,6 +361,44 @@ export async function runValidation(input: RunValidationInput): Promise<RunValid
         blockerRef: blockerRef(input, 'repair-budget'),
         budgetKey: repairBudgetKey,
       };
+    }
+
+    // 修复前先过持久预算/准入：同一验证链重放派生同一个 stepId，重放不重复扣减；unknown 必须保持
+    // 阻塞并按同一 stepId 对账，绝不继续派发修复。
+    const repairOrdinal = consumed + 1;
+    if (input.admitStep !== undefined) {
+      const admitted = await input.admitStep({
+        stepId: validationRepairStepId({
+          dispatchId: input.dispatchId,
+          validationAttemptId: input.validationAttemptId,
+          repairOrdinal,
+        }),
+        kind: 'repair',
+        workPackageId: input.workPackageId,
+        workerTaskId: input.workerTaskId,
+        dispatchId: input.dispatchId,
+        validationAttemptId: input.validationAttemptId,
+        repairIntent: intent,
+        repairOrdinal,
+      });
+      if (admitted.kind === 'rejected') {
+        return {
+          kind: 'blocked',
+          code: 'admission_rejected',
+          reason: admitted.reason,
+          blockerRef: blockerRef(input, 'admission-rejected'),
+          budgetKey: repairBudgetKey,
+        };
+      }
+      if (admitted.kind === 'unknown') {
+        return {
+          kind: 'blocked',
+          code: 'admission_unknown',
+          reason: admitted.reason,
+          blockerRef: blockerRef(input, 'admission-unknown'),
+          budgetKey: repairBudgetKey,
+        };
+      }
     }
 
     steps += 1;

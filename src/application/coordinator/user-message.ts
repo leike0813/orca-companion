@@ -11,7 +11,7 @@
  * 聊天在结构上不可能满足一个待答问题。
  */
 
-import type { CoordinatorSessionState, WakeBatch } from '../../domain/coordinator/session-state.js';
+import type { CoordinatorSessionState, SourceRevisionRef, WakeBatch } from '../../domain/coordinator/session-state.js';
 import type { CoordinationScopeId, CoordinatorSessionId } from '../dto/identity.js';
 import type { ControlState } from '../../domain/coordination/mode.js';
 import type { BranchCoordinationStore } from '../ports/branch-coordination-store.js';
@@ -62,6 +62,8 @@ export type SubmitUserMessageInput = {
   /** UI 在一次提交时生成，并在同一次重试中复用。 */
   readonly submissionId: string;
   readonly content: string;
+  /** 宿主按当前交接身份绑定，仅新普通消息可携带。 */
+  readonly activationSource?: SourceRevisionRef;
   readonly clock?: () => number;
 };
 
@@ -119,12 +121,14 @@ export function userMessageWakeBatch(input: {
   readonly coordinatorSessionId: CoordinatorSessionId;
   readonly submissionId: string;
   readonly content: string;
+  readonly activationSource?: SourceRevisionRef;
 }): WakeBatch {
   return {
     wakeBatchId: `wake:user:${input.submissionId}`,
     coordinationScopeId: input.coordinationScopeId,
     coordinatorSessionId: input.coordinatorSessionId,
-    sourceRevisions: [{ sourceKind: 'user-message', sourceId: input.submissionId, revision: 1 }],
+    sourceRevisions: [{ sourceKind: 'user-message', sourceId: input.submissionId, revision: 1 },
+      ...(input.activationSource === undefined ? [] : [input.activationSource])],
     actionableWork: [
       {
         workKind: 'user_message',
@@ -200,6 +204,7 @@ export function submitUserMessage(input: SubmitUserMessageInput): SubmitUserMess
     coordinatorSessionId: input.coordinatorSessionId,
     submissionId: input.submissionId,
     content,
+    ...(input.activationSource === undefined ? {} : { activationSource: input.activationSource }),
   });
 
   const commit = input.checkpoints.commitUserMessage({

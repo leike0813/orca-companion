@@ -22,6 +22,7 @@ import { projectExecutionProfilesFixture, projectConnectionsFixture } from '../s
 import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
 import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
 import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
+import { beginReplanningFromScope, completeReplanningTransition } from '../../src/application/execution/replanning-service.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
@@ -901,5 +902,59 @@ test('审阅与批准各自核验只读 Worker 能力：不可用不写授权，
   } finally {
     harness.dispose();
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('取消重规划经宿主完整重新授权恢复原 Run 和代际，不复用原批准', { timeout: 60_000 }, async () => {
+  const temporary = mkdtempSync(join(tmpdir(), 'orca-replanning-authorization-'));
+  const harness = await openAuthorizationHost(temporary);
+  let openedStore: CoordinationStore | null = null;
+  try {
+    await harness.host.ports.scopeSetup.resolveHome();
+    harness.capability.value = READ_ONLY_WORKER_AVAILABLE;
+    const initial = await harness.host.ports.executionAuthorization.review();
+    if (initial.kind !== 'review') throw new Error('初始审阅不可读');
+    expect((await harness.host.ports.executionAuthorization.approve({ fingerprint: initial.review.fingerprint,
+      expectedRevision: initial.review.scopeRevision })).kind).toBe('accepted');
+    await harness.host.ports.execute({ kind: 'scope-control', action: 'pause' });
+    const opened = openCoordinationStore({ databasePath: coordinationDatabasePath(join(harness.repository, '.git')), clock });
+    if (opened.kind !== 'opened') throw new Error(opened.message);
+    openedStore = opened.store;
+    const readScope = () => {
+      const read = opened.store.query({ kind: 'scope', coordinationScopeId: SCOPE });
+      if (read.kind !== 'scope' || read.scope === null) throw new Error('Scope 不可读');
+      return read.scope;
+    };
+    const leases = opened.store.query({ kind: 'leases', coordinationScopeId: SCOPE });
+    const runtime = leases.kind === 'leases' ? leases.leases.find(entry => entry.kind === 'runtime' && entry.releasedAt === null) : undefined;
+    if (runtime === undefined) throw new Error('Runtime Lease 不可读');
+    const writer: CoordinationWriter = { coordinatorSessionId: runtime.coordinatorSessionId,
+      runtimeIncarnationId: runtime.runtimeIncarnationId, fencingGeneration: runtime.fencingGeneration };
+    expect(beginReplanningFromScope({ store: opened.store, coordinationScopeId: SCOPE, writer,
+      facts: { userRequestedReplanning: true, goalOrGlobalConstraintChanged: false, graphRevisionsExhausted: false } }).kind).toBe('started');
+    expect(completeReplanningTransition({ store: opened.store, coordinationScopeId: SCOPE, writer, closure: 'drain',
+      settlement: { inFlightWorkers: 0, pendingDeliveries: 0, openInteractions: 0, unresolvedIntents: 0 },
+      newPlanningCycleId: 'cycle-replanning' as PlanningCycleId }).kind).toBe('released');
+    const before = readScope();
+    const fresh = await harness.host.ports.executionAuthorization.review({ target: 'suspended_generation' });
+    if (fresh.kind !== 'review') throw new Error(`恢复审阅不可读: ${JSON.stringify(fresh)}`);
+    expect(fresh.review.gate.ready).toBe(true);
+    expect(fresh.review.fingerprint).not.toBe(initial.review.fingerprint);
+    expect(fresh.review.candidate.graphId).toBe(before.graphId);
+    const refreshed = await harness.host.ports.executionAuthorization.approve({ fingerprint: fresh.review.fingerprint,
+      expectedRevision: fresh.review.scopeRevision });
+    if (refreshed.kind !== 'accepted') throw new Error(JSON.stringify(refreshed));
+    const approved = readScope();
+    expect(approved.mode).toBe('route_planning');
+    expect(approved.authorizationId).not.toBe(before.authorizationId);
+    expect(approved.authorizationVersion).toBe((before.authorizationVersion ?? 0) + 1);
+    const cancelled = await harness.host.controller.execute({ kind: 'graph-evolution', action: 'cancel-replanning',
+      coordinationScopeId: SCOPE, writer, suspendedGraphId: approved.graphId!, authorizationId: approved.authorizationId!,
+      authorizationVersion: approved.authorizationVersion!, reconciliationResolved: false });
+    expect(cancelled.kind).toBe('accepted');
+    expect(readScope()).toMatchObject({ mode: 'execution_coordination', controlState: 'active',
+      graphId: before.graphId, planningCycleId: CYCLE });
+  } finally {
+    openedStore?.close(); harness.dispose(); rmSync(temporary, { recursive: true, force: true });
   }
 });

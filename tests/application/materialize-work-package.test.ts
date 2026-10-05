@@ -102,6 +102,7 @@ function fakeBackend(script: {
   const calls: Call[] = [];
   let worktrees = [...(script.worktrees ?? [])];
   let mutations = 0;
+  let taskSpec: string | null = null;
 
   const backend: ExecutionBackend = {
     query: (input) => {
@@ -120,6 +121,9 @@ function fakeBackend(script: {
             hostScope: { hostIds: ['local'], omittedHostIds: [] },
           },
         });
+      }
+      if (input.operation === 'task-list' && taskSpec !== null) {
+        return Promise.resolve({ kind: 'accepted', value: { tasks: [{ id: 'orca-task-1', spec: taskSpec }] } });
       }
       return Promise.resolve({ kind: 'rejected', code: 'unregistered_fake_query', message: 'fake 未登记该查询' });
     },
@@ -151,6 +155,7 @@ function fakeBackend(script: {
         });
       }
       if (input.operation === 'task-create') {
+        taskSpec = input.spec;
         return Promise.resolve({
           kind: 'accepted',
           operation: { operationId: scope.operationId, target: scope.target },
@@ -998,6 +1003,49 @@ test('Worker 启动失败后复用已绑定 Task，不创建第二个 Task', asy
   expect(
     execution.calls.filter((call) => call.kind === 'mutate' && call.operation.operation === 'task-create'),
   ).toHaveLength(1);
+});
+
+test.each([true, false])('实现结算失败证明=%s：只有确定失败可重派，Task 与预算保持冻结', async (failureProven) => {
+  const execution = fakeBackend({ worktrees: [isolatedWorktree()] });
+  const base = context('first');
+  const first = await materializeWorkPackage({ store, backend: execution.backend, coordinationScopeId: SCOPE,
+    workPackageId: WP, context: base, facts: facts(), expectedRevision: revision() });
+  expect(first.kind).toBe('materialized');
+  const segment = store.transact({ kind: 'record-session-segment', coordinationScopeId: SCOPE,
+    expectedRevision: revision(), writer, segmentId: 'segment-failed' as never, workPackageId: WP,
+    role: 'implementation', workerTaskId: base.candidate.taskEnvelope.workerTaskId,
+    dispatchId: 'dispatch-1' as never, attemptId: 'attempt-1', sessionBindingId: 'binding-1',
+    lastTranscriptRef: 'transcript-1', terminalReceiptRef: null, transcriptReferenceable: true, verifiable: true });
+  expect(segment.kind).toBe('committed');
+  const failure = store.transact({ kind: 'record-delivery-settlement', coordinationScopeId: SCOPE,
+    expectedRevision: revision(), writer, dedupeKey: 'failed-first', deliveryId: 'delivery-first', runId: 'run-1',
+    consumerGeneration: 1, workerTaskId: base.candidate.taskEnvelope.workerTaskId, dispatchId: 'dispatch-1' as never,
+    attemptId: 'attempt-1', role: 'implementation', contractRevision: 1, orcaResultRef: 'orca-task-1#dispatch-1',
+    ...(failureProven ? { outcome: 'failed' as const } : {}) });
+  expect(failure.kind).toBe('committed');
+  const retryContext = (index: number) => ({ ...base,
+    candidate: { ...base.candidate, launchId: `retry-launch-${index}`, taskEnvelope: { ...base.candidate.taskEnvelope,
+      dispatchId: `candidate-${index}` as never, attemptId: `attempt-${index}` } },
+    operationIds: { ...base.operationIds, workerStart: `retry-start-${index}` as OperationId } });
+  const second = await materializeWorkPackage({ store, backend: execution.backend, coordinationScopeId: SCOPE,
+    workPackageId: WP, context: retryContext(2), facts: facts({ consumed: [{ field: 'implementationAttempts', consumed: 1 }] }), expectedRevision: revision() });
+  if (!failureProven) {
+    expect(second).toMatchObject({ kind: 'rejected', failure: { code: 'retry_unproven' } });
+    expect(execution.calls.filter(call => call.kind === 'mutate' && call.operation.operation === 'worker-start')).toHaveLength(1);
+    return;
+  }
+  expect(second.kind).toBe('materialized');
+  const starts = execution.calls.filter(call => call.kind === 'mutate' && call.operation.operation === 'worker-start');
+  expect(starts).toHaveLength(2);
+  expect(starts.at(-1)?.operation).toMatchObject({ taskId: 'orca-task-1', retryOfDispatchId: 'dispatch-1' });
+  expect(execution.calls.filter(call => call.kind === 'mutate' && call.operation.operation === 'task-create')).toHaveLength(1);
+  const counters = store.query({ kind: 'budget-counters', coordinationScopeId: SCOPE });
+  expect(counters.kind === 'budget-counters' ? counters.counters.find(entry => entry.budgetKey.endsWith(':implementationAttempts'))?.consumed : null).toBe(2);
+  const count = execution.calls.length;
+  const third = await materializeWorkPackage({ store, backend: execution.backend, coordinationScopeId: SCOPE,
+    workPackageId: WP, context: retryContext(3), facts: facts({ consumed: [{ field: 'implementationAttempts', consumed: 2 }] }), expectedRevision: revision() });
+  expect(third.kind).toBe('rejected');
+  expect(execution.calls).toHaveLength(count);
 });
 
 test('重新授权只影响新 Task：新 Work Package 钉住新授权，旧 Task 的 Retry 沿用原绑定', async () => {

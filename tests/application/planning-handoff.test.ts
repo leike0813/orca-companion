@@ -289,6 +289,10 @@ test('交接不触碰在途 Worker 的所有权事实与 Execution Coordination 
   expect(after.snapshot.executionLease?.coordinatorSessionId).toBe(SESSION_A);
   expect(after.snapshot.ticketClaims.map((claim) => claim.ticketRef.id)).toContain('ticket-1');
   expect(after.snapshot.ticketClaims.every((claim) => claim.state === 'active')).toBe(true);
+  // 规划责任转移时活跃 Claim 跟着走，不留在 Source 变成悬空所有权。
+  expect(after.snapshot.ticketClaims.find((claim) => claim.ticketRef.id === 'ticket-1')?.coordinatorSessionId).toBe(
+    SESSION_B,
+  );
 });
 
 test('cutover 之前取消交接，责任保持原 Session 且提案标记为已取消', () => {

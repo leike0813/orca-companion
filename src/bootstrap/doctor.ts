@@ -22,6 +22,7 @@ import {
 } from '../adapters/agents/chat-model-factory.js';
 import { verifyModelCapabilities } from '../adapters/agents/capability-probe.js';
 import { JsonCredentialStore } from '../adapters/storage/credential-store.js';
+import type { CredentialStore } from '../application/ports/credential-store.js';
 import {
   configurationByRef,
   currentWorkerProfile,
@@ -343,6 +344,11 @@ export async function runDoctor(probe: DoctorProbe, options: DoctorOptions = {})
 export type OrcaDoctorProbeEnvironment = {
   readonly cwd: string;
   readonly env: Readonly<Record<string, string>>;
+  /**
+   * 宿主已构造的用户级凭据 store。前台 Bootstrap 传入与其它消费者共用的同一实例；独立的
+   * `doctor` 命令省略时由本模块按 `env` 构造一份，保持「一次调用一个实例」。
+   */
+  readonly credentialStore?: CredentialStore;
   readonly executable?: string;
   /** 前台 Scope 的调用者身份只从该 canonical worktree 的终端中选择。 */
   readonly identityWorktreePath?: string;
@@ -401,11 +407,12 @@ function readProjectConfigOnce(worktreePath: string): DoctorProjectConfigRead {
 }
 
 /**
- * 用启动同一条路径核验已配置的 Coordinator 模型：同一工厂、同一凭据 store（按 doctor 的 env 推导）、
- * 同一套五项能力核验。
+ * 用启动同一条路径核验已配置的 Coordinator 模型：同一工厂、同一份 CredentialStore、同一套五项能力
+ * 核验。
  *
- * 凭据 store 刻意由本次 env 构造而不复用宿主实例：doctor 是独立的一次性命令，可能在另一个 XDG 环境
- * 里运行，共用实例反而会读到不属于本次调用的凭据文件。
+ * 凭据 store 由 `createOrcaDoctorProbe` 按本次 env 构造一份并注入，而不是每个消费者各建一个：doctor
+ * 可能运行在另一个 XDG 环境里，store 必须跟随本次调用；同时装配面上只有一个实例来源，避免同一进程
+ * 内出现指向不同文件的副本。
  */
 function unreadableConfigStep(message: string): DoctorProbeStep<CoordinatorModelFacts> {
   return {
@@ -417,7 +424,7 @@ function unreadableConfigStep(message: string): DoctorProbeStep<CoordinatorModel
 
 async function verifyConfiguredCoordinatorModel(
   config: ProjectConfig,
-  env: Readonly<Record<string, string>>,
+  credentials: CredentialStore,
 ): Promise<DoctorProbeStep<CoordinatorModelFacts>> {
   const configuration = configurationByRef(config, config.defaultCoordinatorModelRef);
   if (configuration === null) {
@@ -439,7 +446,7 @@ async function verifyConfiguredCoordinatorModel(
   const resolved = resolveChatModel(
     configuration,
     () => integration,
-    new JsonCredentialStore({ environment: env }),
+    credentials,
   );
   if (resolved.kind !== 'resolved') {
     // 凭据解析失败与 provider 不可用都不是「能力探针没跑」，而是这份配置本身用不了：如实报不可用。
@@ -461,6 +468,10 @@ async function verifyConfiguredCoordinatorModel(
 }
 
 export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): DoctorProbe {
+  // 本次 doctor 调用唯一的凭据 store：优先沿用宿主注入的同一实例；独立命令未注入时按 env 构造
+  // 一份，供所有需要读凭据的消费者共用，不在各消费者内部各建一个指向同一文件的副本。
+  const credentials =
+    environment.credentialStore ?? new JsonCredentialStore({ environment: environment.env });
   // 显式给出的协调身份与 `terminal list` 观察到的句柄同权：否则探测会先宣布「身份可用」，
   // 随后每个带身份的查询都因解析不到这个句柄而失败。
   const observedHandles = new Set<string>(
@@ -614,7 +625,7 @@ export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): 
         : projectConfig.kind === 'loaded'
           ? {
               readCoordinatorModel: () =>
-                verifyConfiguredCoordinatorModel(projectConfig.config, environment.env),
+                verifyConfiguredCoordinatorModel(projectConfig.config, credentials),
             }
           // 配置在但读不动或写坏：同样装配，让 doctor 如实报不可用。跳过会把「配错了」说成「没配」。
           : { readCoordinatorModel: () => Promise.resolve(unreadableConfigStep(projectConfig.message)) }

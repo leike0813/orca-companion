@@ -26,6 +26,7 @@ export type RequestShowResult = {
   readonly requestId: string;
   readonly state: RequestState;
   readonly interpretation: string | null;
+  readonly receipt?: unknown;
 };
 
 /** 与 catalog 的 `OperationParse` 结构相同；在这里本地声明以免反向依赖 catalog。 */
@@ -62,6 +63,7 @@ export function readRequestShow(result: unknown): RequestShowParse {
   }
   return {
     ok: true,
-    value: { requestId, state: state as RequestState, interpretation: readString(record, 'interpretation') },
+    value: { requestId, state: state as RequestState, interpretation: readString(record, 'interpretation'),
+      ...('receipt' in record ? { receipt: record['receipt'] } : {}) },
   };
 }

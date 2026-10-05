@@ -13,7 +13,6 @@
 import type { IntentOutcomeClass } from '../dto/operation-intent.js';
 import type {
   CoordinationScopeId,
-  CoordinatorSessionId,
   EntityRef,
   OperationId,
   PlanningCycleId,
@@ -23,6 +22,7 @@ import type {
   BranchCoordinationStore,
   CoordinationCommandRejection,
   CoordinationWriter,
+  TicketClaimRecord,
 } from '../ports/branch-coordination-store.js';
 import { readScope, type ScopeReadResult } from './scope-read.js';
 import {
@@ -349,16 +349,20 @@ export async function updateRouteMapSection(input: UpdateRouteMapSectionInput): 
 // Ticket Claim
 // ---------------------------------------------------------------------------
 
-type ClaimLookup =
-  | { readonly kind: 'free' }
-  | { readonly kind: 'held'; readonly coordinatorSessionId: CoordinatorSessionId }
+/** 一张票是否与本 Session 已持有的活跃 claim 指向同一张票。 */
+function sameTicket(claim: TicketClaimRecord, ticket: EntityRef<string>): boolean {
+  return claim.ticketRef.kind === ticket.kind && claim.ticketRef.id === ticket.id;
+}
+
+type ActiveClaimsRead =
+  | { readonly kind: 'read'; readonly claims: readonly TicketClaimRecord[] }
   | { readonly kind: 'rejected'; readonly message: string };
 
-function activeClaimLookup(
+/** 一次读回再判定，避免「同一票据」与「同一 Session」两条规则读到不同的快照。 */
+function readActiveClaims(
   store: BranchCoordinationStore,
   coordinationScopeId: CoordinationScopeId,
-  ticket: EntityRef<string>,
-): ClaimLookup {
+): ActiveClaimsRead {
   const snapshot = store.query({ kind: 'snapshot', coordinationScopeId });
   if (snapshot.kind === 'rejected') {
     return { kind: 'rejected', message: snapshot.message };
@@ -366,10 +370,7 @@ function activeClaimLookup(
   if (snapshot.kind !== 'snapshot') {
     return { kind: 'rejected', message: '无法读取 Ticket Claim 快照' };
   }
-  const active = snapshot.snapshot.ticketClaims.find(
-    (claim) => claim.state === 'active' && claim.ticketRef.kind === ticket.kind && claim.ticketRef.id === ticket.id,
-  );
-  return active === undefined ? { kind: 'free' } : { kind: 'held', coordinatorSessionId: active.coordinatorSessionId };
+  return { kind: 'read', claims: snapshot.snapshot.ticketClaims.filter((claim) => claim.state === 'active') };
 }
 
 export type TicketMutationInput = PlanningMutationContext & {
@@ -388,15 +389,35 @@ export type ClaimTicketInput = TicketMutationInput & {
  * 两者必须同时成立；本地已有他人活跃 claim 时直接拒绝，不会去改写别人的 assignee。
  */
 export async function claimTicket(input: ClaimTicketInput): Promise<PlanningMutationResult> {
-  const owner = activeClaimLookup(input.store, input.coordinationScopeId, input.ticketRef);
-  if (owner.kind === 'rejected') {
-    return { kind: 'rejected', code: 'invalid_state', message: owner.message };
+  const active = readActiveClaims(input.store, input.coordinationScopeId);
+  if (active.kind === 'rejected') {
+    return { kind: 'rejected', code: 'invalid_state', message: active.message };
   }
-  if (owner.kind === 'held' && owner.coordinatorSessionId !== input.writer.coordinatorSessionId) {
+  // 同一张票至多一个活跃 claim：本 Session 已持有它时按已认领处理，不必再写 tracker。
+  const ticketClaim = active.claims.find((claim) => sameTicket(claim, input.ticketRef));
+  if (ticketClaim !== undefined) {
+    return ticketClaim.coordinatorSessionId === input.writer.coordinatorSessionId
+      ? {
+          kind: 'rejected',
+          code: 'already_claimed',
+          message: `票据 ${input.ticketRef.id} 已由本 Session 持有活跃 claim`,
+        }
+      : {
+          kind: 'rejected',
+          code: 'claim_conflict',
+          message: `票据 ${input.ticketRef.id} 已由 ${ticketClaim.coordinatorSessionId} 认领`,
+        };
+  }
+  // 每个 Session 至多一个活跃 Ticket Claim：已持有另一张票时在写 tracker 之前拒绝。
+  const sessionClaim = active.claims.find(
+    (claim) => claim.coordinatorSessionId === input.writer.coordinatorSessionId,
+  );
+  if (sessionClaim !== undefined) {
     return {
       kind: 'rejected',
       code: 'claim_conflict',
-      message: `票据 ${input.ticketRef.id} 已由 ${owner.coordinatorSessionId} 认领`,
+      message:
+        `Session ${input.writer.coordinatorSessionId} 已持有票据 ${sessionClaim.ticketRef.id} 的活跃 claim；同一 Session 至多一个活跃 Ticket Claim`,
     };
   }
 

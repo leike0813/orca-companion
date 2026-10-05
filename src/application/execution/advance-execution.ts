@@ -191,6 +191,7 @@ export function materializeOperationIdsFor(input: {
   readonly role: WorkerRole;
   readonly contractRevision: number;
   readonly attemptId: string;
+  readonly workerTaskId?: string;
   readonly unresolvedIntents?: readonly OperationIntent[];
   readonly settledRejectedIntents?: readonly OperationIntent[];
 }): MaterializeOperationIds {
@@ -201,7 +202,7 @@ export function materializeOperationIdsFor(input: {
     input.workPackageId,
     input.role,
     String(input.contractRevision),
-    input.attemptId,
+    ...(input.workerTaskId === undefined ? [] : [input.workerTaskId]),
   ]
     .map((segment) => encodeURIComponent(segment))
     .join(':');
@@ -215,7 +216,7 @@ export function materializeOperationIdsFor(input: {
 
   const identify = (step: AdvanceStep): OperationId => {
     const lane = STEP_LANE[step];
-    const base = `${prefix}:${step}`;
+    const base = `${prefix}${step === 'task' || step === 'worktree' ? '' : `:${encodeURIComponent(input.attemptId)}`}:${step}`;
     const rejected = (input.settledRejectedIntents ?? []).filter((intent) =>
       intent.state === 'settled' && intent.outcomeClass === 'rejected' &&
       (intent.operationId === base || intent.operationId.startsWith(`${base}:retry:`)),
@@ -321,7 +322,18 @@ export function selectAdvanceCandidate(input: {
     if (input.excludedWorkPackageIds?.has(entry.workPackageId) ||
       (input.selectedWorkPackageId !== undefined && entry.workPackageId !== input.selectedWorkPackageId)) continue;
     const permit = revisions.permits.find(item => item.workPackageId === entry.workPackageId) ?? null;
-    const role = nextAdvanceRoleOf({ state: entry.state, role: entry.role, revisionPlanner: permit });
+    const nextRole = nextAdvanceRoleOf({ state: entry.state, role: entry.role, revisionPlanner: permit });
+    // 已结算但非成功的角色（失败或缺证据）不是终局：下一次派发是同一契约的普通 Retry，复用原 Task
+    // 与授权，只换 Dispatch/Attempt。是否真的重派仍由下面的预算门禁判定。
+    const retryRole =
+      entry.state === 'blocked' && entry.role === 'implementation' &&
+      entry.blockerRefs.some((ref) => ref.startsWith('settlement:')) &&
+      input.snapshot.materializationBindings.some(binding => binding.workPackageId === entry.workPackageId &&
+        binding.role === 'implementation' && binding.attemptId === entry.attemptId &&
+        input.snapshot.deliverySettlements.some(settlement => settlement.outcome === 'failed' && acceptedResultMatchesTask(binding, settlement)))
+        ? entry.role
+        : null;
+    const role = nextRole ?? retryRole;
     if (role === null || role === 'finalizer') continue;
     if (entry.liveness === 'live' || entry.liveness === 'unverifiable') {
       blockers.push(`worker:${entry.workPackageId}:${entry.liveness}`);
@@ -344,6 +356,7 @@ export function selectAdvanceCandidate(input: {
         graphId: input.graph.graphId, graphGeneration: input.graph.generation,
         workPackageId: binding.workPackageId, role: binding.role,
         contractRevision: binding.specBinding?.contractRevision ?? 0, attemptId: binding.attemptId,
+        ...(binding.workerTaskId === null ? {} : { workerTaskId: binding.workerTaskId }),
         unresolvedIntents: input.materializationIntents, settledRejectedIntents: input.materializationIntents });
       return input.materializationIntents.some(intent => intent.operationId === ids.workerStart);
     });
@@ -358,7 +371,9 @@ export function selectAdvanceCandidate(input: {
       blockers.push(`budget:${entry.workPackageId}:unreadable`);
       continue;
     }
-    if (role === 'implementation' && budgetFieldExhausted(workPackage.budget.implementationAttempts,
+    const admittedAttempt = input.snapshot.materializationBindings.some(binding => binding.workPackageId === entry.workPackageId &&
+      binding.role === role && binding.identity === 'issued' && !input.snapshot.deliverySettlements.some(settlement => acceptedResultMatchesTask(binding, settlement)));
+    if (role === 'implementation' && !admittedAttempt && budgetFieldExhausted(workPackage.budget.implementationAttempts,
       consumed.find(item => item.field === 'implementationAttempts')?.consumed ?? 0)) {
       blockers.push(`budget-exhausted:${workPackageBudgetKey(workPackage.workPackageId, 'implementationAttempts')}`);
       continue;
@@ -870,7 +885,17 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
     authorization: dispatchAuthorizationFacts,
     authority: dispatchPermissions,
     consumed,
-    requiredBudgetField: dispatch.requiredBudgetField,
+    // 该 Attempt 已有已签发绑定：它的准入扣减已经发生在 record-binding，重启后只是沿原身份继续
+    // worker-start。此时 consumed 已经把这次尝试算在内，再按 exhausted 挡住就会把已准入的尝试永久
+    // 卡在预算门外；因此有绑定即视为已准入，不再重复计费也不重复拒绝。
+    requiredBudgetField: snapshot.materializationBindings.some((binding) =>
+      binding.workPackageId === workPackage.workPackageId &&
+      binding.role === role &&
+      binding.identity === 'issued' &&
+      binding.workerTaskId === dispatch.taskEnvelope.workerTaskId &&
+      binding.attemptId === dispatch.taskEnvelope.attemptId)
+      ? null
+      : dispatch.requiredBudgetField,
   };
 
   const decision = guardDispatchCandidate({
@@ -902,6 +927,7 @@ export async function advanceExecution(input: AdvanceExecutionInput): Promise<Ad
     role,
     contractRevision: dispatch.taskEnvelope.specBinding?.contractRevision ?? 0,
     attemptId: dispatch.taskEnvelope.attemptId,
+    workerTaskId: dispatch.taskEnvelope.workerTaskId,
     unresolvedIntents: intents,
     settledRejectedIntents: intents,
   });

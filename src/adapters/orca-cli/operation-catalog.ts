@@ -23,6 +23,8 @@ import type {
   WorktreeSummary,
 } from '../../application/ports/execution-backend.js';
 import type { OutputLimits } from './process-runner.js';
+import { parseReplyReceipt } from '../../application/ports/execution-backend.js';
+export { parseReplyReceipt, type ReplyReceipt } from '../../application/ports/execution-backend.js';
 import { readRequestShow } from './reconcile-query.js';
 import type { RequestShowResult } from './reconcile-query.js';
 import { parseWorkerStopReceipt } from './worker-stop.js';
@@ -61,6 +63,9 @@ type EntryFor<K extends OrcaOperation> = {
 
 /** `check --wait` 之类长会话输出单独放宽上限，仍是有界值。 */
 const LONG_READ_LIMITS: OutputLimits = { maxBytes: 4 * 1024 * 1024, maxLines: 40_000 };
+
+/** `orchestration inbox` 的硬页上限：绝不接受更大的页，也绝不退化成全库读取。 */
+export const INBOX_PAGE_MAX = 20;
 
 // ---------------------------------------------------------------------------
 // 窄校验器
@@ -618,7 +623,7 @@ export function isDeliveryBatch(value: unknown): value is DeliveryBatch {
   });
 }
 
-function parseDeliveryMessage(raw: unknown): OperationParse<DeliveryMessage> {
+export function parseDeliveryMessage(raw: unknown): OperationParse<DeliveryMessage> {
   const message = readRecord(raw);
   if (message === undefined) {
     return invalid('delivery message: 条目不是对象');
@@ -643,6 +648,50 @@ function parseDeliveryMessage(raw: unknown): OperationParse<DeliveryMessage> {
     priority: readString(message, 'priority'),
     body: readString(message, 'body'),
     payload: readString(message, 'payload'),
+  });
+}
+
+/**
+ * `orchestration inbox` 的有界页：`messages` 是原始 mailbox 行，字段与 Delivery 消息同源。
+ *
+ * inbox 没有 Run/message selector，页大小由调用方限制在 1..20；这里只负责把页内的 raw message 归一化
+ * 成与 `delivery-read` 相同的 `DeliveryMessage` 形状，不声称这一页覆盖了全库。
+ */
+export type MessageInboxPage = {
+  readonly messages: readonly DeliveryMessage[];
+  readonly count: number;
+};
+
+export function parseMessageInbox(result: unknown): OperationParse<MessageInboxPage> {
+  const record = requireRecord(result, 'inbox');
+  if (isParseFailure(record)) {
+    return record;
+  }
+  const messages = readArray(record, 'messages');
+  if (messages === null) {
+    return invalid('inbox: 缺少 messages 数组');
+  }
+  const entries: DeliveryMessage[] = [];
+  for (const raw of messages) {
+    const entry = parseDeliveryMessage(raw);
+    if (!entry.ok) {
+      return entry;
+    }
+    entries.push(entry.value);
+  }
+  const count = readNumber(record, 'count');
+  return parsed({ messages: entries, count: count ?? entries.length });
+}
+
+/** 已解析 inbox 页的结构确认：`message-inbox` 的 parser 已在 backend 侧跑过一次。 */
+export function isMessageInboxPage(value: unknown): value is MessageInboxPage {
+  const record = readRecord(value);
+  if (record === undefined || !Array.isArray(record['messages'])) {
+    return false;
+  }
+  return record['messages'].every((message) => {
+    const entry = readRecord(message);
+    return entry !== undefined && typeof entry['messageId'] === 'string' && typeof entry['fromHandle'] === 'string';
   });
 }
 
@@ -897,6 +946,23 @@ export const ORCA_OPERATIONS = {
     buildArgv: (input) => ['orchestration', 'request-show', '--request', input.requestId, '--json'],
     parseResult: parseRequestShow,
   },
+  'message-inbox': {
+    mutating: false,
+    format: 'json',
+    // 必须带精确 terminal handle：inbox 不跨 terminal，也不接受全库 `--all`。
+    identity: 'terminal',
+    buildArgv: (input, identity) => {
+      const limit = input.limit === undefined ? INBOX_PAGE_MAX : input.limit;
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > INBOX_PAGE_MAX) {
+        throw new Error(`message-inbox 的 limit 必须在 1..${INBOX_PAGE_MAX} 内`);
+      }
+      const args = ['orchestration', 'inbox', '--json'];
+      pushIdentity(args, identity, '--terminal');
+      pushFlag(args, '--limit', limit);
+      return args;
+    },
+    parseResult: parseMessageInbox,
+  },
   'worktree-create': {
     mutating: true,
     format: 'json',
@@ -1047,6 +1113,18 @@ export const ORCA_OPERATIONS = {
       args.push('--ack', input.deliveryId);
       return args;
     },
+  },
+  reply: {
+    mutating: true,
+    format: 'json',
+    identity: 'from',
+    buildArgv: (input, identity) => {
+      const args = ['orchestration', 'reply', '--id', input.messageId, '--body', input.body, '--json'];
+      pushIdentity(args, identity, '--from');
+      pushFlag(args, '--run', input.runId);
+      return args;
+    },
+    parseResult: parseReplyReceipt,
   },
 } satisfies { readonly [K in OrcaOperation]: EntryFor<K> };
 

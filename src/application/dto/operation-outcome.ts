@@ -41,7 +41,7 @@ export type ReconcileBlockReason =
   | 'no_backend_request_id';
 
 export type ReconcileResult =
-  | { readonly kind: 'settled'; readonly operation: OperationRef; readonly statement: string }
+  | { readonly kind: 'settled'; readonly operation: OperationRef; readonly statement: string; readonly receipt?: unknown }
   | { readonly kind: 'blocked'; readonly operation: OperationRef; readonly reason: ReconcileBlockReason };
 
 export type DeliveryContract = 'legacy_direct' | 'current_delivery' | 'audit_only';

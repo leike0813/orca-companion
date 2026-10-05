@@ -185,7 +185,7 @@ export type ExecutionAuthorizationLoad =
  * 用户看到的 Scope revision，宿主重读全部权威输入后才写入批准并原子切换；界面填不了任何身份。
  */
 export type ExecutionAuthorizationIntentPort = {
-  readonly review: () => Promise<ExecutionAuthorizationLoad>;
+  readonly review: (input?: { readonly target?: 'current' | 'suspended_generation' }) => Promise<ExecutionAuthorizationLoad>;
   readonly approve: (input: {
     readonly fingerprint: string;
     readonly expectedRevision: number;

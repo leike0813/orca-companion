@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 19;
+export const SCHEMA_VERSION = 20;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -47,6 +47,8 @@ export const COORDINATION_TABLES: readonly string[] = [
   'baseline_adoptions',
   'work_package_lanes',
   'integration_reconciliations',
+  'validation_step_admissions',
+  'validation_attempts',
 ];
 
 export type Migration = {
@@ -639,6 +641,97 @@ const MIGRATION_17: readonly string[] = [
      ON graph_versions (coordination_scope_id, graph_generation DESC, graph_id DESC, graph_version DESC)`,
 ];
 
+/**
+ * M20：共享协调事实的四项收紧。
+ *
+ * 1. 每个 Session 在同一个 Scope 内至多持有一个活跃 Ticket Claim。旧索引只按 ticket 唯一，同一 Session
+ *    可以同时认领多张票，而 tracker assignee 对所有 Session 是同一身份，冲突检测因此失效。新索引在
+ *    state = active 上按 (scope, session) 唯一；既有重复行会让建索引失败，整个 migration 回滚，绝不自动
+ *    释放或删除任何 claim——重复本身就是需要用户处理的矛盾事实。
+ * 2. session_registry.blocked_reason_json 保存结构化阻塞原因（code 与 message）。blocked 是
+ *    update-session-lifecycle 写入的生命周期状态；旧行保持 NULL，不经迁移猜测原因。
+ * 3. delivery_settlements 增加可空的结果成败与验证结论。旧行一律 NULL：当时没有这项事实，读取方必须
+ *    按「未经证明」精确复核，而不是把缺少结论当成成功。
+ * 4. 物化绑定的主键由 (scope, work_package, creation_operation_id) 放宽为代理键，另加
+ *    (scope, work_package, creation_operation_id, attempt_id) 唯一索引。普通 Retry 复用同一个 Orca Task
+ *    时，创建 Task 的那次 OperationId 不变，只有 Attempt 变化；旧主键会把复用 Task 的第二次派发当成身份
+ *    冲突拒绝。SQLite 不允许 STRICT 表主键列可空，因此这里重建表并搬移数据。
+ */
+const MIGRATION_20: readonly string[] = [
+  `CREATE UNIQUE INDEX IF NOT EXISTS ticket_claims_single_active_per_session
+     ON ticket_claims (coordination_scope_id, coordinator_session_id)
+     WHERE state = 'active'`,
+  `ALTER TABLE session_registry ADD COLUMN blocked_reason_json TEXT`,
+  `ALTER TABLE delivery_settlements ADD COLUMN outcome TEXT`,
+  `ALTER TABLE delivery_settlements ADD COLUMN validation_verdict TEXT`,
+  `CREATE TABLE IF NOT EXISTS validation_step_admissions (
+     coordination_scope_id TEXT NOT NULL,
+     step_id TEXT NOT NULL,
+     work_package_id TEXT NOT NULL,
+     worker_task_id TEXT NOT NULL,
+     dispatch_id TEXT NOT NULL,
+     validation_attempt_id TEXT NOT NULL,
+     repair_ordinal INTEGER NOT NULL CHECK (repair_ordinal > 0),
+     budget_key TEXT NOT NULL,
+     approved_limit_ref TEXT NOT NULL,
+     admitted_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, step_id)
+   ) STRICT`,
+`CREATE TABLE IF NOT EXISTS validation_attempts (
+     coordination_scope_id TEXT NOT NULL,
+     dispatch_id TEXT NOT NULL,
+     validation_attempt_id TEXT NOT NULL,
+     work_package_id TEXT NOT NULL,
+     worker_task_id TEXT NOT NULL,
+     provider_session_id TEXT NOT NULL,
+     initial_repair_consumed INTEGER NOT NULL CHECK (initial_repair_consumed >= 0),
+     message_ids TEXT NOT NULL,
+     terminal_question_message_id TEXT,
+     updated_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, dispatch_id)
+   ) STRICT`,
+  `ALTER TABLE materialization_bindings RENAME TO materialization_bindings_v19`,
+  `CREATE TABLE materialization_bindings (
+     binding_id INTEGER PRIMARY KEY,
+     coordination_scope_id TEXT NOT NULL,
+     work_package_id TEXT NOT NULL,
+     creation_operation_id TEXT NOT NULL,
+     role TEXT,
+     worker_task_id TEXT,
+     dispatch_id TEXT,
+     attempt_id TEXT,
+     worktree_id TEXT,
+     spec_binding_json TEXT,
+     specification_unit_path TEXT,
+     authorization_id TEXT,
+     authorization_version INTEGER,
+     worker_profile_ref TEXT,
+     utility_role TEXT,
+     orca_task_id TEXT NOT NULL,
+     launch_id TEXT,
+     created_at INTEGER NOT NULL
+   ) STRICT`,
+  `INSERT INTO materialization_bindings (
+     coordination_scope_id, work_package_id, creation_operation_id, role, worker_task_id, dispatch_id,
+     attempt_id, worktree_id, spec_binding_json, specification_unit_path, authorization_id,
+     authorization_version, worker_profile_ref, utility_role, orca_task_id, launch_id, created_at
+   )
+   SELECT coordination_scope_id, work_package_id, creation_operation_id, role, worker_task_id, dispatch_id,
+     attempt_id, worktree_id, spec_binding_json, specification_unit_path, authorization_id,
+     authorization_version, worker_profile_ref, utility_role, orca_task_id, launch_id, created_at
+   FROM materialization_bindings_v19`,
+  `DROP TABLE materialization_bindings_v19`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS materialization_bindings_task_attempt
+     ON materialization_bindings (coordination_scope_id, work_package_id, creation_operation_id, attempt_id)
+     WHERE attempt_id IS NOT NULL`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS materialization_bindings_role_attempt
+     ON materialization_bindings (coordination_scope_id, work_package_id, role, attempt_id)
+     WHERE role IS NOT NULL AND attempt_id IS NOT NULL`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS materialization_bindings_utility_attempt
+     ON materialization_bindings (coordination_scope_id, work_package_id, utility_role, attempt_id)
+     WHERE utility_role IS NOT NULL AND attempt_id IS NOT NULL`,
+];
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, statements: MIGRATION_1 },
   { version: 2, statements: MIGRATION_2 },
@@ -703,6 +796,7 @@ export const MIGRATIONS: readonly Migration[] = [
     // terminal 创建/准备类意图的精确资源引用；历史行保持 NULL，不推断回填。
     `ALTER TABLE operation_intents ADD COLUMN terminal_handle TEXT`,
   ] },
+  { version: 20, statements: MIGRATION_20 },
 ];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {

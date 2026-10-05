@@ -16,6 +16,7 @@
 import type {
   CompactionOutcome,
   CoordinatorSessionState,
+  MechanicalShakeArtifact,
   NativeCompactedWindowOwner,
   PortableContextCapsule,
 } from '../../domain/coordinator/session-state.js';
@@ -44,6 +45,8 @@ export type SessionCompactionArtifacts = {
   readonly outcome: CompactionOutcome;
   readonly capsule: PortableContextCapsule | null;
   readonly nativeWindowOwner: NativeCompactedWindowOwner | null;
+  /** 机械 Shake 的尝试标记；没有走这条路径时缺省。 */
+  readonly mechanicalShake?: MechanicalShakeArtifact | null;
 };
 
 /** 压缩产物的写入 seam；由 checkpoint store 实现，与核心会话记录分开落表。 */
@@ -55,6 +58,10 @@ export type CompactionArtifactPort = {
   readonly saveNativeWindowOwner: (
     coordinatorSessionId: CoordinatorSessionId,
     owner: NativeCompactedWindowOwner,
+  ) => CheckpointWriteResult;
+  readonly saveMechanicalShake: (
+    coordinatorSessionId: CoordinatorSessionId,
+    artifact: MechanicalShakeArtifact,
   ) => CheckpointWriteResult;
 };
 
@@ -150,6 +157,12 @@ export function requestSessionCompaction(
     );
     if (saved.kind === 'failed') {
       return { kind: 'blocked', reason: `无法持久化原生压缩窗口：${saved.message}` };
+    }
+  }
+  if (artifacts.mechanicalShake !== undefined && artifacts.mechanicalShake !== null) {
+    const saved = input.checkpoints.saveMechanicalShake(input.coordinatorSessionId, artifacts.mechanicalShake);
+    if (saved.kind === 'failed') {
+      return { kind: 'blocked', reason: `无法持久化机械 Shake 产物：${saved.message}` };
     }
   }
 

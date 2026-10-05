@@ -12,7 +12,6 @@ import {
 } from './codex-model-launcher.js';
 import type { CredentialStore } from '../../application/ports/credential-store.js';
 import type { WorkerModelConfiguration } from '../../domain/model-configuration.js';
-import { JsonCredentialStore } from '../storage/credential-store.js';
 
 export const CODEX_HOOK_TRUST_BYPASS_ARG = '--dangerously-bypass-hook-trust';
 export const CODEX_UTILITY_PERMISSION_PROFILE = 'utility-readonly-local-control';
@@ -127,8 +126,11 @@ export function createCodexWorkerLaunch(input: {
    * 纯 model 字符串路径。
    */
   readonly modelConfiguration: Readonly<WorkerModelConfiguration>;
-  /** managed 凭据的同步 store；用于准备阶段 fail closed 校验凭据存在，不参与 secret 传递。 */
-  readonly credentialStore?: CredentialStore;
+  /**
+   * 宿主（Bootstrap）注入的用户级凭据 store。必填：adapter 不按路径另建实例，否则「刚保存的 key
+   * 在启动路径读不到」只在运行期暴露。它只在准备阶段证明 managed key 存在，不参与 secret 传递。
+   */
+  readonly credentialStore: CredentialStore;
   /** 写入 descriptor 供 launcher 运行时读取的凭据文件位置；省略时按 XDG 推导。 */
   readonly credentialStorePath?: string;
   /** 测试可指向 fake codex 可执行文件。 */
@@ -183,11 +185,11 @@ export function createCodexWorkerLaunch(input: {
           ? input.modelConfiguration.connection.credential
           : null;
       if (managedCredential !== null) {
-        // 没有传 store 时按同一个 storePath（缺省即 XDG 位置）自己建一个，绝不因「没传」跳过校验。
-        const store = input.credentialStore ?? new JsonCredentialStore(
-          input.credentialStorePath === undefined ? {} : { path: input.credentialStorePath },
-        );
-        const read = store.read(managedCredential.credentialRef);
+        // store 必须由宿主注入：缺失即拒绝，绝不按路径另建实例或跳过校验，调用方在写盘前 fail closed。
+        if (input.credentialStore === undefined) {
+          throw new Error('Codex managed 凭据启动必须由 Bootstrap 注入 CredentialStore');
+        }
+        const read = input.credentialStore.read(managedCredential.credentialRef);
         if (read.kind !== 'resolved') {
           throw new Error('Codex managed 凭据不可用：' + read.code);
         }
@@ -265,7 +267,11 @@ export function createCodexResumeLaunch(input: {
   readonly sessionId: string;
   /** 原 session 的 CODEX_HOME；必须是可信装配给出的绝对路径。 */
   readonly codexHome: string;
-  readonly credentialStore?: CredentialStore;
+  /**
+   * 宿主（Bootstrap）注入的用户级凭据 store。必填：adapter 不按路径另建实例；resume 同样只在准备
+   * 阶段证明 managed key 存在，不参与 secret 传递。
+   */
+  readonly credentialStore: CredentialStore;
   readonly credentialStorePath?: string;
   readonly codexExecutable?: string;
   readonly sandboxMode: 'read-only' | 'workspace-write' | 'danger-full-access' | 'read-only-local-control';
@@ -300,10 +306,10 @@ export function createCodexResumeLaunch(input: {
           ? input.modelConfiguration.connection.credential
           : null;
       if (managedCredential !== null) {
-        const store = input.credentialStore ?? new JsonCredentialStore(
-          input.credentialStorePath === undefined ? {} : { path: input.credentialStorePath },
-        );
-        const read = store.read(managedCredential.credentialRef);
+        if (input.credentialStore === undefined) {
+          throw new Error('Codex managed 凭据 resume 必须由 Bootstrap 注入 CredentialStore');
+        }
+        const read = input.credentialStore.read(managedCredential.credentialRef);
         if (read.kind !== 'resolved') {
           throw new Error('Codex managed 凭据不可用：' + read.code);
         }

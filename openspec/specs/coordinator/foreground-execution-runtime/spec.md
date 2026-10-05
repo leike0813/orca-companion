@@ -17,17 +17,17 @@
 - **WHEN** 批准后地图或候选图版本发生变化
 - **THEN** 切换被拒绝，旧批准不触发 Worker 派发
 
-### Requirement: 前台进程串行推进角色工作
+### Requirement: 前台进程有界并行推进角色工作
 
-前台 Controller SHALL 仅由当前 Execution Coordination Lease 持有者推进 Execution Frontier；每次只物化当前候选的一个角色级任务，并按 Planner、Specification Admission、Implementation、Validator 的现有门禁推进。同一时刻 SHALL 至多有一个 active Work Package；Pause、Cancel、失去租约或未决 mutation SHALL 阻止新的派发。
+前台 Controller SHALL 仅由当前 Execution Coordination Lease 持有者推进 Execution Frontier；每次只物化当前候选的一个角色级任务，并按 Planner、Specification Admission、Implementation、Validator 的现有门禁推进。并行包额度 SHALL 来自已批准 Manifest 的 `maxActiveWorkPackages`，默认 3，接受任意正安全整数；各包使用隔离 worktree，同包角色与 canonical 集成 SHALL 分别串行。降低额度后在途包 SHALL 继续，空槽回收至新额度后再接纳新包。Pause、Cancel、失去租约或相关未决 mutation SHALL 阻止新的派发。
 
 #### Scenario: 首个候选进入执行
 - **WHEN** 已授权图有多个满足依赖的候选且没有活跃 Work Package
-- **THEN** 仅一个候选获得隔离 worktree 和当前角色级 Task，其余候选保持等待
+- **THEN** Controller 逐次物化当前候选的角色级 Task，并在批准额度内接纳多个独立包；额度已占满的候选保持等待
 
 #### Scenario: 角色结论推进下一个角色
 - **WHEN** 当前角色的结果已被核验并接受，且其后继门禁通过
-- **THEN** Controller 为同一 Work Package 派发下一个角色；Validator 通过及集成完成前不启动下一个 Work Package
+- **THEN** Controller 为同一 Work Package 派发下一个角色；其他依赖已满足的包可在批准额度内推进
 
 #### Scenario: Planner 的产出位置与结构由 Envelope 明示
 - **WHEN** Controller 为 Specification Planner 组装 Task Envelope

@@ -18,12 +18,16 @@ import type { ActionableWorkProjection } from './actionable-work.js';
 /** 默认的有限维护 cycle 上限；可按项目配置收紧或放宽，但必须有限。 */
 export const MAINTENANCE_CYCLE_LIMIT = 8;
 
+/** 保活动作的保守默认间隔；真实调度使用 provider 能力给出的可信间隔。 */
+export const MAINTENANCE_DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
+
 export const MAINTENANCE_STOP_REASONS = [
   'cycle_limit_reached',
   'actionable_work',
   'control_state',
   'fencing_lost',
   'keepalive_unavailable',
+  'aborted',
   'already_stopped',
 ] as const;
 
@@ -43,7 +47,13 @@ export const INITIAL_MAINTENANCE_STATE: MaintenanceLaneState = {
 };
 
 export type MaintenancePlan =
-  | { readonly kind: 'run'; readonly cycle: number; readonly note: string }
+  | {
+      readonly kind: 'run';
+      readonly cycle: number;
+      /** 本次保活之后到下一次尝试之间的等待间隔；由 provider 能力给出。 */
+      readonly intervalMs: number;
+      readonly note: string;
+    }
   | { readonly kind: 'stop'; readonly reason: MaintenanceStopReason };
 
 export type MaintenancePlanningInput = {
@@ -52,6 +62,10 @@ export type MaintenancePlanningInput = {
   readonly controlState: ControlState;
   readonly projection: ActionableWorkProjection;
   readonly cycleLimit?: number;
+  /** provider 提供的可信间隔；缺省取保守默认值。非正安全整数即视为保活不可用。 */
+  readonly intervalMs?: number;
+  /** 退出或让位信号；已中止即停止，不再发起新的保活。 */
+  readonly signal?: AbortSignal;
 };
 
 /**
@@ -63,6 +77,9 @@ export type MaintenancePlanningInput = {
 export function planMaintenance(input: MaintenancePlanningInput): MaintenancePlan {
   if (input.state.stopped) {
     return { kind: 'stop', reason: input.state.stopReason ?? 'already_stopped' };
+  }
+  if (input.signal?.aborted === true) {
+    return { kind: 'stop', reason: 'aborted' };
   }
   if (input.fencing.kind === 'fenced') {
     return { kind: 'stop', reason: 'fencing_lost' };
@@ -77,9 +94,14 @@ export function planMaintenance(input: MaintenancePlanningInput): MaintenancePla
   if (input.state.cyclesRun >= cycleLimit) {
     return { kind: 'stop', reason: 'cycle_limit_reached' };
   }
+  const intervalMs = input.intervalMs ?? MAINTENANCE_DEFAULT_INTERVAL_MS;
+  if (!Number.isSafeInteger(intervalMs) || intervalMs <= 0) {
+    return { kind: 'stop', reason: 'keepalive_unavailable' };
+  }
   return {
     kind: 'run',
     cycle: input.state.cyclesRun + 1,
+    intervalMs,
     note: `维持连接与缓存（第 ${String(input.state.cyclesRun + 1)}/${String(cycleLimit)} 次）`,
   };
 }
@@ -90,7 +112,8 @@ export type KeepaliveOutcome =
   | { readonly kind: 'unavailable'; readonly reason: string };
 
 export type MaintenanceCycleInput = MaintenancePlanningInput & {
-  readonly keepalive: () => Promise<KeepaliveOutcome>;
+  /** 保活动作；接收让位信号，退出或失去 fencing 时应当立即返回。 */
+  readonly keepalive: (signal: AbortSignal) => Promise<KeepaliveOutcome>;
 };
 
 export type MaintenanceCycleResult =
@@ -112,7 +135,7 @@ export async function runMaintenanceCycle(input: MaintenanceCycleInput): Promise
     return stopped(input.state, plan.reason);
   }
 
-  const outcome = await input.keepalive();
+  const outcome = await input.keepalive(input.signal ?? new AbortController().signal);
   if (outcome.kind === 'unavailable') {
     return stopped(input.state, 'keepalive_unavailable');
   }

@@ -11,6 +11,7 @@ import { expect, test } from 'vitest';
 
 import type { DispatchId, WorkerTaskId, WorkPackageId } from '../../src/application/dto/identity.js';
 import {
+  attemptOutcomeFromWorkerOutcome,
   decideWorkerResultRecording,
   retryPlanCarriesRecoveryArtifacts,
   type RecordWorkerResultInput,
@@ -214,4 +215,26 @@ test('核验不通过的报告被拒绝', () => {
   );
 
   expect(recording).toMatchObject({ kind: 'rejected' });
+});
+
+test('严格结果结论到尝试结局的映射：缺证据不构成尝试结局', () => {
+  expect(attemptOutcomeFromWorkerOutcome('succeeded')).toBe('completed');
+  expect(attemptOutcomeFromWorkerOutcome('failed')).toBe('conclusive_failure');
+  expect(attemptOutcomeFromWorkerOutcome('inconclusive')).toBeNull();
+});
+
+test('Retry 计划携带同一契约身份，缺失时不可证明', () => {
+  const withRef = decideWorkerResultRecording(input({ taskRevisionRef: 'patch-7' }));
+  expect(withRef.kind).toBe('retry');
+  if (withRef.kind !== 'retry') {
+    return;
+  }
+  expect(withRef.plan.taskRevisionRef).toBe('patch-7');
+
+  const withoutRef = decideWorkerResultRecording(input());
+  expect(withoutRef.kind).toBe('retry');
+  if (withoutRef.kind !== 'retry') {
+    return;
+  }
+  expect(withoutRef.plan.taskRevisionRef).toBeNull();
 });

@@ -430,6 +430,19 @@ test('已受理的单次工具动作提交完成源并结束本条工作；拒�
   expect(loadState().committedMessages.at(-1)?.completedWorkSource).toBeUndefined();
 });
 
+test('回复 Worker 消费精确来源，保留队首的其他待处理工作', async () => {
+  seedPendingCalls([{ callId: 'reply-1', name: 'reply_worker', args: {} }]);
+  const pending = work(2).items;
+  const source = pending[1]!.source;
+  const result = await createToolsNode({ sessionRecords: store,
+    assertFencing: () => ({ kind: 'valid', lease: {} as never }),
+    tools: [{ name: 'reply_worker', description: '回复', mutating: true, completesWorkOnSuccess: true,
+      inputSchema: { type: 'object' }, invoke: () => Promise.resolve({ kind: 'ok', value: {}, completedWorkSource: source }) }],
+  })({ ...graphState(2), remainingWork: pending });
+  expect(result.remainingWork).toEqual([pending[0]]);
+  expect(loadState().committedMessages.at(-1)?.completedWorkSource).toEqual(source);
+});
+
 test('ask_user 在没有规划工具的图中恢复原调用，并继续处理下一次提问', async () => {
   const recoveredId = 'ask-recovered';
   seedPendingCalls([{ callId: recoveredId, name: 'ask_user', args: { question: '恢复问题' } }]);

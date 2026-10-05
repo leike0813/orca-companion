@@ -218,6 +218,8 @@ function makeSettlement(input: {
   readonly attemptId?: string;
   readonly acceptedAt?: number;
   readonly contractRevision?: number;
+  readonly outcome?: 'succeeded' | 'failed' | null;
+  readonly validationVerdict?: 'passed' | 'failed' | null;
 }): DeliverySettlementRecord {
   const dispatchId = input.dispatchId ?? `dispatch-${input.workPackageId}-${input.role}`;
   return {
@@ -232,6 +234,14 @@ function makeSettlement(input: {
     role: input.role,
     contractRevision: input.contractRevision ?? 1,
     orcaResultRef: `orca-result-${dispatchId}`,
+    // 既有用例表达的都是「已接受的成功角色结果」；严格 outcome 单独由新用例覆盖。
+    outcome: input.outcome === undefined ? 'succeeded' : input.outcome,
+    validationVerdict:
+      input.validationVerdict === undefined
+        ? input.role === 'validator'
+          ? 'passed'
+          : null
+        : input.validationVerdict,
     acceptedAt: input.acceptedAt ?? 100,
   };
 }
@@ -582,6 +592,59 @@ describe('deriveExecutionFacts：Frontier 阶段只由持久事实推出', () =>
     expect(validating.role).toBe('implementation');
     expect(validating.validation?.state).toBe('validating');
     expect(validating.integration).toBeNull();
+  });
+
+  test('失败或缺证据的实现结算不推进生命周期：停在 implementation 阻塞，不进入验证', () => {
+    const build = (outcome: 'failed' | null) =>
+      derive({
+        snapshot: snapshot({
+          materializationBindings: [
+            makeBinding(WP_A, 'orca-task-planner', 'planner'),
+            makeBinding(WP_A, 'orca-task-impl', 'implementation'),
+          ],
+          deliverySettlements: [
+            makeSettlement({ workPackageId: WP_A, orcaTaskId: 'orca-task-planner', role: 'planner' }),
+            makeSettlement({ workPackageId: WP_A, orcaTaskId: 'orca-task-impl', role: 'implementation', outcome }),
+          ],
+        }),
+      });
+
+    for (const outcome of ['failed', null] as const) {
+      const entry = frontierEntry(build(outcome), WP_A);
+      // 确定失败与缺证据都不推进：节点停在 blocked，而不是 validating，也不静默重派。
+      expect(entry.state).toBe('blocked');
+      expect(entry.role).toBe('implementation');
+      expect(entry.blockerRefs.length).toBe(1);
+      expect(entry.validation).toBeNull();
+    }
+  });
+
+  test('失败的 Validator 结算不算验证通过：节点停在验证阻塞，Finalizer 门禁保持不 ready', () => {
+    const facts = derive({
+      snapshot: snapshot({
+        materializationBindings: [
+          makeBinding(WP_A, 'orca-task-planner', 'planner'),
+          makeBinding(WP_A, 'orca-task-impl', 'implementation'),
+          makeBinding(WP_A, 'orca-task-val', 'validator'),
+        ],
+        deliverySettlements: [
+          makeSettlement({ workPackageId: WP_A, orcaTaskId: 'orca-task-planner', role: 'planner' }),
+          makeSettlement({ workPackageId: WP_A, orcaTaskId: 'orca-task-impl', role: 'implementation' }),
+          makeSettlement({
+            workPackageId: WP_A,
+            orcaTaskId: 'orca-task-val',
+            role: 'validator',
+            outcome: 'failed',
+            validationVerdict: 'failed',
+          }),
+        ],
+      }),
+    });
+
+    const entry = frontierEntry(facts, WP_A);
+    expect(entry.state).toBe('blocked');
+    expect(entry.role).toBe('validator');
+    expect(facts.finalizer.gate.ready).toBe(false);
   });
 
   test('完整 push 结算才解除集成等待并放行依赖节点', () => {

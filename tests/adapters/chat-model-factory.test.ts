@@ -59,6 +59,40 @@ test('ordinary tokenizer and usage support never claim an exact context capabili
   expect(result).toMatchObject({ kind: 'resolved', exactContext: null });
 });
 
+test('installed integration exposes optional native compaction and keepalive; absent or invalid 一律 null', async () => {
+  class InstalledModel extends FakeListChatModel {
+    static companionNativeCompaction = { compact: () => Promise.resolve(null) };
+    static companionKeepalive = { intervalMs: 60_000, keepalive: () => Promise.resolve(true) };
+  }
+  const moduleResolver = createModuleIntegrationResolverAsync({ load: () => Promise.resolve({ InstalledModel }) });
+  const integration = await moduleResolver('installed#InstalledModel');
+  const resolved = resolveChatModel(configuration({ modelOptions: { responses: ['ok'] } }), () => integration, unusedCredentials);
+  expect(resolved.kind).toBe('resolved');
+  if (resolved.kind !== 'resolved') return;
+  expect(resolved.nativeCompaction).not.toBeNull();
+  expect(resolved.keepalive?.intervalMs).toBe(60_000);
+
+  // 缺能力的集成保持 unavailable，绝不猜 provider 私有接口。
+  const plainResolver = createModuleIntegrationResolverAsync({ load: () => Promise.resolve({ Plain: FakeListChatModel }) });
+  const plain = await plainResolver('installed#Plain');
+  expect(resolveChatModel(configuration({ modelOptions: { responses: ['ok'] } }), () => plain, unusedCredentials)).toMatchObject({
+    kind: 'resolved',
+    nativeCompaction: null,
+    keepalive: null,
+  });
+
+  // 间隔不是正安全整数的能力视为无效，同样 unavailable。
+  class BadKeepalive extends FakeListChatModel {
+    static companionKeepalive = { intervalMs: 0, keepalive: () => Promise.resolve(true) };
+  }
+  const badResolver = createModuleIntegrationResolverAsync({ load: () => Promise.resolve({ BadKeepalive }) });
+  const bad = await badResolver('installed#BadKeepalive');
+  expect(resolveChatModel(configuration({ modelOptions: { responses: ['ok'] } }), () => bad, unusedCredentials)).toMatchObject({
+    kind: 'resolved',
+    keepalive: null,
+  });
+});
+
 test('rejects credential-bearing options before resolving a provider', () => {
   let constructed = false;
   const result = resolveChatModel(configuration({ modelOptions: { headers: [{ api_key: 'secret-fixture' }] } }), () => {

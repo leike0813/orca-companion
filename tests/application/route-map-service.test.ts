@@ -707,3 +707,30 @@ test('释放阶段完成后可用原地图 OperationId 继续，且不再次清�
   expect(tracker.writeCalls().slice(writesBefore).map((call) => call.method)).toEqual(['update-body']);
   expect(intentOf(input.mapOperationId)?.outcomeClass).toBe('accepted');
 });
+
+test('同一 Session 已持有一张票据时不能再认领另一张，且不发出 tracker 写', async () => {
+  const tracker = mapAndTicketTracker();
+  const first = await claimTicket({
+    ...mutationContext('op-claim-1'),
+    tracker,
+    ticketRef: TICKET,
+    trackerAssignee: 'alice',
+  });
+  expect(first.kind).toBe('accepted');
+
+  const other: DecisionTicketRef = { kind: 'decision-ticket', id: 'ticket-2', version: 1 };
+  const writesBefore = tracker.writeCalls().length;
+  const second = await claimTicket({
+    ...mutationContext('op-claim-2'),
+    tracker,
+    ticketRef: other,
+    trackerAssignee: 'alice',
+  });
+
+  expect(second.kind).toBe('rejected');
+  if (second.kind === 'rejected') {
+    expect(second.code).toBe('claim_conflict');
+  }
+  // 前置检查在读回本地活跃 claim 后直接拒绝，tracker 上一次写都没有发出。
+  expect(tracker.writeCalls().length).toBe(writesBefore);
+});

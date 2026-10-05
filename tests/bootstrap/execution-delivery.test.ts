@@ -89,6 +89,7 @@ import type { EvidenceRecord } from '../../src/domain/worker-report.js';
 import { createCompanionStartupFixture, type CompanionStartupFixture } from '../support/companion-startup-harness.js';
 import { fixedReadOnlyWorkerProbe } from '../support/read-only-worker-probe.js';
 import { executionModelConfiguration } from '../support/execution-harness.js';
+import { credentialStoreFixture } from '../support/model-configurations.js';
 import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 import {
   RECOVERY_SCOPE,
@@ -565,6 +566,71 @@ test('只承载进度消息的批次不当作装配失败：报告为待确认�
   expect(progress.mutations).toEqual([]);
 });
 
+test('Worker 提问批次缺少耐久消费 seam 时阻塞，不当进度确认', async () => {
+  const fixture = createDeliveryFixture();
+  const question = fakeDeliveryBackend({
+    deliveryId: 'delivery-question',
+    messages: [{ ...deliveryMessage({ taskId: ORCA_TASK, dispatchId: 'ctx-question' }), type: 'question' }],
+  });
+
+  const read = await readPendingDeliveries({ ...fixture.readInput, store: fixture.store, backend: question.backend });
+
+  expect(read.kind).toBe('read');
+  if (read.kind === 'read') {
+    expect(read.pending).toEqual([]);
+    expect(read.progressAcks ?? []).toEqual([]);
+    expect(read.blocked?.map((block) => block.code)).toEqual(['worker_message_unconsumed']);
+  }
+  expect(question.mutations).toEqual([]);
+});
+
+test('Worker 提问经 callback 证明已耐久消费后才确认批次', async () => {
+  const fixture = createDeliveryFixture();
+  const seen: string[] = [];
+  const question = fakeDeliveryBackend({
+    deliveryId: 'delivery-question',
+    messages: [{ ...deliveryMessage({ taskId: ORCA_TASK, dispatchId: 'ctx-question' }), type: 'question' }],
+  });
+
+  const read = await readPendingDeliveries({
+    ...fixture.readInput,
+    store: fixture.store,
+    backend: question.backend,
+    onWorkerMessage: (message) => {
+      seen.push(message.type ?? 'unknown');
+      return Promise.resolve('consumed');
+    },
+  });
+
+  expect(seen).toEqual(['question']);
+  expect(read.kind).toBe('read');
+  if (read.kind === 'read') {
+    expect(read.blocked ?? []).toEqual([]);
+    expect(read.progressAcks).toEqual([{ deliveryId: 'delivery-question', runId: RUN }]);
+  }
+});
+
+test('Worker 提问的 callback 拒绝消费时批次阻塞，不确认', async () => {
+  const fixture = createDeliveryFixture();
+  const question = fakeDeliveryBackend({
+    deliveryId: 'delivery-question',
+    messages: [{ ...deliveryMessage({ taskId: ORCA_TASK, dispatchId: 'ctx-question' }), type: 'escalation' }],
+  });
+
+  const read = await readPendingDeliveries({
+    ...fixture.readInput,
+    store: fixture.store,
+    backend: question.backend,
+    onWorkerMessage: () => Promise.resolve('blocked'),
+  });
+
+  expect(read.kind).toBe('read');
+  if (read.kind === 'read') {
+    expect(read.progressAcks ?? []).toEqual([]);
+    expect(read.blocked?.map((block) => block.code)).toEqual(['worker_message_unconsumed']);
+  }
+});
+
 test('进度批次按既有 intent 顺序确认：ack 只发一次，意图落到已接受', async () => {
   const fixture = createDeliveryFixture();
   const progress = fakeDeliveryBackend({
@@ -1001,6 +1067,7 @@ test('生产事实装配读不到归属时：以结构化 blocker 呈现，不�
         clock: () => CLOCK_MS,
         bindingWindowMs: 100,
         readOnlyWorkerProbe: fixedReadOnlyWorkerProbe(),
+        credentialStore: credentialStoreFixture(),
       }),
   });
   recoveryFixture = fixture;
@@ -1150,6 +1217,7 @@ function factsFor(input: {
     clock,
     bindingWindowMs: 50,
     readOnlyWorkerProbe: fixedReadOnlyWorkerProbe(),
+    credentialStore: credentialStoreFixture(),
   });
 }
 
@@ -1512,6 +1580,7 @@ test('生产替代派发：只复用原 Worker Profile，SessionStart 报告读�
       clock,
       bindingWindowMs: 10,
       readOnlyWorkerProbe: fixedReadOnlyWorkerProbe(),
+      credentialStore: credentialStoreFixture(),
     });
     expect(modeless.replacementFor(fixture.subject)).toMatchObject({ kind: 'unavailable' });
   } finally {

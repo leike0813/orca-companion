@@ -83,6 +83,32 @@ export type WorkspaceGitFacts = {
   readonly dirtyPaths: readonly string[];
 };
 
+/** 修复许可的固定 HEAD 之后的实际路径，包含提交、暂存、未暂存和未跟踪变更。 */
+export async function readWorkspaceChangesSince(input: {
+  readonly worktreePath: string;
+  readonly baselineHead: string;
+  readonly runner?: ProcessRunner;
+  readonly env?: Readonly<Record<string, string>>;
+}): Promise<{ readonly kind: 'observed'; readonly changedPaths: readonly string[] } |
+  { readonly kind: 'rejected'; readonly reason: string }> {
+  if (!COMMIT_ID.test(input.baselineHead)) return { kind: 'rejected', reason: '修复许可缺少完整 Git HEAD' };
+  const before = await readWorkspaceFacts(input);
+  if (before.kind !== 'observed') return before;
+  const git = gitIn(input.worktreePath, input.runner ?? runProcess, input.env ?? (process.env as Record<string, string>));
+  const diff = await git(['diff', '--name-only', '--no-renames', '-z', input.baselineHead, '--']);
+  if (diff.kind !== 'completed' || diff.exitCode !== 0 || diff.stdout.truncated ||
+    (diff.stdout.text.length > 0 && !diff.stdout.text.endsWith('\0'))) {
+    return { kind: 'rejected', reason: '修复后的 Git 路径不可完整核验' };
+  }
+  const after = await readWorkspaceFacts(input);
+  if (after.kind !== 'observed') return after;
+  if (after.facts.head !== before.facts.head || after.facts.indexRevision !== before.facts.indexRevision ||
+    JSON.stringify(after.facts.dirtyPaths) !== JSON.stringify(before.facts.dirtyPaths)) {
+    return { kind: 'rejected', reason: '路径读取期间 worktree 已变化' };
+  }
+  return { kind: 'observed', changedPaths: [...new Set([...diff.stdout.text.split('\0').filter(Boolean), ...after.facts.dirtyPaths])] };
+}
+
 export async function readWorkspaceFacts(input: {
   readonly worktreePath: string;
   readonly runner?: ProcessRunner;

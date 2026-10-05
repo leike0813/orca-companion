@@ -108,6 +108,8 @@ import {
   SESSION_LIFECYCLE_STATES,
   TICKET_CLAIM_STATES,
   WAKE_ADMISSION_STATES,
+  DELIVERY_SETTLEMENT_OUTCOMES,
+  DELIVERY_VALIDATION_VERDICTS,
   type BaselineAdoptionRecord,
   type BaselineReconciliationRecord,
   type BranchCoordinationStore,
@@ -126,6 +128,8 @@ import {
   type InteractionOverview,
   type CoordinatorSessionRegistration,
   type DeliverySettlementRecord,
+  type DeliverySettlementOutcome,
+  type DeliveryValidationVerdict,
   type DeliveryVerdictRecord,
   type ExecutionHandoffPhase,
   type ExecutionHandoffRecord,
@@ -148,14 +152,18 @@ import {
   type RevisionHoldSource,
   type ScopeRecord,
   type SessionLifecycleState,
+  type SessionBlockingReason,
   type SessionSegmentRecord,
   type TicketClaimRecord,
   type TicketClaimState,
   type WakeAdmissionRecord,
   type WakeAdmissionState,
+  type ValidationStepAdmissionRecord,
+  type ValidationAttemptRecord,
   type WorkPackageLineageRecord,
   type WorkPackageLaneReservation,
 } from '../../application/ports/branch-coordination-store.js';
+import { sessionBindingIdOf } from '../agents/session-binding.js';
 import type {
   GraphBasisSourceRef,
   GraphGenerationStatus,
@@ -165,6 +173,9 @@ import { SCHEMA_VERSION, describeError, migrate, readSchemaVersion } from './sch
 
 /** SQLite 主结果码：约束族（PRIMARY KEY / UNIQUE / NOT NULL / CHECK / FOREIGN KEY）。 */
 const SQLITE_CONSTRAINT = 19;
+
+/** Validation Attempt 游标每次最多保留的 message 引用数；正文不入库。 */
+const VALIDATION_ATTEMPT_MESSAGE_LIMIT = 20;
 
 const SETTLE_OUTCOME_CLASSES = [...INTENT_OUTCOME_CLASSES, 'unknown'] as const;
 
@@ -1038,6 +1049,10 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (!lifecycle.ok) {
         return lifecycle;
       }
+      // blocked 必须携带结构化原因，只能经 update-session-lifecycle 写入。
+      if (lifecycle.value === 'blocked') {
+        return fail('register-session 不接受 blocked 状态；请用 update-session-lifecycle 记录阻塞原因');
+      }
       return ok({
         ...base,
         kind: 'register-session',
@@ -1063,6 +1078,46 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         kind: 'update-session-model-configuration',
         coordinatorSessionId: sessionId.value as CoordinatorSessionId,
         coordinatorModelConfigurationRef: configurationRef.value,
+      });
+    }
+    case 'update-session-lifecycle': {
+      const sessionId = requireString(command['coordinatorSessionId'], 'coordinatorSessionId');
+      if (!sessionId.ok) {
+        return sessionId;
+      }
+      const lifecycle = requireEnum(command['lifecycleState'], SESSION_LIFECYCLE_STATES, 'lifecycleState');
+      if (!lifecycle.ok) {
+        return lifecycle;
+      }
+      const rawReason = command['blockingReason'];
+      if (lifecycle.value === 'blocked') {
+        if (!isRecord(rawReason)) {
+          return fail('blocked 状态必须给出结构化的 blockingReason');
+        }
+        const code = requireString(rawReason['code'], 'blockingReason.code');
+        if (!code.ok) {
+          return code;
+        }
+        const message = requireString(rawReason['message'], 'blockingReason.message');
+        if (!message.ok) {
+          return message;
+        }
+        return ok({
+          ...base,
+          kind: 'update-session-lifecycle',
+          coordinatorSessionId: sessionId.value as CoordinatorSessionId,
+          lifecycleState: 'blocked',
+          blockingReason: { code: code.value, message: message.value },
+        });
+      }
+      if (rawReason !== undefined && rawReason !== null) {
+        return fail('非 blocked 状态不得携带 blockingReason');
+      }
+      return ok({
+        ...base,
+        kind: 'update-session-lifecycle',
+        coordinatorSessionId: sessionId.value as CoordinatorSessionId,
+        lifecycleState: lifecycle.value,
       });
     }
     case 'record-ticket-claim': {
@@ -1269,6 +1324,113 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         budgetKey: budgetKey.value,
         approvedLimitRef: approvedLimitRef.value,
         amount: amount.value,
+      });
+    }
+    case 'admit-validation-step': {
+      const stepId = requireString(command['stepId'], 'stepId');
+      if (!stepId.ok) {
+        return stepId;
+      }
+      const workPackageId = requireString(command['workPackageId'], 'workPackageId');
+      if (!workPackageId.ok) {
+        return workPackageId;
+      }
+      const workerTaskId = requireString(command['workerTaskId'], 'workerTaskId');
+      if (!workerTaskId.ok) {
+        return workerTaskId;
+      }
+      const dispatchId = requireString(command['dispatchId'], 'dispatchId');
+      if (!dispatchId.ok) {
+        return dispatchId;
+      }
+      const validationAttemptId = requireString(command['validationAttemptId'], 'validationAttemptId');
+      if (!validationAttemptId.ok) {
+        return validationAttemptId;
+      }
+      const repairOrdinal = requireCount(command['repairOrdinal'], 'repairOrdinal');
+      if (!repairOrdinal.ok || repairOrdinal.value === 0) {
+        return fail('repairOrdinal 必须是正的安全整数');
+      }
+      const approvedLimitRef = requireString(command['approvedLimitRef'], 'approvedLimitRef');
+      if (!approvedLimitRef.ok) {
+        return approvedLimitRef;
+      }
+      const approvedLimit = requireCount(command['approvedLimit'], 'approvedLimit');
+      if (!approvedLimit.ok) {
+        return approvedLimit;
+      }
+      return ok({
+        ...base,
+        kind: 'admit-validation-step',
+        stepId: stepId.value,
+        workPackageId: workPackageId.value as WorkPackageId,
+        workerTaskId: workerTaskId.value as WorkerTaskId,
+        dispatchId: dispatchId.value as DispatchId,
+        validationAttemptId: validationAttemptId.value,
+        repairOrdinal: repairOrdinal.value,
+        approvedLimitRef: approvedLimitRef.value,
+        approvedLimit: approvedLimit.value,
+      });
+    }
+    case 'record-validation-attempt': {
+      const validationAttemptId = requireString(command['validationAttemptId'], 'validationAttemptId');
+      if (!validationAttemptId.ok) {
+        return validationAttemptId;
+      }
+      const workPackageId = requireString(command['workPackageId'], 'workPackageId');
+      if (!workPackageId.ok) {
+        return workPackageId;
+      }
+      const workerTaskId = requireString(command['workerTaskId'], 'workerTaskId');
+      if (!workerTaskId.ok) {
+        return workerTaskId;
+      }
+      const dispatchId = requireString(command['dispatchId'], 'dispatchId');
+      if (!dispatchId.ok) {
+        return dispatchId;
+      }
+      const providerSessionId = requireString(command['providerSessionId'], 'providerSessionId');
+      if (!providerSessionId.ok) {
+        return providerSessionId;
+      }
+      const initialRepairConsumed = requireCount(command['initialRepairConsumed'], 'initialRepairConsumed');
+      if (!initialRepairConsumed.ok) {
+        return initialRepairConsumed;
+      }
+      const messageIds = requireStringArray(command['messageIds'], 'messageIds');
+      if (!messageIds.ok) {
+        return messageIds;
+      }
+      if (messageIds.value.length > VALIDATION_ATTEMPT_MESSAGE_LIMIT) {
+        return fail('messageIds 最多 20 项');
+      }
+      if (new Set(messageIds.value).size !== messageIds.value.length) {
+        return fail('messageIds 不得包含重复引用');
+      }
+      const rawTerminal = command['terminalQuestionMessageId'];
+      let terminal: string | null | undefined;
+      if (rawTerminal === undefined) {
+        terminal = undefined;
+      } else if (rawTerminal === null) {
+        terminal = null;
+      } else {
+        const parsed = requireString(rawTerminal, 'terminalQuestionMessageId');
+        if (!parsed.ok) {
+          return parsed;
+        }
+        terminal = parsed.value;
+      }
+      return ok({
+        ...base,
+        kind: 'record-validation-attempt',
+        validationAttemptId: validationAttemptId.value,
+        workPackageId: workPackageId.value as WorkPackageId,
+        workerTaskId: workerTaskId.value as WorkerTaskId,
+        dispatchId: dispatchId.value as DispatchId,
+        providerSessionId: providerSessionId.value,
+        initialRepairConsumed: initialRepairConsumed.value,
+        messageIds: messageIds.value,
+        ...(terminal === undefined ? {} : { terminalQuestionMessageId: terminal }),
       });
     }
     case 'record-wake-admission': {
@@ -1722,6 +1884,8 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         if (specBinding.value !== null || specificationUnitPath !== null) {
           return fail('recovery_utility 的物化绑定不得携带 Spec Binding 或 specificationUnitPath');
         }
+      } else if (role.value === 'finalizer') {
+        if (specBinding.value !== null || specificationUnitPath !== null) return fail('finalizer 的项目级绑定不得携带 Specification Unit');
       } else if (role.value === 'planner' && (specBinding.value !== null || specificationUnitPath === null)) {
         return fail('planner 的物化绑定必须带 specificationUnitPath 且 specBinding 为 null');
       } else if (role.value !== 'planner' && (specBinding.value === null || specificationUnitPath !== null)) {
@@ -1812,6 +1976,17 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (!orcaResultRef.ok) {
         return orcaResultRef;
       }
+      const outcome = decodeDeliverySettlementOutcome(command['outcome'] ?? null);
+      if (!outcome.ok) {
+        return outcome;
+      }
+      const validationVerdict = decodeDeliveryValidationVerdict(command['validationVerdict'] ?? null);
+      if (!validationVerdict.ok) {
+        return validationVerdict;
+      }
+      if (validationVerdict.value !== null && role.value !== 'validator') {
+        return fail('validationVerdict 只允许出现在 validator 结算上');
+      }
       return ok({
         ...base,
         kind: 'record-delivery-settlement',
@@ -1825,6 +2000,8 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         role: role.value,
         contractRevision: contractRevision.value,
         orcaResultRef: orcaResultRef.value,
+        outcome: outcome.value,
+        validationVerdict: validationVerdict.value,
       });
     }
     case 'record-delivery-verdict': {
@@ -2505,6 +2682,7 @@ type SessionRow = {
   readonly coordinator_session_id: string;
   readonly coordinator_model_configuration_ref: string;
   readonly lifecycle_state: string;
+  readonly blocked_reason_json: string | null;
   readonly registered_at: number;
 };
 
@@ -2557,6 +2735,32 @@ type BudgetRow = {
   readonly budget_key: string;
   readonly approved_limit_ref: string;
   readonly consumed: number;
+};
+
+type ValidationStepAdmissionRow = {
+  readonly coordination_scope_id: string;
+  readonly step_id: string;
+  readonly work_package_id: string;
+  readonly worker_task_id: string;
+  readonly dispatch_id: string;
+  readonly validation_attempt_id: string;
+  readonly repair_ordinal: number;
+  readonly budget_key: string;
+  readonly approved_limit_ref: string;
+  readonly admitted_at: number;
+};
+
+type ValidationAttemptRow = {
+  readonly coordination_scope_id: string;
+  readonly dispatch_id: string;
+  readonly validation_attempt_id: string;
+  readonly work_package_id: string;
+  readonly worker_task_id: string;
+  readonly provider_session_id: string;
+  readonly initial_repair_consumed: number;
+  readonly message_ids: string;
+  readonly terminal_question_message_id: string | null;
+  readonly updated_at: number;
 };
 
 type WakeAdmissionRow = {
@@ -2736,6 +2940,8 @@ type DeliverySettlementRow = {
   readonly role: string;
   readonly contract_revision: number;
   readonly orca_result_ref: string;
+  readonly outcome: string | null;
+  readonly validation_verdict: string | null;
   readonly accepted_at: number;
 };
 
@@ -3124,6 +3330,8 @@ function decodeMaterializationBindingRow(row: MaterializationBindingRow): Decode
     if (specBinding !== null || row.specification_unit_path === null) {
       return fail('Planner 的物化绑定必须带固定规格目标路径且不携带 Spec Binding');
     }
+  } else if (role === 'finalizer') {
+    if (specBinding !== null || row.specification_unit_path !== null) return fail('finalizer 的项目级绑定不得携带 Specification Unit');
   } else if (specBinding === null || row.specification_unit_path !== null) {
     return fail(`${role} 的物化绑定必须携带已接纳的 Spec Binding`);
   }
@@ -3148,6 +3356,17 @@ function decodeDeliverySettlementRow(row: DeliverySettlementRow): Decoded<Delive
   if (role === null) {
     return fail(`delivery_settlements.role 取值不受支持: ${row.role}`);
   }
+  const outcome = decodeDeliverySettlementOutcome(row.outcome);
+  if (!outcome.ok) {
+    return outcome;
+  }
+  const validationVerdict = decodeDeliveryValidationVerdict(row.validation_verdict);
+  if (!validationVerdict.ok) {
+    return validationVerdict;
+  }
+  if (validationVerdict.value !== null && role !== 'validator') {
+    return fail('delivery_settlements.validation_verdict 只允许出现在 validator 结算上');
+  }
   return ok({
     coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
     dedupeKey: row.dedupe_key,
@@ -3160,8 +3379,31 @@ function decodeDeliverySettlementRow(row: DeliverySettlementRow): Decoded<Delive
     role,
     contractRevision: row.contract_revision,
     orcaResultRef: row.orca_result_ref,
+    outcome: outcome.value,
+    validationVerdict: validationVerdict.value,
     acceptedAt: row.accepted_at,
   });
+}
+
+/** 旧行（schema 20 之前）没有结论列：`NULL` 表示「未经证明」，不是成功。 */
+function decodeDeliverySettlementOutcome(raw: unknown): Decoded<DeliverySettlementOutcome | null> {
+  if (raw === null || raw === undefined) {
+    return ok(null);
+  }
+  if (typeof raw !== 'string' || !(DELIVERY_SETTLEMENT_OUTCOMES as readonly string[]).includes(raw)) {
+    return fail('outcome 取值不受支持');
+  }
+  return ok(raw as DeliverySettlementOutcome);
+}
+
+function decodeDeliveryValidationVerdict(raw: unknown): Decoded<DeliveryValidationVerdict | null> {
+  if (raw === null || raw === undefined) {
+    return ok(null);
+  }
+  if (typeof raw !== 'string' || !(DELIVERY_VALIDATION_VERDICTS as readonly string[]).includes(raw)) {
+    return fail('validation_verdict 取值不受支持');
+  }
+  return ok(raw as DeliveryValidationVerdict);
 }
 
 function decodeDeliveryVerdictRow(row: DeliveryVerdictRow): Decoded<DeliveryVerdictRecord> {
@@ -3318,13 +3560,56 @@ function decodeSessionRow(row: SessionRow): Decoded<CoordinatorSessionRegistrati
   if (!(SESSION_LIFECYCLE_STATES as readonly string[]).includes(row.lifecycle_state)) {
     return fail(`session_registry.lifecycle_state 取值不受支持: ${row.lifecycle_state}`);
   }
+  const blockedReason = decodeSessionBlockingReason(row.blocked_reason_json, row.lifecycle_state);
+  if (!blockedReason.ok) {
+    return blockedReason;
+  }
   return ok({
     coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
     coordinatorSessionId: row.coordinator_session_id as CoordinatorSessionId,
     coordinatorModelConfigurationRef: row.coordinator_model_configuration_ref,
     lifecycleState: row.lifecycle_state as SessionLifecycleState,
+    blockedReason: blockedReason.value,
     registeredAt: row.registered_at,
   });
+}
+
+/**
+ * 读取 Session 的结构化阻塞原因。
+ *
+ * 持久行必须自洽：`blocked` 一定有原因，非 `blocked` 一定没有。半套行既说不清为什么被阻塞，也可能让
+ * 调用方以为一个健康的 Session 被阻塞，因此整行拒绝而不是猜测。
+ */
+function decodeSessionBlockingReason(
+  raw: string | null,
+  lifecycleState: string,
+): Decoded<SessionBlockingReason | null> {
+  if (lifecycleState !== 'blocked') {
+    return raw === null
+      ? ok(null)
+      : fail('session_registry.blocked_reason_json 只允许出现在 blocked 状态');
+  }
+  if (raw === null) {
+    return fail('blocked Session 缺少结构化阻塞原因');
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return fail(`session_registry.blocked_reason_json 不是合法 JSON: ${describeError(error)}`);
+  }
+  if (!isRecord(parsed)) {
+    return fail('session_registry.blocked_reason_json 必须是对象');
+  }
+  const code = parsed['code'];
+  const message = parsed['message'];
+  if (typeof code !== 'string' || code.length === 0) {
+    return fail('session_registry.blocked_reason_json.code 必须是非空字符串');
+  }
+  if (typeof message !== 'string' || message.length === 0) {
+    return fail('session_registry.blocked_reason_json.message 必须是非空字符串');
+  }
+  return ok({ code, message });
 }
 
 function decodeTicketClaimRow(row: TicketClaimRow): Decoded<TicketClaimRecord> {
@@ -3414,6 +3699,40 @@ function decodeBudgetRow(row: BudgetRow): BudgetCounterRecord {
     approvedLimitRef: row.approved_limit_ref,
     consumed: row.consumed,
   };
+}
+
+function decodeValidationStepAdmissionRow(row: ValidationStepAdmissionRow): ValidationStepAdmissionRecord {
+  return {
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    stepId: row.step_id,
+    workPackageId: row.work_package_id as WorkPackageId,
+    workerTaskId: row.worker_task_id as WorkerTaskId,
+    dispatchId: row.dispatch_id as DispatchId,
+    validationAttemptId: row.validation_attempt_id,
+    repairOrdinal: row.repair_ordinal,
+    budgetKey: row.budget_key,
+    approvedLimitRef: row.approved_limit_ref,
+    admittedAt: row.admitted_at,
+  };
+}
+
+function decodeValidationAttemptRow(row: ValidationAttemptRow): Decoded<ValidationAttemptRecord> {
+  const messageIds = decodeStringArrayColumn(row.message_ids);
+  if (messageIds === null) {
+    return fail('validation_attempts.message_ids 不是字符串数组');
+  }
+  return ok({
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    validationAttemptId: row.validation_attempt_id,
+    workPackageId: row.work_package_id as WorkPackageId,
+    workerTaskId: row.worker_task_id as WorkerTaskId,
+    dispatchId: row.dispatch_id as DispatchId,
+    providerSessionId: row.provider_session_id,
+    initialRepairConsumed: row.initial_repair_consumed,
+    messageIds,
+    terminalQuestionMessageId: row.terminal_question_message_id,
+    updatedAt: row.updated_at,
+  });
 }
 
 function decodeWakeAdmissionRow(row: WakeAdmissionRow): Decoded<WakeAdmissionRecord> {
@@ -3810,6 +4129,20 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       graphId,
     );
 
+  const budgetReferencesMatch = (scopeId: string, budgetKey: string, previousRef: string, nextRef: string): boolean => {
+    if (previousRef === nextRef) return true;
+    const field = budgetKey.startsWith('work-package:')
+      ? INHERITABLE_BUDGET_FIELDS.find(entry => budgetKey.endsWith(`:${entry}`)) : undefined;
+    if (field === undefined) return false;
+    const previousRow = readAuthorizationRow(scopeId, previousRef), nextRow = readAuthorizationRow(scopeId, nextRef);
+    if (previousRow === undefined || nextRow === undefined) return false;
+    const previous = decodeAuthorizationRow(previousRow), next = decodeAuthorizationRow(nextRow);
+    return previous.ok && next.ok && previous.value.manifest.graph.graphId === next.value.manifest.graph.graphId &&
+      previous.value.manifest.graph.generation === next.value.manifest.graph.generation &&
+      previous.value.manifest.orcaRunId === next.value.manifest.orcaRunId &&
+      previous.value.manifest.limits[field] === next.value.manifest.limits[field];
+  };
+
   const readGraphVersionRow = (
     scopeId: string,
     graphId: string,
@@ -3986,7 +4319,10 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
             'consumedBudgets', json(COALESCE((SELECT json_group_array(json_object(
               'budgetKey', b.budget_key, 'approvedLimitRef', b.approved_limit_ref, 'consumed', b.consumed
             )) FROM budget_counters b WHERE b.coordination_scope_id = a.coordination_scope_id
-              AND b.approved_limit_ref = a.authorization_id), '[]'))
+              AND b.approved_limit_ref IN (SELECT original.authorization_id FROM execution_authorizations original
+                WHERE original.coordination_scope_id = a.coordination_scope_id
+                  AND json_extract(original.manifest_json, '$.graph.graphId') = json_extract(a.manifest_json, '$.graph.graphId')
+                  AND json_extract(original.manifest_json, '$.graph.generation') = json_extract(a.manifest_json, '$.graph.generation'))), '[]'))
           ) AS document, 1 AS object_found
           FROM execution_authorizations a
           WHERE a.coordination_scope_id = ? AND a.authorization_id = ? AND a.authorization_version = ?
@@ -4228,7 +4564,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           db.prepare(
             `SELECT * FROM materialization_bindings
              WHERE coordination_scope_id = ?
-             ORDER BY created_at, work_package_id, creation_operation_id`,
+             ORDER BY created_at, work_package_id, creation_operation_id, attempt_id`,
           ),
           scopeId,
         )
@@ -4236,7 +4572,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           db.prepare(
             `SELECT * FROM materialization_bindings
              WHERE coordination_scope_id = ? AND work_package_id = ?
-             ORDER BY created_at, creation_operation_id`,
+             ORDER BY created_at, creation_operation_id, attempt_id`,
           ),
           scopeId,
           workPackageId,
@@ -4666,6 +5002,36 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         }
         case 'budget-counters':
           return { kind: 'budget-counters', counters: readBudgetRows(scopeId, input.approvedLimitRef).map(decodeBudgetRow) };
+        case 'validation-step-admission': {
+          const row = one<ValidationStepAdmissionRow>(
+            db.prepare(
+              'SELECT * FROM validation_step_admissions WHERE coordination_scope_id = ? AND step_id = ?',
+            ),
+            scopeId,
+            input.stepId,
+          );
+          return {
+            kind: 'validation-step-admission',
+            admission: row === undefined ? null : decodeValidationStepAdmissionRow(row),
+          };
+        }
+        case 'validation-attempt': {
+          const row = one<ValidationAttemptRow>(
+            db.prepare(
+              'SELECT * FROM validation_attempts WHERE coordination_scope_id = ? AND dispatch_id = ?',
+            ),
+            scopeId,
+            input.dispatchId,
+          );
+          if (row === undefined) {
+            return { kind: 'validation-attempt', attempt: null };
+          }
+          const attempt = decodeValidationAttemptRow(row);
+          if (!attempt.ok) {
+            return { kind: 'rejected', code: 'unreadable', message: attempt.message };
+          }
+          return { kind: 'validation-attempt', attempt: attempt.value };
+        }
         case 'wake-admissions': {
           const admissions = decodeRows(
             readWakeAdmissionRows(scopeId, input.coordinatorSessionId),
@@ -5349,6 +5715,13 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
       `UPDATE pending_interactions SET owner_coordinator_session_id = ?
        WHERE coordination_scope_id = ? AND owner_coordinator_session_id = ? AND state = 'open'`,
     ).run(toSessionId, scopeId, fromSessionId);
+
+    // Ticket Claim 的责任随执行责任一起转移：交接必须一次带走该 Session 的全部活跃 claim。
+    // 目标已有活跃 claim 时，Session 级唯一约束会让整笔事务失败并回滚，绝不静默丢 claim。
+    db.prepare(
+      `UPDATE ticket_claims SET coordinator_session_id = ?
+       WHERE coordination_scope_id = ? AND coordinator_session_id = ? AND state = 'active'`,
+    ).run(toSessionId, scopeId, fromSessionId);
     return ok(null);
   };
 
@@ -5383,6 +5756,77 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
          release_reason = NULL,
          created_at = excluded.created_at`,
     ).run(coordinationScopeId, workPackageId, source, sourceRef, now);
+  };
+
+  /**
+   * 接纳一次 Implementation Attempt：在当前图上按绑定的授权校验有效消耗，并扣减一次
+   * implementationAttempts。
+   *
+   * 「有效消耗」= 本代预算计数 + 谱系继承值：继承只增不减，因此重规划不会把已消耗的尝试还回去。
+   * 绑定重放走既有行分支，不经过这里，因此绝不会重复扣减。上限取 Work Package 预算与 Manifest 上限
+   * 的较小值；缺少授权或跨代际授权一律 fail closed。
+   */
+  const admitImplementationAttempt = (
+    cmd: Extract<CoordinationCommand, { readonly kind: "record-materialization-binding" }>,
+  ): Decoded<null> => {
+    const scope = readScopeRow(cmd.coordinationScopeId);
+    if (scope === undefined || scope.graph_id === null || scope.graph_version === null) {
+      return fail("当前 Scope 没有可用的执行图，无法接纳 Implementation Attempt", "invalid_state");
+    }
+    const graphRow = readGraphVersionRow(cmd.coordinationScopeId, scope.graph_id, scope.graph_version);
+    if (graphRow === undefined) {
+      return fail("当前执行图不可读，无法接纳 Implementation Attempt", "invalid_state");
+    }
+    const graph = decodeGraphVersionRow(graphRow);
+    if (!graph.ok) return graph;
+    const wp = graph.value.graph.workPackages.find((record) => record.workPackageId === cmd.workPackageId);
+    if (wp === undefined) {
+      return fail("实现 Attempt 的 Work Package 不属于当前图", "constraint");
+    }
+    const authRow = readAuthorizationRow(cmd.coordinationScopeId, cmd.authorizationId);
+    if (authRow === undefined) {
+      return fail("物化绑定引用的执行授权不存在", "constraint");
+    }
+    const auth = decodeAuthorizationRow(authRow);
+    if (!auth.ok) return auth;
+    if (
+      auth.value.manifest.graph.graphId !== scope.graph_id ||
+      auth.value.manifest.graph.generation !== graph.value.generation
+    ) {
+      return fail("物化绑定的授权不属于当前图代际", "constraint");
+    }
+    const budgetKey = workPackageBudgetKey(cmd.workPackageId, "implementationAttempts");
+    const counter = one<BudgetRow>(
+      db.prepare("SELECT * FROM budget_counters WHERE coordination_scope_id = ? AND budget_key = ?"),
+      cmd.coordinationScopeId,
+      budgetKey,
+    );
+    if (counter !== undefined && !budgetReferencesMatch(cmd.coordinationScopeId, budgetKey, counter.approved_limit_ref, cmd.authorizationId)) {
+      return fail("已登记的预算授权上限引用与本次不一致，拒绝在同一计数上叠加", "constraint");
+    }
+    const lineages = decodeRows(
+      readWorkPackageLineageRows(cmd.coordinationScopeId, cmd.workPackageId),
+      decodeWorkPackageLineageRow,
+    );
+    if (!lineages.ok) return lineages;
+    const inherited = lineages.value
+      .flatMap((entry) => entry.inherited)
+      .filter((entry) => entry.field === "implementationAttempts")
+      .reduce((sum, entry) => sum + entry.consumed, 0);
+    const limit = Math.min(wp.budget.implementationAttempts, auth.value.manifest.limits.implementationAttempts);
+    const effectiveConsumed = (counter?.consumed ?? 0) + inherited;
+    if (effectiveConsumed >= limit) {
+      return fail(
+        `implementationAttempts 预算不可用或已耗尽（有效消耗 ${String(effectiveConsumed)}，上限 ${String(limit)}）`,
+        "constraint",
+      );
+    }
+    db.prepare(
+      `INSERT INTO budget_counters (coordination_scope_id, budget_key, approved_limit_ref, consumed)
+       VALUES (?, ?, ?, 1)
+       ON CONFLICT (coordination_scope_id, budget_key) DO UPDATE SET consumed = consumed + 1`,
+    ).run(cmd.coordinationScopeId, budgetKey, cmd.authorizationId);
+    return ok(null);
   };
 
   const applyCommand = (
@@ -5567,7 +6011,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           const existing = db
             .prepare('SELECT * FROM budget_counters WHERE coordination_scope_id = ? AND budget_key = ?')
             .get(cmd.coordinationScopeId, consumption.budgetKey) as BudgetRow | undefined;
-          if (existing !== undefined && existing.approved_limit_ref !== consumption.approvedLimitRef) {
+          if (existing !== undefined && !budgetReferencesMatch(cmd.coordinationScopeId, consumption.budgetKey, existing.approved_limit_ref, consumption.approvedLimitRef)) {
             return fail('已登记的预算授权上限引用与本次不一致，拒绝在同一计数上叠加', 'constraint');
           }
           db.prepare(
@@ -5697,10 +6141,20 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
                source_proposal_id = excluded.source_proposal_id,
                assigned_at = excluded.assigned_at`,
           ).run(cmd.coordinationScopeId, cmd.targetCoordinatorSessionId, cmd.proposalId, now);
+          // Ticket Claim 随规划责任原子转移：所有活跃 claim 从 Source 归到 Target；目标已有活跃 claim 时
+          // Session 级唯一约束使整笔失败并回滚。
+          db.prepare(
+            `UPDATE ticket_claims SET coordinator_session_id = ?
+             WHERE coordination_scope_id = ? AND coordinator_session_id = ? AND state = 'active'`,
+          ).run(cmd.targetCoordinatorSessionId, cmd.coordinationScopeId, cmd.sourceCoordinatorSessionId);
         }
         return ok(null);
       }
       case 'transition-to-execution': {
+        const generation = readGraphGenerationRow(cmd.coordinationScopeId, cmd.graphId);
+        if (generation?.predecessor_graph_id != null) {
+          return fail('有前代的候选代际必须通过 Generation Cutover 原子冻结前代', 'invalid_state');
+        }
         const active = db
           .prepare(
             `SELECT * FROM leases
@@ -5725,6 +6179,10 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           cmd.coordinationScopeId,
         );
         handExecutionLease(cmd.coordinationScopeId, cmd.writer, now);
+        if (generation !== undefined && generation.status === 'candidate') {
+          db.prepare(`UPDATE graph_generations SET status = 'active', updated_at = ?
+            WHERE coordination_scope_id = ? AND graph_id = ?`).run(now, cmd.coordinationScopeId, cmd.graphId);
+        }
         return ok(null);
       }
       case 'advance-map-revision': {
@@ -5782,16 +6240,19 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         if (!holder.ok) {
           return holder;
         }
-        // 幂等只对「同一内容」成立：主键是创建 Task 的 OperationId，因此重放同一操作得到同一行。
-        // 内容不同意味着两次不同派发共用一个 OperationId——那是身份错误，必须失败而不是覆盖。
+        // 幂等只对「同一内容」成立：身份是 (创建 Task 的 OperationId, Attempt)，因此重放同一操作得到同一行，
+        // 而普通 Retry 复用同一个 Task 创建操作、换一个新的 Attempt 时是另一行。内容不同意味着两次不同派发
+        // 共用一个身份——那是身份错误，必须失败而不是覆盖。
         const existing = one<MaterializationBindingRow>(
           db.prepare(
             `SELECT * FROM materialization_bindings
-             WHERE coordination_scope_id = ? AND work_package_id = ? AND creation_operation_id = ?`,
+             WHERE coordination_scope_id = ? AND work_package_id = ? AND creation_operation_id = ?
+               AND attempt_id = ?`,
           ),
           cmd.coordinationScopeId,
           cmd.workPackageId,
           cmd.creationOperationId,
+          cmd.attemptId,
         );
         if (existing !== undefined) {
           const identical =
@@ -5814,6 +6275,13 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
                 `Operation ${cmd.creationOperationId} 已绑定到另一组物化身份：拒绝覆盖既有派发记录`,
                 'constraint',
               );
+        }
+        // Implementation Attempt 的接纳就是一次预算消耗：只有新行（非重放）走到这里，因此重放不扣。
+        if (cmd.role === 'implementation') {
+          const admitted = admitImplementationAttempt(cmd);
+          if (!admitted.ok) {
+            return admitted;
+          }
         }
         db.prepare(
           `INSERT INTO materialization_bindings (
@@ -5853,8 +6321,9 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         db.prepare(
           `INSERT INTO delivery_settlements (
              coordination_scope_id, dedupe_key, delivery_id, run_id, consumer_generation, worker_task_id,
-             dispatch_id, attempt_id, role, contract_revision, orca_result_ref, accepted_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             dispatch_id, attempt_id, role, contract_revision, orca_result_ref, outcome,
+             validation_verdict, accepted_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).run(
           cmd.coordinationScopeId,
           cmd.dedupeKey,
@@ -5867,6 +6336,8 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           cmd.role,
           cmd.contractRevision,
           cmd.orcaResultRef,
+          cmd.outcome ?? null,
+          cmd.validationVerdict ?? null,
           now,
         );
         return releaseTerminalLanes(cmd.coordinationScopeId, now);
@@ -6265,11 +6736,12 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         db.prepare(
           `INSERT INTO session_registry (
              coordination_scope_id, coordinator_session_id, coordinator_model_configuration_ref,
-             lifecycle_state, registered_at
-           ) VALUES (?, ?, ?, ?, ?)
+             lifecycle_state, blocked_reason_json, registered_at
+           ) VALUES (?, ?, ?, ?, NULL, ?)
            ON CONFLICT (coordination_scope_id, coordinator_session_id) DO UPDATE SET
              coordinator_model_configuration_ref = excluded.coordinator_model_configuration_ref,
-             lifecycle_state = excluded.lifecycle_state`,
+             lifecycle_state = excluded.lifecycle_state,
+             blocked_reason_json = NULL`,
         ).run(
           cmd.coordinationScopeId,
           cmd.coordinatorSessionId,
@@ -6286,6 +6758,24 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
              WHERE coordination_scope_id = ? AND coordinator_session_id = ?`,
           )
           .run(cmd.coordinatorModelConfigurationRef, cmd.coordinationScopeId, cmd.coordinatorSessionId);
+        if (Number(info.changes) === 0) {
+          return fail(`Session ${cmd.coordinatorSessionId} 未注册到本 Scope`);
+        }
+        return ok(null);
+      }
+      case 'update-session-lifecycle': {
+        const blockedReason = cmd.lifecycleState === 'blocked' ? cmd.blockingReason : null;
+        const info = db
+          .prepare(
+            `UPDATE session_registry SET lifecycle_state = ?, blocked_reason_json = ?
+             WHERE coordination_scope_id = ? AND coordinator_session_id = ?`,
+          )
+          .run(
+            cmd.lifecycleState,
+            blockedReason === undefined || blockedReason === null ? null : JSON.stringify(blockedReason),
+            cmd.coordinationScopeId,
+            cmd.coordinatorSessionId,
+          );
         if (Number(info.changes) === 0) {
           return fail(`Session ${cmd.coordinatorSessionId} 未注册到本 Scope`);
         }
@@ -6587,7 +7077,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         const existing = db
           .prepare('SELECT * FROM budget_counters WHERE coordination_scope_id = ? AND budget_key = ?')
           .get(cmd.coordinationScopeId, cmd.budgetKey) as BudgetRow | undefined;
-        if (existing !== undefined && existing.approved_limit_ref !== cmd.approvedLimitRef) {
+        if (existing !== undefined && !budgetReferencesMatch(cmd.coordinationScopeId, cmd.budgetKey, existing.approved_limit_ref, cmd.approvedLimitRef)) {
           return fail('已登记的预算授权上限引用与本次不一致，拒绝在同一计数上叠加');
         }
         db.prepare(
@@ -6595,6 +7085,147 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
            VALUES (?, ?, ?, ?)
            ON CONFLICT (coordination_scope_id, budget_key) DO UPDATE SET consumed = consumed + excluded.consumed`,
         ).run(cmd.coordinationScopeId, cmd.budgetKey, cmd.approvedLimitRef, cmd.amount);
+        return ok(null);
+      }
+      case 'admit-validation-step': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) return holder;
+        // 幂等键是 stepId：同一条验证链重放派生同一个值，因此重放绝不重复扣减。
+        const existing = one<ValidationStepAdmissionRow>(
+          db.prepare(
+            'SELECT * FROM validation_step_admissions WHERE coordination_scope_id = ? AND step_id = ?',
+          ),
+          cmd.coordinationScopeId,
+          cmd.stepId,
+        );
+        if (existing !== undefined) {
+          const identical =
+            existing.work_package_id === cmd.workPackageId &&
+            existing.worker_task_id === cmd.workerTaskId &&
+            existing.dispatch_id === cmd.dispatchId &&
+            existing.validation_attempt_id === cmd.validationAttemptId &&
+            existing.repair_ordinal === cmd.repairOrdinal &&
+            existing.approved_limit_ref === cmd.approvedLimitRef;
+          return identical
+            ? ok(null)
+            : fail(`Validation Step ${cmd.stepId} 已按另一组身份准入：拒绝覆盖既有步骤记录`, 'constraint');
+        }
+        const budgetKey = workPackageBudgetKey(cmd.workPackageId, 'validatorRepairs');
+        const counter = one<BudgetRow>(
+          db.prepare('SELECT * FROM budget_counters WHERE coordination_scope_id = ? AND budget_key = ?'),
+          cmd.coordinationScopeId,
+          budgetKey,
+        );
+        if (counter !== undefined && !budgetReferencesMatch(cmd.coordinationScopeId, budgetKey, counter.approved_limit_ref, cmd.approvedLimitRef)) {
+          return fail('已登记的预算授权上限引用与本次不一致，拒绝在同一计数上叠加', 'constraint');
+        }
+        // 有效消耗 = 本代已消耗 + 谱系继承；继承只增不减，因此越界判定不会被重规划绕过。
+        const lineages = decodeRows(
+          readWorkPackageLineageRows(cmd.coordinationScopeId, cmd.workPackageId),
+          decodeWorkPackageLineageRow,
+        );
+        if (!lineages.ok) return lineages;
+        const inherited = lineages.value
+          .flatMap((entry) => entry.inherited)
+          .filter((entry) => entry.field === 'validatorRepairs')
+          .reduce((sum, entry) => sum + entry.consumed, 0);
+        if ((counter?.consumed ?? 0) + inherited >= cmd.approvedLimit) {
+          return fail(
+            `validatorRepairs 预算不可用或已耗尽（已消耗 ${String((counter?.consumed ?? 0) + inherited)}，上限 ${String(cmd.approvedLimit)}）`,
+            'constraint',
+          );
+        }
+        db.prepare(
+          `INSERT INTO validation_step_admissions (
+             coordination_scope_id, step_id, work_package_id, worker_task_id, dispatch_id,
+             validation_attempt_id, repair_ordinal, budget_key, approved_limit_ref, admitted_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.stepId,
+          cmd.workPackageId,
+          cmd.workerTaskId,
+          cmd.dispatchId,
+          cmd.validationAttemptId,
+          cmd.repairOrdinal,
+          budgetKey,
+          cmd.approvedLimitRef,
+          now,
+        );
+        db.prepare(
+          `INSERT INTO budget_counters (coordination_scope_id, budget_key, approved_limit_ref, consumed)
+           VALUES (?, ?, ?, 1)
+           ON CONFLICT (coordination_scope_id, budget_key) DO UPDATE SET consumed = consumed + 1`,
+        ).run(cmd.coordinationScopeId, budgetKey, cmd.approvedLimitRef);
+        return ok(null);
+      }
+      case 'record-validation-attempt': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) return holder;
+        // 物化绑定证明这条 Validator 派发身份。绑定的 dispatch_id 是 Task Envelope 预发的本地 alias，
+        // 与 Orca 实际 dispatch 不是同一个值，因此这里只比对 Work Package / 角色 / WorkerTask / Attempt；
+        // 实际 dispatch 由下面的 Session Segment 精确证明。
+        const bindings = readMaterializationBindingRows(cmd.coordinationScopeId, cmd.workPackageId);
+        if (!bindings.some((binding) => binding.role === 'validator' &&
+          binding.worker_task_id === cmd.workerTaskId && binding.attempt_id === cmd.validationAttemptId)) {
+          return fail('物化绑定不能证明该 Validation Attempt', 'constraint');
+        }
+        // Session Segment 必须证明固定的 provider session binding。
+        const expectedBinding = sessionBindingIdOf(cmd.dispatchId, cmd.providerSessionId);
+        const segments = readSessionSegmentRows(cmd.coordinationScopeId, cmd.workPackageId);
+        if (!segments.some((segment) => segment.dispatch_id === cmd.dispatchId &&
+          segment.attempt_id === cmd.validationAttemptId && segment.worker_task_id === cmd.workerTaskId &&
+          segment.work_package_id === cmd.workPackageId && segment.session_binding_id === expectedBinding)) {
+          return fail('Session Segment 不能证明该 Validation Attempt 的固定 session', 'constraint');
+        }
+        const existingAttempt = one<ValidationAttemptRow>(
+          db.prepare('SELECT * FROM validation_attempts WHERE coordination_scope_id = ? AND dispatch_id = ?'),
+          cmd.coordinationScopeId,
+          cmd.dispatchId,
+        );
+        if (existingAttempt === undefined) {
+          db.prepare(
+            `INSERT INTO validation_attempts (coordination_scope_id, dispatch_id, validation_attempt_id,
+              work_package_id, worker_task_id, provider_session_id, initial_repair_consumed, message_ids,
+              terminal_question_message_id, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ).run(
+            cmd.coordinationScopeId,
+            cmd.dispatchId,
+            cmd.validationAttemptId,
+            cmd.workPackageId,
+            cmd.workerTaskId,
+            cmd.providerSessionId,
+            cmd.initialRepairConsumed,
+            JSON.stringify(cmd.messageIds),
+            cmd.terminalQuestionMessageId ?? null,
+            now,
+          );
+          return ok(null);
+        }
+        if (existingAttempt.validation_attempt_id !== cmd.validationAttemptId ||
+          existingAttempt.work_package_id !== cmd.workPackageId || existingAttempt.worker_task_id !== cmd.workerTaskId ||
+          existingAttempt.provider_session_id !== cmd.providerSessionId ||
+          existingAttempt.initial_repair_consumed !== cmd.initialRepairConsumed) {
+          return fail('Validation Attempt 的身份与 initialRepairConsumed 不可改写', 'constraint');
+        }
+        const existingIds = decodeStringArrayColumn(existingAttempt.message_ids) ?? [];
+        const keepsPrefix = existingIds.every((id, index) => cmd.messageIds[index] === id);
+        if (!keepsPrefix || cmd.messageIds.length < existingIds.length) {
+          return fail('messageIds 只允许按既有顺序追加，不得删除或重排', 'constraint');
+        }
+        if (existingAttempt.terminal_question_message_id !== null &&
+          cmd.terminalQuestionMessageId !== undefined &&
+          cmd.terminalQuestionMessageId !== existingAttempt.terminal_question_message_id) {
+          return fail('terminalQuestionMessageId 只能记录一次且不可改写', 'constraint');
+        }
+        const terminal = existingAttempt.terminal_question_message_id ?? cmd.terminalQuestionMessageId ?? null;
+        if (terminal === existingAttempt.terminal_question_message_id && cmd.messageIds.length === existingIds.length) {
+          return ok(null);
+        }
+        db.prepare(
+          `UPDATE validation_attempts SET message_ids = ?, terminal_question_message_id = ?, updated_at = ?
+           WHERE coordination_scope_id = ? AND dispatch_id = ?`,
+        ).run(JSON.stringify(cmd.messageIds), terminal, now, cmd.coordinationScopeId, cmd.dispatchId);
         return ok(null);
       }
       case 'register-integration-reconciliation': {
@@ -6637,7 +7268,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         const inherited = lineages.value.flatMap(entry => entry.inherited)
           .filter(entry => entry.field === 'integrationReconciliations').reduce((sum, entry) => sum + entry.consumed, 0);
         const limit = Math.min(wp.budget.integrationReconciliations, auth.value.manifest.limits.integrationReconciliations);
-        if ((budget !== undefined && budget.approved_limit_ref !== cmd.approvedLimitRef) ||
+        if ((budget !== undefined && !budgetReferencesMatch(cmd.coordinationScopeId, cmd.budgetKey, budget.approved_limit_ref, cmd.approvedLimitRef)) ||
           (budget?.consumed ?? 0) + inherited >= limit) return fail('集成复验预算不可用或已耗尽');
         db.prepare(`INSERT INTO integration_reconciliations (coordination_scope_id, reconciliation_id,
           work_package_id, round, validation_attempt_id, source_accepted_result_ref, target_head, state, created_at, updated_at)
@@ -6910,7 +7541,7 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
             cmd.coordinationScopeId,
             entry.budgetKey,
           );
-          if (counter !== undefined && counter.approved_limit_ref !== entry.approvedLimitRef) {
+          if (counter !== undefined && !budgetReferencesMatch(cmd.coordinationScopeId, entry.budgetKey, counter.approved_limit_ref, entry.approvedLimitRef)) {
             return fail('已登记的预算授权上限引用与本次不一致，拒绝在同一计数上叠加', 'constraint');
           }
           const approvedLimit = cmd.approvedLimit;

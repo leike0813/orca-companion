@@ -24,6 +24,8 @@ import type {
 import type { CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
 import type { SemanticEvent } from '../../src/application/controller-service.js';
 import type { DoctorProbe } from '../../src/bootstrap/doctor.js';
+import type { KeepaliveCapability } from '../../src/adapters/agents/chat-model-factory.js';
+import type { ExecutionBackend, ExecutionMutation } from '../../src/application/ports/execution-backend.js';
 import { createForegroundPlanningHost } from '../../src/bootstrap/foreground-planning-runtime.js';
 import { resolveGitCommonDir } from '../../src/bootstrap/composition.js';
 import { openCoordinationStore } from '../../src/adapters/storage/coordination-store.js';
@@ -85,7 +87,7 @@ function initializeRepository(root: string): string {
   return repository;
 }
 
-function writeProjectConfig(repository: string, options: { readonly maxInputTokens?: number } = {}): void {
+function writeProjectConfig(repository: string, options: { readonly maxInputTokens?: number; readonly keepaliveEnabled?: boolean } = {}): void {
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
@@ -112,7 +114,10 @@ function writeProjectConfig(repository: string, options: { readonly maxInputToke
       defaultCoordinatorModelRef: 'planning-default',
       tracker: { kind: 'github', routeMapIssueNumber: 7 },
       planning: { maxMutations: 2 },
-      context: { maxInputTokens: options.maxInputTokens ?? 20_000 },
+      context: {
+        maxInputTokens: options.maxInputTokens ?? 20_000,
+        ...(options.keepaliveEnabled === undefined ? {} : { keepaliveEnabled: options.keepaliveEnabled }),
+      },
     }),
     'utf8',
   );
@@ -151,6 +156,9 @@ async function startHarness(
     readonly heartbeatIntervalMs?: number;
     readonly repository?: string;
     readonly maxInputTokens?: number;
+    readonly keepaliveEnabled?: boolean;
+    readonly companionKeepalive?: KeepaliveCapability;
+    readonly executionBackend?: ExecutionBackend;
     readonly askUser?: boolean;
     readonly streamGate?: Promise<void>;
     readonly modelSignal?: (signal: AbortSignal) => void;
@@ -163,6 +171,7 @@ async function startHarness(
   if (overrides.withConfig !== false) {
     writeProjectConfig(repository, {
       ...(overrides.maxInputTokens === undefined ? {} : { maxInputTokens: overrides.maxInputTokens }),
+      ...(overrides.keepaliveEnabled === undefined ? {} : { keepaliveEnabled: overrides.keepaliveEnabled }),
     });
   }
   if (overrides.detachHead === true) {
@@ -182,6 +191,7 @@ async function startHarness(
     leaseTtlMs: 60_000,
     orcaProbe: fakeProbe(),
     trackerFactory: fakeTracker,
+    ...(overrides.executionBackend === undefined ? {} : { executionBackend: overrides.executionBackend }),
     loadIntegration: () => {
       const exactMeasure = overrides.exactMeasure;
       class InstalledChatModel extends CapableChatModel {
@@ -226,6 +236,9 @@ async function startHarness(
               exactMeasure({ messages, tools }),
           },
         });
+      }
+      if (overrides.companionKeepalive !== undefined) {
+        Object.assign(InstalledChatModel, { companionKeepalive: overrides.companionKeepalive });
       }
       return Promise.resolve({ CapableChatModel: InstalledChatModel });
     },
@@ -281,6 +294,93 @@ async function waitFor(check: () => boolean, timeoutMs = 2_000): Promise<boolean
   }
   return check();
 }
+
+/** 维护回归只观察 Orca mutation；任何查询都留在 fake 内，不连接真实 runtime。 */
+function maintenanceBackend(mutations: ExecutionMutation[]): ExecutionBackend {
+  return {
+    query: () => Promise.resolve({ kind: 'rejected', code: 'unused', message: '无执行 Run' }),
+    mutate: (mutation) => {
+      mutations.push(mutation);
+      return Promise.resolve({ kind: 'rejected', code: 'unexpected_mutation', message: mutation.operation });
+    },
+  };
+}
+
+test('前台 maintenance：每次挂起最多 8 次保活，真实 prompt 后重置且不生成模型或 checkpoint 条目', { timeout: 30_000 }, async () => {
+  let keepaliveCalls = 0;
+  const mutations: ExecutionMutation[] = [];
+  const harness = await startHarness({
+    keepaliveEnabled: true,
+    companionKeepalive: {
+      intervalMs: 20,
+      keepalive: () => { keepaliveCalls++; return Promise.resolve(true); },
+    },
+    executionBackend: maintenanceBackend(mutations),
+  });
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+
+  for (const [index, content] of ['开始规划', '继续真实规划'].entries()) {
+    const previousRounds = modelRounds(harness);
+    expect((await harness.host.ports.execute({
+      kind: 'send-session-message', submissionId: `maintenance-prompt-${String(index)}`,
+      coordinatorSessionId: proposal.coordinatorSessionId, content,
+    })).kind).toBe('accepted');
+    expect(await waitFor(() => modelRounds(harness) > previousRounds, 5_000)).toBe(true);
+    const generations = harness.requests.generations;
+    const history = await harness.host.ports.reading.history({ coordinatorSessionId: proposal.coordinatorSessionId });
+    expect(history.entries.map(entry => entry.role)).toEqual(index === 0
+      ? ['user', 'assistant'] : ['user', 'assistant', 'user', 'assistant']);
+
+    expect(await waitFor(() => keepaliveCalls >= (index + 1) * 8, 5_000)).toBe(true);
+    // 再观察多个 provider 间隔：空转轮询不能恢复模型或重置已经耗尽的维护预算。
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(keepaliveCalls).toBe((index + 1) * 8);
+    const snapshot = await harness.host.ports.snapshot(proposal.coordinatorSessionId);
+    expect(snapshot.kind === 'snapshot' ? snapshot.snapshot.maintenance : null)
+      .toEqual({ cyclesRun: 8, stopped: true, stopReason: 'cycle_limit_reached' });
+    expect(harness.requests.generations).toBe(generations);
+    const after = await harness.host.ports.reading.history({ coordinatorSessionId: proposal.coordinatorSessionId });
+    expect(after.entries).toEqual(history.entries);
+    expect(mutations).toHaveLength(0);
+  }
+  expect(harness.requests.inputs.at(-1)).toContain('继续真实规划');
+});
+
+test.each(['close', 'pause', 'fence'] as const)('前台 maintenance：%s 停止后续保活且不续排', { timeout: 30_000 }, async action => {
+  const gate = Promise.withResolvers<boolean>();
+  const signals: AbortSignal[] = [];
+  const mutations: ExecutionMutation[] = [];
+  const harness = await startHarness({
+    keepaliveEnabled: true,
+    companionKeepalive: {
+      intervalMs: 20,
+      keepalive: ({ signal }) => { signals.push(signal); return gate.promise; },
+    },
+    executionBackend: maintenanceBackend(mutations),
+  });
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  expect((await harness.host.ports.execute({
+    kind: 'send-session-message', submissionId: `maintenance-stop-${action}`,
+    coordinatorSessionId: proposal.coordinatorSessionId, content: '开始规划',
+  })).kind).toBe('accepted');
+  expect(await waitFor(() => signals.length > 0, 5_000)).toBe(true);
+  const generations = harness.requests.generations;
+  if (action === 'close') harness.dispose();
+  else if (action === 'pause') {
+    expect((await harness.host.ports.execute({ kind: 'scope-control', action: 'pause' })).kind).toBe('accepted');
+  } else {
+    now += 60_001;
+  }
+  expect(await waitFor(() => signals[0]?.aborted === true, 5_000)).toBe(true);
+  // 控制状态变化后，即使原 provider 调用迟到返回成功，也不能续排下一次保活。
+  gate.resolve(true);
+  await new Promise(resolve => setTimeout(resolve, 100));
+  expect(signals).toHaveLength(1);
+  expect(harness.requests.generations).toBe(generations);
+  expect(mutations).toHaveLength(0);
+});
 
 test.each(['pause', 'cancel', 'close', 'fence'] as const)('真实流式宿主的 %s 不接受部分消息', async action => {
   const gate = Promise.withResolvers<void>();

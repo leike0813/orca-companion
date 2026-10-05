@@ -65,14 +65,14 @@ function recordBinding(harness: ReturnType<typeof createExecutionScopeHarness>, 
   if (result.kind !== 'scope' || result.scope === null) throw new Error('scope missing');
   const command: CoordinationCommand = {
     kind: 'record-materialization-binding', coordinationScopeId: harness.scopeId, expectedRevision: result.scope.revision,
-    writer: harness.writer, workPackageId: input.workPackageId as WorkPackageId, role: 'implementation',
+    writer: harness.writer, workPackageId: input.workPackageId as WorkPackageId, role: 'validator',
     workerTaskId: `worker-${input.orcaTaskId}` as WorkerTaskId, dispatchId: `dispatch-${input.orcaTaskId}` as DispatchId,
     attemptId: `attempt-${input.orcaTaskId}`, worktreeId: 'worktree-a', specBinding: input.specBinding ?? {
       provider: 'openspec', relativePath: 'openspec/changes/unit-a', contentDigest: 'digest-a',
       providerVersion: '1', contractRevision: 7, trackingRevision: 9,
     },
     specificationUnitPath: null, authorizationId: 'auth-1', authorizationVersion: 1,
-    workerProfileRef: 'profile-implementation', orcaTaskId: input.orcaTaskId, launchId: `launch-${input.orcaTaskId}`,
+    workerProfileRef: 'profile-validator', orcaTaskId: input.orcaTaskId, launchId: `launch-${input.orcaTaskId}`,
     creationOperationId: `operation-${input.orcaTaskId}` as OperationId,
   };
   const written = harness.store.transact(command);

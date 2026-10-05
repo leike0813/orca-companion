@@ -312,6 +312,9 @@ function settle(harness: ExecutionScopeHarness, input: {
     role: input.role,
     contractRevision: input.contractRevision,
     orcaResultRef: `${input.workerTaskId}#accepted`,
+    // 角色结论默认是成功：严格 outcome 由 execution-view 的专项用例覆盖。
+    outcome: 'succeeded',
+    ...(input.role === 'validator' ? { validationVerdict: 'passed' as const } : {}),
   });
   if (recorded.kind === 'rejected') {
     throw new Error(`无法记录结算：${recorded.message}`);
@@ -353,6 +356,7 @@ function derivePlannerIds(harness: ExecutionScopeHarness, workPackageId: WorkPac
     role: 'planner',
     contractRevision: 0,
     attemptId: 'attempt-1',
+    workerTaskId: 'orca-task-1',
   });
 }
 
@@ -571,6 +575,7 @@ test('角色结论被接受后为同一 Work Package 派发新的角色 Task', a
     role: 'implementation',
     contractRevision: 1,
     attemptId: 'attempt-2',
+    workerTaskId: 'orca-task-2',
   }).workerStart;
   expect(scopes.at(-1)?.operationId).toBe(secondStartId);
   // 派发身份绑定当前授权：后代角色用的仍是同一份 Authorization 与 Run。
@@ -641,6 +646,7 @@ test('派发结果未知时返回原 OperationId，lane 保持阻塞且不重发
     contractRevision: 0,
     attemptId: 'attempt-1',
     unresolvedIntents: blocked,
+    workerTaskId: 'orca-task-1',
   });
   expect(reused).toEqual(derived);
 
@@ -915,13 +921,15 @@ test('五个分步骤的 OperationId 由候选事实稳定派生，且未决 lan
   expect(new Set(Object.values(first)).size).toBe(5);
   for (const id of Object.values(first)) {
     expect(id).toContain('scope-1');
-    expect(id).toContain('attempt-2');
   }
+  expect(first.workerStart).toContain('attempt-2');
 
   // 只要有一个组成事实不同，就必须是一组新身份——身份不是「第几次调用」，也不是时钟。
   const otherAttempt = materializeOperationIdsFor({ ...base, attemptId: 'attempt-3' });
   expect(otherAttempt.workerStart).not.toBe(first.workerStart);
-  expect(otherAttempt.task).not.toBe(first.task);
+  expect(otherAttempt.task).toBe(first.task);
+  expect(otherAttempt.worktree).toBe(first.worktree);
+  expect(otherAttempt.workerPrepare).not.toBe(first.workerPrepare);
   expect(materializeOperationIdsFor({ ...base, contractRevision: 2 }).worktree).not.toBe(first.worktree);
 
   // 同一 lane 上的未决意图优先复用其 OperationId：对账只能按原身份进行。
@@ -1126,7 +1134,7 @@ test('旧派发有可核验结算后，在途修订节点重跑一次 Specificat
 
   const result = await advanceExecution({
     ...advanceInput(harness, {
-      roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-2' }) },
+      roles: { planner: roleDispatch({ role: 'planner', attemptId: 'attempt-2', workerTaskId: 'revision-task-2' }) },
       observations: plannerExited(),
     }),
     backend: execution.backend,

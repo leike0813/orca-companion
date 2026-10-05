@@ -14,11 +14,15 @@ import {
 } from '../../../src/adapters/agents/codex-launch.js';
 import { CODEX_MANAGED_CREDENTIAL_ENV } from '../../../src/adapters/agents/codex-model-launcher.js';
 import { JsonCredentialStore } from '../../../src/adapters/storage/credential-store.js';
-import { modelConfigurationFixture } from '../../support/model-configurations.js';
+import { credentialStoreFixture, modelConfigurationFixture } from '../../support/model-configurations.js';
+import type { CredentialStore } from '../../../src/application/ports/credential-store.js';
 import type { WorkerModelConfiguration } from '../../../src/domain/model-configuration.js';
 import { codexConfigValue } from '../../../src/adapters/agents/codex-model-launcher.js';
 
 const roots: string[] = [];
+
+/** harness_login 绑定不会读凭据，但启动装配仍要求宿主注入 store：这些用例给一个不读文件的替身。 */
+const unusedCredentialStore = credentialStoreFixture();
 
 test('SessionStart reporter 可执行并写出完整的一行身份报告', () => {
   const root = mkdtempSync(join(tmpdir(), 'companion-codex-reporter-'));
@@ -66,6 +70,7 @@ test('Codex prepared-terminal 只写 worktree 内隔离状态，并固定 trust 
   const strategy = createCodexWorkerLaunch({
     launchId: 'validator:attempt-1',
     modelConfiguration: modelConfigurationFixture(),
+    credentialStore: unusedCredentialStore,
     sandboxMode: 'workspace-write',
     sourceCodexHome: sourceHome,
     sessionStartReporterPath: reporter,
@@ -100,6 +105,7 @@ test('Utility Codex 使用只读文件系统与本机控制通道 profile', asyn
   const strategy = createCodexWorkerLaunch({
     launchId: 'utility:attempt-1',
     modelConfiguration: modelConfigurationFixture(),
+    credentialStore: unusedCredentialStore,
     sandboxMode: 'read-only-local-control',
     sourceCodexHome: sourceHome,
   });
@@ -131,6 +137,7 @@ test('来源配置的 legacy sandbox 键与只读 profile 混用时启动失败�
   const strategy = createCodexWorkerLaunch({
     launchId: 'utility:attempt-conflict',
     modelConfiguration: modelConfigurationFixture(),
+    credentialStore: unusedCredentialStore,
     sandboxMode: 'read-only-local-control',
     sourceCodexHome: sourceHome,
   });
@@ -154,6 +161,7 @@ test('只读 Finalizer 的状态根与 reporter 留在 canonical worktree 之外
   const strategy = createCodexWorkerLaunch({
     launchId: 'finalizer:delivery-1',
     modelConfiguration: modelConfigurationFixture(),
+    credentialStore: unusedCredentialStore,
     sandboxMode: 'read-only',
     sourceCodexHome: sourceHome,
     sessionStartReporterPath: reporter,
@@ -173,6 +181,7 @@ test('状态根必须是绝对路径', () => {
   const strategy = createCodexWorkerLaunch({
     launchId: 'finalizer:delivery-1',
     modelConfiguration: modelConfigurationFixture(),
+    credentialStore: unusedCredentialStore,
     sandboxMode: 'read-only',
     stateRoot: './relative-companion',
   });
@@ -299,6 +308,7 @@ test('harness_login 保留原 auth.json 绑定，且不注入凭据环境变量'
   const strategy = createCodexWorkerLaunch({
     launchId: 'finalizer:attempt-1',
     modelConfiguration: modelConfigurationFixture(),
+    credentialStore: unusedCredentialStore,
     codexExecutable: fakePath,
     sandboxMode: 'read-only',
     sourceCodexHome: sourceHome,
@@ -345,7 +355,7 @@ test('managed 凭据缺失时准备阶段 fail closed，不产出可启动会话
   expect(() => strategy.prepare({ worktreePath: worktree })).toThrow(/凭据/u);
 });
 
-test('未传 credentialStore 时仍按 storePath 早期拒绝缺失凭据，不跳过校验', () => {
+test('managed 凭据启动必须由宿主注入 store：未注入时在准备前拒绝，不留下产物', () => {
   const root = mkdtempSync(join(tmpdir(), 'companion-codex-no-store-'));
   roots.push(root);
   const sourceHome = join(root, 'source-codex-home');
@@ -362,16 +372,17 @@ test('未传 credentialStore 时仍按 storePath 早期拒绝缺失凭据，不�
     },
   };
 
-  // 刻意不传 credentialStore：校验必须仍然发生，而不是被「没传就跳过」。
+  // 模拟绕过类型约束、未注入 store 的调用形态：adapter 不能按路径另建实例，必须 fail closed。
   const strategy = createCodexWorkerLaunch({
     launchId: 'planner:no-store',
     modelConfiguration,
+    credentialStore: undefined as unknown as CredentialStore,
     credentialStorePath: storePath,
     sandboxMode: 'workspace-write',
     sourceCodexHome: sourceHome,
   });
 
-  expect(() => strategy.prepare({ worktreePath: worktree })).toThrow(/凭据/u);
+  expect(() => strategy.prepare({ worktreePath: worktree })).toThrow(/CredentialStore/u);
   // 未受理，因此不产出可启动的 descriptor。
   expect(existsSync(join(worktree, '.companion', 'codex'))).toBe(false);
 });
@@ -396,6 +407,7 @@ test('模型配置不能覆写沙箱、审批、profile 或 hook 等宿主保留
     const strategy = createCodexWorkerLaunch({
       launchId: 'planner:reserved-' + key,
       modelConfiguration,
+      credentialStore: unusedCredentialStore,
       sandboxMode: 'read-only',
       sourceCodexHome: sourceHome,
     });
@@ -419,6 +431,7 @@ test('嵌套在 modelOptions 里的秘密字段在准备前被拒绝，且不留
   const strategy = createCodexWorkerLaunch({
     launchId: 'planner:nested-secret',
     modelConfiguration,
+    credentialStore: unusedCredentialStore,
     sandboxMode: 'workspace-write',
     sourceCodexHome: sourceHome,
   });
@@ -446,6 +459,7 @@ test('effort 不在能力取值范围内时在准备前被拒绝', () => {
   const strategy = createCodexWorkerLaunch({
     launchId: 'planner:bad-effort',
     modelConfiguration,
+    credentialStore: unusedCredentialStore,
     sandboxMode: 'workspace-write',
     sourceCodexHome: sourceHome,
   });
@@ -471,6 +485,7 @@ test('无法编码的模型选项在准备前被拒绝，不静默丢弃也不�
   const strategy = createCodexWorkerLaunch({
     launchId: 'planner:bad-option',
     modelConfiguration,
+    credentialStore: unusedCredentialStore,
     sandboxMode: 'workspace-write',
     sourceCodexHome: sourceHome,
   });
@@ -582,6 +597,7 @@ test('Codex resume 复用原 CODEX_HOME，argv 以 resume <uuid> 开头', async 
   const strategy = createCodexResumeLaunch({
     launchId: 'reconcile:wp-1:round-1',
     modelConfiguration: modelConfigurationFixture(),
+    credentialStore: unusedCredentialStore,
     sessionId: '11111111-1111-1111-1111-111111111111',
     codexHome,
     sandboxMode: 'workspace-write',
@@ -600,6 +616,7 @@ test('Codex resume 拒绝形态非法的 session ID，不落到任何启动参�
   const strategy = createCodexResumeLaunch({
     launchId: 'reconcile:wp-1:round-1',
     modelConfiguration: modelConfigurationFixture(),
+    credentialStore: unusedCredentialStore,
     sessionId: 'bad id; rm -rf /',
     codexHome: root,
     sandboxMode: 'workspace-write',

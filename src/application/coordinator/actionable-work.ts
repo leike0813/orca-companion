@@ -25,6 +25,9 @@ import type { WakeAdmissionRecord } from '../ports/branch-coordination-store.js'
 export const SOURCE_OBSERVATION_CLASSES = [
   'worker_question',
   'worker_escalation',
+  'delivery_verdict',
+  'worker_failure',
+  'replanning_ready',
   'pending_interaction',
   'user_message',
   'unattributed_drift',
@@ -40,6 +43,9 @@ export type SourceObservationClass = (typeof SOURCE_OBSERVATION_CLASSES)[number]
 const ACTIONABLE_OBSERVATION_CLASSES: ReadonlySet<SourceObservationClass> = new Set([
   'worker_question',
   'worker_escalation',
+  'delivery_verdict',
+  'worker_failure',
+  'replanning_ready',
   'pending_interaction',
   'user_message',
   'unattributed_drift',
@@ -70,6 +76,9 @@ export const ACTIONABLE_WORK_LIMIT = 32;
 /** 暂停、取消与 Replanning Transition 期间不恢复模型（`AGENTS.md` 第 9 节）。 */
 const NO_WAKE_CONTROL_STATES: ReadonlySet<ControlState> = new Set([
   'paused',
+  'blocked',
+  'unverifiable',
+  'replanning_transition',
   'cancelling',
   'cancelled',
 ]);
@@ -149,6 +158,15 @@ export function pendingWorkFromHistory(
 ): readonly ProjectedActionableWorkItem[] {
   const pending: ProjectedActionableWorkItem[] = [];
   for (const entry of entries) {
+    if (entry.workSource !== undefined) {
+      const workKind = entry.workSource.sourceKind === 'worker-question' ? 'worker_question'
+        : entry.workSource.sourceKind === 'worker-escalation' ? 'worker_escalation'
+        : entry.workSource.sourceKind === 'delivery-verdict' ? 'delivery_verdict'
+        : entry.workSource.sourceKind === 'worker-failure' ? 'worker_failure'
+        : entry.workSource.sourceKind === 'planning-cycle' ? 'replanning_ready' : 'unattributed_drift';
+      pending.push({ source: entry.workSource, workKind, summary: entry.content });
+      continue;
+    }
     if (entry.completedWorkSource !== undefined) {
       const source = entry.completedWorkSource;
       const index = pending.findIndex((item) => item.source.sourceKind === source.sourceKind &&

@@ -55,6 +55,31 @@ export type PlannedWorkPackage = {
   readonly scopeEnvelope: ScopeEnvelope;
   /** 计划声明的预算需求；缺省表示只取配置上限，不额外声明。 */
   readonly requestedBudget?: Partial<WorkPackageBudget>;
+  /** 可选的旧成果采用声明；语义适用性由 Coordinator 判断，宿主只核验证据与事实。 */
+  readonly adoption?: PlannedAdoption;
+  /** 可选的旧责任延续声明；继承旧责任**当前**已消耗额度，计划里没有可填入新值的位置。 */
+  readonly lineage?: PlannedLineage;
+};
+
+/**
+ * 计划里的最小采用声明。
+ *
+ * 这里只有引用与种类，不携带「证据是否适用」之类的判定位：那是宿主回读 Orca/Git/旧图之后的事实，
+ * 由 `evaluateAdoptionRequest` 判定，计划不能自证。
+ */
+export type PlannedAdoption = {
+  /** 与端口层 `BaselineAdoptionKind` 同一闭集（SSOT 在 `ports/branch-coordination-store`）。 */
+  readonly kind: 'baseline_adoption' | 'migration_material' | 'planning_reference';
+  readonly adoptedResultRef: string;
+  readonly baselineHead: string;
+  readonly integrationRef?: string;
+  readonly evidenceRefs: readonly string[];
+};
+
+/** 旧责任延续声明：只给出旧责任身份，已消耗计数由宿主按当前计数回读。 */
+export type PlannedLineage = {
+  readonly priorWorkPackageId: string;
+  readonly priorGraphId: string;
 };
 
 export type ImplementationPlan = {

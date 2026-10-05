@@ -63,6 +63,7 @@ import { buildExecutionScope, type ExecutionBackend, type ExecutionScope } from 
 import { activatePreparedWorker, prepareWorkerLaunch, verifyPreparedWorker } from '../../../src/application/worker-launch.js';
 import { loadCurrentGraph, recordInitialGraph } from '../../../src/application/planning/graph-history.js';
 import { implementationPlanFor } from '../../support/graph-plan-fixture.js';
+import { credentialStoreFixture } from '../../support/model-configurations.js';
 import {
   admitGraphRevision,
   applyGraphRevision,
@@ -424,6 +425,7 @@ async function runGraphPatchPlannerWorker(
   const strategy = createCodexWorkerLaunch({
     launchId: `${identity}:graph-patch-planner`,
     modelConfiguration,
+    credentialStore: credentialStoreFixture(),
     sandboxMode: 'read-only-local-control',
     sessionStartReporterPath: reporterPath,
     sourceCodexHome,

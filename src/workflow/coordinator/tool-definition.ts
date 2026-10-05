@@ -11,10 +11,11 @@
  */
 
 import type { OperationId } from '../../application/dto/identity.js';
+import type { SourceRevisionRef } from '../../domain/coordinator/session-state.js';
 
 /** 工具调用的结果闭集：`accepted` / `rejected` / `unknown` 三值，与 IC-02 的操作结果同构。 */
 export type CoordinatorToolOutcome =
-  | { readonly kind: 'ok'; readonly value: unknown }
+  | { readonly kind: 'ok'; readonly value: unknown; readonly completedWorkSource?: SourceRevisionRef }
   | { readonly kind: 'rejected'; readonly code: string; readonly message: string }
   | { readonly kind: 'unknown'; readonly reason: string };
 

@@ -192,8 +192,10 @@ export function createToolsNode(dependencies: ToolNodeDependencies) {
         toolName: call.name,
         ...(completedWorkSource === undefined && outcome.kind === 'ok' &&
           dependencies.tools.find((tool) => tool.name === call.name)?.completesWorkOnSuccess === true &&
-          state.remainingWork[0] !== undefined
-          ? { completedWorkSource: state.remainingWork[0].source }
+          state.remainingWork.some((work) => outcome.completedWorkSource === undefined ||
+            work.source.sourceKind === outcome.completedWorkSource.sourceKind &&
+            work.source.sourceId === outcome.completedWorkSource.sourceId && work.source.revision === outcome.completedWorkSource.revision)
+          ? { completedWorkSource: outcome.completedWorkSource ?? state.remainingWork[0]!.source }
           : {}),
       };
       // 每次追加都基于最新已提交状态：工具执行期间受理的用户消息不会被覆盖。

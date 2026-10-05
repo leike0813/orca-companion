@@ -392,3 +392,50 @@ test('验证修复预算耗尽后阻塞并给出预算键', async () => {
     budgetKey: 'work-package:wp-1:validatorRepairs',
   });
 });
+
+test('修复前持久准入：rejected/unknown 阻止派发修复并给出稳定 stepId', async () => {
+  const runner = scriptedRunner([
+    {
+      kind: 'verified',
+      outcome: 'failed',
+      evidence: [evidence('ev-1', ['src'])],
+      summary: '发现缺陷',
+      sessionBinding: SESSION,
+      repairIntent: { changedPaths: ['src/a.ts'], requiresDesignChange: false, requiresDependencyChange: false },
+    },
+  ]);
+  const admissions: string[] = [];
+
+  const rejected = await runValidation(
+    input({
+      runStep: runner.runStep,
+      repairBudget: { limit: 2, consumed: 1 },
+      admitStep: (request) => {
+        admissions.push(request.stepId);
+        return Promise.resolve({ kind: 'rejected', reason: '额度已满' });
+      },
+    }),
+  );
+  expect(rejected).toMatchObject({ kind: 'blocked', code: 'admission_rejected' });
+  // 已消耗 1，本次修复是第 2 次；stable stepId 由 dispatch/attempt/序号确定性派生。
+  expect(admissions).toEqual(['validator-repair:dispatch-1:validation-1:2']);
+  // 准入被拒后不得派发修复步骤。
+  expect(runner.requests.map((request) => request.kind)).toEqual(['verify']);
+
+  const unknown = await runValidation(
+    input({
+      runStep: scriptedRunner([
+        {
+          kind: 'verified',
+          outcome: 'failed',
+          evidence: [evidence('ev-1', ['src'])],
+          summary: '发现缺陷',
+          sessionBinding: SESSION,
+          repairIntent: { changedPaths: ['src/a.ts'], requiresDesignChange: false, requiresDependencyChange: false },
+        },
+      ]).runStep,
+      admitStep: () => Promise.resolve({ kind: 'unknown', reason: '写入不确定' }),
+    }),
+  );
+  expect(unknown).toMatchObject({ kind: 'blocked', code: 'admission_unknown' });
+});

@@ -35,6 +35,7 @@ import type {
   DeliverySettlementRecord,
   RecoveryRecord,
   SessionSegmentRecord,
+  WakeAdmissionRecord,
 } from '../../src/application/ports/branch-coordination-store.js';
 import type { LeaseRecord } from '../../src/application/ports/branch-coordination-store.js';
 import type { ExecutionObservationFacts } from '../../src/application/execution/execution-view.js';
@@ -588,6 +589,8 @@ const EXEC_RUN = 'run-advance';
 const EXEC_AUTH = 'auth-advance';
 const EXEC_WP_A = 'wp-a' as WorkPackageId;
 const EXEC_WP_B = 'wp-b' as WorkPackageId;
+/** 执行交接门测试的 Target：与 Source 同 Scope 的独立 Session。 */
+const EXEC_TARGET = 'session-advance-target' as CoordinatorSessionId;
 /** 等待触发点结论的时间上界；fake backend 全同步，这里只防「什么都没发生」。 */
 const ADVANCE_WAIT_MS = 3_000;
 const ADVANCE_TIMEOUT_MS = 20_000;
@@ -1147,6 +1150,233 @@ test('派发结果未知：保留原 OperationId，且不产生第二个 Task �
   expect(mutationCount(harness, 'worker-start')).toBe(1);
   expect(mutationCount(harness, 'worktree-create')).toBe(1);
 });
+
+/* -------------------------------------------------------------------------- */
+/* 执行交接激活门（IP-11）：cutover 后 Target 只由下一条普通 Prompt 激活           */
+/* -------------------------------------------------------------------------- */
+
+function waitTick(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** 读取活动租约构造可信 writer：这些写入必须由当前 Execution Coordination Lease 持有者承担。 */
+function liveAdvanceWriter(store: CoordinationStore): CoordinationWriter {
+  const read = store.query({ kind: 'leases', coordinationScopeId: EXEC_SCOPE });
+  const leases = read.kind === 'leases' ? read.leases : [];
+  const lease =
+    leases.find((entry) => entry.kind === 'execution_coordination' && entry.releasedAt === null) ??
+    leases.find(
+      (entry) => entry.kind === 'runtime' && entry.coordinatorSessionId === EXEC_SESSION && entry.releasedAt === null,
+    );
+  if (lease === undefined) {
+    throw new Error('找不到活动租约：无法注册或推进交接');
+  }
+  return {
+    coordinatorSessionId: lease.coordinatorSessionId,
+    runtimeIncarnationId: lease.runtimeIncarnationId,
+    fencingGeneration: lease.fencingGeneration,
+  };
+}
+
+/**
+ * 同一测试内注册 Target，并在它的 checkpoint 播一条未回答的历史 user 消息。
+ *
+ * 这条历史消息是断言的关键：没有激活门时，Target 一旦被拉起就会把它当作待处理工作并写入模型
+ * step；有门则必须等到用户的下一条普通 Prompt。
+ */
+function seedHandoffTarget(repository: string): void {
+  const coordination = openCoordinationStore({
+    databasePath: coordinationDatabasePath(join(repository, '.git')),
+    clock,
+  });
+  if (coordination.kind !== 'opened') {
+    throw new Error(coordination.message);
+  }
+  try {
+    const store = coordination.store;
+    const scope = store.query({ kind: 'scope', coordinationScopeId: EXEC_SCOPE });
+    if (scope.kind !== 'scope' || scope.scope === null) {
+      throw new Error('Scope 不存在：无法注册交接 Target');
+    }
+    const registered = store.transact({
+      kind: 'register-session',
+      coordinationScopeId: EXEC_SCOPE,
+      expectedRevision: scope.scope.revision,
+      writer: liveAdvanceWriter(store),
+      coordinatorSessionId: EXEC_TARGET,
+      coordinatorModelConfigurationRef: 'planning-default',
+      lifecycleState: 'active',
+    });
+    if (registered.kind === 'rejected') {
+      throw new Error(`无法注册交接 Target：${registered.message}`);
+    }
+  } finally {
+    coordination.store.close();
+  }
+
+  const checkpoints = openCheckpointStore({
+    databasePath: checkpointDatabasePath(join(repository, '.git')),
+    clock,
+  });
+  if (checkpoints.kind !== 'opened') {
+    throw new Error(checkpoints.message);
+  }
+  try {
+    const saved = checkpoints.store.saveCheckpoint({
+      schemaVersion: COORDINATOR_SESSION_STATE_SCHEMA_VERSION,
+      coordinatorSessionId: EXEC_TARGET,
+      committedMessages: [
+        { entryId: 'hist-user-1', stepId: 'hist-user-1', role: 'user', content: '交接前的历史消息' },
+      ],
+      graphPosition: 'suspend',
+      committedModelSteps: [],
+      wakeBatches: [],
+      lastCompactionOutcome: null,
+    });
+    if (saved.kind !== 'saved') {
+      throw new Error('无法写入交接 Target 的 checkpoint');
+    }
+  } finally {
+    checkpoints.store.close();
+  }
+}
+
+/** Target 的激活来源准入：只有 `execution-handoff-activation` 这一条才代表激活门被满足。 */
+function targetActivationAdmissions(repository: string): number {
+  const store = readAdvanceStore(repository);
+  try {
+    const read = store.query({
+      kind: 'wake-admissions',
+      coordinationScopeId: EXEC_SCOPE,
+      coordinatorSessionId: EXEC_TARGET,
+    });
+    const admissions: readonly WakeAdmissionRecord[] = read.kind === 'wake-admissions' ? read.admissions : [];
+    return admissions.filter((record) =>
+      record.sourceRevisions.some((source) => source.sourceKind === 'execution-handoff-activation'),
+    ).length;
+  } finally {
+    store.close();
+  }
+}
+
+/** Target checkpoint 里已接受的模型 step 数量。 */
+function targetModelSteps(repository: string): number {
+  const opened = openCheckpointStore({
+    databasePath: checkpointDatabasePath(join(repository, '.git')),
+    clock,
+  });
+  if (opened.kind !== 'opened') {
+    throw new Error(opened.message);
+  }
+  try {
+    const read = opened.store.loadCheckpoint(EXEC_TARGET, 'full');
+    return read.kind === 'recovered' ? read.state.committedModelSteps.length : 0;
+  } finally {
+    opened.store.close();
+  }
+}
+
+test(
+  '执行交接 cutover 后 Target 处于 awaiting_user_prompt：历史消息与定时对账都不启动模型，只有下一条普通消息才激活',
+  { timeout: ADVANCE_TIMEOUT_MS },
+  async () => {
+    const harness = await openAdvanceHarness();
+    // Source 先成为活动 Session，并让首个派发落定：之后 Scope 静默，交接不会被并发写入打断。
+    await sendAdvanceMessage(harness, '准备交接');
+    await vi.waitFor(
+      () => {
+        expect(mutationCount(harness, 'worker-start')).toBe(1);
+      },
+      { timeout: ADVANCE_WAIT_MS, interval: 25 },
+    );
+
+    seedHandoffTarget(harness.repository);
+
+    // prepare → review → cutover 全部走生产宿主端口：review 由 Source 复核并拉起 Target，cutover 由
+    // Source 单次 CAS 转移责任。Target 在门被满足前一直处于 awaiting_user_prompt。
+    const prepared = await harness.host.ports.executionHandoff.prepare(EXEC_TARGET);
+    expect(prepared.kind).toBe('accepted');
+    const preparedRef = prepared.kind === 'accepted' ? prepared.resultRef : undefined;
+    if (preparedRef === undefined || preparedRef.kind !== 'execution-handoff') {
+      throw new Error('prepare 未返回 Execution Handoff 引用');
+    }
+    const reviewed = await harness.host.ports.executionHandoff.review(preparedRef.handoffId);
+    expect(reviewed.kind).toBe('accepted');
+    const reviewedRef = reviewed.kind === 'accepted' ? reviewed.resultRef : undefined;
+    if (reviewedRef === undefined || reviewedRef.kind !== 'execution-handoff') {
+      throw new Error('review 未返回 Execution Handoff 引用');
+    }
+    const cutover = await harness.host.ports.executionHandoff.cutover(
+      preparedRef.handoffId,
+      reviewedRef.revision,
+    );
+    expect(cutover.kind).toBe('accepted');
+
+    const workerStartsAfterCutover = mutationCount(harness, 'worker-start');
+    // 两个定时对账 tick：Target 仍未被激活，历史消息未被消费；确定性触发点也不得在 cutover 后新建
+    // 派发（Delivery 已发生时的结算仍可照常运行）。
+    await waitTick(2_200);
+    expect(mutationCount(harness, 'worker-start')).toBe(workerStartsAfterCutover);
+    expect(targetActivationAdmissions(harness.repository)).toBe(0);
+    expect(targetModelSteps(harness.repository)).toBe(0);
+
+    // 只有下一条普通 Prompt 才满足激活门。
+    const sent = await harness.host.ports.execute({
+      kind: 'send-session-message',
+      submissionId: globalThis.crypto.randomUUID(),
+      coordinatorSessionId: EXEC_TARGET,
+      content: '开始执行',
+    });
+    expect(sent.kind).toBe('accepted');
+    await vi.waitFor(
+      () => {
+        expect(targetActivationAdmissions(harness.repository)).toBeGreaterThan(0);
+        expect(targetModelSteps(harness.repository)).toBeGreaterThan(0);
+      },
+      { timeout: ADVANCE_WAIT_MS, interval: 25 },
+    );
+
+    // 重开同一仓库：已消费的激活不得被重复注入，模型也不得重复处理同一条工作。
+    const admissionsBeforeReopen = targetActivationAdmissions(harness.repository);
+    const stepsBeforeReopen = targetModelSteps(harness.repository);
+    harness.host.close();
+    // 现有 harness 不能重开（每次新建临时目录），host.close 也不幂等，因此这里自行接管清理、
+    // 不再让 afterEach 走 harness.dispose。
+    advanceHarnesses.splice(advanceHarnesses.indexOf(harness), 1);
+    try {
+      const reopened = await createForegroundPlanningHost({
+        repositoryPath: harness.repository,
+        env: process.env as Record<string, string>,
+        clock,
+        newId: (() => {
+          let counter = 0;
+          return () => `reopen-${String((counter += 1))}`;
+        })(),
+        heartbeatIntervalMs: 1_000,
+        leaseTtlMs: 60_000,
+        orcaProbe: fakeProbe(),
+        trackerFactory: fakeTracker,
+        loadIntegration: () => Promise.resolve({ CapableChatModel }),
+        executionBackend: harness.fake.backend,
+      });
+      try {
+        expect(await reopened.ports.scopeSetup.resolveHome()).toEqual({
+          kind: 'restore',
+          coordinationScopeId: EXEC_SCOPE,
+        });
+        // 让重启后的宿主重新拉起 Target Session（phase 已是 cutover，端口只产生 liveness）。
+        await reopened.ports.executionHandoff.review(preparedRef.handoffId);
+        await waitTick(2_200);
+        expect(targetActivationAdmissions(harness.repository)).toBe(admissionsBeforeReopen);
+        expect(targetModelSteps(harness.repository)).toBe(stepsBeforeReopen);
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      rmSync(harness.directory, { recursive: true, force: true });
+    }
+  },
+);
 
 /* -------------------------------------------------------------------------- */
 /* 中断 Segment 的选择规则（IP-04）：未确认的 Delivery 不是「会话丢失」            */

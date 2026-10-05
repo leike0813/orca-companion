@@ -11,12 +11,20 @@
  * 函数是同步的：IC-03 的 store 本身同步，包一层 Promise 只会给调用方增加无意义的等待点。
  */
 
-import type { CoordinationScopeId, GraphId, GraphGeneration, GraphVersion, WorkPackageId } from '../dto/identity.js';
+import type {
+  CoordinationScopeId,
+  GraphId,
+  GraphGeneration,
+  GraphVersion,
+  PlanningCycleId,
+  WorkPackageId,
+} from '../dto/identity.js';
 import type {
   BranchCoordinationStore,
   BudgetConsumptionInput,
   CoordinationCommandRejection,
   CoordinationWriter,
+  GraphGenerationRecord,
   GraphVersionPatchInput,
 } from '../ports/branch-coordination-store.js';
 import type { ExecutionGraph, GraphVersionRecord, ImplementationPlan } from '../../domain/planning/execution-graph.js';
@@ -168,6 +176,62 @@ export function loadScopeGraph(
     return { kind: 'absent' };
   }
   return loadCurrentGraph({ store, coordinationScopeId, graphId: scope.scope.graphId });
+}
+
+export type LoadPlanningCycleCandidateResult =
+  | {
+      readonly kind: 'loaded';
+      readonly generation: GraphGenerationRecord;
+      readonly version: GraphVersionRecord;
+    }
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'rejected'; readonly failure: GraphHistoryFailure };
+
+/**
+ * 读取某个 Planning Cycle 的候选图。
+ *
+ * 候选审阅必须精确落在本 Planning Cycle 的候选代际上：Scope 之前指向的前代图、以及「最新登记的图」
+ * 都可能同时存在（重规划过渡期间尤其如此），按它们审阅会把授权绑到错误的世代。这里只接受
+ * `planningCycleId` 与 `status === 'candidate'` 同时成立的**唯一**代际记录，再读取它的 head 版本。
+ * 同一 Cycle 出现多个候选代际属于状态不一致，整体拒绝而不是挑一个。
+ */
+export function loadPlanningCycleCandidate(input: {
+  readonly store: BranchCoordinationStore;
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly planningCycleId: PlanningCycleId;
+}): LoadPlanningCycleCandidateResult {
+  const generations = input.store.query({
+    kind: 'graph-generations',
+    coordinationScopeId: input.coordinationScopeId,
+  });
+  if (generations.kind !== 'graph-generations') {
+    return { kind: 'rejected', failure: { code: 'invalid_state', message: '无法读取 Graph Generation 历史' } };
+  }
+  const candidates = generations.generations.filter(
+    (generation) => generation.planningCycleId === input.planningCycleId && generation.status === 'candidate',
+  );
+  if (candidates.length === 0) {
+    return { kind: 'absent' };
+  }
+  if (candidates.length > 1) {
+    return {
+      kind: 'rejected',
+      failure: {
+        code: 'invalid_state',
+        message: `Planning Cycle ${input.planningCycleId} 存在 ${candidates.length} 个候选代际`,
+      },
+    };
+  }
+  const generation = candidates[0]!;
+  const version = loadCurrentGraph({
+    store: input.store,
+    coordinationScopeId: input.coordinationScopeId,
+    graphId: generation.graphId,
+  });
+  if (version.kind === 'rejected') {
+    return { kind: 'rejected', failure: version.failure };
+  }
+  return version.kind === 'absent' ? { kind: 'absent' } : { kind: 'loaded', generation, version: version.version };
 }
 
 export type AppendAcceptedRevisionInput = {

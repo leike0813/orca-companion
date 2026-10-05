@@ -50,6 +50,7 @@ import {
 import type { RoleGateFacts } from '../../src/domain/recovery/role-gate.js';
 import type { ExecutionGraph } from '../../src/domain/planning/execution-graph.js';
 import { implementationPlanFor } from './graph-plan-fixture.js';
+import { executionWorkPackage } from './execution-harness.js';
 import type {
   RecoverWorkerSessionInput,
   ReplacementSessionReceipt,
@@ -304,7 +305,7 @@ export function createRecoveryHarness(options: RecoveryHarnessOptions = {}): Rec
   const graph: ExecutionGraph = {
     graphId: RECOVERY_GRAPH,
     generation: 1 as GraphGeneration,
-    workPackages: [],
+    workPackages: [executionWorkPackage(RECOVERY_WORK_PACKAGE)],
   };
   const candidate = recordInitialGraph({
     store,
@@ -462,7 +463,7 @@ export function createRecoveryHarness(options: RecoveryHarnessOptions = {}): Rec
       // 与中断 Segment 记录的业务 Attempt 同一身份：角色级物化绑定按 role + attempt 定位。
       attemptId,
       worktreeId: `worktree:${workPackageId}`,
-      specBinding: role === 'planner' ? null : {
+      specBinding: role === 'planner' || role === 'finalizer' ? null : {
         provider: 'openspec',
         relativePath: `openspec/changes/${workPackageId}`,
         contentDigest: `digest:${workPackageId}`,

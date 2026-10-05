@@ -150,6 +150,19 @@ function executionLeaseHolder(): string | null {
   return snapshot.snapshot.executionLease?.coordinatorSessionId ?? null;
 }
 
+function sessionLifecycle(sessionId: CoordinatorSessionId): string | null {
+  const result = store.query({ kind: 'sessions', coordinationScopeId: SCOPE });
+  if (result.kind !== 'sessions') {
+    throw new Error('无法读取 Session registry');
+  }
+  return result.sessions.find((session) => session.coordinatorSessionId === sessionId)?.lifecycleState ?? null;
+}
+
+function scopeControlState(): string | null {
+  const result = store.query({ kind: 'scope', coordinationScopeId: SCOPE });
+  return result.kind === 'scope' && result.scope !== null ? result.scope.controlState : null;
+}
+
 /** 内存版 checkpoint port：只区分「读回」「从未写过」「读不回来」。 */
 function checkpoints(read: CheckpointRecoveryRead) {
   return { loadCheckpoint: (): CheckpointRecoveryRead => read };
@@ -416,4 +429,66 @@ test('checkpoint thread 映射与 Session 身份一致：一个 Session 一个�
 
   expect(threadIdFor(SESSION_A)).not.toBe(threadIdFor(SESSION_B));
   expect(threadIdFor(SESSION_A)).toBe(threadIdFor(SESSION_A));
+});
+
+test('执行租约持有者的 checkpoint 损坏时，Session 与整个 Scope 都持久 blocked', () => {
+  const first = acquireIncarnation(store, {
+    coordinationScopeId: SCOPE,
+    coordinatorSessionId: SESSION_A,
+    runtimeIncarnationId: incarnation('inc-1'),
+    ttlMs: TTL_MS,
+  });
+  expect(first.kind).toBe('acquired');
+  if (first.kind !== 'acquired') {
+    return;
+  }
+  const lease = acquireExecutionLease(store, {
+    coordinationScopeId: SCOPE,
+    coordinatorSessionId: SESSION_A,
+    runtimeIncarnationId: first.incarnation.runtimeIncarnationId,
+    fencingGeneration: first.incarnation.fencingGeneration,
+  });
+  expect(lease.kind).toBe('acquired');
+
+  now += TTL_MS + 1;
+  const resumed = resumeIncarnation(store, {
+    coordinationScopeId: SCOPE,
+    coordinatorSessionId: SESSION_A,
+    runtimeIncarnationId: incarnation('inc-2'),
+    ttlMs: TTL_MS,
+    clock,
+    checkpoints: checkpoints({ kind: 'unrecoverable', reason: 'checkpoint 校验失败' }),
+  });
+
+  expect(resumed.kind).toBe('blocked');
+  // 持久阻塞事实：Session 生活周期变 blocked，且持有执行租约的 Session 让整个 Scope 一并 blocked。
+  expect(sessionLifecycle(SESSION_A)).toBe('blocked');
+  expect(scopeControlState()).toBe('blocked');
+  // 其它规划 Session 不受影响。
+  expect(sessionLifecycle(SESSION_B)).toBe('registered');
+});
+
+test('非执行持有者的 checkpoint 损坏只阻塞该 Session，Scope 保持 active', () => {
+  const first = acquireIncarnation(store, {
+    coordinationScopeId: SCOPE,
+    coordinatorSessionId: SESSION_B,
+    runtimeIncarnationId: incarnation('inc-1'),
+    ttlMs: TTL_MS,
+  });
+  expect(first.kind).toBe('acquired');
+
+  now += TTL_MS + 1;
+  const resumed = resumeIncarnation(store, {
+    coordinationScopeId: SCOPE,
+    coordinatorSessionId: SESSION_B,
+    runtimeIncarnationId: incarnation('inc-2'),
+    ttlMs: TTL_MS,
+    clock,
+    checkpoints: checkpoints({ kind: 'unrecoverable', reason: 'checkpoint 校验失败' }),
+  });
+
+  expect(resumed.kind).toBe('blocked');
+  expect(sessionLifecycle(SESSION_B)).toBe('blocked');
+  expect(scopeControlState()).toBe('active');
+  expect(sessionLifecycle(SESSION_A)).toBe('registered');
 });
