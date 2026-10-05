@@ -4,16 +4,12 @@
 
 - Change：`complete-coordination-runtime-wiring`
 - 输入实现 HEAD：`adab77f`（`feat(coordinator): wire replanning, validation, wake and budget paths into production`；直接前驱为 `88d908ae2d5e7d798e207875242df72394cee274`）
-- 最终验收 HEAD：本文件所在提交（`docs(openspec): verify complete-coordination-runtime-wiring`）；只含 verification.md，无产品代码改动
+- 最终验收 HEAD：本文件所在提交；相对 `adab77f` 只含 verification.md，无产品代码改动
 - 验收 Agent：MiniMax-M3.1-Flash-Preview（主代理，按 `openspec instructions verification` 执行；未由独立验收子代理复核）
 
 ## 结论
 
-**PASS**，边界为实现提交 `adab77f` 这棵确定的树：9 份 delta spec 的每个 Requirement/Scenario、IP-01—09 的文件与命令映射、限定审计的七个范围都已核验并通过，验收阶段发现的唯一证据缺口已就地补测修复。所有结论只对该提交成立；后续产品代码改动需要重新验收。
-
-真实 Orca/provider 端到端验收不在本结论覆盖范围内（见「后续注意事项」第一条）。该边界不改变本结论：它不在本 change 的应完成义务内，且本结论的每条证据都来自确定可复现的本地检查。
-
-需要显式记录的判断：真实 Orca/provider 端到端验收不属于本 change 的应完成义务（proposal、implementation-plan §8、tasks 结语均已把它排除），因此不作为待决审计项；其缺口记在「后续注意事项」，不影响本结论的边界。
+**PASS**，边界为实现提交 `adab77f` 这棵确定的树。9 份 delta spec 的每个 Requirement/Scenario、IP-01—09 的文件与命令映射、限定审计的七个范围全部通过，验收阶段发现的唯一证据缺口已就地补测修复。真实 Orca/provider 端到端验收不在本 change 的应完成义务内，相关边界记在「后续注意事项」。
 
 ## 核验与修复证据
 
@@ -76,7 +72,7 @@ implementation-plan §8 声明的七个审计范围全部触发，范围为只�
 
 以下不影响本结论的边界，可在 archive 前或之后处理：
 
-- 真实 Orca/provider 端到端验收未在本 change 执行。它不在本 change 的应完成义务内，但本轮接通的是生产调用链（重规划、Validator 同会话修复、Worker reply、前台 pump），fake backend 与临时 Git worktree 无法覆盖真实 CLI 能力缺口。若要把该结论当作真实可用性的依据，需要在显式隔离项目与专用身份上跑一次完整闭环；前驱 `restore-configurable-execution-concurrency` 的 fixture 06 证据不可复用为本次结论。
+- 本轮接通的是生产调用链（重规划、Validator 同会话修复、Worker reply、前台 pump），证据来自 fake backend 与临时 Git worktree。真实 CLI 能力缺口要靠一次隔离项目的完整闭环才能确认，届时不能复用前驱的 fixture 06 证据。
 - `src/interfaces/cli/status-command.ts:199` 的 `maintenance: null` 仍然存在。这是 `status --json` 一次性只读路径按其声明的 `scope:'store-only'` 不启动前台宿主的结果，`maintenance` 字段类型允许 null，运行时维护事实只由 TUI 宿主快照提供；不要把它读成维护 lane 未接通。
 - 6 份 delta spec 尚未同步进主规格（本轮已提前同步的是三处并行条款）。按 orchestrated-delivery 流程留到 `openspec sync specs`；`openspec/config.yaml` 的当前 change 上下文已指向本 change，归档时需一并回填。
 - `coordination.sqlite` schema 19 → 20 的迁移对既有重复活跃 Claim 会拒绝启动并整体回滚。本机测试库未触发该分支，真实项目升级前应先确认没有同一 Session 持有多张活跃票。
