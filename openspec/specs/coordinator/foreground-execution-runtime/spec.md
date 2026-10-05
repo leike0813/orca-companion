@@ -5,6 +5,18 @@
 
 ## Requirements
 
+### Requirement: Implementation Attempt 的准入消费有限且幂等
+
+每次新的 Implementation Attempt SHALL 在允许派发前消费一次绑定授权的实现预算；同一 Attempt 的恢复或重放 MUST NOT 重复扣减。确定失败后的 Retry SHALL 沿原 WorkerTask、contract、revision、授权与 Worker Profile 建立新 Dispatch/Attempt，并消费新尝试额度；unknown MUST 按原操作身份对账，MUST NOT 当作新尝试重派。预算耗尽 SHALL 阻塞实现派发，重启、重新授权和重规划延续旧责任 MUST NOT 重置已消费额度。
+
+#### Scenario: 确定失败重试直至额度耗尽
+- **WHEN** 某包的实现 Attempt 确定失败且原授权仍有效
+- **THEN** 有额度时新 Attempt 使用原 Task 和运行依据；无额度时保持阻塞，预算详情显示真实累计消费
+
+#### Scenario: 准入后中断再恢复
+- **WHEN** 同一 Attempt 已准入并消费预算，进程在派发结果核验前中断
+- **THEN** 恢复沿原身份对账，既不重复扣减也不创建第二个 Dispatch
+
 ### Requirement: 授权切换由当前规划事实驱动
 
 前台 Controller SHALL 从当前地图、票据、计划、图、Scope 与用户批准的完整 Manifest 装配切换事实；门禁通过后 SHALL 原子进入 Execution Coordination。任一引用失效或未获批准时 MUST NOT 进入执行模式或派发 Worker。

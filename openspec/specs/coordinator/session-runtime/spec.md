@@ -43,7 +43,11 @@
 
 #### Scenario: checkpoint 不可恢复时 fail closed
 - **WHEN** 现有 Session 的 checkpoint 损坏或无法读回，且没有其他方式恢复同一会话
-- **THEN** Session SHALL 阻塞并报告原因，SHALL NOT 创建替代 Coordinator Session、SHALL NOT 以空历史继续、SHALL NOT 转移 Ticket Claim 或 Execution Coordination Lease
+- **THEN** Session SHALL 持久保存 blocked 生命周期及结构化原因并可在重启后查询；若该 Session 持有 Execution Coordination Lease，Scope SHALL 同时进入持久 blocked 控制状态；SHALL NOT 创建替代 Coordinator Session、SHALL NOT 以空历史继续、SHALL NOT 转移 Ticket Claim 或 Execution Coordination Lease
+
+#### Scenario: checkpoint blocker 重启后仍存在
+- **WHEN** checkpoint 损坏已经使执行 Lease holder 阻塞，前台退出并重启
+- **THEN** Session 与 Scope 的 blocker 保持可查询，模型与新派发不恢复；只有原 checkpoint 经核验可恢复并完成 Resume 对账后才解除阻塞
 
 #### Scenario: 模型等待期间受理的消息不被覆盖
 - **WHEN** 一次模型响应或工具结果写入期间，同一 Session 受理了一条新的用户消息
