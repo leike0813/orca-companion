@@ -43,12 +43,12 @@ function baseManifest(): Record<string, unknown> {
       profileRef: { kind: 'worker-profile', id: `p-${role}` },
       role,
       harness: 'codex',
-      modelConfiguration: executionModelConfiguration(),
+      modelSelection: executionModelConfiguration(),
     })),
     recoveryUtilityProfile: {
       profileRef: { kind: 'worker-profile', id: 'p-recovery' },
       harness: 'codex',
-      modelConfiguration: executionModelConfiguration(),
+      modelSelection: executionModelConfiguration(),
     },
     permissions: {
       planner: true,
@@ -163,7 +163,7 @@ test('组装阶段补齐所有缺失上限，其余取默认值', () => {
 });
 
 test('未知 manifestVersion 即拒绝', () => {
-  for (const version of [MANIFEST_VERSION + 1, 0, 99]) {
+  for (const version of [MANIFEST_VERSION + 1, 0, 1, 2, 3, 99]) {
     const parsed = parseManifest({ ...baseManifest(), manifestVersion: version });
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) {
@@ -270,8 +270,10 @@ test('默认恢复上限为 1', () => {
   expect(defaultRecoveriesPerWorkerAttempt()).toBe(1);
 });
 
-test('Manifest3 拒绝旧版本、缺模型绑定与重复角色的授权', () => {
-  expect(parseManifest({ ...baseManifest(), manifestVersion: 1 }).ok).toBe(false);
+test('拒绝旧 Manifest 版本、缺模型绑定与重复角色的授权', () => {
+  for (const version of [1, 2, 3]) {
+    expect(parseManifest({ ...baseManifest(), manifestVersion: version }).ok).toBe(false);
+  }
 
   const missingModel = baseManifest();
   (missingModel['workerProfiles'] as Record<string, unknown>[])[0] = {
@@ -289,34 +291,48 @@ test('Manifest3 拒绝旧版本、缺模型绑定与重复角色的授权', () =
   expect(parseManifest(duplicated).ok).toBe(false);
 });
 
-test('Manifest3 不接受模型 options 中的明文秘密，但放行同前缀的非秘密项', () => {
-  const withSecret = (modelOptions: Record<string, unknown>): boolean => {
+test('modelSelection 缺少可信来源或结构不合法时拒绝', () => {
+  const withSelection = (selection: Record<string, unknown>): boolean => {
     const raw = baseManifest();
     const profiles = raw['workerProfiles'] as Record<string, unknown>[];
-    profiles[0] = {
-      ...profiles[0]!,
-      modelConfiguration: executionModelConfiguration({ modelOptions }),
-    };
+    profiles[0] = { ...profiles[0]!, modelSelection: selection };
     return parseManifest(raw).ok;
   };
 
-  for (const secret of ['api_key', 'bearer_token', 'client_secret', 'x-api-key']) {
-    expect(withSecret({ [secret]: 'value' })).toBe(false);
-  }
-  // 键名前缀相同但不是秘密：`maxTokens` 这类合法 option 不能被误杀。
-  expect(withSecret({ maxTokens: 4096 })).toBe(true);
-  // 数组与深嵌套同样受检：只在顶层看键会让数组里的凭据名混进授权。
-  expect(withSecret({ headers: [{ api_key: 'value' }] })).toBe(false);
-  const shared = { maxTokens: 4096 };
-  expect(withSecret({ first: shared, second: shared })).toBe(true);
-  let deep: Record<string, unknown> = {};
-  const root = deep;
-  for (let index = 0; index < 40; index += 1) {
-    const next: Record<string, unknown> = {};
-    deep.nested = next;
-    deep = next;
-  }
-  expect(withSecret(root)).toBe(false);
+  // 非空 effort 要求非空能力且取值属于 values。
+  expect(withSelection({ model: 'gpt-5', effort: 'high', effortCapability: null, catalogSource: null })).toBe(false);
+  expect(
+    withSelection({
+      model: 'gpt-5',
+      effort: 'extreme',
+      effortCapability: { values: ['low', 'high'], source: 'catalog' },
+      catalogSource: 'catalog',
+    }),
+  ).toBe(false);
+  // 非空能力要求目录来源。
+  expect(
+    withSelection({
+      model: 'gpt-5',
+      effort: null,
+      effortCapability: { values: ['low', 'high'], source: 'catalog' },
+      catalogSource: null,
+    }),
+  ).toBe(false);
+  // 旧 modelConfiguration 形状的多余键在 strict schema 下拒绝。
+  expect(
+    withSelection({ model: 'gpt-5', effort: null, effortCapability: null, catalogSource: null, modelOptions: {} }),
+  ).toBe(false);
+  // 合法：可信来源 + 属于 values 的 effort。
+  expect(
+    withSelection({
+      model: 'gpt-5',
+      effort: 'high',
+      effortCapability: { values: ['low', 'high'], source: 'catalog' },
+      catalogSource: 'catalog',
+    }),
+  ).toBe(true);
+  // 合法：手填未验证 native ID，无来源且不捏造 effort。
+  expect(withSelection({ model: 'gpt-5', effort: null, effortCapability: null, catalogSource: null })).toBe(true);
 });
 
 test('模型绑定进入内容指纹：换模型就是另一份授权', () => {
@@ -325,7 +341,7 @@ test('模型绑定进入内容指纹：换模型就是另一份授权', () => {
     ...base,
     workerProfiles: base.workerProfiles.map((profile) =>
       profile.role === 'implementation'
-        ? { ...profile, modelConfiguration: executionModelConfiguration({ model: 'other-model' }) }
+        ? { ...profile, modelSelection: executionModelConfiguration({ model: 'other-model' }) }
         : profile,
     ),
   });

@@ -20,7 +20,7 @@ import type {
 import type { ExecutionBackend, ExecutionMutation } from '../../src/application/ports/execution-backend.js';
 import type { SessionBinding } from '../../src/domain/task-contract.js';
 import { createExecutionScopeHarness, EXECUTION_AUTHORIZATION_ID, EXECUTION_RUN_ID } from '../support/execution-harness.js';
-import { credentialStoreFixture, modelConfigurationFixture } from '../support/model-configurations.js';
+import { modelConfigurationFixture } from '../support/model-configurations.js';
 
 const BINDING: SessionBinding = {
   harness: 'codex',
@@ -100,9 +100,7 @@ test.each([
     originalBinding: BINDING,
     ...(scenario.owner ? { originalOwner: { dispatchId: BINDING.dispatchId, terminalHandle: 'term-orig' } } : {}),
     originalCodexHome: '/tmp/orig-codex-home',
-    modelConfiguration: modelConfigurationFixture(),
-    credentialStore: credentialStoreFixture(),
-    credentialStorePath: '/tmp/credentials.json',
+    modelSelection: modelConfigurationFixture(),
     sandboxMode: 'danger-full-access',
     companionStateRoot: dirname(harness.databasePath),
     canonicalWorktreePath: '/tmp/canonical',

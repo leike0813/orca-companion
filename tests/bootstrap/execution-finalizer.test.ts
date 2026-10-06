@@ -16,9 +16,9 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { afterEach, expect, test, vi } from 'vitest';
 
@@ -330,7 +330,7 @@ function prepareRepository(directory: string): { readonly repository: string; re
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 3,
+      schemaVersion: 4,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',
@@ -375,7 +375,7 @@ function prepareRepository(directory: string): { readonly repository: string; re
 
 function manifestFor(head: string, repository: string): ExecutionAuthorizationManifest {
   return {
-    manifestVersion: 3,
+    manifestVersion: 4,
     coordinationScopeId: SCOPE,
     planningCycleId: CYCLE,
     destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
@@ -505,7 +505,7 @@ function prepareExecutionState(repository: string, head: string): void {
       writer,
       authorizationId: AUTH_ID,
       authorizationVersion: 1,
-      manifestVersion: 3,
+      manifestVersion: 4,
       fingerprint: 'fingerprint-finalizer',
       approvalRef: 'approval-finalizer',
       manifest: manifestFor(head, repository),
@@ -677,27 +677,14 @@ function fakeTracker(): IssueTrackerGateway {
 }
 
 /**
- * 按生产路径写出 SessionStart 报告：Codex 的状态根在 Git common dir 的 Companion 私有目录里，
- * 报告指向该状态根下 sessions 目录中的 rollout 文件，首条记录是 `session_meta`。
+ * 原生会话位于用户状态根；调用生产 reporter 写入 Companion 的精确启动报告。
  */
 function writeSessionStartReport(repository: string): void {
-  const root = join(repository, '.git', COMPANION_STATE_DIRECTORY, 'codex');
-  // 状态根是 registry 按 launch 派生的 digest 目录（含宿主写出的 hooks.json）；报告落在宿主安装的
-  // reporter 脚本旁边的 .jsonl，也就是 hooks.json 指向的那个路径，而不是 root 下的共享文件名。
-  const stateRoot = readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => join(root, entry.name))
-    .find((candidate) => existsSync(join(candidate, 'hooks.json')));
-  if (stateRoot === undefined) {
-    throw new Error('Finalizer 的 Codex 状态根不存在');
-  }
-  const hooks = JSON.parse(readFileSync(join(stateRoot, 'hooks.json'), 'utf8')) as {
-    readonly hooks: { readonly SessionStart: readonly { readonly hooks: readonly { readonly command: string }[] }[] };
-  };
-  const reporterPath = /'([^']*\.mjs)'/u.exec(hooks.hooks.SessionStart[0]?.hooks[0]?.command ?? '')?.[1];
-  if (reporterPath === undefined) {
-    throw new Error('Finalizer 的 reporter 路径不可读');
-  }
+  const reporters = join(repository, '.git', COMPANION_STATE_DIRECTORY, 'codex', 'reporters');
+  const candidates = readdirSync(reporters).filter((name) => name.endsWith('.mjs'));
+  if (candidates.length !== 1) throw new Error('Finalizer 的精确 reporter 不唯一');
+  const reporterPath = join(reporters, candidates[0]!);
+  const stateRoot = join(dirname(repository), 'native-codex');
   const sessionId = 'session-finalizer-codex';
   const sessionsDir = join(stateRoot, 'sessions', '2026', '09', '23');
   mkdirSync(sessionsDir, { recursive: true });
@@ -707,17 +694,11 @@ function writeSessionStartReport(repository: string): void {
     `${JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: canonicalPath(repository) } })}\n`,
     'utf8',
   );
-  writeFileSync(
-    reporterPath.replace(/\.mjs$/u, '.jsonl'),
-    `${JSON.stringify({
-      sessionId,
-      transcriptPath,
-      codexHome: stateRoot,
-      cwd: canonicalPath(repository),
-      observedAt: new Date().toISOString(),
-    })}\n`,
-    'utf8',
-  );
+  execFileSync(process.execPath, [reporterPath], {
+    cwd: canonicalPath(repository),
+    env: { ...process.env, CODEX_HOME: stateRoot },
+    input: JSON.stringify({ session_id: sessionId, transcript_path: transcriptPath, cwd: canonicalPath(repository) }),
+  });
 }
 
 async function openHarness(options?: {
@@ -895,11 +876,17 @@ test('门禁满足时：以新的只读 Session 在 canonical worktree 派发，
   const catalog = await harness.host.ports.modelCatalog.load(SESSION);
   for (const role of catalog.roles ?? []) {
     if (role.current === null) continue;
-    const candidate = role.candidates.find((entry) => entry.candidateRef === role.current?.candidateRef);
-    expect(candidate?.model).toBe(role.current.model);
+    if (role.group === 'current') {
+      const candidate = role.candidates.find((entry) => entry.candidateRef === role.current?.candidateRef);
+      expect(candidate?.model).toBe(role.current.model);
+      continue;
+    }
+    expect(role.current.model).toBe('MiniMax-M3');
+    expect(role.candidates).toEqual([]);
+    expect(role.availability.reason).toContain('原生模型目录尚未查询');
   }
   await sendMessage(harness, '开始收尾');
-  await waitFor(() => expect(workerStarts(harness)).toBe(1));
+  await waitForSnapshot(harness, () => expect(workerStarts(harness)).toBe(1));
 
   const created = harness.fake.mutations.find((mutation) => mutation.operation === 'task-create');
   const spec = created?.operation === 'task-create' ? (created.spec ?? '') : '';

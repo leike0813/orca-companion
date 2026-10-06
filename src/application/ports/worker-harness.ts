@@ -1,8 +1,7 @@
 import { z } from 'zod';
-import type { CredentialStore } from './credential-store.js';
 import type { PreparedTerminalStrategy, PreparedTerminalLaunch } from '../worker-launch.js';
 import type { TranscriptCoverageEvidence } from '../recovery/recovery-capsule.js';
-import type { WorkerModelConfiguration } from '../../domain/model-configuration.js';
+import type { WorkerModelSelection, WorkerEffortCapability } from '../../domain/model-configuration.js';
 import type { DispatchId, WorkerTaskId } from '../dto/identity.js';
 import type { WorkerRole } from '../../domain/planning/execution-authorization.js';
 
@@ -20,9 +19,7 @@ export type HarnessSessionFacts = {
 export type WorkerSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access' | 'read-only-local-control';
 export type WorkerHarnessLaunchInput = {
   readonly launchId: string;
-  readonly modelConfiguration: Readonly<WorkerModelConfiguration>;
-  readonly credentialStore: CredentialStore;
-  readonly credentialStorePath?: string;
+  readonly modelSelection: Readonly<WorkerModelSelection>;
   readonly sandboxMode: WorkerSandboxMode;
   readonly stateRoot?: string;
   readonly sessionStartReporterPath?: string;
@@ -36,6 +33,7 @@ export type HarnessSessionReport = {
   readonly codexHome?: string | null;
   readonly stateRoot?: string | null;
   readonly harness?: string;
+  readonly runtimeRoots?: readonly string[];
 };
 
 const harnessSessionReportSchema = z.object({
@@ -46,17 +44,19 @@ const harnessSessionReportSchema = z.object({
   codexHome: z.string().nullable().optional(),
   stateRoot: z.string().nullable().optional(),
   harness: z.string().optional(),
+  runtimeRoots: z.array(z.string().min(1).max(4096)).max(16).optional(),
 });
 
 export function parseHarnessSessionReport(value: unknown): HarnessSessionReport | null {
   const parsed = harnessSessionReportSchema.safeParse(value);
   if (!parsed.success) return null;
-  const { codexHome, stateRoot, harness, ...required } = parsed.data;
+  const { codexHome, stateRoot, harness, runtimeRoots, ...required } = parsed.data;
   return {
     ...required,
     ...(codexHome === undefined ? {} : { codexHome }),
     ...(stateRoot === undefined ? {} : { stateRoot }),
     ...(harness === undefined ? {} : { harness }),
+    ...(runtimeRoots === undefined ? {} : { runtimeRoots }),
   };
 }
 export type HarnessTranscriptProof = {
@@ -85,11 +85,22 @@ export type ProveHarnessSessionInput = {
   readonly bindingDeadlineAt: string;
 };
 
+export type WorkerModelCatalogResult =
+  | { readonly kind: 'available'; readonly source: string; readonly models: readonly {
+    readonly model: string; readonly effortCapability: WorkerEffortCapability | null;
+  }[] }
+  | { readonly kind: 'unavailable'; readonly code: string; readonly message: string };
+export type WorkerModelCatalogQuery = {
+  readonly cwd: string; readonly signal?: AbortSignal;
+  readonly env?: Readonly<Record<string, string>>;
+};
+
 export interface WorkerHarness {
   readonly id: string;
   prepareLaunch(input: WorkerHarnessLaunchInput): PreparedTerminalStrategy<PreparedHarnessTerminal>;
   prepareReadOnlyLaunch(input: WorkerHarnessLaunchInput): PreparedTerminalStrategy<PreparedHarnessTerminal>;
-  probe(modelConfiguration?: Readonly<WorkerModelConfiguration>): Promise<WorkerHarnessProbeResult>;
+  probe(modelSelection?: Readonly<WorkerModelSelection>): Promise<WorkerHarnessProbeResult>;
+  queryModels(input: WorkerModelCatalogQuery): Promise<WorkerModelCatalogResult>;
   prepareResume(input: WorkerHarnessLaunchInput & {
     readonly sessionId: string;
     readonly originalStateRoot: string;

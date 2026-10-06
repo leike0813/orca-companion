@@ -128,7 +128,7 @@ test('compact 迟到受理不清除调用后新增的输入',async()=>{
 
 test('模型目录绑定明确 Session，迟到查询不覆盖返回后的页面',async()=>{
   const fake=createFakePorts(),gate=Promise.withResolvers<Awaited<ReturnType<typeof fake.ports.modelCatalog.load>>>(),load=vi.fn(()=>gate.promise);
-  const app=renderTui({...fake.ports,modelCatalog:{load}});
+  const app=renderTui({...fake.ports,modelCatalog:{...fake.ports.modelCatalog,load}});
   try{
     await settle();await command(app,'model-picker');await press(app,'\u001b');
     gate.resolve({options:[{configurationRef:'config-b',model:'B'}],currentConfigurationRef:'config-b',switchable:true,switchBlockReason:null});await settle();

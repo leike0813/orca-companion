@@ -220,7 +220,7 @@ function enterExecution(): void {
   if (recorded.kind !== 'recorded') throw new Error('无法记录物化测试图');
   const authorized = store.transact({
     kind: 'record-authorization', coordinationScopeId: SCOPE, expectedRevision: revision(), writer,
-    authorizationId: 'auth-1', authorizationVersion: 1, manifestVersion: 3,
+    authorizationId: 'auth-1', authorizationVersion: 1, manifestVersion: 4,
     fingerprint: 'fingerprint-1', approvalRef: 'approval-1',
     manifest: executionManifest({ graphId: graph.graphId, generation: graph.generation,
       baselineHead: 'abcdef0123456789abcdef0123456789abcdef01' }),
@@ -1083,7 +1083,7 @@ test('重新授权只影响新 Task：新 Work Package 钉住新授权，旧 Tas
   // 新的 Work Package 在新授权下物化：它的绑定是新授权与新 profile。
   const authorized = store.transact({
     kind: 'record-authorization', coordinationScopeId: SCOPE, expectedRevision: revision(), writer,
-    authorizationId: 'auth-2', authorizationVersion: 2, manifestVersion: 3,
+    authorizationId: 'auth-2', authorizationVersion: 2, manifestVersion: 4,
     fingerprint: 'fingerprint-2', approvalRef: 'approval-2',
     manifest: executionManifest({ graphId: graphIdFor(SCOPE, 1 as never), generation: 1 as never,
       baselineHead: 'abcdef0123456789abcdef0123456789abcdef01' }),

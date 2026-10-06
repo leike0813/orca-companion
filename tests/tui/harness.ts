@@ -36,6 +36,7 @@ import type {
   TuiPorts,
   WizardCheck,
   WizardProposal,
+  WorkerModelCatalogLoad,
 } from '../../src/interfaces/tui/ports.js';
 import type {
   FinalizerView,
@@ -43,7 +44,7 @@ import type {
 } from '../../src/application/execution/execution-view.js';
 import { isActiveWorkPackageState } from '../../src/application/execution/execution-view.js';
 import { WIZARD_CHECKS } from '../../src/interfaces/tui/ports.js';
-import type { EffortCapability } from '../../src/domain/model-configuration.js';
+import type { EffortCapability, WorkerHarnessId } from '../../src/domain/model-configuration.js';
 import { openUiInputStore } from '../../src/adapters/storage/ui-input-store.js';
 import { createTranscriptReadingFixture } from '../support/transcript-reading.js';
 import type { UiInputStore } from '../../src/application/ports/ui-input-store.js';
@@ -272,6 +273,11 @@ export type FakePortsOptions = {
   readonly executeResult?: ControllerCommandResult;
   readonly models?: readonly ModelConfigurationOption[];
   readonly modelCatalog?: Partial<ModelCatalog>;
+  /** Worker 原生目录查询的返回值；省略即返回空目录，仍会记录调用。 */
+  readonly workerModels?: (input: {
+    readonly harness: WorkerHarnessId;
+    readonly signal?: AbortSignal;
+  }) => Promise<WorkerModelCatalogLoad>;
   /**
    * 角色模型配置端口。
    *
@@ -440,6 +446,11 @@ export function createFakePorts(options: FakePortsOptions = {}): FakePorts {
           ...options.modelCatalog,
         });
       },
+      queryWorkerModels: (input) => {
+        calls.push({ name: 'modelCatalog.queryWorkerModels', detail: input.harness });
+        return options.workerModels?.(input) ??
+          Promise.resolve({ kind: 'available', source: 'fixture:worker-catalog', models: [] });
+      },
     },
     handoff: {
       read: id => Promise.resolve(snapshot.planningHandoffs.find(p=>p.proposalId===id)??null),
@@ -538,17 +549,19 @@ export const FAKE_MODEL_SETTINGS_SNAPSHOT: ModelSettingsSnapshotView = {
       model: 'model-a',
       effort: 'high',
       effortCapability: FAKE_EFFORT_CAPABILITY,
+      catalogSource: null,
       harness: null,
     },
     {
       role: 'planner',
       bindingRef: 'profile-planner',
-      connectionRef: 'connection-a',
-      connectionLabel: '主连接',
-      providerIntegration: 'openai',
+      connectionRef: null,
+      connectionLabel: null,
+      providerIntegration: null,
       model: 'model-a',
       effort: 'high',
       effortCapability: FAKE_EFFORT_CAPABILITY,
+      catalogSource: 'fixture:worker-catalog',
       harness: 'codex',
     },
   ],
@@ -559,7 +572,6 @@ export const FAKE_MODEL_SETTINGS_SNAPSHOT: ModelSettingsSnapshotView = {
       providerIntegration: 'openai',
       modelOptions: {},
       credential: { kind: 'managed', credentialRef: '11111111-1111-4111-8111-111111111111', optionPath: 'apiKey' },
-      codex: { providerId: 'openai', baseUrl: 'https://api.openai.com/v1', wireApi: 'responses' },
     },
   ],
   models: [

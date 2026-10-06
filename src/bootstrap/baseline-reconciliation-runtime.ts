@@ -1,7 +1,6 @@
 /** 将持久化的基线补救记录接到真实 Codex Planner 派发与 Delivery 结算。 */
 
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
 
 import type { HarnessSessionReport, WorkerSandboxMode } from '../application/ports/worker-harness.js';
 import type { HarnessSessionFacts } from '../adapters/agents/session-binding.js';
@@ -27,8 +26,7 @@ import { workPackageOf } from '../domain/planning/execution-graph.js';
 import { readBaselineGitObservations } from '../adapters/git/baseline-observer.js';
 import { ackConsumedDelivery, settleDelivery } from '../application/delivery/process-delivery.js';
 import { parseOrcaWorkerDoneLocator } from './execution-runtime.js';
-import type { WorkerModelConfiguration } from '../domain/model-configuration.js';
-import type { CredentialStore } from '../application/ports/credential-store.js';
+import type { WorkerModelSelection } from '../domain/model-configuration.js';
 
 export type BaselineReconciliationRuntimeInput = {
   readonly store: BranchCoordinationStore;
@@ -47,22 +45,15 @@ export type BaselineReconciliationRuntimeInput = {
   readonly repoSelector: string;
   readonly worktreePaths: ReadonlyMap<string, string>;
   /**
-   * 冻结的 Planner 模型配置。
+   * 冻结的 Planner 模型选择。
    *
    * 基线补救是一次真实的 Planner 派发，因此与常规 Planner Task 走同一份已批准绑定：启动参数只由
-   * 它生成，不从项目配置或界面另取一个模型。
+   * 它生成，不从项目配置或界面另取一个模型。Worker 的连接、认证与 provider endpoint 由 harness 自身
+   * 拥有，这里没有可注入的凭据。
    */
-  readonly modelConfiguration: WorkerModelConfiguration;
+  readonly modelSelection: WorkerModelSelection;
   /** 该次派发钉住的 Planner profile harness；由调用方按已批准 Manifest 给出，不从模型连接推断。 */
   readonly harness: string;
-  /**
-   * 用户级凭据 store 与其文件位置。
-   *
-   * 基线补救是一次真实的 Planner 派发，可能绑定 managed 凭据：启动准备阶段要用与 Coordinator
-   * 装配、模型保存同一份 store 证明 key 存在。两项由调用方按宿主 env 注入，本模块不自己推导路径。
-   */
-  readonly credentialStore: CredentialStore;
-  readonly credentialStorePath: string;
   /** 该角色绑定 harness 的沙箱模式；null 表示当前 Manifest 未接受所需风险。 */
   readonly sandboxMode: WorkerSandboxMode | null;
   readonly companionStateRoot: string;
@@ -105,8 +96,7 @@ export function createBaselineReconciliationDriver(input: BaselineReconciliation
       canonicalWorktree: input.canonicalWorktreePath,
       worktree: worktree.worktreeId,
       workerLaunch: prepareHarnessWorkerLaunch(harness, {
-        launchId, modelConfiguration: input.modelConfiguration, sandboxMode: input.sandboxMode,
-        credentialStore: input.credentialStore, credentialStorePath: input.credentialStorePath,
+        launchId, modelSelection: input.modelSelection, sandboxMode: input.sandboxMode,
         stateRoot: paths.stateRoot, sessionStartReporterPath: paths.reporterPath,
       }),
       operationIds: {
@@ -125,7 +115,7 @@ export function createBaselineReconciliationDriver(input: BaselineReconciliation
               },
               report,
               workspace: worktree.path,
-              expectedCodexHome: join(paths.stateRoot, createHash('sha256').update(launchId).digest('hex').slice(0, 20)),
+              expectedCodexHome: report.stateRoot ?? report.codexHome ?? '',
               dispatchStartedAt, bindingDeadlineAt: new Date().toISOString(),
             });
             return bound.kind === 'bound' ? {

@@ -466,7 +466,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
     const previewCandidate=(model)=>({candidateRef:model.ref,connectionRef:'fixture-connection',provider:model.provider,model:model.model,effortCapability:model.effort});
     const previewModelOptions=previewModels.map(model=>({configurationRef:model.ref,model:model.model,provider:model.provider,effortCapability:model.effort}));
     const previewBoundRole=(role,label,group,modelRef,effort)=>({
-      role,label,group,
+      role,label,group,harness:role==='coordinator'?null:'codex',
       current:modelRef===null?null:{candidateRef:modelRef,provider:previewModels.find(m=>m.ref===modelRef)?.provider??'',model:previewModels.find(m=>m.ref===modelRef)?.model??'',effort},
       candidates:previewModels.map(previewCandidate),
       availability:{available:true,reason:null},
@@ -485,17 +485,17 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
     const previewConnection={connectionRef:'fixture-connection',label:'主连接',providerIntegration:'openai',
       // 非秘密选项里不出现任何 key 或占位秘密；凭据只以 opaque 引用存在。
       modelOptions:{},credential:{kind:'managed',credentialRef:'fixture-credential',optionPath:'apiKey'},
-      codex:{providerId:'openai',baseUrl:'https://api.openai.com/v1',wireApi:'responses'}};
+      };
     const previewCapability={values:['low','medium','high'],source:'fixture:capability-a',optionPath:'modelReasoningEffort'};
     const previewModelSettingsSnapshot={
       revision:7,
       roles:[
-        {role:'coordinator',bindingRef:'config-a',connectionRef:'fixture-connection',connectionLabel:'主连接',providerIntegration:'openai',model:'示例模型 A',effort:'high',effortCapability:previewCapability,harness:null},
-        {role:'planner',bindingRef:'profile-planner',connectionRef:'fixture-connection',connectionLabel:'主连接',providerIntegration:'openai',model:'示例模型 A',effort:'high',effortCapability:previewCapability,harness:'codex'},
-        {role:'implementation',bindingRef:'profile-implementation',connectionRef:'fixture-connection',connectionLabel:'主连接',providerIntegration:'openai',model:'示例模型 A',effort:'high',effortCapability:previewCapability,harness:'codex'},
-        {role:'validator',bindingRef:'profile-validator',connectionRef:'fixture-connection',connectionLabel:'主连接',providerIntegration:'openai',model:'示例模型 A',effort:'high',effortCapability:previewCapability,harness:'codex'},
-        {role:'finalizer',bindingRef:'profile-finalizer',connectionRef:'fixture-connection',connectionLabel:'主连接',providerIntegration:'openai',model:'示例模型 A',effort:'high',effortCapability:previewCapability,harness:'codex'},
-        {role:'recovery_utility',bindingRef:'profile-recovery',connectionRef:'fixture-connection',connectionLabel:'主连接',providerIntegration:'openai',model:'示例模型 B',effort:'medium',effortCapability:{values:['low','medium'],source:'fixture:capability-b',optionPath:'modelReasoningEffort'},harness:'codex'},
+        {role:'coordinator',bindingRef:'config-a',connectionRef:'fixture-connection',connectionLabel:'主连接',providerIntegration:'openai',model:'示例模型 A',effort:'high',effortCapability:previewCapability,catalogSource:null,harness:null},
+        {role:'planner',bindingRef:'profile-planner',connectionRef:null,connectionLabel:null,providerIntegration:null,model:'示例模型 A',effort:'high',effortCapability:{values:['low','medium','high'],source:'fixture:codex-catalog'},catalogSource:'fixture:codex-catalog',harness:'codex'},
+        {role:'implementation',bindingRef:'profile-implementation',connectionRef:null,connectionLabel:null,providerIntegration:null,model:'示例模型 A',effort:'high',effortCapability:{values:['low','medium','high'],source:'fixture:codex-catalog'},catalogSource:'fixture:codex-catalog',harness:'codex'},
+        {role:'validator',bindingRef:'profile-validator',connectionRef:null,connectionLabel:null,providerIntegration:null,model:'示例模型 A',effort:'high',effortCapability:{values:['low','medium','high'],source:'fixture:codex-catalog'},catalogSource:'fixture:codex-catalog',harness:'codex'},
+        {role:'finalizer',bindingRef:'profile-finalizer',connectionRef:null,connectionLabel:null,providerIntegration:null,model:'示例模型 A',effort:'high',effortCapability:{values:['low','medium','high'],source:'fixture:codex-catalog'},catalogSource:'fixture:codex-catalog',harness:'codex'},
+        {role:'recovery_utility',bindingRef:'profile-recovery',connectionRef:null,connectionLabel:null,providerIntegration:null,model:'示例模型 B',effort:'medium',effortCapability:{values:['low','medium'],source:'fixture:codex-catalog'},catalogSource:'fixture:codex-catalog',harness:'codex'},
       ],
       connections:[previewConnection],
       models:previewModels.map(model=>({modelRef:model.ref,connectionRef:'fixture-connection',model:model.model,effortCapability:model.effort})),
@@ -593,7 +593,10 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
         initialize: async () => rejected,
         bindLegacyIdentity: async () => rejected,
       },
-      modelCatalog: { load: async () => ({ options: previewModelOptions, currentConfigurationRef: 'config-a', switchable: true, switchBlockReason: null,
+      modelCatalog: { queryWorkerModels: async ({harness,signal}) => signal?.aborted
+        ? {kind:'unavailable',code:'catalog_query_cancelled',message:'查询已取消'}
+        : {kind:'available',source:'fixture:'+harness+'-catalog',models:previewModels.map(model=>({model:model.model,effortCapability:model.effort===null?null:{values:model.effort.values,source:'fixture:'+harness+'-catalog'}}))},
+        load: async () => ({ options: previewModelOptions, currentConfigurationRef: 'config-a', switchable: true, switchBlockReason: null,
         configurationRevision: 7, roles: previewModelRoles }) },
       // 预览宿主：保存只追加记录并返回新引用，授权替换仍由 executionAuthorization 审阅后批准。
       modelSettings: previewDialogs ? {
@@ -648,7 +651,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
           ...(statusPrototype ? { initialStatusVariant: statusVariant, initialStatusPreferences: statusPreferences, saveStatusPreferences } : {}),
           ...(sharedDialogs ? { dialogPorts: Object.fromEntries(['planning', 'execution', 'blocked', 'answer', 'idle'].map((phase) => [phase, {
             ...ports,
-            modelCatalog: { load: async () => ({ ...await ports.modelCatalog.load(), switchable: phase !== 'execution' && phase !== 'blocked',
+            modelCatalog: { ...ports.modelCatalog, load: async () => ({ ...await ports.modelCatalog.load(), switchable: phase !== 'execution' && phase !== 'blocked',
               switchBlockReason: phase === 'execution' || phase === 'blocked' ? '当前会话未挂起或存在在途模型操作' : null }) },
           }])) } : {}),
           onExit: () => app.unmount(),

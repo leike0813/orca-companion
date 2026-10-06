@@ -28,7 +28,7 @@ schema 20 的 Branch Store 在副作用前原子登记包级 lane，直到可证
 
 `application/integration-reconciliation.ts` 拥有稳定复验轮次、独立预算与 Git 意图；`bootstrap/integration-reconciliation-runtime.ts` 通过新的真实 Task/Dispatch 续接原 Validator provider Session。先在包内合并 canonical，再验证精确合并树，最后由 Controller 提交并快进 canonical。设置用例 `application/configuration/execution-settings.ts` 复用配置 CAS；保存默认值与批准执行期 Manifest 是两个明确用户意图，批准不重置图、Run 或已消费预算。
 
-Worker Harness 的应用端口位于 `application/ports/worker-harness.ts`，bootstrap 的 `worker-harness.ts` 显式注册 codex、claude、opencode、pi、omp。角色生命周期只使用注册项的启动、恢复、证明、只读启动与探测能力，terminal 创建、激活和接管仍由 `application/worker-launch.ts` 拥有。各 adapter 负责隔离状态根和精确 provider transcript；模型和 harness 沿物化时固定的授权/profile 读取。原生只读启动与探针共用 `adapters/agents/read-only-execution-wrapper.ts`，秘密只由共享 launcher 注入子进程环境。
+Worker Harness 的应用端口位于 `application/ports/worker-harness.ts`，bootstrap 的 `worker-harness.ts` 显式注册 codex、claude、opencode、pi、omp。角色生命周期只使用注册项的启动、恢复、证明、只读启动、探测与原生模型目录查询能力，terminal 创建、激活和接管仍由 `application/worker-launch.ts` 拥有。各 adapter 在 harness 真实用户环境中启动，负责精确 provider transcript 与运行时路径：`adapters/agents/worker-runtime.ts` 从真实 launch 环境解析非秘密 native roots，`adapters/agents/worker-model-catalog.ts` 提供有界、可取消的目录查询；模型、harness 与 effort 沿物化时固定的授权/profile 读取。原生只读启动与探针共用 `adapters/agents/read-only-execution-wrapper.ts`，Coordinator 凭据不经 Worker launcher。
 
 ## 模块依赖
 
@@ -106,7 +106,7 @@ Application 是业务规则的外部 interface。小型纯用例可以直接是�
 
 Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation catalog、进程和 schema 转换；`storage` 分别实现 Branch Coordination Store、LangGraph checkpointer 与 IC-13 UI 输入存储，不共享表或伪装跨库事务。IC-04 的会话历史在 checkpoint 库中按稳定 entry、正文块、step 和 Wake 关联追加，控制记录保持小型；正文范围与 metadata keyset 由 `application/coordinator/history.ts` 定义。有效上下文、工具恢复、待处理输入和 UI 分页各自按用途读取，压缩历史保留原文且不进入常规模型输入读取。TUI 只保留当前 Session 的有界正文/派生缓存及来源锚点；SQLite 是已提交原文的唯一权威。
 
-`storage/credential-store.ts` 是版本控制之外唯一保存明文 secret 的地方，与上面三个存储无关：单文件按 XDG 规则落在用户配置目录，短 exclusive 文件锁、revision CAS、0600 临时文件原子替换与回读；权限不安全的既有目录、文件与符号链接一律拒绝，且不 chmod 用户既有目录。它与项目配置文件之间没有跨文件事务，模型设置因此先写凭据并回读，再写项目引用。
+`storage/credential-store.ts` 是版本控制之外唯一保存明文 secret 的地方，只服务 Coordinator 模型调用，与上面三个存储无关：单文件按 XDG 规则落在用户配置目录，短 exclusive 文件锁、revision CAS、0600 临时文件原子替换与回读；权限不安全的既有目录、文件与符号链接一律拒绝，且不 chmod 用户既有目录。它与项目配置文件之间没有跨文件事务，Coordinator 连接编辑因此先写凭据并回读，再写项目引用；Worker 角色选择不写凭据，Worker 启动也不读取该 store。
 
 ### MOD-05 CLI
 
@@ -197,8 +197,8 @@ flowchart LR
 | 共享协调事实 | `coordination.sqlite` | mode、leases、claims、intents、budgets、interactions、CAS revision |
 | Coordinator Session | `checkpoints.sqlite` | 已提交消息/tool step、图位置、Wake Batch、Context Capsule |
 | UI 输入 | `ui.sqlite` | 按 Scope/Session/回答 revision 隔离的草稿、冲突副本、待核验提交；不形成业务受理事实 |
-| Provider secret | 用户级 CredentialStore 文件 | 永不落其它位置；其它地方只保存 `credentialRef` |
-| 模型与连接设置 | 项目 `orca-companion.json`（schema 3） | 追加式 `providerConnections`、`models`、角色 Worker Profiles 与当前选择引用 |
+| Coordinator provider secret | 用户级 CredentialStore 文件 | 只服务 Coordinator 模型调用；其它地方只保存 `credentialRef`，Worker 启动不读取 |
+| 模型与连接设置 | 项目 `orca-companion.json`（schema 4） | 追加式 Coordinator `providerConnections`/`models`、角色 Worker Profiles（harness + `modelSelection`）与当前选择引用 |
 | Worker Harness session/transcript | Worker Harness | 精确 Session Binding、Segment 与 transcript 引用 |
 
 ## 跨接缝流程
@@ -338,7 +338,7 @@ sequenceDiagram
 
   U->>T: save（角色候选 + 可选新 key + expectedRevision）
   T->>T: 校验候选（引用唯一、交叉引用、effort 可信来源、无明文 secret）
-  opt 候选含新 key
+  opt Coordinator 候选含新 key
     T->>C: save(expectedRevision, secret)
     C->>C: 短锁 → CAS → 0600 临时文件原子替换 → 回读
     C-->>T: saved(新不可变 credentialRef)
@@ -350,7 +350,7 @@ sequenceDiagram
   A->>A: 重算完整 Manifest 指纹与 Scope revision，重新审阅与批准
 ```
 
-保存与应用分开：保存只改配置，Session、已批准 Manifest、Task 与已消耗预算不变。两个文件之间没有跨文件事务，凭据先落盘；项目引用保存失败时保留输入，可能留下未被引用的孤立 secret，但不会激活任何配置。执行期更新模型配置或并行额度时按当前 Graph head、完整指纹和 Scope revision 重新批准，不创建 Graph Revision、不重置预算。详见 `IC-04`、`IC-05`、`IC-11`。
+保存与应用分开：保存只改配置，Session、已批准 Manifest、Task 与已消耗预算不变。Coordinator 连接编辑时两个文件之间没有跨文件事务，凭据先落盘；Worker 角色选择只写项目配置并在显式目录查询的缓存内核验来源。项目引用保存失败时保留输入，可能留下未被引用的孤立 secret，但不会激活任何配置。执行期更新模型选择或并行额度时按当前 Graph head、完整指纹和 Scope revision 重新批准，不创建 Graph Revision、不重置预算。详见 `IC-04`、`IC-05`、`IC-11`。
 
 ## 合同导航
 

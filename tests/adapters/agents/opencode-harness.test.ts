@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,12 +6,10 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 
 import {
-  OPENCODE_MANAGED_CREDENTIAL_ENV,
   OPENCODE_SESSION_REPORT_FILENAME,
   createOpencodeResumeLaunch,
   createOpencodeWorkerLaunch,
   inspectOpencodeTranscript,
-  observeOpencodeSession,
   opencodeHarness,
   opencodeLaunchDigest,
   opencodeRecoveryInstructions,
@@ -24,17 +22,21 @@ import {
   type OpencodeExecutionInput,
 } from '../../../src/adapters/agents/opencode-harness.js';
 import { CODEX_MODEL_DESCRIPTOR_FILENAME } from '../../../src/adapters/agents/codex-model-launcher.js';
-import { credentialStoreFixture } from '../../support/model-configurations.js';
-import type { WorkerModelConfiguration } from '../../../src/domain/model-configuration.js';
+import { nativeWorkerRuntime } from '../../../src/adapters/agents/worker-runtime.js';
+import { modelSelectionFixture } from '../../support/model-configurations.js';
 import type { TranscriptCoverageEvidence } from '../../../src/application/recovery/recovery-capsule.js';
 import { readLatestHarnessSessionReport, resumeSessionPathsUnder } from '../../../src/bootstrap/worker-harness.js';
 
 const roots: string[] = [];
 const originalPath = process.env['PATH'];
+const originalHome = process.env['HOME'];
+const originalXdgDataHome = process.env['XDG_DATA_HOME'];
 beforeEach(() => { writeFakeOpencode({}); });
 
 afterEach(() => {
   process.env['PATH'] = originalPath;
+  if (originalHome === undefined) delete process.env['HOME']; else process.env['HOME'] = originalHome;
+  if (originalXdgDataHome === undefined) delete process.env['XDG_DATA_HOME']; else process.env['XDG_DATA_HOME'] = originalXdgDataHome;
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true });
   }
@@ -46,48 +48,14 @@ function tempRoot(prefix: string): string {
   return root;
 }
 
-const OPENCODE_PROVIDER = 'minimax-cn-coding-plan';
 const OPENCODE_MODEL = 'MiniMax-M3.1-Flash-Preview';
-
-function opencodeModelConfiguration(overrides: Partial<WorkerModelConfiguration> = {}): WorkerModelConfiguration {
-  return {
-    connection: {
-      connectionRef: 'connection-open',
-      label: '测试连接',
-      providerIntegration: 'minimax',
-      modelOptions: {},
-      credential: { kind: 'harness_login' },
-      codex: null,
-      nativeWorker: { harness: 'opencode', providerId: OPENCODE_PROVIDER },
-    },
-    modelRef: 'model-open',
-    model: OPENCODE_MODEL,
-    effort: null,
-    effortCapability: null,
-    modelOptions: {},
-    ...overrides,
-  };
-}
-
-function managedModelConfiguration(credentialRef: string): WorkerModelConfiguration {
-  const base = opencodeModelConfiguration();
-  return opencodeModelConfiguration({
-    connection: {
-      ...base.connection,
-      credential: { kind: 'managed', credentialRef, optionPath: 'connection.credential' },
-      nativeWorker: { harness: 'opencode', providerId: OPENCODE_PROVIDER },
-    },
-  });
-}
+const modelSelection = modelSelectionFixture({ model: OPENCODE_MODEL });
 
 function launchInput(overrides: Partial<OpencodeExecutionInput> = {}): OpencodeExecutionInput {
   return {
     launchId: 'launch-1',
-    modelConfiguration: opencodeModelConfiguration(),
-    credentialStore: credentialStoreFixture({}),
+    modelSelection,
     sandboxMode: 'workspace-write',
-    // 默认指向空的来源数据目录：harness_login 用例不读用户真实 opencode 登录态。
-    sourceDataHome: tempRoot('companion-oc-source-'),
     ...overrides,
   };
 }
@@ -103,23 +71,16 @@ function readJson(path: string): Record<string, unknown> {
 }
 
 type Descriptor = {
+  readonly version: number;
   readonly args: readonly string[];
-  readonly environment: Record<string, string>;
-  readonly unsetEnvironment: readonly string[];
-  readonly credential: Record<string, unknown>;
+  readonly runtimeReportPath: string;
+  readonly harness?: string;
+  readonly expectedStateRoot?: string;
   readonly readOnly?: { readonly stateRoot: string; readonly workspace: string; readonly reportDirectory?: string };
 };
 
 function readDescriptor(stateRoot: string): Descriptor {
   return readJson(join(stateRoot, CODEX_MODEL_DESCRIPTOR_FILENAME)) as unknown as Descriptor;
-}
-
-function reportLines(stateRoot: string): readonly Record<string, unknown>[] {
-  return readFileSync(join(stateRoot, OPENCODE_SESSION_REPORT_FILENAME), 'utf8')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
 /** fake opencode：只服务公开 CLI 的 api 子命令，行为由同目录 fixture.json 驱动。 */
@@ -189,36 +150,12 @@ test('sessionPaths 返回 harness 级父根与带 digest 的报告路径', () =>
   expect(typeof opencodeHarness.probe).toBe('function');
 });
 
-test('managed 凭据不可用时在写盘前拒绝', async () => {
-  const root = tempRoot('companion-oc-managed-');
-  const worktree = worktreeUnder(root);
-  const stateRootParent = join(root, 'state');
-  const strategy = createOpencodeWorkerLaunch(launchInput({
-    stateRoot: stateRootParent,
-    modelConfiguration: managedModelConfiguration(randomUUID()),
-    credentialStore: credentialStoreFixture({}),
-  }));
-  await expect(strategy.prepare({ worktreePath: worktree })).rejects.toThrow(/凭据/u);
-  expect(existsSync(join(stateRootParent, 'opencode'))).toBe(false);
-});
-
-test('nativeWorker harness 不匹配或含秘密选项时拒绝', async () => {
-  const root = tempRoot('companion-oc-guard-');
-  const worktree = worktreeUnder(root);
-  const base = opencodeModelConfiguration();
-  const wrongHarness = opencodeModelConfiguration({
-    connection: { ...base.connection, nativeWorker: { harness: 'pi', providerId: 'x' } },
-  });
-  await expect(createOpencodeWorkerLaunch(launchInput({ modelConfiguration: wrongHarness }))
-    .prepare({ worktreePath: worktree })).rejects.toThrow(/nativeWorker/u);
-  const secretOptions = opencodeModelConfiguration({ modelOptions: { apiKey: 'sk-live-not-a-real-key' } });
-  await expect(createOpencodeWorkerLaunch(launchInput({ modelConfiguration: secretOptions }))
-    .prepare({ worktreePath: worktree })).rejects.toThrow(/秘密/u);
-});
-
-test('新建启动写隔离 XDG、JSONL bootstrap 与非秘密 descriptor', async () => {
+test('launcher v2 binds the native model selector and reports actual runtime roots', async () => {
   const root = tempRoot('companion-oc-launch-');
   const worktree = worktreeUnder(root);
+  process.env['HOME'] = root;
+  process.env['XDG_DATA_HOME'] = join(root, '.local', 'share');
+  mkdirSync(join(process.env['XDG_DATA_HOME'], 'opencode'), { recursive: true });
   const stateRootParent = join(root, 'state');
   // 运行时把 sessionPaths().stateRoot 当父目录交给 adapter，adapter 统一在其下拼 digest。
   const paths = sessionPathsUnder(stateRootParent, 'launch-1');
@@ -231,111 +168,66 @@ test('新建启动写隔离 XDG、JSONL bootstrap 与非秘密 descriptor', asyn
   expect(prepared.title).toBe(strategy.title);
   expect(prepared.title).not.toContain('ses_');
 
-  const config = readJson(join(actual, 'opencode-config.json'));
-  const provider = (config['providers'] as Record<string, Record<string, unknown> | undefined>)[OPENCODE_PROVIDER];
-  expect(provider?.['models']).toEqual({ [OPENCODE_MODEL]: { settings: {} } });
-  // 根命令不接受 --model：模型必须经隔离 config 的顶层 model 钉住。
-  expect(config['model']).toBe(OPENCODE_PROVIDER + '/' + OPENCODE_MODEL);
-
   const descriptor = readDescriptor(actual);
-  expect(descriptor.args).toEqual([
-    'mini', '--standalone', '--model', OPENCODE_PROVIDER + '/' + OPENCODE_MODEL, '--session', 'ses_' + digest,
+  expect(descriptor.version).toBe(2);
+  expect(descriptor.harness).toBe('opencode');
+  expect(descriptor.args.map((arg) => arg.split('/').at(-1))).toEqual([
+    'opencode-bootstrap.mjs', 'opencode-bootstrap.json',
   ]);
-  expect(descriptor.environment['XDG_DATA_HOME']).toBe(join(actual, 'xdg', 'data'));
-  expect(descriptor.environment['OPENCODE_CONFIG']).toBe(join(actual, 'opencode-config.json'));
-  expect(descriptor.unsetEnvironment).toContain('OPENCODE_CONFIG_CONTENT');
-  expect(descriptor.credential).toEqual({ kind: 'harness_login' });
+  expect(descriptor.runtimeReportPath).toBe(join(actual, 'native-runtime.json'));
+  expect(readJson(descriptor.args[1]!).model).toBe(OPENCODE_MODEL);
+  expect(readJson(descriptor.args[1]!).runtimeReportPath).toBe(descriptor.runtimeReportPath);
+  expect(descriptor).not.toHaveProperty('environment');
   expect(descriptor.readOnly).toBeUndefined();
-
-  const lines = reportLines(actual);
-  expect(lines).toHaveLength(2);
-  expect(lines[0]).toMatchObject({ harness: 'opencode', sessionId: 'ses_' + digest, observedAt: null, cwd: worktree });
-});
-
-test('managed 只把变量名写进 config/descriptor，secret 不进公开面', async () => {
-  const root = tempRoot('companion-oc-managed2-');
-  const worktree = worktreeUnder(root);
-  const stateRootParent = join(root, 'state');
-  const credentialRef = randomUUID();
-  const strategy = createOpencodeWorkerLaunch(launchInput({
-    stateRoot: stateRootParent,
-    modelConfiguration: managedModelConfiguration(credentialRef),
-    credentialStore: credentialStoreFixture({ [credentialRef]: 'sk-secret-value' }),
-  }));
-  const prepared = await strategy.prepare({ worktreePath: worktree });
-
-  const descriptor = readDescriptor(prepared.stateRoot);
-  expect(descriptor.credential['kind']).toBe('managed');
-  expect(descriptor.credential['credentialRef']).toBe(credentialRef);
-  expect(descriptor.credential['envKey']).toBe(OPENCODE_MANAGED_CREDENTIAL_ENV);
-  expect(typeof descriptor.credential['storePath']).toBe('string');
-  expect(JSON.stringify(descriptor)).not.toContain('sk-secret-value');
-  const config = readFileSync(join(prepared.stateRoot, 'opencode-config.json'), 'utf8');
-  expect(config).not.toContain('sk-secret-value');
-  expect(readJson(join(prepared.stateRoot, 'opencode-config.json'))['providers']).toMatchObject({
-    [OPENCODE_PROVIDER]: { env: [OPENCODE_MANAGED_CREDENTIAL_ENV] },
+  execFileSync(process.execPath, [join(actual, 'codex-model-launcher.mjs'), join(actual, CODEX_MODEL_DESCRIPTOR_FILENAME)], { env: process.env, cwd: worktree });
+  const runtime = readJson(descriptor.runtimeReportPath);
+  expect(runtime['writableRoots']).toContain(runtime['stateRoot']);
+  expect(runtime['stateRoot']).toBe(join(process.env['XDG_DATA_HOME'], 'opencode'));
+  const report = readLatestHarnessSessionReport(join(actual, OPENCODE_SESSION_REPORT_FILENAME));
+  expect(report).toMatchObject({
+    sessionId: opencodeSessionIdFor('launch-1'),
+    stateRoot: runtime['stateRoot'], runtimeRoots: runtime['writableRoots'], cwd: worktree,
   });
-  expect(readJson(join(prepared.stateRoot, 'opencode-config.json'))['experimental']).toEqual({
-    policies: [
-      { action: 'provider.use', resource: '*', effect: 'deny' },
-      { action: 'provider.use', resource: OPENCODE_PROVIDER, effect: 'allow' },
-    ],
-  });
-});
-
-test('harness_login 复制来源登录文件而不修改来源', async () => {
-  const root = tempRoot('companion-oc-login-');
-  const worktree = worktreeUnder(root);
-  const sourceDataHome = join(root, 'source-data');
-  mkdirSync(join(sourceDataHome, 'opencode'), { recursive: true });
-  const sourceAuth = join(sourceDataHome, 'opencode', 'auth.json');
-  writeFileSync(sourceAuth, '{"integration":"minimax"}', 'utf8');
-  writeFileSync(join(sourceDataHome, 'opencode', 'account.json'), '{"accounts":[]}', 'utf8');
-
-  const strategy = createOpencodeWorkerLaunch(launchInput({ stateRoot: join(root, 'state'), sourceDataHome }));
-  const prepared = await strategy.prepare({ worktreePath: worktree });
-  expect(readFileSync(join(prepared.stateRoot, 'xdg', 'data', 'opencode', 'auth.json'), 'utf8'))
-    .toBe('{"integration":"minimax"}');
-  expect(existsSync(join(prepared.stateRoot, 'xdg', 'data', 'opencode', 'account.json'))).toBe(true);
-  expect(readFileSync(sourceAuth, 'utf8')).toBe('{"integration":"minimax"}');
 });
 
 test('resume 复用原状态根与原 session id', async () => {
   const root = tempRoot('companion-oc-resume-');
   const worktree = worktreeUnder(root);
   const stateRootParent = join(root, 'state');
+  const nativeRoot = join(root, '.local', 'share', 'opencode');
+  mkdirSync(nativeRoot, { recursive: true });
+  process.env['HOME'] = root;
+  process.env['XDG_DATA_HOME'] = join(root, '.local', 'share');
   const first = await createOpencodeWorkerLaunch(launchInput({ stateRoot: stateRootParent }))
     .prepare({ worktreePath: worktree });
-  const originalSessionId = opencodeSessionIdFor('launch-1');
+  const originalSessionId = 'ses_existing123';
   const transcriptRef = join(first.stateRoot, OPENCODE_SESSION_REPORT_FILENAME);
-  const report = readLatestHarnessSessionReport(transcriptRef)!;
-  writeFileSync(transcriptRef, JSON.stringify({ ...report, observedAt: '2020-01-01T00:00:00Z' }) + '\n');
+  const dispatchStartedAt = new Date(Date.now() - 1_000).toISOString();
+  writeFileSync(transcriptRef, JSON.stringify({
+    harness: 'opencode', sessionId: originalSessionId, transcriptPath: transcriptRef,
+    stateRoot: nativeRoot, runtimeRoots: nativeWorkerRuntime('opencode').writableRoots, cwd: worktree, observedAt: dispatchStartedAt,
+  }) + '\n');
   writeFakeOpencode(sessionFixture(originalSessionId, worktree));
-  const dispatchStartedAt = new Date().toISOString();
   const paths = resumeSessionPathsUnder('opencode', stateRootParent, 'resume-1', first.stateRoot);
   const resumed = await createOpencodeResumeLaunch({
     ...launchInput({ stateRoot: stateRootParent }),
     sessionId: originalSessionId,
-    originalStateRoot: first.stateRoot,
+    originalStateRoot: nativeRoot,
     transcriptRef: join(first.stateRoot, OPENCODE_SESSION_REPORT_FILENAME),
   }).prepare({ worktreePath: worktree });
 
-  expect(resumed.stateRoot).toBe(first.stateRoot);
+  expect(resumed.stateRoot).not.toBe(nativeRoot);
   const descriptor = readDescriptor(resumed.stateRoot);
-  expect(descriptor.args).toContain(originalSessionId);
+  expect(readJson(descriptor.args[1]!).sessionId).toBe(originalSessionId);
   expect(descriptor.args).not.toContain(opencodeSessionIdFor('unrelated-launch'));
   expect(resumed.title).toContain('resume');
-  expect(paths.reportPath).toBe(transcriptRef);
-  const fresh = readLatestHarnessSessionReport(paths.reportPath)!;
-  expect(Date.parse(fresh.observedAt!)).toBeGreaterThanOrEqual(Date.parse(dispatchStartedAt));
-  expect(await proveOpencodeTranscript({
-    report: fresh, workspace: worktree, expectedStateRoot: first.stateRoot,
-    dispatchStartedAt, bindingDeadlineAt: new Date().toISOString(),
-  })).toMatchObject({ kind: 'proven', proof: { providerSessionId: originalSessionId } });
+  expect(descriptor.expectedStateRoot).toBe(nativeRoot);
+  expect(paths.reportPath).toBe(join(stateRootParent, 'opencode', opencodeLaunchDigest('resume-1'), OPENCODE_SESSION_REPORT_FILENAME));
+  expect(readJson(descriptor.args[1]!).runtimeReportPath).toBe(descriptor.runtimeReportPath);
   writeFakeOpencode({ sessions: [] });
   await expect(createOpencodeResumeLaunch({
     ...launchInput({ stateRoot: stateRootParent }), sessionId: originalSessionId,
-    originalStateRoot: first.stateRoot, transcriptRef: join(first.stateRoot, OPENCODE_SESSION_REPORT_FILENAME),
+    originalStateRoot: nativeRoot, transcriptRef: join(first.stateRoot, OPENCODE_SESSION_REPORT_FILENAME),
   }).prepare({ worktreePath: worktree })).rejects.toThrow(/Session/u);
 });
 
@@ -350,11 +242,7 @@ test('read-only 启动先核验包装器，descriptor 记录可写状态根', as
   });
   const prepared = await strategy.prepare({ worktreePath: worktree });
   expect(asserted).toBe(1);
-  expect(readDescriptor(prepared.stateRoot).readOnly).toEqual({
-    stateRoot: prepared.stateRoot,
-    workspace: worktree,
-    reportDirectory: prepared.stateRoot,
-  });
+  expect(readDescriptor(prepared.stateRoot).readOnly).toEqual({ stateRoot: prepared.stateRoot, workspace: worktree });
 
   const failingParent = join(root, 'state-2');
   const failing = createOpencodeWorkerLaunch({
@@ -368,10 +256,15 @@ test('read-only 启动先核验包装器，descriptor 记录可写状态根', as
 /** 建好一个含 bootstrap 行的实际状态根，供观察/证明用例直接使用。 */
 function bootstrapState(root: string, sessionId: string, cwd: string): string {
   const stateRoot = join(root, 'state', 'opencode', opencodeLaunchDigest('launch-1'));
-  mkdirSync(join(stateRoot, 'xdg', 'data'), { recursive: true });
+  mkdirSync(join(root, '.local', 'share', 'opencode'), { recursive: true });
+  mkdirSync(stateRoot, { recursive: true });
+  process.env['XDG_DATA_HOME'] = join(root, '.local', 'share');
+  process.env['HOME'] = root;
   const reportPath = join(stateRoot, OPENCODE_SESSION_REPORT_FILENAME);
+  const runtimeRoot = join(root, '.local', 'share', 'opencode');
   writeFileSync(reportPath, JSON.stringify({
-    harness: 'opencode', sessionId, transcriptPath: reportPath, stateRoot, cwd, observedAt: null,
+    harness: 'opencode', sessionId, transcriptPath: reportPath, stateRoot: runtimeRoot,
+    runtimeRoots: nativeWorkerRuntime('opencode').writableRoots, cwd, observedAt: null,
   }) + '\n', 'utf8');
   return stateRoot;
 }
@@ -388,28 +281,26 @@ test('公开 API 唯一候选：observe/prove/identity 与 JSONL 确认行', asy
   const root = tempRoot('companion-oc-prove-');
   const sessionId = 'ses_proven1234';
   const worktree = worktreeUnder(root);
-  const stateRoot = bootstrapState(root, sessionId, worktree);
+  bootstrapState(root, sessionId, worktree);
+  const stateRoot = join(root, 'state', 'opencode', opencodeLaunchDigest('launch-1'));
   writeFakeOpencode(sessionFixture(sessionId, worktree));
 
-  const observed = await observeOpencodeSession({ stateRoot, workspace: worktree, sessionId });
-  expect(observed.kind).toBe('observed');
-  if (observed.kind !== 'observed') return;
-  expect(observed.report.observedAt).not.toBeNull();
-
+  const report = readLatestHarnessSessionReport(join(stateRoot, OPENCODE_SESSION_REPORT_FILENAME))!;
+  const nativeRoot = join(root, '.local', 'share', 'opencode');
+  const startedAt = new Date(Date.now() - 1_000).toISOString();
   const proven = await proveOpencodeTranscript({
-    report: observed.report,
+    report,
     workspace: worktree,
-    expectedStateRoot: stateRoot,
-    ...window(),
+    expectedStateRoot: nativeRoot,
+    dispatchStartedAt: startedAt,
+    bindingDeadlineAt: new Date(Date.now() + 60_000).toISOString(),
   });
   expect(proven.kind).toBe('proven');
   if (proven.kind !== 'proven') return;
   expect(proven.proof.providerSessionId).toBe(sessionId);
   expect(proven.proof.transcriptRef).toBe(join(stateRoot, OPENCODE_SESSION_REPORT_FILENAME));
 
-  const lines = reportLines(stateRoot);
-  expect(lines.length).toBeGreaterThanOrEqual(2);
-  expect(typeof lines.at(-1)?.['observedAt']).toBe('string');
+  expect(report.runtimeRoots).toEqual(nativeWorkerRuntime('opencode').writableRoots);
 
   const identity = await readOpencodeTranscriptIdentity({
     transcriptRef: proven.proof.transcriptRef,
@@ -422,12 +313,14 @@ test('prove 对状态根、时间窗与候选唯一性失败关闭', async () =>
   const root = tempRoot('companion-oc-prove-fail-');
   const sessionId = 'ses_failcheck1';
   const worktree = worktreeUnder(root);
-  const stateRoot = bootstrapState(root, sessionId, worktree);
+  bootstrapState(root, sessionId, worktree);
+  const stateRoot = join(root, 'state', 'opencode', opencodeLaunchDigest('launch-1'));
   const report = {
     harness: 'opencode' as const,
     sessionId,
     transcriptPath: join(stateRoot, OPENCODE_SESSION_REPORT_FILENAME),
-    stateRoot,
+    stateRoot: join(root, '.local', 'share', 'opencode'),
+    runtimeRoots: nativeWorkerRuntime('opencode').writableRoots,
     cwd: worktree,
     observedAt: null,
   };
@@ -455,11 +348,11 @@ test('prove 对状态根、时间窗与候选唯一性失败关闭', async () =>
     cursor: { previous: null, next: null },
   };
   writeFakeOpencode({ list: duplicated });
-  await expect(proveOpencodeTranscript({ report, workspace: worktree, expectedStateRoot: stateRoot, ...window() }))
+  await expect(proveOpencodeTranscript({ report, workspace: worktree, expectedStateRoot: join(root, '.local', 'share', 'opencode'), ...window() }))
     .resolves.toMatchObject({ kind: 'transcript_unavailable' });
 
   writeFakeOpencode({ list: { data: [] } });
-  await expect(proveOpencodeTranscript({ report, workspace: worktree, expectedStateRoot: stateRoot, ...window() }))
+  await expect(proveOpencodeTranscript({ report, workspace: worktree, expectedStateRoot: join(root, '.local', 'share', 'opencode'), ...window() }))
     .resolves.toMatchObject({ kind: 'transcript_unavailable' });
 });
 
@@ -496,7 +389,6 @@ test('inspect 分页覆盖完整；cursor 循环或 API 失败按证据缺口停
       last: { data: [], cursor: {} },
     },
   });
-  await expect(observeOpencodeSession({ stateRoot, workspace: worktree, sessionId })).resolves.toMatchObject({ kind: 'observed' });
   await expect(inspectOpencodeTranscript(transcriptRef)).resolves.toMatchObject({
     kind: 'covered', evidence: { coverage: 'complete', lastCompleteEventRef: 'msg_1' },
   });
@@ -532,7 +424,9 @@ test('报告只认最新非空行，且拒绝多 session 候选', async () => {
 
   // 两条有效行给出不同 session ID：多候选，fail closed。
   const line = (id: string): string => JSON.stringify({
-    harness: 'opencode', sessionId: id, transcriptPath: transcriptRef, stateRoot, cwd: worktree, observedAt: null,
+    harness: 'opencode', sessionId: id, transcriptPath: transcriptRef,
+    stateRoot: join(root, '.local', 'share', 'opencode'),
+    runtimeRoots: nativeWorkerRuntime('opencode').writableRoots, cwd: worktree, observedAt: null,
   });
   writeFileSync(transcriptRef, line(sessionId) + '\n' + line('ses_other9999') + '\n', 'utf8');
   await expect(readOpencodeTranscriptIdentity({ transcriptRef, workspace: worktree }))

@@ -20,7 +20,7 @@ import type {
   ModelRoleView,
   ModelSettingsRole,
 } from '../ports.js';
-import type { ModelRoleMenuState } from '../state.js';
+import type { ModelRoleMenuState, ModelWorkerCatalogState } from '../state.js';
 
 /** 定稿三分区的标题；角色顺序由宿主的 roles 给定，界面不重排。 */
 export const MODEL_ROLE_GROUP_LABELS: Readonly<Record<ModelRoleGroup, string>> = {
@@ -175,10 +175,14 @@ export function modelRoleAdmission(
   if (!role.availability.available) {
     return { allowed: false, reason: role.availability.reason };
   }
-  if (role.candidates.length === 0) {
-    return { allowed: false, reason: '没有可用的模型候选' };
+  if (role.role === 'coordinator') {
+    if (role.candidates.length === 0) {
+      return { allowed: false, reason: '没有可用的模型候选' };
+    }
+    return modelSwitchAdmission(catalog);
   }
-  return role.role === 'coordinator' ? modelSwitchAdmission(catalog) : { allowed: true, reason: null };
+  // Worker 候选来自该 harness 的原生目录（进入菜单后才显式查询），因此不以静态候选列表准入。
+  return { allowed: true, reason: null };
 }
 
 export function candidateLabel(candidate: ModelRoleCandidate): string {
@@ -382,7 +386,7 @@ export function ModelPicker(props: ModelPickerProps) {
 export type RoleModelMenuProps = {
   readonly role: ModelRoleView;
   readonly menu: ModelRoleMenuState;
-  /** 候选查询只作用于本弹窗的有界列表，不进入 IC-13 草稿。 */
+  /** 候选查询只作用于本弹窗的有界列表，不进入 IC-13 草稿；Worker 手填时同时充当 native ID。 */
   readonly query: string;
   readonly admissionReason: string | null;
   readonly notice: string | null;
@@ -390,18 +394,44 @@ export type RoleModelMenuProps = {
   readonly availableWidth: number;
   readonly rows?: number;
   readonly identity?: string;
+  /** Worker 原生目录查询结果；Coordinator 或未发起查询时为 `null`。 */
+  readonly workerCatalog?: ModelWorkerCatalogState | null;
 };
+
+/**
+ * Worker 菜单里的选择是目录候选还是手填未验证的 native exact ID。
+ *
+ * 查询文本非空且没有任何目录候选匹配时判为手填：目录失败或候选不在目录里时仍可保存 exact ID，但
+ * 不带 catalogSource、不提供 effort。判定只依赖本次渲染看到的目录与查询，不发明来源。
+ */
+export function workerManualSelection(role: ModelRoleView, query: string): boolean {
+  if (role.role === 'coordinator') {
+    return false;
+  }
+  const manual = query.trim().toLocaleLowerCase();
+  if (manual === '') {
+    return false;
+  }
+  return dedupeRoleCandidates(role.candidates).every(
+    (candidate) =>
+      !(candidate.provider + ' ' + candidate.model + ' ' + candidate.candidateRef)
+        .toLocaleLowerCase()
+        .includes(manual),
+  );
+}
 
 /**
  * 候选菜单：搜索 + provider/model 列表 + 独立水平 effort + 默认返回动作。
  *
- * 组件是纯渲染：区域切换、候选移动与动作确认都由容器计算后回传 menu，因此 render 不可能提交或
- * 改变任何绑定。
+ * Worker 角色额外先选 harness，候选来自该 harness 的原生目录（由容器显式查询后回传），并可手填未验证
+ * exact ID。组件是纯渲染：区域切换、候选移动与动作确认都由容器计算后回传 menu，因此 render 不可能
+ * 提交或改变任何绑定。
  */
 export function RoleModelMenu(props: RoleModelMenuProps) {
   const rows = props.rows ?? 16;
   const inner = Math.max(1, props.availableWidth - 8);
   const menu = props.menu;
+  const worker = props.role.role !== 'coordinator';
   const selected = selectedRoleCandidate(props.role, menu.selectedCandidateRef);
   const capability = selected?.effortCapability ?? null;
   const efforts = capability?.values ?? [];
@@ -419,13 +449,45 @@ export function RoleModelMenu(props: RoleModelMenuProps) {
       ? ''
       : ' · 来源 ' + truncateToDisplayWidth(capability.source, window.sourceWidth);
   const effortChosen = efforts.length === 0 || effort !== null;
-  const applicable = selected !== null && effortChosen && props.admissionReason === null;
+  const manual = worker && workerManualSelection(props.role, props.query);
+  const manualModel = props.query.trim();
+  const harness = menu.harness ?? null;
+  const catalogLoad =
+    props.workerCatalog !== null && props.workerCatalog !== undefined &&
+    props.workerCatalog.role === props.role.role && props.workerCatalog.harness === harness
+      ? props.workerCatalog.load
+      : null;
+  const applicable =
+    props.admissionReason === null &&
+    (manual ? manualModel !== '' : selected !== null && effortChosen);
   const reason =
     props.admissionReason ??
-    (selected === null ? '没有匹配项' : effortChosen ? null : '请选择该模型支持的 effort');
+    (manual
+      ? null
+      : selected !== null
+        ? effortChosen
+          ? null
+          : '请选择该模型支持的 effort'
+        : worker && props.query.trim() === ''
+          ? '请选择目录候选或手填 native ID'
+          : '没有匹配项');
+  const catalogNotice = !worker
+    ? null
+    : catalogLoad === null
+      ? '目录查询中…'
+      : catalogLoad.kind === 'unavailable'
+        ? '目录不可用：' + catalogLoad.code + '（可手填 native ID，未验证）'
+        : '目录来源 ' + catalogLoad.source;
   // 字段区紧跟标题；窄屏时 fieldRows 退化为单列，因此行数由实际排版决定而不是写死。
-  const fieldLines =
-    selected === null
+  const fieldLines = worker
+    ? fieldRows(
+        [
+          { label: 'Model', value: manual ? (manualModel === '' ? '（待手填）' : manualModel) : selected?.model ?? '—' },
+          { label: '生效对象', value: truncateToDisplayWidth(scope, inner >= 64 ? Math.floor((inner - 2) / 2) - displayWidth('生效对象 ') : inner - displayWidth('生效对象 ')) },
+        ],
+        inner,
+      )
+    : selected === null
       ? []
       : fieldRows(
           [
@@ -444,14 +506,16 @@ export function RoleModelMenu(props: RoleModelMenuProps) {
    */
   const visible = Math.max(
     1,
-    rows - 12 - fieldLines.length - (reason === null ? 0 : 1) - (props.notice === null ? 0 : 1),
+    rows - 12 - (worker ? 1 : 0) - fieldLines.length - (reason === null ? 0 : 1) - (props.notice === null ? 0 : 1),
   );
   const start = Math.max(
     0,
     Math.min(Math.max(0, filtered.length - visible), Math.max(0, index) - Math.floor(visible / 2)),
   );
   const area =
-    menu.focus === 'list'
+    menu.focus === 'harness'
+      ? '当前区域：Harness · ' + (harness ?? 'codex')
+      : menu.focus === 'list'
       ? '当前区域：模型列表 · effort ' + (effort ?? '不适用')
       : menu.focus === 'effort'
         ? '当前区域：Effort · ' + (effort ?? '不适用')
@@ -464,8 +528,16 @@ export function RoleModelMenu(props: RoleModelMenuProps) {
       rows={rows}
       footer="Tab 区域 · ↑↓模型 · ←→选项 · Enter"
     >
+      {!worker ? null : (
+        <Text color={menu.focus === 'harness' ? tuiColors.focus : tuiColors.muted}>
+          {truncateToDisplayWidth('Harness › ' + (harness ?? 'codex') + '  ←→ 切换 · ' + (manual ? '未验证手填' : catalogNotice ?? ''), inner)}
+        </Text>
+      )}
       <Text {...(menu.focus === 'list' ? { color: tuiColors.focus } : {})}>
-        {truncateToDisplayWidth('搜索 › ' + (props.query || '输入名称或 ID'), inner)}
+        {truncateToDisplayWidth(
+          (worker ? '搜索 / 手填 ID › ' : '搜索 › ') + (props.query || '输入名称或 ID'),
+          inner,
+        )}
       </Text>
       <Box height={visible} flexDirection="column" overflow="hidden">
         {filtered.slice(start, start + visible).map((candidate) => {
@@ -487,7 +559,9 @@ export function RoleModelMenu(props: RoleModelMenuProps) {
             </Text>
           );
         })}
-        {filtered.length === 0 ? <Text dimColor>没有匹配项</Text> : null}
+        {filtered.length === 0 ? (
+          <Text dimColor>{manual ? '未验证手填：' + manualModel : '没有匹配项'}</Text>
+        ) : null}
       </Box>
       <Text color={tuiColors.accent} bold>
         {truncateToDisplayWidth(heading + '─'.repeat(Math.max(0, inner - displayWidth(heading))), inner)}

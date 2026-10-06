@@ -36,12 +36,12 @@
 ### 项目配置：`orca-companion.json`
 
 前台规划 Runtime 从 canonical worktree 根目录读取用户维护、纳入版本控制的 `orca-companion.json`。
-它只保存**凭据引用**，不保存任何密钥值：出现已知密钥字段名时整份配置被拒绝。`schemaVersion` 必须是 3，
+它只保存**凭据引用**，不保存任何密钥值：出现已知密钥字段名时整份配置被拒绝。`schemaVersion` 必须是 4，
 旧版本配置被明确拒绝，不会被自动改写。
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "revision": 1,
   "providerConnections": [
     {
@@ -49,8 +49,7 @@
       "label": "OpenAI",
       "providerIntegration": "@langchain/openai#ChatOpenAI",
       "modelOptions": { "temperature": 0 },
-      "credential": { "kind": "harness_login" },
-      "codex": null
+      "credential": { "kind": "harness_login" }
     }
   ],
   "models": [
@@ -78,8 +77,18 @@
   "output": { "maxResponseBytes": 8388608 },
   "execution": {
     "harness": "codex",
-    "workerProfiles": [],
-    "workerProfileRefs": {},
+    "workerProfiles": [{
+      "profileRef": "planner-native",
+      "role": "planner",
+      "harness": "codex",
+      "modelSelection": {
+        "model": "gpt-6-luna",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      }
+    }],
+    "workerProfileRefs": { "planner": "planner-native" },
     "codexSandbox": "workspace-write",
     "permissions": { "gitIntegration": true, "dependencyChanges": false },
     "limits": { "maxActiveWorkPackages": 3, "maxWorkPackages": 8, "integrationReconciliations": 2 },
@@ -90,11 +99,11 @@
 }
 ```
 
-- `revision` / `providerConnections` / `models`：模型设置的不可变记录。每次编辑追加新的 `connectionRef`、
-  `modelRef` 与 `profileRef` 并推进 `revision`，既有引用不被改写；`effortCapability` 为 `null` 表示该模型
-  没有可信的 effort 能力来源，非空时 Worker 选择必须落在它的 `values` 内，注入字段由 `optionPath` 显式
-  给出。`credential` 为 `harness_login` 或 `managed`（带 `credentialRef` 与 LangChain `optionPath`）；密钥值
-  本身存在用户级凭据文件里，不进版本控制。
+- `revision` / `providerConnections` / `models`：**Coordinator** 模型设置的不可变记录。每次编辑追加新的
+  `connectionRef`、`modelRef` 并推进 `revision`，既有引用不被改写。`credential` 为 `harness_login`
+  （provider integration 自身环境认证）或 `managed`（带 `credentialRef` 与 LangChain `optionPath`）；
+  密钥值存在用户级凭据文件里，不进版本控制。Worker 角色不使用连接或凭据：其 Profile 只带 harness 与
+  `modelSelection`。
 - `coordinatorModels` / `defaultCoordinatorModelRef`：可切换的 Coordinator 模型配置闭集与默认引用；
   默认引用必须存在于集合中，且 `configurationRef` 唯一。`providerIntegration` 形如 `<module>#<export>`，
   由用户已安装的 provider 集成提供，Companion 不维护 allowlist、不自动 fallback。
@@ -108,7 +117,8 @@
 - `output.maxResponseBytes`：单次模型输出的字节预算，缺省 8 MiB，涵盖正文、内容块与工具参数。
   两项字节预算均须为有限正整数；输出超限会中止调用，不重试或提交部分响应。
 - `execution`（可选）：执行授权的长期策略。`harness` 与 `workerProfiles` 决定各 Worker 角色用哪个 harness
-  与哪份模型配置；`workerProfiles` 缺省为空，此时只能做规划，执行授权要求四个生产角色齐全。
+  与哪份 `modelSelection`（native model、effort 与目录来源）；`workerProfiles` 缺省为空，此时只能做规划，
+  执行授权要求四个生产角色齐全。
   `codexSandbox` 决定角色级 Session 的 Codex 沙箱模式（默认 `workspace-write`，只允许写隔离
   worktree）；`permissions`、`limits`、`git`、`dependency`、`acceptedRisks` 是 Execution Authorization
   Manifest 被审阅与批准的候选值。缺省的字段取有限默认值（`limits` 走 `budget-policy.ts` 的默认上限，
@@ -122,10 +132,11 @@
   `workerProfileRefs` 是「角色当前选择引用」：执行期换模型时先保存选择，再走完整 Execution Authorization
   重新审阅与批准，批准前不会改变正在运行的 Session、已批准授权、Task 或已消耗预算。
 
-编辑模型设置是显式的两步：**保存**只改配置，**应用**才改变运行中的 Session 或角色授权。保存时先校验
-候选（引用唯一、交叉引用一致、effort 必须落在可信能力来源内、选项里不得含明文密钥），有新 key 时先把凭据
-写入并回读，再把新的 `connectionRef`/`modelRef`/`profileRef` 以 CAS 追加进项目配置；项目保存失败保留
-你的输入，不覆盖较新配置，也不宣称已生效。
+编辑模型设置是显式的两步：**保存**只改配置，**应用**才改变运行中的 Session 或角色授权。Coordinator 连接
+编辑保存时先校验候选（引用唯一、交叉引用一致、选项里不得含明文密钥），有新 key 时先把凭据写入并回读，
+再把新的 `connectionRef`/`modelRef` 以 CAS 追加进项目配置；Worker 角色保存只追加 `profileRef` 与
+`modelSelection`，并经该 harness 显式、有界的原生目录查询核验来源，不写凭据。项目保存失败保留你的输入，
+不覆盖较新配置，也不宣称已生效。
 
 ### 授权与运行依据
 
@@ -135,9 +146,10 @@ Command Palette 的“执行设置”或 `/concurrency` 可保存并行包额度
 完整 Manifest 才生效。降低额度会等待在途包集成或终止后回收空槽，不停止已有 Worker。同包角色按顺序执行，
 独立包可并行，canonical 集成始终串行；分支分歧由原 Validator 会话复验合并树。
 
-Execution Authorization Manifest 当前为 v3：除目的地、图、权限、预算与策略外，它还完整绑定四个生产角色
-各自 Worker Profile 的模型配置（连接、模型、effort 及其可信能力来源、非秘密选项与 `credentialRef`）以及
-Recovery Utility 的独立绑定。缺少任一角色绑定的授权无法证明 Worker 实际用什么模型运行，因此解析即拒绝。
+Execution Authorization Manifest 当前为 v4：除目的地、图、权限、预算与策略外，它还完整绑定四个生产角色
+各自 Worker Profile 的 `modelSelection`（harness、native model、effort 及其可信目录来源）以及 Recovery
+Utility 的独立绑定。缺少任一角色绑定的授权无法证明 Worker 实际用什么模型运行，因此解析即拒绝；旧版本
+Manifest（v1/v2/v3）读取即拒绝。
 执行期改变模型配置或并行额度时按完整 Manifest 指纹与 Scope revision 重新批准，不创建 Graph Revision、不重置预算；
 Replanning、cancelling 或存在未决派发时不能重新授权。
 
@@ -150,10 +162,11 @@ Replanning、cancelling 或存在未决派发时不能重新授权。
 用户安装 provider 集成后填写的密钥存在独立的用户级凭据文件（XDG 目录，按 XDG 变量解析），文件内容是明文的
 `credentialRef → secret` 映射，权限被拒绝时明确报错而不是放宽。项目配置、checkpoint、UI 输入存储、日志与
 提交内容里只出现 `credentialRef`：聊天模型在最后的构造点按 `credential.credentialRef` 与 `optionPath` 解析，
-Codex 启动时通过子进程环境传递，公开的 terminal 命令与回执不含密钥。保存凭据先落盘再写项目配置；后者失败
+凭据只用于 Coordinator 模型调用。保存凭据先落盘再写项目配置；后者失败
 时输入被保留，可能留下未引用的孤立密钥，但不会激活错误配置。
 
-引用不可变：每次保存生成新的 `credentialRef`，既有引用不被改写。文件写入使用短 exclusive 文件锁、
+引用不可变：每次保存生成新的 `credentialRef`，既有引用不被改写。Worker 启动不读取凭据文件，认证由各
+harness 在自己的真实用户环境中提供。文件写入使用短 exclusive 文件锁、
 revision CAS、0600 临时文件原子替换与回读；锁被占用、文件已被其他写者更新、目录或文件权限不安全、指向
 符号链接、内容损坏或超出大小与条目上限时都以结构化错误拒绝，不自动破锁、不修改既有用户目录权限。
 

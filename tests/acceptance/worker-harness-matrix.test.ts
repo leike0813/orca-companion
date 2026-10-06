@@ -114,7 +114,6 @@ async function runHarnessMatrix(fixture: AcceptanceFixture, harness: AcceptanceH
     model: binding.model,
     providerId: binding.providerId,
     baseUrl: binding.baseUrl,
-    credentialSource: fixture.credentialCache.get(harness)?.source ?? null,
     roles: roles.map(roleEvidence),
     resume: { kind: resume.kind, sessionId: resume.sessionId, sameSession: resume.sameSession, coverage: resume.coverage, blocker: resume.blocker },
     blockers,

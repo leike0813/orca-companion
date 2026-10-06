@@ -294,7 +294,7 @@ function prepareRepository(directory: string): { readonly repository: string; re
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 3,
+      schemaVersion: 4,
       coordinatorModels: [{
         configurationRef: 'planning-default',
         providerIntegration: '@fake/provider#CapableChatModel',
@@ -328,7 +328,7 @@ function prepareRepository(directory: string): { readonly repository: string; re
 
 function manifestFor(head: string, repository: string): ExecutionAuthorizationManifest {
   return {
-    manifestVersion: 3,
+    manifestVersion: 4,
     coordinationScopeId: SCOPE,
     planningCycleId: CYCLE,
     destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
@@ -454,7 +454,7 @@ function prepareValidatorState(repository: string, head: string, options?: { rea
     }
     const authorized = store.transact({
       kind: 'record-authorization', coordinationScopeId: SCOPE, expectedRevision: revision(), writer,
-      authorizationId: AUTH_ID, authorizationVersion: 1, manifestVersion: 3,
+      authorizationId: AUTH_ID, authorizationVersion: 1, manifestVersion: 4,
       fingerprint: 'fingerprint-validator-runtime', approvalRef: 'approval-validator-runtime', manifest: manifestFor(head, repository),
     });
     if (authorized.kind === 'rejected') {

@@ -8,7 +8,7 @@
 
 ### Requirement: 只读 Worker 能力必须由实际执行证明
 
-Companion MUST 使用与各只读角色实际启动相同的 harness 权限配置与受限包装器核验本机能力。成功结论 MUST 同时证明受限命令可运行、允许读取指定输入、拒绝修改指定项目文件；版本、配置声明、bwrap 可执行文件存在或会话启动成功本身均不足以证明该能力。探测失败、超时或结果无法核验时，能力 MUST 为不可用或未知，且 MUST 保留可诊断的阶段与原因。探测 SHALL 不调用模型、不使用真实项目文件作为写入目标，也不修改现有 Scope；包装器 SHALL 使仓库与 Git 事实只读，只允许精确 harness 状态根与临时目录写入，coordination.sqlite 不可写。
+Companion MUST 使用与各只读角色实际启动相同的 harness 权限配置与受限包装器核验本机能力。成功结论 MUST 同时证明受限命令可运行、允许读取指定输入、拒绝修改指定项目文件；版本、配置声明、bwrap 可执行文件存在或会话启动成功本身均不足以证明该能力。探测失败、超时或结果无法核验时，能力 MUST 为不可用或未知，且 MUST 保留可诊断的阶段与原因。探测 SHALL 不调用模型、不使用真实项目文件作为写入目标，也不修改现有 Scope；包装器 SHALL 使仓库、Git 事实、Git common dir 与协调库只读，只允许该 harness 真实原生 state 目录与 Companion 工件目录写入，coordination.sqlite 不可写；native 可写根与拒写根重叠且无法分离证明时 MUST 判为不可用，SHALL NOT 改用更宽权限。
 
 #### Scenario: 受限命令可用且拒绝写入
 

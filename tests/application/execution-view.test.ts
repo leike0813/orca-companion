@@ -1379,7 +1379,7 @@ describe('whole-graph Validator acceptance', () => {
       coordinationScopeId: SCOPE,
       authorizationId: 'auth-1',
       authorizationVersion: 1,
-      manifestVersion: 3,
+      manifestVersion: 4,
       fingerprint: 'acceptance-fixture',
       manifest: executionManifest({
         graphId: GRAPH,

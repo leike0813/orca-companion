@@ -133,7 +133,7 @@ beforeEach(() => {
     writer,
     authorizationId: 'auth-1',
     authorizationVersion: 1,
-    manifestVersion: 3,
+    manifestVersion: 4,
     fingerprint: 'fingerprint-1',
     approvalRef: 'approval-1',
     manifest: manifest(),
@@ -187,7 +187,7 @@ function initialGraph(): ExecutionGraph {
 
 function manifest(): ExecutionAuthorizationManifest {
   return {
-    manifestVersion: 3,
+    manifestVersion: 4,
     coordinationScopeId: SCOPE,
     planningCycleId: CYCLE,
     destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },

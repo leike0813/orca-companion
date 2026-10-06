@@ -21,7 +21,7 @@ import { projectHandoff, projectPlanningHandoff } from '../application/controlle
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, isAbsolute, join } from 'node:path';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 
@@ -210,17 +210,20 @@ import type {
   WorkerProfileRef,
   WorkerRole,
 } from '../domain/planning/execution-authorization.js';
-import type {
-  ModelSettingsRole as DomainModelSettingsRole,
-  ModelProfileRole,
-  ProviderConnection,
-  WorkerModelConfiguration,
+import {
+  WORKER_HARNESS_IDS,
+  type ModelSettingsRole as DomainModelSettingsRole,
+  type ModelProfileRole,
+  type WorkerEffortCapability,
+  type WorkerHarnessId,
+  type WorkerModelSelection,
 } from '../domain/model-configuration.js';
 import {
   createModelSettingsService,
   modelSettingsSnapshot,
   type ModelSettingsService,
   type SaveModelSettingsResult,
+  type WorkerSelectionVerification,
 } from '../application/configuration/model-settings.js';
 import { FileProjectConfigurationStore } from '../adapters/storage/project-configuration-store.js';
 import { createExecutionSettingsService } from '../application/configuration/execution-settings.js';
@@ -229,7 +232,7 @@ import { acceptedResultMatchesTask } from '../domain/worker-result-verification.
 import { branchIntegrationReconciliationStore,
   type IntegrationReconciliationContext } from '../application/integration-reconciliation.js';
 import { createIntegrationReconciliationRuntime, createIntegrationReconciliationSettlement } from './integration-reconciliation-runtime.js';
-import { JsonCredentialStore, credentialStorePath } from '../adapters/storage/credential-store.js';
+import { JsonCredentialStore } from '../adapters/storage/credential-store.js';
 import type { CanonicalHeadFacts } from '../domain/git-integration-policy.js';
 import {
   WORK_PACKAGE_BUDGET_FIELDS,
@@ -288,6 +291,7 @@ import type {
   ExecutionHandoffIntentPort,
   HomeResolution,
   ModelCatalog,
+  WorkerModelCatalogLoad,
   ModelRoleCandidate,
   ModelRoleView,
   ModelSettingsPort,
@@ -517,6 +521,11 @@ const ROLE_UNAVAILABLE_REASONS = {
   specification_validator: 'Specification Validator 没有生产生命周期：规格准入只做确定性结构检查',
 } as const satisfies Readonly<Record<'planning_utility' | 'specification_validator', string>>;
 
+/** 已登记 Worker harness 的收窄判定：配置里的 harness 字符串只有登记后才算已注册身份。 */
+function isWorkerHarnessId(value: string): value is WorkerHarnessId {
+  return (WORKER_HARNESS_IDS as readonly string[]).includes(value);
+}
+
 export type ForegroundPlanningFailureCode =
   | 'repository_unresolved'
   | 'detached_head'
@@ -742,7 +751,7 @@ async function readBindingOnce(input: {
     },
     report,
     workspace: input.workspace,
-    expectedCodexHome: input.expectedCodexHome,
+    expectedCodexHome: input.expectedCodexHome || report.stateRoot || report.codexHome || '',
     dispatchStartedAt: input.dispatchStartedAt,
     bindingDeadlineAt: new Date().toISOString(),
   });
@@ -1285,34 +1294,94 @@ export async function createForegroundPlanningHost(
    * 主机挂载、Codex 版本或配置随时可能变化，持久化的「上次可用」会正好在派发时过期。
    */
   const readOnlyWorkerProbe: ReadOnlyWorkerProbe =
-    options.readOnlyWorkerProbe ?? ((modelConfiguration) => probeHarnessReadOnlyWorker(modelConfiguration, { env: options.env }));
+    options.readOnlyWorkerProbe ?? ((harness, modelSelection) => probeHarnessReadOnlyWorker(harness, modelSelection, { env: options.env }));
 
   /**
-   * 用**该次派发自己的**模型配置探测只读 Worker 能力。
+   * 用**该次派发自己的 harness 与模型选择**探测只读 Worker 能力。
    *
-   * 默认探针不带任何模型设置，因此「探针通过」只说明受限命令本身可用，不说明正式只读会话拿到
-   * 的那组 provider/model/effort/options 也能被接受。这里把 profile 传下去，让探针与正式启动走
-   * 同一个配置生成器。
+   * harness 由调用方按被批准 profile 显式给出，绝不从连接推断。这里把 harness 与 selection 传下去，
+   * 让探针与正式启动走同一份逐 harness 启动描述符。
    *
-   * 注入的探针（测试、隔离启动）仍然是唯一的能力 seam：它自带结论，不该被 profile 参数改写。
-   * 因此只有**默认生产探针**才按 profile 复现，注入路径直接返回注入的结论。
+   * 注入的探针（测试、隔离启动）仍然是唯一的能力 seam：它自带结论，不该被参数改写。因此只有
+   * **默认生产探针**才按 harness/selection 复现。
    */
   const probeForProfile = async (
-    modelConfiguration: WorkerModelConfiguration | null,
+    harness: string,
+    modelSelection: WorkerModelSelection | null,
   ): Promise<ReadOnlyWorkerProbeResult> => {
     if (options.readOnlyWorkerProbe !== undefined) {
-      return await options.readOnlyWorkerProbe();
+      return await options.readOnlyWorkerProbe(harness, modelSelection ?? undefined);
     }
-    if (modelConfiguration === null) {
+    if (modelSelection === null) {
       return {
         kind: 'unavailable',
         stage: 'codex-version',
         codexVersion: null,
         profile: CODEX_UTILITY_PERMISSION_PROFILE,
-        diagnostics: ['没有可核验的模型配置：无法确认正式只读会话会拿到同一组设置'],
+        diagnostics: ['没有可核验的模型选择：无法确认正式只读会话会拿到同一组设置'],
       };
     }
-    return await probeHarnessReadOnlyWorker(modelConfiguration, { env: options.env });
+    return await probeHarnessReadOnlyWorker(harness, modelSelection, { env: options.env });
+  };
+
+  /**
+   * 本次进程内、按 harness 的显式原生目录查询缓存。
+   *
+   * 候选只在用户显式查询时刷新；缓存不持久化，进程退出即失效。查询成功时用本次查询的 `source`
+   * 覆盖该 harness 的条目，失败时删除它，避免旧来源被当作本次可核验的目录来源。
+   */
+  const workerModelCatalog = new Map<WorkerHarnessId, {
+    readonly source: string;
+    readonly models: readonly { readonly model: string; readonly effortCapability: WorkerEffortCapability | null }[];
+  }>();
+
+  const workerCatalogQueries = new Map<WorkerHarnessId, object>();
+  const queryWorkerModels = async (input: {
+    readonly harness: WorkerHarnessId;
+    readonly signal?: AbortSignal;
+  }): Promise<WorkerModelCatalogLoad> => {
+    const query = {};
+    workerCatalogQueries.set(input.harness, query);
+    workerModelCatalog.delete(input.harness);
+    const registered = resolveWorkerHarness(workerHarnessRegistry, input.harness);
+    if (registered.kind === 'rejected') {
+      workerModelCatalog.delete(input.harness);
+      return { kind: 'unavailable', code: registered.code, message: registered.message };
+    }
+    const queried = await registered.harness.queryModels({
+      cwd: canonicalWorktreePath ?? options.repositoryPath,
+      env: options.env,
+      ...(input.signal === undefined ? {} : { signal: input.signal }),
+    });
+    if (input.signal?.aborted || workerCatalogQueries.get(input.harness) !== query) {
+      return { kind: 'unavailable', code: 'catalog_query_cancelled', message: '目录查询已取消' };
+    }
+    if (queried.kind !== 'available') {
+      workerModelCatalog.delete(input.harness);
+      return { kind: 'unavailable', code: queried.code, message: queried.message };
+    }
+    workerModelCatalog.set(input.harness, { source: queried.source, models: queried.models });
+    return { kind: 'available', source: queried.source, models: queried.models };
+  };
+
+  /**
+   * 保存来源核验：只承认**本次显式查询缓存**里的来源与能力。
+   *
+   * 未查询过、或该 native model ID 不在缓存里，都返回 `null`，保存侧据此只允许手填未验证选择
+   * （catalogSource/effortCapability/effort 全为 null），不接受调用方自报来源。
+   */
+  const verifyWorkerSelection = (
+    input: { readonly harness: string; readonly model: string },
+  ): WorkerSelectionVerification | null => {
+    if (!(WORKER_HARNESS_IDS as readonly string[]).includes(input.harness)) {
+      return null;
+    }
+    const entry = workerModelCatalog.get(input.harness as WorkerHarnessId);
+    if (entry === undefined) {
+      return null;
+    }
+    const found = entry.models.find((candidate) => candidate.model === input.model);
+    return found === undefined ? null : { catalogSource: entry.source, effortCapability: found.effortCapability };
   };
 
   const trackerFor = (): IssueTrackerGateway | null =>
@@ -3625,37 +3694,6 @@ export async function createForegroundPlanningHost(
     if (current === null) {
       return [];
     }
-    const connections = new Map(current.providerConnections.map((entry) => [entry.connectionRef, entry]));
-    const connectionOf = (connectionRef: string | null): ProviderConnection | null =>
-      connectionRef === null ? null : connections.get(connectionRef) ?? null;
-    const providerOf = (connectionRef: string | null): string => connectionOf(connectionRef)?.providerIntegration ?? '';
-
-    /**
-     * 候选按 modelRef 去重。
-     *
-     * 同一模型可能因不同 effort 被保存成多条不可变 Coordinator configuration；把它们并成一条候选，
-     * 否则菜单里会出现「同一个模型」重复多行、而 effort 只能独立选一次。选中的 effort 由 apply 保存
-     * 成新引用，因此去重不会丢掉 effort 的可选性。
-     */
-    const modelCandidates: readonly ModelRoleCandidate[] = (() => {
-      const seen = new Set<string>();
-      const result: ModelRoleCandidate[] = [];
-      for (const model of current.models) {
-        if (seen.has(model.modelRef)) {
-          continue;
-        }
-        seen.add(model.modelRef);
-        result.push({
-          candidateRef: model.modelRef,
-          connectionRef: model.connectionRef,
-          provider: providerOf(model.connectionRef),
-          model: model.model,
-          effortCapability: model.effortCapability ?? null,
-        });
-      }
-      return result;
-    })();
-
     /**
      * Coordinator 当前绑定取 **Session registry 登记的那一条**，不是项目默认引用。
      *
@@ -3706,26 +3744,47 @@ export async function createForegroundPlanningHost(
           : role === 'recovery_utility'
             ? approvedManifest.recoveryUtilityProfile
             : approvedManifest.workerProfiles.find((profile) => profile.role === role) ?? null;
-      const profile = approved === null ? null : approved.modelConfiguration;
-      const harness = currentWorkerProfile(current, role)?.harness ?? current.execution.harness;
-      const registered = workerHarnessRegistry.has(harness);
+      const selection = approved === null ? null : approved.modelSelection;
+      // harness 只来自该角色被配置的 profile（或执行默认），绝不从任何模型连接推断。
+      const configuredHarness = currentWorkerProfile(current, role)?.harness ?? current.execution.harness;
+      const harness = isWorkerHarnessId(configuredHarness) ? configuredHarness : null;
+      const registered = harness !== null && workerHarnessRegistry.has(harness);
+      // Worker 候选只来自该 harness 本次显式原生目录查询的缓存；未查询过就没有候选，不拿项目配置凑数。
+      const cached = harness === null ? null : workerModelCatalog.get(harness) ?? null;
+      const candidates: readonly ModelRoleCandidate[] = cached === null
+        ? []
+        : cached.models.map((entry) => ({
+            candidateRef: entry.model,
+            provider: harness ?? configuredHarness,
+            model: entry.model,
+            effortCapability: entry.effortCapability,
+            harness,
+            catalogSource: cached.source,
+          }));
+      const available = registered && cached !== null;
       return {
         role,
         label: ROLE_LABELS[role],
         group: 'execution',
         current:
-          profile === null
+          selection === null
             ? null
             : {
-                candidateRef: profile.modelRef,
-                provider: profile.connection.providerIntegration,
-                model: profile.model,
-                effort: profile.effort,
+                candidateRef: selection.model,
+                provider: harness ?? configuredHarness,
+                model: selection.model,
+                effort: selection.effort,
+                harness,
               },
-        candidates: registered ? modelCandidates.filter((candidate) =>
-          (connectionOf(candidate.connectionRef)?.nativeWorker?.harness ?? 'codex') === harness,
-        ) : [],
-        availability: { available: registered, reason: registered ? null : `不支持的 Worker harness：${harness}` },
+        candidates,
+        availability: {
+          available,
+          reason: available
+            ? null
+            : registered
+              ? '原生模型目录尚未查询：请先查询该 harness 的候选'
+              : `不支持的 Worker harness：${configuredHarness}`,
+        },
       };
     };
     const unavailableView = (
@@ -4588,7 +4647,7 @@ export async function createForegroundPlanningHost(
     }
     const proven = await sessionBindingFromStartReport({ reportPath: paths.reportPath, harness, role: 'validator',
       workerTaskId: segment.workerTaskId, dispatchId: segment.dispatchId, attemptId: segment.attemptId,
-      workspace: worktreePath, expectedCodexHome: join(paths.stateRoot, createHash('sha256').update(runtime.launchId).digest('hex').slice(0, 20)),
+      workspace: worktreePath, expectedCodexHome: '',
       dispatchStartedAt: new Date(binding.createdAt).toISOString(), waitMs: 0, expectedProviderSessionId: runtime.expectedProviderSessionId });
     return proven.kind === 'bound' ? proven.binding : { kind: 'unavailable', code: proven.code, message: proven.message };
   };
@@ -5509,7 +5568,7 @@ export async function createForegroundPlanningHost(
         execution,
         workerHarness: config?.execution.harness ?? null,
         // 恢复派发的模型依据按 subject 判定：替代 Session 沿原 Task 绑定，新建 Utility 固定当前授权。
-        resolveModelConfiguration: (subject, kind) =>
+        resolveModelSelection: (subject, kind) =>
           recoveryModelConfigurationFor(scopeId, subject, kind),
         codexSandbox: codexSandboxForDispatch(approvedRisksFor(scopeId)),
         companionStateRoot: commonDirPath === null ? null : join(commonDirPath, COMPANION_STATE_DIRECTORY),
@@ -5518,7 +5577,6 @@ export async function createForegroundPlanningHost(
         clock,
         bindingWindowMs,
         readOnlyWorkerProbe,
-        credentialStore: credentialStore(),
       }),
       workers: workerStopPortFor(scopeId),
       stopModels: (cancelledScope) => {
@@ -5855,7 +5913,7 @@ export async function createForegroundPlanningHost(
   };
 
   /**
-   * 一份授权里的角色 profile；Manifest2 起模型绑定是必填，因此「没有该角色」就是不可派发。
+   * 一份授权里的角色 profile；Manifest v4 的模型选择为必填，缺少角色即不可派发。
    *
    * 取值只按 role 精确匹配，不取第一条：Manifest 可以同时绑定同一 harness 的多个角色 profile，
    * 模糊匹配会把 Planner 的模型交给 Validator。
@@ -5997,7 +6055,7 @@ export async function createForegroundPlanningHost(
     scopeId: CoordinationScopeId,
     subject: { readonly role: WorkerRole; readonly workerTaskId: string; readonly businessAttemptId: string },
     kind: 'replacement' | 'utility',
-  ): WorkerModelConfiguration | null => {
+  ): WorkerModelSelection | null => {
     const current = requireStore();
     if (current === null) {
       return null;
@@ -6014,16 +6072,16 @@ export async function createForegroundPlanningHost(
         : null;
       return binding === null
         ? null
-        : pinnedProfileFor({ scopeId, binding, role: subject.role })?.profile.modelConfiguration ?? null;
+        : pinnedProfileFor({ scopeId, binding, role: subject.role })?.profile.modelSelection ?? null;
     }
     const authorization = activeAuthorization(current, scopeId);
     if (authorization.kind === 'rejected' || authorization.authorization === null) {
       return null;
     }
-    return recoveryUtilityProfileOf(authorization.authorization.manifest)?.modelConfiguration ?? null;
+    return recoveryUtilityProfileOf(authorization.authorization.manifest)?.modelSelection ?? null;
   };
 
-  /** Manifest2 的 Recovery Utility profile 是必填字段；读取处仍按可空处理并阻塞，不填默认值。 */
+  /** Manifest v4 的 Recovery Utility profile 为必填；缺失时阻塞，不填默认值。 */
   const recoveryUtilityProfileOf = (
     manifest: ExecutionAuthorizationManifest,
   ): RecoveryUtilityProfile | null => manifest.recoveryUtilityProfile ?? null;
@@ -6232,7 +6290,7 @@ export async function createForegroundPlanningHost(
       }
       installHarnessSessionReporter(harness, paths);
       reportPath = paths.reportPath;
-      expectedCodexHome = join(paths.stateRoot, createHash('sha256').update(identity.launchId).digest('hex').slice(0, 20));
+      expectedCodexHome = '';
       const taskContract: TaskContract = {
         schemaVersion: TASK_CONTRACT_SCHEMA_VERSION,
         workPackageId: input.workPackage.workPackageId,
@@ -6351,10 +6409,8 @@ export async function createForegroundPlanningHost(
         workerLaunch: prepareHarnessWorkerLaunch(harness, {
           launchId: identity.launchId,
           // 启动参数由已冻结的模型配置生成：模型、effort、provider 与 options 同源，凭据只进子进程环境。
-          modelConfiguration: workerProfile.modelConfiguration,
+          modelSelection: workerProfile.modelSelection,
           // managed 凭据在准备阶段就要证明存在：与模型装配、模型保存共用同一份 env-derived store。
-          credentialStore: credentialStore(),
-          credentialStorePath: credentialStorePath({ environment: options.env }),
           // 沙箱模式来自已批准的 Manifest 所绑定的项目配置：放宽只有在授权审阅里显式接受风险时才生效。
           sandboxMode,
           stateRoot: paths.stateRoot,
@@ -6943,7 +6999,7 @@ export async function createForegroundPlanningHost(
         dispatchId: entry.orcaDispatchId,
         attemptId: entry.attemptId,
         workspace: entry.worktreePath,
-        expectedCodexHome: join(paths.stateRoot, createHash('sha256').update(entry.launchId).digest('hex').slice(0, 20)),
+        expectedCodexHome: '',
         dispatchStartedAt: new Date(entry.createdAt).toISOString(),
         waitMs: 0,
       });
@@ -7246,9 +7302,7 @@ export async function createForegroundPlanningHost(
           canonicalWorktreePath,
           companionStateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY),
           harness: plannerHarness,
-          modelConfiguration: plannerProfile.modelConfiguration,
-          credentialStore: credentialStore(),
-          credentialStorePath: credentialStorePath({ environment: options.env }),
+          modelSelection: plannerProfile.modelSelection,
           bindingWindowMs,
           reportTimeoutMs: 15 * 60_000,
         }),
@@ -7262,9 +7316,7 @@ export async function createForegroundPlanningHost(
           repoSelector: `path:${canonicalWorktreePath}`,
           worktreePaths: observations.worktreePaths,
           harness: plannerHarness,
-          modelConfiguration: plannerProfile.modelConfiguration,
-          credentialStore: credentialStore(),
-          credentialStorePath: credentialStorePath({ environment: options.env }),
+          modelSelection: plannerProfile.modelSelection,
           sandboxMode: codexSandboxForDispatch(approvedRisksFor(scopeId)),
           companionStateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY),
           bindingWindowMs,
@@ -7879,7 +7931,8 @@ export async function createForegroundPlanningHost(
         const paths = harness === null ? null : sessionPathsFor(harness, originalBinding.launchId);
         if (paths !== null && harness !== null && originalProfile !== null && originalBinding.workerProfileRef !== null &&
           originalProfile.profileRef.id === originalBinding.workerProfileRef.id) {
-          const originalCodexHome = join(paths.stateRoot, createHash('sha256').update(originalBinding.launchId).digest('hex').slice(0, 20));
+          const originalReport = readLatestHarnessSessionReport(paths.reportPath);
+          const originalCodexHome = originalReport?.stateRoot ?? originalReport?.codexHome ?? '';
           const proven = await sessionBindingFromStartReport({ reportPath: paths.reportPath,
             harness, role: 'validator', workerTaskId: originalBinding.workerTaskId,
             dispatchId: accepted.dispatchId, attemptId: accepted.attemptId, workspace: worktreePath,
@@ -7923,8 +7976,7 @@ export async function createForegroundPlanningHost(
                   workerProfileRef: originalBinding.workerProfileRef.id,
                   specificationUnitPath: originalBinding.specificationUnitPath,
                 },
-                modelConfiguration: originalProfile.modelConfiguration, credentialStore: credentialStore(),
-                credentialStorePath: credentialStorePath({ environment: options.env }),
+                modelSelection: originalProfile.modelSelection,
                 sandboxMode: codexSandboxForDispatch(approvedRisksFor(scopeId)),
                 companionStateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY), canonicalWorktreePath,
                 workPackage: candidate, bindingWindowMs, resultTimeoutMs: 5 * 60_000,
@@ -8280,7 +8332,7 @@ export async function createForegroundPlanningHost(
         return;
       }
       // 确认没有既有派发/意图之后才探测：能力不可用时零新 Task/Dispatch，交付保持 blocker。
-      const readOnlyWorker = await probeForProfile(finalizerProfile.modelConfiguration);
+      const readOnlyWorker = await probeForProfile(finalizerProfile.harness, finalizerProfile.modelSelection);
       const readOnlyBlocker = readOnlyWorkerUnavailableReason(readOnlyWorker);
       if (readOnlyBlocker !== null) {
         recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_read_only_unavailable', readOnlyBlocker);
@@ -8326,10 +8378,8 @@ export async function createForegroundPlanningHost(
         },
         workerLaunch: prepareHarnessWorkerLaunch(finalizerHarness, {
           launchId: operationIds.launchId,
-          modelConfiguration: finalizerProfile.modelConfiguration,
+          modelSelection: finalizerProfile.modelSelection,
           // 与常规角色派发同源：只读 Finalizer 的 managed 凭据也在准备阶段证明存在。
-          credentialStore: credentialStore(),
-          credentialStorePath: credentialStorePath({ environment: options.env }),
           // Finalizer 只读（profile 继承 `:read-only`），只为本机控制通道回报结论而开启该通道网络。
           sandboxMode: 'read-only-local-control',
           stateRoot: paths.stateRoot,
@@ -8359,7 +8409,7 @@ export async function createForegroundPlanningHost(
                 },
                 report,
                 workspace: canonicalWorktreePath,
-                expectedCodexHome: join(paths.stateRoot, createHash('sha256').update(operationIds.launchId).digest('hex').slice(0, 20)),
+                expectedCodexHome: report.stateRoot ?? report.codexHome ?? '',
                 dispatchStartedAt,
                 bindingDeadlineAt: new Date().toISOString(),
               });
@@ -8979,7 +9029,7 @@ export async function createForegroundPlanningHost(
         },
         workerHarness: config?.execution.harness ?? null,
         // 与启动对账同源：替代 Session 沿原 Task 绑定，新建 Utility 固定当前授权的 Utility profile。
-        resolveModelConfiguration: (subject, kind) =>
+        resolveModelSelection: (subject, kind) =>
           recoveryModelConfigurationFor(scopeId, subject, kind),
         codexSandbox: codexSandboxForDispatch(approvedRisksFor(scopeId)),
         companionStateRoot: commonDirPath === null ? null : join(commonDirPath, COMPANION_STATE_DIRECTORY),
@@ -8988,7 +9038,6 @@ export async function createForegroundPlanningHost(
         clock,
         bindingWindowMs,
         readOnlyWorkerProbe,
-        credentialStore: credentialStore(),
       }),
     });
     const blocker = recoveryBlockerOf(continuation);
@@ -9078,9 +9127,7 @@ export async function createForegroundPlanningHost(
         canonicalWorktreePath, repoSelector: `path:${canonicalWorktreePath}`,
         worktreePaths: observations.worktreePaths,
         harness: baselineHarness,
-        modelConfiguration: baselineProfile.modelConfiguration,
-        credentialStore: credentialStore(),
-        credentialStorePath: credentialStorePath({ environment: options.env }),
+        modelSelection: baselineProfile.modelSelection,
         sandboxMode: codexSandboxForDispatch(approvedRisksFor(scopeId)),
         companionStateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY), bindingWindowMs,
       });
@@ -9804,7 +9851,7 @@ export async function createForegroundPlanningHost(
     // 一次的结论。两个角色用各自固定的模型配置探测——正式只读会话拿到什么设置，探针就核验什么。
     const finalizerProfile = config === null ? null : currentWorkerProfile(config, 'finalizer');
     const readOnlyWorker = await probeForProfile(
-      finalizerProfile === null ? null : finalizerProfile.modelConfiguration,
+      finalizerProfile?.harness ?? '', finalizerProfile?.modelSelection ?? null,
     );
     const readOnlyBlocker = readOnlyWorkerUnavailableReason(readOnlyWorker);
     const reviewed = reviewExecutionAuthorization(read.facts);
@@ -9866,7 +9913,7 @@ export async function createForegroundPlanningHost(
       if (previous === undefined) {
         const written = requiredStore().transact({ kind: 'record-authorization', coordinationScopeId: scopeId,
           expectedRevision: scopeRecord(scopeId)!.revision, writer: writerFor(session.session.incarnation),
-          authorizationId: id, authorizationVersion, manifestVersion: 3, fingerprint: resume.fingerprint,
+          authorizationId: id, authorizationVersion, manifestVersion: resume.manifest.manifestVersion, fingerprint: resume.fingerprint,
           approvalRef: `replanning-resume-review:${resume.fingerprint}`, manifest: resume.manifest });
         if (written.kind !== 'committed') return rejected(written.code, written.message);
       }
@@ -9936,7 +9983,7 @@ export async function createForegroundPlanningHost(
     // 批准前重查能力：审阅时的成功结论不构成本次批准的许可，环境可能在两次检查之间变化。
     const approveProfile = config === null ? null : currentWorkerProfile(config, 'finalizer');
     const readOnlyBlocker = readOnlyWorkerUnavailableReason(
-      await probeForProfile(approveProfile === null ? null : approveProfile.modelConfiguration),
+      await probeForProfile(approveProfile?.harness ?? '', approveProfile?.modelSelection ?? null),
     );
     if (readOnlyBlocker !== null) {
       return rejected('read_only_worker_unavailable', readOnlyBlocker);
@@ -10086,6 +10133,7 @@ export async function createForegroundPlanningHost(
         configPath: projectConfigPath(canonicalWorktreePath),
       }),
       credentials: credentialStore(),
+      verifyWorkerSelection,
     });
   };
 
@@ -10125,7 +10173,7 @@ export async function createForegroundPlanningHost(
       /**
        * 只读非秘密快照。
        *
-       * 连接升级为完整非秘密视图（providerId/baseUrl/wireApi 与凭据引用），secret 与 CredentialStore
+       * Coordinator 连接仅投影 provider integration、非秘密选项与凭据引用，secret 与 CredentialStore
        * 路径都不进入返回值，因此界面重绘与 resize 拿到的始终是同一份投影。
        */
       load: () => {
@@ -10161,7 +10209,6 @@ export async function createForegroundPlanningHost(
                   providerIntegration: connection.providerIntegration,
                   modelOptions: connection.modelOptions,
                   credential: connection.credential,
-                  codex: connection.codex,
                 })),
               },
             },
@@ -10196,13 +10243,6 @@ export async function createForegroundPlanningHost(
        * 也不改已消耗预算——它不做任何状态转换，界面也无需在两个动作之间回滚。
        */
       apply: (input) => {
-        if (input.role === 'planning_utility' || input.role === 'specification_validator') {
-          return Promise.resolve({
-            kind: 'rejected',
-            code: 'invalid_input',
-            message: ROLE_UNAVAILABLE_REASONS[input.role],
-          });
-        }
         if (service() === null) {
           return Promise.resolve({
             kind: 'rejected',
@@ -10216,7 +10256,7 @@ export async function createForegroundPlanningHost(
           );
         }
         return Promise.resolve(
-          saveRoleProfile(input.role, input.modelRef, input.effort, input.expectedRevision),
+          saveRoleProfile(input.role, input.harness, input.modelSelection, input.expectedRevision),
         );
       },
     };
@@ -10258,7 +10298,7 @@ export async function createForegroundPlanningHost(
        message: `Coordinator 配置 ${configurationRef} 不在项目配置中`,
      };
    }
-   // 复用被选中配置里的完整连接：credentialRef、optionPath 与 codex 三项都不重新推断。
+   // 复用被选中 Coordinator 配置的完整连接与凭据引用。
    const connection = configurationConnection(selected);
    if (connection === null && selected.credentialRefs.length > 0) {
      // 凭据引用必须对应一条已声明的连接才能解析出注入路径；没有连接却带引用，模型装配阶段同样会
@@ -10277,14 +10317,12 @@ export async function createForegroundPlanningHost(
            label: selected.configurationRef,
            providerIntegration: selected.providerIntegration,
            modelOptions: {},
-           codex: null,
            credential: { kind: 'harness_login' as const },
          }
        : {
            label: connection.label,
            providerIntegration: connection.providerIntegration,
            modelOptions: connection.modelOptions,
-           codex: connection.codex,
            credential: connection.credential,
          };
    const capability = selected.effortCapability ?? null;
@@ -10311,47 +10349,19 @@ export async function createForegroundPlanningHost(
 
   const saveRoleProfile = (
     role: Exclude<DomainModelSettingsRole, 'coordinator'>,
-    modelRef: string,
-    effort: string | null,
+    harness: WorkerHarnessId,
+    modelSelection: WorkerModelSelection,
     expectedRevision: number,
   ): SaveModelSettingsResult => {
     const current = config;
     if (current === null || canonicalWorktreePath === null) {
       return { kind: 'rejected', code: 'config_unreadable', message: '项目配置不可用' };
     }
-    const model = current.models.find((entry) => entry.modelRef === modelRef);
-    if (model === undefined) {
-      return { kind: 'rejected', code: 'invalid_input', message: `模型 ${modelRef} 不在项目配置中` };
-    }
-    const connection = current.providerConnections.find(
-      (entry) => entry.connectionRef === model.connectionRef,
-    );
-    if (connection === undefined) {
-      return {
-        kind: 'rejected',
-        code: 'invalid_input',
-        message: `模型 ${modelRef} 指向的连接不在项目配置中`,
-      };
-    }
     const result = modelSettingsService().save({
       expectedRevision,
       role,
-      connection: {
-        label: connection.label,
-        providerIntegration: connection.providerIntegration,
-        modelOptions: connection.modelOptions,
-        codex: connection.codex,
-        ...(connection.nativeWorker === undefined ? {} : { nativeWorker: connection.nativeWorker }),
-        credential: connection.credential,
-      },
-      model: model.model,
-      // 沿用该角色**现有 profile** 的非秘密 modelOptions，而不是只取模型定义的默认值。
-      // 丢掉它们等于让一次已经审阅过的绑定在换模型时静默重置——审阅时看到的那组 options 与真正
-      // 启动用的不是同一份，这是不可接受的漂移。选中的模型没有可信 effort 来源时也照旧写出
-      // 既有 options，effort 由上面的能力校验独立把关。
-      modelOptions: currentWorkerProfile(current, role)?.modelConfiguration.modelOptions ?? connection.modelOptions,
-      effortCapability: model.effortCapability,
-      effort,
+      harness,
+      modelSelection,
     });
     // 无论成功与否都重读权威文件：迟到的 save 可能与另一次保存交错，只认文件里最新的 revision 与
     // 记录集合，内存副本不能继续停在过期状态。
@@ -10980,7 +10990,7 @@ export async function createForegroundPlanningHost(
       };
     },
     scopeSetup,
-    modelCatalog: { load: session => Promise.resolve(modelCatalog(session)) },
+    modelCatalog: { load: session => Promise.resolve(modelCatalog(session)), queryWorkerModels },
     modelSettings: settingsPort,
     executionSettings: executionSettingsPort,
     handoff,

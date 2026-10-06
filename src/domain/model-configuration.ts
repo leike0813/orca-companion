@@ -17,19 +17,11 @@ const optionPath = z.string().regex(/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9
 /**
  * Companion 承认的 Worker harness 标识（唯一事实源）。
  *
- * `codex` 用 `codex` 连接（LangChain wireApi/baseUrl）；其余四个用各自 harness 的原生 provider 连接，
- * 因此不能共用同一套 wireApi 描述。这里只给出身份，能力探测与启动绑定仍由 adapter 拥有。
+ * harness 自己拥有模型、认证、provider endpoint 与真实会话：Companion 只登记身份，能力探测与启动绑定
+ * 交给 adapter。这里不描述任何原生连接形状。
  */
 export const WORKER_HARNESS_IDS = ['codex', 'claude', 'opencode', 'pi', 'omp'] as const;
 export type WorkerHarnessId = (typeof WORKER_HARNESS_IDS)[number];
-
-/**
- * 原生连接声明的接口族。
- *
- * `claude` 只可能是 anthropic-messages；`opencode` 用它选择 SDK 的接口；`pi`/`omp` 接受原生取值。
- */
-export const NATIVE_WORKER_APIS = ['anthropic-messages', 'openai-completions', 'openai-responses'] as const;
-export type NativeWorkerApi = (typeof NATIVE_WORKER_APIS)[number];
 
 function urlContainsCredentials(value: string): boolean {
   let url: URL;
@@ -42,57 +34,37 @@ function urlContainsCredentials(value: string): boolean {
     Array.from(url.searchParams.keys()).some(isModelOptionSecretKey);
 }
 
-/** 连接 URL 不得携带 userinfo 或凭据查询参数；两端连接（codex 与原生）共用同一条规则。 */
-const credentialFreeUrl = z.url().refine((value) => !urlContainsCredentials(value), {
-  message: '连接 URL 不得包含认证信息；请使用凭据引用',
-});
+/** effort 能力的取值集合：非空、有界、无重复。 */
+const effortValues = z.array(identity).min(1).max(16)
+  .refine((values) => new Set(values).size === values.length);
 
+/**
+ * Coordinator 的 effort 能力来源。
+ *
+ * `optionPath` 是 SDK options 里承载该 effort 的字段路径：Coordinator 由 Companion 组装 LangChain
+ * 调用，必须显式描述；Worker 的 effort 由 harness 自身解释，没有可注入的 optionPath。
+ */
 export const effortCapabilitySchema = z.strictObject({
-  values: z.array(identity).min(1).max(16).refine((values) => new Set(values).size === values.length),
+  values: effortValues,
   source: identity,
   optionPath,
 });
 export type EffortCapability = z.infer<typeof effortCapabilitySchema>;
 
-/** providerId：harness 侧的 provider 标识，非空有界。 */
-const nativeProviderId = z.string().min(1).max(256);
+/** Worker 的 effort 能力来源：只有取值与来源，没有 SDK optionPath。 */
+export const workerEffortCapabilitySchema = z.strictObject({
+  values: effortValues,
+  source: identity,
+});
+export type WorkerEffortCapability = z.infer<typeof workerEffortCapabilitySchema>;
 
 /**
- * Worker harness 的原生 provider 连接。
+ * Coordinator 的 provider 连接记录。
  *
- * 与 `codex` 连接互斥：codex 走 LangChain 的 wireApi/baseUrl，claude/opencode/pi/omp 走各自 harness
- * 的原生接口。`providerId` 必填；`baseUrl` 可选且不得携带认证信息；`api` 可选，claude 固定
- * anthropic-messages，opencode 用它选择 SDK 接口，pi/omp 接受原生取值。判别联合按 harness 收窄，
- * 每个 harness 只接受自己的字段与取值，未知 harness 或额外字段一律拒绝。
+ * Worker 的 provider 连接、endpoint 与凭据已交还 harness，这里只服务 Coordinator。`credential` 保留
+ * `harness_login`（Coordinator provider integration 自身的环境认证路径，沿用旧命名）与 `managed`
+ * （Companion 凭据引用）。
  */
-export const nativeWorkerConnectionSchema = z.discriminatedUnion('harness', [
-  z.strictObject({
-    harness: z.literal('claude'),
-    providerId: nativeProviderId,
-    baseUrl: credentialFreeUrl.optional(),
-    api: z.literal('anthropic-messages').optional(),
-  }),
-  z.strictObject({
-    harness: z.literal('opencode'),
-    providerId: nativeProviderId,
-    baseUrl: credentialFreeUrl.optional(),
-    api: z.enum(NATIVE_WORKER_APIS).optional(),
-  }),
-  z.strictObject({
-    harness: z.literal('pi'),
-    providerId: nativeProviderId,
-    baseUrl: credentialFreeUrl.optional(),
-    api: z.enum(NATIVE_WORKER_APIS).optional(),
-  }),
-  z.strictObject({
-    harness: z.literal('omp'),
-    providerId: nativeProviderId,
-    baseUrl: credentialFreeUrl.optional(),
-    api: z.enum(NATIVE_WORKER_APIS).optional(),
-  }),
-]);
-export type NativeWorkerConnection = z.infer<typeof nativeWorkerConnectionSchema>;
-
 export const providerConnectionSchema = z.strictObject({
   connectionRef: identity,
   label: identity,
@@ -102,18 +74,6 @@ export const providerConnectionSchema = z.strictObject({
     z.strictObject({ kind: z.literal('harness_login') }),
     z.strictObject({ kind: z.literal('managed'), credentialRef: credentialReference, optionPath }),
   ]),
-  codex: z.strictObject({
-    providerId: z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/),
-    baseUrl: credentialFreeUrl,
-    wireApi: z.enum(['responses', 'chat']),
-  }).nullable(),
-  /**
-   * 原生 Worker 连接；缺省保持缺省。
-   *
-   * 它是**附加**字段：旧的连接没有它，解析与序列化都不会凭空补出一个 key，因此旧配置的指纹不因
-   * 这次扩展而改变。
-   */
-  nativeWorker: nativeWorkerConnectionSchema.optional(),
 });
 export type ProviderConnection = z.infer<typeof providerConnectionSchema>;
 
@@ -125,16 +85,30 @@ export const modelDefinitionSchema = z.strictObject({
 });
 export type ModelDefinition = z.infer<typeof modelDefinitionSchema>;
 
-export const workerModelConfigurationSchema = z.strictObject({
-  connection: providerConnectionSchema,
-  modelRef: identity,
-  model: identity,
-  effort: identity.nullable(),
-  effortCapability: effortCapabilitySchema.nullable(),
-  modelOptions: z.record(z.string(), z.unknown()),
-}).refine((value) => value.effort === null || value.effortCapability?.values.includes(value.effort) === true,
-  { path: ['effort'], message: 'effort 缺少可信能力来源或超出支持范围' });
-export type WorkerModelConfiguration = z.infer<typeof workerModelConfigurationSchema>;
+/**
+ * Worker 的不可变模型选择。
+ *
+ * Worker 只按角色选择 harness、模型与 effort；连接、凭据与 provider options 由 harness 拥有，因此这里
+ * 没有 connection/modelRef/modelOptions/credentialRef。`catalogSource` 是原生目录查询的来源标识；
+ * `null` 表示用户手填的未验证 native exact ID，此时 effort 必须为 null。`effortCapability` 非空则
+ * 必须有目录来源，非 null 的 effort 必须落在能力取值内。
+ */
+export const workerModelSelectionSchema = z
+  .strictObject({
+    model: identity,
+    effort: identity.nullable(),
+    effortCapability: workerEffortCapabilitySchema.nullable(),
+    catalogSource: identity.nullable(),
+  })
+  .refine((value) => value.effortCapability === null || value.catalogSource !== null, {
+    path: ['catalogSource'],
+    message: '有可信 effort 能力来源时必须声明目录来源',
+  })
+  .refine((value) => value.effort === null || value.effortCapability?.values.includes(value.effort) === true, {
+    path: ['effort'],
+    message: 'effort 缺少可信能力来源或超出支持范围',
+  });
+export type WorkerModelSelection = z.infer<typeof workerModelSelectionSchema>;
 
 export const MODEL_PROFILE_ROLES = ['planner', 'implementation', 'validator', 'finalizer', 'recovery_utility'] as const;
 export type ModelProfileRole = (typeof MODEL_PROFILE_ROLES)[number];
@@ -143,8 +117,8 @@ export type ModelSettingsRole = 'coordinator' | ModelProfileRole;
 export const workerProfileConfigurationSchema = z.strictObject({
   profileRef: identity,
   role: z.enum(MODEL_PROFILE_ROLES),
-  harness: identity,
-  modelConfiguration: workerModelConfigurationSchema,
+  harness: z.enum(WORKER_HARNESS_IDS),
+  modelSelection: workerModelSelectionSchema,
 });
 export type WorkerProfileConfiguration = z.infer<typeof workerProfileConfigurationSchema>;
 

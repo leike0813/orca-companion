@@ -255,7 +255,7 @@ if (resolved.kind === 'skip') {
           writer,
           authorizationId: 'auth-real-cutover',
           authorizationVersion: 1,
-          manifestVersion: 3,
+          manifestVersion: 4,
           fingerprint: 'fingerprint-real-cutover-1',
           approvalRef: `${resolved.identity}:approval-1`,
           manifest: executionManifest({
@@ -343,7 +343,7 @@ if (resolved.kind === 'skip') {
           writer,
           authorizationId: 'auth-real-cutover-2',
           authorizationVersion: 2,
-          manifestVersion: 3,
+          manifestVersion: 4,
           fingerprint: 'fingerprint-real-cutover-2',
           approvalRef: `${resolved.identity}:approval-2`,
           manifest: executionManifest({

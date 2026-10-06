@@ -4,7 +4,6 @@ import { beginIntent } from '../../src/application/coordination/intent-service.j
 import type { OperationId } from '../../src/application/dto/identity.js';
 import { runGraphPatchPlannerWorker } from '../../src/bootstrap/graph-patch-worker.js';
 import { createExecutionScopeHarness, executionModelConfiguration, forbiddenExecutionBackend } from '../support/execution-harness.js';
-import { credentialStoreFixture } from '../support/model-configurations.js';
 
 test('Planner Task 意图未决时沿原身份阻塞，不创建第二个 Task', async () => {
   const harness = createExecutionScopeHarness();
@@ -48,9 +47,7 @@ test('Planner Task 意图未决时沿原身份阻塞，不创建第二个 Task',
       },
       canonicalWorktreePath: '/tmp/unused', companionStateRoot: '/tmp/unused',
       harness: 'codex',
-      modelConfiguration: executionModelConfiguration({ model: 'test-model' }),
-      credentialStore: credentialStoreFixture(),
-      credentialStorePath: '/tmp/credentials.json',
+      modelSelection: executionModelConfiguration({ model: 'test-model' }),
       bindingWindowMs: 1_000, reportTimeoutMs: 1_000,
     });
     expect(result.kind).toBe('unknown');

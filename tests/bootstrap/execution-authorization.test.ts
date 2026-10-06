@@ -359,7 +359,7 @@ test('模型重新授权追加唯一记录并保持运行图、政策和已消�
   const nextPolicy = policy();
   const changedPolicy = { ...nextPolicy, workerProfiles: nextPolicy.workerProfiles.map((profile) => ({
     ...profile, profileRef: profile.profileRef + '-new',
-    modelConfiguration: { ...profile.modelConfiguration, model: 'changed-model' },
+    modelSelection: { ...profile.modelSelection, model: 'changed-model' },
   })), workerProfileRefs: Object.fromEntries(Object.entries(nextPolicy.workerProfileRefs)
     .map(([role, ref]) => [role, ref + '-new'])) };
   const review = reviewExecutionAuthorization({ ...facts(), policy: changedPolicy });
@@ -661,7 +661,7 @@ async function openAuthorizationHost(directory: string): Promise<AuthorizationHo
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 3,
+      schemaVersion: 4,
       revision: 0,
       ...projectConnectionsFixture(),
       coordinatorModels: [
@@ -871,9 +871,9 @@ test('审阅与批准各自核验只读 Worker 能力：不可用不写授权，
     expect(blocked.review.gate.ready).toBe(false);
     expect(blocked.review.gate.blockers.join(' ')).toContain('read_only_worker_unavailable');
     // Capsule 与 Finalizer 的实际只读配置与本次结论都在审阅里可见。
-    expect(manifestRow(blocked, 'Worker Sandbox')).toContain('capsule=utility-readonly-local-control');
-    expect(manifestRow(blocked, 'Worker Sandbox')).toContain('finalizer=utility-readonly-local-control');
-    expect(manifestRow(blocked, 'Read-only Workers')).toContain('sandbox-read');
+    expect(manifestRow(blocked, 'Worker Sandbox')).toContain('capsule=bwrap-read-only');
+    expect(manifestRow(blocked, 'Worker Sandbox')).toContain('finalizer=bwrap-read-only');
+    expect(manifestRow(blocked, 'Read-only Workers')).toContain('bwrap-read-only');
 
     const refused = await harness.host.ports.executionAuthorization.approve({
       fingerprint: blocked.review.fingerprint,

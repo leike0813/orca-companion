@@ -23,8 +23,9 @@ context: |
   以已归档的 m2-repair-read-only-worker-sandbox 为直接前驱；它可在执行 TUI
   未归档时 apply、验证和 archive，但必须先核验共享执行接缝并串行编辑共享文件。
 
-  当前 change 为 complete-coordination-runtime-wiring，直接前驱 restore-configurable-execution-concurrency
-  已归档并包含于 88d908a。本 change 补录已授权的生产接线修复，正式验收等待固定实现 checkpoint。
+  当前 change 为 remove-worker-credential-management，直接前驱 add-worker-harness-adapters 已归档（2026-10-06），
+  规划 HEAD f445aee。本 change 移除 Worker 凭据与原生配置管理：Worker 认证归还 harness，Worker Profile 改为
+  modelSelection，项目配置 schema 4、Execution Authorization Manifest v4，旧版本明确拒绝且不迁移。
   后续新隔离任务显式使用用户批准的
   `minimax-cn/MiniMax-M3.1-Flash-Preview` 与已核验连接；已启动现场保持原模型绑定。
   fixture 06 已取得真实并行、原 Validator Session 集成复验、Finalizer deliverable 与同 Scope 重启证据，见 artifacts/execution-concurrency。

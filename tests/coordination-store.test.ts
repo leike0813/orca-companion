@@ -3508,7 +3508,7 @@ test('持久行的 terminal_handle 与 state/category 不自洽时读取 fail cl
 /** 一份满足 Manifest v3 必填绑定的最小授权正文，用于预算接纳路径。 */
 function implementationManifest(graphId: GraphId = GRAPH_ID): ExecutionAuthorizationManifest {
   return {
-    manifestVersion: 3,
+    manifestVersion: 4,
     coordinationScopeId: SCOPE,
     planningCycleId: 'cycle-1' as PlanningCycleId,
     destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
@@ -3543,7 +3543,7 @@ function recordAuthorization(graphId: GraphId = GRAPH_ID): void {
     writer: writer(),
     authorizationId: 'auth-1',
     authorizationVersion: 1,
-    manifestVersion: 3,
+    manifestVersion: 4,
     fingerprint: 'fingerprint-1',
     approvalRef: 'approval-1',
     manifest: implementationManifest(graphId),
@@ -3623,7 +3623,7 @@ test.each([false, true])('重新授权后新 Task 保留已消耗实现预算，
   const base = implementationManifest(GRAPH_ID);
   expect(submit(expectedRevision => ({ kind: 'record-authorization', coordinationScopeId: SCOPE,
     expectedRevision, writer: writer(), authorizationId: 'auth-2', authorizationVersion: 2,
-    manifestVersion: 3, fingerprint: 'fingerprint-2', approvalRef: 'approval-2',
+    manifestVersion: 4, fingerprint: 'fingerprint-2', approvalRef: 'approval-2',
     manifest: { ...base, limits: { ...base.limits, implementationAttempts: changedLimit ? 3 : 2 } } })).kind).toBe('committed');
   const recorded = submit(revision => ({
     kind: 'record-materialization-binding', coordinationScopeId: SCOPE, expectedRevision: revision, writer: writer(),

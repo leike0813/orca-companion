@@ -12,16 +12,16 @@
 | IC-02 | `m0-orca-control-baseline` | Change 5 增加物化操作；Change 7 增加对账 query | 所有外部控制用例 |
 | IC-03 | `m1-persist-coordination-state` | Changes 3–8 增加各自最小记录与 query/command variant；`m1-wire-foreground-planning-runtime` 增加 Scope 注册绑定、交互回答正文与 Session 模型绑定更新；`m2-wire-execution-runtime` 将物化绑定扩展为角色/Attempt 历史 | Controller、status、recovery、TUI projection |
 | IC-04 | `m1-run-coordinator-sessions` | `m1-wire-foreground-planning-runtime` 增加用户消息、工具结果与压缩结论 | Planning、Recovery、ControllerService、TUI |
-| IC-05 | `m1-plan-and-authorize-execution` | Change 8 只扩展 `ExecutionGraphHistory.appendAcceptedRevision` | Specification、Execution、Recovery、TUI |
+| IC-05 | `m1-plan-and-authorize-execution` | Change 8 只扩展 `ExecutionGraphHistory.appendAcceptedRevision`；`remove-worker-credential-management` 将 Manifest 升为 v4 并改绑 `modelSelection` | Specification、Execution、Recovery、TUI |
 | IC-06 | `m1-admit-work-package-specifications` | Change 8 使用同一 provider 实施 Specification Revision | Execution、Recovery、Graph evolution |
-| IC-07 | `m1-admit-work-package-specifications` | `m2-wire-execution-runtime` 增加 Planner 的固定规格目标路径；Recovery 创建替代 Dispatch/Segment | Execution、Recovery、Graph evolution |
+| IC-07 | `m1-admit-work-package-specifications` | `m2-wire-execution-runtime` 增加 Planner 的固定规格目标路径；Recovery 创建替代 Dispatch/Segment；`remove-worker-credential-management` 移除启动输入中的凭据与隔离根，增加 runtime roots 与原生模型目录查询 | Execution、Recovery、Graph evolution |
 | IC-08 | `m1-execute-and-validate-work-packages` | 无；Recovery 重放同一 pipeline | Recovery、Graph evolution、TUI |
 | IC-09 | `m1-recover-execution` | `m2-wire-execution-runtime` 接通前台宿主的 Recovery 事实装配（workspace / 原终态 / 存活 / 绑定 / 替代派发）与回执解释的异步 seam | Graph evolution、TUI |
 | IC-10 | `m1-evolve-execution-graph` | 无 | ControllerService、TUI |
 | IC-11 | `m1-recover-execution` | Change 8 增加图演进 projection/commands；`m1-wire-foreground-planning-runtime` 增加消息/回答字段与事件归属；`m2-deliver-planning-tui` 增加只读投影；`m2-deliver-execution-tui` 增加执行投影、Finalizer 与执行交接投影；`complete-tui-project-statusline` 增加可信 metadata、全图验收摘要及有界项目详情 | CLI、TUI |
 | IC-12 | `m0-orca-control-baseline` | `m1-wire-foreground-planning-runtime` 登记精确 Home 解析；`m2-deliver-planning-tui` 增加 planning 投影与组件；`m2-deliver-execution-tui` 增加执行态字段与组件；`complete-tui-project-statusline` 接通可信展示与 IC-15 编辑/返回 | CLI machine output、TUI React components |
 | IC-13 | `protect-tui-input` | 无 | Bootstrap、TUI 输入保护与记录管理 |
-| IC-14 | `complete-tui-model-configuration` | 无 | chat model factory、模型设置、Worker launcher、`doctor` |
+| IC-14 | `complete-tui-model-configuration` | `remove-worker-credential-management` 收缩为 Coordinator-only，并把 Worker 选择改为 `modelSelection` | chat model factory、Coordinator 模型设置与 `doctor` |
 | IC-15 | `complete-tui-project-statusline` | 无 | Bootstrap、TUI 展示设置 |
 
 ## IC-01 Identity、revision 与引用字段族
@@ -300,7 +300,7 @@ type ExecutionAuthorizationManifest = {
 };
 ```
 
-`ExecutionLimits` 必须包含 active Work Package、实现尝试、Validator 修复、Graph Revision、Specification Revision 和每 Worker Attempt Recovery 的有限上限；缺失字段即拒绝。Graph Compiler 只校验 schema、引用、无环、Scope Envelope、预算和可信配置，不评判规划语义。
+Manifest v4 的每个 Worker Profile 用 `modelSelection`（harness、native model、effort 及其目录来源，见 IC-14）替代完整模型配置；v1–v3 读取即拒绝。`ExecutionLimits` 必须包含 active Work Package、实现尝试、Validator 修复、Graph Revision、Specification Revision 和每 Worker Attempt Recovery 的有限上限；缺失字段即拒绝。Graph Compiler 只校验 schema、引用、无环、Scope Envelope、预算和可信配置，不评判规划语义。
 
 `PlanningHandoffProposal` 持有 proposal ID、Source/Target Session、地图/计划/候选图 revision、责任集合、phase、expected revision 和可移植 Coordinator Context Capsule ref。prepare/review 不转移责任，cutover 才 CAS；它不触碰在途 Worker 或 Execution Coordination Lease。
 
@@ -389,6 +389,7 @@ type SessionBinding = {
   attemptId: string;
   providerSessionId: string;
   transcriptRef: string;
+  runtimeRoots: readonly string[];
   observedAt: string;
 };
 
@@ -396,7 +397,7 @@ type WorkerLiveness = 'live' | 'exited' | 'unverifiable';
 type WorkerReport = WorkerResult | WorkerQuestion | WorkerEscalation;
 ```
 
-Planner 首次派发固定 `specificationUnitPath` 并将 `specBinding` 置空：路径名由 Work Package 身份派生为**文件系统安全**的 slug（非字母数字字符折成 `-`）加 8 位内容哈希后缀，因此跨平台可写、人能照着写、不同 Work Package 不会撞名；百分号编码不可用（Worker 会自然写成解码后的形式，真实运行里正因此错过了固定路径）。Envelope 的 `instructions` 由宿主按角色写出，Planner 必须收到三条产出纪律（写在固定路径、单元必须含 `specs/`、不得自行归档或改名）——真实运行里 Planner 两次自选路径或漏写 `specs/`，Admission 只能 fail closed，因此位置与结构必须由 Envelope 明示而不是留给 Worker 猜。指令是正文，不是身份：回传的镜像不参与任何判定。其完成后宿主用精确 Session Binding 和该路径执行 Specification Admission。Implementation/Validator 的 `specBinding` 必须是 Admission 接纳的内容身份。`SpecificationProvider` 按工具原生布局解析该路径：change 仍活跃时读活跃目录，被工具按自身惯例归档（OpenSpec 的 `changes/archive/<date>-<name>`）后读同名归档目录，同名匹配不唯一或不存在即拒绝，绝不挑选。定位变化不改变单元身份——身份仍是内容摘要与两个 revision，Binding 记录宿主声明的规范路径。角色工件转换状态同样按该固定路径读取，不按「worktree 内唯一活跃 change」猜测。可选的独立规格质量门只在明确启用时增加审阅 Worker。Task Envelope 中的 scope、Run、consumer generation、OperationId 与协调身份由 Controller/adapter 注入，不接受 Worker 回传值覆盖。Session Binding 必须来自精确 harness 能力；terminal 输出、cwd、mtime 和“最新 transcript”不能作为绑定。Worker report 是候选载荷，边界 parser 先做 schema/role/version 校验。
+Planner 首次派发固定 `specificationUnitPath` 并将 `specBinding` 置空：路径名由 Work Package 身份派生为**文件系统安全**的 slug（非字母数字字符折成 `-`）加 8 位内容哈希后缀，因此跨平台可写、人能照着写、不同 Work Package 不会撞名；百分号编码不可用（Worker 会自然写成解码后的形式，真实运行里正因此错过了固定路径）。Envelope 的 `instructions` 由宿主按角色写出，Planner 必须收到三条产出纪律（写在固定路径、单元必须含 `specs/`、不得自行归档或改名）——真实运行里 Planner 两次自选路径或漏写 `specs/`，Admission 只能 fail closed，因此位置与结构必须由 Envelope 明示而不是留给 Worker 猜。指令是正文，不是身份：回传的镜像不参与任何判定。其完成后宿主用精确 Session Binding 和该路径执行 Specification Admission。Implementation/Validator 的 `specBinding` 必须是 Admission 接纳的内容身份。`SpecificationProvider` 按工具原生布局解析该路径：change 仍活跃时读活跃目录，被工具按自身惯例归档（OpenSpec 的 `changes/archive/<date>-<name>`）后读同名归档目录，同名匹配不唯一或不存在即拒绝，绝不挑选。定位变化不改变单元身份——身份仍是内容摘要与两个 revision，Binding 记录宿主声明的规范路径。角色工件转换状态同样按该固定路径读取，不按「worktree 内唯一活跃 change」猜测。可选的独立规格质量门只在明确启用时增加审阅 Worker。Task Envelope 中的 scope、Run、consumer generation、OperationId 与协调身份由 Controller/adapter 注入，不接受 Worker 回传值覆盖。Session Binding 必须来自精确 harness 能力；terminal 输出、cwd、mtime 和“最新 transcript”不能作为绑定。Worker report 是候选载荷，边界 parser 先做 schema/role/version 校验。WorkerHarness 启动输入不含 CredentialStore、凭据路径或可覆盖原生环境的隔离 root：launch 只指定 Companion 工件目录，resume 的 `expectedNative` 只用于核验；端口另提供逐 harness 的原生模型目录有界查询。
 
 Session Segment 记录角色、Task、Dispatch、Attempt、Binding、最后 transcript 位置与可核验终态。信息不足时 liveness 为 `unverifiable`，不能推断退出或触发重复派发。
 
@@ -404,7 +405,7 @@ Session Segment 记录角色、Task、Dispatch、Attempt、Binding、最后 tran
 
 ## IC-08 Delivery settlement、Validation 与 Finalizer
 
-Worker Harness 注册项为 codex、claude、opencode、pi、omp。各角色、Recovery Utility 与 Validator 集成续接使用已固定 profile 的 harness；结果结算不按当前默认 harness 解释历史。注册实现返回已有 PreparedTerminalStrategy，创建、激活、Orca 接管及 unknown 对账仍由既有用例拥有。Validator 续接与集成续接真正需要重新 launch 时使用注册项的 `prepareResume`（精确 session 身份），沿用原 Task/Dispatch/Attempt、原绑定与预算；不需要重新 launch 的恢复只重观察原 terminal。原生只读 Finalizer 与 Utility 的启动和探针共享 bwrap 包装器；包装器仅开放精确状态根和临时目录，仓库、Git、coordination.sqlite 与 checkpoints.sqlite 拒写。
+Worker Harness 注册项为 codex、claude、opencode、pi、omp。各角色、Recovery Utility 与 Validator 集成续接使用已固定 profile 的 harness；结果结算不按当前默认 harness 解释历史。注册实现返回已有 PreparedTerminalStrategy，创建、激活、Orca 接管及 unknown 对账仍由既有用例拥有。Validator 续接与集成续接真正需要重新 launch 时使用注册项的 `prepareResume`（精确 session 身份），沿用原 Task/Dispatch/Attempt、原绑定与预算；不需要重新 launch 的恢复只重观察原 terminal。原生只读 Finalizer 与 Utility 的启动和探针共享 bwrap 包装器；包装器仅开放真实 native state 目录与 Companion 工件目录，仓库、Git、Git common dir、coordination.sqlite 与 checkpoints.sqlite 拒写，可写根与拒写根重叠且无法证明时不可用。
 
 - **Owner (Create)**: `m1-execute-and-validate-work-packages`
 - **Canonical paths**: `src/application/delivery/process-delivery.ts`、`record-worker-result.ts`、`src/application/validation/`、`src/application/finalization/`
@@ -488,7 +489,7 @@ type IntegrationWorkspace = { canonicalWorktreePath: string; workPackageWorktree
 
 ## IC-09 Recovery、Scope control 与 Execution Handoff
 
-原 Session 的 harness 从原物化绑定的授权版本和 profile 读取。各注册项通过精确 transcript 重新证明 provider session；仍存活的 exact Worker 只重观察原 terminal/session，保持原 Session/Segment，不创建 Dispatch、不消费 Recovery Budget，也不登记新 Segment。已退出或身份不可证明时才走原替代路径：新建替代 Dispatch/Binding/Segment，并按原规则消费 Recovery Budget。真正需要重新 launch 时精确 resume 使用 Claude UUID、OpenCode session id 或 pi/omp 完整 session path（注册项 `prepareResume`），随后重新证明同一身份。Capsule 覆盖证据由原 harness 的 transcript inspector 提供，Utility 自报不能覆盖它；恢复、修复及集成续接保持原 Attempt、授权和预算。
+原 Session 的 harness 从原物化绑定的授权版本和 profile 读取。各注册项通过精确 transcript 重新证明 provider session；仍存活的 exact Worker 只重观察原 terminal/session，保持原 Session/Segment，不创建 Dispatch、不消费 Recovery Budget，也不登记新 Segment。已退出或身份不可证明时才走原替代路径：新建替代 Dispatch/Binding/Segment，并按原规则消费 Recovery Budget。真正需要重新 launch 时精确 resume 使用 Claude UUID、OpenCode session id 或 pi/omp 完整 session path（注册项 `prepareResume`），沿用原启动报告的 runtime roots，`expectedNative` 只核验不覆盖，随后重新证明同一身份。Capsule 覆盖证据由原 harness 的 transcript inspector 提供，Utility 自报不能覆盖它；恢复、修复及集成续接保持原 Attempt、授权和预算。
 
 - **Owner (Create)**: `m1-recover-execution`
 - **Canonical paths**: `src/application/recovery/`、`src/domain/recovery/`、`src/application/coordination/scope-control-service.ts`、`src/application/handoff/execution-handoff.ts`
@@ -772,7 +773,7 @@ type ExecutionAuthorizationCommand = ControllerScopeFields &
 
 `propose-graph` 只接受 Coordinator 提出的结构化 Implementation Plan：世代、空 Orca Run、OperationId 与预算上限由宿主从权威事实补齐——`run-create` 先落 Operation Intent，再按专用协调身份读回 Run，结果不可判定时保持未决并沿用同一 OperationId 对账。`review` 是只读的：宿主从 Scope、候选图记录、世代记录、Git 身份与版本化项目配置组装完整 Manifest，返回 Manifest 正文、内容指纹、候选图引用、Scope revision 与门禁判决。`approve` 只携带该指纹与用户看到的 Scope revision：宿主重读全部权威输入、比对指纹、写入批准记录、以刚写入的授权重判门禁后同事务切换；指纹不符时零写入且不派发。这三条命令都不接受调用方提供的 scope、Run、consumer generation 或 operation identity。
 
-Execution Authorization Manifest 的长期字段（Worker Profile 及其完整模型配置、Recovery Utility Profile、角色权限、预算上限、Git 与 Dependency Policy、accepted risks）来自版本化项目配置的 `execution` 段（`src/application/configuration/project-config.ts`，见 README）；Manifest 仍是唯一的授权事实，配置只提供待批准的候选值，批准是用户对完整 Manifest 的一次决定。`execution.codexSandbox` 只影响角色级 Session 的 Codex 沙箱模式：设为 `danger-full-access` 时审阅要求 `acceptedRisks` 含 `codex-sandbox-danger-full-access`（并把该模式显示为 `Worker Sandbox` 一行），角色级派发与替代 Session 还要求**已批准 Manifest** 携带同一风险；Finalizer 始终以 `read-only` 运行。
+Execution Authorization Manifest 的长期字段（Worker Profile 及其 `modelSelection`、Recovery Utility Profile、角色权限、预算上限、Git 与 Dependency Policy、accepted risks）来自版本化项目配置的 `execution` 段（`src/application/configuration/project-config.ts`，见 README）；Manifest 仍是唯一的授权事实，配置只提供待批准的候选值，批准是用户对完整 Manifest 的一次决定。`execution.codexSandbox` 只影响角色级 Session 的 Codex 沙箱模式：设为 `danger-full-access` 时审阅要求 `acceptedRisks` 含 `codex-sandbox-danger-full-access`（并把该模式显示为 `Worker Sandbox` 一行），角色级派发与替代 Session 还要求**已批准 Manifest** 携带同一风险；Finalizer 始终以 `read-only` 运行。
 
 `SemanticEvent` 是 UI 可投影的封闭联合；keepalive、stderr、poll timeout、无变化 reconciliation 和诊断日志不发布。`AnswerPendingInteraction` 必须含 InteractionId、expected revision、submissionId 和 answer payload；普通 Session message 不满足 interaction。
 
@@ -886,31 +887,38 @@ SQLite 位于 Git common dir 的 `orca-companion/ui.sqlite`。短事务中完成
 
 ## IC-14 CredentialStore 与模型设置
 
-schema 3 的 ProviderConnection 可附带 nativeWorker 判别联合：harness、providerId 必填，baseUrl/api 按原生接口选填，api 仅为 anthropic-messages、openai-completions 或 openai-responses；未知字段拒绝。旧连接省略该字段，指纹保持原表示。SaveModelSettingsInput.harness 省略时保留角色当前 harness，首次保存取 execution.harness；显式选择须已注册。角色候选只包含所选已注册 harness 的连接，应用候选完整保留 nativeWorker 与凭据引用。保存追加不可变 profile，应用沿完整 Manifest 审阅。managed secret 只进入子进程环境，harness_login 使用隔离副本，adapter 不写全局认证资产。
+schema 4 的 ProviderConnection 只描述 Coordinator 连接：providerIntegration、modelOptions 与 credential（managed，或沿用旧命名的 harness_login 环境认证）；Worker-only 的 `codex` 与 `nativeWorker` 字段被删除，出现即拒绝。Worker Profile 改为 `modelSelection`：`{model, effort, effortCapability: {values, source} | null, catalogSource: string | null}`；effortCapability 非空要求 catalogSource 非空，effort 非空必须属于 capability.values，catalogSource 为 null 表示手填未验证 native exact ID 且 effort 为 null。SaveModelSettingsInput 对 Worker 角色是只含 harness、model 与 effort 的判别联合，连接、秘密与任意 options 字段明确拒绝；服务经 `verifyWorkerSelection` 绑定本次显式原生目录查询的有界缓存核验来源。保存追加不可变 profile，应用沿完整 Manifest v4 审阅。Coordinator 的 managed secret 与 harness_login 合同不变，Worker 启动不读取 CredentialStore。
 
 - **Owner (Create)**: `complete-tui-model-configuration`
 - **Canonical paths**: `src/application/ports/credential-store.ts`、`src/adapters/storage/credential-store.ts`、`src/application/configuration/model-settings.ts`、`src/domain/model-configuration.ts`
-- **Extenders (Extend)**: 无
-- **Consumers (Consume)**: chat model factory、模型设置用例、Worker launcher 与 `doctor` 的凭据解析
+- **Extenders (Extend)**: `remove-worker-credential-management` 收缩为 Coordinator-only 并把 Worker 选择改为 `modelSelection`
+- **Consumers (Consume)**: chat model factory、Coordinator 模型设置用例与 `doctor` 的 Coordinator 凭据解析；Worker launcher 与原生目录查询不解析凭据
 
 `CredentialStore` 是同步窄端口：`metadata()` 返回 `{revision, refs}`，`read(credentialRef)` 返回 secret，`save({expectedRevision, secret})` 返回 `{revision, credentialRef}`；任何失败都是 `rejected{code,message}`，不抛异常、不回显原始异常或 secret 载荷。metadata 只含引用集合，不含 secret。
 
 文件按 XDG 规则落在 `orca-companion/credentials.json`（`XDG_CONFIG_HOME` 优先，缺省 `~/.config`），格式为 `{schemaVersion:1, revision, entries:[{credentialRef, secret}]}`。`credentialRef` 是不可变 UUID；写入在短 exclusive 文件锁内重读并做 revision CAS，随后 0600 临时文件 → fsync → rename → 目录 fsync → 回读。锁忙、revision 已变、权限不安全、符号链接、非普通文件、损坏内容与超限一律结构化拒绝：不自动破锁、不 chmod 既有用户目录、不猜测其它凭据。读上限 1 MiB、条目上限 256、单条 secret 上限 16 KiB；store 缺失按 revision 0 与空引用处理，按引用读取缺失返回 `credential_missing`。
 
-凭据是**明文**保存在这一份文件里，这是用户确认的取舍，它取代了「Companion 不保存密钥」的旧约束。隔离靠三件事：owner-only 权限、其它位置只保存不透明引用、以及严格的输出边界——项目配置、checkpoint、UI 输入存储、命令参数、诊断与证据中都不出现 secret 值。secret 只在编辑内存、CredentialStore 与必要的子进程环境中存在。
+凭据是**明文**保存在这一份文件里，这是用户确认的取舍，它取代了「Companion 不保存密钥」的旧约束。隔离靠三件事：owner-only 权限、其它位置只保存不透明引用、以及严格的输出边界——项目配置、checkpoint、UI 输入存储、命令参数、诊断与证据中都不出现 secret 值。secret 只在编辑内存、CredentialStore 与必要的 Coordinator 模型调用环境中存在。
 
-`ProjectConfigurationStore`（`src/application/ports/project-configuration-store.ts`）拥有同一 namespace 的项目侧：连接的 `credentialRef` 必须是 UUID，出现已知密钥字段名即拒绝整份配置；短锁、CAS 与原子替换与凭据文件同构，但不做权限收紧——它纳入版本控制。锁内还核验既有 connection、model、Coordinator configuration 和 Worker profile 原样保留，拒绝同引用改写或删除，当前选择指针可前移。parser 核验 Coordinator 和 Worker Profile 的连接快照、模型引用及 effort 能力与被引用记录一致。两者之间没有跨文件事务，因此 `ModelSettingsService.save` 先校验候选，仅 `managed` 连接接受新 key，先写凭据并回读，再 CAS 追加 `providerConnections`/`models`/`execution.workerProfiles` 的新引用；项目保存失败保留输入，可能留下未被引用的孤立 secret，但不会激活配置。查询返回非秘密 snapshot；保存不自动应用。
+`ProjectConfigurationStore`（`src/application/ports/project-configuration-store.ts`）拥有同一 namespace 的项目侧：连接的 `credentialRef` 必须是 UUID，出现已知密钥字段名即拒绝整份配置；短锁、CAS 与原子替换与凭据文件同构，但不做权限收紧——它纳入版本控制。锁内还核验既有 connection、model、Coordinator configuration 和 Worker profile 原样保留，拒绝同引用改写或删除，当前选择指针可前移。parser 核验 Coordinator 连接快照与模型引用一致，以及 Worker Profile 的 harness 与 modelSelection 来源约束（capability 非空要求 catalogSource 非空，effort 必须属于 values）。两者之间没有跨文件事务：Coordinator 连接编辑先校验候选、先写凭据并回读，再 CAS 追加 `providerConnections`/`models`；Worker 角色选择只 CAS 追加 `execution.workerProfiles` 的新引用，零凭据访问。项目保存失败保留输入，可能留下未被引用的孤立 secret，但不会激活配置。查询返回非秘密 snapshot；保存不自动应用。
 
 连接 URL 和 modelOptions 中的 URL 不得携带 userinfo 或凭据查询参数；查询参数的凭据字段判定复用领域层的密钥键名规则。普通 API 版本等非秘密查询参数保留。
 
 ## `complete-tui-model-configuration` 对 IC-03/04/05/07/08/09/11/12 的扩展
 
 - **IC-03 物化绑定**：`record-materialization-binding` 增加 `authorizationId`、`authorizationVersion` 与 `workerProfileRef`（不透明字符串，落库为 `worker-profile` 引用），缺任一项即拒绝，不留下无运行依据的新行。Coordination schema 16 追加这三列，schema 16 之前的历史行保持 `null`；需要这些事实的读取方按不可证明阻塞，不按当前授权推断回填。
-- **IC-04 项目配置**：项目配置为 schema 3，保存 `revision`、`providerConnections`、`models` 与 `execution.workerProfiles`/`workerProfileRefs`，删除全局 `workerModel`；v1 明确拒绝且不自动改写。引用唯一性与交叉引用、effort 必须有可信能力来源都由同一 parser 判定。会话模型绑定沿用既有 `update-session-model-configuration` 记录。
-- **IC-05 授权**：Manifest 为 v3，`workerProfiles[].modelConfiguration` 为必填（连接、模型、effort 及其能力来源、非秘密 options、credentialRef），并单独绑定 `recoveryUtilityProfile`；缺任一项的授权无法证明 Worker 用什么模型运行，解析即拒绝，旧版本不被当作包含模型授权。执行期换模型或并行额度时以完整 Manifest 指纹与 Scope revision 重新批准，保持 Graph Generation、Run、Task、权限、其他上限与已消耗预算，不创建 Graph Revision；Replanning、cancelling 或未决派发 mutation 时拒绝重新授权。
-- **IC-07/IC-08 运行依据**：Task 物化时把当时的授权身份、版本与 profile 钉进绑定。Retry 沿已有 WorkerTask 的绑定取原授权与 profile，结算按该绑定判断权限与配置，不读当前配置；旧任务缺绑定时按不可证明阻塞。Codex 启动沿用同一模型配置生成器，secret 只进子进程环境，公开 terminal 命令与 CLI 参数只含非秘密描述符；managed provider 显式声明 `requires_openai_auth=false` 以免被 Harness auth 覆盖，Harness-login 保持原认证方式，不自动 fallback。
+- **IC-04 项目配置**：项目配置为 schema 4，保存 `revision`、`providerConnections`、`models` 与 `execution.workerProfiles`/`workerProfileRefs`；Worker Profile 使用 `modelSelection`，ProviderConnection 只描述 Coordinator 连接；旧版本明确拒绝且不自动改写。引用唯一性与交叉引用、effort 的目录来源都由同一 parser 判定。会话模型绑定沿用既有 `update-session-model-configuration` 记录。
+- **IC-05 授权**：Manifest 为 v4，`workerProfiles[].modelSelection` 为必填（harness、model、effort 及其目录来源），并单独绑定 `recoveryUtilityProfile`；缺任一项的授权无法证明 Worker 用什么模型运行，解析即拒绝，v1–v3 不被当作包含模型授权。执行期换模型或并行额度时以完整 Manifest 指纹与 Scope revision 重新批准，保持 Graph Generation、Run、Task、权限、其他上限与已消耗预算，不创建 Graph Revision；Replanning、cancelling 或未决派发 mutation 时拒绝重新授权。
+- **IC-07/IC-08 运行依据**：Task 物化时把当时的授权身份、版本与 profile 钉进绑定。Retry 沿已有 WorkerTask 的绑定取原授权与 profile，结算按该绑定判断权限与配置，不读当前配置；旧任务缺绑定时按不可证明阻塞。Worker 启动继承真实 launch 环境，不注入 secret、不生成原生 provider 配置；公开 terminal 命令与 CLI 参数只含非秘密描述符，认证由 harness 自己提供，不自动 fallback。
 - **IC-09 恢复**：替代 Session 沿原 WorkerTask 绑定的 profile 派发，Validator 的修复/复验与原任务同 profile；新 Recovery Utility Task 固定创建时的授权配置。transcript 不可用或恢复预算耗尽仍按不可证明阻塞。
-- **IC-11/IC-12 界面**：模型设置提供只读 load、显式 save 与按角色显式 apply 三条意图；保存输入含目标角色、connection/model/options/capability/effort、可选新 key 与 expected revision，scope/writer/profile 身份由宿主补齐。界面只消费非秘密 snapshot，key 以遮罩显示且只存在于编辑器内存，不进 IC-13。保存不改变 Session、已批准 Manifest、Task 与预算；apply 走既有 switch 或完整授权重新审阅。异步结果仍按原 invocation/Session 归属。
+- **IC-11/IC-12 界面**：模型设置提供只读 load、显式 save 与按角色显式 apply 三条意图；Coordinator 角色的保存输入含 connection/model/options/capability/effort、可选新 key 与 expected revision，Worker 角色只含 harness 与 modelSelection（含显式目录查询与来源），scope/writer/profile 身份由宿主补齐。界面只消费非秘密 snapshot，key 以遮罩显示且只存在于编辑器内存，不进 IC-13。保存不改变 Session、已批准 Manifest、Task 与预算；apply 走既有 switch 或完整授权重新审阅。异步结果仍按原 invocation/Session 归属。
+
+## `remove-worker-credential-management` 对 IC-05/07/08/09/11/12/14 的扩展
+
+- **IC-14 模型设置**：项目 schema 4；ProviderConnection 收缩为 Coordinator-only（删除 Worker-only `codex`/`nativeWorker`，沿用旧命名的 `harness_login` 环境认证保留）；Worker Profile 只带 harness 与 `modelSelection`，保存经显式原生目录查询缓存核验来源，零 CredentialStore 访问。
+- **IC-07 Worker Harness**：启动输入不含 CredentialStore、凭据路径或可覆盖原生环境的隔离 root；`worker-runtime.ts` 从真实 launch 环境解析非 secret runtime roots 并写入精确 Session 报告，`runtimeReportPath` 只承载非秘密路径；端口增加逐 harness 原生模型目录查询（codex `debug models`、Claude streamJSON control_request `list_models` 无 prompt、OpenCode `models --standalone`、pi 公开 availability/thinking API、omp `models --json` 实际 thinking）。查询总时限 30 秒，最多 4096 项、1 MiB/20000 行；控制协议经既有 process-runner 的可选 stdin 传入（最多 1 MiB），使用参数数组并支持取消。
+- **IC-08/IC-09 恢复与只读**：恢复按原 launch report/binding 的精确身份与 runtime roots，`expectedNative` 只核验；bwrap 继续让仓库、Git、common dir 与协调库拒写，真实 native state 目录与 Companion 工件目录可写，重叠不可证明即 unavailable。
+- **IC-11/IC-12 界面**：#52 定稿下 Worker 角色只编辑 harness 与原生目录候选（model/effort），无连接、凭据、API key 或任意 options；Coordinator 表单保留；目录查询失败可手填 exact ID（未验证、无 effort），迟到结果仍按原入口归属。
 
 ## 第七批 IC-11/12 展示扩展
 
@@ -964,7 +972,7 @@ custom 编辑是内存草稿，同生产 statusline 的主区域宽度、字段�
 
 ## 可配置执行并发扩展（restore-configurable-execution-concurrency）
 
-IC-05 的 ExecutionLimits 唯一拥有 `maxActiveWorkPackages`（并行包额度，默认3）、`maxWorkPackages`（未 retire 图容量，默认8）、`integrationReconciliations`（每包集成复验预算，默认2）；所有额度可配置且为正安全整数。ExecutionGraph 不存并发策略。配置与 Manifest 为 schema3，status JSON 为 schema3。
+IC-05 的 ExecutionLimits 唯一拥有 `maxActiveWorkPackages`（并行包额度，默认3）、`maxWorkPackages`（未 retire 图容量，默认8）、`integrationReconciliations`（每包集成复验预算，默认2）；所有额度可配置且为正安全整数。ExecutionGraph 不存并发策略。配置与 Manifest 由 `remove-worker-credential-management` 升为 schema 4 / v4，status JSON 仍为 schema3。
 
 IC-03 schema19 由 Branch Store 拥有最小包级 LaneReservation（scope/generation/package、稳定 operation identity、准入 authorization 与 baseline）。`reserve-work-package-lane` 在短事务内核验 lease/fencing/CAS、当前图与批准额度；同包重放复用原记录，未可见派发仍占用。`release-work-package-lane` 仅在终止或完整集成可证明后释放。额度降低不撤销已有包。集成复验轮次与独立预算消费在同一事务注册，绑定原 Validator Attempt/Session、原接受结果、目标 HEAD 与树证据；具体 Task/Dispatch 仍由 Orca 和物化绑定拥有。
 
@@ -974,9 +982,9 @@ Operation Intent 的 nullable `terminalHandle` 只记录已接受 terminal-creat
 
 IC-07 调度按当前批准的包额度接纳多个独立包，每包角色串行。自动驱动与工具共用原子准入；unknown 仅冻结所属 lane，共享事实无法归属仍全局阻塞。新包 worktree 基于已归属当前 canonical，依赖以已集成证明为准。IC-08/09 原 Validator 续接复验保持业务 Attempt 和精确 provider Session，物理续接使用独立 Task/Dispatch，旧结果不改写。
 
-Codex 启动和续接共用 SessionStart hook（`startup|resume`）。续接报告只能由本次 launch 的精确路径读取，并核验原 provider UUID、CODEX_HOME、cwd、transcript 和当前派发观察窗口。绑定报告迟到时，共享 Scoped Worker 派发按原 Task 只读回读 Dispatch，已接受的草稿激活复用原结算事实，不重复发送；pending 或 unknown 的激活仍须对账，Worker 已绑定 terminal 本身不证明草稿已提交。
+Codex 启动和续接共用 SessionStart hook（`startup|resume`）。续接报告只能由本次 launch 的精确路径读取，并核验原 provider UUID、runtime roots、cwd、transcript 和当前派发观察窗口。绑定报告迟到时，共享 Scoped Worker 派发按原 Task 只读回读 Dispatch，已接受的草稿激活复用原结算事实，不重复发送；pending 或 unknown 的激活仍须对账，Worker 已绑定 terminal 本身不证明草稿已提交。
 
-续接前，Bootstrap 从原 Accepted Validator 的 Task/Dispatch 取得精确终端；后续复验轮次沿同一接受结果与业务 Attempt 读取最近已通过轮次的物理 Worker。只有精确 Worker 已终结且终端满足 `tui-idle` 时才关闭该终端，关闭意图绑定原句柄；pending/unknown 沿原 OperationId 以 `terminal-show` 的精确关闭事实对账。恢复使用原 CODEX_HOME 与 provider UUID 的 `codex resume --no-daemon`。`submit_draft` 直接提交一次 Enter，激活成功的持久化事实控制重放；首个实际 turn 产生本轮 SessionStart 报告，观察窗口从本轮派发前的持久化意图起算。
+续接前，Bootstrap 从原 Accepted Validator 的 Task/Dispatch 取得精确终端；后续复验轮次沿同一接受结果与业务 Attempt 读取最近已通过轮次的物理 Worker。只有精确 Worker 已终结且终端满足 `tui-idle` 时才关闭该终端，关闭意图绑定原句柄；pending/unknown 沿原 OperationId 以 `terminal-show` 的精确关闭事实对账。恢复使用原 runtime roots 与 provider UUID 的 `codex resume --no-daemon`。`submit_draft` 直接提交一次 Enter，激活成功的持久化事实控制重放；首个实际 turn 产生本轮 SessionStart 报告，观察窗口从本轮派发前的持久化意图起算。
 
 Task 物化绑定的 `dispatchId` 是派发前 Task Envelope 的逻辑候选身份；真实 Orca Dispatch 由 Session Segment 证明并写入 Accepted Delivery Settlement。物化互斥与额度结算沿 `acceptedResultMatchesTask` 核对角色、WorkerTask 与业务 Attempt，不将逻辑候选 ID 与实际 Dispatch ID 比较；Delivery 准入仍核验精确物理 Dispatch。仅建立 Task 的包可沿原绑定续办；已受理的 Worker 启动意图及实时 Worker 事实阻止重复派发。
 

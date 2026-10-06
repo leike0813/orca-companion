@@ -89,7 +89,6 @@ import type { EvidenceRecord } from '../../src/domain/worker-report.js';
 import { createCompanionStartupFixture, type CompanionStartupFixture } from '../support/companion-startup-harness.js';
 import { fixedReadOnlyWorkerProbe } from '../support/read-only-worker-probe.js';
 import { executionModelConfiguration } from '../support/execution-harness.js';
-import { credentialStoreFixture } from '../support/model-configurations.js';
 import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 import {
   RECOVERY_SCOPE,
@@ -268,12 +267,12 @@ function createDeliveryFixture(): DeliveryFixture {
         profileRef: { kind: 'worker-profile' as const, id: `profile-${role}` },
         role,
         harness: 'codex',
-        modelConfiguration: executionModelConfiguration({ model: 'original-model' }),
+        modelSelection: executionModelConfiguration({ model: 'original-model' }),
       })),
       recoveryUtilityProfile: {
         profileRef: { kind: 'worker-profile' as const, id: 'profile-recovery-utility' },
         harness: 'codex',
-        modelConfiguration: executionModelConfiguration({ model: 'original-model' }),
+        modelSelection: executionModelConfiguration({ model: 'original-model' }),
       },
       permissions: {
         planner: true,
@@ -1060,14 +1059,13 @@ test('生产事实装配读不到归属时：以结构化 blocker 呈现，不�
         canonicalWorktree: harness.directory,
         execution: null,
         workerHarness: null,
-        resolveModelConfiguration: () => null,
+        resolveModelSelection: () => null,
         codexSandbox: 'workspace-write',
         companionStateRoot: null,
         env: {},
         clock: () => CLOCK_MS,
         bindingWindowMs: 100,
         readOnlyWorkerProbe: fixedReadOnlyWorkerProbe(),
-        credentialStore: credentialStoreFixture(),
       }),
   });
   recoveryFixture = fixture;
@@ -1210,14 +1208,13 @@ function factsFor(input: {
             timeoutMs: 60_000,
           },
     workerHarness: 'codex',
-    resolveModelConfiguration: () => executionModelConfiguration({ model: 'minimax-cn/MiniMax-M3' }),
+    resolveModelSelection: () => executionModelConfiguration({ model: 'minimax-cn/MiniMax-M3' }),
     codexSandbox: 'workspace-write',
     companionStateRoot: input.companionStateRoot,
     env: {},
     clock,
     bindingWindowMs: 50,
     readOnlyWorkerProbe: fixedReadOnlyWorkerProbe(),
-    credentialStore: credentialStoreFixture(),
   });
 }
 
@@ -1573,14 +1570,13 @@ test('生产替代派发：只复用原 Worker Profile，SessionStart 报告读�
       canonicalWorktree: fixture.harness.directory,
       execution: null,
       workerHarness: 'codex',
-      resolveModelConfiguration: () => null,
+      resolveModelSelection: () => null,
       codexSandbox: 'workspace-write',
       companionStateRoot: null,
       env: {},
       clock,
       bindingWindowMs: 10,
       readOnlyWorkerProbe: fixedReadOnlyWorkerProbe(),
-      credentialStore: credentialStoreFixture(),
     });
     expect(modeless.replacementFor(fixture.subject)).toMatchObject({ kind: 'unavailable' });
   } finally {
@@ -1726,11 +1722,11 @@ function reauthorizeWithNewModel(
       ...current.authorization.manifest,
       workerProfiles: current.authorization.manifest.workerProfiles.map((profile: WorkerProfileRef) => ({
         ...profile,
-        modelConfiguration: executionModelConfiguration({ model }),
+        modelSelection: executionModelConfiguration({ model }),
       })),
       recoveryUtilityProfile: {
         ...current.authorization.manifest.recoveryUtilityProfile,
-        modelConfiguration: executionModelConfiguration({ model }),
+        modelSelection: executionModelConfiguration({ model }),
       },
     },
   });

@@ -298,7 +298,7 @@ Palette、slash、快捷键和帮助 SHALL 共用稳定命令身份、展示定�
 
 ### Requirement: Approved role model settings and independent effort
 
-模型页 SHALL 沿 #52 定稿分为当前 Coordinator、Planning 和 Execution 角色区，并 SHALL 允许每个 Worker 角色显式选择 harness 与 provider/model 候选。候选 SHALL 只展示已注册 harness 的 provider/model，effort 使用独立水平选择且展示可信能力来源；未实现角色、未注册 harness 或缺少能力 SHALL 显示原因。原生连接编辑 SHALL 按所选 harness 只显示适用字段（providerId/baseUrl/api 的适用子集），key 始终遮罩。默认动作 SHALL 返回，明确应用才提交；配置编辑 SHALL 支持 provider/model/options/key。保存和应用结果 SHALL 区分，失败保留编辑，迟到结果不改变其他 Session 或焦点。
+模型页 SHALL 沿 #52 定稿分为当前 Coordinator、Planning 和 Execution 角色区。Coordinator 组 SHALL 保留既有 connection/model/options/key 编辑合同；每个 Worker 角色 SHALL 显式选择已注册 harness 与来自该 harness 原生目录的 provider/model 候选，effort 使用独立水平选择且只展示可信能力来源。Worker 角色 MUST NOT 出现连接、凭据、API key 或任意 options 编辑；未实现角色、未注册 harness 或缺少能力 SHALL 显示原因。目录查询失败时 SHALL 允许手填 native exact ID 并标记为未验证，MUST NOT 提供或保存虚构 effort。默认动作 SHALL 返回，明确应用才提交；保存和应用结果 SHALL 区分，失败保留编辑，迟到结果不改变其他 Session 或焦点。
 
 #### Scenario: effort 不复制候选
 
@@ -307,7 +307,7 @@ Palette、slash、快捷键和帮助 SHALL 共用稳定命令身份、展示定�
 
 #### Scenario: 角色配置编辑与返回
 
-- **WHEN** 用户从 Palette 或 slash 进入角色模型、编辑连接、保存或逐层返回
+- **WHEN** 用户从 Palette 或 slash 进入角色模型、编辑候选、保存或逐层返回
 - **THEN** 原查询/选择/Session/草稿/锚点保留，保存不代表应用，秘密不进入普通输入恢复
 
 #### Scenario: 执行模型更新审阅
@@ -317,8 +317,8 @@ Palette、slash、快捷键和帮助 SHALL 共用稳定命令身份、展示定�
 
 #### Scenario: 逐角色 harness 与原生连接编辑
 
-- **WHEN** 用户为某角色选择 harness 并编辑其原生连接字段
-- **THEN** 只出现该 harness 适用字段，未注册 harness 不可保存，保存后执行绑定在重新批准前保持不变
+- **WHEN** 用户为某角色选择 harness 并查看其候选模型
+- **THEN** 只出现该 harness 的原生目录候选与 effort 选择，不出现连接、凭据、API key 或任意 options 字段，未注册 harness 不可保存，保存后执行绑定在重新批准前保持不变
 
 #### Scenario: 三档生产画面对照
 

@@ -5,11 +5,12 @@ import type { WorkerHarness, WorkerHarnessLaunchInput, WorkerHarnessRegistry, Pr
 import { resolveWorkerHarness } from '../application/ports/worker-harness.js';
 import { parseHarnessSessionReport } from '../application/ports/worker-harness.js';
 import { codexHarness } from '../adapters/agents/codex-harness.js';
-import { OPENCODE_SESSION_REPORT_FILENAME, opencodeHarness, readOpencodeTranscriptIdentity } from '../adapters/agents/opencode-harness.js';
+import { opencodeHarness, readOpencodeTranscriptIdentity } from '../adapters/agents/opencode-harness.js';
 import { createNativeWorkerLaunch, installNativeSessionStartReporter, proveNativeTranscript, inspectNativeTranscript, nativeTranscriptIdentity, type NativeHarness } from '../adapters/agents/native-worker.js';
 import { readCodexTranscriptIdentity } from '../adapters/agents/codex-transcript.js';
 import { probeHarnessReadOnlyWorker, assertReadOnlyExecutionWrapperAvailable } from '../adapters/agents/read-only-execution-wrapper.js';
 import { bindHarnessSession, type HarnessSessionFacts, type SessionBindingResult } from '../adapters/agents/session-binding.js';
+import { workerModelQuery } from '../adapters/agents/worker-model-catalog.js';
 
 /** 只证明最后一条报告；冲突身份、损坏尾行或超限文件不能沿用历史绑定。 */
 export function readLatestHarnessSessionReport(path: string): HarnessSessionReport | null {
@@ -41,7 +42,8 @@ function nativeHarness(id: NativeHarness): WorkerHarness {
     id,
     prepareLaunch: (input) => createNativeWorkerLaunch(id, { ...input, assertReadOnlyWrapperAvailable: assertReadOnlyExecutionWrapperAvailable, ...(input.sessionStartReporterPath === undefined ? {} : { reporterPath: input.sessionStartReporterPath }) }),
     prepareReadOnlyLaunch: (input) => createNativeWorkerLaunch(id, { ...input, sandboxMode: 'read-only-local-control', assertReadOnlyWrapperAvailable: assertReadOnlyExecutionWrapperAvailable, ...(input.sessionStartReporterPath === undefined ? {} : { reporterPath: input.sessionStartReporterPath }) }),
-    probe: (configuration) => probeHarnessReadOnlyWorker(configuration),
+    probe: (selection) => probeHarnessReadOnlyWorker(id, selection),
+    queryModels: workerModelQuery(id),
     prepareResume: (input) => createNativeWorkerLaunch(id, { ...input, resume: {
       sessionId: input.sessionId, stateRoot: input.originalStateRoot, transcriptRef: input.transcriptRef,
     }, assertReadOnlyWrapperAvailable: assertReadOnlyExecutionWrapperAvailable, ...(input.sessionStartReporterPath === undefined ? {} : { reporterPath: input.sessionStartReporterPath }) }),
@@ -51,7 +53,7 @@ function nativeHarness(id: NativeHarness): WorkerHarness {
       return { stateRoot, reporterPath: join(stateRoot, digest, 'session-start.mjs'), reportPath: join(stateRoot, digest, 'session-start.jsonl') };
     },
     installReporter: (paths) => installNativeSessionStartReporter(id, { ...paths, stateRoot: dirname(paths.reporterPath) }),
-    proveSession: (input) => Promise.resolve(proveNativeTranscript(id, { ...input, expectedCodexHome: input.expectedStateRoot })),
+    proveSession: (input) => Promise.resolve(proveNativeTranscript(id, input)),
     inspectTranscript: (ref) => inspectNativeTranscript(id, ref),
   };
 }
@@ -71,14 +73,8 @@ export function workerSessionPathsUnder(id: string, root: string, launchId: stri
   return requireWorkerHarness(id).sessionPaths(root, launchId);
 }
 export function resumeSessionPathsUnder(id: string, root: string, launchId: string, originalStateRoot: string) {
-  if (id === 'codex') return workerSessionPathsUnder(id, root, launchId);
-  if (id === 'opencode') {
-    const reportPath = join(originalStateRoot, OPENCODE_SESSION_REPORT_FILENAME);
-    return { stateRoot: originalStateRoot, reporterPath: reportPath, reportPath };
-  }
-  const digest = createHash('sha256').update(launchId).digest('hex').slice(0, 20);
-  const reporterPath = join(originalStateRoot, 'reporters', `${digest}.mjs`);
-  return { stateRoot: originalStateRoot, reporterPath, reportPath: join(originalStateRoot, 'reporters', `${digest}.jsonl`) };
+  if (!originalStateRoot) throw new Error('恢复缺少原生状态根');
+  return workerSessionPathsUnder(id, root, launchId);
 }
 export function installHarnessSessionReporter(id: string, paths: { readonly reporterPath: string; readonly reportPath: string }): void {
   requireWorkerHarness(id).installReporter(paths);

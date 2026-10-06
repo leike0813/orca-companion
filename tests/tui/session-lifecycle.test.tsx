@@ -259,7 +259,7 @@ describe('Model Picker 准入', () => {
       switchBlockReason: 'Coordinator Session 正在运行模型',
     };
     const fake = createFakePorts();
-    const ports = { ...fake.ports, modelCatalog: { load: () => Promise.resolve(catalog) } };
+    const ports = { ...fake.ports, modelCatalog: { ...fake.ports.modelCatalog, load: () => Promise.resolve(catalog) } };
     const rendered = renderTui(ports);
     await settle();
 

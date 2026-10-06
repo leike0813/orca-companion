@@ -18,10 +18,10 @@ import type {
   ProjectConfigurationStore,
 } from '../../src/application/ports/project-configuration-store.js';
 
-/** 最小可解析的 schema3 纯规划配置；执行额度取领域默认值。 */
+/** 最小可解析的 schema4 纯规划配置；执行额度取领域默认值。 */
 const baseConfig = (): ProjectConfig =>
   ({
-    schemaVersion: 3,
+    schemaVersion: 4,
     revision: 0,
     providerConnections: [],
     models: [],

@@ -15,9 +15,11 @@ import { afterEach, beforeEach, expect, test } from 'vitest';
 import {
   createModelSettingsService,
   modelSettingsSnapshot,
+  type SaveCoordinatorModelSettingsInput,
   type SaveModelSettingsInput,
+  type SaveWorkerModelSettingsInput,
 } from '../../src/application/configuration/model-settings.js';
-import { nativeWorkerConnectionSchema } from '../../src/domain/model-configuration.js';
+import { providerConnectionSchema } from '../../src/domain/model-configuration.js';
 import {
   loadProjectConfig,
   projectConfigPath,
@@ -35,6 +37,7 @@ import type {
   ProjectConfigurationStore,
 } from '../../src/application/ports/project-configuration-store.js';
 import { FileProjectConfigurationStore } from '../../src/adapters/storage/project-configuration-store.js';
+import { modelSelectionFixture } from '../support/model-configurations.js';
 
 const INTEGRATION = '@langchain/openai#ChatOpenAI';
 const SECRET = 'sk-orca-model-settings-secret';
@@ -56,7 +59,7 @@ const effortCapability = () => ({
 /** 纯规划项目：只有一条不带可信来源的旧 Coordinator 配置，revision 为 0。 */
 const baseConfig = (): ProjectConfig =>
   ({
-    schemaVersion: 3,
+    schemaVersion: 4,
     revision: 0,
     providerConnections: [],
     models: [],
@@ -109,10 +112,17 @@ const managedConnection = () => ({
   providerIntegration: INTEGRATION,
   modelOptions: { temperature: 0 },
   credential: { kind: 'managed' as const, credentialRef: null, optionPath: 'apiKey' },
-  codex: null,
 });
 
-const coordinatorInput = (overrides: Partial<SaveModelSettingsInput> = {}): SaveModelSettingsInput => ({
+/** Worker 保存输入：只有角色、harness 与不可变的 modelSelection，没有连接、秘密或 options。 */
+const workerInput = (overrides: Partial<SaveWorkerModelSettingsInput> = {}): SaveWorkerModelSettingsInput => ({
+  expectedRevision: 0,
+  role: 'planner',
+  modelSelection: modelSelectionFixture(),
+  ...overrides,
+});
+
+const coordinatorInput = (overrides: Partial<SaveCoordinatorModelSettingsInput> = {}): SaveModelSettingsInput => ({
   expectedRevision: 0,
   role: 'coordinator',
   connection: managedConnection(),
@@ -297,14 +307,12 @@ test('项目里只有凭据引用，密钥不出现在配置内容中', () => {
   expect(loadProjectConfig({ worktreePath: worktree })).toMatchObject({ kind: 'loaded' });
 });
 
-test('Worker 角色保存生成 profile 并更新角色选择，旧 profile 保留为历史', () => {
+test('Worker 角色保存生成 profile 并更新角色选择，旧 profile 保留为历史，全程不碰凭据', () => {
   const project = new FakeProjectStore(baseConfig());
   const credentials = new FakeCredentialStore();
   const service = createModelSettingsService({ projectStore: project, credentials });
 
-  const first = service.save(
-    coordinatorInput({ role: 'planner', expectedRevision: 0 }),
-  );
+  const first = service.save(workerInput({ role: 'planner', expectedRevision: 0 }));
   expect(first).toMatchObject({ kind: 'saved', revision: 1 });
   if (first.kind !== 'saved' || first.profileRef === null) {
     return;
@@ -312,15 +320,10 @@ test('Worker 角色保存生成 profile 并更新角色选择，旧 profile 保�
   expect(first.configurationRef).toBeNull();
   expect(project.config().execution.workerProfileRefs).toEqual({ planner: first.profileRef });
   expect(project.config().execution.workerProfiles[0]?.harness).toBe('codex');
+  expect(project.config().execution.workerProfiles[0]?.modelSelection).toEqual(modelSelectionFixture());
   expect(project.config().coordinatorModels).toHaveLength(1);
 
-  const second = service.save(
-    coordinatorInput({
-      role: 'planner',
-      expectedRevision: 1,
-      effort: 'low',
-    }),
-  );
+  const second = service.save(workerInput({ role: 'planner', expectedRevision: 1 }));
   expect(second).toMatchObject({ kind: 'saved', revision: 2 });
   if (second.kind !== 'saved') {
     return;
@@ -331,6 +334,9 @@ test('Worker 角色保存生成 profile 并更新角色选择，旧 profile 保�
     second.profileRef,
   ]);
   expect(project.config().execution.workerProfileRefs.planner).toBe(second.profileRef);
+  // Worker 保存不读凭据、不写凭据：连接、endpoint 与凭据由 harness 自身拥有。
+  expect(credentials.log).toEqual([]);
+  expect(credentials.savedSecrets()).toEqual([]);
 });
 
 test('项目保存失败时凭据可能成为孤立项，但配置不变且不谎称生效', () => {
@@ -371,7 +377,7 @@ test('revision 冲突与无效候选在任何凭据写入之前被拒绝', () =>
   expect(secretInOptions.config().revision).toBe(0);
 });
 
-test('harness_login 不接受新 key：凭据库与项目配置都不被写', () => {
+test('Coordinator harness_login 不接受新 key：凭据库与项目配置都不被写', () => {
   const project = new FakeProjectStore(baseConfig());
   const credentials = new FakeCredentialStore();
   const service = createModelSettingsService({ projectStore: project, credentials });
@@ -380,17 +386,15 @@ test('harness_login 不接受新 key：凭据库与项目配置都不被写', ()
     credential: { kind: 'harness_login' as const },
   };
 
-  for (const role of ['coordinator', 'planner'] as const) {
-    expect(service.save(coordinatorInput({ role, connection: harnessLogin }))).toMatchObject({
-      kind: 'rejected',
-      code: 'invalid_input',
-    });
-  }
+  expect(service.save(coordinatorInput({ connection: harnessLogin }))).toMatchObject({
+    kind: 'rejected',
+    code: 'invalid_input',
+  });
 
   // 拒绝发生在任何凭据写入之前：写下来的 key 不会成为凭据库里永不使用的孤立项。
   expect(credentials.log).toEqual([]);
   expect(credentials.savedSecrets()).toEqual([]);
-  expect(project.log).toEqual(['project.read', 'project.read']);
+  expect(project.log).toEqual(['project.read']);
   expect(project.config().revision).toBe(0);
   expect(project.config().providerConnections).toEqual([]);
 });
@@ -512,106 +516,205 @@ test('快照是非秘密投影：未配置角色显式为空，保存不改变�
   expect(JSON.stringify(after)).not.toContain(SECRET);
 });
 
-/** 原生 harness 连接：与 codex 连接互斥，字段是非秘密的 providerId/baseUrl/api。 */
-const nativeConnection = (harness: 'claude' | 'opencode' | 'pi' | 'omp') => ({
-  label: 'Anthropic',
-  providerIntegration: 'claude#native',
-  modelOptions: {},
-  credential: { kind: 'managed' as const, credentialRef: null, optionPath: 'apiKey' },
-  codex: null,
-  nativeWorker: {
-    harness,
-    providerId: 'anthropic',
-    baseUrl: 'https://api.anthropic.com',
-    api: 'anthropic-messages' as const,
-  },
+/** ProviderConnection 是封闭对象：Worker-only 的 codex/nativeWorker 字段不再被接受。 */
+test('ProviderConnection 拒绝 Worker-only 的 codex 与 nativeWorker 字段', () => {
+  const base = {
+    connectionRef: 'conn-1',
+    label: 'OpenAI',
+    providerIntegration: INTEGRATION,
+    modelOptions: {},
+    credential: { kind: 'harness_login' as const },
+  };
+  expect(providerConnectionSchema.safeParse(base).success).toBe(true);
+  expect(providerConnectionSchema.safeParse({ ...base, codex: null }).success).toBe(false);
+  expect(
+    providerConnectionSchema.safeParse({ ...base, nativeWorker: { harness: 'claude', providerId: 'anthropic' } })
+      .success,
+  ).toBe(false);
 });
 
-test('nativeWorker 是封闭联合：未知 harness、超范围 api、未知键与凭据 URL 都拒绝', () => {
-  expect(nativeWorkerConnectionSchema.safeParse({ harness: 'kilo', providerId: 'x' }).success).toBe(false);
-  expect(nativeWorkerConnectionSchema.safeParse({ harness: 'opencode', providerId: 'x', api: 'grpc' }).success).toBe(false);
-  expect(nativeWorkerConnectionSchema.safeParse({ harness: 'claude', providerId: 'x', api: 'openai-responses' }).success).toBe(false);
-  expect(nativeWorkerConnectionSchema.safeParse({ harness: 'pi', providerId: 'x', secret: 'sk-nope' }).success).toBe(false);
-  expect(nativeWorkerConnectionSchema.safeParse({ harness: 'claude', providerId: '' }).success).toBe(false);
-  expect(nativeWorkerConnectionSchema.safeParse({ harness: 'omp', providerId: 'x', baseUrl: 'https://user:pw@example.test' }).success).toBe(false);
-  expect(nativeWorkerConnectionSchema.safeParse({ harness: 'claude', providerId: 'x' }).success).toBe(true);
-});
-
-test('显式 harness 写入 Worker profile 与原生连接，缺省时保留该角色原 harness', () => {
-  const project = new FakeProjectStore(baseConfig());
-  const credentials = new FakeCredentialStore();
-  const service = createModelSettingsService({ projectStore: project, credentials });
-
-  expect(service.save(coordinatorInput({ role: 'planner', connection: nativeConnection('claude'), harness: 'claude' })))
-    .toMatchObject({ kind: 'saved', revision: 1 });
-  const profile = project.config().execution.workerProfiles[0]!;
-  expect(profile.harness).toBe('claude');
-  expect(profile.modelConfiguration.connection.nativeWorker).toEqual({
-    harness: 'claude',
-    providerId: 'anthropic',
-    baseUrl: 'https://api.anthropic.com',
-    api: 'anthropic-messages',
-  });
-
-  // 省略 harness：沿用该角色已有 profile 的 harness，不退回 execution.harness。
-  expect(service.save(coordinatorInput({ role: 'planner', connection: nativeConnection('claude'), expectedRevision: 1 }))).toMatchObject({ kind: 'saved' });
-  expect(project.config().execution.workerProfiles[1]?.harness).toBe('claude');
-
-  // 没有既有 profile 的角色省略 harness：取 execution.harness 作为首次默认。
-  expect(service.save(coordinatorInput({ role: 'validator', expectedRevision: 2 }))).toMatchObject({ kind: 'saved' });
-  expect(project.config().execution.workerProfiles[2]?.harness).toBe('codex');
-});
-
-test('未含 nativeWorker 的连接保持字段省略，旧指纹形态不变', () => {
+test('Coordinator 保存的连接只含 Coordinator 合同字段，不含 Worker-only 键', () => {
   const project = new FakeProjectStore(baseConfig());
   const service = createModelSettingsService({ projectStore: project, credentials: new FakeCredentialStore() });
 
   expect(service.save(coordinatorInput())).toMatchObject({ kind: 'saved' });
 
   const connection = project.config().providerConnections[0]!;
-  expect('nativeWorker' in connection).toBe(false);
-  expect(JSON.stringify(connection)).not.toContain('nativeWorker');
+  expect(Object.keys(connection).sort()).toEqual([
+    'connectionRef',
+    'credential',
+    'label',
+    'modelOptions',
+    'providerIntegration',
+  ]);
 });
 
-test('原生连接与所选 harness 不一致、显式 harness 未注册时拒绝，都不写凭据', () => {
+test('Worker 保存拒绝连接、秘密与 options 等非 Worker 字段，且不写配置也不碰凭据', () => {
   const project = new FakeProjectStore(baseConfig());
   const credentials = new FakeCredentialStore();
   const service = createModelSettingsService({ projectStore: project, credentials });
 
-  expect(service.save(coordinatorInput({ role: 'planner', connection: nativeConnection('opencode'), harness: 'claude' })))
-    .toMatchObject({ kind: 'rejected', code: 'invalid_input' });
-  expect(service.save(coordinatorInput({ role: 'planner', harness: 'kilo' })))
-    .toMatchObject({ kind: 'rejected', code: 'invalid_input' });
-  expect(service.save(coordinatorInput({ role: 'planner', harness: 'claude' })))
-    .toMatchObject({ kind: 'rejected', code: 'invalid_input' });
-  expect(service.save(coordinatorInput({
-    role: 'planner', harness: 'claude',
-    connection: { ...nativeConnection('claude'), codex: { providerId: 'openai', baseUrl: 'https://example.test/v1', wireApi: 'responses' } },
-  }))).toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  const extras: readonly Record<string, unknown>[] = [
+    { connection: managedConnection() },
+    { newSecret: SECRET },
+    { modelOptions: { temperature: 0 } },
+    { model: 'gpt-4.1-mini' },
+    { effort: 'high' },
+    { effortCapability: effortCapability() },
+    { credentialRef: EXISTING_CREDENTIAL_REF },
+  ];
+  for (const extra of extras) {
+    expect(service.save({ ...workerInput(), ...extra })).toMatchObject({
+      kind: 'rejected',
+      code: 'invalid_input',
+    });
+  }
 
   expect(credentials.log).toEqual([]);
+  expect(project.log).toEqual([]);
   expect(project.config().revision).toBe(0);
-  expect(project.config().providerConnections).toEqual([]);
 });
 
-test('Coordinator 保持 LangChain，拒绝原生 harness 连接', () => {
+test('显式 harness 写入 Worker profile，缺省时保留该角色原 harness', () => {
   const project = new FakeProjectStore(baseConfig());
   const credentials = new FakeCredentialStore();
   const service = createModelSettingsService({ projectStore: project, credentials });
 
-  expect(service.save(coordinatorInput({ connection: nativeConnection('claude') })))
-    .toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  expect(service.save(workerInput({ role: 'planner', harness: 'claude', expectedRevision: 0 }))).toMatchObject({
+    kind: 'saved',
+    revision: 1,
+  });
+  expect(project.config().execution.workerProfiles[0]?.harness).toBe('claude');
+
+  // 省略 harness：沿用该角色已有 profile 的 harness，不退回 execution.harness。
+  expect(service.save(workerInput({ role: 'planner', expectedRevision: 1 }))).toMatchObject({ kind: 'saved' });
+  expect(project.config().execution.workerProfiles[1]?.harness).toBe('claude');
+
+  // 没有既有 profile 的角色省略 harness：取 execution.harness 作为首次默认。
+  expect(service.save(workerInput({ role: 'validator', expectedRevision: 2 }))).toMatchObject({ kind: 'saved' });
+  expect(project.config().execution.workerProfiles[2]?.harness).toBe('codex');
   expect(credentials.log).toEqual([]);
-  expect(project.config().revision).toBe(0);
 });
 
-test('省略 harness 时也拒绝未注册的首次默认，不写凭据或配置', () => {
+test('经过目录核验的选择保存实际来源与能力；伪造来源、能力或未查询模型被拒绝', () => {
+  const capability = { values: ['low', 'high'], source: 'codex-debug-models' };
+  const verifier = (input: { harness: string; model: string }) =>
+    input.harness === 'codex' && input.model === 'gpt-5'
+      ? { catalogSource: 'codex-debug-models', effortCapability: capability }
+      : null;
+
+  const project = new FakeProjectStore(baseConfig());
+  const credentials = new FakeCredentialStore();
+  const service = createModelSettingsService({ projectStore: project, credentials, verifyWorkerSelection: verifier });
+  const claimed = {
+    model: 'gpt-5',
+    effort: 'high',
+    effortCapability: capability,
+    catalogSource: 'codex-debug-models',
+  };
+
+  expect(service.save(workerInput({ expectedRevision: 0, modelSelection: claimed }))).toMatchObject({
+    kind: 'saved',
+    revision: 1,
+  });
+  expect(project.config().execution.workerProfiles[0]?.modelSelection).toEqual(claimed);
+
+  // 伪造的目录来源：不在本次查询缓存中。
+  expect(
+    service.save(workerInput({ expectedRevision: 1, modelSelection: { ...claimed, catalogSource: 'forged' } })),
+  ).toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  // 自报的能力与目录实际报告不符。
+  expect(
+    service.save(
+      workerInput({
+        expectedRevision: 1,
+        modelSelection: { ...claimed, effortCapability: { values: ['low'], source: 'codex-debug-models' } },
+      }),
+    ),
+  ).toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  // 未经过本次查询的模型（核验返回 null）。
+  expect(
+    service.save(workerInput({ expectedRevision: 1, modelSelection: { ...claimed, model: 'gpt-4o' } })),
+  ).toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+
+  expect(project.config().revision).toBe(1);
+  expect(credentials.log).toEqual([]);
+});
+
+test('没有可信目录时只接受手填未验证选择：来源与能力非空即拒绝', () => {
+  const project = new FakeProjectStore(baseConfig());
+  const credentials = new FakeCredentialStore();
+  const service = createModelSettingsService({ projectStore: project, credentials });
+
+  // 手填 native exact ID：来源、能力与 effort 均为 null。
+  const handFilled = modelSelectionFixture({
+    model: 'gpt-5.1-codex',
+    effort: null,
+    effortCapability: null,
+    catalogSource: null,
+  });
+  expect(service.save(workerInput({ expectedRevision: 0, modelSelection: handFilled }))).toMatchObject({
+    kind: 'saved',
+    revision: 1,
+  });
+  expect(project.config().execution.workerProfiles[0]?.modelSelection).toEqual(handFilled);
+
+  // 自报 catalogSource 但没有可信目录：拒绝。
+  expect(
+    service.save(
+      workerInput({ expectedRevision: 1, modelSelection: { ...handFilled, catalogSource: 'codex-debug-models' } }),
+    ),
+  ).toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  // 自报能力但没有目录来源：schema 先拒绝。
+  expect(
+    service.save(
+      workerInput({
+        expectedRevision: 1,
+        modelSelection: {
+          model: 'gpt-5.1-codex',
+          effort: 'high',
+          effortCapability: { values: ['low', 'high'], source: 'codex-debug-models' },
+          catalogSource: null,
+        },
+      }),
+    ),
+  ).toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  expect(project.config().revision).toBe(1);
+});
+
+test('Worker effort 缺少可信能力时被拒绝，不捏造取值', () => {
+  const project = new FakeProjectStore(baseConfig());
+  const credentials = new FakeCredentialStore();
+  const service = createModelSettingsService({ projectStore: project, credentials });
+
+  expect(
+    service.save(
+      workerInput({
+        modelSelection: { model: 'gpt-5', effort: 'high', effortCapability: null, catalogSource: null },
+      }),
+    ),
+  ).toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  expect(project.config().revision).toBe(0);
+  expect(credentials.log).toEqual([]);
+});
+
+test('未注册 harness 与未注册的首次默认都被拒绝，不写配置', () => {
+  const project = new FakeProjectStore(baseConfig());
+  const credentials = new FakeCredentialStore();
+  const service = createModelSettingsService({ projectStore: project, credentials });
+  expect(service.save(workerInput({ role: 'planner', harness: 'kilo' }))).toMatchObject({
+    kind: 'rejected',
+    code: 'invalid_input',
+  });
+  expect(project.config().revision).toBe(0);
+
   const config = baseConfig();
-  const project = new FakeProjectStore({ ...config, execution: { ...config.execution, harness: 'kilo' } });
-  const credentials = new FakeCredentialStore();
-  const service = createModelSettingsService({ projectStore: project, credentials });
-  expect(service.save(coordinatorInput({ role: 'planner' })))
-    .toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  const brokenDefault = new FakeProjectStore({ ...config, execution: { ...config.execution, harness: 'kilo' } });
+  const brokenService = createModelSettingsService({ projectStore: brokenDefault, credentials });
+  expect(brokenService.save(workerInput({ role: 'planner' }))).toMatchObject({
+    kind: 'rejected',
+    code: 'invalid_input',
+  });
+  expect(brokenDefault.config().revision).toBe(0);
   expect(credentials.log).toEqual([]);
-  expect(project.config().revision).toBe(0);
 });

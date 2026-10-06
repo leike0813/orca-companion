@@ -27,6 +27,15 @@ test('参数按单个数组元素原样传递，不经 shell 解释', async () =
   expect(JSON.parse(result.stdout.text)).toEqual(args);
 });
 
+test('有界 stdin 原样传入并关闭；超限输入在启动前拒绝', async () => {
+  const stdin = JSON.stringify({ type: 'control_request', request: { subtype: 'list_models' } }) + '\n';
+  const result = await runProcess({ ...nodeRequest('process.stdin.pipe(process.stdout)'), stdin });
+  expect(result.kind).toBe('completed');
+  if (result.kind === 'completed') expect(result.stdout.text).toBe(stdin);
+  const oversized = await runProcess({ ...nodeRequest('process.exit(0)'), stdin: 'x'.repeat(1024 * 1024 + 1) });
+  expect(oversized.kind).toBe('unavailable');
+});
+
 test('标准输出与保活噪声分离，噪声不计入上限与截断判定', async () => {
   const script = [
     'for (let i = 0; i < 20; i += 1)',

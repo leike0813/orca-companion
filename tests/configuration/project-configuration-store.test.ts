@@ -35,12 +35,11 @@ const connection = (connectionRef = 'openai-conn') => ({
   providerIntegration: INTEGRATION,
   modelOptions: {},
   credential: { kind: 'harness_login' as const },
-  codex: null,
 });
 
 const baseConfig = (revision = 0): ProjectConfig =>
   ({
-    schemaVersion: 3,
+    schemaVersion: 4,
     revision,
     providerConnections: [connection()],
     models: [],
@@ -122,8 +121,38 @@ test('缺失与内容无效分别报告，读取不做任何隐式创建', () =>
 
   writeFileSync(configPath, '{ not json', 'utf8');
   expect(store.read()).toMatchObject({ kind: 'failed', code: 'invalid' });
+});
 
-  writeExisting({ ...baseConfig(0), schemaVersion: 1 });
+test('schema 1/2/3 明确拒绝，不迁移也不改写用户文件', () => {
+  for (const schemaVersion of [1, 2, 3]) {
+    const raw = { ...baseConfig(0), schemaVersion };
+    writeExisting(raw);
+    expect(store.read()).toMatchObject({ kind: 'failed', code: 'invalid' });
+    expect(JSON.parse(readFileSync(configPath, 'utf8'))).toMatchObject({ schemaVersion });
+
+    expect(store.save({ expectedRevision: 0, next: raw as unknown as ProjectConfig })).toMatchObject({
+      kind: 'failed',
+      code: 'invalid',
+    });
+    expect(JSON.parse(readFileSync(configPath, 'utf8'))).toMatchObject({ schemaVersion });
+  }
+});
+
+test('Worker-only 连接字段（codex/nativeWorker）不再被接受', () => {
+  const withCodex = {
+    ...baseConfig(0),
+    providerConnections: [{ ...connection(), codex: null }],
+  };
+  writeExisting(withCodex);
+  expect(store.read()).toMatchObject({ kind: 'failed', code: 'invalid' });
+
+  const withNative = {
+    ...baseConfig(0),
+    providerConnections: [
+      { ...connection(), nativeWorker: { harness: 'claude', providerId: 'anthropic' } },
+    ],
+  };
+  writeExisting(withNative);
   expect(store.read()).toMatchObject({ kind: 'failed', code: 'invalid' });
 });
 
@@ -265,7 +294,6 @@ test('记录与快照只比较内容，键序不同不算改写', () => {
   writeExisting(baseConfig(1));
   const record = baseConfig(1).providerConnections[0]!;
   const reorderedRecord = {
-    codex: record.codex,
     credential: record.credential,
     modelOptions: record.modelOptions,
     providerIntegration: record.providerIntegration,
@@ -286,7 +314,6 @@ test('记录与快照只比较内容，键序不同不算改写', () => {
           providerIntegration: record.providerIntegration,
           modelOptions: record.modelOptions,
           credential: record.credential,
-          codex: record.codex,
         },
       },
     ],

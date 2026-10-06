@@ -1,0 +1,105 @@
+{
+  "platform": "Ubuntu",
+  "date": "2026-10-07",
+  "commands": [
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm lint",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm build",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm test --maxWorkers 6 --reporter=default --reporter=json --outputFile.json=/tmp/companion-stable-test-results.json",
+      "exitCode": 0
+    },
+    {
+      "command": "openspec validate remove-worker-credential-management --strict",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    }
+  ],
+  "tests": {
+    "success": true,
+    "files": 190,
+    "passedFiles": 183,
+    "total": 2103,
+    "passed": 2087,
+    "failed": 0,
+    "skipped": 16
+  },
+  "nativeCatalogs": [
+    {
+      "harness": "codex",
+      "version": "0.160.0",
+      "models": 14
+    },
+    {
+      "harness": "claude",
+      "version": "2.1.291",
+      "models": 4
+    },
+    {
+      "harness": "opencode",
+      "version": "2.0.21",
+      "models": 0,
+      "code": "catalog_empty"
+    },
+    {
+      "harness": "pi",
+      "version": "1.0.0",
+      "models": 521
+    },
+    {
+      "harness": "omp",
+      "version": "18.4.10",
+      "models": 913
+    }
+  ],
+  "nativeReadOnlyProbes": [
+    {
+      "harness": "codex",
+      "result": "available",
+      "mechanism": "host-verify"
+    },
+    {
+      "harness": "claude",
+      "result": "available",
+      "mechanism": "host-verify"
+    },
+    {
+      "harness": "opencode",
+      "result": "available",
+      "mechanism": "host-verify"
+    },
+    {
+      "harness": "pi",
+      "result": "available",
+      "mechanism": "host-verify"
+    },
+    {
+      "harness": "omp",
+      "result": "available",
+      "mechanism": "host-verify"
+    }
+  ],
+  "ui": {
+    "sizes": [
+      "120x40",
+      "80x24",
+      "50x40"
+    ],
+    "combinations": 12,
+    "result": "passed",
+    "resizeReviewDefaultReturnDraftCursor": "passed"
+  },
+  "realOrcaSessionRecoveryMatrix": "skipped"
+}

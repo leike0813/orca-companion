@@ -1,8 +1,9 @@
 /**
- * `complete-tui-model-configuration` IP-01 的行为测试：v2 项目配置。
+ * `remove-worker-credential-management` IP-01 的行为测试：schema 4 项目配置。
  *
- * 固定四组可观察事实：v2 配置能把默认 Coordinator Model Configuration 解析出来；v1 与未知引用被
- * 明确拒绝；交叉引用与快照必须自洽、effort 不得凭空出现；已知密钥字段名在配置边界即被拒绝。
+ * 固定四组可观察事实：schema 4 配置能把默认 Coordinator Model Configuration 解析出来；旧 schema 与
+ * 未知引用被明确拒绝；Coordinator 交叉引用与快照必须自洽、effort 不得凭空出现；Worker Profile 只带
+ * 已注册 harness 与自洽的 modelSelection；已知密钥字段名在配置边界即被拒绝。
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -39,7 +40,6 @@ const INTEGRATION = '@langchain/openai#ChatOpenAI';
 
 /** 凭据引用与 CredentialStore 同形：只承认 uuid，配置里不出现任何自由文本引用。 */
 const CREDENTIAL_REF = '11111111-1111-4111-8111-111111111111';
-const OTHER_CREDENTIAL_REF = '22222222-2222-4222-8222-222222222222';
 
 const effortCapability = () => ({
   values: ['low', 'high'],
@@ -53,7 +53,6 @@ const connection = (connectionRef = 'openai-conn') => ({
   providerIntegration: INTEGRATION,
   modelOptions: { temperature: 0 },
   credential: { kind: 'managed' as const, credentialRef: CREDENTIAL_REF, optionPath: 'apiKey' },
-  codex: null,
 });
 
 const modelDefinition = (modelRef = 'gpt-4.1-mini', connectionRef = 'openai-conn') => ({
@@ -85,13 +84,11 @@ const workerProfile = (profileRef = 'planner-profile', role = 'planner') => ({
   profileRef,
   role,
   harness: 'codex',
-  modelConfiguration: {
-    connection: connection(),
-    modelRef: 'gpt-4.1-mini',
+  modelSelection: {
     model: 'gpt-4.1-mini',
-    effort: 'low',
-    effortCapability: effortCapability(),
-    modelOptions: {},
+    effort: null,
+    effortCapability: null,
+    catalogSource: null,
   },
 });
 
@@ -118,7 +115,7 @@ function write(raw: unknown): void {
   writeFileSync(projectConfigPath(worktree), JSON.stringify(raw), 'utf8');
 }
 
-test('合法 v2 配置从 canonical worktree 加载并解析默认引用', () => {
+test('合法 schema 4 配置从 canonical worktree 加载并解析默认引用', () => {
   write(validConfig());
 
   const loaded = loadProjectConfig({ worktreePath: worktree });
@@ -137,44 +134,46 @@ test('合法 v2 配置从 canonical worktree 加载并解析默认引用', () =>
   expect(configurationByRef(loaded.config, 'missing')).toBeNull();
 });
 
+test.each(['codex', 'nativeWorker'] as const)('Worker-only 连接字段出现即拒绝：%s', (field) => {
+  const workerOnly = field === 'codex'
+    ? { providerId: 'configured-provider', baseUrl: 'https://api.example/v1', wireApi: 'responses' }
+    : { harness: 'claude', providerId: 'minimax' };
+  const provider = { ...connection(), [field]: workerOnly };
+  // 闭合 schema 直接拒绝 Worker-only 字段；Coordinator 的 credential 合同不变，同一份 fixture 仍合法。
+  expect(parseProjectConfig({
+    ...validConfig(),
+    providerConnections: [provider],
+    coordinatorModels: [{ ...boundCoordinatorModel(), providerConnection: provider }],
+  }).ok).toBe(false);
+  expect(parseProjectConfig(validConfig()).ok).toBe(true);
+});
+
 test.each([
   'https://user:password@api.example/v1',
   'https://user@api.example/v1',
   'https://api.example/v1?api_key=fixture-secret',
   'https://api.example/v1?access_token=fixture-secret',
   'https://api.example/v1?X-API-Key=fixture-secret',
-])('连接 URL 携带凭据时在持久化边界拒绝：%s', (baseUrl) => {
-  const provider = {
-    ...connection(),
-    codex: { providerId: 'configured-provider', baseUrl, wireApi: 'responses' },
-  };
-  const config = {
-    ...validConfig(),
-    providerConnections: [provider],
-    coordinatorModels: [{ ...boundCoordinatorModel(), providerConnection: provider }],
-  };
-  expect(parseProjectConfig(config).ok).toBe(false);
+])('Coordinator 模型选项里的 URL 携带凭据时在持久化边界拒绝：%s', (baseUrl) => {
   expect(parseProjectConfig({
     ...validConfig(),
     coordinatorModels: [{ ...boundCoordinatorModel(), modelOptions: { configuration: { baseURL: baseUrl } } }],
   }).ok).toBe(false);
 });
 
-test('连接 URL 保留不含凭据的查询参数', () => {
-  const provider = {
-    ...connection(),
-    codex: { providerId: 'configured-provider', baseUrl: 'https://api.example/v1?api-version=2026-01', wireApi: 'responses' },
-  };
+test('Coordinator 模型选项保留不含凭据的 URL 查询参数', () => {
   expect(parseProjectConfig({
     ...validConfig(),
-    providerConnections: [provider],
-    coordinatorModels: [{ ...boundCoordinatorModel(), providerConnection: provider }],
+    coordinatorModels: [{
+      ...boundCoordinatorModel(),
+      modelOptions: { configuration: { baseURL: 'https://api.example/v1?api-version=2026-01' } },
+    }],
   }).ok).toBe(true);
 });
 
 test('模型设置字段可缺省：纯规划项目不需要 Worker 配置', () => {
   write({
-    schemaVersion: 3,
+    schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
     coordinatorModels: [legacyCoordinatorModel()],
     defaultCoordinatorModelRef: 'planning-default',
     tracker: { kind: 'github', routeMapIssueNumber: 42 },
@@ -183,7 +182,7 @@ test('模型设置字段可缺省：纯规划项目不需要 Worker 配置', () 
   });
 
   const parsed = parseProjectConfig({
-    schemaVersion: 3,
+    schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
     coordinatorModels: [legacyCoordinatorModel()],
     defaultCoordinatorModelRef: 'planning-default',
     tracker: { kind: 'github', routeMapIssueNumber: 42 },
@@ -208,6 +207,10 @@ test('模型设置字段可缺省：纯规划项目不需要 Worker 配置', () 
 test('v1 与未知字段被拒绝，不自动重写用户项目', () => {
   const v1 = parseProjectConfig({ ...validConfig(), schemaVersion: 1 });
   expect(v1).toMatchObject({ ok: false, field: 'projectConfig' });
+
+  // schema 3 缺 modelSelection：旧版本明确拒绝，不迁移、不改写用户文件。
+  const v3 = parseProjectConfig({ ...validConfig(), schemaVersion: 3 });
+  expect(v3).toMatchObject({ ok: false, field: 'projectConfig' });
 
   const unknownField = parseProjectConfig({ ...validConfig(), extra: true });
   expect(unknownField.ok).toBe(false);
@@ -353,19 +356,19 @@ test('Worker Profile 的模型引用与角色选择必须可解释', () => {
   expect(currentWorkerProfile(valid.value, 'planner')?.profileRef).toBe('planner-profile');
   expect(currentWorkerProfile(valid.value, 'validator')).toBeNull();
 
-  const unknownModel = parseProjectConfig({
+  const unregisteredHarness = parseProjectConfig({
     ...validConfig(),
     execution: executionBlock({
       workerProfiles: [
         {
           ...workerProfile(),
-          modelConfiguration: { ...workerProfile().modelConfiguration, modelRef: 'nope' },
+          harness: 'unregistered-harness',
         },
       ],
       workerProfileRefs: { planner: 'planner-profile' },
     }),
   });
-  expect(unknownModel).toMatchObject({ ok: false });
+  expect(unregisteredHarness).toMatchObject({ ok: false });
 
   const unknownRole = parseProjectConfig({
     ...validConfig(),
@@ -377,37 +380,18 @@ test('Worker Profile 的模型引用与角色选择必须可解释', () => {
   expect(unknownRole).toMatchObject({ ok: false });
 });
 
-test('Worker Profile 的连接快照与能力来源同样不得与被引用记录矛盾', () => {
-  const driftedConnection = parseProjectConfig({
-    ...validConfig(),
-    execution: executionBlock({
-      workerProfiles: [
-        {
-          ...workerProfile(),
-          modelConfiguration: {
-            ...workerProfile().modelConfiguration,
-            connection: {
-              ...connection(),
-              credential: { kind: 'managed', credentialRef: OTHER_CREDENTIAL_REF, optionPath: 'apiKey' },
-            },
-          },
-        },
-      ],
-      workerProfileRefs: { planner: 'planner-profile' },
-    }),
-  });
-  expect(driftedConnection).toMatchObject({ ok: false });
-
+test('Worker Profile 的模型选择必须自洽：伪造 effort 或缺目录来源都拒绝', () => {
   const fabricatedEffort = parseProjectConfig({
     ...validConfig(),
     execution: executionBlock({
       workerProfiles: [
         {
           ...workerProfile(),
-          modelConfiguration: {
-            ...workerProfile().modelConfiguration,
+          modelSelection: {
+            model: 'MiniMax-M3',
             effort: 'extreme',
-            effortCapability: { ...effortCapability(), values: ['low', 'high', 'extreme'] },
+            effortCapability: { values: ['low', 'high'], source: 'native-catalog' },
+            catalogSource: 'native-catalog',
           },
         },
       ],
@@ -415,6 +399,40 @@ test('Worker Profile 的连接快照与能力来源同样不得与被引用记�
     }),
   });
   expect(fabricatedEffort).toMatchObject({ ok: false });
+
+  const capabilityWithoutSource = parseProjectConfig({
+    ...validConfig(),
+    execution: executionBlock({
+      workerProfiles: [
+        {
+          ...workerProfile(),
+          modelSelection: {
+            model: 'MiniMax-M3',
+            effort: null,
+            effortCapability: { values: ['low', 'high'], source: 'native-catalog' },
+            catalogSource: null,
+          },
+        },
+      ],
+      workerProfileRefs: { planner: 'planner-profile' },
+    }),
+  });
+  expect(capabilityWithoutSource).toMatchObject({ ok: false });
+
+  // 手填未验证 native exact ID：没有能力来源也没有目录来源，仍合法。
+  const handFilled = parseProjectConfig({
+    ...validConfig(),
+    execution: executionBlock({
+      workerProfiles: [
+        {
+          ...workerProfile(),
+          modelSelection: { model: 'native-exact-id', effort: null, effortCapability: null, catalogSource: null },
+        },
+      ],
+      workerProfileRefs: { planner: 'planner-profile' },
+    }),
+  });
+  expect(handFilled.ok).toBe(true);
 });
 
 test('循环结构按拒绝返回，不向调用方抛异常', () => {

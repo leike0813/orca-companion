@@ -1,16 +1,22 @@
 /**
- * 各项测试共用的模型绑定夹具（Manifest2 / 项目 schema2 / Task 固定绑定共用同一份）。
+ * 各项测试共用的模型绑定夹具（Manifest4 / 项目 schema4 / Task 固定绑定共用同一份）。
  *
  * 统一由这里生成，各测试文件就不必各写一份，也就不会出现「某个夹具的绑定与授权里的绑定对不上」
- * 这种与被测行为无关的失败。夹具只保存 credentialRef 一类的非秘密标识，凭据一律是
- * harness_login：这里没有任何明文 secret，也不代表任何真实 provider 或真实可用性。
+ * 这种与被测行为无关的失败。Worker 的模型只表达 harness、native model ID 与 effort；连接、凭据与
+ * provider options 由 harness 自身拥有，夹具里没有明文 secret，也不代表任何真实 provider 或可用性。
+ * Coordinator 连接夹具保留 `harness_login`（provider integration 自身的环境认证路径）。
  *
  * 需要制造非法绑定时，负例测试自己改写单个字段，不在这里提供「坏配置」开关。
  */
 
 import type { CredentialStore } from '../../src/application/ports/credential-store.js';
 import type { RecoveryUtilityProfile, WorkerProfileRef, WorkerRole } from '../../src/domain/planning/execution-authorization.js';
-import type { ModelProfileRole, WorkerModelConfiguration, WorkerProfileConfiguration } from '../../src/domain/model-configuration.js';
+import type {
+  ModelProfileRole,
+  ProviderConnection,
+  WorkerModelSelection,
+  WorkerProfileConfiguration,
+} from '../../src/domain/model-configuration.js';
 
 export const FIXTURE_CONNECTION_REF = 'connection-1';
 export const FIXTURE_MODEL_REF = 'model-1';
@@ -26,7 +32,6 @@ export function profileRefFor(role: ModelProfileRole): string {
   return 'profile-' + role;
 }
 
-/** 单份已批准模型绑定；role 只让调用点自解释，绑定本身对所有角色相同。 */
 /**
  * 测试用凭据 store：记录被读取过的引用，按夹具给定的方式回答。
  *
@@ -51,39 +56,30 @@ export function credentialStoreFixture(secretByRef: Readonly<Record<string, stri
   };
 }
 
-export function modelConfigurationFixture(
-  role?: ModelProfileRole,
-  overrides: Partial<WorkerModelConfiguration> = {},
-): WorkerModelConfiguration {
-  void role;
+/** 单份 Worker 模型选择；legacy 名字保留，返回新 selection，新代码用 `modelSelectionFixture`。 */
+export function modelConfigurationFixture(overrides: Partial<WorkerModelSelection> = {}): WorkerModelSelection {
   return {
-    connection: {
-      connectionRef: FIXTURE_CONNECTION_REF,
-      label: '测试连接',
-      providerIntegration: 'minimax',
-      modelOptions: {},
-      credential: { kind: 'harness_login' },
-      codex: { providerId: 'minimax', baseUrl: 'https://example.test/v1', wireApi: 'responses' },
-    },
-    modelRef: FIXTURE_MODEL_REF,
     model: FIXTURE_MODEL,
     effort: null,
     effortCapability: null,
-    modelOptions: {},
+    catalogSource: null,
     ...overrides,
   };
 }
 
+/** 语义别名。 */
+export const modelSelectionFixture = modelConfigurationFixture;
+
 /** 某个生产角色的完整授权绑定。 */
 export function workerProfileFixture(
   role: WorkerRole,
-  overrides: Partial<WorkerModelConfiguration> = {},
+  overrides: Partial<WorkerModelSelection> = {},
 ): WorkerProfileRef {
   return {
     profileRef: { kind: 'worker-profile', id: profileRefFor(role) },
     role,
     harness: 'codex',
-    modelConfiguration: modelConfigurationFixture(role, overrides),
+    modelSelection: modelConfigurationFixture(overrides),
   };
 }
 
@@ -97,29 +93,29 @@ export function recoveryUtilityProfileFixture(): RecoveryUtilityProfile {
   return {
     profileRef: { kind: 'worker-profile', id: profileRefFor('recovery_utility') },
     harness: 'codex',
-    modelConfiguration: modelConfigurationFixture('recovery_utility'),
+    modelSelection: modelConfigurationFixture(),
   };
 }
 
-/** 项目 schema2 的 execution.workerProfiles 与「角色当前选择引用」。 */
+/** 项目 schema4 的 execution.workerProfiles 与「角色当前选择引用」。 */
 export function projectExecutionProfilesFixture(): {
   readonly workerProfiles: readonly WorkerProfileConfiguration[];
   readonly workerProfileRefs: Partial<Record<ModelProfileRole, string>>;
 } {
-  const workerProfiles = PROJECT_ROLES.map((role) => ({
+  const workerProfiles: WorkerProfileConfiguration[] = PROJECT_ROLES.map((role) => ({
     profileRef: profileRefFor(role),
     role,
     harness: 'codex',
-    modelConfiguration: modelConfigurationFixture(role),
+    modelSelection: modelConfigurationFixture(),
   }));
   const workerProfileRefs: Partial<Record<ModelProfileRole, string>> = {};
   for (const profile of workerProfiles) workerProfileRefs[profile.role] = profile.profileRef;
   return { workerProfiles, workerProfileRefs };
 }
 
-/** 项目 schema2 的 providerConnections 与 models 夹具。 */
+/** 项目 schema4 的 Coordinator providerConnections 与 models 夹具。 */
 export function projectConnectionsFixture(): {
-  readonly providerConnections: readonly WorkerModelConfiguration['connection'][];
+  readonly providerConnections: readonly ProviderConnection[];
   readonly models: readonly {
     readonly modelRef: string;
     readonly connectionRef: string;
@@ -127,14 +123,20 @@ export function projectConnectionsFixture(): {
     readonly effortCapability: null;
   }[];
 } {
-  const base = modelConfigurationFixture();
+  const connection: ProviderConnection = {
+    connectionRef: FIXTURE_CONNECTION_REF,
+    label: '测试连接',
+    providerIntegration: 'minimax',
+    modelOptions: {},
+    credential: { kind: 'harness_login' },
+  };
   return {
-    providerConnections: [base.connection],
+    providerConnections: [connection],
     models: [
       {
-        modelRef: base.modelRef,
-        connectionRef: base.connection.connectionRef,
-        model: base.model,
+        modelRef: FIXTURE_MODEL_REF,
+        connectionRef: FIXTURE_CONNECTION_REF,
+        model: FIXTURE_MODEL,
         effortCapability: null,
       },
     ],

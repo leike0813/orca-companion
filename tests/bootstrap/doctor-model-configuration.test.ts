@@ -6,7 +6,7 @@
  * 这层断言依赖外部进程。
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -29,8 +29,36 @@ function repositoryWithConfig(contents: string): string {
   return directory;
 }
 
+function fakeClaude(): { readonly bin: string; readonly env: Record<string, string> } {
+  const directory = mkdtempSync(join(tmpdir(), 'doctor-fake-harness-'));
+  directories.push(directory);
+  const bin = join(directory, 'bin');
+  mkdirSync(bin);
+  const executable = join(bin, 'claude');
+  writeFileSync(executable, [
+    '#!/bin/sh',
+    'if [ "$1" = "--version" ]; then echo "2.1.291 (Claude Code)"; exit 0; fi',
+    'if [ "$1" = "-p" ]; then',
+    '  read -r request',
+    `  printf '%s\\n' '${JSON.stringify({
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        request_id: 'companion-worker-model-catalog',
+        response: { models: [{ value: 'minimax', resolvedModel: 'MiniMax-M3', supportsEffort: false }] },
+      },
+    })}'`,
+    '  exit 0',
+    'fi',
+    'exit 1',
+    '',
+  ].join('\n'), 'utf8');
+  chmodSync(executable, 0o755);
+  return { bin, env: { PATH: `${bin}:${process.env['PATH'] ?? ''}` } };
+}
+
 const VALID_CONFIG = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   revision: 0,
   coordinatorModels: [
     {
@@ -110,20 +138,10 @@ test('项目配置写坏：仍装配核验并报不可用，不回落成「没�
   expect(result.ok).toBe(false);
 });
 
-test('native 只读角色使用 adapter 的启动前门禁：保留字段被拒时逐 harness 报不可用', async () => {
-  const connection = {
-    connectionRef: 'connection-native',
-    label: 'native',
-    providerIntegration: 'minimax',
-    modelOptions: {},
-    credential: { kind: 'harness_login' },
-    codex: null,
-    nativeWorker: { harness: 'claude', providerId: 'minimax' },
-  };
+test('只读角色查询 Worker 原生目录并保留受限启动探针结论', async () => {
+  const harness = fakeClaude();
   const repository = repositoryWithConfig(
     configWith({
-      providerConnections: [connection],
-      models: [{ modelRef: 'model-native', connectionRef: 'connection-native', model: 'MiniMax-M3', effortCapability: null }],
       execution: {
         harness: 'claude',
         codexSandbox: 'workspace-write',
@@ -132,14 +150,11 @@ test('native 只读角色使用 adapter 的启动前门禁：保留字段被拒�
             profileRef: 'profile-finalizer',
             role: 'finalizer',
             harness: 'claude',
-            modelConfiguration: {
-              connection,
-              modelRef: 'model-native',
+            modelSelection: {
               model: 'MiniMax-M3',
               effort: null,
               effortCapability: null,
-              // 宿主保留键：adapter 的启动前门禁会拒绝，doctor 只调用它而不复制规则。
-              modelOptions: { model: 'attempted-override' },
+              catalogSource: 'claude:2.1.291:control-list-models',
             },
           },
         ],
@@ -147,120 +162,12 @@ test('native 只读角色使用 adapter 的启动前门禁：保留字段被拒�
       },
     }),
   );
-  const probe = createOrcaDoctorProbe({ cwd: repository, env: {} });
+  const probe = createOrcaDoctorProbe({ cwd: repository, env: harness.env });
 
   const result = await probe.readReadOnlyWorkers!();
   expect(result.ok).toBe(true);
   if (result.ok) {
-    expect(result.value).toHaveLength(1);
-    expect(result.value[0]).toMatchObject({
-      harness: 'claude',
-      profileRef: 'profile-finalizer',
-      capability: 'unavailable',
-      harnessVersion: null,
-    });
-  }
-});
-
-test('managed 凭据读不到时只读角色不报 ok，且结论里不出现 secret', async () => {
-  const connection = {
-    connectionRef: 'connection-managed',
-    label: 'native-managed',
-    providerIntegration: 'minimax',
-    modelOptions: {},
-    credential: { kind: 'managed', credentialRef: '11111111-1111-4111-8111-111111111111', optionPath: 'apiKey' },
-    codex: null,
-    nativeWorker: { harness: 'claude', providerId: 'minimax' },
-  };
-  const repository = repositoryWithConfig(
-    configWith({
-      providerConnections: [connection],
-      models: [{ modelRef: 'model-managed', connectionRef: 'connection-managed', model: 'MiniMax-M3', effortCapability: null }],
-      execution: {
-        harness: 'claude',
-        codexSandbox: 'workspace-write',
-        workerProfiles: [
-          {
-            profileRef: 'profile-finalizer',
-            role: 'finalizer',
-            harness: 'claude',
-            modelConfiguration: {
-              connection,
-              modelRef: 'model-managed',
-              model: 'MiniMax-M3',
-              effort: null,
-              effortCapability: null,
-              modelOptions: {},
-            },
-          },
-        ],
-        workerProfileRefs: { finalizer: 'profile-finalizer' },
-      },
-    }),
-  );
-  // 独立的临时 XDG：凭据 store 里没有任何条目，因此 managed 引用一定读不到，不依赖真实用户凭据。
-  const credentialsDirectory = mkdtempSync(join(tmpdir(), 'doctor-credentials-'));
-  directories.push(credentialsDirectory);
-  const probe = createOrcaDoctorProbe({
-    cwd: repository,
-    env: { XDG_CONFIG_HOME: credentialsDirectory, XDG_DATA_HOME: credentialsDirectory },
-  });
-
-  const result = await probe.readReadOnlyWorkers!();
-  expect(result.ok).toBe(true);
-  if (result.ok) {
-    expect(result.value[0]).toMatchObject({ harness: 'claude', capability: 'unavailable', harnessVersion: null });
-    expect(result.value[0]?.detail).toContain('managed 凭据不可用');
-    // 结论只报错误类别，绝不回显 secret 或 store 内容。
-    expect(result.value[0]?.detail).not.toContain('11111111-1111-4111-8111-111111111111');
-  }
-});
-
-test.each(['implementation', 'recovery_utility'] as const)('opencode %s 走 adapter 启动前门禁：未核验的 effort 被拒', async (role) => {
-  const connection = {
-    connectionRef: 'connection-opencode',
-    label: 'opencode',
-    providerIntegration: 'minimax',
-    modelOptions: {},
-    credential: { kind: 'harness_login' },
-    codex: null,
-    nativeWorker: { harness: 'opencode', providerId: 'minimax' },
-  };
-  const effortCapability = { values: ['low', 'high'], source: 'opencode', optionPath: 'effort' };
-  const repository = repositoryWithConfig(
-    configWith({
-      providerConnections: [connection],
-      models: [
-        { modelRef: 'model-opencode', connectionRef: 'connection-opencode', model: 'MiniMax-M3', effortCapability },
-      ],
-      execution: {
-        harness: 'opencode',
-        codexSandbox: 'workspace-write',
-        workerProfiles: [
-          {
-            profileRef: 'profile-recovery-utility',
-            role,
-            harness: 'opencode',
-            modelConfiguration: {
-              connection,
-              modelRef: 'model-opencode',
-              model: 'MiniMax-M3',
-              effort: 'high',
-              effortCapability,
-              modelOptions: {},
-            },
-          },
-        ],
-        workerProfileRefs: { [role]: 'profile-recovery-utility' },
-      },
-    }),
-  );
-  const probe = createOrcaDoctorProbe({ cwd: repository, env: {} });
-
-  const result = await probe.readReadOnlyWorkers!();
-  expect(result.ok).toBe(true);
-  if (result.ok) {
-    // adapter 拒绝带 effort 的 opencode 启动；doctor 只调用它，结论如实报不可用。
-    expect(result.value[0]).toMatchObject({ harness: 'opencode', capability: 'unavailable' });
+    expect(result.value[0]).toMatchObject({ harness: 'claude', profileRef: 'profile-finalizer' });
+    expect(result.value[0]?.detail).toContain('原生模型目录可用（1 项）');
   }
 });

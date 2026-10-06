@@ -26,9 +26,9 @@ import {
 } from '../../application/dto/identity.js';
 import type { GraphVersionRecord } from './execution-graph.js';
 import {
-  scanModelOptionFields,
-  workerModelConfigurationSchema,
-  type WorkerModelConfiguration,
+  WORKER_HARNESS_IDS,
+  workerModelSelectionSchema,
+  type WorkerModelSelection,
 } from '../model-configuration.js';
 import {
   DEFAULT_EXECUTION_LIMITS,
@@ -39,7 +39,7 @@ import {
 } from './budget-policy.js';
 
 /** Manifest 的结构版本；字段集合变化时递增，读取到未知版本即拒绝。 */
-export const MANIFEST_VERSION = 3;
+export const MANIFEST_VERSION = 4;
 
 export const WORKER_ROLES = ['planner', 'implementation', 'validator', 'finalizer'] as const;
 
@@ -50,24 +50,24 @@ export type WorkerProfileRef = {
   readonly role: WorkerRole;
   readonly harness: string;
   /**
-   * 该角色的完整模型绑定（连接、模型、effort、非秘密 options 与 credentialRef）。
+   * 该角色的不可变模型选择（harness、model、effort 与原生目录来源）。
    *
-   * Manifest2 起这是必填：缺少它的授权无法证明 Worker 实际用什么模型运行，因此解析层直接拒绝，
-   * 不存在「留到启动时再补」的状态。
+   * 连接、endpoint 与凭据由 harness 自身拥有，因此这里没有 connection/modelOptions/credentialRef。
+   * 缺少 modelSelection 的授权无法证明 Worker 实际用什么模型运行，解析层直接拒绝。
    */
-  readonly modelConfiguration: WorkerModelConfiguration;
+  readonly modelSelection: WorkerModelSelection;
 };
 
 /**
- * Recovery Utility 的独立绑定（Manifest2）。
+ * Recovery Utility 的独立绑定（Manifest4）。
  *
- * 它不参与领域四主角色，但替代 Session 需要模型配置；新 Recovery Utility Task 固定创建时的授权配置，
+ * 它不参与领域四主角色，但替代 Session 需要模型选择；新 Recovery Utility Task 固定创建时的授权配置，
  * 所以授权必须自带这一份绑定，而不是从当前项目配置里现读。
  */
 export type RecoveryUtilityProfile = {
   readonly profileRef: EntityRef<'worker-profile'>;
   readonly harness: string;
-  readonly modelConfiguration: WorkerModelConfiguration;
+  readonly modelSelection: WorkerModelSelection;
 };
 
 /** 角色权限；每一项都是显式布尔值，没有「默认允许」的解读空间。 */
@@ -182,34 +182,33 @@ function readVersionedRef(
   return { ok: true, value: { kind: ref.value.kind, id: ref.value.id, version: version.value } };
 }
 
-function parseModelConfiguration(raw: unknown, path: string): IdentityResult<WorkerModelConfiguration> {
-  const parsed = workerModelConfigurationSchema.safeParse(raw);
+function parseWorkerModelSelection(raw: unknown, path: string): IdentityResult<WorkerModelSelection> {
+  const parsed = workerModelSelectionSchema.safeParse(raw);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     const field = issue === undefined || issue.path.length === 0 ? path : `${path}.${issue.path.join('.')}`;
     return {
       ok: false,
       field,
-      message: issue === undefined ? '不是合法的模型配置' : issue.message,
+      message: issue === undefined ? '不是合法的模型选择' : issue.message,
     };
   }
-  const scanned = [
-    { path: `${path}.modelOptions`, scan: scanModelOptionFields(parsed.data.modelOptions, `${path}.modelOptions`) },
-    { path: `${path}.connection.modelOptions`, scan: scanModelOptionFields(parsed.data.connection.modelOptions, `${path}.connection.modelOptions`) },
-  ];
-  for (const entry of scanned) {
-    if (entry.scan.kind === 'credential_field') {
-      return {
-        ok: false,
-        field: entry.scan.path,
-        message: '模型 options 不得携带明文秘密',
-      };
-    }
-    if (entry.scan.kind === 'unbounded') {
-      return { ok: false, field: entry.path, message: '模型 options 结构过深或成环，无法证明不含明文秘密' };
-    }
-  }
   return { ok: true, value: parsed.data };
+}
+
+/** harness 必须是已注册身份；未注册值在解析层 fail closed。 */
+function readWorkerHarness(
+  record: Record<string, unknown>,
+  path: string,
+): IdentityResult<string> {
+  const harness = readString(record, 'harness', path);
+  if (!harness.ok) {
+    return harness;
+  }
+  if (!(WORKER_HARNESS_IDS as readonly string[]).includes(harness.value)) {
+    return { ok: false, field: `${path}.harness`, message: `未知 Worker harness ${harness.value}` };
+  }
+  return harness;
 }
 
 function parseWorkerProfiles(raw: unknown, path: string): IdentityResult<readonly WorkerProfileRef[]> {
@@ -230,19 +229,19 @@ function parseWorkerProfiles(raw: unknown, path: string): IdentityResult<readonl
     if (typeof role !== 'string' || !(WORKER_ROLES as readonly string[]).includes(role)) {
       return { ok: false, field: `${path}[${index}].role`, message: `未知 Worker 角色 ${String(role)}` };
     }
-    const harness = readString(record, 'harness', `${path}[${index}]`);
+    const harness = readWorkerHarness(record, `${path}[${index}]`);
     if (!harness.ok) {
       return harness;
     }
-    const modelConfiguration = parseModelConfiguration(record['modelConfiguration'], `${path}[${index}].modelConfiguration`);
-    if (!modelConfiguration.ok) {
-      return modelConfiguration;
+    const modelSelection = parseWorkerModelSelection(record['modelSelection'], `${path}[${index}].modelSelection`);
+    if (!modelSelection.ok) {
+      return modelSelection;
     }
     profiles.push({
       profileRef: { kind: 'worker-profile', id: profileRef.value.id },
       role: role as WorkerRole,
       harness: harness.value,
-      modelConfiguration: modelConfiguration.value,
+      modelSelection: modelSelection.value,
     });
   }
   const seenRoles = new Set<string>();
@@ -270,20 +269,20 @@ function parseRecoveryUtilityProfile(raw: unknown, path: string): IdentityResult
   if (!profileRef.ok) {
     return profileRef;
   }
-  const harness = readString(record, 'harness', path);
+  const harness = readWorkerHarness(record, path);
   if (!harness.ok) {
     return harness;
   }
-  const modelConfiguration = parseModelConfiguration(record['modelConfiguration'], `${path}.modelConfiguration`);
-  if (!modelConfiguration.ok) {
-    return modelConfiguration;
+  const modelSelection = parseWorkerModelSelection(record['modelSelection'], `${path}.modelSelection`);
+  if (!modelSelection.ok) {
+    return modelSelection;
   }
   return {
     ok: true,
     value: {
       profileRef: { kind: 'worker-profile', id: profileRef.value.id },
       harness: harness.value,
-      modelConfiguration: modelConfiguration.value,
+      modelSelection: modelSelection.value,
     },
   };
 }

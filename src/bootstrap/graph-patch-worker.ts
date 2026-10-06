@@ -1,7 +1,6 @@
 /** Graph Patch Planner 的生产 Worker port：Task、Session 与 Delivery 都按可信身份核验。 */
 
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
 
 import type { HarnessSessionReport } from '../application/ports/worker-harness.js';
 import type { HarnessSessionFacts } from '../adapters/agents/session-binding.js';
@@ -23,8 +22,7 @@ import { graphPatchPlannerInstruction } from '../application/execution/graph-pat
 import type { BranchCoordinationStore, CoordinationWriter } from '../application/ports/branch-coordination-store.js';
 import type { ExecutionBackend } from '../application/ports/execution-backend.js';
 import type { SpecBinding } from '../domain/task-contract.js';
-import type { WorkerModelConfiguration } from '../domain/model-configuration.js';
-import type { CredentialStore } from '../application/ports/credential-store.js';
+import type { WorkerModelSelection } from '../domain/model-configuration.js';
 import type { WorkerListResult } from '../adapters/orca-cli/operation-catalog.js';
 import { parseOrcaWorkerDoneLocator } from './execution-runtime.js';
 
@@ -39,21 +37,13 @@ export type GraphPatchWorkerInput = {
   /** 该次派发钉住的 Planner profile harness；由调用方按已批准 Manifest 给出，不从模型连接推断。 */
   readonly harness: string;
   /**
-   * 冻结的 Planner 模型配置。
+   * 冻结的 Planner 模型选择。
    *
    * Graph Patch Planner 是一次真实的 Planner 派发，因此与常规 Planner Task 走同一份已批准绑定：
-   * 启动参数只由它生成，不从项目配置或界面另取一个模型。
+   * 启动参数只由它生成，不从项目配置或界面另取一个模型。Worker 的连接、认证与 provider endpoint 由
+   * harness 自身拥有，这里没有可注入的凭据。
    */
-  readonly modelConfiguration: WorkerModelConfiguration;
-  /**
-   * 用户级凭据 store 与其文件位置。
-   *
-   * Graph Patch Planner 与常规 Planner Task 一样可能绑定 managed 凭据，因此启动准备阶段要用与
-   * Coordinator 装配、模型保存同一份 store 证明 key 存在。两项由调用方按宿主 env 注入，本模块
-   * 不自己推导路径，否则测试与隔离启动会各按一份环境解析。
-   */
-  readonly credentialStore: CredentialStore;
-  readonly credentialStorePath: string;
+  readonly modelSelection: WorkerModelSelection;
   readonly bindingWindowMs: number;
   readonly reportTimeoutMs: number;
 };
@@ -201,7 +191,7 @@ export async function runGraphPatchPlannerWorker(input: GraphPatchWorkerInput): 
         dispatchId: dispatch.dispatchId as DispatchId, attemptId },
       report,
       workspace: input.canonicalWorktreePath,
-      expectedCodexHome: join(paths.stateRoot, createHash('sha256').update(launchId).digest('hex').slice(0, 20)),
+      expectedCodexHome: report.stateRoot ?? report.codexHome ?? '',
       dispatchStartedAt: report.observedAt,
       bindingDeadlineAt: report.observedAt,
     });
@@ -220,9 +210,7 @@ export async function runGraphPatchPlannerWorker(input: GraphPatchWorkerInput): 
     execution,
     workerLaunch: prepareHarnessWorkerLaunch(harness, {
       launchId,
-      modelConfiguration: input.modelConfiguration,
-      credentialStore: input.credentialStore,
-      credentialStorePath: input.credentialStorePath,
+      modelSelection: input.modelSelection,
       sandboxMode: 'read-only-local-control',
       stateRoot: paths.stateRoot,
       sessionStartReporterPath: paths.reporterPath,
@@ -246,7 +234,7 @@ export async function runGraphPatchPlannerWorker(input: GraphPatchWorkerInput): 
             },
             report,
             workspace: input.canonicalWorktreePath,
-            expectedCodexHome: join(paths.stateRoot, createHash('sha256').update(launchId).digest('hex').slice(0, 20)),
+            expectedCodexHome: report.stateRoot ?? report.codexHome ?? '',
             dispatchStartedAt,
             bindingDeadlineAt: new Date().toISOString(),
           });

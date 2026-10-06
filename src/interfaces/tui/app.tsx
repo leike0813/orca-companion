@@ -22,6 +22,7 @@ import {
   modelRoles,
   modelSwitchAdmission,
   selectedRoleCandidate,
+  workerManualSelection,
 } from './components/model-picker.js';
 import {
   editModelSettingsField,
@@ -30,7 +31,9 @@ import {
   visibleModelSettingsFields,
 } from './components/model-settings-editor.js';
 import { CommandInvocations, type CommandOutcome, type MutationOutcome } from './command-invocations.js';
+import { WORKER_HARNESS_IDS, type WorkerHarnessId, type WorkerModelSelection } from '../../domain/model-configuration.js';
 import type { ControllerPlanningHandoffView, ControllerHandoffView } from '../../application/controller-service.js';
+import type { ModelSettingsApplyInput } from './ports.js';
 import type { CommandResultRef } from '../../application/tui/command-result.js';
 import type { AnswerPanelView } from './components/answer-panel.js';
 import type { PasteViewerView } from './components/paste-viewer.js';
@@ -467,6 +470,14 @@ function TuiAppContent(props: TuiAppProps) {
   const modelEditVersion = useRef(0);
   const modelSaveInFlight = useRef(false);
   const modelApplyInFlight = useRef(false);
+  /**
+   * Worker 原生目录查询的代次与在途请求。
+   *
+   * 切换 harness、关闭弹窗或重新打开都会取消在途请求并递增代次；迟到结果只允许回到发起它的那一次
+   * 查询，因此不可能改写已经离开的入口或另一个角色的候选。
+   */
+  const modelWorkerQuery = useRef<AbortController | null>(null);
+  const modelWorkerGeneration = useRef(0);
   const [planningReview, setPlanningReview] = useState<ControllerPlanningHandoffView | null>(null);
   const [executionReview, setExecutionReview] = useState<ControllerHandoffView | null>(null);
   const executionReviewRef = useRef<CommandResultRef | null>(null);
@@ -1292,7 +1303,12 @@ function TuiAppContent(props: TuiAppProps) {
     if(state.selectedSessionId===null)return;
     let active=true;
     void ports.modelCatalog.load(state.selectedSessionId).then(catalog=>{ if(active) setModelCatalog(catalog); }).catch(()=>{ if(active) setModelCatalog(EMPTY_MODEL_CATALOG); });
-    return ()=>{active=false;};
+    return ()=>{
+      active=false;
+      modelWorkerGeneration.current += 1;
+      modelWorkerQuery.current?.abort();
+      modelWorkerQuery.current = null;
+    };
   }, [ports, state.selectedSessionId, snapshot?.sessions.find(session=>session.coordinatorSessionId===state.selectedSessionId)?.coordinatorModelConfigurationRef]);
 
   // 选中 Session 后加载其 transcript。
@@ -2370,8 +2386,16 @@ function TuiAppContent(props: TuiAppProps) {
   const modelRoleList = (): readonly ModelRoleView[] => modelRoles(modelCatalog);
   const highlightedRole = (): ModelRoleView | null => modelRoleList()[stateRef.current.modelRoleIndex] ?? null;
   const roleMenuRole = (): ModelRoleView | null => {
-    const role = stateRef.current.modelRoleMenu?.role;
-    return role === undefined ? null : modelRoleList().find((entry) => entry.role === role) ?? null;
+    const current = stateRef.current;
+    const menu = current.modelRoleMenu;
+    const role = modelRoleList().find((entry) => entry.role === menu?.role) ?? null;
+    if (role === null || role.role === 'coordinator' || menu === null) return role;
+    const catalog = current.modelWorkerCatalog;
+    const load = catalog?.role === role.role && catalog.harness === menu.harness ? catalog.load : null;
+    return { ...role, candidates: load?.kind === 'available' ? load.models.map((candidate) => ({
+      candidateRef: candidate.model, connectionRef: null, provider: menu.harness ?? '', harness: menu.harness ?? null,
+      model: candidate.model, effortCapability: candidate.effortCapability, catalogSource: load.source,
+    })) : [] };
   };
   const openModelOverlay = (overlay: OverlayKind, selectedId: string | null = null) => {
     dispatch({ kind: 'review-view', tab: 0, scroll: 0, action: 0 });
@@ -2401,14 +2425,51 @@ function TuiAppContent(props: TuiAppProps) {
   };
   const closeModelOverlays = () => {
     modelInvocation.current += 1;
+    modelWorkerGeneration.current += 1;
+    modelWorkerQuery.current?.abort();
+    modelWorkerQuery.current = null;
     eraseModelSecret();
     modelSettingsSnapshot.current = null;
+    dispatch({ kind: 'model-worker-catalog', catalog: null });
     dispatch({ kind: 'model-role-menu', menu: null });
     dispatch({ kind: 'model-settings-edit', edit: null });
     dispatch({ kind: 'overlay-close-all' });
   };
+  /**
+   * 显式查询一个 Worker harness 的原生模型目录。
+   *
+   * 只由用户动作触发（进入角色菜单、切换 harness），不在 render/effect 中自动调用。结果绑定本次
+   * 角色+harness+代次：切换或关闭会取消在途请求，迟到结果因此不能改写已经离开的入口。
+   */
+  const queryWorkerModelsFor = async (role: ModelRoleView['role'], harness: WorkerHarnessId) => {
+    const generation = (modelWorkerGeneration.current += 1);
+    modelWorkerQuery.current?.abort();
+    const controller = new AbortController();
+    modelWorkerQuery.current = controller;
+    dispatch({ kind: 'model-worker-catalog', catalog: { role, harness, generation, load: null } });
+    let load;
+    try {
+      load = await ports.modelCatalog.queryWorkerModels({ harness, signal: controller.signal });
+    } catch {
+      if (generation !== modelWorkerGeneration.current) return;
+      load = { kind: 'unavailable' as const, code: 'catalog_query_failed', message: '原生目录查询失败' };
+    }
+    if (generation !== modelWorkerGeneration.current) return;
+    dispatch({ kind: 'model-worker-catalog', catalog: { role, harness, generation, load } });
+    const current = stateRef.current;
+    const menu = current.modelRoleMenu;
+    if (load.kind === 'available' && menu?.role === role && menu.harness === harness
+      && (current.dialogSelections['model-role-menu']?.query.text ?? '') === '') {
+      const binding = modelRoleList().find((entry) => entry.role === role)?.current;
+      const candidate = load.models.find((entry) => entry.model === binding?.model) ?? load.models[0];
+      const selectedCandidateRef = candidate?.model ?? null;
+      const effort = candidate?.effortCapability?.values.includes(binding?.effort ?? '') ? binding?.effort ?? null : null;
+      dispatch({ kind: 'dialog-selection', overlay: 'model-role-menu', query: emptyDraft(), selectedId: selectedCandidateRef });
+      dispatch({ kind: 'model-role-menu', menu: { ...menu, selectedCandidateRef, effort } });
+    }
+  };
   /** 进入某个角色的候选菜单；不可用时保持当前层并显示宿主给出的原因。 */
-  const openModelRole = (role?: ModelRoleView) => {
+  const openModelRole = (role?: ModelRoleView, options?: { readonly focus?: ModelRoleMenuState['focus'] }) => {
     const target = role ?? highlightedRole();
     if (target === null) {
       dispatch({ kind: 'model-settings-notice', notice: '! 没有可用的角色' });
@@ -2417,6 +2478,19 @@ function TuiAppContent(props: TuiAppProps) {
     const admission = modelRoleAdmission(target, modelCatalog);
     if (!admission.allowed) {
       dispatch({ kind: 'model-settings-notice', notice: '! ' + (admission.reason ?? '该角色当前不可用') });
+      return;
+    }
+    if (target.role !== 'coordinator') {
+      // Worker：候选来自该 harness 的原生目录，因此先确定 harness，再显式查询。手填入口只是同一菜单
+      // 的一个焦点，不另开表单，也就不会出现连接、凭据或 options 字段。
+      const harness = target.current?.harness ?? WORKER_HARNESS_IDS[0];
+      dispatch({ kind: 'model-settings-notice', notice: null });
+      dispatch({
+        kind: 'model-role-menu',
+        menu: { role: target.role, selectedCandidateRef: null, focus: options?.focus ?? 'list', action: 0, effort: null, harness },
+      });
+      openModelOverlay('model-role-menu', null);
+      void queryWorkerModelsFor(target.role, harness);
       return;
     }
     const current = target.current;
@@ -2455,6 +2529,11 @@ function TuiAppContent(props: TuiAppProps) {
       dispatch({ kind: 'model-settings-notice', notice: '! 没有可用的角色' });
       return;
     }
+    if (target.role !== 'coordinator') {
+      // Worker 不再有连接、凭据或 options 表单：直接进入 harness/native ID 手填菜单。
+      openModelRole(target, { focus: 'harness' });
+      return;
+    }
     const invocation = (modelInvocation.current += 1);
     const navigation = navigationGeneration.current;
     dispatch({ kind: 'model-settings-notice', notice: null });
@@ -2485,28 +2564,18 @@ function TuiAppContent(props: TuiAppProps) {
       kind: 'model-settings-edit',
       field: 'label',
       edit: {
-        role: target.role,
+        role: 'coordinator',
         label: connection?.label ?? binding?.connectionLabel ?? '',
         providerIntegration: connection?.providerIntegration ?? binding?.providerIntegration ?? '',
         model: binding?.model ?? '',
         options: formatModelOptions(connection?.modelOptions ?? {}),
-        // Worker 角色回填既有 profile 的 harness；没有既有 profile 时留空，由服务层落到
-        // execution.harness。Coordinator 始终是 codex/LangChain，不出现 harness 字段。
-        harness: target.role === 'coordinator' ? '' : (binding?.harness ?? ''),
-        codexProviderId: connection?.codex?.providerId ?? '',
-        codexBaseUrl: connection?.codex?.baseUrl ?? '',
-        codexWireApi: connection?.codex?.wireApi ?? '',
-        // 原生连接原样回填：否则编辑一个既有原生角色会把它静默改回 codex 连接。
-        nativeProviderId: connection?.nativeWorker?.providerId ?? '',
-        nativeBaseUrl: connection?.nativeWorker?.baseUrl ?? '',
-        nativeApi: connection?.nativeWorker?.api ?? '',
         credentialKind: credential?.kind ?? 'harness_login',
         credentialRef: credential?.kind === 'managed' ? credential.credentialRef : '',
         credentialOptionPath: credential?.kind === 'managed' ? credential.optionPath : '',
         // 已有能力来源原样复用：界面既不发明也不静默清除它。
         effortSource: capability?.source ?? '',
         effortValues: capability?.values.join(',') ?? '',
-        effortOptionPath: capability?.optionPath ?? '',
+        effortOptionPath: capability !== null && 'optionPath' in capability && typeof capability.optionPath === 'string' ? capability.optionPath : '',
         secret: '',
       },
     });
@@ -2597,26 +2666,23 @@ function TuiAppContent(props: TuiAppProps) {
    */
   const submitModelRole = async (action: number) => {
     if (action === 0) {
+      modelWorkerGeneration.current += 1;
+      modelWorkerQuery.current?.abort();
+      modelWorkerQuery.current = null;
       dispatch({ kind: 'model-role-menu', menu: null });
       dispatch({ kind: 'overlay-close-top' });
       return;
     }
     const menu = stateRef.current.modelRoleMenu;
     const role = roleMenuRole();
-    if (menu === null || role === null || menu.selectedCandidateRef === null) {
-      dispatch({ kind: 'model-settings-notice', notice: '! 请先选择一个模型候选' });
-      return;
-    }
-    const candidate = selectedRoleCandidate(role, menu.selectedCandidateRef);
-    const efforts = effortValues(candidate);
-    const effort = efforts.includes(menu.effort ?? '') ? menu.effort : null;
-    if (efforts.length > 0 && effort === null) {
-      dispatch({ kind: 'model-settings-notice', notice: '! effort_unsupported: 请先选择该模型支持的 effort' });
-      return;
-    }
     const port = modelSettingsPort;
-    if (port === undefined) {
-      dispatch({ kind: 'model-settings-notice', notice: '! model_settings_unavailable: 角色模型配置端口尚未接通' });
+    if (menu === null || role === null || port === undefined) {
+      dispatch({
+        kind: 'model-settings-notice',
+        notice: port === undefined
+          ? '! model_settings_unavailable: 角色模型配置端口尚未接通'
+          : '! 请先选择一个模型候选',
+      });
       return;
     }
     const revision = modelCatalog.configurationRevision;
@@ -2625,19 +2691,88 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     const session = modelMenuTarget.current ?? stateRef.current.selectedSessionId;
-    if (role.role === 'coordinator' && session === null) {
-      dispatch({ kind: 'model-settings-notice', notice: '! session_missing: 未选择 Coordinator Session' });
-      return;
-    }
-    // Coordinator 沿用既有挂起与在途操作的准入：不可切换时不必先保存候选。
+    const menuQueryText = (): string => stateRef.current.dialogSelections['model-role-menu']?.query.text ?? '';
+    /**
+     * 当前菜单的选择指纹。
+     *
+     * 应用前算一次、结果回来后按当时状态再算一次：等待期间改了候选、effort、harness 或手填 ID 时，
+     * 迟到结果只刷新配置基准，不覆盖用户当前选择。指纹读取实时状态，因此不绑定提交瞬间的闭包。
+     */
+    const selectionFingerprint = (): string => {
+      const currentMenu = stateRef.current.modelRoleMenu;
+      const currentRole = roleMenuRole();
+      if (currentMenu === null || currentRole === null) return 'closed';
+      if (currentRole.role === 'coordinator') {
+        return 'config:' + (currentMenu.selectedCandidateRef ?? '') + ':' + (currentMenu.effort ?? '');
+      }
+      const text = menuQueryText();
+      return 'worker:' + String(currentMenu.harness ?? '') + ':' +
+        (workerManualSelection(currentRole, text) ? 'manual:' + text.trim() : 'catalog:' + (currentMenu.selectedCandidateRef ?? '')) +
+        ':' + (currentMenu.effort ?? '');
+    };
+
+    let apply: ModelSettingsApplyInput;
     if (role.role === 'coordinator') {
+      if (menu.selectedCandidateRef === null) {
+        dispatch({ kind: 'model-settings-notice', notice: '! 请先选择一个模型候选' });
+        return;
+      }
+      const candidate = selectedRoleCandidate(role, menu.selectedCandidateRef);
+      const efforts = effortValues(candidate);
+      const effort = efforts.includes(menu.effort ?? '') ? menu.effort : null;
+      if (efforts.length > 0 && effort === null) {
+        dispatch({ kind: 'model-settings-notice', notice: '! effort_unsupported: 请先选择该模型支持的 effort' });
+        return;
+      }
+      if (session === null) {
+        dispatch({ kind: 'model-settings-notice', notice: '! session_missing: 未选择 Coordinator Session' });
+        return;
+      }
+      // Coordinator 沿用既有挂起与在途操作的准入：不可切换时不必先保存候选。
       const admission = modelSwitchAdmission(modelCatalog);
       if (!admission.allowed) {
         setModelRejection(admission.reason);
         dispatch({ kind: 'model-settings-notice', notice: '! ' + (admission.reason ?? '当前不可切换') });
         return;
       }
+      apply = { role: 'coordinator', modelRef: menu.selectedCandidateRef, effort, expectedRevision: revision };
+    } else {
+      const harness = menu.harness ?? WORKER_HARNESS_IDS[0];
+      const text = menuQueryText();
+      let selection: WorkerModelSelection;
+      if (workerManualSelection(role, text)) {
+        const model = text.trim();
+        if (model === '') {
+          dispatch({ kind: 'model-settings-notice', notice: '! 请先选择目录候选或手填 native ID' });
+          return;
+        }
+        // 手填来源未经目录核验：catalogSource 为 null，effort 必须为 null。
+        selection = { model, effort: null, effortCapability: null, catalogSource: null };
+      } else {
+        if (menu.selectedCandidateRef === null) {
+          dispatch({ kind: 'model-settings-notice', notice: '! 请先选择目录候选或手填 native ID' });
+          return;
+        }
+        const candidate = selectedRoleCandidate(role, menu.selectedCandidateRef);
+        const efforts = effortValues(candidate);
+        const effort = efforts.includes(menu.effort ?? '') ? menu.effort : null;
+        if (efforts.length > 0 && effort === null) {
+          dispatch({ kind: 'model-settings-notice', notice: '! effort_unsupported: 请先选择该模型支持的 effort' });
+          return;
+        }
+        const capability = candidate?.effortCapability ?? null;
+        // 目录候选的可信来源与能力原样携带：界面不发明，也不把未验证来源当成已验证。
+        selection = {
+          model: candidate?.model ?? menu.selectedCandidateRef,
+          effort,
+          effortCapability: capability === null ? null : { values: [...capability.values], source: capability.source },
+          catalogSource: candidate?.catalogSource ?? null,
+        };
+      }
+      if (role.role === 'planning_utility' || role.role === 'specification_validator') return;
+      apply = { role: role.role, harness, modelSelection: selection, expectedRevision: revision };
     }
+
     // 同一次选择不允许并发应用：重复 Enter 会追加重复 profile，且后到的结果可能覆盖先到的。
     if (modelApplyInFlight.current) {
       dispatch({ kind: 'model-settings-notice', notice: '! apply_in_flight: 原应用仍在途，请等待结果' });
@@ -2646,12 +2781,11 @@ function TuiAppContent(props: TuiAppProps) {
     dispatch({ kind: 'model-settings-notice', notice: null });
     const invocation = modelInvocation.current;
     const navigation = navigationGeneration.current;
-    const appliedRef = menu.selectedCandidateRef;
-    const appliedEffort = effort;
+    const appliedFingerprint = selectionFingerprint();
     modelApplyInFlight.current = true;
     let saved;
     try {
-      saved = await port.apply({ role: role.role, modelRef: menu.selectedCandidateRef, effort, expectedRevision: revision });
+      saved = await port.apply(apply);
     } catch {
       modelApplyInFlight.current = false;
       if (invocation !== modelInvocation.current || navigation !== navigationGeneration.current) return;
@@ -2664,12 +2798,9 @@ function TuiAppContent(props: TuiAppProps) {
       dispatch({ kind: 'model-settings-notice', notice: '! ' + saved.code + ': ' + saved.message });
       return;
     }
-    // 等待期间改了候选或 effort：已保存的是旧选择。当前选择原样保留，刷新配置基准后可直接再应用。
-    const currentMenu = stateRef.current.modelRoleMenu;
-    if (
-      currentMenu !== null &&
-      (currentMenu.selectedCandidateRef !== appliedRef || currentMenu.effort !== appliedEffort)
-    ) {
+    // 等待期间改了候选、effort、harness 或手填 ID：已保存的是旧选择。当前选择原样保留，刷新配置
+    // 基准后可直接再应用。
+    if (selectionFingerprint() !== appliedFingerprint) {
       void reloadModelCatalog();
       dispatch({
         kind: 'model-settings-notice',
@@ -2728,6 +2859,14 @@ function TuiAppContent(props: TuiAppProps) {
     const selection=current.dialogSelections['model-role-menu']??{query:emptyDraft(),selectedId:null};
     const choices=dialogChoicesFor('model-role-menu',selection.query.text);
     const candidate=()=>role===null?null:selectedRoleCandidate(role,menu.selectedCandidateRef);
+    if(menu.focus==='harness'&&(key.leftArrow||key.rightArrow)){
+      const index=WORKER_HARNESS_IDS.indexOf(menu.harness??'codex');
+      const harness=WORKER_HARNESS_IDS[(index+(key.rightArrow?1:WORKER_HARNESS_IDS.length-1))%WORKER_HARNESS_IDS.length]!;
+      dispatch({kind:'dialog-selection',overlay:'model-role-menu',query:emptyDraft(),selectedId:null});
+      dispatch({kind:'model-role-menu',menu:{...menu,harness,selectedCandidateRef:null,effort:null,action:0}});
+      void queryWorkerModelsFor(menu.role,harness);
+      return;
+    }
     const moveCandidate=(delta:number)=>{
       if(choices.length===0)return;
       const index=choices.findIndex(choice=>choice.value===selection.selectedId);
@@ -2738,7 +2877,7 @@ function TuiAppContent(props: TuiAppProps) {
       dispatch({kind:'model-role-menu',menu:{...menu,selectedCandidateRef:next.value,effort:kept?menu.effort:null}});
     };
     if(key.tab){
-      const focuses:ModelRoleMenuState['focus'][]=effortValues(candidate()).length>0?['list','effort','actions']:['list','actions'];
+      const focuses:ModelRoleMenuState['focus'][]=[...(menu.role==='coordinator'?[]:['harness' as const]),'list',...(effortValues(candidate()).length>0?['effort' as const]:[]),'actions'];
       const next=focuses[(focuses.indexOf(menu.focus)+(key.shift?focuses.length-1:1)+focuses.length)%focuses.length]??'list';
       dispatch({kind:'model-role-menu',menu:{...menu,focus:next,action:next==='actions'?0:menu.action}});
       return;
@@ -2762,6 +2901,10 @@ function TuiAppContent(props: TuiAppProps) {
     }
     if(key.return&&!key.meta&&!key.shift){
       if(menu.focus==='actions'){void submitModelRole(menu.action);return;}
+      if(menu.focus==='harness'){
+        dispatch({kind:'model-role-menu',menu:{...menu,focus:'list',action:0}});
+        return;
+      }
       const hasEffort=effortValues(candidate()).length>0;
       dispatch({kind:'model-role-menu',menu:{...menu,focus:menu.focus==='list'?(hasEffort?'effort':'actions'):'actions',action:0}});
       return;
@@ -2796,7 +2939,7 @@ function TuiAppContent(props: TuiAppProps) {
     }
     if(key.upArrow||key.downArrow){
       // 导航与渲染共用同一份可见字段：隐藏的 API Key 不会被光标指向，也不会被数进行号。
-      const fields=visibleModelSettingsFields(edit.credentialKind,edit);
+      const fields=visibleModelSettingsFields(edit.credentialKind);
       const cursor=Math.max(0,fields.indexOf(current.modelSettingsField));
       const next=fields[(cursor+(key.upArrow?-1:1)+fields.length)%fields.length];
       if(next!==undefined)dispatch({kind:'model-settings-edit',edit,field:next});
@@ -2812,7 +2955,7 @@ function TuiAppContent(props: TuiAppProps) {
     }
     // 可见字段集合随角色与 harness 变化：切换后当前字段若被隐藏，光标落到新的首个可见字段，
     // 否则按键会写进一个已经不可见的字段。
-    const nextFields=visibleModelSettingsFields(next.credentialKind,next);
+    const nextFields=visibleModelSettingsFields(next.credentialKind);
     const nextField=nextFields.includes(current.modelSettingsField)?current.modelSettingsField:(nextFields[0]??'label');
     dispatch({kind:'model-settings-edit',edit:next,field:nextField});
   };
@@ -3068,6 +3211,11 @@ function TuiAppContent(props: TuiAppProps) {
       if(topOverlay()==='handoff-review'){void cancelHandoff();return;}
       if(topOverlay()==='execution-handoff-review'){void cancelExecutionHandoff();return;}
       if (stateRef.current.overlayStack.length > 0) {
+        if (topOverlay() === 'model-role-menu') {
+          modelWorkerGeneration.current += 1;
+          modelWorkerQuery.current?.abort();
+          modelWorkerQuery.current = null;
+        }
         dispatch({ kind: 'overlay-close-top' });
         return;
       }

@@ -24,10 +24,13 @@ test.each([null, {}, { sessionId: 1, transcriptPath: 'path', cwd: '/work', obser
 test('报告读取拒绝冲突身份、损坏尾行与超限输入', () => {
   const root = mkdtempSync(join(tmpdir(), 'companion-session-report-'));
   const path = join(root, 'report.jsonl');
-  const report = { sessionId: 'session-a', transcriptPath: '/session-a', cwd: '/work', observedAt: '2026-10-06T00:00:00Z' };
+  const report = {
+    sessionId: 'session-a', transcriptPath: '/session-a', cwd: '/work', observedAt: '2026-10-06T00:00:00Z',
+    stateRoot: '/native', runtimeRoots: ['/native', '/native/sessions'],
+  };
   try {
     writeFileSync(path, JSON.stringify(report) + '\n' + JSON.stringify(report) + '\n');
-    expect(readLatestHarnessSessionReport(path)?.sessionId).toBe('session-a');
+    expect(readLatestHarnessSessionReport(path)).toMatchObject({ sessionId: 'session-a', stateRoot: '/native', runtimeRoots: ['/native', '/native/sessions'] });
     for (const tail of [JSON.stringify({ ...report, sessionId: 'session-b' }), '{', '{}']) {
       writeFileSync(path, JSON.stringify(report) + '\n' + tail);
       expect(readLatestHarnessSessionReport(path)).toBeNull();

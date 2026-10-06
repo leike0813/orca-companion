@@ -343,6 +343,7 @@ function Overlay(props: {
     case 'model-role-menu':
       return (
         <RoleModelMenu
+          workerCatalog={parent.ui.modelWorkerCatalog}
           role={parent.modelRole ?? modelRoles(parent.modelCatalog)[0] ?? UNKNOWN_MODEL_ROLE}
           menu={parent.ui.modelRoleMenu ?? { role: 'coordinator', selectedCandidateRef: null, focus: 'list', action: 0, effort: null }}
           query={parent.ui.dialogSelections['model-role-menu']?.query.text??''}

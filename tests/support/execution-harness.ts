@@ -37,7 +37,7 @@ import type {
   ExecutionAuthorizationManifest,
   WorkerProfileRef,
 } from '../../src/domain/planning/execution-authorization.js';
-import type { WorkerModelConfiguration } from '../../src/domain/model-configuration.js';
+import type { WorkerModelSelection } from '../../src/domain/model-configuration.js';
 import {
   modelConfigurationFixture,
   recoveryUtilityProfileFixture,
@@ -56,11 +56,11 @@ export const EXECUTION_AUTHORIZATION_ID = 'auth-1';
 export const EXECUTION_ACCEPTED: readonly WorkPackageId[] = ['wp-a' as WorkPackageId];
 
 /**
- * 测试用的模型绑定。定义在 model-configurations.ts，与项目配置、Task 固定绑定和恢复路径共用同一份；
- * 这里保留旧名字是因为多处测试已经按它取夹具。
+ * 测试用的 Worker 模型选择。定义在 model-configurations.ts，与项目配置、Task 固定绑定和恢复路径共用
+ * 同一份；这里保留旧名字是因为多处测试已经按它取夹具。
  */
-export function executionModelConfiguration(overrides: Partial<WorkerModelConfiguration> = {}): WorkerModelConfiguration {
-  return modelConfigurationFixture(undefined, overrides);
+export function executionModelConfiguration(overrides: Partial<WorkerModelSelection> = {}): WorkerModelSelection {
+  return modelConfigurationFixture(overrides);
 }
 
 export function executionWorkerProfiles(): readonly WorkerProfileRef[] {

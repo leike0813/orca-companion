@@ -2,29 +2,38 @@
 
 记录 Companion 依赖的 Orca 侧事实：上游源码快照、本机运行时版本、已经核验的能力，以及尚未验证的部分。运行时能力必须通过当前安装的 Orca 版本核验，不能从 submodule 源码推断。
 
-## Worker Harness 扩展（2026-10-06）
+## Worker Harness 当前基线
 
-当前注册项为 `codex`、`claude`、`opencode`、`pi`、`omp`，配置和启动按角色固定的 profile 解析，不使用 Orca 的全局默认 agent 设置。本轮实际安装版本与指定验收模型如下：
+### 原生环境检查（2026-10-07）
 
-| Harness | 本机 `--version` | 验收模型 |
+移除 Worker 凭据管理后，本机通过生产目录 adapter 无 prompt 查询：Codex 0.160.0 返回 14 项、Claude 2.1.291 返回 4 项、pi 1.0.0 返回 521 项、OMP 18.4.10 返回 913 项；来源及 effort 只取原生输出。OpenCode 2.0.21 的 `models --standalone` 退出码为 0 且输出为空，记录为 `catalog_empty`，可手填未验证 exact ID。这些结果不证明模型网络调用或认证成功。
+
+五项生产 launcher/bwrap 哨兵探针均得到 `available / host-verify`：输入可读，workspace、Git HEAD 与 sibling coordination.sqlite 拒写，精确工件根可写。实际角色 Session、恢复与 Orca 端到端矩阵本轮未运行，条件检查记为 skip；历史矩阵不能作为本次修改的 PASS 证据。
+
+当前注册项为 `codex`、`claude`、`opencode`、`pi`、`omp`，配置和启动按角色固定的 profile（harness + `modelSelection`）解析，不使用 Orca 的全局默认 agent 设置；Worker 认证与 provider 配置由各 harness 在自己的真实用户环境中提供。本轮查询结果如下，真实模型任务均未运行：
+
+| Harness | 本机 `--version` | 原生模型目录 |
 | --- | --- | --- |
-| Claude Code | 2.1.289 | Opus alias → `MiniMax-M3.1-Flash-Preview` |
-| OpenCode | 2.0.21 | `minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview` |
-| pi | 1.0.0 | `minimax-cn/MiniMax-M3` |
-| OMP | 18.4.10 | `minimax-code-cn/MiniMax-M3.1-Flash-Preview` |
+| Codex | 0.160.0 | 14 项 |
+| Claude Code | 2.1.291 | 4 项 |
+| OpenCode | 2.0.21 | 空目录；`catalog_empty` |
+| pi | 1.0.0 | 521 项 |
+| OMP | 18.4.10 | 913 项 |
 
-Claude 通过 SessionStart hook、pi/OMP 通过原生 session extension 报告精确 session 与 transcript path。OpenCode 使用隔离 XDG 状态与 `--standalone`，经公开 session API 和分页消息接口核验，不直接读取数据库。恢复指定原 UUID、session ID 或完整 session 文件路径，并再次证明身份；报告迟到或结果 unknown 保留原操作，不重复派发。
+Claude 通过 SessionStart hook、pi/OMP 通过原生 session extension 报告精确 session 与 transcript path。OpenCode 使用 `--standalone` 私有子进程，经公开 session API 和分页消息接口核验，不直接读取数据库。恢复指定原 UUID、session ID 或完整 session 文件路径，并沿用原启动报告的 runtime roots 再次证明身份；报告迟到或结果 unknown 保留原操作，不重复派发。
 
-原生只读启动使用 `read-only-execution-wrapper.ts` 的 bwrap 包装器，仓库、Git 与协调库只读，仅精确状态根及其临时目录可写。版本可读只说明 CLI 存在；包装器探针与真实角色验收的结果分别记录，不能据此推定整个协调闭环已通过。真实隔离验收入口为 `tests/acceptance/worker-harness-matrix.test.ts`，显式设置 `ORCA_COMPANION_REAL_ACCEPTANCE=1` 才运行；证据写入 `artifacts/worker-harness-adapters/`。本轮完成范围以该目录的实际结果和 change 任务记录为准。
+原生只读启动使用 `read-only-execution-wrapper.ts` 的 bwrap 包装器：仓库、Git、Git common dir 与协调库只读，真实 native state 目录与 Companion 工件目录可写；可写根与拒写根重叠且无法证明时能力不可用。版本可读只说明 CLI 存在；包装器探针与真实角色验收的结果分别记录，不能据此推定整个协调闭环已通过。真实隔离验收入口为 `tests/acceptance/worker-harness-matrix.test.ts`，显式设置 `ORCA_COMPANION_REAL_ACCEPTANCE=1` 才运行；未运行的条件检查如实记为 skip，不计 PASS。本轮完成范围以实际结果和 change 任务记录为准。
 
 ### 隔离实测要点（2026-10-06）
+
+以下为 2026-10-06 的隔离实测记录；其中「Companion 生成原生 provider 配置、复制登录态与注入 Worker secret」的部分已被 `remove-worker-credential-management` 取代（认证与原生配置归还 harness），保留为历史证据。
 
 - OpenCode 2.0.21 用原生 config 顶层 `providers`（复数）声明 provider：provider 的 `settings` 承载 `baseURL`/`apiKey`（managed 只写 `{env:<VAR>}` 变量名并登记 `env`），`package` 选择原生实现——`anthropic-messages` → `@opencode/ai/providers/anthropic`，`openai-completions` → `@opencode/ai/providers/openai/chat`，`openai-responses` → `@opencode/ai/providers/openai/responses`；Anthropic 的 base root 补成 `/v1`。完整 TUI 在 provider 目录初始化期间会覆盖预建 Session 的模型；生产采用公开 `opencode mini --standalone --model <provider/model> --session <id>` 精确绑定，隔离 config 同时声明默认模型、自动许可和仅允许获批 provider 的 `experimental.policies`。
 - 新建 OpenCode Session 走公开 `POST /api/session`（精确 id、`location.directory`、`model`），返回 `data` 必须回读 id/directory/model 一致才接受。列表必须用 `session.list` operation 带 `--param` 穷尽（raw GET 忽略 `--param`）；消息读取用 raw GET `/api/session/:id/message` 的 query string `limit`/`cursor`，不存在 `session.messages` operation。resume 复用原 Session 报告路径，并在公开 API 重新证明后刷新报告 `observedAt`（时间戳只表示本次核验时刻）。
 - OMP 18.4.10 的 `--config` 只是设置 overlay（`startup.setupWizard:false`、`tui.titleState:false`）；模型 registry 来自 agent dir 的 `models.json`（OMP 启动后迁移为 `models.yml`）。公共 extension 在 `session_start`/`agent_start`/`agent_end` 把标题设为 OMP ready/working，供 Orca 判 readiness；报告只在 `existsSync` 确认真实 session 文件后写入，不落空 path 记录。transcript 首行 `{"type":"title","v":1}` 是文件级 metadata，不参与会话条目树。
-- 认证：pi 的自定义 provider `apiKey` 必须写成 `$ENV` 形式，OMP 写裸变量名；secret 仍只由 launcher 注入子进程环境。
+- 历史认证配置实验：pi 的自定义 provider `apiKey` 使用 `$ENV` 形式，OMP 使用裸变量名；当前 Worker 认证完全由 harness 自己提供。
 - 只读包装器：`--ro-bind / /` 之后仅按需 `--tmpfs /tmp` 与精确 `--bind` 状态根（可另加 reporter 目录）；`/run` 保持根挂载只读，保留 DNS symlink 与 runtime socket，单独 tmpfs 会以 `bwrap: Can't create file at /etc/resolv.conf` 失败。workspace、状态根或 reporter 落在 `/tmp` 之下时放弃该 tmpfs。
-- `doctor` 核验配置引用的每个角色 profile（不限于只读角色），逐 profile 输出结论；探针与生产复用该 harness 的启动及只读包装器实现，未配置的角色不假装核验过，未知或缺失 native 连接 fail closed。
+- 当前 `doctor` 核验配置引用的每个角色 profile（不限于只读角色），输出原生模型目录与生产包装器的只读探针结论；探针包含可执行版本，但不建立真实角色 Session。未配置的角色不假装核验过，目录失败只标记该候选不可用并允许手填 exact ID。
 
 CLI 参数核验同时参考[Claude CLI 合同](https://code.claude.com/docs/en/cli-reference)、[pi 原生模型配置](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md)与本机 `--help`；版本升级必须重跑会话绑定、恢复和只读验收。
 
@@ -34,7 +43,7 @@ CLI 参数核验同时参考[Claude CLI 合同](https://code.claude.com/docs/en/
 
 本次现场确认 terminal 显示标题会被 shell/TUI 改写为 worktree 名称，不能作为恢复身份。当前 prepared-terminal 路径保存原创建回执句柄并在精确 worktree 内重验；缺原资源证明时阻塞，已接受的 terminal 创建操作不重复执行。
 
-Codex 的 SessionStart hook 共用 `startup|resume` matcher；官方事件的 source 区分新启动和恢复，单独匹配 startup 无法取得续接报告（[官方 hook 合同](https://learn.chatgpt.com/docs/hooks#sessionstart)）。续接必须读取本次 launch 的报告，核验原 provider UUID、CODEX_HOME、cwd、transcript 与观察时间。已接受的 Worker 启动按原 Task 读回 Dispatch，激活按原结算事实复用；会话报告迟到不会重复创建终端、启动或提交草稿。
+Codex 的 SessionStart hook 共用 `startup|resume` matcher；官方事件的 source 区分新启动和恢复，单独匹配 startup 无法取得续接报告（[官方 hook 合同](https://learn.chatgpt.com/docs/hooks#sessionstart)）。续接必须读取本次 launch 的报告，核验原 provider UUID、runtime roots、cwd、transcript 与观察时间。已接受的 Worker 启动按原 Task 读回 Dispatch，激活按原结算事实复用；会话报告迟到不会重复创建终端、启动或提交草稿。
 
 本次运行时为 Orca 1.4.218、Codex 0.160.0。公开 `terminal read --screen --json` 不提供 `draft` 字段；prepared Worker 的 `submit_draft` 策略直接提交一次 Enter，由持久化激活意图控制重放。隔离探针确认：原 Validator 终结且终端 `tui-idle` 后，按精确句柄关闭原终端，再用 `codex resume <UUID> --no-daemon` 可以保持原 provider UUID；新的 SessionStart 报告在首个实际 turn 后产生。探针身份和公共响应摘要见 [恢复探针](../artifacts/execution-concurrency/provider-resume-probe.json)。
 
@@ -112,6 +121,8 @@ Codex sandbox 与正式 Worker 共用 `-c model=...`；当前 sandbox 不接受 
   - M0 的协调者身份硬门因此通过：一个独立的前台进程可以合法地成为协调者。
 
 ### Codex transcript 启动隔离 PoC
+
+以下为 2026-09-21 的历史实验；当前启动使用 harness 真实环境与逐次参数，隔离 `CODEX_HOME` 做法已被 `remove-worker-credential-management` 取代。
 
 - 2026-09-21 使用 Codex CLI 0.154.0 在 `/tmp` 一次性目录验证：将 `CODEX_HOME` 指向工作树内临时目录，在该状态根的 `config.toml` 中写入仅针对一次性项目的 `trust_level = "trusted"`，并为已核验的项目 SessionStart hook 传入进程级 `--dangerously-bypass-hook-trust` 后，hook 能上报 session ID、精确 transcript path、cwd 与该临时 `CODEX_HOME`；非 ephemeral 运行在临时状态根目录内创建唯一 rollout。
 - PoC 前后 `~/.codex/config.toml` 的 SHA-256 均为 `f81d8fcf152445ce3d1354c4d91a8cf52622b8059f71d0c1e5d699f7496d6207`。探针只复制配置到隔离状态根，并以符号链接引用现有认证文件；工作树回收时临时配置、rollout 与链接一并删除。

@@ -73,7 +73,7 @@ function graphRecord(overrides?: Partial<ExecutionGraph>): GraphVersionRecord {
 
 function authorizationRecord(): ExecutionAuthorizationRecord {
   const manifest: ExecutionAuthorizationManifest = {
-    manifestVersion: 3,
+    manifestVersion: 4,
     coordinationScopeId: 'scope-1' as never,
     planningCycleId: 'cycle-1' as PlanningCycleId,
     destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
@@ -102,7 +102,7 @@ function authorizationRecord(): ExecutionAuthorizationRecord {
     coordinationScopeId: 'scope-1' as never,
     authorizationId: 'auth-1',
     authorizationVersion: 1,
-    manifestVersion: 3,
+    manifestVersion: 4,
     fingerprint: 'fingerprint-1',
     manifest,
     approvedAt: 1,

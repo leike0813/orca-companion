@@ -29,8 +29,7 @@ import {
   CODEX_MODEL_LAUNCHER_FILENAME,
   codexModelLaunchCommand,
 } from '../../../src/adapters/agents/codex-model-launcher.js';
-import { modelConfigurationFixture } from '../../support/model-configurations.js';
-import type { WorkerModelConfiguration } from '../../../src/domain/model-configuration.js';
+import type { WorkerModelSelection } from '../../../src/domain/model-configuration.js';
 import type {
   ProcessRequest,
   ProcessResult,
@@ -95,13 +94,11 @@ test('launcher 内嵌源码与工厂同源：求值后逐字等价', () => {
   );
 });
 
+
 type Descriptor = {
   readonly version: number;
-  readonly codexHome: string;
   readonly executable: string;
   readonly args: readonly string[];
-  readonly credential: { readonly kind: string };
-  readonly environment?: Readonly<Record<string, string>>;
   readonly readOnly?: { readonly workspace: string; readonly stateRoot: string; readonly reportDirectory?: string };
 };
 
@@ -188,16 +185,13 @@ test('探针经生产 launcher + 生产 descriptor 运行，四项证据齐全�
     launcherPath,
     descriptorPath,
   ]);
-  expect(launcherPath).toBe(join(descriptor.codexHome, CODEX_MODEL_LAUNCHER_FILENAME));
-  expect(descriptorPath).toBe(join(descriptor.codexHome, CODEX_MODEL_DESCRIPTOR_FILENAME));
+  expect(launcherPath).toBe(join(descriptor.readOnly!.stateRoot, CODEX_MODEL_LAUNCHER_FILENAME));
+  expect(descriptorPath).toBe(join(descriptor.readOnly!.stateRoot, CODEX_MODEL_DESCRIPTOR_FILENAME));
   expect(codexModelLaunchCommand({ launcherPath, descriptorPath, nodeExecutable: process.execPath })).toContain(launcherPath);
 
-  // descriptor 与生产同 shape：readOnly 原字段、harness_login（不读 key）、隔离环境。
+  // 探针 descriptor 与生产 launcher v2 共用字段，并保留实际运行时报告路径。
+  expect(descriptor.version).toBe(2);
   expect(typeof descriptor.readOnly?.workspace).toBe('string');
-  expect(descriptor.readOnly?.stateRoot).toBe(descriptor.codexHome);
-  expect(descriptor.credential).toEqual({ kind: 'harness_login' });
-  expect(descriptor.environment?.['HOME']).toBe(descriptor.readOnly?.stateRoot);
-  expect(JSON.stringify(descriptor)).not.toContain('credentialRef');
 
   // launcher 脚本内嵌的包装器源码与工厂同源（SSOT）：同一段 argv 逻辑。
   expect(launcher.launcherSources[0]).toContain(READ_ONLY_EXECUTION_WRAPPER_SOURCE.trim());
@@ -252,18 +246,11 @@ test('受限命令超时或 launcher 启动失败时不得报告可用', async (
   expect(unavailable.stage).toBe('sandbox-read');
 });
 
-/** native 只读角色的绑定：连接声明 claude 原生 provider。 */
-function nativeConfiguration(harness: 'claude' | 'opencode' | 'pi' | 'omp' = 'claude'): WorkerModelConfiguration {
-  const base = modelConfigurationFixture();
-  return {
-    ...base,
-    connection: { ...base.connection, codex: null, nativeWorker: { harness, providerId: 'minimax' } },
-  };
-}
+const selection: WorkerModelSelection = { model: 'native-model', effort: null, effortCapability: null, catalogSource: null };
 
 test('通用探针按 binding 的 harness 选实现：native 两次都走同一生产 descriptor，codex 走 Codex profile', async () => {
   const launcher = fakeLauncher();
-  const nativeResult = await probeHarnessReadOnlyWorker(nativeConfiguration('claude'), {
+  const nativeResult = await probeHarnessReadOnlyWorker('claude', selection, {
     env: { PATH: '/usr/bin' },
     runner: launcher.runner,
     timeoutMs: 5_000,
@@ -277,11 +264,11 @@ test('通用探针按 binding 的 harness 选实现：native 两次都走同一�
   expect(launcher.descriptors[0]?.executable).toBe(process.execPath);
   expect(launcher.descriptors[1]?.executable).toBe('claude');
   expect(launcher.descriptors[1]?.args).toEqual(['--version']);
-  expect(launcher.descriptors[0]?.codexHome).toBe(launcher.descriptors[1]?.codexHome);
+  expect(launcher.descriptors[0]?.readOnly?.stateRoot).toBe(launcher.descriptors[1]?.readOnly?.stateRoot);
   expect(launcher.descriptors[1]?.readOnly).toEqual(launcher.descriptors[0]?.readOnly);
   expect(describeHarnessReadOnlyCapability(nativeResult)).toContain('claude');
 
-  const codexResult = await probeHarnessReadOnlyWorker(modelConfigurationFixture(), {
+  const codexResult = await probeHarnessReadOnlyWorker('codex', selection, {
     env: { PATH: '/usr/bin' },
     runner: fakeLauncher().runner,
     timeoutMs: 5_000,
@@ -290,14 +277,10 @@ test('通用探针按 binding 的 harness 选实现：native 两次都走同一�
 });
 
 test('native 连接不合法时按未知处理，不拿 bwrap 结果冒充该 harness 的能力', async () => {
-  const base = modelConfigurationFixture();
-  const broken: WorkerModelConfiguration = {
-    ...base,
-    connection: { ...base.connection, codex: null, nativeWorker: { harness: 'claude', providerId: '' } },
-  };
+  const broken: WorkerModelSelection = { ...selection, model: '' };
   const launcher = fakeLauncher();
 
-  const result = await probeHarnessReadOnlyWorker(broken, {
+  const result = await probeHarnessReadOnlyWorker('claude', broken, {
     env: { PATH: '/usr/bin' },
     runner: launcher.runner,
     timeoutMs: 5_000,
@@ -323,7 +306,7 @@ test('harness 在同一生产 descriptor 下拿不到版本时判为不可用', 
     );
   };
 
-  const result = await probeHarnessReadOnlyWorker(nativeConfiguration('claude'), {
+  const result = await probeHarnessReadOnlyWorker('claude', selection, {
     env: { PATH: '/usr/bin' },
     runner,
     timeoutMs: 5_000,
@@ -363,7 +346,7 @@ test.skipIf(!bwrapUsable)('真实 bwrap：经生产 launcher/descriptor 的哨�
   const bin = mkdtempSync(join(tmpdir(), 'orca-wrapper-bin-'));
   const harness = fakeHarness(bin);
 
-  const result = await probeHarnessReadOnlyWorker(nativeConfiguration('claude'), {
+  const result = await probeHarnessReadOnlyWorker('claude', selection, {
     harnessExecutable: harness,
     env: { PATH: process.env['PATH'] ?? '' },
     timeoutMs: 30_000,

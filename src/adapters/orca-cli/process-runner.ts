@@ -32,6 +32,8 @@ export type ProcessRequest = {
   readonly timeoutMs: number;
   readonly limits?: OutputLimits;
   readonly signal?: AbortSignal;
+  /** 一次性控制协议输入；最多 1 MiB，写完即关闭，不发送模型 prompt。 */
+  readonly stdin?: string;
   /**
    * 诊断行过滤器。命中的行按噪声丢弃，既不计入失败，也不计入 stderr 的输出上限与截断判定
    * （例如 `orca orchestration check --wait` 每 15 秒写到 stderr 的保活行）。
@@ -128,6 +130,10 @@ function createLineSink(limits: OutputLimits, dropLine?: (line: string) => boole
 }
 
 export async function runProcess(request: ProcessRequest): Promise<ProcessResult> {
+  if (request.stdin !== undefined && Buffer.byteLength(request.stdin, 'utf8') > 1024 * 1024) {
+    return { kind: 'unavailable', code: 'process_spawn_failed', message: 'process stdin exceeds limit' };
+  }
+  if (request.signal?.aborted) return { kind: 'unknown', reason: 'cancelled', stdout: { text: '', truncated: false }, stderr: { text: '', truncated: false } };
   const limits = request.limits ?? DEFAULT_OUTPUT_LIMITS;
   const stdoutSink = createLineSink(limits);
   const stderrSink = createLineSink(limits, request.dropStderrLine);
@@ -142,7 +148,7 @@ export async function runProcess(request: ProcessRequest): Promise<ProcessResult
       cwd: request.cwd,
       env: { ...request.env },
       shell: false,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: [request.stdin === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
     });
 
     const terminate = (): void => {
@@ -187,6 +193,9 @@ export async function runProcess(request: ProcessRequest): Promise<ProcessResult
     child.stderr?.on('data', (chunk: Buffer) => {
       stderrSink.push(chunk);
     });
+    // 早退的 CLI 可以关闭 stdin；EPIPE 不应成为宿主进程的未处理异常。
+    child.stdin?.on('error', () => { /* 进程退出结果仍由 close/error 接受。 */ });
+    if (request.stdin !== undefined) child.stdin?.end(request.stdin, 'utf8');
 
     child.on('error', (error: Error) => {
       if (settled) {

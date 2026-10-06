@@ -219,49 +219,51 @@ export type ComposerMode =
 /**
  * 角色模型菜单的内存选择态（IP-06）。
  *
- * 三块区域按定稿顺序循环：候选列表 → 独立 effort → 动作。`action` 的 0 永远是返回，因此 Esc 与默认
- * 确认都不会改变任何绑定。
+ * Coordinator 只有候选列表 → 独立 effort → 动作；Worker 额外先选 harness，`harness` 变化即触发一次
+ * 显式原生目录查询。`action` 的 0 永远是返回，因此 Esc 与默认确认都不会改变任何绑定。
  */
 export type ModelRoleMenuState = {
   readonly role: import('./ports.js').ModelSettingsRole;
   readonly selectedCandidateRef: string | null;
-  readonly focus: 'list' | 'effort' | 'actions';
+  readonly focus: 'harness' | 'list' | 'effort' | 'actions';
   readonly action: number;
   /** 候选自带可信能力来源时才可能有值；没有来源时恒为 `null`。 */
   readonly effort: string | null;
+  /** Worker 角色当前选择的 harness；Coordinator 为 `null`。 */
+  readonly harness?: import('../../domain/model-configuration.js').WorkerHarnessId | null;
 };
 
 /**
- * 角色连接编辑的内存字段（IP-06）。
+ * Worker 原生目录查询的一次结果。
  *
- * 整个结构只存在于进程内内存：它不进入 IC-13 的 `UiDraft`、草稿存储或提交记录，因此 `secret`
- * 不会随输入恢复、resize 或重挂载落盘。渲染时始终以遮罩显示，错误与日志也只带 code 和安全文案。
+ * 绑定发起它的角色、harness 与调用代次：菜单已关闭、切了 harness 或重新打开时，迟到结果不再匹配，
+ * 因此只可能回到原入口。`load` 为 `null` 表示查询在途。
+ */
+export type ModelWorkerCatalogState = {
+  readonly role: import('./ports.js').ModelSettingsRole;
+  readonly harness: import('../../domain/model-configuration.js').WorkerHarnessId;
+  readonly generation: number;
+  readonly load: import('./ports.js').WorkerModelCatalogLoad | null;
+};
+
+/**
+ * Coordinator 连接编辑的内存字段（IP-06）。
  *
- * 字段覆盖完整的 provider 连接：codex 连接、凭据来源与 SDK 字段路径，以及 effort 的可信能力来源。
+ * Worker 角色不再有连接、凭据、API key 或任意 options 编辑，因此这里只服务 Coordinator：provider 集成、
+ * 凭据来源与 SDK 字段路径，以及 effort 的可信能力来源。整个结构只存在于进程内内存：它不进入 IC-13 的
+ * `UiDraft`、草稿存储或提交记录，因此 `secret` 不会随输入恢复、resize 或重挂载落盘。渲染时始终以遮罩
+ * 显示，错误与日志也只带 code 和安全文案。
+ *
+ * 字段覆盖完整的 Coordinator provider 连接：凭据来源与 SDK 字段路径，以及 effort 的可信能力来源。
  * `credentialRef` 是 opaque 引用而非 key，保存时原样带回，因此不提供编辑入口。
- *
- * `harness` 与三个 `native*` 字段是**附加**的：缺省即按 codex 连接处理，旧夹具与旧行为因此保持不变。
- * 只有 Worker 角色在 codex 之外显式选择 harness 时才提供原生连接字段；Coordinator 始终用 LangChain。
  */
 export type ModelSettingsEdit = {
-  readonly role: import('./ports.js').ModelSettingsRole;
+  readonly role: 'coordinator';
   readonly label: string;
   readonly providerIntegration: string;
   readonly model: string;
   /** 非秘密选项，逐行 `key = value`；保存时按行解析。 */
   readonly options: string;
-  /** Worker harness；空串或缺失表示沿用现有 profile、按 codex 处理。 */
-  readonly harness?: string;
-  readonly codexProviderId: string;
-  readonly codexBaseUrl: string;
-  /** 空串表示该连接不配置 codex 连接。 */
-  readonly codexWireApi: '' | 'responses' | 'chat';
-  /** 原生连接的 providerId；非 codex harness 必填。 */
-  readonly nativeProviderId?: string;
-  /** 原生连接的 baseUrl；managed 凭据必填，harness_login 可缺省。 */
-  readonly nativeBaseUrl?: string;
-  /** 原生连接的接口族；managed 必填，取值来自 `NATIVE_WORKER_APIS`。 */
-  readonly nativeApi?: string;
   readonly credentialKind: 'harness_login' | 'managed';
   readonly credentialRef: string;
   readonly credentialOptionPath: string;
@@ -278,13 +280,6 @@ export const MODEL_SETTINGS_FIELDS = [
   'providerIntegration',
   'model',
   'options',
-  'harness',
-  'codexProviderId',
-  'codexBaseUrl',
-  'codexWireApi',
-  'nativeProviderId',
-  'nativeBaseUrl',
-  'nativeApi',
   'credentialKind',
   'credentialOptionPath',
   'effortSource',
@@ -301,13 +296,6 @@ export const EMPTY_MODEL_SETTINGS_EDIT: ModelSettingsEdit = {
   providerIntegration: '',
   model: '',
   options: '',
-  harness: '',
-  codexProviderId: '',
-  codexBaseUrl: '',
-  codexWireApi: '',
-  nativeProviderId: '',
-  nativeBaseUrl: '',
-  nativeApi: '',
   credentialKind: 'harness_login',
   credentialRef: '',
   credentialOptionPath: '',
@@ -367,6 +355,8 @@ export type TuiState = {
   readonly modelRoleIndex: number;
   /** 角色模型菜单的选择态；`null` 表示 overlay 未打开。 */
   readonly modelRoleMenu: ModelRoleMenuState | null;
+  /** Worker 原生目录查询结果；`null` 表示当前没有绑定任何查询入口。 */
+  readonly modelWorkerCatalog: ModelWorkerCatalogState | null;
   /** 角色连接编辑的内存字段；`null` 表示 overlay 未打开。 */
   readonly modelSettingsEdit: ModelSettingsEdit | null;
   /** 编辑器当前字段；用字段身份而不是下标，隐藏字段才不会让光标指向不存在的行。 */
@@ -416,6 +406,7 @@ export const initialTuiState: TuiState = {
   executionHandoffReviewId: null,
   modelRoleIndex: 0,
   modelRoleMenu: null,
+  modelWorkerCatalog: null,
   modelSettingsEdit: null,
   modelSettingsField: 'label',
   modelSettingsNotice: null,
@@ -464,6 +455,7 @@ export type TuiAction =
   | { readonly kind: 'execution-handoff-review'; readonly handoffId: string | null }
   | { readonly kind: 'model-role-selected'; readonly index: number }
   | { readonly kind: 'model-role-menu'; readonly menu: ModelRoleMenuState | null }
+  | { readonly kind: 'model-worker-catalog'; readonly catalog: ModelWorkerCatalogState | null }
   | { readonly kind: 'model-settings-edit'; readonly edit: ModelSettingsEdit | null; readonly field?: ModelSettingsField }
   | { readonly kind: 'model-settings-notice'; readonly notice: string | null }
   /** 依据下钻栈；`frames` 为 `null` 或空表示关闭并回到来源页面。 */
@@ -597,6 +589,8 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
       return { ...state, modelRoleIndex: action.index };
     case 'model-role-menu':
       return { ...state, modelRoleMenu: action.menu, modelSettingsNotice: action.menu === null ? null : state.modelSettingsNotice };
+    case 'model-worker-catalog':
+      return { ...state, modelWorkerCatalog: action.catalog };
     case 'model-settings-edit':
       return {
         ...state,

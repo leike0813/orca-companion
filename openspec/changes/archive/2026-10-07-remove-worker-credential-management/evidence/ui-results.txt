@@ -1,0 +1,13 @@
+120x40-color-nerd
+120x40-color-ascii
+120x40-no-color-nerd
+120x40-no-color-ascii
+80x24-color-nerd
+80x24-color-ascii
+80x24-no-color-nerd
+80x24-no-color-ascii
+50x40-color-nerd
+50x40-color-ascii
+50x40-no-color-nerd
+50x40-no-color-ascii
+resize/review/default return/draft cursor passed

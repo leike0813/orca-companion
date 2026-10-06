@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 
 import type {
   IssueTrackerGateway,
@@ -36,22 +36,21 @@ import type {
 import type { DoctorProbe } from '../../src/bootstrap/doctor.js';
 import type { TuiPorts } from '../../src/interfaces/tui/ports.js';
 import { createForegroundPlanningHost } from '../../src/bootstrap/foreground-planning-runtime.js';
+import { requireWorkerHarness } from '../../src/bootstrap/worker-harness.js';
+import type { WorkerModelCatalogResult } from '../../src/application/ports/worker-harness.js';
 import { coordinationDatabasePath, resolveGitCommonDir } from '../../src/bootstrap/composition.js';
 import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
 import { MIGRATIONS, SCHEMA_VERSION_KEY } from '../../src/adapters/storage/schema.js';
 import { CapableChatModel } from '../support/fake-chat-model.js';
-import { JsonCredentialStore } from '../../src/adapters/storage/credential-store.js';
 import { DEFAULT_TUI_PREFERENCES } from '../../src/application/configuration/tui-preferences.js';
 import { PROJECT_DETAILS_MAX_ITEMS, PROJECT_DETAILS_MAX_PAGE_BYTES } from '../../src/application/tui/project-presentation.js';
 import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
-import { loadProjectConfig } from '../../src/bootstrap/project-config.js';
 import { graphIdFor } from '../../src/application/planning/graph-generation.js';
 import { recordInitialGraph } from '../../src/application/planning/graph-history.js';
 import { DEFAULT_EXECUTION_LIMITS, budgetFromLimits } from '../../src/domain/planning/budget-policy.js';
 import type { ExecutionGraph } from '../../src/domain/planning/execution-graph.js';
 import { executionManifest } from '../support/execution-harness.js';
 import { implementationPlanFor } from '../support/graph-plan-fixture.js';
-import { dedupeRoleCandidates } from '../../src/interfaces/tui/components/model-picker.js';
 import { frameText, renderTui, settle, type RenderedTui } from './harness.js';
 
 const ROUTE_MAP_BODY = [
@@ -95,6 +94,45 @@ afterEach(() => {
 
 const clock = (): number => 1_000;
 
+test('Worker 保存只接受当前原生目录来源；取消和迟到查询不能恢复旧来源，手填不建立凭据文件', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'orca-worker-catalog-wiring-'));
+  const harness = await startHost(initializeRepository(directory), { generations: 0 }, directory);
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  const port = harness.host.ports.modelSettings!;
+  const loaded = await port.load();
+  if (loaded.kind !== 'loaded') throw new Error('模型设置不可读');
+  const revision = loaded.snapshot.revision;
+  const catalog = { kind: 'available' as const, source: 'native:test', models: [
+    { model: 'native-model', effortCapability: { values: ['high'], source: 'native:test' } },
+  ] };
+  const query = vi.spyOn(requireWorkerHarness('codex'), 'queryModels').mockResolvedValue(catalog);
+  try {
+    await harness.host.ports.modelCatalog.queryWorkerModels({ harness: 'codex' });
+    const modelSelection = { model: 'native-model', effort: 'high', effortCapability: catalog.models[0]!.effortCapability, catalogSource: catalog.source };
+    expect(await port.save({ role: 'planner', expectedRevision: revision, harness: 'codex', modelSelection: { ...modelSelection, catalogSource: 'forged' } }))
+      .toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+    expect(await port.save({ role: 'planner', expectedRevision: revision, harness: 'codex', modelSelection }))
+      .toMatchObject({ kind: 'saved', revision: revision + 1 });
+
+    const pending = Promise.withResolvers<WorkerModelCatalogResult>();
+    query.mockReturnValueOnce(pending.promise);
+    const abort = new AbortController();
+    const request = harness.host.ports.modelCatalog.queryWorkerModels({ harness: 'codex', signal: abort.signal });
+    abort.abort();
+    pending.resolve(catalog);
+    expect(await request).toMatchObject({ kind: 'unavailable', code: 'catalog_query_cancelled' });
+    expect(await port.save({ role: 'planner', expectedRevision: revision + 1, harness: 'codex', modelSelection }))
+      .toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+    expect(await port.save({ role: 'planner', expectedRevision: revision + 1, harness: 'codex', modelSelection: {
+      model: 'manual/exact-id', effort: null, effortCapability: null, catalogSource: null,
+    } })).toMatchObject({ kind: 'saved', revision: revision + 2 });
+    expect(existsSync(join(directory, 'config', 'orca-companion', 'credentials.json'))).toBe(false);
+  } finally {
+    query.mockRestore();
+  }
+});
+
 function gitFor(repository: string): (...args: string[]) => string {
   return (...args: string[]): string =>
     execFileSync('git', args, { cwd: repository, encoding: 'utf8' }).trim();
@@ -111,7 +149,7 @@ function initializeRepository(root: string): string {
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 3,
+      schemaVersion: 4,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',
@@ -529,7 +567,7 @@ test('host projectDetails绑定Scope、Session和所见revision，并连续读�
       writer,
       authorizationId: 'approved-project-details',
       authorizationVersion: 1,
-      manifestVersion: 3,
+      manifestVersion: 4,
       fingerprint: 'approved-project-details-fingerprint',
       approvalRef: 'approved-project-details-review',
       manifest,
@@ -785,65 +823,6 @@ test('规划 Handoff 的 Target 来自用户在 Session Picker 里的选择', as
   // 该用例包含真实模型回合与真实 store 写入；并行全量套件下 5s 上限会被吃掉。
 }, 30_000);
 
-test.each(['codex', 'pi'] as const)('%s 同 provider/model 的新连接可应用，候选与原连接保持 harness 隔离', async (workerHarness) => {
-  const harness = await startHost(initializeRepository(mkdtempSync(join(tmpdir(), 'orca-tui-model-connection-'))));
-  const proposal = await harness.host.ports.scopeSetup.proposal();
-  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
-  const port = harness.host.ports.modelSettings;
-  if (port === undefined) throw new Error('模型设置端口缺失');
-  const foreignConfig = loadProjectConfig({ worktreePath: harness.repository });
-  if (foreignConfig.kind !== 'loaded') throw new Error('配置不可读');
-  const foreignHarness = workerHarness === 'pi' ? 'codex' : 'pi';
-  expect(await port.save({
-    expectedRevision: foreignConfig.config.revision, role: 'implementation', harness: foreignHarness,
-    connection: {
-      label: 'other harness', providerIntegration: '@fake/provider#CapableChatModel', modelOptions: {},
-      credential: { kind: 'harness_login' }, codex: null,
-      ...(foreignHarness === 'pi' ? { nativeWorker: { harness: 'pi' as const, providerId: 'fixture' } } : {}),
-    },
-    model: 'foreign-model', effort: null,
-  })).toMatchObject({ kind: 'saved' });
-  for (const secret of ['fixture-key-old', 'fixture-key-new']) {
-    const config = loadProjectConfig({ worktreePath: harness.repository });
-    if (config.kind !== 'loaded') throw new Error('配置不可读');
-    expect(await port.save({
-      expectedRevision: config.config.revision,
-      role: 'planner',
-      harness: workerHarness,
-      connection: {
-        label: 'test provider', providerIntegration: '@fake/provider#CapableChatModel', modelOptions: {},
-        credential: { kind: 'managed', credentialRef: null, optionPath: 'apiKey' },
-        codex: workerHarness === 'codex' ? { providerId: 'fixture', baseUrl: 'https://api.example/v1', wireApi: 'responses' } : null,
-        ...(workerHarness === 'pi' ? { nativeWorker: {
-          harness: 'pi' as const, providerId: 'fixture', baseUrl: 'https://api.example/v1', api: 'openai-completions' as const,
-        } } : {}),
-      },
-      model: 'same-model', effort: null, newSecret: secret,
-    })).toMatchObject({ kind: 'saved' });
-  }
-  const before = loadProjectConfig({ worktreePath: harness.repository });
-  if (before.kind !== 'loaded') throw new Error('配置不可读');
-  const latestConnection = before.config.providerConnections.at(-1);
-  const catalog = await harness.host.ports.modelCatalog.load(proposal.coordinatorSessionId);
-  const planner = catalog.roles?.find((entry) => entry.role === 'planner');
-  const choices = dedupeRoleCandidates(planner?.candidates ?? []);
-  expect(choices).toHaveLength(1);
-  expect(choices[0]?.connectionRef).toBe(latestConnection?.connectionRef);
-  expect(await port.apply({ role: 'planner', modelRef: choices[0]!.candidateRef,
-    effort: null, expectedRevision: before.config.revision })).toMatchObject({ kind: 'saved' });
-  const after = loadProjectConfig({ worktreePath: harness.repository });
-  if (after.kind !== 'loaded') throw new Error('配置不可读');
-  const applied = after.config.execution.workerProfiles.find((entry) =>
-    entry.profileRef === after.config.execution.workerProfileRefs.planner);
-  expect(applied?.modelConfiguration.connection.credential).toEqual(latestConnection?.credential);
-  expect(applied?.harness).toBe(workerHarness);
-  expect(applied?.modelConfiguration.connection.nativeWorker).toEqual(latestConnection?.nativeWorker);
-  expect(after.config.providerConnections.slice(0, before.config.providerConnections.length)).toEqual(before.config.providerConnections);
-  const credentials = new JsonCredentialStore({ environment: { XDG_CONFIG_HOME: join(harness.directory, 'config') } });
-  if (latestConnection?.credential.kind !== 'managed') throw new Error('测试凭据应为 managed');
-  expect(credentials.read(latestConnection.credential.credentialRef)).toMatchObject({ kind: 'resolved', secret: 'fixture-key-new' });
-});
-
 test('会话维护与模型切换在 TUI 入口上落到真实记录，而不是占位拒绝', async () => {
   const harness = await startHost(initializeRepository(mkdtempSync(join(tmpdir(), 'orca-tui-wiring-maintenance-'))));
   const proposal = await harness.host.ports.scopeSetup.proposal();
@@ -988,7 +967,7 @@ test('执行设置端口：保存默认额度经生产 CAS，当前批准额度�
     const approved = store.transact({
       kind: 'record-authorization', coordinationScopeId: scopeId,
       expectedRevision: scope.scope.revision, writer,
-      authorizationId: 'exec-settings-auth', authorizationVersion: 1, manifestVersion: 3,
+      authorizationId: 'exec-settings-auth', authorizationVersion: 1, manifestVersion: 4,
       fingerprint: 'exec-settings-fingerprint', approvalRef: 'exec-settings-review', manifest,
     });
     if (approved.kind !== 'committed') throw new Error(`授权未记录：${JSON.stringify(approved)}`);

@@ -49,7 +49,7 @@ const REQUIRED_WORKER_MODEL = 'minimax-cn/MiniMax-M3.1-Flash-Preview';
 
 type RealProjectConfig = {
   readonly execution?: {
-    readonly workerProfiles?: readonly { readonly role: string; readonly modelConfiguration: { readonly model: string } }[];
+    readonly workerProfiles?: readonly { readonly role: string; readonly modelSelection: { readonly model: string } }[];
     readonly acceptedRisks?: unknown;
   };
 };
@@ -58,7 +58,7 @@ type RealProjectConfig = {
 function workerModelsByRole(config: RealProjectConfig): Record<string, string> {
   const models: Record<string, string> = {};
   for (const profile of config.execution?.workerProfiles ?? []) {
-    models[profile.role] = profile.modelConfiguration.model;
+    models[profile.role] = profile.modelSelection.model;
   }
   return models;
 }

@@ -1,21 +1,20 @@
 /**
- * IP-05：OpenCode Worker Harness adapter（Owner: \`add-worker-harness-adapters\`）。
+ * IP-05：OpenCode Worker Harness adapter（Owner: remove-worker-credential-management）。
  *
- * OpenCode 没有 SessionStart hook 或进程内 extension：provider session 事实只经隔离
- * \`--standalone\` 私有子进程的公开 HTTP API 观察（\`GET /api/session\`、
- * \`GET /api/session/:sessionID/message\`）。本 adapter 因此是 pull 型：启动时把 bootstrap 状态
- * 写进可写的隔离状态根，观察/证明阶段再经公开 API 回读精确身份；不直读 SQLite，也不按终端输出猜。
+ * OpenCode 没有 SessionStart hook 或进程内 extension：provider session 事实只经隔离 --standalone
+ * 私有子进程的公开 HTTP API 观察（GET /api/session、GET /api/session/:sessionID/message）。
  *
- * \`--standalone\` 的内部 server 用随机端口 + 随机密码，外部无法发现，因此统一经同一隔离 XDG 下的
- * 公开 CLI \`opencode api --standalone\` 访问（自行拉起私有 server，实测无需外部密码）。秘密只经子进程
- * 环境进入 opencode；隔离 config 只声明承载 key 的环境变量**名称**。
+ * 本 adapter 不再建立隔离 HOME/XDG、不复制登录态、不生成 provider 配置：Worker 启动继承真实
+ * launch 的 process.env，认证与状态根由 opencode 自身拥有。session 创建必须发生在真实终端 spawn
+ * 的子进程里，因此 prepare 只写一份自包含的 Companion bootstrap 工件（非秘密）；该脚本在真实环境
+ * 内经公开 opencode api --standalone 建 exact session、上报 runtime roots，再 exec opencode mini。
+ * Companion 侧只经公开 API 回读精确身份，绝不直读 SQLite、不按终端输出或最近会话猜。
  */
 
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import type { PreparedTerminalStrategy } from '../../application/worker-launch.js';
 import type {
@@ -27,33 +26,28 @@ import type {
   WorkerHarnessLaunchInput,
 } from '../../application/ports/worker-harness.js';
 import type { TranscriptCoverageEvidence, TranscriptGap } from '../../application/recovery/recovery-capsule.js';
-import {
-  nativeWorkerConnectionSchema,
-  scanModelOptionFields,
-  type NativeWorkerConnection,
-  type WorkerModelConfiguration,
-} from '../../domain/model-configuration.js';
-import { credentialStorePath } from '../storage/credential-store.js';
+import { workerModelSelectionSchema } from '../../domain/model-configuration.js';
+import type { WorkerModelSelection } from '../../domain/model-configuration.js';
 import { CODEX_MODEL_DESCRIPTOR_VERSION, codexModelLaunchCommand, writeCodexModelLaunch } from './codex-model-launcher.js';
-import type { CodexModelCredentialDescriptor, CodexModelLaunchDescriptor } from './codex-model-launcher.js';
+import type { CodexModelLaunchDescriptor } from './codex-model-launcher.js';
 import { assertReadOnlyExecutionWrapperAvailable, probeHarnessReadOnlyWorker } from './read-only-execution-wrapper.js';
+import { queryWorkerModels } from './worker-model-catalog.js';
+import { nativeWorkerRuntime } from './worker-runtime.js';
 
 export const OPENCODE_HARNESS_ID = 'opencode';
 
-/** managed 凭据承载变量「名称」；名称非秘密，可写进隔离 config 与 descriptor。 */
-export const OPENCODE_MANAGED_CREDENTIAL_ENV = 'COMPANION_OPENCODE_MANAGED_KEY';
-
-export const OPENCODE_CONFIG_FILENAME = 'opencode-config.json';
-
-/** 会话状态报告（JSONL）：首行是未确认的 bootstrap 状态，后续每行是一次经公开 API 确认的观察。 */
+/** 会话状态报告（JSONL）：每行一次经公开 API 确认的观察。 */
 export const OPENCODE_SESSION_REPORT_FILENAME = 'session-start.jsonl';
 
 /** Utility 私有可写根内的派生转录材料目录。 */
 export const OPENCODE_MATERIAL_DIR = 'opencode-recovery';
 
+/** Companion bootstrap 工件文件名（写入 Companion 工件根，非秘密）。 */
+export const OPENCODE_BOOTSTRAP_SCRIPT_FILENAME = 'opencode-bootstrap.mjs';
+export const OPENCODE_BOOTSTRAP_PAYLOAD_FILENAME = 'opencode-bootstrap.json';
+
 const MAX_API_BODY_BYTES = 8 * 1024 * 1024;
 const API_TIMEOUT_MS = 30_000;
-const SESSION_REPORT_MAX_BYTES = 64 * 1024;
 const MAX_MATERIAL_BYTES = 4 * 1024 * 1024;
 
 /** session 列表分页上限：候选唯一性只在穷尽窗口后成立。 */
@@ -65,26 +59,6 @@ export const OPENCODE_MAX_MESSAGE_PAGES = 40;
 export const OPENCODE_MAX_MESSAGE_EVENTS = 2_000;
 
 const SAFE_SESSION_ID = /^ses[A-Za-z0-9_-]{3,}$/;
-
-/** 宿主保留键：身份、权限与自动化开关由 Manifest 决定，不能被 modelOptions 改写。 */
-const RESERVED_OPTION_KEYS: ReadonlySet<string> = new Set([
-  'model', 'models', 'provider', 'apikey', 'session', 'sessionid', 'agent', 'variant',
-  'config', 'plugin', 'plugins', 'permission', 'permissions', 'tool', 'tools',
-  'auto', 'autoapprove', 'continue', 'fork', 'standalone', 'server', 'directory', 'prompt',
-]);
-
-function normalizeOptionKey(key: string): string {
-  return key.toLowerCase().replace(/[-_\s]/gu, '');
-}
-
-function assertOptionsAreNotReserved(options: Readonly<Record<string, unknown>>): void {
-  for (const key of Object.keys(options)) {
-    const head = key.split('.')[0] ?? key;
-    if (RESERVED_OPTION_KEYS.has(normalizeOptionKey(key)) || RESERVED_OPTION_KEYS.has(normalizeOptionKey(head))) {
-      throw new Error('模型配置不能设置宿主保留的 opencode 选项：' + key);
-    }
-  }
-}
 
 /** 与 Codex/native 相同的启动摘要公式：sha256(launchId) 前 20 位十六进制。 */
 export function opencodeLaunchDigest(launchId: string): string {
@@ -99,208 +73,119 @@ export function opencodeSessionIdFor(launchId: string): string {
 function assertInsideWorktree(worktreePath: string, candidate: string): void {
   const child = relative(resolve(worktreePath), resolve(candidate));
   if (child.length === 0 || child === '..' || child.startsWith('..' + sep) || isAbsolute(child)) {
-    throw new Error('opencode 状态根必须位于 Worker worktree 内：' + candidate);
+    throw new Error('opencode Companion 工件根必须位于 Worker worktree 内：' + candidate);
   }
 }
 
-/** 启动前门禁；与 config/argv/env 生成共用同一判断，且在写盘之前跑。 */
-export function assertLaunchableOpencodeModelConfiguration(
-  configuration: Readonly<WorkerModelConfiguration>,
-): NativeWorkerConnection & { readonly harness: 'opencode' } {
-  if (scanModelOptionFields(configuration, 'configuration', true).kind !== 'clean') {
-    throw new Error('opencode 模型配置含秘密字段，拒绝启动');
+function samePath(left: string, right: string): boolean {
+  try {
+    return realpathSync(left) === realpathSync(right);
+  } catch {
+    return false;
   }
-  const raw = (configuration.connection as { readonly nativeWorker?: unknown }).nativeWorker;
-  const parsed = nativeWorkerConnectionSchema.safeParse(raw);
-  if (!parsed.success || parsed.data.harness !== 'opencode') {
-    throw new Error('opencode 启动需要合法的 connection.nativeWorker（harness=opencode、providerId）');
+}
+
+/** 启动前门禁：Worker 选择必须合法；opencode 的 effort→variant 映射未经核验，宁可阻塞也不换模型。 */
+export function assertLaunchableOpencodeModelSelection(selection: Readonly<WorkerModelSelection>): void {
+  if (!workerModelSelectionSchema.safeParse(selection).success) {
+    throw new Error('opencode Worker 模型选择无效：需要合法的 model/effort/effortCapability/catalogSource');
   }
-  // effort 只在 --model provider/model#variant 里表达，该映射未经运行时核验：宁可阻塞也不换模型。
-  if (configuration.effort !== null) {
+  if (selection.effort !== null) {
     throw new Error('opencode adapter 未核验 effort→variant 映射，拒绝带 effort 的启动');
-  }
-  assertOptionsAreNotReserved(configuration.connection.modelOptions);
-  assertOptionsAreNotReserved(configuration.modelOptions);
-  return parsed.data;
-}
-
-function modelOptionRecord(configuration: Readonly<WorkerModelConfiguration>): Record<string, unknown> {
-  return { ...configuration.connection.modelOptions, ...configuration.modelOptions };
-}
-
-/** 隔离 XDG：data/config/cache/state 与测试 HOME 全部指向状态根。 */
-function isolatedStateEnvironment(stateRoot: string): Record<string, string> {
-  return {
-    XDG_DATA_HOME: join(stateRoot, 'xdg', 'data'),
-    XDG_CONFIG_HOME: join(stateRoot, 'xdg', 'config'),
-    XDG_CACHE_HOME: join(stateRoot, 'xdg', 'cache'),
-    XDG_STATE_HOME: join(stateRoot, 'xdg', 'state'),
-    OPENCODE_TEST_HOME: join(stateRoot, 'home'),
-    OPENCODE_CONFIG: join(stateRoot, OPENCODE_CONFIG_FILENAME),
-  };
-}
-
-/** 必须剔除的用户侧环境：否则会连上用户后台 server 或覆盖隔离 config。 */
-const UNSET_ENVIRONMENT = [
-  'OPENCODE_PASSWORD',
-  'OPENCODE_SERVER_PASSWORD',
-  'OPENCODE_CONFIG_CONTENT',
-  'OPENCODE_CONFIG_DIR',
-  'OPENCODE_SERVER',
-] as const;
-
-/** 隔离 provider/model 声明；managed 只写承载 secret 的变量名（models.dev 的 env 语义）。 */
-function opencodeProviderConfig(
-  native: NativeWorkerConnection & { readonly harness: 'opencode' },
-  configuration: Readonly<WorkerModelConfiguration>,
-): Record<string, unknown> {
-  const provider: Record<string, unknown> = {};
-  if (native.api !== undefined) {
-    provider['package'] = native.api === 'anthropic-messages'
-      ? '@opencode/ai/providers/anthropic'
-      : native.api === 'openai-responses'
-        ? '@opencode/ai/providers/openai/responses'
-        : '@opencode/ai/providers/openai/chat';
-  }
-  provider['settings'] = {
-    ...(native.baseUrl === undefined ? {} : {
-      baseURL: native.api === 'anthropic-messages' && !native.baseUrl.replace(/\/$/u, '').endsWith('/v1')
-        ? native.baseUrl.replace(/\/$/u, '') + '/v1' : native.baseUrl,
-    }),
-    ...(configuration.connection.credential.kind === 'managed'
-      ? { apiKey: '{env:' + OPENCODE_MANAGED_CREDENTIAL_ENV + '}' } : {}),
-  };
-  if (configuration.connection.credential.kind === 'managed') {
-    provider['env'] = [OPENCODE_MANAGED_CREDENTIAL_ENV];
-  }
-  provider['models'] = { [configuration.model]: { settings: modelOptionRecord(configuration) } };
-  // TUI 在 provider 插件尚未完成初始化时可能先选中环境中的其它 provider。
-  // 原生 policy 收紧可用目录，避免这个初始化窗口导致模型回退。
-  return {
-    model: native.providerId + '/' + configuration.model,
-    providers: { [native.providerId]: provider },
-    permissions: [{ action: '*', resource: '*', effect: 'allow' }],
-    experimental: {
-      policies: [
-        { action: 'provider.use', resource: '*', effect: 'deny' },
-        { action: 'provider.use', resource: native.providerId, effect: 'allow' },
-      ],
-    },
-  };
-}
-
-/** harness_login 只复制来源登录文件；managed 不复制，避免既有登录抢在 env 之前生效。 */
-function copyHarnessLoginAuth(input: { readonly sourceDataHome?: string }, stateRoot: string): void {
-  const sourceDataHome = resolve(
-    input.sourceDataHome ?? process.env['XDG_DATA_HOME'] ?? join(homedir(), '.local', 'share'),
-  );
-  mkdirSync(join(stateRoot, 'xdg', 'data', 'opencode'), { recursive: true });
-  for (const asset of ['auth.json', 'account.json'] as const) {
-    const source = join(sourceDataHome, 'opencode', asset);
-    if (!existsSync(source)) continue;
-    copyFileSync(source, join(stateRoot, 'xdg', 'data', 'opencode', asset));
   }
 }
 
 export type OpencodeExecutionInput = WorkerHarnessLaunchInput & {
   /** 测试可指向 fake opencode 可执行文件。 */
   readonly executable?: string;
-  /** harness_login 的来源数据目录；省略时按 XDG_DATA_HOME/家目录推导。 */
-  readonly sourceDataHome?: string;
   /** 只读启动前的包装器核验；省略时用真实 bwrap 探针。 */
   readonly assertReadOnlyWrapperAvailable?: () => Promise<void>;
 };
 
 export type OpencodeResumeInput = OpencodeExecutionInput & {
   readonly sessionId: string;
+  /** 原精确 report 记录的真实 native 状态根；仅用于核验。 */
   readonly originalStateRoot: string;
   readonly transcriptRef: string;
 };
 
-/** 每行一条完整 JSON 的会话状态报告；超过上限时只保留最新一条。 */
-function appendSessionReport(reportPath: string, value: unknown): void {
-  mkdirSync(join(reportPath, '..'), { recursive: true });
-  const line = JSON.stringify(value) + '\n';
-  if (existsSync(reportPath) && statSync(reportPath).size > SESSION_REPORT_MAX_BYTES) {
-    writeFileSync(reportPath, line, 'utf8');
-    return;
-  }
-  appendFileSync(reportPath, line, 'utf8');
-}
+/**
+ * 真实终端里运行的自包含 bootstrap 脚本；只依赖 node 内置与公开 opencode CLI。
+ *
+ * create=true 时先经公开 api --standalone 建立 exact session 并核验身份，随后把一次确认观察追加到
+ * Companion 报告，最后 exec opencode mini。期间不写任何 native auth/config，也不改写环境。
+ */
+const OPENCODE_BOOTSTRAP_SCRIPT = [
+  "import { spawn, spawnSync } from 'node:child_process';",
+  "import { appendFileSync, readFileSync, realpathSync } from 'node:fs';",
+  '',
+  'const payload = JSON.parse(readFileSync(process.argv[2], "utf8"));',
+  'const runtime = JSON.parse(readFileSync(payload.runtimeReportPath, "utf8"));',
+  'function fail(message) { process.stderr.write("companion opencode bootstrap: " + message + "\\n"); process.exit(2); }',
+  'function samePath(left, right) { try { return realpathSync(left) === realpathSync(right); } catch { return false; } }',
+  'function api(args) {',
+  '  const result = spawnSync(payload.executable, ["api", "--standalone", ...args], { cwd: payload.workspace, env: process.env, encoding: "utf8", timeout: 60000, maxBuffer: 8 * 1024 * 1024, windowsHide: true });',
+  '  if (result.error || result.status !== 0) return null;',
+  '  try { return JSON.parse(result.stdout); } catch { return null; }',
+  '}',
+  'if (payload.create) {',
+  '  const created = api(["POST", "/api/session", "--data", JSON.stringify({ id: payload.sessionId, location: { directory: payload.workspace } })]);',
+  '  const session = created && created.data ? created.data : null;',
+  '  if (!session || session.id !== payload.sessionId || !session.location || !samePath(session.location.directory, payload.workspace)) fail("session identity unconfirmed");',
+  '}',
+  'appendFileSync(payload.reportPath, JSON.stringify({ harness: "opencode", sessionId: payload.sessionId, transcriptPath: payload.reportPath, stateRoot: runtime.stateRoot, runtimeRoots: runtime.writableRoots, cwd: payload.workspace, observedAt: new Date().toISOString() }) + "\\n", { mode: 0o600 });',
+  'const child = spawn(payload.executable, ["mini", "--standalone", "--model", payload.model, "--session", payload.sessionId], { stdio: "inherit" });',
+  'for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => { if (!child.killed) child.kill(signal); });',
+  'child.on("error", () => process.exit(1));',
+  'child.on("close", (code, signal) => process.exit(typeof code === "number" ? code : signal ? 1 : 0));',
+  '',
+].join('\n');
 
-type PreparedState = {
-  readonly stateRoot: string;
-  readonly native: NativeWorkerConnection & { readonly harness: 'opencode' };
+type BootstrapPayload = {
+  readonly executable: string;
+  readonly sessionId: string;
+  readonly workspace: string;
+  readonly model: string;
+  readonly runtimeReportPath: string;
+  readonly reportPath: string;
+  readonly create: boolean;
 };
 
-/** 早期 fail closed 后，建立状态根并写出全部非秘密状态文件。 */
-function prepareState(
-  input: OpencodeExecutionInput,
-  worktreePath: string,
-  sessionId: string,
-  exactStateRoot: string | null,
-): PreparedState {
-  const native = assertLaunchableOpencodeModelConfiguration(input.modelConfiguration);
-  // 状态根一律在 input.stateRoot（harness 级父目录）下再拼 digest，与其它注册项一致。
-  const stateRoot = exactStateRoot ?? join(
-    input.stateRoot ?? join(worktreePath, '.companion', 'opencode'),
-    opencodeLaunchDigest(input.launchId),
-  );
-  if (exactStateRoot === null && input.stateRoot === undefined) {
+/** 写 Companion bootstrap 脚本与 payload（非秘密）；脚本内容不变则不重写。 */
+function writeBootstrapArtifacts(stateRoot: string, payload: BootstrapPayload): { readonly scriptPath: string; readonly payloadPath: string } {
+  mkdirSync(stateRoot, { recursive: true });
+  const scriptPath = join(stateRoot, OPENCODE_BOOTSTRAP_SCRIPT_FILENAME);
+  if (!existsSync(scriptPath) || readFileSync(scriptPath, 'utf8') !== OPENCODE_BOOTSTRAP_SCRIPT) {
+    writeFileSync(scriptPath, OPENCODE_BOOTSTRAP_SCRIPT, { mode: 0o600 });
+  }
+  const payloadPath = join(stateRoot, OPENCODE_BOOTSTRAP_PAYLOAD_FILENAME);
+  writeFileSync(payloadPath, JSON.stringify(payload) + '\n', { mode: 0o600 });
+  return { scriptPath, payloadPath };
+}
+
+function isReadOnlyMode(mode: WorkerHarnessLaunchInput['sandboxMode']): boolean {
+  return mode === 'read-only' || mode === 'read-only-local-control';
+}
+
+/** Companion 工件根：只放 launcher/reporter/bootstrap 工件，绝不当作 native 状态根。 */
+function prepareState(execution: OpencodeExecutionInput, worktreePath: string): string {
+  const digest = opencodeLaunchDigest(execution.launchId);
+  const stateRoot = execution.stateRoot === undefined
+    ? join(worktreePath, '.companion', OPENCODE_HARNESS_ID, digest)
+    : join(execution.stateRoot, digest);
+  if (execution.stateRoot === undefined) {
     assertInsideWorktree(worktreePath, stateRoot);
   }
-
-  for (const sub of [['xdg', 'data'], ['xdg', 'config'], ['xdg', 'cache'], ['xdg', 'state'], ['home']]) {
-    mkdirSync(join(stateRoot, ...sub), { recursive: true });
+  mkdirSync(stateRoot, { recursive: true });
+  if (isReadOnlyMode(execution.sandboxMode)) {
+    mkdirSync(join(stateRoot, 'tmp'), { recursive: true });
   }
-  writeFileSync(
-    join(stateRoot, OPENCODE_CONFIG_FILENAME),
-    JSON.stringify(opencodeProviderConfig(native, input.modelConfiguration), null, 2) + '\n',
-    'utf8',
-  );
-  if (input.modelConfiguration.connection.credential.kind === 'harness_login') {
-    copyHarnessLoginAuth(input, stateRoot);
-  }
-
-  // bootstrap 状态落在可写的隔离状态根里（read-only 包装器只把状态根与 tmp 绑定为可写）。
-  const reportPath = join(stateRoot, OPENCODE_SESSION_REPORT_FILENAME);
-  if (!existsSync(reportPath)) {
-    appendSessionReport(reportPath, {
-      harness: OPENCODE_HARNESS_ID,
-      sessionId,
-      transcriptPath: reportPath,
-      stateRoot,
-      cwd: resolve(worktreePath),
-      observedAt: null,
-    });
-  }
-  return { stateRoot, native };
+  return stateRoot;
 }
 
-function opencodeCredential(input: OpencodeExecutionInput): CodexModelCredentialDescriptor {
-  const credential = input.modelConfiguration.connection.credential;
-  if (credential.kind !== 'managed') {
-    return { kind: 'harness_login' };
-  }
-  return {
-    kind: 'managed',
-    credentialRef: credential.credentialRef,
-    envKey: OPENCODE_MANAGED_CREDENTIAL_ENV,
-    storePath: input.credentialStorePath ?? credentialStorePath(),
-  };
-}
-
-/** managed 启动只在准备阶段证明 key 存在；secret 由 launcher 运行时注入。 */
-function assertManagedCredentialResolvable(input: OpencodeExecutionInput): void {
-  const credential = input.modelConfiguration.connection.credential;
-  if (credential.kind !== 'managed') return;
-  if (input.credentialStore === undefined) {
-    throw new Error('opencode managed 凭据启动必须由 Bootstrap 注入 CredentialStore');
-  }
-  const read = input.credentialStore.read(credential.credentialRef);
-  if (read.kind !== 'resolved') {
-    throw new Error('opencode managed 凭据不可用：' + read.code);
-  }
+async function assertReadOnlyReady(execution: OpencodeExecutionInput): Promise<void> {
+  if (!isReadOnlyMode(execution.sandboxMode)) return;
+  await (execution.assertReadOnlyWrapperAvailable ?? assertReadOnlyExecutionWrapperAvailable)();
 }
 
 function buildLaunch(input: {
@@ -308,41 +193,44 @@ function buildLaunch(input: {
   readonly title: string;
   readonly worktreePath: string;
   readonly sessionId: string;
-  readonly exactStateRoot: string | null;
+  readonly create: boolean;
+  readonly reportPath?: string;
+  readonly expectedStateRoot?: string;
 }): PreparedHarnessTerminal {
-  const { execution } = input;
-  assertManagedCredentialResolvable(execution);
-  const prepared = prepareState(execution, input.worktreePath, input.sessionId, input.exactStateRoot);
-  const readOnly = execution.sandboxMode === 'read-only' || execution.sandboxMode === 'read-only-local-control'
-    ? { stateRoot: prepared.stateRoot, workspace: input.worktreePath, reportDirectory: prepared.stateRoot }
+  assertLaunchableOpencodeModelSelection(input.execution.modelSelection);
+  const stateRoot = prepareState(input.execution, input.worktreePath);
+  // 本次派发的报告写在本次 Companion 工件区（sessionStartReporterPath），用于证明本次观察窗口；
+  // resume 的原报告只用于核验原身份，不被复用为本次证据。
+  const reportPath = input.reportPath ?? input.execution.sessionStartReporterPath ?? join(stateRoot, OPENCODE_SESSION_REPORT_FILENAME);
+  const runtimeReportPath = join(stateRoot, 'native-runtime.json');
+  const { scriptPath, payloadPath } = writeBootstrapArtifacts(stateRoot, {
+    executable: input.execution.executable ?? OPENCODE_HARNESS_ID,
+    sessionId: input.sessionId,
+    workspace: resolve(input.worktreePath),
+    model: input.execution.modelSelection.model,
+    runtimeReportPath,
+    reportPath,
+    create: input.create,
+  });
+  const reportDirectory = dirname(reportPath);
+  const readOnly = isReadOnlyMode(input.execution.sandboxMode)
+    ? {
+        workspace: input.worktreePath,
+        stateRoot,
+        ...(reportDirectory === stateRoot ? {} : { reportDirectory }),
+      }
     : undefined;
   const descriptor: CodexModelLaunchDescriptor = {
     version: CODEX_MODEL_DESCRIPTOR_VERSION,
-    codexHome: prepared.stateRoot,
-    executable: execution.executable ?? OPENCODE_HARNESS_ID,
-    // mini 通过公开 --model 绑定 Session，避免完整 TUI 在目录初始化时重选默认模型。
-    args: ['mini', '--standalone', '--model', prepared.native.providerId + '/' + execution.modelConfiguration.model,
-      '--session', input.sessionId],
-    credential: opencodeCredential(execution),
-    environment: isolatedStateEnvironment(prepared.stateRoot),
-    unsetEnvironment: [...UNSET_ENVIRONMENT],
+    executable: process.execPath,
+    args: [scriptPath, payloadPath],
+    harness: OPENCODE_HARNESS_ID,
+    ...(input.expectedStateRoot === undefined ? {} : { expectedStateRoot: input.expectedStateRoot }),
+    runtimeReportPath,
     ...(readOnly === undefined ? {} : { readOnly }),
   };
-  // 复用 Codex 的 self-contained launcher：注入 managed secret、透传信号与退出码。
-  const { descriptorPath, launcherPath } = writeCodexModelLaunch({
-    codexHome: prepared.stateRoot,
-    descriptor,
-  });
-  return {
-    title: input.title,
-    stateRoot: prepared.stateRoot,
-    command: codexModelLaunchCommand({ launcherPath, descriptorPath }),
-  };
-}
-
-async function assertReadOnlyReady(execution: OpencodeExecutionInput): Promise<void> {
-  if (execution.sandboxMode !== 'read-only' && execution.sandboxMode !== 'read-only-local-control') return;
-  await (execution.assertReadOnlyWrapperAvailable ?? assertReadOnlyExecutionWrapperAvailable)();
+  const { descriptorPath, launcherPath } = writeCodexModelLaunch({ stateRoot, descriptor });
+  return { title: input.title, stateRoot, command: codexModelLaunchCommand({ launcherPath, descriptorPath }) };
 }
 
 /** 新建 Session 的固定 prepared-terminal 策略；session id 由 launchId 确定性派生。 */
@@ -364,41 +252,19 @@ export function createOpencodeWorkerLaunch(
         throw new Error('opencode Worker worktree 必须是绝对路径：' + worktreePath);
       }
       if (input.stateRoot !== undefined && !isAbsolute(input.stateRoot)) {
-        throw new Error('opencode 状态根必须是绝对路径：' + input.stateRoot);
+        throw new Error('opencode 工件根必须是绝对路径：' + input.stateRoot);
       }
+      assertLaunchableOpencodeModelSelection(input.modelSelection);
       await assertReadOnlyReady(input);
-      const prepared = buildLaunch({ execution: input, title, worktreePath, sessionId, exactStateRoot: null });
-      const native = assertLaunchableOpencodeModelConfiguration(input.modelConfiguration);
-      const created = await runOpencodeApi({
-        executable: input.executable ?? OPENCODE_HARNESS_ID,
-        stateRoot: prepared.stateRoot,
-        workspace: worktreePath,
-        args: ['POST', '/api/session', '--data', JSON.stringify({
-          id: sessionId, location: { directory: worktreePath },
-          model: { providerID: native.providerId, id: input.modelConfiguration.model },
-        })],
-      });
-      const response = created.ok ? parseJson(created.stdout) : null;
-      const session = isRecord(response) ? response['data'] : null;
-      const metadata = parseSessionItem(session);
-      const model = isRecord(session) ? session['model'] : null;
-      if (metadata?.id !== sessionId || !samePath(metadata.directory, worktreePath)
-        || !isRecord(model) || model['id'] !== input.modelConfiguration.model || model['providerID'] !== native.providerId) {
-        throw new Error('opencode 精确 Session/model 未由公开 API 确认，拒绝启动');
-      }
-      appendSessionReport(join(prepared.stateRoot, OPENCODE_SESSION_REPORT_FILENAME), {
-        harness: OPENCODE_HARNESS_ID, sessionId,
-        transcriptPath: join(prepared.stateRoot, OPENCODE_SESSION_REPORT_FILENAME),
-        stateRoot: prepared.stateRoot, cwd: worktreePath, observedAt: new Date().toISOString(),
-      });
-      return prepared;
+      const reportPath = input.sessionStartReporterPath ?? join(prepareState(input, worktreePath), OPENCODE_SESSION_REPORT_FILENAME);
+      return buildLaunch({ execution: input, title, worktreePath, sessionId, create: true, reportPath });
     },
   };
 }
 
 /**
- * 复用原 Session：同一隔离状态根 + 原 exact session id。
- * 绝不用 --continue、picker 或最近会话；新 session 由 Recovery 的正常路径创建。
+ * 复用原 Session：同一精确 session id 与原原生状态根。
+ * 绝不用 --continue、picker 或最近会话；session 创建在启动子进程里完成，这里只做失败前置核验。
  */
 export function createOpencodeResumeLaunch(
   input: OpencodeResumeInput,
@@ -407,7 +273,7 @@ export function createOpencodeResumeLaunch(
     throw new Error('opencode launchId 必须是非空字符串');
   }
   if (!isAbsolute(input.originalStateRoot)) {
-    throw new Error('opencode resume 的原状态根必须是绝对路径：' + input.originalStateRoot);
+    throw new Error('opencode resume 的原 native 状态根必须是绝对路径：' + input.originalStateRoot);
   }
   const title = 'orca-companion:opencode-resume:' + opencodeLaunchDigest(input.launchId);
   return {
@@ -422,35 +288,37 @@ export function createOpencodeResumeLaunch(
       if (!SAFE_SESSION_ID.test(input.sessionId)) {
         throw new Error('opencode resume session ID 形态非法，拒绝启动');
       }
+      assertLaunchableOpencodeModelSelection(input.modelSelection);
       const report = readSessionReportFile(input.transcriptRef);
       if (report === null || report.sessionId !== input.sessionId
-        || !samePath(report.stateRoot, input.originalStateRoot) || !samePath(report.cwd, worktreePath)) {
+        || !samePath(report.cwd, worktreePath) || !samePath(report.stateRoot, input.originalStateRoot)
+        || !matchesCurrentNativeRoot(report.stateRoot, report.runtimeRoots)) {
         throw new Error('opencode resume 原 Session 身份不可证明');
       }
       const original = await findUniqueSession({
         executable: input.executable ?? OPENCODE_HARNESS_ID,
-        stateRoot: input.originalStateRoot, workspace: worktreePath, sessionId: input.sessionId,
+        env: currentOpencodeEnv(),
+        workspace: worktreePath,
+        sessionId: input.sessionId,
       });
       if (!original.ok) throw new Error('opencode resume 原 Session 不可用：' + original.reason);
       await assertReadOnlyReady(input);
-      const prepared = buildLaunch({
+      return buildLaunch({
         execution: input,
         title,
         worktreePath,
         sessionId: input.sessionId,
-        exactStateRoot: resolve(input.originalStateRoot),
+        create: false,
+        reportPath: input.transcriptRef,
+        expectedStateRoot: input.originalStateRoot,
       });
-      appendSessionReport(input.transcriptRef, {
-        ...report, observedAt: new Date().toISOString(),
-      });
-      return prepared;
     },
   };
 }
 
 /**
- * 每个 launch 的稳定私有命名空间：stateRoot 是 harness 级父目录（实际状态根在其下按 digest 取），
- * 报告路径已拼好 digest，指向实际状态根内的 JSONL 会话状态报告。
+ * 每个 launch 的稳定私有命名空间：stateRoot 是 Companion harness 级工件父目录（实际工件根在其下按
+ * digest 取），报告路径已拼好 digest。
  */
 export function sessionPathsUnder(companionStateRoot: string, launchId: string): {
   readonly stateRoot: string;
@@ -471,8 +339,9 @@ export type OpencodeSessionReport = {
   readonly sessionId: string;
   readonly transcriptPath: string;
   readonly stateRoot: string;
+  readonly runtimeRoots: readonly string[];
   readonly cwd: string;
-  readonly observedAt: string;
+  readonly observedAt: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -484,40 +353,59 @@ function unavailable(reason: string): { readonly kind: 'transcript_unavailable';
 }
 
 function instant(value: string | null): number | null {
-  if (value === null || value.length === 0) return null;
+  if (value === null || value.length === 0) {
+    return null;
+  }
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function samePath(left: string, right: string): boolean {
-  return resolve(left) === resolve(right);
+/** 真实 launch 环境：proof/query 只继承当前进程环境，绝不从报告反推或覆盖 XDG/认证。 */
+function currentOpencodeEnv(): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value === 'string') env[key] = value;
+  }
+  return env;
 }
 
-function isInside(parent: string, child: string): boolean {
-  const path = relative(resolve(parent), resolve(child));
-  return path.length > 0 && path !== '..' && !path.startsWith('..' + sep) && !isAbsolute(path);
+/** 本进程当前真实原生状态根；报告必须与它一致，禁止从报告反向生成环境。 */
+function currentNativeRoot(): string | null {
+  try {
+    return nativeWorkerRuntime(OPENCODE_HARNESS_ID, process.env).stateRoot;
+  } catch {
+    return null;
+  }
+}
+
+/** 报告的 native 根必须与本进程实际 native runtime 相同；不同即不可用。 */
+function matchesCurrentNativeRoot(reportedRoot: string, reportedRoots: readonly string[]): boolean {
+  const actual = currentNativeRoot();
+  if (actual === null || !samePath(actual, reportedRoot)) return false;
+  try {
+    const roots = nativeWorkerRuntime(OPENCODE_HARNESS_ID, process.env).writableRoots;
+    return roots.length === reportedRoots.length && roots.every((root) => reportedRoots.includes(root));
+  } catch { return false; }
 }
 
 type CliResult =
   | { readonly ok: true; readonly stdout: string }
   | { readonly ok: false; readonly code: string; readonly message: string };
 
-/** 公开 CLI 调用；输出有界、超时可控，失败只报告固定 code。 */
+/** 公开 CLI 调用；输出有界、超时可控，失败只报告固定 code。环境由调用方按真实 roots 提供。 */
 function runOpencodeApi(input: {
   readonly executable: string;
-  readonly stateRoot: string;
+  readonly env: Readonly<Record<string, string>>;
   readonly workspace: string;
   readonly args: readonly string[];
 }): Promise<CliResult> {
   return new Promise((resolveResult) => {
-    const env = { ...process.env, ...isolatedStateEnvironment(input.stateRoot) };
-    for (const name of UNSET_ENVIRONMENT) delete env[name];
     execFile(
       input.executable,
       ['api', '--standalone', ...input.args],
       {
         cwd: input.workspace,
-        env,
+        env: input.env,
         encoding: 'utf8',
         maxBuffer: MAX_API_BODY_BYTES,
         timeout: API_TIMEOUT_MS,
@@ -556,14 +444,12 @@ function parseSessionItem(value: unknown): SessionMetadata | null {
     : null;
 }
 
-/** 只承认规范的 \`{data: [], cursor: {previous, next}}\` 形状；形状不符即不可核验。 */
+/** 只承认规范的 {data: [], cursor: {previous, next}} 形状；形状不符即不可核验。 */
 function parseSessionListEnvelope(value: unknown): { readonly items: readonly unknown[]; readonly next: string | null } | null {
   if (!isRecord(value) || !Array.isArray(value['data'])) return null;
   const cursor = value['cursor'];
   if (!isRecord(cursor)) return null;
-  const previous = cursor['previous'];
   const next = cursor['next'];
-  if (previous !== undefined && previous !== null && typeof previous !== 'string') return null;
   if (next !== null && typeof next !== 'string' && !(next === undefined && value['data'].length === 0)) return null;
   return { items: value['data'], next: typeof next === 'string' && next.length > 0 ? next : null };
 }
@@ -586,7 +472,7 @@ function parseMessageEnvelope(value: unknown): {
   };
 }
 
-/** v2 消息条目是 \`{info:{id}, parts:[...]}\`；缺失事件引用即不可读。 */
+/** v2 消息条目是 {info:{id}, parts:[...]}；缺失事件引用即不可读。 */
 function messageEventRef(item: unknown): string | null {
   if (!isRecord(item)) return null;
   const info = item['info'];
@@ -595,12 +481,12 @@ function messageEventRef(item: unknown): string | null {
 }
 
 /**
- * 经公开 \`GET /api/session\`（\`{data, cursor:{previous,next}}\`）在有界窗口内确认唯一候选。
+ * 经公开 GET /api/session（{data, cursor:{previous,next}}）在有界窗口内确认唯一候选。
  * 窗口未穷尽、候选不为 1、directory 不符或 cursor 循环都判不可核验。
  */
 async function findUniqueSession(input: {
   readonly executable: string;
-  readonly stateRoot: string;
+  readonly env: Readonly<Record<string, string>>;
   readonly workspace: string;
   readonly sessionId: string;
 }): Promise<{ readonly ok: true; readonly session: SessionMetadata } | { readonly ok: false; readonly reason: string }> {
@@ -614,7 +500,7 @@ async function findUniqueSession(input: {
     if (pages > MAX_SESSION_LIST_PAGES) break;
     const result = await runOpencodeApi({
       executable: input.executable,
-      stateRoot: input.stateRoot,
+      env: input.env,
       workspace: input.workspace,
       args: [
         'session.list',
@@ -650,35 +536,34 @@ async function findUniqueSession(input: {
   return { ok: true, session };
 }
 
-/** 报告文件里的一条可核验会话状态；bootstrap 行的 observedAt 为 null。 */
-type SessionReportFile = {
-  readonly harness: 'opencode';
-  readonly sessionId: string;
-  readonly transcriptPath: string;
-  readonly stateRoot: string;
-  readonly cwd: string;
-  readonly observedAt: string | null;
-};
-
-/** 读最后一条可核验记录；bootstrap 行与确认行共用同一文件与形状。 */
-function parseSessionReportLine(parsed: unknown): SessionReportFile | null {
+/** 报告文件里的一条可核验会话状态。 */
+function parseSessionReportLine(parsed: unknown): OpencodeSessionReport | null {
   if (!isRecord(parsed)) return null;
-  const { harness, sessionId, transcriptPath, stateRoot, cwd, observedAt } = parsed;
+  const { harness, sessionId, transcriptPath, stateRoot, runtimeRoots, cwd, observedAt } = parsed;
   return harness === OPENCODE_HARNESS_ID
     && typeof sessionId === 'string' && SAFE_SESSION_ID.test(sessionId)
     && typeof transcriptPath === 'string' && transcriptPath.length > 0
     && typeof stateRoot === 'string' && stateRoot.length > 0
+    && Array.isArray(runtimeRoots) && runtimeRoots.every((root) => typeof root === 'string' && root.length > 0)
     && typeof cwd === 'string' && cwd.length > 0
     && (observedAt === null || typeof observedAt === 'string')
-    ? { harness: OPENCODE_HARNESS_ID, sessionId, transcriptPath, stateRoot, cwd, observedAt }
+    ? {
+        harness: OPENCODE_HARNESS_ID,
+        sessionId,
+        transcriptPath,
+        stateRoot,
+        runtimeRoots: runtimeRoots as readonly string[],
+        cwd,
+        observedAt,
+      }
     : null;
 }
 
 /**
- * 只认**最新一条非空行**：最新行解析或 schema 失败即 null，不回落旧行；任何其它有效行出现不同
+ * 只认最新一条非空行：最新行解析或 schema 失败即 null，不回落旧行；任何其它有效行出现不同
  * session ID 都表示多候选，同样 fail closed。
  */
-function readSessionReportFile(path: string): SessionReportFile | null {
+function readSessionReportFile(path: string): OpencodeSessionReport | null {
   let lines: readonly string[];
   try {
     lines = readFileSync(path, 'utf8').split('\n');
@@ -709,39 +594,9 @@ function readSessionReportFile(path: string): SessionReportFile | null {
   return report;
 }
 
-/** 经公开 API 观察一次本次派发的 session，并把确认记录追加到可写的隔离状态根。 */
-export async function observeOpencodeSession(input: {
-  readonly stateRoot: string;
-  readonly workspace: string;
-  readonly sessionId: string;
-  readonly executable?: string;
-}): Promise<{ readonly kind: 'observed'; readonly report: OpencodeSessionReport }
-  | { readonly kind: 'unavailable'; readonly reason: string }> {
-  if (!SAFE_SESSION_ID.test(input.sessionId)) {
-    return { kind: 'unavailable', reason: 'opencode session ID 形态非法' };
-  }
-  const found = await findUniqueSession({
-    executable: input.executable ?? OPENCODE_HARNESS_ID,
-    stateRoot: input.stateRoot,
-    workspace: input.workspace,
-    sessionId: input.sessionId,
-  });
-  if (!found.ok) return { kind: 'unavailable', reason: found.reason };
-  const report: OpencodeSessionReport = {
-    harness: OPENCODE_HARNESS_ID,
-    sessionId: input.sessionId,
-    transcriptPath: join(input.stateRoot, OPENCODE_SESSION_REPORT_FILENAME),
-    stateRoot: input.stateRoot,
-    cwd: resolve(found.session.directory),
-    observedAt: new Date().toISOString(),
-  };
-  appendSessionReport(report.transcriptPath, report);
-  return { kind: 'observed', report };
-}
-
 /**
- * 证明一次 opencode Session：报告、隔离状态根、workspace、时间窗与公开 API 事实必须一致。
- * \`observedAt\` 缺失（bootstrap）时取本次真实观察时刻；任何不一致都判不可用。
+ * 证明一次 opencode Session：报告、真实 native 状态根、runtime roots、workspace、时间窗与公开 API
+ * 事实必须一致。expectedStateRoot 只作核验，不覆盖真实环境；工件目录不当作 native root。
  */
 export async function proveOpencodeTranscript(
   input: ProveHarnessSessionInput,
@@ -755,17 +610,21 @@ export async function proveOpencodeTranscript(
   if (sessionId === null || cwd === null || !SAFE_SESSION_ID.test(sessionId)) {
     return unavailable('opencode 报告缺少可核验的 session ID 或 cwd');
   }
-  const expectedRoot = resolve(input.expectedStateRoot);
-  const reportRoot = report.stateRoot ?? report.codexHome ?? null;
-  if (reportRoot === null || !samePath(reportRoot, expectedRoot)) {
-    return unavailable('报告状态根与本次派发的隔离状态根不一致');
-  }
-  const transcriptPath = report.transcriptPath ?? join(expectedRoot, OPENCODE_SESSION_REPORT_FILENAME);
-  if (!isInside(expectedRoot, transcriptPath)) {
-    return unavailable('报告 transcript path 不在隔离状态根内');
+  const nativeRoot = report.stateRoot ?? report.codexHome ?? null;
+  if (nativeRoot === null) {
+    return unavailable('opencode 报告缺少真实 native 状态根');
   }
   if (!samePath(cwd, input.workspace)) {
     return unavailable('报告 cwd 与绑定 workspace 不一致');
+  }
+  if (input.expectedStateRoot.length === 0 || !samePath(nativeRoot, input.expectedStateRoot)) {
+    return unavailable('报告 native 状态根与本次派发预期的原生根不一致');
+  }
+  if (report.runtimeRoots === undefined || report.runtimeRoots.length === 0) {
+    return unavailable('opencode 报告缺少原生 runtime roots');
+  }
+  if (!matchesCurrentNativeRoot(nativeRoot, report.runtimeRoots)) {
+    return unavailable('opencode 当前真实原生状态根与报告不一致');
   }
   const observedAt = report.observedAt ?? new Date().toISOString();
   const observed = instant(observedAt);
@@ -779,19 +638,13 @@ export async function proveOpencodeTranscript(
   }
   const found = await findUniqueSession({
     executable: OPENCODE_HARNESS_ID,
-    stateRoot: expectedRoot,
+    env: currentOpencodeEnv(),
     workspace: input.workspace,
     sessionId,
   });
   if (!found.ok) return unavailable(found.reason);
-  appendSessionReport(transcriptPath, {
-    harness: OPENCODE_HARNESS_ID,
-    sessionId,
-    transcriptPath,
-    stateRoot: expectedRoot,
-    cwd: resolve(found.session.directory),
-    observedAt,
-  });
+  // 只读核验：报告由实际 launch bootstrap 签发，这里绝不 append 或改写任何报告。
+  const transcriptPath = report.transcriptPath ?? join(nativeRoot, OPENCODE_SESSION_REPORT_FILENAME);
   return { kind: 'proven', proof: { providerSessionId: sessionId, transcriptRef: transcriptPath, observedAt } };
 }
 
@@ -806,9 +659,12 @@ export async function readOpencodeTranscriptIdentity(input: {
   if (!samePath(report.cwd, input.workspace)) {
     return unavailable('状态报告的 cwd 与绑定 workspace 不一致');
   }
+  if (!matchesCurrentNativeRoot(report.stateRoot, report.runtimeRoots)) {
+    return unavailable('opencode 当前真实原生状态根与报告不一致');
+  }
   const found = await findUniqueSession({
     executable: OPENCODE_HARNESS_ID,
-    stateRoot: report.stateRoot,
+    env: currentOpencodeEnv(),
     workspace: input.workspace,
     sessionId: report.sessionId,
   });
@@ -825,7 +681,7 @@ type MessageCollection = {
 /** 有界分页：硬上限页数/事件数/材料字节数，并检测 cursor 循环、截断与非法条目。 */
 async function collectMessages(input: {
   readonly executable: string;
-  readonly stateRoot: string;
+  readonly env: Readonly<Record<string, string>>;
   readonly workspace: string;
   readonly sessionId: string;
 }): Promise<MessageCollection> {
@@ -845,7 +701,7 @@ async function collectMessages(input: {
     if (pages > OPENCODE_MAX_MESSAGE_PAGES) return gapAt('page_limit');
     const result = await runOpencodeApi({
       executable: input.executable,
-      stateRoot: input.stateRoot,
+      env: input.env,
       workspace: input.workspace,
       args: [
         'GET', '/api/session/' + encodeURIComponent(input.sessionId) + '/message?'
@@ -880,9 +736,12 @@ async function collectMessages(input: {
 export async function inspectOpencodeTranscript(transcriptRef: string): Promise<HarnessTranscriptCoverageResult> {
   const report = readSessionReportFile(transcriptRef);
   if (report === null) return unavailable('opencode 状态报告缺失或不可核验');
+  if (!matchesCurrentNativeRoot(report.stateRoot, report.runtimeRoots)) {
+    return unavailable('opencode 当前真实原生状态根与报告不一致');
+  }
   const collected = await collectMessages({
     executable: OPENCODE_HARNESS_ID,
-    stateRoot: report.stateRoot,
+    env: currentOpencodeEnv(),
     workspace: report.cwd,
     sessionId: report.sessionId,
   });
@@ -915,7 +774,7 @@ export function opencodeRecoveryMaterialPath(writableRoot: string, transcriptRef
 }
 
 function shellQuote(value: string): string {
-  return "'" + value.replaceAll("'", "'\\''") + "'";
+  return "'" + value.split("'").join("'\\''") + "'";
 }
 
 /**
@@ -986,9 +845,10 @@ export async function prepareOpencodeRecoveryMaterial(
   const report = readSessionReportFile(transcriptRef);
   if (report === null) return null;
   if (!samePath(expectedEvidence.readableRange.transcriptRef, report.transcriptPath)) return null;
+  if (!matchesCurrentNativeRoot(report.stateRoot, report.runtimeRoots)) return null;
   const collected = await collectMessages({
     executable: OPENCODE_HARNESS_ID,
-    stateRoot: report.stateRoot,
+    env: currentOpencodeEnv(),
     workspace: report.cwd,
     sessionId: report.sessionId,
   });
@@ -1012,12 +872,13 @@ export const opencodeHarness: WorkerHarness = {
   id: OPENCODE_HARNESS_ID,
   prepareLaunch: (input) => createOpencodeWorkerLaunch(input),
   prepareReadOnlyLaunch: (input) => createOpencodeWorkerLaunch({ ...input, sandboxMode: 'read-only-local-control' }),
-  probe: (configuration) => probeHarnessReadOnlyWorker(configuration),
+  probe: (modelSelection) => probeHarnessReadOnlyWorker(OPENCODE_HARNESS_ID, modelSelection),
+  queryModels: (input) => queryWorkerModels({ ...input, harness: OPENCODE_HARNESS_ID }),
   prepareResume: (input) => createOpencodeResumeLaunch(input),
   sessionPaths: (companionStateRoot, launchId) => sessionPathsUnder(companionStateRoot, launchId),
   installReporter: (paths) => {
     // opencode 没有 hook/extension 上报通道：会话事实由 adapter 经公开 API 主动观察（pull），
-    // 这里只保证报告目录存在于可写的隔离状态根。
+    // 这里只保证报告目录存在于 Companion 工件区。
     mkdirSync(join(paths.reportPath, '..'), { recursive: true });
   },
   proveSession: (input) => proveOpencodeTranscript(input),

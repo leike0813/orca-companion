@@ -25,7 +25,7 @@ A LangChain chat-model integration that implements the common `BaseChatModel` in
 _Avoid_: Companion-owned provider wrapper, provider gateway, bundled provider catalog, credential store
 
 **Credential Store**:
-The single user-level file holding plaintext provider secrets outside version control, addressed only through opaque immutable credential references. Project configuration, checkpoints, UI input storage, command arguments, and evidence carry the reference; the value is resolved at the last construction point and reaches Worker processes only through their environment. Owner-only permissions, a short exclusive lock, revision compare-and-set, and atomic replacement keep it single-writer and recoverable; an unreferenced leftover secret stays an orphan rather than activating anything.
+The single user-level file holding plaintext provider secrets for Coordinator model calls, outside version control and addressed only through opaque immutable credential references. Project configuration, checkpoints, UI input storage, command arguments, and evidence carry the reference; the value is resolved at the last construction point of a Coordinator model call. Worker launches never read it: Worker authentication belongs to the Worker Harness in its own user environment. Owner-only permissions, a short exclusive lock, revision compare-and-set, and atomic replacement keep it single-writer and recoverable; an unreferenced leftover secret stays an orphan rather than activating anything.
 _Avoid_: Version-controlled configuration, per-project key file, provider token cache, session credential
 
 **Coordinator Session**:
@@ -77,7 +77,7 @@ A bounded round in which a Work Package incorporates an attributable canonical a
 _Avoid_: Worker retry, Validator repair, new Validation Attempt, baseline adoption
 
 **Execution Authorization Manifest**:
-The complete, versioned proposal presented for one atomic user decision before a Graph Generation may execute, binding its destination and planning artifacts to an exact Coordination Scope and baseline, the full model configuration of every production Worker Profile plus the Recovery Utility Profile, role authorities, budget caps, workspace policy, and accepted risks. A manifest that omits a role's model binding is not an authorization to run that role, and an earlier version without those bindings is never read as one.
+The complete, versioned proposal presented for one atomic user decision before a Graph Generation may execute, binding its destination and planning artifacts to an exact Coordination Scope and baseline, the model selection of every production Worker Profile plus the Recovery Utility Profile, role authorities, budget caps, workspace policy, and accepted risks. A manifest that omits a role's model selection is not an authorization to run that role, and an earlier version without those bindings is never read as one.
 _Avoid_: Partial approval, per-task approval, execution status
 
 **Execution Authorization**:
@@ -133,7 +133,7 @@ An agent session delegated through Orca to perform one bounded project role usin
 _Avoid_: Coordinator, Companion agent
 
 **Worker Harness**:
-An existing coding-agent environment, such as Codex or Claude Code, that runs a Worker and provides its model, session, and code-operation capabilities.
+An existing coding-agent environment, such as Codex or Claude Code, that runs a Worker and provides its model, authentication, session, and code-operation capabilities in its own user environment.
 _Avoid_: Coordinator Harness
 
 **Worker Role**:
@@ -165,7 +165,7 @@ A low-authority Worker for bounded, mechanically verifiable task kinds with expl
 _Avoid_: General-purpose worker, coordinator, fallback validator
 
 **Session Binding**:
-A controller-validated association between one Worker Dispatch and its exact Worker Harness session and transcript source.
+A controller-validated association between one Worker Dispatch and its exact Worker Harness session, transcript source, and the non-secret native runtime roots recorded by that launch.
 _Avoid_: Terminal handle, guessed latest session
 
 **Recovery Capsule**:
@@ -181,8 +181,12 @@ A bounded, workspace-scoped record of a command or judgment whose affected porti
 _Avoid_: Worker assertion, full transcript, permanent proof
 
 **Worker Profile**:
-A user-approved configuration that binds a Worker Role to its harness and its complete model configuration: provider connection, model, reasoning effort with a trusted capability source, non-secret options, and a credential reference. Worker Profiles are immutable and append-only; editing a model setting publishes a new profile rather than rewriting an approved one.
-_Avoid_: Coordinator choice, automatic model routing
+A user-approved configuration that binds a Worker Role to its harness and its model selection: the native model identifier, reasoning effort with a trusted catalog source, and the catalog provenance of that selection. Worker authentication and provider configuration belong to the harness, not the profile. Worker Profiles are immutable and append-only; editing a model setting publishes a new profile rather than rewriting an approved one.
+_Avoid_: Coordinator choice, automatic model routing, Companion-managed credential
+
+**Worker Model Selection**:
+The immutable record of the native model identifier, reasoning effort, trusted effort capability values, and catalog provenance that a Worker Profile binds for one role. A null catalog provenance marks a manually entered, unverified native model whose effort is unset; a non-null effort always comes from the capability values recorded by the explicit native catalog query.
+_Avoid_: Provider connection, model options, credential reference
 
 **Dependency Policy**:
 The standing authority in an Execution Authorization Manifest for Workers to add, upgrade, remove, and install project dependencies through the repository's existing package manager and configured registries within a Task Envelope and Scope Envelope.

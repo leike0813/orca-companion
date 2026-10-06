@@ -56,14 +56,13 @@ import type {
 } from '../../../src/application/dto/identity.js';
 import type { ExecutionAuthorizationRecord } from '../../../src/domain/planning/execution-authorization.js';
 import type { SpecBinding } from '../../../src/domain/task-contract.js';
-import type { WorkerModelConfiguration } from '../../../src/domain/model-configuration.js';
+import type { WorkerModelSelection } from '../../../src/domain/model-configuration.js';
 import { initializeCoordinationScope } from '../../../src/application/planning/initialize-scope.js';
 import { graphIdFor } from '../../../src/application/planning/graph-generation.js';
 import { buildExecutionScope, type ExecutionBackend, type ExecutionScope } from '../../../src/application/ports/execution-backend.js';
 import { activatePreparedWorker, prepareWorkerLaunch, verifyPreparedWorker } from '../../../src/application/worker-launch.js';
 import { loadCurrentGraph, recordInitialGraph } from '../../../src/application/planning/graph-history.js';
 import { implementationPlanFor } from '../../support/graph-plan-fixture.js';
-import { credentialStoreFixture } from '../../support/model-configurations.js';
 import {
   admitGraphRevision,
   applyGraphRevision,
@@ -348,8 +347,6 @@ async function runGraphPatchPlannerWorker(
   workspace: string,
   identity: string,
   model: string,
-  baseUrl: string,
-  envFile: string,
   request: GraphPatchPlannerRequest,
   active: { dispatchId: string | null; terminalHandle: string | null },
 ): Promise<{ draft: unknown; taskId: string; dispatchId: string; deliveryId: string; attemptId: string }> {
@@ -377,58 +374,12 @@ async function runGraphPatchPlannerWorker(
   const taskId = stringField(record(created.value)?.['task'], 'id');
   if (taskId === null) throw new Error('Planner Task 回执缺少 id');
 
-  const tokenHelper = join(reporterDir, 'provider-token.mjs');
-  writeFileSync(tokenHelper, [
-    "import { readFileSync } from 'node:fs';",
-    'const line = readFileSync(process.argv[2], "utf8").split("\\n").find((entry) => entry.startsWith("COORDINATOR_SMOKE_API_KEY="));',
-    'if (!line) process.exit(1);',
-    'const value = line.slice(line.indexOf("=") + 1).trim();',
-    'if (!value) process.exit(1);',
-    'process.stdout.write(value);',
-  ].join('\n'));
-  const sourceCodexHome = join(reporterDir, 'codex-source');
-  mkdirSync(sourceCodexHome, { recursive: true });
-  writeFileSync(join(sourceCodexHome, 'config.toml'), [
-    'disable_response_storage = true',
-    'model_reasoning_effort = "low"',
-    '',
-    '[features]',
-    'hooks = true',
-    '',
-    '[model_providers.companion_minimax]',
-    'name = "MiniMax"',
-    `base_url = ${JSON.stringify(baseUrl)}`,
-    'wire_api = "responses"',
-    '',
-    '[model_providers.companion_minimax.auth]',
-    'command = "node"',
-    `args = [${JSON.stringify(tokenHelper)}, ${JSON.stringify(envFile)}]`,
-    '',
-  ].join('\n'));
-  // 认证仍由来源 config.toml 的 token helper 命令提供，因此是 harness_login；provider 与来源配置
-  // 同源声明，启动参数由生成器从这份绑定产出，不再手工拼接 model_provider 后缀。
-  const modelConfiguration: WorkerModelConfiguration = {
-    connection: {
-      connectionRef: 'acceptance-minimax',
-      label: 'MiniMax',
-      providerIntegration: 'minimax',
-      modelOptions: {},
-      credential: { kind: 'harness_login' },
-      codex: { providerId: 'companion_minimax', baseUrl, wireApi: 'responses' },
-    },
-    modelRef: 'acceptance-model',
-    model,
-    effort: null,
-    effortCapability: null,
-    modelOptions: {},
-  };
+  const modelSelection: WorkerModelSelection = { model, effort: null, effortCapability: null, catalogSource: null };
   const strategy = createCodexWorkerLaunch({
     launchId: `${identity}:graph-patch-planner`,
-    modelConfiguration,
-    credentialStore: credentialStoreFixture(),
+    modelSelection,
     sandboxMode: 'read-only-local-control',
     sessionStartReporterPath: reporterPath,
-    sourceCodexHome,
   });
   const prepared = await prepareWorkerLaunch({
     backend: runtime.backend, strategy, worktreeId: `path:${workspace}`, worktreePath: workspace,
@@ -615,7 +566,7 @@ if (resolved.kind === 'skip') {
           writer,
           authorizationId: EXECUTION_AUTHORIZATION_ID,
           authorizationVersion: 1,
-          manifestVersion: 3,
+          manifestVersion: 4,
           fingerprint: 'fingerprint-real-planner',
           approvalRef: `${resolved.identity}:approval`,
           manifest,
@@ -664,8 +615,7 @@ if (resolved.kind === 'skip') {
 
         const worker = await runGraphPatchPlannerWorker(
           runtime, resolved.workspace, resolved.identity,
-          resolved.model, resolved.baseUrl,
-          process.env[ENV_FILE_VAR] ?? DEFAULT_ENV_FILE,
+          resolved.model,
           request, active,
         );
         const plannerSpecBinding = {

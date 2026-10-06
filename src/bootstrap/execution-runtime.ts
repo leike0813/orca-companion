@@ -67,10 +67,8 @@ import {
   type WorkerStartReceipt,
 } from '../adapters/orca-cli/operation-catalog.js';
 import { requireWorkerHarness, workerHarnessRegistry, workerSessionPathsUnder, prepareHarnessWorkerLaunch, installHarnessSessionReporter, bindHarnessSessionFromStartReport, readHarnessTranscriptIdentity, readLatestHarnessSessionReport } from './worker-harness.js';
-import { credentialStorePath } from '../adapters/storage/credential-store.js';
 import { prepareOpencodeRecoveryMaterial } from '../adapters/agents/opencode-harness.js';
 import { nativeRecoveryInstructions } from '../adapters/agents/native-worker.js';
-import type { CredentialStore } from '../application/ports/credential-store.js';
 import {
   readOnlyWorkerUnavailableReason,
   type ReadOnlyWorkerProbe,
@@ -110,7 +108,7 @@ import type {
 import type { ClaimedResultAttribution, TrustedExecutionFacts } from '../domain/worker-result-verification.js';
 import type { TerminalLivenessFacts } from '../domain/worker-liveness.js';
 import type { SpecBinding } from '../domain/task-contract.js';
-import type { WorkerModelConfiguration } from '../domain/model-configuration.js';
+import type { WorkerModelSelection } from '../domain/model-configuration.js';
 import {
   compileExecutionGraph,
   parseImplementationPlan,
@@ -628,7 +626,7 @@ export function reviewExecutionAuthorization(
         profileRef: { kind: 'worker-profile', id: profile.profileRef },
         role,
         harness: profile.harness,
-        modelConfiguration: profile.modelConfiguration,
+        modelSelection: profile.modelSelection,
       };
     }),
     recoveryUtilityProfile: (() => {
@@ -636,7 +634,7 @@ export function reviewExecutionAuthorization(
       return profile === undefined ? null : {
         profileRef: { kind: 'worker-profile', id: profile.profileRef },
         harness: profile.harness,
-        modelConfiguration: profile.modelConfiguration,
+        modelSelection: profile.modelSelection,
       };
     })(),
     permissions: facts.policy.permissions,
@@ -1758,7 +1756,7 @@ export type ExecutionRecoveryFactsInput = {
   readonly execution: RecoveryExecutionContext | null;
   /** Worker Profile（harness 与模型）：替代 Session 默认复用它们，不从界面或模型填。 */
   readonly workerHarness: string | null;
-  readonly resolveModelConfiguration: (subject: RecoveryFactSubject, kind: 'replacement' | 'utility') => WorkerModelConfiguration | null;
+  readonly resolveModelSelection: (subject: RecoveryFactSubject, kind: 'replacement' | 'utility') => WorkerModelSelection | null;
   /**
    * 替代 Session 的 Codex 沙箱模式；与常规角色派发同源（都来自已批准 Manifest 绑定的项目配置）。
    * `null` 表示当前配置的沙箱模式未被授权接受，此时替代派发不可用。
@@ -1767,10 +1765,10 @@ export type ExecutionRecoveryFactsInput = {
   /** Companion 私有的状态根（Git common dir 下）；缺失即无法证明 Codex Session。 */
   readonly companionStateRoot: string | null;
   /**
-   * 本机只读 Codex Worker 能力探针。
+   * 本机只读 Worker 能力探针。
    *
-   * Capsule 提取要派发只读 Utility Worker，因此新派发之前必须知道本机能不能运行受限命令。测试注入
-   * 固定结论；生产用真实受限命令探针。
+   * Capsule 提取要派发只读 Utility Worker，因此新派发之前必须知道本机能不能运行受限命令。探针按
+   * **该次派发钉住的 harness** 与 `modelSelection` 核验，测试注入固定结论；生产用真实受限命令探针。
    */
   readonly readOnlyWorkerProbe: ReadOnlyWorkerProbe;
   /**
@@ -1778,8 +1776,6 @@ export type ExecutionRecoveryFactsInput = {
    * 可信身份；缺失时不派发（fail closed），其余 Recovery 事实仍照常装配。
    */
   readonly writer?: CoordinationWriter | undefined;
-  /** 宿主 bootstrap 注入的唯一凭据 store；恢复派发不再按 env 另建实例。 */
-  readonly credentialStore: CredentialStore;
   readonly env: Readonly<Record<string, string>>;
   readonly clock: () => number;
   /** SessionStart 报告的等待窗口。 */
@@ -2101,8 +2097,8 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
           ? authorizationRead.authorization
           : null;
       const profile = authorization?.manifest.recoveryUtilityProfile ?? null;
-      const modelConfiguration = profile?.modelConfiguration ?? null;
-      if (modelConfiguration === null || profile === null || authorization === null ||
+      const modelSelection = profile?.modelSelection ?? null;
+      if (modelSelection === null || profile === null || authorization === null ||
           (pinned !== null && (pinned.workerProfileRef?.id !== profile.profileRef.id ||
             pinned.authorizationVersion !== authorization.authorizationVersion))) {
         return { kind: 'failed', reason: 'Recovery Utility 缺少可核验模型授权绑定' };
@@ -2144,16 +2140,16 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
         return { kind: 'failed', reason: '已有 Recovery Utility Task 缺少可核验的原模型绑定' };
       }
       if (priorDispatch === null && !capsuleIntentExists(input.store(), scopeId, operationIds)) {
-        const readOnlyBlocker = readOnlyWorkerUnavailableReason(await input.readOnlyWorkerProbe(modelConfiguration));
+        const readOnlyBlocker = readOnlyWorkerUnavailableReason(await input.readOnlyWorkerProbe(profile.harness, modelSelection));
         if (readOnlyBlocker !== null) {
           // 不进入报告等待、不建 Task/Dispatch、不消耗 Recovery 预算：只留下可诊断的能力 blocker。
           return { kind: 'failed', reason: readOnlyBlocker };
         }
       }
       installHarnessSessionReporter(harness.id, paths);
-      const expectedCodexHome = join(paths.stateRoot, createHash('sha256').update(launchId).digest('hex').slice(0, 20));
+      const materialRoot = join(paths.stateRoot, createHash('sha256').update(launchId).digest('hex').slice(0, 20));
       const readingInstructions = sourceHarness === 'opencode'
-        ? await prepareOpencodeRecoveryMaterial(request.transcriptRef, expectedCodexHome, evidence.evidence)
+        ? await prepareOpencodeRecoveryMaterial(request.transcriptRef, materialRoot, evidence.evidence)
         : sourceHarness === 'claude' || sourceHarness === 'pi' || sourceHarness === 'omp'
           ? nativeRecoveryInstructions(sourceHarness) : undefined;
       if (readingInstructions === null) return { kind: 'transcript_unavailable', reason: 'OpenCode 精确 transcript 材料无法核验' };
@@ -2183,10 +2179,7 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
         },
         workerLaunch: prepareHarnessWorkerLaunch(harness.id, {
           launchId,
-          modelConfiguration,
-          // 与宿主其余派发同源：managed 凭据用 bootstrap 注入的唯一实例证明存在。
-          credentialStore: input.credentialStore,
-          credentialStorePath: credentialStorePath({ environment: input.env }),
+          modelSelection,
           // Capsule 提取只读 transcript：权限是共享的 `read-only-local-control` profile（继承
           // `:read-only`，只为本机控制通道开启网络），信封 `authority.write=false`。
           sandboxMode: 'read-only-local-control',
@@ -2211,7 +2204,7 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
                   },
                   report,
                   workspace: worktree.path,
-                  expectedCodexHome,
+                  expectedCodexHome: report.stateRoot ?? report.codexHome ?? '',
                   dispatchStartedAt,
                   bindingDeadlineAt: new Date(input.clock()).toISOString(),
                 });
@@ -2282,9 +2275,9 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
       if (harnessId === null) return unavailable('worker_profile_unresolved', '替代 Session 缺少原 harness 授权绑定');
       const harness = workerHarnessRegistry.get(harnessId);
       if (harness === undefined) return unavailable('worker_harness_unregistered', '替代 Session 的原 harness 未注册');
-      const modelConfiguration = input.resolveModelConfiguration(recovery, 'replacement');
+      const modelSelection = input.resolveModelSelection(recovery, 'replacement');
       const originalProfileRef = bindingFor(recovery)?.workerProfileRef?.id;
-      if (modelConfiguration === null || originalProfileRef === undefined) {
+      if (modelSelection === null || originalProfileRef === undefined) {
         return unavailable('worker_model_unresolved', '替代 Session 缺少原任务模型授权绑定');
       }
       if (input.codexSandbox === null) {
@@ -2299,16 +2292,12 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
       const launchId = recoveryLaunchIdOf(recovery.recoveryId);
       const paths = harness.sessionPaths(input.companionStateRoot, launchId);
       installHarnessSessionReporter(harness.id, paths);
-      const expectedCodexHome = join(paths.stateRoot, createHash('sha256').update(launchId).digest('hex').slice(0, 20));
       const dispatchStartedAt = new Date(input.clock()).toISOString();
       return {
         profile: { kind: 'reuse', profileRef: originalProfileRef },
         workerLaunch: prepareHarnessWorkerLaunch(harness.id, {
           launchId,
-          modelConfiguration,
-          // 替代 Session 沿用原 Task 的模型绑定，凭据 store 用 bootstrap 注入的唯一实例。
-          credentialStore: input.credentialStore,
-          credentialStorePath: credentialStorePath({ environment: input.env }),
+          modelSelection,
           sandboxMode: input.codexSandbox,
           stateRoot: paths.stateRoot,
           sessionStartReporterPath: paths.reporterPath,
@@ -2339,7 +2328,7 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
                   },
                   report,
                   workspace: worktree.path,
-                  expectedCodexHome,
+                  expectedCodexHome: report.stateRoot ?? report.codexHome ?? '',
                   dispatchStartedAt,
                   bindingDeadlineAt: new Date(input.clock()).toISOString(),
                 });

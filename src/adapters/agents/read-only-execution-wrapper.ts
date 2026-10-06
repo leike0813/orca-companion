@@ -3,8 +3,8 @@
  *
  * 只回答一个问题：**生产 launcher 与生产 descriptor** 下的受限命令能不能运行、读得到指定输入，又
  * 写不动仓库、Git 事实与 Companion 私有状态。探针不自己拼 bwrap argv：它用
- * `writeCodexModelLaunch` 写出与生产同构的 descriptor（`readOnly` 原 shape、`credential: harness_login`
- * 不读 key、隔离环境），再跑同一条公开 launcher 命令；launcher 内嵌的 argv 工厂与本模块的
+ * `writeCodexModelLaunch` 写出与生产同构的非秘密 descriptor，继承真实原生环境，
+ * 再跑同一条公开 launcher 命令；launcher 内嵌的 argv 工厂与本模块的
  * {@link readOnlyExecutionArguments} 是同一次序列化，所以二者不会漂移。
  *
  * 边界要说清楚：它证明的是「生产 launcher + descriptor + 包装器」这条链路，不是某次 harness 会话的
@@ -26,9 +26,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { runProcess, type ProcessRunner, type ProcessResult } from '../orca-cli/process-runner.js';
-import type { ReadOnlyWorkerProbeResult, ReadOnlyWorkerProbeStage } from './codex-read-only-probe.js';
-import { nativeWorkerConnectionSchema } from '../../domain/model-configuration.js';
-import type { WorkerModelConfiguration } from '../../domain/model-configuration.js';
+import type { ReadOnlyWorkerProbeStage } from './codex-read-only-probe.js';
+import { WORKER_HARNESS_IDS, workerModelSelectionSchema, type WorkerHarnessId, type WorkerModelSelection } from '../../domain/model-configuration.js';
 
 /** 包装器可执行文件；探针与生产 launcher 用同一份事实。 */
 export const READ_ONLY_EXECUTION_WRAPPER = 'bwrap';
@@ -55,12 +54,14 @@ export type ReadOnlyExecutionInput = {
    * 省略表示 reporter 落在状态根内，无需第二个挂载点。
    */
   readonly reportDirectory?: string;
+  readonly writableRoots?: readonly string[];
+  readonly protectedPaths?: readonly string[];
 };
 
 export function readOnlyExecutionArguments(input: ReadOnlyExecutionInput): readonly string[] {
   const shadowed = (path: string): boolean => path === '/tmp' || path.startsWith('/tmp/');
   // /tmp 内有输入或状态根时保留原路径；harness 的暂存由 TMPDIR 承担。
-  const protectedRoots = [input.workspace, input.stateRoot, input.reportDirectory]
+  const protectedRoots = [input.workspace, input.stateRoot, input.reportDirectory, ...(input.writableRoots ?? []), ...(input.protectedPaths ?? [])]
     .filter((path): path is string => path !== undefined)
     .some(shadowed);
   const args: string[] = [
@@ -74,6 +75,8 @@ export function readOnlyExecutionArguments(input: ReadOnlyExecutionInput): reado
     args.push('--tmpfs', '/tmp');
   }
   // /run 保持根挂载的只读权限，保留 Ubuntu 的 DNS symlink 与 runtime socket。
+  for (const path of input.protectedPaths ?? []) args.push('--ro-bind', path, path);
+  for (const path of input.writableRoots ?? []) args.push('--bind', path, path);
   args.push('--bind', input.stateRoot, input.stateRoot);
   if (input.reportDirectory !== undefined) {
     args.push('--bind', input.reportDirectory, input.reportDirectory);
@@ -233,8 +236,6 @@ type ProbeLayout = {
   readonly gitHead: string;
   readonly gitHeadPath: string;
   readonly stateFile: string;
-  /** 隔离环境：HOME 与各 XDG 根都指向状态根，harness 不碰真实用户配置。 */
-  readonly environment: Readonly<Record<string, string>>;
 };
 
 function createLayout(input: ReadOnlyExecutionProbeInput): ProbeLayout | { readonly error: string } {
@@ -244,19 +245,8 @@ function createLayout(input: ReadOnlyExecutionProbeInput): ProbeLayout | { reado
     const workspace = join(root, 'workspace');
     const stateDir = join(stateRoot, 'sessions');
     const gitDir = join(workspace, '.git');
-    const environment: Record<string, string> = {
-      HOME: stateRoot,
-      TMPDIR: join(stateRoot, 'tmp'),
-      XDG_CONFIG_HOME: join(stateRoot, 'xdg-config'),
-      XDG_DATA_HOME: join(stateRoot, 'xdg-data'),
-      XDG_CACHE_HOME: join(stateRoot, 'xdg-cache'),
-      XDG_STATE_HOME: join(stateRoot, 'xdg-state'),
-    };
     mkdirSync(stateDir, { recursive: true });
     mkdirSync(gitDir, { recursive: true });
-    for (const directory of Object.values(environment)) {
-      mkdirSync(directory, { recursive: true });
-    }
     const sentinelPath = join(workspace, 'tracked.txt');
     const gitHeadPath = join(gitDir, 'HEAD');
     const coordinationPath = join(root, 'coordination.sqlite');
@@ -284,7 +274,6 @@ function createLayout(input: ReadOnlyExecutionProbeInput): ProbeLayout | { reado
       gitHead,
       gitHeadPath,
       stateFile,
-      environment,
     };
   } catch (error) {
     return { error: bounded(error instanceof Error ? error.message : String(error)) };
@@ -298,20 +287,18 @@ async function runUnderProductionDescriptor(
   payload: { readonly executable: string; readonly args: readonly string[] },
   timeoutMs: number,
   env: Readonly<Record<string, string>>,
+  harness?: WorkerHarnessId,
 ): Promise<ProcessResult> {
   // 动态 import：launcher 静态内嵌本模块的源码常量，静态反向 import 会形成
   // launcher → wrapper → codex-model-launcher → launcher 的顶层初始化环。
   const { CODEX_MODEL_DESCRIPTOR_VERSION, writeCodexModelLaunch } = await import('./codex-model-launcher.js');
   const { descriptorPath, launcherPath } = writeCodexModelLaunch({
-    codexHome: layout.stateRoot,
+    stateRoot: layout.stateRoot,
     descriptor: {
       version: CODEX_MODEL_DESCRIPTOR_VERSION,
-      codexHome: layout.stateRoot,
       executable: payload.executable,
       args: payload.args,
-      // harness_login：探针不调用模型，因此不解析、不注入任何凭据。
-      credential: { kind: 'harness_login' },
-      environment: layout.environment,
+      ...(harness === undefined ? {} : { harness }),
       readOnly: { workspace: layout.workspace, stateRoot: layout.stateRoot },
     },
   });
@@ -413,6 +400,7 @@ async function runSentinelEvidence(
   input: ReadOnlyExecutionProbeInput,
   timeoutMs: number,
   env: Readonly<Record<string, string>>,
+  harness?: WorkerHarnessId,
 ): Promise<{ readonly result: WorkerHarnessProbeResult; readonly layout: ProbeLayout | null; readonly diagnostics: string[] }> {
   const diagnostics: string[] = [];
   let layout: ProbeLayout | null = null;
@@ -428,6 +416,7 @@ async function runSentinelEvidence(
       { executable: input.sandboxExecutable ?? process.execPath, args: sentinelArgs(layout) },
       timeoutMs,
       env,
+      harness,
     );
     return { result: classify(result, layout, diagnostics), layout, diagnostics };
   } catch (error) {
@@ -476,41 +465,21 @@ export async function probeReadOnlyExecution(
  * 能在这条链路里起来。两条路径都返回同一种结论形状，调用方不需要自己判断 harness。
  */
 export async function probeHarnessReadOnlyWorker(
-  modelConfiguration?: Readonly<WorkerModelConfiguration>,
+  harness: string,
+  modelSelection?: Readonly<WorkerModelSelection>,
   input: HarnessReadOnlyProbeInput = {},
 ): Promise<WorkerHarnessProbeResult> {
-  const native = modelConfiguration?.connection.nativeWorker;
-  if (native === undefined) {
-    // 动态 import：launcher 内嵌本模块的源码常量，静态 import Codex 探针会形成
-    // launcher → wrapper → codex-read-only-probe → codex-launch → launcher 的初始化环。
-    const { probeReadOnlyWorker } = await import('./codex-read-only-probe.js');
-    const result: ReadOnlyWorkerProbeResult = await probeReadOnlyWorker({
-      ...(input.env === undefined ? {} : { env: input.env }),
-      ...(input.runner === undefined ? {} : { runner: input.runner }),
-      ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
-      ...(input.tempParent === undefined ? {} : { tempParent: input.tempParent }),
-      ...(modelConfiguration === undefined ? {} : { modelConfiguration }),
-    });
-    return {
-      ...result,
-      harness: 'codex',
-      harnessVersion: result.codexVersion,
-      codexVersion: result.codexVersion,
-    };
+  if (!(WORKER_HARNESS_IDS as readonly string[]).includes(harness)
+    || (modelSelection !== undefined && !workerModelSelectionSchema.safeParse(modelSelection).success)) {
+    return unknown('codex-version', ['Worker harness/model selection 无效']);
   }
-
-  const parsed = nativeWorkerConnectionSchema.safeParse(native);
-  if (!parsed.success) {
-    return unknown('codex-version', ['native 模型配置缺少合法的 connection.nativeWorker']);
-  }
-  const harness = parsed.data.harness;
   const executable = input.harnessExecutable ?? HARNESS_EXECUTABLES[harness];
   if (executable === undefined) {
     return unknown('codex-version', [`未登记的 harness：${harness}`]);
   }
   const timeoutMs = input.timeoutMs ?? READ_ONLY_EXECUTION_PROBE_TIMEOUT_MS;
   const env = input.env ?? (process.env as Readonly<Record<string, string>>);
-  const evidence = await runSentinelEvidence(input, timeoutMs, env);
+  const evidence = await runSentinelEvidence(input, timeoutMs, env, harness as WorkerHarnessId);
   let result: WorkerHarnessProbeResult;
   try {
     if (evidence.result.kind !== 'available' || evidence.layout === null) {
@@ -518,7 +487,7 @@ export async function probeHarnessReadOnlyWorker(
     } else {
       // 第二次运行复用同一 descriptor：证明 harness 可执行文件与本包装器兼容。
       const version = versionFrom(
-        await runUnderProductionDescriptor(input, evidence.layout, { executable, args: ['--version'] }, timeoutMs, env),
+        await runUnderProductionDescriptor(input, evidence.layout, { executable, args: ['--version'] }, timeoutMs, env, harness as WorkerHarnessId),
       );
       if (version === null) {
         evidence.diagnostics.push(`${harness} 在同一生产 descriptor 下没有输出版本：无法证明该 harness 只读能力可用`);

@@ -46,7 +46,6 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { createCodexWorkerLaunch } from '../../../src/adapters/agents/codex-launch.js';
-import { credentialStoreFixture } from '../../support/model-configurations.js';
 import {
   inspectCodexTranscript,
   proveCodexTranscript,
@@ -733,22 +732,7 @@ async function startPreparedCodexWorker(input: {
     launchId: input.launchId,
     // 真实夹具沿用本机 CODEX_HOME 的既有认证与 provider，因此是 harness_login 且没有自定义
     // codex provider；模型名仍由这份绑定显式给出，不再有绕过绑定的裸 model 字符串。
-    modelConfiguration: {
-      connection: {
-        connectionRef: 'acceptance-harness-login',
-        label: 'Codex harness login',
-        providerIntegration: 'codex',
-        modelOptions: {},
-        credential: { kind: 'harness_login' },
-        codex: null,
-      },
-      modelRef: 'acceptance-model',
-      model: input.model,
-      effort: null,
-      effortCapability: null,
-      modelOptions: {},
-    },
-    credentialStore: credentialStoreFixture(),
+    modelSelection: { model: input.model, effort: null, effortCapability: null, catalogSource: null },
     sandboxMode: input.sandboxMode,
     sessionStartReporterPath: join(input.fixture.projectDir, '.companion', 'session-start.mjs'),
   });

@@ -5,7 +5,8 @@
  * 默认引用、角色 Worker Profiles、tracker 地图引用、规划写入上限与上下文/输出预算。
  *
  * 它只保存凭据**引用**：明文 key 属于用户级 CredentialStore，这里没有落脚点，出现已知密钥字段名即
- * 拒绝整份配置。schema 3 把模型设置表达为「不可变记录 + 显式引用」，并把执行额度收敛为
+ * 拒绝整份配置。schema 4 把模型设置表达为「不可变记录 + 显式引用」，Worker Profile 只带已注册
+ * harness 与不可变 modelSelection（连接、endpoint、凭据由 harness 自身拥有），并把执行额度收敛为
  * `maxActiveWorkPackages`（并行包，默认 3）、`maxWorkPackages`（图容量，默认 8）与
  * `integrationReconciliations`（集成复验，默认 2）：编辑只能追加新引用并推进 `revision`，
  * 旧记录不改写，因此已批准的 Manifest 与在途 Task 仍能按原引用读回当时的配置。
@@ -42,7 +43,7 @@ import type { DependencyPolicy, RoleAuthorities } from '../../domain/planning/ex
 
 export const PROJECT_CONFIG_FILENAME = 'orca-companion.json';
 
-export const PROJECT_CONFIG_SCHEMA_VERSION = 3;
+export const PROJECT_CONFIG_SCHEMA_VERSION = 4;
 
 /** 项目级 tracker 引用；正文仍是 tracker 的事实，这里只有「读写哪张地图」。 */
 export type ProjectTrackerConfiguration = {
@@ -322,9 +323,12 @@ function describeIssues(error: z.ZodError): string {
 /**
  * 核验「记录 + 引用」之间的交叉关系。
  *
- * Coordinator configuration 与 Worker Profile 都是**快照**：各自复制 provider、model、options 与
- * 能力来源，好让已批准的授权和在途 Task 不必回查配置。快照一旦与被引用的记录矛盾，说明有人手改过
- * 其中一边；此时只有 fail closed 一条路，因为「以哪边为准」没有任何可信依据。
+ * Coordinator configuration 是**快照**：它复制 provider、model、options 与能力来源，好让已批准的授权
+ * 和在途 Task 不必回查配置。快照一旦与被引用的记录矛盾，说明有人手改过其中一边；此时只有 fail closed
+ * 一条路，因为「以哪边为准」没有任何可信依据。
+ *
+ * Worker Profile 不再引用 providerConnections/models：Worker 的连接、endpoint 与凭据由 harness
+ * 自身拥有，Profile 只带已注册 harness 与不可变 modelSelection。
  *
  * effort 是唯一不能猜的字段：没有可信能力来源、来源里没有这个取值，都按拒绝处理。
  */
@@ -462,53 +466,11 @@ function validateReferences(config: ProjectConfig): IdentityFailure | null {
 
   const profiles = new Map<string, WorkerProfileConfiguration>();
   for (const profile of config.execution.workerProfiles) {
-    const field = `projectConfig.execution.workerProfiles.${profile.profileRef}`;
     if (profiles.has(profile.profileRef)) {
       return {
         ok: false,
         field: 'projectConfig.execution.workerProfiles',
         message: `Worker Profile 引用重复：${profile.profileRef}`,
-      };
-    }
-    const connectionRef = profile.modelConfiguration.connection.connectionRef;
-    const connection = connections.get(connectionRef);
-    if (connection === undefined) {
-      return {
-        ok: false,
-        field: `${field}.modelConfiguration.connection`,
-        message: `引用的 Provider Connection 不存在：${connectionRef}`,
-      };
-    }
-    // Profile 的连接与 Coordinator 一样是快照：与记录矛盾说明两边被分别改过，只能 fail closed。
-    if (!semanticEqual(profile.modelConfiguration.connection, connection)) {
-      return {
-        ok: false,
-        field: `${field}.modelConfiguration.connection`,
-        message: `与所引用的 Provider Connection 不一致：${connectionRef}`,
-      };
-    }
-    const model = models.get(profile.modelConfiguration.modelRef);
-    if (model === undefined) {
-      return {
-        ok: false,
-        field,
-        message: `引用的 Model 不存在：${profile.modelConfiguration.modelRef}`,
-      };
-    }
-    if (model.connectionRef !== connectionRef || model.model !== profile.modelConfiguration.model) {
-      return {
-        ok: false,
-        field,
-        message: `与所引用的 Model 不一致：${profile.modelConfiguration.modelRef}`,
-      };
-    }
-    // 只在 Profile 声明了能力来源时核对：凭空多出来的取值比少声明更危险。
-    const capability = profile.modelConfiguration.effortCapability;
-    if (capability !== null && !semanticEqual(capability, model.effortCapability)) {
-      return {
-        ok: false,
-        field: `${field}.modelConfiguration.effortCapability`,
-        message: `与所引用的 Model 能力来源不一致：${profile.modelConfiguration.modelRef}`,
       };
     }
     profiles.set(profile.profileRef, profile);

@@ -16,9 +16,6 @@ import {
   probeHarnessReadOnlyWorker,
   type WorkerHarnessProbeResult,
 } from '../adapters/agents/read-only-execution-wrapper.js';
-import { assertLaunchableModelConfiguration } from '../adapters/agents/codex-model-launcher.js';
-import { assertLaunchableNativeModelConfiguration } from '../adapters/agents/native-worker.js';
-import { assertLaunchableOpencodeModelConfiguration } from '../adapters/agents/opencode-harness.js';
 import { MODEL_PROFILE_ROLES, WORKER_HARNESS_IDS, type WorkerProfileConfiguration } from '../domain/model-configuration.js';
 import {
   createModuleIntegrationResolverAsync,
@@ -26,6 +23,7 @@ import {
 } from '../adapters/agents/chat-model-factory.js';
 import { verifyModelCapabilities } from '../adapters/agents/capability-probe.js';
 import { JsonCredentialStore } from '../adapters/storage/credential-store.js';
+import { queryWorkerModels } from '../adapters/agents/worker-model-catalog.js';
 import type { CredentialStore } from '../application/ports/credential-store.js';
 import {
   configurationByRef,
@@ -477,31 +475,16 @@ async function verifyConfiguredCoordinatorModel(
       };
 }
 
-/** 按 harness 调用 adapter 自己的启动前门禁（保留字段/凭据/effort 的 SSOT）；doctor 不复制这套规则。 */
-function assertConfiguredModelConfiguration(profile: WorkerProfileConfiguration): void {
-  const configuration = profile.modelConfiguration;
-  const native = configuration.connection.nativeWorker;
-  if (native === undefined) {
-    assertLaunchableModelConfiguration(configuration);
-    return;
-  }
-  if (native.harness === 'opencode') {
-    assertLaunchableOpencodeModelConfiguration(configuration);
-    return;
-  }
-  assertLaunchableNativeModelConfiguration(configuration, native.harness);
-}
-
 /**
  * 单个被配置 harness 的只读核验。
  *
- * 结论只来自真实受限命令；harness 名称、版本字符串或配置文件存在都不构成能力证明。native harness
- * 的模型配置由 adapter 的启动前门禁校验，探针再按同一份绑定的 harness 选择包装器实现。
+ * 结论只来自真实受限命令；harness 名称、版本字符串或配置文件存在都不构成能力证明。Worker 的模型、
+ * 凭据与 provider endpoint 由 harness 自身拥有，doctor 只按被引用 harness 与其 `modelSelection` 用
+ * 同一生产包装器探针，不解析凭据、也不读原生连接。
  */
 async function probeConfiguredReadOnlyHarness(
   profile: WorkerProfileConfiguration,
   env: Readonly<Record<string, string>>,
-  credentials: CredentialStore,
 ): Promise<ReadOnlyHarnessFacts> {
   const harness = profile.harness;
   const base = { harness, profileRef: profile.profileRef };
@@ -511,31 +494,10 @@ async function probeConfiguredReadOnlyHarness(
     harnessVersion: string | null = null,
   ): ReadOnlyHarnessFacts => ({ ...base, capability, harnessVersion, detail });
   if (!(WORKER_HARNESS_IDS as readonly string[]).includes(harness)) {
-    return fail('unknown', `未注册的 Worker harness：${harness}`);
-  }
-  // profile 声明的 harness 与原生连接声明的 harness 必须自洽：不一致时不能拿任一方冒充这次的绑定。
-  const native = profile.modelConfiguration.connection.nativeWorker;
-  if (harness !== 'codex' && native === undefined) {
-    return fail('unavailable', `Worker harness ${harness} 缺少原生连接`);
-  }
-  if (native !== undefined && native.harness !== harness) {
-    return fail('unavailable', `connection.nativeWorker.harness ${native.harness} 与 profile.harness ${harness} 不一致`);
+    return fail('unknown', `未注册的 Worker harness：${String(harness)}`);
   }
   try {
-    assertConfiguredModelConfiguration(profile);
-  } catch (error) {
-    return fail('unavailable', `模型配置不可启动：${error instanceof Error ? error.message : String(error)}`);
-  }
-  // managed 凭据是这条只读能力的输入：读不到就不可能有可用结论，且绝不把 secret 带进结论。
-  const credential = profile.modelConfiguration.connection.credential;
-  if (credential.kind === 'managed') {
-    const read = credentials.read(credential.credentialRef);
-    if (read.kind !== 'resolved') {
-      return fail('unavailable', `managed 凭据不可用：${read.code}`);
-    }
-  }
-  try {
-    const result = await probeHarnessReadOnlyWorker(profile.modelConfiguration, { env });
+    const result = await probeHarnessReadOnlyWorker(harness, profile.modelSelection, { env });
     return {
       ...base,
       capability: result.kind,
@@ -734,8 +696,18 @@ export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): 
       // 逐 profile 核验，不按 harness 合并：同一 harness 的两个 profile 可能带不同模型或认证来源，
       // 合并成一条会让其中一条不合法被另一条掩盖。harness 探针本身可以按 harness 复用结论。
       const facts: ReadOnlyHarnessFacts[] = [];
+      const catalogs = new Map<string, string>();
       for (const profile of profiles) {
-        facts.push(await probeConfiguredReadOnlyHarness(profile, environment.env, credentials));
+        let catalog = catalogs.get(profile.harness);
+        if (catalog === undefined) {
+          const result = await queryWorkerModels({ harness: profile.harness, cwd: environment.cwd, env: environment.env });
+          catalog = result.kind === 'available'
+            ? `原生模型目录可用（${result.models.length} 项）`
+            : `原生模型目录不可用（${result.code}），可手填未验证模型 ID`;
+          catalogs.set(profile.harness, catalog);
+        }
+        const fact = await probeConfiguredReadOnlyHarness(profile, environment.env);
+        facts.push({ ...fact, detail: `${fact.detail}；${catalog}；精确 Session/runtime roots 由实际派发报告核验` });
       }
       return { ok: true, value: facts };
     },

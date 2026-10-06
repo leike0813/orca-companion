@@ -28,7 +28,7 @@ const unusedCredentials: Pick<CredentialStore, 'read'> = {
 const managedConnection: ProviderConnection = {
   connectionRef: 'connection:test', label: 'test', providerIntegration: 'mock#ChatModel',
   modelOptions: { configuration: { baseURL: 'https://example.invalid/v1' } },
-  credential: { kind: 'managed', credentialRef: CREDENTIAL_REF, optionPath: 'apiKey' }, codex: null,
+  credential: { kind: 'managed', credentialRef: CREDENTIAL_REF, optionPath: 'apiKey' },
 };
 
 test('installed integration exposes its explicit exact context capability for the resolved model', async () => {

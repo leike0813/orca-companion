@@ -23,10 +23,10 @@ Companion 为范围明确的软件项目提供可恢复、可追踪、有预算�
 - 使用 TypeScript strict、ESM、Node.js 24 和 pnpm；在 `engines`、版本文件与 `packageManager` 中声明实际验证版本并提交 lockfile。
 - Coordinator agent loop 使用 `@langchain/langgraph` StateGraph；模型节点面向 LangChain `BaseChatModel`。业务规则保留在普通 TypeScript 模块中。
 - Provider integration 由用户安装并通过 `initChatModel` 或 bootstrap 注入；Companion 不设 provider allowlist、不捆绑全部 provider，也不自动 fallback。`doctor` 必须核验文本、流式、tool calling、取消和可用 usage 能力，缺失必需能力时拒绝启动。
-- API key 保存于用户级明文 CredentialStore（见下），项目配置、checkpoint、UI 输入存储、命令参数、诊断与证据只出现不透明 `credentialRef`。这是用户确认的取舍：它改变了本文件早期「Companion 不保存密钥」的约束。
+- API key 只服务 Coordinator 模型调用，保存于用户级明文 CredentialStore（见下）；项目配置、checkpoint、UI 输入存储、命令参数、诊断与证据只出现不透明 `credentialRef`，Worker 启动不读取该 store。这是用户确认的取舍：它改变了本文件早期「Companion 不保存密钥」的约束。
 - Coordinator Session 使用 LangGraph SqliteSaver，`durability: sync`；Branch Coordination State 使用独立 SQLite store。
 - TUI 使用 `ink@7.1.1`、`react@19.3.0` 和 `@types/react@19.3.0`；TUI 测试可使用 `ink-testing-library@4.0.0`，但其 Ink 7/React 19 兼容性仅有本机验证。
-- 边界 DTO、CLI JSON、项目配置和持久化记录必须做运行时 schema 校验；领域类型不得依赖框架运行时对象。项目配置当前为 schema 3：保存 `revision`、`providerConnections`、`models` 与 `execution.workerProfiles`，不再有全局 `workerModel`；旧格式明确拒绝且不自动改写。
+- 边界 DTO、CLI JSON、项目配置和持久化记录必须做运行时 schema 校验；领域类型不得依赖框架运行时对象。项目配置当前为 schema 4：保存 `revision`、`providerConnections`、`models` 与 `execution.workerProfiles`；Worker Profile 绑定 harness 与 `modelSelection`，`ProviderConnection` 只描述 Coordinator 连接；旧格式明确拒绝且不自动改写。
 - 测试使用 Vitest，不为覆盖率引入第二套运行器。
 - 保持单 npm package；只有实际发布或依赖隔离需要时才拆 package。
 - 当前支持声明以 Ubuntu 本机验证为限。Windows 仍是目标平台，但未经验证不得标记为支持。
@@ -87,7 +87,7 @@ Agent-visible tools 只提供给 Coordinator Agent。Worker 只接收 Task Envel
 | `CredentialStore` | 在版本控制之外保存明文 secret，只以不可变 `credentialRef` 对外；提供 metadata、CAS 保存与按引用读取。 |
 | `ControllerService` | 向 TUI/CLI 提供初始化、查询、暂停、恢复、取消、回答和事件订阅。 |
 
-`CredentialStore` 的唯一生产实例来源在 bootstrap；chat model factory、模型设置用例、Worker launcher 与 `doctor` 的凭据解析都从它取实例，不各自新建或另建路径。文件位置按 XDG 规则取 `orca-companion/credentials.json`，目录 0700、文件 0600；写入用短 exclusive 文件锁、revision CAS、临时文件原子替换与回读，锁忙与权限不安全一律结构化拒绝，不自动破锁、不 chmod 既有用户目录。
+`CredentialStore` 的唯一生产实例来源在 bootstrap；chat model factory、Coordinator 模型设置用例与 `doctor` 的 Coordinator 凭据解析都从它取实例，不各自新建或另建路径，Worker launcher 不接收它。文件位置按 XDG 规则取 `orca-companion/credentials.json`，目录 0700、文件 0600；写入用短 exclusive 文件锁、revision CAS、临时文件原子替换与回读，锁忙与权限不安全一律结构化拒绝，不自动破锁、不 chmod 既有用户目录。
 
 Route Planning 的语义操作覆盖读取地图/frontier、创建票、设置依赖、领取、解决和按固定章节更新地图。运行协调操作覆盖状态查询、派发、回复 Worker、结算、集成、异步 `ask_user` 与非阻塞 `suspend`。按模式和当前事实动态暴露工具，handler 每次调用仍重验 scope、ownership、revision、权限和预算。
 
@@ -118,9 +118,9 @@ type OperationOutcome<T> =
 - Worker liveness 至少保留 `live`、`exited` 与 `unverifiable`；不可达或信息不完整不能推断退出或触发重复派发。
 - 禁止伪造 terminal 身份、写 Orca DB 补绑定或使用私有接口绕过能力缺口。
 
-Worker Harness 经 `src/application/ports/worker-harness.ts` 端口与 `src/bootstrap/worker-harness.ts` 显式注册表接入，注册项为 codex、claude、opencode、pi、omp；未注册身份在派发前拒绝。逐角色 profile 固定 harness 与完整模型配置，恢复、Retry 和 Validator 续接从原 Task 的授权绑定读取它们。Planner、Implementation、Validator 和 Finalizer 使用角色隔离 Session；Validator 在同一任务的“验证—范围内修复—复验”内复用同一真实 Session。Finalizer 使用新的只读项目级 Session。精确 Session Binding 由各 adapter 的 hook、extension 或公开 session API 与 transcript 共同证明，不能按 cwd/mtime 猜最新 transcript，也不能用 terminal 输出冒充 provider transcript。
+Worker Harness 经 `src/application/ports/worker-harness.ts` 端口与 `src/bootstrap/worker-harness.ts` 显式注册表接入，注册项为 codex、claude、opencode、pi、omp；未注册身份在派发前拒绝。逐角色 profile 固定 harness 与 `modelSelection`（model、effort 及可信目录来源），恢复、Retry 和 Validator 续接从原 Task 的授权绑定读取它们。端口同时提供原生模型目录的有界查询；启动在 harness 真实用户环境中进行，`worker-runtime.ts` 只把真实 launch 环境解析出的非秘密 runtime roots 写入精确 Session 报告。Planner、Implementation、Validator 和 Finalizer 使用角色隔离 Session；Validator 在同一任务的“验证—范围内修复—复验”内复用同一真实 Session。Finalizer 使用新的只读项目级 Session。精确 Session Binding 由各 adapter 的 hook、extension 或公开 session API 与 transcript 共同证明，不能按 cwd/mtime 猜最新 transcript，也不能用 terminal 输出冒充 provider transcript。
 
-原生连接由 schema 3 的可选 `ProviderConnection.nativeWorker` 声明 harness、providerId、baseUrl 与 api。managed secret 只经共享 launcher 进入子进程环境，harness_login 使用隔离登录态。原生只读角色与探针共用 `read-only-execution-wrapper.ts` 的 bwrap 包装器，仓库、Git 与协调库拒写，仅精确 harness 状态根和临时目录可写；能力不可证明即阻塞。
+Worker 不管理 provider 连接、凭据或原生配置：认证、登录态与 provider endpoint 由 harness 在自己的真实用户环境中提供，启动继承真实 `process.env`；Codex 用 inline `-c` hooks 与 `--no-daemon`，Claude 用只叠加 report/security 的 `--settings` 并保留 native setting sources，pi/omp 用 extension，OpenCode 用 `--standalone` 与公开 Session API。Coordinator 连接的 managed credential 与沿用旧命名的 `harness_login` 环境认证保持原合同。只读角色与探针共用 `read-only-execution-wrapper.ts` 的 bwrap 包装器：仓库、Git、Git common dir 与协调库拒写，真实 native state 目录与 Companion 工件目录可写；可写根与拒写根重叠且无法证明时能力判为不可用。
 
 Validator 修复许可绑定原 worktree 的干净 HEAD，并随原答复 Intent 持久保存；实际修复范围由该 HEAD 之后的提交与未提交 Git 路径核验，Worker 自报路径只作补充。基线、范围或精确 Session 不可证明时停止验证链。
 
@@ -142,7 +142,7 @@ Coordinator Agent 与用户形成并维护 Route Map、Decision Tickets 和 Impl
 
 Manifest 一次性绑定当前 Destination/地图/计划/Graph Generation、Coordination Scope、baseline HEAD、空 Orca Run、Worker Profiles、权限、预算、workspace、Git/Dependency Policy 和 accepted risks。授权后的普通派发、策略内依赖变更与受控 Git 集成不再逐次审批；发布、部署和越界外部操作仍需单独授权。
 
-Manifest 当前为 v3，每个生产角色的 Worker Profile 必须带完整 `modelConfiguration`（连接、模型、effort 及其可信能力来源、非秘密 options 与 credentialRef），并单独绑定 Recovery Utility Profile；缺任一项即拒绝，不存在「启动时再补」的状态。执行期换模型或并行额度时按完整 Manifest 指纹与 Scope revision 重新批准，保持 Graph Generation、Run、Task、权限、其他上限与已消耗预算，不创建 Graph Revision；降低额度后在途包继续，空槽回收至新额度后再接纳新包。Replanning、cancelling 或存在未决派发 mutation 时拒绝重新授权。旧版本 Manifest 不被当作包含模型授权。
+Manifest 当前为 v4，每个生产角色的 Worker Profile 必须带完整 `modelSelection`（harness、model、effort 及其可信目录来源），并单独绑定 Recovery Utility Profile；缺任一项即拒绝，不存在「启动时再补」的状态。执行期换模型或并行额度时按完整 Manifest 指纹与 Scope revision 重新批准，保持 Graph Generation、Run、Task、权限、其他上限与已消耗预算，不创建 Graph Revision；降低额度后在途包继续，空槽回收至新额度后再接纳新包。Replanning、cancelling 或存在未决派发 mutation 时拒绝重新授权。旧版本 Manifest（v1/v2/v3）不被当作包含模型授权，读取即拒绝。
 
 派发即固定运行依据：Task 物化时把当时的 authorizationId、authorizationVersion 与 workerProfileRef 写进 Materialization Binding。Retry 沿原 WorkerTask 的绑定取原授权与 profile；已结算与恢复读取按绑定判断，绑定缺这三项即按不可证明阻塞，不退回「当前授权」。
 
@@ -230,6 +230,8 @@ LangGraph checkpoint、SQLite 和 Orca receipt 都不提供跨系统 exactly-onc
 初始化只建立 Scope、Planning Cycle 与首个 Coordinator Session；Worker Profiles、预算、依赖权限、Git 集成和 accepted risks 留给 Execution Authorization Manifest。
 
 **TUI 硬约束：尊重已确认原型。** 规划、实现或验收任何 TUI change 前，必须读取 [TUI 实现进度与原型交接](docs/dev/tui-implementation-handoff.md)，核对对应定稿来源、当前批次及验收要求。未经用户明确批准不得自行重新设计；交互或自动测试通过不能替代原型一致性验收。
+
+模型设置沿 #52 定稿；Worker 角色只选择 harness、原生模型候选与可信 effort，Coordinator 保留连接与凭据表单。目录查询失败可手填未验证模型 ID，保存与应用分别提交明确意图。
 
 TUI 实施必须先读 [原型交接](docs/dev/tui-implementation-handoff.md) 所指的六票定稿决议、源码和画面，按已批准的布局、层级、配色、导航及返回约定验收；修改设计须获用户明确批准。自动检查与交互正常不能代替逐票画面对照。
 

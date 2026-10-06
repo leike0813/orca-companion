@@ -438,7 +438,7 @@ test('包占位在 CAS 竞争、重启与降低额度后不超额或丢失', () 
   } finally { reopened.store.close(); }
   const lowered = harness.store.transact({ kind: 'record-authorization', coordinationScopeId: harness.scopeId,
     expectedRevision: harness.revision(), writer: harness.writer, authorizationId: 'auth-lower',
-    authorizationVersion: 2, manifestVersion: 3, fingerprint: 'lower-limit', approvalRef: 'lower-approval',
+    authorizationVersion: 2, manifestVersion: 4, fingerprint: 'lower-limit', approvalRef: 'lower-approval',
     manifest: { ...harness.authorization().manifest,
       limits: { ...harness.limits, maxActiveWorkPackages: 1 } },
   });
@@ -736,7 +736,7 @@ test('未授权角色时不物化，结论只说明是哪一条准入规则拒�
     writer: harness.writer,
     authorizationId: 'auth-2',
     authorizationVersion: 2,
-    manifestVersion: 3,
+    manifestVersion: 4,
     fingerprint: 'fingerprint-2',
     approvalRef: 'approval-2',
     manifest: {
@@ -778,7 +778,7 @@ test('授权绑定的图与当前 Graph Version 不一致时不派发', async ()
     writer: harness.writer,
     authorizationId: 'auth-2',
     authorizationVersion: 2,
-    manifestVersion: 3,
+    manifestVersion: 4,
     fingerprint: 'fingerprint-2',
     approvalRef: 'approval-2',
     // 批准绑定的是下一个 Graph Version：规划引用一旦前进，旧批准就不再适用。

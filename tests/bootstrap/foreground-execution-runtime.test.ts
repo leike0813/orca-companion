@@ -209,7 +209,7 @@ function writeProjectConfig(repository: string): void {
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 3,
+      schemaVersion: 4,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',
@@ -855,7 +855,7 @@ function prepareAdvanceState(repository: string, head: string): void {
       writer,
       authorizationId: EXEC_AUTH,
       authorizationVersion: 1,
-      manifestVersion: 3,
+      manifestVersion: 4,
       fingerprint: 'fingerprint-advance',
       approvalRef: 'approval-advance',
       manifest,
@@ -946,7 +946,7 @@ async function openAdvanceHarness(options?: { readonly unknownWorkerStart?: bool
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 3,
+      schemaVersion: 4,
       coordinatorModels: [
         {
           configurationRef: 'planning-default',

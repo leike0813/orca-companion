@@ -55,9 +55,8 @@ import type {
   WorkerTaskId,
 } from '../application/dto/identity.js';
 import type { BranchCoordinationStore, CoordinationWriter } from '../application/ports/branch-coordination-store.js';
-import type { CredentialStore } from '../application/ports/credential-store.js';
 import type { ExecutionBackend } from '../application/ports/execution-backend.js';
-import type { WorkerModelConfiguration } from '../domain/model-configuration.js';
+import type { WorkerModelSelection } from '../domain/model-configuration.js';
 import type { ScopeEnvelope } from '../domain/planning/execution-graph.js';
 import { pathsOutsideScopeEnvelope } from '../domain/repair-scope.js';
 import { envelopeCheckedPaths } from '../domain/worker-result-verification.js';
@@ -97,7 +96,9 @@ export type IntegrationReconciliationRuntimeInput = {
    * attempt、worktree、codexHome 与 createdAt 全部一致才给出，因此这里不回退到 encoded ID 猜 UUID。
    */
   readonly originalBinding: SessionBinding;
-  /** 原 session 的 CODEX_HOME；resume 必须在同一个 HOME 内进行。 */
+  /**
+   * 原启动报告证明的 native 状态根。resume 只核验该根；launcher 从真实终端环境解析路径，不覆盖 HOME。
+   */
   readonly originalCodexHome: string;
   /**
    * 原 Accepted Validator 的 exact owner 资源（foreground 从已接受结算 + worker-show 证明后给出）。
@@ -109,9 +110,7 @@ export type IntegrationReconciliationRuntimeInput = {
     readonly dispatchId: DispatchId;
     readonly terminalHandle: string;
   };
-  readonly modelConfiguration: WorkerModelConfiguration;
-  readonly credentialStore: CredentialStore;
-  readonly credentialStorePath: string;
+  readonly modelSelection: WorkerModelSelection;
   /** 续接角色绑定 harness 的沙箱模式；null 表示当前 Manifest 未接受所需风险。 */
   readonly sandboxMode: WorkerSandboxMode | null;
   readonly companionStateRoot: string;
@@ -870,12 +869,10 @@ export function createIntegrationReconciliationRuntime(
     installHarnessSessionReporter(harness, paths);
     const launch = prepareHarnessResumeLaunch(harness, {
       launchId,
-      modelConfiguration: input.modelConfiguration,
+      modelSelection: input.modelSelection,
       sessionId: input.originalBinding.providerSessionId,
       codexHome: input.originalCodexHome,
       transcriptRef: input.originalBinding.transcriptRef,
-      credentialStore: input.credentialStore,
-      credentialStorePath: input.credentialStorePath,
       sandboxMode: input.sandboxMode,
       sessionStartReporterPath: paths.reporterPath,
     });

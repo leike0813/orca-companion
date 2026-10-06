@@ -4,7 +4,7 @@
 
 状态日期：2026-10-06。接手先核对 HEAD、工作区和当前工件；保留已有未提交改动。体验以用户当前指示和 Decision Ticket 最终决议为准；领域、模块与公共合同分别由 [CONTEXT.md](../../CONTEXT.md)、[architecture.md](../architecture.md)、[interface-contracts.md](../interface-contracts.md) 拥有。
 
-当前批次为 [add-worker-harness-adapters](../../openspec/changes/add-worker-harness-adapters/implementation-plan.md)。模型设置沿 #52 dialog final 增加逐角色 Harness 选择与适用的原生 provider/baseUrl/api 字段；已有角色编辑回填原 harness，切换时导航只进入可见字段。保存追加 profile，执行应用仍须 Manifest 审阅。行为证据见 `tests/tui/model-settings.test.tsx` 的生产 App 入口用例；本轮画面单独保存于 `artifacts/worker-harness/tui/`，自动测试不能代替三档呈现验收。
+当前批次为 [remove-worker-credential-management](../../openspec/changes/remove-worker-credential-management/implementation-plan.md)。模型设置沿 #52 dialog final：Worker 角色只选择 harness 与该 harness 原生目录候选（model/effort），不再出现连接、凭据、API key 或任意 options 字段；Coordinator 表单保留。目录查询失败时可手填 native exact ID 并标记未验证，effort 不可捏造。保存追加 profile，执行应用须经 Manifest v4 审阅。行为检查与三档画面验收按本 change 的 implementation-plan 执行，自动测试不能代替呈现验收。
 
 ## 1. 六票来源与当前范围
 
@@ -42,7 +42,7 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 
 ### 第二批成果及证据边界
 
-第六批 6A/6B 及全部前驱已归档；第七批 `complete-tui-project-statusline` 已包含于 commit `41b2f1e` 并归档到 `2026-10-04-complete-tui-project-statusline`。其[生产证据](../../artifacts/project-statusline/README.md)和历史验收范围保持原样。第八批 `complete-tui-graph-basis` 已包含于 `055c148` 并归档到 `2026-10-04-complete-tui-graph-basis`。当前 active change 为 `restore-configurable-execution-concurrency`，沿用六票布局与返回约定，增加执行设置与多包事实展示；完成状态以当前 change 的任务和验证记录为准。
+第六批 6A/6B 及全部前驱已归档；第七批 `complete-tui-project-statusline` 已包含于 commit `41b2f1e` 并归档到 `2026-10-04-complete-tui-project-statusline`。其[生产证据](../../artifacts/project-statusline/README.md)和历史验收范围保持原样。第八批 `complete-tui-graph-basis` 已包含于 `055c148` 并归档到 `2026-10-04-complete-tui-graph-basis`。当前 active change 为 `remove-worker-credential-management`，沿用六票布局与返回约定，把 Worker 模型设置收敛为原生目录候选与独立 effort；完成状态以当前 change 的任务和验证记录为准。
 
 第二批已提供 grapheme 任意位置编辑、行首尾、多行有界视窗、原生光标；>1000 code points 原子粘贴及 /paste；唯一完整 UiDraft、CAS、提交快照/稳定 submissionId、单活跃提交/generation；真实 ask_user 创建/重放与精确查询；当前 Session 选项/自由回答、Esc 恢复。UI schema v2、Coordination schema 14，问题正文由 Branch Store 拥有。
 

@@ -11,7 +11,6 @@ import { workPackageComment } from '../../src/application/materialize-work-packa
 import type { DispatchId, WorkPackageId } from '../../src/application/dto/identity.js';
 import type { ExecutionBackend } from '../../src/application/ports/execution-backend.js';
 import { createExecutionScopeHarness, EXECUTION_AUTHORIZATION_ID, EXECUTION_RUN_ID, executionModelConfiguration } from '../support/execution-harness.js';
-import { credentialStoreFixture } from '../support/model-configurations.js';
 
 test('独立基线 Planner 的 Delivery 先结算再解除补救门禁，重放不重新派发', async () => {
   const harness = createExecutionScopeHarness();
@@ -85,9 +84,7 @@ test('独立基线 Planner 的 Delivery 先结算再解除补救门禁，重放�
       canonicalWorktreePath: '/work', repoSelector: 'path:/work',
       worktreePaths: new Map([[workPackageId, directory]]),
       harness: 'codex',
-      modelConfiguration: executionModelConfiguration({ model: 'test-model' }),
-      credentialStore: credentialStoreFixture(),
-      credentialStorePath: join(directory, 'credentials.json'),
+      modelSelection: executionModelConfiguration({ model: 'test-model' }),
       sandboxMode: 'danger-full-access', companionStateRoot: join(directory, '.git', 'companion'), bindingWindowMs: 1_000,
     });
     expect(await driver(plan)).toEqual({ kind: 'verified' });

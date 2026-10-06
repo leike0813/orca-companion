@@ -8,9 +8,7 @@
  * 隔离事实：一次性 Git 项目建在显式隔离目录（默认 /var/tmp，因为只读包装器隐藏 /tmp），
  * 专用协调终端提供唯一 Orca 身份并自建 Run，结束整体删除。
  *
- * 凭据边界：secret 只从进程环境（.env.smoke 与既有 harness 环境）或非数据库的本机配置读入，
- * 写进隔离 CredentialStore；不打开任何 harness SQLite、不打印 secret、不改写用户全局配置。
- * omp 显式复用同一 MiniMax provider 端点的 managed key，来源在证据里如实标注。
+ * Worker 认证由各 harness 的实际原生环境提供，夹具只传入模型选择。
  *
  * 报告边界：任何 harness 的 SessionStart 报告都经运行时 schema 映射为结构化 HarnessSessionReport
  * （缺字段为 null），不做裸类型断言。
@@ -33,7 +31,6 @@ import { fileURLToPath } from 'node:url';
 import { readRecord } from '../../src/adapters/orca-cli/operation-catalog.js';
 import { createOrcaExecutionBackend } from '../../src/adapters/orca-cli/orca-backend.js';
 import { runProcess } from '../../src/adapters/orca-cli/process-runner.js';
-import { JsonCredentialStore, credentialStorePath } from '../../src/adapters/storage/credential-store.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
@@ -42,7 +39,6 @@ import type {
   RuntimeIncarnationId,
   WorkerTaskId,
 } from '../../src/application/dto/identity.js';
-import type { CredentialStore } from '../../src/application/ports/credential-store.js';
 import type { ExecutionBackend, ExecutionScope } from '../../src/application/ports/execution-backend.js';
 import { buildExecutionScope } from '../../src/application/ports/execution-backend.js';
 import type { HarnessSessionReport, WorkerHarnessLaunchInput } from '../../src/application/ports/worker-harness.js';
@@ -63,10 +59,9 @@ import {
   resumeSessionPathsUnder,
 } from '../../src/bootstrap/worker-harness.js';
 import { prepareOpencodeRecoveryMaterial, opencodeRecoveryMaterialPath } from '../../src/adapters/agents/opencode-harness.js';
-import type { NativeWorkerApi, NativeWorkerConnection, WorkerModelConfiguration } from '../../src/domain/model-configuration.js';
+import type { WorkerModelSelection } from '../../src/domain/model-configuration.js';
 import { toChildEnvironment } from '../../src/interfaces/cli/main.js';
 
-import { REAL_ENV_FILE_VAR, mergeRealEnvFileIntoProcess } from './real-env.js';
 
 export const REAL_ACCEPTANCE_SWITCH = 'ORCA_COMPANION_REAL_ACCEPTANCE';
 export const REAL_ACCEPTANCE_BASE_VAR = 'ORCA_COMPANION_REAL_ACCEPTANCE_BASE';
@@ -92,7 +87,7 @@ export type HarnessBinding = {
   readonly harness: AcceptanceHarnessId;
   readonly model: string;
   readonly providerId: string;
-  readonly api: NativeWorkerApi;
+  readonly api: 'anthropic-messages';
   readonly baseUrl: string;
 };
 
@@ -129,7 +124,7 @@ export function resolveAcceptancePlan(env: Readonly<Record<string, string | unde
     baseDir: resolve(env[REAL_ACCEPTANCE_BASE_VAR] ?? DEFAULT_ACCEPTANCE_BASE),
     // 并发独立跑时身份必须逐跑唯一，避免共享 Run/协调终端；选择集稳定，故身份可复现。
     identity: 'companion-harness-matrix-' + harnesses.join('-'),
-    envFile: env[REAL_ENV_FILE_VAR] ?? DEFAULT_ACCEPTANCE_ENV_FILE,
+    envFile: env['ORCA_COMPANION_REAL_ENV_FILE'] ?? DEFAULT_ACCEPTANCE_ENV_FILE,
     harnesses,
     roles,
     baseUrl: envBaseUrl.length > 0 ? envBaseUrl : HARNESS_MATRIX[0]?.baseUrl ?? '',
@@ -179,103 +174,6 @@ export function assertIsolatedWorkspace(workspace: string, allowedEntries: Reado
 }
 
 // ---------------------------------------------------------------------------------------------
-// 凭据：只读进程环境与非数据库本机配置，写进隔离 store
-// ---------------------------------------------------------------------------------------------
-
-type CredentialSource = { readonly secret: string; readonly source: string };
-
-function claudeSettingsToken(): string | null {
-  const path = join(homedir(), '.claude', 'settings.json');
-  if (!existsSync(path)) return null;
-  try {
-    const parsed = readRecord(JSON.parse(readFileSync(path, 'utf8')));
-    const env = parsed === undefined ? undefined : readRecord(parsed['env']);
-    if (env === undefined) return null;
-    for (const key of ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY']) {
-      const value = env[key];
-      if (typeof value === 'string' && value.length > 0) return value;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function opencodeAuthToken(): string | null {
-  const path = join(homedir(), '.local', 'share', 'opencode', 'auth.json');
-  if (!existsSync(path)) return null;
-  try {
-    const parsed = readRecord(JSON.parse(readFileSync(path, 'utf8')));
-    const entry = parsed === undefined ? undefined : readRecord(parsed['minimax-cn-coding-plan']);
-    const key = entry === undefined ? undefined : entry['key'];
-    return typeof key === 'string' && key.length > 0 ? key : null;
-  } catch {
-    return null;
-  }
-}
-
-/** 共享的 MiniMax managed key：进程环境优先，其次非数据库的本机 claude 登录态。 */
-function sharedMinimaxCredential(): CredentialSource | null {
-  for (const name of ['MINIMAX_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY', 'COORDINATOR_SMOKE_API_KEY']) {
-    const value = process.env[name];
-    if (typeof value === 'string' && value.length > 0) return { secret: value, source: 'env:' + name };
-  }
-  const claude = claudeSettingsToken();
-  return claude === null ? null : { secret: claude, source: 'claude-settings' };
-}
-
-/** omp 不读 agent.db：优先 MINIMAX_API_KEY，否则复用同一 MiniMax 端点的 managed key。 */
-function resolveHarnessCredential(harness: AcceptanceHarnessId): CredentialSource {
-  if (harness === 'opencode') {
-    const token = opencodeAuthToken();
-    if (token !== null) return { secret: token, source: 'opencode-auth' };
-    const shared = sharedMinimaxCredential();
-    if (shared !== null) return { secret: shared.secret, source: 'shared-minimax:' + shared.source };
-    throw new AcceptanceBlocker('credential_unavailable', 'opencode 没有可用的本机凭据来源');
-  }
-  if (harness === 'claude') {
-    const token = process.env['ANTHROPIC_AUTH_TOKEN'] ?? process.env['ANTHROPIC_API_KEY'];
-    if (typeof token === 'string' && token.length > 0) return { secret: token, source: 'env:ANTHROPIC_AUTH_TOKEN' };
-  }
-  if (harness === 'pi' || harness === 'omp') {
-    const direct = process.env['MINIMAX_API_KEY'];
-    if (typeof direct === 'string' && direct.length > 0) return { secret: direct, source: 'env:MINIMAX_API_KEY' };
-  }
-  const shared = sharedMinimaxCredential();
-  if (shared === null) throw new AcceptanceBlocker('credential_unavailable', harness + ' 没有可用的本机凭据来源');
-  return { secret: shared.secret, source: 'shared-minimax:' + shared.source };
-}
-
-export type ResolvedCredential = { readonly credentialRef: string; readonly source: string };
-
-export function createCredentialStore(directory: string): CredentialStore {
-  return new JsonCredentialStore({ path: join(directory, 'credentials.json') });
-}
-
-/** 同一次运行内按 harness 缓存，避免重复读取本机源；secret 只在闭包里流转。 */
-export function ensureCredential(
-  store: CredentialStore,
-  cache: Map<AcceptanceHarnessId, ResolvedCredential>,
-  harness: AcceptanceHarnessId,
-): ResolvedCredential {
-  const cached = cache.get(harness);
-  if (cached !== undefined) return cached;
-  const native = resolveHarnessCredential(harness);
-  ACCEPTANCE_DIAGNOSTICS.credentialsRead = true;
-  const metadata = store.metadata();
-  if (metadata.kind !== 'metadata') {
-    throw new AcceptanceBlocker('credential_store_unreadable', '隔离凭据 store 不可读：' + metadata.code);
-  }
-  const saved = store.save({ expectedRevision: metadata.revision, secret: native.secret });
-  if (saved.kind !== 'saved') {
-    throw new AcceptanceBlocker('credential_write_failed', '隔离凭据写入失败：' + saved.code);
-  }
-  const resolved: ResolvedCredential = { credentialRef: saved.credentialRef, source: native.source };
-  cache.set(harness, resolved);
-  return resolved;
-}
-
-// ---------------------------------------------------------------------------------------------
 // 隔离夹具
 // ---------------------------------------------------------------------------------------------
 
@@ -317,9 +215,6 @@ export type AcceptanceFixture = {
   readonly runId: string;
   readonly coordinatorTerminalHandle: string;
   readonly identity: string;
-  readonly credentialStore: CredentialStore;
-  readonly credentialStoreFile: string;
-  readonly credentialCache: Map<AcceptanceHarnessId, ResolvedCredential>;
   readonly configBefore: GlobalConfigSnapshot;
   readonly scopeFor: (operationId: string, target: { readonly kind: string; readonly id: string }) => ExecutionScope;
   readonly noteDispatch: (dispatchId: string, terminalHandle: string | null) => void;
@@ -347,10 +242,6 @@ export async function createAcceptanceFixture(plan: Extract<AcceptancePlan, { ki
   if (!existsSync(plan.baseDir)) {
     throw new AcceptanceBlocker('base_dir_missing', '隔离基目录不存在：' + plan.baseDir);
   }
-  const loaded = mergeRealEnvFileIntoProcess(plan.envFile);
-  if (!loaded.hasProviderCredential && sharedMinimaxCredential() === null) {
-    throw new AcceptanceBlocker('credential_unavailable', '没有从 ' + plan.envFile + ' 或既有环境取得 provider 凭据');
-  }
   const root = mkdtempSync(join(plan.baseDir, 'orca-harness-acceptance-'));
   const projectName = 'project-' + plan.identity;
   const projectDir = join(root, projectName);
@@ -358,11 +249,7 @@ export async function createAcceptanceFixture(plan: Extract<AcceptancePlan, { ki
 
   const configBefore = snapshotGlobalConfig();
   const stateDir = join(root, 'state');
-  const credentialDir = join(root, 'credentials');
   mkdirSync(stateDir, { recursive: true });
-  mkdirSync(credentialDir, { recursive: true, mode: 0o700 });
-  const credentialStoreFile = join(credentialDir, 'credentials.json');
-  const credentialStore = createCredentialStore(credentialDir);
 
   mkdirSync(projectDir, { recursive: true });
   const gitInit = await runCaptured('git', ['init', '-q', '-b', 'main'], projectDir, 30_000);
@@ -468,9 +355,6 @@ export async function createAcceptanceFixture(plan: Extract<AcceptancePlan, { ki
     runId,
     coordinatorTerminalHandle: handle,
     identity: plan.identity,
-    credentialStore,
-    credentialStoreFile,
-    credentialCache: new Map(),
     configBefore,
     scopeFor,
     noteDispatch: (dispatchId, terminalHandle) => { dispatches.push({ dispatchId, terminalHandle }); },
@@ -514,35 +398,9 @@ function roleSpec(harness: AcceptanceHarnessId, role: AcceptanceRole): { spec: s
   };
 }
 
-function nativeConnection(binding: HarnessBinding): NativeWorkerConnection {
-  const base = {
-    providerId: binding.providerId,
-    ...(binding.baseUrl.length === 0 ? {} : { baseUrl: binding.baseUrl }),
-  };
-  if (binding.harness === 'claude') {
-    if (binding.api !== 'anthropic-messages') throw new AcceptanceBlocker('invalid_binding', 'claude 只接受 anthropic-messages');
-    return { harness: 'claude', ...base, api: 'anthropic-messages' };
-  }
-  return { harness: binding.harness, ...base, api: binding.api };
-}
-
-function modelConfiguration(binding: HarnessBinding, credentialRef: string): WorkerModelConfiguration {
-  return {
-    connection: {
-      connectionRef: 'acceptance-' + binding.harness,
-      label: binding.harness + ' acceptance',
-      providerIntegration: 'minimax',
-      modelOptions: {},
-      credential: { kind: 'managed', credentialRef, optionPath: 'model' },
-      codex: null,
-      nativeWorker: nativeConnection(binding),
-    },
-    modelRef: 'acceptance-model',
-    model: binding.model,
-    effort: null,
-    effortCapability: null,
-    modelOptions: {},
-  };
+function modelSelection(binding: HarnessBinding): WorkerModelSelection {
+  const model = binding.harness === 'claude' ? binding.model : binding.providerId + '/' + binding.model;
+  return { model, effort: null, effortCapability: null, catalogSource: null };
 }
 
 function stringField(value: unknown, ...keys: readonly string[]): string | null {
@@ -772,7 +630,7 @@ async function launchPreparedTerminal(input: {
     },
     report,
     workspace: fixture.projectDir,
-    expectedCodexHome: input.stateRoot,
+    expectedCodexHome: report.stateRoot ?? report.codexHome ?? input.stateRoot,
     dispatchStartedAt,
     bindingDeadlineAt: new Date(Date.parse(dispatchStartedAt) + WORKER_START_TIMEOUT_MS + REPORT_DEADLINE_MS).toISOString(),
   });
@@ -812,7 +670,7 @@ async function launchPreparedTerminal(input: {
     worker: {
       dispatchId,
       terminalHandle: prepared.preparedTerminal.handle,
-      stateRoot: input.stateRoot,
+      stateRoot: report.stateRoot ?? report.codexHome ?? input.stateRoot,
       reporterPath: input.reporterPath,
       reportPath: input.reportPath,
       sessionId: bound.binding.providerSessionId,
@@ -837,7 +695,6 @@ function stateRootsFor(paths: ReturnType<typeof workerSessionPathsUnder>): { rea
 function harnessLaunchInput(input: {
   readonly fixture: AcceptanceFixture;
   readonly binding: HarnessBinding;
-  readonly credentialRef: string;
   readonly launchId: string;
   readonly stateRoot: string;
   readonly reporterPath: string;
@@ -845,9 +702,7 @@ function harnessLaunchInput(input: {
 }): WorkerHarnessLaunchInput {
   return {
     launchId: input.launchId,
-    modelConfiguration: modelConfiguration(input.binding, input.credentialRef),
-    credentialStore: input.fixture.credentialStore,
-    credentialStorePath: credentialStorePath({ path: input.fixture.credentialStoreFile }),
+    modelSelection: modelSelection(input.binding),
     sandboxMode: input.sandboxMode,
     stateRoot: input.stateRoot,
     sessionStartReporterPath: input.reporterPath,
@@ -885,17 +740,11 @@ export async function runRole(input: {
   if (!workerHarnessRegistry.has(binding.harness)) {
     return blockedRole(binding.harness, role, launchId, 'worker_harness_unregistered', 'Worker Harness 未注册：' + binding.harness);
   }
-  let credential: ResolvedCredential;
-  try {
-    credential = ensureCredential(fixture.credentialStore, fixture.credentialCache, binding.harness);
-  } catch (error) {
-    return blockedRole(binding.harness, role, launchId, 'credential_unavailable', error instanceof Error ? error.message : String(error));
-  }
   const paths = workerSessionPathsUnder(binding.harness, join(fixture.root, 'state'), launchId);
   const roots = stateRootsFor(paths);
   installHarnessSessionReporter(binding.harness, paths);
   const strategy = prepareHarnessWorkerLaunch(binding.harness, harnessLaunchInput({
-    fixture, binding, credentialRef: credential.credentialRef, launchId, stateRoot: roots.parent, reporterPath: paths.reporterPath, sandboxMode: sandboxModeFor(role),
+    fixture, binding, launchId, stateRoot: roots.parent, reporterPath: paths.reporterPath, sandboxMode: sandboxModeFor(role),
   }));
   let outcome: LaunchOutcome;
   try {
@@ -940,17 +789,11 @@ export async function resumeRole(input: {
   if (original.kind !== 'ran' || original.sessionId === null || original.transcriptRef === null || original.reporterPath === null || original.stateRoot === null) {
     return blocked('original_unavailable', '原 Session 没有可核验的精确身份，拒绝恢复');
   }
-  let credential: ResolvedCredential;
-  try {
-    credential = ensureCredential(fixture.credentialStore, fixture.credentialCache, binding.harness);
-  } catch (error) {
-    return blocked('credential_unavailable', error instanceof Error ? error.message : String(error));
-  }
   const newPaths = resumeSessionPathsUnder(binding.harness, join(fixture.root, 'state'), input.resumeLaunchId, original.stateRoot);
   const { reporterPath, reportPath } = newPaths;
   installHarnessSessionReporter(binding.harness, { reporterPath: newPaths.reporterPath, reportPath: newPaths.reportPath });
   const base = harnessLaunchInput({
-    fixture, binding, credentialRef: credential.credentialRef, launchId: input.resumeLaunchId,
+    fixture, binding, launchId: input.resumeLaunchId,
     stateRoot: stateRootsFor(newPaths).parent, reporterPath, sandboxMode: 'workspace-write',
   });
   const strategy = prepareHarnessResumeLaunch(binding.harness, {

@@ -1404,7 +1404,7 @@ if (gate.kind === 'skip') {
         const config = parsedConfig.value;
         const workerRoles: readonly ModelProfileRole[] = ['planner', 'implementation', 'validator', 'finalizer', 'recovery_utility'];
         for (const role of workerRoles) {
-          expect(currentWorkerProfile(config, role)?.modelConfiguration.model, '角色模型必须显式绑定：' + role)
+          expect(currentWorkerProfile(config, role)?.modelSelection.model, '角色模型必须显式绑定：' + role)
             .toBe(REQUIRED_COORDINATOR_MODEL);
         }
 
@@ -1996,8 +1996,8 @@ if (gate.kind === 'skip') {
         // 逐角色核对真实 Session 的模型；显示名可能包含 provider 前缀。
         for (const role of ['planner', 'implementation', ...models.keys()]) {
           const expectedWorkerModel = workerRoles.includes(role as ModelProfileRole)
-            ? currentWorkerProfile(config, role as ModelProfileRole)?.modelConfiguration.model
-            : currentWorkerProfile(config, 'planner')?.modelConfiguration.model;
+            ? currentWorkerProfile(config, role as ModelProfileRole)?.modelSelection.model
+            : currentWorkerProfile(config, 'planner')?.modelSelection.model;
           const seen = models.get(role) ?? [];
           expect(
             seen.length,

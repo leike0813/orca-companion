@@ -47,7 +47,7 @@ import type {
   WorkerProfileRef,
 } from '../../src/domain/planning/execution-authorization.js';
 import type { ExecutionGraph, GraphVersionRecord } from '../../src/domain/planning/execution-graph.js';
-import type { WorkerModelConfiguration } from '../../src/domain/model-configuration.js';
+import type { WorkerModelSelection } from '../../src/domain/model-configuration.js';
 import { executionModelConfiguration } from '../support/execution-harness.js';
 import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 
@@ -168,12 +168,12 @@ type RawManifest = {
     profileRef: { kind: string; id: string };
     role: string;
     harness: string;
-    modelConfiguration: WorkerModelConfiguration;
+    modelSelection: WorkerModelSelection;
   }[];
   recoveryUtilityProfile: {
     profileRef: { kind: string; id: string };
     harness: string;
-    modelConfiguration: WorkerModelConfiguration;
+    modelSelection: WorkerModelSelection;
   };
   permissions: Record<string, boolean>;
   limits?: Record<string, number>;
@@ -185,7 +185,7 @@ type RawManifest = {
 
 function manifestFor(record: GraphVersionRecord, limits?: Record<string, number>): RawManifest {
   const base: RawManifest = {
-    manifestVersion: 3,
+    manifestVersion: 4,
     coordinationScopeId: SCOPE,
     planningCycleId: CYCLE,
     destinationRef: { kind: 'destination', id: 'd', version: 1 },
@@ -198,12 +198,12 @@ function manifestFor(record: GraphVersionRecord, limits?: Record<string, number>
       profileRef: { kind: 'worker-profile', id: `p-${role}` },
       role,
       harness: 'codex',
-      modelConfiguration: executionModelConfiguration(),
+      modelSelection: executionModelConfiguration(),
     })),
     recoveryUtilityProfile: {
       profileRef: { kind: 'worker-profile', id: 'p-recovery' },
       harness: 'codex',
-      modelConfiguration: executionModelConfiguration(),
+      modelSelection: executionModelConfiguration(),
     },
     permissions: {
       planner: true,
@@ -329,7 +329,7 @@ function reauthorizedProfiles(model: string): readonly WorkerProfileRef[] {
     profileRef: { kind: 'worker-profile', id: `p-${role}` },
     role,
     harness: 'codex',
-    modelConfiguration: executionModelConfiguration({ model }),
+    modelSelection: executionModelConfiguration({ model }),
   }));
 }
 
@@ -343,7 +343,7 @@ function reauthorize(overrides: Partial<Parameters<typeof recordModelReauthoriza
     recoveryUtilityProfile: {
       profileRef: { kind: 'worker-profile', id: 'p-recovery-next' },
       harness: 'codex',
-      modelConfiguration: executionModelConfiguration({ model: 'next-model' }),
+      modelSelection: executionModelConfiguration({ model: 'next-model' }),
     },
     graphVersion: candidate.version,
     authorizationId: 'auth-reapproved',
@@ -557,10 +557,10 @@ test('模型限定重新授权只换模型绑定与 Graph head，其余字段与
   expect(next.manifest.gitPolicy).toEqual(first.manifest.gitPolicy);
   expect(next.manifest.acceptedRisks).toEqual(first.manifest.acceptedRisks);
   expect(next.manifest.implementationPlanRef).toEqual(first.manifest.implementationPlanRef);
-  expect(next.manifest.workerProfiles.find((profile) => profile.role === 'validator')?.modelConfiguration.model).toBe(
+  expect(next.manifest.workerProfiles.find((profile) => profile.role === 'validator')?.modelSelection.model).toBe(
     'next-model',
   );
-  expect(next.manifest.recoveryUtilityProfile.modelConfiguration.model).toBe('next-model');
+  expect(next.manifest.recoveryUtilityProfile.modelSelection.model).toBe('next-model');
   // 旧授权仍在历史里：既有 Task 的运行依据不因新授权而改变。
   expect(authorizations().map((record) => record.authorizationId)).toEqual(['auth-1', 'auth-reapproved']);
 });
@@ -707,7 +707,7 @@ test('相同授权 ID 的异载荷重放被拒绝，且不产生第二条记录'
       recoveryUtilityProfile: {
         profileRef: { kind: 'worker-profile' as const, id: 'p-recovery-other' },
         harness: 'codex',
-        modelConfiguration: executionModelConfiguration({ model: 'other-model' }),
+        modelSelection: executionModelConfiguration({ model: 'other-model' }),
       },
     }],
     ['不同的 Graph head 版本', { graphVersion: (candidate.version + 1) as typeof candidate.version }],

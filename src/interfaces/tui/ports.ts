@@ -20,8 +20,11 @@ import type { SubmissionQuery, SubmissionStatus } from '../../application/coordi
 import type { TranscriptReadingPort } from '../../application/coordinator/history.js';
 import type {
   EffortCapability,
+  ModelProfileRole,
   ModelSettingsRole as DomainModelSettingsRole,
-  NativeWorkerConnection,
+  WorkerEffortCapability,
+  WorkerHarnessId,
+  WorkerModelSelection,
 } from '../../domain/model-configuration.js';
 import type {
   ModelSettingsSnapshot,
@@ -288,8 +291,34 @@ export type ModelConfigurationOption = {
   readonly effortCapability?: EffortCapability | null;
 };
 
+/** 原生 harness 目录里的一个模型候选；`effortCapability` 缺省即无可信 effort 来源。 */
+export type WorkerModelOption = {
+  readonly model: string;
+  readonly effortCapability: WorkerEffortCapability | null;
+};
+
+/**
+ * 原生目录查询结果。
+ *
+ * `available` 带查询来源标识与该 harness 实际报告的候选；`unavailable` 只带结构化 code 与安全文案，
+ * 界面据此允许手填 native exact ID，且不得捏造 effort。查询有界、可取消，经 `signal` 中止。
+ */
+export type WorkerModelCatalogLoad =
+  | { readonly kind: 'available'; readonly source: string; readonly models: readonly WorkerModelOption[] }
+  | { readonly kind: 'unavailable'; readonly code: string; readonly message: string };
+
 export type ModelCatalogPort = {
   readonly load: (coordinatorSessionId: string) => Promise<ModelCatalog>;
+  /**
+   * 显式查询某已注册 harness 的原生模型目录。
+   *
+   * 只由用户动作触发（选择/切换 harness 或刷新），不在 render/effect 中自动调用；`signal` 让切换
+   * harness 或关闭弹窗时取消在途查询，迟到结果因此不能改写已经离开的入口。
+   */
+  readonly queryWorkerModels: (input: {
+    readonly harness: WorkerHarnessId;
+    readonly signal?: AbortSignal;
+  }) => Promise<WorkerModelCatalogLoad>;
 };
 
 /**
@@ -307,17 +336,26 @@ export type ModelSettingsRole =
 /** 定稿 #52 的三个分区。顺序由 `roles` 数组给定，界面不重排。 */
 export type ModelRoleGroup = 'current' | 'planning' | 'execution';
 
-/** 角色候选：只展示 provider/model，effort 只能取自该模型的可信能力来源。 */
+/**
+ * 角色候选：只展示 provider/model，effort 只能取自该模型的可信能力来源。
+ *
+ * Coordinator 候选来自已保存的 configuration，带 `connectionRef` 与带 `optionPath` 的 `EffortCapability`；
+ * Worker 候选来自该 harness 的原生目录，没有 modelRef/connectionRef，`effortCapability` 无 optionPath，
+ * 并带目录来源 `catalogSource`（手填候选为 `null`，表示未验证）。
+ */
 export type ModelRoleCandidate = {
-  /** Coordinator 组是 configurationRef，Worker 组是 modelRef；界面原样回传给 save/apply。 */
+  /** Coordinator 组是 configurationRef；Worker 组是原生 model ID。界面原样回传给 apply。 */
   readonly candidateRef: string;
-  readonly connectionRef: string | null;
   readonly provider: string;
   readonly model: string;
   /** `null` 表示该模型没有可信 effort 能力来源；界面不得提供虚构 effort。 */
-  readonly effortCapability: EffortCapability | null;
-  /** Worker 候选绑定的 harness；Coordinator 或宿主未提供时缺省。 */
-  readonly harness?: string | null;
+  readonly effortCapability: EffortCapability | WorkerEffortCapability | null;
+  /** 仅 Coordinator 候选：已保存模型绑定的连接。 */
+  readonly connectionRef?: string | null;
+  /** 仅 Worker 候选：候选所属 harness。 */
+  readonly harness?: WorkerHarnessId | null;
+  /** 仅 Worker 候选：原生目录查询来源；`null` 表示手填未验证。 */
+  readonly catalogSource?: string | null;
 };
 
 /** 角色当前绑定；未配置时为 `null`，界面显示未配置而不是取最近对象。 */
@@ -326,6 +364,8 @@ export type ModelRoleBinding = {
   readonly provider: string;
   readonly model: string;
   readonly effort: string | null;
+  /** Worker 角色当前绑定（已批准 Manifest）的 harness；Coordinator 为 `null`。 */
+  readonly harness?: WorkerHarnessId | null;
 };
 
 export type ModelRoleView = {
@@ -349,11 +389,12 @@ export type ModelSettingsLoad =
   | { readonly kind: 'failed'; readonly code: string; readonly message: string };
 
 /**
- * 完整连接的非秘密视图。
+ * Coordinator 连接的非秘密视图。
  *
  * 应用的 ModelSettingsConnectionSummary 只带 label、providerIntegration 与凭据来源，但保存始终
- * **新增**连接，因此编辑既有连接必须能原样带回 codex 连接与凭据的引用与 SDK 字段路径，否则保存
- * 会静默丢掉它们。credentialRef 是 opaque 引用而非 key，因此可以进入界面。
+ * **新增**连接，因此编辑既有连接必须能原样带回凭据引用与 SDK 字段路径，否则保存会静默丢掉它们。
+ * credentialRef 是 opaque 引用而非 key，因此可以进入界面。Worker 已不再拥有连接，此视图只服务于
+ * Coordinator form。
  */
 export type ModelSettingsConnectionView = {
   readonly connectionRef: string;
@@ -363,13 +404,6 @@ export type ModelSettingsConnectionView = {
   readonly credential:
     | { readonly kind: 'harness_login' }
     | { readonly kind: 'managed'; readonly credentialRef: string; readonly optionPath: string };
-  readonly codex: {
-    readonly providerId: string;
-    readonly baseUrl: string;
-    readonly wireApi: 'responses' | 'chat';
-  } | null;
-  /** Worker harness 的原生连接；与 codex 连接互斥，缺省表示没有。 */
-  readonly nativeWorker?: NativeWorkerConnection;
 };
 
 /**
@@ -383,17 +417,25 @@ export type ModelSettingsSnapshotView = Omit<ModelSettingsSnapshot, 'connections
 };
 
 /**
- * 角色显式应用。
+ * 角色显式应用，按 role 判别。
  *
- * 这里只提交角色、模型引用、effort 与 CAS 基准：完整连接、选项与凭据引用由宿主从项目配置按
- * `modelRef` 解析，界面无法凭摘要重建它们，因此也不会有机会填错凭据。
+ * Coordinator 只提交模型引用、effort 与 CAS 基准：完整连接、选项与凭据引用由宿主从项目配置按
+ * `modelRef` 解析，界面无法凭摘要重建它们。Worker 提交所选 harness 与 `modelSelection`（含目录
+ * 来源与可信能力），宿主先追加不可变 profile，再进入完整 Manifest 审阅；应用仍不自动批准。
  */
-export type ModelSettingsApplyInput = {
-  readonly role: ModelSettingsRole;
-  readonly modelRef: string;
-  readonly effort: string | null;
-  readonly expectedRevision: number;
-};
+export type ModelSettingsApplyInput =
+  | {
+      readonly role: 'coordinator';
+      readonly modelRef: string;
+      readonly effort: string | null;
+      readonly expectedRevision: number;
+    }
+  | {
+      readonly role: ModelProfileRole;
+      readonly harness: WorkerHarnessId;
+      readonly modelSelection: WorkerModelSelection;
+      readonly expectedRevision: number;
+    };
 
 /**
  * 角色模型配置端口（IP-06）。
@@ -402,8 +444,9 @@ export type ModelSettingsApplyInput = {
  * 角色 profile 并返回 profileRef；真正的授权替换仍由 `executionAuthorization.review/approve` 走完。
  * Coordinator 的应用复用既有 `switch-model-configuration` 意图，保留挂起与在途操作的原合同。
  *
- * `save` 的输入与结果直接用应用层 `ModelSettingsService` 的类型：编辑器提交完整连接候选
- * （含 codex 连接、凭据引用与 SDK 字段路径、effort 能力来源），不在界面层复制第二份形状。
+ * `save` 的输入与结果直接用应用层 `ModelSettingsService` 的类型（按 role 判别联合）：Coordinator
+ * 编辑器提交 provider 连接、凭据引用与 SDK 字段路径、effort 能力来源，Worker 分支提交 harness 与
+ * `modelSelection`，不在界面层复制第二份形状。
  */
 export type ModelSettingsPort = {
   readonly load: () => Promise<ModelSettingsLoad>;
