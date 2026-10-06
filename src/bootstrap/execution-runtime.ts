@@ -15,7 +15,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type {
@@ -66,8 +66,10 @@ import {
   type WorkerShowResult,
   type WorkerStartReceipt,
 } from '../adapters/orca-cli/operation-catalog.js';
-import { createCodexWorkerLaunch, installCodexSessionStartReporter } from '../adapters/agents/codex-launch.js';
+import { requireWorkerHarness, workerHarnessRegistry, workerSessionPathsUnder, prepareHarnessWorkerLaunch, installHarnessSessionReporter, bindHarnessSessionFromStartReport, readHarnessTranscriptIdentity, readLatestHarnessSessionReport } from './worker-harness.js';
 import { credentialStorePath } from '../adapters/storage/credential-store.js';
+import { prepareOpencodeRecoveryMaterial } from '../adapters/agents/opencode-harness.js';
+import { nativeRecoveryInstructions } from '../adapters/agents/native-worker.js';
 import type { CredentialStore } from '../application/ports/credential-store.js';
 import {
   readOnlyWorkerUnavailableReason,
@@ -79,12 +81,7 @@ import {
   findDispatchedUtilityWorker,
   type UtilityWorkerDispatchInput,
 } from '../adapters/agents/utility-worker.js';
-import {
-  inspectCodexTranscript,
-  readCodexTranscriptIdentity,
-  type CodexSessionStartReport,
-} from '../adapters/agents/codex-transcript.js';
-import { bindCodexSessionFromStartReport, sessionBindingIdOf } from '../adapters/agents/session-binding.js';
+import { sessionBindingIdOf } from '../adapters/agents/session-binding.js';
 import { readWorkspaceFacts } from '../adapters/git/baseline-observer.js';
 import { workerStateLiveness } from '../application/execution/execution-view.js';
 import { workPackageComment } from '../application/materialize-work-package.js';
@@ -1703,13 +1700,7 @@ export function codexSessionPathsUnder(
   companionStateRoot: string,
   launchId: string,
 ): { readonly stateRoot: string; readonly reporterPath: string; readonly reportPath: string } {
-  const stateRoot = join(companionStateRoot, 'codex');
-  const id = createHash('sha256').update(launchId).digest('hex').slice(0, 20);
-  return {
-    stateRoot,
-    reporterPath: join(stateRoot, 'reporters', `${id}.mjs`),
-    reportPath: join(stateRoot, 'reporters', `${id}.jsonl`),
-  };
+  return workerSessionPathsUnder('codex', companionStateRoot, launchId);
 }
 
 /** 替代 Session 的稳定 launchId：同一 Recovery 的重放必须命中同一组 Codex 状态文件。 */
@@ -1829,7 +1820,7 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
     return read.kind === 'materialization-bindings' ? read.bindings : null;
   };
 
-  const bindingFor = (subject: RecoveryFactSubject): MaterializationBindingRecord | null =>
+  const bindingFor = (subject: Pick<RecoveryFactSubject, 'workPackageId' | 'role' | 'businessAttemptId'>): MaterializationBindingRecord | null =>
     bindingsOf()?.find(
       (entry) =>
         entry.identity === 'issued' &&
@@ -1840,6 +1831,14 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
 
   const sourceSegmentOf = (subject: RecoveryFactSubject): SessionSegmentRecord | null =>
     segmentsOf()?.find((entry) => entry.segmentId === subject.sourceSegmentId) ?? null;
+
+  const sourceHarnessOf = (subject: Pick<RecoveryFactSubject, 'workPackageId' | 'role' | 'businessAttemptId'>): string | null => {
+    const binding = bindingFor(subject);
+    if (binding?.authorizationId == null || binding.workerProfileRef == null) return null;
+    const read = input.store().query({ kind: 'authorization', coordinationScopeId: scopeId, authorizationId: binding.authorizationId });
+    if (read.kind !== 'authorization' || read.authorization === null || read.authorization.authorizationVersion !== binding.authorizationVersion) return null;
+    return read.authorization.manifest.workerProfiles.find((profile) => profile.profileRef.id === binding.workerProfileRef?.id)?.harness ?? null;
+  };
 
   /** 该 Work Package 的隔离 worktree；未列举完整或不存在时给出可区分的原因。 */
   const readIsolatedWorktree = async (
@@ -1927,7 +1926,11 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
       if (worktree.kind === 'unavailable') {
         return worktree;
       }
-      const identity = readCodexTranscriptIdentity({
+      const harness = sourceHarnessOf(recovery);
+      if (harness === null) return unavailable('worker_profile_unresolved', '中断 Session 缺少原 harness 授权绑定');
+      if (!workerHarnessRegistry.has(harness)) return unavailable('worker_harness_unregistered', '原 Session 的 harness 未注册');
+      const identity = await readHarnessTranscriptIdentity({
+        harness,
         transcriptRef: segment.lastTranscriptRef,
         workspace: worktree.path,
       });
@@ -1962,12 +1965,23 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
       };
     },
 
-    // 精确续接需要 provider 侧 resume 路径（Codex 当前未验证）：只报 `unverifiable`，保持未决。
-    resumeExact: () =>
-      Promise.resolve({
-        kind: 'unverifiable',
-        reason: 'Worker Harness Adapter 没有可核验的 provider session 续接路径：保持未决，不重复派发也不伪称已续接',
-      }),
+    resumeExact: async (request) => {
+      const harness = sourceHarnessOf({ workPackageId: request.workPackageId, role: request.role, businessAttemptId: request.businessAttemptId });
+      if (harness === null || request.segment.lastTranscriptRef === null) {
+        return { kind: 'unverifiable', reason: '原 Session 缺少 harness 或 transcript 绑定' };
+      }
+      const shown = await input.backend.query({ operation: 'worker-show', dispatchId: request.segment.dispatchId });
+      if (shown.kind !== 'accepted') return { kind: 'unverifiable', reason: '无法重新核验原 Worker 的存活事实' };
+      const worker = shown.value as WorkerShowResult;
+      const liveness = workerStateLiveness(worker.workerState);
+      if (liveness === 'exited') return { kind: 'unrecoverable', reason: '原 Worker 已退出，须建立新的 Session Segment' };
+      if (liveness !== 'live' || !worker.exactWorker) return { kind: 'unverifiable', reason: '原 Worker 的精确身份或存活事实不可证明' };
+      const worktree = await readIsolatedWorktree(request.workPackageId);
+      if (worktree.kind !== 'read') return { kind: 'unverifiable', reason: worktree.message };
+      const identity = await readHarnessTranscriptIdentity({ harness, transcriptRef: request.segment.lastTranscriptRef, workspace: worktree.path });
+      if ('kind' in identity || identity.providerSessionId !== request.providerSessionId) return { kind: 'unverifiable', reason: '原 Worker 的 Session 身份已无法重新证明' };
+      return { kind: 'resumed', sessionBindingId: sessionBindingIdOf(request.segment.dispatchId, identity.providerSessionId) };
+    },
 
     workspaceFor: (recovery) => reconcileWorkspace(recovery),
 
@@ -2065,19 +2079,16 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
     },
 
     extractCapsule: async (request) => {
-      const evidence = await inspectCodexTranscript(request.transcriptRef);
+      const sourceHarness = sourceHarnessOf({ workPackageId: request.workPackageId as WorkPackageId, role: request.role, businessAttemptId: request.attemptId });
+      if (sourceHarness === null) return { kind: 'transcript_unavailable', reason: '缺少原 Session 的 harness 授权绑定' };
+      if (!workerHarnessRegistry.has(sourceHarness)) return { kind: 'transcript_unavailable', reason: '原 Session 的 harness 未注册' };
+      const evidence = await requireWorkerHarness(sourceHarness).inspectTranscript(request.transcriptRef);
       if (evidence.kind !== 'covered') {
         // transcript 读不到是确定性结论：重派读的还是同一份，因此直接上报，不在这里重试。
         return { kind: 'transcript_unavailable', reason: evidence.reason };
       }
       if (input.writer === undefined) {
         return { kind: 'failed', reason: '协调写入者不可读：无法派发受限 Utility Worker' };
-      }
-      if (input.workerHarness !== 'codex') {
-        return {
-          kind: 'failed',
-          reason: `Worker Profile 的 harness 为 ${input.workerHarness ?? '未配置'}，本进程只能派发 codex Utility Worker`,
-        };
       }
       const operationIds = capsuleOperationIdsOf(request.segmentId);
       const pinned = bindingsOf()?.find((entry) => entry.creationOperationId === operationIds.task) ?? null;
@@ -2096,6 +2107,8 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
             pinned.authorizationVersion !== authorization.authorizationVersion))) {
         return { kind: 'failed', reason: 'Recovery Utility 缺少可核验模型授权绑定' };
       }
+      const harness = workerHarnessRegistry.get(profile.harness);
+      if (harness === undefined) return { kind: 'failed', reason: 'Recovery Utility harness 未注册' };
       if (input.companionStateRoot === null) {
         return { kind: 'failed', reason: '无法定位 Companion 私有的状态根：Utility Worker 的 SessionStart 不可证' };
       }
@@ -2113,7 +2126,7 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
       }
 
       const launchId = capsuleLaunchIdOf(request.segmentId);
-      const paths = codexSessionPathsUnder(input.companionStateRoot, launchId);
+      const paths = harness.sessionPaths(input.companionStateRoot, launchId);
       const envelope = buildUtilityWorkerEnvelope({
         workPackageId: request.workPackageId,
         sourceWorkerTaskId: request.workerTaskId,
@@ -2137,10 +2150,16 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
           return { kind: 'failed', reason: readOnlyBlocker };
         }
       }
-      installCodexSessionStartReporter(paths);
+      installHarnessSessionReporter(harness.id, paths);
       const expectedCodexHome = join(paths.stateRoot, createHash('sha256').update(launchId).digest('hex').slice(0, 20));
+      const readingInstructions = sourceHarness === 'opencode'
+        ? await prepareOpencodeRecoveryMaterial(request.transcriptRef, expectedCodexHome, evidence.evidence)
+        : sourceHarness === 'claude' || sourceHarness === 'pi' || sourceHarness === 'omp'
+          ? nativeRecoveryInstructions(sourceHarness) : undefined;
+      if (readingInstructions === null) return { kind: 'transcript_unavailable', reason: 'OpenCode 精确 transcript 材料无法核验' };
       const dispatchStartedAt = new Date(input.clock()).toISOString();
       const dispatch = await dispatchCapsuleWorker({
+        ...(readingInstructions === undefined ? {} : { instructions: readingInstructions }),
         store: input.store(),
         backend: input.backend,
         writer: input.writer,
@@ -2162,7 +2181,7 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
           });
           return recorded.kind === 'rejected' ? { code: recorded.code, message: recorded.message } : null;
         },
-        workerLaunch: createCodexWorkerLaunch({
+        workerLaunch: prepareHarnessWorkerLaunch(harness.id, {
           launchId,
           modelConfiguration,
           // 与宿主其余派发同源：managed 凭据用 bootstrap 注入的唯一实例证明存在。
@@ -2180,23 +2199,11 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
           const deadline = input.clock() + input.bindingWindowMs;
           const maxAttempts = Math.max(1, Math.ceil(input.bindingWindowMs / 250) + 1);
           for (let attempt = 1; ; attempt += 1) {
-            if (existsSync(paths.reportPath)) {
-              for (const line of readFileSync(paths.reportPath, 'utf8').split('\n')) {
-                if (line.length === 0) {
-                  continue;
-                }
-                let report: CodexSessionStartReport;
-                try {
-                  report = JSON.parse(line) as CodexSessionStartReport;
-                } catch {
-                  continue;
-                }
-                if (report.cwd !== worktree.path) {
-                  continue;
-                }
-                const bound = bindCodexSessionFromStartReport({
+            const report = readLatestHarnessSessionReport(paths.reportPath);
+            if (report !== null && report.cwd === worktree.path) {
+                const bound = await bindHarnessSessionFromStartReport({
                   facts: {
-                    harness: 'codex',
+                    harness: harness.id,
                     role: request.role,
                     workerTaskId: request.workerTaskId,
                     dispatchId: dispatchId as DispatchId,
@@ -2208,10 +2215,7 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
                   dispatchStartedAt,
                   bindingDeadlineAt: new Date(input.clock()).toISOString(),
                 });
-                if (bound.kind !== 'bound') {
-                  continue;
-                }
-                return {
+                if (bound.kind === 'bound') return {
                   harness: bound.binding.harness,
                   role: bound.binding.role,
                   workerTaskId: bound.binding.workerTaskId,
@@ -2221,7 +2225,6 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
                   transcriptRef: bound.binding.transcriptRef,
                   observedAt: bound.binding.observedAt,
                 };
-              }
             }
             if (attempt >= maxAttempts || input.clock() >= deadline) {
               return null;
@@ -2275,12 +2278,10 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
       unavailable('execution_context_unreadable', '当前图的 Run / 授权 / 后端身份不可读：没有可核验的执行上下文'),
 
     replacementFor: (recovery) => {
-      if (input.workerHarness !== 'codex') {
-        return unavailable(
-          'worker_harness_unsupported',
-          `Worker Profile 的 harness 为 ${input.workerHarness ?? '未配置'}，本进程只能派发 codex 替代 Session`,
-        );
-      }
+      const harnessId = sourceHarnessOf(recovery);
+      if (harnessId === null) return unavailable('worker_profile_unresolved', '替代 Session 缺少原 harness 授权绑定');
+      const harness = workerHarnessRegistry.get(harnessId);
+      if (harness === undefined) return unavailable('worker_harness_unregistered', '替代 Session 的原 harness 未注册');
       const modelConfiguration = input.resolveModelConfiguration(recovery, 'replacement');
       const originalProfileRef = bindingFor(recovery)?.workerProfileRef?.id;
       if (modelConfiguration === null || originalProfileRef === undefined) {
@@ -2296,13 +2297,13 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
         return unavailable('state_root_unavailable', '无法定位 Companion 私有的状态根：替代 Session 的 SessionStart 不可证');
       }
       const launchId = recoveryLaunchIdOf(recovery.recoveryId);
-      const paths = codexSessionPathsUnder(input.companionStateRoot, launchId);
-      installCodexSessionStartReporter(paths);
+      const paths = harness.sessionPaths(input.companionStateRoot, launchId);
+      installHarnessSessionReporter(harness.id, paths);
       const expectedCodexHome = join(paths.stateRoot, createHash('sha256').update(launchId).digest('hex').slice(0, 20));
       const dispatchStartedAt = new Date(input.clock()).toISOString();
       return {
         profile: { kind: 'reuse', profileRef: originalProfileRef },
-        workerLaunch: createCodexWorkerLaunch({
+        workerLaunch: prepareHarnessWorkerLaunch(harness.id, {
           launchId,
           modelConfiguration,
           // 替代 Session 沿用原 Task 的模型绑定，凭据 store 用 bootstrap 注入的唯一实例。
@@ -2326,20 +2327,11 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
           // 窗口同时用「轮次」表达：注入的 clock 可能是固定值，只靠它判断会让等待永不结束。
           const maxAttempts = Math.max(1, Math.ceil(input.bindingWindowMs / 250) + 1);
           for (let attempt = 1; ; attempt += 1) {
-            if (existsSync(paths.reportPath)) {
-              for (const line of readFileSync(paths.reportPath, 'utf8').split('\n')) {
-                if (line.length === 0) {
-                  continue;
-                }
-                let report: CodexSessionStartReport;
-                try {
-                  report = JSON.parse(line) as CodexSessionStartReport;
-                } catch {
-                  continue;
-                }
-                const bound = bindCodexSessionFromStartReport({
+            const report = readLatestHarnessSessionReport(paths.reportPath);
+            if (report !== null) {
+                const bound = await bindHarnessSessionFromStartReport({
                   facts: {
-                    harness: 'codex',
+                    harness: harness.id,
                     role: recovery.role,
                     workerTaskId: recovery.workerTaskId,
                     dispatchId: dispatchId as DispatchId,
@@ -2358,7 +2350,6 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
                     transcriptRef: bound.binding.transcriptRef,
                   };
                 }
-              }
             }
             if (attempt >= maxAttempts || input.clock() >= deadline) {
               return { failure: '替代 Session 的 SessionStart 报告不可达或 transcript 无法精确绑定' };

@@ -1,0 +1,77 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T03:58:55.945Z",
+  "finishedAt": "2026-10-06T04:08:52.934Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-pi",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": [
+    {
+      "harness": "pi",
+      "model": "MiniMax-M3",
+      "providerId": "minimax-cn",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "shared-minimax:env:ANTHROPIC_API_KEY",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "dispatchId": "ctx_bf96b61139dd",
+          "sessionId": "552be574-e01b-4377-aeaa-82fb91fcf04b",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "dispatchId": "ctx_e659192928d6",
+          "sessionId": "0c2ef10d-59d4-4405-aa63-8edf8d2b23d0",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "dispatchId": "ctx_bd6b1696b7b2",
+          "sessionId": "35d67f03-e5e1-451f-a50d-4c350dcaead5",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "worker_not_succeeded",
+            "message": "Worker 未完成：start_unknown；worker-show={\"dispatchId\":\"ctx_120fe5c476df\",\"taskId\":\"task_447cff45114d\",\"dispatchStatus\":\"pending\",\"workerState\":\"start_unknown\",\"workerStage\":\"turn_start_unobserved\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_120fe5c476df\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\" Treat it as new user-owned work: follow it without coordinator approval or a\",\" fresh Dispatch, and do not send lifecycle messages using the settled task or\",\" Dispatch IDs. Never refuse a direct user request because you were a worker.\",\" Do not exit the shell. Your terminal stays available, and if the\",\" coordinator has more for you it will re-engage this terminal with a fresh\",\" preamble + TASK block, which arrives as new input. Treat that as supervised\",\" work under the new Dispatch; ignore stale follow-ups from the settled task.\",\" === TASK === | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\" === AFTER YOU SEND worker_done ===\",\" worker_done ends your turn for this task. Your dispatched work is complete:\",\" stop, return to an idle prompt, and take no further actions — do NOT start\",\" new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling\",\" orca orchestration check. The coordinator has already recorded your\",\" completion and expects no further output.\",\" A direct instruction from the user takes precedence over this idle rule.\",\" Treat it as new user-owned work: follow it without coordinator approval or a\",\" fresh Dispatch, and do not send lifecycle messages using the settled task or\",\" Dispatch IDs. Never refuse a direct user request because you were a worker.\",\" Do not exit the shell. Your terminal stays available, and if the\",\" coordinator has more for you it will re-engage this terminal with a fresh\",\" preamble + TASK block, which arrives as new input. Treat that as supervised\",\" work under the new Dispatch; ignore stale follow-ups from the settled task.\",\" === TASK ===\",\" You are the finalizer worker for work package WP-1 in a throwaway repository. Work only inside the current dire"
+          }
+        }
+      ],
+      "resume": {
+        "kind": "ran",
+        "sessionId": "0c2ef10d-59d4-4405-aa63-8edf8d2b23d0",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null
+      },
+      "blockers": [
+        "finalizer：worker_not_succeeded Worker 未完成：start_unknown；worker-show={\"dispatchId\":\"ctx_120fe5c476df\",\"taskId\":\"task_447cff45114d\",\"dispatchStatus\":\"pending\",\"workerState\":\"start_unknown\",\"workerStage\":\"turn_start_unobserved\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_120fe5c476df\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\" Treat it as new user-owned work: follow it without coordinator approval or a\",\" fresh Dispatch, and do not send lifecycle messages using the settled task or\",\" Dispatch IDs. Never refuse a direct user request because you were a worker.\",\" Do not exit the shell. Your terminal stays available, and if the\",\" coordinator has more for you it will re-engage this terminal with a fresh\",\" preamble + TASK block, which arrives as new input. Treat that as supervised\",\" work under the new Dispatch; ignore stale follow-ups from the settled task.\",\" === TASK === | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\" === AFTER YOU SEND worker_done ===\",\" worker_done ends your turn for this task. Your dispatched work is complete:\",\" stop, return to an idle prompt, and take no further actions — do NOT start\",\" new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling\",\" orca orchestration check. The coordinator has already recorded your\",\" completion and expects no further output.\",\" A direct instruction from the user takes precedence over this idle rule.\",\" Treat it as new user-owned work: follow it without coordinator approval or a\",\" fresh Dispatch, and do not send lifecycle messages using the settled task or\",\" Dispatch IDs. Never refuse a direct user request because you were a worker.\",\" Do not exit the shell. Your terminal stays available, and if the\",\" coordinator has more for you it will re-engage this terminal with a fresh\",\" preamble + TASK block, which arrives as new input. Treat that as supervised\",\" work under the new Dispatch; ignore stale follow-ups from the settled task.\",\" === TASK ===\",\" You are the finalizer worker for work package WP-1 in a throwaway repository. Work only inside the current dire"
+      ]
+    }
+  ]
+}

@@ -17,6 +17,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
+import { READ_ONLY_EXECUTION_WRAPPER_SOURCE } from './read-only-execution-wrapper.js';
 
 import {
   CREDENTIAL_STORE_SCHEMA_VERSION,
@@ -108,6 +109,9 @@ export type CodexModelLaunchDescriptor = {
   /** 传给 Codex 的完整 argv（不含任何 secret）。 */
   readonly args: readonly string[];
   readonly credential: CodexModelCredentialDescriptor;
+  readonly environment?: Readonly<Record<string, string>>;
+  readonly unsetEnvironment?: readonly string[];
+  readonly readOnly?: { readonly workspace: string; readonly stateRoot: string; readonly reportDirectory?: string };
 };
 
 /** 把一个模型选项值编码成可被 `codex -c key=value` 解析的 TOML 字面量。 */
@@ -313,6 +317,7 @@ const STORE_SCHEMA_VERSION = __SCHEMA__;
 const MAX_STORE_BYTES = __MAXBYTES__;
 const MAX_STORE_ENTRIES = __MAXENTRIES__;
 const GROUP_AND_OTHER_BITS = 0o077;
+${READ_ONLY_EXECUTION_WRAPPER_SOURCE}
 
 const descriptorPath = process.argv[2];
 if (typeof descriptorPath !== 'string' || descriptorPath.length === 0) {
@@ -343,7 +348,8 @@ if (
   fail('invalid model launch descriptor');
 }
 
-const env = Object.assign({}, process.env, { CODEX_HOME: descriptor.codexHome });
+const env = Object.assign({}, process.env, { CODEX_HOME: descriptor.codexHome }, descriptor.environment);
+for (const key of descriptor.unsetEnvironment ?? []) delete env[key];
 const credential = descriptor.credential;
 if (credential.kind === 'managed') {
   // 复用 CredentialStore 的权限/体积/结构边界：目录与文件都必须 owner-only，文件不得是符号链接，
@@ -397,7 +403,10 @@ if (credential.kind === 'managed') {
   env[credential.envKey] = resolved.secret;
 }
 
-const child = spawn(descriptor.executable, descriptor.args, { env, stdio: 'inherit' });
+const readOnlyArgs = descriptor.readOnly === undefined ? null : readOnlyExecutionArguments({
+  ...descriptor.readOnly, executable: descriptor.executable, args: descriptor.args,
+});
+const child = spawn(readOnlyArgs === null ? descriptor.executable : 'bwrap', readOnlyArgs ?? descriptor.args, { env, stdio: 'inherit' });
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
   process.on(signal, () => {
     if (!child.killed) child.kill(signal);

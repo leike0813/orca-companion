@@ -1,0 +1,72 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T04:22:10.547Z",
+  "finishedAt": "2026-10-06T04:27:04.690Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-omp",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": [
+    {
+      "harness": "omp",
+      "model": "MiniMax-M3.1-Flash-Preview",
+      "providerId": "minimax-code-cn",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "shared-minimax:env:ANTHROPIC_API_KEY",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "dispatchId": "ctx_64bacb87b001",
+          "sessionId": "01a10f72-b7b7-7462-b556-aeb7e93095d6",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-code-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "dispatchId": "ctx_5b8af4a83c27",
+          "sessionId": "01a10f73-0a13-75e1-a720-7bf166ba33f9",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-code-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "dispatchId": "ctx_9f62238f7737",
+          "sessionId": "01a10f73-7980-73e5-bcbf-32f76bba0c84",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-code-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "dispatchId": "ctx_5ce242fef601",
+          "sessionId": "01a10f76-0ce5-7222-b699-6efbb0054203",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-code-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "kind": "ran",
+        "sessionId": "01a10f73-0a13-75e1-a720-7bf166ba33f9",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null
+      },
+      "blockers": []
+    }
+  ]
+}

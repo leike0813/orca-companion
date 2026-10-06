@@ -1,0 +1,47 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T03:21:38.758Z",
+  "finishedAt": "2026-10-06T03:25:40.959Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": [
+    {
+      "harness": "claude",
+      "model": "MiniMax-M3.1-Flash-Preview",
+      "providerId": "minimax",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "env:ANTHROPIC_AUTH_TOKEN",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "claude 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_8b32d44ed87c\",\"taskId\":\"task_c76716187563\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_8b32d44ed87c\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"\",\"────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\",\" Accessing workspace:\",\"\",\" /var/tmp/<redacted>/<redacted>\",\"\",\" Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source\",\" project, or work from your team). If not, take a moment to review what's in this folder first.\",\"\",\" Claude Code'll be able to read, edit, and execute files here.\",\"\",\" Security guide\",\"\",\" ❯ No, exit\"],\"truncated\":false,\"limited\":false,\"oldestCur | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"model name for 1M, or set <redacted> to its real window; <redacted>\",\"FORCEMENT=1 restores the previous wait-for-the-API behavior.\",\"────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\",\" Accessing workspace:\",\" /var/tmp/<redacted>/<redacted>\",\" Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source\",\" project, or work from your team). If not, take a moment to review what's in this folder first.\",\" Claude Code'll be able to read, edit, and execute files here.\",\" Security guide\",\" ❯ No, exit\",\"   Yes, I trust this folder\",\" Enter to confirm · Esc to cancel\"],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"56\",\"latestCursor\":\"56\",\"returnedLineCount\":12,\"source\":\"screen\"}}"
+          }
+        }
+      ],
+      "resume": {
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "没有可恢复的 implementation 会话"
+        }
+      },
+      "blockers": [
+        "planner：session_report_missing claude 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_8b32d44ed87c\",\"taskId\":\"task_c76716187563\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_8b32d44ed87c\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"\",\"────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\",\" Accessing workspace:\",\"\",\" /var/tmp/<redacted>/<redacted>\",\"\",\" Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source\",\" project, or work from your team). If not, take a moment to review what's in this folder first.\",\"\",\" Claude Code'll be able to read, edit, and execute files here.\",\"\",\" Security guide\",\"\",\" ❯ No, exit\"],\"truncated\":false,\"limited\":false,\"oldestCur | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"model name for 1M, or set <redacted> to its real window; <redacted>\",\"FORCEMENT=1 restores the previous wait-for-the-API behavior.\",\"────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\",\" Accessing workspace:\",\" /var/tmp/<redacted>/<redacted>\",\" Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source\",\" project, or work from your team). If not, take a moment to review what's in this folder first.\",\" Claude Code'll be able to read, edit, and execute files here.\",\" Security guide\",\" ❯ No, exit\",\"   Yes, I trust this folder\",\" Enter to confirm · Esc to cancel\"],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"56\",\"latestCursor\":\"56\",\"returnedLineCount\":12,\"source\":\"screen\"}}",
+        "resume：original_unavailable 没有可恢复的 implementation 会话"
+      ]
+    }
+  ]
+}

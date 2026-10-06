@@ -1,0 +1,72 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T04:41:57.495Z",
+  "finishedAt": "2026-10-06T04:44:00.827Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-pi",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": [
+    {
+      "harness": "pi",
+      "model": "MiniMax-M3",
+      "providerId": "minimax-cn",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "shared-minimax:env:ANTHROPIC_API_KEY",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "dispatchId": "ctx_89402a75e0aa",
+          "sessionId": "552be574-e01b-4377-aeaa-82fb91fcf04b",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "dispatchId": "ctx_7fa7b6afe9df",
+          "sessionId": "0c2ef10d-59d4-4405-aa63-8edf8d2b23d0",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": false,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "dispatchId": "ctx_6c3c78727b3e",
+          "sessionId": "35d67f03-e5e1-451f-a50d-4c350dcaead5",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": false,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "dispatchId": "ctx_4b0b0ec17e54",
+          "sessionId": "81cd34c5-21d1-489e-a50b-57a0dea577c1",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "kind": "ran",
+        "sessionId": "0c2ef10d-59d4-4405-aa63-8edf8d2b23d0",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null
+      },
+      "blockers": []
+    }
+  ]
+}

@@ -1,12 +1,19 @@
 /** Graph Patch Planner 的生产 Worker port：Task、Session 与 Delivery 都按可信身份核验。 */
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createCodexWorkerLaunch, installCodexSessionStartReporter } from '../adapters/agents/codex-launch.js';
-import { bindCodexSessionFromStartReport } from '../adapters/agents/session-binding.js';
-import type { CodexSessionStartReport } from '../adapters/agents/codex-transcript.js';
+import type { HarnessSessionReport } from '../application/ports/worker-harness.js';
+import type { HarnessSessionFacts } from '../adapters/agents/session-binding.js';
+import { resolveWorkerHarness } from '../application/ports/worker-harness.js';
+import {
+  bindHarnessSessionFromStartReport,
+  installHarnessSessionReporter,
+  prepareHarnessWorkerLaunch,
+  readLatestHarnessSessionReport,
+  workerHarnessRegistry,
+  workerSessionPathsUnder,
+} from './worker-harness.js';
 import { readDeliveryBatch } from '../adapters/orca-cli/delivery-reader.js';
 import { dispatchScopedWorker, type ScopedWorkerDispatchInput } from '../adapters/agents/utility-worker.js';
 import { ackConsumedDelivery, settleDelivery } from '../application/delivery/process-delivery.js';
@@ -19,7 +26,7 @@ import type { SpecBinding } from '../domain/task-contract.js';
 import type { WorkerModelConfiguration } from '../domain/model-configuration.js';
 import type { CredentialStore } from '../application/ports/credential-store.js';
 import type { WorkerListResult } from '../adapters/orca-cli/operation-catalog.js';
-import { codexSessionPathsUnder, parseOrcaWorkerDoneLocator } from './execution-runtime.js';
+import { parseOrcaWorkerDoneLocator } from './execution-runtime.js';
 
 export type GraphPatchWorkerInput = {
   readonly store: BranchCoordinationStore;
@@ -29,6 +36,8 @@ export type GraphPatchWorkerInput = {
   readonly execution: ScopedWorkerDispatchInput['execution'];
   readonly canonicalWorktreePath: string;
   readonly companionStateRoot: string;
+  /** 该次派发钉住的 Planner profile harness；由调用方按已批准 Manifest 给出，不从模型连接推断。 */
+  readonly harness: string;
   /**
    * 冻结的 Planner 模型配置。
    *
@@ -54,15 +63,9 @@ function scopeRevision(input: GraphPatchWorkerInput): number | null {
   return read.kind === 'scope' && read.scope !== null ? read.scope.revision : null;
 }
 
-function readReport(path: string): CodexSessionStartReport | null {
-  if (!existsSync(path)) return null;
-  const line = readFileSync(path, 'utf8').split('\n').find(Boolean);
-  if (line === undefined) return null;
-  try {
-    return JSON.parse(line) as CodexSessionStartReport;
-  } catch {
-    return null;
-  }
+/** 共享 reader：只接受唯一会话身份、形状合法的最新报告；缺失、非法或多 ID 一律 null。 */
+function readReport(path: string): HarnessSessionReport | null {
+  return readLatestHarnessSessionReport(path);
 }
 
 /** Worker 正文必须是一份完整 JSON 草案；Markdown 包裹会造成不可核验的额外内容。 */
@@ -108,15 +111,21 @@ export async function runGraphPatchPlannerWorker(input: GraphPatchWorkerInput): 
   });
   if (authorization.kind !== 'authorization' || authorization.authorization === null ||
       !authorization.authorization.manifest.permissions.planner ||
-      !authorization.authorization.manifest.workerProfiles.some((profile) => profile.role === 'planner' && profile.harness === 'codex')) {
-    return { kind: 'rejected', code: 'planner_not_authorized', message: '当前授权未批准 Codex Planner' };
+      !authorization.authorization.manifest.workerProfiles.some((profile) => profile.role === 'planner' && workerHarnessRegistry.has(profile.harness))) {
+    return { kind: 'rejected', code: 'planner_not_authorized', message: '当前授权未批准已注册 harness 的 Planner' };
+  }
+  // 运行依据来自该次派发钉住的 Planner profile harness；未注册即结构化拒绝。
+  const harness = input.harness;
+  const registered = resolveWorkerHarness(workerHarnessRegistry, harness);
+  if (registered.kind === 'rejected') {
+    return { kind: 'rejected', code: registered.code, message: registered.message };
   }
   const operationId = (step: string): OperationId => `${request.operationId}:${step}` as OperationId;
   const workerTaskId = `${request.patchId}:planner-task` as WorkerTaskId;
   const attemptId = `${request.patchId}:planner-attempt`;
   const launchId = `${request.patchId}:planner-launch`;
-  const paths = codexSessionPathsUnder(input.companionStateRoot, launchId);
-  installCodexSessionStartReporter(paths);
+  const paths = workerSessionPathsUnder(harness, input.companionStateRoot, launchId);
+  installHarnessSessionReporter(harness, paths);
   const instruction = graphPatchPlannerInstruction(request);
   const spec = JSON.stringify({
     schemaVersion: 1,
@@ -187,8 +196,8 @@ export async function runGraphPatchPlannerWorker(input: GraphPatchWorkerInput): 
     if (report === null || report.observedAt === null) {
       return { kind: 'unknown', reason: 'Planner Dispatch 已登记，但精确 Codex SessionStart 报告不可读' };
     }
-    const bound = bindCodexSessionFromStartReport({
-      facts: { harness: 'codex', role: 'planner', workerTaskId,
+    const bound = await bindHarnessSessionFromStartReport({
+      facts: { harness, role: 'planner', workerTaskId,
         dispatchId: dispatch.dispatchId as DispatchId, attemptId },
       report,
       workspace: input.canonicalWorktreePath,
@@ -209,7 +218,7 @@ export async function runGraphPatchPlannerWorker(input: GraphPatchWorkerInput): 
     spec,
     taskTitle: `Graph Patch Planner ${request.patchId}`,
     execution,
-    workerLaunch: createCodexWorkerLaunch({
+    workerLaunch: prepareHarnessWorkerLaunch(harness, {
       launchId,
       modelConfiguration: input.modelConfiguration,
       credentialStore: input.credentialStore,
@@ -225,14 +234,14 @@ export async function runGraphPatchPlannerWorker(input: GraphPatchWorkerInput): 
       workerStart: operationId('worker-start'),
       workerActivate: operationId('activate'),
     },
-    observeSession: async (dispatchId) => {
+    observeSession: async (dispatchId): Promise<HarnessSessionFacts | null> => {
       const deadline = Date.now() + input.bindingWindowMs;
       while (Date.now() < deadline) {
         const report = readReport(paths.reportPath);
         if (report !== null) {
-          const bound = bindCodexSessionFromStartReport({
+          const bound = await bindHarnessSessionFromStartReport({
             facts: {
-              harness: 'codex', role: 'planner', workerTaskId,
+              harness, role: 'planner', workerTaskId,
               dispatchId: dispatchId as DispatchId, attemptId,
             },
             report,

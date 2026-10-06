@@ -1,0 +1,93 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T04:05:13.626Z",
+  "finishedAt": "2026-10-06T04:27:52.527Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-opencode",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": [
+    {
+      "harness": "opencode",
+      "model": "MiniMax-M3.1-Flash-Preview",
+      "providerId": "minimax-cn-coding-plan",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "opencode-auth",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "worker_not_succeeded",
+            "message": "Worker 未完成：failed；worker-show={\"dispatchId\":\"ctx_d4fe91dfd295\",\"taskId\":\"task_211f84657ea4\",\"dispatchStatus\":\"failed\",\"workerState\":\"failed\",\"workerStage\":\"process_exited\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"exited\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_d4fe91dfd295\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"exited\",\"tail\":[],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"0\",\"latestCursor\":\"0\",\"returnedLineCount\":0,\"source\":\"stream\"},\"cursor\":\"<redacted>\",\"status\":{\"worker\":\"failed\",\"terminal\":\"exited\",\"liveness\":\"exited\"},\"fallbackReason\":\"session_not_reported\",\"warnings\":[],\"sourceExact\":false,\"contentComplete\":false,\"clipping\":[\"terminal_fallback\"],\"projection\":{\"id\":\"ctx_d4fe91dfd295\",\"dispatchId\":\"ctx_d4fe91dfd295\",\"taskId\":\"task_211f84657ea4\",\"runId\":\"run_6d80515178ed\",\"role\":\"worker\",\"parent\":null,\"provider\":null,\"host\":{\"kind\":\"local\",\"id\":\"lo | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"exited\",\"tail\":[],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"0\",\"latestCursor\":\"0\",\"returnedLineCount\":0,\"source\":\"screen-unavailable\"}}"
+          }
+        },
+        {
+          "role": "implementation",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "worker_not_succeeded",
+            "message": "Worker 未完成：ready；worker-show={\"dispatchId\":\"ctx_2bbf44743d94\",\"taskId\":\"task_61ffe04964e0\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_2bbf44743d94\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃\",\"  ┃  Do not exit the shell. Your terminal stays available, and if the\",\"  ┃  coordinator has more for you it will re-engage this terminal with a fresh\",\"  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised\",\"  ┃  work under the new Dispatch; ignore stale follow-ups from the settled task.\",\"  ┃\",\"  ┃  === TASK ===\",\"  ┃  You are the implementation worker for work package WP-1 in a throwaway repository. Work only inside the current\",\"  ┃  directory. Do not install dependencies, do not use the network, do not commit or | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"   New session                   +\",\"  ┃    orca orchestration check --terminal <redacted> --json\",\"  ┃  ```\",\"  ┃\",\"  ┃  === AFTER YOU SEND worker_done ===\",\"  ┃\",\"  ┃  worker_done ends your turn for this task. Your dispatched work is complete:\",\"  ┃  stop, return to an idle prompt, and take no further actions — do NOT start\",\"  ┃  new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling\",\"  ┃  `orca orchestration check`. The coordinator has already recorded your\",\"  ┃  completion and expects no further output.\",\"  ┃\",\"  ┃  A direct instruction from the user takes precedence over this idle rule.\",\"  ┃  Treat it as new user-owned work: follow it without coordinator approval or a\",\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dispatch IDs. Never refuse a direct user request because you were a worker.\",\"  ┃\",\"  ┃  Do not exit the shell. Your terminal stays available, and if the\",\"  ┃  coordinator has more for you it will re-engage this terminal with a fresh\",\"  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised\",\"  ┃  work under th"
+          }
+        },
+        {
+          "role": "validator",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "worker_not_succeeded",
+            "message": "Worker 未完成：ready；worker-show={\"dispatchId\":\"ctx_ef7ca3c07731\",\"taskId\":\"task_9798ac506be6\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_ef7ca3c07731\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃\",\"  ┃  Do not exit the shell. Your terminal stays available, and if the\",\"  ┃  coordinator has more for you it will re-engage this terminal with a fresh\",\"  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised\",\"  ┃  work under the new Dispatch; ignore stale follow-ups from the settled task.\",\"  ┃\",\"  ┃  === TASK ===\",\"  ┃  You are the validator worker for work package WP-1 in a throwaway repository. Work only inside the current\",\"  ┃  directory. Do not install dependencies, do not use the network, do not commit or push | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"   New session                   +\",\"  ┃    orca orchestration check --terminal <redacted> --json\",\"  ┃  ```\",\"  ┃\",\"  ┃  === AFTER YOU SEND worker_done ===\",\"  ┃\",\"  ┃  worker_done ends your turn for this task. Your dispatched work is complete:\",\"  ┃  stop, return to an idle prompt, and take no further actions — do NOT start\",\"  ┃  new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling\",\"  ┃  `orca orchestration check`. The coordinator has already recorded your\",\"  ┃  completion and expects no further output.\",\"  ┃\",\"  ┃  A direct instruction from the user takes precedence over this idle rule.\",\"  ┃  Treat it as new user-owned work: follow it without coordinator approval or a\",\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dispatch IDs. Never refuse a direct user request because you were a worker.\",\"  ┃\",\"  ┃  Do not exit the shell. Your terminal stays available, and if the\",\"  ┃  coordinator has more for you it will re-engage this terminal with a fresh\",\"  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised\",\"  ┃  work under th"
+          }
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "prepare_failed",
+            "message": "prepared-terminal 失败：只读包装器不可用：不可用（未知 harness 未读到，阶段 sandbox-read，profile bwrap-read-only）：受限命令失败（退出码 1）：bwrap: Can't create file at /etc/resolv.conf: No such file or directory"
+          }
+        }
+      ],
+      "resume": {
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "blockers": [
+        "planner：worker_not_succeeded Worker 未完成：failed；worker-show={\"dispatchId\":\"ctx_d4fe91dfd295\",\"taskId\":\"task_211f84657ea4\",\"dispatchStatus\":\"failed\",\"workerState\":\"failed\",\"workerStage\":\"process_exited\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"exited\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_d4fe91dfd295\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"exited\",\"tail\":[],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"0\",\"latestCursor\":\"0\",\"returnedLineCount\":0,\"source\":\"stream\"},\"cursor\":\"<redacted>\",\"status\":{\"worker\":\"failed\",\"terminal\":\"exited\",\"liveness\":\"exited\"},\"fallbackReason\":\"session_not_reported\",\"warnings\":[],\"sourceExact\":false,\"contentComplete\":false,\"clipping\":[\"terminal_fallback\"],\"projection\":{\"id\":\"ctx_d4fe91dfd295\",\"dispatchId\":\"ctx_d4fe91dfd295\",\"taskId\":\"task_211f84657ea4\",\"runId\":\"run_6d80515178ed\",\"role\":\"worker\",\"parent\":null,\"provider\":null,\"host\":{\"kind\":\"local\",\"id\":\"lo | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"exited\",\"tail\":[],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"0\",\"latestCursor\":\"0\",\"returnedLineCount\":0,\"source\":\"screen-unavailable\"}}",
+        "implementation：worker_not_succeeded Worker 未完成：ready；worker-show={\"dispatchId\":\"ctx_2bbf44743d94\",\"taskId\":\"task_61ffe04964e0\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_2bbf44743d94\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃\",\"  ┃  Do not exit the shell. Your terminal stays available, and if the\",\"  ┃  coordinator has more for you it will re-engage this terminal with a fresh\",\"  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised\",\"  ┃  work under the new Dispatch; ignore stale follow-ups from the settled task.\",\"  ┃\",\"  ┃  === TASK ===\",\"  ┃  You are the implementation worker for work package WP-1 in a throwaway repository. Work only inside the current\",\"  ┃  directory. Do not install dependencies, do not use the network, do not commit or | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"   New session                   +\",\"  ┃    orca orchestration check --terminal <redacted> --json\",\"  ┃  ```\",\"  ┃\",\"  ┃  === AFTER YOU SEND worker_done ===\",\"  ┃\",\"  ┃  worker_done ends your turn for this task. Your dispatched work is complete:\",\"  ┃  stop, return to an idle prompt, and take no further actions — do NOT start\",\"  ┃  new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling\",\"  ┃  `orca orchestration check`. The coordinator has already recorded your\",\"  ┃  completion and expects no further output.\",\"  ┃\",\"  ┃  A direct instruction from the user takes precedence over this idle rule.\",\"  ┃  Treat it as new user-owned work: follow it without coordinator approval or a\",\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dispatch IDs. Never refuse a direct user request because you were a worker.\",\"  ┃\",\"  ┃  Do not exit the shell. Your terminal stays available, and if the\",\"  ┃  coordinator has more for you it will re-engage this terminal with a fresh\",\"  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised\",\"  ┃  work under th",
+        "validator：worker_not_succeeded Worker 未完成：ready；worker-show={\"dispatchId\":\"ctx_ef7ca3c07731\",\"taskId\":\"task_9798ac506be6\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_ef7ca3c07731\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃\",\"  ┃  Do not exit the shell. Your terminal stays available, and if the\",\"  ┃  coordinator has more for you it will re-engage this terminal with a fresh\",\"  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised\",\"  ┃  work under the new Dispatch; ignore stale follow-ups from the settled task.\",\"  ┃\",\"  ┃  === TASK ===\",\"  ┃  You are the validator worker for work package WP-1 in a throwaway repository. Work only inside the current\",\"  ┃  directory. Do not install dependencies, do not use the network, do not commit or push | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"   New session                   +\",\"  ┃    orca orchestration check --terminal <redacted> --json\",\"  ┃  ```\",\"  ┃\",\"  ┃  === AFTER YOU SEND worker_done ===\",\"  ┃\",\"  ┃  worker_done ends your turn for this task. Your dispatched work is complete:\",\"  ┃  stop, return to an idle prompt, and take no further actions — do NOT start\",\"  ┃  new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling\",\"  ┃  `orca orchestration check`. The coordinator has already recorded your\",\"  ┃  completion and expects no further output.\",\"  ┃\",\"  ┃  A direct instruction from the user takes precedence over this idle rule.\",\"  ┃  Treat it as new user-owned work: follow it without coordinator approval or a\",\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dispatch IDs. Never refuse a direct user request because you were a worker.\",\"  ┃\",\"  ┃  Do not exit the shell. Your terminal stays available, and if the\",\"  ┃  coordinator has more for you it will re-engage this terminal with a fresh\",\"  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised\",\"  ┃  work under th",
+        "finalizer：prepare_failed prepared-terminal 失败：只读包装器不可用：不可用（未知 harness 未读到，阶段 sandbox-read，profile bwrap-read-only）：受限命令失败（退出码 1）：bwrap: Can't create file at /etc/resolv.conf: No such file or directory",
+        "resume：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复"
+      ]
+    }
+  ]
+}

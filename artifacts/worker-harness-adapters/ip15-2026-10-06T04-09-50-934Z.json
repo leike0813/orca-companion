@@ -1,0 +1,93 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T04:09:50.934Z",
+  "finishedAt": "2026-10-06T04:29:05.276Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-omp",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": [
+    {
+      "harness": "omp",
+      "model": "MiniMax-M3.1-Flash-Preview",
+      "providerId": "minimax-code-cn",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "shared-minimax:env:ANTHROPIC_API_KEY",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "prepare_failed",
+            "message": "prepared-terminal 失败：timeout"
+          }
+        },
+        {
+          "role": "implementation",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "prepare_failed",
+            "message": "prepared-terminal 失败：terminal_exited"
+          }
+        },
+        {
+          "role": "validator",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "prepare_failed",
+            "message": "prepared-terminal 失败：timeout"
+          }
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "prepare_failed",
+            "message": "prepared-terminal 失败：timeout"
+          }
+        }
+      ],
+      "resume": {
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "blockers": [
+        "planner：prepare_failed prepared-terminal 失败：timeout",
+        "implementation：prepare_failed prepared-terminal 失败：terminal_exited",
+        "validator：prepare_failed prepared-terminal 失败：timeout",
+        "finalizer：prepare_failed prepared-terminal 失败：timeout",
+        "resume：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复"
+      ]
+    }
+  ]
+}

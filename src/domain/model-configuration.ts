@@ -14,6 +14,23 @@ const credentialReference = z.uuid();
 const optionPath = z.string().regex(/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*$/)
   .refine((path) => !path.split('.').some((part) => ['__proto__', 'prototype', 'constructor'].includes(part)));
 
+/**
+ * Companion 承认的 Worker harness 标识（唯一事实源）。
+ *
+ * `codex` 用 `codex` 连接（LangChain wireApi/baseUrl）；其余四个用各自 harness 的原生 provider 连接，
+ * 因此不能共用同一套 wireApi 描述。这里只给出身份，能力探测与启动绑定仍由 adapter 拥有。
+ */
+export const WORKER_HARNESS_IDS = ['codex', 'claude', 'opencode', 'pi', 'omp'] as const;
+export type WorkerHarnessId = (typeof WORKER_HARNESS_IDS)[number];
+
+/**
+ * 原生连接声明的接口族。
+ *
+ * `claude` 只可能是 anthropic-messages；`opencode` 用它选择 SDK 的接口；`pi`/`omp` 接受原生取值。
+ */
+export const NATIVE_WORKER_APIS = ['anthropic-messages', 'openai-completions', 'openai-responses'] as const;
+export type NativeWorkerApi = (typeof NATIVE_WORKER_APIS)[number];
+
 function urlContainsCredentials(value: string): boolean {
   let url: URL;
   try {
@@ -25,12 +42,56 @@ function urlContainsCredentials(value: string): boolean {
     Array.from(url.searchParams.keys()).some(isModelOptionSecretKey);
 }
 
+/** 连接 URL 不得携带 userinfo 或凭据查询参数；两端连接（codex 与原生）共用同一条规则。 */
+const credentialFreeUrl = z.url().refine((value) => !urlContainsCredentials(value), {
+  message: '连接 URL 不得包含认证信息；请使用凭据引用',
+});
+
 export const effortCapabilitySchema = z.strictObject({
   values: z.array(identity).min(1).max(16).refine((values) => new Set(values).size === values.length),
   source: identity,
   optionPath,
 });
 export type EffortCapability = z.infer<typeof effortCapabilitySchema>;
+
+/** providerId：harness 侧的 provider 标识，非空有界。 */
+const nativeProviderId = z.string().min(1).max(256);
+
+/**
+ * Worker harness 的原生 provider 连接。
+ *
+ * 与 `codex` 连接互斥：codex 走 LangChain 的 wireApi/baseUrl，claude/opencode/pi/omp 走各自 harness
+ * 的原生接口。`providerId` 必填；`baseUrl` 可选且不得携带认证信息；`api` 可选，claude 固定
+ * anthropic-messages，opencode 用它选择 SDK 接口，pi/omp 接受原生取值。判别联合按 harness 收窄，
+ * 每个 harness 只接受自己的字段与取值，未知 harness 或额外字段一律拒绝。
+ */
+export const nativeWorkerConnectionSchema = z.discriminatedUnion('harness', [
+  z.strictObject({
+    harness: z.literal('claude'),
+    providerId: nativeProviderId,
+    baseUrl: credentialFreeUrl.optional(),
+    api: z.literal('anthropic-messages').optional(),
+  }),
+  z.strictObject({
+    harness: z.literal('opencode'),
+    providerId: nativeProviderId,
+    baseUrl: credentialFreeUrl.optional(),
+    api: z.enum(NATIVE_WORKER_APIS).optional(),
+  }),
+  z.strictObject({
+    harness: z.literal('pi'),
+    providerId: nativeProviderId,
+    baseUrl: credentialFreeUrl.optional(),
+    api: z.enum(NATIVE_WORKER_APIS).optional(),
+  }),
+  z.strictObject({
+    harness: z.literal('omp'),
+    providerId: nativeProviderId,
+    baseUrl: credentialFreeUrl.optional(),
+    api: z.enum(NATIVE_WORKER_APIS).optional(),
+  }),
+]);
+export type NativeWorkerConnection = z.infer<typeof nativeWorkerConnectionSchema>;
 
 export const providerConnectionSchema = z.strictObject({
   connectionRef: identity,
@@ -43,10 +104,16 @@ export const providerConnectionSchema = z.strictObject({
   ]),
   codex: z.strictObject({
     providerId: z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/),
-    baseUrl: z.url().refine((value) => !urlContainsCredentials(value),
-      { message: '连接 URL 不得包含认证信息；请使用凭据引用' }),
+    baseUrl: credentialFreeUrl,
     wireApi: z.enum(['responses', 'chat']),
   }).nullable(),
+  /**
+   * 原生 Worker 连接；缺省保持缺省。
+   *
+   * 它是**附加**字段：旧的连接没有它，解析与序列化都不会凭空补出一个 key，因此旧配置的指纹不因
+   * 这次扩展而改变。
+   */
+  nativeWorker: nativeWorkerConnectionSchema.optional(),
 });
 export type ProviderConnection = z.infer<typeof providerConnectionSchema>;
 

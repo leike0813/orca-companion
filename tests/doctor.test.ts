@@ -356,24 +356,45 @@ test('doctor 命令把结构化缺失能力写进诊断行，退出码为非零'
 test('本机只读 Worker 不可用时 doctor 报独立检查项并以非零结束', async () => {
   const report = await runDoctor(
     probe({
-      readReadOnlyWorker: () =>
+      readReadOnlyWorkers: () =>
         Promise.resolve({
           ok: true,
-          value: { capability: 'unavailable', detail: '不可用（阶段 sandbox-read，codex 0.156.1，profile utility-readonly-local-control）' },
+          value: [
+            {
+              harness: 'codex',
+              profileRef: 'profile-finalizer',
+              capability: 'unavailable',
+              harnessVersion: '0.156.1',
+              detail: '不可用（阶段 sandbox-read，profile utility-readonly-local-control）',
+            },
+          ],
         }),
     }),
   );
 
   expect(report.ok).toBe(false);
   const check = report.checks[report.checks.length - 1];
-  expect(check).toMatchObject({ id: 'read-only-worker', status: 'capability-missing' });
+  expect(check).toMatchObject({ id: 'read-only-worker', status: 'capability-missing', missing: ['profile-finalizer'] });
   // 失败阶段与原因必须留在结论里，调用方不必等到真实派发才看见。
   expect(check?.detail).toContain('sandbox-read');
   expect(check?.detail).toContain('utility-readonly-local-control');
+  expect(check?.detail).toContain('codex');
 
   const unknown = await runDoctor(
     probe({
-      readReadOnlyWorker: () => Promise.resolve({ ok: true, value: { capability: 'unknown', detail: '未知（阶段 sandbox-write）' } }),
+      readReadOnlyWorkers: () =>
+        Promise.resolve({
+          ok: true,
+          value: [
+            {
+              harness: 'codex',
+              profileRef: 'profile-finalizer',
+              capability: 'unknown',
+              harnessVersion: null,
+              detail: '未知（阶段 sandbox-write）',
+            },
+          ],
+        }),
     }),
   );
   expect(unknown.ok).toBe(false);
@@ -386,13 +407,46 @@ test('本机只读 Worker 不可用时 doctor 报独立检查项并以非零结�
 test('只读 Worker 能力可用时 doctor 结论为 ok，且该检查项独立可见', async () => {
   const report = await runDoctor(
     probe({
-      readReadOnlyWorker: () =>
-        Promise.resolve({ ok: true, value: { capability: 'available', detail: '可用（codex 0.156.1，profile utility-readonly-local-control）' } }),
+      readReadOnlyWorkers: () =>
+        Promise.resolve({
+          ok: true,
+          value: [
+            {
+              harness: 'claude',
+              profileRef: 'profile-finalizer',
+              capability: 'available',
+              harnessVersion: '2.1.289',
+              detail: '可用（claude 2.1.289，profile bwrap-read-only）',
+            },
+          ],
+        }),
     }),
   );
 
   expect(report.ok).toBe(true);
   expect(report.checks[report.checks.length - 1]).toMatchObject({ id: 'read-only-worker', status: 'ok' });
+});
+
+test('被配置引用的多个 harness 各自成项：一个缺失只标记它自己', async () => {
+  const report = await runDoctor(
+    probe({
+      readReadOnlyWorkers: () =>
+        Promise.resolve({
+          ok: true,
+          value: [
+            { harness: 'codex', profileRef: 'profile-finalizer', capability: 'available', harnessVersion: '0.156.1', detail: '可用' },
+            { harness: 'claude', profileRef: 'profile-recovery-utility', capability: 'unavailable', harnessVersion: null, detail: '不可用（阶段 codex-version）' },
+          ],
+        }),
+    }),
+  );
+
+  expect(report.ok).toBe(false);
+  const readOnly = report.checks.filter((check) => check.id === 'read-only-worker');
+  expect(readOnly).toHaveLength(2);
+  expect(readOnly[0]).toMatchObject({ status: 'ok' });
+  expect(readOnly[1]).toMatchObject({ status: 'capability-missing', missing: ['profile-recovery-utility'] });
+  expect(report.checks.filter((check) => check.status !== 'ok').map((check) => check.id)).toEqual(['read-only-worker']);
 });
 
 test('未提供只读 Worker 探针时 doctor 不报告该项结论', async () => {
@@ -405,8 +459,19 @@ test('doctor 命令把只读 Worker 能力缺失写进诊断行', async () => {
   const capture = captureIO();
   const exitCode = await runDoctorCommand(
     probe({
-      readReadOnlyWorker: () =>
-        Promise.resolve({ ok: true, value: { capability: 'unavailable', detail: '不可用（阶段 sandbox-read）：cannot establish app-server socket mount isolation' } }),
+      readReadOnlyWorkers: () =>
+        Promise.resolve({
+          ok: true,
+          value: [
+            {
+              harness: 'codex',
+              profileRef: 'profile-finalizer',
+              capability: 'unavailable',
+              harnessVersion: null,
+              detail: '不可用（阶段 sandbox-read）：cannot establish app-server socket mount isolation',
+            },
+          ],
+        }),
     }),
     capture.io,
   );
@@ -414,4 +479,5 @@ test('doctor 命令把只读 Worker 能力缺失写进诊断行', async () => {
   expect(exitCode).toBe(1);
   expect(capture.stderr.join('')).toContain('doctor: read-only-worker: capability-missing');
   expect(capture.stderr.join('')).toContain('cannot establish app-server socket mount isolation');
+  expect(capture.stderr.join('')).toContain('缺少：profile-finalizer');
 });

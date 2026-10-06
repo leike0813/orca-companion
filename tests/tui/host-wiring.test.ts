@@ -785,22 +785,38 @@ test('规划 Handoff 的 Target 来自用户在 Session Picker 里的选择', as
   // 该用例包含真实模型回合与真实 store 写入；并行全量套件下 5s 上限会被吃掉。
 }, 30_000);
 
-test('同 provider/model 的新连接可应用，原连接与凭据引用保留', async () => {
+test.each(['codex', 'pi'] as const)('%s 同 provider/model 的新连接可应用，候选与原连接保持 harness 隔离', async (workerHarness) => {
   const harness = await startHost(initializeRepository(mkdtempSync(join(tmpdir(), 'orca-tui-model-connection-'))));
   const proposal = await harness.host.ports.scopeSetup.proposal();
   expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
   const port = harness.host.ports.modelSettings;
   if (port === undefined) throw new Error('模型设置端口缺失');
+  const foreignConfig = loadProjectConfig({ worktreePath: harness.repository });
+  if (foreignConfig.kind !== 'loaded') throw new Error('配置不可读');
+  const foreignHarness = workerHarness === 'pi' ? 'codex' : 'pi';
+  expect(await port.save({
+    expectedRevision: foreignConfig.config.revision, role: 'implementation', harness: foreignHarness,
+    connection: {
+      label: 'other harness', providerIntegration: '@fake/provider#CapableChatModel', modelOptions: {},
+      credential: { kind: 'harness_login' }, codex: null,
+      ...(foreignHarness === 'pi' ? { nativeWorker: { harness: 'pi' as const, providerId: 'fixture' } } : {}),
+    },
+    model: 'foreign-model', effort: null,
+  })).toMatchObject({ kind: 'saved' });
   for (const secret of ['fixture-key-old', 'fixture-key-new']) {
     const config = loadProjectConfig({ worktreePath: harness.repository });
     if (config.kind !== 'loaded') throw new Error('配置不可读');
     expect(await port.save({
       expectedRevision: config.config.revision,
       role: 'planner',
+      harness: workerHarness,
       connection: {
         label: 'test provider', providerIntegration: '@fake/provider#CapableChatModel', modelOptions: {},
         credential: { kind: 'managed', credentialRef: null, optionPath: 'apiKey' },
-        codex: { providerId: 'fixture', baseUrl: 'https://api.example/v1', wireApi: 'responses' },
+        codex: workerHarness === 'codex' ? { providerId: 'fixture', baseUrl: 'https://api.example/v1', wireApi: 'responses' } : null,
+        ...(workerHarness === 'pi' ? { nativeWorker: {
+          harness: 'pi' as const, providerId: 'fixture', baseUrl: 'https://api.example/v1', api: 'openai-completions' as const,
+        } } : {}),
       },
       model: 'same-model', effort: null, newSecret: secret,
     })).toMatchObject({ kind: 'saved' });
@@ -820,6 +836,8 @@ test('同 provider/model 的新连接可应用，原连接与凭据引用保留'
   const applied = after.config.execution.workerProfiles.find((entry) =>
     entry.profileRef === after.config.execution.workerProfileRefs.planner);
   expect(applied?.modelConfiguration.connection.credential).toEqual(latestConnection?.credential);
+  expect(applied?.harness).toBe(workerHarness);
+  expect(applied?.modelConfiguration.connection.nativeWorker).toEqual(latestConnection?.nativeWorker);
   expect(after.config.providerConnections.slice(0, before.config.providerConnections.length)).toEqual(before.config.providerConnections);
   const credentials = new JsonCredentialStore({ environment: { XDG_CONFIG_HOME: join(harness.directory, 'config') } });
   if (latestConnection?.credential.kind !== 'managed') throw new Error('测试凭据应为 managed');

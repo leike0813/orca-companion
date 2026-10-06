@@ -1,13 +1,19 @@
 /** 将持久化的基线补救记录接到真实 Codex Planner 派发与 Delivery 结算。 */
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createCodexWorkerLaunch } from '../adapters/agents/codex-launch.js';
-import { installCodexSessionStartReporter } from '../adapters/agents/codex-launch.js';
-import { bindCodexSessionFromStartReport } from '../adapters/agents/session-binding.js';
-import type { CodexSessionStartReport } from '../adapters/agents/codex-transcript.js';
+import type { HarnessSessionReport, WorkerSandboxMode } from '../application/ports/worker-harness.js';
+import type { HarnessSessionFacts } from '../adapters/agents/session-binding.js';
+import { resolveWorkerHarness } from '../application/ports/worker-harness.js';
+import {
+  bindHarnessSessionFromStartReport,
+  installHarnessSessionReporter,
+  prepareHarnessWorkerLaunch,
+  readLatestHarnessSessionReport,
+  workerHarnessRegistry,
+  workerSessionPathsUnder,
+} from './worker-harness.js';
 import { driveBaselineWorker, verifyBaselineWorker } from '../adapters/agents/baseline-worker.js';
 import { readDeliveryBatch } from '../adapters/orca-cli/delivery-reader.js';
 import type { WorktreeListResult } from '../application/ports/execution-backend.js';
@@ -20,7 +26,7 @@ import { loadCurrentGraph } from '../application/planning/graph-history.js';
 import { workPackageOf } from '../domain/planning/execution-graph.js';
 import { readBaselineGitObservations } from '../adapters/git/baseline-observer.js';
 import { ackConsumedDelivery, settleDelivery } from '../application/delivery/process-delivery.js';
-import { codexSessionPathsUnder, parseOrcaWorkerDoneLocator } from './execution-runtime.js';
+import { parseOrcaWorkerDoneLocator } from './execution-runtime.js';
 import type { WorkerModelConfiguration } from '../domain/model-configuration.js';
 import type { CredentialStore } from '../application/ports/credential-store.js';
 
@@ -47,6 +53,8 @@ export type BaselineReconciliationRuntimeInput = {
    * 它生成，不从项目配置或界面另取一个模型。
    */
   readonly modelConfiguration: WorkerModelConfiguration;
+  /** 该次派发钉住的 Planner profile harness；由调用方按已批准 Manifest 给出，不从模型连接推断。 */
+  readonly harness: string;
   /**
    * 用户级凭据 store 与其文件位置。
    *
@@ -55,22 +63,21 @@ export type BaselineReconciliationRuntimeInput = {
    */
   readonly credentialStore: CredentialStore;
   readonly credentialStorePath: string;
-  readonly codexSandboxMode: Parameters<typeof createCodexWorkerLaunch>[0]['sandboxMode'] | null;
+  /** 该角色绑定 harness 的沙箱模式；null 表示当前 Manifest 未接受所需风险。 */
+  readonly sandboxMode: WorkerSandboxMode | null;
   readonly companionStateRoot: string;
   readonly bindingWindowMs: number;
 };
 
-function readReport(path: string): CodexSessionStartReport | null {
-  if (!existsSync(path)) return null;
-  const line = readFileSync(path, 'utf8').split('\n').find(Boolean);
-  if (line === undefined) return null;
-  try { return JSON.parse(line) as CodexSessionStartReport; } catch { return null; }
+/** 共享 reader：只接受唯一会话身份、形状合法的最新报告；缺失、非法或多 ID 一律 null。 */
+function readReport(path: string): HarnessSessionReport | null {
+  return readLatestHarnessSessionReport(path);
 }
 
 export function createBaselineReconciliationDriver(input: BaselineReconciliationRuntimeInput): BaselineReconciliationDriver {
   return async (plan) => {
-    if (input.codexSandboxMode === null) {
-      return { kind: 'blocked', reason: 'Codex sandbox 风险未获当前 Manifest 授权' };
+    if (input.sandboxMode === null) {
+      return { kind: 'blocked', reason: 'Worker sandbox 风险未获当前 Manifest 授权' };
     }
     const listed = await input.backend.query({ operation: 'worktree-list', repo: input.repoSelector, limit: 1_000 });
     if (listed.kind !== 'accepted') return { kind: 'blocked', reason: `worktree-list: ${listed.message}` };
@@ -84,8 +91,12 @@ export function createBaselineReconciliationDriver(input: BaselineReconciliation
     if (matches.length !== 1) return { kind: 'blocked', reason: '基线补救 worktree 无法唯一定位' };
     const worktree = matches[0]!;
     const launchId = `baseline-reconciliation:${encodeURIComponent(plan.reconciliationId)}`;
-    const paths = codexSessionPathsUnder(input.companionStateRoot, launchId);
-    installCodexSessionStartReporter(paths);
+    // 运行依据来自该角色钉住的 Planner profile harness；未注册即阻塞。
+    const harness = input.harness;
+    const registered = resolveWorkerHarness(workerHarnessRegistry, harness);
+    if (registered.kind === 'rejected') return { kind: 'blocked', reason: registered.message };
+    const paths = workerSessionPathsUnder(harness, input.companionStateRoot, launchId);
+    installHarnessSessionReporter(harness, paths);
     const dispatchStartedAt = new Date().toISOString();
     const operationId = (step: string): OperationId => `op:${launchId}:${step}` as OperationId;
     const workerInput = {
@@ -93,8 +104,8 @@ export function createBaselineReconciliationDriver(input: BaselineReconciliation
       plan,
       canonicalWorktree: input.canonicalWorktreePath,
       worktree: worktree.worktreeId,
-      workerLaunch: createCodexWorkerLaunch({
-        launchId, modelConfiguration: input.modelConfiguration, sandboxMode: input.codexSandboxMode,
+      workerLaunch: prepareHarnessWorkerLaunch(harness, {
+        launchId, modelConfiguration: input.modelConfiguration, sandboxMode: input.sandboxMode,
         credentialStore: input.credentialStore, credentialStorePath: input.credentialStorePath,
         stateRoot: paths.stateRoot, sessionStartReporterPath: paths.reporterPath,
       }),
@@ -102,14 +113,14 @@ export function createBaselineReconciliationDriver(input: BaselineReconciliation
         task: operationId('task'), workerPrepare: operationId('terminal'),
         workerStart: operationId('worker-start'), workerActivate: operationId('activate'),
       },
-      observeSession: async (dispatchId: string) => {
+      observeSession: async (dispatchId: string): Promise<HarnessSessionFacts | null> => {
         const deadline = Date.now() + input.bindingWindowMs;
         while (Date.now() < deadline) {
           const report = readReport(paths.reportPath);
           if (report !== null) {
-            const bound = bindCodexSessionFromStartReport({
+            const bound = await bindHarnessSessionFromStartReport({
               facts: {
-                harness: 'codex', role: 'planner', workerTaskId: plan.reconciliationId as WorkerTaskId,
+                harness, role: 'planner', workerTaskId: plan.reconciliationId as WorkerTaskId,
                 dispatchId: dispatchId as DispatchId, attemptId: plan.reconciliationId,
               },
               report,

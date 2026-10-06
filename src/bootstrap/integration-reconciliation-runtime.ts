@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 
 /**
  * IP-03 / D-03：集成复验的生产 channel/runner 装配。
@@ -13,9 +13,17 @@ import { existsSync, readFileSync } from 'node:fs';
  *   files/summary 冒充通过。运行时不在持久化之前 ack：返回真实 Delivery 身份，由 IC-08 结算后确认。
  */
 
-import { createCodexResumeLaunch, installCodexSessionStartReporter } from '../adapters/agents/codex-launch.js';
-import { bindCodexSessionFromStartReport, type HarnessSessionFacts } from '../adapters/agents/session-binding.js';
-import type { CodexSessionStartReport } from '../adapters/agents/codex-transcript.js';
+import type { WorkerSandboxMode } from '../application/ports/worker-harness.js';
+import type { HarnessSessionFacts } from '../adapters/agents/session-binding.js';
+import { resolveWorkerHarness } from '../application/ports/worker-harness.js';
+import {
+  bindHarnessSessionFromStartReport,
+  installHarnessSessionReporter,
+  prepareHarnessResumeLaunch,
+  readLatestHarnessSessionReport,
+  resumeSessionPathsUnder,
+  workerHarnessRegistry,
+} from './worker-harness.js';
 import { decideValidatorSessionContinuity } from '../adapters/agents/validator-runner.js';
 import { dispatchScopedWorker } from '../adapters/agents/utility-worker.js';
 import type { TerminalSummary, WorkerShowResult } from '../adapters/orca-cli/operation-catalog.js';
@@ -55,7 +63,7 @@ import { pathsOutsideScopeEnvelope } from '../domain/repair-scope.js';
 import { envelopeCheckedPaths } from '../domain/worker-result-verification.js';
 import type { SessionBinding } from '../domain/task-contract.js';
 import type { EvidenceRecord, EvidenceRecordKind } from '../domain/worker-report.js';
-import { codexSessionPathsUnder, parseOrcaWorkerDoneLocator } from './execution-runtime.js';
+import { parseOrcaWorkerDoneLocator } from './execution-runtime.js';
 
 export type IntegrationReconciliationExecution = {
   readonly backendIdentityRef: string;
@@ -104,7 +112,8 @@ export type IntegrationReconciliationRuntimeInput = {
   readonly modelConfiguration: WorkerModelConfiguration;
   readonly credentialStore: CredentialStore;
   readonly credentialStorePath: string;
-  readonly sandboxMode: Parameters<typeof createCodexResumeLaunch>[0]['sandboxMode'] | null;
+  /** 续接角色绑定 harness 的沙箱模式；null 表示当前 Manifest 未接受所需风险。 */
+  readonly sandboxMode: WorkerSandboxMode | null;
   readonly companionStateRoot: string;
   readonly canonicalWorktreePath: string;
   readonly originalMaterializationBinding: IntegrationReconciliationMaterializationBinding;
@@ -830,6 +839,12 @@ export function createIntegrationReconciliationRuntime(
     if (input.sandboxMode === null) {
       return { kind: 'escalation', reason: 'authority', request: 'Codex 沙箱策略未被当前 Manifest 接受：不派发未授权沙箱的集成复验' };
     }
+    // 续接沿用原 WorkerTask 的 harness 绑定（该次派发钉住的原 profile），不取当前执行配置。
+    const harness = input.originalBinding.harness;
+    const registered = resolveWorkerHarness(workerHarnessRegistry, harness);
+    if (registered.kind === 'rejected') {
+      return { kind: 'step_failed', code: registered.code, message: registered.message };
+    }
     const live = input.liveTerminalVerified === undefined ? false : await input.liveTerminalVerified();
     const continuity = decideValidatorSessionContinuity({
       liveTerminalVerified: live,
@@ -850,13 +865,15 @@ export function createIntegrationReconciliationRuntime(
       return { kind: 'step_failed', code: 'owner_release_blocked', message: released.reason };
     }
     const launchId = input.originalMaterializationBinding.launchId + ':round-' + String(request.round);
-    const paths = codexSessionPathsUnder(input.companionStateRoot, launchId);
-    installCodexSessionStartReporter(paths);
-    const launch = createCodexResumeLaunch({
+    // 恢复的 reporter/report 必须落在原会话的精确状态根内（只读包装器只把该根挂为可写）。
+    const paths = resumeSessionPathsUnder(harness, input.companionStateRoot, launchId, input.originalCodexHome);
+    installHarnessSessionReporter(harness, paths);
+    const launch = prepareHarnessResumeLaunch(harness, {
       launchId,
       modelConfiguration: input.modelConfiguration,
       sessionId: input.originalBinding.providerSessionId,
       codexHome: input.originalCodexHome,
+      transcriptRef: input.originalBinding.transcriptRef,
       credentialStore: input.credentialStore,
       credentialStorePath: input.credentialStorePath,
       sandboxMode: input.sandboxMode,
@@ -906,25 +923,12 @@ export function createIntegrationReconciliationRuntime(
         for (;;) {
           if (aborted()) return null;
           if (paths.reportPath.length > 0) {
-            let lines: string[] = [];
-            try {
-              if (existsSync(paths.reportPath)) {
-                lines = readFileSync(paths.reportPath, 'utf8').split('\n').filter((line) => line.length > 0);
-              }
-            } catch {
-              lines = [];
-            }
-            for (const line of lines) {
-              let report: CodexSessionStartReport;
-              try {
-                report = JSON.parse(line) as CodexSessionStartReport;
-              } catch {
-                continue;
-              }
-              if (report.cwd !== request.worktreePath) continue;
-              const bound = bindCodexSessionFromStartReport({
+            // 共享 reader：唯一会话身份、形状合法的最新报告；缺失、非法或多 ID 一律等待重试。
+            const report = existsSync(paths.reportPath) ? readLatestHarnessSessionReport(paths.reportPath) : null;
+            if (report !== null && report.cwd === request.worktreePath) {
+              const bound = await bindHarnessSessionFromStartReport({
                 facts: {
-                  harness: 'codex',
+                  harness,
                   role: 'validator',
                   // 逻辑业务身份来自续接 spec（customSpec 声明）；真实 Orca Task 由 bindContinuation 单独持久化。
                   workerTaskId: request.continuation.attemptId as WorkerTaskId,

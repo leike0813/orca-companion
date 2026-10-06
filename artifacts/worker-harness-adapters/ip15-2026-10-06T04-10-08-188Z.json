@@ -1,0 +1,93 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T04:10:08.188Z",
+  "finishedAt": "2026-10-06T04:36:22.091Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-opencode",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": [
+    {
+      "harness": "opencode",
+      "model": "MiniMax-M3.1-Flash-Preview",
+      "providerId": "minimax-cn-coding-plan",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "opencode-auth",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "worker_not_succeeded",
+            "message": "Worker 未完成：ready；worker-show={\"dispatchId\":\"ctx_b4c35b98c61a\",\"taskId\":\"task_fcd6e7d488db\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_b4c35b98c61a\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dispatch IDs. Never refuse a direct user request because you were a worker.\",\"  ┃\",\"  ┃  Do not exit the shell. Your terminal stays available, and if the\",\"  ┃  coordinator has more for you it will re-engage this terminal with a fresh\",\"  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised\",\"  ┃  work under the new Dispatch; ignore stale follow-ups from the settled task.\",\"  ┃\",\"  ┃  === TASK ===\",\"  ┃  You are the planner worker for w | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"   New session                   +\",\"  ┃    # Read coordinator follow-ups. Nothing interrupts you: a durable message only\",\"  ┃    # arrives when you look, so run this at each natural checkpoint — before you\",\"  ┃    # start a new file and after a test run — and once more immediately before\",\"  ┃    # you send worker_done, so a redirect lands before the task settles.\",\"  ┃    orca orchestration check --terminal <redacted> --json\",\"  ┃  ```\",\"  ┃\",\"  ┃  === AFTER YOU SEND worker_done ===\",\"  ┃\",\"  ┃  worker_done ends your turn for this task. Your dispatched work is complete:\",\"  ┃  stop, return to an idle prompt, and take no further actions — do NOT start\",\"  ┃  new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling\",\"  ┃  `orca orchestration check`. The coordinator has already recorded your\",\"  ┃  completion and expects no further output.\",\"  ┃\",\"  ┃  A direct instruction from the user takes precedence over this idle rule.\",\"  ┃  Treat it as new user-owned work: follow it without coordinator approval or a\",\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dis"
+          }
+        },
+        {
+          "role": "implementation",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "activate_failed",
+            "message": "prepared Worker draft 提交失败"
+          }
+        },
+        {
+          "role": "validator",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "worker_not_succeeded",
+            "message": "Worker 未完成：start_unknown；worker-show={\"dispatchId\":\"ctx_f7bf0c03be11\",\"taskId\":\"task_408bcf5f1bc5\",\"dispatchStatus\":\"pending\",\"workerState\":\"start_unknown\",\"workerStage\":\"turn_start_unobserved\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_f7bf0c03be11\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dispatch IDs. Never refuse a direct user request because you were a worker.\",\"  ┃\",\"  ┃  Do not exit the shell. Your terminal stays available, and if the\",\"  ┃  coordinator has more for you it will re-engage this terminal with a fresh\",\"  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised\",\"  ┃  work under the new Dispatch; ignore stale follow-ups from the settled task.\",\"  ┃\",\"  ┃  === TASK ===\",\"  ┃  You are the validator worker for | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\" • New session                   +\",\"  ┃    # Read coordinator follow-ups. Nothing interrupts you: a durable message only\",\"  ┃    # arrives when you look, so run this at each natural checkpoint — before you\",\"  ┃    # start a new file and after a test run — and once more immediately before\",\"  ┃    # you send worker_done, so a redirect lands before the task settles.\",\"  ┃    orca orchestration check --terminal <redacted> --json\",\"  ┃  ```\",\"  ┃\",\"  ┃  === AFTER YOU SEND worker_done ===\",\"  ┃\",\"  ┃  worker_done ends your turn for this task. Your dispatched work is complete:\",\"  ┃  stop, return to an idle prompt, and take no further actions — do NOT start\",\"  ┃  new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling\",\"  ┃  `orca orchestration check`. The coordinator has already recorded your\",\"  ┃  completion and expects no further output.\",\"  ┃\",\"  ┃  A direct instruction from the user takes precedence over this idle rule.\",\"  ┃  Treat it as new user-owned work: follow it without coordinator approval or a\",\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dis"
+          }
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "worker_not_succeeded",
+            "message": "Worker 未完成：start_unknown；worker-show={\"dispatchId\":\"ctx_862817b0e752\",\"taskId\":\"task_c42fbfe02854\",\"dispatchStatus\":\"pending\",\"workerState\":\"start_unknown\",\"workerStage\":\"turn_start_unobserved\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_862817b0e752\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dispatch IDs. Never refuse a direct user request because you were a worker.\",\"  ┃\",\"  ┃  Do not exit the shell. Your terminal stays available, and if the\",\"  ┃  coordinator has more for you it will re-engage this terminal with a fresh\",\"  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised\",\"  ┃  work under the new Dispatch; ignore stale follow-ups from the settled task.\",\"  ┃\",\"  ┃  === TASK ===\",\"  ┃  You are the finalizer worker for | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\" • New session                   +\",\"  ┃    # Read coordinator follow-ups. Nothing interrupts you: a durable message only\",\"  ┃    # arrives when you look, so run this at each natural checkpoint — before you\",\"  ┃    # start a new file and after a test run — and once more immediately before\",\"  ┃    # you send worker_done, so a redirect lands before the task settles.\",\"  ┃    orca orchestration check --terminal <redacted> --json\",\"  ┃  ```\",\"  ┃\",\"  ┃  === AFTER YOU SEND worker_done ===\",\"  ┃\",\"  ┃  worker_done ends your turn for this task. Your dispatched work is complete:\",\"  ┃  stop, return to an idle prompt, and take no further actions — do NOT start\",\"  ┃  new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling\",\"  ┃  `orca orchestration check`. The coordinator has already recorded your\",\"  ┃  completion and expects no further output.\",\"  ┃\",\"  ┃  A direct instruction from the user takes precedence over this idle rule.\",\"  ┃  Treat it as new user-owned work: follow it without coordinator approval or a\",\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dis"
+          }
+        }
+      ],
+      "resume": {
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "blockers": [
+        "planner：worker_not_succeeded Worker 未完成：ready；worker-show={\"dispatchId\":\"ctx_b4c35b98c61a\",\"taskId\":\"task_fcd6e7d488db\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_b4c35b98c61a\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dispatch IDs. Never refuse a direct user request because you were a worker.\",\"  ┃\",\"  ┃  Do not exit the shell. Your terminal stays available, and if the\",\"  ┃  coordinator has more for you it will re-engage this terminal with a fresh\",\"  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised\",\"  ┃  work under the new Dispatch; ignore stale follow-ups from the settled task.\",\"  ┃\",\"  ┃  === TASK ===\",\"  ┃  You are the planner worker for w | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"   New session                   +\",\"  ┃    # Read coordinator follow-ups. Nothing interrupts you: a durable message only\",\"  ┃    # arrives when you look, so run this at each natural checkpoint — before you\",\"  ┃    # start a new file and after a test run — and once more immediately before\",\"  ┃    # you send worker_done, so a redirect lands before the task settles.\",\"  ┃    orca orchestration check --terminal <redacted> --json\",\"  ┃  ```\",\"  ┃\",\"  ┃  === AFTER YOU SEND worker_done ===\",\"  ┃\",\"  ┃  worker_done ends your turn for this task. Your dispatched work is complete:\",\"  ┃  stop, return to an idle prompt, and take no further actions — do NOT start\",\"  ┃  new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling\",\"  ┃  `orca orchestration check`. The coordinator has already recorded your\",\"  ┃  completion and expects no further output.\",\"  ┃\",\"  ┃  A direct instruction from the user takes precedence over this idle rule.\",\"  ┃  Treat it as new user-owned work: follow it without coordinator approval or a\",\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dis",
+        "implementation：activate_failed prepared Worker draft 提交失败",
+        "validator：worker_not_succeeded Worker 未完成：start_unknown；worker-show={\"dispatchId\":\"ctx_f7bf0c03be11\",\"taskId\":\"task_408bcf5f1bc5\",\"dispatchStatus\":\"pending\",\"workerState\":\"start_unknown\",\"workerStage\":\"turn_start_unobserved\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_f7bf0c03be11\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dispatch IDs. Never refuse a direct user request because you were a worker.\",\"  ┃\",\"  ┃  Do not exit the shell. Your terminal stays available, and if the\",\"  ┃  coordinator has more for you it will re-engage this terminal with a fresh\",\"  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised\",\"  ┃  work under the new Dispatch; ignore stale follow-ups from the settled task.\",\"  ┃\",\"  ┃  === TASK ===\",\"  ┃  You are the validator worker for | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\" • New session                   +\",\"  ┃    # Read coordinator follow-ups. Nothing interrupts you: a durable message only\",\"  ┃    # arrives when you look, so run this at each natural checkpoint — before you\",\"  ┃    # start a new file and after a test run — and once more immediately before\",\"  ┃    # you send worker_done, so a redirect lands before the task settles.\",\"  ┃    orca orchestration check --terminal <redacted> --json\",\"  ┃  ```\",\"  ┃\",\"  ┃  === AFTER YOU SEND worker_done ===\",\"  ┃\",\"  ┃  worker_done ends your turn for this task. Your dispatched work is complete:\",\"  ┃  stop, return to an idle prompt, and take no further actions — do NOT start\",\"  ┃  new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling\",\"  ┃  `orca orchestration check`. The coordinator has already recorded your\",\"  ┃  completion and expects no further output.\",\"  ┃\",\"  ┃  A direct instruction from the user takes precedence over this idle rule.\",\"  ┃  Treat it as new user-owned work: follow it without coordinator approval or a\",\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dis",
+        "finalizer：worker_not_succeeded Worker 未完成：start_unknown；worker-show={\"dispatchId\":\"ctx_862817b0e752\",\"taskId\":\"task_c42fbfe02854\",\"dispatchStatus\":\"pending\",\"workerState\":\"start_unknown\",\"workerStage\":\"turn_start_unobserved\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_862817b0e752\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dispatch IDs. Never refuse a direct user request because you were a worker.\",\"  ┃\",\"  ┃  Do not exit the shell. Your terminal stays available, and if the\",\"  ┃  coordinator has more for you it will re-engage this terminal with a fresh\",\"  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised\",\"  ┃  work under the new Dispatch; ignore stale follow-ups from the settled task.\",\"  ┃\",\"  ┃  === TASK ===\",\"  ┃  You are the finalizer worker for | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\" • New session                   +\",\"  ┃    # Read coordinator follow-ups. Nothing interrupts you: a durable message only\",\"  ┃    # arrives when you look, so run this at each natural checkpoint — before you\",\"  ┃    # start a new file and after a test run — and once more immediately before\",\"  ┃    # you send worker_done, so a redirect lands before the task settles.\",\"  ┃    orca orchestration check --terminal <redacted> --json\",\"  ┃  ```\",\"  ┃\",\"  ┃  === AFTER YOU SEND worker_done ===\",\"  ┃\",\"  ┃  worker_done ends your turn for this task. Your dispatched work is complete:\",\"  ┃  stop, return to an idle prompt, and take no further actions — do NOT start\",\"  ┃  new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling\",\"  ┃  `orca orchestration check`. The coordinator has already recorded your\",\"  ┃  completion and expects no further output.\",\"  ┃\",\"  ┃  A direct instruction from the user takes precedence over this idle rule.\",\"  ┃  Treat it as new user-owned work: follow it without coordinator approval or a\",\"  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or\",\"  ┃  Dis",
+        "resume：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复"
+      ]
+    }
+  ]
+}

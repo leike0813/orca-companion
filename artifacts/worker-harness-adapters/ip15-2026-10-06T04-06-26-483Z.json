@@ -1,0 +1,10 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T04:06:26.483Z",
+  "finishedAt": "2026-10-06T04:36:28.201Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-opencode",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": []
+}

@@ -15,6 +15,7 @@ import {
   CODEX_HARNESS_ID,
   SESSION_BOUND_ROLES,
   bindCodexSession,
+  bindHarnessSession,
   roleRequiresSessionBinding,
   type HarnessSessionFacts,
 } from '../../../src/adapters/agents/session-binding.js';
@@ -33,6 +34,12 @@ function facts(overrides: Partial<HarnessSessionFacts> = {}): HarnessSessionFact
     ...overrides,
   };
 }
+
+test.each(['codex', 'claude', 'opencode', 'pi', 'omp'])('%s 绑定保留 harness、角色与派发身份', (harness) => {
+  const result = bindHarnessSession(harness, facts({ harness }));
+  expect(result).toMatchObject({ kind: 'bound', binding: { harness, role: 'implementation', dispatchId: 'dispatch-1', providerSessionId: 'session-abc' } });
+  expect(bindHarnessSession(harness, facts({ harness: 'unrelated' }))).toMatchObject({ kind: 'unavailable', code: 'harness_mismatch', blocksDispatch: true });
+});
 
 test('四个主要角色都要求精确绑定', () => {
   expect([...SESSION_BOUND_ROLES].sort()).toEqual([...WORKER_ROLES].sort());

@@ -2,7 +2,9 @@
 
 > **硬约束：尊重已确认原型。任何 TUI change 必须直接引用对应定稿决议、源码和画面，并按其布局、信息层级、视觉风格、导航与返回约定实施、验收。未经用户明确批准，不得自行重新设计。交互正常或自动测试通过，不能替代原型一致性验收。**
 
-状态日期：2026-10-04。接手先核对 HEAD、工作区和当前工件；保留已有未提交改动。体验以用户当前指示和 Decision Ticket 最终决议为准；领域、模块与公共合同分别由 [CONTEXT.md](../../CONTEXT.md)、[architecture.md](../architecture.md)、[interface-contracts.md](../interface-contracts.md) 拥有。
+状态日期：2026-10-06。接手先核对 HEAD、工作区和当前工件；保留已有未提交改动。体验以用户当前指示和 Decision Ticket 最终决议为准；领域、模块与公共合同分别由 [CONTEXT.md](../../CONTEXT.md)、[architecture.md](../architecture.md)、[interface-contracts.md](../interface-contracts.md) 拥有。
+
+当前批次为 [add-worker-harness-adapters](../../openspec/changes/add-worker-harness-adapters/implementation-plan.md)。模型设置沿 #52 dialog final 增加逐角色 Harness 选择与适用的原生 provider/baseUrl/api 字段；已有角色编辑回填原 harness，切换时导航只进入可见字段。保存追加 profile，执行应用仍须 Manifest 审阅。行为证据见 `tests/tui/model-settings.test.tsx` 的生产 App 入口用例；本轮画面单独保存于 `artifacts/worker-harness/tui/`，自动测试不能代替三档呈现验收。
 
 ## 1. 六票来源与当前范围
 

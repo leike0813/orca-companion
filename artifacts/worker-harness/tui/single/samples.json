@@ -1,0 +1,227 @@
+[
+  {
+    "frame": "workspace",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "workspace-120x40-color-nerd.png",
+    "text": "workspace-120x40-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "frame": "roles",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "roles-120x40-color-nerd.png",
+    "text": "roles-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-coordinator",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "editor-coordinator-120x40-color-nerd.png",
+    "text": "editor-coordinator-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-cjk",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "editor-cjk-120x40-color-nerd.png",
+    "text": "editor-cjk-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "harness-codex",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "harness-codex-120x40-color-nerd.png",
+    "text": "harness-codex-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-fields",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "native-fields-120x40-color-nerd.png",
+    "text": "native-fields-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-filled",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "native-filled-120x40-color-nerd.png",
+    "text": "native-filled-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "masked-key",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "masked-key-120x40-color-nerd.png",
+    "text": "masked-key-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "saved",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "saved-120x40-color-nerd.png",
+    "text": "saved-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "effort",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "effort-120x40-color-nerd.png",
+    "text": "effort-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "reapproval",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "reapproval-120x40-color-nerd.png",
+    "text": "reapproval-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "returned-draft",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "returned-draft-120x40-color-nerd.png",
+    "text": "returned-draft-120x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "frame": "resize-native",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "resize-native-80x24-color-nerd.png",
+    "text": "resize-native-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "resize-native",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "resize-native-50x40-color-nerd.png",
+    "text": "resize-native-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "resize-native",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "resize-native-120x40-color-nerd.png",
+    "text": "resize-native-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  }
+]

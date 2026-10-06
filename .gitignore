@@ -16,6 +16,7 @@ Thumbs.db
 *.log
 
 .agents/
+.codex/
 .claude/
 .codegraph/
 .kilocode/
@@ -26,3 +27,5 @@ Thumbs.db
 .pi/
 
 .playwright-mcp/
+
+.mcp.json

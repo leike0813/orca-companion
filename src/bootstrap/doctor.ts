@@ -12,10 +12,14 @@ import { failureCategoryOf } from '../adapters/orca-cli/error-classification.js'
 import { createOrcaExecutionBackend } from '../adapters/orca-cli/orca-backend.js';
 import { runProcess } from '../adapters/orca-cli/process-runner.js';
 import {
-  describeReadOnlyWorkerCapability,
-  probeReadOnlyWorker,
-  type ReadOnlyWorkerProbeResult,
-} from '../adapters/agents/codex-read-only-probe.js';
+  describeHarnessReadOnlyCapability,
+  probeHarnessReadOnlyWorker,
+  type WorkerHarnessProbeResult,
+} from '../adapters/agents/read-only-execution-wrapper.js';
+import { assertLaunchableModelConfiguration } from '../adapters/agents/codex-model-launcher.js';
+import { assertLaunchableNativeModelConfiguration } from '../adapters/agents/native-worker.js';
+import { assertLaunchableOpencodeModelConfiguration } from '../adapters/agents/opencode-harness.js';
+import { MODEL_PROFILE_ROLES, WORKER_HARNESS_IDS, type WorkerProfileConfiguration } from '../domain/model-configuration.js';
 import {
   createModuleIntegrationResolverAsync,
   resolveChatModel,
@@ -130,21 +134,26 @@ export type DoctorProbe = {
    */
   readonly readCoordinatorModel?: () => Promise<DoctorProbeStep<CoordinatorModelFacts>>;
   /**
-   * 本机只读 Codex Worker 能力核验（Capsule Utility Worker 与只读 Finalizer 都走这条路径）。
+   * 本机只读 Worker 能力核验，按**被配置引用的 harness** 逐项输出（Capsule Utility Worker 与只读
+   * Finalizer 都走这条路径）。
    *
    * 可选：未提供时不报告该项结论，而不是默认通过。它与 Route Planning 的启动门无关，只影响
    * `doctor` 的结论与依赖这两个角色的执行授权。
    */
-  readonly readReadOnlyWorker?: () => Promise<DoctorProbeStep<ReadOnlyWorkerFacts>>;
+  readonly readReadOnlyWorkers?: () => Promise<DoctorProbeStep<readonly ReadOnlyHarnessFacts[]>>;
 };
 
 /**
- * 只读 Worker 能力事实：三态结论加上一段可读结论（阶段、Codex 版本、profile 与诊断）。
+ * 单个只读角色 profile 的能力事实：三态结论加上一段可读结论（阶段、版本、profile 与诊断）。
  *
- * doctor 只做投影，不重新判断能力：失败时以既有 `capability-missing` 表达，不新增 doctor 状态。
+ * 按 profile 而不是按 harness 归并：同一 harness 的不同 profile 可能带不同模型与认证来源，合并成
+ * 一条会让其中一条不合法被另一条掩盖。doctor 只做投影，不重新判断能力。
  */
-export type ReadOnlyWorkerFacts = {
-  readonly capability: ReadOnlyWorkerProbeResult['kind'];
+export type ReadOnlyHarnessFacts = {
+  readonly harness: string;
+  readonly profileRef: string;
+  readonly capability: WorkerHarnessProbeResult['kind'];
+  readonly harnessVersion: string | null;
   readonly detail: string;
 };
 
@@ -320,21 +329,22 @@ export async function runDoctor(probe: DoctorProbe, options: DoctorOptions = {})
   }
 
   // 只读 Worker 是本机的一条独立能力：它在既有前置换完成后单独核验，不参与 Route Planning 启动门。
-  if (probe.readReadOnlyWorker !== undefined) {
-    const readOnly = await probe.readReadOnlyWorker();
+  // 每个被配置引用的 harness 各出一条结论：某一项能力缺失只把该项标记失败，不把别的 harness 的
+  // 结论套到它身上。
+  if (probe.readReadOnlyWorkers !== undefined) {
+    const readOnly = await probe.readReadOnlyWorkers();
     if (!readOnly.ok) {
       checks.push({ id: 'read-only-worker', status: readOnly.status, detail: readOnly.detail });
       return finish(version.value);
     }
-    if (readOnly.value.capability === 'available') {
-      checks.push({ id: 'read-only-worker', status: 'ok', detail: `只读 Worker 能力${readOnly.value.detail}` });
-    } else {
+    for (const fact of readOnly.value) {
+      const available = fact.capability === 'available';
       checks.push({
         id: 'read-only-worker',
-        status: 'capability-missing',
-        detail: `只读 Worker 能力${readOnly.value.detail}`,
+        status: available ? 'ok' : 'capability-missing',
+        detail: `只读 Worker 能力［${fact.harness} ${fact.harnessVersion ?? '未读到'} · ${fact.profileRef}］：${fact.detail}`,
+        ...(available ? {} : { missing: [fact.profileRef] }),
       });
-      return finish(version.value);
     }
   }
 
@@ -465,6 +475,79 @@ async function verifyConfiguredCoordinatorModel(
           details: verification.report.details,
         },
       };
+}
+
+/** 按 harness 调用 adapter 自己的启动前门禁（保留字段/凭据/effort 的 SSOT）；doctor 不复制这套规则。 */
+function assertConfiguredModelConfiguration(profile: WorkerProfileConfiguration): void {
+  const configuration = profile.modelConfiguration;
+  const native = configuration.connection.nativeWorker;
+  if (native === undefined) {
+    assertLaunchableModelConfiguration(configuration);
+    return;
+  }
+  if (native.harness === 'opencode') {
+    assertLaunchableOpencodeModelConfiguration(configuration);
+    return;
+  }
+  assertLaunchableNativeModelConfiguration(configuration, native.harness);
+}
+
+/**
+ * 单个被配置 harness 的只读核验。
+ *
+ * 结论只来自真实受限命令；harness 名称、版本字符串或配置文件存在都不构成能力证明。native harness
+ * 的模型配置由 adapter 的启动前门禁校验，探针再按同一份绑定的 harness 选择包装器实现。
+ */
+async function probeConfiguredReadOnlyHarness(
+  profile: WorkerProfileConfiguration,
+  env: Readonly<Record<string, string>>,
+  credentials: CredentialStore,
+): Promise<ReadOnlyHarnessFacts> {
+  const harness = profile.harness;
+  const base = { harness, profileRef: profile.profileRef };
+  const fail = (
+    capability: WorkerHarnessProbeResult['kind'],
+    detail: string,
+    harnessVersion: string | null = null,
+  ): ReadOnlyHarnessFacts => ({ ...base, capability, harnessVersion, detail });
+  if (!(WORKER_HARNESS_IDS as readonly string[]).includes(harness)) {
+    return fail('unknown', `未注册的 Worker harness：${harness}`);
+  }
+  // profile 声明的 harness 与原生连接声明的 harness 必须自洽：不一致时不能拿任一方冒充这次的绑定。
+  const native = profile.modelConfiguration.connection.nativeWorker;
+  if (harness !== 'codex' && native === undefined) {
+    return fail('unavailable', `Worker harness ${harness} 缺少原生连接`);
+  }
+  if (native !== undefined && native.harness !== harness) {
+    return fail('unavailable', `connection.nativeWorker.harness ${native.harness} 与 profile.harness ${harness} 不一致`);
+  }
+  try {
+    assertConfiguredModelConfiguration(profile);
+  } catch (error) {
+    return fail('unavailable', `模型配置不可启动：${error instanceof Error ? error.message : String(error)}`);
+  }
+  // managed 凭据是这条只读能力的输入：读不到就不可能有可用结论，且绝不把 secret 带进结论。
+  const credential = profile.modelConfiguration.connection.credential;
+  if (credential.kind === 'managed') {
+    const read = credentials.read(credential.credentialRef);
+    if (read.kind !== 'resolved') {
+      return fail('unavailable', `managed 凭据不可用：${read.code}`);
+    }
+  }
+  try {
+    const result = await probeHarnessReadOnlyWorker(profile.modelConfiguration, { env });
+    return {
+      ...base,
+      capability: result.kind,
+      harnessVersion: result.harnessVersion,
+      detail: describeHarnessReadOnlyCapability(result),
+    };
+  } catch (error) {
+    // 原始 error.message 会被子进程与 SDK 放大，可能带出命令行、模型参数或凭据片段。doctor 是给人看的
+    // 诊断面，不是调试通道：这里只报错误类别，细节留在日志里由调用方自己取。
+    const category = error instanceof Error ? error.name : typeof error;
+    return fail('unknown', `只读 Worker 能力探针无法运行（${category}）`);
+  }
 }
 
 export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): DoctorProbe {
@@ -630,42 +713,31 @@ export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): 
           // 配置在但读不动或写坏：同样装配，让 doctor 如实报不可用。跳过会把「配错了」说成「没配」。
           : { readCoordinatorModel: () => Promise.resolve(unreadableConfigStep(projectConfig.message)) }
       : { readCoordinatorModel: environment.coordinatorModel.resolve }),
-    readReadOnlyWorker: async (): Promise<DoctorProbeStep<ReadOnlyWorkerFacts>> => {
-      // 只读探针按 Manifest 里的 Finalizer 绑定运行：正式只读会话拿到哪组 provider/model/effort/
-      // options，探针就核验哪一组。
-      //
-      // 配置已加载却没有 Finalizer profile 时按不可用报告：项目已进入执行配置，缺角色绑定意味着只读
-      // Finalizer 拿不到可证明的模型依据，与其跑一个「不带模型设置」的探针给出看起来通过的结论，
-      // 不如如实说不可用。只有「根本没有项目配置」才退化为受限命令本身的探针，因为那时连「本应
-      // 核验哪一组」都还不存在，结论不冒充与正式启动同配置。
-      const finalizerProfile =
-        projectConfig.kind === 'loaded' ? currentWorkerProfile(projectConfig.config, 'finalizer') : null;
-      if (projectConfig.kind === 'loaded' && finalizerProfile === null) {
+    readReadOnlyWorkers: async (): Promise<DoctorProbeStep<readonly ReadOnlyHarnessFacts[]>> => {
+      // 按配置引用的每个角色核验模型、认证与受限执行能力，未配置的角色不假装核验过。
+      if (projectConfig.kind === 'absent') {
+        return { ok: true, value: [] };
+      }
+      if (projectConfig.kind === 'failed') {
+        return { ok: false, status: 'capability-missing', detail: `项目配置无法使用：${projectConfig.message}` };
+      }
+      const profiles = MODEL_PROFILE_ROLES
+        .map((role) => currentWorkerProfile(projectConfig.config, role))
+        .filter((profile): profile is WorkerProfileConfiguration => profile !== null);
+      if (profiles.length === 0) {
         return {
           ok: false,
           status: 'capability-missing',
-          detail: '项目配置没有 Finalizer Worker Profile：只读 Worker 拿不到可证明的模型绑定',
+          detail: '项目配置没有 Worker Profile：拿不到可证明的模型绑定',
         };
       }
-      const modelConfiguration = finalizerProfile?.modelConfiguration ?? null;
-      try {
-        const result = await probeReadOnlyWorker({
-          env: environment.env,
-          ...(modelConfiguration === null ? {} : { modelConfiguration }),
-        });
-        return { ok: true, value: { capability: result.kind, detail: describeReadOnlyWorkerCapability(result) } };
-      } catch (error) {
-        // 探针连跑都跑不起来时不能说「能力可用」：这是能力缺失，而不是通过。
-        //
-        // 原始 error.message 会被子进程与 SDK 放大，可能带出命令行、模型参数或凭据片段。这里只报
-        // 错误类别：doctor 是给人看的诊断面，不是调试通道，细节留在日志里由调用方自己取。
-        const category = error instanceof Error ? error.name : typeof error;
-        return {
-          ok: false,
-          status: 'capability-missing',
-          detail: `只读 Worker 能力探针无法运行（${category}）`,
-        };
+      // 逐 profile 核验，不按 harness 合并：同一 harness 的两个 profile 可能带不同模型或认证来源，
+      // 合并成一条会让其中一条不合法被另一条掩盖。harness 探针本身可以按 harness 复用结论。
+      const facts: ReadOnlyHarnessFacts[] = [];
+      for (const profile of profiles) {
+        facts.push(await probeConfiguredReadOnlyHarness(profile, environment.env, credentials));
       }
+      return { ok: true, value: facts };
     },
   };
 }

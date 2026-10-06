@@ -18,7 +18,7 @@ import { projectHandoff, projectPlanningHandoff } from '../application/controlle
  *   Pause/Cancel 任何 Scope 或 Session。
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, isAbsolute, join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -302,7 +302,6 @@ import type {
 } from '../interfaces/tui/ports.js';
 import {
   approveExecutionAuthorization,
-  codexSessionPathsUnder,
   createExecutionRecoveryFacts,
   parseDeliveryClaimedPayload,
   parseOrcaWorkerDoneLocator,
@@ -327,16 +326,14 @@ import { recoverySubjectOf } from '../application/recovery/worker-session-recove
 import { createOrcaWorkerStopPort } from '../adapters/orca-cli/worker-stop.js';
 import {
   CODEX_UTILITY_PERMISSION_PROFILE,
-  createCodexWorkerLaunch,
-  installCodexSessionStartReporter,
 } from '../adapters/agents/codex-launch.js';
 import {
   describeReadOnlyWorkerCapability,
-  probeReadOnlyWorker,
   readOnlyWorkerUnavailableReason,
   type ReadOnlyWorkerProbe,
   type ReadOnlyWorkerProbeResult,
 } from '../adapters/agents/codex-read-only-probe.js';
+import { probeHarnessReadOnlyWorker } from '../adapters/agents/read-only-execution-wrapper.js';
 import { dispatchScopedWorker } from '../adapters/agents/utility-worker.js';
 import {
   createValidatorStepRunner,
@@ -360,10 +357,16 @@ import {
 import { replyOperationIdOf } from '../application/coordination/reply-worker-question.js';
 import { workPackageOf } from '../domain/planning/execution-graph.js';
 import { verifyModelCapabilities } from '../adapters/agents/capability-probe.js';
-import { bindCodexSessionFromStartReport, sessionBindingIdOf } from '../adapters/agents/session-binding.js';
-import type { CodexSessionStartReport } from '../adapters/agents/codex-transcript.js';
-import { readCodexTranscriptIdentity } from '../adapters/agents/codex-transcript.js';
-import type { HarnessSessionFacts } from '../adapters/agents/session-binding.js';
+import { sessionBindingIdOf, type HarnessSessionFacts } from '../adapters/agents/session-binding.js';
+import { resolveWorkerHarness } from '../application/ports/worker-harness.js';
+import {
+  bindHarnessSessionFromStartReport,
+  installHarnessSessionReporter,
+  prepareHarnessWorkerLaunch,
+  readLatestHarnessSessionReport,
+  readHarnessTranscriptIdentity,
+  workerHarnessRegistry,
+} from './worker-harness.js';
 import { createGitIntegrationPort } from '../adapters/git/integration.js';
 import { createGraphBasisService } from '../application/tui/graph-basis-service.js';
 import type { GraphBasisPort } from '../application/tui/graph-basis.js';
@@ -690,7 +693,7 @@ export async function sessionBindingFromStartReport(input: {
 > {
   const deadline = Date.now() + input.waitMs;
   for (;;) {
-    const once = readBindingOnce(input);
+    const once = await readBindingOnce(input);
     if (once.kind === 'bound') {
       return once;
     }
@@ -701,7 +704,7 @@ export async function sessionBindingFromStartReport(input: {
   }
 }
 
-function readBindingOnce(input: {
+async function readBindingOnce(input: {
   readonly reportPath: string;
   readonly harness: string;
   readonly role: WorkerRole;
@@ -712,55 +715,44 @@ function readBindingOnce(input: {
   readonly expectedCodexHome: string;
   readonly dispatchStartedAt: string;
   readonly expectedProviderSessionId?: string;
-}):
+}): Promise<
   | { readonly kind: 'bound'; readonly binding: SessionBinding }
-  | { readonly kind: 'unbound'; readonly code: string; readonly message: string } {
+  | { readonly kind: 'unbound'; readonly code: string; readonly message: string }
+> {
+  // 未注册的 harness 在查询路径结构化拒绝，不让底层 requireWorkerHarness 抛错。
+  const registered = resolveWorkerHarness(workerHarnessRegistry, input.harness);
+  if (registered.kind === 'rejected') {
+    return { kind: 'unbound', code: registered.code, message: registered.message };
+  }
   if (!existsSync(input.reportPath)) {
     return { kind: 'unbound', code: 'report_absent', message: `SessionStart 报告尚不可读：${input.reportPath}` };
   }
-  let last: { readonly code: string; readonly message: string } | null = null;
-  let latestBinding: SessionBinding | null = null;
-  for (const line of readFileSync(input.reportPath, 'utf8').split('\n').filter(Boolean)) {
-    let report: CodexSessionStartReport;
-    try {
-      report = JSON.parse(line) as CodexSessionStartReport;
-    } catch {
-      if (input.expectedProviderSessionId !== undefined) {
-        latestBinding = null;
-        last = { code: 'report_unreadable', message: '最新 SessionStart 报告不可解析' };
-      }
-      continue;
-    }
-    const proven = bindCodexSessionFromStartReport({
-      facts: {
-        harness: input.harness,
-        role: input.role,
-        workerTaskId: input.workerTaskId,
-        dispatchId: input.dispatchId,
-        attemptId: input.attemptId,
-      },
-      report,
-      workspace: input.workspace,
-      expectedCodexHome: input.expectedCodexHome,
-      dispatchStartedAt: input.dispatchStartedAt,
-      bindingDeadlineAt: new Date().toISOString(),
-    });
-    if (proven.kind === 'bound') {
-      if (input.expectedProviderSessionId === undefined) return proven;
-      latestBinding = proven.binding;
-      continue;
-    }
-    if (input.expectedProviderSessionId !== undefined) latestBinding = null;
-    last = { code: proven.code, message: proven.message };
+  // 共享 reader 只接受唯一会话身份、形状合法的最新报告；malformed、多 ID 或超限一律 null，一次绑定证一次。
+  const report = readLatestHarnessSessionReport(input.reportPath);
+  if (report === null) {
+    return { kind: 'unbound', code: 'report_unreadable', message: 'SessionStart 报告缺失、形状非法或含多个会话身份' };
   }
-  if (input.expectedProviderSessionId !== undefined && latestBinding !== null) {
-    return latestBinding.providerSessionId === input.expectedProviderSessionId
-      ? { kind: 'bound', binding: latestBinding }
-      : { kind: 'unbound', code: 'session_identity_changed', message: '该次派发的最新可核验 Session 与原 Session 不一致' };
+  const proven = await bindHarnessSessionFromStartReport({
+    facts: {
+      harness: input.harness,
+      role: input.role,
+      workerTaskId: input.workerTaskId,
+      dispatchId: input.dispatchId,
+      attemptId: input.attemptId,
+    },
+    report,
+    workspace: input.workspace,
+    expectedCodexHome: input.expectedCodexHome,
+    dispatchStartedAt: input.dispatchStartedAt,
+    bindingDeadlineAt: new Date().toISOString(),
+  });
+  if (proven.kind !== 'bound') {
+    return { kind: 'unbound', code: proven.code, message: proven.message };
   }
-  return last === null
-    ? { kind: 'unbound', code: 'report_unreadable', message: `SessionStart 报告没有可解析的行：${input.reportPath}` }
-    : { kind: 'unbound', code: last.code, message: last.message };
+  if (input.expectedProviderSessionId !== undefined && proven.binding.providerSessionId !== input.expectedProviderSessionId) {
+    return { kind: 'unbound', code: 'session_identity_changed', message: '该次派发的最新可核验 Session 与原 Session 不一致' };
+  }
+  return proven;
 }
 
 /** 一条「已派发但未绑定」的角色派发；字段全部来自已记录事实与 Orca 列举。 */
@@ -1293,7 +1285,7 @@ export async function createForegroundPlanningHost(
    * 主机挂载、Codex 版本或配置随时可能变化，持久化的「上次可用」会正好在派发时过期。
    */
   const readOnlyWorkerProbe: ReadOnlyWorkerProbe =
-    options.readOnlyWorkerProbe ?? (() => probeReadOnlyWorker({ env: options.env }));
+    options.readOnlyWorkerProbe ?? ((modelConfiguration) => probeHarnessReadOnlyWorker(modelConfiguration, { env: options.env }));
 
   /**
    * 用**该次派发自己的**模型配置探测只读 Worker 能力。
@@ -1320,7 +1312,7 @@ export async function createForegroundPlanningHost(
         diagnostics: ['没有可核验的模型配置：无法确认正式只读会话会拿到同一组设置'],
       };
     }
-    return await probeReadOnlyWorker({ env: options.env, modelConfiguration });
+    return await probeHarnessReadOnlyWorker(modelConfiguration, { env: options.env });
   };
 
   const trackerFor = (): IssueTrackerGateway | null =>
@@ -3715,6 +3707,8 @@ export async function createForegroundPlanningHost(
             ? approvedManifest.recoveryUtilityProfile
             : approvedManifest.workerProfiles.find((profile) => profile.role === role) ?? null;
       const profile = approved === null ? null : approved.modelConfiguration;
+      const harness = currentWorkerProfile(current, role)?.harness ?? current.execution.harness;
+      const registered = workerHarnessRegistry.has(harness);
       return {
         role,
         label: ROLE_LABELS[role],
@@ -3728,8 +3722,10 @@ export async function createForegroundPlanningHost(
                 model: profile.model,
                 effort: profile.effort,
               },
-        candidates: modelCandidates,
-        availability: { available: true, reason: null },
+        candidates: registered ? modelCandidates.filter((candidate) =>
+          (connectionOf(candidate.connectionRef)?.nativeWorker?.harness ?? 'codex') === harness,
+        ) : [],
+        availability: { available: registered, reason: registered ? null : `不支持的 Worker harness：${harness}` },
       };
     };
     const unavailableView = (
@@ -4491,12 +4487,41 @@ export async function createForegroundPlanningHost(
   const validatorStepKey = (scopeId: CoordinationScopeId, dispatchId: string): string => `${scopeId}:${dispatchId}`;
 
   /**
+   * 从**物化绑定钉住的**授权解析该次会话的 harness。
+   *
+   * Session Segment 自身不保存 harness；按当前执行配置取会张冠李戴，因此必须回到原绑定：授权
+   * id/version 与 workerProfileRef 逐项一致才给出，缺任一项按不可证明返回 null。
+   */
+  const harnessForPinnedBinding = (
+    binding: MaterializationBindingRecord | null,
+    role: WorkerRole,
+  ): string | null => {
+    const current = requiredStore();
+    if (current === null || binding === null || binding.authorizationId === null ||
+        binding.authorizationVersion === null || binding.workerProfileRef === null) {
+      return null;
+    }
+    const read = current.query({
+      kind: 'authorization',
+      coordinationScopeId: binding.coordinationScopeId,
+      authorizationId: binding.authorizationId,
+    });
+    if (read.kind !== 'authorization' || read.authorization === null ||
+        read.authorization.authorizationVersion !== binding.authorizationVersion) {
+      return null;
+    }
+    return read.authorization.manifest.workerProfiles.find((profile) =>
+      profile.role === role && profile.profileRef.id === binding.workerProfileRef?.id)?.harness ?? null;
+  };
+
+  /**
    * 从 Session Segment 重建可核验的 Session Binding。
    *
    * provider session 身份编码在 `sessionBindingId` 里（`session-binding:<dispatch>:<uuid>`），必须是
-   * 规范前缀且能解码；缺任一项都返回 `null`，绝不用「最近一次传出的结果」顶替。
+   * 规范前缀且能解码；harness 由该次派发钉住的 profile 给出。缺任一项都返回 `null`，绝不用
+   * 「最近一次传出的结果」顶替。
    */
-  const sessionBindingFromSegment = (segment: SessionSegmentRecord): SessionBinding | null => {
+  const sessionBindingFromSegment = (segment: SessionSegmentRecord, harness: string): SessionBinding | null => {
     const prefix = `session-binding:${encodeURIComponent(segment.dispatchId)}:`;
     if (!segment.sessionBindingId.startsWith(prefix)) {
       return null;
@@ -4511,7 +4536,7 @@ export async function createForegroundPlanningHost(
       return null;
     }
     return {
-      harness: 'codex',
+      harness,
       role: segment.role,
       workerTaskId: segment.workerTaskId,
       dispatchId: segment.dispatchId,
@@ -4538,14 +4563,18 @@ export async function createForegroundPlanningHost(
     if (segment === undefined || !segment.transcriptReferenceable || !segment.verifiable) {
       return { kind: 'unavailable' as const, code: 'session_not_referenceable', message: 'Session Segment 已不可核验' };
     }
-    const expected = sessionBindingFromSegment(segment);
+    const binding = snapshot.snapshot.materializationBindings.find((entry) =>
+      entry.workerTaskId === segment.workerTaskId && entry.attemptId === segment.attemptId && entry.role === 'validator');
+    const harness = harnessForPinnedBinding(binding ?? null, 'validator');
+    if (harness === null) {
+      return { kind: 'unavailable' as const, code: 'worker_profile_unresolved', message: '该次 Validator 派发的原始 harness 授权绑定不可读' };
+    }
+    const expected = sessionBindingFromSegment(segment, harness);
     if (expected === null || expected.providerSessionId !== runtime.expectedProviderSessionId) {
       return { kind: 'unavailable' as const, code: 'session_identity_changed', message: 'Session 身份已变更' };
     }
-    const binding = snapshot.snapshot.materializationBindings.find((entry) =>
-      entry.workerTaskId === segment.workerTaskId && entry.attemptId === segment.attemptId && entry.role === 'validator');
     const backend = backendForExecution();
-    const paths = codexSessionPaths(runtime.launchId);
+    const paths = sessionPathsFor(harness, runtime.launchId);
     if (paths === null || backend === null || binding?.worktreeId === null || binding === undefined || segment.lastTranscriptRef === null) {
       return { kind: 'unavailable' as const, code: 'report_absent', message: '该次派发的 SessionStart 报告不可读' };
     }
@@ -4553,11 +4582,11 @@ export async function createForegroundPlanningHost(
     if (worktreePath === null) {
       return { kind: 'unavailable', code: 'worktree_unverifiable', message: 'Validator 的精确 worktree 不可核验' };
     }
-    const observed = readCodexTranscriptIdentity({ transcriptRef: segment.lastTranscriptRef, workspace: worktreePath });
+    const observed = await readHarnessTranscriptIdentity({ harness, transcriptRef: segment.lastTranscriptRef, workspace: worktreePath });
     if ('kind' in observed || observed.providerSessionId !== runtime.expectedProviderSessionId) {
       return { kind: 'unavailable', code: 'transcript_unavailable', message: 'Validator transcript 无法重新证明原 Session 身份' };
     }
-    const proven = await sessionBindingFromStartReport({ reportPath: paths.reportPath, harness: 'codex', role: 'validator',
+    const proven = await sessionBindingFromStartReport({ reportPath: paths.reportPath, harness, role: 'validator',
       workerTaskId: segment.workerTaskId, dispatchId: segment.dispatchId, attemptId: segment.attemptId,
       workspace: worktreePath, expectedCodexHome: join(paths.stateRoot, createHash('sha256').update(runtime.launchId).digest('hex').slice(0, 20)),
       dispatchStartedAt: new Date(binding.createdAt).toISOString(), waitMs: 0, expectedProviderSessionId: runtime.expectedProviderSessionId });
@@ -4808,7 +4837,11 @@ export async function createForegroundPlanningHost(
       return 'ignored';
     }
     const scopeId = session.incarnation.coordinationScopeId;
-    const binding = sessionBindingFromSegment(facts.segment);
+    const stepHarness = harnessForPinnedBinding(facts.binding, 'validator');
+    if (stepHarness === null) {
+      return 'blocked';
+    }
+    const binding = sessionBindingFromSegment(facts.segment, stepHarness);
     if (binding === null) {
       return 'blocked';
     }
@@ -6185,18 +6218,19 @@ export async function createForegroundPlanningHost(
       const basisManifest = dispatchAuthorization.manifest;
       const contractSpecBinding = priorBinding === null ? specBinding : priorBinding.specBinding;
       const workerProfile = dispatchAuthorization.profile;
-      if (workerProfile.harness !== 'codex') {
+      const harness = workerProfile.harness;
+      if (resolveWorkerHarness(workerHarnessRegistry, harness).kind === 'rejected') {
         return {
           kind: 'blocked',
-          code: 'worker_harness_unsupported',
-          message: `Worker Profile 的 harness 为 ${workerProfile.harness}，本进程只能派发 codex Worker`,
+          code: 'worker_harness_unregistered',
+          message: `Worker Profile 的 harness ${harness} 未注册：不派发未注册 harness 的 Worker`,
         };
       }
-      const paths = codexSessionPaths(identity.launchId);
+      const paths = sessionPathsFor(harness, identity.launchId);
       if (paths === null) {
-        return { kind: 'blocked', code: 'state_root_unavailable', message: '无法建立 Codex Session reporter' };
+        return { kind: 'blocked', code: 'state_root_unavailable', message: '无法建立 Worker Session reporter' };
       }
-      installCodexSessionStartReporter(paths);
+      installHarnessSessionReporter(harness, paths);
       reportPath = paths.reportPath;
       expectedCodexHome = join(paths.stateRoot, createHash('sha256').update(identity.launchId).digest('hex').slice(0, 20));
       const taskContract: TaskContract = {
@@ -6314,7 +6348,7 @@ export async function createForegroundPlanningHost(
       };
       roles[role] = {
         taskEnvelope,
-        workerLaunch: createCodexWorkerLaunch({
+        workerLaunch: prepareHarnessWorkerLaunch(harness, {
           launchId: identity.launchId,
           // 启动参数由已冻结的模型配置生成：模型、effort、provider 与 options 同源，凭据只进子进程环境。
           modelConfiguration: workerProfile.modelConfiguration,
@@ -6805,9 +6839,13 @@ export async function createForegroundPlanningHost(
     if (worktree === undefined) {
       return { code: 'worktree_not_found', message: '派发后的隔离 worktree 不可读' };
     }
+    // 该次派发实际选择的 harness 与 workerLaunch 同源；不从当前执行配置另取。
+    const harness = dispatch.workerLaunch.kind === 'prepared_terminal'
+      ? dispatch.workerLaunch.harness
+      : dispatch.workerLaunch.agent;
     const proven = await sessionBindingFromStartReport({
       reportPath: assembled.reportPath,
-      harness: 'codex',
+      harness,
       role: result.role,
       workerTaskId: dispatch.taskEnvelope.workerTaskId,
       dispatchId: result.dispatchId as DispatchId,
@@ -6818,7 +6856,7 @@ export async function createForegroundPlanningHost(
       waitMs: bindingWindowMs,
     });
     if (proven.kind === 'unbound') {
-      return { code: 'planner_session_unbound', message: `Codex SessionStart 报告不可达或无法精确绑定（${proven.code}：${proven.message}）` };
+      return { code: 'planner_session_unbound', message: `SessionStart 报告不可达或无法精确绑定（${proven.code}：${proven.message}）` };
     }
     return recordRoleSegment({
       session,
@@ -6885,13 +6923,21 @@ export async function createForegroundPlanningHost(
       segmentIdOf: (orcaDispatchId, attemptId) => derivedKey('segment', [scopeId, orcaDispatchId, attemptId]),
     });
     for (const entry of unbound) {
-      const paths = codexSessionPaths(entry.launchId);
+      // harness 只从该次派发钉住的物化绑定解析，不取当前执行配置。
+      const pinnedBinding = bindings.find((binding) =>
+        binding.workPackageId === entry.workPackageId && binding.workerTaskId === entry.workerTaskId &&
+        binding.attemptId === entry.attemptId && binding.role === entry.role) ?? null;
+      const harness = harnessForPinnedBinding(pinnedBinding, entry.role);
+      if (harness === null) {
+        continue;
+      }
+      const paths = sessionPathsFor(harness, entry.launchId);
       if (paths === null) {
         continue;
       }
       const proven = await sessionBindingFromStartReport({
         reportPath: paths.reportPath,
-        harness: 'codex',
+        harness,
         role: entry.role,
         workerTaskId: entry.workerTaskId,
         dispatchId: entry.orcaDispatchId,
@@ -7100,11 +7146,12 @@ export async function createForegroundPlanningHost(
         message: '当前已批准 Manifest 没有绑定 Planner Worker Profile：不伪造模型派发 Graph Patch Planner',
       };
     }
-    if (plannerProfile.harness !== 'codex') {
+    const plannerHarness = plannerProfile.harness;
+    if (resolveWorkerHarness(workerHarnessRegistry, plannerHarness).kind === 'rejected') {
       return {
         kind: 'rejected',
-        code: 'worker_harness_unsupported',
-        message: `Planner Worker Profile 的 harness 为 ${plannerProfile.harness}，本进程只能派发 codex Worker`,
+        code: 'worker_harness_unregistered',
+        message: `Planner Worker Profile 的 harness ${plannerHarness} 未注册：不派发未注册 harness 的 Graph Patch Planner`,
       };
     }
     const graph = graphRead.version.graph;
@@ -7198,6 +7245,7 @@ export async function createForegroundPlanningHost(
           execution,
           canonicalWorktreePath,
           companionStateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY),
+          harness: plannerHarness,
           modelConfiguration: plannerProfile.modelConfiguration,
           credentialStore: credentialStore(),
           credentialStorePath: credentialStorePath({ environment: options.env }),
@@ -7213,10 +7261,11 @@ export async function createForegroundPlanningHost(
           canonicalWorktreePath,
           repoSelector: `path:${canonicalWorktreePath}`,
           worktreePaths: observations.worktreePaths,
+          harness: plannerHarness,
           modelConfiguration: plannerProfile.modelConfiguration,
           credentialStore: credentialStore(),
           credentialStorePath: credentialStorePath({ environment: options.env }),
-          codexSandboxMode: codexSandboxForDispatch(approvedRisksFor(scopeId)),
+          sandboxMode: codexSandboxForDispatch(approvedRisksFor(scopeId)),
           companionStateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY),
           bindingWindowMs,
         }),
@@ -7820,17 +7869,19 @@ export async function createForegroundPlanningHost(
         acceptedResultMatchesTask(binding, accepted));
       if (accepted !== undefined && originalBinding?.workerTaskId != null && originalBinding.dispatchId !== null &&
         originalBinding.launchId !== null && originalBinding.authorizationId !== null) {
-        const paths = codexSessionPaths(originalBinding.launchId);
         const originalAuthorization = current.query({ kind: 'authorization', coordinationScopeId: scopeId,
           authorizationId: originalBinding.authorizationId });
         const originalProfile = originalAuthorization.kind === 'authorization' &&
           originalAuthorization.authorization?.authorizationVersion === originalBinding.authorizationVersion
           ? manifestProfileFor(originalAuthorization.authorization.manifest, 'validator') : null;
-        if (paths !== null && originalProfile !== null && originalBinding.workerProfileRef !== null &&
+        // 原 harness 来自该次 Validator 派发钉住的授权 profile，不取当前执行配置。
+        const harness = originalProfile?.harness ?? null;
+        const paths = harness === null ? null : sessionPathsFor(harness, originalBinding.launchId);
+        if (paths !== null && harness !== null && originalProfile !== null && originalBinding.workerProfileRef !== null &&
           originalProfile.profileRef.id === originalBinding.workerProfileRef.id) {
           const originalCodexHome = join(paths.stateRoot, createHash('sha256').update(originalBinding.launchId).digest('hex').slice(0, 20));
           const proven = await sessionBindingFromStartReport({ reportPath: paths.reportPath,
-            harness: 'codex', role: 'validator', workerTaskId: originalBinding.workerTaskId,
+            harness, role: 'validator', workerTaskId: originalBinding.workerTaskId,
             dispatchId: accepted.dispatchId, attemptId: accepted.attemptId, workspace: worktreePath,
             expectedCodexHome: originalCodexHome, dispatchStartedAt: new Date(originalBinding.createdAt).toISOString(), waitMs: 0 });
           if (proven.kind === 'bound') {
@@ -7984,8 +8035,19 @@ export async function createForegroundPlanningHost(
   /* 项目级 Finalizer                                                          */
   /* ------------------------------------------------------------------------ */
 
-  /** Codex 状态根与 SessionStart 报告的 Companion 私有位置：绝不写进被只读检查的 canonical 工作区。 */
-  const finalizerCompanionPaths = (): {
+  /** 逐 harness 的状态根与 SessionStart 报告的 Companion 私有位置：绝不写进被只读检查的 canonical 工作区。 */
+  const finalizerCompanionPaths = (harness: string, launchId: string): {
+    readonly stateRoot: string;
+    readonly reporterPath: string;
+    readonly reportPath: string;
+  } | null => sessionPathsFor(harness, launchId);
+
+  /**
+   * 每次角色派发自己的报告文件，避免旧 SessionStart 行冒充本次启动。
+   *
+   * harness 未注册时返回 null（查询路径不抛错）：调用方按不可派发阻塞。
+   */
+  const sessionPathsFor = (harness: string, launchId: string): {
     readonly stateRoot: string;
     readonly reporterPath: string;
     readonly reportPath: string;
@@ -7993,20 +8055,11 @@ export async function createForegroundPlanningHost(
     if (commonDirPath === null) {
       return null;
     }
-    const stateRoot = join(commonDirPath, COMPANION_STATE_DIRECTORY, 'codex');
-    return {
-      stateRoot,
-      reporterPath: join(stateRoot, 'session-start-reporter.mjs'),
-      reportPath: join(stateRoot, 'session-start.jsonl'),
-    };
+    const resolved = resolveWorkerHarness(workerHarnessRegistry, harness);
+    return resolved.kind === 'rejected'
+      ? null
+      : resolved.harness.sessionPaths(join(commonDirPath, COMPANION_STATE_DIRECTORY), launchId);
   };
-
-  /** 每次角色派发自己的报告文件，避免旧 SessionStart 行冒充本次启动。 */
-  const codexSessionPaths = (launchId: string): {
-    readonly stateRoot: string;
-    readonly reporterPath: string;
-    readonly reportPath: string;
-  } | null => (commonDirPath === null ? null : codexSessionPathsUnder(join(commonDirPath, COMPANION_STATE_DIRECTORY), launchId));
 
   /** 本进程读到的 Finalizer 派发事实；重启后不存在，因此重启期间无法证明只读（见下）。 */
   type FinalizerRun = {
@@ -8112,8 +8165,7 @@ export async function createForegroundPlanningHost(
     if (scope.graphId === null || scope.graphVersion === null) {
       return;
     }
-    const paths = finalizerCompanionPaths();
-    if (paths === null || canonicalWorktreePath === null) {
+    if (canonicalWorktreePath === null) {
       return;
     }
     const graphRead = current.query({
@@ -8134,14 +8186,22 @@ export async function createForegroundPlanningHost(
     // 项目级 Finalizer 是一次新的只读派发，因此固定**当前**授权的 Finalizer profile；
     // 它不继承任何 Work Package 的绑定。
     const finalizerProfile = manifestProfileFor(manifest, 'finalizer');
-    if (finalizerProfile === null || finalizerProfile.harness !== 'codex') {
+    if (finalizerProfile === null) {
       recordExecutionBlocker(
         scopeId,
         'finalizer',
         'worker_profile_unresolved',
-        finalizerProfile === null
-          ? '当前已批准 Manifest 没有绑定 Finalizer Worker Profile：不伪造模型派发只读检查'
-          : `Finalizer Worker Profile 的 harness 为 ${finalizerProfile.harness}，本进程只能派发 codex Worker`,
+        '当前已批准 Manifest 没有绑定 Finalizer Worker Profile：不伪造模型派发只读检查',
+      );
+      return;
+    }
+    const finalizerHarness = finalizerProfile.harness;
+    if (resolveWorkerHarness(workerHarnessRegistry, finalizerHarness).kind === 'rejected') {
+      recordExecutionBlocker(
+        scopeId,
+        'finalizer',
+        'worker_profile_unresolved',
+        `Finalizer Worker Profile 的 harness ${finalizerHarness} 未注册：不派发未注册 harness 的只读检查`,
       );
       return;
     }
@@ -8189,6 +8249,11 @@ export async function createForegroundPlanningHost(
       graphId: graph.graphId,
       generation: graph.generation,
     });
+    const paths = finalizerCompanionPaths(finalizerHarness, operationIds.launchId);
+    if (paths === null) {
+      recordExecutionBlocker(scopeId, 'finalizer', 'state_root_unavailable', '无法建立 Finalizer Session reporter');
+      return;
+    }
     const existing = finalizerRuns.get(scopeId);
     const before = await readWorkspaceFacts({ worktreePath: canonicalWorktreePath, env: options.env });
     if (before.kind !== 'observed') {
@@ -8221,7 +8286,7 @@ export async function createForegroundPlanningHost(
         recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_read_only_unavailable', readOnlyBlocker);
         return;
       }
-      installCodexSessionStartReporter(paths);
+      installHarnessSessionReporter(finalizerHarness, paths);
       const dispatchStartedAt = new Date().toISOString();
       const dispatched = await dispatchScopedWorker({
         store: current,
@@ -8259,7 +8324,7 @@ export async function createForegroundPlanningHost(
           consumerGeneration: run.consumerGeneration,
           timeoutMs: MUTATION_TIMEOUT_MS,
         },
-        workerLaunch: createCodexWorkerLaunch({
+        workerLaunch: prepareHarnessWorkerLaunch(finalizerHarness, {
           launchId: operationIds.launchId,
           modelConfiguration: finalizerProfile.modelConfiguration,
           // 与常规角色派发同源：只读 Finalizer 的 managed 凭据也在准备阶段证明存在。
@@ -8279,45 +8344,37 @@ export async function createForegroundPlanningHost(
           workerActivate: operationIds.workerActivate,
         },
         observeSession: async (dispatchId): Promise<HarnessSessionFacts | null> => {
-          // SessionStart 由 Codex 进程在启动时写出；给一个短窗口再读，读不到就是读不到。
+          // SessionStart 由 harness 进程在启动时写出；给一个短窗口再读，读不到就是读不到。
           const deadline = Date.now() + bindingWindowMs;
           while (Date.now() < deadline) {
-            if (existsSync(paths.reportPath)) {
-              const line = readFileSync(paths.reportPath, 'utf8').split('\n').find((entry) => entry.length > 0);
-              if (line !== undefined) {
-                let report: CodexSessionStartReport;
-                try {
-                  report = JSON.parse(line) as CodexSessionStartReport;
-                } catch {
-                  return null;
-                }
-                const bound = bindCodexSessionFromStartReport({
-                  facts: {
-                    harness: 'codex',
-                    role: 'finalizer',
-                    workerTaskId: operationIds.workerTaskId,
-                    dispatchId: dispatchId as DispatchId,
-                    attemptId: operationIds.attemptId,
-                  },
-                  report,
-                  workspace: canonicalWorktreePath,
-                  expectedCodexHome: join(paths.stateRoot, createHash('sha256').update(operationIds.launchId).digest('hex').slice(0, 20)),
-                  dispatchStartedAt,
-                  bindingDeadlineAt: new Date().toISOString(),
-                });
-                return bound.kind === 'bound'
-                  ? {
-                      harness: bound.binding.harness,
-                      role: bound.binding.role,
-                      workerTaskId: bound.binding.workerTaskId,
-                      dispatchId: bound.binding.dispatchId,
-                      attemptId: bound.binding.attemptId,
-                      providerSessionId: bound.binding.providerSessionId,
-                      transcriptRef: bound.binding.transcriptRef,
-                      observedAt: bound.binding.observedAt,
-                    }
-                  : null;
-              }
+            const report = existsSync(paths.reportPath) ? readLatestHarnessSessionReport(paths.reportPath) : null;
+            if (report !== null) {
+              const bound = await bindHarnessSessionFromStartReport({
+                facts: {
+                  harness: finalizerHarness,
+                  role: 'finalizer',
+                  workerTaskId: operationIds.workerTaskId,
+                  dispatchId: dispatchId as DispatchId,
+                  attemptId: operationIds.attemptId,
+                },
+                report,
+                workspace: canonicalWorktreePath,
+                expectedCodexHome: join(paths.stateRoot, createHash('sha256').update(operationIds.launchId).digest('hex').slice(0, 20)),
+                dispatchStartedAt,
+                bindingDeadlineAt: new Date().toISOString(),
+              });
+              return bound.kind === 'bound'
+                ? {
+                    harness: bound.binding.harness,
+                    role: bound.binding.role,
+                    workerTaskId: bound.binding.workerTaskId,
+                    dispatchId: bound.binding.dispatchId,
+                    attemptId: bound.binding.attemptId,
+                    providerSessionId: bound.binding.providerSessionId,
+                    transcriptRef: bound.binding.transcriptRef,
+                    observedAt: bound.binding.observedAt,
+                  }
+                : null;
             }
             const { promise, resolve } = Promise.withResolvers<void>();
             setTimeout(resolve, 250);
@@ -8342,7 +8399,7 @@ export async function createForegroundPlanningHost(
         const segment = binding.kind === 'committed' ? recordRoleSegment({ session,
           segmentId: derivedKey('finalizer-segment', [scopeId, dispatched.dispatchId]), workPackageId: scopeId as unknown as WorkPackageId,
           role: 'finalizer', workerTaskId: operationIds.workerTaskId, dispatchId: dispatched.dispatchId as DispatchId,
-          attemptId: operationIds.attemptId, binding: { ...dispatched.binding, harness: 'codex', role: 'finalizer', attemptId: operationIds.attemptId } })
+          attemptId: operationIds.attemptId, binding: { ...dispatched.binding, harness: finalizerHarness, role: 'finalizer', attemptId: operationIds.attemptId } })
           : { code: binding.code, message: binding.message };
         if (segment !== null) { recordExecutionBlocker(scopeId, 'finalizer', segment.code, segment.message); return; }
         finalizerRuns.set(scopeId, {
@@ -8994,11 +9051,15 @@ export async function createForegroundPlanningHost(
         baselineAuthorization.kind === 'rejected' || baselineAuthorization.authorization === null
           ? null
           : manifestProfileFor(baselineAuthorization.authorization.manifest, 'planner');
-      if (baselineProfile === null || baselineProfile.harness !== 'codex') {
+      if (baselineProfile === null) {
         recordExecutionBlocker(scopeId, 'baseline-reconciliation', 'worker_profile_unresolved',
-          baselineProfile === null
-            ? '当前已批准 Manifest 没有绑定 Planner Worker Profile：不伪造模型派发基线补救'
-            : `Planner Worker Profile 的 harness 为 ${baselineProfile.harness}，本进程只能派发 codex Worker`);
+          '当前已批准 Manifest 没有绑定 Planner Worker Profile：不伪造模型派发基线补救');
+        return;
+      }
+      const baselineHarness = baselineProfile.harness;
+      if (resolveWorkerHarness(workerHarnessRegistry, baselineHarness).kind === 'rejected') {
+        recordExecutionBlocker(scopeId, 'baseline-reconciliation', 'worker_profile_unresolved',
+          `Planner Worker Profile 的 harness ${baselineHarness} 未注册：不派发未注册 harness 的基线补救`);
         return;
       }
       const observations = await executionObservations(scope, graph.version.graph.workPackages);
@@ -9016,10 +9077,11 @@ export async function createForegroundPlanningHost(
         },
         canonicalWorktreePath, repoSelector: `path:${canonicalWorktreePath}`,
         worktreePaths: observations.worktreePaths,
+        harness: baselineHarness,
         modelConfiguration: baselineProfile.modelConfiguration,
         credentialStore: credentialStore(),
         credentialStorePath: credentialStorePath({ environment: options.env }),
-        codexSandboxMode: codexSandboxForDispatch(approvedRisksFor(scopeId)),
+        sandboxMode: codexSandboxForDispatch(approvedRisksFor(scopeId)),
         companionStateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY), bindingWindowMs,
       });
       for (const record of pendingBaselines) {
@@ -10279,6 +10341,7 @@ export async function createForegroundPlanningHost(
         providerIntegration: connection.providerIntegration,
         modelOptions: connection.modelOptions,
         codex: connection.codex,
+        ...(connection.nativeWorker === undefined ? {} : { nativeWorker: connection.nativeWorker }),
         credential: connection.credential,
       },
       model: model.model,

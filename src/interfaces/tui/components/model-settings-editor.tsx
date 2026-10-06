@@ -20,6 +20,12 @@ import { tuiColors } from '../theme.js';
 import { padToDisplayWidth, truncateToDisplayWidth } from '../render/width.js';
 import { MODEL_SETTINGS_FIELDS, type ModelSettingsEdit, type ModelSettingsField } from '../state.js';
 import type { SaveModelSettingsInput } from '../../../application/configuration/model-settings.js';
+import {
+  NATIVE_WORKER_APIS,
+  WORKER_HARNESS_IDS,
+  type NativeWorkerApi,
+  type NativeWorkerConnection,
+} from '../../../domain/model-configuration.js';
 import { editComposer, textDraft } from '../input/composer-editor.js';
 
 const FIELD_LABELS: Readonly<Record<ModelSettingsField, string>> = {
@@ -27,9 +33,13 @@ const FIELD_LABELS: Readonly<Record<ModelSettingsField, string>> = {
   providerIntegration: 'Provider 集成',
   model: 'Model',
   options: '非秘密选项',
+  harness: 'Harness',
   codexProviderId: 'Codex providerId',
   codexBaseUrl: 'Codex baseUrl',
   codexWireApi: 'Codex wireApi',
+  nativeProviderId: 'native providerId',
+  nativeBaseUrl: 'native baseUrl',
+  nativeApi: 'native api',
   credentialKind: '凭据来源',
   credentialOptionPath: '凭据 optionPath',
   effortSource: 'effort 来源',
@@ -43,17 +53,38 @@ const OPTION_SEPARATOR = String.fromCharCode(10);
 const WIRE_APIS = ['', 'responses', 'chat'] as const;
 
 /**
- * 当前凭据来源下可见的字段。
+ * 当前角色与凭据来源下可见的字段。
  *
- * 导航与渲染共用这一份：`harness_login` 由 Harness 自己提供认证，没有可输入的 key，
- * 因此 API Key 字段不出现——出现一个永远不会被使用的输入框，就是邀请用户填一个必然被丢弃的秘密。
+ * 导航与渲染共用这一份。`harness_login` 由 Harness 自己提供认证，没有可输入的 key，因此 API Key 字段
+ * 不出现——出现一个永远不会被使用的输入框，就是邀请用户填一个必然被丢弃的秘密。Coordinator 始终用
+ * LangChain，因此不出现 harness 与原生连接字段；Worker 选 codex 之外的 harness 时反过来隐藏 codex 字段。
+ * `edit` 缺省按 codex 处理，旧调用方与原夹具的可见字段因此不变。
  */
 export function visibleModelSettingsFields(
   credentialKind: ModelSettingsEdit['credentialKind'],
+  edit?: Pick<ModelSettingsEdit, 'role' | 'harness'>,
 ): readonly ModelSettingsField[] {
-  return credentialKind === 'harness_login'
-    ? MODEL_SETTINGS_FIELDS.filter((field) => field !== 'secret')
-    : MODEL_SETTINGS_FIELDS;
+  const worker = edit !== undefined && edit.role !== 'coordinator';
+  const harness = edit?.harness ?? '';
+  const native = worker && harness !== '' && harness !== 'codex';
+  return MODEL_SETTINGS_FIELDS.filter((field) => {
+    switch (field) {
+      case 'secret':
+        return credentialKind !== 'harness_login';
+      case 'harness':
+        return worker;
+      case 'nativeProviderId':
+      case 'nativeBaseUrl':
+      case 'nativeApi':
+        return native;
+      case 'codexProviderId':
+      case 'codexBaseUrl':
+      case 'codexWireApi':
+        return !native;
+      default:
+        return true;
+    }
+  });
 }
 
 /** 遮罩常量：任何 key 都不进入渲染文本，也不随实际长度变化。 */
@@ -125,6 +156,33 @@ export type ModelSettingsDraft =
   | { readonly kind: 'invalid'; readonly field: ModelSettingsField; readonly message: string };
 
 /**
+ * 把已校验的原生字段组装成判别联合的对应分支。
+ *
+ * harness 与 api 都已在草稿校验里收窄，因此这里的 `api` 断言只表达「取值集合已确认」，不绕过校验。
+ */
+function nativeWorkerCandidate(
+  harness: string,
+  providerId: string,
+  baseUrl: string,
+  api: string,
+): NativeWorkerConnection {
+  const address = baseUrl === '' ? {} : { baseUrl };
+  const interfaceFamily = api === '' ? {} : { api: api as NativeWorkerApi };
+  switch (harness) {
+    case 'claude':
+      return { harness: 'claude', providerId, ...address, ...(api === '' ? {} : { api: 'anthropic-messages' as const }) };
+    case 'opencode':
+      return { harness: 'opencode', providerId, ...address, ...interfaceFamily };
+    case 'pi':
+      return { harness: 'pi', providerId, ...address, ...interfaceFamily };
+    case 'omp':
+      return { harness: 'omp', providerId, ...address, ...interfaceFamily };
+    default:
+      throw new Error(`unsupported_worker_harness: ${harness}`);
+  }
+}
+
+/**
  * 校验内存编辑并组装应用层的保存输入。
  *
  * effort 能力必须三项齐全才算可信来源：只填部分字段会得到明确的字段级提示，而不是让服务去猜。
@@ -141,14 +199,46 @@ export function modelSettingsDraft(edit: ModelSettingsEdit, expectedRevision: nu
   if (edit.model.trim() === '') {
     return { kind: 'invalid', field: 'model', message: 'Model 不能为空' };
   }
-  const wireApi = edit.codexWireApi;
+
+  // Worker 角色显式选择 codex 之外的 harness 时改走原生连接；Coordinator 始终是 codex/LangChain，
+  // 缺省 harness 也按 codex 处理，旧编辑因此保持原行为。
+  const harness = (edit.harness ?? '').trim();
+  const native = edit.role !== 'coordinator' && harness !== '' && harness !== 'codex';
+  if (native && !(WORKER_HARNESS_IDS as readonly string[]).includes(harness)) {
+    return { kind: 'invalid', field: 'harness', message: `不支持的 Worker harness：${harness}` };
+  }
+
+  // codex 连接只在 codex（或按 codex 处理）时组装；原生 harness 不接受 codex 连接。
+  const wireApi = native ? '' : edit.codexWireApi;
   const codexId = edit.codexProviderId.trim();
   const codexBaseUrl = edit.codexBaseUrl.trim();
-  if (wireApi !== '' && (codexId === '' || codexBaseUrl === '')) {
-    return { kind: 'invalid', field: 'codexProviderId', message: '配置 wireApi 时必须同时给出 providerId 与 baseUrl' };
+  if (!native) {
+    if (wireApi !== '' && (codexId === '' || codexBaseUrl === '')) {
+      return { kind: 'invalid', field: 'codexProviderId', message: '配置 wireApi 时必须同时给出 providerId 与 baseUrl' };
+    }
+    if (wireApi === '' && (codexId !== '' || codexBaseUrl !== '')) {
+      return { kind: 'invalid', field: 'codexWireApi', message: '给出 Codex 连接时必须选择 wireApi' };
+    }
   }
-  if (wireApi === '' && (codexId !== '' || codexBaseUrl !== '')) {
-    return { kind: 'invalid', field: 'codexWireApi', message: '给出 Codex 连接时必须选择 wireApi' };
+
+  // 原生连接：providerId 必须显式；managed 凭据还必须给出 baseUrl 与 api。harness_login 沿用 harness
+  // 自己配置的 provider，可以缺省 baseUrl 与 api。
+  const nativeProviderId = (edit.nativeProviderId ?? '').trim();
+  const nativeBaseUrl = (edit.nativeBaseUrl ?? '').trim();
+  const nativeApi = (edit.nativeApi ?? '').trim();
+  if (native) {
+    if (nativeProviderId === '') {
+      return { kind: 'invalid', field: 'nativeProviderId', message: 'Worker 原生连接需要 providerId' };
+    }
+    if (nativeApi !== '' && !(NATIVE_WORKER_APIS as readonly string[]).includes(nativeApi)) {
+      return { kind: 'invalid', field: 'nativeApi', message: `不支持的接口族：${nativeApi}` };
+    }
+    if (harness === 'claude' && nativeApi !== '' && nativeApi !== 'anthropic-messages') {
+      return { kind: 'invalid', field: 'nativeApi', message: 'claude harness 只支持 anthropic-messages' };
+    }
+    if (edit.credentialKind === 'managed' && (nativeBaseUrl === '' || nativeApi === '')) {
+      return { kind: 'invalid', field: 'nativeBaseUrl', message: 'managed 原生连接需要 baseUrl 与 api' };
+    }
   }
   const capability = [edit.effortSource, edit.effortValues, edit.effortOptionPath];
   const filled = capability.map((value) => value.trim() !== '');
@@ -177,6 +267,8 @@ export function modelSettingsDraft(edit: ModelSettingsEdit, expectedRevision: nu
     input: {
       expectedRevision,
       role: edit.role,
+      // Worker 角色只有显式选了 harness 才带上它：缺省时把「沿用现有 profile」的决定留给服务层。
+      ...(edit.role !== 'coordinator' && harness !== '' ? { harness } : {}),
       // 服务层每次保存都**新增**连接与模型，因此这里不存在需要合并的既有值：连接记录与模型配置
       // 各写同一份用户编辑的选项，载入时也以完整 binding 的连接选项回填，避免任一侧静默丢失。
       modelOptions: parsed.options,
@@ -196,6 +288,7 @@ export function modelSettingsDraft(edit: ModelSettingsEdit, expectedRevision: nu
           wireApi === ''
             ? null
             : { providerId: codexId, baseUrl: codexBaseUrl, wireApi },
+        ...(native ? { nativeWorker: nativeWorkerCandidate(harness, nativeProviderId, nativeBaseUrl, nativeApi) } : {}),
       },
       model: edit.model.trim(),
       effortCapability:
@@ -224,21 +317,28 @@ export function editModelSettingsField(
     return { ...edit, options: edit.options + OPTION_SEPARATOR };
   }
   // 枚举字段用左右键循环，方向键不会插入字符。
-  if (field === 'codexWireApi' || field === 'credentialKind') {
+  if (field === 'codexWireApi' || field === 'credentialKind' || field === 'harness' || field === 'nativeApi') {
     if (!key.leftArrow && !key.rightArrow) {
       return edit;
     }
-    const options: readonly string[] = field === 'codexWireApi' ? WIRE_APIS : ['harness_login', 'managed'];
-    const index = options.indexOf(edit[field]);
+    const options: readonly string[] =
+      field === 'codexWireApi' ? WIRE_APIS
+        : field === 'credentialKind' ? ['harness_login', 'managed']
+          : field === 'harness' ? WORKER_HARNESS_IDS
+            // claude 只有 anthropic-messages：循环列表不许提供服务端会拒绝的取值。
+            : edit.harness === 'claude' ? ['anthropic-messages']
+              : NATIVE_WORKER_APIS;
+    const current = edit[field] ?? '';
+    const index = options.indexOf(current);
     const next = options[(((index + (key.leftArrow ? options.length - 1 : 1)) % options.length) + options.length) % options.length];
-    if (next === undefined || next === edit[field]) {
+    if (next === undefined || next === current) {
       return edit;
     }
     // 切回 harness_login 时本次输入的 key 没有去处：立刻从内存清掉，而不是留着并在保存时
     // 变成一条被成功丢弃的孤立凭据。调用方负责把这次清空显示给用户。
     return field === 'credentialKind' && next === 'harness_login' ? { ...edit, credentialKind: next, secret: '' } : { ...edit, [field]: next };
   }
-  const current = edit[field];
+  const current = edit[field] ?? '';
   const next = editComposer(textDraft(current), input, key).text;
   if (next === current) {
     return edit;
@@ -273,18 +373,26 @@ export function ModelSettingsEditor(props: ModelSettingsEditorProps) {
   const inner = Math.max(1, props.availableWidth - 8);
   const labelWidth = Math.min(LABEL_WIDTH, Math.max(8, Math.floor(inner / 3)));
   const listBudget = Math.max(1, rows - 12);
-  const fields = visibleModelSettingsFields(props.edit.credentialKind);
+  const fields = visibleModelSettingsFields(props.edit.credentialKind, props.edit);
   const cursor = Math.max(0, fields.indexOf(props.field));
   const start = fieldWindowStart(cursor, fields.length, listBudget);
+  const harness = props.edit.harness ?? '';
+  const nativeProviderId = props.edit.nativeProviderId ?? '';
+  const nativeBaseUrl = props.edit.nativeBaseUrl ?? '';
+  const nativeApi = props.edit.nativeApi ?? '';
   const values: Readonly<Record<ModelSettingsField, string>> = {
     ...(Object.fromEntries(MODEL_SETTINGS_FIELDS.map((field) => [field, ''])) as Record<ModelSettingsField, string>),
     label: props.edit.label === '' ? '—' : props.edit.label,
     providerIntegration: props.edit.providerIntegration,
     model: props.edit.model,
     options: props.edit.options === '' ? '—' : props.edit.options,
+    harness: harness === '' ? 'codex（默认）' : harness,
     codexProviderId: props.edit.codexProviderId === '' ? '—' : props.edit.codexProviderId,
     codexBaseUrl: props.edit.codexBaseUrl === '' ? '—' : props.edit.codexBaseUrl,
     codexWireApi: props.edit.codexWireApi === '' ? '（不配置）' : props.edit.codexWireApi,
+    nativeProviderId: nativeProviderId === '' ? '—' : nativeProviderId,
+    nativeBaseUrl: nativeBaseUrl === '' ? '—' : nativeBaseUrl,
+    nativeApi: nativeApi === '' ? '（不指定）' : nativeApi,
     credentialKind: props.edit.credentialKind,
     credentialOptionPath: props.edit.credentialOptionPath === '' ? '—' : props.edit.credentialOptionPath,
     effortSource: props.edit.effortSource === '' ? '（无可信来源）' : props.edit.effortSource,

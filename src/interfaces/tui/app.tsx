@@ -2490,9 +2490,16 @@ function TuiAppContent(props: TuiAppProps) {
         providerIntegration: connection?.providerIntegration ?? binding?.providerIntegration ?? '',
         model: binding?.model ?? '',
         options: formatModelOptions(connection?.modelOptions ?? {}),
+        // Worker 角色回填既有 profile 的 harness；没有既有 profile 时留空，由服务层落到
+        // execution.harness。Coordinator 始终是 codex/LangChain，不出现 harness 字段。
+        harness: target.role === 'coordinator' ? '' : (binding?.harness ?? ''),
         codexProviderId: connection?.codex?.providerId ?? '',
         codexBaseUrl: connection?.codex?.baseUrl ?? '',
         codexWireApi: connection?.codex?.wireApi ?? '',
+        // 原生连接原样回填：否则编辑一个既有原生角色会把它静默改回 codex 连接。
+        nativeProviderId: connection?.nativeWorker?.providerId ?? '',
+        nativeBaseUrl: connection?.nativeWorker?.baseUrl ?? '',
+        nativeApi: connection?.nativeWorker?.api ?? '',
         credentialKind: credential?.kind ?? 'harness_login',
         credentialRef: credential?.kind === 'managed' ? credential.credentialRef : '',
         credentialOptionPath: credential?.kind === 'managed' ? credential.optionPath : '',
@@ -2789,7 +2796,7 @@ function TuiAppContent(props: TuiAppProps) {
     }
     if(key.upArrow||key.downArrow){
       // 导航与渲染共用同一份可见字段：隐藏的 API Key 不会被光标指向，也不会被数进行号。
-      const fields=visibleModelSettingsFields(edit.credentialKind);
+      const fields=visibleModelSettingsFields(edit.credentialKind,edit);
       const cursor=Math.max(0,fields.indexOf(current.modelSettingsField));
       const next=fields[(cursor+(key.upArrow?-1:1)+fields.length)%fields.length];
       if(next!==undefined)dispatch({kind:'model-settings-edit',edit,field:next});
@@ -2803,7 +2810,11 @@ function TuiAppContent(props: TuiAppProps) {
     if(edit.secret!==''&&next.secret===''){
       dispatch({kind:'model-settings-notice',notice:'凭据来源已切回 Harness 登录，本次输入的 API Key 已从内存清除'});
     }
-    dispatch({kind:'model-settings-edit',edit:next,field:current.modelSettingsField});
+    // 可见字段集合随角色与 harness 变化：切换后当前字段若被隐藏，光标落到新的首个可见字段，
+    // 否则按键会写进一个已经不可见的字段。
+    const nextFields=visibleModelSettingsFields(next.credentialKind,next);
+    const nextField=nextFields.includes(current.modelSettingsField)?current.modelSettingsField:(nextFields[0]??'label');
+    dispatch({kind:'model-settings-edit',edit:next,field:nextField});
   };
   const workspaceActions: WorkspaceActions = {
     dispatch,

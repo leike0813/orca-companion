@@ -1,0 +1,279 @@
+[
+  {
+    "combo": "120x40-color-nerd",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "expectations": {
+      "roles": "Model Picker",
+      "editor-coordinator": "Codex 可见/native 不可见",
+      "editor-cjk": "中文连接 可见",
+      "harness-codex": "Harness=codex 时可编辑 Codex 字段",
+      "native-fields": "Harness=claude 时仅 native 字段",
+      "native-filled": "native providerId/baseUrl/api",
+      "masked-key": "key 未出现在屏幕",
+      "saved": "保存独立于应用",
+      "effort": "独立 effort 选择",
+      "reapproval": "重新授权审阅",
+      "returned-draft": "返回后草稿=首中尾",
+      "resize-native": "80x24/50x40/120x40 连续 resize"
+    },
+    "source": "production TuiApp / scripts/tui-preview.mjs alignment-planning / isolated fixture ports"
+  },
+  {
+    "combo": "120x40-color-ascii",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "expectations": {
+      "roles": "Model Picker",
+      "editor-coordinator": "Codex 可见/native 不可见",
+      "editor-cjk": "中文连接 可见",
+      "harness-codex": "Harness=codex 时可编辑 Codex 字段",
+      "native-fields": "Harness=claude 时仅 native 字段",
+      "native-filled": "native providerId/baseUrl/api",
+      "masked-key": "key 未出现在屏幕",
+      "saved": "保存独立于应用",
+      "effort": "独立 effort 选择",
+      "reapproval": "重新授权审阅",
+      "returned-draft": "返回后草稿=首中尾"
+    },
+    "source": "production TuiApp / scripts/tui-preview.mjs alignment-planning / isolated fixture ports"
+  },
+  {
+    "combo": "120x40-no-color-nerd",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "expectations": {
+      "roles": "Model Picker",
+      "editor-coordinator": "Codex 可见/native 不可见",
+      "editor-cjk": "中文连接 可见",
+      "harness-codex": "Harness=codex 时可编辑 Codex 字段",
+      "native-fields": "Harness=claude 时仅 native 字段",
+      "native-filled": "native providerId/baseUrl/api",
+      "masked-key": "key 未出现在屏幕",
+      "saved": "保存独立于应用",
+      "effort": "独立 effort 选择",
+      "reapproval": "重新授权审阅",
+      "returned-draft": "返回后草稿=首中尾"
+    },
+    "source": "production TuiApp / scripts/tui-preview.mjs alignment-planning / isolated fixture ports"
+  },
+  {
+    "combo": "120x40-no-color-ascii",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "expectations": {
+      "roles": "Model Picker",
+      "editor-coordinator": "Codex 可见/native 不可见",
+      "editor-cjk": "中文连接 可见",
+      "harness-codex": "Harness=codex 时可编辑 Codex 字段",
+      "native-fields": "Harness=claude 时仅 native 字段",
+      "native-filled": "native providerId/baseUrl/api",
+      "masked-key": "key 未出现在屏幕",
+      "saved": "保存独立于应用",
+      "effort": "独立 effort 选择",
+      "reapproval": "重新授权审阅",
+      "returned-draft": "返回后草稿=首中尾"
+    },
+    "source": "production TuiApp / scripts/tui-preview.mjs alignment-planning / isolated fixture ports"
+  },
+  {
+    "combo": "80x24-color-nerd",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "expectations": {
+      "roles": "Model Picker",
+      "editor-coordinator": "Codex 可见/native 不可见",
+      "editor-cjk": "中文连接 可见",
+      "harness-codex": "Harness=codex 时可编辑 Codex 字段",
+      "native-fields": "Harness=claude 时仅 native 字段",
+      "native-filled": "native providerId/baseUrl/api",
+      "masked-key": "key 未出现在屏幕",
+      "saved": "保存独立于应用",
+      "effort": "独立 effort 选择",
+      "reapproval": "重新授权审阅",
+      "returned-draft": "返回后草稿=首中尾"
+    },
+    "source": "production TuiApp / scripts/tui-preview.mjs alignment-planning / isolated fixture ports"
+  },
+  {
+    "combo": "80x24-color-ascii",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "expectations": {
+      "roles": "Model Picker",
+      "editor-coordinator": "Codex 可见/native 不可见",
+      "editor-cjk": "中文连接 可见",
+      "harness-codex": "Harness=codex 时可编辑 Codex 字段",
+      "native-fields": "Harness=claude 时仅 native 字段",
+      "native-filled": "native providerId/baseUrl/api",
+      "masked-key": "key 未出现在屏幕",
+      "saved": "保存独立于应用",
+      "effort": "独立 effort 选择",
+      "reapproval": "重新授权审阅",
+      "returned-draft": "返回后草稿=首中尾"
+    },
+    "source": "production TuiApp / scripts/tui-preview.mjs alignment-planning / isolated fixture ports"
+  },
+  {
+    "combo": "80x24-no-color-nerd",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "expectations": {
+      "roles": "Model Picker",
+      "editor-coordinator": "Codex 可见/native 不可见",
+      "editor-cjk": "中文连接 可见",
+      "harness-codex": "Harness=codex 时可编辑 Codex 字段",
+      "native-fields": "Harness=claude 时仅 native 字段",
+      "native-filled": "native providerId/baseUrl/api",
+      "masked-key": "key 未出现在屏幕",
+      "saved": "保存独立于应用",
+      "effort": "独立 effort 选择",
+      "reapproval": "重新授权审阅",
+      "returned-draft": "返回后草稿=首中尾"
+    },
+    "source": "production TuiApp / scripts/tui-preview.mjs alignment-planning / isolated fixture ports"
+  },
+  {
+    "combo": "80x24-no-color-ascii",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "expectations": {
+      "roles": "Model Picker",
+      "editor-coordinator": "Codex 可见/native 不可见",
+      "editor-cjk": "中文连接 可见",
+      "harness-codex": "Harness=codex 时可编辑 Codex 字段",
+      "native-fields": "Harness=claude 时仅 native 字段",
+      "native-filled": "native providerId/baseUrl/api",
+      "masked-key": "key 未出现在屏幕",
+      "saved": "保存独立于应用",
+      "effort": "独立 effort 选择",
+      "reapproval": "重新授权审阅",
+      "returned-draft": "返回后草稿=首中尾"
+    },
+    "source": "production TuiApp / scripts/tui-preview.mjs alignment-planning / isolated fixture ports"
+  },
+  {
+    "combo": "50x40-color-nerd",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "expectations": {
+      "roles": "Model Picker",
+      "editor-coordinator": "Codex 可见/native 不可见",
+      "editor-cjk": "中文连接 可见",
+      "harness-codex": "Harness=codex 时可编辑 Codex 字段",
+      "native-fields": "Harness=claude 时仅 native 字段",
+      "native-filled": "native providerId/baseUrl/api",
+      "masked-key": "key 未出现在屏幕",
+      "saved": "保存独立于应用",
+      "effort": "独立 effort 选择",
+      "reapproval": "重新授权审阅",
+      "returned-draft": "返回后草稿=首中尾"
+    },
+    "source": "production TuiApp / scripts/tui-preview.mjs alignment-planning / isolated fixture ports"
+  },
+  {
+    "combo": "50x40-color-ascii",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "expectations": {
+      "roles": "Model Picker",
+      "editor-coordinator": "Codex 可见/native 不可见",
+      "editor-cjk": "中文连接 可见",
+      "harness-codex": "Harness=codex 时可编辑 Codex 字段",
+      "native-fields": "Harness=claude 时仅 native 字段",
+      "native-filled": "native providerId/baseUrl/api",
+      "masked-key": "key 未出现在屏幕",
+      "saved": "保存独立于应用",
+      "effort": "独立 effort 选择",
+      "reapproval": "重新授权审阅",
+      "returned-draft": "返回后草稿=首中尾"
+    },
+    "source": "production TuiApp / scripts/tui-preview.mjs alignment-planning / isolated fixture ports"
+  },
+  {
+    "combo": "50x40-no-color-nerd",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "expectations": {
+      "roles": "Model Picker",
+      "editor-coordinator": "Codex 可见/native 不可见",
+      "editor-cjk": "中文连接 可见",
+      "harness-codex": "Harness=codex 时可编辑 Codex 字段",
+      "native-fields": "Harness=claude 时仅 native 字段",
+      "native-filled": "native providerId/baseUrl/api",
+      "masked-key": "key 未出现在屏幕",
+      "saved": "保存独立于应用",
+      "effort": "独立 effort 选择",
+      "reapproval": "重新授权审阅",
+      "returned-draft": "返回后草稿=首中尾"
+    },
+    "source": "production TuiApp / scripts/tui-preview.mjs alignment-planning / isolated fixture ports"
+  },
+  {
+    "combo": "50x40-no-color-ascii",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "expectations": {
+      "roles": "Model Picker",
+      "editor-coordinator": "Codex 可见/native 不可见",
+      "editor-cjk": "中文连接 可见",
+      "harness-codex": "Harness=codex 时可编辑 Codex 字段",
+      "native-fields": "Harness=claude 时仅 native 字段",
+      "native-filled": "native providerId/baseUrl/api",
+      "masked-key": "key 未出现在屏幕",
+      "saved": "保存独立于应用",
+      "effort": "独立 effort 选择",
+      "reapproval": "重新授权审阅",
+      "returned-draft": "返回后草稿=首中尾"
+    },
+    "source": "production TuiApp / scripts/tui-preview.mjs alignment-planning / isolated fixture ports"
+  }
+]

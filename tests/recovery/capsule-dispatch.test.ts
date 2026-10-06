@@ -126,7 +126,10 @@ function prepareCodexSession(input: {
   return { reportPath: paths.reportPath, transcriptPath, codexHome };
 }
 
-test.each(['payload', 'body'] as const)('Capsule 提取：受限派发、按 Orca 身份读回 %s 报告并交回 Delivery 身份', { timeout: 30_000 }, async (location) => {
+test.each([
+  ['codex', 'payload'], ['codex', 'body'], ['claude', 'payload'],
+  ['opencode', 'payload'], ['pi', 'payload'], ['omp', 'payload'],
+] as const)('Capsule 提取：%s 的可信会话事实经 %s 读回报告并交回 Delivery 身份', { timeout: 30_000 }, async (harnessId, location) => {
   harness = createRecoveryHarness();
   harness.recordSourceSegment({
     segmentId: SEGMENT,
@@ -254,14 +257,8 @@ test.each(['payload', 'body'] as const)('Capsule 提取：受限派发、按 Orc
       consumerGeneration: 1,
       timeoutMs: 1_000,
     },
-    workerLaunch: createCodexWorkerLaunch({
-      launchId,
-      modelConfiguration: modelConfigurationFixture(),
-      credentialStore: credentialStoreFixture(),
-      sandboxMode: 'read-only',
-      stateRoot,
-      sessionStartReporterPath: codexSessionPathsUnder(stateRoot, launchId).reporterPath,
-    }),
+    // 本测试只验证派发与 Delivery 接缝；逐 harness transcript 证明由 adapter 合同测试覆盖。
+    workerLaunch: { ...launch, harness: harnessId },
     worktree: `path:${worktree}`,
     operationIds: {
       task: 'op:capsule:task' as OperationId,
@@ -272,7 +269,7 @@ test.each(['payload', 'body'] as const)('Capsule 提取：受限派发、按 Orc
     observeSession: ({ dispatchId }) => {
       // 绑定输入由用例给出：绑定规则本身由 session-binding 的用例覆盖，这里只提供可信事实。
       return Promise.resolve({
-        harness: 'codex',
+        harness: harnessId,
         role: 'planner',
         workerTaskId: RECOVERY_WORKER_TASK,
         dispatchId: dispatchId as never,
@@ -671,6 +668,26 @@ function capsuleFacts(input: {
   readonly companionStateRoot: string;
   readonly probe: ReadOnlyWorkerProbe;
 }) {
+  const scope = harness!.store.query({ kind: 'scope', coordinationScopeId: RECOVERY_SCOPE });
+  if (scope.kind !== 'scope' || scope.scope === null) throw new Error('Scope 不存在');
+  const bindings = harness!.store.query({ kind: 'materialization-bindings', coordinationScopeId: RECOVERY_SCOPE });
+  if (bindings.kind !== 'materialization-bindings') throw new Error('bindings 不可读');
+  if (!bindings.bindings.some((binding) => binding.workerTaskId === RECOVERY_WORKER_TASK && binding.attemptId === 'attempt-capsule-1')) {
+    const recorded = harness!.store.transact({
+      kind: 'record-materialization-binding', coordinationScopeId: RECOVERY_SCOPE,
+      expectedRevision: scope.scope.revision, writer: harness!.writer,
+      workPackageId: RECOVERY_WORK_PACKAGE, role: 'implementation',
+      workerTaskId: RECOVERY_WORKER_TASK, dispatchId: 'ctx-capsule-source' as DispatchId,
+      attemptId: 'attempt-capsule-1', worktreeId: 'worktree-capsule', specBinding: {
+        provider: 'openspec', relativePath: `openspec/changes/${RECOVERY_WORK_PACKAGE}`,
+        contentDigest: 'digest:capsule-source', providerVersion: '0.4.0', contractRevision: 1, trackingRevision: 1,
+      },
+      specificationUnitPath: null, ...harness!.authorizationRef(), workerProfileRef: 'profile-implementation',
+      orcaTaskId: 'source-capsule-task', creationOperationId: 'op:capsule-source' as OperationId,
+      launchId: 'launch-capsule-source',
+    });
+    if (recorded.kind === 'rejected') throw new Error(`${recorded.code}: ${recorded.message}`);
+  }
   return createExecutionRecoveryFacts({
     store: () => harness!.store,
     backend: input.backend,

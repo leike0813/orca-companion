@@ -1,0 +1,77 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T04:10:05.889Z",
+  "finishedAt": "2026-10-06T04:19:15.213Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-pi",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": [
+    {
+      "harness": "pi",
+      "model": "MiniMax-M3",
+      "providerId": "minimax-cn",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "shared-minimax:env:ANTHROPIC_API_KEY",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "dispatchId": "ctx_e4f1fc8996ec",
+          "sessionId": "552be574-e01b-4377-aeaa-82fb91fcf04b",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "dispatchId": "ctx_0cd5229f862d",
+          "sessionId": "0c2ef10d-59d4-4405-aa63-8edf8d2b23d0",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "dispatchId": "ctx_770be6b6858b",
+          "sessionId": "35d67f03-e5e1-451f-a50d-4c350dcaead5",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "worker_not_succeeded",
+            "message": "Worker 未完成：failed；worker-show={\"dispatchId\":\"ctx_cf6daea6f31c\",\"taskId\":\"task_2045bc6ab498\",\"dispatchStatus\":\"failed\",\"workerState\":\"failed\",\"workerStage\":\"process_exited\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"exited\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_cf6daea6f31c\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"exited\",\"tail\":[],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"0\",\"latestCursor\":\"0\",\"returnedLineCount\":0,\"source\":\"stream\"},\"cursor\":\"<redacted>\",\"status\":{\"worker\":\"failed\",\"terminal\":\"exited\",\"liveness\":\"exited\"},\"fallbackReason\":\"session_not_reported\",\"warnings\":[],\"sourceExact\":false,\"contentComplete\":false,\"clipping\":[\"terminal_fallback\"],\"projection\":{\"id\":\"ctx_cf6daea6f31c\",\"dispatchId\":\"ctx_cf6daea6f31c\",\"taskId\":\"task_2045bc6ab498\",\"runId\":\"run_d7219c28f5aa\",\"role\":\"worker\",\"parent\":null,\"provider\":null,\"host\":{\"kind\":\"local\",\"id\":\"lo | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"exited\",\"tail\":[],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"0\",\"latestCursor\":\"0\",\"returnedLineCount\":0,\"source\":\"screen-unavailable\"}}"
+          }
+        }
+      ],
+      "resume": {
+        "kind": "ran",
+        "sessionId": "0c2ef10d-59d4-4405-aa63-8edf8d2b23d0",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null
+      },
+      "blockers": [
+        "finalizer：worker_not_succeeded Worker 未完成：failed；worker-show={\"dispatchId\":\"ctx_cf6daea6f31c\",\"taskId\":\"task_2045bc6ab498\",\"dispatchStatus\":\"failed\",\"workerState\":\"failed\",\"workerStage\":\"process_exited\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"exited\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_cf6daea6f31c\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"exited\",\"tail\":[],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"0\",\"latestCursor\":\"0\",\"returnedLineCount\":0,\"source\":\"stream\"},\"cursor\":\"<redacted>\",\"status\":{\"worker\":\"failed\",\"terminal\":\"exited\",\"liveness\":\"exited\"},\"fallbackReason\":\"session_not_reported\",\"warnings\":[],\"sourceExact\":false,\"contentComplete\":false,\"clipping\":[\"terminal_fallback\"],\"projection\":{\"id\":\"ctx_cf6daea6f31c\",\"dispatchId\":\"ctx_cf6daea6f31c\",\"taskId\":\"task_2045bc6ab498\",\"runId\":\"run_d7219c28f5aa\",\"role\":\"worker\",\"parent\":null,\"provider\":null,\"host\":{\"kind\":\"local\",\"id\":\"lo | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"exited\",\"tail\":[],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"0\",\"latestCursor\":\"0\",\"returnedLineCount\":0,\"source\":\"screen-unavailable\"}}"
+      ]
+    }
+  ]
+}

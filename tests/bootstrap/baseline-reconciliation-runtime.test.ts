@@ -84,10 +84,11 @@ test('独立基线 Planner 的 Delivery 先结算再解除补救门禁，重放�
       },
       canonicalWorktreePath: '/work', repoSelector: 'path:/work',
       worktreePaths: new Map([[workPackageId, directory]]),
+      harness: 'codex',
       modelConfiguration: executionModelConfiguration({ model: 'test-model' }),
       credentialStore: credentialStoreFixture(),
       credentialStorePath: join(directory, 'credentials.json'),
-      codexSandboxMode: 'danger-full-access', companionStateRoot: join(directory, '.git', 'companion'), bindingWindowMs: 1_000,
+      sandboxMode: 'danger-full-access', companionStateRoot: join(directory, '.git', 'companion'), bindingWindowMs: 1_000,
     });
     expect(await driver(plan)).toEqual({ kind: 'verified' });
     expect(mutations).toEqual(['task-update', 'delivery-ack']);

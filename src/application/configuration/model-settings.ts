@@ -28,6 +28,7 @@ import {
   modelDefinitionSchema,
   providerConnectionSchema,
   workerProfileConfigurationSchema,
+  WORKER_HARNESS_IDS,
   type EffortCapability,
   type ModelProfileRole,
   type ModelSettingsRole,
@@ -81,6 +82,11 @@ export type SaveModelSettingsInput = {
   /** 调用方读到的项目配置 revision；不匹配即拒绝，不覆盖较新的配置。 */
   readonly expectedRevision: number;
   readonly role: ModelSettingsRole;
+  /**
+   * Worker 角色的 harness。缺省表示沿用该角色已有 profile；只有该角色首次配置时才落到项目默认
+   * `execution.harness`。Coordinator 不使用它。
+   */
+  readonly harness?: string;
   readonly connection: ModelSettingsConnectionCandidate;
   readonly model: string;
   readonly modelOptions?: Readonly<Record<string, unknown>>;
@@ -119,6 +125,59 @@ function reject(code: ModelSettingsRejectionCode, message: string): ModelSetting
 
 function isCoordinatorRole(role: ModelSettingsRole): role is 'coordinator' {
   return role === 'coordinator';
+}
+
+/** 该角色当前绑定的 profile harness；没有 profile 时为 null。 */
+function currentWorkerHarness(current: ProjectConfig, role: ModelProfileRole): string | null {
+  const profileRef = current.execution.workerProfileRefs[role];
+  if (profileRef === undefined) {
+    return null;
+  }
+  return current.execution.workerProfiles.find((entry) => entry.profileRef === profileRef)?.harness ?? null;
+}
+
+/**
+ * 本次保存实际写入的 Worker harness。
+ *
+ * 显式给出即采用；缺省沿用该角色已有 profile，只有第一次配置才落到项目默认 `execution.harness`。
+ * 这样一次「换模型」的保存不会把角色悄悄从原 harness 换回默认值。
+ */
+function selectedWorkerHarness(input: SaveModelSettingsInput, current: ProjectConfig): string {
+  const explicit = input.harness?.trim() ?? '';
+  if (explicit !== '') {
+    return explicit;
+  }
+  return currentWorkerHarness(current, input.role as ModelProfileRole) ?? current.execution.harness;
+}
+
+/**
+ * harness 与原生连接的准入。
+ *
+ * Coordinator 保持 LangChain：它不接受 Worker harness 的原生连接。显式选择、既有角色与首次默认
+ * 都必须指向已注册 harness。原生连接声明的 harness 必须与所选 harness 一致，否则一次保存会写出一个启动时
+ * 无法解释的连接。
+ */
+function validateHarness(input: SaveModelSettingsInput, current: ProjectConfig): ModelSettingsRejection | null {
+  if (isCoordinatorRole(input.role)) {
+    return input.connection.nativeWorker === undefined
+      ? null
+      : reject('invalid_input', 'Coordinator 必须使用 LangChain provider 连接，不接受 Worker 的原生 harness 连接');
+  }
+  const harness = selectedWorkerHarness(input, current);
+  if (!(WORKER_HARNESS_IDS as readonly string[]).includes(harness)) {
+    return reject('invalid_input', `不支持的 Worker harness：${harness}`);
+  }
+  const native = input.connection.nativeWorker;
+  if (harness !== 'codex' && native === undefined) {
+    return reject('invalid_input', `Worker harness ${harness} 缺少原生连接`);
+  }
+  if (native !== undefined && input.connection.codex !== null) {
+    return reject('invalid_input', '原生 Worker 连接不能同时声明 Codex 配置');
+  }
+  if (native !== undefined && native.harness !== harness) {
+    return reject('invalid_input', `原生连接的 harness ${native.harness} 与所选 harness ${harness} 不一致`);
+  }
+  return null;
 }
 
 /**
@@ -162,6 +221,10 @@ function assembleCandidate(
   refs: CandidateRefs,
   credentialRef: string | null,
 ): CandidateAssembly {
+  const harnessRejection = validateHarness(input, current);
+  if (harnessRejection !== null) {
+    return harnessRejection;
+  }
   const connection = providerConnectionSchema.safeParse({
     ...input.connection,
     connectionRef: refs.connectionRef,
@@ -209,7 +272,7 @@ function assembleCandidate(
     const parsed = workerProfileConfigurationSchema.safeParse({
       profileRef: refs.profileRef,
       role: input.role as ModelProfileRole,
-      harness: current.execution.harness,
+      harness: selectedWorkerHarness(input, current),
       modelConfiguration: {
         connection: connection.data,
         modelRef: refs.modelRef,

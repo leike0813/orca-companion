@@ -1,0 +1,44 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T04:21:20.233Z",
+  "finishedAt": "2026-10-06T04:21:42.750Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-omp",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": [
+    {
+      "harness": "omp",
+      "model": "MiniMax-M3.1-Flash-Preview",
+      "providerId": "minimax-code-cn",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "shared-minimax:env:ANTHROPIC_API_KEY",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "dispatchId": "ctx_5ac56994d8ab",
+          "sessionId": "01a10f71-f62c-77af-ae65-d1fa212dff57",
+          "coverage": "partial",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-code-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "没有可恢复的 implementation 会话"
+        }
+      },
+      "blockers": [
+        "resume：original_unavailable 没有可恢复的 implementation 会话"
+      ]
+    }
+  ]
+}

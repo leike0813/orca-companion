@@ -2,6 +2,32 @@
 
 记录 Companion 依赖的 Orca 侧事实：上游源码快照、本机运行时版本、已经核验的能力，以及尚未验证的部分。运行时能力必须通过当前安装的 Orca 版本核验，不能从 submodule 源码推断。
 
+## Worker Harness 扩展（2026-10-06）
+
+当前注册项为 `codex`、`claude`、`opencode`、`pi`、`omp`，配置和启动按角色固定的 profile 解析，不使用 Orca 的全局默认 agent 设置。本轮实际安装版本与指定验收模型如下：
+
+| Harness | 本机 `--version` | 验收模型 |
+| --- | --- | --- |
+| Claude Code | 2.1.289 | Opus alias → `MiniMax-M3.1-Flash-Preview` |
+| OpenCode | 2.0.21 | `minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview` |
+| pi | 1.0.0 | `minimax-cn/MiniMax-M3` |
+| OMP | 18.4.10 | `minimax-code-cn/MiniMax-M3.1-Flash-Preview` |
+
+Claude 通过 SessionStart hook、pi/OMP 通过原生 session extension 报告精确 session 与 transcript path。OpenCode 使用隔离 XDG 状态与 `--standalone`，经公开 session API 和分页消息接口核验，不直接读取数据库。恢复指定原 UUID、session ID 或完整 session 文件路径，并再次证明身份；报告迟到或结果 unknown 保留原操作，不重复派发。
+
+原生只读启动使用 `read-only-execution-wrapper.ts` 的 bwrap 包装器，仓库、Git 与协调库只读，仅精确状态根及其临时目录可写。版本可读只说明 CLI 存在；包装器探针与真实角色验收的结果分别记录，不能据此推定整个协调闭环已通过。真实隔离验收入口为 `tests/acceptance/worker-harness-matrix.test.ts`，显式设置 `ORCA_COMPANION_REAL_ACCEPTANCE=1` 才运行；证据写入 `artifacts/worker-harness-adapters/`。本轮完成范围以该目录的实际结果和 change 任务记录为准。
+
+### 隔离实测要点（2026-10-06）
+
+- OpenCode 2.0.21 用原生 config 顶层 `providers`（复数）声明 provider：provider 的 `settings` 承载 `baseURL`/`apiKey`（managed 只写 `{env:<VAR>}` 变量名并登记 `env`），`package` 选择原生实现——`anthropic-messages` → `@opencode/ai/providers/anthropic`，`openai-completions` → `@opencode/ai/providers/openai/chat`，`openai-responses` → `@opencode/ai/providers/openai/responses`；Anthropic 的 base root 补成 `/v1`。完整 TUI 在 provider 目录初始化期间会覆盖预建 Session 的模型；生产采用公开 `opencode mini --standalone --model <provider/model> --session <id>` 精确绑定，隔离 config 同时声明默认模型、自动许可和仅允许获批 provider 的 `experimental.policies`。
+- 新建 OpenCode Session 走公开 `POST /api/session`（精确 id、`location.directory`、`model`），返回 `data` 必须回读 id/directory/model 一致才接受。列表必须用 `session.list` operation 带 `--param` 穷尽（raw GET 忽略 `--param`）；消息读取用 raw GET `/api/session/:id/message` 的 query string `limit`/`cursor`，不存在 `session.messages` operation。resume 复用原 Session 报告路径，并在公开 API 重新证明后刷新报告 `observedAt`（时间戳只表示本次核验时刻）。
+- OMP 18.4.10 的 `--config` 只是设置 overlay（`startup.setupWizard:false`、`tui.titleState:false`）；模型 registry 来自 agent dir 的 `models.json`（OMP 启动后迁移为 `models.yml`）。公共 extension 在 `session_start`/`agent_start`/`agent_end` 把标题设为 OMP ready/working，供 Orca 判 readiness；报告只在 `existsSync` 确认真实 session 文件后写入，不落空 path 记录。transcript 首行 `{"type":"title","v":1}` 是文件级 metadata，不参与会话条目树。
+- 认证：pi 的自定义 provider `apiKey` 必须写成 `$ENV` 形式，OMP 写裸变量名；secret 仍只由 launcher 注入子进程环境。
+- 只读包装器：`--ro-bind / /` 之后仅按需 `--tmpfs /tmp` 与精确 `--bind` 状态根（可另加 reporter 目录）；`/run` 保持根挂载只读，保留 DNS symlink 与 runtime socket，单独 tmpfs 会以 `bwrap: Can't create file at /etc/resolv.conf` 失败。workspace、状态根或 reporter 落在 `/tmp` 之下时放弃该 tmpfs。
+- `doctor` 核验配置引用的每个角色 profile（不限于只读角色），逐 profile 输出结论；探针与生产复用该 harness 的启动及只读包装器实现，未配置的角色不假装核验过，未知或缺失 native 连接 fail closed。
+
+CLI 参数核验同时参考[Claude CLI 合同](https://code.claude.com/docs/en/cli-reference)、[pi 原生模型配置](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md)与本机 `--help`；版本升级必须重跑会话绑定、恢复和只读验收。
+
 ## 当前执行约束（2026-10-05）
 
 并行 Work Package 额度由用户配置并通过 Manifest 批准，默认 3，图容量默认 8。新包以已归属的当前 canonical HEAD 建立隔离 worktree，既有包保留准入基线。canonical 集成串行；分叉包先在包内合并 canonical，再续接原 Validator Session 复验精确合并树。Graph Patch Planner 有独立的单例派发约束，普通包不等待整个 Run 静止。

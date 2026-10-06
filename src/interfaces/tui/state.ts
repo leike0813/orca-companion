@@ -239,6 +239,9 @@ export type ModelRoleMenuState = {
  *
  * 字段覆盖完整的 provider 连接：codex 连接、凭据来源与 SDK 字段路径，以及 effort 的可信能力来源。
  * `credentialRef` 是 opaque 引用而非 key，保存时原样带回，因此不提供编辑入口。
+ *
+ * `harness` 与三个 `native*` 字段是**附加**的：缺省即按 codex 连接处理，旧夹具与旧行为因此保持不变。
+ * 只有 Worker 角色在 codex 之外显式选择 harness 时才提供原生连接字段；Coordinator 始终用 LangChain。
  */
 export type ModelSettingsEdit = {
   readonly role: import('./ports.js').ModelSettingsRole;
@@ -247,10 +250,18 @@ export type ModelSettingsEdit = {
   readonly model: string;
   /** 非秘密选项，逐行 `key = value`；保存时按行解析。 */
   readonly options: string;
+  /** Worker harness；空串或缺失表示沿用现有 profile、按 codex 处理。 */
+  readonly harness?: string;
   readonly codexProviderId: string;
   readonly codexBaseUrl: string;
   /** 空串表示该连接不配置 codex 连接。 */
   readonly codexWireApi: '' | 'responses' | 'chat';
+  /** 原生连接的 providerId；非 codex harness 必填。 */
+  readonly nativeProviderId?: string;
+  /** 原生连接的 baseUrl；managed 凭据必填，harness_login 可缺省。 */
+  readonly nativeBaseUrl?: string;
+  /** 原生连接的接口族；managed 必填，取值来自 `NATIVE_WORKER_APIS`。 */
+  readonly nativeApi?: string;
   readonly credentialKind: 'harness_login' | 'managed';
   readonly credentialRef: string;
   readonly credentialOptionPath: string;
@@ -267,9 +278,13 @@ export const MODEL_SETTINGS_FIELDS = [
   'providerIntegration',
   'model',
   'options',
+  'harness',
   'codexProviderId',
   'codexBaseUrl',
   'codexWireApi',
+  'nativeProviderId',
+  'nativeBaseUrl',
+  'nativeApi',
   'credentialKind',
   'credentialOptionPath',
   'effortSource',
@@ -286,9 +301,13 @@ export const EMPTY_MODEL_SETTINGS_EDIT: ModelSettingsEdit = {
   providerIntegration: '',
   model: '',
   options: '',
+  harness: '',
   codexProviderId: '',
   codexBaseUrl: '',
   codexWireApi: '',
+  nativeProviderId: '',
+  nativeBaseUrl: '',
+  nativeApi: '',
   credentialKind: 'harness_login',
   credentialRef: '',
   credentialOptionPath: '',

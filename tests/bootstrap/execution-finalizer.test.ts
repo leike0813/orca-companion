@@ -16,7 +16,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -682,12 +682,21 @@ function fakeTracker(): IssueTrackerGateway {
  */
 function writeSessionStartReport(repository: string): void {
   const root = join(repository, '.git', COMPANION_STATE_DIRECTORY, 'codex');
+  // 状态根是 registry 按 launch 派生的 digest 目录（含宿主写出的 hooks.json）；报告落在宿主安装的
+  // reporter 脚本旁边的 .jsonl，也就是 hooks.json 指向的那个路径，而不是 root 下的共享文件名。
   const stateRoot = readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => join(root, entry.name))
-    .sort()[0];
+    .find((candidate) => existsSync(join(candidate, 'hooks.json')));
   if (stateRoot === undefined) {
     throw new Error('Finalizer 的 Codex 状态根不存在');
+  }
+  const hooks = JSON.parse(readFileSync(join(stateRoot, 'hooks.json'), 'utf8')) as {
+    readonly hooks: { readonly SessionStart: readonly { readonly hooks: readonly { readonly command: string }[] }[] };
+  };
+  const reporterPath = /'([^']*\.mjs)'/u.exec(hooks.hooks.SessionStart[0]?.hooks[0]?.command ?? '')?.[1];
+  if (reporterPath === undefined) {
+    throw new Error('Finalizer 的 reporter 路径不可读');
   }
   const sessionId = 'session-finalizer-codex';
   const sessionsDir = join(stateRoot, 'sessions', '2026', '09', '23');
@@ -699,7 +708,7 @@ function writeSessionStartReport(repository: string): void {
     'utf8',
   );
   writeFileSync(
-    join(root, 'session-start.jsonl'),
+    reporterPath.replace(/\.mjs$/u, '.jsonl'),
     `${JSON.stringify({
       sessionId,
       transcriptPath,

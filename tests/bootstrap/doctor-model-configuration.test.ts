@@ -66,6 +66,15 @@ test('项目没有配置时：doctor 不装配模型核验，也不因此判定�
   expect(probe.readCoordinatorModel).toBeUndefined();
 });
 
+test('项目没有配置时：不假装核验过任何只读角色引用的 harness', async () => {
+  const empty = mkdtempSync(join(tmpdir(), 'doctor-model-empty-'));
+  directories.push(empty);
+  const probe = createOrcaDoctorProbe({ cwd: empty, env: {} });
+
+  // 没有配置引用任何角色，就不存在「本应核验哪个 harness」：如实返回空结论，而不是拿默认 harness 顶替。
+  await expect(probe.readReadOnlyWorkers!()).resolves.toEqual({ ok: true, value: [] });
+});
+
 test('配置的 provider 集成不可用：报不可用，而不是通过', async () => {
   const repository = repositoryWithConfig(configWith({}));
   const probe = createOrcaDoctorProbe({ cwd: repository, env: {} });
@@ -84,7 +93,7 @@ test('配置已加载但没有 Finalizer profile：只读 Worker 报不可用，
   const probe = createOrcaDoctorProbe({ cwd: repository, env: {} });
 
   // 配置已进入执行形态却没有 Finalizer 绑定：退化探针会把「没核验模型」说成通过。
-  const result = await probe.readReadOnlyWorker!();
+  const result = await probe.readReadOnlyWorkers!();
   expect(result.ok).toBe(false);
   if (!result.ok) {
     expect(result.status).toBe('capability-missing');
@@ -99,4 +108,159 @@ test('项目配置写坏：仍装配核验并报不可用，不回落成「没�
   expect(probe.readCoordinatorModel).toBeDefined();
   const result = await probe.readCoordinatorModel!();
   expect(result.ok).toBe(false);
+});
+
+test('native 只读角色使用 adapter 的启动前门禁：保留字段被拒时逐 harness 报不可用', async () => {
+  const connection = {
+    connectionRef: 'connection-native',
+    label: 'native',
+    providerIntegration: 'minimax',
+    modelOptions: {},
+    credential: { kind: 'harness_login' },
+    codex: null,
+    nativeWorker: { harness: 'claude', providerId: 'minimax' },
+  };
+  const repository = repositoryWithConfig(
+    configWith({
+      providerConnections: [connection],
+      models: [{ modelRef: 'model-native', connectionRef: 'connection-native', model: 'MiniMax-M3', effortCapability: null }],
+      execution: {
+        harness: 'claude',
+        codexSandbox: 'workspace-write',
+        workerProfiles: [
+          {
+            profileRef: 'profile-finalizer',
+            role: 'finalizer',
+            harness: 'claude',
+            modelConfiguration: {
+              connection,
+              modelRef: 'model-native',
+              model: 'MiniMax-M3',
+              effort: null,
+              effortCapability: null,
+              // 宿主保留键：adapter 的启动前门禁会拒绝，doctor 只调用它而不复制规则。
+              modelOptions: { model: 'attempted-override' },
+            },
+          },
+        ],
+        workerProfileRefs: { finalizer: 'profile-finalizer' },
+      },
+    }),
+  );
+  const probe = createOrcaDoctorProbe({ cwd: repository, env: {} });
+
+  const result = await probe.readReadOnlyWorkers!();
+  expect(result.ok).toBe(true);
+  if (result.ok) {
+    expect(result.value).toHaveLength(1);
+    expect(result.value[0]).toMatchObject({
+      harness: 'claude',
+      profileRef: 'profile-finalizer',
+      capability: 'unavailable',
+      harnessVersion: null,
+    });
+  }
+});
+
+test('managed 凭据读不到时只读角色不报 ok，且结论里不出现 secret', async () => {
+  const connection = {
+    connectionRef: 'connection-managed',
+    label: 'native-managed',
+    providerIntegration: 'minimax',
+    modelOptions: {},
+    credential: { kind: 'managed', credentialRef: '11111111-1111-4111-8111-111111111111', optionPath: 'apiKey' },
+    codex: null,
+    nativeWorker: { harness: 'claude', providerId: 'minimax' },
+  };
+  const repository = repositoryWithConfig(
+    configWith({
+      providerConnections: [connection],
+      models: [{ modelRef: 'model-managed', connectionRef: 'connection-managed', model: 'MiniMax-M3', effortCapability: null }],
+      execution: {
+        harness: 'claude',
+        codexSandbox: 'workspace-write',
+        workerProfiles: [
+          {
+            profileRef: 'profile-finalizer',
+            role: 'finalizer',
+            harness: 'claude',
+            modelConfiguration: {
+              connection,
+              modelRef: 'model-managed',
+              model: 'MiniMax-M3',
+              effort: null,
+              effortCapability: null,
+              modelOptions: {},
+            },
+          },
+        ],
+        workerProfileRefs: { finalizer: 'profile-finalizer' },
+      },
+    }),
+  );
+  // 独立的临时 XDG：凭据 store 里没有任何条目，因此 managed 引用一定读不到，不依赖真实用户凭据。
+  const credentialsDirectory = mkdtempSync(join(tmpdir(), 'doctor-credentials-'));
+  directories.push(credentialsDirectory);
+  const probe = createOrcaDoctorProbe({
+    cwd: repository,
+    env: { XDG_CONFIG_HOME: credentialsDirectory, XDG_DATA_HOME: credentialsDirectory },
+  });
+
+  const result = await probe.readReadOnlyWorkers!();
+  expect(result.ok).toBe(true);
+  if (result.ok) {
+    expect(result.value[0]).toMatchObject({ harness: 'claude', capability: 'unavailable', harnessVersion: null });
+    expect(result.value[0]?.detail).toContain('managed 凭据不可用');
+    // 结论只报错误类别，绝不回显 secret 或 store 内容。
+    expect(result.value[0]?.detail).not.toContain('11111111-1111-4111-8111-111111111111');
+  }
+});
+
+test.each(['implementation', 'recovery_utility'] as const)('opencode %s 走 adapter 启动前门禁：未核验的 effort 被拒', async (role) => {
+  const connection = {
+    connectionRef: 'connection-opencode',
+    label: 'opencode',
+    providerIntegration: 'minimax',
+    modelOptions: {},
+    credential: { kind: 'harness_login' },
+    codex: null,
+    nativeWorker: { harness: 'opencode', providerId: 'minimax' },
+  };
+  const effortCapability = { values: ['low', 'high'], source: 'opencode', optionPath: 'effort' };
+  const repository = repositoryWithConfig(
+    configWith({
+      providerConnections: [connection],
+      models: [
+        { modelRef: 'model-opencode', connectionRef: 'connection-opencode', model: 'MiniMax-M3', effortCapability },
+      ],
+      execution: {
+        harness: 'opencode',
+        codexSandbox: 'workspace-write',
+        workerProfiles: [
+          {
+            profileRef: 'profile-recovery-utility',
+            role,
+            harness: 'opencode',
+            modelConfiguration: {
+              connection,
+              modelRef: 'model-opencode',
+              model: 'MiniMax-M3',
+              effort: 'high',
+              effortCapability,
+              modelOptions: {},
+            },
+          },
+        ],
+        workerProfileRefs: { [role]: 'profile-recovery-utility' },
+      },
+    }),
+  );
+  const probe = createOrcaDoctorProbe({ cwd: repository, env: {} });
+
+  const result = await probe.readReadOnlyWorkers!();
+  expect(result.ok).toBe(true);
+  if (result.ok) {
+    // adapter 拒绝带 effort 的 opencode 启动；doctor 只调用它，结论如实报不可用。
+    expect(result.value[0]).toMatchObject({ harness: 'opencode', capability: 'unavailable' });
+  }
 });

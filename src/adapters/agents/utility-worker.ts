@@ -45,7 +45,7 @@ import {
   validateTranscriptCoverage,
 } from '../../application/recovery/recovery-capsule.js';
 import {
-  bindCodexSession,
+  bindHarnessSession,
   type HarnessSessionFacts,
   type SessionBindingFailureCode,
 } from './session-binding.js';
@@ -81,14 +81,17 @@ export const RECOVERY_CAPSULE_REPORT_SHAPE = JSON.stringify({
 export function recoveryCapsuleInstructions(
   transcriptRef: string,
   evidence: TranscriptCoverageEvidence,
+  readingInstructions?: readonly string[],
 ): readonly string[] {
   return [
-    '你是只读 Utility Worker，从一份精确的 Codex JSONL transcript 提取 Recovery Capsule。',
+    '你是只读 Utility Worker，从宿主指定的精确 Worker Harness transcript 提取 Recovery Capsule。',
     '不得改文件、跑 git、再派发 Worker、装依赖或访问外部网络；本机 Orca 控制通道是唯一允许的网络用途。',
     `只读这一份 transcript：${transcriptRef}`,
     `宿主已独立读出的可信 coverage 证据是：${JSON.stringify(evidence)}`,
-    '用一个 Node 脚本一次读完所有非空行并 JSON.parse 每一行，只按脚本输出结论；不要倾泻正文或重复读取同一段。',
-    '事件引用规则：记录自带 ordinal 字段时用 ordinal:<值>；否则有非空 timestamp 时用 timestamp:<值>；都没有时用 line:<行号>（行号从 1 起）。',
+    ...(readingInstructions ?? [
+      '用一个 Node 脚本一次读完所有非空行并 JSON.parse 每一行，只按脚本输出结论；不要倾泻正文或重复读取同一段。',
+      '事件引用规则：记录自带 ordinal 字段时用 ordinal:<值>；否则有非空 timestamp 时用 timestamp:<值>；都没有时用 line:<行号>（行号从 1 起）。',
+    ]),
     `产出只有一个 JSON 对象，形状与解析器逐字一致的可解析样例是：${RECOVERY_CAPSULE_REPORT_SHAPE}`,
     'coverage、readableRange、gaps、lastCompleteEventRef 必须逐项等于上面的可信证据；openActions 的每个元素都是含 actionRef/description/sourceRef 三个非空字符串的对象，sourceRefs 与 unknowns 都是字符串数组，没有结论时写 []。',
     'lastCompleteEventRef 非空时必须出现在 sourceRefs 里。把该 JSON 作为 worker_done 正文提交（outcome succeeded），不要只打印它。',
@@ -163,15 +166,15 @@ export type UtilityWorkerBindingResult =
 /**
  * 核验 Utility Worker 的精确绑定。
  *
- * 复用 `bindCodexSession` 的全部规则（harness、session 身份、transcript 来源、观察时间窗、身份
+ * 复用 `bindHarnessSession` 的全部规则（harness、session 身份、transcript 来源、观察时间窗、身份
  * 变更），只把返回值换成不含业务角色的形状——Utility Worker 不是 Planner / Implementation /
  * Validator / Finalizer 中的任何一个。
  */
 export function bindUtilityWorkerSession(
   facts: HarnessSessionFacts,
-  options: { readonly identityChanged?: boolean } = {},
+  options: { readonly identityChanged?: boolean; readonly harness?: string } = {},
 ): UtilityWorkerBindingResult {
-  const bound = bindCodexSession(facts, options);
+  const bound = bindHarnessSession(options.harness ?? 'codex', facts, options);
   if (bound.kind === 'unavailable') {
     return bound;
   }
@@ -654,7 +657,9 @@ export async function dispatchScopedWorker(input: ScopedWorkerDispatchInput): Pr
       message: '无法观察到该 Utility Worker 的精确 harness session 事实',
     };
   }
-  const bound = bindUtilityWorkerSession(facts);
+  const bound = bindUtilityWorkerSession(facts, {
+    harness: input.workerLaunch.kind === 'prepared_terminal' ? input.workerLaunch.harness : input.workerLaunch.agent,
+  });
   if (bound.kind === 'unavailable') {
     return { kind: 'binding_unavailable', code: bound.code, message: bound.message };
   }
@@ -668,6 +673,7 @@ export async function dispatchScopedWorker(input: ScopedWorkerDispatchInput): Pr
  * 事实由 `parseRecoveryCapsuleReport` 按 host 侧的 transcript 读取证据校验。
  */
 export type CapsuleDispatchInput = {
+  readonly instructions?: readonly string[];
   readonly store: BranchCoordinationStore;
   readonly backend: ExecutionBackend;
   readonly writer: CoordinationWriter;
@@ -872,7 +878,7 @@ export async function dispatchCapsuleWorker(input: CapsuleDispatchInput): Promis
       operationIds: input.operationIds,
       observeSession: input.observeSession,
       ...(input.onTaskCreated === undefined ? {} : { onTaskCreated: input.onTaskCreated }),
-      instructions: recoveryCapsuleInstructions(input.envelope.transcriptRef, input.evidence),
+      instructions: recoveryCapsuleInstructions(input.envelope.transcriptRef, input.evidence, input.instructions),
     });
     if (created.kind !== 'dispatched') {
       const reason =

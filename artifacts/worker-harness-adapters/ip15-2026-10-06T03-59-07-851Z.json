@@ -1,0 +1,93 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T03:59:07.851Z",
+  "finishedAt": "2026-10-06T03:59:56.229Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-opencode",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": [
+    {
+      "harness": "opencode",
+      "model": "MiniMax-M3.1-Flash-Preview",
+      "providerId": "minimax-cn-coding-plan",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "opencode-auth",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "Session Binding 不可用：opencode session 列表 cursor 循环"
+          }
+        },
+        {
+          "role": "implementation",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "Session Binding 不可用：opencode session 列表 cursor 循环"
+          }
+        },
+        {
+          "role": "validator",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "Session Binding 不可用：opencode session 列表 cursor 循环"
+          }
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "Session Binding 不可用：opencode session 列表 cursor 循环"
+          }
+        }
+      ],
+      "resume": {
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "blockers": [
+        "planner：transcript_unavailable Session Binding 不可用：opencode session 列表 cursor 循环",
+        "implementation：transcript_unavailable Session Binding 不可用：opencode session 列表 cursor 循环",
+        "validator：transcript_unavailable Session Binding 不可用：opencode session 列表 cursor 循环",
+        "finalizer：transcript_unavailable Session Binding 不可用：opencode session 列表 cursor 循环",
+        "resume：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复"
+      ]
+    }
+  ]
+}

@@ -30,7 +30,7 @@ import {
 } from '../../src/interfaces/tui/components/model-settings-editor.js';
 import { MODEL_SETTINGS_FIELDS, type ModelRoleMenuState, type ModelSettingsEdit } from '../../src/interfaces/tui/state.js';
 import { displayWidth, truncateToDisplayWidth } from '../../src/interfaces/tui/render/width.js';
-import type { ModelCatalog, ModelRoleView } from '../../src/interfaces/tui/ports.js';
+import type { ModelCatalog, ModelRoleView, ModelSettingsSnapshotView } from '../../src/interfaces/tui/ports.js';
 import {
   FAKE_MODEL_SETTINGS_SNAPSHOT,
   chooseCommand,
@@ -46,6 +46,7 @@ import {
 const ENTER = '\r';
 const DOWN = '\u001b[B';
 const RIGHT = '\u001b[C';
+const LEFT = '\u001b[D';
 const TAB = '\t';
 const ESC = '\u001b';
 
@@ -499,9 +500,12 @@ function fakeCatalogOptions() {
   };
 }
 
-/** 走到 API Key 字段并输入一串可识别的假 key。 */
+/** 走到 API Key 字段并输入一串可识别的假 key。可见字段随角色与 harness 变化，按激活标记定位。 */
 async function typeSecret(rendered: RenderedTui, secret: string): Promise<void> {
-  for (let index = 0; index < MODEL_SETTINGS_FIELDS.length - 1; index += 1) {
+  for (let index = 0; index < MODEL_SETTINGS_FIELDS.length; index += 1) {
+    if (/›\s+API Key/u.test(frameText(rendered))) {
+      break;
+    }
     await press(rendered, DOWN);
   }
   await press(rendered, secret);
@@ -834,6 +838,301 @@ describe('保存与应用分离', () => {
     await settle(6);
     expect(frameText(rendered)).toContain('Execution Authorization Review');
     expect(fake.calls.filter((call) => call.name === 'executionAuthorization.approve')).toHaveLength(0);
+    rendered.unmount();
+  });
+});
+
+describe('逐角色 harness 与原生连接编辑', () => {
+  const nativeEdit = (overrides: Partial<ModelSettingsEdit> = {}): ModelSettingsEdit => editWith({
+    role: 'planner',
+    harness: 'claude',
+    nativeProviderId: 'anthropic',
+    nativeBaseUrl: 'https://api.anthropic.com',
+    nativeApi: 'anthropic-messages',
+    credentialKind: 'managed',
+    credentialRef: '11111111-1111-4111-8111-111111111111',
+    credentialOptionPath: 'apiKey',
+    ...overrides,
+  });
+
+  test('codex 之外的 harness 组装原生连接，codex 连接让位', () => {
+    const draft = modelSettingsDraft(nativeEdit(), 7);
+    expect(draft.kind).toBe('ok');
+    if (draft.kind !== 'ok') return;
+    expect(draft.input.harness).toBe('claude');
+    expect(draft.input.connection.codex).toBeNull();
+    expect(draft.input.connection.nativeWorker).toEqual({
+      harness: 'claude',
+      providerId: 'anthropic',
+      baseUrl: 'https://api.anthropic.com',
+      api: 'anthropic-messages',
+    });
+  });
+
+  test('原生连接缺 providerId、managed 缺 baseUrl/api、api 超范围都拒绝', () => {
+    expect(modelSettingsDraft(nativeEdit({ nativeProviderId: '' }), 7)).toMatchObject({
+      kind: 'invalid',
+      field: 'nativeProviderId',
+    });
+    expect(modelSettingsDraft(nativeEdit({ nativeBaseUrl: '', nativeApi: '' }), 7)).toMatchObject({
+      kind: 'invalid',
+      field: 'nativeBaseUrl',
+    });
+    // claude 只支持 anthropic-messages：选了别的接口族必须显式拒绝。
+    expect(modelSettingsDraft(nativeEdit({ nativeApi: 'openai-completions' }), 7)).toMatchObject({
+      kind: 'invalid',
+      field: 'nativeApi',
+    });
+  });
+
+  test('harness_login 可缺省 baseUrl/api，但仍需要 providerId', () => {
+    const draft = modelSettingsDraft(
+      nativeEdit({
+        credentialKind: 'harness_login',
+        credentialRef: '',
+        credentialOptionPath: '',
+        nativeBaseUrl: '',
+        nativeApi: '',
+      }),
+      7,
+    );
+    expect(draft.kind).toBe('ok');
+    if (draft.kind !== 'ok') return;
+    expect(draft.input.connection.nativeWorker).toEqual({ harness: 'claude', providerId: 'anthropic' });
+  });
+
+  test('未注册的显式 harness 被拒绝', () => {
+    expect(modelSettingsDraft(nativeEdit({ harness: 'kilo' }), 7)).toMatchObject({
+      kind: 'invalid',
+      field: 'harness',
+    });
+  });
+
+  test('harness 缺省仍按 codex 处理，Coordinator 不组装原生连接', () => {
+    const codex = modelSettingsDraft(
+      editWith({
+        role: 'planner',
+        codexProviderId: 'openai',
+        codexBaseUrl: 'https://api.openai.com/v1',
+        codexWireApi: 'responses',
+      }),
+      7,
+    );
+    expect(codex.kind).toBe('ok');
+    if (codex.kind !== 'ok') return;
+    expect(codex.input.harness).toBeUndefined();
+    expect(codex.input.connection.codex).not.toBeNull();
+    expect(codex.input.connection.nativeWorker).toBeUndefined();
+
+    // Coordinator 即使带着 native 字段也不走原生分支：它始终是 LangChain/codex。
+    const coordinator = modelSettingsDraft(nativeEdit({ role: 'coordinator' }), 7);
+    expect(coordinator.kind).toBe('ok');
+    if (coordinator.kind !== 'ok') return;
+    expect(coordinator.input.harness).toBeUndefined();
+    expect(coordinator.input.connection.nativeWorker).toBeUndefined();
+  });
+
+  test('可见字段按角色与 harness 收窄，缺省仍是 codex', () => {
+    const coordinator = visibleModelSettingsFields('managed', { role: 'coordinator', harness: 'claude' });
+    expect(coordinator).not.toContain('harness');
+    expect(coordinator).not.toContain('nativeProviderId');
+    expect(coordinator).toContain('codexProviderId');
+
+    const codexWorker = visibleModelSettingsFields('managed', { role: 'planner', harness: 'codex' });
+    expect(codexWorker).toContain('harness');
+    expect(codexWorker).toContain('codexProviderId');
+    expect(codexWorker).not.toContain('nativeProviderId');
+
+    const nativeWorker = visibleModelSettingsFields('managed', { role: 'planner', harness: 'claude' });
+    expect(nativeWorker).toContain('harness');
+    expect(nativeWorker).toContain('nativeProviderId');
+    expect(nativeWorker).not.toContain('codexProviderId');
+
+    // 旧调用方式（无 edit）保持 codex 行为，字段数量不变。
+    expect(visibleModelSettingsFields('managed')).toHaveLength(13);
+    expect(visibleModelSettingsFields('harness_login')).toHaveLength(12);
+  });
+
+  test('harness 与 native api 用左右键循环', () => {
+    const toClaude = editModelSettingsField(editWith({ harness: 'codex' }), 'harness', '', {
+      leftArrow: false,
+      rightArrow: true,
+    } as never);
+    expect(toClaude.harness).toBe('claude');
+    const toCodex = editModelSettingsField(editWith({ harness: 'claude' }), 'harness', '', {
+      leftArrow: true,
+      rightArrow: false,
+    } as never);
+    expect(toCodex.harness).toBe('codex');
+    const nextApi = editModelSettingsField(editWith({ nativeApi: 'anthropic-messages' }), 'nativeApi', '', {
+      leftArrow: false,
+      rightArrow: true,
+    } as never);
+    expect(nextApi.nativeApi).toBe('openai-completions');
+    // claude 只支持 anthropic-messages：循环列表不许提供会被拒绝的取值。
+    const claudeApi = editModelSettingsField(
+      editWith({ harness: 'claude', nativeApi: 'anthropic-messages' }),
+      'nativeApi',
+      '',
+      { leftArrow: false, rightArrow: true } as never,
+    );
+    expect(claudeApi.nativeApi).toBe('anthropic-messages');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* 真实 App 集成（IP-12 模型子页）                                             */
+/* -------------------------------------------------------------------------- */
+
+const NATIVE_PLANNER: ModelRoleView = {
+  role: 'planner',
+  label: 'Planner',
+  group: 'execution',
+  current: { candidateRef: 'model-native', provider: 'anthropic', model: 'claude-native', effort: null },
+  candidates: [
+    { candidateRef: 'model-native', connectionRef: 'connection-native', provider: 'anthropic', model: 'claude-native', effortCapability: null },
+  ],
+  availability: { available: true, reason: null },
+};
+
+/** 既有原生角色：连接带 nativeWorker，角色 harness 为 claude。 */
+const NATIVE_SNAPSHOT: ModelSettingsSnapshotView = {
+  revision: 9,
+  roles: [
+    {
+      role: 'coordinator',
+      bindingRef: 'config-a',
+      connectionRef: 'connection-a',
+      connectionLabel: '主连接',
+      providerIntegration: 'openai',
+      model: 'model-a',
+      effort: null,
+      effortCapability: null,
+      harness: null,
+    },
+    {
+      role: 'planner',
+      bindingRef: 'profile-native',
+      connectionRef: 'connection-native',
+      connectionLabel: 'Anthropic',
+      providerIntegration: 'claude#native',
+      model: 'claude-native',
+      effort: null,
+      effortCapability: null,
+      harness: 'claude',
+    },
+  ],
+  connections: [
+    {
+      connectionRef: 'connection-a',
+      label: '主连接',
+      providerIntegration: 'openai',
+      modelOptions: {},
+      credential: { kind: 'managed', credentialRef: '11111111-1111-4111-8111-111111111111', optionPath: 'apiKey' },
+      codex: { providerId: 'openai', baseUrl: 'https://api.openai.com/v1', wireApi: 'responses' },
+    },
+    {
+      connectionRef: 'connection-native',
+      label: 'Anthropic',
+      providerIntegration: 'claude#native',
+      modelOptions: {},
+      credential: { kind: 'managed', credentialRef: '11111111-1111-4111-8111-111111111111', optionPath: 'apiKey' },
+      codex: null,
+      nativeWorker: { harness: 'claude', providerId: 'anthropic', baseUrl: 'https://api.anthropic.com', api: 'anthropic-messages' },
+    },
+  ],
+  models: [{ modelRef: 'model-native', connectionRef: 'connection-native', model: 'claude-native', effortCapability: null }],
+  coordinatorConfigurations: [{ configurationRef: 'config-a', model: 'model-a', effort: null }],
+};
+
+const nativeCatalog = () => ({
+  options: [],
+  currentConfigurationRef: null,
+  switchable: true,
+  switchBlockReason: null,
+  configurationRevision: 9,
+  roles: [NATIVE_PLANNER],
+});
+
+/** 一直下移，直到目标字段成为激活行；字段集合随角色与 harness 变化。 */
+async function pressDownUntilActive(rendered: RenderedTui, label: string): Promise<void> {
+  for (let index = 0; index < MODEL_SETTINGS_FIELDS.length; index += 1) {
+    if (new RegExp('›\\s+' + label, 'u').test(frameText(rendered))) {
+      return;
+    }
+    await press(rendered, DOWN);
+  }
+}
+
+describe('真实 App 的角色连接子页', () => {
+  test('既有原生角色回填 harness 与原生字段，保存不再改回 codex', async () => {
+    const fake = createFakePorts({
+      modelCatalog: nativeCatalog(),
+      modelSettings: { load: () => Promise.resolve({ kind: 'loaded', snapshot: NATIVE_SNAPSHOT }) },
+    });
+    const rendered = renderTui(fake.ports);
+    await settle();
+    // 角色 catalog 由 Model Picker 载入；e 直接编辑高亮角色的连接。
+    await chooseCommand(rendered, 'model-picker');
+    await settle();
+    await press(rendered, 'e');
+    await settle();
+
+    // 导航必须能走到原生字段：字段集合与渲染一致，否则这些行不可达。
+    await pressDownUntilActive(rendered, 'native providerId');
+    const frame = frameText(rendered);
+    expect(frame).toContain('目标角色：planner');
+    expect(frame).toContain('Harness');
+    expect(frame).toContain('claude');
+    expect(frame).toContain('native providerId');
+    expect(frame).toContain('anthropic');
+    // 原生角色不该再出现 codex 连接字段。
+    expect(frame).not.toContain('Codex providerId');
+
+    await press(rendered, ENTER);
+    await settle(6);
+    const saved = fake.calls.find((call) => call.name === 'modelSettings.save');
+    expect(saved?.detail).toMatchObject({
+      role: 'planner',
+      harness: 'claude',
+      connection: {
+        codex: null,
+        nativeWorker: {
+          harness: 'claude',
+          providerId: 'anthropic',
+          baseUrl: 'https://api.anthropic.com',
+          api: 'anthropic-messages',
+        },
+      },
+    });
+    rendered.unmount();
+  });
+
+  test('切到 codex 后可见字段与保存一起改走 codex 连接', async () => {
+    const fake = createFakePorts({
+      modelCatalog: nativeCatalog(),
+      modelSettings: { load: () => Promise.resolve({ kind: 'loaded', snapshot: NATIVE_SNAPSHOT }) },
+    });
+    const rendered = renderTui(fake.ports);
+    await settle();
+    await chooseCommand(rendered, 'model-picker');
+    await settle();
+    await press(rendered, 'e');
+    await settle();
+
+    await pressDownUntilActive(rendered, 'Harness');
+    await press(rendered, LEFT);
+    await settle(2);
+
+    const frame = frameText(rendered);
+    expect(frame).toContain('Codex providerId');
+    expect(frame).not.toContain('native providerId');
+
+    await press(rendered, ENTER);
+    await settle(6);
+    const saved = fake.calls.find((call) => call.name === 'modelSettings.save');
+    expect(saved?.detail).toMatchObject({ role: 'planner', harness: 'codex', connection: { codex: null } });
+    expect((saved?.detail as { connection: Record<string, unknown> }).connection.nativeWorker).toBeUndefined();
     rendered.unmount();
   });
 });

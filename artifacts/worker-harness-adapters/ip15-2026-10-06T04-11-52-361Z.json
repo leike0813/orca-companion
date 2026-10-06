@@ -1,0 +1,93 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T04:11:52.361Z",
+  "finishedAt": "2026-10-06T04:12:28.246Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-omp",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": [
+    {
+      "harness": "omp",
+      "model": "MiniMax-M3.1-Flash-Preview",
+      "providerId": "minimax-code-cn",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "shared-minimax:env:ANTHROPIC_API_KEY",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "Session Binding 不可用：ENOENT: no such file or directory, lstat '/var/tmp/orca-harness-acceptance-ZIRW97/state/omp/4ccfdd07c2c4017794a5/sessions/2026-10-06T04-12-00-144Z_01a10f69-4710-7285-a8ac-7fae6e94706c.jsonl'"
+          }
+        },
+        {
+          "role": "implementation",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "Session Binding 不可用：ENOENT: no such file or directory, lstat '/var/tmp/orca-harness-acceptance-ZIRW97/state/omp/036627db0b8a233c5f0d/sessions/2026-10-06T04-12-08-608Z_01a10f69-6820-77cb-81d2-7a81f1fcc084.jsonl'"
+          }
+        },
+        {
+          "role": "validator",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "Session Binding 不可用：ENOENT: no such file or directory, lstat '/var/tmp/orca-harness-acceptance-ZIRW97/state/omp/29b545dc8e66b342ec9d/sessions/2026-10-06T04-12-16-980Z_01a10f69-88d4-7552-ad6a-415187d5a6fd.jsonl'"
+          }
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "Session Binding 不可用：ENOENT: no such file or directory, lstat '/var/tmp/orca-harness-acceptance-ZIRW97/state/omp/6ee8c8fcd26e9cc9cf3c/sessions/2026-10-06T04-12-25-576Z_01a10f69-aa68-77fc-93e1-d2d163606ccb.jsonl'"
+          }
+        }
+      ],
+      "resume": {
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "blockers": [
+        "planner：transcript_unavailable Session Binding 不可用：ENOENT: no such file or directory, lstat '/var/tmp/orca-harness-acceptance-ZIRW97/state/omp/4ccfdd07c2c4017794a5/sessions/2026-10-06T04-12-00-144Z_01a10f69-4710-7285-a8ac-7fae6e94706c.jsonl'",
+        "implementation：transcript_unavailable Session Binding 不可用：ENOENT: no such file or directory, lstat '/var/tmp/orca-harness-acceptance-ZIRW97/state/omp/036627db0b8a233c5f0d/sessions/2026-10-06T04-12-08-608Z_01a10f69-6820-77cb-81d2-7a81f1fcc084.jsonl'",
+        "validator：transcript_unavailable Session Binding 不可用：ENOENT: no such file or directory, lstat '/var/tmp/orca-harness-acceptance-ZIRW97/state/omp/29b545dc8e66b342ec9d/sessions/2026-10-06T04-12-16-980Z_01a10f69-88d4-7552-ad6a-415187d5a6fd.jsonl'",
+        "finalizer：transcript_unavailable Session Binding 不可用：ENOENT: no such file or directory, lstat '/var/tmp/orca-harness-acceptance-ZIRW97/state/omp/6ee8c8fcd26e9cc9cf3c/sessions/2026-10-06T04-12-25-576Z_01a10f69-aa68-77fc-93e1-d2d163606ccb.jsonl'",
+        "resume：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复"
+      ]
+    }
+  ]
+}

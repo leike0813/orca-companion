@@ -359,8 +359,8 @@ IC-11 图依据读取可选使用 `readFiles` 与 `readFileRange`。调用必须
 ## IC-07 Worker Harness、Task Envelope、Session Binding 与候选报告
 
 - **Owner (Create)**: `m1-admit-work-package-specifications`
-- **Canonical paths**: `src/adapters/agents/`、`src/domain/{task-envelope,worker-report,worker-liveness}.ts`
-- **Extenders (Extend)**: 无；Recovery 只新建符合该合同的 Dispatch/Session Segment
+- **Canonical paths**: `src/application/ports/worker-harness.ts`、`src/bootstrap/worker-harness.ts`、`src/adapters/agents/`、`src/domain/{task-envelope,worker-report,worker-liveness}.ts`
+- **Extenders (Extend)**: `add-worker-harness-adapters` 增加显式注册表与逐 harness 的精确会话证明；Recovery 只新建符合该合同的 Dispatch/Session Segment
 - **Consumers (Consume)**: Execution、Validation、Recovery、Graph evolution
 
 ```ts
@@ -382,7 +382,7 @@ type TaskEnvelope = {
 };
 
 type SessionBinding = {
-  harness: 'codex';
+  harness: string;
   role: WorkerRole;
   workerTaskId: string;
   dispatchId: string;
@@ -400,9 +400,11 @@ Planner 首次派发固定 `specificationUnitPath` 并将 `specBinding` 置空�
 
 Session Segment 记录角色、Task、Dispatch、Attempt、Binding、最后 transcript 位置与可核验终态。信息不足时 liveness 为 `unverifiable`，不能推断退出或触发重复派发。
 
-- **测试 seam**：Worker Harness Adapter contract tests 使用托管 hook fixture；真实 Codex/Minimax-M3 仅在隔离项目验证精确 binding。领域层测试 Task Envelope parser 和三值 liveness。
+- **测试 seam**：Worker Harness Adapter contract tests 覆盖 codex、claude、opencode、pi、omp 五个注册项的合同（使用托管 hook/HTTP fixture），并指定四个隔离 probe（claude/opencode/pi/omp 各自的批准模型）在显式隔离项目中验证精确 binding；只有实际运行产生的 artifact（hook/extension 报告、精确 transcript、真实 usage）才计入验证结论，未运行的 probe 如实记录为未验证，不得据此写全 PASS。领域层测试 Task Envelope parser 和三值 liveness。
 
 ## IC-08 Delivery settlement、Validation 与 Finalizer
+
+Worker Harness 注册项为 codex、claude、opencode、pi、omp。各角色、Recovery Utility 与 Validator 集成续接使用已固定 profile 的 harness；结果结算不按当前默认 harness 解释历史。注册实现返回已有 PreparedTerminalStrategy，创建、激活、Orca 接管及 unknown 对账仍由既有用例拥有。Validator 续接与集成续接真正需要重新 launch 时使用注册项的 `prepareResume`（精确 session 身份），沿用原 Task/Dispatch/Attempt、原绑定与预算；不需要重新 launch 的恢复只重观察原 terminal。原生只读 Finalizer 与 Utility 的启动和探针共享 bwrap 包装器；包装器仅开放精确状态根和临时目录，仓库、Git、coordination.sqlite 与 checkpoints.sqlite 拒写。
 
 - **Owner (Create)**: `m1-execute-and-validate-work-packages`
 - **Canonical paths**: `src/application/delivery/process-delivery.ts`、`record-worker-result.ts`、`src/application/validation/`、`src/application/finalization/`
@@ -486,6 +488,8 @@ type IntegrationWorkspace = { canonicalWorktreePath: string; workPackageWorktree
 
 ## IC-09 Recovery、Scope control 与 Execution Handoff
 
+原 Session 的 harness 从原物化绑定的授权版本和 profile 读取。各注册项通过精确 transcript 重新证明 provider session；仍存活的 exact Worker 只重观察原 terminal/session，保持原 Session/Segment，不创建 Dispatch、不消费 Recovery Budget，也不登记新 Segment。已退出或身份不可证明时才走原替代路径：新建替代 Dispatch/Binding/Segment，并按原规则消费 Recovery Budget。真正需要重新 launch 时精确 resume 使用 Claude UUID、OpenCode session id 或 pi/omp 完整 session path（注册项 `prepareResume`），随后重新证明同一身份。Capsule 覆盖证据由原 harness 的 transcript inspector 提供，Utility 自报不能覆盖它；恢复、修复及集成续接保持原 Attempt、授权和预算。
+
 - **Owner (Create)**: `m1-recover-execution`
 - **Canonical paths**: `src/application/recovery/`、`src/domain/recovery/`、`src/application/coordination/scope-control-service.ts`、`src/application/handoff/execution-handoff.ts`
 - **Extenders (Extend)**: `m2-wire-execution-runtime`（前台宿主的 Recovery 事实装配与回执解释的异步 seam）
@@ -526,9 +530,9 @@ type ExecutionHandoffState = {
 };
 ```
 
-Worker Session Recovery 先尝试精确恢复原 session；仅确认不可恢复后才创建替代 Dispatch/Binding/Segment，并保留 Worker Task、contract/revision 和业务 Attempt。Recovery Budget 按 Worker Attempt 创建替代 Segment 时消费，重启不重置。`salvage` 只指 Utility Worker 从精确 Worker transcript 提取 Recovery Capsule 的动作；它不是生命周期或角色。
+Worker Session Recovery 先尝试精确恢复原 session：仍存活时只重观察并重新证明同一身份，不产生新 Dispatch/Segment，也不消费 Recovery Budget；仅确认退出或不可恢复后才创建替代 Dispatch/Binding/Segment，并保留 Worker Task、contract/revision 和业务 Attempt。Recovery Budget 按 Worker Attempt 创建替代 Segment 时消费，重启不重置。`salvage` 只指 Utility Worker 从精确 Worker transcript 提取 Recovery Capsule 的动作；它不是生命周期或角色。
 
-前台宿主的 Recovery 事实来源固定为：中断归属由精确 transcript 的 `session_meta` 重新读出（provider session 身份不从 `worker-show` 猜），存活由 `worker-list` + `terminal-list` 的列举判定，workspace 由 `worktree-list` 的归属注释 + `readWorkspaceFacts` 的真实 HEAD 对账，原会话终态只认已结算的 Orca 结果，替代派发复用 Codex prepared-terminal 策略并要求 `worker-start` 回执 + SessionStart 报告共同证明精确 Binding（回执解释因此是异步 seam）。任何一项读不到都返回结构化 `unavailable` 并保持未决，不把「没读到」读成「已退出」或「已恢复」。Recovery Capsule 的正文只能由受限 Utility Worker 经 IC-08 Delivery pipeline 回到应用层，该路径未接线前需要 Capsule 的角色以 `transcript_unavailable` 阻塞。
+前台宿主的 Recovery 事实来源固定为：中断归属由原 harness 的精确 transcript 或公开 session metadata 重新读出（provider session 身份不从 `worker-show` 猜），存活由 `worker-list` + `terminal-list` 的列举判定，workspace 由 `worktree-list` 的归属注释 + `readWorkspaceFacts` 的真实 HEAD 对账，原会话终态只认已结算的 Orca 结果，替代派发复用注册项的 prepared-terminal 策略并要求 `worker-start` 回执与 harness 会话证明共同确认精确 Binding（回执解释因此是异步 seam）。任何一项读不到都返回结构化 `unavailable` 并保持未决，不把「没读到」读成「已退出」或「已恢复」。Recovery Capsule 的正文只能由受限 Utility Worker 经 IC-08 Delivery pipeline 回到应用层；精确 transcript 不可用时以 `transcript_unavailable` 阻塞。
 
 Session Binding 的补记（schema 12 的 `launchId` + 每次触发对「已派发未绑定」角色的重读）在 Recovery 判定之前执行：只有绑定成立之后，「这条会话有没有结果」才有可判定的归属。
 
@@ -881,6 +885,8 @@ SQLite 位于 Git common dir 的 `orca-companion/ui.sqlite`。短事务中完成
 - **读取失效**：交互事件只触发摘要重读及有界 snapshot/原锚点 refresh，不作为问题或受理权威，不开回答或抢焦点。render/effect/resize 仍无 command、副作用或持久写入。
 
 ## IC-14 CredentialStore 与模型设置
+
+schema 3 的 ProviderConnection 可附带 nativeWorker 判别联合：harness、providerId 必填，baseUrl/api 按原生接口选填，api 仅为 anthropic-messages、openai-completions 或 openai-responses；未知字段拒绝。旧连接省略该字段，指纹保持原表示。SaveModelSettingsInput.harness 省略时保留角色当前 harness，首次保存取 execution.harness；显式选择须已注册。角色候选只包含所选已注册 harness 的连接，应用候选完整保留 nativeWorker 与凭据引用。保存追加不可变 profile，应用沿完整 Manifest 审阅。managed secret 只进入子进程环境，harness_login 使用隔离副本，adapter 不写全局认证资产。
 
 - **Owner (Create)**: `complete-tui-model-configuration`
 - **Canonical paths**: `src/application/ports/credential-store.ts`、`src/adapters/storage/credential-store.ts`、`src/application/configuration/model-settings.ts`、`src/domain/model-configuration.ts`

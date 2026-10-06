@@ -9,10 +9,8 @@
  * 本模块不启动 Worker、不恢复 session、不生成 Capsule；它只回答「这次 Dispatch 与哪个 session 绑定」。
  */
 
-import type {
-  DispatchId,
-  WorkerTaskId,
-} from '../../application/dto/identity.js';
+import type { HarnessSessionFacts } from '../../application/ports/worker-harness.js';
+export type { HarnessSessionFacts } from '../../application/ports/worker-harness.js';
 import type { WorkerRole } from '../../domain/planning/execution-authorization.js';
 import type { SessionBinding } from '../../domain/task-contract.js';
 import {
@@ -32,21 +30,6 @@ export const CODEX_HARNESS_ID = 'codex';
 export function sessionBindingIdOf(dispatchId: string, providerSessionId: string): string {
   return `session-binding:${encodeURIComponent(dispatchId)}:${encodeURIComponent(providerSessionId)}`;
 }
-
-/** harness 报告的原始事实；字段缺失是常态，缺失即不可用。 */
-export type HarnessSessionFacts = {
-  readonly harness: string;
-  readonly role: WorkerRole;
-  readonly workerTaskId: WorkerTaskId;
-  readonly dispatchId: DispatchId;
-  readonly attemptId: string;
-  /** provider 报告的 session 身份；未报告时为 `null`（不是空字符串）。 */
-  readonly providerSessionId: string | null;
-  /** 可引用的 transcript 来源；未报告时为 `null`。 */
-  readonly transcriptRef: string | null;
-  /** 观察时间窗；由 harness 或 Controller 提供，不由本模块取时钟。 */
-  readonly observedAt: string | null;
-};
 
 export type SessionBindingFailureCode =
   | 'harness_mismatch'
@@ -80,8 +63,16 @@ export function bindCodexSession(
   facts: HarnessSessionFacts,
   options: { readonly identityChanged?: boolean } = {},
 ): SessionBindingResult {
-  if (facts.harness !== CODEX_HARNESS_ID) {
-    return unavailable('harness_mismatch', `期望 harness ${CODEX_HARNESS_ID}，实际为 ${facts.harness}`);
+  return bindHarnessSession(CODEX_HARNESS_ID, facts, options);
+}
+
+export function bindHarnessSession(
+  harness: string,
+  facts: HarnessSessionFacts,
+  options: { readonly identityChanged?: boolean } = {},
+): SessionBindingResult {
+  if (facts.harness !== harness) {
+    return unavailable('harness_mismatch', `期望 harness ${harness}，实际为 ${facts.harness}`);
   }
   if (options.identityChanged === true) {
     return unavailable('worker_identity_changed', 'Orca 报告 worker 身份已变更，原观察不再属于该 Dispatch');
@@ -101,7 +92,7 @@ export function bindCodexSession(
   return {
     kind: 'bound',
     binding: {
-      harness: CODEX_HARNESS_ID,
+      harness,
       role: facts.role,
       workerTaskId: facts.workerTaskId,
       dispatchId: facts.dispatchId,

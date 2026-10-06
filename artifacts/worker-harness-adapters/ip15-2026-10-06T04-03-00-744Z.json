@@ -1,0 +1,59 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T04:03:00.744Z",
+  "finishedAt": "2026-10-06T04:06:34.558Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-claude",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": [
+    {
+      "harness": "claude",
+      "model": "MiniMax-M3.1-Flash-Preview",
+      "providerId": "minimax",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "env:ANTHROPIC_AUTH_TOKEN",
+      "roles": [
+        {
+          "role": "validator",
+          "kind": "ran",
+          "dispatchId": "ctx_4c1c154983af",
+          "sessionId": "5313b6d7-bbda-4a2c-ade5-e5e068af4cba",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "dispatchId": null,
+          "sessionId": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "claude 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_85dac9e5143d\",\"taskId\":\"task_31aa5300548b\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_85dac9e5143d\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"\",\"\\\"MiniMax-M3.1-Flash-Preview\\\" isn't described by this version's model catalog; update Claude Code, or map it with behavesAs on a modelPicker row (or modelOverrides, if it is a provider id of a model this version knows). Until then auto-compact keeps this session within 200k tokens (the context window it assumes); if the model accepts more, append [1m] to the model name for 1M, or set <redacted> to its real window; <redacted>=1 restores the previous wait-for-the-API behavior.\",\"\",\"────────────────────────────────────────────────────────────────── | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"    /var/t/<redacted>/<redacted>    main ?1  node '/var/tmp/orca-harn\",\"ess-acceptance-PQl6Wi/state/claude/bb1c21c94bf2fab453a3/codex-model-launcher.mjs' '/var/tmp/<redacted>\",\"Wi/state/claude/bb1c21c94bf2fab453a3/codex-model-launch.json'\",\"\\\"MiniMax-M3.1-Flash-Preview\\\" isn't described by this version's model catalog; update Claude Code, or map it with behaves\",\"As on a modelPicker row (or modelOverrides, if it is a provider id of a model this version knows). Until then auto-compa\",\"ct keeps this session within 200k tokens (the context window it assumes); if the model accepts more, append [1m] to the\",\"model name for 1M, or set <redacted> to its real window; <redacted>\",\"FORCEMENT=1 restores the previous wait-for-the-API behavior.\",\"────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\",\"  WARNING: Claude Code running in Bypass Permissions mode\",\"  In Bypass Permissions mode, Claude Code will not ask for your approval before running potentially dangerous\",\"  commands.\",\"  This mode should only be used in a sandboxed container/VM that has restrict"
+          }
+        }
+      ],
+      "resume": {
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "没有可恢复的 implementation 会话"
+        }
+      },
+      "blockers": [
+        "finalizer：session_report_missing claude 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_85dac9e5143d\",\"taskId\":\"task_31aa5300548b\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_85dac9e5143d\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"\",\"\\\"MiniMax-M3.1-Flash-Preview\\\" isn't described by this version's model catalog; update Claude Code, or map it with behavesAs on a modelPicker row (or modelOverrides, if it is a provider id of a model this version knows). Until then auto-compact keeps this session within 200k tokens (the context window it assumes); if the model accepts more, append [1m] to the model name for 1M, or set <redacted> to its real window; <redacted>=1 restores the previous wait-for-the-API behavior.\",\"\",\"────────────────────────────────────────────────────────────────── | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"    /var/t/<redacted>/<redacted>    main ?1  node '/var/tmp/orca-harn\",\"ess-acceptance-PQl6Wi/state/claude/bb1c21c94bf2fab453a3/codex-model-launcher.mjs' '/var/tmp/<redacted>\",\"Wi/state/claude/bb1c21c94bf2fab453a3/codex-model-launch.json'\",\"\\\"MiniMax-M3.1-Flash-Preview\\\" isn't described by this version's model catalog; update Claude Code, or map it with behaves\",\"As on a modelPicker row (or modelOverrides, if it is a provider id of a model this version knows). Until then auto-compa\",\"ct keeps this session within 200k tokens (the context window it assumes); if the model accepts more, append [1m] to the\",\"model name for 1M, or set <redacted> to its real window; <redacted>\",\"FORCEMENT=1 restores the previous wait-for-the-API behavior.\",\"────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\",\"  WARNING: Claude Code running in Bypass Permissions mode\",\"  In Bypass Permissions mode, Claude Code will not ask for your approval before running potentially dangerous\",\"  commands.\",\"  This mode should only be used in a sandboxed container/VM that has restrict",
+        "resume：original_unavailable 没有可恢复的 implementation 会话"
+      ]
+    }
+  ]
+}

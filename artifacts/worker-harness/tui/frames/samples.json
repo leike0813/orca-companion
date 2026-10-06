@@ -1,0 +1,2207 @@
+[
+  {
+    "frame": "workspace",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "workspace-120x40-color-nerd.png",
+    "text": "workspace-120x40-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "frame": "roles",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "roles-120x40-color-nerd.png",
+    "text": "roles-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-coordinator",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "editor-coordinator-120x40-color-nerd.png",
+    "text": "editor-coordinator-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-cjk",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "editor-cjk-120x40-color-nerd.png",
+    "text": "editor-cjk-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "harness-codex",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "harness-codex-120x40-color-nerd.png",
+    "text": "harness-codex-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-fields",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "native-fields-120x40-color-nerd.png",
+    "text": "native-fields-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-filled",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "native-filled-120x40-color-nerd.png",
+    "text": "native-filled-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "masked-key",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "masked-key-120x40-color-nerd.png",
+    "text": "masked-key-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "saved",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "saved-120x40-color-nerd.png",
+    "text": "saved-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "effort",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "effort-120x40-color-nerd.png",
+    "text": "effort-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "reapproval",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "reapproval-120x40-color-nerd.png",
+    "text": "reapproval-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "returned-draft",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "returned-draft-120x40-color-nerd.png",
+    "text": "returned-draft-120x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "frame": "resize-native",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "resize-native-80x24-color-nerd.png",
+    "text": "resize-native-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "resize-native",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "resize-native-50x40-color-nerd.png",
+    "text": "resize-native-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "resize-native",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "resize-native-120x40-color-nerd.png",
+    "text": "resize-native-120x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "workspace",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "workspace-120x40-color-ascii.png",
+    "text": "workspace-120x40-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "frame": "roles",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "roles-120x40-color-ascii.png",
+    "text": "roles-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-coordinator",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "editor-coordinator-120x40-color-ascii.png",
+    "text": "editor-coordinator-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-cjk",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "editor-cjk-120x40-color-ascii.png",
+    "text": "editor-cjk-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "harness-codex",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "harness-codex-120x40-color-ascii.png",
+    "text": "harness-codex-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-fields",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "native-fields-120x40-color-ascii.png",
+    "text": "native-fields-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-filled",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "native-filled-120x40-color-ascii.png",
+    "text": "native-filled-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "masked-key",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "masked-key-120x40-color-ascii.png",
+    "text": "masked-key-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "saved",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "saved-120x40-color-ascii.png",
+    "text": "saved-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "effort",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "effort-120x40-color-ascii.png",
+    "text": "effort-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "reapproval",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "reapproval-120x40-color-ascii.png",
+    "text": "reapproval-120x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "returned-draft",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "returned-draft-120x40-color-ascii.png",
+    "text": "returned-draft-120x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "frame": "workspace",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "workspace-120x40-no-color-nerd.png",
+    "text": "workspace-120x40-no-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "frame": "roles",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "roles-120x40-no-color-nerd.png",
+    "text": "roles-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-coordinator",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "editor-coordinator-120x40-no-color-nerd.png",
+    "text": "editor-coordinator-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-cjk",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "editor-cjk-120x40-no-color-nerd.png",
+    "text": "editor-cjk-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "harness-codex",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "harness-codex-120x40-no-color-nerd.png",
+    "text": "harness-codex-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-fields",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "native-fields-120x40-no-color-nerd.png",
+    "text": "native-fields-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-filled",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "native-filled-120x40-no-color-nerd.png",
+    "text": "native-filled-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "masked-key",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "masked-key-120x40-no-color-nerd.png",
+    "text": "masked-key-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "saved",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "saved-120x40-no-color-nerd.png",
+    "text": "saved-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "effort",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "effort-120x40-no-color-nerd.png",
+    "text": "effort-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "reapproval",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "reapproval-120x40-no-color-nerd.png",
+    "text": "reapproval-120x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "returned-draft",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "returned-draft-120x40-no-color-nerd.png",
+    "text": "returned-draft-120x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "frame": "workspace",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "workspace-120x40-no-color-ascii.png",
+    "text": "workspace-120x40-no-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "frame": "roles",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "roles-120x40-no-color-ascii.png",
+    "text": "roles-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-coordinator",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "editor-coordinator-120x40-no-color-ascii.png",
+    "text": "editor-coordinator-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-cjk",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "editor-cjk-120x40-no-color-ascii.png",
+    "text": "editor-cjk-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "harness-codex",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "harness-codex-120x40-no-color-ascii.png",
+    "text": "harness-codex-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-fields",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "native-fields-120x40-no-color-ascii.png",
+    "text": "native-fields-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-filled",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "native-filled-120x40-no-color-ascii.png",
+    "text": "native-filled-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "masked-key",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "masked-key-120x40-no-color-ascii.png",
+    "text": "masked-key-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "saved",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "saved-120x40-no-color-ascii.png",
+    "text": "saved-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "effort",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "effort-120x40-no-color-ascii.png",
+    "text": "effort-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "reapproval",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "reapproval-120x40-no-color-ascii.png",
+    "text": "reapproval-120x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "returned-draft",
+    "size": [
+      120,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "returned-draft-120x40-no-color-ascii.png",
+    "text": "returned-draft-120x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "frame": "workspace",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "workspace-80x24-color-nerd.png",
+    "text": "workspace-80x24-color-nerd.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "frame": "roles",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "roles-80x24-color-nerd.png",
+    "text": "roles-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "editor-coordinator",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "editor-coordinator-80x24-color-nerd.png",
+    "text": "editor-coordinator-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "editor-cjk",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "editor-cjk-80x24-color-nerd.png",
+    "text": "editor-cjk-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "harness-codex",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "harness-codex-80x24-color-nerd.png",
+    "text": "harness-codex-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "native-fields",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "native-fields-80x24-color-nerd.png",
+    "text": "native-fields-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "native-filled",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "native-filled-80x24-color-nerd.png",
+    "text": "native-filled-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "masked-key",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "masked-key-80x24-color-nerd.png",
+    "text": "masked-key-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "saved",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "saved-80x24-color-nerd.png",
+    "text": "saved-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "effort",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "effort-80x24-color-nerd.png",
+    "text": "effort-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "reapproval",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "reapproval-80x24-color-nerd.png",
+    "text": "reapproval-80x24-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "returned-draft",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "returned-draft-80x24-color-nerd.png",
+    "text": "returned-draft-80x24-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "frame": "workspace",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "workspace-80x24-color-ascii.png",
+    "text": "workspace-80x24-color-ascii.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "frame": "roles",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "roles-80x24-color-ascii.png",
+    "text": "roles-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "editor-coordinator",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "editor-coordinator-80x24-color-ascii.png",
+    "text": "editor-coordinator-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "editor-cjk",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "editor-cjk-80x24-color-ascii.png",
+    "text": "editor-cjk-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "harness-codex",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "harness-codex-80x24-color-ascii.png",
+    "text": "harness-codex-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "native-fields",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "native-fields-80x24-color-ascii.png",
+    "text": "native-fields-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "native-filled",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "native-filled-80x24-color-ascii.png",
+    "text": "native-filled-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "masked-key",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "masked-key-80x24-color-ascii.png",
+    "text": "masked-key-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "saved",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "saved-80x24-color-ascii.png",
+    "text": "saved-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "effort",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "effort-80x24-color-ascii.png",
+    "text": "effort-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "reapproval",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "reapproval-80x24-color-ascii.png",
+    "text": "reapproval-80x24-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "returned-draft",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "returned-draft-80x24-color-ascii.png",
+    "text": "returned-draft-80x24-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "frame": "workspace",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "workspace-80x24-no-color-nerd.png",
+    "text": "workspace-80x24-no-color-nerd.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "frame": "roles",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "roles-80x24-no-color-nerd.png",
+    "text": "roles-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "editor-coordinator",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "editor-coordinator-80x24-no-color-nerd.png",
+    "text": "editor-coordinator-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "editor-cjk",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "editor-cjk-80x24-no-color-nerd.png",
+    "text": "editor-cjk-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "harness-codex",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "harness-codex-80x24-no-color-nerd.png",
+    "text": "harness-codex-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "native-fields",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "native-fields-80x24-no-color-nerd.png",
+    "text": "native-fields-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "native-filled",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "native-filled-80x24-no-color-nerd.png",
+    "text": "native-filled-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "masked-key",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "masked-key-80x24-no-color-nerd.png",
+    "text": "masked-key-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "saved",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "saved-80x24-no-color-nerd.png",
+    "text": "saved-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "effort",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "effort-80x24-no-color-nerd.png",
+    "text": "effort-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "reapproval",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "reapproval-80x24-no-color-nerd.png",
+    "text": "reapproval-80x24-no-color-nerd.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "returned-draft",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "returned-draft-80x24-no-color-nerd.png",
+    "text": "returned-draft-80x24-no-color-nerd.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "frame": "workspace",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "workspace-80x24-no-color-ascii.png",
+    "text": "workspace-80x24-no-color-ascii.txt",
+    "cursor": [
+      4,
+      20
+    ]
+  },
+  {
+    "frame": "roles",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "roles-80x24-no-color-ascii.png",
+    "text": "roles-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "editor-coordinator",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "editor-coordinator-80x24-no-color-ascii.png",
+    "text": "editor-coordinator-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "editor-cjk",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "editor-cjk-80x24-no-color-ascii.png",
+    "text": "editor-cjk-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "harness-codex",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "harness-codex-80x24-no-color-ascii.png",
+    "text": "harness-codex-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "native-fields",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "native-fields-80x24-no-color-ascii.png",
+    "text": "native-fields-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "native-filled",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "native-filled-80x24-no-color-ascii.png",
+    "text": "native-filled-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "masked-key",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "masked-key-80x24-no-color-ascii.png",
+    "text": "masked-key-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "saved",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "saved-80x24-no-color-ascii.png",
+    "text": "saved-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "effort",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "effort-80x24-no-color-ascii.png",
+    "text": "effort-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "reapproval",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "reapproval-80x24-no-color-ascii.png",
+    "text": "reapproval-80x24-no-color-ascii.txt",
+    "cursor": [
+      0,
+      23
+    ]
+  },
+  {
+    "frame": "returned-draft",
+    "size": [
+      80,
+      24
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "returned-draft-80x24-no-color-ascii.png",
+    "text": "returned-draft-80x24-no-color-ascii.txt",
+    "cursor": [
+      6,
+      20
+    ]
+  },
+  {
+    "frame": "workspace",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "workspace-50x40-color-nerd.png",
+    "text": "workspace-50x40-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "frame": "roles",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "roles-50x40-color-nerd.png",
+    "text": "roles-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-coordinator",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "editor-coordinator-50x40-color-nerd.png",
+    "text": "editor-coordinator-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-cjk",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "editor-cjk-50x40-color-nerd.png",
+    "text": "editor-cjk-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "harness-codex",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "harness-codex-50x40-color-nerd.png",
+    "text": "harness-codex-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-fields",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "native-fields-50x40-color-nerd.png",
+    "text": "native-fields-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-filled",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "native-filled-50x40-color-nerd.png",
+    "text": "native-filled-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "masked-key",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "masked-key-50x40-color-nerd.png",
+    "text": "masked-key-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "saved",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "saved-50x40-color-nerd.png",
+    "text": "saved-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "effort",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "effort-50x40-color-nerd.png",
+    "text": "effort-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "reapproval",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "reapproval-50x40-color-nerd.png",
+    "text": "reapproval-50x40-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "returned-draft",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "nerd",
+    "png": "returned-draft-50x40-color-nerd.png",
+    "text": "returned-draft-50x40-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "frame": "workspace",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "workspace-50x40-color-ascii.png",
+    "text": "workspace-50x40-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "frame": "roles",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "roles-50x40-color-ascii.png",
+    "text": "roles-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-coordinator",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "editor-coordinator-50x40-color-ascii.png",
+    "text": "editor-coordinator-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-cjk",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "editor-cjk-50x40-color-ascii.png",
+    "text": "editor-cjk-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "harness-codex",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "harness-codex-50x40-color-ascii.png",
+    "text": "harness-codex-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-fields",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "native-fields-50x40-color-ascii.png",
+    "text": "native-fields-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-filled",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "native-filled-50x40-color-ascii.png",
+    "text": "native-filled-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "masked-key",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "masked-key-50x40-color-ascii.png",
+    "text": "masked-key-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "saved",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "saved-50x40-color-ascii.png",
+    "text": "saved-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "effort",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "effort-50x40-color-ascii.png",
+    "text": "effort-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "reapproval",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "reapproval-50x40-color-ascii.png",
+    "text": "reapproval-50x40-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "returned-draft",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "color",
+    "icons": "ascii",
+    "png": "returned-draft-50x40-color-ascii.png",
+    "text": "returned-draft-50x40-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "frame": "workspace",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "workspace-50x40-no-color-nerd.png",
+    "text": "workspace-50x40-no-color-nerd.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "frame": "roles",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "roles-50x40-no-color-nerd.png",
+    "text": "roles-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-coordinator",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "editor-coordinator-50x40-no-color-nerd.png",
+    "text": "editor-coordinator-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-cjk",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "editor-cjk-50x40-no-color-nerd.png",
+    "text": "editor-cjk-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "harness-codex",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "harness-codex-50x40-no-color-nerd.png",
+    "text": "harness-codex-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-fields",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "native-fields-50x40-no-color-nerd.png",
+    "text": "native-fields-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-filled",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "native-filled-50x40-no-color-nerd.png",
+    "text": "native-filled-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "masked-key",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "masked-key-50x40-no-color-nerd.png",
+    "text": "masked-key-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "saved",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "saved-50x40-no-color-nerd.png",
+    "text": "saved-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "effort",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "effort-50x40-no-color-nerd.png",
+    "text": "effort-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "reapproval",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "reapproval-50x40-no-color-nerd.png",
+    "text": "reapproval-50x40-no-color-nerd.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "returned-draft",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "nerd",
+    "png": "returned-draft-50x40-no-color-nerd.png",
+    "text": "returned-draft-50x40-no-color-nerd.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  },
+  {
+    "frame": "workspace",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "workspace-50x40-no-color-ascii.png",
+    "text": "workspace-50x40-no-color-ascii.txt",
+    "cursor": [
+      4,
+      36
+    ]
+  },
+  {
+    "frame": "roles",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "roles-50x40-no-color-ascii.png",
+    "text": "roles-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-coordinator",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "editor-coordinator-50x40-no-color-ascii.png",
+    "text": "editor-coordinator-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "editor-cjk",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "editor-cjk-50x40-no-color-ascii.png",
+    "text": "editor-cjk-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "harness-codex",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "harness-codex-50x40-no-color-ascii.png",
+    "text": "harness-codex-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-fields",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "native-fields-50x40-no-color-ascii.png",
+    "text": "native-fields-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "native-filled",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "native-filled-50x40-no-color-ascii.png",
+    "text": "native-filled-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "masked-key",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "masked-key-50x40-no-color-ascii.png",
+    "text": "masked-key-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "saved",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "saved-50x40-no-color-ascii.png",
+    "text": "saved-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "effort",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "effort-50x40-no-color-ascii.png",
+    "text": "effort-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "reapproval",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "reapproval-50x40-no-color-ascii.png",
+    "text": "reapproval-50x40-no-color-ascii.txt",
+    "cursor": [
+      0,
+      39
+    ]
+  },
+  {
+    "frame": "returned-draft",
+    "size": [
+      50,
+      40
+    ],
+    "mode": "no-color",
+    "icons": "ascii",
+    "png": "returned-draft-50x40-no-color-ascii.png",
+    "text": "returned-draft-50x40-no-color-ascii.txt",
+    "cursor": [
+      6,
+      36
+    ]
+  }
+]

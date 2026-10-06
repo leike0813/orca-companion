@@ -21,6 +21,7 @@ import type { TranscriptReadingPort } from '../../application/coordinator/histor
 import type {
   EffortCapability,
   ModelSettingsRole as DomainModelSettingsRole,
+  NativeWorkerConnection,
 } from '../../domain/model-configuration.js';
 import type {
   ModelSettingsSnapshot,
@@ -315,6 +316,8 @@ export type ModelRoleCandidate = {
   readonly model: string;
   /** `null` 表示该模型没有可信 effort 能力来源；界面不得提供虚构 effort。 */
   readonly effortCapability: EffortCapability | null;
+  /** Worker 候选绑定的 harness；Coordinator 或宿主未提供时缺省。 */
+  readonly harness?: string | null;
 };
 
 /** 角色当前绑定；未配置时为 `null`，界面显示未配置而不是取最近对象。 */
@@ -365,6 +368,8 @@ export type ModelSettingsConnectionView = {
     readonly baseUrl: string;
     readonly wireApi: 'responses' | 'chat';
   } | null;
+  /** Worker harness 的原生连接；与 codex 连接互斥，缺省表示没有。 */
+  readonly nativeWorker?: NativeWorkerConnection;
 };
 
 /**

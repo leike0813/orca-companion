@@ -17,6 +17,7 @@ import {
   modelSettingsSnapshot,
   type SaveModelSettingsInput,
 } from '../../src/application/configuration/model-settings.js';
+import { nativeWorkerConnectionSchema } from '../../src/domain/model-configuration.js';
 import {
   loadProjectConfig,
   projectConfigPath,
@@ -509,4 +510,108 @@ test('快照是非秘密投影：未配置角色显式为空，保存不改变�
   expect(after.roles[0]?.bindingRef).toBe('planning-default');
   expect(after.roles[0]?.effortCapability).toBeNull();
   expect(JSON.stringify(after)).not.toContain(SECRET);
+});
+
+/** 原生 harness 连接：与 codex 连接互斥，字段是非秘密的 providerId/baseUrl/api。 */
+const nativeConnection = (harness: 'claude' | 'opencode' | 'pi' | 'omp') => ({
+  label: 'Anthropic',
+  providerIntegration: 'claude#native',
+  modelOptions: {},
+  credential: { kind: 'managed' as const, credentialRef: null, optionPath: 'apiKey' },
+  codex: null,
+  nativeWorker: {
+    harness,
+    providerId: 'anthropic',
+    baseUrl: 'https://api.anthropic.com',
+    api: 'anthropic-messages' as const,
+  },
+});
+
+test('nativeWorker 是封闭联合：未知 harness、超范围 api、未知键与凭据 URL 都拒绝', () => {
+  expect(nativeWorkerConnectionSchema.safeParse({ harness: 'kilo', providerId: 'x' }).success).toBe(false);
+  expect(nativeWorkerConnectionSchema.safeParse({ harness: 'opencode', providerId: 'x', api: 'grpc' }).success).toBe(false);
+  expect(nativeWorkerConnectionSchema.safeParse({ harness: 'claude', providerId: 'x', api: 'openai-responses' }).success).toBe(false);
+  expect(nativeWorkerConnectionSchema.safeParse({ harness: 'pi', providerId: 'x', secret: 'sk-nope' }).success).toBe(false);
+  expect(nativeWorkerConnectionSchema.safeParse({ harness: 'claude', providerId: '' }).success).toBe(false);
+  expect(nativeWorkerConnectionSchema.safeParse({ harness: 'omp', providerId: 'x', baseUrl: 'https://user:pw@example.test' }).success).toBe(false);
+  expect(nativeWorkerConnectionSchema.safeParse({ harness: 'claude', providerId: 'x' }).success).toBe(true);
+});
+
+test('显式 harness 写入 Worker profile 与原生连接，缺省时保留该角色原 harness', () => {
+  const project = new FakeProjectStore(baseConfig());
+  const credentials = new FakeCredentialStore();
+  const service = createModelSettingsService({ projectStore: project, credentials });
+
+  expect(service.save(coordinatorInput({ role: 'planner', connection: nativeConnection('claude'), harness: 'claude' })))
+    .toMatchObject({ kind: 'saved', revision: 1 });
+  const profile = project.config().execution.workerProfiles[0]!;
+  expect(profile.harness).toBe('claude');
+  expect(profile.modelConfiguration.connection.nativeWorker).toEqual({
+    harness: 'claude',
+    providerId: 'anthropic',
+    baseUrl: 'https://api.anthropic.com',
+    api: 'anthropic-messages',
+  });
+
+  // 省略 harness：沿用该角色已有 profile 的 harness，不退回 execution.harness。
+  expect(service.save(coordinatorInput({ role: 'planner', connection: nativeConnection('claude'), expectedRevision: 1 }))).toMatchObject({ kind: 'saved' });
+  expect(project.config().execution.workerProfiles[1]?.harness).toBe('claude');
+
+  // 没有既有 profile 的角色省略 harness：取 execution.harness 作为首次默认。
+  expect(service.save(coordinatorInput({ role: 'validator', expectedRevision: 2 }))).toMatchObject({ kind: 'saved' });
+  expect(project.config().execution.workerProfiles[2]?.harness).toBe('codex');
+});
+
+test('未含 nativeWorker 的连接保持字段省略，旧指纹形态不变', () => {
+  const project = new FakeProjectStore(baseConfig());
+  const service = createModelSettingsService({ projectStore: project, credentials: new FakeCredentialStore() });
+
+  expect(service.save(coordinatorInput())).toMatchObject({ kind: 'saved' });
+
+  const connection = project.config().providerConnections[0]!;
+  expect('nativeWorker' in connection).toBe(false);
+  expect(JSON.stringify(connection)).not.toContain('nativeWorker');
+});
+
+test('原生连接与所选 harness 不一致、显式 harness 未注册时拒绝，都不写凭据', () => {
+  const project = new FakeProjectStore(baseConfig());
+  const credentials = new FakeCredentialStore();
+  const service = createModelSettingsService({ projectStore: project, credentials });
+
+  expect(service.save(coordinatorInput({ role: 'planner', connection: nativeConnection('opencode'), harness: 'claude' })))
+    .toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  expect(service.save(coordinatorInput({ role: 'planner', harness: 'kilo' })))
+    .toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  expect(service.save(coordinatorInput({ role: 'planner', harness: 'claude' })))
+    .toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  expect(service.save(coordinatorInput({
+    role: 'planner', harness: 'claude',
+    connection: { ...nativeConnection('claude'), codex: { providerId: 'openai', baseUrl: 'https://example.test/v1', wireApi: 'responses' } },
+  }))).toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+
+  expect(credentials.log).toEqual([]);
+  expect(project.config().revision).toBe(0);
+  expect(project.config().providerConnections).toEqual([]);
+});
+
+test('Coordinator 保持 LangChain，拒绝原生 harness 连接', () => {
+  const project = new FakeProjectStore(baseConfig());
+  const credentials = new FakeCredentialStore();
+  const service = createModelSettingsService({ projectStore: project, credentials });
+
+  expect(service.save(coordinatorInput({ connection: nativeConnection('claude') })))
+    .toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  expect(credentials.log).toEqual([]);
+  expect(project.config().revision).toBe(0);
+});
+
+test('省略 harness 时也拒绝未注册的首次默认，不写凭据或配置', () => {
+  const config = baseConfig();
+  const project = new FakeProjectStore({ ...config, execution: { ...config.execution, harness: 'kilo' } });
+  const credentials = new FakeCredentialStore();
+  const service = createModelSettingsService({ projectStore: project, credentials });
+  expect(service.save(coordinatorInput({ role: 'planner' })))
+    .toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  expect(credentials.log).toEqual([]);
+  expect(project.config().revision).toBe(0);
 });

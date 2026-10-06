@@ -1,0 +1,72 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T04:46:43.584Z",
+  "finishedAt": "2026-10-06T04:49:30.441Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-opencode",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": [
+    {
+      "harness": "opencode",
+      "model": "MiniMax-M3.1-Flash-Preview",
+      "providerId": "minimax-cn-coding-plan",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "opencode-auth",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "dispatchId": "ctx_ebfde875246e",
+          "sessionId": "ses_aadc51bd99b707911ce6",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": null,
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "dispatchId": "ctx_431e648148ee",
+          "sessionId": "ses_fec54632385ef12f63fb",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": null,
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "dispatchId": "ctx_2a94f6729059",
+          "sessionId": "ses_8eb0e1dda13c03127b7e",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": null,
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "dispatchId": "ctx_69b0d1d7faa1",
+          "sessionId": "ses_7dc28467902d81493e2a",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": false,
+          "modelEvidence": null,
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "kind": "ran",
+        "sessionId": "ses_fec54632385ef12f63fb",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null
+      },
+      "blockers": []
+    }
+  ]
+}

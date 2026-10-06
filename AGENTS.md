@@ -118,7 +118,9 @@ type OperationOutcome<T> =
 - Worker liveness 至少保留 `live`、`exited` 与 `unverifiable`；不可达或信息不完整不能推断退出或触发重复派发。
 - 禁止伪造 terminal 身份、写 Orca DB 补绑定或使用私有接口绕过能力缺口。
 
-首个 Worker Harness 是 Codex。Planner、Implementation、Validator 和 Finalizer 使用角色隔离 Session；Validator 在同一任务的“验证—范围内修复—复验”内复用同一真实 Session。Finalizer 使用新的只读项目级 Session。精确 Session Binding 由 Worker Harness Adapter 验证，不能按 cwd/mtime 猜最新 transcript，也不能用 terminal 输出冒充 provider transcript。
+Worker Harness 经 `src/application/ports/worker-harness.ts` 端口与 `src/bootstrap/worker-harness.ts` 显式注册表接入，注册项为 codex、claude、opencode、pi、omp；未注册身份在派发前拒绝。逐角色 profile 固定 harness 与完整模型配置，恢复、Retry 和 Validator 续接从原 Task 的授权绑定读取它们。Planner、Implementation、Validator 和 Finalizer 使用角色隔离 Session；Validator 在同一任务的“验证—范围内修复—复验”内复用同一真实 Session。Finalizer 使用新的只读项目级 Session。精确 Session Binding 由各 adapter 的 hook、extension 或公开 session API 与 transcript 共同证明，不能按 cwd/mtime 猜最新 transcript，也不能用 terminal 输出冒充 provider transcript。
+
+原生连接由 schema 3 的可选 `ProviderConnection.nativeWorker` 声明 harness、providerId、baseUrl 与 api。managed secret 只经共享 launcher 进入子进程环境，harness_login 使用隔离登录态。原生只读角色与探针共用 `read-only-execution-wrapper.ts` 的 bwrap 包装器，仓库、Git 与协调库拒写，仅精确 harness 状态根和临时目录可写；能力不可证明即阻塞。
 
 Validator 修复许可绑定原 worktree 的干净 HEAD，并随原答复 Intent 持久保存；实际修复范围由该 HEAD 之后的提交与未提交 Git 路径核验，Worker 自报路径只作补充。基线、范围或精确 Session 不可证明时停止验证链。
 

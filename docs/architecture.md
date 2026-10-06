@@ -28,6 +28,8 @@ schema 20 的 Branch Store 在副作用前原子登记包级 lane，直到可证
 
 `application/integration-reconciliation.ts` 拥有稳定复验轮次、独立预算与 Git 意图；`bootstrap/integration-reconciliation-runtime.ts` 通过新的真实 Task/Dispatch 续接原 Validator provider Session。先在包内合并 canonical，再验证精确合并树，最后由 Controller 提交并快进 canonical。设置用例 `application/configuration/execution-settings.ts` 复用配置 CAS；保存默认值与批准执行期 Manifest 是两个明确用户意图，批准不重置图、Run 或已消费预算。
 
+Worker Harness 的应用端口位于 `application/ports/worker-harness.ts`，bootstrap 的 `worker-harness.ts` 显式注册 codex、claude、opencode、pi、omp。角色生命周期只使用注册项的启动、恢复、证明、只读启动与探测能力，terminal 创建、激活和接管仍由 `application/worker-launch.ts` 拥有。各 adapter 负责隔离状态根和精确 provider transcript；模型和 harness 沿物化时固定的授权/profile 读取。原生只读启动与探针共用 `adapters/agents/read-only-execution-wrapper.ts`，秘密只由共享 launcher 注入子进程环境。
+
 ## 模块依赖
 
 ```mermaid

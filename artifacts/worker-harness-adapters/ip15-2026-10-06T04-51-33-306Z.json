@@ -1,0 +1,311 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-06T04:51:33.306Z",
+  "finishedAt": "2026-10-06T05:00:09.371Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-claude-opencode-pi-omp",
+  "envFile": "/home/joshua/Workspace/Code/JavaScript/orca-companion/.env.smoke",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "harnesses": [
+    {
+      "harness": "claude",
+      "model": "MiniMax-M3.1-Flash-Preview",
+      "providerId": "minimax",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "env:ANTHROPIC_AUTH_TOKEN",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "dispatchId": "ctx_b6b1511c40a9",
+          "sessionId": "35f8a493-bfa8-4158-afdb-41d6b0538f68",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "dispatchId": "ctx_f077956b6b53",
+          "sessionId": "995aa0d5-90fb-4f05-a61b-64afcbc2b8bb",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "dispatchId": "ctx_baf08e0e3521",
+          "sessionId": "5313b6d7-bbda-4a2c-ade5-e5e068af4cba",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "dispatchId": "ctx_93b28980f99f",
+          "sessionId": "bb1c21c9-4bf2-4ab4-a3a3-a9a70edb94ef",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": false,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "kind": "ran",
+        "sessionId": "995aa0d5-90fb-4f05-a61b-64afcbc2b8bb",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null
+      },
+      "blockers": []
+    },
+    {
+      "harness": "opencode",
+      "model": "MiniMax-M3.1-Flash-Preview",
+      "providerId": "minimax-cn-coding-plan",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "opencode-auth",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "dispatchId": "ctx_83b4f3fe4138",
+          "sessionId": "ses_aadc51bd99b707911ce6",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "dispatchId": "ctx_bb6b1a8f69e6",
+          "sessionId": "ses_fec54632385ef12f63fb",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "dispatchId": "ctx_4187784c1c81",
+          "sessionId": "ses_8eb0e1dda13c03127b7e",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "dispatchId": "ctx_51affd4bd1ce",
+          "sessionId": "ses_7dc28467902d81493e2a",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "kind": "ran",
+        "sessionId": "ses_fec54632385ef12f63fb",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null
+      },
+      "blockers": []
+    },
+    {
+      "harness": "pi",
+      "model": "MiniMax-M3",
+      "providerId": "minimax-cn",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "shared-minimax:env:ANTHROPIC_API_KEY",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "dispatchId": "ctx_66f2aaf58475",
+          "sessionId": "552be574-e01b-4377-aeaa-82fb91fcf04b",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "dispatchId": "ctx_7112a727c403",
+          "sessionId": "0c2ef10d-59d4-4405-aa63-8edf8d2b23d0",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "dispatchId": "ctx_770bfdaaec72",
+          "sessionId": "35d67f03-e5e1-451f-a50d-4c350dcaead5",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "dispatchId": "ctx_c40ecad33d11",
+          "sessionId": "81cd34c5-21d1-489e-a50b-57a0dea577c1",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "kind": "ran",
+        "sessionId": "0c2ef10d-59d4-4405-aa63-8edf8d2b23d0",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null
+      },
+      "blockers": []
+    },
+    {
+      "harness": "omp",
+      "model": "MiniMax-M3.1-Flash-Preview",
+      "providerId": "minimax-code-cn",
+      "baseUrl": "https://api.minimax.cn/anthropic",
+      "credentialSource": "shared-minimax:env:ANTHROPIC_API_KEY",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "dispatchId": "ctx_73afd6e34c63",
+          "sessionId": "01a10f92-6899-71f4-844c-3d60ec73d8d4",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "dispatchId": "ctx_9c7bea78d4d1",
+          "sessionId": "01a10f92-b595-7714-a3ec-7a4900e713cc",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "dispatchId": "ctx_f61a08e0efae",
+          "sessionId": "01a10f93-0a9c-71cc-a75a-33cdf0983312",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "dispatchId": "ctx_75ef23bedcb0",
+          "sessionId": "01a10f93-5b36-7124-9a70-edda988681db",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "kind": "ran",
+        "sessionId": "01a10f92-b595-7714-a3ec-7a4900e713cc",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null
+      },
+      "blockers": []
+    },
+    {
+      "harness": "mixed",
+      "assignment": [
+        "claude:planner",
+        "opencode:implementation",
+        "pi:validator",
+        "omp:finalizer"
+      ],
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "dispatchId": "ctx_c7c52d02e5e9",
+          "sessionId": "26a77a6e-906c-4096-a60f-726f1d0652c3",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "dispatchId": "ctx_4c4b6961a6c6",
+          "sessionId": "ses_feb7d8a5b2770bf08236",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "dispatchId": "ctx_ed89bba77f00",
+          "sessionId": "073fc7c3-8094-400a-adbe-835409798a1a",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "dispatchId": "ctx_350ab4d82b58",
+          "sessionId": "01a10f95-10aa-74d2-8636-2d103b26e5d5",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": false,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        }
+      ],
+      "blockers": []
+    }
+  ]
+}
