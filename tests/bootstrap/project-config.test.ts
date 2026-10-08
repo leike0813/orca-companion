@@ -22,6 +22,7 @@ import {
   projectConfigPath,
 } from '../../src/bootstrap/project-config.js';
 import { CONTEXT_READ_BYTES, MODEL_RESPONSE_BYTES } from '../../src/application/coordinator/history.js';
+import { FIXTURE_CREDENTIAL_REF } from '../support/model-configurations.js';
 
 let directory = '';
 let worktree = '';
@@ -36,10 +37,10 @@ afterEach(() => {
   rmSync(directory, { recursive: true, force: true });
 });
 
-const INTEGRATION = '@langchain/openai#ChatOpenAI';
+const INTEGRATION = 'openai-chat';
 
 /** 凭据引用与 CredentialStore 同形：只承认 uuid，配置里不出现任何自由文本引用。 */
-const CREDENTIAL_REF = '11111111-1111-4111-8111-111111111111';
+const CREDENTIAL_REF = FIXTURE_CREDENTIAL_REF;
 
 const effortCapability = () => ({
   values: ['low', 'high'],
@@ -50,9 +51,10 @@ const effortCapability = () => ({
 const connection = (connectionRef = 'openai-conn') => ({
   connectionRef,
   label: 'OpenAI',
+  providerId: 'openai',
   providerIntegration: INTEGRATION,
-  modelOptions: { temperature: 0 },
-  credential: { kind: 'managed' as const, credentialRef: CREDENTIAL_REF, optionPath: 'apiKey' },
+  baseUrl: 'https://api.example.invalid/v1',
+  credential: { kind: 'managed' as const, credentialRef: CREDENTIAL_REF },
 });
 
 const modelDefinition = (modelRef = 'gpt-4.1-mini', connectionRef = 'openai-conn') => ({
@@ -73,7 +75,11 @@ const legacyCoordinatorModel = (configurationRef = 'planning-default') => ({
 });
 
 const boundCoordinatorModel = (configurationRef = 'planning-default') => ({
-  ...legacyCoordinatorModel(configurationRef),
+  configurationRef,
+  providerIntegration: INTEGRATION,
+  model: 'gpt-4.1-mini',
+  credentialRefs: [CREDENTIAL_REF],
+  nativeWindowOwnerRef: null,
   providerConnection: connection(),
   modelRef: 'gpt-4.1-mini',
   effortCapability: effortCapability(),
@@ -115,7 +121,7 @@ function write(raw: unknown): void {
   writeFileSync(projectConfigPath(worktree), JSON.stringify(raw), 'utf8');
 }
 
-test('合法 schema 4 配置从 canonical worktree 加载并解析默认引用', () => {
+test('合法 schema 5 配置从 canonical worktree 加载并解析默认引用', () => {
   write(validConfig());
 
   const loaded = loadProjectConfig({ worktreePath: worktree });
@@ -148,39 +154,21 @@ test.each(['codex', 'nativeWorker'] as const)('Worker-only 连接字段出现即
   expect(parseProjectConfig(validConfig()).ok).toBe(true);
 });
 
-test.each([
-  'https://user:password@api.example/v1',
-  'https://user@api.example/v1',
-  'https://api.example/v1?api_key=fixture-secret',
-  'https://api.example/v1?access_token=fixture-secret',
-  'https://api.example/v1?X-API-Key=fixture-secret',
-])('Coordinator 模型选项里的 URL 携带凭据时在持久化边界拒绝：%s', (baseUrl) => {
+test('已移除的 Coordinator modelOptions 在持久化边界拒绝', () => {
   expect(parseProjectConfig({
     ...validConfig(),
-    coordinatorModels: [{ ...boundCoordinatorModel(), modelOptions: { configuration: { baseURL: baseUrl } } }],
+    coordinatorModels: [{ ...boundCoordinatorModel(), modelOptions: {} }],
   }).ok).toBe(false);
 });
 
-test('Coordinator 模型选项保留不含凭据的 URL 查询参数', () => {
+test('schema 4 明确拒绝，不自动迁移', () => {
   expect(parseProjectConfig({
     ...validConfig(),
-    coordinatorModels: [{
-      ...boundCoordinatorModel(),
-      modelOptions: { configuration: { baseURL: 'https://api.example/v1?api-version=2026-01' } },
-    }],
-  }).ok).toBe(true);
+    schemaVersion: 4,
+  })).toMatchObject({ ok: false, field: 'projectConfig' });
 });
 
-test('模型设置字段可缺省：纯规划项目不需要 Worker 配置', () => {
-  write({
-    schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
-    coordinatorModels: [legacyCoordinatorModel()],
-    defaultCoordinatorModelRef: 'planning-default',
-    tracker: { kind: 'github', routeMapIssueNumber: 42 },
-    planning: { maxMutations: 3 },
-    context: { maxInputTokens: 120_000 },
-  });
-
+test('Coordinator 配置缺少完整连接快照和模型引用时拒绝', () => {
   const parsed = parseProjectConfig({
     schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
     coordinatorModels: [legacyCoordinatorModel()],
@@ -190,27 +178,17 @@ test('模型设置字段可缺省：纯规划项目不需要 Worker 配置', () 
     context: { maxInputTokens: 120_000 },
   });
 
-  expect(parsed.ok).toBe(true);
-  if (!parsed.ok) {
-    return;
-  }
-  expect(parsed.value.revision).toBe(0);
-  expect(parsed.value.providerConnections).toEqual([]);
-  expect(parsed.value.models).toEqual([]);
-  expect(parsed.value.execution.workerProfiles).toEqual([]);
-  expect(parsed.value.execution.workerProfileRefs).toEqual({});
-  expect(currentWorkerProfile(parsed.value, 'planner')).toBeNull();
-  // 旧形状的 Coordinator 配置没有 effort 来源，因此不能凭空带上 effort。
-  expect(parsed.value.coordinatorModels[0]?.effort).toBeUndefined();
+  expect(parsed.ok).toBe(false);
 });
 
 test('v1 与未知字段被拒绝，不自动重写用户项目', () => {
   const v1 = parseProjectConfig({ ...validConfig(), schemaVersion: 1 });
   expect(v1).toMatchObject({ ok: false, field: 'projectConfig' });
 
-  // schema 3 缺 modelSelection：旧版本明确拒绝，不迁移、不改写用户文件。
+  // schema 4 缺 provider/model bindings：旧版本明确拒绝，不迁移、不改写用户文件。
   const v3 = parseProjectConfig({ ...validConfig(), schemaVersion: 3 });
   expect(v3).toMatchObject({ ok: false, field: 'projectConfig' });
+  expect(parseProjectConfig({ ...validConfig(), schemaVersion: 4 })).toMatchObject({ ok: false, field: 'projectConfig' });
 
   const unknownField = parseProjectConfig({ ...validConfig(), extra: true });
   expect(unknownField.ok).toBe(false);
@@ -445,8 +423,7 @@ test('循环结构按拒绝返回，不向调用方抛异常', () => {
     coordinatorModels: [legacyCoordinatorModel()],
     defaultCoordinatorModelRef: 'planning-default',
   });
-  // 同一份配置去掉回指就完全合法，拒绝确实来自循环而不是别的规则。
-  expect(parseProjectConfig(withModelOptions({ temperature: 0 }))).toMatchObject({ ok: true });
+  expect(parseProjectConfig(validConfig())).toMatchObject({ ok: true });
 
   let result: unknown = null;
   expect(() => {
@@ -498,7 +475,7 @@ test('凭据只以引用出现：已知密钥字段名在配置边界被拒绝',
   if (nested.ok) {
     return;
   }
-  expect(nested.field).toContain('coordinatorModels.0.modelOptions.headers.Authorization');
+  expect(JSON.stringify(nested)).not.toContain('Bearer secret');
 
   const plaintextCredentialRef = 'sk-live-secret';
   const plaintextConnection = {
@@ -523,7 +500,7 @@ test('凭据只以引用出现：已知密钥字段名在配置边界被拒绝',
   expect(topLevel).toMatchObject({ ok: false, field: 'projectConfig' });
 });
 
-test('模型选项的凭据键名按常见拼法拒绝，规模类选项与引用字段不受影响', () => {
+test('任意 SDK options 都被拒绝，包括非秘密值与重复对象', () => {
   const withOptions = (options: Record<string, unknown>) => ({
     ...validConfig(),
     coordinatorModels: [{ ...boundCoordinatorModel(), modelOptions: options }],
@@ -532,12 +509,11 @@ test('模型选项的凭据键名按常见拼法拒绝，规模类选项与引�
   for (const key of ['api_key', 'bearer_token', 'client_secret', 'x-api-key', 'OPENAI_API_KEY']) {
     expect(parseProjectConfig(withOptions({ [key]: 'sk-live-value' })).ok).toBe(false);
   }
-  // `token` 只在自身就是凭据名时才算命中：规模与预算类选项必须照常可用。
-  expect(parseProjectConfig(withOptions({ maxTokens: 4096, tokenBudget: 1000, max_tokens: 4096 })).ok).toBe(true);
-  expect(parseProjectConfig(withOptions({ credentialRef: 'cred-openai' })).ok).toBe(true);
+  expect(parseProjectConfig(withOptions({ maxTokens: 4096, tokenBudget: 1000, max_tokens: 4096 })).ok).toBe(false);
+  expect(parseProjectConfig(withOptions({ credentialRef: 'cred-openai' })).ok).toBe(false);
   expect(parseProjectConfig(withOptions({ headers: [{ api_key: 'value' }] })).ok).toBe(false);
   const shared = { maxTokens: 4096 };
-  expect(parseProjectConfig(withOptions({ first: shared, second: shared })).ok).toBe(true);
+  expect(parseProjectConfig(withOptions({ first: shared, second: shared })).ok).toBe(false);
   const cyclic: Record<string, unknown> = {};
   cyclic.self = cyclic;
   expect(parseProjectConfig(withOptions(cyclic)).ok).toBe(false);

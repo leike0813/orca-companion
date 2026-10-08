@@ -42,6 +42,7 @@ import { coordinationDatabasePath, resolveGitCommonDir } from '../../src/bootstr
 import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
 import { MIGRATIONS, SCHEMA_VERSION_KEY } from '../../src/adapters/storage/schema.js';
 import { CapableChatModel } from '../support/fake-chat-model.js';
+import { coordinatorConfigurationFixture, credentialFixtureEnvironment, FIXTURE_CONNECTION_REF, projectConnectionsFixture } from '../support/model-configurations.js';
 import { DEFAULT_TUI_PREFERENCES } from '../../src/application/configuration/tui-preferences.js';
 import { PROJECT_DETAILS_MAX_ITEMS, PROJECT_DETAILS_MAX_PAGE_BYTES } from '../../src/application/tui/project-presentation.js';
 import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
@@ -98,6 +99,7 @@ test('Worker 保存只接受当前原生目录来源；取消和迟到查询不�
   const directory = mkdtempSync(join(tmpdir(), 'orca-worker-catalog-wiring-'));
   const harness = await startHost(initializeRepository(directory), { generations: 0 }, directory);
   const proposal = await harness.host.ports.scopeSetup.proposal();
+  await harness.host.ports.scopeSetup.verify();
   expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
   const port = harness.host.ports.modelSettings!;
   const loaded = await port.load();
@@ -146,29 +148,16 @@ function initializeRepository(root: string): string {
   git('config', 'user.name', 'Verification');
   git('config', 'user.email', 'verification@example.invalid');
   writeFileSync(join(repository, 'README.md'), '# repo\n');
+  const connections = projectConnectionsFixture();
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 4,
-      coordinatorModels: [
-        {
-          configurationRef: 'planning-default',
-          providerIntegration: '@fake/provider#CapableChatModel',
-          model: 'fake-coordinator',
-          modelOptions: {},
-          // 注入的假模型不需要真实凭据：凭据引用必须对应已声明的 Provider Connection，否则启动拒绝。
-          credentialRefs: [],
-          nativeWindowOwnerRef: null,
-        },
-        {
-          configurationRef: 'planning-spare',
-          providerIntegration: '@fake/provider#CapableChatModel',
-          model: 'fake-coordinator-spare',
-          modelOptions: {},
-          credentialRefs: [],
-          nativeWindowOwnerRef: null,
-        },
-      ],
+      schemaVersion: 5,
+      ...connections,
+      models: [...connections.models, { modelRef: 'model-spare', connectionRef: FIXTURE_CONNECTION_REF, model: 'fake-coordinator-spare', effortCapability: null }],
+      coordinatorModels: [coordinatorConfigurationFixture('planning-default'), coordinatorConfigurationFixture('planning-spare', {
+        model: 'fake-coordinator-spare', modelRef: 'model-spare',
+      })],
       defaultCoordinatorModelRef: 'planning-default',
       tracker: { kind: 'github', routeMapIssueNumber: 7 },
       planning: { maxMutations: 2 },
@@ -219,7 +208,7 @@ async function startHost(
   const summaryReads: { readonly kind: string; readonly id: string }[] = [];
   const host = await createForegroundPlanningHost({
     repositoryPath: repository,
-    env: { ...process.env, XDG_CONFIG_HOME: join(directory, 'config') },
+    env: credentialFixtureEnvironment(directory),
     clock,
     newId: (() => {
       let counter = 0;
@@ -231,9 +220,13 @@ async function startHost(
     trackerFactory: () => fakeTracker(summaryReads),
     loadIntegration: () =>
       Promise.resolve({
-        CapableChatModel: class extends CapableChatModel {
+        ChatOpenAICompletions: class extends CapableChatModel {
           override _generate(messages: never, options: never): never {
-            requests.generations += 1;
+            const capabilityProbe = (messages as unknown as readonly { readonly _getType?: () => string; readonly content?: unknown }[]).some((message) =>
+              message._getType?.() === 'human' &&
+              ['ping', 'capability cancellation probe', 'Call the capability_probe tool.']
+                .some((probe) => JSON.stringify(message.content).includes(probe)));
+            if (!capabilityProbe) requests.generations += 1;
             return super._generate(messages, options) as never;
           }
         },
@@ -434,6 +427,7 @@ test('其他分支的 Scope 不构成匹配：Home 进入向导而不是误判�
 test('向导创建后按当前完整 ref 与 canonical worktree 恢复', async () => {
   const harness = await startHost(initializeRepository(mkdtempSync(join(tmpdir(), 'orca-tui-wiring-restore-'))));
   const proposal = await harness.host.ports.scopeSetup.proposal();
+  await harness.host.ports.scopeSetup.verify();
   expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
 
   const home = await harness.host.ports.scopeSetup.resolveHome();
@@ -452,6 +446,7 @@ test('host metadata读取注册Session的配置与精确Claim摘要，不读取�
   const repository = initializeRepository(directory);
   const harness = await startHost(repository, { generations: 0 }, directory);
   const proposal = await harness.host.ports.scopeSetup.proposal();
+  await harness.host.ports.scopeSetup.verify();
   expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
   const scopeId = proposal.coordinationScopeId as CoordinationScopeId;
   const sessionId = proposal.coordinatorSessionId as CoordinatorSessionId;
@@ -488,7 +483,7 @@ test('host metadata读取注册Session的配置与精确Claim摘要，不读取�
 
   const selected = await harness.host.ports.snapshot(sessionId);
   expect(selected.kind === 'snapshot' ? selected.snapshot.projectPresentation : null).toMatchObject({
-    session: { id: sessionId, model: 'fake-coordinator' },
+    session: { id: sessionId, model: 'MiniMax-M3' },
     ticket: { ref: '42', title: 'Route Map summary' },
   });
   expect(harness.summaryReads).toEqual([{ kind: 'decision-ticket', id: '42' }]);
@@ -503,6 +498,7 @@ test('host projectDetails绑定Scope、Session和所见revision，并连续读�
   const repository = initializeRepository(directory);
   const harness = await startHost(repository, { generations: 0 }, directory);
   const proposal = await harness.host.ports.scopeSetup.proposal();
+  await harness.host.ports.scopeSetup.verify();
   expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
   const scopeId = proposal.coordinationScopeId as CoordinationScopeId;
   const sessionId = proposal.coordinatorSessionId as CoordinatorSessionId;
@@ -666,6 +662,7 @@ test('链接 worktree 被拒绝恢复，并把身份不匹配的原因显示出�
   const repository = initializeRepository(directory);
   const harness = await startHost(repository, { generations: 0 }, directory);
   const proposal = await harness.host.ports.scopeSetup.proposal();
+  await harness.host.ports.scopeSetup.verify();
   expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
 
   // Worker worktree 是另一个工作区：Scope 身份绑定在 canonical worktree 上。
@@ -742,6 +739,7 @@ test('旧未绑定记录：确认前零写入，Review 确认后补齐绑定并�
 test('规划 Handoff 的 Target 来自用户在 Session Picker 里的选择', async () => {
   const harness = await startHost(initializeRepository(mkdtempSync(join(tmpdir(), 'orca-tui-wiring-handoff-'))));
   const proposal = await harness.host.ports.scopeSetup.proposal();
+  await harness.host.ports.scopeSetup.verify();
   expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
   const scopeId = proposal.coordinationScopeId as CoordinationScopeId;
   const source = proposal.coordinatorSessionId as CoordinatorSessionId;
@@ -826,6 +824,7 @@ test('规划 Handoff 的 Target 来自用户在 Session Picker 里的选择', as
 test('会话维护与模型切换在 TUI 入口上落到真实记录，而不是占位拒绝', async () => {
   const harness = await startHost(initializeRepository(mkdtempSync(join(tmpdir(), 'orca-tui-wiring-maintenance-'))));
   const proposal = await harness.host.ports.scopeSetup.proposal();
+  await harness.host.ports.scopeSetup.verify();
   expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
   const session = proposal.coordinatorSessionId;
 
@@ -917,6 +916,7 @@ test('执行设置端口：保存默认额度经生产 CAS，当前批准额度�
   const repository = initializeRepository(mkdtempSync(join(tmpdir(), 'orca-exec-settings-')));
   const harness = await startHost(repository);
   const proposal = await harness.host.ports.scopeSetup.proposal();
+  await harness.host.ports.scopeSetup.verify();
   expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
   const port = harness.host.ports.executionSettings;
   if (port === undefined) throw new Error('executionSettings 端口缺失');

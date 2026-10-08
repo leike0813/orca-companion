@@ -149,7 +149,7 @@ export function toDurableMessage(value: unknown): DurableMessage {
   const additionalKwargs = isRecord(value) && isRecord(value['additional_kwargs'])
     ? value['additional_kwargs']
     : undefined;
-  const providerReplayKeys = ['reasoning_content', 'reasoning', '__openai_function_call_ids__'] as const;
+  const providerReplayKeys = ['reasoning_content', 'reasoning', '__openai_function_call_ids__', 'originalTextContentBlock'] as const;
   const contentBlocks = isRecord(value) && Array.isArray(value['content']) ? value['content'] : undefined;
   const replayKwargs = additionalKwargs === undefined
     ? {}
@@ -195,7 +195,7 @@ export function fromDurableMessage(value: unknown, configurationRef?: string): B
       {
       const blocks = isRecord(value) && value['contentFormat'] === 'json_blocks' ? JSON.parse(content) as unknown : null;
       const visibleContent = Array.isArray(blocks)
-        ? blocks.map((block) => isRecord(block) && block['type'] === 'text' && typeof block['text'] === 'string' ? block['text'] : '').filter(Boolean).join('\n')
+        ? blocks.map((block) => isRecord(block) && block['type'] === 'text' && block['thought'] !== true && typeof block['text'] === 'string' ? block['text'] : '').filter(Boolean).join('\n')
         : content;
       return new AIMessage({
         content: replay !== undefined && Array.isArray(blocks) ? blocks : visibleContent,
@@ -379,7 +379,7 @@ function classify(message: unknown, stepId: string): DurableMessage {
     try {
       const blocks: unknown = JSON.parse(content);
       if (!Array.isArray(blocks)) throw new Error('invalid blocks');
-      content = blocks.map((block) => isRecord(block) && block['type'] === 'text' && typeof block['text'] === 'string' ? block['text'] : '').filter(Boolean).join('\n');
+      content = blocks.map((block) => isRecord(block) && block['type'] === 'text' && block['thought'] !== true && typeof block['text'] === 'string' ? block['text'] : '').filter(Boolean).join('\n');
     } catch {
       throw new ContextMaintenanceError('历史中的内容块无法安全转换为可移植文本', stepId);
     }

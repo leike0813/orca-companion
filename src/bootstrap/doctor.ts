@@ -18,7 +18,7 @@ import {
 } from '../adapters/agents/read-only-execution-wrapper.js';
 import { MODEL_PROFILE_ROLES, WORKER_HARNESS_IDS, type WorkerProfileConfiguration } from '../domain/model-configuration.js';
 import {
-  createModuleIntegrationResolverAsync,
+  createBuiltinIntegrationResolverAsync,
   resolveChatModel,
 } from '../adapters/agents/chat-model-factory.js';
 import { verifyModelCapabilities } from '../adapters/agents/capability-probe.js';
@@ -442,7 +442,7 @@ async function verifyConfiguredCoordinatorModel(
       detail: `默认 Coordinator 配置 ${config.defaultCoordinatorModelRef} 不在项目配置中`,
     };
   }
-  const resolver = createModuleIntegrationResolverAsync();
+  const resolver = createBuiltinIntegrationResolverAsync();
   const integration = await resolver(configuration.providerIntegration);
   if (integration === null) {
     return {

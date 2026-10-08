@@ -887,7 +887,7 @@ SQLite 位于 Git common dir 的 `orca-companion/ui.sqlite`。短事务中完成
 
 ## IC-14 CredentialStore 与模型设置
 
-schema 4 的 ProviderConnection 只描述 Coordinator 连接：providerIntegration、modelOptions 与 credential（managed，或沿用旧命名的 harness_login 环境认证）；Worker-only 的 `codex` 与 `nativeWorker` 字段被删除，出现即拒绝。Worker Profile 改为 `modelSelection`：`{model, effort, effortCapability: {values, source} | null, catalogSource: string | null}`；effortCapability 非空要求 catalogSource 非空，effort 非空必须属于 capability.values，catalogSource 为 null 表示手填未验证 native exact ID 且 effort 为 null。SaveModelSettingsInput 对 Worker 角色是只含 harness、model 与 effort 的判别联合，连接、秘密与任意 options 字段明确拒绝；服务经 `verifyWorkerSelection` 绑定本次显式原生目录查询的有界缓存核验来源。保存追加不可变 profile，应用沿完整 Manifest v4 审阅。Coordinator 的 managed secret 与 harness_login 合同不变，Worker 启动不读取 CredentialStore。
+schema 5 的 ProviderConnection 只描述 Coordinator 连接：connectionRef、label、providerId、固定协议 providerIntegration、baseUrl 与 credential（managed API Key 引用）；Worker-only 的 `codex` 与 `nativeWorker` 字段被删除，出现即拒绝。Worker Profile 改为 `modelSelection`：`{model, effort, effortCapability: {values, source} | null, catalogSource: string | null}`；effortCapability 非空要求 catalogSource 非空，effort 非空必须属于 capability.values，catalogSource 为 null 表示手填未验证 native exact ID 且 effort 为 null。SaveModelSettingsInput 对 Worker 角色是只含 harness、model 与 effort 的判别联合，连接、秘密与任意 options 字段明确拒绝；服务经 `verifyWorkerSelection` 绑定本次显式原生目录查询的有界缓存核验来源。保存追加不可变 profile，应用沿完整 Manifest v4 审阅。Coordinator 仅使用 API Key，Worker 启动不读取 CredentialStore。
 
 - **Owner (Create)**: `complete-tui-model-configuration`
 - **Canonical paths**: `src/application/ports/credential-store.ts`、`src/adapters/storage/credential-store.ts`、`src/application/configuration/model-settings.ts`、`src/domain/model-configuration.ts`
@@ -900,25 +900,25 @@ schema 4 的 ProviderConnection 只描述 Coordinator 连接：providerIntegrati
 
 凭据是**明文**保存在这一份文件里，这是用户确认的取舍，它取代了「Companion 不保存密钥」的旧约束。隔离靠三件事：owner-only 权限、其它位置只保存不透明引用、以及严格的输出边界——项目配置、checkpoint、UI 输入存储、命令参数、诊断与证据中都不出现 secret 值。secret 只在编辑内存、CredentialStore 与必要的 Coordinator 模型调用环境中存在。
 
-`ProjectConfigurationStore`（`src/application/ports/project-configuration-store.ts`）拥有同一 namespace 的项目侧：连接的 `credentialRef` 必须是 UUID，出现已知密钥字段名即拒绝整份配置；短锁、CAS 与原子替换与凭据文件同构，但不做权限收紧——它纳入版本控制。锁内还核验既有 connection、model、Coordinator configuration 和 Worker profile 原样保留，拒绝同引用改写或删除，当前选择指针可前移。parser 核验 Coordinator 连接快照与模型引用一致，以及 Worker Profile 的 harness 与 modelSelection 来源约束（capability 非空要求 catalogSource 非空，effort 必须属于 values）。两者之间没有跨文件事务：Coordinator 连接编辑先校验候选、先写凭据并回读，再 CAS 追加 `providerConnections`/`models`；Worker 角色选择只 CAS 追加 `execution.workerProfiles` 的新引用，零凭据访问。项目保存失败保留输入，可能留下未被引用的孤立 secret，但不会激活配置。查询返回非秘密 snapshot；保存不自动应用。
+`ProjectConfigurationStore`（`src/application/ports/project-configuration-store.ts`）拥有同一 namespace 的项目侧：连接的 `credentialRef` 必须是 UUID，出现已知密钥字段名即拒绝整份配置；短锁、CAS 与原子替换与凭据文件同构，但不做权限收紧——它纳入版本控制。锁内还核验既有 connection、model、Coordinator configuration 和 Worker profile 原样保留，拒绝同引用改写或删除，当前选择指针可前移。parser 核验 Coordinator 连接快照与模型引用一致，以及 Worker Profile 的 harness 与 modelSelection 来源约束（capability 非空要求 catalogSource 非空，effort 必须属于 values）。两者之间没有跨文件事务：Coordinator 连接编辑先校验候选、先写凭据并回读，再 CAS 追加用户级库；项目通过 modelRef 解析并复制完整连接/模型快照；Worker 角色选择只 CAS 追加 `execution.workerProfiles` 的新引用，零凭据访问。项目保存失败保留输入，可能留下未被引用的孤立 secret，但不会激活配置。查询返回非秘密 snapshot；保存不自动应用。
 
-连接 URL 和 modelOptions 中的 URL 不得携带 userinfo 或凭据查询参数；查询参数的凭据字段判定复用领域层的密钥键名规则。普通 API 版本等非秘密查询参数保留。
+连接 URL 不得携带 userinfo、fragment 或凭据查询参数；查询参数的凭据字段判定复用领域层的密钥键名规则。普通 API 版本等非秘密查询参数保留。
 
 ## `complete-tui-model-configuration` 对 IC-03/04/05/07/08/09/11/12 的扩展
 
 - **IC-03 物化绑定**：`record-materialization-binding` 增加 `authorizationId`、`authorizationVersion` 与 `workerProfileRef`（不透明字符串，落库为 `worker-profile` 引用），缺任一项即拒绝，不留下无运行依据的新行。Coordination schema 16 追加这三列，schema 16 之前的历史行保持 `null`；需要这些事实的读取方按不可证明阻塞，不按当前授权推断回填。
-- **IC-04 项目配置**：项目配置为 schema 4，保存 `revision`、`providerConnections`、`models` 与 `execution.workerProfiles`/`workerProfileRefs`；Worker Profile 使用 `modelSelection`，ProviderConnection 只描述 Coordinator 连接；旧版本明确拒绝且不自动改写。引用唯一性与交叉引用、effort 的目录来源都由同一 parser 判定。会话模型绑定沿用既有 `update-session-model-configuration` 记录。
+- **IC-04 项目配置**：项目配置为 schema 5，保存 `revision`、`providerConnections`、`models` 与 `execution.workerProfiles`/`workerProfileRefs`；Worker Profile 使用 `modelSelection`，ProviderConnection 只描述 Coordinator 连接；旧版本明确拒绝且不自动改写。引用唯一性与交叉引用、effort 的目录来源都由同一 parser 判定。会话模型绑定沿用既有 `update-session-model-configuration` 记录。
 - **IC-05 授权**：Manifest 为 v4，`workerProfiles[].modelSelection` 为必填（harness、model、effort 及其目录来源），并单独绑定 `recoveryUtilityProfile`；缺任一项的授权无法证明 Worker 用什么模型运行，解析即拒绝，v1–v3 不被当作包含模型授权。执行期换模型或并行额度时以完整 Manifest 指纹与 Scope revision 重新批准，保持 Graph Generation、Run、Task、权限、其他上限与已消耗预算，不创建 Graph Revision；Replanning、cancelling 或未决派发 mutation 时拒绝重新授权。
 - **IC-07/IC-08 运行依据**：Task 物化时把当时的授权身份、版本与 profile 钉进绑定。Retry 沿已有 WorkerTask 的绑定取原授权与 profile，结算按该绑定判断权限与配置，不读当前配置；旧任务缺绑定时按不可证明阻塞。Worker 启动继承真实 launch 环境，不注入 secret、不生成原生 provider 配置；公开 terminal 命令与 CLI 参数只含非秘密描述符，认证由 harness 自己提供，不自动 fallback。
 - **IC-09 恢复**：替代 Session 沿原 WorkerTask 绑定的 profile 派发，Validator 的修复/复验与原任务同 profile；新 Recovery Utility Task 固定创建时的授权配置。transcript 不可用或恢复预算耗尽仍按不可证明阻塞。
-- **IC-11/IC-12 界面**：模型设置提供只读 load、显式 save 与按角色显式 apply 三条意图；Coordinator 角色的保存输入含 connection/model/options/capability/effort、可选新 key 与 expected revision，Worker 角色只含 harness 与 modelSelection（含显式目录查询与来源），scope/writer/profile 身份由宿主补齐。界面只消费非秘密 snapshot，key 以遮罩显示且只存在于编辑器内存，不进 IC-13。保存不改变 Session、已批准 Manifest、Task 与预算；apply 走既有 switch 或完整授权重新审阅。异步结果仍按原 invocation/Session 归属。
+- **IC-11/IC-12 界面**：模型设置提供只读 load、显式 save 与按角色显式 apply 三条意图；Coordinator 角色的项目保存输入仅为 modelRef、effort 与 expected revision；用户库拥有连接保存和可信模型定义，Worker 角色只含 harness 与 modelSelection（含显式目录查询与来源），scope/writer/profile 身份由宿主补齐。界面只消费非秘密 snapshot，key 以遮罩显示且只存在于编辑器内存，不进 IC-13。保存不改变 Session、已批准 Manifest、Task 与预算；apply 走既有 switch 或完整授权重新审阅。异步结果仍按原 invocation/Session 归属。
 
 ## `remove-worker-credential-management` 对 IC-05/07/08/09/11/12/14 的扩展
 
-- **IC-14 模型设置**：项目 schema 4；ProviderConnection 收缩为 Coordinator-only（删除 Worker-only `codex`/`nativeWorker`，沿用旧命名的 `harness_login` 环境认证保留）；Worker Profile 只带 harness 与 `modelSelection`，保存经显式原生目录查询缓存核验来源，零 CredentialStore 访问。
+- **IC-14 模型设置**：项目 schema 5；ProviderConnection 为 Coordinator-only 的固定协议/API Key 连接；Worker Profile 只带 harness 与 `modelSelection`，保存经显式原生目录查询缓存核验来源，零 CredentialStore 访问。
 - **IC-07 Worker Harness**：启动输入不含 CredentialStore、凭据路径或可覆盖原生环境的隔离 root；`worker-runtime.ts` 从真实 launch 环境解析非 secret runtime roots 并写入精确 Session 报告，`runtimeReportPath` 只承载非秘密路径；端口增加逐 harness 原生模型目录查询（codex `debug models`、Claude streamJSON control_request `list_models` 无 prompt、OpenCode `models --standalone`、pi 公开 availability/thinking API、omp `models --json` 实际 thinking）。查询总时限 30 秒，最多 4096 项、1 MiB/20000 行；控制协议经既有 process-runner 的可选 stdin 传入（最多 1 MiB），使用参数数组并支持取消。
 - **IC-08/IC-09 恢复与只读**：恢复按原 launch report/binding 的精确身份与 runtime roots，`expectedNative` 只核验；bwrap 继续让仓库、Git、common dir 与协调库拒写，真实 native state 目录与 Companion 工件目录可写，重叠不可证明即 unavailable。
-- **IC-11/IC-12 界面**：#52 定稿下 Worker 角色只编辑 harness 与原生目录候选（model/effort），无连接、凭据、API key 或任意 options；Coordinator 表单保留；目录查询失败可手填 exact ID（未验证、无 effort），迟到结果仍按原入口归属。
+- **IC-11/IC-12 界面**：#52 定稿下 Worker 角色只编辑 harness 与原生目录候选（model/effort），无连接、凭据、API key 或任意 options；Coordinator 表单使用服务/地区产品线或自定义协议、地址、隐藏Key与模型选择；目录查询失败可手填 exact ID（未验证、无 effort），迟到结果仍按原入口归属。
 
 ## 第七批 IC-11/12 展示扩展
 
@@ -972,7 +972,7 @@ custom 编辑是内存草稿，同生产 statusline 的主区域宽度、字段�
 
 ## 可配置执行并发扩展（restore-configurable-execution-concurrency）
 
-IC-05 的 ExecutionLimits 唯一拥有 `maxActiveWorkPackages`（并行包额度，默认3）、`maxWorkPackages`（未 retire 图容量，默认8）、`integrationReconciliations`（每包集成复验预算，默认2）；所有额度可配置且为正安全整数。ExecutionGraph 不存并发策略。配置与 Manifest 由 `remove-worker-credential-management` 升为 schema 4 / v4，status JSON 仍为 schema3。
+IC-05 的 ExecutionLimits 唯一拥有 `maxActiveWorkPackages`（并行包额度，默认3）、`maxWorkPackages`（未 retire 图容量，默认8）、`integrationReconciliations`（每包集成复验预算，默认2）；所有额度可配置且为正安全整数。ExecutionGraph 不存并发策略。配置与 Manifest 由 `remove-worker-credential-management` 升为 schema 5 / v4，status JSON 仍为 schema3。
 
 IC-03 schema19 由 Branch Store 拥有最小包级 LaneReservation（scope/generation/package、稳定 operation identity、准入 authorization 与 baseline）。`reserve-work-package-lane` 在短事务内核验 lease/fencing/CAS、当前图与批准额度；同包重放复用原记录，未可见派发仍占用。`release-work-package-lane` 仅在终止或完整集成可证明后释放。额度降低不撤销已有包。集成复验轮次与独立预算消费在同一事务注册，绑定原 Validator Attempt/Session、原接受结果、目标 HEAD 与树证据；具体 Task/Dispatch 仍由 Orca 和物化绑定拥有。
 
@@ -1003,3 +1003,11 @@ IC-11/12 提供 ExecutionSettings load/save 和显式执行期完整审阅意图
 3. Consumer 只导入，不定义别名类型、镜像状态、第二 repository/pipeline/snapshot。
 4. 实现需要本文未登记的公共字段、枚举、错误、权限、migration 或调用顺序时停止 IP-ID，更新本合同与受影响 change 后再继续。
 5. 私有 helper、SQL 细节、React props 和单模块内部拆分不属于本合同；owner 可在不改变调用者知识的前提下调整。
+
+### Coordinator Provider Library 与 Catalog 合同
+
+`ProviderLibraryStore` 的 canonical path 为 `src/application/ports/provider-library-store.ts`，`FileProviderLibraryStore` 实现用户级 providers.json（schema1、revision、connections、models），0700目录/0600文件、短exclusive锁、CAS、原子替换与回读；拒绝删除/改写历史引用、symlink、不安全权限和无界输入。应用 `ProviderLibraryService` 提供 load/saveConnection/saveModel/resolveModel。连接输入strict校验先于任何secret写入；保存失败不激活，密钥可能成为不被引用的孤立项。模型能力来自精确匹配的可信目录，未知为null。
+
+`ProviderCatalog` 的 canonical path 为 `src/application/configuration/provider-catalog.ts`。presets/candidates 同步只读；discover 与 refresh 是分开的显式异步意图，查询有界、可取消。发现非空为唯一候选，失败或空结果按 connectionRef/credentialRef/effective catalog version 的LKG→catalog回退，无发现服务直接catalog。公共内容更新或发布基线更新使旧缓存失效，相同内容刷新保持缓存。自定义只按固定协议提供兼容候选，不按hostname猜供应商，exact ID不重写。
+
+Home initializeProject 意图携带用户所选modelRef/effort/Route Map issue，仅对不存在文件按CAS创建完整schema5；Scope和Session仍需独立核验与批准。响应恢复的原配置引用/必要白名单kwargs与签名内容由checkpoint拥有，计入输出/上下文预算，不进普通metadata页；换模型只用可移植文本/tool结构。

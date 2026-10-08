@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 
 import { CapableChatModel } from '../support/fake-chat-model.js';
+import { coordinatorConfigurationFixture, credentialFixtureEnvironment, projectConnectionsFixture } from '../support/model-configurations.js';
 import type {
   CoordinationScopeId,
   CoordinatorSessionId,
@@ -108,17 +109,9 @@ async function startHandoffHarness(options: { readonly withSourceHistory: boolea
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 4,
-      coordinatorModels: [
-        {
-          configurationRef: 'planning-default',
-          providerIntegration: '@fake/provider#CapableChatModel',
-          model: 'fake-coordinator',
-          modelOptions: {},
-          credentialRefs: [],
-          nativeWindowOwnerRef: null,
-        },
-      ],
+      schemaVersion: 5,
+      ...projectConnectionsFixture(),
+      coordinatorModels: [coordinatorConfigurationFixture('planning-default')],
       defaultCoordinatorModelRef: 'planning-default',
       tracker: { kind: 'github', routeMapIssueNumber: 7 },
       planning: { maxMutations: 2 },
@@ -131,7 +124,7 @@ async function startHandoffHarness(options: { readonly withSourceHistory: boolea
 
   const host = await createForegroundPlanningHost({
     repositoryPath: repository,
-    env: process.env as Record<string, string>,
+    env: credentialFixtureEnvironment(directory),
     clock,
     newId: (() => {
       let counter = 0;
@@ -141,11 +134,12 @@ async function startHandoffHarness(options: { readonly withSourceHistory: boolea
     leaseTtlMs: 600_000,
     orcaProbe: fakeProbe(),
     trackerFactory: () => fakeTracker(EMPTY_TICKET_MAP),
-    loadIntegration: () => Promise.resolve({ CapableChatModel: class extends CapableChatModel {} }),
+    loadIntegration: () => Promise.resolve({ ChatOpenAICompletions: class extends CapableChatModel {} }),
   });
   hosts.push(host);
 
   const proposal = await host.ports.scopeSetup.proposal();
+  await host.ports.scopeSetup.verify();
   const initialized = await host.ports.scopeSetup.initialize(proposal);
   if (initialized.kind !== 'accepted') {
     throw new Error(`无法初始化测试 Scope：${initialized.message}`);

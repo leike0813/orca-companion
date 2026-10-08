@@ -28,6 +28,7 @@ import {
   deriveContextCapsule,
 } from '../../src/workflow/coordinator/context.js';
 import { SUSPENSION_GRAPH_POSITION, type SuspensionState } from '../../src/application/coordinator/suspension.js';
+import { coordinatorConfigurationFixture } from '../support/model-configurations.js';
 
 const SESSION = 'session-a' as CoordinatorSessionId;
 
@@ -53,11 +54,7 @@ afterEach(() => {
 
 function configuration(overrides: Partial<CoordinatorModelConfiguration> = {}): CoordinatorModelConfiguration {
   return {
-    configurationRef: 'coordinator-default',
-    providerIntegration: '@langchain/openai#ChatOpenAI',
-    model: 'MiniMax-M3',
-    modelOptions: {},
-    credentialRefs: ['env:MINIMAX_API_KEY'],
+    ...coordinatorConfigurationFixture(),
     nativeWindowOwnerRef: 'provider:minimax-m3:generation-2',
     ...overrides,
   };

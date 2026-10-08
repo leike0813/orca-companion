@@ -2,9 +2,9 @@
 
 > **硬约束：尊重已确认原型。任何 TUI change 必须直接引用对应定稿决议、源码和画面，并按其布局、信息层级、视觉风格、导航与返回约定实施、验收。未经用户明确批准，不得自行重新设计。交互正常或自动测试通过，不能替代原型一致性验收。**
 
-状态日期：2026-10-06。接手先核对 HEAD、工作区和当前工件；保留已有未提交改动。体验以用户当前指示和 Decision Ticket 最终决议为准；领域、模块与公共合同分别由 [CONTEXT.md](../../CONTEXT.md)、[architecture.md](../architecture.md)、[interface-contracts.md](../interface-contracts.md) 拥有。
+状态日期：2026-10-08。接手先核对 HEAD、工作区和当前工件；保留已有未提交改动。体验以用户当前指示和 Decision Ticket 最终决议为准；领域、模块与公共合同分别由 [CONTEXT.md](../../CONTEXT.md)、[architecture.md](../architecture.md)、[interface-contracts.md](../interface-contracts.md) 拥有。
 
-当前批次为 [remove-worker-credential-management](../../openspec/changes/remove-worker-credential-management/implementation-plan.md)。模型设置沿 #52 dialog final：Worker 角色只选择 harness 与该 harness 原生目录候选（model/effort），不再出现连接、凭据、API key 或任意 options 字段；Coordinator 表单保留。目录查询失败时可手填 native exact ID 并标记未验证，effort 不可捏造。保存追加 profile，执行应用须经 Manifest v4 审阅。行为检查与三档画面验收按本 change 的 implementation-plan 执行，自动测试不能代替呈现验收。
+当前批次为 [rework-coordinator-provider-configuration](../../openspec/changes/rework-coordinator-provider-configuration/implementation-plan.md)。模型设置沿 #52 dialog final：Worker 角色只选择 harness 与该 harness 原生目录候选（model/effort），不再出现连接、凭据、API key 或任意 options 字段；Coordinator 沿同布局加入用户连接复用、服务/地区产品线、自定义协议、地址与隐藏 Key、模型候选。目录查询失败时可手填 native exact ID 并标记未验证，effort 不可捏造。保存追加 profile，执行应用须经 Manifest v4 审阅。本批用户于2026-10-08接受当前功能，明确将TUI美化与完整视觉对照留待后续；已有三档画面保留为审阅材料，不由行为测试或本次功能接受推定逐项呈现验收通过。后续TUI改动仍按本页原型规则执行。
 
 ## 1. 六票来源与当前范围
 
@@ -42,7 +42,7 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 
 ### 第二批成果及证据边界
 
-第六批 6A/6B 及全部前驱已归档；第七批 `complete-tui-project-statusline` 已包含于 commit `41b2f1e` 并归档到 `2026-10-04-complete-tui-project-statusline`。其[生产证据](../../artifacts/project-statusline/README.md)和历史验收范围保持原样。第八批 `complete-tui-graph-basis` 已包含于 `055c148` 并归档到 `2026-10-04-complete-tui-graph-basis`。当前 active change 为 `remove-worker-credential-management`，沿用六票布局与返回约定，把 Worker 模型设置收敛为原生目录候选与独立 effort；完成状态以当前 change 的任务和验证记录为准。
+第六批 6A/6B 及全部前驱已归档；第七批 `complete-tui-project-statusline` 已包含于 commit `41b2f1e` 并归档到 `2026-10-04-complete-tui-project-statusline`。其[生产证据](../../artifacts/project-statusline/README.md)和历史验收范围保持原样。第八批 `complete-tui-graph-basis` 已包含于 `055c148` 并归档到 `2026-10-04-complete-tui-graph-basis`。Worker 原生模型候选与独立 effort 由已归档的 [remove-worker-credential-management](../../openspec/changes/archive/2026-10-07-remove-worker-credential-management/verification.md) 实现。当前 Provider 批次以本页开头所链接的 change 为准。
 
 第二批已提供 grapheme 任意位置编辑、行首尾、多行有界视窗、原生光标；>1000 code points 原子粘贴及 /paste；唯一完整 UiDraft、CAS、提交快照/稳定 submissionId、单活跃提交/generation；真实 ask_user 创建/重放与精确查询；当前 Session 选项/自由回答、Esc 恢复。UI schema v2、Coordination schema 14，问题正文由 Branch Store 拥有。
 
@@ -80,7 +80,7 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 | 第六批 6A | 9/9、[正式验收PASS](../../openspec/changes/archive/2026-10-04-complete-tui-command-reviews/verification.md)，已包含于 `8f6d1a7`、已归档：同源目录/子页搜索、结构化结果与输入保护、精确交接 ID/revision、五栏授权/三栏交接审阅和显式 Session 模型目录；[生产画面与操作](../../artifacts/command-reviews/README.md)及最终检查见 change 验收记录 |
 | 第六批 6B | 13/13、[独立验收PASS](../../openspec/changes/archive/2026-10-04-complete-tui-model-configuration/verification.md)，已包含于 `82f6a77`、已归档；provider/model/effort、不可变 Worker Profiles、用户级 CredentialStore、Manifest2 模型限定重授权、schema16 Task 绑定和实际启动接线完成。[171对生产画面与隔离真实启动](../../artifacts/model-configuration/README.md)；全量及最终受影响复验按文件去重后1653项通过/12项条件跳过，原始全量exit 1及复验口径见验收报告 |
 | 第七批 | 已归档并包含于 `41b2f1e`：[complete-tui-project-statusline](../../openspec/changes/archive/2026-10-04-complete-tui-project-statusline/implementation-plan.md)，12/12任务和历史独立验收完成；[原生产证据](../../artifacts/project-statusline/README.md)保留原记录 |
-| 第八批 | 当前 active：[complete-tui-graph-basis](../../openspec/changes/complete-tui-graph-basis/implementation-plan.md)，任务12/12；最终检查已通过，独立正式核验PASS。读取返回、六票对照、规模性能、真实Cutover与MiniMax真实闭环已完成：n retire、o同Attempt Recovery/revise均取得deliverable，2版图的38/82完整正文可读。原驱动各6通过/2显示断言失败/2阶段跳过、exit1，已在原暂停现场通过生产详情与Inspector复验结清；人工督办/回答及原日志保留。Task/Dispatch/Attempt、Segment、结算、预算与Verdict在读取重启后不变。固定全量1756通过/12条件跳过，最终脚手架复验另存。六票原矩阵192独立对、项目入口96对、状态栏114对、审阅108对、待答/事件36对；独立正式验收PASS，见 [graph-basis](../../artifacts/graph-basis/README.md) |
+| 第八批 | 已归档：[complete-tui-graph-basis](../../openspec/changes/archive/2026-10-04-complete-tui-graph-basis/implementation-plan.md)，任务12/12；最终检查已通过，独立正式核验PASS。读取返回、六票对照、规模性能、真实Cutover与MiniMax真实闭环已完成：n retire、o同Attempt Recovery/revise均取得deliverable，2版图的38/82完整正文可读。原驱动各6通过/2显示断言失败/2阶段跳过、exit1，已在原暂停现场通过生产详情与Inspector复验结清；人工督办/回答及原日志保留。Task/Dispatch/Attempt、Segment、结算、预算与Verdict在读取重启后不变。固定全量1756通过/12条件跳过，最终脚手架复验另存。六票原矩阵192独立对、项目入口96对、状态栏114对、审阅108对、待答/事件36对；独立正式验收PASS，见 [graph-basis](../../artifacts/graph-basis/README.md) |
 
 [#53 性能基线](https://github.com/leike0813/orca-companion/issues/53#issuecomment-5945507505)：1000/10000/100000 条记录，输入与已缓存导航 p95≤100ms。3B使用实际 SQLite、生产阅读器与生产 App，每种100次输入/导航采样；1/5 MiB 正文与工具输出同测。冷读取、提交、finish、SDK聚合与RSS另列，限制见证据报告。
 

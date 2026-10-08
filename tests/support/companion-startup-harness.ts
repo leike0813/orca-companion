@@ -28,6 +28,7 @@ import type { WorkerRole } from '../../src/domain/planning/execution-authorizati
 import type { BranchCoordinationStore, CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
 import type { ActiveWorkerListResult, WorkerStopPort } from '../../src/application/coordination/scope-control-service.js';
 import { CapableChatModel } from './fake-chat-model.js';
+import { coordinatorConfigurationFixture } from './model-configurations.js';
 import {
   RECOVERY_AUTHORIZATION,
   RECOVERY_SCOPE,
@@ -217,14 +218,7 @@ export function createCompanionStartupFixture(
           coordinationScopeId: RECOVERY_SCOPE,
           coordinatorSessionId: RECOVERY_SESSION,
           runtimeIncarnationId: incarnation,
-          configuration: {
-            configurationRef: 'model-config-recovery',
-            providerIntegration: '@langchain/openai#ChatOpenAI',
-            model: 'MiniMax-M3',
-            modelOptions: {},
-            credentialRefs: [],
-            nativeWindowOwnerRef: null,
-          },
+          configuration: coordinatorConfigurationFixture('model-config-recovery'),
           resolveModel: () => Promise.resolve({ kind: 'resolved', model: new CapableChatModel() }),
           gitCommonDir: harness.directory,
           coordinationStore: harness.store,

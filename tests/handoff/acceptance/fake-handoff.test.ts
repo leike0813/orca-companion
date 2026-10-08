@@ -21,6 +21,7 @@
 
 import { afterEach, expect, test } from 'vitest';
 import { HumanMessage } from '@langchain/core/messages';
+import { coordinatorConfigurationFixture } from '../../support/model-configurations.js';
 
 import { openCheckpointStore } from '../../../src/adapters/storage/checkpoint-store.js';
 import {
@@ -235,14 +236,7 @@ async function createHandoffFixture(): Promise<HandoffFixture> {
     coordinationScopeId: RECOVERY_SCOPE,
     coordinatorSessionId: RECOVERY_SESSION,
     runtimeIncarnationId: HANDOFF_INCARNATION,
-    configuration: {
-      configurationRef: 'model-config-recovery',
-      providerIntegration: '@langchain/openai#ChatOpenAI',
-      model: 'MiniMax-M3',
-      modelOptions: {},
-      credentialRefs: [],
-      nativeWindowOwnerRef: null,
-    },
+    configuration: coordinatorConfigurationFixture('model-config-recovery'),
     resolveModel: () => Promise.resolve({ kind: 'resolved', model: counting }),
     gitCommonDir: harness.directory,
     coordinationStore: store,

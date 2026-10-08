@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, expect, test } from 'vitest';
-import { projectExecutionProfilesFixture, projectConnectionsFixture } from '../support/model-configurations.js';
+import { coordinatorConfigurationFixture, credentialFixtureEnvironment, projectExecutionProfilesFixture, projectConnectionsFixture } from '../support/model-configurations.js';
 import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
 import { openCheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
 import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
@@ -661,19 +661,10 @@ async function openAuthorizationHost(directory: string): Promise<AuthorizationHo
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 4,
+      schemaVersion: 5,
       revision: 0,
       ...projectConnectionsFixture(),
-      coordinatorModels: [
-        {
-          configurationRef: 'planning-default',
-          providerIntegration: '@fake/provider#CapableChatModel',
-          model: 'fake-coordinator',
-          modelOptions: {},
-          credentialRefs: [],
-          nativeWindowOwnerRef: null,
-        },
-      ],
+      coordinatorModels: [coordinatorConfigurationFixture('planning-default')],
       defaultCoordinatorModelRef: 'planning-default',
       tracker: { kind: 'github', routeMapIssueNumber: 7 },
       planning: { maxMutations: 2 },
@@ -791,7 +782,7 @@ async function openAuthorizationHost(directory: string): Promise<AuthorizationHo
   const probeCalls = { value: 0 };
   const host = await createForegroundPlanningHost({
     repositoryPath: repository,
-    env: process.env as Record<string, string>,
+    env: credentialFixtureEnvironment(directory),
     clock,
     newId: (() => {
       let counter = 0;
@@ -801,7 +792,7 @@ async function openAuthorizationHost(directory: string): Promise<AuthorizationHo
     leaseTtlMs: 60_000,
     orcaProbe: hostProbe(),
     trackerFactory: hostTracker,
-    loadIntegration: () => Promise.resolve({ CapableChatModel }),
+    loadIntegration: () => Promise.resolve({ ChatOpenAICompletions: CapableChatModel }),
     executionBackend: permissiveHostBackend(),
     readOnlyWorkerProbe: () => {
       probeCalls.value += 1;

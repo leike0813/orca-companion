@@ -25,6 +25,7 @@ import type {
   WorkerEffortCapability,
   WorkerHarnessId,
   WorkerModelSelection,
+  ProviderConnection,
 } from '../../domain/model-configuration.js';
 import type {
   ModelSettingsSnapshot,
@@ -34,6 +35,8 @@ import type {
 import type { TuiPreferencesPort } from '../../application/configuration/tui-preferences.js';
 import type { ProjectDetailsPort } from '../../application/tui/project-presentation.js';
 import type { GraphBasisPort } from '../../application/tui/graph-basis.js';
+import type { ProviderLibrary } from '../../application/configuration/provider-library.js';
+import type { ProviderCatalog } from '../../application/configuration/provider-catalog.js';
 
 export type { ModelSettingsSnapshot, SaveModelSettingsInput, SaveModelSettingsResult };
 
@@ -392,19 +395,11 @@ export type ModelSettingsLoad =
  * Coordinator 连接的非秘密视图。
  *
  * 应用的 ModelSettingsConnectionSummary 只带 label、providerIntegration 与凭据来源，但保存始终
- * **新增**连接，因此编辑既有连接必须能原样带回凭据引用与 SDK 字段路径，否则保存会静默丢掉它们。
+ * **新增**连接，因此编辑既有连接必须保留其协议、地址与不透明凭据引用。
  * credentialRef 是 opaque 引用而非 key，因此可以进入界面。Worker 已不再拥有连接，此视图只服务于
  * Coordinator form。
  */
-export type ModelSettingsConnectionView = {
-  readonly connectionRef: string;
-  readonly label: string;
-  readonly providerIntegration: string;
-  readonly modelOptions: Readonly<Record<string, unknown>>;
-  readonly credential:
-    | { readonly kind: 'harness_login' }
-    | { readonly kind: 'managed'; readonly credentialRef: string; readonly optionPath: string };
-};
+export type ModelSettingsConnectionView = ProviderConnection;
 
 /**
  * 载入快照。
@@ -414,6 +409,7 @@ export type ModelSettingsConnectionView = {
  */
 export type ModelSettingsSnapshotView = Omit<ModelSettingsSnapshot, 'connections'> & {
   readonly connections: readonly ModelSettingsConnectionView[];
+  readonly libraryRevision?: number;
 };
 
 /**
@@ -445,13 +441,16 @@ export type ModelSettingsApplyInput =
  * Coordinator 的应用复用既有 `switch-model-configuration` 意图，保留挂起与在途操作的原合同。
  *
  * `save` 的输入与结果直接用应用层 `ModelSettingsService` 的类型（按 role 判别联合）：Coordinator
- * 编辑器提交 provider 连接、凭据引用与 SDK 字段路径、effort 能力来源，Worker 分支提交 harness 与
+ * 编辑器提交模型引用与 effort，共享服务解析完整连接；Worker 分支提交 harness 与
  * `modelSelection`，不在界面层复制第二份形状。
  */
 export type ModelSettingsPort = {
   readonly load: () => Promise<ModelSettingsLoad>;
   readonly save: (input: SaveModelSettingsInput) => Promise<SaveModelSettingsResult>;
   readonly apply: (input: ModelSettingsApplyInput) => Promise<SaveModelSettingsResult>;
+  readonly library?: ProviderLibrary;
+  readonly catalog?: ProviderCatalog;
+  readonly initializeProject?: (input: { readonly modelRef: string; readonly effort: string | null; readonly routeMapIssueNumber: number }) => Promise<SaveModelSettingsResult>;
 };
 
 /**

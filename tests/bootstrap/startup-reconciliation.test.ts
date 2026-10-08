@@ -84,6 +84,7 @@ import {
   type RecoveryHarness,
 } from '../support/recovery-harness.js';
 import { CapableChatModel } from '../support/fake-chat-model.js';
+import { coordinatorConfigurationFixture } from '../support/model-configurations.js';
 
 const CLOCK_MS = 5_000;
 const clock = (): number => CLOCK_MS;
@@ -436,14 +437,7 @@ function createFixture(
     coordinationScopeId: RECOVERY_SCOPE,
     coordinatorSessionId: RECOVERY_SESSION,
     runtimeIncarnationId: STARTUP_INCARNATION,
-    configuration: {
-      configurationRef: 'model-config-recovery',
-      providerIntegration: '@langchain/openai#ChatOpenAI',
-      model: 'MiniMax-M3',
-      modelOptions: {},
-      credentialRefs: [],
-      nativeWindowOwnerRef: null,
-    },
+    configuration: coordinatorConfigurationFixture('model-config-recovery'),
     resolveModel: () => Promise.resolve({ kind: 'resolved', model: new CapableChatModel() }),
     gitCommonDir: fixture.directory,
     coordinationStore: observed.store,

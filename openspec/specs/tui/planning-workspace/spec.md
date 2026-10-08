@@ -298,32 +298,47 @@ Palette、slash、快捷键和帮助 SHALL 共用稳定命令身份、展示定�
 
 ### Requirement: Approved role model settings and independent effort
 
-模型页 SHALL 沿 #52 定稿分为当前 Coordinator、Planning 和 Execution 角色区。Coordinator 组 SHALL 保留既有 connection/model/options/key 编辑合同；每个 Worker 角色 SHALL 显式选择已注册 harness 与来自该 harness 原生目录的 provider/model 候选，effort 使用独立水平选择且只展示可信能力来源。Worker 角色 MUST NOT 出现连接、凭据、API key 或任意 options 编辑；未实现角色、未注册 harness 或缺少能力 SHALL 显示原因。目录查询失败时 SHALL 允许手填 native exact ID 并标记为未验证，MUST NOT 提供或保存虚构 effort。默认动作 SHALL 返回，明确应用才提交；保存和应用结果 SHALL 区分，失败保留编辑，迟到结果不改变其他 Session 或焦点。
+模型页 SHALL 沿 #52 定稿分为当前 Coordinator、Planning 和 Execution 角色区。Coordinator SHALL 提供已有连接复用及 Provider/custom、地区/产品线或地址、隐藏 API Key、保存/发现、模型/可信 effort、核验和明确应用流程；MUST NOT 呈现 module/export、SDK options JSON、认证类型或字段路径。每个 Worker 角色 SHALL 显式选择注册 harness 与原生目录模型，effort 使用独立水平选择且只展示可信来源；Worker MUST NOT 出现连接、凭据、Key 或 options。目录失败 SHALL 允许手填 exact ID 并标记未验证，不捏造 effort。默认动作 SHALL 返回，保存、发现、核验和应用 SHALL 区分；失败保留输入，异步结果不得改变其它 Session 或焦点。
+
+#### Scenario: Coordinator 简洁配置与复用
+
+- **WHEN** 用户新建连接或选已有连接
+- **THEN** 新建只需服务/协议、地址及隐藏 Key；已有连接直接选择模型，不要求重复输入 Key 或 SDK JSON
+
+#### Scenario: Worker 原生选择
+
+- **WHEN** 用户配置 Worker 角色
+- **THEN** 只选择 harness、native model 与可信 effort，目录失败可以手填未验证 exact ID
+
+#### Scenario: 默认返回与独立应用
+
+- **WHEN** 用户保存、取消、刷新或切 Session
+- **THEN** 默认返回和原焦点约定保留，只有明确应用才更新目标绑定，迟到结果不覆盖新编辑
 
 #### Scenario: effort 不复制候选
 
-- **WHEN** 用户浏览同一模型不同 effort
-- **THEN** 候选只有一个 provider/model 条目，水平选择只允许来源证明的值，缺失能力不可保存虚构 effort
+- **WHEN** 浏览同模型不同 effort
+- **THEN** 只有一个模型候选，独立水平选择仅提供可信值
 
 #### Scenario: 角色配置编辑与返回
 
-- **WHEN** 用户从 Palette 或 slash 进入角色模型、编辑候选、保存或逐层返回
-- **THEN** 原查询/选择/Session/草稿/锚点保留，保存不代表应用，秘密不进入普通输入恢复
+- **WHEN** 从 Palette/slash 编辑保存或逐层返回
+- **THEN** 保留查询、选择、Session、草稿与锚点，保存不代表应用，秘密不进输入恢复
 
 #### Scenario: 执行模型更新审阅
 
-- **WHEN** 用户在 execution_coordination 应用角色模型候选
-- **THEN** 展示完整新 Manifest 并默认返回，仅明确批准后应用，失效审阅和不可用角色有明确原因
+- **WHEN** 在 execution_coordination 应用角色模型
+- **THEN** 展示完整新 Manifest，默认返回且明确批准后应用，失效审阅明确拒绝
 
 #### Scenario: 逐角色 harness 与原生连接编辑
 
-- **WHEN** 用户为某角色选择 harness 并查看其候选模型
-- **THEN** 只出现该 harness 的原生目录候选与 effort 选择，不出现连接、凭据、API key 或任意 options 字段，未注册 harness 不可保存，保存后执行绑定在重新批准前保持不变
+- **WHEN** 为 Worker 角色选 harness 并浏览模型
+- **THEN** 仅出现其原生模型与可信 effort，执行绑定在重新批准前不变
 
 #### Scenario: 三档生产画面对照
 
-- **WHEN** 验收模型选择、harness 选择、effort、编辑、保存与重新授权
-- **THEN** 六票有120×40/80×24/50×40、彩色/NO_COLOR、Nerd/ASCII生产画面对照，中文/resize/返回符合原定稿，旧证据不被覆盖
+- **WHEN** 验收模型选择、编辑、保存和应用
+- **THEN** 提供120×40/80×24/50×40可审阅画面及中文、resize和返回行为证据，不覆盖旧证据；按2026-10-08用户决议接受当前功能，彩色/NO_COLOR、Nerd/ASCII及完整视觉一致性对照留待后续，不计为本轮通过项
 
 ### Requirement: Trusted project and selected session presentation
 顶栏/状态栏 SHALL 消费应用只读投影的注册 repository/branch、选中 Session 的不可变模型 provider/model/effort、精确 Ticket Claim 及当前 Dispatch Work Package；缺失、未配置、不支持与不可用 SHALL 明确区分。预算 SHALL 按明确类别显示实际主体、持久 consumed 与对应批准上限，MUST NOT 使用第一条 ledger 或累计消耗作为 active package count。statusline SHALL 保持三核心项、单行与默认 graph 附加项，普通字段按配置顺序整体让位、先缩短 provider，Ticket 号保持可辨识。展示偏好 MUST NOT 控制风险、授权或待答事实。

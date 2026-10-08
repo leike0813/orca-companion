@@ -60,6 +60,8 @@ import { checkpointDatabasePath } from '../../src/bootstrap/coordinator-runtime.
 import { executionWorkerProfiles } from '../support/execution-harness.js';
 import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 import {
+  coordinatorConfigurationFixture,
+  credentialFixtureEnvironment,
   projectConnectionsFixture,
   projectExecutionProfilesFixture,
   recoveryUtilityProfileFixture,
@@ -330,17 +332,8 @@ function prepareRepository(directory: string): { readonly repository: string; re
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 4,
-      coordinatorModels: [
-        {
-          configurationRef: 'planning-default',
-          providerIntegration: '@fake/provider#CapableChatModel',
-          model: 'fake-coordinator',
-          modelOptions: {},
-          credentialRefs: [],
-          nativeWindowOwnerRef: null,
-        },
-      ],
+      schemaVersion: 5,
+      coordinatorModels: [coordinatorConfigurationFixture('planning-default')],
       defaultCoordinatorModelRef: 'planning-default',
       tracker: { kind: 'github', routeMapIssueNumber: 7 },
       planning: { maxMutations: 2 },
@@ -737,7 +730,7 @@ async function openHarness(options?: {
   };
   const host = await createForegroundPlanningHost({
     repositoryPath: repository,
-    env: process.env as Record<string, string>,
+    env: credentialFixtureEnvironment(directory),
     clock: () => 1_000,
     newId: (() => {
       let counter = 0;
@@ -748,7 +741,7 @@ async function openHarness(options?: {
     sessionBindingWindowMs: options?.sessionBindingWindowMs ?? 200,
     orcaProbe: fakeProbe(),
     trackerFactory: fakeTracker,
-    loadIntegration: () => Promise.resolve({ CapableChatModel }),
+    loadIntegration: () => Promise.resolve({ ChatOpenAICompletions: CapableChatModel }),
     executionBackend: fake.backend,
     readOnlyWorkerProbe: options?.readOnlyWorkerProbe ?? fixedReadOnlyWorkerProbe(),
   });

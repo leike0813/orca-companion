@@ -345,6 +345,7 @@ const PROVIDER_REPLAY_KWARGS = new Set([
   'reasoning_content',
   'reasoning',
   '__openai_function_call_ids__',
+  'originalTextContentBlock',
 ]);
 const PROVIDER_REPLAY_MAX_BYTES = 64 * 1024;
 
@@ -649,9 +650,12 @@ function parseMessageEntry(raw: unknown, field: string): IdentityResult<Committe
         return fail(`${field}.providerReplay`, 'replay 配置引用或白名单字段不合法');
       }
       if (kwargs['reasoning_content'] !== undefined && typeof kwargs['reasoning_content'] !== 'string') return fail(`${field}.providerReplay`, 'reasoning_content 类型不合法');
-      if (kwargs['__openai_function_call_ids__'] !== undefined && (!Array.isArray(kwargs['__openai_function_call_ids__']) || kwargs['__openai_function_call_ids__'].some((id) => typeof id !== 'string'))) return fail(`${field}.providerReplay`, 'function call ids 类型不合法');
+      const callIds = kwargs['__openai_function_call_ids__'];
+      if (callIds !== undefined && (!isRecord(callIds) || Object.values(callIds).some((id) => typeof id !== 'string'))) return fail(`${field}.providerReplay`, 'function call ids 类型不合法');
       const reasoning = kwargs['reasoning'];
-      if (reasoning !== undefined && (!isRecord(reasoning) || Object.keys(reasoning).some((key) => !['id', 'type', 'encrypted_content', 'summary'].includes(key)) || Object.entries(reasoning).some(([key, value]) => key !== 'summary' && typeof value !== 'string') || (reasoning['summary'] !== undefined && (!Array.isArray(reasoning['summary']) || reasoning['summary'].some((item) => !isRecord(item) || Object.keys(item).some((key) => !['type', 'text'].includes(key)) || typeof item['type'] !== 'string' || typeof item['text'] !== 'string'))))) return fail(`${field}.providerReplay`, 'reasoning 结构不合法');
+      if (reasoning !== undefined && (!isRecord(reasoning) || Object.keys(reasoning).some((key) => !['id', 'type', 'encrypted_content', 'summary'].includes(key)) || Object.entries(reasoning).some(([key, value]) => key !== 'summary' && typeof value !== 'string') || (reasoning['summary'] !== undefined && (!Array.isArray(reasoning['summary']) || reasoning['summary'].some((item) => !isRecord(item) || Object.keys(item).some((key) => !['type', 'text', 'index'].includes(key)) || typeof item['type'] !== 'string' || typeof item['text'] !== 'string' || (item['index'] !== undefined && (!Number.isSafeInteger(item['index']) || Number(item['index']) < 0))))))) return fail(`${field}.providerReplay`, 'reasoning 结构不合法');
+      const originalBlock = kwargs['originalTextContentBlock'];
+      if (originalBlock !== undefined && (!isRecord(originalBlock) || Object.keys(originalBlock).some((key) => !['type', 'text', 'thought', 'thoughtSignature', 'partMetadata'].includes(key)) || originalBlock['type'] !== 'text' || typeof originalBlock['text'] !== 'string' || (originalBlock['thought'] !== undefined && typeof originalBlock['thought'] !== 'boolean') || (originalBlock['thoughtSignature'] !== undefined && typeof originalBlock['thoughtSignature'] !== 'string') || (originalBlock['partMetadata'] !== undefined && !isRecord(originalBlock['partMetadata'])))) return fail(`${field}.providerReplay`, 'original text block 结构不合法');
       try {
         if (Buffer.byteLength(JSON.stringify(kwargs), 'utf8') > PROVIDER_REPLAY_MAX_BYTES) {
           return fail(`${field}.providerReplay`, 'replay 超出字节预算');

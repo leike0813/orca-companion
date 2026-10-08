@@ -49,21 +49,29 @@
 
 ### 项目配置：`orca-companion.json`
 
+在 `/connections` 中选择服务、地区/产品线或自定义协议，输入地址与隐藏 API Key，再选择或手填模型。
+已有连接可以直接复用。首次项目配置还需填写 Route Map issue；ledger-lab 使用 `pnpm lab configure`。
+用户库位于 XDG config 的 `orca-companion/providers.json`，Key 位于同目录 `credentials.json`。
+发布 catalog 支持离线选择；非空端点发现独占候选，发现失败回退同版本 last known good，再回退 catalog。
+保存、发现、核验与应用分别进行；离线可以保存，启动和应用必须通过真实工具调用及续接核验。
+以下 UUID 为示例，实际配置由向导使用 CredentialStore 返回的引用生成。
+
 前台规划 Runtime 从 canonical worktree 根目录读取用户维护、纳入版本控制的 `orca-companion.json`。
-它只保存**凭据引用**，不保存任何密钥值：出现已知密钥字段名时整份配置被拒绝。`schemaVersion` 必须是 4，
+它只保存**凭据引用**，不保存任何密钥值：出现已知密钥字段名时整份配置被拒绝。`schemaVersion` 必须是 5，
 旧版本配置被明确拒绝，不会被自动改写。
 
 ```json
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "revision": 1,
   "providerConnections": [
     {
       "connectionRef": "connection-openai",
       "label": "OpenAI",
-      "providerIntegration": "@langchain/openai#ChatOpenAI",
-      "modelOptions": { "temperature": 0 },
-      "credential": { "kind": "harness_login" }
+      "providerId": "openai-responses",
+      "providerIntegration": "openai-responses",
+      "baseUrl": "https://api.openai.com/v1",
+      "credential": { "kind": "managed", "credentialRef": "11111111-2222-4333-8444-555555555555" }
     }
   ],
   "models": [
@@ -77,11 +85,21 @@
   "coordinatorModels": [
     {
       "configurationRef": "planning-default",
-      "providerIntegration": "@langchain/openai#ChatOpenAI",
+      "providerIntegration": "openai-responses",
       "model": "gpt-4.1-mini",
-      "modelOptions": { "temperature": 0 },
-      "credentialRefs": [],
-      "nativeWindowOwnerRef": null
+      "credentialRefs": ["11111111-2222-4333-8444-555555555555"],
+      "nativeWindowOwnerRef": null,
+      "modelRef": "gpt-4.1-mini",
+      "effortCapability": null,
+      "effort": null,
+      "providerConnection": {
+        "connectionRef": "connection-openai",
+        "label": "OpenAI",
+        "providerId": "openai-responses",
+        "providerIntegration": "openai-responses",
+        "baseUrl": "https://api.openai.com/v1",
+        "credential": { "kind": "managed", "credentialRef": "11111111-2222-4333-8444-555555555555" }
+      }
     }
   ],
   "defaultCoordinatorModelRef": "planning-default",
@@ -114,13 +132,13 @@
 ```
 
 - `revision` / `providerConnections` / `models`：**Coordinator** 模型设置的不可变记录。每次编辑追加新的
-  `connectionRef`、`modelRef` 并推进 `revision`，既有引用不被改写。`credential` 为 `harness_login`
-  （provider integration 自身环境认证）或 `managed`（带 `credentialRef` 与 LangChain `optionPath`）；
+  `connectionRef`、`modelRef` 并推进 `revision`，既有引用不被改写。连接由用户级库跨项目复用，
+  `credential` 只使用 `managed` 与不可变 UUID `credentialRef`；
   密钥值存在用户级凭据文件里，不进版本控制。Worker 角色不使用连接或凭据：其 Profile 只带 harness 与
   `modelSelection`。
 - `coordinatorModels` / `defaultCoordinatorModelRef`：可切换的 Coordinator 模型配置闭集与默认引用；
-  默认引用必须存在于集合中，且 `configurationRef` 唯一。`providerIntegration` 形如 `<module>#<export>`，
-  由用户已安装的 provider 集成提供，Companion 不维护 allowlist、不自动 fallback。
+  默认引用必须存在于集合中，且 `configurationRef` 唯一。协议为内置固定的 OpenAI Chat、OpenAI Responses、
+  Anthropic Messages 或官方 Gemini；应用不自动换协议或模型。
 - `tracker`：Route Map 所在的 GitHub issue；正文与票据仍是 tracker 的事实。
 - `planning.maxMutations`：本 Scope 允许的规划写入次数上限，`0` 表示只读规划。已用次数由
   Companion 的 Operation Intent 记录派生，重启与重规划都不清零。
@@ -147,8 +165,8 @@
   重新审阅与批准，批准前不会改变正在运行的 Session、已批准授权、Task 或已消耗预算。
 
 编辑模型设置是显式的两步：**保存**只改配置，**应用**才改变运行中的 Session 或角色授权。Coordinator 连接
-编辑保存时先校验候选（引用唯一、交叉引用一致、选项里不得含明文密钥），有新 key 时先把凭据写入并回读，
-再把新的 `connectionRef`/`modelRef` 以 CAS 追加进项目配置；Worker 角色保存只追加 `profileRef` 与
+编辑在用户库先校验候选，有新 Key 时保存凭据并回读，再以 CAS 追加连接与模型。
+项目选择从库中复制完整不可变快照；Worker 角色保存只追加 `profileRef` 与
 `modelSelection`，并经该 harness 显式、有界的原生目录查询核验来源，不写凭据。项目保存失败保留你的输入，
 不覆盖较新配置，也不宣称已生效。
 
@@ -173,9 +191,9 @@ Replanning、cancelling 或存在未决派发时不能重新授权。
 
 ### 凭据文件
 
-用户安装 provider 集成后填写的密钥存在独立的用户级凭据文件（XDG 目录，按 XDG 变量解析），文件内容是明文的
+用户在连接表单中填写的 API Key 存在独立的用户级凭据文件（XDG 目录，按 XDG 变量解析），文件内容是明文的
 `credentialRef → secret` 映射，权限被拒绝时明确报错而不是放宽。项目配置、checkpoint、UI 输入存储、日志与
-提交内容里只出现 `credentialRef`：聊天模型在最后的构造点按 `credential.credentialRef` 与 `optionPath` 解析，
+提交内容里只出现 `credentialRef`：聊天模型在最后的构造点按 `credential.credentialRef` 解析 API Key，
 凭据只用于 Coordinator 模型调用。保存凭据先落盘再写项目配置；后者失败
 时输入被保留，可能留下未引用的孤立密钥，但不会激活错误配置。
 

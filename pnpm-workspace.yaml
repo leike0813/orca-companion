@@ -4,3 +4,5 @@ allowBuilds:
   electron: true
 minimumReleaseAgeExclude:
   - '@langchain/core@1.2.12'
+patchedDependencies:
+  '@langchain/openai@1.5.13': patches/@langchain__openai@1.5.13.patch

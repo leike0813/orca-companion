@@ -59,7 +59,7 @@ import { MANIFEST_VERSION } from '../../src/domain/planning/execution-authorizat
 import type { ExecutionAuthorizationManifest } from '../../src/domain/planning/execution-authorization.js';
 import { EXECUTION_AUTHORIZATION_ID, executionWorkerProfiles } from '../support/execution-harness.js';
 import { implementationPlanFor } from '../support/graph-plan-fixture.js';
-import { projectConnectionsFixture, projectExecutionProfilesFixture } from '../support/model-configurations.js';
+import { coordinatorConfigurationFixture, credentialFixtureEnvironment, projectConnectionsFixture, projectExecutionProfilesFixture } from '../support/model-configurations.js';
 import { recoveryUtilityProfileFixture } from '../support/model-configurations.js';
 import type { ExecutionGraph } from '../../src/domain/planning/execution-graph.js';
 import type { SnapshotLoad } from '../../src/interfaces/tui/ports.js';
@@ -209,17 +209,9 @@ function writeProjectConfig(repository: string): void {
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 4,
-      coordinatorModels: [
-        {
-          configurationRef: 'planning-default',
-          providerIntegration: '@fake/provider#CapableChatModel',
-          model: 'fake-coordinator',
-          modelOptions: {},
-          credentialRefs: [],
-          nativeWindowOwnerRef: null,
-        },
-      ],
+      schemaVersion: 5,
+      ...projectConnectionsFixture(),
+      coordinatorModels: [coordinatorConfigurationFixture('planning-default')],
       defaultCoordinatorModelRef: 'planning-default',
       tracker: { kind: 'github', routeMapIssueNumber: 7 },
       planning: { maxMutations: 2 },
@@ -368,7 +360,7 @@ async function openHarness(): Promise<Harness> {
   const backend = fakeHostBackend();
   const host = await createForegroundPlanningHost({
     repositoryPath: repository,
-    env: process.env as Record<string, string>,
+    env: credentialFixtureEnvironment(directory),
     clock,
     newId: (() => {
       let counter = 0;
@@ -378,7 +370,7 @@ async function openHarness(): Promise<Harness> {
     leaseTtlMs: 60_000,
     orcaProbe: fakeProbe(),
     trackerFactory: fakeTracker,
-    loadIntegration: () => Promise.resolve({ CapableChatModel }),
+    loadIntegration: () => Promise.resolve({ ChatOpenAICompletions: CapableChatModel }),
     executionBackend: backend.backend,
   });
   // Home 解析选中 Scope（真实路径）：所有测试都在同一个选中 Scope 上执行。
@@ -946,17 +938,9 @@ async function openAdvanceHarness(options?: { readonly unknownWorkerStart?: bool
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 4,
-      coordinatorModels: [
-        {
-          configurationRef: 'planning-default',
-          providerIntegration: '@fake/provider#CapableChatModel',
-          model: 'fake-coordinator',
-          modelOptions: {},
-          credentialRefs: [],
-          nativeWindowOwnerRef: null,
-        },
-      ],
+      schemaVersion: 5,
+      ...projectConnectionsFixture(),
+      coordinatorModels: [coordinatorConfigurationFixture('planning-default')],
       defaultCoordinatorModelRef: 'planning-default',
       tracker: { kind: 'github', routeMapIssueNumber: 7 },
       planning: { maxMutations: 2 },
@@ -996,7 +980,7 @@ async function openAdvanceHarness(options?: { readonly unknownWorkerStart?: bool
   });
   const host = await createForegroundPlanningHost({
     repositoryPath: repository,
-    env: process.env as Record<string, string>,
+    env: credentialFixtureEnvironment(directory),
     clock,
     newId: (() => {
       let counter = 0;
@@ -1006,7 +990,7 @@ async function openAdvanceHarness(options?: { readonly unknownWorkerStart?: bool
     leaseTtlMs: 60_000,
     orcaProbe: fakeProbe(),
     trackerFactory: fakeTracker,
-    loadIntegration: () => Promise.resolve({ CapableChatModel }),
+    loadIntegration: () => Promise.resolve({ ChatOpenAICompletions: CapableChatModel }),
     executionBackend: fake.backend,
   });
   expect(await host.ports.scopeSetup.resolveHome()).toEqual({
@@ -1346,7 +1330,7 @@ test(
     try {
       const reopened = await createForegroundPlanningHost({
         repositoryPath: harness.repository,
-        env: process.env as Record<string, string>,
+        env: credentialFixtureEnvironment(harness.directory),
         clock,
         newId: (() => {
           let counter = 0;
@@ -1356,7 +1340,7 @@ test(
         leaseTtlMs: 60_000,
         orcaProbe: fakeProbe(),
         trackerFactory: fakeTracker,
-        loadIntegration: () => Promise.resolve({ CapableChatModel }),
+        loadIntegration: () => Promise.resolve({ ChatOpenAICompletions: CapableChatModel }),
         executionBackend: harness.fake.backend,
       });
       try {

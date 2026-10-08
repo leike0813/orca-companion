@@ -2,19 +2,17 @@
  * IC-04：Coordinator chat model 装配
  * （Owner: `m1-run-coordinator-sessions`）。
  *
- * 这里只做一件事：把用户批准的 Coordinator Model Configuration 解析成**已安装** provider 集成的
- * 一个 chat model 实例，并把它原样交给 workflow。Companion 不维护 allowlist、不打包 provider、
- * 仅在构造时读取宿主注入的凭据、不做 fallback；解析出来的实例就是调用路径本身。
- *
- * 集成标识的形状是 `<module>#<export>`：模块与导出都由用户在配置里写死，解析失败就是启动失败，
- * 不会退到「猜一个 provider」。
+ * 从完整不可变配置构造内置固定协议模型，凭据只在此解析；模型直接调用选定端点。
  */
 
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import { ChatOpenAICompletions, ChatOpenAIResponses } from '@langchain/openai';
+import { ChatAnthropic } from '@langchain/anthropic';
+import { ChatGoogle } from '@langchain/google';
 
-import type { CoordinatorModelConfiguration } from '../../application/coordinator/model-config-switch.js';
+import { coordinatorModelConfigurationSchema, type CoordinatorModelConfiguration } from '../../application/coordinator/model-config-switch.js';
 import type { CredentialStore } from '../../application/ports/credential-store.js';
-import { scanModelOptionFields, withModelOption } from '../../domain/model-configuration.js';
+import { providerProtocolSchema, withModelOption } from '../../domain/model-configuration.js';
 import type { NativeWindowItemRef } from '../../domain/coordinator/session-state.js';
 
 /**
@@ -24,8 +22,6 @@ import type { NativeWindowItemRef } from '../../domain/coordinator/session-state
  */
 export const MODEL_INNER_RETRY_DISABLED = 0;
 
-/** 集成标识的分隔符：`<module>#<export>`。 */
-export const INTEGRATION_SEPARATOR = '#';
 
 export const MODEL_RESOLUTION_FAILURE_CODES = [
   'invalid_integration_ref',
@@ -128,27 +124,12 @@ export type ResolveChatModelResult =
       readonly message: string;
     };
 
-function splitIntegrationRef(integrationRef: string): { readonly module: string; readonly exportName: string } | null {
-  const index = integrationRef.lastIndexOf(INTEGRATION_SEPARATOR);
-  if (index <= 0 || index === integrationRef.length - 1) {
-    return null;
-  }
-  return {
-    module: integrationRef.slice(0, index),
-    exportName: integrationRef.slice(index + 1),
-  };
-}
-
-function isConstructable(value: unknown): value is new (options: Record<string, unknown>) => BaseChatModel {
-  return typeof value === 'function';
-}
 
 /** 内层重试必须关闭；这是 D15 的唯一声明处，装配时统一注入。 */
 export function chatModelOptionsFor(
   configuration: CoordinatorModelConfiguration,
 ): Record<string, unknown> {
   return {
-    ...configuration.modelOptions,
     model: configuration.model,
     maxRetries: MODEL_INNER_RETRY_DISABLED,
   };
@@ -165,8 +146,8 @@ export function resolveChatModel(
   /** 凭据来源由 bootstrap 显式注入。 */
   credentials: Pick<CredentialStore, 'read'>,
 ): ResolveChatModelResult {
-  if (scanModelOptionFields(configuration, 'configuration', true).kind !== 'clean') {
-    return { kind: 'rejected', code: 'invalid_model_options', message: '模型选项不能包含秘密或不可核验结构' };
+  if (!coordinatorModelConfigurationSchema.safeParse(configuration).success) {
+    return { kind: 'rejected', code: 'invalid_model_options', message: '模型配置结构无效' };
   }
   const integration = resolver(configuration.providerIntegration);
   if (integration === null) {
@@ -178,14 +159,25 @@ export function resolveChatModel(
   }
   try {
     const connection = configuration.providerConnection;
-    let modelOptions = { ...connection?.modelOptions, ...chatModelOptionsFor(configuration) };
+    if (connection === undefined || connection.providerIntegration !== configuration.providerIntegration ||
+      configuration.credentialRefs.length !== 1 || configuration.credentialRefs[0] !== connection.credential.credentialRef) {
+      return { kind: 'rejected', code: 'credential_unavailable', message: '模型配置需要完整的连接与凭据绑定' };
+    }
+    let modelOptions = chatModelOptionsFor(configuration);
     const credential = connection?.credential;
     if (credential?.kind === 'managed') {
       const resolved = credentials.read(credential.credentialRef);
       if (resolved.kind !== 'resolved') {
         return { kind: 'rejected', code: 'credential_unavailable', message: '配置的凭据无法解析，请检查用户凭据存储' };
       }
-      modelOptions = withModelOption(modelOptions, credential.optionPath, resolved.secret);
+      modelOptions.apiKey = resolved.secret;
+      if (configuration.providerIntegration.startsWith('openai-')) modelOptions.configuration = { baseURL: connection?.baseUrl };
+      else if (configuration.providerIntegration === 'anthropic-messages') modelOptions.anthropicApiUrl = connection.baseUrl.replace(/\/v1\/?$/, '');
+      else modelOptions.endpoint = connection?.baseUrl;
+      if (configuration.providerIntegration === 'openai-responses') {
+        modelOptions.zdrEnabled = true;
+        modelOptions.modelKwargs = { include: ['reasoning.encrypted_content'] };
+      }
     } else if (configuration.credentialRefs.length > 0 && connection === undefined) {
       return { kind: 'rejected', code: 'credential_unavailable', message: '凭据引用缺少明确的连接绑定' };
     }
@@ -194,7 +186,9 @@ export function resolveChatModel(
       if (capability === undefined || capability === null || !capability.values.includes(configuration.effort)) {
         return { kind: 'rejected', code: 'invalid_effort', message: '推理强度缺少可信能力来源' };
       }
-      modelOptions = withModelOption(modelOptions, capability.optionPath, configuration.effort);
+      const optionPath = configuration.providerIntegration.startsWith('openai-') && capability.optionPath === 'reasoningEffort'
+        ? 'reasoning.effort' : capability.optionPath;
+      modelOptions = withModelOption(modelOptions, optionPath, configuration.effort);
     }
     const model = integration.createChatModel({
       model: configuration.model,
@@ -214,47 +208,38 @@ export function resolveChatModel(
 }
 
 /**
- * 异步解析器：先加载配置指向的模块，再按导出名构造实例。
- *
- * 这是 Bootstrap 使用的路径；加载失败、导出缺失或导出不可构造都在这里 fail closed。
+ * 固定协议注册表；load 仅为宿主显式注入测试/能力实现的 seam。
  */
-export function createModuleIntegrationResolverAsync(options: {
+export function createBuiltinIntegrationResolverAsync(options: {
   readonly load?: (specifier: string) => Promise<unknown>;
 } = {}): (integrationRef: string) => Promise<ProviderIntegration | null> {
-  const load = options.load ?? ((specifier: string) => import(specifier));
   return async (integrationRef: string): Promise<ProviderIntegration | null> => {
-    const parts = splitIntegrationRef(integrationRef);
-    if (parts === null) {
-      return null;
-    }
+    const parsed = providerProtocolSchema.safeParse(integrationRef);
+    if (!parsed.success) return null;
+    const builtins = {
+      'openai-chat': ChatOpenAICompletions,
+      'openai-responses': ChatOpenAIResponses,
+      'anthropic-messages': ChatAnthropic,
+      'google-gemini': ChatGoogle,
+    };
     let loaded: unknown;
-    try {
-      loaded = await load(parts.module);
-    } catch {
-      return null;
-    }
-    const exported = (loaded as Record<string, unknown> | null)?.[parts.exportName];
-    if (!isConstructable(exported)) {
-      return null;
-    }
-    const context = exactContextCapability(
-      'companionExactContext' in exported ? exported.companionExactContext : null,
-    );
-    const nativeCompaction = nativeCompactionCapability(
-      'companionNativeCompaction' in exported ? exported.companionNativeCompaction : null,
-    );
-    const keepalive = keepaliveCapability(
-      'companionKeepalive' in exported ? exported.companionKeepalive : null,
-    );
+    try { loaded = options.load === undefined ? null : await options.load(integrationRef); }
+    catch { return null; }
+    const exported = loaded === null ? builtins[parsed.data] :
+      typeof loaded === 'function' ? loaded : (loaded as Record<string, unknown>)?.[builtins[parsed.data].name];
+    if (typeof exported !== 'function') return null;
+    const context = exactContextCapability('companionExactContext' in exported ? exported.companionExactContext : null);
+    const compaction = nativeCompactionCapability('companionNativeCompaction' in exported ? exported.companionNativeCompaction : null);
+    const keepalive = keepaliveCapability('companionKeepalive' in exported ? exported.companionKeepalive : null);
     return {
       integrationRef,
       ...(context === null ? {} : { exactContext: context }),
-      ...(nativeCompaction === null ? {} : { nativeCompaction }),
+      ...(compaction === null ? {} : { nativeCompaction: compaction }),
       ...(keepalive === null ? {} : { keepalive }),
       createChatModel: (input) =>
         // `model` 必须显式并入构造函数字段：集成不会从别处取模型名，漏掉它会静默落到集成自己的
         // 默认模型（OpenAI 集成即 `gpt-3.5-turbo`）上，而调用方以为配置生效了。
-        new exported({ ...input.modelOptions, model: input.model }),
+        new (exported as new (options: Record<string, unknown>) => BaseChatModel)({ ...input.modelOptions, model: input.model }),
     };
   };
 }

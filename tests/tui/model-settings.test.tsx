@@ -1,18 +1,20 @@
 /** Model settings user flows through the production TUI and fake ports. */
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { createElement } from 'react';
 
 import {
   ModelSettingsEditor,
   SECRET_MASK,
-  modelSettingsDraft,
 } from '../../src/interfaces/tui/components/model-settings-editor.js';
-import { MODEL_SETTINGS_FIELDS, type ModelSettingsEdit } from '../../src/interfaces/tui/state.js';
+import { EMPTY_MODEL_SETTINGS_EDIT } from '../../src/interfaces/tui/state.js';
+import type { ProviderConnection } from '../../src/domain/model-configuration.js';
+import type { ModelSettingsPort } from '../../src/interfaces/tui/ports.js';
 import type { ModelRoleView } from '../../src/interfaces/tui/ports.js';
 import {
   chooseCommand,
   createFakePorts,
+  FAKE_MODEL_SETTINGS_SNAPSHOT,
   frameText,
   makeAuthorizationReview,
   renderComponent,
@@ -38,20 +40,27 @@ async function pressEscape(rendered: RenderedTui): Promise<void> {
   await settle(4);
 }
 
-const coordinatorEdit: ModelSettingsEdit = {
-  role: 'coordinator',
-  label: 'Primary',
-  providerIntegration: '@fixture/chat',
-  model: 'coordinator-model',
-  options: '',
-  credentialKind: 'managed',
-  credentialRef: '11111111-1111-4111-8111-111111111111',
-  credentialOptionPath: 'apiKey',
-  effortSource: '',
-  effortValues: '',
-  effortOptionPath: '',
-  secret: '',
+const connection: ProviderConnection = {
+  connectionRef: 'connection-a', label: 'Primary', providerId: 'openai', providerIntegration: 'openai-chat',
+  baseUrl: 'https://api.openai.com/v1', credential: { kind: 'managed', credentialRef: '11111111-1111-4111-8111-111111111111' },
 };
+const catalogModel = { id: 'gpt-test', label: 'GPT Test', providerId: 'openai', protocol: 'openai-chat' as const, effortCapability: null, contextWindow: null };
+function providerPort(overrides: Partial<ModelSettingsPort> = {}): ModelSettingsPort {
+  let revision = 1;
+  const library: NonNullable<ModelSettingsPort['library']> = {
+    load: () => ({ kind: 'loaded', revision, connections: [connection], models: [] }),
+    saveConnection: (input) => Promise.resolve({ kind: 'saved', revision: ++revision, connection: { ...connection, label: input.label } }),
+    saveModel: (input) => ({ kind: 'saved', revision: ++revision, model: { modelRef: 'model-ref-a', connectionRef: input.connectionRef, model: input.model, effortCapability: null } }),
+    resolveModel: () => ({ kind: 'rejected', code: 'missing', message: 'missing' }),
+  };
+  const catalog: NonNullable<ModelSettingsPort['catalog']> = {
+    presets: () => [{ id: 'openai', label: 'OpenAI', protocol: 'openai-chat', baseUrl: 'https://api.openai.com/v1', discovery: true }],
+    candidates: () => ({ models: [catalogModel], source: 'catalog', catalogVersion: 'fixture', expired: false }),
+    discover: () => Promise.resolve({ models: [catalogModel], source: 'discovery', catalogVersion: 'fixture', expired: false }),
+    refresh: () => Promise.resolve({ kind: 'unchanged', catalogVersion: 'fixture' }),
+  };
+  return { load: () => Promise.resolve({ kind: 'failed', code: 'config_absent', message: 'missing project' }), save: () => Promise.resolve({ kind: 'saved', revision: 2, configurationRef: 'configuration-a', profileRef: null }), apply: () => Promise.resolve({ kind: 'saved', revision: 2, configurationRef: 'configuration-a', profileRef: null }), library, catalog, ...overrides };
+}
 
 const PLANNER: ModelRoleView = {
   role: 'planner',
@@ -70,12 +79,11 @@ async function openPlannerMenu(rendered: RenderedTui): Promise<void> {
   await settle(4);
 }
 
-describe('Coordinator 模型设置', () => {
-  test('编辑表单遮罩 key，保存输入保留 Coordinator 凭据合同', () => {
-    const edit = { ...coordinatorEdit, secret: 'sk-never-render' };
+describe('Coordinator Provider library', () => {
+  test('连接编辑隐藏 API key，并且不展示 SDK module/JSON/auth/path 字段', () => {
+    const edit = { ...EMPTY_MODEL_SETTINGS_EDIT, stage: 'connection' as const, connectionRef: connection.connectionRef, credentialRef: connection.credential.credentialRef, providerId: 'openai', providerIntegration: 'openai-chat' as const, label: 'Primary', baseUrl: connection.baseUrl, secret: 'sk-never-render' };
     const frame = frameText(renderComponent(createElement(ModelSettingsEditor, {
       edit,
-      field: 'secret',
       notice: null,
       failing: false,
       availableWidth: 100,
@@ -83,50 +91,110 @@ describe('Coordinator 模型设置', () => {
     expect(frame).toContain('API Key');
     expect(frame).toContain(SECRET_MASK);
     expect(frame).not.toContain('sk-never-render');
-
-    const draft = modelSettingsDraft(edit, 12);
-    expect(draft).toMatchObject({
-      kind: 'ok',
-      input: {
-        role: 'coordinator',
-        expectedRevision: 12,
-        connection: {
-          credential: {
-            kind: 'managed',
-            credentialRef: '11111111-1111-4111-8111-111111111111',
-            optionPath: 'apiKey',
-          },
-        },
-      },
-    });
+    expect(frame).not.toMatch(/module|options JSON|auth type|optionPath/iu);
   });
 
-  test('模型设置保存失败时编辑器仍可见，关闭后不再显示 key 遮罩', async () => {
-    const fake = createFakePorts({
-      modelSettings: {
-        save: () => Promise.resolve({ kind: 'rejected', code: 'conflict', message: 'configuration changed' }),
-      },
-    });
+  test('Home 可保存共享模型并显式初始化项目；缺少配置不会阻塞 library', async () => {
+    const modelSettings = providerPort({ initializeProject: (input) => Promise.resolve({ kind: 'saved', revision: 1, configurationRef: `config-${input.routeMapIssueNumber}`, profileRef: null }) });
+    const fake = createFakePorts({ modelSettings, home: { kind: 'wizard' } });
     const rendered = renderTui(fake.ports);
     await settle();
-    await chooseCommand(rendered, 'model-settings');
-    for (let index = 0; index < MODEL_SETTINGS_FIELDS.length; index += 1) {
-      if (/›\s+API Key/u.test(frameText(rendered))) break;
-      await press(rendered, DOWN);
-    }
-    await press(rendered, 'sk-temporary');
-    expect(frameText(rendered)).toContain(SECRET_MASK);
-    expect(frameText(rendered)).not.toContain('sk-temporary');
+    await press(rendered, 'p');
+    await settle(5);
+    expect(frameText(rendered)).toContain('Primary');
+    await press(rendered, ENTER); // select existing connection without re-entering its key
+    expect(frameText(rendered)).toContain('GPT Test');
+    await press(rendered, DOWN);
+    await press(rendered, DOWN); // manual exact ID row
+    await press(rendered, 'custom/model-v1');
+    await press(rendered, DOWN);
     await press(rendered, ENTER);
-    expect(frameText(rendered)).toContain('conflict');
-    expect(fake.calls.find((call) => call.name === 'modelSettings.save')?.detail).toMatchObject({
-      role: 'coordinator',
-      newSecret: 'sk-temporary',
-    });
-    expect(frameText(rendered)).toContain(SECRET_MASK);
-    await pressEscape(rendered);
-    expect(frameText(rendered)).not.toContain(SECRET_MASK);
+    expect(frameText(rendered)).toContain('初始化项目配置');
+    await press(rendered, DOWN); // initialize row
+    await press(rendered, ENTER);
+    await press(rendered, '42');
+    await press(rendered, ENTER);
+    expect(fake.calls.some((call) => call.name === 'modelSettings.load')).toBe(false);
+    expect(frameText(rendered)).not.toContain('sk-');
     rendered.unmount();
+  });
+
+  test('连接保存的迟到成功保留新编辑，下一次保存使用新的库 revision', async () => {
+    const settings = providerPort();
+    const library = settings.library!;
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof library.saveConnection>>>();
+    let revision = 1;
+    const saveConnection = vi.fn<typeof library.saveConnection>(() => pending.promise);
+    const fake = createFakePorts({ home: { kind: 'wizard' }, modelSettings: {
+      ...settings, library: { ...library, load: () => ({ kind: 'loaded', revision, connections: [connection], models: [] }), saveConnection },
+    } });
+    const rendered = renderTui(fake.ports);
+    try {
+      await settle();
+      await press(rendered, 'p');
+      await press(rendered, DOWN);
+      await press(rendered, ENTER); // edit the saved connection
+      await press(rendered, ENTER); // save while retaining its key
+      expect(saveConnection).toHaveBeenCalledTimes(1);
+      await press(rendered, '-new-edit');
+      revision = 2;
+      pending.resolve({ kind: 'saved', revision, connection });
+      await settle(5);
+      expect(frameText(rendered)).toContain('Primary-new-edit');
+      await press(rendered, ENTER);
+      expect(saveConnection.mock.calls.at(-1)?.[0]).toMatchObject({ label: 'Primary-new-edit', expectedRevision: 2 });
+    } finally { rendered.unmount(); }
+  });
+
+  test.each(['saved', 'rejected', 'throw'] as const)('项目模型保存 %s 时仍保留等待期间的新输入', async (outcome) => {
+    const pending = Promise.withResolvers<Awaited<ReturnType<ModelSettingsPort['save']>>>();
+    const save = vi.fn(() => pending.promise);
+    const fake = createFakePorts({ modelSettings: providerPort({
+      load: () => Promise.resolve({ kind: 'loaded', snapshot: { ...FAKE_MODEL_SETTINGS_SNAPSHOT, roles: [], connections: [connection] } }),
+      save,
+    }) });
+    const rendered = renderTui(fake.ports);
+    try {
+      await settle();
+      await chooseCommand(rendered, 'model-settings');
+      await press(rendered, ENTER);
+      await press(rendered, DOWN);
+      await press(rendered, ENTER); // save the catalog model
+      expect(save).toHaveBeenCalledTimes(1);
+      await press(rendered, 'new/model');
+      if (outcome === 'throw') pending.reject(new Error('offline'));
+      else pending.resolve(outcome === 'saved'
+        ? { kind: 'saved', revision: 8, configurationRef: 'configuration-a', profileRef: null }
+        : { kind: 'rejected', code: 'conflict', message: 'conflict' });
+      await settle(5);
+      expect(frameText(rendered)).toContain('new/model');
+      expect(fake.calls.some(call => call.name === 'modelSettings.apply')).toBe(false);
+    } finally { rendered.unmount(); }
+  });
+
+  test('项目初始化的迟到成功保留后来编辑的 issue number', async () => {
+    const pending = Promise.withResolvers<Awaited<ReturnType<ModelSettingsPort['save']>>>();
+    const initializeProject = vi.fn(() => pending.promise);
+    const fake = createFakePorts({ home: { kind: 'wizard' }, modelSettings: providerPort({ initializeProject }) });
+    const rendered = renderTui(fake.ports);
+    try {
+      await settle();
+      await press(rendered, 'p');
+      await press(rendered, ENTER);
+      await press(rendered, DOWN);
+      await press(rendered, ENTER); // save a model in the user library
+      await press(rendered, DOWN);
+      await press(rendered, DOWN);
+      await press(rendered, DOWN);
+      await press(rendered, ENTER); // initialize project
+      await press(rendered, '42');
+      await press(rendered, ENTER);
+      expect(initializeProject).toHaveBeenCalledTimes(1);
+      await press(rendered, '1');
+      pending.resolve({ kind: 'saved', revision: 1, configurationRef: 'configuration-a', profileRef: null });
+      await settle(5);
+      expect(frameText(rendered)).toContain('421');
+    } finally { rendered.unmount(); }
   });
 });
 

@@ -20,8 +20,9 @@ import {
 import type {
   ProjectConfigurationFailure,
 } from '../../src/application/ports/project-configuration-store.js';
+import { FIXTURE_CREDENTIAL_REF } from '../support/model-configurations.js';
 
-const INTEGRATION = '@langchain/openai#ChatOpenAI';
+const INTEGRATION = 'openai-chat' as const;
 
 const effortCapability = () => ({
   values: ['low', 'high'],
@@ -32,26 +33,27 @@ const effortCapability = () => ({
 const connection = (connectionRef = 'openai-conn') => ({
   connectionRef,
   label: 'OpenAI',
+  providerId: 'openai',
   providerIntegration: INTEGRATION,
-  modelOptions: {},
-  credential: { kind: 'harness_login' as const },
+  baseUrl: 'https://api.example.invalid/v1',
+  credential: { kind: 'managed' as const, credentialRef: FIXTURE_CREDENTIAL_REF },
 });
 
 const baseConfig = (revision = 0): ProjectConfig =>
   ({
-    schemaVersion: 4,
+    schemaVersion: 5,
     revision,
     providerConnections: [connection()],
-    models: [],
+    models: [{ modelRef: 'gpt-4.1-mini', connectionRef: 'openai-conn', model: 'gpt-4.1-mini', effortCapability: null }],
     coordinatorModels: [
       {
         configurationRef: 'planning-default',
         providerIntegration: INTEGRATION,
         model: 'gpt-4.1-mini',
-        modelOptions: {},
-        credentialRefs: [],
+        credentialRefs: [FIXTURE_CREDENTIAL_REF],
         nativeWindowOwnerRef: null,
         providerConnection: connection(),
+        modelRef: 'gpt-4.1-mini',
       },
     ],
     defaultCoordinatorModelRef: 'planning-default',
@@ -123,8 +125,8 @@ test('缺失与内容无效分别报告，读取不做任何隐式创建', () =>
   expect(store.read()).toMatchObject({ kind: 'failed', code: 'invalid' });
 });
 
-test('schema 1/2/3 明确拒绝，不迁移也不改写用户文件', () => {
-  for (const schemaVersion of [1, 2, 3]) {
+test('schema 1/2/3/4 明确拒绝，不迁移也不改写用户文件', () => {
+  for (const schemaVersion of [1, 2, 3, 4]) {
     const raw = { ...baseConfig(0), schemaVersion };
     writeExisting(raw);
     expect(store.read()).toMatchObject({ kind: 'failed', code: 'invalid' });
@@ -156,7 +158,7 @@ test('Worker-only 连接字段（codex/nativeWorker）不再被接受', () => {
   expect(store.read()).toMatchObject({ kind: 'failed', code: 'invalid' });
 });
 
-test('保存推进 revision，写回的文件仍是可正常加载的 schema 3 项目配置', () => {
+test('保存推进 revision，写回的文件仍是可正常加载的 schema 5 项目配置', () => {
   const saved = store.save({ expectedRevision: 0, next: baseConfig(1) });
 
   expect(saved.kind).toBe('saved');
@@ -273,16 +275,17 @@ test('同引用改写既有记录被拒绝，追加新记录仍然允许', () =>
     ...existing,
     revision: 2,
     providerConnections: [...existing.providerConnections, connection('second-conn')],
+    models: [...existing.models, { modelRef: 'second-model', connectionRef: 'second-conn', model: 'gpt-4.1', effortCapability: null }],
     coordinatorModels: [
       ...existing.coordinatorModels,
       {
         configurationRef: 'second',
         providerIntegration: INTEGRATION,
         model: 'gpt-4.1',
-        modelOptions: {},
-        credentialRefs: [],
+        credentialRefs: [FIXTURE_CREDENTIAL_REF],
         nativeWindowOwnerRef: null,
         providerConnection: connection('second-conn'),
+        modelRef: 'second-model',
       },
     ],
     defaultCoordinatorModelRef: 'second',
@@ -295,7 +298,8 @@ test('记录与快照只比较内容，键序不同不算改写', () => {
   const record = baseConfig(1).providerConnections[0]!;
   const reorderedRecord = {
     credential: record.credential,
-    modelOptions: record.modelOptions,
+    baseUrl: record.baseUrl,
+    providerId: record.providerId,
     providerIntegration: record.providerIntegration,
     label: record.label,
     connectionRef: record.connectionRef,
@@ -311,8 +315,9 @@ test('记录与快照只比较内容，键序不同不算改写', () => {
         providerConnection: {
           connectionRef: record.connectionRef,
           label: record.label,
+          providerId: record.providerId,
           providerIntegration: record.providerIntegration,
-          modelOptions: record.modelOptions,
+          baseUrl: record.baseUrl,
           credential: record.credential,
         },
       },
@@ -351,8 +356,8 @@ test('格式化后的配置超限时保存前拒绝并保留原文件', () => {
   const current = baseConfig(1);
   writeExisting(current);
   const original = readFileSync(configPath, 'utf8');
-  const modelOptions = { values: Array.from({ length: 50_000 }, (_, index) => index) };
-  const addedConnection = { ...connection('large-connection'), modelOptions };
+  const addedConnection = connection('large-connection');
+  const acceptedRisks = Array.from({ length: 50_000 }, () => 'fixture-risk');
   const next: ProjectConfig = {
     ...current,
     revision: 2,
@@ -371,14 +376,14 @@ test('格式化后的配置超限时保存前拒绝并保留原文件', () => {
         configurationRef: 'large-model-configuration',
         providerIntegration: INTEGRATION,
         model: 'large-model',
-        modelOptions,
-        credentialRefs: [],
+        credentialRefs: [FIXTURE_CREDENTIAL_REF],
         nativeWindowOwnerRef: null,
         providerConnection: addedConnection,
         modelRef: 'large-model',
         effortCapability: null,
       },
     ],
+    execution: { ...current.execution, acceptedRisks },
   };
 
   expect(Buffer.byteLength(JSON.stringify(next), 'utf8')).toBeLessThan(MAX_PROJECT_CONFIG_BYTES);

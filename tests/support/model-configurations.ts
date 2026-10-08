@@ -9,6 +9,9 @@
  * 需要制造非法绑定时，负例测试自己改写单个字段，不在这里提供「坏配置」开关。
  */
 
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import type { CredentialStore } from '../../src/application/ports/credential-store.js';
 import type { RecoveryUtilityProfile, WorkerProfileRef, WorkerRole } from '../../src/domain/planning/execution-authorization.js';
 import type {
@@ -21,6 +24,24 @@ import type {
 export const FIXTURE_CONNECTION_REF = 'connection-1';
 export const FIXTURE_MODEL_REF = 'model-1';
 export const FIXTURE_MODEL = 'MiniMax-M3';
+export const FIXTURE_CREDENTIAL_REF = '11111111-1111-4111-8111-111111111111';
+export const FIXTURE_PROVIDER_PROTOCOL = 'openai-chat' as const;
+
+/** Isolated user credential store for runtime tests; the fake value never reaches a real provider. */
+export function credentialFixtureEnvironment(
+  root: string,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): Record<string, string> {
+  const configHome = join(root, 'fixture-config');
+  const credentialDirectory = join(configHome, 'orca-companion');
+  mkdirSync(credentialDirectory, { recursive: true, mode: 0o700 });
+  writeFileSync(join(credentialDirectory, 'credentials.json'), JSON.stringify({
+    schemaVersion: 1,
+    revision: 1,
+    entries: [{ credentialRef: FIXTURE_CREDENTIAL_REF, secret: 'fixture-only-not-a-provider-key' }],
+  }), { encoding: 'utf8', mode: 0o600 });
+  return { ...environment, XDG_CONFIG_HOME: configHome };
+}
 
 const PRODUCTION_ROLES = ['planner', 'implementation', 'validator', 'finalizer'] as const;
 
@@ -113,7 +134,7 @@ export function projectExecutionProfilesFixture(): {
   return { workerProfiles, workerProfileRefs };
 }
 
-/** 项目 schema4 的 Coordinator providerConnections 与 models 夹具。 */
+/** 项目 schema5 的 Coordinator 连接与模型记录。 */
 export function projectConnectionsFixture(): {
   readonly providerConnections: readonly ProviderConnection[];
   readonly models: readonly {
@@ -126,9 +147,10 @@ export function projectConnectionsFixture(): {
   const connection: ProviderConnection = {
     connectionRef: FIXTURE_CONNECTION_REF,
     label: '测试连接',
-    providerIntegration: 'minimax',
-    modelOptions: {},
-    credential: { kind: 'harness_login' },
+    providerId: 'minimax',
+    providerIntegration: FIXTURE_PROVIDER_PROTOCOL,
+    baseUrl: 'https://api.example.invalid/v1',
+    credential: { kind: 'managed', credentialRef: FIXTURE_CREDENTIAL_REF },
   };
   return {
     providerConnections: [connection],
@@ -140,5 +162,26 @@ export function projectConnectionsFixture(): {
         effortCapability: null,
       },
     ],
+  };
+}
+
+/** 项目配置要求的完整 Coordinator 配置绑定。 */
+export function coordinatorConfigurationFixture(
+  configurationRef = 'coordinator-default',
+  overrides: { readonly model?: string; readonly modelRef?: string } = {},
+) {
+  const { providerConnections, models } = projectConnectionsFixture();
+  const providerConnection = providerConnections[0]!;
+  const model = models[0]!;
+  return {
+    configurationRef,
+    providerIntegration: FIXTURE_PROVIDER_PROTOCOL,
+    model: overrides.model ?? model.model,
+    credentialRefs: [FIXTURE_CREDENTIAL_REF],
+    nativeWindowOwnerRef: null,
+    providerConnection,
+    modelRef: overrides.modelRef ?? model.modelRef,
+    effortCapability: null,
+    effort: null,
   };
 }

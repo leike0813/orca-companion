@@ -72,7 +72,9 @@ import type { SnapshotLoad } from '../../src/interfaces/tui/ports.js';
 import { executionWorkerProfiles } from '../support/execution-harness.js';
 import { implementationPlanFor } from '../support/graph-plan-fixture.js';
 import {
+  coordinatorConfigurationFixture,
   projectConnectionsFixture,
+  credentialFixtureEnvironment,
   projectExecutionProfilesFixture,
   recoveryUtilityProfileFixture,
 } from '../support/model-configurations.js';
@@ -294,14 +296,10 @@ function prepareRepository(directory: string): { readonly repository: string; re
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 4,
+      schemaVersion: 5,
+      ...projectConnectionsFixture(),
       coordinatorModels: [{
-        configurationRef: 'planning-default',
-        providerIntegration: '@fake/provider#CapableChatModel',
-        model: 'fake-coordinator',
-        modelOptions: {},
-        credentialRefs: [],
-        nativeWindowOwnerRef: null,
+        ...coordinatorConfigurationFixture('planning-default'),
       }],
       defaultCoordinatorModelRef: 'planning-default',
       tracker: { kind: 'github', routeMapIssueNumber: 7 },
@@ -617,7 +615,7 @@ async function openHarness(options?: { readonly rejectFinish?: boolean; readonly
   fake.rejectFinish = options?.rejectFinish === true;
   const host = await createForegroundPlanningHost({
     repositoryPath: repository,
-    env: process.env as Record<string, string>,
+    env: credentialFixtureEnvironment(directory),
     clock,
     newId: (() => {
       let counter = 0;
@@ -628,7 +626,7 @@ async function openHarness(options?: { readonly rejectFinish?: boolean; readonly
     reconciliationIntervalMs: 20,
     orcaProbe: fakeProbe(),
     trackerFactory: fakeTracker,
-    loadIntegration: () => Promise.resolve({ CapableChatModel }),
+    loadIntegration: () => Promise.resolve({ ChatOpenAICompletions: CapableChatModel }),
     executionBackend: fake.backend,
   });
   expect(await host.ports.scopeSetup.resolveHome()).toEqual({ kind: 'restore', coordinationScopeId: SCOPE });

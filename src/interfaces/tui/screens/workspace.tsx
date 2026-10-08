@@ -359,7 +359,6 @@ function Overlay(props: {
       return (
         <ModelSettingsEditor
           edit={parent.modelSettingsEdit ?? EMPTY_MODEL_SETTINGS_EDIT}
-          field={parent.ui.modelSettingsField}
           notice={parent.ui.modelSettingsNotice}
           failing={parent.ui.modelSettingsNotice!==null&&parent.ui.modelSettingsNotice.startsWith('!')}
           availableWidth={parent.terminalWidth}

@@ -65,36 +65,33 @@ export async function configureSettings({ settingsPath, prompt, host, catalog, r
   const previous = host.read();
   if (previous.kind === 'failed') throw new Error(previous.message);
   const config = previous.kind === 'read' ? previous.config : null;
-  const current = config?.coordinatorModels.find((model) => model.configurationRef === config.defaultCoordinatorModelRef);
-  const integration = await prompt.ask('Coordinator 已安装的 provider integration（module#export）', current?.providerIntegration ?? '');
-  const model = await prompt.ask('Coordinator 模型 ID', current?.model ?? '');
-  if (!integration || !model) throw new Error('provider integration 与模型不能为空');
-  const connectionOptions = await prompt.ask('连接非秘密 SDK options（JSON 对象）', JSON.stringify(current?.providerConnection?.modelOptions ?? {}));
-  const modelOptions = await prompt.ask('模型非秘密 SDK options（JSON 对象）', JSON.stringify(current?.modelOptions ?? {}));
-  const parseOptions = (text) => {
-    let value;
-    try { value = JSON.parse(text); } catch { throw new Error('SDK options 必须为 JSON 对象'); }
-    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('SDK options 必须为 JSON 对象');
-    return value;
-  };
-  const auth = await choose(prompt, 'Coordinator 认证', ['environment', 'existing', 'new'], current?.providerConnection?.credential.kind === 'managed' ? 'existing' : 'environment');
-  let credential = { kind: 'harness_login' };
-  let newSecret;
-  if (auth !== 'environment') {
-    const optionPath = await prompt.ask('凭据注入的 SDK 字段路径', current?.providerConnection?.credential.optionPath ?? 'apiKey');
-    let credentialRef = null;
-    if (auth === 'existing') {
-      const metadata = host.credentials.metadata();
-      if (metadata.kind === 'rejected') throw new Error(metadata.message);
-      if (!metadata.refs.length) throw new Error('凭据库没有可用引用，请选择 new 或 environment');
-      credentialRef = await choose(prompt, '凭据引用', metadata.refs, current?.providerConnection?.credential.credentialRef ?? metadata.refs[0]);
-    } else {
-      prompt.say('新 key 保存到现有用户级 CredentialStore；不回显、不写入演练配置。');
-      newSecret = await prompt.secret('新 key');
-      if (!newSecret) throw new Error('新 key 不能为空');
-    }
-    credential = { kind: 'managed', optionPath, credentialRef };
+  const active = config?.coordinatorModels.find((model) => model.configurationRef === config.defaultCoordinatorModelRef);
+  if (await choose(prompt, '更新公共 Provider 和模型目录', ['keep', 'refresh'], 'keep') === 'refresh') {
+    const result = await host.providerCatalog.refresh();
+    prompt.say(result.kind === 'failed' ? '更新失败，继续使用已有目录。' : '公共目录已更新。');
   }
+  const library = host.providerLibrary;
+  let available = library.load();
+  if (available.kind !== 'loaded') throw new Error(available.message);
+  let connection;
+  let refreshConnection = false;
+  if (available.connections.length > 0 && await choose(prompt, 'Coordinator 连接', ['existing', 'new'], 'existing') === 'existing') {
+    connection = await selectLibraryConnection(prompt, available.connections);
+    refreshConnection = true;
+  } else {
+    connection = await addConnection(prompt, library, host.providerCatalog, available.revision);
+    available = library.load();
+    if (available.kind !== 'loaded') throw new Error(available.message);
+  }
+  if (refreshConnection) {
+    try { await host.providerCatalog.discover(connection); } catch { /* 连接和离线候选仍可用。 */ }
+  }
+  const candidates = host.providerCatalog.candidates(connection).models;
+  const modelChoice = await selectCoordinatorModel(prompt, candidates, active?.model);
+  const savedModel = library.saveModel({ expectedRevision: available.revision, connectionRef: connection.connectionRef, model: modelChoice });
+  if (savedModel.kind !== 'saved') throw new Error(savedModel.message);
+  const effortValues = savedModel.model.effortCapability?.values ?? [];
+  const effort = effortValues.length === 0 ? null : await choose(prompt, 'Coordinator effort', ['default', ...effortValues], 'default');
   const workers = [];
   for (const role of roles) {
     const selectedRef = config?.execution.workerProfileRefs[role];
@@ -119,9 +116,73 @@ export async function configureSettings({ settingsPath, prompt, host, catalog, r
   const confirm = await choose(prompt, '保存以上选择作为后续演练默认配置', ['save', 'cancel'], 'cancel');
   if (confirm !== 'save') throw new Error('配置已取消');
   await mkdir(dirname(settingsPath), { recursive: true, mode: 0o700 });
-  return host.save({ coordinator: { connection: { label: 'ledger-lab', providerIntegration: integration,
-      modelOptions: parseOptions(connectionOptions), credential }, model, modelOptions: parseOptions(modelOptions),
-      ...(newSecret === undefined ? {} : { newSecret }) }, workers, maxMutations, maxInputTokens });
+  return host.save({ coordinator: { modelRef: savedModel.model.modelRef, effort: effort === 'default' ? null : effort }, workers, maxMutations, maxInputTokens });
+}
+
+const PAGE_SIZE = 20;
+
+async function selectPaged(prompt, label, rows, display, match, fallback, allowManual = false) {
+  let query = '';
+  let page = 0;
+  for (;;) {
+    const matches = rows.filter((row) => match(row, query));
+    if (query !== '') {
+      const exact = matches.find((row) => display(row).split(' — ')[0] === query);
+      if (exact) return exact;
+    }
+    const start = page * PAGE_SIZE;
+    for (const [index, row] of matches.slice(start, start + PAGE_SIZE).entries()) prompt.say(`${index + 1}. ${display(row)}`);
+    if (matches.length > PAGE_SIZE) prompt.say(`共 ${matches.length} 项；当前显示 ${start + 1}-${Math.min(start + PAGE_SIZE, matches.length)}。`);
+    const answer = await prompt.ask(`${label}：输入序号、搜索词${matches.length > PAGE_SIZE ? '、next' : ''}或精确名称`, fallback ?? '');
+    if (allowManual && answer === 'manual') return null;
+    if (/^\d+$/u.test(answer) && Number(answer) >= 1 && Number(answer) <= Math.min(PAGE_SIZE, matches.length - start)) return matches[start + Number(answer) - 1];
+    if (answer === 'next' && start + PAGE_SIZE < matches.length) { page += 1; continue; }
+    const exact = matches.find((row) => display(row).split(' — ')[0] === answer);
+    if (exact) return exact;
+    query = answer;
+    page = 0;
+  }
+}
+
+async function selectLibraryConnection(prompt, connections) {
+  return selectPaged(prompt, '选择用户级连接', connections,
+    (row) => `${row.label} — ${row.providerId} (${row.providerIntegration})`,
+    (row, query) => query === '' || `${row.label} ${row.providerId} ${row.providerIntegration}`.toLowerCase().includes(query.toLowerCase()));
+}
+
+async function addConnection(prompt, library, catalog, revision) {
+  const presets = catalog.presets();
+  const source = await choose(prompt, 'Coordinator provider 来源', ['preset', 'custom'], 'preset');
+  let providerId, protocol, baseUrl, label;
+  if (source === 'preset') {
+    const preset = await selectPaged(prompt, '搜索 provider（名称含地区/产品线）', presets,
+      (row) => `${row.label} — ${row.id} (${row.protocol})`,
+      (row, query) => query === '' || `${row.label} ${row.id} ${row.protocol}`.toLowerCase().includes(query.toLowerCase()));
+    ({ id: providerId, protocol, baseUrl } = preset);
+    label = await prompt.ask('连接名称', preset.label);
+    if (baseUrl === null) baseUrl = await prompt.ask('Provider 地址');
+  } else {
+    providerId = 'custom';
+    protocol = await choose(prompt, '自定义协议', ['openai-chat', 'openai-responses', 'anthropic-messages'], 'openai-chat');
+    label = await prompt.ask('连接名称');
+    baseUrl = await prompt.ask('Provider 地址');
+  }
+  const newSecret = await prompt.secret('API Key');
+  if (!newSecret) throw new Error('API Key 不能为空');
+  const saved = await library.saveConnection({ expectedRevision: revision, label, providerId, providerIntegration: protocol, baseUrl, newSecret });
+  if (saved.kind !== 'saved') throw new Error(saved.message);
+  prompt.say('API Key 已保存到用户级凭据库；不会显示或写入项目配置。');
+  return saved.connection;
+}
+
+async function selectCoordinatorModel(prompt, candidates, previousModel) {
+  if (candidates.length === 0) {
+    prompt.say('模型目录不可用或没有候选；可以手动填写精确模型 ID。');
+    return prompt.ask('Coordinator 精确模型 ID', previousModel ?? '');
+  }
+  const selected = await selectPaged(prompt, '选择 Coordinator 模型（输入 manual 手填）', candidates,
+    (row) => `${row.id} — ${row.label}`, (row, query) => query === '' || `${row.id} ${row.label}`.toLowerCase().includes(query.toLowerCase()), previousModel, true);
+  return selected?.id ?? prompt.ask('Coordinator 精确模型 ID', previousModel ?? '');
 }
 
 export async function runConfigurationWizard(settingsPath, environment = process.env, credentials) {

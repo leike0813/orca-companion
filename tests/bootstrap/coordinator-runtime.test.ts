@@ -30,6 +30,7 @@ import {
   type CoordinatorSessionState,
 } from '../../src/domain/coordinator/session-state.js';
 import { CapableChatModel, NoToolsChatModel } from '../support/fake-chat-model.js';
+import { coordinatorConfigurationFixture } from '../support/model-configurations.js';
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SESSION = 'session-a' as CoordinatorSessionId;
@@ -111,12 +112,7 @@ function leaseCount(): number {
 
 function configuration(): CoordinatorModelConfiguration {
   return {
-    configurationRef: 'coordinator-default',
-    providerIntegration: '@langchain/openai#ChatOpenAI',
-    model: 'MiniMax-M3',
-    modelOptions: {},
-    credentialRefs: [],
-    nativeWindowOwnerRef: null,
+    ...coordinatorConfigurationFixture(),
   };
 }
 

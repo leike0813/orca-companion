@@ -9,7 +9,7 @@
  *
  * 与 `~/.cache/orca-acceptance/setup-fixture.sh` 的差别是本 change 要求的两处：
  *
- * 1. 项目配置是 **schema 3**：删除重复的 `concurrencyLimit`，并行包额度用
+ * 1. 项目配置是 **schema 5**：删除重复的 `concurrencyLimit`，并行包额度用
  *    `limits.maxActiveWorkPackages`，并单独给出 `maxWorkPackages`（图容量）与
  *    `integrationReconciliations`（集成复验）。本验收显式把并行额度设为 5，证明它可配置且大于
  *    设计时的保守假定 3。
@@ -61,12 +61,10 @@ const OPENSPEC_CONFIG_TEMPLATE = "schema: spec-driven\n\n# Project context (opti
 /** 用户批准的验收模型与本机已核验的 loopback OAuth 代理（均非秘密）。 */
 const ACCEPTANCE_MODEL = process.env['ORCA_COMPANION_COORDINATOR_MODEL'] ?? 'minimax-cn/MiniMax-M3.1-Flash-Preview';
 const PROVIDER_ID = 'companion-oauth';
-const PROVIDER_INTEGRATION = '@langchain/openai#ChatOpenAI';
+const PROVIDER_INTEGRATION = 'openai-chat';
 const DEFAULT_BASE_URL = 'http://127.0.0.1:10100/v1';
 const CONNECTION_REF = 'acceptance-coordinator';
-const WORKER_CONNECTION_REF = 'acceptance-worker';
 const MODEL_REF = 'acceptance-model';
-const WORKER_MODEL_REF = 'acceptance-worker-model';
 const CONFIGURATION_REF = 'planning-default';
 const WORKER_ROLES = ['planner', 'implementation', 'validator', 'finalizer', 'recovery_utility'];
 const SDK_COMPATIBILITY_PLACEHOLDER = 'loopback-oauth-proxy';
@@ -100,17 +98,9 @@ function projectConfig(credentialRef, integrationRef) {
     connectionRef: CONNECTION_REF,
     label: '本机 OAuth Coordinator',
     providerIntegration: PROVIDER_INTEGRATION,
-    modelOptions: { temperature: 0, configuration: { baseURL: DEFAULT_BASE_URL } },
-    credential: { kind: 'managed', credentialRef, optionPath: 'apiKey' },
-    codex: null,
-  };
-  const workerConnection = {
-    connectionRef: WORKER_CONNECTION_REF,
-    label: '本机 OAuth Worker Harness',
-    providerIntegration: PROVIDER_INTEGRATION,
-    modelOptions: { temperature: 0, configuration: { baseURL: DEFAULT_BASE_URL } },
-    credential: { kind: 'harness_login' },
-    codex: { providerId: PROVIDER_ID, baseUrl: DEFAULT_BASE_URL, wireApi: 'responses' },
+    providerId: PROVIDER_ID,
+    baseUrl: DEFAULT_BASE_URL,
+    credential: { kind: 'managed', credentialRef },
   };
   const model = {
     modelRef: MODEL_REF,
@@ -118,36 +108,22 @@ function projectConfig(credentialRef, integrationRef) {
     model: ACCEPTANCE_MODEL,
     effortCapability: null,
   };
-  const workerModel = {
-    modelRef: WORKER_MODEL_REF,
-    connectionRef: WORKER_CONNECTION_REF,
-    model: ACCEPTANCE_MODEL,
-    effortCapability: null,
-  };
-  const workerModelConfiguration = {
-    connection: workerConnection,
-    modelRef: WORKER_MODEL_REF,
-    model: ACCEPTANCE_MODEL,
-    effort: null,
-    effortCapability: null,
-    modelOptions: {},
-  };
   return {
-    schemaVersion: 3,
+    schemaVersion: 5,
     revision: 0,
-    providerConnections: [coordinatorConnection, workerConnection],
-    models: [model, workerModel],
+    providerConnections: [coordinatorConnection],
+    models: [model],
     coordinatorModels: [
       {
         configurationRef: CONFIGURATION_REF,
         providerIntegration: PROVIDER_INTEGRATION,
         model: ACCEPTANCE_MODEL,
-        modelOptions: { temperature: 0, configuration: { baseURL: DEFAULT_BASE_URL } },
         credentialRefs: [credentialRef],
         nativeWindowOwnerRef: null,
         providerConnection: coordinatorConnection,
         modelRef: MODEL_REF,
         effortCapability: null,
+        effort: null,
       },
     ],
     defaultCoordinatorModelRef: CONFIGURATION_REF,
@@ -160,7 +136,7 @@ function projectConfig(credentialRef, integrationRef) {
         profileRef: `profile-${role}`,
         role,
         harness: 'codex',
-        modelConfiguration: workerModelConfiguration,
+        modelSelection: { model: ACCEPTANCE_MODEL, effort: null, effortCapability: null, catalogSource: null },
       })),
       workerProfileRefs: Object.fromEntries(WORKER_ROLES.map((role) => [role, `profile-${role}`])),
       codexSandbox: 'danger-full-access',

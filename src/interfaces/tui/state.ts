@@ -12,6 +12,9 @@
 import type { WorkPackageExecutionState } from '../../application/execution/execution-view.js';
 import type { UiDraft } from '../../application/ports/ui-input-store.js';
 import type { BasisSourceRef, GraphVersionRef } from '../../application/tui/graph-basis.js';
+import type { ProviderConnection, ProviderProtocol } from '../../domain/model-configuration.js';
+import type { ModelDefinition } from '../../domain/model-configuration.js';
+import type { ProviderPreset, ProviderCatalogResult } from '../../application/configuration/provider-catalog.js';
 import { emptyDraft, textDraft } from './input/composer-editor.js';
 import { tuiIconMode, type TuiIconMode } from './theme.js';
 
@@ -259,49 +262,56 @@ export type ModelWorkerCatalogState = {
  */
 export type ModelSettingsEdit = {
   readonly role: 'coordinator';
+  readonly stage: 'connections' | 'preset' | 'connection' | 'models' | 'project-init';
+  readonly connectionRef: string | null;
+  readonly credentialRef: string | null;
+  readonly providerId: string;
+  readonly providerIntegration: ProviderProtocol;
   readonly label: string;
-  readonly providerIntegration: string;
+  readonly baseUrl: string;
   readonly model: string;
-  /** 非秘密选项，逐行 `key = value`；保存时按行解析。 */
-  readonly options: string;
-  readonly credentialKind: 'harness_login' | 'managed';
-  readonly credentialRef: string;
-  readonly credentialOptionPath: string;
-  /** 三者全空表示无可信来源；全非空才构成可保存的 effort 能力。 */
-  readonly effortSource: string;
-  readonly effortValues: string;
-  readonly effortOptionPath: string;
+  readonly modelRef: string | null;
+  readonly effort: string | null;
+  readonly query: string;
+  readonly selectedIndex: number;
+  readonly selectedModelId: string | null;
+  readonly field: 'label' | 'baseUrl' | 'secret' | 'query' | 'model';
+  readonly connections: readonly ProviderConnection[];
+  readonly models: readonly ModelDefinition[];
+  readonly presets: readonly ProviderPreset[];
+  readonly catalogResult: ProviderCatalogResult | null;
+  readonly libraryRevision: number;
+  readonly routeMapIssueNumber: string;
+  readonly projectAvailable: boolean;
   readonly secret: string;
 };
 
-/** 编辑器字段顺序；Enter 提交保存，Esc 逐层返回并保留已输入内容。 */
-export const MODEL_SETTINGS_FIELDS = [
-  'label',
-  'providerIntegration',
-  'model',
-  'options',
-  'credentialKind',
-  'credentialOptionPath',
-  'effortSource',
-  'effortValues',
-  'effortOptionPath',
-  'secret',
-] as const satisfies readonly (keyof ModelSettingsEdit)[];
-export type ModelSettingsField = (typeof MODEL_SETTINGS_FIELDS)[number];
+export type ModelSettingsField = ModelSettingsEdit['field'];
 
 /** overlay 刚打开、快照尚未返回时的空编辑；不含任何秘密。 */
 export const EMPTY_MODEL_SETTINGS_EDIT: ModelSettingsEdit = {
   role: 'coordinator',
+  stage: 'connections',
+  connectionRef: null,
+  credentialRef: null,
+  providerId: '',
+  providerIntegration: 'openai-chat',
   label: '',
-  providerIntegration: '',
+  baseUrl: '',
   model: '',
-  options: '',
-  credentialKind: 'harness_login',
-  credentialRef: '',
-  credentialOptionPath: '',
-  effortSource: '',
-  effortValues: '',
-  effortOptionPath: '',
+  modelRef: null,
+  effort: null,
+  query: '',
+  selectedIndex: 0,
+  selectedModelId: null,
+  field: 'label',
+  connections: [],
+  models: [],
+  presets: [],
+  catalogResult: null,
+  libraryRevision: 0,
+  routeMapIssueNumber: '',
+  projectAvailable: false,
   secret: '',
 };
 

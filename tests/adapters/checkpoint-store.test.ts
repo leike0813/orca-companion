@@ -160,7 +160,12 @@ test('provider replay 在 checkpoint 重开后逐字恢复，且不进入 metada
   const entry: CommittedMessageEntry = {
     ...assistantEntry('replay', JSON.stringify(blocks)),
     contentFormat: 'json_blocks',
-    providerReplay: { configurationRef: 'config-a', additionalKwargs: { reasoning_content: 'R'.repeat(2_000) } },
+    providerReplay: { configurationRef: 'config-a', additionalKwargs: {
+      reasoning_content: 'R'.repeat(2_000),
+      __openai_function_call_ids__: { call_1: 'fc_1' },
+      reasoning: { id: 'rs_1', type: 'reasoning', encrypted_content: 'encrypted', summary: [{ type: 'summary_text', text: 'summary', index: 0 }] },
+      originalTextContentBlock: { type: 'text', text: 'visible', thoughtSignature: 'signature' },
+    } },
   };
   expect(store.appendModelStep({ coordinatorSessionId: SESSION_A, entry, step: { ...step('replay', entry.content, 1), messages: [entry] }, graphPosition: 'suspend' }).kind).toBe('saved');
   const pageEntry = store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries.find((item) => item.entryId === entry.entryId)!;

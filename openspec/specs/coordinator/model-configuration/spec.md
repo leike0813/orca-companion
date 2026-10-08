@@ -7,27 +7,51 @@
 
 ### Requirement: Coordinator Model Configuration injects a verified installed chat model
 
-Coordinator 模型 SHALL 由用户批准的 Coordinator Model Configuration 解析到已安装的 provider 集成并注入 chat model 实例；Companion SHALL NOT 维护 provider allowlist、SHALL NOT 自动 fallback 到其他模型。凭据 SHALL 仅由用户级 CredentialStore 或显式 Harness-login 解析，版本化配置只保存引用。建立 Coordinator Session 并开始模型循环之前，以及显式切换之前，能力核验 SHALL 覆盖文本生成、流式输出、tool calling、取消与可用 usage，任一必需能力缺失时 SHALL 拒绝。
+Coordinator SHALL 从用户批准的完整配置快照解析内置固定协议 chat model，并直接调用指定 Provider。凭据 SHALL 只从用户级 CredentialStore 按精确引用解析。创建 Session、启动及显式切换之前 SHALL 核验文本、流式、实际工具调用与结果续接、取消及可用 usage；必需能力缺失 SHALL 拒绝，MUST NOT 自动换协议、模型或凭据。
 
-#### Scenario: 配置的集成不可用时拒绝启动
-- **WHEN** 配置指向的 provider 集成不可用、配置缺失或凭据无法解析
-- **THEN** 启动以非零状态和可操作诊断失败，不改用其他模型、配置或任意凭据
+#### Scenario: 配置或凭据不可用
+
+- **WHEN** 必需 adapter、配置或凭据不可用
+- **THEN** 启动明确失败并保留原配置，不使用其它模型或环境认证
 
 #### Scenario: 模型调用不经过 Companion 代理
-- **WHEN** Coordinator Agent 调用模型
-- **THEN** 注入的 chat model 直接调用配置 provider，凭据不进入协调记录，provider 响应不被代理改写
 
-#### Scenario: 缺少 tool calling 时拒绝启动
-- **WHEN** 能力核验发现不支持工具调用
-- **THEN** 启动被拒绝并列出缺失能力，不以降级模式继续
+- **WHEN** Coordinator 调用模型
+- **THEN** chat model 直接调用配置 Provider，秘密不进入协调记录
 
 #### Scenario: 核验通过后才建立 Session
-- **WHEN** 全部必需能力核验通过
-- **THEN** 才建立 Coordinator Session 并开始模型循环
+
+- **WHEN** 文本、流式、工具及续接、取消和 usage 全部核验通过
+- **THEN** 才建立 Session 或应用新模型；任何失败保留原绑定
+
+#### Scenario: 配置的集成不可用时拒绝启动
+
+- **WHEN** 配置协议无可用内置 adapter
+- **THEN** 启动拒绝，不更换协议或模型
+
+#### Scenario: 缺少 tool calling 时拒绝启动
+
+- **WHEN** 未取得真实非空工具调用或工具结果续接失败
+- **THEN** 必需能力核验失败，不能建立 Session
 
 #### Scenario: 切换也核验全部能力
-- **WHEN** suspended 且无在途模型操作的 Session 显式应用新配置
-- **THEN** 先按既有 checkpoint/native-window 迁移合同完成准备并核验全部必需能力，失败保持原绑定且不自动 fallback
+
+- **WHEN** 用户明确应用新配置
+- **THEN** 再次核验全部必需能力，失败保持旧绑定
+
+### Requirement: Provider replay data survives bounded restoration
+
+完整接受的 assistant 响应 SHALL 保留再次请求必需的内容块、推理载荷及签名；数据 SHALL 属于原消息、绑定原模型配置、计入输出和上下文预算，MUST NOT 保存凭据或进入普通 metadata 页。重启和工具续接 SHALL 恢复同模型所需的数据；不兼容切换 MUST NOT 将签名或加密载荷重放到其它模型。普通文本与工具调用历史 SHALL 继续可移植。
+
+#### Scenario: 推理工具续接及重启
+
+- **WHEN** 模型带推理或签名返回工具调用，接受结果后重启并继续
+- **THEN** 原调用身份和 Provider 所需重放数据保留，模型能够消费配对的工具结果
+
+#### Scenario: 预算和跨模型隔离
+
+- **WHEN** 重放数据超出预算或目标模型不兼容
+- **THEN** 超限明确阻塞，不提交部分响应；不兼容载荷不发送给目标模型
 
 ### Requirement: Model Configuration switches only while suspended
 

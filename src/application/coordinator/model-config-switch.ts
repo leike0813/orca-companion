@@ -2,9 +2,7 @@
  * IC-04 的 Coordinator Model Configuration 与运行中切换用例
  * （Owner: `m1-run-coordinator-sessions`，模型设置形状由 `complete-tui-model-configuration` IP-01 扩展）。
  *
- * 这个模块拥有配置本身的形状以及它的切换规则。配置是**用户批准的值**：它指向用户已安装的
- * provider 集成，因此 Companion 既不维护 allowlist，也没有存放凭据的字段——只有凭据引用，
- * 用于审计与诊断，不会被解析成值，也不会被落盘。
+ * 本模块拥有用户选定的完整不可变配置与切换规则；凭据只保留引用，adapter 在构造时解析。
  *
  * 切换顺序是固定的（D14）：校验 Session 处于 suspended 且无在途模型操作 → 持久化 checkpoint →
  * 必要时把不兼容的原生窗口迁移为可移植 Capsule → 清空旧 cache 与维护计划 → 装配并核验新配置 →
@@ -21,6 +19,7 @@ import type {
 import {
   effortCapabilitySchema,
   providerConnectionSchema,
+  providerProtocolSchema,
   type EffortCapability,
   type ProviderConnection,
 } from '../../domain/model-configuration.js';
@@ -33,23 +32,19 @@ const identity = z.string().min(1).max(2048);
 /**
  * 一份用户批准的 Coordinator Model Configuration。
  *
- * `credentialRefs` 只是引用：Companion 不在版本控制里保存密钥，值只在用户级 CredentialStore 或
- * 显式 Harness-login 处解析。
+ * `credentialRefs` 只是引用：密钥值仅从用户级 CredentialStore 解析。
  *
- * `providerConnection`、`modelRef`、`effortCapability` 与 `effort` 是 v2 增加的可选绑定。缺省表示
- * 「没有可信的连接或能力来源」——旧配置仍能表达，模型则只能取默认值、不能猜 effort。
+ * 项目 parser 要求完整连接与 modelRef；未知 effort 能力为 null。
  *
- * `providerConnection` 是**完整连接快照**而不是引用字符串：模型装配点要的是 provider 集成、非秘密
- * modelOptions 与凭据解析方式，让每个调用方去回查项目配置会把「配置读不到」变成一次运行期故障。
+ * `providerConnection` 是完整快照，装配时无需回查可变用户库。
  * 它与项目配置里被引用的连接记录必须逐字段一致，交叉核验在项目配置 parser 统一完成。
  */
 export const coordinatorModelConfigurationSchema = z.strictObject({
   /** 稳定引用；Session registry 里登记的就是它。 */
   configurationRef: identity,
-  /** 用户已安装的 provider 集成标识，例如 `@langchain/openai#ChatOpenAI`。 */
-  providerIntegration: identity,
+  /** 用户选定的固定协议。 */
+  providerIntegration: providerProtocolSchema,
   model: identity,
-  modelOptions: z.record(z.string(), z.unknown()),
   credentialRefs: z.array(identity),
   /** 该配置使用的原生压缩窗口 owner 身份；跨配置迁移的兼容判据。 */
   nativeWindowOwnerRef: identity.nullable(),

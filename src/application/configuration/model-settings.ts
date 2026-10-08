@@ -20,13 +20,12 @@ import {
   coordinatorModelConfigurationSchema,
 } from '../coordinator/model-config-switch.js';
 import type { CredentialStore } from '../ports/credential-store.js';
+import type { ProviderLibrary } from './provider-library.js';
 import type {
   ProjectConfigurationStore,
   ProjectConfigurationSaveResult,
 } from '../ports/project-configuration-store.js';
 import {
-  modelDefinitionSchema,
-  providerConnectionSchema,
   semanticEqual,
   workerModelSelectionSchema,
   workerProfileConfigurationSchema,
@@ -39,7 +38,7 @@ import {
   type WorkerHarnessId,
   type WorkerModelSelection,
 } from '../../domain/model-configuration.js';
-import { parseProjectConfig, scanCredentialBearingFields, type ProjectConfig } from './project-config.js';
+import { parseProjectConfig, type ProjectConfig } from './project-config.js';
 
 export const MODEL_SETTINGS_REJECTION_CODES = [
   'invalid_input',
@@ -59,44 +58,11 @@ export type ModelSettingsRejection = {
   readonly message: string;
 };
 
-/**
- * 候选连接的凭据。
- *
- * `credentialRef` 为 `null` 表示「本次会提供新 key，由服务生成引用」；给出已有引用则表示复用
- * 用户级凭据。秘密本身从不进入这里，只在 `newSecret` 这条内存路径上短暂存在。
- */
-export type ModelSettingsConnectionCredential =
-  | { readonly kind: 'harness_login' }
-  | {
-      readonly kind: 'managed';
-      readonly credentialRef: string | null;
-      /** 凭据要注入的 SDK 字段路径；显式描述，不猜 provider 的参数名。 */
-      readonly optionPath: string;
-    };
-
-/** 待保存的 provider 连接：与领域记录同构，只差一个尚未生成的引用。 */
-export type ModelSettingsConnectionCandidate = Omit<
-  ProviderConnection,
-  'connectionRef' | 'credential'
-> & {
-  readonly credential: ModelSettingsConnectionCredential;
-};
-
-/** Coordinator 的保存输入：仍可能有新 key，连接快照与 SDK effort optionPath 的合同不变。 */
 export type SaveCoordinatorModelSettingsInput = {
-  /** 调用方读到的项目配置 revision；不匹配即拒绝，不覆盖较新的配置。 */
   readonly expectedRevision: number;
   readonly role: 'coordinator';
-  readonly connection: ModelSettingsConnectionCandidate;
-  readonly model: string;
-  readonly modelOptions?: Readonly<Record<string, unknown>>;
-  /** 能力来源；缺失且未引用 Model 时，任何非 null effort 都会被拒绝。 */
-  readonly effortCapability?: EffortCapability | null;
+  readonly modelRef: string;
   readonly effort?: string | null;
-  /** 本次新输入的 key；只在内存、CredentialStore 与必要子进程环境中存在。 */
-  readonly newSecret?: string;
-  /** 只属于 Coordinator configuration：原生压缩窗口的 owner 身份。 */
-  readonly nativeWindowOwnerRef?: string | null;
 };
 
 /**
@@ -150,6 +116,7 @@ export type WorkerSelectionVerifier = (input: {
 export type ModelSettingsDependencies = {
   readonly projectStore: ProjectConfigurationStore;
   readonly credentials: CredentialStore;
+  readonly library?: Pick<ProviderLibrary, 'resolveModel'>;
   /**
    * 可选的 Worker 选择来源核验。
    *
@@ -199,93 +166,6 @@ function selectedWorkerHarness(input: SaveWorkerModelSettingsInput, current: Pro
  * 已生效。成功后配置里只多了新记录，`defaultCoordinatorModelRef` 与角色当前选择以外的事实不变。
  */
 
-/** 一次 Coordinator 保存新生的引用；预检与最终组装共用同一组，调用方拿到的身份不会变。 */
-type CandidateRefs = {
-  readonly connectionRef: string;
-  readonly modelRef: string;
-  readonly configurationRef: string;
-};
-
-type CandidateAssembly =
-  | ModelSettingsRejection
-  | { readonly kind: 'assembled'; readonly next: ProjectConfig };
-
-/**
- * 预检用的占位凭据引用。
- *
- * 它只在内存里存在：形状、快照一致性与 effort 来源的判定都与真实引用完全相同，因此「完整校验通过
- * 才写 key」不会漏掉任何凭据写入前就能发现的错误。它本身也必须满足引用的正式形状（uuid），否则
- * 预检会比真实路径更宽松或更严格，两次组装的判定就不再等价。真正落盘的候选一定经过第二次组装，
- * 引用已被 CredentialStore 返回的真实值替换。
- */
-const PENDING_CREDENTIAL_REF = '00000000-0000-4000-8000-000000000000';
-
-/**
- * 组装并**完整校验**一份 Coordinator 候选配置。
- *
- * 新增记录永远追加；引用与 effort 的一致性由项目配置 parser 统一判断，这里不重复实现。返回值是
- * 「已校验的下一版配置」，调用方只负责把它交给 store。
- */
-function assembleCoordinatorCandidate(
-  input: SaveCoordinatorModelSettingsInput,
-  current: ProjectConfig,
-  refs: CandidateRefs,
-  credentialRef: string | null,
-): CandidateAssembly {
-  const connection = providerConnectionSchema.safeParse({
-    ...input.connection,
-    connectionRef: refs.connectionRef,
-    credential:
-      input.connection.credential.kind === 'harness_login'
-        ? { kind: 'harness_login' }
-        : { kind: 'managed', credentialRef, optionPath: input.connection.credential.optionPath },
-  });
-  if (!connection.success) {
-    return reject('invalid_input', 'provider 连接无效');
-  }
-
-  const model = modelDefinitionSchema.safeParse({
-    modelRef: refs.modelRef,
-    connectionRef: refs.connectionRef,
-    model: input.model,
-    effortCapability: input.effortCapability ?? null,
-  });
-  if (!model.success) {
-    return reject('invalid_input', '模型设置无效');
-  }
-
-  const modelOptions = input.modelOptions ?? {};
-  const effort = input.effort ?? null;
-  const configuration = coordinatorModelConfigurationSchema.safeParse({
-    configurationRef: refs.configurationRef,
-    providerIntegration: connection.data.providerIntegration,
-    model: model.data.model,
-    modelOptions,
-    credentialRefs: credentialRef === null ? [] : [credentialRef],
-    nativeWindowOwnerRef: input.nativeWindowOwnerRef ?? null,
-    providerConnection: connection.data,
-    modelRef: refs.modelRef,
-    ...(input.effortCapability === undefined ? {} : { effortCapability: input.effortCapability }),
-    effort,
-  });
-  if (!configuration.success) {
-    return reject('invalid_input', 'Coordinator Model Configuration 无效');
-  }
-
-  const next: ProjectConfig = {
-    ...current,
-    revision: current.revision + 1,
-    providerConnections: [...current.providerConnections, connection.data],
-    models: [...current.models, model.data],
-    coordinatorModels: [...current.coordinatorModels, configuration.data],
-  };
-  const validated = parseProjectConfig(next);
-  if (!validated.ok) {
-    return reject('invalid_input', `${validated.field}: ${validated.message}`);
-  }
-  return { kind: 'assembled', next };
-}
-
 export function createModelSettingsService(dependencies: ModelSettingsDependencies): ModelSettingsService {
   const { projectStore, credentials } = dependencies;
   const verifyWorkerSelection = dependencies.verifyWorkerSelection;
@@ -321,89 +201,53 @@ export function createModelSettingsService(dependencies: ModelSettingsDependenci
   }
 
   function saveCoordinator(input: SaveCoordinatorModelSettingsInput): SaveModelSettingsResult {
+    if (Object.keys(input).some((key) => !['expectedRevision', 'role', 'modelRef', 'effort'].includes(key))) {
+      return reject('invalid_input', 'Coordinator 模型设置字段无效');
+    }
     const loaded = loadCurrent(input.expectedRevision);
     if (loaded.kind !== 'current') {
       return loaded;
     }
     const current = loaded.config;
 
-    // 1. 候选先过密钥字段检查：把 key 写进 modelOptions 的编辑必须先于任何凭据写入被拒绝。
-    const scan = scanCredentialBearingFields(
-      { connection: input.connection, modelOptions: input.modelOptions ?? {} },
-      'modelSettings',
-    );
-    if (scan.kind === 'credential_field') {
-      return reject('invalid_input', `模型设置只接受凭据引用，不接受凭据字段：${scan.path}`);
+    const projectModel = current.models.find((candidate) => candidate.modelRef === input.modelRef);
+    const projectConnection = projectModel === undefined ? undefined : current.providerConnections.find((candidate) => candidate.connectionRef === projectModel.connectionRef);
+    const library = dependencies.library;
+    const resolved = projectModel !== undefined && projectConnection !== undefined
+      ? { kind: 'resolved' as const, model: projectModel, connection: projectConnection }
+      : library?.resolveModel(input.modelRef) ?? reject('invalid_input', 'Provider library is unavailable');
+    if (resolved.kind !== 'resolved') return reject('invalid_input', resolved.message);
+    const capability = resolved.model.effortCapability;
+    if (capability === null ? input.effort != null : input.effort != null && !capability.values.includes(input.effort)) {
+      return reject('invalid_input', '所选模型不支持该 effort');
     }
-    if (scan.kind === 'unbounded') {
-      return reject('invalid_input', '模型设置结构循环或过深，无法确认其中没有凭据字段');
-    }
-
-    // 2. 输入形状：managed 凭据要么复用既有引用，要么本次提供新 key。
-    const newSecret = input.newSecret;
-    if (newSecret !== undefined && newSecret.length === 0) {
-      return reject('invalid_input', '新 key 不能为空字符串');
-    }
-    // harness_login 用 provider integration 自身的环境认证，没有可注入的凭据引用：此时写入的 key 既不
-    // 会被配置引用、也不会被任何运行时读到，只会在用户级凭据库里留下一条永不使用的明文。
-    if (newSecret !== undefined && input.connection.credential.kind !== 'managed') {
-      return reject(
-        'invalid_input',
-        'harness_login 凭据来源不接受新 key：它使用 provider integration 自身的环境认证',
-      );
-    }
-    const requestedRef =
-      input.connection.credential.kind === 'managed' ? input.connection.credential.credentialRef : null;
-    if (input.connection.credential.kind === 'managed' && requestedRef === null && newSecret === undefined) {
-      return reject('invalid_input', 'managed 凭据需要已有 credentialRef 或本次提供的新 key');
-    }
-
-    // 3. 完整候选校验先于任何凭据写入：无法落盘的编辑不该在凭据库里留下孤立项。
-    const refs: CandidateRefs = {
-      connectionRef: randomUUID(),
-      modelRef: randomUUID(),
-      configurationRef: randomUUID(),
+    const credentialRef = resolved.connection.credential.credentialRef;
+    if (credentials.read(credentialRef).kind !== 'resolved') return reject('credential_unresolved', '模型凭据不可用');
+    const configurationRef = randomUUID();
+    const configuration = coordinatorModelConfigurationSchema.safeParse({
+      configurationRef,
+      providerIntegration: resolved.connection.providerIntegration,
+      model: resolved.model.model,
+      credentialRefs: [credentialRef],
+      nativeWindowOwnerRef: null,
+      providerConnection: resolved.connection,
+      modelRef: resolved.model.modelRef,
+      effortCapability: capability,
+      effort: input.effort ?? null,
+    });
+    if (!configuration.success) return reject('invalid_input', 'Coordinator Model Configuration 无效');
+    const next: ProjectConfig = {
+      ...current,
+      revision: current.revision + 1,
+      providerConnections: current.providerConnections.some(entry => entry.connectionRef === resolved.connection.connectionRef)
+        ? current.providerConnections : [...current.providerConnections, resolved.connection],
+      models: current.models.some(entry => entry.modelRef === resolved.model.modelRef)
+        ? current.models : [...current.models, resolved.model],
+      coordinatorModels: [...current.coordinatorModels, configuration.data],
     };
-    const preflight = assembleCoordinatorCandidate(
-      input,
-      current,
-      refs,
-      input.connection.credential.kind === 'managed' ? PENDING_CREDENTIAL_REF : null,
-    );
-    if (preflight.kind !== 'assembled') {
-      return preflight;
-    }
-
-    // 4. 凭据解析：新 key 先保存再回读；复用既有引用也必须当场证明它可解析。
-    let credentialRef: string | null = null;
-    if (newSecret !== undefined) {
-      const metadata = credentials.metadata();
-      if (metadata.kind === 'rejected') {
-        return reject('credential_failed', metadata.message);
-      }
-      const stored = credentials.save({ expectedRevision: metadata.revision, secret: newSecret });
-      if (stored.kind === 'rejected') {
-        return reject('credential_failed', stored.message);
-      }
-      credentialRef = stored.credentialRef;
-      const resolved = credentials.read(credentialRef);
-      if (resolved.kind === 'rejected') {
-        return reject('credential_unresolved', resolved.message);
-      }
-    } else if (requestedRef !== null) {
-      const resolved = credentials.read(requestedRef);
-      if (resolved.kind === 'rejected') {
-        return reject('credential_unresolved', resolved.message);
-      }
-      credentialRef = requestedRef;
-    }
-
-    // 5. 用真实引用组装最终候选：落盘的永远是预检过的同一份编辑。
-    const assembled = assembleCoordinatorCandidate(input, current, refs, credentialRef);
-    if (assembled.kind !== 'assembled') {
-      return assembled;
-    }
-    return persist(input.expectedRevision, assembled.next, refs.configurationRef, null);
+    const validated = parseProjectConfig(next);
+    if (!validated.ok) return reject('invalid_input', `${validated.field}: ${validated.message}`);
+    return persist(input.expectedRevision, next, configurationRef, null);
   }
 
   function saveWorker(input: SaveWorkerModelSettingsInput): SaveModelSettingsResult {

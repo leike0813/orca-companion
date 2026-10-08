@@ -61,19 +61,23 @@ export type WorkerEffortCapability = z.infer<typeof workerEffortCapabilitySchema
 /**
  * Coordinator 的 provider 连接记录。
  *
- * Worker 的 provider 连接、endpoint 与凭据已交还 harness，这里只服务 Coordinator。`credential` 保留
- * `harness_login`（Coordinator provider integration 自身的环境认证路径，沿用旧命名）与 `managed`
- * （Companion 凭据引用）。
+ * Worker 的连接由 harness 拥有；Coordinator 只保存固定协议、地址及 API Key 的不可变引用。
  */
+export const PROVIDER_PROTOCOLS = ['openai-chat', 'openai-responses', 'anthropic-messages', 'google-gemini'] as const;
+export const providerProtocolSchema = z.enum(PROVIDER_PROTOCOLS);
+export type ProviderProtocol = z.infer<typeof providerProtocolSchema>;
+export const providerBaseUrlSchema = z.url().max(2048).refine((value) => {
+  const url = new URL(value);
+  return ['https:', 'http:'].includes(url.protocol) && !urlContainsCredentials(value) && url.hash === '';
+});
+
 export const providerConnectionSchema = z.strictObject({
   connectionRef: identity,
   label: identity,
-  providerIntegration: identity,
-  modelOptions: z.record(z.string(), z.unknown()),
-  credential: z.discriminatedUnion('kind', [
-    z.strictObject({ kind: z.literal('harness_login') }),
-    z.strictObject({ kind: z.literal('managed'), credentialRef: credentialReference, optionPath }),
-  ]),
+  providerId: identity,
+  providerIntegration: providerProtocolSchema,
+  baseUrl: providerBaseUrlSchema,
+  credential: z.strictObject({ kind: z.literal('managed'), credentialRef: credentialReference }),
 });
 export type ProviderConnection = z.infer<typeof providerConnectionSchema>;
 

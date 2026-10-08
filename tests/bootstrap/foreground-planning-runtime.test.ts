@@ -36,6 +36,7 @@ import { coordinationDatabasePath } from '../../src/bootstrap/composition.js';
 import { checkpointDatabasePath } from '../../src/bootstrap/coordinator-runtime.js';
 import { COORDINATOR_SESSION_STATE_SCHEMA_VERSION, toolOperationId } from '../../src/domain/coordinator/session-state.js';
 import { CapableChatModel } from '../support/fake-chat-model.js';
+import { coordinatorConfigurationFixture, credentialFixtureEnvironment, projectConnectionsFixture } from '../support/model-configurations.js';
 
 const ROUTE_MAP_BODY = [
   '## Destination',
@@ -91,26 +92,9 @@ function writeProjectConfig(repository: string, options: { readonly maxInputToke
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
-      schemaVersion: 4,
-      coordinatorModels: [
-        {
-          configurationRef: 'planning-default',
-          providerIntegration: '@fake/provider#CapableChatModel',
-          model: 'fake-coordinator',
-          modelOptions: {},
-          // 注入的假模型不需要真实凭据：凭据引用必须对应已声明的 Provider Connection，否则启动拒绝。
-          credentialRefs: [],
-          nativeWindowOwnerRef: null,
-        },
-        {
-          configurationRef: 'planning-spare',
-          providerIntegration: '@fake/provider#CapableChatModel',
-          model: 'fake-coordinator-spare',
-          modelOptions: {},
-          credentialRefs: [],
-          nativeWindowOwnerRef: null,
-        },
-      ],
+      schemaVersion: 5,
+      ...projectConnectionsFixture(),
+      coordinatorModels: [coordinatorConfigurationFixture('planning-default'), coordinatorConfigurationFixture('planning-spare')],
       defaultCoordinatorModelRef: 'planning-default',
       tracker: { kind: 'github', routeMapIssueNumber: 7 },
       planning: { maxMutations: 2 },
@@ -178,10 +162,11 @@ async function startHarness(
     execFileSync('git', ['checkout', '-q', '--detach'], { cwd: repository });
   }
   const events: SemanticEvent[] = [];
+  const env = credentialFixtureEnvironment(directory);
   const requests = { generations: 0, inputs: [] as string[] };
   const host = await createForegroundPlanningHost({
     repositoryPath: repository,
-    env: process.env as Record<string, string>,
+    env,
     clock,
     newId: (() => {
       let counter = 0;
@@ -217,8 +202,14 @@ async function startHarness(
               message: new AIMessageChunk({ content: message.content, ...(AIMessage.isInstance(message) ? { tool_calls: message.tool_calls } : {}) }) });
           }
           override _generate(messages: BaseMessage[], options: { readonly signal?: AbortSignal } | undefined): Promise<import('@langchain/core/outputs').ChatResult> {
-            requests.generations += 1;
-            requests.inputs.push((messages as readonly { readonly content: unknown }[]).map((message) => String(message.content)).join('\n'));
+            const input = (messages as readonly { readonly content: unknown }[]).map((message) => String(message.content)).join('\n');
+            const capabilityProbe = messages.some((message) => message._getType() === 'human' &&
+              ['ping', 'capability cancellation probe', 'Call the capability_probe tool.']
+                .some((probe) => JSON.stringify(message.content).includes(probe)));
+            if (!capabilityProbe) {
+              requests.generations += 1;
+              requests.inputs.push(input);
+            }
             if (overrides.askUser && !this.asked && requests.inputs.at(-1)?.includes('__ASK_USER__')) {
               this.asked = true;
               const message = new AIMessage({ content: '', tool_calls: [{ id: 'call-question', name: 'ask_user', args: {
@@ -240,7 +231,7 @@ async function startHarness(
       if (overrides.companionKeepalive !== undefined) {
         Object.assign(InstalledChatModel, { companionKeepalive: overrides.companionKeepalive });
       }
-      return Promise.resolve({ CapableChatModel: InstalledChatModel });
+      return Promise.resolve({ ChatOpenAICompletions: InstalledChatModel });
     },
   });
   host.ports.subscribe((event) => {
@@ -274,6 +265,11 @@ function modelRounds(harness: Harness): number {
   return harness.events.filter(
     (event) => event.kind === 'state-changed' && String(event.reason).startsWith('model:'),
   ).length;
+}
+
+async function initializeScope(harness: Harness, proposal: Awaited<ReturnType<typeof harness.host.ports.scopeSetup.proposal>>) {
+  await harness.host.ports.scopeSetup.verify();
+  return harness.host.ports.scopeSetup.initialize(proposal);
 }
 
 /**
@@ -318,7 +314,7 @@ test('前台 maintenance：每次挂起最多 8 次保活，真实 prompt 后重
     executionBackend: maintenanceBackend(mutations),
   });
   const proposal = await harness.host.ports.scopeSetup.proposal();
-  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  expect((await initializeScope(harness, proposal)).kind).toBe('accepted');
 
   for (const [index, content] of ['开始规划', '继续真实规划'].entries()) {
     const previousRounds = modelRounds(harness);
@@ -360,7 +356,7 @@ test.each(['close', 'pause', 'fence'] as const)('前台 maintenance：%s 停止�
     executionBackend: maintenanceBackend(mutations),
   });
   const proposal = await harness.host.ports.scopeSetup.proposal();
-  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  expect((await initializeScope(harness, proposal)).kind).toBe('accepted');
   expect((await harness.host.ports.execute({
     kind: 'send-session-message', submissionId: `maintenance-stop-${action}`,
     coordinatorSessionId: proposal.coordinatorSessionId, content: '开始规划',
@@ -387,7 +383,7 @@ test.each(['pause', 'cancel', 'close', 'fence'] as const)('真实流式宿主的
   const observed: { signal: AbortSignal | null } = { signal: null };
   const harness = await startHarness({ streamGate: gate.promise, modelSignal: value => { observed.signal = value; } });
   const proposal = await harness.host.ports.scopeSetup.proposal();
-  await harness.host.ports.scopeSetup.initialize(proposal);
+  await initializeScope(harness, proposal);
   await harness.host.ports.execute({ kind: 'send-session-message', submissionId: globalThis.crypto.randomUUID(),
     coordinatorSessionId: proposal.coordinatorSessionId, content: '__STREAM_HOST__' });
   expect(await waitFor(() => observed.signal !== null)).toBe(true);
@@ -434,10 +430,8 @@ test('配置缺失与 detached HEAD 都是可诊断拒绝，且不建立任何 S
 
   const home = await withoutConfig.host.ports.scopeSetup.resolveHome();
 
-  expect(home).toMatchObject({ kind: 'failed', code: 'config_unavailable' });
-  expect(withoutConfig.host.readiness().blocker?.code).toBe('config_unavailable');
-  const snapshot = await withoutConfig.host.ports.snapshot(null);
-  expect(snapshot).toMatchObject({ kind: 'failed', code: 'config_unavailable' });
+  expect(home).toEqual({ kind: 'wizard' });
+  expect(withoutConfig.requests.generations).toBe(0);
 
   const detachedDirectory = mkdtempSync(join(tmpdir(), 'orca-foreground-detached-'));
   const detachedRepository = initializeRepository(detachedDirectory);
@@ -460,7 +454,7 @@ test('生产工具循环创建真实问题，窄查询与回答沿用原 Session
     },
   });
   const proposal = await harness.host.ports.scopeSetup.proposal();
-  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  expect((await initializeScope(harness, proposal)).kind).toBe('accepted');
   expect((await harness.host.ports.execute({ kind: 'send-session-message', coordinatorSessionId: proposal.coordinatorSessionId,
     submissionId: 'ask-prompt', content: '__ASK_USER__' })).kind).toBe('accepted');
   expect(await waitFor(() => harness.events.some((event) => event.kind === 'interaction-opened'))).toBe(true);
@@ -500,7 +494,7 @@ test('向导创建 Scope 后 Home 按精确绑定恢复，且只读查询不产�
   });
   expect(initialized.kind).toBe('rejected');
 
-  const created = await harness.host.ports.scopeSetup.initialize(proposal);
+  const created = await initializeScope(harness, proposal);
   expect(created.kind).toBe('accepted');
 
   const home = await harness.host.ports.scopeSetup.resolveHome();
@@ -538,7 +532,7 @@ test('向导创建 Scope 后 Home 按精确绑定恢复，且只读查询不产�
 test('重启核验原提交并清理受理快照，保留下一稿且不启动模型', async () => {
   const first = await startHarness();
   const proposal = await first.host.ports.scopeSetup.proposal();
-  expect((await first.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  expect((await initializeScope(first, proposal)).kind).toBe('accepted');
   const target = {
     kind: 'message' as const, coordinationScopeId: proposal.coordinationScopeId,
     coordinatorSessionId: proposal.coordinatorSessionId,
@@ -591,7 +585,7 @@ test('重启核验原提交并清理受理快照，保留下一稿且不启动�
 test('重启保留未发现的提交，不自动重发或取得租约', async () => {
   const first = await startHarness();
   const proposal = await first.host.ports.scopeSetup.proposal();
-  await first.host.ports.scopeSetup.initialize(proposal);
+  await initializeScope(first, proposal);
   const target = {
     kind: 'message' as const,
     coordinationScopeId: proposal.coordinationScopeId,
@@ -618,7 +612,7 @@ test('重启保留未发现的提交，不自动重发或取得租约', async ()
 test('提交消息后取得租约并由模型处理一次，transcript 里有用户消息与响应', async () => {
   const harness = await startHarness();
   const proposal = await harness.host.ports.scopeSetup.proposal();
-  await harness.host.ports.scopeSetup.initialize(proposal);
+  await initializeScope(harness, proposal);
 
   const accepted = await harness.host.ports.execute({
     kind: 'send-session-message',
@@ -656,7 +650,7 @@ test('提交消息后取得租约并由模型处理一次，transcript 里有用
 test('正式宿主读取全历史 keyset，停止模型期间分页仍可用', async () => {
   const harness = await startHarness();
   const proposal = await harness.host.ports.scopeSetup.proposal();
-  expect((await harness.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  expect((await initializeScope(harness, proposal)).kind).toBe('accepted');
   expect((await harness.host.ports.execute({ kind: 'scope-control', action: 'pause' })).kind).toBe('accepted');
   const common = await resolveGitCommonDir({ repositoryPath: harness.repository, env: process.env as Record<string, string> });
   if (common.kind !== 'resolved') throw new Error('Git common dir unavailable');
@@ -686,7 +680,7 @@ test('正式宿主读取全历史 keyset，停止模型期间分页仍可用', a
 test('重启后继续未完成的工具回合，直到用户消息收到最终回答', async () => {
   const first = await startHarness();
   const proposal = await first.host.ports.scopeSetup.proposal();
-  expect((await first.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  expect((await initializeScope(first, proposal)).kind).toBe('accepted');
   first.dispose();
 
   const commonDir = await resolveGitCommonDir({ repositoryPath: first.repository, env: process.env as Record<string, string> });
@@ -742,7 +736,7 @@ test('重启后继续未完成的工具回合，直到用户消息收到最终�
 test('回答写入 Branch 后即使进程退出，重启仍从权威正文恢复一次模型工作', async () => {
   const first = await startHarness();
   const proposal = await first.host.ports.scopeSetup.proposal();
-  expect((await first.host.ports.scopeSetup.initialize(proposal)).kind).toBe('accepted');
+  expect((await initializeScope(first, proposal)).kind).toBe('accepted');
   first.dispose();
 
   const commonDir = await resolveGitCommonDir({ repositoryPath: first.repository, env: process.env as Record<string, string> });
@@ -821,7 +815,7 @@ test('回答写入 Branch 后即使进程退出，重启仍从权威正文恢复
 test('Runtime Lease 被续约；续约失败后停止模型调用与写入并发布 blocker', async () => {
   const harness = await startHarness();
   const proposal = await harness.host.ports.scopeSetup.proposal();
-  await harness.host.ports.scopeSetup.initialize(proposal);
+  await initializeScope(harness, proposal);
   await harness.host.ports.execute({
     kind: 'send-session-message',
     submissionId: globalThis.crypto.randomUUID(),
@@ -954,7 +948,7 @@ test('未绑定的旧 Scope 在 Home 里作为候选出现，不按数量推断�
 test('会话维护端口已接线：/compact 与模型切换都走既有用例并落到权威记录上', async () => {
   const harness = await startHarness({ exactMeasure: () => Promise.resolve({ used: 10, capacity: 100 }) });
   const proposal = await harness.host.ports.scopeSetup.proposal();
-  await harness.host.ports.scopeSetup.initialize(proposal);
+  await initializeScope(harness, proposal);
   await harness.host.ports.execute({
     kind: 'send-session-message',
     submissionId: globalThis.crypto.randomUUID(),
@@ -1031,7 +1025,7 @@ test('上下文耗尽时不再发起超窗模型请求，并把耗尽原因投�
   // 预算刻意小到无法收敛：长消息会被机械 Shake 折成占位符，但固定开销仍然超窗。
   const harness = await startHarness({ maxInputTokens: 20 });
   const proposal = await harness.host.ports.scopeSetup.proposal();
-  await harness.host.ports.scopeSetup.initialize(proposal);
+  await initializeScope(harness, proposal);
 
   const accepted = await harness.host.ports.execute({
     kind: 'send-session-message',
@@ -1095,7 +1089,7 @@ test('精确 context 只测量准备好的完整输入和实际 bindTools defs�
     },
   });
   const proposal = await harness.host.ports.scopeSetup.proposal();
-  await harness.host.ports.scopeSetup.initialize(proposal);
+  await initializeScope(harness, proposal);
 
   await harness.host.ports.execute({
     kind: 'send-session-message',
@@ -1157,7 +1151,7 @@ test('新输入受理后迟到的精确 context 测量不能恢复旧读数', as
     },
   });
   const proposal = await harness.host.ports.scopeSetup.proposal();
-  await harness.host.ports.scopeSetup.initialize(proposal);
+  await initializeScope(harness, proposal);
   await harness.host.ports.execute({ kind: 'send-session-message',
     coordinatorSessionId: proposal.coordinatorSessionId,
     submissionId: 'context-late-first', content: '__STREAM_HOST__ original input' });

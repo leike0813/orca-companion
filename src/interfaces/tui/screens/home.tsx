@@ -20,6 +20,7 @@ export type HomeProps = {
   /** 迁移被拒绝时的结构化原因；Review 内展示。 */
   readonly notice?: string | null;
   readonly onStartWizard: () => void;
+  readonly onOpenProviderLibrary?: () => void;
   readonly availableWidth: number;
 };
 
@@ -81,6 +82,7 @@ export function Home(props: HomeProps) {
       return (
         <Box flexDirection="column">
           <Text>当前仓库还没有 Coordination Scope。</Text>
+          {props.onOpenProviderLibrary === undefined ? null : <Text>按 p 打开 Coordinator Provider 库（可先保存共享连接与模型）。</Text>}
           <Text>按 n 进入初始化向导（在 Review 确认之前不会写入任何记录）。</Text>
         </Box>
       );

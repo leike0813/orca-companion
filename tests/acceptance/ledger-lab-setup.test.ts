@@ -55,12 +55,26 @@ type WizardModule = {
       secret(label: string): Promise<string>;
       say(text: string): void;
     };
-    readonly host: { read(): unknown; save(input: unknown): unknown; readonly credentials: { metadata(): unknown } };
-    readonly catalog: { query(input: { readonly harness: string }): Promise<{
-      readonly kind: 'available'; readonly source: string; readonly models: readonly {
-        readonly model: string; readonly effortCapability: { readonly values: readonly string[]; readonly source: string } | null;
-      }[];
-    }> };
+    readonly host: {
+      read(): unknown;
+      save(input: unknown): unknown;
+      readonly providerLibrary: {
+        load(): unknown;
+        saveConnection(input: unknown): Promise<unknown>;
+        saveModel(input: unknown): unknown;
+      };
+      readonly providerCatalog: {
+        presets(): readonly unknown[];
+        discover(connection: unknown): Promise<unknown>;
+        candidates(connection: unknown): { readonly models: readonly { readonly id: string; readonly label: string }[] };
+      };
+    };
+    readonly catalog: { query(input: { readonly harness: string }): Promise<
+      | { readonly kind: 'available'; readonly source: string; readonly models: readonly {
+          readonly model: string; readonly effortCapability: { readonly values: readonly string[]; readonly source: string } | null;
+        }[] }
+      | { readonly kind: 'unavailable'; readonly code: string }
+    > };
     readonly roles: readonly string[];
     readonly harnesses: readonly string[];
   }) => Promise<unknown>;
@@ -99,7 +113,11 @@ afterEach(async () => {
   await Promise.all(sandboxes.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
-function schemaFourConfig(): unknown {
+function schemaFiveConfig(): unknown {
+  const credentialRef = '00000000-0000-4000-8000-000000000001';
+  const connection = { connectionRef: 'connection-main', label: 'Fixture provider', providerId: 'custom',
+    providerIntegration: 'openai-chat', baseUrl: 'https://api.fixture.invalid/v1', credential: { kind: 'managed', credentialRef } };
+  const model = { modelRef: 'model-main', connectionRef: connection.connectionRef, model: 'coordinator-fixture', effortCapability: null };
   const workerProfiles = MODEL_PROFILE_ROLES.map((role) => ({
     profileRef: `profile-${role}`,
     role,
@@ -107,13 +125,14 @@ function schemaFourConfig(): unknown {
     modelSelection: { model: `worker-${role}`, effort: null, effortCapability: null, catalogSource: null },
   }));
   const parsed = parseProjectConfig({
-    schemaVersion: 4,
+    schemaVersion: 5,
     revision: 0,
-    coordinatorModels: [{ configurationRef: 'coordinator-main', providerIntegration: '@fixture/provider#chat',
-      model: 'coordinator-fixture', modelOptions: {}, credentialRefs: [], nativeWindowOwnerRef: null }],
+    coordinatorModels: [{ configurationRef: 'coordinator-main', providerIntegration: connection.providerIntegration,
+      model: model.model, credentialRefs: [credentialRef], nativeWindowOwnerRef: null, providerConnection: connection,
+      modelRef: model.modelRef, effortCapability: null, effort: null }],
     defaultCoordinatorModelRef: 'coordinator-main',
-    providerConnections: [],
-    models: [],
+    providerConnections: [connection],
+    models: [model],
     tracker: { kind: 'github', routeMapIssueNumber: 1 },
     planning: { maxMutations: 20 },
     context: { maxInputTokens: 10000 },
@@ -122,7 +141,7 @@ function schemaFourConfig(): unknown {
       workerProfileRefs: Object.fromEntries(MODEL_PROFILE_ROLES.map((role) => [role, `profile-${role}`])),
     },
   });
-  if (!parsed.ok) throw new Error('test fixture schema-4 config failed to parse');
+  if (!parsed.ok) throw new Error('test fixture schema-5 config failed to parse');
   return parsed.value;
 }
 
@@ -193,7 +212,7 @@ function setupCall(options: { readonly unknownCreate?: boolean; readonly onCall?
 describe('ledger-lab setup', () => {
   it.each(['main', 'cancel'] as const)('prepares a private external %s lab with canonical worktree and wrappers', async (profile) => {
     const root = join(await sandbox(), 'existing-runs-root');
-    const config = schemaFourConfig();
+    const config = schemaFiveConfig();
     const fake = setupCall();
     const progress: string[] = [];
     const doctorEnvironments: Readonly<Record<string, string>>[] = [];
@@ -236,7 +255,7 @@ describe('ledger-lab setup', () => {
     await import('node:fs/promises').then(({ mkdir }) => mkdir(root));
     const dependencies = {
       env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFourConfig())),
+      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
       doctor: () => Promise.resolve({ ok: true, checks: [{ id: 'coordinator-model', status: 'ok' }, { id: 'read-only-worker', status: 'ok' }] }),
     };
     const first = await setup.prepareLab({ root }, { ...dependencies, call: setupCall().call });
@@ -251,7 +270,7 @@ describe('ledger-lab setup', () => {
     const fake = setupCall();
     await expect(setup.prepareLab({ root: join(setup.companionRoot, 'artifacts', 'ledger-lab', '.test-output') }, {
       env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: fake.call,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFourConfig())),
+      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
     })).rejects.toThrow('Companion 仓库之外');
     expect(fake.createCount).toBe(0);
   });
@@ -272,7 +291,7 @@ describe('ledger-lab setup', () => {
     const fake = setupCall({ unknownCreate: true });
     await expect(setup.prepareLab({ root }, {
       env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: fake.call,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFourConfig())),
+      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
     })).rejects.toMatchObject({ code: 'LAB_OPERATION_UNKNOWN' });
 
     expect(fake.createCount).toBe(1);
@@ -290,7 +309,7 @@ describe('ledger-lab setup', () => {
     await expect(setup.prepareLab({ root }, {
       env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: fake.call,
       signal: controller.signal,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFourConfig())),
+      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
       progress: (stage) => { if (stage === 'github-repository') controller.abort(); },
     })).rejects.toMatchObject({ code: 'LAB_OPERATION_UNKNOWN' });
     expect(fake.createCount).toBe(0);
@@ -303,7 +322,7 @@ describe('ledger-lab setup', () => {
     const root = join(await sandbox(), 'runs');
     const prepared = await setup.prepareLab({ root }, {
       env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFourConfig())),
+      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
       doctor: () => Promise.resolve({ ok: true, checks: [{ id: 'coordinator-model', status: 'ok' }, { id: 'read-only-worker', status: 'ok' }] }),
     });
     let terminalCreateCount = 0;
@@ -328,7 +347,7 @@ describe('ledger-lab setup', () => {
     const root = join(await sandbox(), 'runs');
     const prepared = await setup.prepareLab({ root }, {
       env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFourConfig())),
+      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
       doctor: () => Promise.resolve({ ok: true, checks: [{ id: 'coordinator-model', status: 'ok' }, { id: 'read-only-worker', status: 'ok' }] }),
     });
     const gitDir = join(prepared.repositoryPath, '.git');
@@ -388,7 +407,7 @@ describe('ledger-lab setup', () => {
     const root = join(await sandbox(), 'runs');
     const prepared = await setup.prepareLab({ root }, {
       env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFourConfig())),
+      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
       doctor: () => Promise.resolve({ ok: true, checks: [{ id: 'coordinator-model', status: 'ok' }, { id: 'read-only-worker', status: 'ok' }] }),
     });
     const code = await lab.main(['verify-result', '--run', prepared.directory]);
@@ -405,7 +424,7 @@ describe('ledger-lab setup', () => {
     const root = join(await sandbox(), 'runs');
     const prepared = await setup.prepareLab({ root }, {
       env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFourConfig())),
+      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
       doctor: () => Promise.resolve({ ok: true, checks: [{ id: 'coordinator-model', status: 'ok' }, { id: 'read-only-worker', status: 'ok' }] }),
     });
     await expect(lab.main(['collect', '--run', prepared.directory])).rejects.toThrow(/Scope|scope/u);
@@ -429,6 +448,23 @@ describe('ledger-lab setup', () => {
 });
 
 describe('ledger-lab setup wizard', () => {
+  const libraryConnection = { connectionRef: 'connection-library', label: 'Fixture connection', providerId: 'fixture',
+    providerIntegration: 'openai-chat', baseUrl: 'https://api.fixture.invalid/v1',
+    credential: { kind: 'managed', credentialRef: '00000000-0000-4000-8000-000000000001' } };
+  const createWizardHost = (save: (input: unknown) => unknown) => ({
+    read: () => ({ kind: 'absent' }), save,
+    providerLibrary: {
+      load: () => ({ kind: 'loaded', revision: 4, connections: [libraryConnection], models: [] }),
+      saveConnection: () => Promise.reject(new Error('existing connection should be reused')),
+      saveModel: () => ({ kind: 'saved', revision: 5, model: { modelRef: 'coordinator-model-ref', connectionRef: libraryConnection.connectionRef,
+        model: 'coordinator-fixture', effortCapability: null } }),
+    },
+    providerCatalog: {
+      presets: () => [], discover: () => Promise.reject(new Error('offline')),
+      candidates: () => ({ models: [{ id: 'coordinator-fixture', label: 'Coordinator Fixture' }] }),
+    },
+  });
+
   it('queries and preserves native source and effort for each of the five worker roles', async () => {
     const asks: string[] = [];
     const queriedRoles: string[] = [];
@@ -436,11 +472,10 @@ describe('ledger-lab setup wizard', () => {
     const prompt = {
       ask(label: string, fallback = ''): Promise<string> {
         asks.push(label);
-        const answer = label.startsWith('Coordinator 已安装') ? '@fixture/provider#chat'
-          : label === 'Coordinator 模型 ID' ? 'coordinator-fixture'
-            : label.includes('SDK options') ? '{}'
-              : label.startsWith('Coordinator 认证') ? 'environment'
-                : label.includes('模型序号或原生 ID') ? '1'
+        const answer = label.startsWith('Coordinator 连接') ? 'existing'
+          : label.startsWith('选择用户级连接') ? 'Fixture connection'
+            : label.startsWith('选择 Coordinator 模型') ? 'coordinator-fixture'
+              : label.includes('模型序号或原生 ID') ? '1'
                   : label.includes(' effort ') ? 'high'
                     : label.includes('预算') ? '20'
                       : label.includes('token 上限') ? '10000'
@@ -452,7 +487,7 @@ describe('ledger-lab setup wizard', () => {
     };
     const result = await wizard.configureSettings({
       settingsPath: join(await sandbox(), 'settings.json'), prompt,
-      host: { read: () => ({ kind: 'empty' }), save: (input) => { saved = input; return input; }, credentials: { metadata: () => ({ kind: 'available', refs: [] }) } },
+      host: createWizardHost((input) => { saved = input; return input; }),
       catalog: { query: ({ harness }) => {
         const role = MODEL_PROFILE_ROLES[queriedRoles.length];
         queriedRoles.push(role ?? 'missing-role');
@@ -475,11 +510,10 @@ describe('ledger-lab setup wizard', () => {
     let saveCount = 0;
     const prompt = {
       ask(label: string, fallback = ''): Promise<string> {
-        const answer = label.includes('Coordinator 已安装') ? '@fixture/provider#chat'
-          : label === 'Coordinator 模型 ID' ? 'coordinator-fixture'
-            : label.includes('SDK options') ? '{}'
-              : label.startsWith('Coordinator 认证') ? 'environment'
-                : label.includes('模型序号或原生 ID') ? 'manual-worker-model'
+        const answer = label.startsWith('Coordinator 连接') ? 'existing'
+          : label.startsWith('选择用户级连接') ? 'Fixture connection'
+            : label.startsWith('选择 Coordinator 模型') ? 'coordinator-fixture'
+              : label.includes('模型序号或原生 ID') ? 'manual-worker-model'
                   : label.includes('保存以上选择') ? 'cancel' : fallback;
         return Promise.resolve(answer);
       },
@@ -488,10 +522,59 @@ describe('ledger-lab setup wizard', () => {
     };
     await expect(wizard.configureSettings({
       settingsPath: '/external/settings.json', prompt,
-      host: { read: () => ({ kind: 'empty' }), save: () => { saveCount += 1; }, credentials: { metadata: () => ({ kind: 'available', refs: [] }) } },
+      host: createWizardHost(() => { saveCount += 1; }),
       catalog: { query: () => Promise.resolve({ kind: 'available' as const, source: 'fixture', models: [] }) },
       roles: MODEL_PROFILE_ROLES, harnesses: WORKER_HARNESS_IDS,
     })).rejects.toThrow('配置已取消');
     expect(saveCount).toBe(0);
+  });
+
+  it('saves a custom connection key privately and permits offline exact model IDs', async () => {
+    const messages: string[] = [];
+    const savedConnectionInputs: unknown[] = [];
+    let projectSave: unknown;
+    const connection = { ...libraryConnection, connectionRef: 'new-connection', label: 'Custom provider' };
+    const host = {
+      read: () => ({ kind: 'absent' }),
+      save: (input: unknown) => { projectSave = input; return input; },
+      providerLibrary: {
+        load: (() => {
+          let reads = 0;
+          return () => ++reads === 1
+            ? { kind: 'loaded', revision: 0, connections: [], models: [] }
+            : { kind: 'loaded', revision: 1, connections: [connection], models: [] };
+        })(),
+        saveConnection: (input: unknown) => {
+          savedConnectionInputs.push(input);
+          return Promise.resolve({ kind: 'saved', revision: 1, connection });
+        },
+        saveModel: () => ({ kind: 'saved', revision: 2, model: { modelRef: 'offline-model-ref', connectionRef: connection.connectionRef,
+          model: 'provider/exact-id', effortCapability: null } }),
+      },
+      providerCatalog: { presets: () => [], discover: () => Promise.reject(new Error('offline')), candidates: () => ({ models: [] }) },
+    };
+    const prompt = {
+      ask(label: string, fallback = ''): Promise<string> {
+        if (label.startsWith('Coordinator 连接')) return Promise.resolve('new');
+        if (label.startsWith('Coordinator provider 来源')) return Promise.resolve('custom');
+        if (label === '连接名称') return Promise.resolve('Custom provider');
+        if (label === 'Provider 地址') return Promise.resolve('https://api.fixture.invalid/v1');
+        if (label.startsWith('Coordinator 精确模型 ID')) return Promise.resolve('provider/exact-id');
+        if (label.includes('模型序号或原生 ID')) return Promise.resolve('worker-native-id');
+        if (label.includes('预算')) return Promise.resolve('20');
+        if (label.includes('token 上限')) return Promise.resolve('10000');
+        if (label.includes('保存以上选择')) return Promise.resolve('save');
+        return Promise.resolve(fallback);
+      },
+      secret: () => Promise.resolve('sk-private-key'),
+      say: (text: string) => messages.push(text),
+    };
+    await wizard.configureSettings({ settingsPath: join(await sandbox(), 'settings.json'), prompt, host,
+      catalog: { query: () => Promise.resolve({ kind: 'unavailable' as const, code: 'offline' }) },
+      roles: MODEL_PROFILE_ROLES, harnesses: WORKER_HARNESS_IDS });
+
+    expect(savedConnectionInputs).toEqual([expect.objectContaining({ providerId: 'custom', providerIntegration: 'openai-chat', newSecret: 'sk-private-key' })]);
+    expect(JSON.stringify(messages)).not.toContain('sk-private-key');
+    expect(projectSave).toMatchObject({ coordinator: { modelRef: 'offline-model-ref', effort: null } });
   });
 });

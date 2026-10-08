@@ -32,7 +32,8 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { HumanMessage } from '@langchain/core/messages';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
-import { createModuleIntegrationResolverAsync } from '../../src/adapters/agents/chat-model-factory.js';
+import { createBuiltinIntegrationResolverAsync, resolveChatModel } from '../../src/adapters/agents/chat-model-factory.js';
+import type { ProviderProtocol } from '../../src/domain/model-configuration.js';
 import { runProcess } from '../../src/adapters/orca-cli/process-runner.js';
 import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
 import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
@@ -44,6 +45,7 @@ import type {
 } from '../../src/application/dto/identity.js';
 import type { CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
 import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
+import type { CoordinatorModelConfiguration } from '../../src/application/coordinator/model-config-switch.js';
 import {
   cutoverPlanningHandoff,
   preparePlanningHandoff,
@@ -114,12 +116,11 @@ function mergeEnvFile(path: string): void {
 
 export type SmokeProfile = {
   readonly id: string;
-  readonly integration: string;
+  readonly integration: ProviderProtocol;
   readonly model: string;
   readonly baseUrl: string;
   readonly endpointUrl: string;
   readonly keyEnvVar: string;
-  readonly modelOptions: Readonly<Record<string, unknown>>;
 };
 
 const PROFILE_SOURCES = [
@@ -127,45 +128,38 @@ const PROFILE_SOURCES = [
     id: 'anthropic',
     baseUrlVar: 'COORDINATOR_SMOKE_ANTHROPIC_BASE_URL',
     modelVar: 'COORDINATOR_SMOKE_ANTHROPIC_MODEL',
-    defaultIntegration: '@langchain/anthropic#ChatAnthropic',
+    defaultIntegration: 'anthropic-messages',
     defaultKeyEnvVar: 'ANTHROPIC_API_KEY',
     endpointPath: '/v1/messages',
     normalize: (raw: string) => {
       const base = raw.replace(/\/+$/, '');
       return base.endsWith('/v1') ? base.slice(0, -3) : base;
     },
-    buildOptions: (baseUrl: string) => ({ temperature: 0, anthropicApiUrl: baseUrl }),
   },
   {
     id: 'openai',
     baseUrlVar: 'COORDINATOR_SMOKE_OPENAI_BASE_URL',
     modelVar: 'COORDINATOR_SMOKE_OPENAI_MODEL',
-    defaultIntegration: '@langchain/openai#ChatOpenAI',
+    defaultIntegration: 'openai-chat',
     defaultKeyEnvVar: 'OPENAI_API_KEY',
     endpointPath: '/chat/completions',
     normalize: (raw: string) => {
       const base = raw.replace(/\/+$/, '');
       return base.endsWith('/v1') ? base : `${base}/v1`;
     },
-    buildOptions: (baseUrl: string) => ({ temperature: 0, configuration: { baseURL: baseUrl } }),
   },
   {
     id: 'openai-responses',
     baseUrlVar: 'COORDINATOR_SMOKE_RESPONSES_BASE_URL',
     fallbackVar: 'COORDINATOR_SMOKE_OPENAI_BASE_URL',
     modelVar: 'COORDINATOR_SMOKE_RESPONSES_MODEL',
-    defaultIntegration: '@langchain/openai#ChatOpenAI',
+    defaultIntegration: 'openai-responses',
     defaultKeyEnvVar: 'OPENAI_API_KEY',
     endpointPath: '/responses',
     normalize: (raw: string) => {
       const base = raw.replace(/\/+$/, '');
       return base.endsWith('/v1') ? base : `${base}/v1`;
     },
-    buildOptions: (baseUrl: string) => ({
-      temperature: 0,
-      useResponsesApi: true,
-      configuration: { baseURL: baseUrl },
-    }),
   },
 ] as const;
 
@@ -183,12 +177,11 @@ function readProfiles(): readonly SmokeProfile[] {
     const baseUrl = source.normalize(raw);
     profiles.push({
       id: source.id,
-      integration: process.env[`${source.baseUrlVar.replace('_BASE_URL', '')}_INTEGRATION`] ?? source.defaultIntegration,
+      integration: source.defaultIntegration,
       model: process.env[source.modelVar] ?? 'MiniMax-M3.1-Flash-Preview',
       baseUrl,
       endpointUrl: `${baseUrl}${source.endpointPath}`,
       keyEnvVar: process.env[`${source.baseUrlVar.replace('_BASE_URL', '')}_KEY_ENV`] ?? source.defaultKeyEnvVar,
-      modelOptions: source.buildOptions(baseUrl),
     });
   }
   return profiles;
@@ -341,16 +334,36 @@ async function createFixture(plan: Extract<SmokePlan, { kind: 'run' }>, profile:
     rmSync(projectDir, { recursive: true, force: true });
   };
 
-  const resolveIntegration = createModuleIntegrationResolverAsync();
-  const integration = await resolveIntegration(profile.integration);
+  const integration = await createBuiltinIntegrationResolverAsync()(profile.integration);
   if (integration === null) {
     dispose();
     throw new Error(`无法加载 provider 集成 ${profile.integration}；请确认它已安装且凭据可用`);
   }
-  const model = integration.createChatModel({
+  const configuration: CoordinatorModelConfiguration = {
+    configurationRef: `smoke-${profile.id}-${plan.identity}`,
+    providerIntegration: profile.integration,
     model: profile.model,
-    modelOptions: { ...profile.modelOptions, maxRetries: 0 },
+    credentialRefs: ['11111111-1111-4111-8111-111111111111'],
+    nativeWindowOwnerRef: null,
+    providerConnection: {
+      connectionRef: `smoke-${profile.id}`,
+      label: `smoke-${profile.id}`,
+      providerId: profile.id,
+      providerIntegration: profile.integration,
+      baseUrl: profile.baseUrl,
+      credential: { kind: 'managed', credentialRef: '11111111-1111-4111-8111-111111111111' },
+    },
+    modelRef: `smoke-${profile.id}-model`,
+    effortCapability: null,
+    effort: null,
+  };
+  const resolved = resolveChatModel(configuration, () => integration, {
+    read: (credentialRef) => credentialRef === '11111111-1111-4111-8111-111111111111' && process.env[profile.keyEnvVar]
+      ? { kind: 'resolved' as const, secret: process.env[profile.keyEnvVar]! }
+      : { kind: 'rejected' as const, code: 'credential_missing' as const, message: 'smoke credential unavailable' },
   });
+  if (resolved.kind !== 'resolved') throw new Error(`无法构造 smoke 模型：${resolved.message}`);
+  const model = resolved.model;
 
   const scopeId = `${plan.identity}:scope` as CoordinationScopeId;
   const sessionA = `${plan.identity}:session-a` as CoordinatorSessionId;
@@ -359,7 +372,7 @@ async function createFixture(plan: Extract<SmokePlan, { kind: 'run' }>, profile:
     store,
     coordinationScopeId: scopeId,
     coordinatorSessionId: sessionA,
-    coordinatorModelConfigurationRef: `${profile.integration}#${profile.model}`,
+    coordinatorModelConfigurationRef: configuration.configurationRef,
     planningCycleId: `${plan.identity}:cycle-1` as PlanningCycleId,
     fullBranchRef: `refs/heads/${plan.identity}`,
     canonicalWorktreePath: '/tmp/orca-smoke-worktree',
@@ -396,7 +409,7 @@ async function createFixture(plan: Extract<SmokePlan, { kind: 'run' }>, profile:
     expectedRevision: scopeRow.scope.revision,
     writer: writerA,
     coordinatorSessionId: sessionB,
-    coordinatorModelConfigurationRef: `${profile.integration}#${profile.model}`,
+    coordinatorModelConfigurationRef: configuration.configurationRef,
     lifecycleState: 'registered',
   });
   if (registered.kind !== 'committed') {

@@ -32,7 +32,7 @@ export const COMMAND_METADATA = {
   "command-directory": {"path":"命令目录","shortcut":"ctrl+p","action":"command-palette","alias":null,"label":"命令目录","description":"搜索操作","target":"UI"},
   'verify-command-results': {alias:null,label:'核验命令结果',description:'只读核验原调用',target:'Scope',path:'核验命令结果',shortcut:null,action:null},
   "help": {"path":"Help","shortcut":null,"action":null,"alias":"help","label":"Help","description":"命令与键位","target":"UI"},
-  "model-settings": {"path":"模型连接设置","shortcut":null,"action":null,"alias":"connections","label":"模型连接设置","description":"编辑 provider、模型、选项与 key","target":"Scope"},
+  "model-settings": {"path":"模型连接设置","shortcut":null,"action":null,"alias":"connections","label":"模型连接设置","description":"管理 Provider 连接与模型","target":"Scope"},
   "execution-settings": {"path":"执行设置","shortcut":null,"action":null,"alias":"concurrency","label":"执行并发设置","description":"默认并行包额度与批准值","target":"Scope"},
 } as const satisfies Readonly<Record<string, CommandMeta>>;
 export type CommandId = keyof typeof COMMAND_METADATA;

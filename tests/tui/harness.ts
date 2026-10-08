@@ -569,9 +569,10 @@ export const FAKE_MODEL_SETTINGS_SNAPSHOT: ModelSettingsSnapshotView = {
     {
       connectionRef: 'connection-a',
       label: '主连接',
-      providerIntegration: 'openai',
-      modelOptions: {},
-      credential: { kind: 'managed', credentialRef: '11111111-1111-4111-8111-111111111111', optionPath: 'apiKey' },
+      providerId: 'openai',
+      providerIntegration: 'openai-chat',
+      baseUrl: 'https://api.openai.com/v1',
+      credential: { kind: 'managed', credentialRef: '11111111-1111-4111-8111-111111111111' },
     },
   ],
   models: [
@@ -612,6 +613,9 @@ function createFakeModelSettings(options: FakePortsOptions, calls: PortCall[]): 
         },
       );
     },
+    ...(options.modelSettings?.library === undefined ? {} : { library: options.modelSettings.library }),
+    ...(options.modelSettings?.catalog === undefined ? {} : { catalog: options.modelSettings.catalog }),
+    ...(options.modelSettings?.initializeProject === undefined ? {} : { initializeProject: options.modelSettings.initializeProject }),
   };
 }
 

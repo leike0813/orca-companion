@@ -23,9 +23,11 @@ context: |
   以已归档的 m2-repair-read-only-worker-sandbox 为直接前驱；它可在执行 TUI
   未归档时 apply、验证和 archive，但必须先核验共享执行接缝并串行编辑共享文件。
 
-  当前 change 为 remove-worker-credential-management，直接前驱 add-worker-harness-adapters 已归档（2026-10-06），
-  规划 HEAD f445aee。本 change 移除 Worker 凭据与原生配置管理：Worker 认证归还 harness，Worker Profile 改为
-  modelSelection，项目配置 schema 4、Execution Authorization Manifest v4，旧版本明确拒绝且不迁移。
+  当前实施 change 为 rework-coordinator-provider-configuration，直接前驱 remove-worker-credential-management
+  已归档（2026-10-07），规划 HEAD f486bd6。它是 active add-ledger-lab-rehearsal-infrastructure 的配置
+  解阻塞项，允许前者未归档时实施；共享文件串行编辑，lab 剩余真实业务验收保持未完成。
+  Coordinator 配置采用内置协议与 API Key、用户级连接/模型库，项目 schema 5；Worker 保持
+  modelSelection 与原生认证，Execution Authorization Manifest v4，旧版本明确拒绝且不迁移。
   后续新隔离任务显式使用用户批准的
   `minimax-cn/MiniMax-M3.1-Flash-Preview` 与已核验连接；已启动现场保持原模型绑定。
   fixture 06 已取得真实并行、原 Validator Session 集成复验、Finalizer deliverable 与同 Scope 重启证据，见 artifacts/execution-concurrency。
@@ -55,7 +57,7 @@ rules:
 operations:
   apply:
     guidance:
-      - 默认只实施依赖序列中第一个尚未归档的 change；m2-wire-execution-runtime、m2-repair-read-only-worker-sandbox 与 m2-settle-in-flight-graph-revision 可作为解阻塞并行项在 m2-deliver-execution-tui 尚未归档时实施，前提是各自的直接已归档前驱及共享接缝均已核验，且同一文件不被两个 agent 同时编辑。
+      - 默认只实施依赖序列中第一个尚未归档的 change；既定 M2 解阻塞项及 rework-coordinator-provider-configuration 可以作为各自前台验收 change 的解阻塞项提前实施，前提是直接已归档前驱和共享接缝已核验，且共享文件串行编辑。
       - 开始编辑前执行 implementation-plan 的基线和前驱接缝检查；漂移时停止并回到规划。
       - 不在 apply 阶段创建 verification.md。
   archive:

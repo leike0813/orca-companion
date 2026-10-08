@@ -8,9 +8,8 @@
  *
  * 与 `~/.cache/orca-acceptance/setup-fixture.sh` 的差别只有两处，都是当前产品合同要求的：
  *
- * 1. 项目配置是 **schema 2**（`providerConnections` + `models` + `execution.workerProfiles`），五个角色
- *    各自带完整 `modelConfiguration` 并显式绑定本批验收模型；旧脚本写的是 schema 1 的
- *    `execution.workerModel`，现在会被明确拒绝。
+ * 1. 项目配置是 **schema 5**；Coordinator 使用固定协议与完整连接快照，Worker profile 保存 harness
+ *    原生模型选择与可信目录来源。
  * 2. 凭据走**隔离的用户级 CredentialStore**：本脚本新建一个 0700 的 `XDG_CONFIG_HOME`，用生产
  *    `JsonCredentialStore` 存一次，拿到它自己生成的不可变 `credentialRef`（uuid）再写进项目配置。
  *    用户的 `~/.config/orca-companion` 不被读写、不被 chmod——它当前是 0755，产品按
@@ -50,12 +49,10 @@ const INTEGRATION_REMOTE = process.env['ORCA_COMPANION_ACCEPTANCE_REMOTE'] ??
 /** D06 用户批准的 Coordinator 模型和已核验的本机 OAuth proxy。 */
 const ACCEPTANCE_MODEL = process.env['ORCA_COMPANION_COORDINATOR_MODEL'] ?? 'minimax-cn/MiniMax-M3.1-Flash-Preview';
 const PROVIDER_ID = 'companion-oauth';
-const PROVIDER_INTEGRATION = '@langchain/openai#ChatOpenAI';
+const PROVIDER_INTEGRATION = 'openai-chat';
 const DEFAULT_BASE_URL = 'http://127.0.0.1:10100/v1';
 const CONNECTION_REF = 'acceptance-coordinator';
-const WORKER_CONNECTION_REF = 'acceptance-worker';
 const MODEL_REF = 'acceptance-model';
-const WORKER_MODEL_REF = 'acceptance-worker-model';
 const CONFIGURATION_REF = 'planning-default';
 const WORKER_ROLES = ['planner', 'implementation', 'validator', 'finalizer', 'recovery_utility'];
 const SDK_COMPATIBILITY_PLACEHOLDER = 'loopback-oauth-proxy';
@@ -86,17 +83,9 @@ function projectConfig(credentialRef, integrationRef) {
     connectionRef: CONNECTION_REF,
     label: '本机 OAuth Coordinator',
     providerIntegration: PROVIDER_INTEGRATION,
-    modelOptions: { temperature: 0, configuration: { baseURL: DEFAULT_BASE_URL } },
-    credential: { kind: 'managed', credentialRef, optionPath: 'apiKey' },
-    codex: null,
-  };
-  const workerConnection = {
-    connectionRef: WORKER_CONNECTION_REF,
-    label: '本机 OAuth Worker Harness',
-    providerIntegration: PROVIDER_INTEGRATION,
-    modelOptions: { temperature: 0, configuration: { baseURL: DEFAULT_BASE_URL } },
-    credential: { kind: 'harness_login' },
-    codex: { providerId: PROVIDER_ID, baseUrl: DEFAULT_BASE_URL, wireApi: 'responses' },
+    providerId: PROVIDER_ID,
+    baseUrl: DEFAULT_BASE_URL,
+    credential: { kind: 'managed', credentialRef },
   };
   const model = {
     modelRef: MODEL_REF,
@@ -104,36 +93,22 @@ function projectConfig(credentialRef, integrationRef) {
     model: ACCEPTANCE_MODEL,
     effortCapability: null,
   };
-  const workerModel = {
-    modelRef: WORKER_MODEL_REF,
-    connectionRef: WORKER_CONNECTION_REF,
-    model: ACCEPTANCE_MODEL,
-    effortCapability: null,
-  };
-  const workerModelConfiguration = {
-    connection: workerConnection,
-    modelRef: WORKER_MODEL_REF,
-    model: ACCEPTANCE_MODEL,
-    effort: null,
-    effortCapability: null,
-    modelOptions: {},
-  };
   return {
-    schemaVersion: 2,
+    schemaVersion: 5,
     revision: 0,
-    providerConnections: [coordinatorConnection, workerConnection],
-    models: [model, workerModel],
+    providerConnections: [coordinatorConnection],
+    models: [model],
     coordinatorModels: [
       {
         configurationRef: CONFIGURATION_REF,
         providerIntegration: PROVIDER_INTEGRATION,
         model: ACCEPTANCE_MODEL,
-        modelOptions: { temperature: 0, configuration: { baseURL: DEFAULT_BASE_URL } },
         credentialRefs: [credentialRef],
         nativeWindowOwnerRef: null,
         providerConnection: coordinatorConnection,
         modelRef: MODEL_REF,
         effortCapability: null,
+        effort: null,
       },
     ],
     defaultCoordinatorModelRef: CONFIGURATION_REF,
@@ -146,7 +121,7 @@ function projectConfig(credentialRef, integrationRef) {
         profileRef: `profile-${role}`,
         role,
         harness: 'codex',
-        modelConfiguration: workerModelConfiguration,
+        modelSelection: { model: ACCEPTANCE_MODEL, effort: null, effortCapability: null, catalogSource: null },
       })),
       workerProfileRefs: Object.fromEntries(
         WORKER_ROLES.map((role) => [role, `profile-${role}`]),
@@ -155,7 +130,8 @@ function projectConfig(credentialRef, integrationRef) {
       git: { remotes: ['origin'], refs: [`refs/heads/${integrationRef}`] },
       limits: {
         maxActiveWorkPackages: 8,
-        concurrencyLimit: 1,
+        maxWorkPackages: 8,
+        integrationReconciliations: 2,
         implementationAttempts: 2,
         validatorRepairs: 1,
         graphRevisions: 2,

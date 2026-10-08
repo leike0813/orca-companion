@@ -17,12 +17,20 @@ The coordination role run by Orca Companion. Multiple independent Coordinator Se
 _Avoid_: Planner, implementation agent, validator
 
 **Coordinator Model Configuration**:
-A user-approved configuration that binds the Coordinator Agent to a provider adapter, model, model options, credential references, and execution limits.
+A user-approved immutable snapshot binding the Coordinator Agent to a provider connection, fixed protocol, exact model ID, trusted effort and credential reference. Project and Session bindings retain their selected versions independently of user-library edits and catalog updates.
 _Avoid_: Worker Profile, automatic routing, fallback model
 
 **Provider Adapter**:
-A LangChain chat-model integration that implements the common `BaseChatModel` interface and resolves one Coordinator Model Configuration without proxying requests or owning credentials. Companion does not maintain a provider allowlist; availability follows installed integrations and verified runtime capabilities.
-_Avoid_: Companion-owned provider wrapper, provider gateway, bundled provider catalog, credential store
+A bundled LangChain integration implementing `BaseChatModel` for one fixed protocol, directly calling the configured endpoint. It resolves credentials at construction and requires runtime capability verification before startup or application.
+_Avoid_: Provider gateway, model discovery, credential store
+
+**Provider Library**:
+The user-level append-only collection of immutable Coordinator connections and model definitions. A connection can serve multiple exact models; explicit project selection copies a complete snapshot, and edits never change existing Session bindings.
+_Avoid_: Worker native configuration, mutable Session model pointer
+
+**Provider Catalog**:
+The release-fixed public provider and model baseline, with separately refreshable public metadata. A valid nonempty endpoint discovery owns its candidate list; failed or empty discovery falls back to last known good bound to the same connection, credential reference and catalog version, then the catalog. Changed catalog content invalidates prior discovery caches.
+_Avoid_: Model capability verification, automatic model routing
 
 **Credential Store**:
 The single user-level file holding plaintext provider secrets for Coordinator model calls, outside version control and addressed only through opaque immutable credential references. Project configuration, checkpoints, UI input storage, command arguments, and evidence carry the reference; the value is resolved at the last construction point of a Coordinator model call. Worker launches never read it: Worker authentication belongs to the Worker Harness in its own user environment. Owner-only permissions, a short exclusive lock, revision compare-and-set, and atomic replacement keep it single-writer and recoverable; an unreferenced leftover secret stays an orphan rather than activating anything.

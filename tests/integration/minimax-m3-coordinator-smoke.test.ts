@@ -56,7 +56,8 @@ import type {
   RuntimeIncarnationId,
 } from '../../src/application/dto/identity.js';
 import type { CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
-import { createModuleIntegrationResolverAsync } from '../../src/adapters/agents/chat-model-factory.js';
+import { createBuiltinIntegrationResolverAsync, resolveChatModel } from '../../src/adapters/agents/chat-model-factory.js';
+import type { ProviderProtocol } from '../../src/domain/model-configuration.js';
 import { runProcess } from '../../src/adapters/orca-cli/process-runner.js';
 import { openCheckpointStore, type CheckpointStore } from '../../src/adapters/storage/checkpoint-store.js';
 import { openCoordinationStore, type CoordinationStore } from '../../src/adapters/storage/coordination-store.js';
@@ -131,7 +132,7 @@ function mergeEnvFileIntoProcess(path: string): { readonly loaded: boolean; read
 
 export type SmokeProfile = {
   readonly id: string;
-  readonly integration: string;
+  readonly integration: ProviderProtocol;
   readonly model: string;
   /** 归一化后的 base URL：已按各家 SDK 的拼接规则补上或去掉 `/v1`。 */
   readonly baseUrl: string;
@@ -139,7 +140,6 @@ export type SmokeProfile = {
   readonly endpointUrl: string;
   readonly keyEnvVar: string;
   /** 只含非凭据字段：凭据由 provider 集成自己从标准环境变量取得。 */
-  readonly modelOptions: Readonly<Record<string, unknown>>;
 };
 
 /** 去掉结尾斜杠，便于比较与拼接。 */
@@ -182,15 +182,13 @@ type ProfileSource = {
   /** 未设置主变量时的回退变量；Responses 与 Chat Completions 通常同一个 host。 */
   readonly baseUrlFallbackVar?: string;
   readonly modelVar: string;
-  readonly integrationVar: string;
   readonly keyEnvVarVar: string;
-  readonly defaultIntegration: string;
+  readonly defaultIntegration: ProviderProtocol;
   readonly defaultKeyEnvVar: string;
   /** 把端点地址归一化成该 SDK 需要的 base URL。 */
   readonly normalize: (raw: string) => string;
   /** 该 SDK 会在 base URL 之后拼出的路径，用于诊断与观测。 */
   readonly endpointPath: string;
-  readonly buildOptions: (baseUrl: string) => Readonly<Record<string, unknown>>;
 };
 
 const PROFILE_SOURCES: readonly ProfileSource[] = [
@@ -198,45 +196,35 @@ const PROFILE_SOURCES: readonly ProfileSource[] = [
     id: 'anthropic',
     baseUrlVar: 'COORDINATOR_SMOKE_ANTHROPIC_BASE_URL',
     modelVar: 'COORDINATOR_SMOKE_ANTHROPIC_MODEL',
-    integrationVar: 'COORDINATOR_SMOKE_ANTHROPIC_INTEGRATION',
     keyEnvVarVar: 'COORDINATOR_SMOKE_ANTHROPIC_KEY_ENV',
-    defaultIntegration: '@langchain/anthropic#ChatAnthropic',
+    defaultIntegration: 'anthropic-messages',
     defaultKeyEnvVar: 'ANTHROPIC_API_KEY',
     normalize: baseWithoutV1,
     endpointPath: '/v1/messages',
     // Anthropic SDK 自己补 /v1/messages，凭据由集成从 ANTHROPIC_API_KEY 取得。
-    buildOptions: (baseUrl) => ({ temperature: 0, anthropicApiUrl: baseUrl }),
   },
   {
     id: 'openai',
     baseUrlVar: 'COORDINATOR_SMOKE_OPENAI_BASE_URL',
     modelVar: 'COORDINATOR_SMOKE_OPENAI_MODEL',
-    integrationVar: 'COORDINATOR_SMOKE_OPENAI_INTEGRATION',
     keyEnvVarVar: 'COORDINATOR_SMOKE_OPENAI_KEY_ENV',
-    defaultIntegration: '@langchain/openai#ChatOpenAI',
+    defaultIntegration: 'openai-chat',
     defaultKeyEnvVar: 'OPENAI_API_KEY',
     normalize: baseWithV1,
     endpointPath: '/chat/completions',
     // OpenAI SDK 直接拼 /chat/completions，凭据由集成从 OPENAI_API_KEY 取得。
-    buildOptions: (baseUrl) => ({ temperature: 0, configuration: { baseURL: baseUrl } }),
   },
   {
     id: 'openai-responses',
     baseUrlVar: 'COORDINATOR_SMOKE_RESPONSES_BASE_URL',
     baseUrlFallbackVar: 'COORDINATOR_SMOKE_OPENAI_BASE_URL',
     modelVar: 'COORDINATOR_SMOKE_RESPONSES_MODEL',
-    integrationVar: 'COORDINATOR_SMOKE_RESPONSES_INTEGRATION',
     keyEnvVarVar: 'COORDINATOR_SMOKE_RESPONSES_KEY_ENV',
-    defaultIntegration: '@langchain/openai#ChatOpenAI',
+    defaultIntegration: 'openai-responses',
     defaultKeyEnvVar: 'OPENAI_API_KEY',
     normalize: baseWithV1,
     endpointPath: '/responses',
     // Responses API 是同一个集成的另一条请求路径：SDK 拼 /responses。
-    buildOptions: (baseUrl) => ({
-      temperature: 0,
-      useResponsesApi: true,
-      configuration: { baseURL: baseUrl },
-    }),
   },
 ];
 
@@ -279,12 +267,11 @@ function readProfiles(): readonly SmokeProfile[] {
     const baseUrl = source.normalize(resolved.raw);
     profiles.push({
       id: source.id,
-      integration: process.env[source.integrationVar] ?? source.defaultIntegration,
+      integration: source.defaultIntegration,
       model: process.env[source.modelVar] ?? 'MiniMax-M3.1-Flash-Preview',
       baseUrl,
       endpointUrl: `${baseUrl}${source.endpointPath}`,
       keyEnvVar: process.env[source.keyEnvVarVar] ?? source.defaultKeyEnvVar,
-      modelOptions: source.buildOptions(baseUrl),
     });
   }
   return profiles;
@@ -560,23 +547,34 @@ async function createProfileFixture(
     configurationRef: `smoke-${profile.id}-${plan.identity}`,
     providerIntegration: profile.integration,
     model: profile.model,
-    // 只含非凭据字段：凭据由集成自己从标准环境变量取得。
-    modelOptions: { ...profile.modelOptions },
-    credentialRefs: [`env:${profile.keyEnvVar}`],
+    credentialRefs: ['11111111-1111-4111-8111-111111111111'],
     nativeWindowOwnerRef: null,
+    providerConnection: {
+      connectionRef: `smoke-${profile.id}`,
+      label: `smoke-${profile.id}`,
+      providerId: profile.id,
+      providerIntegration: profile.integration,
+      baseUrl: profile.baseUrl,
+      credential: { kind: 'managed', credentialRef: '11111111-1111-4111-8111-111111111111' },
+    },
+    modelRef: `smoke-${profile.id}-model`,
+    effortCapability: null,
+    effort: null,
   };
 
-  const resolveIntegration = createModuleIntegrationResolverAsync();
-  const integration = await resolveIntegration(configuration.providerIntegration);
+  const integration = await createBuiltinIntegrationResolverAsync()(configuration.providerIntegration);
   if (integration === null) {
     checkpointOpen.store.close();
     coordination.close();
     throw new Error(`无法加载 provider 集成 ${configuration.providerIntegration}；请确认它已安装且凭据可用`);
   }
-  const model = integration.createChatModel({
-    model: configuration.model,
-    modelOptions: { ...configuration.modelOptions, maxRetries: 0 },
+  const resolved = resolveChatModel(configuration, () => integration, {
+    read: (credentialRef) => credentialRef === '11111111-1111-4111-8111-111111111111' && process.env[profile.keyEnvVar]
+      ? { kind: 'resolved', secret: process.env[profile.keyEnvVar]! }
+      : { kind: 'rejected', code: 'credential_missing', message: 'smoke credential unavailable' },
   });
+  if (resolved.kind !== 'resolved') throw new Error(`无法构造 smoke 模型：${resolved.message}`);
+  const model = resolved.model;
 
   const created = coordination.transact({
     kind: 'create-scope',

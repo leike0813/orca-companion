@@ -43,7 +43,7 @@ import type { DependencyPolicy, RoleAuthorities } from '../../domain/planning/ex
 
 export const PROJECT_CONFIG_FILENAME = 'orca-companion.json';
 
-export const PROJECT_CONFIG_SCHEMA_VERSION = 4;
+export const PROJECT_CONFIG_SCHEMA_VERSION = 5;
 
 /** 项目级 tracker 引用；正文仍是 tracker 的事实，这里只有「读写哪张地图」。 */
 export type ProjectTrackerConfiguration = {
@@ -363,6 +363,9 @@ function validateReferences(config: ProjectConfig): IdentityFailure | null {
   const configurationRefs = new Set<string>();
   for (const configuration of config.coordinatorModels) {
     const field = `projectConfig.coordinatorModels.${configuration.configurationRef}`;
+    if (configuration.providerConnection === undefined || configuration.modelRef === undefined) {
+      return { ok: false, field, message: 'Coordinator 配置需要完整连接快照与模型引用' };
+    }
     if (configurationRefs.has(configuration.configurationRef)) {
       return {
         ok: false,
@@ -400,7 +403,7 @@ function validateReferences(config: ProjectConfig): IdentityFailure | null {
       }
       if (
         connection.credential.kind === 'managed' &&
-        !configuration.credentialRefs.includes(connection.credential.credentialRef)
+        (configuration.credentialRefs.length !== 1 || configuration.credentialRefs[0] !== connection.credential.credentialRef)
       ) {
         return {
           ok: false,

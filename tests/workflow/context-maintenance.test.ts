@@ -36,14 +36,16 @@ test('assistant provider replay 只在相同 configurationRef 下恢复白名单
     content: [{ type: 'text', text: 'answer' }],
     additional_kwargs: {
       reasoning_content: 'opaque-reasoning',
-      __openai_function_call_ids__: ['signed-call'],
+      originalTextContentBlock: { type: 'text', text: 'answer', thoughtSignature: 'gemini-signature' },
+      __openai_function_call_ids__: { call_1: 'signed-call' },
       ignored_private_field: 'discarded',
     },
   });
   const durable = toDurableMessage(response);
   expect(durable.providerReplay).toEqual({
     reasoning_content: 'opaque-reasoning',
-    __openai_function_call_ids__: ['signed-call'],
+    originalTextContentBlock: { type: 'text', text: 'answer', thoughtSignature: 'gemini-signature' },
+    __openai_function_call_ids__: { call_1: 'signed-call' },
   });
   const entry = {
     entryId: 'entry:assistant:step', stepId: 'step', role: 'assistant' as const,
@@ -63,7 +65,7 @@ test('assistant provider replay 只在相同 configurationRef 下恢复白名单
 test('跨配置的签名内容块只留下可见文本，reasoning 块不会进入 portable content', () => {
   const entry = {
     role: 'assistant', contentFormat: 'json_blocks',
-    content: JSON.stringify([{ type: 'text', text: 'visible' }, { type: 'reasoning', signature: 'secret-signature' }]),
+    content: JSON.stringify([{ type: 'text', text: 'visible' }, { type: 'reasoning', signature: 'secret-signature' }, { type: 'text', thought: true, text: 'secret-thought' }]),
     providerReplay: { configurationRef: 'old', additionalKwargs: { reasoning_content: 'secret-reasoning' } },
   };
   expect((fromDurableMessage(entry, 'new') as AIMessage).content).toBe('visible');

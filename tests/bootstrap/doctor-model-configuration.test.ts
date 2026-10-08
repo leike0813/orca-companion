@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 
 import { createOrcaDoctorProbe } from '../../src/bootstrap/doctor.js';
+import { coordinatorConfigurationFixture } from '../support/model-configurations.js';
 
 const directories: string[] = [];
 
@@ -58,21 +59,14 @@ function fakeClaude(): { readonly bin: string; readonly env: Record<string, stri
 }
 
 const VALID_CONFIG = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   revision: 0,
   coordinatorModels: [
-    {
-      configurationRef: 'probe-model',
-      providerIntegration: '@example/missing-integration#Absent',
-      model: 'probe-model',
-      modelOptions: {},
-      credentialRefs: [],
-      nativeWindowOwnerRef: null,
-    },
+    coordinatorConfigurationFixture('probe-model'),
   ],
   defaultCoordinatorModelRef: 'probe-model',
-  providerConnections: [],
-  models: [],
+  providerConnections: [coordinatorConfigurationFixture().providerConnection],
+  models: [{ modelRef: coordinatorConfigurationFixture().modelRef, connectionRef: coordinatorConfigurationFixture().providerConnection.connectionRef, model: coordinatorConfigurationFixture().model, effortCapability: null }],
   tracker: { kind: 'github', routeMapIssueNumber: 1 },
   planning: { maxMutations: 0 },
   context: { maxInputTokens: 1000 },
@@ -103,7 +97,7 @@ test('项目没有配置时：不假装核验过任何只读角色引用的 harn
   await expect(probe.readReadOnlyWorkers!()).resolves.toEqual({ ok: true, value: [] });
 });
 
-test('配置的 provider 集成不可用：报不可用，而不是通过', async () => {
+test('配置的 API Key 不可用：报不可用，而不是通过', async () => {
   const repository = repositoryWithConfig(configWith({}));
   const probe = createOrcaDoctorProbe({ cwd: repository, env: {} });
 
@@ -111,8 +105,7 @@ test('配置的 provider 集成不可用：报不可用，而不是通过', asyn
   expect(result.ok).toBe(false);
   if (!result.ok) {
     expect(result.status).toBe('capability-missing');
-    // 只断言结构化状态与「点名了是哪个集成不可用」：不锁定完整文案。
-    expect(result.detail).toContain('@example/missing-integration');
+    expect(result.detail).toContain('凭据');
   }
 });
 

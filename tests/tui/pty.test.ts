@@ -24,7 +24,8 @@
  */
 
 import { execFileSync, spawnSync, type SpawnSyncReturns } from 'node:child_process';
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterAll, describe, expect, test } from 'vitest';
@@ -297,6 +298,7 @@ function quoteArgument(value: string): string {
 const build = ensureBuild();
 const pty = build.ok ? probeTmux() : { ok: false as const, reason: '构建产物不可用' };
 const SOCKETS: string[] = [];
+const DIRECTORIES: string[] = [];
 
 function newSocket(label: string): string {
   const socket = `orca-companion-pty-${label}-${String(process.pid)}`;
@@ -314,6 +316,7 @@ afterAll(() => {
       tmux(socket, ['kill-server']);
     }
   }
+  for (const directory of DIRECTORIES) rmSync(directory, { recursive: true, force: true });
 });
 
 const SUITE_NAME = build.ok
@@ -429,10 +432,13 @@ describe.skipIf(!build.ok)(SUITE_NAME, () => {
       });
 
       test('PTY 中启动前台 TUI，Ctrl+C 退出后终端仍可用', () => {
+        const repository = mkdtempSync(join(tmpdir(), 'companion-pty-home-'));
+        DIRECTORIES.push(repository);
+        execFileSync('git', ['init', '--quiet', repository]);
         const socket = newSocket('start');
         const session = 'app';
         const command = [process.execPath, BUILT_ENTRY].map(quoteArgument).join(' ');
-        expect(startSession(socket, session, 120, 40, command, { cwd: REPOSITORY_ROOT }).status).toBe(0);
+        expect(startSession(socket, session, 120, 40, command, { cwd: repository }).status).toBe(0);
 
         const frame = pollPane(socket, session, (text) => /Coordination Scope|初始化向导|Orca Companion|config_unavailable/u.test(text));
         expect(frame.ok, `5s 内未出现界面语义片段，最后帧：\n${frame.text}`).toBe(true);

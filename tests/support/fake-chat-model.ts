@@ -7,7 +7,7 @@
  */
 
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { AIMessage, AIMessageChunk, type BaseMessage } from '@langchain/core/messages';
+import { AIMessage, AIMessageChunk, ToolMessage, type BaseMessage } from '@langchain/core/messages';
 import { ChatGenerationChunk, type ChatResult } from '@langchain/core/outputs';
 import type { Runnable } from '@langchain/core/runnables';
 
@@ -22,15 +22,41 @@ export class CapableChatModel extends BaseChatModel {
   }
 
   override _generate(
-    _messages: BaseMessage[],
+    messages: BaseMessage[],
     options: { readonly signal?: AbortSignal } | undefined,
   ): Promise<ChatResult> {
+    const lastMessage = messages.at(-1);
+    if (lastMessage?._getType() === 'human' && lastMessage.content === 'capability cancellation probe') {
+      return new Promise((_, reject) => {
+        const signal = options?.signal;
+        if (signal === undefined) return;
+        const abort = () => reject(Object.assign(new Error('调用已被取消'), { name: 'AbortError' }));
+        if (signal.aborted) abort();
+        else signal.addEventListener('abort', abort, { once: true });
+      });
+    }
     if (options?.signal?.aborted === true) {
       const aborted = new Error('调用已被取消');
       aborted.name = 'AbortError';
       return Promise.reject(aborted);
     }
-    const message = new AIMessage('pong');
+    if (lastMessage instanceof ToolMessage) {
+      const message = new AIMessage('probe continued');
+      (message as { usage_metadata?: unknown }).usage_metadata = {
+        input_tokens: 1,
+        output_tokens: 1,
+        total_tokens: 2,
+      };
+      return Promise.resolve({ generations: [{ text: 'probe continued', message }] });
+    }
+    const requestsProbe = lastMessage?._getType() === 'human' &&
+      typeof lastMessage.content === 'string' && lastMessage.content.includes('Call the capability_probe tool.');
+    const message = requestsProbe
+      ? new AIMessage({
+          content: '',
+          tool_calls: [{ id: 'fixture-capability-probe', name: 'capability_probe', args: {} }],
+        })
+      : new AIMessage('pong');
     (message as { usage_metadata?: unknown }).usage_metadata = {
       input_tokens: 1,
       output_tokens: 1,

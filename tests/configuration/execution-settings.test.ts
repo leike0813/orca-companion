@@ -17,24 +17,15 @@ import type {
   ProjectConfigurationSaveResult,
   ProjectConfigurationStore,
 } from '../../src/application/ports/project-configuration-store.js';
+import { coordinatorConfigurationFixture, projectConnectionsFixture } from '../support/model-configurations.js';
 
-/** 最小可解析的 schema4 纯规划配置；执行额度取领域默认值。 */
+/** 最小可解析的 schema5 配置；执行额度取领域默认值。 */
 const baseConfig = (): ProjectConfig =>
   ({
-    schemaVersion: 4,
+    schemaVersion: 5,
     revision: 0,
-    providerConnections: [],
-    models: [],
-    coordinatorModels: [
-      {
-        configurationRef: 'planning-default',
-        providerIntegration: '@langchain/openai#ChatOpenAI',
-        model: 'gpt-4.1-mini',
-        modelOptions: {},
-        credentialRefs: [],
-        nativeWindowOwnerRef: null,
-      },
-    ],
+    ...projectConnectionsFixture(),
+    coordinatorModels: [coordinatorConfigurationFixture('planning-default')],
     defaultCoordinatorModelRef: 'planning-default',
     tracker: { kind: 'github', routeMapIssueNumber: 42 },
     planning: { maxMutations: 3 },

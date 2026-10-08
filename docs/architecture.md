@@ -106,7 +106,7 @@ Application 是业务规则的外部 interface。小型纯用例可以直接是�
 
 Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation catalog、进程和 schema 转换；`storage` 分别实现 Branch Coordination Store、LangGraph checkpointer 与 IC-13 UI 输入存储，不共享表或伪装跨库事务。IC-04 的会话历史在 checkpoint 库中按稳定 entry、正文块、step 和 Wake 关联追加，控制记录保持小型；正文范围与 metadata keyset 由 `application/coordinator/history.ts` 定义。有效上下文、工具恢复、待处理输入和 UI 分页各自按用途读取，压缩历史保留原文且不进入常规模型输入读取。TUI 只保留当前 Session 的有界正文/派生缓存及来源锚点；SQLite 是已提交原文的唯一权威。
 
-`storage/credential-store.ts` 是版本控制之外唯一保存明文 secret 的地方，只服务 Coordinator 模型调用，与上面三个存储无关：单文件按 XDG 规则落在用户配置目录，短 exclusive 文件锁、revision CAS、0600 临时文件原子替换与回读；权限不安全的既有目录、文件与符号链接一律拒绝，且不 chmod 用户既有目录。它与项目配置文件之间没有跨文件事务，Coordinator 连接编辑因此先写凭据并回读，再写项目引用；Worker 角色选择不写凭据，Worker 启动也不读取该 store。
+`storage/credential-store.ts` 是版本控制之外唯一保存明文 secret 的地方，只服务 Coordinator 模型调用，与上面三个存储无关：单文件按 XDG 规则落在用户配置目录，短 exclusive 文件锁、revision CAS、0600 临时文件原子替换与回读；权限不安全的既有目录、文件与符号链接一律拒绝，且不 chmod 用户既有目录。它与项目配置文件之间没有跨文件事务，Coordinator 连接编辑先校验、写凭据并回读，再 CAS 追加用户库；项目显式选择完整快照；Worker 角色选择不写凭据，Worker 启动也不读取该 store。
 
 ### MOD-05 CLI
 
@@ -198,7 +198,8 @@ flowchart LR
 | Coordinator Session | `checkpoints.sqlite` | 已提交消息/tool step、图位置、Wake Batch、Context Capsule |
 | UI 输入 | `ui.sqlite` | 按 Scope/Session/回答 revision 隔离的草稿、冲突副本、待核验提交；不形成业务受理事实 |
 | Coordinator provider secret | 用户级 CredentialStore 文件 | 只服务 Coordinator 模型调用；其它地方只保存 `credentialRef`，Worker 启动不读取 |
-| 模型与连接设置 | 项目 `orca-companion.json`（schema 4） | 追加式 Coordinator `providerConnections`/`models`、角色 Worker Profiles（harness + `modelSelection`）与当前选择引用 |
+| 可复用连接与模型 | 用户级 `providers.json` | 不可变连接/模型追加记录与 revision CAS，一个连接可保存多个模型 |
+| 模型与连接设置 | 项目 `orca-companion.json`（schema 5） | 明确选定的完整 Coordinator 快照、角色 Worker Profiles（harness + `modelSelection`）与当前选择引用 |
 | Worker Harness session/transcript | Worker Harness | 精确 Session Binding、Segment 与 transcript 引用 |
 
 ## 跨接缝流程
@@ -363,3 +364,5 @@ sequenceDiagram
 | MOD-05 CLI | IC-11、IC-12 |
 | MOD-06 TUI | IC-11–IC-15 |
 | MOD-07 Bootstrap | IC-02–IC-04、IC-11–IC-15 |
+
+Coordinator Provider 设置由 `application/configuration/provider-library.ts` 与 `provider-catalog.ts` 拥有公共用例/端口；storage 的用户库 adapter 与 agents 的 catalog adapter 分别实现持久化与有界 HTTP。内置 chat-model factory 按固定协议直接构造 LangChain 模型，bootstrap 注入唯一 CredentialStore。公共 catalog 更新独立于连接发现；非空发现独占候选，失败按同连接/凭据/catalog版本的 LKG→catalog 回退。UI/lab 共用这些服务，render 只读，明确意图触发保存/发现/更新。

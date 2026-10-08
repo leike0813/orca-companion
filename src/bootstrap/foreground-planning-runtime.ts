@@ -19,6 +19,9 @@ import { projectHandoff, projectPlanningHandoff } from '../application/controlle
  */
 
 import { existsSync } from 'node:fs';
+import { FileProviderLibraryStore } from '../adapters/storage/provider-library-store.js';
+import { createProviderLibrary } from '../application/configuration/provider-library.js';
+import { createProviderCatalog } from '../adapters/agents/provider-catalog.js';
 import { homedir } from 'node:os';
 import { basename, isAbsolute, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -386,7 +389,7 @@ import type { DeliveryMessage } from '../application/dto/operation-outcome.js';
 import { workPackageComment } from '../application/materialize-work-package.js';
 import { createGhTracker } from '../adapters/tracker/gh-tracker.js';
 import {
-  createModuleIntegrationResolverAsync,
+  createBuiltinIntegrationResolverAsync,
   resolveChatModel,
 } from '../adapters/agents/chat-model-factory.js';
 import {
@@ -434,6 +437,8 @@ import {
 import { createOrcaDoctorProbe } from './doctor.js';
 import {
   PROJECT_CONFIG_FILENAME,
+  PROJECT_CONFIG_SCHEMA_VERSION,
+  parseProjectConfig,
   currentWorkerProfile,
   configurationByRef,
   CODEX_FULL_ACCESS_RISK,
@@ -997,12 +1002,12 @@ export async function createForegroundPlanningHost(
       worktreePath: canonicalWorktreePath,
       ...(options.readFile === undefined ? {} : { readFile: options.readFile }),
     });
-    if (loaded.kind === 'failed') {
+    if (loaded.kind === 'failed' && loaded.code !== 'missing') {
       blocker = {
         code: 'config_unavailable',
         message: `${loaded.message}（期望文件 ${join(canonicalWorktreePath, PROJECT_CONFIG_FILENAME)}）`,
       };
-    } else {
+    } else if (loaded.kind === 'loaded') {
       configPath = loaded.path;
       config = loaded.config;
     }
@@ -1224,11 +1229,9 @@ export async function createForegroundPlanningHost(
   // 模型与 tracker
   // ---------------------------------------------------------------------
 
-  const loadIntegration =
-    options.loadIntegration ?? ((specifier: string) => import(specifier) as Promise<unknown>);
-  const integrationResolver = createModuleIntegrationResolverAsync({
-    load: (specifier) => loadIntegration(specifier),
-  });
+  const integrationResolver = createBuiltinIntegrationResolverAsync(
+    options.loadIntegration === undefined ? {} : { load: options.loadIntegration },
+  );
 
   /**
    * 用户级 CredentialStore 的唯一生产实例来源。
@@ -1243,6 +1246,10 @@ export async function createForegroundPlanningHost(
    */
   const credentials = new JsonCredentialStore({ environment: options.env });
   const credentialStore = (): JsonCredentialStore => credentials;
+  const providerCatalog = createProviderCatalog({ credentials, environment: options.env });
+  const providerLibrary = createProviderLibrary({
+    store: new FileProviderLibraryStore({ environment: options.env }), credentials, catalog: providerCatalog,
+  });
 
   const modelFor = async (
     configuration: CoordinatorModelConfiguration,
@@ -3464,10 +3471,12 @@ export async function createForegroundPlanningHost(
     canonicalWorktree: canonicalWorktreePath ?? options.repositoryPath,
     trackerRef: config === null ? '' : `github#${String(config.tracker.routeMapIssueNumber)}`,
   });
+  let verifiedWizardConfigurationRef: string | null = null;
 
   const scopeSetup: ScopeSetupPort = {
     resolveHome: () => Promise.resolve(resolveHome()),
     verify: async (): Promise<readonly WizardCheck[]> => {
+      verifiedWizardConfigurationRef = null;
       const checks: WizardCheck[] = [];
       checks.push({
         id: 'repository',
@@ -3505,10 +3514,15 @@ export async function createForegroundPlanningHost(
         return checks;
       }
       const resolved = await modelFor(config.defaultCoordinatorModelRef === '' ? config.coordinatorModels[0]! : configurationByRef(config, config.defaultCoordinatorModelRef) ?? config.coordinatorModels[0]!);
+      const capabilities = resolved.kind === 'resolved' ? await verifyModelCapabilities(resolved.model, {
+        modelRef: config.defaultCoordinatorModelRef,
+        ...(options.probeTimeoutMs === undefined ? {} : { timeoutMs: options.probeTimeoutMs }),
+      }) : null;
+      if (capabilities?.kind === 'verified') verifiedWizardConfigurationRef = config.defaultCoordinatorModelRef;
       checks[3] = {
         id: 'model',
-        ok: resolved.kind === 'resolved',
-        detail: resolved.kind === 'resolved' ? config.defaultCoordinatorModelRef : resolved.message,
+        ok: capabilities?.kind === 'verified',
+        detail: resolved.kind !== 'resolved' ? resolved.message : capabilities?.kind === 'rejected' ? capabilities.message : config.defaultCoordinatorModelRef,
       };
       const tracker = trackerFor();
       const mapRef = { kind: 'route-map' as const, id: String(config.tracker.routeMapIssueNumber), version: 0 };
@@ -3593,6 +3607,9 @@ export async function createForegroundPlanningHost(
       }
       if (fullBranchRef === null || canonicalWorktreePath === null || config === null) {
         return rejected('config_unavailable', '缺少可核验的 Git 身份或项目配置');
+      }
+      if (verifiedWizardConfigurationRef !== proposal.coordinatorModelConfigurationRef || proposal.coordinatorModelConfigurationRef !== config.defaultCoordinatorModelRef) {
+        return rejected('verification_failed', '请先核验当前 Coordinator 模型能力再建立 Session');
       }
       if (proposal.canonicalWorktree !== canonicalWorktreePath || proposal.repositoryPath !== options.repositoryPath) {
         return rejected(
@@ -10079,6 +10096,7 @@ export async function createForegroundPlanningHost(
         configPath: projectConfigPath(canonicalWorktreePath),
       }),
       credentials: credentialStore(),
+      library: providerLibrary,
       verifyWorkerSelection,
     });
   };
@@ -10116,10 +10134,41 @@ export async function createForegroundPlanningHost(
       return modelSettingsService();
     };
     return {
+      library: providerLibrary,
+      catalog: providerCatalog,
+      initializeProject: (input) => Promise.resolve().then(() => {
+        if (canonicalWorktreePath === null) return { kind: 'rejected', code: 'config_unreadable', message: '无法定位项目工作区' };
+        const selected = providerLibrary.resolveModel(input.modelRef);
+        if (selected.kind !== 'resolved') return { kind: 'rejected', code: 'invalid_input', message: selected.message };
+        if (credentials.read(selected.connection.credential.credentialRef).kind !== 'resolved') {
+          return { kind: 'rejected', code: 'credential_unresolved', message: '所选连接的 API Key 不可用' };
+        }
+        const configurationRef = newId();
+        const parsed = parseProjectConfig({
+          schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION, revision: 1,
+          providerConnections: [selected.connection], models: [selected.model],
+          coordinatorModels: [{ configurationRef, providerIntegration: selected.connection.providerIntegration,
+            model: selected.model.model, credentialRefs: [selected.connection.credential.credentialRef],
+            nativeWindowOwnerRef: null, providerConnection: selected.connection, modelRef: selected.model.modelRef,
+            effortCapability: selected.model.effortCapability, effort: input.effort }],
+          defaultCoordinatorModelRef: configurationRef,
+          tracker: { kind: 'github', routeMapIssueNumber: input.routeMapIssueNumber },
+          planning: { maxMutations: 100 }, context: { maxInputTokens: 120000 },
+        });
+        if (!parsed.ok) return { kind: 'rejected', code: 'invalid_input', message: parsed.message };
+        const projectStore = new FileProjectConfigurationStore({ configPath: projectConfigPath(canonicalWorktreePath) });
+        const observed = projectStore.read();
+        if (observed.kind !== 'absent') return { kind: 'rejected', code: 'conflict', message: '项目配置已经存在，重新载入后保存' };
+        const saved = projectStore.save({ expectedRevision: 0, next: parsed.value });
+        if (saved.kind === 'failed') return { kind: 'rejected', code: saved.code === 'conflict' ? 'conflict' : 'save_failed', message: saved.message };
+        config = saved.config;
+        configPath = projectConfigPath(canonicalWorktreePath);
+        return { kind: 'saved', revision: saved.revision, configurationRef, profileRef: null };
+      }),
       /**
        * 只读非秘密快照。
        *
-       * Coordinator 连接仅投影 provider integration、非秘密选项与凭据引用，secret 与 CredentialStore
+       * Coordinator 连接仅投影服务、协议、地址与凭据引用，secret 与 CredentialStore
        * 路径都不进入返回值，因此界面重绘与 resize 拿到的始终是同一份投影。
        */
       load: () => {
@@ -10149,19 +10198,13 @@ export async function createForegroundPlanningHost(
               kind: 'loaded',
               snapshot: {
                 ...modelSettingsSnapshot(current),
-                connections: current.providerConnections.map((connection) => ({
-                  connectionRef: connection.connectionRef,
-                  label: connection.label,
-                  providerIntegration: connection.providerIntegration,
-                  modelOptions: connection.modelOptions,
-                  credential: connection.credential,
-                })),
+                connections: current.providerConnections,
               },
             },
         );
       },
       /**
-       * 保存：先写 CredentialStore 并回读，再 CAS 追加项目引用。
+       * 保存：回读所选连接凭据，再 CAS 追加完整项目快照。
        *
        * 任何一步失败都原样返回 rejected，界面据此保留编辑内容；已写入的凭据不回滚，孤立 key 是已知
        * 取舍——它不会被任何配置引用，因此不会激活错误的模型。
@@ -10244,33 +10287,6 @@ export async function createForegroundPlanningHost(
        message: `Coordinator 配置 ${configurationRef} 不在项目配置中`,
      };
    }
-   // 复用被选中 Coordinator 配置的完整连接与凭据引用。
-   const connection = configurationConnection(selected);
-   if (connection === null && selected.credentialRefs.length > 0) {
-     // 凭据引用必须对应一条已声明的连接才能解析出注入路径；没有连接却带引用，模型装配阶段同样会
-     // 拒绝，在这里提前给出同义结论，而不是保存出一条注定启动失败的新配置。
-     return {
-       kind: 'rejected',
-       code: 'invalid_input',
-       message: `Coordinator 配置 ${configurationRef} 带凭据引用但没有绑定 provider 连接`,
-     };
-   }
-   // 没有连接快照的配置是合法的 harness-login 形态：沿用它自己的 providerIntegration 与
-   // modelOptions，不在这里编造一条连接记录。
-   const connectionCandidate =
-     connection === null
-       ? {
-           label: selected.configurationRef,
-           providerIntegration: selected.providerIntegration,
-           modelOptions: {},
-           credential: { kind: 'harness_login' as const },
-         }
-       : {
-           label: connection.label,
-           providerIntegration: connection.providerIntegration,
-           modelOptions: connection.modelOptions,
-           credential: connection.credential,
-         };
    const capability = selected.effortCapability ?? null;
    if (effort !== null && capability?.values.includes(effort) !== true) {
      return {
@@ -10282,12 +10298,8 @@ export async function createForegroundPlanningHost(
    const result = modelSettingsService().save({
      expectedRevision,
      role: 'coordinator',
-     connection: connectionCandidate,
-     model: selected.model,
-     modelOptions: selected.modelOptions,
-     effortCapability: capability,
+     modelRef: selected.modelRef ?? '',
      effort,
-     nativeWindowOwnerRef: selected.nativeWindowOwnerRef,
    });
    reloadProjectConfigFromDisk();
    return result;
