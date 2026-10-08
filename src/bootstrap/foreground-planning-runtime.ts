@@ -214,7 +214,6 @@ import {
   WORKER_HARNESS_IDS,
   type ModelSettingsRole as DomainModelSettingsRole,
   type ModelProfileRole,
-  type WorkerEffortCapability,
   type WorkerHarnessId,
   type WorkerModelSelection,
 } from '../domain/model-configuration.js';
@@ -223,7 +222,6 @@ import {
   modelSettingsSnapshot,
   type ModelSettingsService,
   type SaveModelSettingsResult,
-  type WorkerSelectionVerification,
 } from '../application/configuration/model-settings.js';
 import { FileProjectConfigurationStore } from '../adapters/storage/project-configuration-store.js';
 import { createExecutionSettingsService } from '../application/configuration/execution-settings.js';
@@ -291,7 +289,6 @@ import type {
   ExecutionHandoffIntentPort,
   HomeResolution,
   ModelCatalog,
-  WorkerModelCatalogLoad,
   ModelRoleCandidate,
   ModelRoleView,
   ModelSettingsPort,
@@ -371,6 +368,7 @@ import {
   readHarnessTranscriptIdentity,
   workerHarnessRegistry,
 } from './worker-harness.js';
+import { createWorkerModelSettingsCatalog } from './worker-model-settings.js';
 import { createGitIntegrationPort } from '../adapters/git/integration.js';
 import { createGraphBasisService } from '../application/tui/graph-basis-service.js';
 import type { GraphBasisPort } from '../application/tui/graph-basis.js';
@@ -1324,65 +1322,13 @@ export async function createForegroundPlanningHost(
     return await probeHarnessReadOnlyWorker(harness, modelSelection, { env: options.env });
   };
 
-  /**
-   * 本次进程内、按 harness 的显式原生目录查询缓存。
-   *
-   * 候选只在用户显式查询时刷新；缓存不持久化，进程退出即失效。查询成功时用本次查询的 `source`
-   * 覆盖该 harness 的条目，失败时删除它，避免旧来源被当作本次可核验的目录来源。
-   */
-  const workerModelCatalog = new Map<WorkerHarnessId, {
-    readonly source: string;
-    readonly models: readonly { readonly model: string; readonly effortCapability: WorkerEffortCapability | null }[];
-  }>();
-
-  const workerCatalogQueries = new Map<WorkerHarnessId, object>();
-  const queryWorkerModels = async (input: {
-    readonly harness: WorkerHarnessId;
-    readonly signal?: AbortSignal;
-  }): Promise<WorkerModelCatalogLoad> => {
-    const query = {};
-    workerCatalogQueries.set(input.harness, query);
-    workerModelCatalog.delete(input.harness);
-    const registered = resolveWorkerHarness(workerHarnessRegistry, input.harness);
-    if (registered.kind === 'rejected') {
-      workerModelCatalog.delete(input.harness);
-      return { kind: 'unavailable', code: registered.code, message: registered.message };
-    }
-    const queried = await registered.harness.queryModels({
-      cwd: canonicalWorktreePath ?? options.repositoryPath,
-      env: options.env,
-      ...(input.signal === undefined ? {} : { signal: input.signal }),
-    });
-    if (input.signal?.aborted || workerCatalogQueries.get(input.harness) !== query) {
-      return { kind: 'unavailable', code: 'catalog_query_cancelled', message: '目录查询已取消' };
-    }
-    if (queried.kind !== 'available') {
-      workerModelCatalog.delete(input.harness);
-      return { kind: 'unavailable', code: queried.code, message: queried.message };
-    }
-    workerModelCatalog.set(input.harness, { source: queried.source, models: queried.models });
-    return { kind: 'available', source: queried.source, models: queried.models };
-  };
-
-  /**
-   * 保存来源核验：只承认**本次显式查询缓存**里的来源与能力。
-   *
-   * 未查询过、或该 native model ID 不在缓存里，都返回 `null`，保存侧据此只允许手填未验证选择
-   * （catalogSource/effortCapability/effort 全为 null），不接受调用方自报来源。
-   */
-  const verifyWorkerSelection = (
-    input: { readonly harness: string; readonly model: string },
-  ): WorkerSelectionVerification | null => {
-    if (!(WORKER_HARNESS_IDS as readonly string[]).includes(input.harness)) {
-      return null;
-    }
-    const entry = workerModelCatalog.get(input.harness as WorkerHarnessId);
-    if (entry === undefined) {
-      return null;
-    }
-    const found = entry.models.find((candidate) => candidate.model === input.model);
-    return found === undefined ? null : { catalogSource: entry.source, effortCapability: found.effortCapability };
-  };
+  const workerModelSettings = createWorkerModelSettingsCatalog({
+    cwd: () => canonicalWorktreePath ?? options.repositoryPath,
+    env: options.env,
+    registry: workerHarnessRegistry,
+  });
+  const queryWorkerModels = workerModelSettings.query;
+  const verifyWorkerSelection = workerModelSettings.verify;
 
   const trackerFor = (): IssueTrackerGateway | null =>
     trackerFactory({ cwd: canonicalWorktreePath ?? options.repositoryPath, env: options.env });
@@ -3750,7 +3696,7 @@ export async function createForegroundPlanningHost(
       const harness = isWorkerHarnessId(configuredHarness) ? configuredHarness : null;
       const registered = harness !== null && workerHarnessRegistry.has(harness);
       // Worker 候选只来自该 harness 本次显式原生目录查询的缓存；未查询过就没有候选，不拿项目配置凑数。
-      const cached = harness === null ? null : workerModelCatalog.get(harness) ?? null;
+      const cached = harness === null ? null : workerModelSettings.get(harness);
       const candidates: readonly ModelRoleCandidate[] = cached === null
         ? []
         : cached.models.map((entry) => ({

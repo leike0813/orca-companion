@@ -219,15 +219,17 @@ LangGraph checkpoint、SQLite 和 Orca receipt 都不提供跨系统 exactly-onc
 
 ## 9. TUI、CLI 与生命周期
 
-发布命令为 `orca-companion`：
+发布命令为 `ocp`（`orca-companion` 为等价长别名）：
 
-- `orca-companion [repository-path]` 启动前台 TUI；Home 选择现有 Scope，或通过最小向导核验 repository、branch、canonical worktree、Coordinator Model Configuration、tracker 和 Orca 能力后创建 Scope。
-- `orca-companion status [--json]` 执行一次性只读查询。
-- `orca-companion doctor` 检查环境与能力。
+- `ocp [repository-path]` 启动前台 TUI；Home 选择现有 Scope，或通过最小向导核验 repository、branch、canonical worktree、Coordinator Model Configuration、tracker 和 Orca 能力后创建 Scope。
+- `ocp status [--json]` 执行一次性只读查询。
+- `ocp doctor` 检查环境与能力。
 
 不提供 `run`、`resume`、`tui` 或 headless 子命令。启动 TUI 前同时检查 stdin/stdout TTY；无 TTY 时以非零状态明确拒绝。`status --json` 与 `doctor` 必须无 TTY 可运行，机器输出只写 stdout，诊断写 stderr。
 
 初始化只建立 Scope、Planning Cycle 与首个 Coordinator Session；Worker Profiles、预算、依赖权限、Git 集成和 accepted risks 留给 Execution Authorization Manifest。
+
+ledger-lab round preparation 可自动准备环境；Scope/需求批准、规划审阅、故障操作和业务步骤由用户按 `artifacts/ledger-lab/guide.md` 手动完成。准备不得生成业务骨架、执行图或验收答案，也不得自动循环派发；失败保留现场，unknown 不自动重试或清理，重开只核验原身份、不推进流程。
 
 **TUI 硬约束：尊重已确认原型。** 规划、实现或验收任何 TUI change 前，必须读取 [TUI 实现进度与原型交接](docs/dev/tui-implementation-handoff.md)，核对对应定稿来源、当前批次及验收要求。未经用户明确批准不得自行重新设计；交互或自动测试通过不能替代原型一致性验收。
 

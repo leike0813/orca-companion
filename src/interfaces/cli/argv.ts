@@ -9,9 +9,10 @@ export const SUPPORTED_SUBCOMMANDS = ['status', 'doctor', 'help'] as const;
 
 export const CLI_USAGE = [
   '用法:',
-  '  orca-companion [repository-path]            启动前台 TUI（需要 TTY）',
-  '  orca-companion status [--json]              只读输出当前 Coordination Scope 状态（无 TTY 可运行）',
-  '  orca-companion doctor                       核验 Orca 环境与 M0 必需能力（无 TTY 可运行）',
+  '  ocp [repository-path]            启动前台 TUI（需要 TTY）',
+  '  ocp status [--json]              只读输出当前 Coordination Scope 状态（无 TTY 可运行）',
+  '  ocp doctor                       核验 Orca 环境与 M0 必需能力（无 TTY 可运行）',
+  '  长别名：orca-companion（参数与行为相同）',
 ].join('\n');
 
 /** 已被明确退役的入口；它们曾经存在或容易被误用，因此必须给出可诊断的拒绝。 */

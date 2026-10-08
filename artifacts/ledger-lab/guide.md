@@ -1,17 +1,17 @@
 # 操作指南
 
-本指南描述一次完整的人工实测。全部操作由你在独立仓库里手动完成，指南不授权任何自动化。
+本指南描述一次完整实测。round 准备可由工具创建环境；规划、批准 Scope 与需求、故障操作及业务步骤由操作者按剧本完成。
 
 ## 0. 前置条件
 
-- 一个独立的 Git 仓库作为被测项目，`ledger-lab` 就实现在这里。
+- 一个已通过 `pnpm lab:new` 准备好的 round；首次准备会运行 `doctor`，因此产生少量模型费用。
 - 已按项目文档完成 Companion 的安装、Provider 与模型配置以及 Orca 能力核验，`doctor` 通过。
 - 一个仓库外的输出目录，例如 `/abs/out`，用来存放采集证据与报告。
 - 建议把并发上限设为 3、每 lane 上限 1、active Work Package 上限 8（取值见 `contract.json` 的 `executionLimits`）；当前产品的实际并发行为见 `capabilities.md`。
 
 ## 1. 验收程序
 
-入口是 `artifacts/ledger-lab/lab.mjs`。四个子命令：
+入口是 `pnpm lab`（等同 `node artifacts/ledger-lab/lab.mjs`）。验收命令可从 round 读取已配置身份与路径，也可继续使用显式参数：
 
 ```
 node artifacts/ledger-lab/lab.mjs collect --repo /abs/testrepo --scope <S> --out /abs/out --watch [--interval-ms 2000] [--max-samples 1800]
@@ -20,12 +20,14 @@ node artifacts/ledger-lab/lab.mjs verify-process --evidence /abs/out/evidence.js
 node artifacts/ledger-lab/lab.mjs report --process /abs/process.json --observations /abs/obs.json --out /abs/report-dir [--result /abs/result.json]   # main 必需 --result
 ```
 
+所有采集与核验命令可附 `--run /abs/round`；round 根目录默认为 `$XDG_STATE_HOME/orca-companion/ledger-lab`，否则 `~/.local/state/orca-companion/ledger-lab`。`--root` 可指定绝对外置 runs 根目录，`--settings` 可指定外置 JSON 设置。通过 `pnpm lab open --run /abs/round` 重开时只核验原身份，不推进流程；`pnpm lab configure` 修改设置前需已有构建产物或先运行 `pnpm lab:new`。
+
 - `collect`：只读采集，在 `--out` 目录内新建 `evidence.jsonl`。`--watch` 持续采集，`--interval-ms` 默认 2000 毫秒（范围 200 到 60000）；`--max-samples` 是采样上限，默认 1800（范围 1 到 10000），达到上限即停止。
 - `verify-result`：从仓库外运行固定 CLI，用外部输入核对实际输出，`--version` 选择初始、修订或隐私版的预期。`--entry` 默认取 `contract.json` 的 `entry`，`--line-ending` 默认 `lf`。
 - `verify-process`：读取证据、映射与人工观察，按 `main` 或 `cancel` 档案核验过程断言，输出 `process.json`。
 - `report`：把过程结论、结果结论和人工观察合并成 JSON 与 Markdown 报告。`--out` 必须是新目录，已存在则拒绝覆盖。`--result` 在 `main` 档案下必需，`cancel` 档案可省略；缺 `--result` 时不生成成品报告，也不伪造。
 
-命令帮助只列这四个子命令。版本规则（别名、脱敏、CSV 行序）、默认值、行尾与输出语义由 `contract.json` 的 `projections`、`defaults`、`lineEndings`、`limits`、`outputSemantics` 拥有；本文只引用，具体取值以合同为准。
+命令帮助还列出环境准备、配置和重开入口。版本规则（别名、脱敏、CSV 行序）、默认值、行尾与输出语义由 `contract.json` 的 `projections`、`defaults`、`lineEndings`、`limits`、`outputSemantics` 拥有；本文只引用，具体取值以合同为准。
 
 ### 1.1 证据样本（`evidence.jsonl` 每行一条）
 

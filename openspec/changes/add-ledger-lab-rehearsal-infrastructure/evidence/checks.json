@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "change": "add-ledger-lab-rehearsal-infrastructure",
+  "recordedOn": "2026-10-08",
+  "observedHead": "8bde2e75ba1c5a84d40bc4cf8207d2ff7a9d0d26",
+  "implementationInWorkingTree": true,
+  "kind": "engineering-check-summary",
+  "finalVerification": false,
+  "checks": [
+    {
+      "command": "pnpm exec vitest run tests/bootstrap/ledger-lab.test.ts tests/bootstrap/worker-model-settings.test.ts tests/acceptance/ledger-lab-setup.test.ts tests/acceptance/ledger-lab-collector.test.ts tests/acceptance/ledger-lab-process.test.ts tests/acceptance/ledger-lab-result.test.ts tests/configuration/model-settings.test.ts tests/bootstrap/foreground-planning-runtime.test.ts tests/doctor.test.ts tests/tui/model-settings.test.tsx",
+      "source": "rerun-during-change-backfill",
+      "exitCode": 0,
+      "passedFiles": 10,
+      "passedTests": 203,
+      "durationSeconds": 13.95
+    },
+    { "command": "pnpm typecheck", "source": "implementation-earlier-in-same-session", "exitCode": 0 },
+    { "command": "pnpm lint", "source": "implementation-earlier-in-same-session", "exitCode": 0 },
+    { "command": "pnpm build", "source": "implementation-earlier-in-same-session", "exitCode": 0 },
+    { "command": "git diff --check", "source": "implementation-earlier-in-same-session", "exitCode": 0 }
+  ],
+  "sessionSmokeChecks": {
+    "source": "implementation-earlier-in-same-session",
+    "realLocalChecks": ["git-init", "initial-commit", "local-git-credential-helper", "clean-baseline", "ocp-launcher-help", "reopen-git-identity", "scope-read-does-not-create-store", "hidden-pty-input", "input-after-hidden", "ctrl-c-restores-raw-mode"],
+    "mockedExternalOperations": ["github-create", "github-route-map", "git-push", "orca-mutations", "model-doctor"],
+    "durableRawSmokeEvidence": false
+  },
+  "notRun": ["real-github-create-and-push", "real-orca-terminal-adoption", "real-model-doctor", "collection-after-real-home-initialization", "full-test-suite", "independent-final-audit"],
+  "notes": [
+    "The BLOCKED result report emitted by the empty-project acceptance test is expected behavior, not a failed test.",
+    "The user has no existing usable model configuration; initial model selection is reserved for the wizard.",
+    "No fixed implementation commit, final verification, spec sync, or archive is claimed."
+  ]
+}

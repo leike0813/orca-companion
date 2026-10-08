@@ -20,6 +20,8 @@
 | `pnpm lint`、`pnpm lint:fix` | ESLint，含类型感知规则 |
 | `pnpm test`、`pnpm test:watch` | Vitest（含 TUI 组件与 PTY 用例） |
 | `pnpm build` | 输出 `dist/`；`pnpm start` 运行构建产物 |
+| `pnpm lab` | 运行 ledger-lab 验收工具；子命令支持 `--run` 选择外置 round |
+| `pnpm lab:new` | 构建并进入 ledger-lab 新 round 向导；可用 `--profile cancel` 建立独立取消轮次 |
 | `pnpm ui:preview planning` | 启动只读假数据 TUI 预览；其他场景见 [TUI 调试工作台](docs/dev/tui-workbench.md) |
 | `pnpm ui:devtools` | 启动独立 React DevTools，配合 `DEV=true pnpm ui:preview execution` |
 
@@ -30,6 +32,18 @@
 | `orca-companion [repository-path]` | 启动前台 TUI。**需要交互式终端**：stdin 或 stdout 无 TTY 时在挂载 Ink 之前以退出码 2 拒绝，诊断写 stderr |
 | `orca-companion status [--json]` | 只读输出当前 Coordination Scope 状态（`schemaVersion: 3`，含执行快照分区）；无 TTY 可运行 |
 | `orca-companion doctor` | 核验 Orca 环境与能力；无 TTY 可运行 |
+
+`ocp` 是 `orca-companion` 的短命令别名，参数与行为相同。
+
+### ledger-lab 实测
+
+首次运行 `pnpm lab:new` 会进入终端向导，并把可复用设置保存在 XDG 配置目录
+`orca-companion/ledger-lab.json`；使用 `pnpm lab:new --profile cancel` 建立独立取消轮次。
+已有构建产物或运行过新建向导后，可用 `pnpm lab configure` 修改设置；`pnpm lab open --run /abs/round`
+核对原 round 身份并重开，不会推进流程。采集与验收子命令可用 `--run /abs/round`，也保留显式参数。
+`--root` 指定绝对路径的外置 runs 根目录，`--settings` 指定外置 JSON 设置文件。目录结构、人工步骤和证据限制见
+[ledger-lab 实测包](artifacts/ledger-lab/README.md)。
+基础设施的规格、设计与验收进度见 [OpenSpec change](openspec/changes/add-ledger-lab-rehearsal-infrastructure/proposal.md)。
 
 不存在 `run`、`resume`、`tui` 子命令；传入它们会以非零状态被拒绝并指出受支持入口。
 

@@ -203,7 +203,7 @@ test('无参数启动 TUI 在无 TTY 时被拒绝，未知子命令给出明确�
 
   const help = captureIO();
   expect(await main(['--help'], environment, help.io, { createDoctorProbe: () => probe() })).toBe(0);
-  expect(help.stdout.join('')).toContain('orca-companion doctor');
+  expect(help.stdout.join('')).toContain('ocp doctor');
 });
 
 test('doctor 不要求 TTY：注入的管道式标准流即可运行', async () => {

@@ -10,10 +10,13 @@
   },
   "packageManager": "pnpm@11.10.0",
   "bin": {
-    "orca-companion": "./dist/src/interfaces/cli/main.js"
+    "orca-companion": "./dist/src/interfaces/cli/main.js",
+    "ocp": "./dist/src/interfaces/cli/main.js"
   },
   "scripts": {
     "start": "node ./dist/src/interfaces/cli/main.js",
+    "lab": "node artifacts/ledger-lab/lab.mjs",
+    "lab:new": "pnpm build && node artifacts/ledger-lab/lab.mjs prepare",
     "ui:preview": "pnpm build && node scripts/tui-preview.mjs",
     "ui:prototype": "pnpm build && node scripts/tui-preview.mjs --prototype",
     "ui:graph-prototype": "pnpm build && node scripts/tui-preview.mjs --graph-prototype",

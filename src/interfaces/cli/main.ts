@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 /**
  * IP-6 / MOD-05：`orca-companion` 顶层 CLI 入口。
  *

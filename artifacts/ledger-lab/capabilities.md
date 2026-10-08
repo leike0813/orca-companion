@@ -4,12 +4,12 @@
 
 ## 并发与 lane
 
-设计目标是多 Worker 并行、每条 lane 至多一个 Worker。当前实现不是这样：
+设计目标是最多 3 个并行 Work Package、每条 lane 至多一个 Worker，图容量为 8 个 Work Package。`live` Worker 只阻止其所属包内继续推进，其他独立包可继续。实际观测仍受以下证据限制：
 
-- `src/domain/planning/budget-policy.ts` 的默认 `concurrencyLimit` 是 1。
-- `src/application/execution/advance-execution.ts` 在存在任一 live 或 unverifiable Worker 时直接返回 idle，不再物化新的角色级 Task。即使把并发上限调大，实际仍然串行。
+- 并发额度与图容量是授权上限，不等于某次采样必然观察到并行 Worker。
+- `live` 只占用对应 Work Package；不可核验状态仍须按证据边界处理。
 
-影响：`parallel` 与 `lane-capacity` 在修正前只能观测到串行。`parallel` 在授权图并发上限为 1 时机器记 `BLOCKED`，并发上限更大时因捕获不到同一 Run 内两条 lane 共存的 live Worker 而保持 `NOT_COVERED`。`lane-capacity` 只有在名单自证覆盖完整（`complete:true` 这类强证据）时才可能对单 Worker 情形给出 `PASS`；生产上 `complete:false`，即使有单 Worker 也记 `INCONCLUSIVE`。把串行当作并行通过是不允许的，报告里要说明这是产品缺口。
+判定边界：`parallel` 需要同一 Run 内两条 lane 共存的 live 正证据；`lane-capacity` 需要完整 Worker 名单证明。图容量 8 不能作为实际并行证据。
 
 ## 时间与活跃区间
 
@@ -33,7 +33,7 @@
 `process-verifier.mjs` 的报告是 `checks` 数组加一个只覆盖必需场景组的总 `status`，没有顶层 `statuses`。按当前实现：
 
 - `unknown`、`handoff`、`validator-repair`、`escalation`、`model-reauthorization` 发生后最多 `INCONCLUSIVE`，未发生 `NOT_COVERED`，不会自动 `PASS`。
-- `parallel` 在授权图 `concurrencyLimit === 1` 时记 `BLOCKED`；并发上限更大但没有捕获到同一 Run 内两条 lane 的真实 live Worker 时保持 `NOT_COVERED`。
+- `parallel` 在授权并发额度为 1 时记 `BLOCKED`；额度大于 1 但没有捕获到同一 Run 内两条 lane 的真实 live Worker 时保持 `NOT_COVERED`。
 - 名单覆盖不完整（`complete:false`）时，`lane-capacity` 即使捕获到 live Worker 也记 `INCONCLUSIVE`；若捕获到同一 lane 多个 live 仍记 `FAIL`。`parallel` 有两条 lane 共存的 live 正证据即可 `PASS`。
 - `recovery` 只有明确阻塞记录时记 `BLOCKED`。
 - `retry`：同 WorkerTask 的新 Attempt 光有物化记录不够，每个 Attempt 都要在 `segments`/`settlements` 留下不同的真实 Orca Dispatch；缺 Dispatch 记录记 `INCONCLUSIVE`，只有规格、worktree 或授权绑定不一致才 `FAIL`。
