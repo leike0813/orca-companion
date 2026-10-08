@@ -81,6 +81,7 @@ function graphWith(model: unknown, overrides: {
   let step = 0;
   return buildCoordinatorGraph({
     model: model as never,
+    configurationRef: 'test-configuration',
     checkpointer: store.checkpointer,
     sessionRecords: (overrides.sessionRecords as never) ?? store,
     assertFencing: overrides.assertFencing ?? (() => ({ kind: 'valid', lease: {} as never })),

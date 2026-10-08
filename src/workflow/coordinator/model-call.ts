@@ -171,13 +171,20 @@ function valueBytes(value: unknown): number {
   return 0;
 }
 
-function chunkBytes(chunk: BaseMessage): number {
+function chunkBytes(chunk: BaseMessage, includeParsedToolCalls = true): number {
   const message = chunk as {
     readonly content?: unknown;
     readonly tool_calls?: readonly { readonly args?: unknown }[] | undefined;
     readonly tool_call_chunks?: readonly { readonly args?: unknown }[] | undefined;
+    readonly additional_kwargs?: unknown;
   };
-  let bytes = valueBytes(message.content);
+  const filteredKwargs = typeof message.additional_kwargs === 'object' && message.additional_kwargs !== null
+    ? Object.fromEntries(Object.entries(message.additional_kwargs as Record<string, unknown>).filter(([key]) => key !== 'tool_calls'))
+    : message.additional_kwargs;
+  const additionalKwargs = typeof filteredKwargs === 'object' && filteredKwargs !== null && Object.keys(filteredKwargs).length === 0
+    ? undefined
+    : filteredKwargs;
+  let bytes = valueBytes(message.content) + valueBytes(additionalKwargs);
   // 工具参数只计一次：带 `tool_call_chunks` 的 chunk 里，`tool_calls` 是 SDK 从同一批原始片段解析出的
   // 副本。两边都计会让参数在预算里翻倍，把合法的大参数响应判成超限。
   const rawChunks = message.tool_call_chunks;
@@ -185,7 +192,7 @@ function chunkBytes(chunk: BaseMessage): number {
     for (const call of rawChunks) {
       bytes += valueBytes(call.args);
     }
-  } else {
+  } else if (includeParsedToolCalls) {
     for (const call of message.tool_calls ?? []) {
       bytes += valueBytes(call.args);
     }
@@ -273,6 +280,7 @@ export async function streamModelCall(input: {
   publish({ ...preview, kind: 'started' });
 
   let bytes = 0;
+  let sawToolCallChunks = false;
   // usage 片段只留「唯一观察到的那个」加一个饱和计数：两个片段已经足以判定归约语义不明确，
   // 再往上数既不改变结论，也不值得为一次调用留一份无界数组。
   //
@@ -294,7 +302,10 @@ export async function streamModelCall(input: {
     });
     for await (const raw of stream) {
       const chunk = raw as BaseMessage;
-      bytes += chunkBytes(chunk);
+      const hasRawToolCallChunks = (chunk as { readonly tool_call_chunks?: readonly unknown[] }).tool_call_chunks?.length !== undefined &&
+        (chunk as { readonly tool_call_chunks?: readonly unknown[] }).tool_call_chunks!.length > 0;
+      sawToolCallChunks ||= hasRawToolCallChunks;
+      bytes += chunkBytes(chunk, !sawToolCallChunks);
       if (bytes > maxResponseBytes) {
         fail({
           kind: 'failed',

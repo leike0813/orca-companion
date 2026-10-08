@@ -154,6 +154,33 @@ test('压缩后的上下文、精确工具恢复和新增提交不读取被替�
   expect(() => store.readEntry(SESSION_A, userEntryId('submission-1'))).toThrow();
 });
 
+test('provider replay 在 checkpoint 重开后逐字恢复，且不进入 metadata/summary 并计入读取预算', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
+  const blocks = [{ type: 'text', text: 'visible' }, { type: 'reasoning', signature: 'opaque-signature' }];
+  const entry: CommittedMessageEntry = {
+    ...assistantEntry('replay', JSON.stringify(blocks)),
+    contentFormat: 'json_blocks',
+    providerReplay: { configurationRef: 'config-a', additionalKwargs: { reasoning_content: 'R'.repeat(2_000) } },
+  };
+  expect(store.appendModelStep({ coordinatorSessionId: SESSION_A, entry, step: { ...step('replay', entry.content, 1), messages: [entry] }, graphPosition: 'suspend' }).kind).toBe('saved');
+  const pageEntry = store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries.find((item) => item.entryId === entry.entryId)!;
+  expect(pageEntry).not.toHaveProperty('providerReplay');
+  const raw = rawDatabase();
+  const stored = raw.prepare('SELECT metadata,summary_metadata FROM conversation_entries WHERE entry_id=?').get(entry.entryId) as { metadata: string; summary_metadata: string };
+  expect(stored.metadata).not.toContain('reasoning_content');
+  expect(stored.metadata).not.toContain('opaque-signature');
+  expect(stored.summary_metadata).not.toContain('providerReplay');
+  raw.close();
+
+  store.close();
+  openedStores = [];
+  store = open();
+  expect(store.readEntry(SESSION_A, entry.entryId)?.providerReplay).toEqual(entry.providerReplay);
+  const bounded = openWith({ contextReadBytes: 1_024 });
+  expect(bounded.loadCheckpoint(SESSION_A, 'metadata').kind).toBe('recovered');
+  expect(bounded.loadCheckpoint(SESSION_A, 'context').kind).toBe('unrecoverable');
+});
+
 test('metadata keyset 与有效上下文在十万条历史下仍有界，正文只保存一次', () => {
   expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
   expect(store.appendMessage(SESSION_A, { entryId: 'seed', stepId: 'seed', role: 'user', content: '旧正文' }).kind).toBe('saved');

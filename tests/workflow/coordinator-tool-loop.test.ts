@@ -202,6 +202,7 @@ function graphWith(input: {
   let step = read.kind === 'recovered' ? read.state.committedModelSteps.length : 0;
   return buildCoordinatorGraph({
     model: input.model as never,
+    configurationRef: 'test-configuration',
     checkpointer: store.checkpointer,
     sessionRecords: store,
     planningTools: input.tools,

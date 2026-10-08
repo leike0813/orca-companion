@@ -63,8 +63,10 @@ export type { DurableMessageRole };
 export type DurableMessage = {
   readonly role: DurableMessageRole;
   readonly content: string;
+  readonly contentFormat?: 'json_blocks';
   /** 完整模型响应中的标准化 tool calls；缺失时不写该字段。 */
   readonly toolCalls?: readonly unknown[];
+  readonly providerReplay?: Readonly<Record<string, unknown>>;
 };
 
 /** 已知的角色别名。未列出的角色一律阻塞，不猜。 */
@@ -144,13 +146,28 @@ export function toDurableMessage(value: unknown): DurableMessage {
   if (toolCalls !== undefined && !Array.isArray(toolCalls)) {
     throw new ContextMaintenanceError('模型响应的 tool_calls 不是可持久化数组');
   }
-  return toolCalls === undefined || toolCalls.length === 0
-    ? { role, content }
-    : { role, content, toolCalls };
+  const additionalKwargs = isRecord(value) && isRecord(value['additional_kwargs'])
+    ? value['additional_kwargs']
+    : undefined;
+  const providerReplayKeys = ['reasoning_content', 'reasoning', '__openai_function_call_ids__'] as const;
+  const contentBlocks = isRecord(value) && Array.isArray(value['content']) ? value['content'] : undefined;
+  const replayKwargs = additionalKwargs === undefined
+    ? {}
+    : Object.fromEntries(providerReplayKeys.filter((key) => key in additionalKwargs).map((key) => [key, additionalKwargs[key]]));
+  const replay = role === 'assistant' && (contentBlocks !== undefined || Object.keys(replayKwargs).length > 0)
+    ? replayKwargs
+    : undefined;
+  return {
+    role,
+    content,
+    ...(contentBlocks === undefined ? {} : { contentFormat: 'json_blocks' as const }),
+    ...(toolCalls === undefined || toolCalls.length === 0 ? {} : { toolCalls }),
+    ...(replay === undefined ? {} : { providerReplay: replay }),
+  };
 }
 
 /** 把持久化形状还原成 LangChain 消息，供下一次模型调用使用。 */
-export function fromDurableMessage(value: unknown): BaseMessage {
+export function fromDurableMessage(value: unknown, configurationRef?: string): BaseMessage {
   if (isBaseMessage(value)) {
     return value;
   }
@@ -165,14 +182,27 @@ export function fromDurableMessage(value: unknown): BaseMessage {
   const toolCalls = isRecord(value) && Array.isArray(value['toolCalls'])
     ? value['toolCalls']
     : undefined;
+  const replay = isRecord(value) && isRecord(value['providerReplay']) &&
+    typeof value['providerReplay']['configurationRef'] === 'string' &&
+    value['providerReplay']['configurationRef'] === configurationRef &&
+    isRecord(value['providerReplay']['additionalKwargs'])
+    ? value['providerReplay']
+    : undefined;
   switch (role) {
     case 'system':
       return new SystemMessage(content);
     case 'assistant':
+      {
+      const blocks = isRecord(value) && value['contentFormat'] === 'json_blocks' ? JSON.parse(content) as unknown : null;
+      const visibleContent = Array.isArray(blocks)
+        ? blocks.map((block) => isRecord(block) && block['type'] === 'text' && typeof block['text'] === 'string' ? block['text'] : '').filter(Boolean).join('\n')
+        : content;
       return new AIMessage({
-        content,
+        content: replay !== undefined && Array.isArray(blocks) ? blocks : visibleContent,
         ...(toolCalls === undefined ? {} : { tool_calls: langchainToolCalls(toolCalls) as never }),
+        ...(replay === undefined || !isRecord(replay['additionalKwargs']) ? {} : { additional_kwargs: replay['additionalKwargs'] }),
       });
+      }
     case 'tool':
       return toolMessageFrom(value, content);
     case 'user':
@@ -224,17 +254,26 @@ export function entryFromResponse(
     readonly stepId: string;
     readonly entryId: string;
     readonly toolCalls: readonly CommittedToolCall[];
+    readonly configurationRef?: string;
   },
 ): CommittedMessageEntry {
   const durable = toDurableMessage(value);
+  const providerReplay = durable.providerReplay === undefined || input.configurationRef === undefined
+    ? undefined
+    : { configurationRef: input.configurationRef, additionalKwargs: durable.providerReplay };
   const base = {
     entryId: input.entryId,
     stepId: input.stepId,
     role: durable.role,
     content: durable.content,
+    ...(durable.contentFormat === undefined ? {} : { contentFormat: durable.contentFormat }),
   };
   if (durable.role === 'assistant') {
-    return input.toolCalls.length === 0 ? base : { ...base, toolCalls: input.toolCalls };
+    return {
+      ...base,
+      ...(input.toolCalls.length === 0 ? {} : { toolCalls: input.toolCalls }),
+      ...(providerReplay === undefined ? {} : { providerReplay }),
+    };
   }
   if (durable.role === 'tool') {
     // 模型响应里出现 tool 角色时，配对身份只接受持久化的字段名，不猜 provider 的拼写。
@@ -335,7 +374,16 @@ function classify(message: unknown, stepId: string): DurableMessage {
       stepId,
     );
   }
-  const content = contentTextOf(message);
+  let content = contentTextOf(message);
+      if (content !== null && isRecord(message) && message['contentFormat'] === 'json_blocks') {
+    try {
+      const blocks: unknown = JSON.parse(content);
+      if (!Array.isArray(blocks)) throw new Error('invalid blocks');
+      content = blocks.map((block) => isRecord(block) && block['type'] === 'text' && typeof block['text'] === 'string' ? block['text'] : '').filter(Boolean).join('\n');
+    } catch {
+      throw new ContextMaintenanceError('历史中的内容块无法安全转换为可移植文本', stepId);
+    }
+  }
   if (content === null) {
     throw new ContextMaintenanceError('历史中出现无法安全归类的内容：content 不是字符串', stepId);
   }
@@ -477,6 +525,7 @@ export type BoundedModelInput = {
 
 export type BuildBoundedModelInputRequest = {
   readonly segments: readonly HistorySegment[];
+  readonly configurationRef?: string;
   readonly estimate: (segments: readonly HistorySegment[]) => number;
   readonly fixedOverhead: number;
   readonly budgetTokens: number;
@@ -494,10 +543,10 @@ export type BuildBoundedModelInputRequest = {
  *
  * 已提交历史里存的是 Companion 自己的持久化形状；这里只做还原，不做角色推断。
  */
-function messagesFromSegment(segment: Extract<HistorySegment, { kind: 'messages' }>): readonly BaseMessage[] {
+function messagesFromSegment(segment: Extract<HistorySegment, { kind: 'messages' }>, configurationRef?: string): readonly BaseMessage[] {
   return segment.messages.map((message) => {
     try {
-      return fromDurableMessage(message);
+      return fromDurableMessage(message, configurationRef);
     } catch (error) {
       throw new ContextMaintenanceError(
         error instanceof ContextMaintenanceError ? error.reason : '历史中出现无法安全归类的项',
@@ -521,13 +570,14 @@ function assembleMessages(
   preamble: readonly BaseMessage[],
   segments: readonly HistorySegment[],
   currentWork: { readonly workKind: string; readonly summary: string } | null,
+  configurationRef?: string,
 ): readonly unknown[] {
   const systemBlocks: string[] = preamble.map((message) => message.text);
   const conversation: unknown[] = [];
   for (const segment of segments) {
     switch (segment.kind) {
       case 'messages':
-        for (const message of messagesFromSegment(segment)) {
+        for (const message of messagesFromSegment(segment, configurationRef)) {
           if (message instanceof SystemMessage) {
             systemBlocks.push(message.text);
           } else {
@@ -565,7 +615,13 @@ function assembleMessages(
 export function buildBoundedModelInput(request: BuildBoundedModelInputRequest): BoundedModelInput {
   const compacted: CompactionResult = compactWithNativeFirst({
     segments: request.segments,
-    estimate: request.estimate,
+    estimate: (segments) => request.estimate(segments) + Math.ceil(segments.reduce((bytes, segment) => {
+      if (segment.kind !== 'messages') return bytes;
+      return bytes + segment.messages.reduce<number>((total, message) => {
+        if (!isRecord(message) || !isRecord(message['providerReplay'])) return total;
+        return total + Buffer.byteLength(JSON.stringify(message['providerReplay']), 'utf8');
+      }, 0);
+    }, 0) / 4),
     fixedOverhead: request.fixedOverhead,
     budgetTokens: request.budgetTokens,
     native: request.native,
@@ -617,7 +673,7 @@ export function buildBoundedModelInput(request: BuildBoundedModelInputRequest): 
     ),
   ];
   return {
-    messages: assembleMessages(preamble, compacted.segments, request.currentWork ?? null),
+    messages: assembleMessages(preamble, compacted.segments, request.currentWork ?? null, request.configurationRef),
     toolSchema: reinjectToolSchema(request.toolSchema),
     compaction: compacted.outcome,
     segments: compacted.segments,

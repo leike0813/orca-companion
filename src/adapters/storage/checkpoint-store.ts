@@ -147,6 +147,8 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
                 "CREATE INDEX IF NOT EXISTS conversation_visible ON conversation_entries(coordinator_session_id,seq) WHERE role!='system';",
                 'CREATE INDEX IF NOT EXISTS conversation_pending ON conversation_entries(coordinator_session_id,seq) WHERE work_input=1 AND handled_by IS NULL;',
                 'CREATE TABLE IF NOT EXISTS conversation_bodies (coordinator_session_id TEXT NOT NULL,entry_id TEXT NOT NULL,start INTEGER NOT NULL,data BLOB NOT NULL,PRIMARY KEY(coordinator_session_id,entry_id,start)) STRICT;',
+                'CREATE TABLE IF NOT EXISTS conversation_replay_owners (coordinator_session_id TEXT NOT NULL,entry_id TEXT NOT NULL,configuration_ref TEXT NOT NULL,byte_length INTEGER NOT NULL,PRIMARY KEY(coordinator_session_id,entry_id)) STRICT;',
+                'CREATE TABLE IF NOT EXISTS conversation_replay_bodies (coordinator_session_id TEXT NOT NULL,entry_id TEXT NOT NULL,start INTEGER NOT NULL,data BLOB NOT NULL,PRIMARY KEY(coordinator_session_id,entry_id,start)) STRICT;',
                 'CREATE TABLE IF NOT EXISTS conversation_model_steps (coordinator_session_id TEXT NOT NULL,seq INTEGER NOT NULL,step_id TEXT NOT NULL,entry_id TEXT NOT NULL,metadata TEXT NOT NULL,PRIMARY KEY(coordinator_session_id,step_id),UNIQUE(coordinator_session_id,seq),UNIQUE(coordinator_session_id,entry_id)) STRICT;',
                 'CREATE TABLE IF NOT EXISTS conversation_wakes (coordinator_session_id TEXT NOT NULL,wake_batch_id TEXT NOT NULL,metadata TEXT NOT NULL,PRIMARY KEY(coordinator_session_id,wake_batch_id)) STRICT;',
                 'CREATE TABLE IF NOT EXISTS native_window_owners (coordinator_session_id TEXT PRIMARY KEY,owner_ref TEXT NOT NULL,items TEXT NOT NULL,through_seq INTEGER NOT NULL,updated_at INTEGER NOT NULL) STRICT;',
@@ -267,7 +269,16 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
             content += range.text;
             offset = range.end;
         }
-        return valid({ ...empty(id as CoordinatorSessionId), committedMessages: [{ ...(JSON.parse(row.metadata) as CommittedMessageEntry), content }] }).committedMessages[0]!;
+        const meta = JSON.parse(row.metadata) as CommittedMessageEntry;
+        const owner = stmt('SELECT configuration_ref,byte_length FROM conversation_replay_owners WHERE coordinator_session_id=? AND entry_id=?').get(id, entryId) as { configuration_ref: string; byte_length: number } | undefined;
+        let providerReplay: CommittedMessageEntry['providerReplay'];
+        if (owner !== undefined) {
+            const chunks = stmt('SELECT data FROM conversation_replay_bodies WHERE coordinator_session_id=? AND entry_id=? ORDER BY start').all(id, entryId) as { data: Uint8Array }[];
+            const bytes = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk.data)));
+            if (bytes.length !== owner.byte_length) throw new Error('Provider replay body length mismatch');
+            providerReplay = { configurationRef: owner.configuration_ref, additionalKwargs: JSON.parse(bytes.toString('utf8')) as Record<string, unknown> };
+        }
+        return valid({ ...empty(id as CoordinatorSessionId), committedMessages: [{ ...meta, ...(providerReplay === undefined ? {} : { providerReplay }), content }] }).committedMessages[0]!;
     }
     // ---------------------------------------------------------------- 派生调用索引
 type CallIndexRow = {
@@ -515,12 +526,18 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
         const seq = (stmt('SELECT seq FROM conversation_entries WHERE coordinator_session_id=? ORDER BY seq DESC LIMIT 1').get(id) as {
             seq: number;
         } | undefined)?.seq ?? 0;
-        const { content, ...meta } = entry, summary = { ...meta }, bytes = Buffer.from(content, 'utf8'), work = entry.role === 'user' || entry.entryId.startsWith('entry:interaction-answer:') || (entry.role === 'system' && entry.workSource !== undefined);
+        const { content, providerReplay, ...meta } = entry, summary = { ...meta }, bytes = Buffer.from(content, 'utf8'), replayBytes = providerReplay === undefined ? null : Buffer.from(JSON.stringify(providerReplay.additionalKwargs), 'utf8'), work = entry.role === 'user' || entry.entryId.startsWith('entry:interaction-answer:') || (entry.role === 'system' && entry.workSource !== undefined);
+        if (replayBytes !== null && replayBytes.length > 64 * 1024) throw new Error('Provider replay exceeds byte budget');
         delete summary.toolCalls;
         if (Buffer.byteLength(JSON.stringify(summary)) > HISTORY_PAGE_BYTES)
             throw new Error('History metadata exceeds page budget');
         const metadataJson = JSON.stringify(meta);
         stmt('INSERT INTO conversation_entries VALUES(?,?,?,?,?,?,?,?,?,NULL)').run(id, seq + 1, entry.entryId, entry.stepId, entry.role, metadataJson, JSON.stringify(summary), bytes.length, work ? 1 : 0);
+        if (providerReplay !== undefined && replayBytes !== null) {
+            stmt('INSERT INTO conversation_replay_owners VALUES(?,?,?,?)').run(id, entry.entryId, providerReplay.configurationRef, replayBytes.length);
+            for (let start = 0; start < replayBytes.length; start += HISTORY_CHUNK_BYTES)
+                stmt('INSERT INTO conversation_replay_bodies VALUES(?,?,?,?)').run(id, entry.entryId, start, replayBytes.subarray(start, start + HISTORY_CHUNK_BYTES));
+        }
         for (let start = 0; start < bytes.length; start += HISTORY_CHUNK_BYTES)
             stmt('INSERT INTO conversation_bodies VALUES(?,?,?,?)').run(id, entry.entryId, start, bytes.subarray(start, start + HISTORY_CHUNK_BYTES));
         // 派生定位与权威原文同事务落盘：写入路径已经持有完整对象，不需要回读整段 metadata。
@@ -547,7 +564,7 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
             throw new Error('A model step must reference exactly one canonical entry');
         const shapes = messages.map(message => { if (typeof message !== 'object' || message === null || Array.isArray(message))
             throw new Error('Step message must be a durable object'); const shape = { ...message as Record<string, unknown> }; if (shape.content !== canonical.content)
-            throw new Error('Step body differs from canonical entry'); delete shape.content; delete shape.toolCalls; return shape; });
+            throw new Error('Step body differs from canonical entry'); delete shape.content; delete shape.toolCalls; delete shape.providerReplay; return shape; });
         if (JSON.stringify(step.toolCalls) !== JSON.stringify(canonical.toolCalls ?? []))
             throw new Error('Step tool calls differ from canonical entry');
         const old = stmt('SELECT metadata FROM conversation_model_steps WHERE coordinator_session_id=? AND step_id=?').get(id, step.stepId) as {
@@ -580,7 +597,8 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
             const { shapes, ...rest } = JSON.parse(row.metadata) as Omit<CommittedModelStep, 'messages' | 'toolCalls'> & {
                 shapes: Record<string, unknown>[];
             };
-            return [{ ...rest, toolCalls: entry.toolCalls ?? [], messages: shapes.map(shape => ({ ...shape, content: entry.content, ...(entry.toolCalls !== undefined && 'entryId' in shape ? { toolCalls: entry.toolCalls } : {}) })) }];
+            const replay = entry.providerReplay;
+            return [{ ...rest, toolCalls: entry.toolCalls ?? [], messages: shapes.map(shape => ({ ...shape, content: entry.content, ...(entry.contentFormat === undefined ? {} : { contentFormat: entry.contentFormat }), ...(entry.toolCalls !== undefined && 'entryId' in shape ? { toolCalls: entry.toolCalls } : {}), ...(replay === undefined ? {} : { providerReplay: replay }) })) }];
         });
     }
     /**
@@ -688,14 +706,15 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
                     }
                 }
             }
-            if (purpose !== 'full' && (rows.length > CONTEXT_READ_ITEMS || rows.reduce((n, r) => n + r.byte_length + r.metadata_length, 0) > budget))
+            const replayBytes = purpose === 'metadata' || purpose === 'pending' || rows.length === 0 ? 0 : (stmt('SELECT COALESCE(SUM(byte_length),0) AS bytes FROM conversation_replay_owners WHERE coordinator_session_id=? AND entry_id IN (SELECT entry_id FROM conversation_entries WHERE coordinator_session_id=? AND seq IN (' + rows.map(() => '?').join(',') + '))').get(id, id, ...rows.map((row) => row.seq)) as { bytes: number } | undefined)?.bytes ?? 0;
+            if (purpose !== 'full' && (rows.length > CONTEXT_READ_ITEMS || rows.reduce((n, r) => n + r.byte_length + r.metadata_length, 0) + replayBytes > budget))
                 throw new Error('context_exhausted: effective history read budget exceeded');
             const entries = rows.map(row => { const entry = readEntry(id, row.entry_id); if (entry === null)
                 throw new Error('Committed entry missing'); return entry; });
             const wakes = purpose === 'full' ? (stmt('SELECT metadata FROM conversation_wakes WHERE coordinator_session_id=? ORDER BY rowid').all(id) as {
                 metadata: string;
             }[]).map(row => JSON.parse(row.metadata) as WakeBatch) : [];
-            return { kind: 'recovered', state: valid({ ...head, committedMessages: entries, committedModelSteps: stepsFor(id, entries, budget - rows.reduce((sum, row) => sum + row.byte_length + row.metadata_length, 0)), wakeBatches: wakes, ...(nativeWindowOwner === null && capsule === null && mechanicalShake === null ? {} : { contextMaterial: { nativeWindowOwner, capsule, ...(mechanicalShake === null ? {} : { mechanicalShake }) } }) }) };
+            return { kind: 'recovered', state: valid({ ...head, committedMessages: entries, committedModelSteps: stepsFor(id, entries, budget - rows.reduce((sum, row) => sum + row.byte_length + row.metadata_length, 0) - replayBytes), wakeBatches: wakes, ...(nativeWindowOwner === null && capsule === null && mechanicalShake === null ? {} : { contextMaterial: { nativeWindowOwner, capsule, ...(mechanicalShake === null ? {} : { mechanicalShake }) } }) }) };
         }
         catch (error) {
             return { kind: 'unrecoverable', reason: describeError(error) };

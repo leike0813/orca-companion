@@ -31,6 +31,47 @@ test('压缩交错区间时摘要包含用户消息和终点 step 的全部片�
   expect(capsule.text).toContain('已提交工具结果');
 });
 
+test('assistant provider replay 只在相同 configurationRef 下恢复白名单字段', () => {
+  const response = new AIMessage({
+    content: [{ type: 'text', text: 'answer' }],
+    additional_kwargs: {
+      reasoning_content: 'opaque-reasoning',
+      __openai_function_call_ids__: ['signed-call'],
+      ignored_private_field: 'discarded',
+    },
+  });
+  const durable = toDurableMessage(response);
+  expect(durable.providerReplay).toEqual({
+    reasoning_content: 'opaque-reasoning',
+    __openai_function_call_ids__: ['signed-call'],
+  });
+  const entry = {
+    entryId: 'entry:assistant:step', stepId: 'step', role: 'assistant' as const,
+    content: durable.content,
+    contentFormat: durable.contentFormat,
+    providerReplay: { configurationRef: 'config-a', additionalKwargs: durable.providerReplay! },
+  };
+  const sameConfiguration = fromDurableMessage(entry, 'config-a') as AIMessage;
+  expect(sameConfiguration.additional_kwargs).toEqual(durable.providerReplay);
+  expect(sameConfiguration.content).toEqual([{ type: 'text', text: 'answer' }]);
+  const differentConfiguration = fromDurableMessage(entry, 'config-b') as AIMessage;
+  expect(differentConfiguration.additional_kwargs).toEqual({});
+  expect(differentConfiguration.content).toBe('answer');
+  expect(differentConfiguration.content).not.toContain('opaque-reasoning');
+});
+
+test('跨配置的签名内容块只留下可见文本，reasoning 块不会进入 portable content', () => {
+  const entry = {
+    role: 'assistant', contentFormat: 'json_blocks',
+    content: JSON.stringify([{ type: 'text', text: 'visible' }, { type: 'reasoning', signature: 'secret-signature' }]),
+    providerReplay: { configurationRef: 'old', additionalKwargs: { reasoning_content: 'secret-reasoning' } },
+  };
+  expect((fromDurableMessage(entry, 'new') as AIMessage).content).toBe('visible');
+  const capsule = deriveContextCapsule({ fromStepId: 'step', toStepId: 'step', steps: [{ stepId: 'step', messages: [entry] }] });
+  expect(capsule.text).toContain('visible');
+  expect(capsule.text).not.toContain('secret');
+});
+
 test('最新 step 出现在较早片段时，压缩不拆开它并吞掉交错用户输入', () => {
   const segments: HistorySegment[] = [
     { kind: 'messages', stepId: 'S', messages: [{ role: 'assistant', content: '发起调用' }] },

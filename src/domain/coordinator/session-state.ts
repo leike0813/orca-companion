@@ -89,8 +89,14 @@ export type CommittedMessageEntry = {
   readonly stepId: string;
   readonly role: DurableMessageRole;
   readonly content: string;
+  readonly contentFormat?: 'json_blocks';
   /** 仅 assistant：已校验并带可信 operation 身份的 tool calls。 */
   readonly toolCalls?: readonly CommittedToolCall[];
+  /** Provider-specific assistant replay, retained only for its originating configuration. */
+  readonly providerReplay?: {
+    readonly configurationRef: string;
+    readonly additionalKwargs: Readonly<Record<string, unknown>>;
+  };
   /** 仅 tool：被回答的 call 身份与工具名。 */
   readonly toolCallId?: string;
   readonly toolName?: string;
@@ -325,12 +331,22 @@ const MESSAGE_ENTRY_FIELDS: readonly string[] = [
   'stepId',
   'role',
   'content',
+  'contentFormat',
   'toolCalls',
+  'providerReplay',
   'toolCallId',
   'toolName',
   'completedWorkSource',
   'workSource',
 ];
+
+const PROVIDER_REPLAY_FIELDS = ['configurationRef', 'additionalKwargs'] as const;
+const PROVIDER_REPLAY_KWARGS = new Set([
+  'reasoning_content',
+  'reasoning',
+  '__openai_function_call_ids__',
+]);
+const PROVIDER_REPLAY_MAX_BYTES = 64 * 1024;
 
 const LEGACY_MESSAGE_FIELDS: readonly string[] = ['role', 'content', 'toolCalls'];
 
@@ -604,11 +620,13 @@ function parseMessageEntry(raw: unknown, field: string): IdentityResult<Committe
   if (typeof raw['content'] !== 'string') {
     return fail(`${field}.content`, '必须是字符串');
   }
+  if (raw['contentFormat'] !== undefined && (raw['contentFormat'] !== 'json_blocks' || raw['role'] !== 'assistant')) return fail(`${field}.contentFormat`, '格式标记不受支持');
   const base = {
     entryId: entryId.value,
     stepId: stepId.value,
     role: role as DurableMessageRole,
     content: raw['content'],
+    ...(raw['contentFormat'] === 'json_blocks' ? { contentFormat: 'json_blocks' as const } : {}),
   };
 
   if (role === 'assistant') {
@@ -619,8 +637,32 @@ function parseMessageEntry(raw: unknown, field: string): IdentityResult<Committe
       return fail(`${field}.workSource`, '只有 system 引用条目可携带外部工作源');
     }
     const callsRaw = raw['toolCalls'];
+    let providerReplay: CommittedMessageEntry['providerReplay'];
+    if (raw['providerReplay'] !== undefined) {
+      const replay = raw['providerReplay'];
+      if (!isRecord(replay) || !requireClosedFields(replay, PROVIDER_REPLAY_FIELDS, `${field}.providerReplay`).ok) {
+        return fail(`${field}.providerReplay`, 'replay 字段不合法');
+      }
+      const configurationRef = requireNonEmptyString(replay['configurationRef'], `${field}.providerReplay.configurationRef`);
+      const kwargs = replay['additionalKwargs'];
+      if (!configurationRef.ok || !isRecord(kwargs) || Object.keys(kwargs).some((key) => !PROVIDER_REPLAY_KWARGS.has(key))) {
+        return fail(`${field}.providerReplay`, 'replay 配置引用或白名单字段不合法');
+      }
+      if (kwargs['reasoning_content'] !== undefined && typeof kwargs['reasoning_content'] !== 'string') return fail(`${field}.providerReplay`, 'reasoning_content 类型不合法');
+      if (kwargs['__openai_function_call_ids__'] !== undefined && (!Array.isArray(kwargs['__openai_function_call_ids__']) || kwargs['__openai_function_call_ids__'].some((id) => typeof id !== 'string'))) return fail(`${field}.providerReplay`, 'function call ids 类型不合法');
+      const reasoning = kwargs['reasoning'];
+      if (reasoning !== undefined && (!isRecord(reasoning) || Object.keys(reasoning).some((key) => !['id', 'type', 'encrypted_content', 'summary'].includes(key)) || Object.entries(reasoning).some(([key, value]) => key !== 'summary' && typeof value !== 'string') || (reasoning['summary'] !== undefined && (!Array.isArray(reasoning['summary']) || reasoning['summary'].some((item) => !isRecord(item) || Object.keys(item).some((key) => !['type', 'text'].includes(key)) || typeof item['type'] !== 'string' || typeof item['text'] !== 'string'))))) return fail(`${field}.providerReplay`, 'reasoning 结构不合法');
+      try {
+        if (Buffer.byteLength(JSON.stringify(kwargs), 'utf8') > PROVIDER_REPLAY_MAX_BYTES) {
+          return fail(`${field}.providerReplay`, 'replay 超出字节预算');
+        }
+      } catch {
+        return fail(`${field}.providerReplay`, 'replay 不是可序列化数据');
+      }
+      providerReplay = { configurationRef: configurationRef.value, additionalKwargs: kwargs };
+    }
     if (callsRaw === undefined) {
-      return { ok: true, value: base };
+      return { ok: true, value: providerReplay === undefined ? base : { ...base, providerReplay } };
     }
     const calls = requireArray(callsRaw, `${field}.toolCalls`);
     if (!calls.ok) {
@@ -634,7 +676,14 @@ function parseMessageEntry(raw: unknown, field: string): IdentityResult<Committe
       }
       parsed.push(call.value);
     }
-    return parsed.length === 0 ? { ok: true, value: base } : { ok: true, value: { ...base, toolCalls: parsed } };
+    return {
+      ok: true,
+      value: {
+        ...base,
+        ...(parsed.length === 0 ? {} : { toolCalls: parsed }),
+        ...(providerReplay === undefined ? {} : { providerReplay }),
+      },
+    };
   }
 
   if (role === 'tool') {

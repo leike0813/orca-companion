@@ -95,6 +95,8 @@ function describeError(error: unknown): string {
 /** 节点需要的依赖；全部由 Bootstrap 注入，节点不构造它们。 */
 export type CoordinatorNodeDependencies = {
   readonly model: StreamingModelHandle;
+  /** Trusted binding supplied by the Session registry; absent replay remains portable. */
+  readonly configurationRef?: string;
   readonly sessionRecords: CoordinatorSessionRecordPort;
   /** 每次模型调用和 checkpoint 写入紧前都回读当前 Runtime Lease。 */
   readonly assertFencing: () => FencingAssertion;
@@ -303,7 +305,19 @@ export function createModelNode(dependencies: CoordinatorNodeDependencies) {
 
     let entry: ReturnType<typeof entryFromResponse>;
     try {
-      entry = entryFromResponse(response, { stepId, entryId, toolCalls });
+      const additionalKwargs = (response as { additional_kwargs?: unknown }).additional_kwargs;
+      const hasProviderReplay = Array.isArray((response as { content?: unknown }).content) ||
+        (typeof additionalKwargs === 'object' && additionalKwargs !== null &&
+          ['reasoning_content', 'reasoning', '__openai_function_call_ids__'].some((key) => key in additionalKwargs));
+      if (hasProviderReplay && dependencies.configurationRef === undefined) {
+        return interrupted('响应包含 provider replay 数据，但 Session 缺少可信 configurationRef');
+      }
+      entry = entryFromResponse(response, {
+        stepId,
+        entryId,
+        toolCalls,
+        ...(dependencies.configurationRef === undefined ? {} : { configurationRef: dependencies.configurationRef }),
+      });
     } catch (error) {
       // 无法归一化的响应不是可提交的响应：写不下去，也不留下仍在 streaming 的预览。
       return interrupted(`响应无法安全归一化：${describeError(error)}`);

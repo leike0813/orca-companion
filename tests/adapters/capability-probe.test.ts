@@ -1,5 +1,5 @@
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { AIMessage, AIMessageChunk, type BaseMessage } from '@langchain/core/messages';
+import { AIMessage, AIMessageChunk, HumanMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages';
 import { ChatGenerationChunk, type ChatResult } from '@langchain/core/outputs';
 import type { Runnable } from '@langchain/core/runnables';
 import { expect, test } from 'vitest';
@@ -39,10 +39,17 @@ class ProbeChatModel extends BaseChatModel {
     _messages: BaseMessage[],
     options: { readonly signal?: AbortSignal } | undefined,
   ): Promise<ChatResult> {
-    if (this.enabled.cancellation && options?.signal?.aborted === true) {
-      const aborted = new Error('调用已被取消');
-      aborted.name = 'AbortError';
-      return Promise.reject(aborted);
+    if (_messages.some((message) => message instanceof HumanMessage && message.content === 'capability cancellation probe')) {
+      if (!this.enabled.cancellation) return Promise.resolve({ generations: [{ text: 'pong', message: new AIMessage('pong') }] });
+      return new Promise<ChatResult>((_resolve, reject) => {
+        const rejectAbort = (): void => {
+          const aborted = new Error('调用已被取消');
+          aborted.name = 'AbortError';
+          reject(aborted);
+        };
+        if (options?.signal?.aborted === true) rejectAbort();
+        else options?.signal?.addEventListener('abort', rejectAbort, { once: true });
+      });
     }
     const message = new AIMessage(this.enabled.text_generation ? 'pong' : '');
     if (this.enabled.usage) {
@@ -64,11 +71,16 @@ class ProbeChatModel extends BaseChatModel {
   }
 
   override bindTools(tools: readonly unknown[]): Runnable {
-    void tools;
     if (!this.enabled.tool_calling) {
       return { invoke: (): Promise<never> => Promise.reject(new Error('该模型不支持工具调用')) } as unknown as Runnable;
     }
-    return this;
+    const tool = tools[0] as { name: string };
+    return {
+      invoke: (messages: readonly BaseMessage[]) => {
+        if (messages.some((message) => message instanceof ToolMessage)) return this.invoke([...messages]);
+        return Promise.resolve(new AIMessage({ content: '', tool_calls: [{ id: 'probe-call', name: tool.name, args: {}, type: 'tool_call' }] }));
+      },
+    } as unknown as Runnable;
   }
 }
 
@@ -121,6 +133,32 @@ test('首个流式 chunk 超时时拒绝启动，不无限等待', async () => {
   }
 });
 
+test('流式探测跳过空的首个 chunk，并在后续 chunk 找到可见文本', async () => {
+  class RoleFirstModel extends ProbeChatModel {
+    // eslint-disable-next-line @typescript-eslint/require-await -- deterministic stream fixture
+    override async *_streamResponseChunks(): AsyncGenerator<ChatGenerationChunk> {
+      yield new ChatGenerationChunk({ text: '', message: new AIMessageChunk('') });
+      yield new ChatGenerationChunk({ text: 'pong', message: new AIMessageChunk('pong') });
+    }
+  }
+  const result = await verifyModelCapabilities(new RoleFirstModel(), { timeoutMs: 2_000 });
+  expect(result.kind).toBe('verified');
+});
+
+test('取消探测的普通网络错误不算取消成功', async () => {
+  class NetworkFailureModel extends ProbeChatModel {
+    override _generate(messages: BaseMessage[], options: { readonly signal?: AbortSignal } | undefined): Promise<ChatResult> {
+      if (messages.some((message) => message instanceof HumanMessage && message.content === 'capability cancellation probe')) {
+        return Promise.reject(new Error('network failure'));
+      }
+      return super._generate(messages, options);
+    }
+  }
+  const result = await verifyModelCapabilities(new NetworkFailureModel(), { timeoutMs: 2_000 });
+  expect(result.kind).toBe('rejected');
+  if (result.kind === 'rejected') expect(result.missing).toContain('cancellation');
+});
+
 test('不能取消时拒绝启动', async () => {
   const result = await verifyModelCapabilities(new ProbeChatModel({ cancellation: false }), {
     timeoutMs: 2_000,
@@ -169,9 +207,11 @@ test('多个能力同时缺失时全部列出，不掩盖', async () => {
   }
 });
 
-test('核验用的工具只声明路径可用性，不要求模型真的调用它', () => {
+test('核验用工具执行真实调用并完成 ToolMessage 续接', async () => {
   expect(CAPABILITY_PROBE_TOOL.name).toBe('capability_probe');
   expect(CAPABILITY_PROBE_TOOL.description.length).toBeGreaterThan(0);
+  const result = await verifyModelCapabilities(new ProbeChatModel(), { timeoutMs: 2_000 });
+  expect(result.kind).toBe('verified');
 });
 
 test('文本生成为空时判定为缺失', async () => {
