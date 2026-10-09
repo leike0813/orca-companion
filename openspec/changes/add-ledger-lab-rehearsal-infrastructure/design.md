@@ -2,7 +2,7 @@
 
 本 change 补录已经授权实现的工作，源 HEAD 为 `8bde2e75ba1c5a84d40bc4cf8207d2ff7a9d0d26`，实现仍在未提交工作区。现有 `artifacts/ledger-lab` 已拥有合同、剧本、只读 collector、过程/成品 verifier 和报告；本次只补环境准备与轮次入口。Coordination Scope 的 canonical 约束沿用 `CONTEXT.md`，模块与凭据边界沿用 MOD-07、IC-03/12/14。
 
-直接前驱 `remove-worker-credential-management` 已归档并提供 schema 4、原生模型目录与 Coordinator-only CredentialStore。`testing/isolated-control-probe` 负责已有 M0 自动控制探针，不承担本次人工业务演练；演练向导也不同于 Home 初始化向导，不改变后者不收集执行授权设置的约束。
+直接前驱 `remove-worker-credential-management` 已归档并提供 schema 4、原生模型目录与 Coordinator-only CredentialStore；配置解阻塞 change `rework-coordinator-provider-configuration` 将共享接缝升级为 schema 5。`testing/isolated-control-probe` 负责已有 M0 自动控制探针，不承担本次人工业务演练；演练向导也不同于 Home 初始化向导，不改变后者不收集执行授权设置的约束。
 
 ## Goals / Non-Goals
 
@@ -44,11 +44,15 @@ Git 与 Orca 是仓库/worktree 身份权威；轮次记录只保存目标与回
 
 ### D-04 用户设置沿用生产配置与凭据合同
 
-`wizard.mjs` 只负责交互；`src/bootstrap/ledger-lab.ts` 装配 FileProjectConfigurationStore、ModelSettingsService 与唯一 CredentialStore。用户设置仍为完整 schema 4，位置取 XDG config 或 `--settings`。向导依次收集 Coordinator 与五个 `MODEL_PROFILE_ROLES`，明确保存后才提交。
+`wizard.mjs` 只负责交互；`src/bootstrap/ledger-lab.ts` 装配 FileProjectConfigurationStore、共享 ProviderLibraryService/ProviderCatalog、ModelSettingsService 与唯一 CredentialStore。用户设置仍为完整 schema 5，位置取 XDG config 或 `--settings`。向导依次收集 Coordinator 与五个 `MODEL_PROFILE_ROLES`，明确保存后才提交。
 
 模型配置规则由现有服务拥有。首次配置在内存候选中完成生产校验，移除临时 seed，设置默认 Coordinator 引用；整次向导以读取的 revision 做一次文件 CAS。重配追加历史，不迁移旧 schema、不自动应用到既有 Session/Manifest。文件保存失败可留下未引用凭据，按 IC-14 不激活、不删除或自动换引用。
 
 新 Coordinator key 通过终端 raw 输入隐藏，完成和取消均恢复 raw 状态。凭据实例由 bootstrap 创建，在同次配置与 doctor 之间传递；Worker 不读取此 store。`worker-model-settings.ts` 抽取 foreground host 已有的原生目录查询/可信缓存，两个入口共用它；失败或取消清空可信结果，迟到查询不能替代较新结果。
+
+首次配置与 `pnpm lab configure` 在进入问答前先核验用户级 Provider Library 与 CredentialStore，随后自动更新公共 Provider/模型目录并沿用既有请求超时；更新失败继续使用已有缓存或随包目录。已有演练设置时 `pnpm lab:new` 直接沿用，不进入向导也不更新公共目录。目录可用只说明候选来源，不代表模型能力通过，能力仍由 doctor 核验。
+
+演练 CLI 捕获的输入或 I/O 异常用 `LAB_INPUT_OR_IO_ERROR` envelope，可选 `causeCode` 传底层结构化码。用户级 Provider Library 与 CredentialStore 的目录和文件权限沿用 `0700`/`0600`，既有目录只校验不 chmod；Provider 库权限拒绝说明路径、实际权限、要求权限与修复命令。原型偏好目录新建时同样指定 `0700`。
 
 ### D-05 准备成功与业务授权分开
 
@@ -77,7 +81,7 @@ Git 与 Orca 是仓库/worktree 身份权威；轮次记录只保存目标与回
 
 ## Migration Plan
 
-不修改协调数据库、Manifest schema、凭据格式或旧项目配置。新轮次记录使用 schema 1，设置使用现有 schema 4；不支持的旧设置明确拒绝。两个 CLI bin 共用入口，现有长命令继续可用。主规格同步与归档留到本 change 完成验收之后。
+不修改协调数据库、Manifest schema、凭据格式、设置存储路径或旧项目配置。新轮次记录使用 schema 1，设置使用现有 schema 5；不支持的旧设置明确拒绝。两个 CLI bin 共用入口，现有长命令继续可用。主规格同步与归档留到本 change 完成验收之后。
 
 ## Open Questions
 

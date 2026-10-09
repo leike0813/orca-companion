@@ -184,5 +184,9 @@ export async function resolveRunOptions(command, options) {
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { process.exitCode = await main(); }
-  catch (error) { process.stderr.write(`${JSON.stringify({ code: 'LAB_INPUT_OR_IO_ERROR', message: error.message })}\n`); process.exitCode = 2; }
+  catch (error) {
+    process.stderr.write(`${JSON.stringify({ code: 'LAB_INPUT_OR_IO_ERROR', message: error.message,
+      ...(typeof error.code === 'string' ? { causeCode: error.code } : {}) })}\n`);
+    process.exitCode = 2;
+  }
 }

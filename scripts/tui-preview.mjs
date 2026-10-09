@@ -68,7 +68,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
     }
     const saveStatusPreferences = async (preferences) => {
       const validated = statusPreferenceSchema.parse(preferences);
-      await mkdir(dirname(statusPreferencePath), { recursive: true });
+      await mkdir(dirname(statusPreferencePath), { recursive: true, mode: 0o700 });
       const temporary = statusPreferencePath + '.' + process.pid + '.tmp';
       await writeFile(temporary, JSON.stringify(validated, null, 2) + '\n', { mode: 0o600 });
       await rename(temporary, statusPreferencePath);

@@ -25,7 +25,7 @@
 
 ### Requirement: Explicit reusable model setup
 
-演练准备 SHALL 从 XDG 用户配置目录的 `orca-companion/ledger-lab.json` 或显式 `--settings` 读取可复用设置。首次缺少设置时 SHALL 在交互式终端收集 Coordinator provider integration、模型与非秘密 SDK options，以及 planner、implementation、validator、finalizer、recovery_utility 五个角色各自的 harness 与模型；`pnpm lab configure` SHALL 提供重新配置入口。Worker 模型目录与 effort SHALL 沿用 `configuration/model-settings` 的可信来源规则，目录失败时只允许未验证 exact ID 和空 effort。保存 SHALL 保留已有不可变配置历史并核验初次读取的 revision；取消 SHALL NOT 保存候选设置。
+演练准备 SHALL 从 XDG 用户配置目录的 `orca-companion/ledger-lab.json` 或显式 `--settings` 读取可复用设置。首次缺少设置时 SHALL 在交互式终端收集 Coordinator 服务/地区产品线或自定义固定协议、地址、隐藏 API Key 与模型（可复用用户库连接），以及 planner、implementation、validator、finalizer、recovery_utility 五个角色各自的 harness 与模型；`pnpm lab configure` SHALL 提供重新配置入口。首次配置与 `pnpm lab configure` SHALL 在开始问答前核验用户级 Provider Library 与 CredentialStore，通过后自动更新公共 Provider/模型目录并沿用既有请求超时，SHALL NOT 询问保留或刷新。更新失败 SHALL 继续使用已有缓存或随包目录。已有可复用设置时 `pnpm lab:new` SHALL 直接沿用，SHALL NOT 重新进入向导或更新公共目录。公共目录更新成功 SHALL NOT 被当作模型能力核验通过。Worker 模型目录与 effort SHALL 沿用 `configuration/model-settings` 的可信来源规则，目录失败时只允许未验证 exact ID 和空 effort。保存 SHALL 保留已有不可变配置历史并核验初次读取的 revision；取消 SHALL NOT 保存候选设置。
 
 #### Scenario: 角色分别选择
 
@@ -40,26 +40,50 @@
 #### Scenario: 取消配置
 
 - **WHEN** 操作者取消输入或最终保存确认
-- **THEN** 候选设置 SHALL NOT 写入配置文件，既有设置 SHALL 保持原样
+- **THEN** 候选演练设置 SHALL NOT 写入配置文件，既有演练设置 SHALL 保持原样；此前明确保存的用户库连接、凭据与模型 SHALL 保留，可供下次复用
 
 #### Scenario: 设置已被另一编辑更新
 
 - **WHEN** 向导读取设置后，另一编辑已保存新的 revision
 - **THEN** 保存 SHALL 拒绝冲突，SHALL NOT 覆盖较新的设置或宣称候选已生效
 
+#### Scenario: 已有设置直接准备
+
+- **WHEN** 操作者在已有可复用演练设置时运行 `pnpm lab:new`
+- **THEN** 准备 SHALL 沿用该设置，SHALL NOT 进入向导或更新公共目录
+
+#### Scenario: 公共目录更新失败
+
+- **WHEN** 首次配置或重新配置时公共 Provider/模型目录更新失败
+- **THEN** 向导 SHALL 继续使用已有缓存或随包目录，SHALL NOT 中断配置或宣称目录已更新
+
 ### Requirement: Coordinator secrets stay in the credential store
 
-Coordinator 认证 SHALL 支持 provider 环境认证、选择已有 `credentialRef` 或隐藏输入新 key。新 key SHALL 只经现有用户级 CredentialStore 保存；项目与演练设置只保存不透明引用。设置保存和同次准备的 doctor SHALL 共用同一凭据实例。Worker 认证 SHALL 由 harness 的真实用户环境提供。秘密 SHALL NOT 出现在待测仓库、轮次记录、命令参数、诊断或验收证据；本工具 SHALL NOT 为 Worker 复制凭据或生成原生认证配置。
+Coordinator 认证 SHALL 仅支持 API Key；可复用用户库连接，或隐藏输入新 Key。新 key SHALL 只经现有用户级 CredentialStore 保存；项目与演练设置只保存不透明引用。设置保存和同次准备的 doctor SHALL 共用同一凭据实例。Worker 认证 SHALL 由 harness 的真实用户环境提供。秘密 SHALL NOT 出现在待测仓库、轮次记录、命令参数、诊断或验收证据；本工具 SHALL NOT 为 Worker 复制凭据或生成原生认证配置。
 
 #### Scenario: 保存新 Coordinator key
 
 - **WHEN** 操作者隐藏输入新 key 并保存合法设置
 - **THEN** 设置 SHALL 只保存已回读核验的引用，终端 SHALL 不回显 key；取消或完成隐藏输入后 SHALL 恢复终端输入状态
 
-#### Scenario: SDK options 包含秘密字段
+#### Scenario: 设置包含秘密字段
 
 - **WHEN** 设置输入包含被项目配置合同禁止的秘密字段
 - **THEN** 保存 SHALL 拒绝该配置，SHALL NOT 将该字段复制到演练文件或诊断
+
+### Requirement: Rehearsal failures stay structured
+
+入口捕获的输入或 I/O 异常 SHALL 以退出码 2 输出 `LAB_INPUT_OR_IO_ERROR` envelope，并在底层已有结构化码时把它放入可选 `causeCode`。用户级 Provider Library 与 CredentialStore SHALL 沿用目录 `0700`、文件 `0600` 的权限约束；Provider 库因既有目录或文件权限不安全而拒绝时 SHALL 说明路径、实际权限、要求权限与修复命令。既有用户目录权限 SHALL 保持原样。
+
+#### Scenario: 权限不安全
+
+- **WHEN** Provider 库所在的既有目录权限宽于要求
+- **THEN** 命令 SHALL 非零退出并说明路径、实际权限、要求权限与修复命令，SHALL NOT 修改该目录权限
+
+#### Scenario: 结构化失败
+
+- **WHEN** 输入、文件或外部调用失败且底层带结构化码
+- **THEN** stderr SHALL 输出带 `causeCode` 的 `LAB_INPUT_OR_IO_ERROR` envelope，SHALL NOT 退化为纯文本错误
 
 ### Requirement: Readiness preserves manual coordination
 

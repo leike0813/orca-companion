@@ -13,7 +13,22 @@ export const MAX_PROVIDER_LIBRARY_ENTRIES = 10_000;
 const DIRECTORY_MODE = 0o700;
 const FILE_MODE = 0o600;
 const schema = z.strictObject({ schemaVersion: z.literal(1), revision: z.number().int().nonnegative().safe(), connections: z.array(providerConnectionSchema).max(MAX_PROVIDER_LIBRARY_ENTRIES), models: z.array(modelDefinitionSchema).max(MAX_PROVIDER_LIBRARY_ENTRIES) });
-const fail = (code: string): ProviderLibraryStoreResult => ({ kind: 'rejected', code, message: code === 'revision_conflict' ? 'Provider library revision conflict' : 'Provider library unavailable or invalid' });
+const FAILURE_MESSAGES = {
+  missing: 'Provider 库尚未创建',
+  permission_denied: 'Provider 库权限不安全或无法访问',
+  store_invalid: 'Provider 库格式、引用或文件类型无效；原文件已保留',
+  store_too_large: 'Provider 库文件超出允许大小',
+  revision_conflict: 'Provider 库已被其他写者更新，请重新读取',
+  lock_busy: 'Provider 库正在被其他写者持有，请稍后重试',
+  write_failed: 'Provider 库写入或回读核验失败',
+  limit_exceeded: 'Provider 库条目数量或体积超出上限',
+} as const;
+
+function fail(code: keyof typeof FAILURE_MESSAGES, path?: string, mode?: number, requiredMode = FILE_MODE): ProviderLibraryStoreResult {
+  const permission = mode === undefined || path === undefined ? ''
+    : `；实际权限 ${(mode & 0o777).toString(8).padStart(4, '0')}，要求 ${requiredMode.toString(8).padStart(4, '0')}。确认后执行：chmod ${requiredMode.toString(8)} '${path.replace(/'/gu, "'\"'\"'")}'`;
+  return { kind: 'rejected', code, message: `${FAILURE_MESSAGES[code]}${path === undefined ? '' : `：${path}`}${permission}` };
+}
 
 export function providerLibraryPath(options: { path?: string; environment?: Readonly<Record<string, string | undefined>>; homeDirectory?: string } = {}): string {
   if (options.path !== undefined) return resolve(options.path);
@@ -34,13 +49,15 @@ export class FileProviderLibraryStore implements ProviderLibraryStore {
     try {
       const stats = lstatSync(this.path);
       if (stats.isSymbolicLink() || !stats.isFile()) return fail('store_invalid');
-      if ((stats.mode & 0o077) !== 0) return fail('permission_denied');
+      if ((stats.mode & 0o077) !== 0) return fail('permission_denied', this.path, stats.mode);
       if (stats.size > MAX_PROVIDER_LIBRARY_BYTES) return fail('store_too_large');
       const fd = openSync(this.path, constants.O_RDONLY | constants.O_NOFOLLOW);
       let contents: string;
       try {
         const opened = fstatSync(fd);
-        if (!opened.isFile() || opened.size > MAX_PROVIDER_LIBRARY_BYTES || (opened.mode & 0o077) !== 0) return fail(opened.size > MAX_PROVIDER_LIBRARY_BYTES ? 'store_too_large' : 'store_invalid');
+        if (!opened.isFile()) return fail('store_invalid');
+        if (opened.size > MAX_PROVIDER_LIBRARY_BYTES) return fail('store_too_large');
+        if ((opened.mode & 0o077) !== 0) return fail('permission_denied', this.path, opened.mode);
         const buffer = Buffer.allocUnsafe(opened.size);
         let offset = 0;
         while (offset < buffer.length) {
@@ -58,14 +75,15 @@ export class FileProviderLibraryStore implements ProviderLibraryStore {
       if (parsed.data.connections.length + parsed.data.models.length > MAX_PROVIDER_LIBRARY_ENTRIES) return fail('store_invalid');
       return { kind: 'loaded', library: parsed.data };
     } catch (error) {
-      return fail((error as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : 'store_invalid');
+      const code = (error as NodeJS.ErrnoException).code;
+      return fail(code === 'ENOENT' ? 'missing' : code === 'EACCES' || code === 'EPERM' ? 'permission_denied' : 'store_invalid', this.path);
     }
   }
   save(input: { expectedRevision: number; next: ProviderLibraryRecord }): ProviderLibraryStoreResult {
     const dir = this.checkDirectory(false);
     if (dir !== null) return dir;
     let lock: number;
-    try { lock = openSync(`${this.path}.lock`, 'wx', FILE_MODE); } catch (error) { return fail((error as NodeJS.ErrnoException).code === 'EEXIST' ? 'lock_busy' : 'write_failed'); }
+    try { lock = openSync(`${this.path}.lock`, 'wx', FILE_MODE); } catch (error) { return fail((error as NodeJS.ErrnoException).code === 'EEXIST' ? 'lock_busy' : 'write_failed', `${this.path}.lock`); }
     try {
       const current = this.load();
       if (current.kind === 'rejected' && current.code !== 'missing') return current;
@@ -103,10 +121,10 @@ export class FileProviderLibraryStore implements ProviderLibraryStore {
     try {
       if (!allowMissing) mkdirSync(this.directory, { recursive: true, mode: DIRECTORY_MODE });
       const stat = lstatSync(this.directory);
-      if (stat.isSymbolicLink() || !stat.isDirectory()) return fail('store_invalid');
-      if ((stat.mode & 0o077) !== 0) return fail('permission_denied');
+      if (stat.isSymbolicLink() || !stat.isDirectory()) return fail('store_invalid', this.directory);
+      if ((stat.mode & 0o077) !== 0) return fail('permission_denied', this.directory, stat.mode, DIRECTORY_MODE);
       return null;
     }
-    catch (error) { return allowMissing && (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : fail('permission_denied'); }
+    catch (error) { return allowMissing && (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : fail('permission_denied', this.directory); }
   }
 }

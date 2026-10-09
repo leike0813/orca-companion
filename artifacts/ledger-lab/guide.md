@@ -8,6 +8,11 @@
 - 已按项目文档完成 Companion 的安装、Provider 与模型配置以及 Orca 能力核验，`doctor` 通过。
 - 一个仓库外的输出目录，例如 `/abs/out`，用来存放采集证据与报告。
 - 建议把并发上限设为 3、每 lane 上限 1、active Work Package 上限 8（取值见 `contract.json` 的 `executionLimits`）；当前产品的实际并发行为见 `capabilities.md`。
+- 用户级 Provider/凭据库所在的 `orca-companion` 目录要求 `0700`，库文件要求 `0600`。工具不会修改既有目录；Provider 库权限不安全时会给出路径、实际权限与修复命令，例如：
+
+  ```sh
+  chmod 700 "${XDG_CONFIG_HOME:-$HOME/.config}/orca-companion"
+  ```
 
 ## 1. 验收程序
 
@@ -20,7 +25,7 @@ node artifacts/ledger-lab/lab.mjs verify-process --evidence /abs/out/evidence.js
 node artifacts/ledger-lab/lab.mjs report --process /abs/process.json --observations /abs/obs.json --out /abs/report-dir [--result /abs/result.json]   # main 必需 --result
 ```
 
-所有采集与核验命令可附 `--run /abs/round`；round 根目录默认为 `$XDG_STATE_HOME/orca-companion/ledger-lab`，否则 `~/.local/state/orca-companion/ledger-lab`。`--root` 可指定绝对外置 runs 根目录，`--settings` 可指定外置 JSON 设置。通过 `pnpm lab open --run /abs/round` 重开时只核验原身份，不推进流程；`pnpm lab configure` 修改设置前需已有构建产物或先运行 `pnpm lab:new`。
+所有采集与核验命令可附 `--run /abs/round`；round 根目录默认为 `$XDG_STATE_HOME/orca-companion/ledger-lab`，否则 `~/.local/state/orca-companion/ledger-lab`。`--root` 可指定绝对外置 runs 根目录，`--settings` 可指定外置 JSON 设置。通过 `pnpm lab open --run /abs/round` 重开时只核验原身份，不推进流程；`pnpm lab configure` 修改设置前需已有构建产物或先运行 `pnpm lab:new`，它会先核验用户级 Provider Library 与凭据库，再自动更新公共 Provider/模型目录，更新失败继续使用已有缓存或随包目录。
 
 - `collect`：只读采集，在 `--out` 目录内新建 `evidence.jsonl`。`--watch` 持续采集，`--interval-ms` 默认 2000 毫秒（范围 200 到 60000）；`--max-samples` 是采样上限，默认 1800（范围 1 到 10000），达到上限即停止。
 - `verify-result`：从仓库外运行固定 CLI，用外部输入核对实际输出，`--version` 选择初始、修订或隐私版的预期。`--entry` 默认取 `contract.json` 的 `entry`，`--line-ending` 默认 `lf`。
@@ -103,7 +108,7 @@ worker 名单覆盖不完整时（collector 的 `complete:false`；adapter 只�
 
 - 0：`PASS`
 - 1：`FAIL`
-- 2：参数或文件错误
+- 2：参数或文件错误；stderr 输出单行 JSON envelope `{"code":"LAB_INPUT_OR_IO_ERROR","message":…}`，可带可选 `causeCode` 给出底层结构化码
 - 3：其他非通过（`BLOCKED`、`NOT_COVERED`、`INCONCLUSIVE`）
 
 ### 1.4 采集语义

@@ -63,16 +63,18 @@ async function integer(prompt, label, fallback, minimum) {
 
 export async function configureSettings({ settingsPath, prompt, host, catalog, roles, harnesses }) {
   const previous = host.read();
-  if (previous.kind === 'failed') throw new Error(previous.message);
+  if (previous.kind === 'failed') throw Object.assign(new Error(previous.message), { code: previous.code });
   const config = previous.kind === 'read' ? previous.config : null;
   const active = config?.coordinatorModels.find((model) => model.configurationRef === config.defaultCoordinatorModelRef);
-  if (await choose(prompt, '更新公共 Provider 和模型目录', ['keep', 'refresh'], 'keep') === 'refresh') {
-    const result = await host.providerCatalog.refresh();
-    prompt.say(result.kind === 'failed' ? '更新失败，继续使用已有目录。' : '公共目录已更新。');
-  }
   const library = host.providerLibrary;
   let available = library.load();
-  if (available.kind !== 'loaded') throw new Error(available.message);
+  if (available.kind !== 'loaded') throw Object.assign(new Error(available.message), { code: available.code });
+  const credentials = host.credentials.metadata();
+  if (credentials.kind === 'rejected') throw Object.assign(new Error(credentials.message), { code: credentials.code });
+  prompt.say('正在更新公共 Provider 和模型目录…');
+  const refreshed = await host.providerCatalog.refresh();
+  prompt.say(refreshed.kind === 'failed' ? '目录更新失败，继续使用缓存或内置目录。'
+    : refreshed.kind === 'unchanged' ? '公共目录已是最新。' : '公共目录已更新。');
   let connection;
   let refreshConnection = false;
   if (available.connections.length > 0 && await choose(prompt, 'Coordinator 连接', ['existing', 'new'], 'existing') === 'existing') {
@@ -81,7 +83,7 @@ export async function configureSettings({ settingsPath, prompt, host, catalog, r
   } else {
     connection = await addConnection(prompt, library, host.providerCatalog, available.revision);
     available = library.load();
-    if (available.kind !== 'loaded') throw new Error(available.message);
+    if (available.kind !== 'loaded') throw Object.assign(new Error(available.message), { code: available.code });
   }
   if (refreshConnection) {
     try { await host.providerCatalog.discover(connection); } catch { /* 连接和离线候选仍可用。 */ }
@@ -89,7 +91,7 @@ export async function configureSettings({ settingsPath, prompt, host, catalog, r
   const candidates = host.providerCatalog.candidates(connection).models;
   const modelChoice = await selectCoordinatorModel(prompt, candidates, active?.model);
   const savedModel = library.saveModel({ expectedRevision: available.revision, connectionRef: connection.connectionRef, model: modelChoice });
-  if (savedModel.kind !== 'saved') throw new Error(savedModel.message);
+  if (savedModel.kind !== 'saved') throw Object.assign(new Error(savedModel.message), { code: savedModel.code });
   const effortValues = savedModel.model.effortCapability?.values ?? [];
   const effort = effortValues.length === 0 ? null : await choose(prompt, 'Coordinator effort', ['default', ...effortValues], 'default');
   const workers = [];
@@ -170,7 +172,7 @@ async function addConnection(prompt, library, catalog, revision) {
   const newSecret = await prompt.secret('API Key');
   if (!newSecret) throw new Error('API Key 不能为空');
   const saved = await library.saveConnection({ expectedRevision: revision, label, providerId, providerIntegration: protocol, baseUrl, newSecret });
-  if (saved.kind !== 'saved') throw new Error(saved.message);
+  if (saved.kind !== 'saved') throw Object.assign(new Error(saved.message), { code: saved.code });
   prompt.say('API Key 已保存到用户级凭据库；不会显示或写入项目配置。');
   return saved.connection;
 }

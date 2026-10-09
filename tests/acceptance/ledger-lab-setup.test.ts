@@ -1,8 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { createProviderCatalog } from '../../src/adapters/agents/provider-catalog.js';
+import { JsonCredentialStore } from '../../src/adapters/storage/credential-store.js';
+import { createLedgerLabConfigurationHost } from '../../src/bootstrap/ledger-lab.js';
 
 type CallOptions = { readonly cwd?: string; readonly env?: Readonly<Record<string, string>> };
 type Call = (executable: string, args: readonly string[], options?: CallOptions) => Promise<string>;
@@ -58,12 +62,14 @@ type WizardModule = {
     readonly host: {
       read(): unknown;
       save(input: unknown): unknown;
+      readonly credentials: { metadata(): unknown };
       readonly providerLibrary: {
         load(): unknown;
         saveConnection(input: unknown): Promise<unknown>;
         saveModel(input: unknown): unknown;
       };
       readonly providerCatalog: {
+        refresh(): Promise<unknown>;
         presets(): readonly unknown[];
         discover(connection: unknown): Promise<unknown>;
         candidates(connection: unknown): { readonly models: readonly { readonly id: string; readonly label: string }[] };
@@ -211,15 +217,17 @@ function setupCall(options: { readonly unknownCreate?: boolean; readonly onCall?
 
 describe('ledger-lab setup', () => {
   it.each(['main', 'cancel'] as const)('prepares a private external %s lab with canonical worktree and wrappers', async (profile) => {
-    const root = join(await sandbox(), 'existing-runs-root');
+    const directory = await sandbox();
+    const root = join(directory, 'existing-runs-root');
     const config = schemaFiveConfig();
+    const settingsPath = join(directory, 'settings.json');
+    await writeFile(settingsPath, JSON.stringify(config), { mode: 0o600 });
     const fake = setupCall();
     const progress: string[] = [];
     const doctorEnvironments: Readonly<Record<string, string>>[] = [];
-    const result = await setup.prepareLab({ profile, root }, {
+    const result = await setup.prepareLab({ profile, root, settings: settingsPath }, {
       env: { HOME: '/fixture-home', PATH: '/fixture-bin', GH_TOKEN: 'secret-gh-token', GH_REPO: 'attacker/repo', ORCA_HOST: 'attacker-host' },
       orca: ORCA_EXECUTABLE, call: fake.call,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(config)),
       doctor: (_record, env) => {
         doctorEnvironments.push(env);
         return Promise.resolve({ ok: true, checks: [{ id: 'coordinator-model', status: 'ok' }, { id: 'read-only-worker', status: 'ok' }] });
@@ -453,6 +461,7 @@ describe('ledger-lab setup wizard', () => {
     credential: { kind: 'managed', credentialRef: '00000000-0000-4000-8000-000000000001' } };
   const createWizardHost = (save: (input: unknown) => unknown) => ({
     read: () => ({ kind: 'absent' }), save,
+    credentials: { metadata: () => ({ kind: 'metadata', revision: 0, refs: [] }) },
     providerLibrary: {
       load: () => ({ kind: 'loaded', revision: 4, connections: [libraryConnection], models: [] }),
       saveConnection: () => Promise.reject(new Error('existing connection should be reused')),
@@ -460,6 +469,7 @@ describe('ledger-lab setup wizard', () => {
         model: 'coordinator-fixture', effortCapability: null } }),
     },
     providerCatalog: {
+      refresh: () => Promise.resolve({ kind: 'unchanged', catalogVersion: 'fixture' }),
       presets: () => [], discover: () => Promise.reject(new Error('offline')),
       candidates: () => ({ models: [{ id: 'coordinator-fixture', label: 'Coordinator Fixture' }] }),
     },
@@ -529,36 +539,36 @@ describe('ledger-lab setup wizard', () => {
     expect(saveCount).toBe(0);
   });
 
-  it('saves a custom connection key privately and permits offline exact model IDs', async () => {
+  it.each([
+    { prototypes: false, offline: false },
+    { prototypes: true, offline: false },
+    { prototypes: true, offline: true },
+  ])('configures real user stores with prototypes=$prototypes and offline=$offline', async ({ prototypes, offline }) => {
+    const root = await sandbox();
+    const env = { XDG_CONFIG_HOME: join(root, 'config'), XDG_CACHE_HOME: join(root, 'cache') };
+    const directory = join(env.XDG_CONFIG_HOME, 'orca-companion');
+    if (prototypes) await mkdir(join(directory, 'prototypes'), { recursive: true, mode: 0o700 });
+    const credentials = new JsonCredentialStore({ environment: env });
+    const fetcher = vi.fn<typeof fetch>((input) => {
+      if (offline) return Promise.reject(new Error('offline'));
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const body = url.includes('models.dev')
+        ? { fixture: { name: 'Fixture', npm: '@ai-sdk/openai-compatible', env: ['FIXTURE_API_KEY'], api: 'https://api.fixture.invalid/v1',
+            models: { 'provider/exact-id': { name: 'Fixture model' } } } }
+        : { data: [] };
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+    });
+    const providerCatalog = createProviderCatalog({ credentials, environment: env, fetch: fetcher });
+    const settingsPath = join(directory, 'ledger-lab.json');
+    const host = createLedgerLabConfigurationHost({ configPath: settingsPath, env, credentials, catalog: providerCatalog, verifyWorkerSelection: () => null });
     const messages: string[] = [];
-    const savedConnectionInputs: unknown[] = [];
-    let projectSave: unknown;
-    const connection = { ...libraryConnection, connectionRef: 'new-connection', label: 'Custom provider' };
-    const host = {
-      read: () => ({ kind: 'absent' }),
-      save: (input: unknown) => { projectSave = input; return input; },
-      providerLibrary: {
-        load: (() => {
-          let reads = 0;
-          return () => ++reads === 1
-            ? { kind: 'loaded', revision: 0, connections: [], models: [] }
-            : { kind: 'loaded', revision: 1, connections: [connection], models: [] };
-        })(),
-        saveConnection: (input: unknown) => {
-          savedConnectionInputs.push(input);
-          return Promise.resolve({ kind: 'saved', revision: 1, connection });
-        },
-        saveModel: () => ({ kind: 'saved', revision: 2, model: { modelRef: 'offline-model-ref', connectionRef: connection.connectionRef,
-          model: 'provider/exact-id', effortCapability: null } }),
-      },
-      providerCatalog: { presets: () => [], discover: () => Promise.reject(new Error('offline')), candidates: () => ({ models: [] }) },
-    };
     const prompt = {
       ask(label: string, fallback = ''): Promise<string> {
         if (label.startsWith('Coordinator 连接')) return Promise.resolve('new');
         if (label.startsWith('Coordinator provider 来源')) return Promise.resolve('custom');
         if (label === '连接名称') return Promise.resolve('Custom provider');
         if (label === 'Provider 地址') return Promise.resolve('https://api.fixture.invalid/v1');
+        if (label.startsWith('选择 Coordinator 模型')) return Promise.resolve('manual');
         if (label.startsWith('Coordinator 精确模型 ID')) return Promise.resolve('provider/exact-id');
         if (label.includes('模型序号或原生 ID')) return Promise.resolve('worker-native-id');
         if (label.includes('预算')) return Promise.resolve('20');
@@ -569,12 +579,63 @@ describe('ledger-lab setup wizard', () => {
       secret: () => Promise.resolve('sk-private-key'),
       say: (text: string) => messages.push(text),
     };
-    await wizard.configureSettings({ settingsPath: join(await sandbox(), 'settings.json'), prompt, host,
+    await wizard.configureSettings({ settingsPath, prompt, host,
       catalog: { query: () => Promise.resolve({ kind: 'unavailable' as const, code: 'offline' }) },
       roles: MODEL_PROFILE_ROLES, harnesses: WORKER_HARNESS_IDS });
 
-    expect(savedConnectionInputs).toEqual([expect.objectContaining({ providerId: 'custom', providerIntegration: 'openai-chat', newSecret: 'sk-private-key' })]);
+    expect(fetcher.mock.calls.filter(([input]) => typeof input === 'string' && input === 'https://models.dev/api.json')).toHaveLength(1);
     expect(JSON.stringify(messages)).not.toContain('sk-private-key');
-    expect(projectSave).toMatchObject({ coordinator: { modelRef: 'offline-model-ref', effort: null } });
+    const config = JSON.parse(await readFile(settingsPath, 'utf8')) as { coordinatorModels: { model: string; effortCapability: unknown }[] };
+    expect(config.coordinatorModels).toEqual([expect.objectContaining({ model: 'provider/exact-id', effortCapability: null })]);
+    expect(JSON.stringify(config)).not.toContain('sk-private-key');
+    const library = host.providerLibrary.load();
+    expect(library).toMatchObject({ kind: 'loaded', connections: [expect.objectContaining({ providerId: 'custom' })] });
+    const metadata = credentials.metadata();
+    expect(metadata.kind).toBe('metadata');
+    if (metadata.kind !== 'metadata') throw new Error(metadata.message);
+    expect(credentials.read(metadata.refs[0]!)).toMatchObject({ kind: 'resolved', secret: 'sk-private-key' });
+    expect((await stat(directory)).mode & 0o777).toBe(0o700);
+    for (const file of ['providers.json', 'credentials.json']) expect((await stat(join(directory, file))).mode & 0o777).toBe(0o600);
+  });
+
+  it('rejects an existing unsafe prototype directory before prompts, network or credential writes', async () => {
+    const root = await sandbox();
+    const env = { XDG_CONFIG_HOME: join(root, 'config'), XDG_CACHE_HOME: join(root, 'cache') };
+    const directory = join(env.XDG_CONFIG_HOME, 'orca-companion');
+    await mkdir(join(directory, 'prototypes'), { recursive: true });
+    await chmod(directory, 0o775);
+    const credentials = new JsonCredentialStore({ environment: env });
+    const fetcher = vi.fn<typeof fetch>(() => Promise.reject(new Error('unexpected network request')));
+    const host = createLedgerLabConfigurationHost({ configPath: join(directory, 'ledger-lab.json'), env, credentials,
+      catalog: createProviderCatalog({ credentials, environment: env, fetch: fetcher }), verifyWorkerSelection: () => null });
+    const prompt = { ask: vi.fn(() => Promise.reject(new Error('unexpected prompt'))),
+      secret: vi.fn(() => Promise.reject(new Error('unexpected secret prompt'))), say: vi.fn() };
+
+    const attempt = wizard.configureSettings({ settingsPath: join(directory, 'ledger-lab.json'), prompt, host,
+      catalog: { query: () => Promise.resolve({ kind: 'unavailable', code: 'unused' }) },
+      roles: MODEL_PROFILE_ROLES, harnesses: WORKER_HARNESS_IDS,
+    });
+    await expect(attempt).rejects.toMatchObject({ code: 'permission_denied' });
+    await expect(attempt).rejects.toHaveProperty('message', expect.stringContaining(directory));
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(prompt.ask).not.toHaveBeenCalled();
+    expect(prompt.secret).not.toHaveBeenCalled();
+    expect(await readdir(directory)).toEqual(['prototypes']);
+    expect((await stat(directory)).mode & 0o777).toBe(0o775);
+  });
+
+  it('preserves credential rejection before refreshing the catalog', async () => {
+    const host = createWizardHost(() => { throw new Error('unexpected save'); });
+    const refresh = vi.fn(host.providerCatalog.refresh);
+    const ask = vi.fn(() => Promise.reject(new Error('unexpected prompt')));
+    await expect(wizard.configureSettings({ settingsPath: '/external/settings.json',
+      prompt: { ask, secret: ask, say: vi.fn() },
+      host: { ...host, credentials: { metadata: () => ({ kind: 'rejected', code: 'store_invalid', message: '凭据存储内容无法解析' }) },
+        providerCatalog: { ...host.providerCatalog, refresh } },
+      catalog: { query: () => Promise.resolve({ kind: 'unavailable', code: 'unused' }) },
+      roles: MODEL_PROFILE_ROLES, harnesses: WORKER_HARNESS_IDS,
+    })).rejects.toMatchObject({ code: 'store_invalid' });
+    expect(refresh).not.toHaveBeenCalled();
+    expect(ask).not.toHaveBeenCalled();
   });
 });

@@ -5,7 +5,7 @@ ledger-lab 已有业务剧本和验收工具，但每轮实操仍需手工准备
 ## What Changes
 
 - 增加 `pnpm lab:new`，构建当前开发版本，为 `main` 或独立 `cancel` 轮次创建外置 canonical 仓库、私有 GitHub 仓库、空 Route Map、最小项目配置与 Orca 终端；完成能力核验后由用户启动演练。
-- 增加交互式配置向导与 XDG 设置复用，分别选择 Coordinator 和五个 Worker Profile；沿用现有凭据隔离、原生模型来源与配置 CAS 合同。
+- 增加交互式配置向导与 XDG 设置复用，分别选择 Coordinator 和五个 Worker Profile；首次配置与重新配置先核验用户级 Provider Library 与凭据库，再自动更新公共 Provider/模型目录；沿用现有凭据隔离、原生模型来源与配置 CAS 合同。
 - 增加轮次记录、失败保留与身份核验后的重开；现有四个采集/验收命令支持 `--run` 默认路径。
 - 提供短命令 `ocp`，保留等价的 `orca-companion` 入口。
 
@@ -24,7 +24,7 @@ ledger-lab 已有业务剧本和验收工具，但每轮实操仍需手工准备
 ## Impact
 
 - 操作者入口：`package.json`、`artifacts/ledger-lab/{lab,setup,wizard}.mjs` 与该目录指南。
-- Bootstrap：`src/bootstrap/{ledger-lab,worker-model-settings,foreground-planning-runtime}.ts`，复用 schema 4、模型设置服务、CredentialStore、原生模型目录和 doctor。
+- Bootstrap：`src/bootstrap/{ledger-lab,worker-model-settings,foreground-planning-runtime}.ts`，复用 schema 5、模型设置服务、CredentialStore、原生模型目录和 doctor。
 - CLI：`src/interfaces/cli/{main,argv}.ts`，两个 bin 指向同一入口。
 - 测试与当前开发文档：相关 bootstrap/acceptance/doctor 测试、根 README 与 AGENTS；不增加依赖，不改变协调数据库或 Execution Authorization schema。
 - 外部副作用只发生在新轮次：Git 首次提交与推送、GitHub 新私有仓库/Issue、Orca 仓库登记与终端创建。准备阶段 doctor 会调用模型；现有业务验收工具继续只读采集并输出外置报告。

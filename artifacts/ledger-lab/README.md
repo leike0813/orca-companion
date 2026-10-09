@@ -14,9 +14,9 @@
 
 ## 创建与重开 round
 
-- `pnpm lab:new` 首次运行进入终端向导，设置保存在 XDG 配置目录 `orca-companion/ledger-lab.json`；之后沿用该设置。
+- `pnpm lab:new` 首次运行进入终端向导：先核验用户级 Provider Library 与凭据库，再自动更新公共 Provider/模型目录。设置保存在 XDG 配置目录 `orca-companion/ledger-lab.json`；已有设置时直接沿用，不再进入向导，也不更新公共目录。
 - `pnpm lab:new --profile cancel` 建立独立的 `cancel` round。
-- `pnpm lab configure` 重新配置（先运行 `pnpm build`，或先运行过 `pnpm lab:new`）。
+- `pnpm lab configure` 重新配置，做同样的核验与目录更新（先运行 `pnpm build`，或先运行过 `pnpm lab:new`）。
 - `pnpm lab open --run /abs/round` 核对 round 原身份后重开；不会推进流程。
 - `collect`、`verify-result`、`verify-process`、`report` 均可接收 `--run /abs/round`。原有显式参数仍可使用。
 - `--root` 指定绝对路径的外置 runs 根目录，`--settings` 指定外置 JSON 设置文件。
@@ -25,7 +25,9 @@
 
 每轮创建私有 GitHub 仓库和空 Route Map，在本地 `main` 首次提交并推送，向 Orca 注册 canonical 工作区。操作者从终端运行 `ocp`，并亲自创建 Scope、提交需求和批准规划/授权。
 
-向导分别配置 Coordinator，以及 Planner、Implementation、Validator、Finalizer、Recovery Utility 五个 Worker 角色。Worker 从各自 harness 的原生目录选择模型与 effort。Coordinator 凭据可使用环境认证、已有 `credentialRef`，或在向导中隐蔽输入新密钥；密钥只写入用户级 CredentialStore。
+向导分别配置 Coordinator，以及 Planner、Implementation、Validator、Finalizer、Recovery Utility 五个 Worker 角色。Worker 从各自 harness 的原生目录选择模型与 effort。Coordinator 只使用 API Key：复用用户级连接，或在向导中隐蔽输入新密钥；密钥只写入用户级 CredentialStore。
+
+公共目录更新失败时继续使用已有缓存或随包目录，不阻断配置。目录可用不等于模型能力可用，能力仍由准备阶段的 `doctor` 核验。用户级 Provider/凭据库目录要求 `0700`、文件要求 `0600`；既有目录不会被自动改权限，Provider 库权限不安全时会给出路径、实际权限与修复命令。
 
 运行前需配置 Git 作者身份、登录 `gh` 并启动 Orca；所选 harness 也需在本机完成认证。准备完成后，Orca 会打开该轮终端，在其中运行 `ocp`。初始化 Scope 后可采集并填写外置映射与观察：
 
