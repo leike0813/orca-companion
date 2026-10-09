@@ -11,10 +11,11 @@ import { historyArgumentsQuerySchema, historyCallQuerySchema, userHistoryQuerySc
 import { COORDINATOR_SESSION_STATE_SCHEMA_VERSION, parseCoordinatorSessionState, userEntryId, userStepId, workEntryId, type MechanicalShakeArtifact, type NativeCompactedWindowOwner, type PortableContextCapsule, type CommittedMessageEntry, type CommittedModelStep, type CoordinatorSessionState, type WakeBatch } from '../../domain/coordinator/session-state.js';
 import { activityStatusOf, createMetadataScanState, scanMetadataBytes, scanMetadataText, tallyOf, TOOL_CALL_SCAN_CHUNK_BYTES, type ActivityTally, type CallStatus, type MetadataScanState, type ToolCallSpan } from './history-inspection-index.js';
 import { describeError } from './schema.js';
-export const CHECKPOINT_SCHEMA_VERSION = 3;
+import { AGENT_TURN_FAILURE_CODES, AGENT_TURN_MESSAGE_CHARS, type AgentTurnFailure, type AgentTurnPort, type AgentTurnState } from '../../application/ports/agent-turn.js';
+export const CHECKPOINT_SCHEMA_VERSION = 4;
 
 /** 可无损升级到当前版本的前驱库 schema；旧库按 `CREATE TABLE IF NOT EXISTS` 补齐后写回新版本号。 */
-const UPGRADABLE_CHECKPOINT_SCHEMA_VERSIONS: ReadonlySet<number> = new Set([2, CHECKPOINT_SCHEMA_VERSION]);
+const UPGRADABLE_CHECKPOINT_SCHEMA_VERSIONS: ReadonlySet<number> = new Set([2, 3, CHECKPOINT_SCHEMA_VERSION]);
 
 /** 一次 Wake Batch metadata 读取的有界上限；超过即拒绝，不为了读一条 batch 拉进无界正文。 */
 const WAKE_BATCH_METADATA_BYTES = 64 * 1024;
@@ -30,6 +31,8 @@ export type CommittedMessageRange = {
 };
 export type CheckpointStore = CoordinatorSessionRecordPort & HistoryReadPort & HistoryInspectionStorePort & {
     readonly checkpointer: BaseCheckpointSaver;
+    /** 轮次状态：idle / running / halted 与结构化失败，独立于正文与协调状态。 */
+    readonly turns: AgentTurnPort;
     /** 可信 unknown 观测；只存真实观测，不补配对结果。 */
     readonly recordToolObservation: (input: HistoryToolObservation) => CheckpointWriteResult;
     readCommittedMessages(id: CoordinatorSessionId, range?: CommittedMessageRange): readonly CommittedMessageEntry[];
@@ -173,8 +176,10 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
                 'CREATE TABLE IF NOT EXISTS history_call_observations (coordinator_session_id TEXT NOT NULL,call_entry_id TEXT NOT NULL,call_id TEXT NOT NULL,step_id TEXT NOT NULL,operation_id TEXT NOT NULL,reason TEXT NOT NULL,recorded_at INTEGER NOT NULL,observed_seq INTEGER NOT NULL,PRIMARY KEY(coordinator_session_id,call_entry_id,call_id)) STRICT;',
                 'CREATE TABLE IF NOT EXISTS history_inspection_progress (coordinator_session_id TEXT PRIMARY KEY,indexed_through_seq INTEGER NOT NULL,open_activity_id TEXT,updated_at INTEGER NOT NULL) STRICT;',
                 'CREATE TABLE IF NOT EXISTS history_inspection_scans (coordinator_session_id TEXT NOT NULL,entry_id TEXT NOT NULL,state TEXT NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(coordinator_session_id,entry_id)) STRICT;',
+                // 轮次状态独立于正文：没有轮次行的既有会话按 idle 读取，补表不重写任何历史。
+                'CREATE TABLE IF NOT EXISTS agent_turns (coordinator_session_id TEXT PRIMARY KEY,status TEXT NOT NULL,failure_code TEXT,failure_message TEXT,updated_at INTEGER NOT NULL) STRICT;',
             ].join('\n'));
-            // 旧库（v2）按上面的 `CREATE TABLE IF NOT EXISTS` 无损补齐后写回当前版本号；既有行不动。
+            // 旧库按上面的 `CREATE TABLE IF NOT EXISTS` 无损补齐后写回当前版本号；既有行不动。
             stmt("INSERT INTO checkpoint_meta VALUES('checkpoint_schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(String(CHECKPOINT_SCHEMA_VERSION));
         });
         // 打开时补齐会话水位行：只读会话注册表，不碰任何历史正文或 metadata。
@@ -1112,8 +1117,44 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
             return failed(error);
         }
     }
+    // ---------------------------------------------------------------- 轮次状态
+    const turnFailureCodes: ReadonlySet<string> = new Set(AGENT_TURN_FAILURE_CODES);
+    /** 损坏的轮次行不猜测结局：抛给驱动按「状态不可用」停止，而不是当成 idle 放行请求。 */
+    function readTurnState(id: CoordinatorSessionId): AgentTurnState {
+        const row = stmt('SELECT status,failure_code,failure_message FROM agent_turns WHERE coordinator_session_id=?').get(id) as {
+            status: string;
+            failure_code: string | null;
+            failure_message: string | null;
+        } | undefined;
+        // 没有轮次行的既有会话按首次 idle 读取；不因此写回一行，也不碰任何历史。
+        if (row === undefined)
+            return { kind: 'idle' };
+        if ((row.status === 'idle' || row.status === 'running') && row.failure_code === null)
+            return { kind: row.status };
+        if (row.status === 'halted' && row.failure_code !== null && turnFailureCodes.has(row.failure_code))
+            return { kind: 'halted', failure: { code: row.failure_code as AgentTurnFailure['code'], message: (row.failure_message ?? '').slice(0, AGENT_TURN_MESSAGE_CHARS) } };
+        throw new Error('Corrupt agent turn record');
+    }
+    function writeTurnState(id: CoordinatorSessionId, state: AgentTurnState): CheckpointWriteResult {
+        try {
+            const failure = state.kind === 'halted' ? state.failure : null;
+            if (failure !== null && !turnFailureCodes.has(failure.code))
+                throw new Error('Unknown agent turn failure code');
+            if (failure !== null && typeof failure.message !== 'string')
+                throw new Error('Agent turn failure message must be text');
+            atomic(() => {
+                stmt('INSERT INTO agent_turns VALUES(?,?,?,?,?) ON CONFLICT(coordinator_session_id) DO UPDATE SET status=excluded.status,failure_code=excluded.failure_code,failure_message=excluded.failure_message,updated_at=excluded.updated_at')
+                    .run(id, state.kind, failure?.code ?? null, failure === null ? null : failure.message.slice(0, AGENT_TURN_MESSAGE_CHARS), clock());
+            });
+            return { kind: 'saved' };
+        }
+        catch (error) {
+            return failed(error);
+        }
+    }
     const store: CheckpointStore = {
         checkpointer: saver, loadCheckpoint, updateCheckpoint, readEntry, readHistoryBody,
+        turns: { readTurnState, writeTurnState },
         saveCheckpoint(input) { try {
             const state = valid(input);
             const stepsByEntry = new Map(state.committedModelSteps.map(step => [step.entryId, step])), placed = new Set<string>();

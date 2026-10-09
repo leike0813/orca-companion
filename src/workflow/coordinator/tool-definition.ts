@@ -30,6 +30,8 @@ export type CoordinatorToolCallContext = {
   readonly operationId: OperationId;
   /** 该 call 触发的第二次独立副作用；没有时为 `null`。 */
   readonly mapOperationId: OperationId | null;
+  /** 本次 invoke 的取消信号；只读工具用它停止有界读取，副作用工具忽略它。 */
+  readonly signal?: AbortSignal;
 };
 
 /** 一个工具定义；输入 schema 是 JSON Schema，工具层不引入第二套类型系统。 */

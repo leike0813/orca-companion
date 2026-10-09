@@ -1,7 +1,7 @@
 /**
  * MOD-05：顶层 argv 解析（Owner: `m2-deliver-planning-tui`）。
  *
- * 只识别 `[repository-path]`、`status [--json]`、`doctor`（外加 `help` 与 `--version`）。
+ * 只识别 `[repository-path]`、`--debug [directory]`、`status [--json]`、`doctor`（外加 `help` 与 `--version`）。
  * `run`、`resume`、`tui` 明确不存在：它们会被拒绝并指出受支持入口，而不是被当成未知值忽略。
  */
 
@@ -10,6 +10,7 @@ export const SUPPORTED_SUBCOMMANDS = ['status', 'doctor', 'help'] as const;
 export const CLI_USAGE = [
   '用法:',
   '  ocp [repository-path]            启动前台 TUI（需要 TTY）',
+  '  ocp --debug [directory]          启动前台调试会话（普通目录，需要 TTY）',
   '  ocp status [--json]              只读输出当前 Coordination Scope 状态（无 TTY 可运行）',
   '  ocp doctor                       核验 Orca 环境与 M0 必需能力（无 TTY 可运行）',
   '  长别名：orca-companion（参数与行为相同）',
@@ -20,6 +21,7 @@ export const REJECTED_SUBCOMMANDS: readonly string[] = ['run', 'resume', 'tui', 
 
 export type CliInvocation =
   | { readonly kind: 'tui'; readonly repositoryPath: string | null }
+  | { readonly kind: 'debug'; readonly directory: string | null }
   | { readonly kind: 'status'; readonly json: boolean }
   | { readonly kind: 'doctor' }
   | { readonly kind: 'help' }
@@ -36,6 +38,17 @@ export function parseCliArguments(argv: readonly string[]): CliInvocation {
   }
   if (first === '--version') {
     return { kind: 'version' };
+  }
+  if (first === '--debug') {
+    // 调试目录可选，缺省按当前目录；它不是 repository path，也不要求是 Git 目录。
+    if (rest.length > 1) {
+      return { kind: 'rejected', code: 'invalid_arguments', message: `--debug 只接受一个可选目录: ${rest.join(' ')}` };
+    }
+    const directory = rest[0];
+    if (directory !== undefined && directory.startsWith('-')) {
+      return { kind: 'rejected', code: 'invalid_arguments', message: `--debug 不支持选项: ${directory}` };
+    }
+    return { kind: 'debug', directory: directory ?? null };
   }
   if (first === 'doctor') {
     if (rest.length > 0) {

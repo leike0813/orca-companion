@@ -11,18 +11,19 @@
 | IC-01 | `m0-orca-control-baseline` | 无 | 全部后继 change |
 | IC-02 | `m0-orca-control-baseline` | Change 5 增加物化操作；Change 7 增加对账 query | 所有外部控制用例 |
 | IC-03 | `m1-persist-coordination-state` | Changes 3–8 增加各自最小记录与 query/command variant；`m1-wire-foreground-planning-runtime` 增加 Scope 注册绑定、交互回答正文与 Session 模型绑定更新；`m2-wire-execution-runtime` 将物化绑定扩展为角色/Attempt 历史 | Controller、status、recovery、TUI projection |
-| IC-04 | `m1-run-coordinator-sessions` | `m1-wire-foreground-planning-runtime` 增加用户消息、工具结果与压缩结论 | Planning、Recovery、ControllerService、TUI |
+| IC-04 | `m1-run-coordinator-sessions` | `m1-wire-foreground-planning-runtime` 增加用户消息、工具结果与压缩结论；`stabilize-agent-harness-core` 增加必填可信配置核验、唯一重试分类与持久轮次状态 | Planning、Recovery、ControllerService、TUI |
 | IC-05 | `m1-plan-and-authorize-execution` | Change 8 只扩展 `ExecutionGraphHistory.appendAcceptedRevision`；`remove-worker-credential-management` 将 Manifest 升为 v4 并改绑 `modelSelection` | Specification、Execution、Recovery、TUI |
 | IC-06 | `m1-admit-work-package-specifications` | Change 8 使用同一 provider 实施 Specification Revision | Execution、Recovery、Graph evolution |
 | IC-07 | `m1-admit-work-package-specifications` | `m2-wire-execution-runtime` 增加 Planner 的固定规格目标路径；Recovery 创建替代 Dispatch/Segment；`remove-worker-credential-management` 移除启动输入中的凭据与隔离根，增加 runtime roots 与原生模型目录查询 | Execution、Recovery、Graph evolution |
 | IC-08 | `m1-execute-and-validate-work-packages` | 无；Recovery 重放同一 pipeline | Recovery、Graph evolution、TUI |
 | IC-09 | `m1-recover-execution` | `m2-wire-execution-runtime` 接通前台宿主的 Recovery 事实装配（workspace / 原终态 / 存活 / 绑定 / 替代派发）与回执解释的异步 seam | Graph evolution、TUI |
 | IC-10 | `m1-evolve-execution-graph` | 无 | ControllerService、TUI |
-| IC-11 | `m1-recover-execution` | Change 8 增加图演进 projection/commands；`m1-wire-foreground-planning-runtime` 增加消息/回答字段与事件归属；`m2-deliver-planning-tui` 增加只读投影；`m2-deliver-execution-tui` 增加执行投影、Finalizer 与执行交接投影；`complete-tui-project-statusline` 增加可信 metadata、全图验收摘要及有界项目详情 | CLI、TUI |
-| IC-12 | `m0-orca-control-baseline` | `m1-wire-foreground-planning-runtime` 登记精确 Home 解析；`m2-deliver-planning-tui` 增加 planning 投影与组件；`m2-deliver-execution-tui` 增加执行态字段与组件；`complete-tui-project-statusline` 接通可信展示与 IC-15 编辑/返回 | CLI machine output、TUI React components |
-| IC-13 | `protect-tui-input` | 无 | Bootstrap、TUI 输入保护与记录管理 |
-| IC-14 | `complete-tui-model-configuration` | `remove-worker-credential-management` 收缩为 Coordinator-only，并把 Worker 选择改为 `modelSelection` | chat model factory、Coordinator 模型设置与 `doctor` |
+| IC-11 | `m1-recover-execution` | Change 8 增加图演进 projection/commands；`m1-wire-foreground-planning-runtime` 增加消息/回答字段与事件归属；`m2-deliver-planning-tui` 增加只读投影；`m2-deliver-execution-tui` 增加执行投影、Finalizer 与执行交接投影；`complete-tui-project-statusline` 增加可信 metadata、全图验收摘要及有界项目详情；`stabilize-agent-harness-core` 增加 Session 级 stop/retry intent 与轮次投影 | CLI、TUI |
+| IC-12 | `m0-orca-control-baseline` | `m1-wire-foreground-planning-runtime` 登记精确 Home 解析；`m2-deliver-planning-tui` 增加 planning 投影与组件；`m2-deliver-execution-tui` 增加执行态字段与组件；`complete-tui-project-statusline` 接通可信展示与 IC-15 编辑/返回；`stabilize-agent-harness-core` 增加 `--debug` 前台、共用对话区域与调试命令可见性 | CLI machine output、TUI React components |
+| IC-13 | `protect-tui-input` | `stabilize-agent-harness-core` 增加 `debug-message` 输入身份，既有 message/answer 身份不变 | Bootstrap、TUI 输入保护与记录管理 |
+| IC-14 | `complete-tui-model-configuration` | `remove-worker-credential-management` 收缩为 Coordinator-only，并把 Worker 选择改为 `modelSelection`；`stabilize-agent-harness-core` 让调试会话复用同一凭据、模型库与能力核验 | chat model factory、Coordinator 模型设置与 `doctor` |
 | IC-15 | `complete-tui-project-statusline` | 无 | Bootstrap、TUI 展示设置 |
+| IC-16 | `stabilize-agent-harness-core` | 无 | `--debug` 前台与调试 TUI；协调运行时不消费 |
 
 ## IC-01 Identity、revision 与引用字段族
 
@@ -264,6 +265,16 @@ Capsule 的替换区间在保存时绑定固定序号边界；摘要包含实际
 
 - **失败**：checkpoint 不可恢复时阻塞同一 Session，不创建替代 Session；跨库中途崩溃按 WakeBatchId/source revision 补齐。
 - **测试 seam**：LangGraph SqliteSaver 使用临时 `checkpoints.sqlite`；fake model 测试提交/重放；不少于 100 个连续工具调用验证无固定业务 step 上限。
+
+### `stabilize-agent-harness-core` 对 IC-04 的扩展
+
+**必填可信绑定**：模型节点的可信 `configurationRef` 是必填依赖，请求前核验；为空或缺失时本轮以结构化 blocked 结束，不发请求，也不回落到任何默认模型。
+
+**唯一重试分类**：`src/workflow/coordinator/model-call.ts` 是模型故障的唯一分类点，只有结构化网络错误、`429` 与 `500/502/503/504` 可重试；有界退避循环在 `src/workflow/coordinator/nodes.ts` 的 model node 内，每次模型调用最多尝试三次，不用 LangGraph `retryPolicy` 再叠一层。工具结果续接可形成新的模型调用。SDK 内层重试由 chat-model factory 关闭。解析、类型、普通 `Error`、配置、上下文、落盘、fencing、取消与输出超限都不重试；等待期间响应 `AbortSignal`，取消后不再续发请求。失败分类对外只暴露固定 code 与有界诊断，不保存凭据或 provider 原始错误体。
+
+**持久轮次**：checkpoint 库升为 schema 4，新增每 Session 唯一的 `agent_turns` 表，状态为 `idle`、`running`、`halted`，另存固定 failure code 与截断消息；正文、控制字段与协调状态都不改写，没有轮次行的既有 Session 按 `idle` 读取。顺序固定为：读身份/配置/历史/租约 → 落盘 `running` → 模型调用与完整 step 提交、串行工具配对及续接 → 落盘 `idle`。每次模型调用最多三次尝试。请求前的 `running` 写失败本身就是一次停止，不能先跑再记。
+
+**停止与恢复**：停止的顺序是先 abort 在途请求、再上进程内 latch、最后落盘 `halted`。处于 `halted`、或重新打开时读到 `running`（视为中断）的 Session 拒绝一切自动 invoke、pending Wake、定时 wake 与 keepalive 维护；期间受理的用户消息按原身份保留，只在明确恢复后处理。轮次驱动由 `src/application/ports/agent-turn.ts` 的 port 与 `src/workflow/coordinator/turn-driver.ts` 的实现拥有，协调宿主与调试宿主调用同一份；它不认识 graph 的节点与状态名，图结局到轮次结局的映射由宿主负责。已提交响应、工具身份、submission 身份与 Scope 控制状态都不因停止或重启而改写。
 
 ## IC-05 Planning、Authorization 与 ExecutionGraphHistory
 
@@ -781,6 +792,8 @@ Execution Authorization Manifest 的长期字段（Worker Profile 及其 `modelS
 
 Service 只委派既有用例，不打开 store、不调用具体 adapter、不拥有状态转换。Scope 初始化继续使用 `initializeCoordinationScope`，不塞入 façade。
 
+`stabilize-agent-harness-core` 增加两个 Session 级 intent：`stop-session` 停止当前 Session 的模型轮次（先 abort 再持久化 `halted`，不改变 Scope 控制状态，也不请求 Worker 停止），`retry-session` 在核验通过后恢复同一 Session 的模型 loop。恢复核验至少包括可信配置绑定非空、checkpoint 的 pending/tools/context 读取可恢复、Runtime Lease 与 fencing 未失效、Session 注册仍有效、Scope 控制状态允许恢复模型，且没有未决 mutation 或 Operation Intent；任一项不可证明即拒绝并保持停止。Scope Pause/Cancel/Resume 语义不变，Resume 不隐式解除轮次停止。轮次失败只作为结构化 blocker 投影（含失败 code 与恢复入口），不通过 transcript 伪造 assistant 回复，也不进入 Pending Interaction。
+
 - **错误/取消**：command 返回结构化 accepted/rejected/unknown 或领域拒绝；stale revision 零副作用。订阅取消只移除 listener。
 - **测试 seam**：注入 fake use cases，断言每个 variant 委派一次；snapshot/event contract tests 只断言字段与语义，不锁定内部调用顺序。
 
@@ -841,7 +854,11 @@ type StatusJson = {
 - **Execution Authorization Review**（`m2-wire-execution-runtime` 的 Extend，`src/interfaces/tui/components/authorization-review.tsx`，overlay `authorization-review`，Command Palette 的 `authorize-execution`）：界面只显示宿主读好的完整 Manifest 展示行、候选图引用、Scope revision、指纹与门禁判决。它不组装 Manifest、不计算指纹，也不把自由文本解释成批准；批准只回传用户看到的那份内容的指纹与 revision，门禁未通过或事实不可读时不提供批准入口。推进仍走 `execution-authorization` 命令，不新增页面与控制粒度。
 - **`StatusJson`**：`schemaVersion` 为 **3**，`execution` 分区包含 `workPackages`/`integrationQueue`/`activeWorkPackageCount`/`activeWorkPackageIds`/`reconciliations`/`finalizer`/`executionReconciliation`，并填充 `workers`/`blockers`。`status` 不调用 Orca，因此其中 Worker liveness 等外部事实保持不可核验。
 
-顶层 CLI 只识别 `[repository-path]`、`status [--json]`、`doctor`。启动 TUI 前同时检查 stdin/stdout TTY；无 TTY 在挂载 Ink 前非零退出。Exit/Ctrl+C 只退出进程，不隐式 Pause/Cancel。React render/effect/resize/remount 不调用 IC-11 command。
+顶层 CLI 只识别 `[repository-path]`、`--debug [directory]`、`status [--json]`、`doctor`。启动 TUI 前同时检查 stdin/stdout TTY；无 TTY 在挂载 Ink 前非零退出。Exit/Ctrl+C 只退出进程，不隐式 Pause/Cancel。React render/effect/resize/remount 不调用 IC-11 command。
+
+`stabilize-agent-harness-core` 增加 `--debug [directory]`：启动独立调试前台，缺省目录为当前工作目录，允许普通非 Git 目录。它与 TUI 入口共用双 TTY 门禁，无 TTY 时 stdout 不出现渲染帧，只输出稳定退出码。退出意图先 abort 在途模型再走草稿保存与退出流程，取消不触发重试，也不延长后端请求。
+
+对话主视图由 `src/interfaces/tui/components/conversation.tsx` 的 `Conversation` 拥有有界 transcript 区域，协调工作区与调试工作台都复用它，并继续消费 `Composer`、`render/transcript-reader.ts` 与 IC-13 输入保护；协调工作区的已批准布局不变。调试界面只有会话/模型选择、命令与对话，不装配 Coordination Scope、执行图、Run、Worker、Pending Interaction 或授权审阅，也不构造假的 ControllerSnapshot。`src/interfaces/tui/commands.ts` 是命令、别名、键位、帮助与调试模式可见性的唯一来源：调试模式只暴露 `conversationCommands()`，`stop` 与 `retry` 走 IC-11 的 Session 级 intent。
 
 - **版本/可访问性**：状态不能只靠颜色；宽字符按显示宽度裁切。`StatusJson.schemaVersion` 变化时消费者可 fail closed；字段顺序不是合同。
 - **测试 seam**：纯 projection 单测、Ink 组件交互测试、真实 PTY 的 TTY/CJK/resize/终端恢复测试；不使用整屏大 snapshot。
@@ -885,6 +902,10 @@ SQLite 位于 Git common dir 的 `orca-companion/ui.sqlite`。短事务中完成
 - **IC-12 呈现/返回**：历史原调用处紧凑显示 Q/state/A，F4 Enter 原位开合；开放提问在活动导航内以 Shift+Left 进入同一回答管线。项目 Scope 列表 PgUp/PgDn 翻页，Enter 精确核验 owner/revision 并保存输入后进入。单次进程内返回上下文保存原 Session、来源锚点、展开模式、栏目/selectedKey/scroll 和焦点，草稿留在 IC-13。Esc 保存成功返回；受理且没有后续编辑或选题/Session变化才自动返回。显式切会话使旧返回失效；unknown/拒绝/保存失败保持原绑定与输入。消失的 selectedKey 明确显示变化，不自动选择下一题。Ctrl+R 仍是普通输入历史。
 - **读取失效**：交互事件只触发摘要重读及有界 snapshot/原锚点 refresh，不作为问题或受理权威，不开回答或抢焦点。render/effect/resize 仍无 command、副作用或持久写入。
 
+### `stabilize-agent-harness-core` 对 IC-13 的扩展
+
+`UiInputTarget` 增加 `debug-message` 变体，携带 `debugDirectoryId` 与 `coordinatorSessionId`。调试目标的草稿、冲突副本与提交 key 使用 `debug-` 前缀，与既有 message/answer key 分属不同族；既有记录的身份、schema 与读取行为不变，UI schema 沿用当前版本。容量、CAS、单活跃提交、折叠粘贴唯一范围、稳定 submissionId 与未知提交只核验不重发的规则完全复用，`/inputs` 的查看、恢复、核验与删除同样适用。调试目录不是 Scope，也不借用 Scope 或回答身份；render、resize、读取恢复与 remount 仍只读，不自动发送。
+
 ## IC-14 CredentialStore 与模型设置
 
 schema 5 的 ProviderConnection 只描述 Coordinator 连接：connectionRef、label、providerId、固定协议 providerIntegration、baseUrl 与 credential（managed API Key 引用）；Worker-only 的 `codex` 与 `nativeWorker` 字段被删除，出现即拒绝。Worker Profile 改为 `modelSelection`：`{model, effort, effortCapability: {values, source} | null, catalogSource: string | null}`；effortCapability 非空要求 catalogSource 非空，effort 非空必须属于 capability.values，catalogSource 为 null 表示手填未验证 native exact ID 且 effort 为 null。SaveModelSettingsInput 对 Worker 角色是只含 harness、model 与 effort 的判别联合，连接、秘密与任意 options 字段明确拒绝；服务经 `verifyWorkerSelection` 绑定本次显式原生目录查询的有界缓存核验来源。保存追加不可变 profile，应用沿完整 Manifest v4 审阅。Coordinator 仅使用 API Key，Worker 启动不读取 CredentialStore。
@@ -919,6 +940,10 @@ schema 5 的 ProviderConnection 只描述 Coordinator 连接：connectionRef、l
 - **IC-07 Worker Harness**：启动输入不含 CredentialStore、凭据路径或可覆盖原生环境的隔离 root；`worker-runtime.ts` 从真实 launch 环境解析非 secret runtime roots 并写入精确 Session 报告，`runtimeReportPath` 只承载非秘密路径；端口增加逐 harness 原生模型目录查询（codex `debug models`、Claude streamJSON control_request `list_models` 无 prompt、OpenCode `models --standalone`、pi 公开 availability/thinking API、omp `models --json` 实际 thinking）。查询总时限 30 秒，最多 4096 项、1 MiB/20000 行；控制协议经既有 process-runner 的可选 stdin 传入（最多 1 MiB），使用参数数组并支持取消。
 - **IC-08/IC-09 恢复与只读**：恢复按原 launch report/binding 的精确身份与 runtime roots，`expectedNative` 只核验；bwrap 继续让仓库、Git、common dir 与协调库拒写，真实 native state 目录与 Companion 工件目录可写，重叠不可证明即 unavailable。
 - **IC-11/IC-12 界面**：#52 定稿下 Worker 角色只编辑 harness 与原生目录候选（model/effort），无连接、凭据、API key 或任意 options；Coordinator 表单使用服务/地区产品线或自定义协议、地址、隐藏Key与模型选择；目录查询失败可手填 exact ID（未验证、无 effort），迟到结果仍按原入口归属。
+
+## `stabilize-agent-harness-core` 对 IC-14 的扩展
+
+调试会话与协调运行共用同一个 `CredentialStore`、`ProviderLibrary`、固定协议 chat-model adapter 与同一 capability probe，不另建凭据路径、第二个模型解析实现或第二套能力判定。用户在新建或继续时明确选择用户库中已有的连接与模型；会话固定该选择的不可变配置快照，后续目录查询失败或用户库变化都不改写已打开会话的绑定。能力核验不通过时拒绝打开会话，不降级为未核验连接。
 
 ## 第七批 IC-11/12 展示扩展
 
@@ -969,6 +994,28 @@ type GraphBasisPort = {
 `load()` 返回 `{kind:'loaded',preferences,writable,notice}`。文件缺失只读默认且可写；损坏/未来版本/不可读保留原文件，默认呈现且不可写。`save({expectedRevision,patch})` 的 patch 只含 icons 或 statusline 一区；短 exclusive 文件锁内重读/CAS、临时文件原子替换与回读，返回 saved/conflict（当前 preferences）/failed（安全code/message）。冲突不自动重试；锁占用失败关闭。该文件不含秘密、不进入协调/checkpoint/ui.sqlite，环境图标覆盖保持临时。
 
 custom 编辑是内存草稿，同生产 statusline 的主区域宽度、字段配色与裁切作预览。↑↓选择、Space勾选、←→顺序/格式、Enter显式保存、Esc逐层丢弃；恢复默认只改草稿。成功关闭设置/命令层并回原入口；失败/CAS保留草稿可显式重试。异步请求绑定原编辑 generation，不闭合新页或覆盖新编辑。图标即时生效，独立分区保存，失败保留本次选择与未保存提示；重启恢复最后保存值。render/effect/resize/remount 只读。
+
+## IC-16 调试会话宿主与有界只读工具
+
+- **Owner (Create)**：`stabilize-agent-harness-core`
+- **Canonical paths**：`src/application/ports/debug-harness.ts`（界面端口与 DTO）、`src/bootstrap/debug-runtime.ts`（宿主装配）、`src/adapters/storage/debug-session-store.ts`（会话注册表）、`src/application/ports/debug-read-tools.ts` 与 `src/adapters/agents/debug-read-tools.ts`（只读工具 port 与实现）、`src/workflow/coordinator/debug-tools.ts`（工具 schema）、`src/application/coordinator/debug-user-message.ts`（调试消息准入）
+- **Consumers**：`--debug` 前台与调试 TUI；协调运行时、Controller 与 `ControllerService` 不消费本 seam
+
+`--debug` 是与协调运行并列的独立 launch profile，目录参数缺省为当前工作目录并按 realpath 归一化，允许普通非 Git 目录。用户必须明确选择新建会话或继续该目录下的既有会话，并选定用户模型库中的已有连接与模型；目录、会话与配置的组合不可从 cwd 猜测。
+
+会话注册表、checkpoint、UI 输入与诊断都在用户状态目录 `${XDG_STATE_HOME:-~/.local/state}/orca-companion/debug`：`sessions.json` 保存会话注册，`sessions/<coordinatorSessionId>/` 下分别是 `checkpoints.sqlite`、`ui.sqlite` 与 `diagnostics/`，单写者锁覆盖同一会话目录。协调库的 Git common dir 路径、coordination.sqlite 与 Scope 记录都不参与调试，调试也不创建 Execution Graph、Run、Worker 或授权。
+
+`DebugHarnessPort` 是调试界面的唯一依赖，提供目录下的会话列表、模型候选、新建/打开、会话状态、提交、提交核验与事件订阅；界面不构造身份，也不复制端口。轮次使用 IC-04 的同一驱动：请求前落盘 `running`，故障落盘 `halted` 并停止全部自动入口，重开读到 `running`/`halted` 时等待用户明确 `/retry`；退出先 abort 再保存草稿。
+
+模型输入和压缩由 `src/workflow/coordinator/history-input.ts` 共同拥有：两个宿主按同一边界组装、保存压缩结论/Capsule/原生窗口/Shake，`context_exhausted` 与 `compaction_degraded` 在请求前停止。调试默认输入预算为 100000 tokens，沿用生产的预算估算，不作为模型窗口或 UI 百分比。图写入接缝只消费 `SessionWriteAssertion`（valid/fenced）；协调宿主用真实租约证明它，调试宿主用独占会话写者及退出状态证明它。
+
+注册表锁覆盖读取、修改和原子替换。写者锁仅在 PID 可证明退出时串行回收；未知持有者拒绝接管。回收锁或注册表锁自身若在写入途中随进程崩溃而遗留，需要人工核验后处理，禁止嵌套破锁。诊断 `diagnostics/turn.jsonl` 保存时间、Session、固定 code 与有界说明，总量最多 256 KiB，不保存 provider 原始错误体。
+
+调试消息沿用正式提交管线：先保存完整 UiDraft 与稳定 submissionId，再写入该 Session 的持久历史并按无 Scope 变体准入为 Actionable Work。`debugUserMessageWakeBatch` 从稳定 submissionId 派生来源身份，同载荷重放只产生一条消息；既有 Scope Wake 记录保持可读，不被改写成调试来源。
+
+调试输入与协调输入遵守同一按键时序：草稿、slash 选择和弹窗焦点在按键处理时同步更新，连续事件读取前一事件的结果，不等待 React 下一帧。粘贴正文只插入草稿；独立 Enter 按键才提交，slash 仍先采用、再明确执行。
+
+只读工具集固定为 `list_files`、`read_file`、`search` 与 `git_diff`，schema 在 `src/workflow/coordinator/debug-tools.ts` 闭合声明。文件系统 adapter 只读调试根目录内的真实路径，读取前核验 realpath，拒绝绝对路径、父目录、符号链接逃逸与非普通文件；Git 使用参数数组并关闭 external diff、textconv 与 pager，模型不能追加参数。预算固定为单文件 64 KiB、遍历 500 项、搜索 100 命中、搜索累计 4 MiB、结果文本 256 KiB、单次调用 10s，全部可用 `DebugReadLimits` 覆盖。每次调用传入 `AbortSignal`，超时与取消都是结构化拒绝而不是未知结果；工具结果经既有配对与历史管线反馈给模型与 transcript，取消后不再续发请求。这些工具不是任意 shell，也不提供写入能力。
 
 ## 可配置执行并发扩展（restore-configurable-execution-concurrency）
 

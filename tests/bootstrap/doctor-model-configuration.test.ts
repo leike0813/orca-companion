@@ -10,14 +10,15 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 
 import { createOrcaDoctorProbe } from '../../src/bootstrap/doctor.js';
-import { coordinatorConfigurationFixture } from '../support/model-configurations.js';
+import { coordinatorConfigurationFixture, credentialStoreFixture, FIXTURE_CREDENTIAL_REF } from '../support/model-configurations.js';
 
 const directories: string[] = [];
 
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -106,6 +107,29 @@ test('配置的 API Key 不可用：报不可用，而不是通过', async () =>
   if (!result.ok) {
     expect(result.status).toBe('capability-missing');
     expect(result.detail).toContain('凭据');
+  }
+});
+
+test('doctor 保留真实模型探测的失败原因且不转发 provider 原始错误', async () => {
+  const secret = 'fixture-private-provider-payload';
+  vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(Response.json({
+    error: { message: secret, type: 'authentication_error' },
+  }, { status: 401 })));
+  const repository = repositoryWithConfig(configWith({}));
+  const probe = createOrcaDoctorProbe({
+    cwd: repository,
+    env: {},
+    credentialStore: credentialStoreFixture({ [FIXTURE_CREDENTIAL_REF]: 'fixture-only-key' }),
+  });
+  const result = await probe.readCoordinatorModel!();
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.status).toBe('capability-missing');
+    expect(result.detail).toContain('tool_calling:');
+    expect(result.detail).toContain('工具调用');
+    expect(result.detail).toContain('HTTP 401');
+    expect(result.detail).not.toContain(secret);
+    expect(result.detail).not.toContain('fixture-only-key');
   }
 });
 

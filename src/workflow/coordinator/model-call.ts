@@ -24,7 +24,7 @@ import {
   type TranscriptStreamEvent,
   type TranscriptStreamObserver,
 } from '../../application/coordinator/history.js';
-import type { FencingAssertion } from '../../application/coordinator/runtime-guard.js';
+import type { SessionWriteAssertion as FencingAssertion } from '../../application/coordinator/runtime-guard.js';
 import type { ModelUsageObservation } from '../../domain/coordinator/session-state.js';
 
 /**
@@ -35,7 +35,7 @@ import type { ModelUsageObservation } from '../../domain/coordinator/session-sta
  */
 export type StreamingModelHandle = Pick<Runnable, 'stream'>;
 
-/** 一次流式调用失败的原因分类；只有 `error` 可能是可重试的普通模型故障。 */
+/** 一次流式调用失败的原因分类；只有 `error` 可能是可重试的 provider 故障。 */
 export type ModelCallFailureReason =
   | 'output_limit'
   | 'cancelled'
@@ -105,7 +105,13 @@ class AggregatedResponseCollector extends BaseCallbackHandler {
 }
 
 function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  const chain = causeChain(error);
+  const status = chain.map(link => (link as { status?: unknown }).status)
+    .find(value => typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599);
+  const code = chain.map(link => (link as { code?: unknown }).code)
+    .find(value => typeof value === 'string' && RETRYABLE_NETWORK_CODES.has(value));
+  return [error instanceof Error ? error.name : 'model_error',
+    typeof status === 'number' ? `HTTP ${status}` : null, code].filter(Boolean).join(' · ');
 }
 
 /**
@@ -224,14 +230,93 @@ function deltaTextOf(chunk: BaseMessage): string {
     .join('');
 }
 
+/** 可重试的 HTTP 状态：限流与网关类瞬时故障。 */
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+
+/** 传输层网络错误码（Node 与 undici）：连接被重置、超时或对端不可达。 */
+const RETRYABLE_NETWORK_CODES = new Set([
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'ECONNREFUSED',
+  'ECONNABORTED',
+  'EPIPE',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'UND_ERR_SOCKET',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_BODY_TIMEOUT',
+  'ERR_STREAM_PREMATURE_CLOSE',
+]);
+
 /**
- * 只有普通模型故障可以重试。
+ * 官方 SDK 的连接类错误类型名。
+ *
+ * 三个协议的 SDK 都把这个连接失败报成 `APIConnectionError`（超时是它的子类），但没有一个把
+ * `name` 设成类名，因此只能按类名判定；这比按错误文案匹配稳定，也不让 workflow 层依赖某个
+ * provider 的 SDK 包。
+ */
+const RETRYABLE_SDK_ERRORS = new Set(['APIConnectionError', 'APIConnectionTimeoutError']);
+
+/** cause 链的最大长度：只用来在同一次故障里找到网络事实，不用来遍历任意深度。 */
+const MAX_CAUSE_DEPTH = 8;
+
+function causeChain(error: unknown): readonly unknown[] {
+  const chain: unknown[] = [];
+  let current: unknown = error;
+  while (
+    typeof current === 'object' &&
+    current !== null &&
+    chain.length < MAX_CAUSE_DEPTH &&
+    !chain.includes(current)
+  ) {
+    chain.push(current);
+    current = (current as { readonly cause?: unknown }).cause;
+  }
+  return chain;
+}
+
+function classNameOf(link: object): string {
+  const name = (link as { constructor?: { readonly name?: unknown } }).constructor?.name;
+  return typeof name === 'string' ? name : '';
+}
+
+/**
+ * 唯一的可重试判定（SSOT）。
+ *
+ * 只有可证明的瞬时 provider 事实可以重试：429、可重试的 5xx、结构化网络错误码，以及官方 SDK
+ * 把它包在 `cause` 链里的连接失败。解析、类型、普通 `Error`、上下文、提交与输出限制都不满足
+ * 任何一条，因此重试它们只会重复同一个内部故障。
+ *
+ * 取消优先于一切：被取消的调用即使带着连接错误也绝不重试，否则取消语义会被重试掩盖。
+ */
+export function isRetryableModelCall(error: unknown): boolean {
+  const chain = causeChain(error);
+  if (chain.some((link) => isCancellationError(link))) {
+    return false;
+  }
+  return chain.some((link) => {
+    const { status, code } = link as { readonly status?: unknown; readonly code?: unknown };
+    if (typeof status === 'number' && RETRYABLE_STATUS.has(status)) {
+      return true;
+    }
+    if (typeof code === 'string' && RETRYABLE_NETWORK_CODES.has(code)) {
+      return true;
+    }
+    return RETRYABLE_SDK_ERRORS.has(classNameOf(link as object));
+  });
+}
+
+/**
+ * 只有可重试的 provider 故障可以重试。
  *
  * 输出超限、取消与 fencing 失效都是「这次调用不该再发生」的事实：重试会重新生成一个同样大的
  * 响应、违背取消语义，或让已被取代的 incarnation 重新写入。
  */
 export function isRetryableModelCallFailure(failure: ModelCallFailure): boolean {
-  return failure.reason === 'error' && !isCancellationError(failure.error);
+  return failure.reason === 'error' && isRetryableModelCall(failure.error);
 }
 
 /**

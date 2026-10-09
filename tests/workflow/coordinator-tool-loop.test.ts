@@ -696,6 +696,43 @@ test('工具调用期间失去 lease 时不写配对结果，保留原 call 供�
   expect(pendingToolCallsIn(loadState())).toBe(1);
 });
 
+test('取消后不再开始下一次调用：已返回的结果仍按原身份落盘，剩余调用等待恢复', async () => {
+  seedPendingCalls([
+    { callId: 'call-1', name: 'claim_ticket', args: { ticketId: 'ticket-1', expectedRevision: 7 } },
+    { callId: 'call-2', name: 'claim_ticket', args: { ticketId: 'ticket-2', expectedRevision: 7 } },
+  ]);
+  const toolFacts = facts();
+  const harness = recordingServices(toolFacts);
+  const controller = new AbortController();
+  const seen: (AbortSignal | undefined)[] = [];
+  const node = createToolsNode({
+    sessionRecords: store,
+    assertFencing: () => ({ kind: 'valid', lease: {} as never }),
+    tools: [{
+      name: 'claim_ticket',
+      description: '测试工具：取消发生在第一次调用期间',
+      mutating: true,
+      inputSchema: { type: 'object' },
+      invoke: (_args, context) => {
+        seen.push(context.signal);
+        controller.abort();
+        return Promise.resolve({ kind: 'ok', value: accepted() });
+      },
+    }],
+  });
+
+  const update = await node(graphState(2), { signal: controller.signal });
+
+  expect(update.status).toBe('stalled');
+  // 取消信号进入可信上下文；handler 因此能停止自己有界的读取。
+  expect(seen).toEqual([controller.signal]);
+  expect(harness.executed).toEqual([]);
+  // 已经返回的结果是既成事实：丢掉它等于让这次副作用失去唯一证据。
+  expect(loadState().committedMessages.find((entry) => entry.toolCallId === 'call-1')?.content).toContain('"kind":"ok"');
+  // call-2 从未开始，因此保持未配对，恢复时仍以原 OperationId 对账。
+  expect(pendingToolCallsIn(loadState())).toBe(1);
+});
+
 test('无法受控执行的 tool call 先提交响应，再以 blocked 结束并说明原因', async () => {
   const scenarios: readonly { readonly label: string; readonly raw: Record<string, unknown>; readonly reason: string }[] =
     [

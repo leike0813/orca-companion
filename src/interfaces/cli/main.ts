@@ -3,11 +3,13 @@
 /**
  * IP-6 / MOD-05：`orca-companion` 顶层 CLI 入口。
  *
- * 识别 `[repository-path]`（前台 TUI）、`status [--json]`、`doctor`；`run`/`resume`/`tui` 明确不存在。
+ * 识别 `[repository-path]`（前台 TUI）、`--debug [directory]`（前台调试会话）、`status [--json]`、
+ * `doctor`；`run`/`resume`/`tui` 明确不存在。
  * 入口不要求 TTY、不直接调用 adapter（只消费 Bootstrap 注入的能力），也不在查询时续租或对账。
  * 机器输出只写标准输出，诊断只写标准错误。
  *
- * TUI 路径在 `src/bootstrap/tui-entry.ts` 里检查 TTY，并在通过后才动态加载 Ink：本模块不 import
+ * TUI 与调试路径分别在 `src/bootstrap/tui-entry.ts` 与 `src/bootstrap/debug-entry.ts` 里检查 TTY，
+ * 并在通过后才动态加载 Ink：本模块不 import
  * Ink/React，因此无 TTY 时 stdout 不会出现渲染帧。
  */
 
@@ -20,6 +22,7 @@ import {
   type CoordinationStoreOpenResult,
 } from '../../bootstrap/composition.js';
 import { runTuiEntry, type TuiEntryEnvironment } from '../../bootstrap/tui-entry.js';
+import { runDebugEntry, type DebugEntryEnvironment } from '../../bootstrap/debug-entry.js';
 import { CLI_USAGE, parseCliArguments, renderRejection } from './argv.js';
 import { defaultCliIO, runDoctorCommand, type CliIO } from './doctor-command.js';
 import { runStatus } from './status-command.js';
@@ -41,6 +44,8 @@ export type CliDependencies = {
   readonly openCoordinationStore?: (environment: CliEnvironment) => Promise<CoordinationStoreOpenResult>;
   /** 覆盖点：测试注入 fake 端口与渲染器；生产走 `runTuiEntry`。 */
   readonly runTui?: (environment: TuiEntryEnvironment, io: CliIO) => Promise<number>;
+  /** 覆盖点：测试注入 fake host 与渲染器；生产走 `runDebugEntry`。 */
+  readonly runDebug?: (environment: DebugEntryEnvironment, io: CliIO) => Promise<number>;
 };
 
 /**
@@ -109,6 +114,20 @@ export async function main(
         return await dependencies.runTui(tuiEnvironment, io);
       }
       return await runTuiEntry(tuiEnvironment, io);
+    }
+    case 'debug': {
+      // 调试目录可以是普通目录：门禁与 TUI 相同，只检查双 TTY，不装配协调功能。
+      const debugEnvironment: DebugEntryEnvironment = {
+        cwd: invocation.directory ?? environment.cwd,
+        env: environment.env,
+        stdinIsTty: environment.stdinIsTty === true,
+        stdoutIsTty: environment.stdoutIsTty === true,
+        columns: environment.columns ?? 80,
+      };
+      if (dependencies.runDebug !== undefined) {
+        return await dependencies.runDebug(debugEnvironment, io);
+      }
+      return await runDebugEntry(debugEnvironment, io);
     }
   }
 }

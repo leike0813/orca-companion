@@ -172,6 +172,7 @@ async function measure(scenario) {
 
   const graph = buildCoordinatorGraph({
     model,
+    configurationRef: 'benchmark-configuration',
     checkpointer: store.checkpointer,
     sessionRecords: timedRecords,
     assertFencing: () => ({ kind: 'valid', lease: {} }),

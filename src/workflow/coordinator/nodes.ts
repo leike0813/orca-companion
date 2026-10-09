@@ -12,14 +12,13 @@
  */
 
 import type { RunnableConfig } from '@langchain/core/runnables';
-import type { RetryPolicy } from '@langchain/langgraph';
 
 import type { ProjectedActionableWorkItem } from '../../application/coordinator/actionable-work.js';
 import type { TranscriptStreamObserver } from '../../application/coordinator/history.js';
 import type {
   CheckpointRecoveryRead,
   CoordinatorSessionRecordPort,
-  FencingAssertion,
+  SessionWriteAssertion as FencingAssertion,
 } from '../../application/coordinator/runtime-guard.js';
 import type { CoordinatorSessionId } from '../../application/dto/identity.js';
 import {
@@ -30,7 +29,6 @@ import {
 } from '../../domain/coordinator/session-state.js';
 import { entryFromResponse, parseModelToolCalls } from './context.js';
 import {
-  isCancellationError,
   isRetryableModelCallFailure,
   publishStreamEvent,
   streamModelCall,
@@ -51,40 +49,30 @@ export const SUSPEND_NODE = 'suspend';
 export const MODEL_NODE_MAX_ATTEMPTS = 3;
 
 /**
- * 模型调用的自动重试只覆盖可证明安全的调用。
+ * 模型调用重试的退避参数。
  *
- * 取消不是可重试错误：重试一个已被用户取消的调用会违背取消语义。除此之外，模型调用不产生副作用，
- * 且未完整返回的响应不会被提交，所以重试是安全的。
+ * 策略由 model node 自己执行，**不**交给 `addNode` 的 retryPolicy——两层重试会让次数相乘，这正是
+ * D15 要避免的；SDK 内层重试同样在 `resolveChatModel` 中关闭。可重试的分类由 `model-call.ts` 拥有。
  */
-export function isRetryableModelCall(error: unknown): boolean {
-  return !isCancellationError(error);
-}
-
-/**
- * 模型调用的自动重试策略。
- *
- * 只覆盖可证明安全的调用：模型调用不产生副作用，且未完整返回的响应不会被提交，所以重试是安全的；
- * 取消则不是可重试错误。策略由 model node 自己执行，**不**同时交给 `addNode` 的 retryPolicy——
- * 两层重试会让次数相乘，这正是 D15 要避免的。内层重试同样在 `resolveChatModel` 中关闭。
- */
-export const MODEL_NODE_RETRY_POLICY: RetryPolicy = {
-  maxAttempts: MODEL_NODE_MAX_ATTEMPTS,
-  initialInterval: 250,
-  backoffFactor: 2,
-  jitter: false,
-  retryOn: isRetryableModelCall,
-};
+const RETRY_BACKOFF_INITIAL_MS = 250;
+const RETRY_BACKOFF_FACTOR = 2;
 
 /** 第 `attempt` 次失败后的退避毫秒数（`attempt` 从 1 开始）。 */
 export function retryBackoffMs(attempt: number): number {
-  const initial = MODEL_NODE_RETRY_POLICY.initialInterval ?? 0;
-  const factor = MODEL_NODE_RETRY_POLICY.backoffFactor ?? 1;
-  return initial * factor ** Math.max(0, attempt - 1);
+  return RETRY_BACKOFF_INITIAL_MS * RETRY_BACKOFF_FACTOR ** Math.max(0, attempt - 1);
 }
 
-function defaultSleep(ms: number): Promise<void> {
+/**
+ * 退避等待必须可取消：等待期间失去写入权或被取消时，再等满整个间隔只是让停止更晚发生。
+ */
+function defaultSleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
   return new Promise((resolve) => {
-    setTimeout(resolve, ms);
+    if (signal?.aborted === true) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
   });
 }
 
@@ -95,8 +83,13 @@ function describeError(error: unknown): string {
 /** 节点需要的依赖；全部由 Bootstrap 注入，节点不构造它们。 */
 export type CoordinatorNodeDependencies = {
   readonly model: StreamingModelHandle;
-  /** Trusted binding supplied by the Session registry; absent replay remains portable. */
-  readonly configurationRef?: string;
+  /**
+   * 这个 Session 固定的可信模型配置绑定，由 Session registry 提供。
+   *
+   * 它是必填依赖而不是可选增强：provider replay 的归属完全由它决定，缺少它就无法把一次响应
+   * 提交成可恢复的历史。请求之前先校验，避免「先发一次请求、再发现提交不了」。
+   */
+  readonly configurationRef: string;
   readonly sessionRecords: CoordinatorSessionRecordPort;
   /** 每次模型调用和 checkpoint 写入紧前都回读当前 Runtime Lease。 */
   readonly assertFencing: () => FencingAssertion;
@@ -126,7 +119,7 @@ export type CoordinatorNodeDependencies = {
   readonly tools?: readonly PlanningToolDefinition[];
   readonly clock?: () => number;
   /** 退避等待由宿主注入，便于在测试与紧耦合宿主中不真实等待。 */
-  readonly sleep?: (ms: number) => Promise<void>;
+  readonly sleep?: (ms: number, signal: AbortSignal | undefined) => Promise<void>;
   /** 把未提交的流式响应投影成临时预览；预览故障不影响模型调用。 */
   readonly streamObserver?: TranscriptStreamObserver;
   /** 单次模型响应的输出预算；缺省由 `MODEL_RESPONSE_BYTES` 拥有。 */
@@ -145,7 +138,7 @@ async function streamModelWithRetry(input: {
   readonly stepId: string;
   readonly messages: readonly unknown[];
   readonly signal: AbortSignal | undefined;
-  readonly sleep: (ms: number) => Promise<void>;
+  readonly sleep: (ms: number, signal: AbortSignal | undefined) => Promise<void>;
 }): Promise<
   | {
       readonly kind: 'response';
@@ -155,9 +148,13 @@ async function streamModelWithRetry(input: {
     }
   | { readonly kind: 'failed'; readonly failure: ModelCallFailure }
 > {
-  const maxAttempts = MODEL_NODE_RETRY_POLICY.maxAttempts ?? 1;
+  const maxAttempts = MODEL_NODE_MAX_ATTEMPTS;
   let lastFailure: ModelCallFailure | null = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    // 退避期间被取消就不再发请求：这一组三次的机会属于这次 invoke，取消后它已经结束。
+    if (attempt > 1 && input.signal?.aborted === true) {
+      break;
+    }
     // 预览身份由可信 step 与本次 attempt 派生：模型无法影响它，也无法复用上一次尝试的预览。
     const previewId = `preview:${input.stepId}:attempt-${String(attempt)}`;
     const outcome = await streamModelCall({
@@ -181,7 +178,7 @@ async function streamModelWithRetry(input: {
     if (!isRetryableModelCallFailure(outcome) || attempt === maxAttempts) {
       break;
     }
-    await input.sleep(retryBackoffMs(attempt));
+    await input.sleep(retryBackoffMs(attempt), input.signal);
   }
   return {
     kind: 'failed',
@@ -222,6 +219,11 @@ export function createModelNode(dependencies: CoordinatorNodeDependencies) {
     const coordinatorSessionId = state.coordinatorSessionId as CoordinatorSessionId;
     if (coordinatorSessionId.length === 0) {
       return blocked('model node 缺少 Coordinator Session 身份');
+    }
+    // 可信配置绑定是这次响应的归属依据，缺失时无法把响应提交成可恢复历史。
+    // 在发出任何请求之前 fail closed：先发一次再发现提交不了，只会在 provider 侧留下无人认领的事实。
+    if (dependencies.configurationRef.trim().length === 0) {
+      return blocked('model node 缺少可信 configurationRef 绑定，拒绝发出模型请求');
     }
     let read: CheckpointRecoveryRead;
     try {
@@ -305,18 +307,11 @@ export function createModelNode(dependencies: CoordinatorNodeDependencies) {
 
     let entry: ReturnType<typeof entryFromResponse>;
     try {
-      const additionalKwargs = (response as { additional_kwargs?: unknown }).additional_kwargs;
-      const hasProviderReplay = Array.isArray((response as { content?: unknown }).content) ||
-        (typeof additionalKwargs === 'object' && additionalKwargs !== null &&
-          ['reasoning_content', 'reasoning', '__openai_function_call_ids__'].some((key) => key in additionalKwargs));
-      if (hasProviderReplay && dependencies.configurationRef === undefined) {
-        return interrupted('响应包含 provider replay 数据，但 Session 缺少可信 configurationRef');
-      }
       entry = entryFromResponse(response, {
         stepId,
         entryId,
         toolCalls,
-        ...(dependencies.configurationRef === undefined ? {} : { configurationRef: dependencies.configurationRef }),
+        configurationRef: dependencies.configurationRef,
       });
     } catch (error) {
       // 无法归一化的响应不是可提交的响应：写不下去，也不留下仍在 streaming 的预览。

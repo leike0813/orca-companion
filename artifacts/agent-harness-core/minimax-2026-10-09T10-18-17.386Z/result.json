@@ -1,0 +1,16 @@
+{
+  "status": "passed",
+  "directory": "/tmp/ocp-minimax-debug-si0DJ7",
+  "sessionId": "885312b3-ab21-4516-940d-9a57a4427186",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "requestLimit": 12,
+  "requests": 9,
+  "afterProbe": 6,
+  "activeAfterExit": 0,
+  "committedAssistants": 3,
+  "pairedReadTools": 1,
+  "exit": {
+    "exitCode": 0,
+    "signal": 0
+  }
+}

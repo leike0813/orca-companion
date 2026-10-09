@@ -928,3 +928,50 @@ test('v2 库无损升级到当前 schema：既有会话与正文保留，版本�
   verify.close();
   expect(Number(version.value)).toBe(CHECKPOINT_SCHEMA_VERSION);
 });
+
+test('轮次状态独立读写：没有轮次行的会话按 idle 读取，失败只保存固定 code 与有界诊断', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
+  expect(store.turns.readTurnState(SESSION_A)).toEqual({ kind: 'idle' });
+
+  expect(store.turns.writeTurnState(SESSION_A, { kind: 'running' }).kind).toBe('saved');
+  expect(store.turns.readTurnState(SESSION_A)).toEqual({ kind: 'running' });
+
+  expect(store.turns.writeTurnState(SESSION_A, { kind: 'halted', failure: { code: 'execution_failed', message: 'x'.repeat(4_000) } }).kind).toBe('saved');
+  const halted = store.turns.readTurnState(SESSION_A);
+  expect(halted.kind).toBe('halted');
+  if (halted.kind === 'halted') {
+    expect(halted.failure.code).toBe('execution_failed');
+    expect(halted.failure.message.length).toBe(512);
+  }
+
+  // 轮次行不参与正文：会话历史与读回不受影响。
+  const read = store.loadCheckpoint(SESSION_A);
+  expect(read.kind === 'recovered' && read.state.committedMessages.length).toBe(2);
+  // 未登记的 code 直接拒绝写入，不把自由文本当成结构化失败。
+  expect(store.turns.writeTurnState(SESSION_A, { kind: 'halted', failure: { code: 'whatever' as never, message: 'x' } }).kind).toBe('failed');
+});
+
+test('v3 库增量迁移出轮次表：既有会话保留，未结束的轮次读回为 running', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
+  expect(store.turns.writeTurnState(SESSION_A, { kind: 'running' }).kind).toBe('saved');
+  store.close();
+
+  // 去掉轮次表并把版本号写成 v3：模拟升级前的老库。
+  const raw = rawDatabase();
+  raw.exec('DROP TABLE agent_turns');
+  raw.prepare('UPDATE checkpoint_meta SET value = ? WHERE key = ?').run('3', 'checkpoint_schema_version');
+  raw.close();
+
+  const upgraded = openWith({});
+  const read = upgraded.loadCheckpoint(SESSION_A);
+  expect(read.kind).toBe('recovered');
+  // 老库没有轮次行：按首次 idle 处理，且不因此写回一行。
+  expect(upgraded.turns.readTurnState(SESSION_A)).toEqual({ kind: 'idle' });
+  expect(upgraded.turns.writeTurnState(SESSION_A, { kind: 'running' }).kind).toBe('saved');
+  expect(upgraded.turns.readTurnState(SESSION_A)).toEqual({ kind: 'running' });
+
+  const verify = new DatabaseSync(databasePath);
+  const version = verify.prepare("SELECT value FROM checkpoint_meta WHERE key = 'checkpoint_schema_version'").get() as { value: string };
+  verify.close();
+  expect(Number(version.value)).toBe(CHECKPOINT_SCHEMA_VERSION);
+});

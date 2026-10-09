@@ -101,6 +101,7 @@ export type TuiIntent =
       readonly answer: string;
     }
   | { readonly kind: 'compact-session'; readonly coordinatorSessionId: string; readonly reason: string }
+  | { readonly kind: 'stop-session' | 'retry-session'; readonly coordinatorSessionId: string }
   | {
       readonly kind: 'switch-model-configuration';
       readonly coordinatorSessionId: string;
@@ -115,6 +116,8 @@ export type TuiIntent =
     };
 
 export type TuiPorts = {
+  /** Exit intent cancels foreground model work before draft saving or confirmation. */
+  readonly exitIntent?: () => void;
   readonly commandStatus: (ref: import('../../application/tui/command-result.js').CommandResultRef) => Promise<ControllerCommandResult>;
   readonly reading: TranscriptReadingPort;
   readonly questions?: (input: TuiQuestionQuery) => Promise<import('../../application/controller-service.js').ControllerQuestionResult>;

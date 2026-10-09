@@ -7,12 +7,12 @@
  */
 
 import { Box, Text, useBoxMetrics, type DOMElement } from 'ink';
-import { useEffect, useRef, type ReactElement } from 'react';
+import { useRef, type ReactElement } from 'react';
 import { AnswerPanel, type AnswerPanelView } from '../components/answer-panel.js';
 import { PasteViewer, type PasteViewerView } from '../components/paste-viewer.js';
 
 import { CommandPalette, commandReason, slashCandidates, type CommandId } from '../components/command-palette.js';
-import { HELP_LINES, COMMAND_METADATA } from '../commands.js';
+import { HELP_LINES, COMMAND_METADATA, helpLines } from '../commands.js';
 import { Composer } from '../components/composer.js';
 import { ContextSearch, type ContextSearchView } from '../components/context-search.js';
 import { ControlBar } from '../components/control-bar.js';
@@ -36,7 +36,7 @@ import { StatusLine } from '../components/status-line.js';
 import { StatuslineSettings } from '../components/statusline-settings.js';
 import { ExecutionSettings } from '../components/execution-settings.js';
 import { TopBar } from '../components/top-bar.js';
-import { Transcript } from '../components/transcript.js';
+import { Conversation } from '../components/conversation.js';
 import type { TranscriptFrame } from '../render/transcript-reader.js';
 import { sidebarWidthFor, truncateToDisplayWidth } from '../render/width.js';
 import type { ExecutionAuthorizationLoad, ModelCatalog, ModelRoleView } from '../ports.js';
@@ -180,10 +180,8 @@ export function workspaceLayout(view: TuiViewModel, ui: TuiState, terminalWidth:
 }
 
 export function Workspace(props: WorkspaceProps) {
-  const rowRef=useRef<DOMElement>(null), bodyRef=useRef<DOMElement>(null), transcriptRef=useRef<DOMElement>(null);
-  const rowMetrics=useBoxMetrics(rowRef),bodyMetrics=useBoxMetrics(bodyRef),transcriptMetrics=useBoxMetrics(transcriptRef);
-  const transcriptHeight = transcriptMetrics.hasMeasured ? Math.max(1, Math.round(transcriptMetrics.height)) : null;
-  useEffect(() => { if (transcriptHeight !== null) props.onTranscriptHeight?.(transcriptHeight); }, [transcriptHeight, props.onTranscriptHeight]);
+  const rowRef=useRef<DOMElement>(null), bodyRef=useRef<DOMElement>(null);
+  const rowMetrics=useBoxMetrics(rowRef),bodyMetrics=useBoxMetrics(bodyRef);
   const view=props.viewModel,ui=props.ui,rows=props.terminalHeight??24;
   const {width,bodyRows,alerts,projectWidth}=workspaceLayout(view,ui,props.terminalWidth,rows);
   const selected=ui.selectedSessionId,input=props.historyPreview??composerInputFor(ui,selected),readOnly=isComposerReadOnly(ui,selected);
@@ -218,10 +216,10 @@ export function Workspace(props: WorkspaceProps) {
     ui.projectPanel.open&&props.terminalWidth<100?project:
     <Box ref={rowRef} flexDirection="row" height={bodyRows} flexShrink={0}>
       <Box ref={bodyRef} flexDirection="column" width={width} height={bodyRows}>
-        <Box ref={transcriptRef} flexDirection="column" flexGrow={1} flexBasis={0} minHeight={1} overflow="hidden">
-          <Transcript transcript={view.transcript} {...(props.transcriptFrame === undefined ? {} : { frame: props.transcriptFrame })} expandedToolIds={ui.expandedToolIds} onToggleTool={props.actions.toggleTool} availableWidth={width}
-            maxLines={transcriptMetrics.hasMeasured?Math.max(1,Math.round(transcriptMetrics.height)):Math.max(1,bodyRows-12)}/>
-        </Box>
+        <Conversation width={width} height={bodyRows} transcript={view.transcript}
+          {...(props.transcriptFrame === undefined ? {} : { frame: props.transcriptFrame })}
+          expandedToolIds={ui.expandedToolIds} onToggleTool={props.actions.toggleTool} availableWidth={width}
+          {...(props.onTranscriptHeight === undefined ? {} : { onTranscriptHeight: props.onTranscriptHeight })}>
         {candidates.length&&focus?<CommandPalette commands={candidates} selectedIndex={Math.min(ui.slashIndex,candidates.length-1)} onRun={props.actions.runCommand}
           availableWidth={width} maxRows={Math.min(3,Math.max(1,rows-21))} reasons={reasons} slash/>:null}
         {props.historyContext?<ContextSearch view={props.historyContext} width={width} origin={origin}/>:null}
@@ -231,6 +229,7 @@ export function Workspace(props: WorkspaceProps) {
           disabledReason={props.composerDisabledReason} newlineHint={props.newlineHint} availableWidth={width}/></>}
         <StatusLine scope={view.scope} compaction={view.compaction} maintenance={view.maintenance} blockerCount={view.blockers.length} notice={ui.notice}
           sidebarDensity={ui.sidebarDensity} execution={view.execution} availableWidth={width} model={model} graph={view.graph} {...(view.projectPresentation===undefined?{}:{presentation:view.projectPresentation})} {...(props.savedStatusline===undefined?{}:{preferences:props.savedStatusline})}/>
+        </Conversation>
       </Box>
       {ui.projectPanel.open?project:ui.sidebarDensity==='collapsed'?null:<Sidebar density={ui.sidebarDensity} viewModel={view} terminalWidth={props.terminalWidth} height={bodyRows} selectedId={ui.inspectorSelection} iconMode={ui.iconMode}/>}
     </Box>}
@@ -326,7 +325,7 @@ function Overlay(props: {
         />
       );
     case 'help':
-      return <DialogFrame title="Help · 命令与键位" summary="Scope / Session / UI" width={parent.terminalWidth} rows={Math.max(10,(parent.terminalHeight??24)-7)} footer="↑↓ 浏览 · Esc 返回"><Box flexDirection="column" overflow="hidden">{[...HELP_LINES,...parent.commands.map(id=>{const meta=COMMAND_METADATA[id];return `${meta.alias?'/'+meta.alias:meta.label} · ${meta.target} · ${meta.description}`;})].slice(parent.ui.reviewScroll,parent.ui.reviewScroll+Math.max(1,(parent.terminalHeight??24)-14)).map((line,i)=><Text key={i}>{truncateToDisplayWidth(line,Math.max(1,parent.terminalWidth-8))}</Text>)}</Box></DialogFrame>;
+      return <DialogFrame title="Help · 命令与键位" summary="Scope / Session / UI" width={parent.terminalWidth} rows={Math.max(10,(parent.terminalHeight??24)-7)} footer="↑↓ 浏览 · Esc 返回"><Box flexDirection="column" overflow="hidden">{helpLines(parent.viewModel.scope.mode,parent.commands).slice(parent.ui.reviewScroll,parent.ui.reviewScroll+Math.max(1,(parent.terminalHeight??24)-14)).map((line,i)=><Text key={i}>{truncateToDisplayWidth(line,Math.max(1,parent.terminalWidth-8))}</Text>)}</Box></DialogFrame>;
     case 'model-picker':
       return (
         <ModelPicker

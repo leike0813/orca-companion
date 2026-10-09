@@ -40,7 +40,8 @@ import { scanHistory } from '../../application/coordinator/history-search.js';
 import type { HistorySearchHit, HistoryCall } from '../../application/coordinator/history-inspection.js';
 import { userQuestionInteractionId } from '../../application/coordination/pending-interaction.js';
 import { wrapByDisplayWidth } from './render/width.js';
-import { editComposer, editorLayout, emptyDraft, textDraft, type EditorKey } from './input/composer-editor.js';
+import { editComposer, editorLayout, emptyDraft, textDraft } from './input/composer-editor.js';
+import { handleComposerKey } from './input/composer-key.js';
 import { allowedSidebarDensity, composerContentWidth } from './render/width.js';
 import { requiresConfirmation } from './components/control-bar.js';
 import {
@@ -278,7 +279,7 @@ function saveOutcomeText(outcome: SaveOutcome): string {
 
 /** 从记录派生只读核验查询；普通消息按 Session 与 submissionId，回答另加交互绑定。 */
 function submissionQueryFor(record: UiInputRecord): SubmissionQuery | null {
-  if (record.kind !== 'submission') {
+  if (record.kind !== 'submission' || record.target.kind === 'debug-message') {
     return null;
   }
   const { target } = record;
@@ -294,7 +295,7 @@ function submissionQueryFor(record: UiInputRecord): SubmissionQuery | null {
 
 /** 把某个目标的文本写回展示态的 action：普通草稿与回答草稿分别走各自的隔离槽。 */
 function draftActionFor(target: UiInputTarget, draft: UiDraft): TuiAction {
-  return target.kind === 'message'
+  return target.kind !== 'answer'
     ? { kind: 'draft-changed', coordinatorSessionId: target.coordinatorSessionId, draft }
     : {
         kind: 'answer-draft-changed',
@@ -309,6 +310,8 @@ function draftActionFor(target: UiInputTarget, draft: UiDraft): TuiAction {
 
 /** 两个输入目标是否是同一个：回答要求 interaction 与 revision 都一致。 */
 function sameInputTarget(a: UiInputTarget, b: UiInputTarget): boolean {
+  if (a.kind === 'debug-message' || b.kind === 'debug-message') return a.kind === 'debug-message' && b.kind === 'debug-message'
+    && a.debugDirectoryId === b.debugDirectoryId && a.coordinatorSessionId === b.coordinatorSessionId;
   const base =
     a.coordinationScopeId === b.coordinationScopeId &&
     a.coordinatorSessionId === b.coordinatorSessionId;
@@ -1759,6 +1762,7 @@ function TuiAppContent(props: TuiAppProps) {
    * 或未决操作时必须先确认。
    */
   const requestExit = useCallback(() => {
+    ports.exitIntent?.();
     // 退出前先立即保存所有未保存输入；保存失败默认留在界面，只有再次明确确认才丢弃。
     if (protection.hasUnsaved()) {
       const flushed = protection.flushAll();
@@ -1779,7 +1783,7 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     onExit();
-  }, [dispatch, onExit, protection]);
+  }, [dispatch, onExit, protection, ports]);
 
   /** 确认一次待确认动作；`exit` 只结束前台进程，`cancel` 提交取消意图。 */
   const confirmPending = useCallback(
@@ -1923,6 +1927,15 @@ function TuiAppContent(props: TuiAppProps) {
           case 'graph-inspector':return open('graph-inspector');
           case 'toggle-sidebar':dispatch({kind:'overlay-close-all'});dispatch({kind:'sidebar-toggle',allowed:allowedSidebarDensity(terminalWidth)});return {kind:'opened'};
           case 'help':return open('help');
+          case 'stop':
+          case 'retry': {
+            if (session === null) return reject('session_unavailable', '未选择 Session');
+            const result = await runMutation(`${command}:${session}`, () => ports.execute({
+              kind: command === 'stop' ? 'stop-session' : 'retry-session', coordinatorSessionId: session,
+            }));
+            if (result.kind === 'accepted' && active()) dispatch({kind:'overlay-close-all'});
+            return result;
+          }
           case 'pause':
           case 'resume':
           case 'cancel':
@@ -3873,36 +3886,4 @@ function handleInspectorKey(
 }
 
 
-export type ComposerKeyContext = {
-  readonly readOnly: boolean;
-  readonly draft: UiDraft;
-  readonly width?: number;
-  readonly change: (draft: UiDraft) => void;
-  readonly submit: () => void;
-};
-
-/**
- * composer 输入。
- *
- * 普通字符只进入草稿；Enter 提交；Shift/Alt+Enter 换行由 `key.shift`/`key.meta` 判定，终端无法区分
- * 时回退为 Alt+Enter（提示里显示实际键位）。
- */
-export function handleComposerKey(
-  input: string,
-  key: EditorKey,
-  context: ComposerKeyContext,
-): void {
-  if (context.readOnly) {
-    return;
-  }
-  if (key.return === true) {
-    if (key.shift === true || key.meta === true) {
-      context.change(editComposer(context.draft, input, key, context.width));
-      return;
-    }
-    if (context.draft.text.trim()) context.submit();
-    return;
-  }
-  const next = editComposer(context.draft, input, key, context.width);
-  if (next !== context.draft) context.change(next);
-}
+export { handleComposerKey, type ComposerKeyContext } from './input/composer-key.js';

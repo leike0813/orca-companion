@@ -32,6 +32,33 @@ import {
 import { CapableChatModel, NoToolsChatModel } from '../support/fake-chat-model.js';
 import { coordinatorConfigurationFixture } from '../support/model-configurations.js';
 
+/**
+ * 除能力核验外挂起的假模型：用于验证退出意图能真正打断一条在途的探测请求。
+ *
+ * 它记录收到的 signal 与调用次数，因此「取消被观察到」「之后不再有请求」都是对这个 fake 的事实断言。
+ */
+class HangingProbeChatModel extends CapableChatModel {
+  generations = 0;
+  abortsObserved = 0;
+
+  override _generate(
+    _messages: Parameters<CapableChatModel['_generate']>[0],
+    options: { readonly signal?: AbortSignal } | undefined,
+  ): ReturnType<CapableChatModel['_generate']> {
+    this.generations += 1;
+    const signal = options?.signal;
+    return new Promise((_, reject) => {
+      const abort = (): void => {
+        this.abortsObserved += 1;
+        reject(Object.assign(new Error('调用已被取消'), { name: 'AbortError' }));
+      };
+      if (signal === undefined) return;
+      if (signal.aborted) abort();
+      else signal.addEventListener('abort', abort, { once: true });
+    });
+  }
+}
+
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const SESSION = 'session-a' as CoordinatorSessionId;
 const TTL_MS = 30_000;
@@ -133,6 +160,16 @@ function options(model: BaseChatModel) {
 
 function checkpointPath(): string {
   return checkpointDatabasePath(gitCommonDir);
+}
+
+/** 轮询一个条件；超时返回 `false`，不隐藏失败。 */
+async function waitUntil(check: () => boolean, timeoutMs = 2_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    if (Date.now() >= deadline) return false;
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  return true;
 }
 
 test('核验通过后才建立 Session：打开 checkpoint store 并取得 Runtime Lease', async () => {
@@ -360,4 +397,51 @@ test('会话记录文件确实落在 Companion 私有目录下', async () => {
 
   const contents = readFileSync(checkpointPath()).subarray(0, 16).toString('utf8');
   expect(contents.startsWith('SQLite format 3')).toBe(true);
+});
+
+test('退出意图中断挂起的能力核验：只发出一次请求，不留下 lease、库或后续探测', async () => {
+  const model = new HangingProbeChatModel();
+  const controller = new AbortController();
+  const started = startCoordinatorRuntime({ ...options(model), signal: controller.signal });
+
+  // 等第一条探测真的在途，再取消：这正是 CtrlC 落在挂起请求上的形状。
+  await waitUntil(() => model.generations === 1);
+  controller.abort();
+  const result = await started;
+
+  expect(result.kind).toBe('rejected');
+  if (result.kind === 'rejected') {
+    // 取消是它自己的结论：不能被当成「能力缺失」继续显示给用户。
+    expect(result.code).toBe('cancelled');
+  }
+  expect(model.abortsObserved).toBeGreaterThan(0);
+  // 其余四条探测不再发出请求。
+  expect(model.generations).toBe(1);
+  expect(existsSync(checkpointPath())).toBe(false);
+  expect(leaseCount()).toBe(0);
+});
+
+test('启动前就已取消时不解析模型，也不打开会话库', async () => {
+  const model = new HangingProbeChatModel();
+  const controller = new AbortController();
+  controller.abort();
+  let resolved = 0;
+
+  const started = await startCoordinatorRuntime({
+    ...options(model),
+    signal: controller.signal,
+    resolveModel: () => {
+      resolved += 1;
+      return Promise.resolve({ kind: 'resolved' as const, model });
+    },
+  });
+
+  expect(started.kind).toBe('rejected');
+  if (started.kind === 'rejected') {
+    expect(started.code).toBe('cancelled');
+  }
+  expect(resolved).toBe(0);
+  expect(model.generations).toBe(0);
+  expect(existsSync(checkpointPath())).toBe(false);
+  expect(leaseCount()).toBe(0);
 });

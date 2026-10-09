@@ -505,6 +505,7 @@ test('执行工具被注册进图：已提交调用由 tools 节点按持久化�
   let step = 0;
   const graph = buildCoordinatorGraph({
     model,
+    configurationRef: 'test-configuration',
     checkpointer: checkpointStore.checkpointer,
     sessionRecords: checkpointStore,
     planningTools: [],

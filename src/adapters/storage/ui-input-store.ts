@@ -19,6 +19,7 @@ import { z } from 'zod';
 import {
   DEFAULT_UI_INPUT_LIMITS,
   isValidUiDraft,
+  targetNamespace,
   UI_ACTIVE_SUBMISSION_STATUSES,
   UI_SUBMISSION_STATUSES,
   type UiInputInvalidRecord,
@@ -53,6 +54,7 @@ const UI_INPUT_DDL: readonly string[] = [
      value TEXT NOT NULL
    ) STRICT`,
   // value 为 NULL 即 tombstone：只保留递增 revision 以拒绝删除前的旧写入，不占容量、不进列表。
+  // scope_id 存的是目标命名空间（Scope 身份或调试目录身份，见 `targetNamespace`）。
   `CREATE TABLE IF NOT EXISTS ui_input (
      key TEXT PRIMARY KEY,
      revision INTEGER NOT NULL,
@@ -64,7 +66,7 @@ const UI_INPUT_DDL: readonly string[] = [
      status TEXT,
      bytes INTEGER NOT NULL
    ) STRICT`,
-  // 「同一 Scope/Session 最多一条活跃提交」由库保证，跨连接竞争不需要调用方自觉。
+  // 「同一命名空间/Session 最多一条活跃提交」由库保证，跨连接竞争不需要调用方自觉。
   `CREATE UNIQUE INDEX IF NOT EXISTS ui_input_submission_lane
      ON ui_input(scope_id, session_id)
      WHERE kind = 'submission' AND status IN (${activeStatusLiterals})`,
@@ -95,7 +97,18 @@ const answerTargetSchema = z.strictObject({
   expectedRevision: z.number().int().nonnegative(),
 });
 
-const inputTargetSchema = z.discriminatedUnion('kind', [messageTargetSchema, answerTargetSchema]);
+// 调试目标没有 Scope 字段：strictObject 因此也拒绝给它补上 coordinationScopeId 之类的协调身份。
+const debugMessageTargetSchema = z.strictObject({
+  kind: z.literal('debug-message'),
+  debugDirectoryId: nonEmptyString,
+  coordinatorSessionId: nonEmptyString,
+});
+
+const inputTargetSchema = z.discriminatedUnion('kind', [
+  messageTargetSchema,
+  answerTargetSchema,
+  debugMessageTargetSchema,
+]);
 
 const submissionValueSchema = z.strictObject({
   kind: z.literal('submission'),
@@ -192,7 +205,7 @@ function nextSequence(db: DatabaseSync): number {
   return next;
 }
 
-/** 整库容量计量：上限按仓库计算，因此它必须覆盖所有 Scope 而不只是当前列出的那个。 */
+/** 整库容量计量：上限按仓库计算，因此它必须覆盖所有命名空间而不只是当前列出的那个。 */
 function readUsage(db: DatabaseSync): UiInputUsage {
   const row = one<{ readonly records: number; readonly bytes: number }>(
     db.prepare('SELECT COUNT(*) AS records, COALESCE(SUM(bytes), 0) AS bytes FROM ui_input WHERE value IS NOT NULL'),
@@ -335,17 +348,17 @@ export function openUiInputStore(options: OpenUiInputStoreOptions): OpenUiInputS
     }
   };
 
-  const list = (coordinationScopeId: string): UiInputListResult => {
+  const list = (namespace: string): UiInputListResult => {
     if (closed) {
       return closedFailure();
     }
-    if (!isNonEmptyString(coordinationScopeId)) {
-      return failure('invalid_request', 'coordinationScopeId 必须是非空字符串');
+    if (!isNonEmptyString(namespace)) {
+      return failure('invalid_request', '列举范围必须是非空字符串');
     }
     try {
       const rows = many<UiInputRow>(
         db.prepare('SELECT * FROM ui_input WHERE scope_id = ? AND value IS NOT NULL ORDER BY seq, key'),
-        coordinationScopeId,
+        namespace,
       );
       const records: UiInputRecord[] = [];
       const invalidRecords: UiInputInvalidRecord[] = [];
@@ -425,7 +438,7 @@ export function openUiInputStore(options: OpenUiInputStoreOptions): OpenUiInputS
         nextRevision,
         nextSequence(db),
         JSON.stringify(value),
-        value.target.coordinationScopeId,
+        targetNamespace(value.target),
         value.target.coordinatorSessionId,
         value.kind,
         value.kind === 'submission' ? value.status : null,

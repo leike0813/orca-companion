@@ -17,8 +17,9 @@ import {
   type CoordinatorSessionState,
 } from '../../src/domain/coordinator/session-state.js';
 import { buildCoordinatorGraph, routeAfterModel, routeAtStart } from '../../src/workflow/coordinator/graph.js';
-import { streamModelCall } from '../../src/workflow/coordinator/model-call.js';
-import { MODEL_NODE_MAX_ATTEMPTS, usageOf, isRetryableModelCall } from '../../src/workflow/coordinator/nodes.js';
+import { isRetryableModelCall, streamModelCall } from '../../src/workflow/coordinator/model-call.js';
+import { AgentTurnDriver } from '../../src/workflow/coordinator/turn-driver.js';
+import { MODEL_NODE_MAX_ATTEMPTS, usageOf } from '../../src/workflow/coordinator/nodes.js';
 import { COORDINATOR_INVOKE_DEFAULTS, type CoordinatorGraphState } from '../../src/workflow/coordinator/state.js';
 
 const SESSION = 'session-a' as CoordinatorSessionId;
@@ -77,16 +78,18 @@ function graphWith(model: unknown, overrides: {
   readonly streamObserver?: (event: TranscriptStreamEvent) => void;
   readonly maxResponseBytes?: number;
   readonly sessionRecords?: unknown;
+  readonly configurationRef?: string;
+  readonly sleep?: (ms: number, signal: AbortSignal | undefined) => Promise<void>;
 } = {}) {
   let step = 0;
   return buildCoordinatorGraph({
     model: model as never,
-    configurationRef: 'test-configuration',
+    configurationRef: overrides.configurationRef ?? 'test-configuration',
     checkpointer: store.checkpointer,
     sessionRecords: (overrides.sessionRecords as never) ?? store,
     assertFencing: overrides.assertFencing ?? (() => ({ kind: 'valid', lease: {} as never })),
     newStepId: () => `step-${String((step += 1))}`,
-    sleep: () => Promise.resolve(),
+    sleep: overrides.sleep ?? (() => Promise.resolve()),
     ...(overrides.streamObserver === undefined ? {} : { streamObserver: overrides.streamObserver }),
     ...(overrides.maxResponseBytes === undefined ? {} : { maxResponseBytes: overrides.maxResponseBytes }),
     buildMessages:
@@ -127,9 +130,9 @@ test('模型响应被原子接受为 Committed Model Step，图位置前进到 m
 test('一次未完整提交的响应不进入历史，重启后从最后一个已提交 step 之后继续', async () => {
   seedSession();
   const failing = new ScriptedStreamingChatModel([
-    { kind: 'error' },
-    { kind: 'error' },
-    { kind: 'error' },
+    { kind: 'error', status: 429 },
+    { kind: 'error', status: 429 },
+    { kind: 'error', status: 429 },
   ]);
   const interrupted = graphWith(failing);
 
@@ -186,6 +189,7 @@ test('模型输入拿到本次正要消费的那条 Actionable Work', async () =
   let step = 0;
   const graph = buildCoordinatorGraph({
     model: new FakeListChatModel({ responses: ['一', '二'] }),
+    configurationRef: 'test-configuration',
     checkpointer: store.checkpointer,
     sessionRecords: store,
     newStepId: () => `step-${String((step += 1))}`,
@@ -296,10 +300,27 @@ test('D15：模型调用重试次数有限，取消不重试，recursionLimit �
   expect(COORDINATOR_INVOKE_DEFAULTS.recursionLimit).toBeGreaterThanOrEqual(1_000);
   expect(COORDINATOR_INVOKE_DEFAULTS.durability).toBe('sync');
 
-  expect(isRetryableModelCall(new Error('连接重置'))).toBe(true);
-  const abort = new Error('已取消');
-  abort.name = 'AbortError';
-  expect(isRetryableModelCall(abort)).toBe(false);
+  // 可重试的只有可证明的瞬时 provider 事实：限流、可重试 5xx、结构化网络错误码。
+  expect(isRetryableModelCall(Object.assign(new Error('限流'), { status: 429 }))).toBe(true);
+  for (const status of [500, 502, 503, 504]) {
+    expect(isRetryableModelCall(Object.assign(new Error('网关故障'), { status }))).toBe(true);
+  }
+  for (const code of ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EPIPE', 'UND_ERR_SOCKET']) {
+    expect(isRetryableModelCall(Object.assign(new Error('连接中断'), { code }))).toBe(true);
+  }
+  // 官方 SDK 把连接失败包在 cause 链里，因此判定必须沿 cause 走。
+  class APIConnectionError extends Error {}
+  expect(
+    isRetryableModelCall(Object.assign(new Error('provider 调用失败'), { cause: new APIConnectionError('socket hang up') })),
+  ).toBe(true);
+
+  // 普通内部错误、4xx 与取消都不重试：重试只会重复同一个故障。
+  expect(isRetryableModelCall(new Error('连接重置'))).toBe(false);
+  expect(isRetryableModelCall(new TypeError('参数不是对象'))).toBe(false);
+  expect(isRetryableModelCall(new SyntaxError('响应不是合法 JSON'))).toBe(false);
+  expect(isRetryableModelCall(Object.assign(new Error('请求非法'), { status: 400 }))).toBe(false);
+  // 取消优先于任何网络事实：被取消的调用不因底层是连接错误而重来。
+  expect(isRetryableModelCall(Object.assign(new Error('已取消'), { name: 'AbortError', code: 'ECONNRESET' }))).toBe(false);
 });
 
 test('usage 只报告 provider 实际给出的数字，缺失时保留 null', () => {
@@ -388,15 +409,15 @@ test('未完整返回的响应不进入历史，也不发布 committed', async (
   expect(committedSteps()).toEqual([]);
   expect(store.loadCheckpoint(SESSION)).toMatchObject({ kind: 'recovered', state: { committedMessages: [] } });
   expect(events.some((event) => event.kind === 'committed')).toBe(false);
-  // 普通模型故障仍按既有策略有限重试，每次尝试用同一个 step 派生不同预览身份。
-  expect(model.received).toHaveLength(MODEL_NODE_MAX_ATTEMPTS);
-  expect(events.filter((event) => event.kind === 'interrupted')).toHaveLength(MODEL_NODE_MAX_ATTEMPTS);
+  // 断流报的是普通错误：它不满足任何瞬时故障事实，因此只失败一次，不追加请求。
+  expect(model.received).toHaveLength(1);
+  expect(events.filter((event) => event.kind === 'interrupted')).toHaveLength(1);
 });
 
 test('一次失败后重试成功：只有一个 step，且身份沿用同一个可信 stepId', async () => {
   seedSession();
   const model = new ScriptedStreamingChatModel([
-    { kind: 'error' },
+    { kind: 'error', status: 503 },
     { kind: 'text', text: '恢复后的响应', chunkSize: 2 },
   ]);
   const events: TranscriptStreamEvent[] = [];
@@ -417,6 +438,45 @@ test('一次失败后重试成功：只有一个 step，且身份沿用同一个
   // 第一次尝试的预览被中断，接受的是第二次尝试的预览。
   expect(events.filter((event) => event.kind === 'interrupted')).toHaveLength(1);
   expect(events.at(-1)).toMatchObject({ kind: 'committed', previewId: 'preview:step-1:attempt-2' });
+});
+
+test('退避期间被取消时不再发出下一次请求', async () => {
+  seedSession();
+  const model = new ScriptedStreamingChatModel([
+    { kind: 'error', code: 'ECONNRESET' },
+    { kind: 'text', text: '不该被调用' },
+  ]);
+  const controller = new AbortController();
+  const graph = graphWith(model, {
+    // 等待退避时 Scope 被取消：这一组三次的机会到此结束。
+    sleep: () => { controller.abort(); return Promise.resolve(); },
+  });
+
+  await expect(
+    graph.invoke(
+      { coordinatorSessionId: SESSION, remainingWork: work(1).items, deferredWork: 0 },
+      { configurable: { thread_id: 'thread-backoff-cancel' }, signal: controller.signal, ...COORDINATOR_INVOKE_DEFAULTS },
+    ),
+  ).rejects.toThrow();
+
+  expect(model.received).toHaveLength(1);
+  expect(committedSteps()).toEqual([]);
+});
+
+test('缺少可信 configurationRef 时不发出任何模型请求', async () => {
+  seedSession();
+  const model = new ScriptedStreamingChatModel([{ kind: 'text', text: '不该被调用' }]);
+  const graph = graphWith(model, { configurationRef: '  ' });
+
+  const result = await graph.invoke(
+    { coordinatorSessionId: SESSION, remainingWork: work(1).items, deferredWork: 0 },
+    { configurable: { thread_id: 'thread-no-configuration' }, ...COORDINATOR_INVOKE_DEFAULTS },
+  );
+
+  expect(result.status).toBe('blocked');
+  // 请求之前就被拒绝：provider 侧不会留下无人认领的响应。
+  expect(model.received).toEqual([]);
+  expect(committedSteps()).toEqual([]);
 });
 
 test('输出超限时实际终止这次调用，不重试也不提交部分响应', async () => {
@@ -631,12 +691,19 @@ test('响应无法落盘时不提交历史，并让这次预览以 interrupted �
   });
   const graph = graphWith(model, { sessionRecords: refusing, streamObserver: (event) => events.push(event) });
 
-  const result = await graph.invoke(
-    { coordinatorSessionId: SESSION, remainingWork: work(1).items, deferredWork: 0 },
-    { configurable: { thread_id: 'thread-refused' }, ...COORDINATOR_INVOKE_DEFAULTS },
-  );
-
-  expect(result.status).toBe('blocked');
+  const driver = new AgentTurnDriver({ coordinatorSessionId: SESSION, turns: store.turns,
+    execute: async signal => {
+      const result = await graph.invoke(
+        { coordinatorSessionId: SESSION, remainingWork: work(1).items, deferredWork: 0 },
+        { configurable: { thread_id: 'thread-refused' }, signal, ...COORDINATOR_INVOKE_DEFAULTS },
+      );
+      return result.status === 'blocked' ? { kind: 'halted', failure: { code: 'halted_by_host', message: result.note } }
+        : { kind: 'completed' };
+    } });
+  expect((await driver.run()).kind).toBe('stopped');
+  expect((await driver.run()).kind).toBe('stopped');
+  expect(model.received).toHaveLength(1);
+  expect(store.turns.readTurnState(SESSION).kind).toBe('halted');
   expect(committedSteps()).toEqual([]);
   expect(events.some((event) => event.kind === 'committed')).toBe(false);
   expect(events.at(-1)?.kind).toBe('interrupted');

@@ -51,6 +51,7 @@ export const COORDINATOR_RUNTIME_FAILURE_CODES = [
   'capability_missing',
   'checkpoint_store_failed',
   'incarnation_rejected',
+  'cancelled',
 ] as const;
 
 export type CoordinatorRuntimeFailureCode = (typeof COORDINATOR_RUNTIME_FAILURE_CODES)[number];
@@ -71,7 +72,16 @@ export type StartCoordinatorRuntimeOptions = {
   readonly clock?: () => number;
   readonly probeTimeoutMs?: number;
   readonly contextReadBytes?: number;
+  /** 宿主退出（CtrlC / SIGTERM / close）时的取消信号；能力核验与模型装配随它立即中止。 */
+  readonly signal?: AbortSignal;
 };
+
+const CANCELLED_MESSAGE = '启动已取消：前台正在退出';
+
+/** 取消是一次显式拒绝，不是能力缺失或 provider 故障。 */
+function cancelledIfAborted(signal: AbortSignal | undefined): CoordinatorRuntimeStartResult | null {
+  return signal?.aborted === true ? { kind: 'rejected', code: 'cancelled', message: CANCELLED_MESSAGE } : null;
+}
 
 export type StartedCoordinatorRuntime = {
   readonly kind: 'started';
@@ -104,8 +114,17 @@ export type CoordinatorRuntimeStartResult =
 export async function startCoordinatorRuntime(
   options: StartCoordinatorRuntimeOptions,
 ): Promise<CoordinatorRuntimeStartResult> {
+  const alreadyCancelled = cancelledIfAborted(options.signal);
+  if (alreadyCancelled !== null) {
+    return alreadyCancelled;
+  }
   // 1. 解析 provider 集成并构造 chat model；失败即拒绝启动。
   const resolved = await options.resolveModel();
+  // 每个 await 之后都重新确认本进程仍然服务：期间可能已收到退出意图。
+  const cancelledAfterResolve = cancelledIfAborted(options.signal);
+  if (cancelledAfterResolve !== null) {
+    return cancelledAfterResolve;
+  }
   if (resolved.kind === 'failed') {
     return { kind: 'rejected', code: 'model_resolution_failed', message: resolved.message };
   }
@@ -114,7 +133,13 @@ export async function startCoordinatorRuntime(
   const verification = await verifyModelCapabilities(resolved.model, {
     modelRef: options.configuration.configurationRef,
     ...(options.probeTimeoutMs === undefined ? {} : { timeoutMs: options.probeTimeoutMs }),
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
   });
+  // 取消先于核验结论判断：被中断的五条探测一律不是「能力缺失」。
+  const cancelledAfterProbe = cancelledIfAborted(options.signal);
+  if (cancelledAfterProbe !== null) {
+    return cancelledAfterProbe;
+  }
   if (verification.kind === 'rejected') {
     return { kind: 'rejected', code: 'capability_missing', message: verification.message };
   }

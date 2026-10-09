@@ -34,6 +34,8 @@ export const COMMAND_METADATA = {
   "help": {"path":"Help","shortcut":null,"action":null,"alias":"help","label":"Help","description":"命令与键位","target":"UI"},
   "model-settings": {"path":"模型连接设置","shortcut":null,"action":null,"alias":"connections","label":"模型连接设置","description":"管理 Provider 连接与模型","target":"Scope"},
   "execution-settings": {"path":"执行设置","shortcut":null,"action":null,"alias":"concurrency","label":"执行并发设置","description":"默认并行包额度与批准值","target":"Scope"},
+  "stop": {"path":"停止当前轮次","shortcut":null,"action":null,"alias":"stop","label":"停止当前轮次","description":"停止模型，保留会话与输入","target":"Session"},
+  "retry": {"path":"恢复停止轮次","shortcut":null,"action":null,"alias":"retry","label":"恢复停止轮次","description":"核验历史与未决操作后继续","target":"Session"},
 } as const satisfies Readonly<Record<string, CommandMeta>>;
 export type CommandId = keyof typeof COMMAND_METADATA;
 export const COMMAND_IDS = Object.keys(COMMAND_METADATA) as CommandId[];
@@ -53,6 +55,21 @@ export function literalMatch(query: string, ...values: string[]): boolean { retu
 export function searchCommands(query: string): readonly CommandId[] {
   return COMMAND_IDS.filter(id => { const meta = COMMAND_METADATA[id]; return literalMatch(query, id, meta.label, meta.description, meta.alias === null ? '' : '/' + meta.alias, meta.path); });
 }
+
+export function conversationCommands(): readonly CommandId[] {
+  return COMMAND_IDS.filter(id => ['stop', 'retry', 'input-record-manager', 'paste', 'exit', 'transcript-details', 'command-directory', 'help'].includes(id));
+}
+export function helpLines(mode: string, commands?: readonly CommandId[]): readonly string[] {
+  const ids = commands ?? (mode === 'debug' ? conversationCommands() : COMMAND_IDS);
+  return [
+    ...(mode === 'debug' ? [
+      ...ids.flatMap(id => { const meta = COMMAND_METADATA[id]; return meta.shortcut ? [meta.shortcut + ' · ' + meta.label] : []; }),
+      'Ctrl+A/E 当前行首尾 · 空输入 ↑ 召回 · Esc 逐层返回',
+      COMPOSER_SUBMIT_KEY + ' 提交 · Alt+Enter 换行',
+    ] : HELP_LINES),
+    ...ids.map(id => { const meta = COMMAND_METADATA[id]; return `${meta.alias ? '/' + meta.alias : meta.label} · ${meta.target} · ${meta.description}`; }),
+  ];
+}
 export type SlashResolution =
   | { readonly kind: 'not-command' }
   | { readonly kind: 'command'; readonly command: CommandId }
@@ -68,7 +85,7 @@ export type SlashResolution =
  * `handoff` 在规划与执行两个业务合同下同名：按当前模式选择，执行阶段取 `execution-handoff`。
  */
 function commandForSlashAlias(alias: string, mode: string): CommandId | undefined {
-  const matches = COMMAND_IDS.filter((command) => COMMAND_METADATA[command].alias === alias);
+  const matches = (mode === 'debug' ? conversationCommands() : COMMAND_IDS).filter((command) => COMMAND_METADATA[command].alias === alias);
   if (matches.length <= 1) {
     return matches[0];
   }
@@ -126,6 +143,7 @@ export function slashCandidates(text: string, mode: string): readonly CommandId[
   if (!/^\/[a-z-]*$/i.test(text)) return [];
   const query = text.slice(1).toLowerCase();
   return COMMAND_IDS.filter(command => {
+    if (mode === 'debug' && !conversationCommands().includes(command)) return false;
     const alias = COMMAND_METADATA[command].alias;
     return alias !== null && alias.startsWith(query) && commandForSlashAlias(alias, mode) === command;
   });

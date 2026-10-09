@@ -70,6 +70,11 @@ export type FencingAssertion =
   | { readonly kind: 'valid'; readonly lease: LeaseRecord }
   | { readonly kind: 'fenced'; readonly code: FenceViolationCode };
 
+/** The workflow needs a write verdict; the host owns its actual lease or debug writer lock. */
+export type SessionWriteAssertion =
+  | { readonly kind: 'valid' }
+  | Extract<FencingAssertion, { readonly kind: 'fenced' }>;
+
 /**
  * 读回同一 Session 会话状态的 port。
  *

@@ -157,8 +157,24 @@ export type StreamedTurn =
       readonly kind: 'incomplete';
       readonly text: string;
       readonly chunkSize?: number;
+      /** 传输层错误码或 HTTP 状态：用来表达「可证明的瞬时 provider 故障」。 */
+      readonly code?: string;
+      readonly status?: number;
     }
-  | { readonly kind: 'error' };
+  | { readonly kind: 'error'; readonly code?: string; readonly status?: number };
+
+/**
+ * 一次失败：默认是普通 `Error`（不可重试），带 `code` 或 `status` 时表达结构化的瞬时故障。
+ *
+ * 真实 SDK 会把网络失败包成带 `code`/`status` 的错误，因此分类判断只有结构化字段可用，
+ * 不能靠文案。
+ */
+function streamError(turn: { readonly code?: string; readonly status?: number }): Error {
+  return Object.assign(new Error('provider 连接中断'), {
+    ...(turn.code === undefined ? {} : { code: turn.code }),
+    ...(turn.status === undefined ? {} : { status: turn.status }),
+  });
+}
 
 function textChunks(text: string, chunkSize: number | undefined): AIMessageChunk[] {
   if (text.length === 0 || chunkSize === undefined) {
@@ -264,7 +280,7 @@ export class ScriptedStreamingChatModel extends BaseChatModel {
     }
     this.index += 1;
     if (turn.kind === 'error') {
-      return Promise.reject(new Error('provider 连接中断'));
+      return Promise.reject(streamError(turn));
     }
     const chunks = chunksOf(turn);
     const message = chunks.length === 1 && chunks[0] !== undefined ? chunks[0] : chunks.reduce((left, right) => left.concat(right));
@@ -284,7 +300,7 @@ export class ScriptedStreamingChatModel extends BaseChatModel {
     }
     this.index += 1;
     if (turn.kind === 'error') {
-      throw new Error('provider 连接中断');
+      throw streamError(turn);
     }
     for (const chunk of chunksOf(turn)) {
       if (options?.signal?.aborted === true) {
@@ -297,7 +313,7 @@ export class ScriptedStreamingChatModel extends BaseChatModel {
     }
     if (turn.kind === 'incomplete') {
       // 响应在交付前断开：已经产出的 chunk 不是一次完整响应。
-      throw new Error('provider 连接中断');
+      throw streamError(turn);
     }
   }
 

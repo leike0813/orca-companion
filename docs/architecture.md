@@ -87,7 +87,7 @@ Application 是业务规则的外部 interface。小型纯用例可以直接是�
 | 项目 | 合同 |
 |---|---|
 | Canonical path | `src/workflow/` |
-| 职责 | Coordinator Agent 的 LangGraph loop、模型/tool 节点、checkpoint 恢复与 suspend |
+| 职责 | Coordinator Agent 的 LangGraph loop、模型/tool 节点、checkpoint 恢复与 suspend；两个宿主共用的轮次驱动与调试只读工具 schema |
 | 允许依赖 | `MOD-02` 的用例与 DTO、LangGraph interface、注入的 chat model |
 | Interface | Coordinator graph 的启动/恢复入口和 checkpoint 所需 Session state |
 | 禁止 | 另建业务状态机、直接调用 Orca/SQLite、重验一套不同的授权或预算、节点重启整张图 |
@@ -106,6 +106,8 @@ Application 是业务规则的外部 interface。小型纯用例可以直接是�
 
 Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation catalog、进程和 schema 转换；`storage` 分别实现 Branch Coordination Store、LangGraph checkpointer 与 IC-13 UI 输入存储，不共享表或伪装跨库事务。IC-04 的会话历史在 checkpoint 库中按稳定 entry、正文块、step 和 Wake 关联追加，控制记录保持小型；正文范围与 metadata keyset 由 `application/coordinator/history.ts` 定义。有效上下文、工具恢复、待处理输入和 UI 分页各自按用途读取，压缩历史保留原文且不进入常规模型输入读取。TUI 只保留当前 Session 的有界正文/派生缓存及来源锚点；SQLite 是已提交原文的唯一权威。
 
+协调宿主与调试宿主共享 `workflow/coordinator/turn-driver.ts` 与 IC-04 的轮次端口，因此「一次请求能否发出、结束后停在哪里」只有一份实现，宿主只负责把图结局映射为轮次结局。`adapters/agents/debug-read-tools.ts` 实现调试专用的有界只读文件与 Git 访问，不进入协调工具注册表，也不成为通用只读能力。
+
 `storage/credential-store.ts` 是版本控制之外唯一保存明文 secret 的地方，只服务 Coordinator 模型调用，与上面三个存储无关：单文件按 XDG 规则落在用户配置目录，短 exclusive 文件锁、revision CAS、0600 临时文件原子替换与回读；权限不安全的既有目录、文件与符号链接一律拒绝，且不 chmod 用户既有目录。它与项目配置文件之间没有跨文件事务，Coordinator 连接编辑先校验、写凭据并回读，再 CAS 追加用户库；项目显式选择完整快照；Worker 角色选择不写凭据，Worker 启动也不读取该 store。
 
 ### MOD-05 CLI
@@ -113,7 +115,7 @@ Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation
 | 项目 | 合同 |
 |---|---|
 | Canonical path | `src/interfaces/cli/` |
-| 职责 | `status [--json]`、`doctor` 与顶层 argv 解析 |
+| 职责 | `[repository-path]`、`--debug [directory]`、`status [--json]`、`doctor` 与顶层 argv 解析 |
 | 允许依赖 | `MOD-02` 的只读查询/`ControllerService`、Bootstrap 注入的启动能力 |
 | Interface | stdout 机器输出、stderr 诊断、稳定退出码 |
 | 禁止 | 加载 Ink/React、要求 TTY、自行推进状态、直接调用 adapter、在查询时续租或对账 |
@@ -124,7 +126,7 @@ Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation
 | 项目 | 合同 |
 |---|---|
 | Canonical path | `src/interfaces/tui/`、`src/application/tui/view-model.ts` 与 `src/application/execution/execution-view.ts` |
-| 职责 | Ink transcript、composer、sidebar、overlay、Graph Inspector、输入映射，执行态/规划态纯展示 projection，以及执行阶段只读派生（`execution-view.ts`） |
+| 职责 | Ink transcript、composer、sidebar、overlay、Graph Inspector、输入映射，两个宿主共用的对话区域（`components/conversation.tsx`）与调试工作台（`debug-app.tsx`），执行态/规划态纯展示 projection，以及执行阶段只读派生（`execution-view.ts`） |
 | 允许依赖 | `IC-11` Controller façade、`IC-12` view model、`IC-13` UI 输入、`IC-14` 模型设置与 `IC-15` 展示偏好端口；Ink/React 与 `@inkjs/ui` 展示组件 |
 | Interface | 用户 intent、选中 Session、局部草稿/滚动/overlay 状态和渲染帧 |
 | 禁止 | 调用 Orca、打开 store、恢复模型、实现重试/准入/预算、从自由文本推断待答 interaction；`execution-view.ts` 只从 IC-03 快照与调用方读到的只读观察派生，不派发、不写、不实现对账 |
@@ -155,7 +157,7 @@ Composer 的纯编辑模块拥有 grapheme 光标、原子粘贴范围和有界 
 | 项目 | 合同 |
 |---|---|
 | Canonical path | `src/bootstrap/` |
-| 职责 | 配置、依赖注入、能力核验、启动顺序、信号和进程生命周期；前台宿主的执行阶段装配：启动对账与 Resume 门、Execution Authorization 授权切换、单步 Frontier 推进（`advanceExecution`）、Delivery 结算与 Recovery 续办、受控 Git 集成、只读 Finalizer 派发，以及 Scope 控制与 Execution Handoff 意图接线 |
+| 职责 | 配置、依赖注入、能力核验、启动顺序、信号和进程生命周期；前台宿主的执行阶段装配：启动对账与 Resume 门、Execution Authorization 授权切换、单步 Frontier 推进（`advanceExecution`）、Delivery 结算与 Recovery 续办、受控 Git 集成、只读 Finalizer 派发，以及 Scope 控制与 Execution Handoff 意图接线；另装配无 Scope 的调试宿主（`debug-runtime.ts`、`debug-entry.ts`） |
 | 允许依赖 | 所有 module 的公开 interface 以完成组合 |
 | Interface | core/CLI/TUI 启动入口与 `doctor` 组合报告 |
 | 禁止 | 持有领域规则、复制用例、在 import 时启动进程、让核心入口加载 UI 或数据库 |
@@ -186,6 +188,8 @@ flowchart LR
 
 前台 TUI 退出只停止本进程；活跃 Worker 可能继续。重新启动时 Bootstrap 先恢复 store、取得 Runtime Lease 并对账，再允许模型恢复或新派发。M0–M2 没有后台 controller、远程 attach 或 headless run。
 
+`ocp --debug [directory]` 启动第二个前台宿主。它同样先检查双 TTY，但只装配真实模型、对话核心、有界只读工具与 IC-13 输入保护，不加载协调库、执行图、Worker Harness 或授权审阅；会话与历史留在用户状态目录，不写入项目仓库或 Git common dir。
+
 ## 权威归属
 
 | 事实 | Owner | Companion 可保存的内容 |
@@ -197,6 +201,7 @@ flowchart LR
 | 共享协调事实 | `coordination.sqlite` | mode、leases、claims、intents、budgets、interactions、CAS revision |
 | Coordinator Session | `checkpoints.sqlite` | 已提交消息/tool step、图位置、Wake Batch、Context Capsule |
 | UI 输入 | `ui.sqlite` | 按 Scope/Session/回答 revision 隔离的草稿、冲突副本、待核验提交；不形成业务受理事实 |
+| 调试会话 | `${XDG_STATE_HOME:-~/.local/state}/orca-companion/debug` | 会话注册、该 Session 的 checkpoint/UI 输入与诊断；没有 Scope、执行图、Worker 或授权 |
 | Coordinator provider secret | 用户级 CredentialStore 文件 | 只服务 Coordinator 模型调用；其它地方只保存 `credentialRef`，Worker 启动不读取 |
 | 可复用连接与模型 | 用户级 `providers.json` | 不可变连接/模型追加记录与 revision CAS，一个连接可保存多个模型 |
 | 模型与连接设置 | 项目 `orca-companion.json`（schema 5） | 明确选定的完整 Coordinator 快照、角色 Worker Profiles（harness + `modelSelection`）与当前选择引用 |
@@ -353,16 +358,42 @@ sequenceDiagram
 
 保存与应用分开：保存只改配置，Session、已批准 Manifest、Task 与已消耗预算不变。Coordinator 连接编辑时两个文件之间没有跨文件事务，凭据先落盘；Worker 角色选择只写项目配置并在显式目录查询的缓存内核验来源。项目引用保存失败时保留输入，可能留下未被引用的孤立 secret，但不会激活任何配置。执行期更新模型选择或并行额度时按当前 Graph head、完整指纹和 Scope revision 重新批准，不创建 Graph Revision、不重置预算。详见 `IC-04`、`IC-05`、`IC-11`。
 
+### FLOW-07 模型轮次、停止与明确恢复
+
+```mermaid
+sequenceDiagram
+  participant H as 宿主（协调或调试）
+  participant T as AgentTurnDriver
+  participant P as AgentTurnPort（checkpoint）
+  participant M as 固定协议 chat model
+
+  H->>T: run()（先核验可信 configurationRef）
+  T->>P: writeTurnState(running)
+  alt running 落盘成功
+    T->>M: 每次调用最多三次尝试（仅断连/429/500/502/503/504）
+    M-->>T: 完整响应或结构化故障
+    T->>P: appendModelStep → idle
+  else 落盘失败
+    T-->>H: stopped(state_unavailable)，本进程不再发请求
+  end
+  Note over H,P: 任何故障先 abort 在途请求并上 latch，再落盘 halted
+  H->>T: stop() / retry(verify)
+  T->>P: writeTurnState(halted) / 核验历史、租约与未决副作用
+  T-->>H: halted 或 cleared
+```
+
+轮次状态是唯一的自动恢复闸：`halted` 或重开时读到的 `running` 都会拒绝 invoke、pending Wake、定时 wake 与维护，直到用户明确 `/retry` 且核验通过。详见 `IC-04`、`IC-11`、`IC-12`、`IC-16`。
+
 ## 合同导航
 
 | Module | 主要接口合同 |
 |---|---|
 | MOD-01 Domain | IC-01、IC-05–IC-10 |
-| MOD-02 Application | IC-02–IC-11、IC-13–IC-15 |
-| MOD-03 Workflow | IC-04、IC-11 |
-| MOD-04 Adapters | IC-02–IC-10、IC-13–IC-15 |
-| MOD-05 CLI | IC-11、IC-12 |
-| MOD-06 TUI | IC-11–IC-15 |
-| MOD-07 Bootstrap | IC-02–IC-04、IC-11–IC-15 |
+| MOD-02 Application | IC-02–IC-11、IC-13–IC-16 |
+| MOD-03 Workflow | IC-04、IC-11、IC-16 |
+| MOD-04 Adapters | IC-02–IC-10、IC-13–IC-16 |
+| MOD-05 CLI | IC-11、IC-12、IC-16 |
+| MOD-06 TUI | IC-11–IC-16 |
+| MOD-07 Bootstrap | IC-02–IC-04、IC-11–IC-16 |
 
 Coordinator Provider 设置由 `application/configuration/provider-library.ts` 与 `provider-catalog.ts` 拥有公共用例/端口；storage 的用户库 adapter 与 agents 的 catalog adapter 分别实现持久化与有界 HTTP。内置 chat-model factory 按固定协议直接构造 LangChain 模型，bootstrap 注入唯一 CredentialStore。公共 catalog 更新独立于连接发现；非空发现独占候选，失败按同连接/凭据/catalog版本的 LKG→catalog 回退。UI/lab 共用这些服务，render 只读，明确意图触发保存/发现/更新。

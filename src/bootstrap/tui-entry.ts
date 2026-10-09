@@ -90,10 +90,14 @@ export async function runTuiEntry(
     }),
     { exitOnCtrlC: false, interactive: true },
   );
+  const terminate = () => { ports.exitIntent?.(); app.unmount(); };
+  process.once('SIGTERM', terminate);
   try {
     await app.waitUntilExit();
   } finally {
+    process.removeListener('SIGTERM', terminate);
     // 退出只清理本进程资源：不隐式 Pause/Cancel 任何 Scope 或 Session。
+    ports.exitIntent?.();
     composed.close();
   }
   return 0;

@@ -25,6 +25,7 @@ Companion 为范围明确的软件项目提供可恢复、可追踪、有预算�
 - Coordinator 使用内置固定协议 LangChain adapter：OpenAI Chat、OpenAI Responses、Anthropic Messages 与官方 Gemini。API Key 从唯一 CredentialStore 解析，不自动换协议或模型。`doctor` 与启动/应用必须核验文本、流式、真实工具调用及结果续接、取消和可用 usage，缺必需能力拒绝启动。
 - API key 只服务 Coordinator 模型调用，保存于用户级明文 CredentialStore（见下）；项目配置、checkpoint、UI 输入存储、命令参数、诊断与证据只出现不透明 `credentialRef`，Worker 启动不读取该 store。这是用户确认的取舍：它改变了本文件早期「Companion 不保存密钥」的约束。
 - Coordinator Session 使用 LangGraph SqliteSaver，`durability: sync`；Branch Coordination State 使用独立 SQLite store。
+- 模型节点的可信 `configurationRef` 是必填依赖，请求前核验；为空即拒绝发出请求。只有断连、429 与 500/502/503/504 可自动重试，每次模型调用最多三次尝试且关闭 SDK 内层重试；解析、类型、普通 Error、fencing、取消、上下文、落盘与输出超限不重试。分类只在 `workflow/coordinator/model-call.ts` 一处。
 - TUI 使用 `ink@7.1.1`、`react@19.3.0` 和 `@types/react@19.3.0`；TUI 测试可使用 `ink-testing-library@4.0.0`，但其 Ink 7/React 19 兼容性仅有本机验证。
 - 边界 DTO、CLI JSON、项目配置和持久化记录必须做运行时 schema 校验；领域类型不得依赖框架运行时对象。项目配置为 schema 5：保存 `revision`、Coordinator 完整不可变连接/模型/配置快照与 `execution.workerProfiles`；用户级 providers.json 以追加记录与 CAS 支持跨项目、多模型复用。ProviderConnection 只带服务、协议、地址与 API Key 引用。旧格式明确拒绝且不自动改写；Worker Profile 仍绑定 harness 与 `modelSelection`。
 - 测试使用 Vitest，不为覆盖率引入第二套运行器。
@@ -197,11 +198,13 @@ Graph Patch 采用原子的 `add + revise + retire`：
 - `coordination.sqlite` 保存模式、Planning Cycle、当前 graph/authorization 引用、Session 注册及 Coordinator Model Configuration binding、Ticket Claim、Pending Interaction、Operation Intent、Runtime/Execution lease、fencing、共享预算状态和 CAS revision；
 - `checkpoints.sqlite` 由 LangGraph SqliteSaver 保存每个 Session 的已提交消息/tool step、图位置、Wake Batch 与 Context Capsule。
 
+`checkpoints.sqlite` 当前为 schema 4，每个 Session 另有一行轮次状态 `idle`/`running`/`halted`，独立于正文与协调状态；请求前先落盘 `running`，写失败即本进程停止，正常结束落盘 `idle`，故障或用户停止落盘 `halted`。停止的顺序固定为先 abort 在途请求、再上进程内 latch、最后落盘。`halted` 以及重开时读到的 `running`（视为中断）都拒绝全部自动 invoke、pending Wake、定时 wake 与维护；期间受理的用户消息按原身份保留。`/retry` 需重新核验历史可读、Runtime Lease 与 fencing、Session 注册、Scope 控制状态与未决 mutation/Operation Intent，通过后才恢复；已提交响应、工具与 submission 身份不改写。详见 IC-04/11。
+
 `coordination.sqlite` 当前为 schema 20：每个 Scope/Session 只有一个 active Ticket Claim；Session blocked 保存结构化原因，损坏的执行 Lease holder 同时阻塞 Scope。角色结算保存明确 outcome 与 Validator verdict，历史缺失值按不可证明处理。实现尝试随派发准入、Validator 修复随稳定步骤准入原子计费，重放不重复扣预算。物化绑定要求 `authorization_id`、`authorization_version` 与 `worker_profile_ref`；同一契约 Retry 保持 Task 和授权，只追加 Attempt/Dispatch 绑定。初始图记录 nullable `initial_plan_json`，初始 v1 写入必须携带与 `planRevision` 一致的归一化 Implementation Plan，并与图记录在同一事务提交。旧行保持 `null`，读取时明确显示原计划未记录，不推断回填；accepted revision 不改写原计划。prepared terminal 的原创建回执句柄随 Operation Intent 结算保存；恢复在精确 worktree 内重新核验该资源，显示标题不承担身份语义。原句柄缺失或失效时阻塞，不能重发已接受的创建操作。
 
 图历史与依据正文遵守 IC-03/05/06/11/12：版本目录、head、追加链 membership 与依据 UTF-8 范围通过 metadata/范围查询读取；目录每页最多 20 项，正文每次最多 64 KiB。初始计划按 JSON 原结构保留，以 SQLite BLOB 范围读取，不先全文编码。generation 状态只读登记值，不能从历史身份推断 frozen。TUI 唯一只读 seam 是 `src/application/tui/graph-basis.ts` 的 `GraphBasisPort`，应用实现由 `src/application/tui/graph-basis-service.ts` 拥有。来源引用按判别联合 fail closed。原生规格 provider 的 `readFiles` 与 `readFileRange` 是可选能力，只有 task、package、Orca Task、locator 和 contract binding 精确匹配时才可读；`listSources` 可带 `orcaTaskId` 进入该 Task binding 的精确 unit，tracking revision 独立呈现。tracker 只读取配置的当前 `routeMapIssueRef`；未保存的批准时正文明确缺失。`retained_task` 是 Work Package 级保留记录，不能按时间归到某个 GraphVersion。ProjectDetails 仍绑定当前 Scope revision；历史图与依据使用独立来源身份和各自 8 MiB/64 项缓存，snapshot 只带当前拓扑。历史图不得借用当前 frontier、worker、budget 或验收事实。
 
-UI 输入另存于同目录 `ui.sqlite`，由 IC-13 的应用端口、storage adapter 和 Bootstrap 装配拥有。草稿、冲突副本与待核验提交按 Scope/Session/回答 revision 隔离；提交先保存完整快照和稳定 submissionId，再调用业务用例。输入恢复只核验原身份，界面 render/effect/resize/remount 只读取，不持久写入或自动发送。容量满额与 CAS 冲突保留输入并经 `/inputs` 显式处理；详细合同见 `docs/interface-contracts.md` IC-13。
+UI 输入另存于同目录 `ui.sqlite`，由 IC-13 的应用端口、storage adapter 和 Bootstrap 装配拥有。草稿、冲突副本与待核验提交按 Scope/Session/回答 revision 隔离；提交先保存完整快照和稳定 submissionId，再调用业务用例。输入恢复只核验原身份，界面 render/effect/resize/remount 只读取，不持久写入或自动发送。容量满额与 CAS 冲突保留输入并经 `/inputs` 显式处理；调试输入使用 `debug-message` 目标与独立 key 前缀，不借用 Scope 或回答身份，原 message/answer key 不变；详细合同见 `docs/interface-contracts.md` IC-13。
 
 UiDraft.text 是唯一展开载荷，cursor 位于 grapheme 边界，折叠粘贴只保存唯一身份与非重叠范围。`ask_user` 的问答正文由 Branch Store 拥有，可信 operationId 派生 InteractionId；同载荷重放复用原记录，异载荷拒绝。Scope/Session 问题页和指定 ID 摘要每次最多 20 条，展示 snapshot 使用完整聚合计数，Finalizer 不取页长。历史 Q/A 沿 IC-11 的 interaction source/version/part/UTF-8 range 原位阅读；完整合同见 IC-03/11/12。
 
@@ -222,10 +225,13 @@ LangGraph checkpoint、SQLite 和 Orca receipt 都不提供跨系统 exactly-onc
 发布命令为 `ocp`（`orca-companion` 为等价长别名）：
 
 - `ocp [repository-path]` 启动前台 TUI；Home 选择现有 Scope，或通过最小向导核验 repository、branch、canonical worktree、Coordinator Model Configuration、tracker 和 Orca 能力后创建 Scope。
+- `ocp --debug [directory]` 启动无 Scope 的前台调试会话；目录缺省为当前目录，允许普通非 Git 目录。
 - `ocp status [--json]` 执行一次性只读查询。
 - `ocp doctor` 检查环境与能力。
 
 不提供 `run`、`resume`、`tui` 或 headless 子命令。启动 TUI 前同时检查 stdin/stdout TTY；无 TTY 时以非零状态明确拒绝。`status --json` 与 `doctor` 必须无 TTY 可运行，机器输出只写 stdout，诊断写 stderr。
+
+调试模式复用真实固定协议 adapter、唯一 CredentialStore、ProviderLibrary 与 capability probe、同一轮次驱动、对话核心和 IC-13 输入保护，但不创建 Coordination Scope、执行图、Run、Worker 或授权，也不写 Git common dir。会话注册、checkpoint、UI 输入与诊断保存在 `${XDG_STATE_HOME:-~/.local/state}/orca-companion/debug`；用户明确新建或继续，并选定用户库中已有的连接与模型，会话固定该不可变配置快照。调试工具固定为 `list_files`、`read_file`、`search`、`git_diff`，限制调试根目录、输出、处理量与时间并支持取消，越界、绝对路径、符号链接逃逸与非普通文件返回结构化拒绝。合同见 IC-12/13/16。
 
 初始化只建立 Scope、Planning Cycle 与首个 Coordinator Session；Worker Profiles、预算、依赖权限、Git 集成和 accepted risks 留给 Execution Authorization Manifest。
 
@@ -250,6 +256,8 @@ Transcript 只显示用户/Agent 消息和折叠 tool 记录；运行事实按�
 最小全局键位为 `Ctrl+P` 打开 Command Palette、`Ctrl+B` 开合项目面板、`Ctrl+G` 打开 Graph Inspector、`Esc` 逐层返回，方向键与 Enter 用于导航。slash 上方候选先采用、再明确执行；审阅默认返回。Session Picker 和新事件不得自动切换 transcript、抢占 composer 或改变 Scope 级 Graph；M2 不实现自定义键位。用户级 Nerd/ASCII 与 statusline 偏好由 IC-15 拥有：只在明确输入意图中分区 CAS 保存，环境图标覆盖保持临时，失败保留编辑及未保存选择。render/effect/resize/remount 只读。
 
 第七批 metadata 由应用 `project-presentation.ts` 投影注册身份、选中 Session 的精确模型/Claim、当前 Dispatch Work Package 和绑定批准上限的预算，缺来源不可用。context 只接受 installed integration 对当前完整有效输入与 tools 的精确测量及可信模型窗口，并绑定 Session/configuration/输入版本；消息/tool/压缩/换模型后失效，禁止近似 tokenizer、字符估算或累计 usage 冒充。statusline、Sidebar 与 Inspector 共用当前全图未 retire 包的 Accepted Validator Result 摘要，不从局部窗口或 Task done 猜进度。项目详情只经 IC-11/12 有界端口，每页20项/64KiB，批准后 Manifest 与候选区分，旧对象/版本结果不得替换当前页。
+
+`/stop` 与 `/retry` 只作用于 Session 级模型轮次，不改变 Scope 控制状态；`stop` 先 abort 再持久化，`retry` 核验后恢复原会话，输入与阅读位置保留。Exit 与 `Ctrl+C` 先中止在途模型，再走草稿保存与退出流程；取消不触发重试。
 
 Pause、Resume 和 Cancel 都作用于整个 Coordination Scope：
 

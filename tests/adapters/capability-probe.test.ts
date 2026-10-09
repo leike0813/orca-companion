@@ -84,6 +84,29 @@ class ProbeChatModel extends BaseChatModel {
   }
 }
 
+test('退出中止正在核验的请求，后续能力不再请求', async () => {
+  const started = Promise.withResolvers<void>();
+  let requests = 0;
+  let aborted = false;
+  const model = { invoke: (_messages: unknown, options: { signal: AbortSignal }) => {
+    requests++;
+    started.resolve();
+    return new Promise<never>((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => {
+        aborted = true;
+        reject(new DOMException('cancelled', 'AbortError'));
+      }, { once: true });
+    });
+  } } as unknown as BaseChatModel;
+  const controller = new AbortController();
+  const pending = verifyModelCapabilities(model, { signal: controller.signal, timeoutMs: 5000 });
+  await started.promise;
+  controller.abort();
+  expect((await pending).kind).toBe('rejected');
+  expect(aborted).toBe(true);
+  expect(requests).toBe(1);
+});
+
 test('五项必需能力全部通过才算核验成功', async () => {
   const result = await verifyModelCapabilities(new ProbeChatModel(), { timeoutMs: 2_000 });
 
@@ -212,6 +235,38 @@ test('核验用工具执行真实调用并完成 ToolMessage 续接', async () =
   expect(CAPABILITY_PROBE_TOOL.description.length).toBeGreaterThan(0);
   const result = await verifyModelCapabilities(new ProbeChatModel(), { timeoutMs: 2_000 });
   expect(result.kind).toBe('verified');
+});
+
+test.each([
+  { failure: 'timeout', expected: '超时' },
+  { failure: 'request', expected: '请求失败' },
+  { failure: 'http', expected: 'HTTP 429' },
+])('工具探测保留 $failure 的阶段和安全原因', async ({ failure, expected }) => {
+  const secret = 'fixture-private-error-payload';
+  for (const continuation of [false, true]) {
+    class FailingToolModel extends ProbeChatModel {
+      override bindTools(tools: readonly unknown[]): Runnable {
+        const bound = super.bindTools(tools);
+        return {
+          invoke: (messages: readonly BaseMessage[]) => {
+            if (messages.some(message => message instanceof ToolMessage) === continuation) {
+              return failure === 'timeout'
+                ? new Promise<never>(() => undefined)
+                : Promise.reject(Object.assign(new Error(secret), failure === 'http' ? { status: 429 } : {}));
+            }
+            return bound.invoke([...messages]);
+          },
+        } as unknown as Runnable;
+      }
+    }
+    const result = await verifyModelCapabilities(new FailingToolModel(), { timeoutMs: 20 });
+    expect(result.kind).toBe('rejected');
+    expect(result.report.missing).toEqual(['tool_calling']);
+    const detail = result.report.details.find(item => item.startsWith('tool_calling:'));
+    expect(detail).toContain(continuation ? '工具结果续接' : '工具调用');
+    expect(detail).toContain(expected);
+    expect(JSON.stringify(result)).not.toContain(secret);
+  }
 });
 
 test('文本生成为空时判定为缺失', async () => {

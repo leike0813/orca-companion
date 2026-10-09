@@ -58,6 +58,8 @@ import {
 import { answerPendingInteraction, createUserQuestion } from '../application/coordination/pending-interaction.js';
 import { recordAcceptedTaskResult } from '../application/delivery/process-delivery.js';
 import { userQuestionTool } from '../workflow/coordinator/interaction-tools.js';
+import { AgentTurnDriver } from '../workflow/coordinator/turn-driver.js';
+import type { AgentTurnResult } from '../application/ports/agent-turn.js';
 import { asRecord, toolInputSchema } from '../workflow/coordinator/tool-definition.js';
 import { querySubmission, type SubmissionQuery, type SubmissionStatus } from '../application/coordinator/submission-status.js';
 import type { UiInputStore, UiInputRecord } from '../application/ports/ui-input-store.js';
@@ -264,7 +266,6 @@ import {
 import type { DeliveryVerdict } from '../domain/delivery-verdict.js';
 import type { ClaimProjection } from '../domain/planning/ticket-claim.js';
 import type {
-  CommittedMessageEntry,
   CoordinatorSessionState,
 } from '../domain/coordinator/session-state.js';
 import { COORDINATOR_SESSION_STATE_SCHEMA_VERSION, threadIdFor } from '../domain/coordinator/session-state.js';
@@ -398,6 +399,7 @@ import {
   type ToolSchemaEntry,
 } from '../workflow/coordinator/context.js';
 import { buildCoordinatorGraph, registerPlanningTools } from '../workflow/coordinator/graph.js';
+import { historySegmentsFromState as segmentsFromState, estimateHistoryTokens as estimatorInput, buildSessionBoundedInput, nativeCompactionAvailabilityFor, persistBoundedCompaction } from '../workflow/coordinator/history-input.js';
 import { planningRecoveryToolset } from '../workflow/coordinator/planning-tools.js';
 import {
   executionToolsForMode,
@@ -634,6 +636,7 @@ type LiveSession = {
   pendingWake: ProjectedActionableWorkItem[] | null;
   inFlightModelOperations: number;
   modelAbort: AbortController | null;
+  turn: AgentTurnDriver | null;
 };
 
 /**
@@ -934,6 +937,10 @@ export async function createForegroundPlanningHost(
   const previews = createTranscriptPreviewStore();
   let previewCapacityUnavailable = false;
   let closed = false;
+  let exitRequested = false;
+  // 启动阶段的取消：CtrlC / SIGTERM / close 必须能中断在途的能力核验，而不是等它跑完五条探测。
+  // 与已注册 Session 的 modelAbort 分开：被取消的启动还没有 LiveSession 可取消。
+  const startupAbort = new AbortController();
   let reconciliationTimer: ReturnType<typeof setTimeout> | null = null;
 
   const publish = (
@@ -1804,217 +1811,40 @@ export async function createForegroundPlanningHost(
   // 模型输入与压缩
   // ---------------------------------------------------------------------
 
-  /** 已提交条目按 step 分组形成片段；已有 Capsule 覆盖的区间不再逐字进入输入。 */
-  const segmentsFromState = (state: CoordinatorSessionState): readonly HistorySegment[] => {
-    const capsule = state.contextMaterial?.capsule ?? null;
-    const native = state.contextMaterial?.nativeWindowOwner ?? null;
-    const covered = new Set<string>();
-    if (capsule !== null) {
-      const from = state.committedMessages.findIndex((entry) => entry.stepId === capsule.replacedFromStepId);
-      const to = state.committedMessages.findLastIndex((entry) => entry.stepId === capsule.replacedToStepId);
-      if (from >= 0 && to >= from) {
-        for (const entry of state.committedMessages.slice(from, to + 1)) {
-          covered.add(entry.entryId);
-        }
-      }
-    }
-    const grouped: HistorySegment[] = [];
-    if (native !== null) grouped.push({ kind: 'native-window', ownerRef: native.ownerRef, items: native.items });
-    if (capsule !== null && native === null) {
-      grouped.push({
-        kind: 'capsule',
-        capsuleId: capsule.capsuleId,
-        text: capsule.text,
-        replacedFromStepId: capsule.replacedFromStepId,
-        replacedToStepId: capsule.replacedToStepId,
-      });
-    }
-    let current: { kind: 'messages'; stepId: string; messages: CommittedMessageEntry[] } | null = null;
-    for (const entry of state.committedMessages) {
-      if (covered.has(entry.entryId)) {
-        continue;
-      }
-      if (current === null || current.stepId !== entry.stepId) {
-        current = { kind: 'messages', stepId: entry.stepId, messages: [] };
-        grouped.push(current);
-      }
-      current.messages.push(entry);
-    }
-    return grouped;
-  };
+  const contextRequestFor = (
+    session: LiveSession,
+    tools: readonly PlanningToolDefinition[],
+    currentWork: ProjectedActionableWorkItem | null,
+  ) => ({
+    configurationRef: session.configuration.configurationRef,
+    fixedOverhead: toolSchemaTokens(tools),
+    budgetTokens: config?.context.maxInputTokens ?? 100_000,
+    nativeCompaction: session.nativeCompaction,
+    instructions: FOREGROUND_COORDINATOR_INSTRUCTIONS,
+    toolSchema: toolSchemaOf(tools),
+    authoritativeFacts: authoritativeFactsFor(session),
+    currentWork,
+    ...(session.modelAbort === null ? {} : { signal: session.modelAbort.signal }),
+  });
 
-  const estimateTokens = (segments: readonly HistorySegment[]): number =>
-    segments.reduce((total, segment) => {
-      if (segment.kind === 'capsule') {
-        return total + Math.ceil(segment.text.length / 4);
-      }
-      if (segment.kind === 'native-window') {
-        return total;
-      }
-      return (
-        total +
-        segment.messages.reduce<number>((sum, message) => {
-          const content = (message as { readonly content?: unknown }).content;
-          return sum + (typeof content === 'string' ? Math.ceil((content.length + 16) / 4) : 0);
-        }, 0)
-      );
-    }, 0);
-
-  const estimatorInput = (segments: readonly HistorySegment[]): number => estimateTokens(segments);
-
-  /**
-   * provider 原生压缩的可用性。
-   *
-   * 只有集成显式提供能力时才尝试；provider 看到的是**未压缩的完整有效输入**，因此先用一个不触发
-   * 压缩的预算把消息组装出来再交给它。调用失败或 provider 不返回窗口一律按 unavailable 处理，绝不
-   * 退化成「假装压过」。
-   */
-  const nativeAvailabilityFor = async (
+  const nativeAvailabilityFor = (
     session: LiveSession,
     segments: readonly HistorySegment[],
     tools: readonly PlanningToolDefinition[],
     currentWork: ProjectedActionableWorkItem | null,
-  ): Promise<NativeCompactionAvailability> => {
-    if (session.nativeCompaction === null) {
-      return { kind: 'unavailable', reason: 'provider 集成未提供原生压缩能力' };
-    }
-    if (estimatorInput(segments) + toolSchemaTokens(tools) <= (config?.context.maxInputTokens ?? 100_000)) {
-      return { kind: 'unavailable', reason: '当前有效输入已在预算内' };
-    }
-    if (session.modelAbort?.signal.aborted === true) {
-      return { kind: 'unavailable', reason: '本次模型调用已中止' };
-    }
-    // ponytail: 组装两次（探测 + 真正输入）；provider 压缩端点是真实网络调用，本地拼装占比可忽略。
-    const probe = buildBoundedModelInput({
-      segments,
-      estimate: estimatorInput,
-      fixedOverhead: toolSchemaTokens(tools),
-      budgetTokens: Number.MAX_SAFE_INTEGER,
-      native: { kind: 'unavailable', reason: 'probe' },
-      shaken: true,
-      instructions: FOREGROUND_COORDINATOR_INSTRUCTIONS,
-      toolSchema: toolSchemaOf(tools),
-      authoritativeFacts: authoritativeFactsFor(session),
-      currentWork,
-    });
-    try {
-      const compacted = await session.nativeCompaction.compact({
-        messages: probe.messages,
-        tools: probe.toolSchema,
-        ...(session.modelAbort === null ? {} : { signal: session.modelAbort.signal }),
-      });
-      if (compacted === null) {
-        return { kind: 'unavailable', reason: 'provider 本次未返回原生压缩窗口' };
-      }
-      return {
-        kind: 'available',
-        compact: () => ({
-          ownerRef: compacted.ownerRef,
-          items: compacted.items,
-          compactedTokens: compacted.compactedTokens,
-        }),
-      };
-    } catch {
-      return { kind: 'unavailable', reason: 'provider 原生压缩调用失败' };
-    }
-  };
+  ): Promise<NativeCompactionAvailability> =>
+    nativeCompactionAvailabilityFor(contextRequestFor(session, tools, currentWork), segments);
 
-  /**
-   * 组装本次有界输入。
-   *
-   * 先按 provider 能力取原生窗口，再按稳定边界决定是否复用已保存的机械 Shake 产物；同一历史 /
-   * configuration / Capsule 边界至多尝试一次 Shake，重启后仍读到同一结论。
-   */
-  const boundedInputFor = async (
+  const boundedInputFor = (
     session: LiveSession,
     state: CoordinatorSessionState,
     tools: readonly PlanningToolDefinition[],
     currentWork: ProjectedActionableWorkItem | null,
-  ): Promise<{ readonly input: ReturnType<typeof buildBoundedModelInput>; readonly shakeBoundary: string }> => {
-    const material = state.contextMaterial ?? null;
-    const shakeBoundary = mechanicalShakeSourceRevision({
-      tailSequence: session.checkpoints.readHistoryInspection(session.coordinatorSessionId).upperSequence,
-      configurationRef: session.configuration.configurationRef,
-      capsuleId: material?.capsule?.capsuleId ?? null,
-      nativeOwnerRef: material?.nativeWindowOwner?.ownerRef ?? null,
-    });
-    const resolution = resolveMechanicalShake({
-      artifact: material?.mechanicalShake ?? null,
-      sourceRevision: shakeBoundary,
-      segments: segmentsFromState(state),
-    });
-    const native = await nativeAvailabilityFor(session, resolution.segments, tools, currentWork);
-    const input = buildBoundedModelInput({
-      segments: resolution.segments,
-      estimate: estimatorInput,
-      fixedOverhead: toolSchemaTokens(tools),
-      budgetTokens: config?.context.maxInputTokens ?? 100_000,
-      native,
-      shaken: resolution.kind === 'reapplied',
-      instructions: FOREGROUND_COORDINATOR_INSTRUCTIONS,
-      toolSchema: toolSchemaOf(tools),
-      authoritativeFacts: authoritativeFactsFor(session),
-      currentWork,
-    });
-    return { input, shakeBoundary };
-  };
-
-  const persistCompaction = (
-    coordinatorSessionId: CoordinatorSessionId,
-    state: CoordinatorSessionState,
-    input: ReturnType<typeof buildBoundedModelInput>,
-    shakeBoundary: string,
-  ): CoordinatorSessionState => {
-    const checkpoints = checkpointStoreForScope();
-    if (checkpoints === null) {
-      return state;
-    }
-    if (input.compaction.kind === 'not_needed' && state.lastCompactionOutcome?.kind === 'not_needed') {
-      return state;
-    }
-    const capsuleSegment = input.segments.find((segment) => segment.kind === 'capsule');
-    const nativeSegment = input.segments.find((segment) => segment.kind === 'native-window');
-    const next: CoordinatorSessionState = { ...state, lastCompactionOutcome: input.compaction };
-    const saved = checkpoints.updateCheckpoint(coordinatorSessionId, { lastCompactionOutcome: input.compaction });
-    if (saved.kind === 'failed') {
-      throw new Error(`无法持久化压缩结论：${saved.message}`);
-    }
-    if (capsuleSegment !== undefined && capsuleSegment.kind === 'capsule') {
-      const capsuleSaved = checkpoints.savePortableCapsule(coordinatorSessionId, {
-        kind: 'derived_context_capsule',
-        capsuleId: capsuleSegment.capsuleId,
-        replacedFromStepId: capsuleSegment.replacedFromStepId,
-        replacedToStepId: capsuleSegment.replacedToStepId,
-        text: capsuleSegment.text,
-      });
-      if (capsuleSaved.kind === 'failed') {
-        throw new Error(`无法持久化压缩 Capsule：${capsuleSaved.message}`);
-      }
-    }
-    if (nativeSegment !== undefined && nativeSegment.kind === 'native-window') {
-      const nativeSaved = checkpoints.saveNativeWindowOwner(coordinatorSessionId, {
-        ownerRef: nativeSegment.ownerRef,
-        items: [...nativeSegment.items],
-      });
-      if (nativeSaved.kind === 'failed') {
-        throw new Error(`无法持久化原生上下文：${nativeSaved.message}`);
-      }
-    }
-    // 机械 Shake 的尝试标记：只在本次真的走了 mechanical_shake 时写入；边界变化时清除陈旧产物。
-    const existingShake = state.contextMaterial?.mechanicalShake ?? null;
-    if (input.compaction.kind === 'compacted' && input.compaction.path === 'mechanical_shake') {
-      const shakeSaved = checkpoints.saveMechanicalShake(coordinatorSessionId, {
-        sourceRevision: shakeBoundary,
-        shakenStepIds: shakenStepIds(segmentsFromState(state)),
-      });
-      if (shakeSaved.kind === 'failed') {
-        throw new Error(`无法持久化机械 Shake 产物：${shakeSaved.message}`);
-      }
-    } else if (existingShake !== null && existingShake.sourceRevision !== shakeBoundary) {
-      checkpoints.clearMechanicalShake(coordinatorSessionId);
-    }
-    return next;
-  };
+  ) => buildSessionBoundedInput({
+    ...contextRequestFor(session, tools, currentWork),
+    state,
+    tailSequence: session.checkpoints.readHistoryInspection(session.coordinatorSessionId).upperSequence,
+  });
 
   const compactionViewOf = (state: CoordinatorSessionState | null): ControllerCompactionView | null => {
     const outcome = state?.lastCompactionOutcome ?? null;
@@ -2085,8 +1915,11 @@ export async function createForegroundPlanningHost(
     }
     const tools = session.boundTools;
     const { input, shakeBoundary } = await boundedInputFor(session, read.state, tools, currentWork);
-    persistCompaction(session.coordinatorSessionId, read.state, input, shakeBoundary);
+    persistBoundedCompaction({ checkpoints: session.checkpoints, coordinatorSessionId: session.coordinatorSessionId,
+      state: read.state, built: input, shakeBoundary });
     if (input.compaction.kind === 'context_exhausted') {
+      publish(session.coordinatorSessionId, { kind: 'blocked', coordinationScopeId: session.incarnation.coordinationScopeId,
+        code: 'context_exhausted', message: '上下文已耗尽：请先手动压缩或交接该 Session' });
       throw new Error(`上下文已耗尽：${input.compaction.reason}`);
     }
     if (input.compaction.kind === 'compaction_degraded') {
@@ -2183,6 +2016,7 @@ export async function createForegroundPlanningHost(
     session.effectiveInputBinding = null;
     return buildCoordinatorGraph({
       model: session.model,
+      configurationRef: session.configuration.configurationRef,
       checkpointer: session.checkpoints.checkpointer,
       sessionRecords: session.checkpoints,
       assertFencing: () => closed || session.fencingLost ? { kind: 'fenced', code: 'released_lease' }
@@ -2268,7 +2102,7 @@ export async function createForegroundPlanningHost(
    * 每次只安排一个单次定时器；动作完成后再决定是否续排，因此不会出现并行心跳。
    */
   const scheduleMaintenance = (session: LiveSession): void => {
-    if (closed || session.fencingLost || session.loopRunning || session.maintenance.stopped) return;
+    if (closed || exitRequested || session.fencingLost || session.turn?.halted || session.loopRunning || session.maintenance.stopped) return;
     if (config?.context.keepaliveEnabled !== true) return;
     if (session.keepalive === null) {
       session.maintenance = stopMaintenance(session.maintenance, 'keepalive_unavailable');
@@ -2305,7 +2139,7 @@ export async function createForegroundPlanningHost(
   };
 
   const performMaintenance = async (session: LiveSession, intervalMs: number): Promise<void> => {
-    if (closed || session.fencingLost || session.loopRunning || session.maintenance.stopped) return;
+    if (closed || exitRequested || session.fencingLost || session.turn?.halted || session.loopRunning || session.maintenance.stopped) return;
     if (config?.context.keepaliveEnabled !== true || session.keepalive === null) return;
     const scope = scopeRecord(session.incarnation.coordinationScopeId);
     if (scope === null) {
@@ -2439,6 +2273,7 @@ export async function createForegroundPlanningHost(
   const ensureLiveSession = async (
     coordinatorSessionId: CoordinatorSessionId,
   ): Promise<EnsureSessionResult> => {
+    if (closed || exitRequested) return { kind: 'failed', code: 'session_unavailable', message: '前台正在退出' };
     const existing = liveSessions.get(coordinatorSessionId);
     if (existing !== undefined) {
       if (existing.fencingLost) {
@@ -2469,6 +2304,23 @@ export async function createForegroundPlanningHost(
       return { kind: 'failed', code: 'repository_unresolved', message: '无法解析 Git common dir' };
     }
     recoverCutoverCheckpoint(coordinatorSessionId);
+    /**
+     * 放弃已经装配完成、但本进程不再服务的 Runtime。
+     *
+     * 释放必须显式发生：Runtime Lease 只标记 `releasedAt`，不删除行，因此迟到的退出会把 Session
+     * 一直扣到 TTL 到期，重启时读到的仍是「被存活 incarnation 持有」。
+     */
+    const abandonStartedRuntime = (started: StartedCoordinatorRuntime): void => {
+      started.close();
+      const scope = scopeRecord(started.incarnation.coordinationScopeId);
+      if (scope === null) return;
+      requiredStore().transact({
+        kind: 'release-runtime-lease',
+        coordinationScopeId: started.incarnation.coordinationScopeId,
+        expectedRevision: scope.revision,
+        writer: writerFor(started.incarnation),
+      });
+    };
     let exactContext: ExactContextCapability | null = null;
     let nativeCompaction: NativeCompactionCapability | null = null;
     let keepalive: KeepaliveCapability | null = null;
@@ -2492,13 +2344,23 @@ export async function createForegroundPlanningHost(
       ttlMs: leaseTtlMs,
       clock,
       ...(options.probeTimeoutMs === undefined ? {} : { probeTimeoutMs: options.probeTimeoutMs }),
+      signal: startupAbort.signal,
     });
     if (started.kind === 'rejected') {
+      // 取消不是 Session 不可用之外的另一种故障，但对调用方仍是同一个可重试的拒绝码。
+      if (started.code === 'cancelled' && (closed || exitRequested)) {
+        return { kind: 'failed', code: 'session_unavailable', message: '前台正在退出' };
+      }
       return {
         kind: 'failed',
         code: started.code === 'model_resolution_failed' ? 'model_unavailable' : 'session_unavailable',
         message: started.message,
       };
+    }
+    // 核验与装配之间可能已经收到退出意图：迟到的 started 不再注册，避免复活 Runtime Lease 与模型请求。
+    if (closed || exitRequested || startupAbort.signal.aborted) {
+      abandonStartedRuntime(started);
+      return { kind: 'failed', code: 'session_unavailable', message: '前台正在退出' };
     }
     const session: LiveSession = {
       coordinatorSessionId,
@@ -2524,7 +2386,12 @@ export async function createForegroundPlanningHost(
       pendingWake: null,
       inFlightModelOperations: 0,
       modelAbort: null,
+      turn: null,
     };
+    session.turn = new AgentTurnDriver({
+      coordinatorSessionId, turns: session.checkpoints.turns, isClosing: () => closed,
+      execute: signal => executeModelTurn(session, signal),
+    });
     session.graph = graphForSession(session);
     const withGraph = session;
     liveSessions.set(coordinatorSessionId, withGraph);
@@ -2647,7 +2514,7 @@ export async function createForegroundPlanningHost(
   };
 
   const runModelLoop = async (session: LiveSession): Promise<void> => {
-    if (closed || session.fencingLost) {
+    if (closed || exitRequested || session.fencingLost || session.turn === null || session.turn.halted) {
       return;
     }
     const registered = requiredStore().query({ kind: 'sessions', coordinationScopeId: session.incarnation.coordinationScopeId });
@@ -2675,7 +2542,7 @@ export async function createForegroundPlanningHost(
     session.inFlightModelOperations += 1;
     try {
       syncAnsweredInteractions(session);
-      let work = pendingWorkFor(session);
+      const work = pendingWorkFor(session);
       // 主 timer 会周期性调用本函数；没有真实工作时直接早返回，**保留**既有维护定时器，
       // 否则长 interval 会被每一轮空转重置成「刚排好就取消再重排」，保活永远不触发。
       if (work.length === 0) {
@@ -2684,11 +2551,40 @@ export async function createForegroundPlanningHost(
       // 真实工作到达：维护立即让位，不再发起新的保活。
       stopMaintenanceLane(session);
       session.maintenance = INITIAL_MAINTENANCE_STATE;
-      while (work.length > 0 && !closed && !modelAbort.signal.aborted && !session.fencingLost && session.graph !== null) {
-        const scope = selectedScopeId === null ? null : scopeRecord(selectedScopeId);
+      const onAbort = () => session.turn?.stop();
+      modelAbort.signal.addEventListener('abort', onAbort, { once: true });
+      try {
+        const outcome = await session.turn.run();
+        if (outcome.kind === 'stopped' && !closed) publish(session.coordinatorSessionId, {
+          kind: 'blocked', coordinationScopeId: session.incarnation.coordinationScopeId,
+          code: outcome.failure.code, message: outcome.failure.message,
+        });
+      } finally { modelAbort.signal.removeEventListener('abort', onAbort); }
+    } catch {
+      session.turn.stop();
+      if (!closed) publish(session.coordinatorSessionId, {
+        kind: 'blocked', coordinationScopeId: session.incarnation.coordinationScopeId,
+        code: 'model_loop_failed', message: '模型轮次失败，已停止；请核验后明确恢复',
+      });
+    } finally {
+      session.inFlightModelOperations -= 1;
+      session.loopRunning = false;
+      if (session.modelAbort === modelAbort) session.modelAbort = null;
+      const queued = session.pendingWake;
+      session.pendingWake = null;
+      if (session.turn.halted) stopMaintenanceLane(session);
+      else if (queued !== null && !closed && !modelAbort.signal.aborted && !session.fencingLost) void runModelLoop(session);
+      else if (queued === null) scheduleMaintenance(session);
+    }
+  };
+
+  const executeModelTurn = async (session: LiveSession, signal: AbortSignal): Promise<AgentTurnResult> => {
+      let work = pendingWorkFor(session);
+      while (work.length > 0 && !closed && !signal.aborted && !session.fencingLost && session.graph !== null) {
+        const scope = scopeRecord(session.incarnation.coordinationScopeId);
         const state = liveStateOf(session, 'tools');
         if (scope === null || state === null) {
-          return;
+          return { kind: 'halted', failure: { code: 'halted_by_host', message: 'Scope 或会话历史不可读取' } };
         }
         if (state.lastCompactionOutcome?.kind === 'context_exhausted') {
           publish(session.coordinatorSessionId, {
@@ -2697,7 +2593,7 @@ export async function createForegroundPlanningHost(
             code: 'context_exhausted',
             message: '上下文已耗尽：请先手动压缩或交接该 Session',
           });
-          return;
+          return { kind: 'halted', failure: { code: 'halted_by_host', message: '上下文已耗尽，请先压缩或交接' } };
         }
         const result = (await session.graph.invoke(
           {
@@ -2706,7 +2602,7 @@ export async function createForegroundPlanningHost(
             deferredWork: 0,
             pendingToolCalls: pendingToolCallsOf(state),
           },
-          { configurable: { thread_id: threadIdFor(session.coordinatorSessionId) }, signal: modelAbort.signal, ...COORDINATOR_INVOKE_DEFAULTS },
+          { configurable: { thread_id: threadIdFor(session.coordinatorSessionId) }, signal, ...COORDINATOR_INVOKE_DEFAULTS },
         )) as {
           readonly status: string;
           readonly note: string;
@@ -2718,31 +2614,15 @@ export async function createForegroundPlanningHost(
           revision: scope.revision,
           reason: `model:${result.status}:${result.note}`,
         });
+        if (result.status === 'suspended') return { kind: 'completed' };
         if (result.status !== 'running' && result.status !== 'work_completed') {
-          return;
+          return { kind: 'halted', failure: { code: 'halted_by_host', message: result.note } };
         }
         work = result.remainingWork.length > 0 ? result.remainingWork : pendingWorkFor(session);
       }
-    } catch (error) {
-      if (!closed && !modelAbort.signal.aborted) publish(session.coordinatorSessionId, {
-        kind: 'blocked',
-        coordinationScopeId: session.incarnation.coordinationScopeId,
-        code: 'model_loop_failed',
-        message: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      session.inFlightModelOperations -= 1;
-      session.loopRunning = false;
-      if (session.modelAbort === modelAbort) session.modelAbort = null;
-      const queued = session.pendingWake;
-      session.pendingWake = null;
-      if (queued !== null && !closed && !modelAbort.signal.aborted && !session.fencingLost) {
-        void runModelLoop(session);
-      } else if (queued === null) {
-        // 没有后续工作时进入挂起：按 provider 能力调度 best-effort 保活。
-        scheduleMaintenance(session);
-      }
-    }
+      return signal.aborted || closed || session.fencingLost
+        ? { kind: 'halted', failure: { code: 'stopped', message: '模型轮次已停止' } }
+        : { kind: 'completed' };
   };
 
   // ---------------------------------------------------------------------
@@ -2987,7 +2867,11 @@ export async function createForegroundPlanningHost(
         const verification = await verifyModelCapabilities(resolved.model, {
           modelRef: candidate.configurationRef,
           ...(options.probeTimeoutMs === undefined ? {} : { timeoutMs: options.probeTimeoutMs }),
+          signal: startupAbort.signal,
         });
+        if (startupAbort.signal.aborted) {
+          return { kind: 'rejected', message: '前台正在退出，模型核验未完成' };
+        }
         if (verification.kind === 'rejected') {
           return { kind: 'rejected', message: verification.message };
         }
@@ -3249,6 +3133,14 @@ export async function createForegroundPlanningHost(
       extraBlockers: [
         ...startupBlockersFor(snapshot.snapshot.scope.coordinationScopeId),
         ...executionBlockersFor(snapshot.snapshot.scope.coordinationScopeId),
+        ...(() => {
+          const turn = selectedLive?.turn?.state ?? (selectedSessionId === null ? null
+            : checkpointStoreForScope()?.turns.readTurnState(selectedSessionId as CoordinatorSessionId));
+          return turn?.kind === 'halted' ? [{ source: 'injected' as const, code: turn.failure.code,
+            message: `${turn.failure.message} · /retry 核验后恢复` }]
+            : turn?.kind === 'running' && selectedLive === undefined
+              ? [{ source: 'injected' as const, code: 'interrupted', message: '上轮未结束，等待 /retry 明确恢复' }] : [];
+        })(),
       ],
       maintenance:
         selectedSessionId === null ? null : (liveSessions.get(selectedSessionId)?.maintenance ?? null),
@@ -3517,6 +3409,7 @@ export async function createForegroundPlanningHost(
       const capabilities = resolved.kind === 'resolved' ? await verifyModelCapabilities(resolved.model, {
         modelRef: config.defaultCoordinatorModelRef,
         ...(options.probeTimeoutMs === undefined ? {} : { timeoutMs: options.probeTimeoutMs }),
+        signal: startupAbort.signal,
       }) : null;
       if (capabilities?.kind === 'verified') verifiedWizardConfigurationRef = config.defaultCoordinatorModelRef;
       checks[3] = {
@@ -3896,6 +3789,40 @@ export async function createForegroundPlanningHost(
 
   const execute = async (intent: TuiIntent): Promise<ControllerCommandResult> => {
     switch (intent.kind) {
+      case 'stop-session':
+      case 'retry-session': {
+        const ensured = await ensureLiveSession(intent.coordinatorSessionId as CoordinatorSessionId);
+        if (ensured.kind !== 'live') return rejected(ensured.code, ensured.message);
+        const session = ensured.session;
+        if (session.turn === null) return rejected('turn_unavailable', '轮次状态不可读取');
+        if (intent.kind === 'stop-session') {
+          session.turn.stop();
+          session.modelAbort?.abort();
+          session.pendingWake = null;
+          stopMaintenanceLane(session);
+          publish(session.coordinatorSessionId, { kind: 'blocked', coordinationScopeId: session.incarnation.coordinationScopeId,
+            code: 'stopped', message: '当前模型轮次已停止，输入保持；/retry 核验后恢复' });
+          return accepted('当前模型轮次已停止');
+        }
+        if (session.loopRunning) return rejected('turn_running', '当前轮次尚未结束');
+        const restored = await session.turn.retry(() => {
+          if (closed || session.fencingLost || session.configuration.configurationRef.length === 0 ||
+            assertFencingGeneration(requiredStore(), session.incarnation, { clock }).kind === 'fenced') return false;
+          for (const purpose of ['pending', 'tools', 'context'] as const) {
+            if (session.checkpoints.loadCheckpoint(session.coordinatorSessionId, purpose).kind !== 'recovered') return false;
+          }
+          const scope = requiredStore().query({ kind: 'snapshot', coordinationScopeId: session.incarnation.coordinationScopeId });
+          if (scope.kind !== 'snapshot' || scope.snapshot.scope.controlState !== 'active' ||
+            scope.snapshot.unresolvedIntents.length > 0 || scope.snapshot.mutationLanes.length > 0 ||
+            !mayResumeModelFor(session.incarnation.coordinationScopeId)) return false;
+          const registration = scope.snapshot.sessions.find(entry => entry.coordinatorSessionId === session.coordinatorSessionId);
+          return registration?.lifecycleState === 'registered' || registration?.lifecycleState === 'active';
+        });
+        if (restored.kind === 'rejected') return rejected(restored.failure.code, restored.failure.message);
+        session.maintenance = INITIAL_MAINTENANCE_STATE;
+        void runModelLoop(session);
+        return accepted('原 Session 已核验，恢复模型轮次');
+      }
       case 'send-session-message':
         return await sessionMessages({
           coordinatorSessionId: intent.coordinatorSessionId as CoordinatorSessionId,
@@ -10941,6 +10868,17 @@ export async function createForegroundPlanningHost(
     snapshot: async (selectedSessionId) => await readSnapshot(selectedSessionId),
     transcript: (coordinatorSessionId, cursor) => Promise.resolve(readTranscript(coordinatorSessionId, cursor)),
     execute: async (intent) => await execute(intent),
+    exitIntent: () => {
+      exitRequested = true;
+      // 正在装配的 Session 还没有 LiveSession 可取消；启动链自己必须被中断。
+      startupAbort.abort();
+      for (const session of liveSessions.values()) {
+        if (session.loopRunning) session.turn?.stop();
+        session.modelAbort?.abort();
+        session.pendingWake = null;
+        stopMaintenanceLane(session);
+      }
+    },
     subscribe: (listener): Unsubscribe => {
       listeners.add(listener);
       return () => {
@@ -10982,6 +10920,8 @@ export async function createForegroundPlanningHost(
       blocker,
     }),
     close: () => {
+      if (closed) return;
+      ports.exitIntent?.();
       closed = true;
       if (reconciliationTimer !== null) clearTimeout(reconciliationTimer);
       reconciliationTimer = null;
@@ -11021,6 +10961,7 @@ export function createForegroundPlanningPorts(
 }
 
 function submissionQueryFor(record: Extract<UiInputRecord, { kind: 'submission' }>): SubmissionQuery {
+  if (record.target.kind === 'debug-message') throw new Error('调试提交不属于协调 Scope');
   const common = {
     coordinatorSessionId: record.target.coordinatorSessionId,
     submissionId: record.submissionId,

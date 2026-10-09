@@ -179,6 +179,17 @@ function wakeBatch(wakeBatchId: string, sources: readonly SourceRevisionRef[]): 
   };
 }
 
+/** 换成另一个 Scope：WakeBatch 的来源是判别联合，重建而不是展开才能保持来源唯一。 */
+function withScope(batch: WakeBatch, coordinationScopeId: string): WakeBatch {
+  return {
+    wakeBatchId: batch.wakeBatchId,
+    coordinatorSessionId: batch.coordinatorSessionId,
+    sourceRevisions: batch.sourceRevisions,
+    actionableWork: batch.actionableWork,
+    coordinationScopeId,
+  };
+}
+
 function admissions(): readonly { readonly wakeBatchId: string; readonly admissionState: string }[] {
   const result = store.query({ kind: 'wake-admissions', coordinationScopeId: SCOPE });
   if (result.kind !== 'wake-admissions') {
@@ -370,7 +381,7 @@ test('Wake Batch 的 Coordination Scope 必须与当前 incarnation 一致', () 
   const checkpoints = createCheckpoints();
 
   const outcome = admitWakeBatch(store, {
-    wakeBatch: { ...wakeBatch('wake-1', [source('delivery-1', 3)]), coordinationScopeId: 'scope-other' },
+    wakeBatch: withScope(wakeBatch('wake-1', [source('delivery-1', 3)]), 'scope-other'),
     incarnation: incarnationUnderTest,
     checkpoints: checkpoints.port,
     clock,

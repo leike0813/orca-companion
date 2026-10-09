@@ -15,12 +15,18 @@
  * 工具返回 `unknown` 时保留未配对的 call，停止循环；恢复时以原 OperationId 对账。节点还会在
  * 原 fencing 仍然有效时把这次真实结果作为结构化观测落盘，让调用清单能区分「未确认」与「已观测的
  * unknown」——观测不补配对结果、不让工具重跑，也不改写这次调用的任何身份。
+ *
+ * 取消沿 invoke 的 signal 生效：不再开始新的调用，也不回到模型节点；已经返回的结果照常落盘，
+ * 因为丢掉它等于让一次已发生的副作用失去唯一证据。未执行的 call 因此保持未配对，恢复仍以原
+ * OperationId 对账。
  */
+
+import type { RunnableConfig } from '@langchain/core/runnables';
 
 import type {
   CheckpointRecoveryRead,
   CoordinatorSessionRecordPort,
-  FencingAssertion,
+  SessionWriteAssertion as FencingAssertion,
 } from '../../application/coordinator/runtime-guard.js';
 import type { CoordinatorSessionId, OperationId } from '../../application/dto/identity.js';
 import {
@@ -116,7 +122,10 @@ function recordUnknownObservation(
  * 已提交历史。普通工具完成后回到模型节点；被标记为单次动作的工具在结果落盘后消费当前工作。
  */
 export function createToolsNode(dependencies: ToolNodeDependencies) {
-  return async (state: CoordinatorGraphState): Promise<CoordinatorGraphUpdate> => {
+  return async (
+    state: CoordinatorGraphState,
+    config?: RunnableConfig,
+  ): Promise<CoordinatorGraphUpdate> => {
     const coordinatorSessionId = state.coordinatorSessionId as CoordinatorSessionId;
     if (coordinatorSessionId.length === 0) {
       return blocked('tools node 缺少 Coordinator Session 身份');
@@ -143,6 +152,13 @@ export function createToolsNode(dependencies: ToolNodeDependencies) {
 
     const current = read.state;
     const answered = new Set(current.committedMessages.map((entry) => entry.entryId));
+    // 取消只阻止「新的副作用」：已经返回的结果照常落盘，丢掉它等于让同一次副作用失去唯一证据。
+    const signal = config?.signal;
+    const cancelled = (): CoordinatorGraphUpdate => ({
+      status: 'stalled',
+      graphPosition: TOOLS_NODE,
+      note: `调用在工具执行期间被取消：${step.stepId} 的剩余调用未执行，等待明确恢复`,
+    });
     let executed = 0;
     let completedWorkSource = current.committedMessages.find((entry) =>
       entry.stepId === step.stepId && entry.completedWorkSource !== undefined,
@@ -154,6 +170,9 @@ export function createToolsNode(dependencies: ToolNodeDependencies) {
         // 崩溃或重放：结果已经在历史里，绝不重复发起同一个副作用。
         continue;
       }
+      if (signal?.aborted === true) {
+        return cancelled();
+      }
       const fencing = dependencies.assertFencing();
       if (fencing.kind === 'fenced') {
         // 有效 lease 是副作用的准入条件：fenced 时不再执行任何调用，也不写结果。
@@ -164,6 +183,7 @@ export function createToolsNode(dependencies: ToolNodeDependencies) {
       const outcome = await invokeRegistered(dependencies.tools, call, {
         operationId: call.operationId,
         mapOperationId: call.mapOperationId,
+        ...(signal === undefined ? {} : { signal }),
       });
       if (outcome.kind === 'unknown') {
         const observed = recordUnknownObservation(dependencies, {
@@ -210,6 +230,11 @@ export function createToolsNode(dependencies: ToolNodeDependencies) {
       answered.add(entryId);
       completedWorkSource ??= entry.completedWorkSource;
       executed += 1;
+    }
+
+    // 取消后不再回到模型节点：剩余调用保持未配对，恢复时仍以原 OperationId 对账。
+    if (signal?.aborted === true) {
+      return cancelled();
     }
 
     const summary =

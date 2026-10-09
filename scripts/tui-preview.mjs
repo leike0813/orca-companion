@@ -696,6 +696,7 @@ if (process.argv.length > (graphPrototype || composerPrototype || statusPrototyp
         }
       }
       const graph = buildCoordinatorGraph({ model: new PreviewModel({}), checkpointer: history.store.checkpointer,
+        configurationRef: 'preview-configuration',
         sessionRecords: history.store, assertFencing: () => ({ kind: 'valid', lease: {} }), newStepId: () => 'preview-stream-step',
         buildMessages: async () => ({ messages: [], note: 'isolated preview' }),
         streamObserver: event => previewStore.observe(event, history.store.readHistoryPage({ coordinatorSessionId: 'session-a' }).entries.at(-1)?.sequence ?? 0),

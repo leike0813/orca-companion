@@ -72,6 +72,12 @@ const answerTarget: UiInputTarget = {
   interactionId: 'i-1',
   expectedRevision: 4,
 };
+const debugDirectoryId = '/tmp/orca-debug-a';
+const debugTarget: UiInputTarget = {
+  kind: 'debug-message',
+  debugDirectoryId,
+  coordinatorSessionId: 'session-a',
+};
 
 function recordAt(store: UiInputStore, key: string): UiInputRecord | null {
   const read = store.read(key);
@@ -496,5 +502,56 @@ describe('TuiApp 输入保护集成（真实组件行为）', () => {
     expect(frame).toContain('capacity_exceeded');
     expect(frame).toContain('仍要退出并丢弃');
     rendered.unmount();
+  });
+});
+
+describe('调试输入按调试目录隔离', () => {
+  test('调试草稿与同 Session 的协调草稿互不影响，重启后原正文与光标恢复', () => {
+    const store = createMemoryInputStore();
+    const first = createInputProtection({ store });
+    first.edit(targetA, textDraft('协调草稿'));
+    expect(first.flushAll().status).toBe('saved');
+    expect(first.paste(debugTarget, '调试粘贴').status).toBe('saved');
+    expect(first.paste(debugTarget, '第二段').status).toBe('saved');
+
+    const restarted = createInputProtection({ store });
+    const loadedDebug = restarted.load(debugTarget);
+    expect(loadedDebug.status === 'loaded' && loadedDebug.draft.text).toBe('调试粘贴第二段');
+    expect(loadedDebug.status === 'loaded' && loadedDebug.draft.cursor).toBe('调试粘贴第二段'.length);
+    const loadedScope = restarted.load(targetA);
+    expect(loadedScope.status === 'loaded' && loadedScope.draft.text).toBe('协调草稿');
+
+    // 调试范围只列出调试记录：协调记录不会因为 Session 同名而混进来。
+    expect(listedRecords(store, debugDirectoryId).map((record) => record.key)).toEqual([targetDraftKey(debugTarget)]);
+    expect(listedRecords(store, 'scope-1').map((record) => record.key)).toEqual([targetDraftKey(targetA)]);
+  });
+
+  test('未知提交在重启后保留原身份：只占等待位、不自动重发', () => {
+    const store = createMemoryInputStore();
+    const first = createInputProtection({ store });
+    const draft = textDraft('调试提交正文');
+    expect(first.beginSubmission({ target: debugTarget, draft, submissionId: 'sub-1' }).status).toBe('started');
+    expect(
+      first.settleSubmission({
+        target: debugTarget,
+        submissionId: 'sub-1',
+        outcome: { kind: 'unknown', code: 'transport_lost', message: '连接中断' },
+      }).status,
+    ).toBe('saved');
+
+    const restarted = createInputProtection({ store });
+    expect(restarted.pendingSubmission(debugDirectoryId, 'session-a')).toMatchObject({
+      status: 'active',
+      submissionId: 'sub-1',
+      state: 'unknown',
+    });
+    expect(restarted.pendingSubmission('scope-1', 'session-a').status).toBe('none');
+    expect(restarted.beginSubmission({ target: debugTarget, draft, submissionId: 'sub-2' })).toMatchObject({
+      status: 'lane-busy',
+      submissionId: 'sub-1',
+      state: 'unknown',
+    });
+    const snapshots = listedRecords(store, debugDirectoryId).filter((record) => record.kind === 'submission');
+    expect(snapshots.map((record) => (record.kind === 'submission' ? record.submissionId : ''))).toEqual(['sub-1']);
   });
 });

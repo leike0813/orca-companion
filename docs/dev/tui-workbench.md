@@ -8,7 +8,11 @@
 
 生产组件的 Ctrl+B 打开固定项目面板，Tab 切总览/待答/最近事件，Enter 下钻、Esc 返回；120 列对话保持原位，80/50 列面板独占主区域。项目待答页可显式选择跨 Session 问题，进入其回答面板；返回恢复原入口、草稿与阅读锚点。Ctrl+G 打开三档可浏览的图检查：上下选择、左右选择真实关系、多关系明确确认、Enter 详情、Tab 栏目。命令候选在输入上方，第一次 Tab/Enter 填入，第二次 Enter 执行。审阅固定框内 Tab 切概要/完整记录、上下浏览，默认返回，左右选动作后 Enter；Cancel/Exit 同时保留 y/n 明确确认，无色以“当前操作”辨识。第七批沿 IC-15 接通 Ctrl+P → 选项的图标与状态栏保存恢复，状态和验收以 [原型交接](tui-implementation-handoff.md) 的当前任务记录为准。
 
-生产工作区将草稿、粘贴载荷与提交快照保存到仓库 Git common dir 下的 `orca-companion/ui.sqlite`。`/inputs` 打开输入记录管理：选择记录后 `r` 恢复、`v` 核验、`d` 删除；恢复不会自动发送。退出时立即保存，失败则留在界面，明确确认后才丢弃未保存输入。预览使用独立内存输入库，退出即关闭，不影响生产记录。
+生产工作区将草稿、粘贴载荷与提交快照保存到仓库 Git common dir 下的 `orca-companion/ui.sqlite`。`/inputs` 打开输入记录管理：选择记录后 `r` 恢复、`v` 核验、`d` 删除；恢复不会自动发送。退出时先中止在途模型，再立即保存，失败则留在界面，明确确认后才丢弃未保存输入。预览使用独立内存输入库，退出即关闭，不影响生产记录。
+
+`ocp --debug [directory]` 是另一条前台入口，目录缺省为当前目录，允许普通非 Git 目录；它同样要求 stdin/stdout 双 TTY。启动后先明确选择新建会话或继续该目录下的既有会话，并选择用户模型库中已有的连接与模型。界面只有 transcript、composer、`/inputs` 与 `/stop`、`/retry` 等对话命令，没有 Scope、执行图、Worker 或授权面板。会话注册、checkpoint、UI 输入与诊断保存在 `${XDG_STATE_HOME:-~/.local/state}/orca-companion/debug`，每个 Session 一个子目录；退出不写项目仓库或 Git common dir。调试可用工具固定为 `list_files`、`read_file`、`search`、`git_diff`，只读且限制在调试根目录、输出、处理量与时间，越界读取返回结构化拒绝。`/stop` 停止当前轮次而不动 Scope，`/retry` 核验后恢复原会话；协调工作区使用同一对话区域与输入保护。合同见 [IC-16](../interface-contracts.md#ic-16-调试会话宿主与有界只读工具)。
+
+调试对话中 Ctrl+P 打开命令目录，Ctrl+T 展开或收起工具详情，PageUp/PageDown 阅读历史。`/inputs` 的 Enter 查看正文、r 恢复、v 核验；已受理提交核验成功后释放等待位，删除需 y 明确确认。故障会显示停止原因；新消息仍可保存，明确 `/retry` 前不会运行模型。诊断在会话目录的 `diagnostics/turn.jsonl`。
 
 主工作区临时原型运行 `pnpm ui:prototype planning`（同样可选上述场景）。`Ctrl+R` 打开消息历史，`Ctrl+T` 折叠或展开最新工具输出。原型内的思路摘要、消息和工具输出是固定假数据，不来自真实 Coordinator Session；原型代码位于 `src/interfaces/tui/workspace-prototype.tsx`。
 
@@ -44,7 +48,7 @@ Composer 的 slash 对照直接运行 `pnpm ui:composer-prototype slash above`�
 
 第七批 `complete-tui-project-statusline` 已随 `41b2f1e` 归档。其隔离预览、采集命令与证据见[归档证据说明](../../artifacts/project-statusline/README.md)；fixture 不证明真实 provider、tracker 或 Orca 能力，历史原型资产保留。
 
-第七批历史采集命令为 `node artifacts/project-statusline/capture.mjs` 与 `node artifacts/project-statusline/capture-supplement.mjs`，性能命令为 `node artifacts/project-statusline/benchmark.mjs`；结果与逐票核对见[历史证据说明](../../artifacts/project-statusline/README.md)。第八批 `complete-tui-graph-basis` 仍在实施，其历史图与依据验收状态以当前 change 工件为准。
+第七批历史采集命令为 `node artifacts/project-statusline/capture.mjs` 与 `node artifacts/project-statusline/capture-supplement.mjs`，性能命令为 `node artifacts/project-statusline/benchmark.mjs`；结果与逐票核对见[历史证据说明](../../artifacts/project-statusline/README.md)。第八批 `complete-tui-graph-basis` 已归档到 `2026-10-04-complete-tui-graph-basis`，其历史图与依据验收结论以该归档 change 的记录为准。
 
 两个终端分别运行：
 

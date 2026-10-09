@@ -14,6 +14,7 @@ import {
   conflictKey,
   submissionKey,
   targetDraftKey,
+  targetNamespace,
   type UiDraft,
   type UiInputRecord,
   type UiInputStore,
@@ -87,8 +88,8 @@ export type InputProtection = {
   readonly adoptRecord: (record: UiInputRecord) => SaveOutcome;
   /** 清除已提交且未再编辑的草稿记录；仍有未保存改动时拒绝清除。 */
   readonly clearDraft: (target: UiInputTarget) => SaveOutcome;
-  /** 该 Session 是否已有等待确认或不可核验的提交（单活跃提交 lane）。 */
-  readonly pendingSubmission: (coordinationScopeId: string, coordinatorSessionId: string) => PendingSubmission;
+  /** 该 Session 是否已有等待确认或不可核验的提交（单活跃提交 lane）；范围取 `targetNamespace`。 */
+  readonly pendingSubmission: (namespace: string, coordinatorSessionId: string) => PendingSubmission;
   readonly beginSubmission: (input: {
     readonly target: UiInputTarget;
     readonly draft: UiDraft;
@@ -99,7 +100,7 @@ export type InputProtection = {
     readonly submissionId: string;
     readonly outcome: SubmissionOutcome;
   }) => SaveOutcome;
-  readonly list: (coordinationScopeId: string) => InputRecordListing;
+  readonly list: (namespace: string) => InputRecordListing;
   /** 用户核验后的状态回写；`not-found` 保持未决，不改写记录。返回回写是否真实落盘。 */
   readonly markVerified: (input: {
     readonly key: string;
@@ -136,11 +137,11 @@ function randomId(): string {
   return globalThis.crypto.randomUUID();
 }
 
-/** 目标的规范绑定串：用于核对库内记录的 target 与请求目标逐字段一致，防止串 Scope/Session。 */
+/** 目标的规范绑定串：用于核对库内记录的 target 与请求目标逐字段一致，防止串命名空间/Session/形态。 */
 function targetCanonical(target: UiInputTarget): string {
   return JSON.stringify([
     target.kind,
-    target.coordinationScopeId,
+    targetNamespace(target),
     target.coordinatorSessionId,
     target.kind === 'answer' ? target.interactionId : null,
     target.kind === 'answer' ? target.expectedRevision : null,
@@ -473,14 +474,15 @@ export function createInputProtection(options: InputProtectionOptions): InputPro
       slot.revision = removed.revision;
       return { status: 'conflict', message: '草稿已被并发修改，未清除' };
     },
-    pendingSubmission(coordinationScopeId, coordinatorSessionId) {
-      const listed = store.list(coordinationScopeId);
+    pendingSubmission(namespace, coordinatorSessionId) {
+      const listed = store.list(namespace);
       if (listed.kind === 'failed') {
         return { status: 'failed', code: listed.code, message: listed.message };
       }
       for (const record of listed.records) {
         if (
           record.kind === 'submission' &&
+          targetNamespace(record.target) === namespace &&
           record.target.coordinatorSessionId === coordinatorSessionId &&
           (record.status === 'awaiting' || record.status === 'unknown')
         ) {
@@ -490,7 +492,7 @@ export function createInputProtection(options: InputProtectionOptions): InputPro
       return { status: 'none' };
     },
     beginSubmission({ target, draft, submissionId }) {
-      const lane = this.pendingSubmission(target.coordinationScopeId, target.coordinatorSessionId);
+      const lane = this.pendingSubmission(targetNamespace(target), target.coordinatorSessionId);
       if (lane.status === 'failed') {
         return { status: 'failed', code: lane.code, message: lane.message };
       }
@@ -563,8 +565,8 @@ export function createInputProtection(options: InputProtectionOptions): InputPro
       }
       return { status: 'conflict', message: '提交状态回写冲突，原身份保持待核验' };
     },
-    list(coordinationScopeId) {
-      const listed = store.list(coordinationScopeId);
+    list(namespace) {
+      const listed = store.list(namespace);
       if (listed.kind === 'failed') {
         return { status: 'failed', code: listed.code, message: listed.message };
       }

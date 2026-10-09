@@ -97,6 +97,7 @@ export type ControllerSessionSummary = {
   readonly coordinatorSessionId: string;
   readonly coordinatorModelConfigurationRef: string;
   readonly lifecycleState: SessionLifecycleState;
+  readonly blockedReason?: { readonly code: string; readonly message: string } | null;
   readonly holdsRuntimeLease: boolean;
   readonly holdsExecutionLease: boolean;
   readonly planningResponsible: boolean;
@@ -1158,6 +1159,7 @@ export function projectControllerSnapshot(facts: ControllerSnapshotFacts): Contr
       coordinatorSessionId: session.coordinatorSessionId,
       coordinatorModelConfigurationRef: session.coordinatorModelConfigurationRef,
       lifecycleState: session.lifecycleState,
+      blockedReason: session.blockedReason,
       holdsRuntimeLease: runtimeLeaseHolders.has(session.coordinatorSessionId),
       holdsExecutionLease: executionLeaseHolderSessionId === session.coordinatorSessionId,
       planningResponsible: planningResponsible === session.coordinatorSessionId,

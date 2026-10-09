@@ -52,6 +52,7 @@ export type VerifyModelCapabilitiesOptions = {
   readonly modelRef?: string;
   /** 单次探测的上限；超时即视为该项能力缺失。 */
   readonly timeoutMs?: number;
+  readonly signal?: AbortSignal;
 };
 
 const DEFAULT_PROBE_TIMEOUT_MS = 30_000;
@@ -61,27 +62,42 @@ const MAX_STREAM_BYTES = 1024 * 1024;
 
 class ProbeTimeoutError extends Error {}
 
-function withTimeout<T>(work: Promise<T>, timeoutMs: number, controller: AbortController): Promise<T> {
+function withTimeout<T>(work: Promise<T>, timeoutMs: number, controller: AbortController, signal?: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    const cancel = () => {
+      controller.abort();
+      clearTimeout(timer);
+      reject(new DOMException('Capability probe cancelled', 'AbortError'));
+    };
     const timer = setTimeout(() => {
       controller.abort();
+      signal?.removeEventListener('abort', cancel);
       reject(new ProbeTimeoutError());
     }, timeoutMs);
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) cancel();
     work.then(
       (value) => {
         clearTimeout(timer);
+        signal?.removeEventListener('abort', cancel);
         resolve(value);
       },
       (error: unknown) => {
         clearTimeout(timer);
+        signal?.removeEventListener('abort', cancel);
         reject(error instanceof Error ? error : new Error(String(error)));
       },
     );
   });
 }
 
-function safeFailure(): string {
-  return '请求失败或超时';
+function safeFailure(error: unknown): string {
+  if (error instanceof ProbeTimeoutError) return '请求超时';
+  // Provider 原始错误可能含凭据；只保留 HTTP 状态码。
+  const status = typeof error === 'object' && error !== null && 'status' in error ? error.status : undefined;
+  return typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599
+    ? `请求失败（HTTP ${status}）`
+    : '请求失败';
 }
 
 function visibleText(value: unknown): string {
@@ -108,24 +124,24 @@ function streamBytes(value: unknown): number {
 
 type ProbeOutcome = { readonly ok: boolean; readonly detail: string };
 
-async function probeTextGeneration(model: BaseChatModel, timeoutMs: number): Promise<ProbeOutcome> {
+async function probeTextGeneration(model: BaseChatModel, timeoutMs: number, signal?: AbortSignal): Promise<ProbeOutcome> {
   try {
     const controller = new AbortController();
-    const response = await withTimeout(model.invoke([new HumanMessage('ping')], { signal: controller.signal }), timeoutMs, controller);
+    const response = await withTimeout(model.invoke([new HumanMessage('ping')], { signal: controller.signal }), timeoutMs, controller, signal);
     const text = visibleText(response);
     return text.trim().length > 0
       ? { ok: true, detail: '文本生成返回非空响应' }
       : { ok: false, detail: '文本生成返回空响应' };
-  } catch {
-    return { ok: false, detail: `文本生成失败：${safeFailure()}` };
+  } catch (error) {
+    return { ok: false, detail: `文本生成失败：${safeFailure(error)}` };
   }
 }
 
-async function probeStreaming(model: BaseChatModel, timeoutMs: number): Promise<ProbeOutcome> {
+async function probeStreaming(model: BaseChatModel, timeoutMs: number, signal?: AbortSignal): Promise<ProbeOutcome> {
   const deadline = Date.now() + timeoutMs;
   const controller = new AbortController();
   try {
-    const stream = await withTimeout(Promise.resolve(model.stream([new HumanMessage('ping')], { signal: controller.signal })), Math.max(1, deadline - Date.now()), controller);
+    const stream = await withTimeout(Promise.resolve(model.stream([new HumanMessage('ping')], { signal: controller.signal })), Math.max(1, deadline - Date.now()), controller, signal);
     const iterator = stream[Symbol.asyncIterator]();
     try {
       let chunks = 0;
@@ -133,7 +149,7 @@ async function probeStreaming(model: BaseChatModel, timeoutMs: number): Promise<
       while (chunks < MAX_STREAM_CHUNKS && bytes <= MAX_STREAM_BYTES) {
         const remaining = deadline - Date.now();
         if (remaining <= 0) throw new ProbeTimeoutError();
-        const next = await withTimeout(iterator.next(), remaining, controller);
+        const next = await withTimeout(iterator.next(), remaining, controller, signal);
         if (next.done) return { ok: false, detail: '流式输出结束前没有产生非空文本' };
         chunks += 1;
         bytes += streamBytes(next.value);
@@ -147,16 +163,17 @@ async function probeStreaming(model: BaseChatModel, timeoutMs: number): Promise<
         if (iterator.return !== undefined) await withTimeout(Promise.resolve(iterator.return()), CLEANUP_TIMEOUT_MS, controller);
       } catch { /* cleanup remains bounded even when an iterator ignores cancellation */ }
     }
-  } catch {
-    return { ok: false, detail: `流式输出失败：${safeFailure()}` };
+  } catch (error) {
+    return { ok: false, detail: `流式输出失败：${safeFailure(error)}` };
   }
 }
 
-async function probeToolCalling(model: BaseChatModel, timeoutMs: number): Promise<ProbeOutcome> {
+async function probeToolCalling(model: BaseChatModel, timeoutMs: number, signal?: AbortSignal): Promise<ProbeOutcome> {
   const bindTools = (model as { readonly bindTools?: unknown }).bindTools;
   if (typeof bindTools !== 'function') {
     return { ok: false, detail: '模型实例没有 bindTools，无法声明工具调用能力' };
   }
+  let stage = '工具调用';
   try {
     const bound = (bindTools as (tools: readonly unknown[], options: unknown) => unknown).call(model, [CAPABILITY_PROBE_TOOL], { tool_choice: CAPABILITY_PROBE_TOOL.name }) as {
       readonly invoke?: (input: unknown, options?: { signal?: AbortSignal }) => Promise<unknown>;
@@ -165,7 +182,7 @@ async function probeToolCalling(model: BaseChatModel, timeoutMs: number): Promis
       return { ok: false, detail: 'bindTools 返回的对象不能 invoke' };
     }
     const controller = new AbortController();
-    const response = await withTimeout(bound.invoke([new HumanMessage('Call the capability_probe tool.')], { signal: controller.signal }), timeoutMs, controller);
+    const response = await withTimeout(bound.invoke([new HumanMessage('Call the capability_probe tool.')], { signal: controller.signal }), timeoutMs, controller, signal);
     if (!(response instanceof AIMessage)) return { ok: false, detail: '工具调用没有返回 assistant 消息' };
     const toolCalls = (response as { readonly tool_calls?: unknown } | null)?.tool_calls;
     if (!Array.isArray(toolCalls) || toolCalls.length === 0) return { ok: false, detail: '模型没有返回真实工具调用' };
@@ -179,6 +196,7 @@ async function probeToolCalling(model: BaseChatModel, timeoutMs: number): Promis
       ids.add(item.id);
       toolMessages.push(new ToolMessage({ content: 'probe accepted', tool_call_id: item.id, name: CAPABILITY_PROBE_TOOL.name }));
     }
+    stage = '工具结果续接';
     const continuationModel = (bindTools as (tools: readonly unknown[], options: unknown) => unknown).call(model, [CAPABILITY_PROBE_TOOL], { tool_choice: 'auto' }) as {
       readonly invoke?: (input: unknown, options?: { signal?: AbortSignal }) => Promise<unknown>;
     };
@@ -187,24 +205,24 @@ async function probeToolCalling(model: BaseChatModel, timeoutMs: number): Promis
       new HumanMessage('Call the capability_probe tool.'),
       response,
       ...toolMessages,
-    ], { signal: controller.signal }), timeoutMs, controller);
+    ], { signal: controller.signal }), timeoutMs, controller, signal);
     return continued instanceof AIMessage && visibleText(continued).trim().length > 0
       ? { ok: true, detail: '真实工具调用及 ToolMessage 续接成功' }
       : { ok: false, detail: 'ToolMessage 续接未返回有效响应' };
-  } catch {
-    return { ok: false, detail: `tool calling 失败：${safeFailure()}` };
+  } catch (error) {
+    return { ok: false, detail: `${stage}失败：${safeFailure(error)}` };
   }
 }
 
-async function probeCancellation(model: BaseChatModel, timeoutMs: number): Promise<ProbeOutcome> {
+async function probeCancellation(model: BaseChatModel, timeoutMs: number, signal?: AbortSignal): Promise<ProbeOutcome> {
   const controller = new AbortController();
   const abortTimer = setTimeout(() => controller.abort(), 0);
   try {
     const request = model.invoke([new HumanMessage('capability cancellation probe')], { signal: controller.signal });
-    await withTimeout(request, timeoutMs, controller);
+    await withTimeout(request, timeoutMs, controller, signal);
     return { ok: false, detail: '已取消的调用仍然成功返回，未观察到取消能力' };
   } catch (error) {
-    if (error instanceof ProbeTimeoutError || !(error instanceof Error && (error.name === 'AbortError' || ModelAbortError.isInstance(error)))) return { ok: false, detail: `取消请求失败：${safeFailure()}` };
+    if (error instanceof ProbeTimeoutError || !(error instanceof Error && (error.name === 'AbortError' || ModelAbortError.isInstance(error)))) return { ok: false, detail: `取消请求失败：${safeFailure(error)}` };
     return { ok: true, detail: '以已取消的 signal 调用被拒绝' };
   } finally {
     clearTimeout(abortTimer);
@@ -227,15 +245,15 @@ function usageAvailabilityOf(response: unknown): boolean {
   return input !== null && output !== null && total !== null && input + output === total;
 }
 
-async function probeUsage(model: BaseChatModel, timeoutMs: number): Promise<ProbeOutcome> {
+async function probeUsage(model: BaseChatModel, timeoutMs: number, signal?: AbortSignal): Promise<ProbeOutcome> {
   try {
     const controller = new AbortController();
-    const response = await withTimeout(model.invoke([new HumanMessage('ping')], { signal: controller.signal }), timeoutMs, controller);
+    const response = await withTimeout(model.invoke([new HumanMessage('ping')], { signal: controller.signal }), timeoutMs, controller, signal);
     return usageAvailabilityOf(response)
       ? { ok: true, detail: '响应包含可用 usage 元数据' }
       : { ok: false, detail: '响应没有可用的 usage 元数据' };
-  } catch {
-    return { ok: false, detail: `usage 探测失败：${safeFailure()}` };
+  } catch (error) {
+    return { ok: false, detail: `usage 探测失败：${safeFailure(error)}` };
   }
 }
 
@@ -249,13 +267,14 @@ export async function verifyModelCapabilities(
   options: VerifyModelCapabilitiesOptions = {},
 ): Promise<ModelCapabilityVerification> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS;
-  const outcomes: Record<ModelCapability, ProbeOutcome> = {
-    text_generation: await probeTextGeneration(model, timeoutMs),
-    streaming: await probeStreaming(model, timeoutMs),
-    tool_calling: await probeToolCalling(model, timeoutMs),
-    cancellation: await probeCancellation(model, timeoutMs),
-    usage: await probeUsage(model, timeoutMs),
-  };
+  const outcomes = {} as Record<ModelCapability, ProbeOutcome>;
+  const probes = { text_generation: probeTextGeneration, streaming: probeStreaming,
+    tool_calling: probeToolCalling, cancellation: probeCancellation, usage: probeUsage };
+  for (const capability of REQUIRED_MODEL_CAPABILITIES) {
+    outcomes[capability] = options.signal?.aborted
+      ? { ok: false, detail: '核验已取消' }
+      : await probes[capability](model, timeoutMs, options.signal);
+  }
 
   const capabilities = Object.fromEntries(
     REQUIRED_MODEL_CAPABILITIES.map((capability) => [capability, outcomes[capability].ok]),

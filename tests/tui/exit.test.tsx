@@ -68,10 +68,13 @@ function hazardousSnapshot(overrides: SnapshotOverrides = {}): SnapshotOverrides
 describe('tui/execution-control / 前台 Exit 与 Ctrl+C', () => {
   test('Scenario: Exit 不等同 Cancel —— 确认后退出前台进程，但不产生任何 scope-control 意图', async () => {
     const fake = createFakePorts({ snapshot: hazardousSnapshot() });
+    const abort = vi.fn();
+    Object.assign(fake.ports, { exitIntent: abort });
     const { rendered, onExit } = renderWithExitSpy(fake);
     await settle();
 
     await pressKey(rendered, CTRL_C);
+    expect(abort).toHaveBeenCalledOnce();
     expect(frameText(rendered)).toContain(CONFIRM_EXIT);
     expect(onExit).not.toHaveBeenCalled();
 

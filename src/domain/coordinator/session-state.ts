@@ -144,11 +144,20 @@ export type ActionableWorkRef = {
 /** 一次模型恢复的准入记录（`CONTEXT.md`「Wake Batch」）。 */
 export type WakeBatch = {
   readonly wakeBatchId: string;
-  readonly coordinationScopeId: string;
   readonly coordinatorSessionId: string;
   readonly sourceRevisions: readonly SourceRevisionRef[];
   readonly actionableWork: readonly ActionableWorkRef[];
-};
+} & WakeBatchOrigin;
+
+/**
+ * 唤醒来源：协调会话属于某个 Coordination Scope，调试会话只属于一个真实调试目录。
+ *
+ * 两种来源互斥且都必填其一：调试目录不是 Scope 的别名，因此它不能借用 Scope 身份，也不能被
+ * 协调准入逻辑读成 Scope（`wake-admission` 的比较对 `undefined` 直接判为不一致）。
+ */
+export type WakeBatchOrigin =
+  | { readonly coordinationScopeId: string; readonly debugDirectoryId?: never }
+  | { readonly debugDirectoryId: string; readonly coordinationScopeId?: never };
 
 /**
  * provider 原生压缩项：身份与位置由 Companion 记录，内容保持不透明。
@@ -356,6 +365,7 @@ const USAGE_FIELDS: readonly string[] = ['inputTokens', 'outputTokens', 'totalTo
 const WAKE_BATCH_FIELDS: readonly string[] = [
   'wakeBatchId',
   'coordinationScopeId',
+  'debugDirectoryId',
   'coordinatorSessionId',
   'sourceRevisions',
   'actionableWork',
@@ -939,9 +949,9 @@ function parseWakeBatch(raw: unknown, field: string): IdentityResult<WakeBatch> 
   if (!wakeBatchId.ok) {
     return wakeBatchId;
   }
-  const scopeId = requireNonEmptyString(raw['coordinationScopeId'], `${field}.coordinationScopeId`);
-  if (!scopeId.ok) {
-    return scopeId;
+  const origin = parseWakeBatchOrigin(raw, field);
+  if (!origin.ok) {
+    return origin;
   }
   const sessionId = requireNonEmptyString(raw['coordinatorSessionId'], `${field}.coordinatorSessionId`);
   if (!sessionId.ok) {
@@ -978,12 +988,30 @@ function parseWakeBatch(raw: unknown, field: string): IdentityResult<WakeBatch> 
     ok: true,
     value: {
       wakeBatchId: wakeBatchId.value,
-      coordinationScopeId: scopeId.value,
+      ...origin.value,
       coordinatorSessionId: sessionId.value,
       sourceRevisions,
       actionableWork,
     },
   };
+}
+
+/** 来源判别：两种身份必须恰好出现一个，缺失或同时出现都按损坏处理。 */
+function parseWakeBatchOrigin(raw: Record<string, unknown>, field: string): IdentityResult<WakeBatchOrigin> {
+  const scope = raw['coordinationScopeId'];
+  const debug = raw['debugDirectoryId'];
+  if (scope !== undefined && debug !== undefined) {
+    return fail(field, 'Wake Batch 必须且只能携带 coordinationScopeId 或 debugDirectoryId 之一');
+  }
+  if (scope === undefined && debug === undefined) {
+    return fail(field, 'Wake Batch 缺少来源身份：coordinationScopeId 与 debugDirectoryId 至少一个');
+  }
+  if (debug !== undefined) {
+    const directoryId = requireNonEmptyString(debug, `${field}.debugDirectoryId`);
+    return directoryId.ok ? { ok: true, value: { debugDirectoryId: directoryId.value } } : directoryId;
+  }
+  const scopeId = requireNonEmptyString(scope, `${field}.coordinationScopeId`);
+  return scopeId.ok ? { ok: true, value: { coordinationScopeId: scopeId.value } } : scopeId;
 }
 
 function parseNativeWindowOwner(

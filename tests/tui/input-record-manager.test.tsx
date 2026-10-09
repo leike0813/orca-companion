@@ -138,6 +138,22 @@ describe('记录管理展示有界', () => {
     rendered.unmount();
   });
 
+  test('调试记录标注 debug 身份，不冒充 Scope 消息', () => {
+    const record: UiInputRecord = {
+      key: 'debug-draft-key',
+      revision: 1,
+      kind: 'draft',
+      target: { kind: 'debug-message', debugDirectoryId: '/tmp/orca-debug-a', coordinatorSessionId: 'session-a' },
+      draft: { text: '调试草稿', cursor: 4, pasteBlocks: [] },
+    };
+    const rendered = renderComponent(
+      <InputRecordManager view={makeView([{ kind: 'record', record }])} availableWidth={100} />,
+    );
+    expect(frameText(rendered)).toContain('draft · debug session-a');
+    expect(frameText(rendered)).not.toContain('msg session-a');
+    rendered.unmount();
+  });
+
   test('删除二次确认提示可见', () => {
     const entries: InputManagerEntry[] = [{ kind: 'record', record: makeDraftRecord(0, '草稿') }];
     const rendered = renderComponent(

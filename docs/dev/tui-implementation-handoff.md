@@ -2,9 +2,11 @@
 
 > **硬约束：尊重已确认原型。任何 TUI change 必须直接引用对应定稿决议、源码和画面，并按其布局、信息层级、视觉风格、导航与返回约定实施、验收。未经用户明确批准，不得自行重新设计。交互正常或自动测试通过，不能替代原型一致性验收。**
 
-状态日期：2026-10-08。接手先核对 HEAD、工作区和当前工件；保留已有未提交改动。体验以用户当前指示和 Decision Ticket 最终决议为准；领域、模块与公共合同分别由 [CONTEXT.md](../../CONTEXT.md)、[architecture.md](../architecture.md)、[interface-contracts.md](../interface-contracts.md) 拥有。
+状态日期：2026-10-09。接手先核对 HEAD、工作区和当前工件；保留已有未提交改动。体验以用户当前指示和 Decision Ticket 最终决议为准；领域、模块与公共合同分别由 [CONTEXT.md](../../CONTEXT.md)、[architecture.md](../architecture.md)、[interface-contracts.md](../interface-contracts.md) 拥有。
 
-当前批次为 [rework-coordinator-provider-configuration](../../openspec/changes/rework-coordinator-provider-configuration/implementation-plan.md)。模型设置沿 #52 dialog final：Worker 角色只选择 harness 与该 harness 原生目录候选（model/effort），不再出现连接、凭据、API key 或任意 options 字段；Coordinator 沿同布局加入用户连接复用、服务/地区产品线、自定义协议、地址与隐藏 Key、模型候选。目录查询失败时可手填 native exact ID 并标记未验证，effort 不可捏造。保存追加 profile，执行应用须经 Manifest v4 审阅。本批用户于2026-10-08接受当前功能，明确将TUI美化与完整视觉对照留待后续；已有三档画面保留为审阅材料，不由行为测试或本次功能接受推定逐项呈现验收通过。后续TUI改动仍按本页原型规则执行。
+当前批次为 [stabilize-agent-harness-core](../../openspec/changes/archive/2026-10-09-stabilize-agent-harness-core/implementation-plan.md)（2026-10-09 已归档）；其直接前驱 [rework-coordinator-provider-configuration](../../openspec/changes/archive/2026-10-08-rework-coordinator-provider-configuration/implementation-plan.md) 已归档。模型设置沿 #52 dialog final 的定稿不变：Worker 角色只选择 harness 与该 harness 原生目录候选（model/effort），不再出现连接、凭据、API key 或任意 options 字段；Coordinator 沿同布局加入用户连接复用、服务/地区产品线、自定义协议、地址与隐藏 Key、模型候选。目录查询失败时可手填 native exact ID 并标记未验证，effort 不可捏造。保存追加 profile，执行应用须经 Manifest v4 审阅。用户于2026-10-08接受 provider 批次功能，明确将TUI美化与完整视觉对照留待后续；已有三档画面保留为审阅材料，不由行为测试或该次功能接受推定逐项呈现验收通过。后续TUI改动仍按本页原型规则执行。
+
+本批只稳定对话核心与新增调试入口：协调与调试共用 transcript/composer 区域和输入保护，新增 Session 级 `/stop`、`/retry`，退出先 abort 模型再保存草稿，并新增 `ocp --debug [directory]` 的无 Scope 前台与 `list_files`/`read_file`/`search`/`git_diff` 有界只读工具。协调工作区的布局、层级、配色、导航与返回约定不变；调试界面是新入口，不构成对六票原型的修改。实施任务已完成，真实链路、MiniMax有限实测及三档有色/无色画面对照见 [实施证据](../../artifacts/agent-harness-core/README.md)；本次对照覆盖对话核心，六票原型的完整人工呈现验收仍以用户确认为准。
 
 ## 1. 六票来源与当前范围
 
@@ -42,7 +44,7 @@ Route Map 为 [#37](https://github.com/leike0813/orca-companion/issues/37)，功
 
 ### 第二批成果及证据边界
 
-第六批 6A/6B 及全部前驱已归档；第七批 `complete-tui-project-statusline` 已包含于 commit `41b2f1e` 并归档到 `2026-10-04-complete-tui-project-statusline`。其[生产证据](../../artifacts/project-statusline/README.md)和历史验收范围保持原样。第八批 `complete-tui-graph-basis` 已包含于 `055c148` 并归档到 `2026-10-04-complete-tui-graph-basis`。Worker 原生模型候选与独立 effort 由已归档的 [remove-worker-credential-management](../../openspec/changes/archive/2026-10-07-remove-worker-credential-management/verification.md) 实现。当前 Provider 批次以本页开头所链接的 change 为准。
+第六批 6A/6B 及全部前驱已归档；第七批 `complete-tui-project-statusline` 已包含于 commit `41b2f1e` 并归档到 `2026-10-04-complete-tui-project-statusline`。其[生产证据](../../artifacts/project-statusline/README.md)和历史验收范围保持原样。第八批 `complete-tui-graph-basis` 已包含于 `055c148` 并归档到 `2026-10-04-complete-tui-graph-basis`。Worker 原生模型候选与独立 effort 由已归档的 [remove-worker-credential-management](../../openspec/changes/archive/2026-10-07-remove-worker-credential-management/verification.md) 实现，Coordinator provider 配置由已归档的 [rework-coordinator-provider-configuration](../../openspec/changes/archive/2026-10-08-rework-coordinator-provider-configuration/implementation-plan.md) 实现；当前批次以本页开头所链接的 change 为准。
 
 第二批已提供 grapheme 任意位置编辑、行首尾、多行有界视窗、原生光标；>1000 code points 原子粘贴及 /paste；唯一完整 UiDraft、CAS、提交快照/稳定 submissionId、单活跃提交/generation；真实 ask_user 创建/重放与精确查询；当前 Session 选项/自由回答、Esc 恢复。UI schema v2、Coordination schema 14，问题正文由 Branch Store 拥有。
 

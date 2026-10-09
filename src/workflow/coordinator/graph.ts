@@ -7,7 +7,8 @@
  * 整张图——恢复由 Controller 在拿到 Runtime Lease 后以同一 thread 重新 invoke 完成（D5）。
  *
  * `recursionLimit` 只是高位技术保险，不作为业务预算，也不当作工具循环的步数上限；模型调用的有限
- * 重试只配置在 model node 上，且内层重试已在 `resolveChatModel` 中关闭，避免次数相乘（D15）。
+ * 重试由 model node 自己执行（分类由 `model-call.ts` 拥有），且内层重试已在 `resolveChatModel` 中
+ * 关闭，避免次数相乘（D15）。
  */
 
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';

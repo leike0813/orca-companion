@@ -464,7 +464,7 @@ async function verifyConfiguredCoordinatorModel(
     modelRef: configuration.configurationRef,
   });
   return verification.kind === 'rejected'
-    ? { ok: false, status: 'capability-missing', detail: verification.message }
+    ? { ok: false, status: 'capability-missing', detail: `${verification.message}；${verification.report.details.join('；')}` }
     : {
         ok: true,
         value: {

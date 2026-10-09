@@ -37,11 +37,15 @@ export type InputRecordManagerView = {
 export type InputRecordManagerProps = {
   readonly view: InputRecordManagerView;
   readonly availableWidth: number;
+  readonly availableRows?: number;
 };
 
 /** 目标的可读摘要；界面只显示范围，不构造身份。 */
 export function inputRecordTargetLabel(record: UiInputRecord): string {
   const target = record.target;
+  if (target.kind === 'debug-message') {
+    return `debug ${target.coordinatorSessionId}`;
+  }
   return target.kind === 'message'
     ? `msg ${target.coordinatorSessionId}`
     : `answer ${target.coordinatorSessionId} ${target.interactionId}@${String(target.expectedRevision)}`;
@@ -64,16 +68,17 @@ export function inputManagerEntryLabel(entry: InputManagerEntry): string {
 export function inputManagerWindow(
   entries: readonly InputManagerEntry[],
   selectedIndex: number,
+  visibleRows = INPUT_MANAGER_VISIBLE_ROWS,
 ): readonly { readonly index: number; readonly entry: InputManagerEntry }[] {
-  if (entries.length <= INPUT_MANAGER_VISIBLE_ROWS) {
+  if (entries.length <= visibleRows) {
     return entries.map((entry, index) => ({ index, entry }));
   }
   const start = Math.min(
-    Math.max(0, selectedIndex - Math.floor(INPUT_MANAGER_VISIBLE_ROWS / 2)),
-    entries.length - INPUT_MANAGER_VISIBLE_ROWS,
+    Math.max(0, selectedIndex - Math.floor(visibleRows / 2)),
+    entries.length - visibleRows,
   );
   return entries
-    .slice(start, start + INPUT_MANAGER_VISIBLE_ROWS)
+    .slice(start, start + visibleRows)
     .map((entry, offset) => ({ index: start + offset, entry }));
 }
 
@@ -86,6 +91,7 @@ export function inputManagerWindow(
 export function inputManagerBodyLines(
   view: InputRecordManagerView,
   availableWidth: number,
+  visibleRows = INPUT_MANAGER_BODY_ROWS,
 ): readonly string[] {
   const selected = view.entries[view.selectedIndex];
   if (selected === undefined || selected.kind === 'invalid') {
@@ -97,7 +103,7 @@ export function inputManagerBodyLines(
   }
   const width = Math.max(1, availableWidth);
   const skip = Math.max(0, view.bodyScroll);
-  const rowBudget = width * (skip + INPUT_MANAGER_BODY_ROWS + 1);
+  const rowBudget = width * (skip + visibleRows + 1);
   const rows: string[] = [];
   let rowIndex = 0;
   let lineStart = 0;
@@ -110,7 +116,7 @@ export function inputManagerBodyLines(
         rows.push(row);
       }
       rowIndex += 1;
-      if (rows.length >= INPUT_MANAGER_BODY_ROWS) {
+      if (rows.length >= visibleRows) {
         return rows;
       }
     }
@@ -124,18 +130,20 @@ export function inputManagerBodyLines(
 
 export function InputRecordManager(props: InputRecordManagerProps) {
   const { view } = props;
-  const width = Math.max(1, props.availableWidth);
-  const visible = inputManagerWindow(view.entries, view.selectedIndex);
-  const body = inputManagerBodyLines(view, width);
+  const width = Math.max(1, props.availableWidth - 2);
+  const listRows = props.availableRows === undefined ? INPUT_MANAGER_VISIBLE_ROWS : Math.max(1, Math.min(INPUT_MANAGER_VISIBLE_ROWS, Math.floor((props.availableRows - 7) / 2)));
+  const bodyRows = props.availableRows === undefined ? INPUT_MANAGER_BODY_ROWS : Math.max(1, Math.min(INPUT_MANAGER_BODY_ROWS, props.availableRows - listRows - 7));
+  const visible = inputManagerWindow(view.entries, view.selectedIndex, listRows);
+  const body = inputManagerBodyLines(view, width, bodyRows);
   return (
     <Box flexDirection="column" borderStyle="single">
       <Text bold>
         {truncateToDisplayWidth(
-          `输入记录管理 · 本 Scope ${String(view.entries.length)} 条 · 容量 ${String(view.usage.records)} 条 / ${String(view.usage.bytes)} 字节`,
+          `输入记录管理 · 当前范围 ${String(view.entries.length)} 条 · 容量 ${String(view.usage.records)} 条 / ${String(view.usage.bytes)} 字节`,
           width,
         )}
       </Text>
-      {view.entries.length === 0 ? <Text dimColor>（本 Scope 没有输入记录）</Text> : null}
+      {view.entries.length === 0 ? <Text dimColor>（当前范围没有输入记录）</Text> : null}
       {visible.map(({ index, entry }) => (
         <Text
           key={entry.kind === 'record' ? entry.record.key : entry.key}
@@ -152,7 +160,7 @@ export function InputRecordManager(props: InputRecordManagerProps) {
           )}
         </Text>
       ))}
-      {view.entries.length > INPUT_MANAGER_VISIBLE_ROWS ? (
+      {view.entries.length > listRows ? (
         <Text dimColor>
           {`（列表滚动：显示 ${String(visible.length)} / ${String(view.entries.length)} 条 · 正文第 ${String(view.bodyScroll + 1)} 行起）`}
         </Text>

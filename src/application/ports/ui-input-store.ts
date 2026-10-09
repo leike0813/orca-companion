@@ -32,7 +32,27 @@ export type UiAnswerTarget = {
   readonly expectedRevision: number;
 };
 
-export type UiInputTarget = UiMessageTarget | UiAnswerTarget;
+/**
+ * 调试消息的目标：没有 Scope，只有独立调试目录与其中的 Session。
+ *
+ * 它不带 `coordinationScopeId`：调试目录不冒充 Coordination Scope，因此调度、权限与回答语义都够不到它。
+ */
+export type UiDebugMessageTarget = {
+  readonly kind: 'debug-message';
+  readonly debugDirectoryId: string;
+  readonly coordinatorSessionId: string;
+};
+
+export type UiInputTarget = UiMessageTarget | UiAnswerTarget | UiDebugMessageTarget;
+
+/**
+ * 目标所属的命名空间：协调输入是 Scope 身份，调试输入是调试目录身份。
+ *
+ * 它只用于按范围列举与等待位判定，不构成跨形态的身份相等：两者语义不同，永不互换。
+ */
+export function targetNamespace(target: UiInputTarget): string {
+  return target.kind === 'debug-message' ? target.debugDirectoryId : target.coordinationScopeId;
+}
 
 /** 折叠块范围：正文只存在于 UiDraft.text。 */
 export type UiPasteBlock = {
@@ -93,8 +113,8 @@ export type UiInputRecord = UiInputValue & {
 /**
  * 容量计量与不可读记录。
  *
- * `usage` 计量的是**整库**（上限按仓库计算），`records`/`invalidRecords` 只覆盖被列举的那个
- * Scope；容量逼近时界面据此提示清理，所以它不能只反映当前 Scope。
+ * `usage` 计量的是**整库**（上限按仓库计算），`records`/`invalidRecords` 只覆盖被列举的那个命名
+ * 空间；容量逼近时界面据此提示清理，所以它不能只反映当前范围。
  */
 export type UiInputUsage = {
   readonly records: number;
@@ -149,7 +169,8 @@ export type UiInputRemoveInput = {
 
 export type UiInputStore = {
   read(key: string): UiInputReadResult;
-  list(coordinationScopeId: string): UiInputListResult;
+  /** 按命名空间列举：传 Scope 身份或调试目录身份，见 `targetNamespace`。 */
+  list(namespace: string): UiInputListResult;
   write(input: UiInputWriteInput): UiInputWriteResult;
   remove(input: UiInputRemoveInput): UiInputRemoveResult;
 };
@@ -170,20 +191,20 @@ export const DEFAULT_UI_INPUT_LIMITS: UiInputLimits = {
   maxBytes: 32 * 1024 * 1024,
 };
 
-/** 普通消息草稿的 key：同一 Session 只有一条。 */
-function messageDraftKey(target: UiMessageTarget): string {
-  return JSON.stringify(['draft', target.coordinationScopeId, target.coordinatorSessionId]);
-}
-
-/** 回答草稿的 key：同一交互的不同 expected revision 各自独立，永不自动改绑。 */
-function answerDraftKey(target: UiAnswerTarget): string {
-  return JSON.stringify([
-    'draft',
-    target.coordinationScopeId,
-    target.coordinatorSessionId,
-    target.interactionId,
-    target.expectedRevision,
-  ]);
+/**
+ * 记录 key：形态标签 + 命名空间 + Session（+ 该形态自己的后缀）。
+ *
+ * 调试输入带 `debug-` 前缀，因此它的 key 与既有 message/answer key 不同族：旧记录身份不变，调试
+ * 输入也不可能命中协调输入的记录。
+ */
+function recordKey(
+  tag: 'draft' | 'submission' | 'conflict',
+  target: UiInputTarget,
+  ...rest: readonly (string | number)[]
+): string {
+  return target.kind === 'debug-message'
+    ? JSON.stringify([`debug-${tag}`, target.debugDirectoryId, target.coordinatorSessionId, ...rest])
+    : JSON.stringify([tag, target.coordinationScopeId, target.coordinatorSessionId, ...rest]);
 }
 
 /**
@@ -192,25 +213,18 @@ function answerDraftKey(target: UiAnswerTarget): string {
  * 草稿、冲突副本与提交各自持有独立 key，因此同一目标可以同时留有草稿与待核验提交。
  */
 export function targetDraftKey(target: UiInputTarget): string {
-  return target.kind === 'message' ? messageDraftKey(target) : answerDraftKey(target);
+  // 回答草稿另带 interaction 与 expected revision：同一交互的不同 revision 永不自动改绑。
+  return target.kind === 'answer'
+    ? recordKey('draft', target, target.interactionId, target.expectedRevision)
+    : recordKey('draft', target);
 }
 
 /** 提交快照的 key；`submissionId` 是稳定身份，重试必须复用它而不是换一个。 */
 export function submissionKey(target: UiInputTarget, submissionId: string): string {
-  return JSON.stringify([
-    'submission',
-    target.coordinationScopeId,
-    target.coordinatorSessionId,
-    submissionId,
-  ]);
+  return recordKey('submission', target, submissionId);
 }
 
 /** 冲突副本的 key；`conflictId` 由调用方给出，用于保留被覆盖的另一版本。 */
 export function conflictKey(target: UiInputTarget, conflictId: string): string {
-  return JSON.stringify([
-    'conflict',
-    target.coordinationScopeId,
-    target.coordinatorSessionId,
-    conflictId,
-  ]);
+  return recordKey('conflict', target, conflictId);
 }

@@ -11,6 +11,7 @@ import {
   submissionKey,
   targetDraftKey,
   type UiAnswerTarget,
+  type UiDebugMessageTarget,
   type UiDraft,
   type UiInputLimits,
   type UiInputRecord,
@@ -26,6 +27,8 @@ const SCOPE = 'scope-1';
 const SCOPE_2 = 'scope-2';
 const SESSION_A = 'session-a';
 const SESSION_B = 'session-b';
+const DEBUG_DIR = '/tmp/orca-debug-1';
+const DEBUG_DIR_2 = '/tmp/orca-debug-2';
 
 let directory = '';
 let databasePath = '';
@@ -57,6 +60,10 @@ function messageTarget(scopeId = SCOPE, sessionId = SESSION_A): UiMessageTarget 
 
 function answerTarget(interactionId = 'interaction-1', expectedRevision = 3): UiAnswerTarget {
   return { kind: 'answer', coordinationScopeId: SCOPE, coordinatorSessionId: SESSION_A, interactionId, expectedRevision };
+}
+
+function debugTarget(debugDirectoryId = DEBUG_DIR, sessionId = SESSION_A): UiDebugMessageTarget {
+  return { kind: 'debug-message', debugDirectoryId, coordinatorSessionId: sessionId };
 }
 
 function draft(text: string, pasteBlocks: UiDraft['pasteBlocks'] = []): UiDraft {
@@ -176,6 +183,30 @@ test('同一交互不同 expected revision 的回答草稿相互隔离', () => {
   expect(readText(newer)).toBe('新 revision 的回答');
 });
 
+test('调试记录使用独立 key 族，既有 message/answer key 逐字不变', () => {
+  expect(targetDraftKey(messageTarget())).toBe(JSON.stringify(['draft', SCOPE, SESSION_A]));
+  expect(submissionKey(messageTarget(), 'submission-1')).toBe(JSON.stringify(['submission', SCOPE, SESSION_A, 'submission-1']));
+  expect(conflictKey(messageTarget(), 'conflict-1')).toBe(JSON.stringify(['conflict', SCOPE, SESSION_A, 'conflict-1']));
+
+  const debug = debugTarget();
+  expect(targetDraftKey(debug)).toBe(JSON.stringify(['debug-draft', DEBUG_DIR, SESSION_A]));
+  expect(submissionKey(debug, 'submission-1')).toBe(JSON.stringify(['debug-submission', DEBUG_DIR, SESSION_A, 'submission-1']));
+  expect(conflictKey(debug, 'conflict-1')).toBe(JSON.stringify(['debug-conflict', DEBUG_DIR, SESSION_A, 'conflict-1']));
+
+  // 目录名与 Scope 名相同时也不会互相命中，两套身份不是同一事实来源。
+  expect(targetDraftKey(debugTarget(SCOPE))).not.toBe(targetDraftKey(messageTarget()));
+  const keys = [
+    targetDraftKey(messageTarget()),
+    targetDraftKey(answerTarget()),
+    submissionKey(messageTarget(), 'same-id'),
+    conflictKey(messageTarget(), 'same-id'),
+    targetDraftKey(debug),
+    submissionKey(debug, 'same-id'),
+    conflictKey(debug, 'same-id'),
+  ];
+  expect(new Set(keys).size).toBe(keys.length);
+});
+
 test('记录 key 按目标种类稳定派生且互不冲突', () => {
   const message = messageTarget();
   expect(targetDraftKey(message)).toBe(JSON.stringify(['draft', SCOPE, SESSION_A]));
@@ -192,6 +223,66 @@ test('记录 key 按目标种类稳定派生且互不冲突', () => {
       conflictKey(message, 'same-id'),
     ]).size,
   ).toBe(4);
+});
+
+test('调试草稿按调试目录与 Session 隔离，跨重启恢复且不出现在 Scope 列表', () => {
+  writeDraft(messageTarget(SCOPE, SESSION_A), '协调草稿');
+  writeDraft(debugTarget(), '调试草稿');
+  writeDraft(debugTarget(DEBUG_DIR_2), '另一个目录的调试草稿');
+
+  store.close();
+  store = openInputs();
+
+  expect(readText(debugTarget())).toBe('调试草稿');
+  expect(readText(messageTarget(SCOPE, SESSION_A))).toBe('协调草稿');
+  expect(store.list(DEBUG_DIR)).toMatchObject({
+    kind: 'records',
+    records: [{ key: targetDraftKey(debugTarget()) }],
+  });
+  expect(store.list(SCOPE)).toMatchObject({
+    kind: 'records',
+    records: [{ key: targetDraftKey(messageTarget(SCOPE, SESSION_A)) }],
+  });
+});
+
+test('调试目标不接受补上的协调身份，Scope 目标也不接受调试目录', () => {
+  const pretendScope = {
+    kind: 'draft',
+    target: { ...debugTarget(), coordinationScopeId: SCOPE },
+    draft: draft('假装 Scope 的调试草稿'),
+  } as unknown as UiInputValue;
+  expect(store.write({ key: targetDraftKey(debugTarget()), expectedRevision: 0, record: pretendScope })).toMatchObject({
+    kind: 'failed',
+    code: 'record_invalid',
+  });
+
+  const pretendDebug = {
+    kind: 'draft',
+    target: { ...messageTarget(), debugDirectoryId: DEBUG_DIR },
+    draft: draft('带调试目录的协调草稿'),
+  } as unknown as UiInputValue;
+  expect(store.write({ key: 'message-with-debug-directory', expectedRevision: 0, record: pretendDebug })).toMatchObject({
+    kind: 'failed',
+    code: 'record_invalid',
+  });
+});
+
+test('调试 Session 的单活跃提交按调试目录与 Session 生效', () => {
+  const target = debugTarget();
+  expect(
+    store.write({ key: submissionKey(target, 'sub-1'), expectedRevision: 0, record: submissionValue(target, 'sub-1') }),
+  ).toMatchObject({ kind: 'saved' });
+  expect(
+    store.write({ key: submissionKey(target, 'sub-2'), expectedRevision: 0, record: submissionValue(target, 'sub-2') }),
+  ).toMatchObject({ kind: 'failed', code: 'submission_lane_busy' });
+
+  // 另一个调试目录（含与 Scope 同名的目录）不受该等待位影响。
+  for (const directory of [DEBUG_DIR_2, SCOPE]) {
+    const other = debugTarget(directory);
+    expect(
+      store.write({ key: submissionKey(other, 'sub-3'), expectedRevision: 0, record: submissionValue(other, 'sub-3') }),
+    ).toMatchObject({ kind: 'saved' });
+  }
 });
 
 test('读取不存在的 key 返回空记录与 revision 0', () => {

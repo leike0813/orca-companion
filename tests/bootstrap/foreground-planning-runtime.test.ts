@@ -58,7 +58,7 @@ type Harness = {
   readonly directory: string;
   readonly host: Awaited<ReturnType<typeof createForegroundPlanningHost>>;
   readonly events: readonly SemanticEvent[];
-  readonly requests: { generations: number; inputs: string[] };
+  readonly requests: { generations: number; inputs: string[]; probes: number };
   readonly dispose: () => void;
 };
 
@@ -148,6 +148,10 @@ async function startHarness(
     readonly modelSignal?: (signal: AbortSignal) => void;
     readonly exactMeasure?: (input: { readonly messages: readonly unknown[]; readonly tools: readonly unknown[] }) => Promise<{ readonly used: number; readonly capacity: number } | null>;
     readonly boundTools?: (tools: readonly unknown[]) => void;
+    readonly structuredResponse?: boolean;
+    readonly modelFailure?: () => boolean;
+    /** 让能力核验的探测挂起，直到它收到的 signal 被取消；每次调用时求值，因此可以在初始化之后再武装。 */
+    readonly hangProbe?: () => boolean;
   } = {},
 ): Promise<Harness> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-foreground-'));
@@ -163,7 +167,7 @@ async function startHarness(
   }
   const events: SemanticEvent[] = [];
   const env = credentialFixtureEnvironment(directory);
-  const requests = { generations: 0, inputs: [] as string[] };
+  const requests = { generations: 0, inputs: [] as string[], probes: 0 };
   const host = await createForegroundPlanningHost({
     repositoryPath: repository,
     env,
@@ -206,9 +210,22 @@ async function startHarness(
             const capabilityProbe = messages.some((message) => message._getType() === 'human' &&
               ['ping', 'capability cancellation probe', 'Call the capability_probe tool.']
                 .some((probe) => JSON.stringify(message.content).includes(probe)));
+            if (capabilityProbe) requests.probes += 1;
             if (!capabilityProbe) {
               requests.generations += 1;
               requests.inputs.push(input);
+              if (overrides.modelFailure?.()) throw new TypeError('internal model parser failed');
+              if (overrides.structuredResponse) return Promise.resolve({ generations: [{ text: '你好',
+                message: new AIMessage({ content: [{ type: 'text', text: '你好' }] }) }] });
+            }
+            if (capabilityProbe && overrides.hangProbe?.() === true) {
+              return new Promise<import('@langchain/core/outputs').ChatResult>((_, reject) => {
+                const signal = options?.signal;
+                if (signal === undefined) return;
+                const abort = () => reject(Object.assign(new Error('调用已被取消'), { name: 'AbortError' }));
+                if (signal.aborted) abort();
+                else signal.addEventListener('abort', abort, { once: true });
+              });
             }
             if (overrides.askUser && !this.asked && requests.inputs.at(-1)?.includes('__ASK_USER__')) {
               this.asked = true;
@@ -271,6 +288,50 @@ async function initializeScope(harness: Harness, proposal: Awaited<ReturnType<ty
   await harness.host.ports.scopeSetup.verify();
   return harness.host.ports.scopeSetup.initialize(proposal);
 }
+
+test('生产装配提交结构化响应，绑定原模型配置并只请求一次', async () => {
+  const harness = await startHarness({ structuredResponse: true });
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  expect((await initializeScope(harness, proposal)).kind).toBe('accepted');
+  expect((await harness.host.ports.execute({ kind: 'send-session-message',
+    coordinatorSessionId: proposal.coordinatorSessionId, submissionId: 'structured-greeting', content: '你好' })).kind).toBe('accepted');
+  expect(await waitFor(() => modelRounds(harness) > 0)).toBe(true);
+  const history = await harness.host.ports.reading.history({ coordinatorSessionId: proposal.coordinatorSessionId });
+  expect(history.entries.map(entry => entry.role)).toEqual(['user', 'assistant']);
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  expect(harness.requests.generations).toBe(1);
+});
+
+test('内部异常停止跨轮请求，新消息和重启不解除停止，明确 retry 后继续', { timeout: 20_000 }, async () => {
+  let failing = true;
+  const harness = await startHarness({ modelFailure: () => failing });
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  expect((await initializeScope(harness, proposal)).kind).toBe('accepted');
+  const send = (submissionId: string) => harness.host.ports.execute({ kind: 'send-session-message',
+    coordinatorSessionId: proposal.coordinatorSessionId, submissionId, content: '你好' });
+  expect((await send('failed-greeting')).kind).toBe('accepted');
+  expect(await waitFor(() => modelRounds(harness) > 0)).toBe(true);
+  expect((await send('queued-greeting')).kind).toBe('accepted');
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  expect(harness.requests.generations).toBe(1);
+  const failed = await harness.host.ports.snapshot(proposal.coordinatorSessionId);
+  expect(failed.kind === 'snapshot' && failed.snapshot.blockers.some(entry => entry.code === 'halted_by_host')).toBe(true);
+  const history = await harness.host.ports.reading.history({ coordinatorSessionId: proposal.coordinatorSessionId });
+  expect(history.entries.map(entry => entry.role)).toEqual(['user', 'user']);
+  harness.dispose();
+  now += 60_001;
+  failing = false;
+  const restored = await startHarness({ repository: harness.repository, modelFailure: () => failing });
+  await restored.host.ports.modelCatalog.load(proposal.coordinatorSessionId);
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  expect(restored.requests.generations).toBe(0);
+  expect((await restored.host.ports.execute({ kind: 'retry-session', coordinatorSessionId: proposal.coordinatorSessionId })).kind).toBe('accepted');
+  expect(await waitFor(() => restored.requests.generations > 0)).toBe(true);
+  expect(await waitFor(() => modelRounds(restored) > 0)).toBe(true);
+  const after = await restored.host.ports.reading.history({ coordinatorSessionId: proposal.coordinatorSessionId });
+  expect(after.entries.filter(entry => entry.role === 'user')).toHaveLength(2);
+  expect(after.entries.some(entry => entry.role === 'assistant')).toBe(true);
+});
 
 /**
  * 等一个条件成立；`timeoutMs` 到点仍未成立即返回 `false`，不隐藏失败。
@@ -1166,4 +1227,37 @@ test('新输入受理后迟到的精确 context 测量不能恢复旧读数', as
     .toEqual({ status: 'unavailable' });
   expect(measurements).toBe(1);
   streamGate.resolve();
+});
+
+test('退出意图打断挂起的能力核验：Session 不上线，Runtime Lease 不残留', { timeout: 20_000 }, async () => {
+  let armed = false;
+  const harness = await startHarness({ hangProbe: () => armed });
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  expect((await initializeScope(harness, proposal)).kind).toBe('accepted');
+
+  // 启动链在探测里挂着时收到退出：这条 Session 从未注册，也不应留下任何运行资源。
+  armed = true;
+  const probesBeforeExit = harness.requests.probes;
+  const sending = harness.host.ports.execute({ kind: 'send-session-message',
+    coordinatorSessionId: proposal.coordinatorSessionId,
+    submissionId: 'exit-during-probe', content: '开始规划' });
+  expect(await waitFor(() => harness.requests.probes === probesBeforeExit + 1)).toBe(true);
+  harness.host.ports.exitIntent?.();
+
+  expect((await sending).kind).toBe('rejected');
+  // 其余探测不再发出请求。
+  expect(harness.requests.probes).toBe(probesBeforeExit + 1);
+  expect(harness.requests.generations).toBe(0);
+
+  const commonDir = await resolveGitCommonDir({ repositoryPath: harness.repository, env: process.env as Record<string, string> });
+  if (commonDir.kind !== 'resolved') throw new Error('无法解析 Git common dir');
+  const opened = openCoordinationStore({ databasePath: coordinationDatabasePath(commonDir.path), clock, readOnly: true });
+  if (opened.kind !== 'opened') throw new Error(opened.message);
+  try {
+    const leases = opened.store.query({ kind: 'leases',
+      coordinationScopeId: proposal.coordinationScopeId as CoordinationScopeId });
+    expect(leases.kind === 'leases' ? leases.leases : []).toEqual([]);
+  } finally {
+    opened.store.close();
+  }
 });

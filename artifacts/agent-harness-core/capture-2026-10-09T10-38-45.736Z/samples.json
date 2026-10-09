@@ -1,0 +1,494 @@
+{
+  "samples": [
+    {
+      "stem": "debug-empty-120x40-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-greeting-120x40-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-tool-120x40-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-tool-details-120x40-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-cursor-120x40-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        6,
+        32
+      ]
+    },
+    {
+      "stem": "debug-slash-120x40-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        3,
+        32
+      ]
+    },
+    {
+      "stem": "debug-palette-120x40-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        57,
+        39
+      ]
+    },
+    {
+      "stem": "debug-help-120x40-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        57,
+        39
+      ]
+    },
+    {
+      "stem": "coordination-120x40-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        2,
+        36
+      ]
+    },
+    {
+      "stem": "debug-empty-120x40-no-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-greeting-120x40-no-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-tool-120x40-no-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-tool-details-120x40-no-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-cursor-120x40-no-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        6,
+        32
+      ]
+    },
+    {
+      "stem": "debug-slash-120x40-no-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        3,
+        32
+      ]
+    },
+    {
+      "stem": "debug-palette-120x40-no-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        57,
+        39
+      ]
+    },
+    {
+      "stem": "debug-help-120x40-no-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        57,
+        39
+      ]
+    },
+    {
+      "stem": "coordination-120x40-no-color",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        2,
+        36
+      ]
+    },
+    {
+      "stem": "debug-empty-80x24-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        2,
+        16
+      ]
+    },
+    {
+      "stem": "debug-greeting-80x24-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        2,
+        16
+      ]
+    },
+    {
+      "stem": "debug-tool-80x24-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        2,
+        16
+      ]
+    },
+    {
+      "stem": "debug-tool-details-80x24-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        2,
+        16
+      ]
+    },
+    {
+      "stem": "debug-cursor-80x24-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        6,
+        16
+      ]
+    },
+    {
+      "stem": "debug-slash-80x24-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        3,
+        16
+      ]
+    },
+    {
+      "stem": "debug-palette-80x24-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        57,
+        23
+      ]
+    },
+    {
+      "stem": "debug-help-80x24-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        57,
+        23
+      ]
+    },
+    {
+      "stem": "coordination-80x24-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        2,
+        20
+      ]
+    },
+    {
+      "stem": "debug-empty-80x24-no-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        2,
+        16
+      ]
+    },
+    {
+      "stem": "debug-greeting-80x24-no-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        2,
+        16
+      ]
+    },
+    {
+      "stem": "debug-tool-80x24-no-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        2,
+        16
+      ]
+    },
+    {
+      "stem": "debug-tool-details-80x24-no-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        2,
+        16
+      ]
+    },
+    {
+      "stem": "debug-cursor-80x24-no-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        6,
+        16
+      ]
+    },
+    {
+      "stem": "debug-slash-80x24-no-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        3,
+        16
+      ]
+    },
+    {
+      "stem": "debug-palette-80x24-no-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        57,
+        23
+      ]
+    },
+    {
+      "stem": "debug-help-80x24-no-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        57,
+        23
+      ]
+    },
+    {
+      "stem": "coordination-80x24-no-color",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        2,
+        20
+      ]
+    },
+    {
+      "stem": "debug-empty-50x40-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-greeting-50x40-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-tool-50x40-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-tool-details-50x40-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-cursor-50x40-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        6,
+        32
+      ]
+    },
+    {
+      "stem": "debug-slash-50x40-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        3,
+        32
+      ]
+    },
+    {
+      "stem": "debug-palette-50x40-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        49,
+        39
+      ]
+    },
+    {
+      "stem": "debug-help-50x40-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        49,
+        39
+      ]
+    },
+    {
+      "stem": "coordination-50x40-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        2,
+        36
+      ]
+    },
+    {
+      "stem": "debug-empty-50x40-no-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-greeting-50x40-no-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-tool-50x40-no-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-tool-details-50x40-no-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        2,
+        32
+      ]
+    },
+    {
+      "stem": "debug-cursor-50x40-no-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        6,
+        32
+      ]
+    },
+    {
+      "stem": "debug-slash-50x40-no-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        3,
+        32
+      ]
+    },
+    {
+      "stem": "debug-palette-50x40-no-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        49,
+        39
+      ]
+    },
+    {
+      "stem": "debug-help-50x40-no-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        49,
+        39
+      ]
+    },
+    {
+      "stem": "coordination-50x40-no-color",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        2,
+        36
+      ]
+    }
+  ],
+  "actualAgentRequests": 18,
+  "totalRequests": 54,
+  "activeRequestsAfterExit": 0,
+  "fixtureDirectory": "/tmp/ocp-core-capture-x9h9zE"
+}

@@ -405,8 +405,11 @@ describe.skipIf(!build.ok)(SUITE_NAME, () => {
         tmux(socket, ['send-keys', '-t', session, '-l', '\u001b[1;2D']);
         expect(pollPane(socket, session, (text) => text.includes('请确认中文路径')).ok).toBe(true);
         tmux(socket, ['send-keys', '-t', session, 'Tab']);
+        const answerEditor = pollPane(socket, session, (text) => text.includes('输入回答后回车提交'));
+        expect(answerEditor.ok, answerEditor.text).toBe(true);
         tmux(socket, ['send-keys', '-t', session, '-l', '回答草稿']);
-        expect(pollPane(socket, session, (text) => text.includes('回答草稿')).ok).toBe(true);
+        const answerDraft = pollPane(socket, session, (text) => text.includes('回答草稿'));
+        expect(answerDraft.ok, answerDraft.text).toBe(true);
         tmux(socket, ['send-keys', '-t', session, 'Escape']);
         expect(pollPane(socket, session, (text) => text.includes('普通消息')).ok).toBe(true);
         tmux(socket, ['send-keys', '-t', session, '-l', '后']);
