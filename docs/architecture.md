@@ -108,6 +108,8 @@ Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation
 
 协调宿主与调试宿主共享 `workflow/coordinator/turn-driver.ts` 与 IC-04 的轮次端口，因此「一次请求能否发出、结束后停在哪里」只有一份实现，宿主只负责把图结局映射为轮次结局。`adapters/agents/debug-read-tools.ts` 实现调试专用的有界只读文件与 Git 访问，不进入协调工具注册表，也不成为通用只读能力。
 
+Scope 前 Route Map 初始化用例由 `application/planning/route-map-initialization.ts` 拥有，Bootstrap 从当前仓库解析可信 tracker 身份和完整 branch ref，再注入 `RouteMapInitializationPort`。它只有有界 list、精确 select 和创建空地图 create，不持有 Scope/Session，也不进入 Coordinator 工具面。`adapters/tracker/gh-route-map-initialization.ts` 只做公开 gh 参数数组调用与结果转换；`adapters/storage/route-map-initialization.ts` 在 Git common dir 的 `orca-companion/route-map-initialization/<encoded-full-branch-ref>.json` 保存 schema 1 操作记录，以短 exclusive 锁、revision CAS、原子替换和回读核验保护一次创建。请求前保存稳定 operationId/目标，正文附唯一 operation marker；unknown 或落盘失败后只按原记录对账，最多 20 项且须唯一匹配，不能换身份重发。该文件不是 Branch Coordination State，不新增生产 DB migration。
+
 `storage/credential-store.ts` 是版本控制之外唯一保存明文 secret 的地方，只服务 Coordinator 模型调用，与上面三个存储无关：单文件按 XDG 规则落在用户配置目录，短 exclusive 文件锁、revision CAS、0600 临时文件原子替换与回读；权限不安全的既有目录、文件与符号链接一律拒绝，且不 chmod 用户既有目录。它与项目配置文件之间没有跨文件事务，Coordinator 连接编辑先校验、写凭据并回读，再 CAS 追加用户库；项目显式选择完整快照；Worker 角色选择不写凭据，Worker 启动也不读取该 store。
 
 ### MOD-05 CLI
@@ -127,12 +129,14 @@ Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation
 |---|---|
 | Canonical path | `src/interfaces/tui/`、`src/application/tui/view-model.ts` 与 `src/application/execution/execution-view.ts` |
 | 职责 | Ink transcript、composer、sidebar、overlay、Graph Inspector、输入映射，两个宿主共用的对话区域（`components/conversation.tsx`）与调试工作台（`debug-app.tsx`），执行态/规划态纯展示 projection，以及执行阶段只读派生（`execution-view.ts`） |
-| 允许依赖 | `IC-11` Controller façade、`IC-12` view model、`IC-13` UI 输入、`IC-14` 模型设置与 `IC-15` 展示偏好端口；Ink/React 与 `@inkjs/ui` 展示组件 |
+| 允许依赖 | `IC-11` Controller façade、`IC-12` view model/启动窄端口、`IC-13` UI 输入、`IC-14` 模型设置、`IC-15` 展示偏好与 `IC-16` 调试宿主端口；Ink/React 与 `@inkjs/ui` 展示组件 |
 | Interface | 用户 intent、选中 Session、局部草稿/滚动/overlay 状态和渲染帧 |
 | 禁止 | 调用 Orca、打开 store、恢复模型、实现重试/准入/预算、从自由文本推断待答 interaction；`execution-view.ts` 只从 IC-03 快照与调用方读到的只读观察派生，不派发、不写、不实现对账 |
 | 测试 seam | 组件经固定 view model 与 command callbacks 测试；PTY 单独验证 TTY/CJK/resize |
 
 React 组件只拥有展示与输入协调。render、effect、resize 和重挂载只读取与查询；用户输入事件经 IC-13 保存草稿与提交快照，所有 Scope 级动作经 `ControllerService`。Bootstrap 启动核验 pending 提交并清理已受理快照，恢复过程不自动发送。
+
+`screens/startup-onboarding.tsx` 经 `ScopeSetupPort.verifyEnvironment(onCheck)` 在每次普通启动自动核验 repository、Orca 与身份，逐项绘制真实结果及当前 spinner；失败后只接受用户显式重试，不因重绘启动副作用。无项目配置时以环境、Coordinator、Route Map、最终确认四步引导。模型步骤复用 `components/provider-library-editor.tsx` 与既有 provider 状态转换/对话组件；地图步骤调用上述窄端口。最终确认先经 `ModelSettingsPort.initializeProject` 保存 schema 5，再经 `verify(onCheck)` 核验模型/tracker 和 `proposal/initialize` 创建 Scope/cycle/session。有配置但无 Scope 则复用配置进入确认；精确匹配的 Scope 继续沿既有恢复路径。Worker Profiles 留在执行授权边界，不作为规划引导前提。
 
 第七批 `application/tui/project-presentation.ts` 是可信项目/Session metadata、有界项目详情及共享 Validator 验收摘要的 DTO owner。Bootstrap 从注册 Scope、精确 Session configuration/Claim、当前图与 Task 绑定批准事实组装，不让 UI 查询 tracker/store；context 只消费 installed integration 的精确当前输入测量能力，并在有效输入版本变化后失效。偏好 schema/port 位于 `application/configuration/tui-preferences.ts`，`storage/tui-preferences-store.ts` 以独立用户文件实现 IC-15；Bootstrap 注入窄端口，UI 只在明确保存事件提交单区 CAS patch。展示文件不进入业务/输入数据库。
 
@@ -188,13 +192,16 @@ flowchart LR
 
 前台 TUI 退出只停止本进程；活跃 Worker 可能继续。重新启动时 Bootstrap 先恢复 store、取得 Runtime Lease 并对账，再允许模型恢复或新派发。M0–M2 没有后台 controller、远程 attach 或 headless run。
 
-`ocp --debug [directory]` 启动第二个前台宿主。它同样先检查双 TTY，但只装配真实模型、对话核心、有界只读工具与 IC-13 输入保护，不加载协调库、执行图、Worker Harness 或授权审阅；会话与历史留在用户状态目录，不写入项目仓库或 Git common dir。
+`ocp --debug [directory]` 启动第二个前台宿主。它同样先检查双 TTY，复用普通启动的 ProviderLibraryEditor；`DebugHarnessPort.providerLibrary` 注入同一用户级 library/catalog，空库也能保存连接和模型。用户明确新建或继续后才核验并打开会话，不要求 Orca、项目配置、Route Map 或 Worker Profiles。它只装配真实模型、对话核心、有界只读工具与 IC-13 输入保护，不加载协调库、执行图、Worker Harness 或授权审阅；会话与历史留在用户状态目录，不写入项目仓库或 Git common dir。
+
+ledger-lab 准备属于外置演练工具：`setup.mjs` 创建/推送私有 main 仓库、安装打包快照，经公开 Orca 命令登记、设置 `origin/main` 并打开原生终端，仅补本轮 bin PATH 和明确 `ORCA_CLI_COMMAND`。模型设置和 Scope 初始化仍由上述生产入口拥有；准备不读取用户模型/凭据库、不运行模型或 doctor。`run-record.mjs` 记录精确仓库、worktree 与 terminal handle；open 核验后聚焦原终端，仅确定 exited 才替换，旧 schema 2 未登记现场可在显式 open 时补登记。cleanup 仍由用户指定轮次、预览后以 `--yes` 执行，用户先停进程并解除登记，外置证据保留。
 
 ## 权威归属
 
 | 事实 | Owner | Companion 可保存的内容 |
 |---|---|---|
 | Route Map、Decision Ticket | Issue tracker | 引用、claim 和 pending interaction |
+| Scope 前地图创建身份 | Git common dir 私有 branch record | operationId、repository、完整 branch ref、revision 与 nullable issue 引用；正文仍归 tracker |
 | 代码、HEAD、index、worktree | Git 与 Orca | expected HEAD、Operation Intent、可丢弃 binding |
 | Run、Task、Dispatch、Worker、Delivery、receipt、Accepted Worker Result | Orca | 去重键、引用和控制记录，不复制正文 |
 | Execution Graph | Implementation Plan + accepted Graph Revision 历史 | append-only graph history 与当前引用 |
@@ -337,19 +344,23 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant U as User
+  participant L as ProviderLibrary
   participant T as ModelSettingsService
   participant C as CredentialStore
   participant P as ProjectConfigurationStore
   participant A as Authorization path
 
-  U->>T: save（角色候选 + 可选新 key + expectedRevision）
-  T->>T: 校验候选（引用唯一、交叉引用、effort 可信来源、无明文 secret）
-  opt Coordinator 候选含新 key
-    T->>C: save(expectedRevision, secret)
+  opt Coordinator 保存用户连接
+    U->>L: saveConnection（连接候选 + 新 key 或 credentialRef + expectedRevision）
+    L->>L: 校验连接候选
+    L->>C: 新 key 时 save(expectedRevision, secret)
     C->>C: 短锁 → CAS → 0600 临时文件原子替换 → 回读
-    C-->>T: saved(新不可变 credentialRef)
+    C-->>L: saved(新不可变 credentialRef)
+    L->>L: CAS 追加连接；明确 saveModel 保存模型
   end
-  T->>P: 追加新 connectionRef/modelRef/profileRef 并 CAS 保存
+  U->>T: save（Coordinator modelRef/effort 或 Worker harness/model/effort）
+  T->>T: 解析用户库快照或核验 Worker 原生目录来源
+  T->>P: CAS 保存完整 Coordinator 快照或新 Worker profile
   P-->>T: saved
   T-->>U: 非秘密 snapshot（保存不等于应用）
   U->>A: 显式 apply
@@ -396,4 +407,4 @@ sequenceDiagram
 | MOD-06 TUI | IC-11–IC-16 |
 | MOD-07 Bootstrap | IC-02–IC-04、IC-11–IC-16 |
 
-Coordinator Provider 设置由 `application/configuration/provider-library.ts` 与 `provider-catalog.ts` 拥有公共用例/端口；storage 的用户库 adapter 与 agents 的 catalog adapter 分别实现持久化与有界 HTTP。内置 chat-model factory 按固定协议直接构造 LangChain 模型，bootstrap 注入唯一 CredentialStore。公共 catalog 更新独立于连接发现；非空发现独占候选，失败按同连接/凭据/catalog版本的 LKG→catalog 回退。UI/lab 共用这些服务，render 只读，明确意图触发保存/发现/更新。
+Coordinator Provider 设置由 `application/configuration/provider-library.ts` 与 `provider-catalog.ts` 拥有公共用例/端口；storage 的用户库 adapter 与 agents 的 catalog adapter 分别实现持久化与有界 HTTP。内置 chat-model factory 按固定协议直接构造 LangChain 模型，bootstrap 注入唯一 CredentialStore。公共 catalog 更新独立于连接发现；非空发现独占候选，失败按同连接/凭据/catalog版本的 LKG→catalog 回退。普通启动与 debug 共用这些服务，render 只读，明确意图触发保存/发现/更新；lab 准备不读取它们。

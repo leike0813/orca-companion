@@ -73,7 +73,6 @@ const NOOP_ACTIONS: WorkspaceActions = {
   enterAnswer: () => undefined,
   runCommand: () => undefined,
   openModelRole: () => undefined,
-  saveModelSettings: () => undefined,
   submitModelRole: () => undefined,
   confirmHandoff: () => undefined,
   cancelHandoff: () => undefined,

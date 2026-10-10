@@ -1,14 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createProviderCatalog } from '../../src/adapters/agents/provider-catalog.js';
-import { JsonCredentialStore } from '../../src/adapters/storage/credential-store.js';
-import { createLedgerLabConfigurationHost } from '../../src/bootstrap/ledger-lab.js';
-
-type CallOptions = { readonly cwd?: string; readonly env?: Readonly<Record<string, string>> };
+type CallOptions = { readonly cwd?: string; readonly env?: Readonly<Record<string, string>>; readonly timeoutMs?: number };
 type Call = (executable: string, args: readonly string[], options?: CallOptions) => Promise<string>;
 type RunRecord = {
   readonly directory: string;
@@ -16,12 +12,12 @@ type RunRecord = {
   readonly profile: string;
   readonly repositoryPath: string;
   readonly branch: string;
-  readonly githubRepository: string;
-  readonly stage: string;
   readonly state: string;
-  readonly orcaRepoId: string | null;
-  readonly worktreeId: string | null;
-  readonly terminalHandle: string | null;
+  readonly stage: string;
+  readonly github: { readonly host: string; readonly nameWithOwner: string; readonly url: string | null; readonly nodeId: string | null };
+  readonly installation: { readonly packageVersion: string; readonly packagePath: string; readonly sourceHead: string; readonly sourceDirty: boolean } | null;
+  readonly orca: { readonly executable: string; readonly repoId: string; readonly worktreeId: string | null; readonly terminalHandle?: string } | null;
+  readonly startup?: { readonly cwd: string; readonly command: string; readonly debugCommand: string };
 };
 type SetupModule = {
   readonly companionRoot: string;
@@ -37,53 +33,22 @@ type SetupModule = {
       readonly limits: { readonly maxBytes: number; readonly maxLines: number };
     }) => Promise<unknown>;
   }) => Promise<(executable: string, args: readonly string[], options?: CallOptions) => Promise<string>>;
-  readonly prepareLab: (options: { readonly profile?: 'main' | 'cancel'; readonly root?: string; readonly settings?: string }, dependencies: {
+  readonly prepareLab: (options: { readonly profile?: 'main' | 'cancel'; readonly root?: string }, dependencies: {
     readonly env?: Record<string, string | undefined>;
     readonly orca?: string;
     readonly call?: Call;
-    readonly readSettings?: (path: string) => Promise<unknown>;
     readonly signal?: AbortSignal;
-    readonly doctor?: (record: RunRecord, env: Readonly<Record<string, string>>) => Promise<unknown>;
     readonly progress?: (stage: string) => void;
   }) => Promise<RunRecord>;
   readonly readRun: (path: string) => Promise<RunRecord>;
+  readonly listRuns: (root?: string) => Promise<{ readonly root: string; readonly runs: readonly { readonly id?: string; readonly state?: string; readonly error?: string }[]; readonly truncated: boolean }>;
   readonly bindOperatorFiles: (record: Pick<RunRecord, 'directory'>, scopeId: string) => Promise<void>;
-  readonly openLab: (options: { readonly run: string }, dependencies: { readonly env?: Record<string, string | undefined>; readonly call: Call }) => Promise<RunRecord>;
+  readonly verifyScopeForRun: (record: RunRecord, scopeId: string, dependencies: { readonly env?: Record<string, string | undefined>; readonly call?: Call }) => Promise<string>;
+  readonly bindOrcaForRun: (record: RunRecord, dependencies: { readonly env?: Record<string, string | undefined>; readonly orca?: string; readonly call?: Call }) => Promise<RunRecord>;
+  readonly openLab: (options: { readonly run: string }, dependencies: { readonly env?: Record<string, string | undefined>; readonly orca?: string; readonly call: Call }) => Promise<RunRecord & {
+    readonly terminalHandle?: string;
+  }>;
   readonly shellQuote: (value: string) => string;
-};
-type WizardModule = {
-  readonly configureSettings: (input: {
-    readonly settingsPath: string;
-    readonly prompt: {
-      ask(label: string, fallback?: string): Promise<string>;
-      secret(label: string): Promise<string>;
-      say(text: string): void;
-    };
-    readonly host: {
-      read(): unknown;
-      save(input: unknown): unknown;
-      readonly credentials: { metadata(): unknown };
-      readonly providerLibrary: {
-        load(): unknown;
-        saveConnection(input: unknown): Promise<unknown>;
-        saveModel(input: unknown): unknown;
-      };
-      readonly providerCatalog: {
-        refresh(): Promise<unknown>;
-        presets(): readonly unknown[];
-        discover(connection: unknown): Promise<unknown>;
-        candidates(connection: unknown): { readonly models: readonly { readonly id: string; readonly label: string }[] };
-      };
-    };
-    readonly catalog: { query(input: { readonly harness: string }): Promise<
-      | { readonly kind: 'available'; readonly source: string; readonly models: readonly {
-          readonly model: string; readonly effortCapability: { readonly values: readonly string[]; readonly source: string } | null;
-        }[] }
-      | { readonly kind: 'unavailable'; readonly code: string }
-    > };
-    readonly roles: readonly string[];
-    readonly harnesses: readonly string[];
-  }) => Promise<unknown>;
 };
 type LabModule = { readonly main: (argv: readonly string[]) => Promise<number> };
 
@@ -92,21 +57,6 @@ const setup = (await import(/* @vite-ignore */ setupHref)) as SetupModule;
 const labHref = new URL('../../artifacts/ledger-lab/lab.mjs', import.meta.url).href;
 const lab = (await import(/* @vite-ignore */ labHref)) as LabModule;
 const ORCA_EXECUTABLE = '/fixture/bin/orca';
-const wizardHref = new URL('../../artifacts/ledger-lab/wizard.mjs', import.meta.url).href;
-const wizard = (await import(/* @vite-ignore */ wizardHref)) as WizardModule;
-const settingsHref = new URL('../../dist/src/bootstrap/ledger-lab.js', import.meta.url).href;
-const configHref = new URL('../../dist/src/application/configuration/project-config.js', import.meta.url).href;
-const modelConfigHref = new URL('../../dist/src/domain/model-configuration.js', import.meta.url).href;
-const { requireLedgerLabConfiguration } = await import(/* @vite-ignore */ settingsHref) as {
-  readonly requireLedgerLabConfiguration: (value: unknown) => unknown;
-};
-const { parseProjectConfig } = await import(/* @vite-ignore */ configHref) as {
-  readonly parseProjectConfig: (value: unknown) => { readonly ok: boolean; readonly value?: unknown };
-};
-const { MODEL_PROFILE_ROLES, WORKER_HARNESS_IDS } = await import(/* @vite-ignore */ modelConfigHref) as {
-  readonly MODEL_PROFILE_ROLES: readonly string[];
-  readonly WORKER_HARNESS_IDS: readonly string[];
-};
 
 const sandboxes: string[] = [];
 async function sandbox(): Promise<string> {
@@ -114,57 +64,61 @@ async function sandbox(): Promise<string> {
   sandboxes.push(path);
   return path;
 }
+async function readRunFile<T>(path: string): Promise<T> {
+  return JSON.parse(await readFile(path, 'utf8')) as T;
+}
 afterEach(async () => {
   vi.restoreAllMocks();
   await Promise.all(sandboxes.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
-function schemaFiveConfig(): unknown {
-  const credentialRef = '00000000-0000-4000-8000-000000000001';
-  const connection = { connectionRef: 'connection-main', label: 'Fixture provider', providerId: 'custom',
-    providerIntegration: 'openai-chat', baseUrl: 'https://api.fixture.invalid/v1', credential: { kind: 'managed', credentialRef } };
-  const model = { modelRef: 'model-main', connectionRef: connection.connectionRef, model: 'coordinator-fixture', effortCapability: null };
-  const workerProfiles = MODEL_PROFILE_ROLES.map((role) => ({
-    profileRef: `profile-${role}`,
-    role,
-    harness: 'codex',
-    modelSelection: { model: `worker-${role}`, effort: null, effortCapability: null, catalogSource: null },
-  }));
-  const parsed = parseProjectConfig({
-    schemaVersion: 5,
-    revision: 0,
-    coordinatorModels: [{ configurationRef: 'coordinator-main', providerIntegration: connection.providerIntegration,
-      model: model.model, credentialRefs: [credentialRef], nativeWindowOwnerRef: null, providerConnection: connection,
-      modelRef: model.modelRef, effortCapability: null, effort: null }],
-    defaultCoordinatorModelRef: 'coordinator-main',
-    providerConnections: [connection],
-    models: [model],
-    tracker: { kind: 'github', routeMapIssueNumber: 1 },
-    planning: { maxMutations: 20 },
-    context: { maxInputTokens: 10000 },
-    execution: {
-      harness: 'codex', codexSandbox: 'workspace-write', workerProfiles,
-      workerProfileRefs: Object.fromEntries(MODEL_PROFILE_ROLES.map((role) => [role, `profile-${role}`])),
-    },
-  });
-  if (!parsed.ok) throw new Error('test fixture schema-5 config failed to parse');
-  return parsed.value;
-}
-
-function setupCall(options: { readonly unknownCreate?: boolean; readonly onCall?: (executable: string, args: readonly string[], options?: CallOptions) => void } = {}) {
+/** 合成外部命令：Git 真实执行，gh/pnpm 的远端与安装副作用在临时目录内模拟。 */
+function setupCall(options: {
+  readonly unknownCreate?: boolean;
+  readonly unknownTerminalCreate?: boolean;
+  readonly orcaPreflight?: 'reachable' | 'unreachable' | 'unknown';
+  readonly failInstall?: boolean;
+  readonly repositoryPath?: string;
+  /** 原终端状态：live 聚焦，exited 替换，unknown 不可核验。 */
+  readonly terminal?: 'live' | 'exited' | 'unknown' | 'missing-state' | 'unproven-exit' | 'wrong-worktree';
+  readonly terminalHandle?: string;
+  readonly unknownRepoAdd?: boolean;
+  readonly unregisteredPath?: boolean;
+  readonly rejectTerminalCreate?: boolean;
+  readonly worktreeMismatchOnShow?: number;
+  readonly onCall?: (executable: string, args: readonly string[], options?: CallOptions) => void | Promise<void>;
+} = {}) {
   const calls: { readonly executable: string; readonly args: readonly string[]; readonly options?: CallOptions }[] = [];
-  let issueBody = '';
   let createCount = 0;
+  let terminalCreateCount = 0;
+  let registeredPath: string | null = options.unregisteredPath ? null : options.repositoryPath ?? null;
+  let worktreeShowCount = 0;
+  let terminalSwitchCount = 0;
+  const ok = (result: unknown) => Promise.resolve(JSON.stringify({ ok: true, result }));
   const call: Call = async (executable, args, callOptions) => {
     calls.push({ executable, args, ...(callOptions === undefined ? {} : { options: callOptions }) });
-    options.onCall?.(executable, args, callOptions);
+    await options.onCall?.(executable, args, callOptions);
     const first = args[0];
     if (executable === 'node' && first === '--version') return 'v24.1.0\n';
     if (executable === 'pnpm' && first === '--version') return '11.10.0\n';
+    if (executable === 'pnpm' && first === 'pack') {
+      await writeFile(join(args[2]!, 'orca-companion-0.0.0.tgz'), 'fixture-tarball');
+      return 'orca-companion-0.0.0.tgz\n';
+    }
+    if (executable === 'pnpm' && first === 'install') {
+      if (options.failInstall) throw Object.assign(new Error('install failed'), { code: 'LAB_COMMAND_FAILED' });
+      const installed = join(callOptions!.cwd!, 'node_modules', 'orca-companion');
+      await mkdir(installed, { recursive: true });
+      await writeFile(join(installed, 'package.json'), JSON.stringify({ name: 'orca-companion', version: '0.0.0' }));
+      await writeFile(join(callOptions!.cwd!, 'pnpm-lock.yaml'), 'lockfileVersion: \'9.0\'\n');
+      return '';
+    }
+    if (executable === 'pnpm' && first === 'exec') return '用法: ocp ...\n';
     if (executable === 'git' && first === 'config' && args.includes('--get')) {
       return args.at(-1) === 'user.email' ? 'fixture@example.invalid\n' : 'Fixture User\n';
     }
     if (executable === 'git' && first === 'var' && args[1] === 'GIT_AUTHOR_IDENT') return 'Fixture User <fixture@example.invalid> 0 +0000\n';
+    if (executable === 'git' && first === 'status' && args[1] === '--porcelain' && callOptions?.cwd === setup.companionRoot) return '';
     if (executable === 'git' && first === 'rev-parse' && args[1] === 'HEAD') {
       return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: callOptions?.cwd ?? setup.companionRoot, encoding: 'utf8' });
     }
@@ -182,90 +136,190 @@ function setupCall(options: { readonly unknownCreate?: boolean; readonly onCall?
       return '';
     }
     if (executable === 'gh' && first === 'repo' && args[1] === 'view') {
-      return JSON.stringify({ nameWithOwner: args[2], visibility: 'PRIVATE', url: `https://github.com/${args[2]}` });
+      return JSON.stringify({ nameWithOwner: args[2], visibility: 'PRIVATE', url: `https://github.com/${args[2]}`, id: 'R_kgFixtureNodeId' });
     }
-    if (executable === 'gh' && first === 'api' && args[1]?.endsWith('/issues') && args.includes('POST')) {
-      const payloadPath = args[args.indexOf('--input') + 1];
-      if (payloadPath === undefined) throw new Error('fake GH call did not include its payload path');
-      const payload = JSON.parse(await readFile(payloadPath, 'utf8')) as { readonly body: string };
-      issueBody = payload.body;
-      const repository = args[1].slice('repos/'.length, -'/issues'.length);
-      return JSON.stringify({ number: 17, html_url: `https://github.com/${repository}/issues/17` });
+    if (executable === ORCA_EXECUTABLE) {
+      if (first === 'status') {
+        if (options.orcaPreflight === 'unknown') throw Object.assign(new Error('Orca status unknown'), { code: 'LAB_OPERATION_UNKNOWN' });
+        return ok({ runtime: { reachable: options.orcaPreflight !== 'unreachable' } });
+      }
+      if (first === 'repo' && args[1] === 'add') {
+        registeredPath ??= args[3]!;
+        if (options.unknownRepoAdd) throw Object.assign(new Error('repo add outcome unknown'), { code: 'LAB_OPERATION_UNKNOWN' });
+        return ok({ repo: { id: 'repo-fixture', path: registeredPath } });
+      }
+      if (first === 'repo' && args[1] === 'set-base-ref') return ok({ repo: { id: 'repo-fixture', path: registeredPath } });
+      if (first === 'worktree' && args[1] === 'show') {
+        worktreeShowCount += 1;
+        if (args[3]!.startsWith('path:') && registeredPath === null) {
+          throw Object.assign(new Error('worktree not found'), { code: 'selector_not_found' });
+        }
+        return ok({ worktree: { id: 'worktree-fixture', repoId: 'repo-fixture', path: options.worktreeMismatchOnShow === worktreeShowCount ? '/fixture/wrong' : registeredPath,
+          branch: 'refs/heads/main', isMainWorktree: true, isBare: false } });
+      }
+      if (first === 'terminal' && args[1] === 'create') {
+        terminalCreateCount += 1;
+        if (options.unknownTerminalCreate) throw Object.assign(new Error('terminal create unknown'), { code: 'LAB_OPERATION_UNKNOWN' });
+        if (options.rejectTerminalCreate) throw Object.assign(new Error('terminal create rejected'), { code: 'selector_not_found' });
+        return ok({ terminal: { handle: `${options.terminalHandle ?? 'terminal-fixture'}-${terminalCreateCount}` } });
+      }
+      if (first === 'terminal' && args[1] === 'show') {
+        if (options.terminal === 'unknown') return Promise.resolve(JSON.stringify({ ok: false, error: { code: 'terminal_handle_stale' } }));
+        return ok({ terminal: { handle: args[3], worktreeId: options.terminal === 'wrong-worktree' ? 'other-worktree' : 'worktree-fixture',
+          worktreePath: registeredPath,
+          ...(options.terminal === 'missing-state' ? {} : { ptyId: options.terminal === 'exited' || options.terminal === 'unproven-exit' ? null : 'pty-fixture' }),
+          ...(options.terminal === 'exited' ? { exitCause: { kind: 'exited', exitCode: 0 } }
+            : options.terminal === 'unproven-exit' ? { exitCause: { kind: 'unknown', reason: 'cause_unreported' } } : {}) } });
+      }
+      if (first === 'terminal' && args[1] === 'switch') { terminalSwitchCount += 1; return ok({}); }
     }
-    if (executable === 'gh' && first === 'api' && args[1]?.includes('/issues/17')) {
-      return JSON.stringify({ number: 17, body: issueBody });
-    }
-    if (executable.endsWith('/orca') && args[0] === 'status') return JSON.stringify({ ok: true, result: { runtime: { reachable: true } } });
-    if (executable.endsWith('/orca') && args[0] === 'repo' && args[1] === 'add') {
-      return JSON.stringify({ ok: true, result: { repo: { id: 'repo-fixture', path: args[3] } } });
-    }
-    if (executable.endsWith('/orca') && args[0] === 'repo' && args[1] === 'set-base-ref') return JSON.stringify({ ok: true, result: {} });
-    if (executable.endsWith('/orca') && args[0] === 'worktree' && args[1] === 'show') {
-      return JSON.stringify({ ok: true, result: { worktree: {
-        id: 'worktree-fixture', repoId: 'repo-fixture', path: args[3]?.startsWith('path:') ? args[3].slice(5) : '',
-        branch: 'refs/heads/main', isMainWorktree: true, isBare: false,
-      } } });
-    }
-    if (executable.endsWith('/orca') && args[0] === 'terminal' && args[1] === 'create') {
-      return JSON.stringify({ ok: true, result: { terminal: { handle: 'terminal-fixture' } } });
-    }
-    if (executable.endsWith('/orca') && args[0] === 'terminal' && args[1] === 'switch') return JSON.stringify({ ok: true, result: {} });
     throw new Error(`unexpected fake command: ${executable} ${args.join(' ')}`);
   };
-  return { call, calls, get createCount() { return createCount; } };
+  return { call, calls, get createCount() { return createCount; }, get terminalCreateCount() { return terminalCreateCount; }, get terminalSwitchCount() { return terminalSwitchCount; } };
 }
 
 describe('ledger-lab setup', () => {
-  it.each(['main', 'cancel'] as const)('prepares a private external %s lab with canonical worktree and wrappers', async (profile) => {
+  it.each([
+    { preflight: 'unreachable' as const, code: 'LAB_ORCA_UNAVAILABLE' },
+    { preflight: 'unknown' as const, code: 'LAB_OPERATION_UNKNOWN' },
+  ])('runs Orca preflight before creating external resources when status is $preflight', async ({ preflight, code }) => {
+    const directory = await sandbox();
+    const root = join(directory, 'runs');
+    const fake = setupCall({ orcaPreflight: preflight });
+
+    await expect(setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: fake.call }))
+      .rejects.toMatchObject({ code });
+    expect(fake.createCount).toBe(0);
+    await expect(readdir(root)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it.each(['main', 'cancel'] as const)('prepares a private external %s lab with an Orca terminal and no models or doctor', async (profile) => {
     const directory = await sandbox();
     const root = join(directory, 'existing-runs-root');
-    const config = schemaFiveConfig();
-    const settingsPath = join(directory, 'settings.json');
-    await writeFile(settingsPath, JSON.stringify(config), { mode: 0o600 });
     const fake = setupCall();
     const progress: string[] = [];
-    const doctorEnvironments: Readonly<Record<string, string>>[] = [];
-    const result = await setup.prepareLab({ profile, root, settings: settingsPath }, {
+    const result = await setup.prepareLab({ profile, root }, {
       env: { HOME: '/fixture-home', PATH: '/fixture-bin', GH_TOKEN: 'secret-gh-token', GH_REPO: 'attacker/repo', ORCA_HOST: 'attacker-host' },
-      orca: ORCA_EXECUTABLE, call: fake.call,
-      doctor: (_record, env) => {
-        doctorEnvironments.push(env);
-        return Promise.resolve({ ok: true, checks: [{ id: 'coordinator-model', status: 'ok' }, { id: 'read-only-worker', status: 'ok' }] });
-      },
+      orca: ORCA_EXECUTABLE,
+      call: fake.call,
       progress: (stage) => progress.push(stage),
     });
 
-    expect(await stat(root)).toBeDefined();
-    expect(result).toMatchObject({ profile, state: 'ready', stage: 'ready', branch: 'refs/heads/main', githubRepository: `fixture-user/${result.id}` });
+    expect(await readdir(root)).toContain(result.id);
+    expect(result).toMatchObject({ profile, state: 'ready', stage: 'ready', branch: 'refs/heads/main',
+      orca: { executable: ORCA_EXECUTABLE, repoId: 'repo-fixture', worktreeId: 'worktree-fixture', terminalHandle: 'terminal-fixture-1' },
+      github: { host: 'github.com', nameWithOwner: `fixture-user/${result.id}`, url: `https://github.com/fixture-user/${result.id}`, nodeId: 'R_kgFixtureNodeId' } });
     expect(result.repositoryPath).toBe(join(result.directory, 'repo'));
-    expect(await setup.readRun(result.directory)).toMatchObject({ id: result.id, state: 'ready', orcaRepoId: 'repo-fixture', worktreeId: 'worktree-fixture' });
-    expect(doctorEnvironments[0]).toMatchObject({ GH_TOKEN: 'secret-gh-token', GH_REPO: result.githubRepository });
-    expect(doctorEnvironments[0]).not.toHaveProperty('ORCA_HOST');
+    expect(result.installation?.packagePath).toBe(join(result.directory, 'packages', 'orca-companion-0.0.0.tgz'));
+    expect(result.startup).toMatchObject({ cwd: result.repositoryPath, command: 'ocp', debugCommand: 'ocp --debug' });
+    expect(fake.calls.some(({ executable, args, options }) => executable === 'pnpm' && args[0] === 'install' && options?.timeoutMs === 600000)).toBe(true);
+    expect(await setup.readRun(result.directory)).not.toHaveProperty('startup');
+    expect(await setup.readRun(result.directory)).toMatchObject({ id: result.id, state: 'ready', orca: result.orca });
     expect(progress).toContain('ready');
     expect(fake.calls.some(({ executable, args }) => executable === 'gh' && args[0] === 'repo' && args[1] === 'create' && args.includes('--private'))).toBe(true);
-    expect(fake.calls.some(({ executable, args }) => executable === 'git' && args[0] === 'config' && args.includes('--local') && args.includes('credential.https://github.com.helper'))).toBe(true);
+    // 登记、base ref 与主 checkout 核验都走公开命令，终端只补本轮 PATH 与 ORCA_CLI_COMMAND。
+    expect(fake.calls.some(({ executable, args }) => executable === ORCA_EXECUTABLE && args[0] === 'status')).toBe(true);
+    expect(fake.calls.findIndex(({ executable, args }) => executable === ORCA_EXECUTABLE && args[0] === 'status'))
+      .toBeLessThan(fake.calls.findIndex(({ executable, args }) => executable === 'gh' && args[0] === 'repo' && args[1] === 'create'));
+    expect(fake.calls.some(({ executable, args }) => executable === ORCA_EXECUTABLE && args.join(' ') === `repo add --path ${result.repositoryPath} --json`)).toBe(true);
+    expect(fake.calls.some(({ args }) => args.join(' ').includes('repo set-base-ref --repo id:repo-fixture --ref origin/main'))).toBe(true);
+    expect(fake.calls.some(({ args }) => args.join(' ').includes(`worktree show --worktree path:${result.repositoryPath}`))).toBe(true);
+    const created = fake.calls.find(({ args }) => args[0] === 'terminal' && args[1] === 'create');
+    expect(created?.args.join(' ')).toContain('--worktree id:worktree-fixture --title');
+    expect(created?.args.join(' ')).toContain(`--focus`);
+    // --command 只被键入原生 shell：仓库内 bin 前置 PATH，并固定本轮选定的 Orca 可执行文件。
+    expect(created?.args[created.args.indexOf('--command') + 1]).toBe(
+      `export PATH='${join(result.repositoryPath, 'node_modules', '.bin')}':"$PATH"; export ORCA_CLI_COMMAND='${ORCA_EXECUTABLE}'`);
+    expect(fake.calls.some(({ args }) => args.includes('dist/src/bootstrap/ledger-lab.js'))).toBe(false);
+    expect(fake.calls.some(({ args }) => args.includes('doctor'))).toBe(false);
+    expect(fake.calls.some(({ args }) => args.includes('route-map'))).toBe(false);
+    expect(fake.calls.some(({ executable, args }) => executable === 'pnpm' && args[0] === 'pack')).toBe(true);
+    expect(fake.calls.some(({ executable, args }) => executable === 'pnpm' && args[0] === 'exec' && args[1] === 'ocp')).toBe(true);
     expect(fake.calls.some(({ executable, args }) => executable === 'git' && args[0] === 'push')).toBe(true);
 
-    const launcher = await readFile(join(result.directory, 'bin', 'ocp'), 'utf8');
-    const shell = await readFile(join(result.directory, 'bin', 'shell'), 'utf8');
-    expect(launcher).toContain('dist/src/interfaces/cli/main.js');
-    expect(launcher).toContain(`export GH_REPO='${result.githubRepository}'`);
-    expect(shell).toContain(`cd '${result.repositoryPath}'`);
-    expect(await readdir(result.directory)).toEqual(expect.arrayContaining(['repo', 'operator', 'bin', 'run.json']));
-    expect(await readdir(result.repositoryPath)).toEqual(expect.arrayContaining(['README.md', '.gitignore', 'openspec', 'orca-companion.json', '.git']));
+    expect(await readdir(result.directory)).toEqual(expect.arrayContaining(['repo', 'operator', 'captures', 'checks', 'packages', 'run.json']));
+    expect(await readdir(result.directory)).not.toContain('bin');
+    expect(await readdir(result.repositoryPath)).toEqual(expect.arrayContaining(['README.md', '.gitignore', 'openspec', 'package.json', 'pnpm-lock.yaml', '.git']));
     expect(await readdir(result.repositoryPath)).not.toContain('src');
+    expect(await readdir(result.repositoryPath)).not.toContain('orca-companion.json');
+    expect(JSON.parse(await readFile(join(result.repositoryPath, 'package.json'), 'utf8'))).toMatchObject({
+      devDependencies: { 'orca-companion': 'file:../packages/orca-companion-0.0.0.tgz' },
+    });
+    // pnpm 11 未放行依赖 build script 会让安装直接失败；演练仓库必须带同一份放行配置。
+    expect(await readFile(join(result.repositoryPath, 'pnpm-workspace.yaml'), 'utf8')).toBe('allowBuilds:\n  better-sqlite3: true\n');
+    expect(await readFile(join(result.repositoryPath, 'README.md'), 'utf8')).not.toContain('nativeSQLite');
     expect(await readFile(join(result.directory, 'operator', 'guide.md'), 'utf8')).toContain('ledger-lab');
     expect(await readFile(join(result.directory, 'run.json'), 'utf8')).not.toContain('secret-gh-token');
   });
 
-  it('allows an existing output root and allocates a distinct run directory each time', async () => {
+  it('persists the registration stage and exact binding before later Orca mutations', async () => {
     const root = join(await sandbox(), 'runs');
-    await import('node:fs/promises').then(({ mkdir }) => mkdir(root));
-    const dependencies = {
-      env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
-      doctor: () => Promise.resolve({ ok: true, checks: [{ id: 'coordinator-model', status: 'ok' }, { id: 'read-only-worker', status: 'ok' }] }),
-    };
+    let directory = '';
+    const beforeMutation: { command: string; record: Record<string, unknown> }[] = [];
+    const fake = setupCall({ onCall: async (executable, args) => {
+      if (executable === ORCA_EXECUTABLE && args[0] === 'repo' && args[1] === 'add') directory = dirname(args[3]!);
+      if (executable === ORCA_EXECUTABLE && ((args[0] === 'repo' && args[1] === 'add') ||
+          (args[0] === 'terminal' && args[1] === 'create'))) {
+        beforeMutation.push({ command: `${args[0]} ${args[1]}`, record: await readRunFile(join(directory, 'run.json')) });
+      }
+    } });
+
+    await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: fake.call });
+    expect(beforeMutation).toMatchObject([
+      { command: 'repo add', record: { stage: 'orca-registration', orca: null } },
+      { command: 'terminal create', record: { stage: 'orca-terminal', failureCode: 'LAB_OPERATION_UNKNOWN',
+        orca: { executable: ORCA_EXECUTABLE, repoId: 'repo-fixture', worktreeId: 'worktree-fixture' } } },
+    ]);
+  });
+
+  it('reconciles an unknown repo add by exact worktree path before any explicit retry', async () => {
+    const root = join(await sandbox(), 'runs');
+    await expect(setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE,
+      call: setupCall({ unknownRepoAdd: true }).call })).rejects.toMatchObject({ code: 'LAB_OPERATION_UNKNOWN' });
+    const [id] = await readdir(root);
+    const record = await setup.readRun(join(root, id!));
+    expect(record).toMatchObject({ stage: 'orca-registration', orca: null });
+    const retry = setupCall({ repositoryPath: record.repositoryPath });
+
+    const opened = await setup.openLab({ run: record.directory }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE,
+      call: openCall(record, retry.call).call });
+    expect(retry.calls.some(({ executable, args }) => executable === ORCA_EXECUTABLE && args[0] === 'repo' && args[1] === 'add')).toBe(false);
+    expect(opened.orca).toMatchObject({ repoId: 'repo-fixture', worktreeId: 'worktree-fixture' });
+  });
+
+  it('does not repeat an unknown repo add when the record already has a partial binding', async () => {
+    const root = join(await sandbox(), 'runs');
+    const partial = setupCall({ unknownRepoAdd: true });
+    await expect(setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: partial.call }))
+      .rejects.toMatchObject({ code: 'LAB_OPERATION_UNKNOWN' });
+    const [id] = await readdir(root);
+    const record = await setup.readRun(join(root, id!));
+    const raw = await readRunFile<Record<string, unknown>>(join(record.directory, 'run.json'));
+    await writeFile(join(record.directory, 'run.json'), JSON.stringify({ ...raw,
+      orca: { executable: ORCA_EXECUTABLE, repoId: 'repo-fixture', worktreeId: null } }));
+    const retry = setupCall({ repositoryPath: record.repositoryPath });
+
+    await setup.openLab({ run: record.directory }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE,
+      call: openCall(record, retry.call).call });
+    expect(retry.calls.some(({ executable, args }) => executable === ORCA_EXECUTABLE && args[0] === 'repo' && args[1] === 'add')).toBe(false);
+  });
+
+  it('keeps an unknown registration unresolved when the original worktree cannot be found', async () => {
+    const root = join(await sandbox(), 'runs');
+    await expect(setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE,
+      call: setupCall({ unknownRepoAdd: true }).call })).rejects.toMatchObject({ code: 'LAB_OPERATION_UNKNOWN' });
+    const [id] = await readdir(root);
+    const record = await setup.readRun(join(root, id!));
+    const retry = setupCall({ unregisteredPath: true });
+    await expect(setup.openLab({ run: record.directory }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE,
+      call: openCall(record, retry.call).call })).rejects.toMatchObject({ code: 'LAB_OPERATION_UNKNOWN' });
+    expect(retry.calls.some(({ args }) => args[0] === 'repo' && args[1] === 'add')).toBe(false);
+    expect(retry.terminalCreateCount).toBe(0);
+  });
+
+  it('allocates a distinct run directory each time under an existing output root', async () => {
+    const root = join(await sandbox(), 'runs');
+    const dependencies = { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE };
     const first = await setup.prepareLab({ root }, { ...dependencies, call: setupCall().call });
     const second = await setup.prepareLab({ root }, { ...dependencies, call: setupCall().call });
     expect(first.id).not.toBe(second.id);
@@ -278,36 +332,26 @@ describe('ledger-lab setup', () => {
     const fake = setupCall();
     await expect(setup.prepareLab({ root: join(setup.companionRoot, 'artifacts', 'ledger-lab', '.test-output') }, {
       env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: fake.call,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
     })).rejects.toThrow('Companion 仓库之外');
     expect(fake.createCount).toBe(0);
-  });
-
-  it('rejects non-TTY first-run configuration before invoking external commands', async () => {
-    const calls: string[] = [];
-    await expect(setup.prepareLab({ root: join(await sandbox(), 'runs') }, {
-      env: { HOME: '/fixture', PATH: '/bin' },
-      readSettings: () => Promise.reject(Object.assign(new Error('missing settings'), { code: 'ENOENT' })),
-      call: (executable) => { calls.push(executable); return Promise.resolve(''); },
-      orca: ORCA_EXECUTABLE,
-    })).rejects.toThrow('首次配置需要交互式终端');
-    expect(calls).toEqual([]);
   });
 
   it('preserves an unknown GitHub create outcome without retrying or cleaning the run', async () => {
     const root = join(await sandbox(), 'runs');
     const fake = setupCall({ unknownCreate: true });
-    await expect(setup.prepareLab({ root }, {
-      env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: fake.call,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
-    })).rejects.toMatchObject({ code: 'LAB_OPERATION_UNKNOWN' });
+    await expect(setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: fake.call }))
+      .rejects.toMatchObject({ code: 'LAB_OPERATION_UNKNOWN' });
 
     expect(fake.createCount).toBe(1);
-    const [directory] = await readdir(root);
-    const record: unknown = JSON.parse(await readFile(join(root, directory!, 'run.json'), 'utf8'));
-    expect(record).toMatchObject({ state: 'failed', stage: 'github-repository' });
-    expect((record as { readonly githubRepository: string }).githubRepository).toMatch(/^fixture-user\/ledger-lab-/u);
-    expect(await readdir(directory ? join(root, directory) : root)).toContain('repo');
+    const [id] = await readdir(root);
+    const record = await readRunFile<RunRecord>(join(root, id!, 'run.json'));
+    expect(record).toMatchObject({ state: 'failed', stage: 'github-repository', installation: null, orca: null });
+    expect(record.github.nameWithOwner).toMatch(/^fixture-user\/ledger-lab-/u);
+    expect(record.github.nodeId).toBeNull();
+    expect(record.installation).toBeNull();
+    expect(await readdir(join(root, id!))).toContain('repo');
+    const listed = await setup.listRuns(root);
+    expect(listed.runs).toEqual([expect.objectContaining({ id: record.id, state: 'failed' })]);
   });
 
   it('retains the failed run and avoids GitHub create when cancellation arrives at a stage boundary', async () => {
@@ -317,70 +361,261 @@ describe('ledger-lab setup', () => {
     await expect(setup.prepareLab({ root }, {
       env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: fake.call,
       signal: controller.signal,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
       progress: (stage) => { if (stage === 'github-repository') controller.abort(); },
-    })).rejects.toMatchObject({ code: 'LAB_OPERATION_UNKNOWN' });
+    })).rejects.toMatchObject({ code: 'LAB_PREPARE_CANCELLED' });
     expect(fake.createCount).toBe(0);
-    const [directory] = await readdir(root);
-    const record = JSON.parse(await readFile(join(root, directory!, 'run.json'), 'utf8')) as Record<string, unknown>;
-    expect(record).toMatchObject({ state: 'failed', stage: 'github-repository' });
+    const [id] = await readdir(root);
+    const record = JSON.parse(await readFile(join(root, id!, 'run.json'), 'utf8')) as Record<string, unknown>;
+    expect(record).toMatchObject({ state: 'failed', stage: 'github-repository', failureCode: 'LAB_PREPARE_CANCELLED' });
   });
 
-  it('checks the original worktree identity before opening a new terminal', async () => {
+  it('keeps the failed stage and installation provenance when the repository-local install fails', async () => {
     const root = join(await sandbox(), 'runs');
-    const prepared = await setup.prepareLab({ root }, {
-      env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
-      doctor: () => Promise.resolve({ ok: true, checks: [{ id: 'coordinator-model', status: 'ok' }, { id: 'read-only-worker', status: 'ok' }] }),
-    });
-    let terminalCreateCount = 0;
+    const fake = setupCall({ failInstall: true });
+    await expect(setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: fake.call }))
+      .rejects.toMatchObject({ code: 'LAB_COMMAND_FAILED' });
+    const [id] = await readdir(root);
+    const record = JSON.parse(await readFile(join(root, id!, 'run.json'), 'utf8')) as RunRecord;
+    expect(record).toMatchObject({ state: 'failed', stage: 'installation' });
+    expect(record.github.nodeId).toBe('R_kgFixtureNodeId');
+    expect(record.installation?.packagePath).toBe(join(root, id!, 'packages', 'orca-companion-0.0.0.tgz'));
+    expect(await readdir(join(root, id!))).toEqual(expect.arrayContaining(['repo', 'packages', 'run.json']));
+  });
+
+  it('reads the record and lists the round after the local repository is deleted', async () => {
+    const root = join(await sandbox(), 'runs');
+    const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
+    await rm(prepared.repositoryPath, { recursive: true, force: true });
+    const record = await setup.readRun(prepared.directory);
+    expect(record).toMatchObject({ id: prepared.id, repositoryPath: prepared.repositoryPath, state: 'ready' });
+    expect(await setup.listRuns(root)).toMatchObject({ truncated: false, runs: [expect.objectContaining({ id: prepared.id })] });
+    await expect(setup.openLab({ run: prepared.directory }, { env: { HOME: '/fixture', PATH: '/bin' }, call: setupCall().call })).rejects.toThrow();
+  });
+
+  it('rejects a replaced local directory before reading its Git identity', async () => {
+    const root = join(await sandbox(), 'runs');
+    const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
+    await rm(prepared.repositoryPath, { recursive: true, force: true });
+    await mkdir(prepared.repositoryPath);
+    let gitCalled = false;
+    const call: Call = (executable) => {
+      if (executable === 'git') gitCalled = true;
+      return Promise.resolve('');
+    };
+    await expect(setup.openLab({ run: prepared.directory }, { env: { HOME: '/fixture', PATH: '/bin' }, call }))
+      .rejects.toMatchObject({ code: 'LAB_IDENTITY_MISMATCH' });
+    expect(gitCalled).toBe(false);
+  });
+
+  it('verifies an explicit scope against this round before binding Orca', async () => {
+    const root = join(await sandbox(), 'runs');
+    const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
+    const record = { ...prepared, schemaVersion: 2 } as RunRecord;
+    const orcaCalls: string[] = [];
+    const call: Call = (executable, args) => {
+      orcaCalls.push(`${executable} ${args.join(' ')}`);
+      return Promise.resolve(JSON.stringify({ ok: true, result: { worktree: { id: 'worktree-fixture', repoId: 'repo-fixture',
+        path: prepared.repositoryPath, branch: prepared.branch, isMainWorktree: true, isBare: false } } }));
+    };
+    await expect(setup.verifyScopeForRun(record, 'scope-other', { env: { HOME: '/fixture', PATH: '/bin' }, call })).rejects.toThrow(/Scope/u);
+    expect(orcaCalls.some((command) => command.includes('worktree show'))).toBe(false);
+  });
+
+  it('checks the original Git identity before returning startup instructions', async () => {
+    const root = join(await sandbox(), 'runs');
+    const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
+    const terminalCalls: string[] = [];
     const call: Call = (executable, args) => {
       if (executable === 'git' && args[0] === 'symbolic-ref') return Promise.resolve('refs/heads/wrong\n');
-      if (executable === 'git' && args[0] === 'rev-parse' && args[1] === '--path-format=absolute') return Promise.resolve(join(prepared.repositoryPath, '.git'));
-      if (executable === 'git' && args[0] === 'rev-parse' && args[1] === '--absolute-git-dir') return Promise.resolve(join(prepared.repositoryPath, '.git'));
-      if (executable === 'git' && args[0] === 'rev-parse' && args[1] === '--show-toplevel') return Promise.resolve(prepared.repositoryPath);
-      if (executable === 'git' && args[0] === 'remote') return Promise.resolve(`https://github.com/${prepared.githubRepository}.git`);
-      if (executable.endsWith('/orca') && args[0] === 'worktree') return Promise.resolve(JSON.stringify({ ok: true, result: { worktree: {
-        id: prepared.worktreeId, repoId: prepared.orcaRepoId, path: prepared.repositoryPath,
-        branch: prepared.branch, isMainWorktree: true, isBare: false,
-      } } }));
-      if (executable.endsWith('/orca') && args[0] === 'terminal' && args[1] === 'create') terminalCreateCount += 1;
-      throw new Error(`unexpected open command ${executable} ${args.join(' ')}`);
+      if (executable.endsWith('/orca')) { terminalCalls.push(args.join(' ')); return Promise.resolve(''); }
+      return Promise.resolve('');
     };
     await expect(setup.openLab({ run: prepared.directory }, { env: { HOME: '/fixture', PATH: '/bin' }, call })).rejects.toThrow('Git canonical 身份不符');
-    expect(terminalCreateCount).toBe(0);
+    expect(terminalCalls).toEqual([]);
   });
 
-  it('opens only after Git branch, common dir, toplevel, remote, and Orca worktree match', async () => {
-    const root = join(await sandbox(), 'runs');
-    const prepared = await setup.prepareLab({ root }, {
-      env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
-      doctor: () => Promise.resolve({ ok: true, checks: [{ id: 'coordinator-model', status: 'ok' }, { id: 'read-only-worker', status: 'ok' }] }),
-    });
+  /** open 先证明原 canonical Git 身份，其余命令交给合成 transport。 */
+  function openCall(prepared: RunRecord, transport: Call) {
     const gitDir = join(prepared.repositoryPath, '.git');
+    const commands: string[] = [];
+    const call: Call = async (executable, args, options) => {
+      commands.push(`${executable} ${args.join(' ')}`);
+      if (executable === 'git' && args[0] === 'symbolic-ref') return `${prepared.branch}\n`;
+      if (executable === 'git' && args[0] === 'rev-parse' && args[1] !== 'HEAD') return args[1] === '--show-toplevel' ? `${prepared.repositoryPath}\n` : `${gitDir}\n`;
+      if (executable === 'git' && args[0] === 'remote') return `https://github.com/${prepared.github.nameWithOwner}.git\n`;
+      return transport(executable, args, options);
+    };
+    return { call, commands };
+  }
+
+  it('focuses the recorded terminal and returns the bare startup command', async () => {
+    const root = join(await sandbox(), 'runs');
+    const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
+    const fake = setupCall({ repositoryPath: prepared.repositoryPath, terminal: 'live' });
+    const { call, commands } = openCall(prepared, fake.call);
+    const opened = await setup.openLab({ run: prepared.directory }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: '/fixture/bin/other-orca', call });
+
+    expect(opened.terminalHandle).toBe('terminal-fixture-1');
+    expect(opened.startup?.command).toBe('ocp');
+    expect(opened.startup?.cwd).toBe(prepared.repositoryPath);
+    expect(commands.some((command) => command.includes('remote get-url origin'))).toBe(true);
+    expect(commands.some((command) => command.includes('worktree show --worktree id:worktree-fixture'))).toBe(true);
+    expect(commands.some((command) => command.includes('terminal switch --terminal terminal-fixture-1'))).toBe(true);
+    expect(fake.terminalCreateCount).toBe(0);
+    expect(await setup.readRun(prepared.directory)).toMatchObject({ orca: prepared.orca });
+  });
+
+  it('replaces the recorded terminal only after Orca reports it exited', async () => {
+    const root = join(await sandbox(), 'runs');
+    const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
+    const fake = setupCall({ repositoryPath: prepared.repositoryPath, terminal: 'exited', terminalHandle: 'terminal-reopened' });
+    const opened = await setup.openLab({ run: prepared.directory }, { env: { HOME: '/fixture', PATH: '/bin' }, call: openCall(prepared, fake.call).call });
+
+    expect(fake.terminalCreateCount).toBe(1);
+    expect(opened.orca).toMatchObject({ repoId: 'repo-fixture', worktreeId: 'worktree-fixture', terminalHandle: 'terminal-reopened-1' });
+    expect((await setup.readRun(prepared.directory)).orca?.terminalHandle).toBe('terminal-reopened-1');
+  });
+
+  it('stops without creating a terminal when the recorded one cannot be verified', async () => {
+    const root = join(await sandbox(), 'runs');
+    const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
+    const fake = setupCall({ repositoryPath: prepared.repositoryPath, terminal: 'unknown' });
+    await expect(setup.openLab({ run: prepared.directory }, { env: { HOME: '/fixture', PATH: '/bin' }, call: openCall(prepared, fake.call).call }))
+      .rejects.toMatchObject({ code: 'LAB_TERMINAL_UNVERIFIABLE' });
+
+    expect(fake.terminalCreateCount).toBe(0);
+    expect((await setup.readRun(prepared.directory)).orca?.terminalHandle).toBe('terminal-fixture-1');
+  });
+
+  it('does not create another terminal after the original create outcome is unknown, even if the row looks ready', async () => {
+    const root = join(await sandbox(), 'runs');
+    const initial = setupCall({ unknownTerminalCreate: true });
+    await expect(setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: initial.call }))
+      .rejects.toMatchObject({ code: 'LAB_OPERATION_UNKNOWN' });
+    const [id] = await readdir(root);
+    const record = await setup.readRun(join(root, id!));
+    const persisted = await readRunFile<Record<string, unknown>>(join(record.directory, 'run.json'));
+    await writeFile(join(record.directory, 'run.json'), JSON.stringify({ ...persisted, state: 'ready' }));
+    const retry = setupCall({ repositoryPath: record.repositoryPath });
+
+    await expect(setup.openLab({ run: record.directory }, {
+      env: { HOME: '/fixture', PATH: '/bin' }, call: openCall(record, retry.call).call,
+    })).rejects.toMatchObject({ code: 'LAB_TERMINAL_UNVERIFIABLE' });
+    expect(retry.terminalCreateCount).toBe(0);
+  });
+
+  it.each(['missing-state', 'unproven-exit', 'wrong-worktree'] as const)(
+    'does not switch or recreate a terminal with %s evidence', async (terminal) => {
+      const root = join(await sandbox(), 'runs');
+      const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
+      const fake = setupCall({ repositoryPath: prepared.repositoryPath, terminal });
+
+      await expect(setup.openLab({ run: prepared.directory }, {
+        env: { HOME: '/fixture', PATH: '/bin' }, call: openCall(prepared, fake.call).call,
+      })).rejects.toMatchObject({ code: 'LAB_TERMINAL_UNVERIFIABLE' });
+      expect(fake.terminalSwitchCount).toBe(0);
+      expect(fake.terminalCreateCount).toBe(0);
+    },
+  );
+
+  it('rechecks the canonical worktree after proving the terminal PTY is live and before switching', async () => {
+    const root = join(await sandbox(), 'runs');
+    const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
+    const fake = setupCall({ repositoryPath: prepared.repositoryPath, terminal: 'live', worktreeMismatchOnShow: 2 });
+
+    await expect(setup.openLab({ run: prepared.directory }, {
+      env: { HOME: '/fixture', PATH: '/bin' }, call: openCall(prepared, fake.call).call,
+    })).rejects.toThrow('Orca canonical 工作区身份不符');
+    expect(fake.terminalSwitchCount).toBe(0);
+  });
+
+  it('allows an explicit retry after Orca returned a known terminal-create rejection', async () => {
+    const root = join(await sandbox(), 'runs');
+    const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
+    const rejected = setupCall({ repositoryPath: prepared.repositoryPath, terminal: 'exited', rejectTerminalCreate: true });
+    await expect(setup.openLab({ run: prepared.directory }, {
+      env: { HOME: '/fixture', PATH: '/bin' }, call: openCall(prepared, rejected.call).call,
+    })).rejects.toMatchObject({ code: 'selector_not_found' });
+    expect(await setup.readRun(prepared.directory)).toMatchObject({ stage: 'orca-terminal', failureCode: 'selector_not_found' });
+
+    const retry = setupCall({ repositoryPath: prepared.repositoryPath, terminal: 'exited', terminalHandle: 'retried-terminal' });
+    const opened = await setup.openLab({ run: prepared.directory }, {
+      env: { HOME: '/fixture', PATH: '/bin' }, call: openCall(prepared, retry.call).call,
+    });
+    expect(opened.orca?.terminalHandle).toBe('retried-terminal-1');
+    expect(await setup.readRun(prepared.directory)).toMatchObject({ state: 'ready', stage: 'ready' });
+  });
+
+  it('uses the canonical path to verify an older schema 2 binding without a worktree id', async () => {
+    const root = join(await sandbox(), 'runs');
+    const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
+    const raw = await readRunFile<RunRecord & { orca: NonNullable<RunRecord['orca']> }>(join(prepared.directory, 'run.json'));
+    const oldOrca = { ...raw.orca, worktreeId: null };
+    delete oldOrca.terminalHandle;
+    const oldRecord = { ...raw, orca: oldOrca };
+    await writeFile(join(prepared.directory, 'run.json'), JSON.stringify(oldRecord));
+    const fake = setupCall({ repositoryPath: prepared.repositoryPath });
+    const { call, commands } = openCall(prepared, fake.call);
+
+    const opened = await setup.openLab({ run: prepared.directory }, { env: { HOME: '/fixture', PATH: '/bin' }, call });
+    expect(commands.some((command) => command.includes(`worktree show --worktree path:${prepared.repositoryPath}`))).toBe(true);
+    expect((await setup.readRun(prepared.directory)).orca?.terminalHandle).toBe(opened.orca?.terminalHandle);
+  });
+
+  it('registers an old schema 2 round without an Orca binding on explicit open', async () => {
+    const root = join(await sandbox(), 'runs');
+    const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
+    const file = join(prepared.directory, 'run.json');
+    await writeFile(file, JSON.stringify({ ...(await readRunFile<RunRecord>(file)), orca: null }));
+    const fake = setupCall({ unregisteredPath: true });
+    const opened = await setup.openLab({ run: prepared.directory }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: openCall(prepared, fake.call).call });
+
+    expect(fake.calls.some(({ args }) => args.join(' ').includes(`repo add --path ${prepared.repositoryPath}`))).toBe(true);
+    expect(fake.calls.some(({ args }) => args.join(' ').includes('repo set-base-ref --repo id:repo-fixture --ref origin/main'))).toBe(true);
+    expect(opened.orca).toMatchObject({ executable: ORCA_EXECUTABLE, repoId: 'repo-fixture', worktreeId: 'worktree-fixture', terminalHandle: 'terminal-fixture-1' });
+    expect((await setup.readRun(prepared.directory)).orca).toEqual(opened.orca);
+  });
+
+  it('keeps the terminal handle when collect rebinds the recorded Orca identity', async () => {
+    const root = join(await sandbox(), 'runs');
+    const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
+    const fake = setupCall({ repositoryPath: prepared.repositoryPath });
+    const bound = await setup.bindOrcaForRun(prepared, { env: { HOME: '/fixture', PATH: '/bin' }, orca: '/fixture/bin/other-orca', call: fake.call });
+    expect(bound.orca).toEqual(prepared.orca);
+  });
+
+  it('keeps the legacy schema 1 open contract on the original Orca terminal entry', async () => {
+    const root = join(await sandbox(), 'runs');
+    const legacyRoot = join(await sandbox(), 'legacy-runs');
+    const repositoryPath = join(legacyRoot, 'ledger-lab-main-legacy', 'repo');
+    await mkdir(join(repositoryPath, 'bin'), { recursive: true });
+    await mkdir(join(legacyRoot, 'ledger-lab-main-legacy', 'captures'), { recursive: true });
+    await mkdir(join(legacyRoot, 'ledger-lab-main-legacy', 'checks'), { recursive: true });
+    await mkdir(join(legacyRoot, 'ledger-lab-main-legacy', 'operator'), { recursive: true });
+    const directory = join(legacyRoot, 'ledger-lab-main-legacy');
+    await writeFile(join(directory, 'run.json'), JSON.stringify({ schemaVersion: 1, kind: 'ledger-lab-run', id: 'ledger-lab-main-legacy',
+      profile: 'main', repositoryPath, branch: 'refs/heads/main', companionRoot: setup.companionRoot, orcaExecutable: ORCA_EXECUTABLE,
+      githubRepository: 'fixture-user/ledger-lab-main-legacy', routeMapIssueNumber: 17, orcaRepoId: 'repo-fixture', worktreeId: 'worktree-fixture',
+      terminalHandle: 'terminal-fixture', sourceHead: 'a'.repeat(40), sourceDirty: false, baselineHead: null,
+      state: 'ready', stage: 'ready', createdAt: '2026-10-01T00:00:00.000Z' }));
+    const gitDir = join(repositoryPath, '.git');
     const commands: string[] = [];
     const call: Call = (executable, args) => {
       commands.push(`${executable} ${args.join(' ')}`);
-      if (executable === 'git' && args[0] === 'symbolic-ref') return Promise.resolve(`${prepared.branch}\n`);
+      if (executable === 'git' && args[0] === 'symbolic-ref') return Promise.resolve('refs/heads/main\n');
       if (executable === 'git' && args[0] === 'rev-parse' && args[1] === '--path-format=absolute') return Promise.resolve(`${gitDir}\n`);
       if (executable === 'git' && args[0] === 'rev-parse' && args[1] === '--absolute-git-dir') return Promise.resolve(`${gitDir}\n`);
-      if (executable === 'git' && args[0] === 'rev-parse' && args[1] === '--show-toplevel') return Promise.resolve(`${prepared.repositoryPath}\n`);
-      if (executable === 'git' && args[0] === 'remote') return Promise.resolve(`https://github.com/${prepared.githubRepository}.git\n`);
+      if (executable === 'git' && args[0] === 'rev-parse' && args[1] === '--show-toplevel') return Promise.resolve(`${repositoryPath}\n`);
+      if (executable === 'git' && args[0] === 'remote') return Promise.resolve('https://github.com/fixture-user/ledger-lab-main-legacy.git\n');
       if (executable.endsWith('/orca') && args[0] === 'worktree') return Promise.resolve(JSON.stringify({ ok: true, result: { worktree: {
-        id: prepared.worktreeId, repoId: prepared.orcaRepoId, path: prepared.repositoryPath,
-        branch: prepared.branch, isMainWorktree: true, isBare: false,
-      } } }));
-      if (executable.endsWith('/orca') && args[0] === 'terminal' && args[1] === 'create') {
-        return Promise.resolve(JSON.stringify({ ok: true, result: { terminal: { handle: 'terminal-reopened' } } }));
-      }
-      throw new Error(`unexpected open command ${executable} ${args.join(' ')}`);
+        id: 'worktree-fixture', repoId: 'repo-fixture', path: repositoryPath, branch: 'refs/heads/main', isMainWorktree: true, isBare: false } } }));
+      if (executable.endsWith('/orca') && args[0] === 'terminal') return Promise.resolve(JSON.stringify({ ok: true, result: { terminal: { handle: 'terminal-reopened' } } }));
+      throw new Error(`unexpected legacy open command ${executable} ${args.join(' ')}`);
     };
-    const opened = await setup.openLab({ run: prepared.directory }, { env: { HOME: '/fixture', PATH: '/bin' }, call });
+    const opened = await setup.openLab({ run: directory }, { env: { HOME: '/fixture', PATH: '/bin' }, call });
     expect(opened.terminalHandle).toBe('terminal-reopened');
-    expect(commands.some((command) => command.includes('--show-toplevel'))).toBe(true);
-    expect(commands.some((command) => command.includes('remote get-url origin'))).toBe(true);
     expect(commands.some((command) => command.startsWith(`${ORCA_EXECUTABLE} worktree show`))).toBe(true);
+    void root;
   });
 
   it('binds empty operator templates once, preserves matching data, and rejects another scope', async () => {
@@ -390,12 +625,8 @@ describe('ledger-lab setup', () => {
     const record = { directory };
     const mappingPath = join(operator, 'mapping.json');
     const observationsPath = join(operator, 'observations.json');
-    const blankFiles = [
-      { schemaVersion: 1, coordinationScopeId: '', graphs: [] },
-      { schemaVersion: 1, coordinationScopeId: '', entries: [] },
-    ];
-    await writeFile(mappingPath, JSON.stringify(blankFiles[0]));
-    await writeFile(observationsPath, JSON.stringify(blankFiles[1]));
+    await writeFile(mappingPath, JSON.stringify({ schemaVersion: 1, coordinationScopeId: '', graphs: [] }));
+    await writeFile(observationsPath, JSON.stringify({ schemaVersion: 1, coordinationScopeId: '', entries: [] }));
 
     await setup.bindOperatorFiles(record, 'scope-alpha');
     const mapping = JSON.parse(await readFile(mappingPath, 'utf8')) as { coordinationScopeId: string; graphs: unknown[] };
@@ -413,229 +644,58 @@ describe('ledger-lab setup', () => {
 
   it('resolves verify-result --run defaults to the run repository and writes checks outside it', async () => {
     const root = join(await sandbox(), 'runs');
-    const prepared = await setup.prepareLab({ root }, {
-      env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
-      doctor: () => Promise.resolve({ ok: true, checks: [{ id: 'coordinator-model', status: 'ok' }, { id: 'read-only-worker', status: 'ok' }] }),
-    });
+    const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
     const code = await lab.main(['verify-result', '--run', prepared.directory]);
     expect(code).toBe(3);
     const reports = await readdir(join(prepared.directory, 'checks'));
     expect(reports).toHaveLength(1);
     const reportPath = join(prepared.directory, 'checks', reports[0]!);
     expect(reportPath.startsWith(prepared.repositoryPath)).toBe(false);
-    const report: unknown = JSON.parse(await readFile(reportPath, 'utf8'));
-    expect(report).toMatchObject({ kind: 'result-report', repositoryPath: prepared.repositoryPath });
+    expect(JSON.parse(await readFile(reportPath, 'utf8'))).toMatchObject({ kind: 'result-report', repositoryPath: prepared.repositoryPath });
   });
 
   it('rejects --run collection before a canonical Scope exists', async () => {
     const root = join(await sandbox(), 'runs');
-    const prepared = await setup.prepareLab({ root }, {
-      env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call,
-      readSettings: () => Promise.resolve(requireLedgerLabConfiguration(schemaFiveConfig())),
-      doctor: () => Promise.resolve({ ok: true, checks: [{ id: 'coordinator-model', status: 'ok' }, { id: 'read-only-worker', status: 'ok' }] }),
-    });
+    const prepared = await setup.prepareLab({ root }, { env: { HOME: '/fixture', PATH: '/bin' }, orca: ORCA_EXECUTABLE, call: setupCall().call });
     await expect(lab.main(['collect', '--run', prepared.directory])).rejects.toThrow(/Scope|scope/u);
     expect(await readdir(join(prepared.directory, 'captures'))).toEqual([]);
   });
 
-  it('passes a sanitized environment to the process runner while retaining credentials in memory', async () => {
+  it('passes a sanitized environment to the process runner and keeps GH_HOST for GitHub calls', async () => {
     const requests: { readonly env: Readonly<Record<string, string>>; readonly args: readonly string[] }[] = [];
-    const call = await setup.createCommandRunner({ env: setup.cleanEnvironment({ GH_TOKEN: 'memory-token', GH_REPO: 'untrusted/repo', ORCA_HOST: 'untrusted', SAFE: 'kept' }),
+    const call = await setup.createCommandRunner({ env: setup.cleanEnvironment({ GH_TOKEN: 'memory-token', GH_REPO: 'untrusted/repo', GH_HOST: 'github.com', ORCA_HOST: 'untrusted', SAFE: 'kept' }),
       runner: (request) => {
         requests.push({ env: request.env, args: request.args });
         return Promise.resolve({ kind: 'completed', exitCode: 0, stdout: { text: 'ok', truncated: false }, stderr: { text: '', truncated: false } });
       } });
     expect(await call('git', ['status'])).toBe('ok');
-    expect(requests[0]?.env).toMatchObject({ GH_TOKEN: 'memory-token', SAFE: 'kept' });
+    expect(requests[0]?.env).toMatchObject({ GH_TOKEN: 'memory-token', GH_HOST: 'github.com', SAFE: 'kept' });
     expect(requests[0]?.env).not.toHaveProperty('GH_REPO');
     expect(requests[0]?.env).not.toHaveProperty('ORCA_HOST');
     expect(JSON.stringify(requests.map(({ args }) => args))).not.toContain('memory-token');
     expect(setup.shellQuote("space $() and ' quote")).toBe("'space $() and '" + '"' + "'" + '"' + "' quote'");
-  });
-});
 
-describe('ledger-lab setup wizard', () => {
-  const libraryConnection = { connectionRef: 'connection-library', label: 'Fixture connection', providerId: 'fixture',
-    providerIntegration: 'openai-chat', baseUrl: 'https://api.fixture.invalid/v1',
-    credential: { kind: 'managed', credentialRef: '00000000-0000-4000-8000-000000000001' } };
-  const createWizardHost = (save: (input: unknown) => unknown) => ({
-    read: () => ({ kind: 'absent' }), save,
-    credentials: { metadata: () => ({ kind: 'metadata', revision: 0, refs: [] }) },
-    providerLibrary: {
-      load: () => ({ kind: 'loaded', revision: 4, connections: [libraryConnection], models: [] }),
-      saveConnection: () => Promise.reject(new Error('existing connection should be reused')),
-      saveModel: () => ({ kind: 'saved', revision: 5, model: { modelRef: 'coordinator-model-ref', connectionRef: libraryConnection.connectionRef,
-        model: 'coordinator-fixture', effortCapability: null } }),
-    },
-    providerCatalog: {
-      refresh: () => Promise.resolve({ kind: 'unchanged', catalogVersion: 'fixture' }),
-      presets: () => [], discover: () => Promise.reject(new Error('offline')),
-      candidates: () => ({ models: [{ id: 'coordinator-fixture', label: 'Coordinator Fixture' }] }),
-    },
+    const failing = await setup.createCommandRunner({ env: {}, runner: () => Promise.resolve({ kind: 'completed', exitCode: 1,
+      stdout: { text: '', truncated: false }, stderr: { text: JSON.stringify({ ok: false, error: { code: 'selector_not_found', message: 'x' } }), truncated: false } }) });
+    await expect(failing('/fixture/bin/orca', ['worktree', 'show'])).rejects.toMatchObject({ code: 'selector_not_found' });
   });
 
-  it('queries and preserves native source and effort for each of the five worker roles', async () => {
-    const asks: string[] = [];
-    const queriedRoles: string[] = [];
-    let saved: unknown;
-    const prompt = {
-      ask(label: string, fallback = ''): Promise<string> {
-        asks.push(label);
-        const answer = label.startsWith('Coordinator 连接') ? 'existing'
-          : label.startsWith('选择用户级连接') ? 'Fixture connection'
-            : label.startsWith('选择 Coordinator 模型') ? 'coordinator-fixture'
-              : label.includes('模型序号或原生 ID') ? '1'
-                  : label.includes(' effort ') ? 'high'
-                    : label.includes('预算') ? '20'
-                      : label.includes('token 上限') ? '10000'
-                        : label.includes('保存以上选择') ? 'save' : fallback;
-        return Promise.resolve(answer);
-      },
-      secret(): Promise<string> { return Promise.reject(new Error('secret input is not expected')); },
-      say(): void {},
-    };
-    const result = await wizard.configureSettings({
-      settingsPath: join(await sandbox(), 'settings.json'), prompt,
-      host: createWizardHost((input) => { saved = input; return input; }),
-      catalog: { query: ({ harness }) => {
-        const role = MODEL_PROFILE_ROLES[queriedRoles.length];
-        queriedRoles.push(role ?? 'missing-role');
-        const source = `${harness}:${role}:catalog`;
-        return Promise.resolve({ kind: 'available' as const, source, models: [{ model: `${role}-native`, effortCapability: { values: ['low', 'high'], source } }] });
-      } },
-      roles: MODEL_PROFILE_ROLES,
-      harnesses: WORKER_HARNESS_IDS,
+  it('attaches a parsed GraphQL payload only on a determined failure, never on an unknown outcome', async () => {
+    const envelope = JSON.stringify({ data: { repository: null, viewer: { repository: { id: 'R_kgFixtureNodeId' } } }, errors: [{ type: 'NOT_FOUND' }] });
+    const determined = await setup.createCommandRunner({ env: {}, runner: () => Promise.resolve({ kind: 'completed', exitCode: 1,
+      stdout: { text: envelope, truncated: false }, stderr: { text: '', truncated: false } }) });
+    await expect(determined('gh', ['api', 'graphql', '--input', 'payload.json'])).rejects.toMatchObject({
+      code: 'LAB_COMMAND_FAILED', response: { data: { repository: null } },
     });
-    expect(result).toBe(saved);
-    expect(queriedRoles).toEqual(MODEL_PROFILE_ROLES);
-    expect(saved).toMatchObject({ workers: MODEL_PROFILE_ROLES.map((role) => ({ role, harness: 'codex', modelSelection: {
-      model: `${role}-native`, effort: 'high', catalogSource: `codex:${role}:catalog`,
-      effortCapability: { values: ['low', 'high'], source: `codex:${role}:catalog` },
-    } })) });
-    expect(asks.filter((label) => label.includes('模型序号或原生 ID'))).toHaveLength(5);
-  });
+    const timedOut = await setup.createCommandRunner({ env: {}, runner: () => Promise.resolve({ kind: 'unknown', reason: 'timeout',
+      stdout: { text: envelope, truncated: false }, stderr: { text: '', truncated: false } }) });
+    await expect(timedOut('gh', ['api', 'graphql', '--input', 'payload.json'])).rejects.toMatchObject({ code: 'LAB_OPERATION_UNKNOWN' });
+    await expect(timedOut('gh', ['api', 'graphql', '--input', 'payload.json']).catch((error: unknown) => error)).resolves.not.toHaveProperty('response');
 
-  it('does not save when the user cancels the final confirmation', async () => {
-    let saveCount = 0;
-    const prompt = {
-      ask(label: string, fallback = ''): Promise<string> {
-        const answer = label.startsWith('Coordinator 连接') ? 'existing'
-          : label.startsWith('选择用户级连接') ? 'Fixture connection'
-            : label.startsWith('选择 Coordinator 模型') ? 'coordinator-fixture'
-              : label.includes('模型序号或原生 ID') ? 'manual-worker-model'
-                  : label.includes('保存以上选择') ? 'cancel' : fallback;
-        return Promise.resolve(answer);
-      },
-      secret(): Promise<string> { return Promise.reject(new Error('secret input is not expected')); },
-      say(): void {},
-    };
-    await expect(wizard.configureSettings({
-      settingsPath: '/external/settings.json', prompt,
-      host: createWizardHost(() => { saveCount += 1; }),
-      catalog: { query: () => Promise.resolve({ kind: 'available' as const, source: 'fixture', models: [] }) },
-      roles: MODEL_PROFILE_ROLES, harnesses: WORKER_HARNESS_IDS,
-    })).rejects.toThrow('配置已取消');
-    expect(saveCount).toBe(0);
-  });
-
-  it.each([
-    { prototypes: false, offline: false },
-    { prototypes: true, offline: false },
-    { prototypes: true, offline: true },
-  ])('configures real user stores with prototypes=$prototypes and offline=$offline', async ({ prototypes, offline }) => {
-    const root = await sandbox();
-    const env = { XDG_CONFIG_HOME: join(root, 'config'), XDG_CACHE_HOME: join(root, 'cache') };
-    const directory = join(env.XDG_CONFIG_HOME, 'orca-companion');
-    if (prototypes) await mkdir(join(directory, 'prototypes'), { recursive: true, mode: 0o700 });
-    const credentials = new JsonCredentialStore({ environment: env });
-    const fetcher = vi.fn<typeof fetch>((input) => {
-      if (offline) return Promise.reject(new Error('offline'));
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-      const body = url.includes('models.dev')
-        ? { fixture: { name: 'Fixture', npm: '@ai-sdk/openai-compatible', env: ['FIXTURE_API_KEY'], api: 'https://api.fixture.invalid/v1',
-            models: { 'provider/exact-id': { name: 'Fixture model' } } } }
-        : { data: [] };
-      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
-    });
-    const providerCatalog = createProviderCatalog({ credentials, environment: env, fetch: fetcher });
-    const settingsPath = join(directory, 'ledger-lab.json');
-    const host = createLedgerLabConfigurationHost({ configPath: settingsPath, env, credentials, catalog: providerCatalog, verifyWorkerSelection: () => null });
-    const messages: string[] = [];
-    const prompt = {
-      ask(label: string, fallback = ''): Promise<string> {
-        if (label.startsWith('Coordinator 连接')) return Promise.resolve('new');
-        if (label.startsWith('Coordinator provider 来源')) return Promise.resolve('custom');
-        if (label === '连接名称') return Promise.resolve('Custom provider');
-        if (label === 'Provider 地址') return Promise.resolve('https://api.fixture.invalid/v1');
-        if (label.startsWith('选择 Coordinator 模型')) return Promise.resolve('manual');
-        if (label.startsWith('Coordinator 精确模型 ID')) return Promise.resolve('provider/exact-id');
-        if (label.includes('模型序号或原生 ID')) return Promise.resolve('worker-native-id');
-        if (label.includes('预算')) return Promise.resolve('20');
-        if (label.includes('token 上限')) return Promise.resolve('10000');
-        if (label.includes('保存以上选择')) return Promise.resolve('save');
-        return Promise.resolve(fallback);
-      },
-      secret: () => Promise.resolve('sk-private-key'),
-      say: (text: string) => messages.push(text),
-    };
-    await wizard.configureSettings({ settingsPath, prompt, host,
-      catalog: { query: () => Promise.resolve({ kind: 'unavailable' as const, code: 'offline' }) },
-      roles: MODEL_PROFILE_ROLES, harnesses: WORKER_HARNESS_IDS });
-
-    expect(fetcher.mock.calls.filter(([input]) => typeof input === 'string' && input === 'https://models.dev/api.json')).toHaveLength(1);
-    expect(JSON.stringify(messages)).not.toContain('sk-private-key');
-    const config = JSON.parse(await readFile(settingsPath, 'utf8')) as { coordinatorModels: { model: string; effortCapability: unknown }[] };
-    expect(config.coordinatorModels).toEqual([expect.objectContaining({ model: 'provider/exact-id', effortCapability: null })]);
-    expect(JSON.stringify(config)).not.toContain('sk-private-key');
-    const library = host.providerLibrary.load();
-    expect(library).toMatchObject({ kind: 'loaded', connections: [expect.objectContaining({ providerId: 'custom' })] });
-    const metadata = credentials.metadata();
-    expect(metadata.kind).toBe('metadata');
-    if (metadata.kind !== 'metadata') throw new Error(metadata.message);
-    expect(credentials.read(metadata.refs[0]!)).toMatchObject({ kind: 'resolved', secret: 'sk-private-key' });
-    expect((await stat(directory)).mode & 0o777).toBe(0o700);
-    for (const file of ['providers.json', 'credentials.json']) expect((await stat(join(directory, file))).mode & 0o777).toBe(0o600);
-  });
-
-  it('rejects an existing unsafe prototype directory before prompts, network or credential writes', async () => {
-    const root = await sandbox();
-    const env = { XDG_CONFIG_HOME: join(root, 'config'), XDG_CACHE_HOME: join(root, 'cache') };
-    const directory = join(env.XDG_CONFIG_HOME, 'orca-companion');
-    await mkdir(join(directory, 'prototypes'), { recursive: true });
-    await chmod(directory, 0o775);
-    const credentials = new JsonCredentialStore({ environment: env });
-    const fetcher = vi.fn<typeof fetch>(() => Promise.reject(new Error('unexpected network request')));
-    const host = createLedgerLabConfigurationHost({ configPath: join(directory, 'ledger-lab.json'), env, credentials,
-      catalog: createProviderCatalog({ credentials, environment: env, fetch: fetcher }), verifyWorkerSelection: () => null });
-    const prompt = { ask: vi.fn(() => Promise.reject(new Error('unexpected prompt'))),
-      secret: vi.fn(() => Promise.reject(new Error('unexpected secret prompt'))), say: vi.fn() };
-
-    const attempt = wizard.configureSettings({ settingsPath: join(directory, 'ledger-lab.json'), prompt, host,
-      catalog: { query: () => Promise.resolve({ kind: 'unavailable', code: 'unused' }) },
-      roles: MODEL_PROFILE_ROLES, harnesses: WORKER_HARNESS_IDS,
-    });
-    await expect(attempt).rejects.toMatchObject({ code: 'permission_denied' });
-    await expect(attempt).rejects.toHaveProperty('message', expect.stringContaining(directory));
-    expect(fetcher).not.toHaveBeenCalled();
-    expect(prompt.ask).not.toHaveBeenCalled();
-    expect(prompt.secret).not.toHaveBeenCalled();
-    expect(await readdir(directory)).toEqual(['prototypes']);
-    expect((await stat(directory)).mode & 0o777).toBe(0o775);
-  });
-
-  it('preserves credential rejection before refreshing the catalog', async () => {
-    const host = createWizardHost(() => { throw new Error('unexpected save'); });
-    const refresh = vi.fn(host.providerCatalog.refresh);
-    const ask = vi.fn(() => Promise.reject(new Error('unexpected prompt')));
-    await expect(wizard.configureSettings({ settingsPath: '/external/settings.json',
-      prompt: { ask, secret: ask, say: vi.fn() },
-      host: { ...host, credentials: { metadata: () => ({ kind: 'rejected', code: 'store_invalid', message: '凭据存储内容无法解析' }) },
-        providerCatalog: { ...host.providerCatalog, refresh } },
-      catalog: { query: () => Promise.resolve({ kind: 'unavailable', code: 'unused' }) },
-      roles: MODEL_PROFILE_ROLES, harnesses: WORKER_HARNESS_IDS,
-    })).rejects.toMatchObject({ code: 'store_invalid' });
-    expect(refresh).not.toHaveBeenCalled();
-    expect(ask).not.toHaveBeenCalled();
+    const truncated = await setup.createCommandRunner({ env: {}, runner: () => Promise.resolve({ kind: 'completed', exitCode: 1,
+      stdout: { text: envelope, truncated: true }, stderr: { text: '', truncated: false } }) });
+    const outcome = await truncated('gh', ['api', 'graphql', '--input', 'payload.json']).catch((error: unknown) => error);
+    expect(outcome).toMatchObject({ code: 'LAB_OPERATION_UNKNOWN' });
+    expect(outcome).not.toHaveProperty('response');
   });
 });

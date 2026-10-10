@@ -21,7 +21,10 @@ import type {
 import type { SubmissionStatus } from '../../src/application/coordinator/submission-status.js';
 import type { CoordinatorModelConfiguration } from '../../src/application/coordinator/model-config-switch.js';
 import type { UiInputStore } from '../../src/application/ports/ui-input-store.js';
+import type { ProviderCatalog } from '../../src/application/configuration/provider-catalog.js';
+import type { ProviderLibrary } from '../../src/application/configuration/provider-library.js';
 import { openUiInputStore } from '../../src/adapters/storage/ui-input-store.js';
+import type { ModelDefinition, ProviderConnection } from '../../src/domain/model-configuration.js';
 import { createTranscriptReadingFixture } from '../support/transcript-reading.js';
 
 const SESSION = 'debug-session-0001';
@@ -36,23 +39,98 @@ const CONFIGURATION: CoordinatorModelConfiguration = {
 type FakeHarness = {
   harness: DebugHarnessPort;
   sent: DebugSendInput[];
+  opens: DebugOpenInput[];
   submissionQueries: string[];
   inputStore: UiInputStore;
+  saves: { readonly connections: unknown[]; readonly models: unknown[] };
   counters: { stops: number; retries: number; exitIntents: number; closes: number };
 };
+
+/**
+ * 内存里的 Provider library 与公共目录：调试空库配置消费的就是这两个生产服务的形状，
+ * 因此连接、模型与凭据引用的保存路径与真实实现一致。
+ */
+function fakeProviderLibrary(): {
+  readonly library: ProviderLibrary;
+  readonly catalog: ProviderCatalog;
+  readonly saves: { readonly connections: unknown[]; readonly models: unknown[] };
+} {
+  const saves: { connections: unknown[]; models: unknown[] } = { connections: [], models: [] };
+  const connections: ProviderConnection[] = [];
+  const models: ModelDefinition[] = [];
+  let revision = 0;
+  const effortCapability = { values: ['low', 'high'], source: 'native-catalog', optionPath: '/reasoning/effort' };
+  const catalogModel = { id: 'gpt-fixture', label: 'GPT Fixture', providerId: 'openai', protocol: 'openai-chat' as const, effortCapability, contextWindow: null };
+  const catalog: ProviderCatalog = {
+    presets: () => [{ id: 'openai', label: 'OpenAI', protocol: 'openai-chat', baseUrl: 'https://api.openai.com/v1', discovery: true }],
+    candidates: () => ({ models: [catalogModel], source: 'catalog', catalogVersion: 'fixture', expired: false }),
+    discover: () => Promise.resolve({ models: [catalogModel], source: 'discovery', catalogVersion: 'fixture', expired: false }),
+    refresh: () => Promise.resolve({ kind: 'unchanged' as const, catalogVersion: 'fixture' }),
+  };
+  const library: ProviderLibrary = {
+    load: () => ({ kind: 'loaded', revision, connections, models }),
+    saveConnection: (input) => {
+      saves.connections.push(input);
+      const connection: ProviderConnection = {
+        connectionRef: 'conn-new',
+        label: input.label,
+        providerId: input.providerId,
+        providerIntegration: input.providerIntegration,
+        baseUrl: input.baseUrl,
+        credential: { kind: 'managed', credentialRef: 'credential-ref-new' },
+      };
+      connections.push(connection);
+      revision += 1;
+      return Promise.resolve({ kind: 'saved' as const, revision, connection });
+    },
+    saveModel: (input) => {
+      saves.models.push(input);
+      const model: ModelDefinition = { modelRef: 'model-new', connectionRef: input.connectionRef, model: input.model, effortCapability };
+      models.push(model);
+      revision += 1;
+      return { kind: 'saved' as const, revision, model };
+    },
+    resolveModel: (modelRef) => {
+      const model = models.find((item) => item.modelRef === modelRef);
+      const connection = model === undefined ? undefined : connections.find((item) => item.connectionRef === model.connectionRef);
+      return model !== undefined && connection !== undefined
+        ? { kind: 'resolved' as const, model, connection }
+        : { kind: 'rejected' as const, code: 'model_missing', message: 'missing' };
+    },
+  };
+  return { library, catalog, saves };
+}
 
 function fakeHarness(overrides: {
   send?: (input: DebugSendInput) => DebugSendResult | Promise<DebugSendResult>;
   turn?: AgentTurnState;
   sessions?: readonly string[];
   submissionStatus?: SubmissionStatus;
+  blank?: boolean;
+  openRejected?: boolean;
 } = {}): FakeHarness {
   const sent: DebugSendInput[] = [];
+  const opens: DebugOpenInput[] = [];
   const submissionQueries: string[] = [];
+  const provider = fakeProviderLibrary();
   const opened = openUiInputStore({ databasePath: ':memory:' });
   if (opened.kind !== 'opened') throw new Error('无法创建内存 UI 输入存储');
   let turn: AgentTurnState = overrides.turn ?? { kind: 'idle' };
   let open: { readonly kind: 'opened' } | { readonly kind: 'rejected'; readonly code: string; readonly message: string } | null = null;
+  const currentModels = () => {
+    if (overrides.blank !== true) return [
+      { modelRef: 'model-a', connectionRef: 'conn-a', connectionLabel: 'OpenAI', providerIntegration: 'openai-chat', model: 'gpt-x', efforts: null },
+      { modelRef: 'model-b', connectionRef: 'conn-b', connectionLabel: 'Anthropic', providerIntegration: 'anthropic-messages', model: 'claude-y', efforts: ['low', 'high'] },
+    ];
+    const loaded = provider.library.load();
+    if (loaded.kind !== 'loaded') return [];
+    const { models: savedModels, connections: savedConnections } = loaded;
+    return savedModels.map((model) => {
+      const connection = savedConnections.find((item) => item.connectionRef === model.connectionRef)!;
+      return { modelRef: model.modelRef, connectionRef: connection.connectionRef, connectionLabel: connection.label,
+        providerIntegration: connection.providerIntegration, model: model.model, efforts: model.effortCapability?.values ?? null };
+    });
+  };
   const fake = {
     stops: 0,
     retries: 0,
@@ -77,12 +155,12 @@ function fakeHarness(overrides: {
         updatedAt: 1,
         turn: null,
       })),
-      models: [
-        { modelRef: 'model-a', connectionRef: 'conn-a', connectionLabel: 'OpenAI', providerIntegration: 'openai-chat', model: 'gpt-x', efforts: null },
-        { modelRef: 'model-b', connectionRef: 'conn-b', connectionLabel: 'Anthropic', providerIntegration: 'anthropic-messages', model: 'claude-y', efforts: ['low', 'high'] },
-      ],
+      models: currentModels(),
     }),
+    providerLibrary: { library: provider.library, catalog: provider.catalog },
     open: (input: DebugOpenInput) => {
+      opens.push(input);
+      if (overrides.openRejected === true) return Promise.resolve({ kind: 'rejected', code: 'capability_missing', message: '能力核验失败' });
       if (input.kind === 'new' && input.modelRef === 'model-b') {
         return Promise.resolve({ kind: 'rejected', code: 'model_unknown', message: '模型不在用户模型库中' });
       }
@@ -108,7 +186,7 @@ function fakeHarness(overrides: {
     subscribe: () => () => undefined,
     close: () => { fake.closes += 1; },
   };
-  return { harness, sent, submissionQueries, inputStore: opened.store, counters: fake };
+  return { harness, sent, opens, submissionQueries, inputStore: opened.store, saves: provider.saves, counters: fake };
 }
 
 async function settle(ticks = 6): Promise<void> {
@@ -410,5 +488,69 @@ describe('tui/debug-app / 调试前台对话', () => {
     rendered.stdin.write('\r');
     await settle(6);
     expect(frameText(rendered)).toContain('openai-chat · gpt-x');
+  });
+
+  test('Scenario: 空库按 p 打开共享编辑器，配置模型后仍须明确选择才打开会话', async () => {
+    const fake = fakeHarness({ blank: true });
+    const rendered = render(createElement(DebugApp, { harness: fake.harness, terminalWidth: 100, onExit: vi.fn() }));
+    await settle();
+    rendered.stdin.write('p');
+    await settle();
+    expect(frameText(rendered)).toContain('已保存 Provider 连接');
+
+    // 空库：跳到「＋ 新建连接」→ 选 Provider → 填 key 并保存连接。
+    rendered.stdin.write('\u001b[B'); await settle(2);
+    rendered.stdin.write('\u001b[B'); await settle(2);
+    rendered.stdin.write('\r'); await settle(4);
+    rendered.stdin.write('\u001b[B'); await settle(2);
+    rendered.stdin.write('\r'); await settle(4);
+    rendered.stdin.write('\u001b[B'); await settle(2);
+    rendered.stdin.write('\u001b[B'); await settle(2);
+    await typeText(rendered, 'sk-fixture-key');
+    // key 始终隐藏：保存前就已经是遮罩。
+    expect(frameText(rendered)).not.toContain('sk-fixture-key');
+    rendered.stdin.write('\r'); await settle(6);
+    expect(fake.saves.connections).toHaveLength(1);
+    expect(fake.saves.connections[0]).toMatchObject({ label: 'OpenAI', providerId: 'openai', providerIntegration: 'openai-chat', newSecret: 'sk-fixture-key' });
+
+    rendered.stdin.write('\u001b[B'); await settle(2);
+    rendered.stdin.write('\r'); await settle(6);
+    expect(fake.saves.models).toEqual([{ expectedRevision: 1, connectionRef: 'conn-new', model: 'gpt-fixture' }]);
+
+    // 有可信 effort 取值：先明确选 effort，再打开会话。
+    expect(frameText(rendered)).toContain('不指定 effort');
+    rendered.stdin.write('\u001b[B'); await settle(2);
+    rendered.stdin.write('\r'); await settle(6);
+    expect(fake.opens).toHaveLength(0);
+    expect(frameText(rendered)).toContain('选择模型（会话固定该配置）');
+    rendered.stdin.write('\r'); await settle(6);
+    expect(fake.opens).toEqual([{ kind: 'new', modelRef: 'model-new', effort: 'low' }]);
+    expect(frameText(rendered)).toContain('调试 /tmp/debug-project');
+    expect(fake.sent).toHaveLength(0);
+  });
+
+  test('Scenario: 空模型库时 Esc 退出配置不保存任何连接', async () => {
+    const fake = fakeHarness({ blank: true });
+    const rendered = render(createElement(DebugApp, { harness: fake.harness, terminalWidth: 100, onExit: vi.fn() }));
+    await settle();
+    rendered.stdin.write('p');
+    await settle();
+    rendered.stdin.write('\u001b');
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    await settle(4);
+    expect(fake.saves.connections).toHaveLength(0);
+    expect(fake.opens).toHaveLength(0);
+    expect(frameText(rendered)).toContain('新建或继续调试会话');
+  });
+
+  test('Scenario: capability failure refuses session and never starts a conversation loop', async () => {
+    const fake = fakeHarness({ openRejected: true });
+    const rendered = render(createElement(DebugApp, { harness: fake.harness, terminalWidth: 100, onExit: vi.fn() }));
+    await settle();
+    rendered.stdin.write('n'); await settle();
+    rendered.stdin.write('\r'); await settle(6);
+    expect(fake.opens).toEqual([{ kind: 'new', modelRef: 'model-a' }]);
+    expect(fake.sent).toHaveLength(0);
+    expect(frameText(rendered)).toContain('capability_missing');
   });
 });

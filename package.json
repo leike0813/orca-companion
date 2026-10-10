@@ -13,6 +13,9 @@
     "orca-companion": "./dist/src/interfaces/cli/main.js",
     "ocp": "./dist/src/interfaces/cli/main.js"
   },
+  "files": [
+    "dist/src"
+  ],
   "scripts": {
     "start": "node ./dist/src/interfaces/cli/main.js",
     "lab": "node artifacts/ledger-lab/lab.mjs",

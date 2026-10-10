@@ -224,18 +224,20 @@ LangGraph checkpoint、SQLite 和 Orca receipt 都不提供跨系统 exactly-onc
 
 发布命令为 `ocp`（`orca-companion` 为等价长别名）：
 
-- `ocp [repository-path]` 启动前台 TUI；Home 选择现有 Scope，或通过最小向导核验 repository、branch、canonical worktree、Coordinator Model Configuration、tracker 和 Orca 能力后创建 Scope。
+- `ocp [repository-path]` 启动前台 TUI；每次自动核验 repository、Orca 与身份，逐项显示完成状态及当前核验 spinner，失败后由用户显式重试。Home 精确恢复现有 Scope；缺配置时按环境、Coordinator 模型、Route Map 创建或选择、最终确认四步引导，确认后保存 schema 5、核验模型与 tracker，再创建 Scope/cycle/session。
 - `ocp --debug [directory]` 启动无 Scope 的前台调试会话；目录缺省为当前目录，允许普通非 Git 目录。
 - `ocp status [--json]` 执行一次性只读查询。
 - `ocp doctor` 检查环境与能力。
 
 不提供 `run`、`resume`、`tui` 或 headless 子命令。启动 TUI 前同时检查 stdin/stdout TTY；无 TTY 时以非零状态明确拒绝。`status --json` 与 `doctor` 必须无 TTY 可运行，机器输出只写 stdout，诊断写 stderr。
 
-调试模式复用真实固定协议 adapter、唯一 CredentialStore、ProviderLibrary 与 capability probe、同一轮次驱动、对话核心和 IC-13 输入保护，但不创建 Coordination Scope、执行图、Run、Worker 或授权，也不写 Git common dir。会话注册、checkpoint、UI 输入与诊断保存在 `${XDG_STATE_HOME:-~/.local/state}/orca-companion/debug`；用户明确新建或继续，并选定用户库中已有的连接与模型，会话固定该不可变配置快照。调试工具固定为 `list_files`、`read_file`、`search`、`git_diff`，限制调试根目录、输出、处理量与时间并支持取消，越界、绝对路径、符号链接逃逸与非普通文件返回结构化拒绝。合同见 IC-12/13/16。
+调试模式复用真实固定协议 adapter、唯一 CredentialStore、ProviderLibrary 与 capability probe、同一轮次驱动、对话核心和 IC-13 输入保护，不要求 Orca、项目配置或 Worker Profiles，也不创建 Coordination Scope、执行图、Run、Worker 或授权，不写 Git common dir。会话注册、checkpoint、UI 输入与诊断保存在 `${XDG_STATE_HOME:-~/.local/state}/orca-companion/debug`；用户明确新建或继续，空用户库经共享 `ProviderLibraryEditor` 保存连接与模型，再核验并打开固定配置快照的会话。调试工具固定为 `list_files`、`read_file`、`search`、`git_diff`，限制调试根目录、输出、处理量与时间并支持取消，越界、绝对路径、符号链接逃逸与非普通文件返回结构化拒绝。合同见 IC-12/13/16。
 
 初始化只建立 Scope、Planning Cycle 与首个 Coordinator Session；Worker Profiles、预算、依赖权限、Git 集成和 accepted risks 留给 Execution Authorization Manifest。
 
-ledger-lab round preparation 可自动准备环境；Scope/需求批准、规划审阅、故障操作和业务步骤由用户按 `artifacts/ledger-lab/guide.md` 手动完成。准备不得生成业务骨架、执行图或验收答案，也不得自动循环派发；失败保留现场，unknown 不自动重试或清理，重开只核验原身份、不推进流程。
+ledger-lab round preparation 建立私有仓库、`main` 主 checkout 和仓库内安装的打包 ocp，经公开命令登记 Orca、设置 `origin/main` 并打开原生项目终端；仅设置本轮 bin PATH 与明确 `ORCA_CLI_COMMAND`，用户直接运行 `ocp` 或 `ocp --debug`。准备不配置模型、不创建 Route Map、不运行 `doctor` 或模型探针，也不得生成业务骨架、执行图或验收答案。模型与 Route Map 由用户通过正常启动引导配置；需求批准、规划审阅、故障和业务步骤按 `artifacts/ledger-lab/guide.md` 完成。失败保留现场，unknown 不自动重试或清理；重开核验原身份、聚焦原终端，仅确定 exited 才替换，未登记 schema 2 轮次可在显式 open 时补登记，不推进业务。round 回收必须由用户显式指定轮次：`cleanup` 默认只预览，`--yes` 才删除该轮私有仓库与主 checkout，先由用户停止相关进程并用公开 `orca project setup-delete` 解除登记；脚本不结束进程、不注销项目、不批量回收，也不删除 round 外置的记录、安装包与证据。
+
+Scope 前 Route Map 初始化只经 `application/planning/route-map-initialization.ts` 的窄端口 list/select/create：目标仓库与完整 branch ref 由 Bootstrap 提供，候选最多 20 项。创建前在 Git common dir 私有目录持久保存稳定 operationId、目标和 revision，以短锁、CAS、原子替换及回读核验；issue 正文附唯一 operation marker。unknown 只按原记录和 marker 对账，无法证明时明确阻塞或由用户选择既有 issue，不换 ID 重发。它不属于 Coordinator 工具，也不创建 Scope；秘密仍只归 CredentialStore。
 
 **TUI 硬约束：尊重已确认原型。** 规划、实现或验收任何 TUI change 前，必须读取 [TUI 实现进度与原型交接](docs/dev/tui-implementation-handoff.md)，核对对应定稿来源、当前批次及验收要求。未经用户明确批准不得自行重新设计；交互或自动测试通过不能替代原型一致性验收。
 

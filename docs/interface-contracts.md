@@ -803,7 +803,7 @@ Service 只委派既有用例，不打开 store、不调用具体 adapter、不�
 
 - **Owner (Create)**: `m0-orca-control-baseline`
 - **Canonical paths**: `src/application/tui/view-model.ts`、`src/interfaces/cli/`、`src/interfaces/tui/`
-- **Extenders (Extend)**: `m2-deliver-planning-tui` 在同一合同内实现 planning 投影与 TUI；`m2-deliver-execution-tui` 增加执行态分区；`m2-wire-execution-runtime` 增加 Execution Authorization 审阅 overlay 与 `authorize-execution` 命令，不新增页面或键位
+- **Extenders (Extend)**: `m2-deliver-planning-tui` 在同一合同内实现 planning 投影与 TUI；`m2-deliver-execution-tui` 增加执行态分区；`m2-wire-execution-runtime` 增加 Execution Authorization 审阅；`simplify-ledger-lab-lifecycle` 扩展启动核验及首次配置窄端口
 - **Consumers (Consume)**: CLI machine users、React components、PTY tests
 
 ```ts
@@ -838,6 +838,9 @@ type StatusJson = {
 `m2-deliver-planning-tui` 的 Extend 把 `TuiViewModel` 拆成可复用的纯展示 DTO（`ScopeView`、`SessionSummaryView`、`GraphView`、`WorkerView`、`BlockerView`、`BudgetView`、`InteractionView`、`MaintenanceView`、`CompactionView`、`TranscriptView`）并登记 Home 解析规则：
 
 - **Home 解析**：以 Git common dir 定位 Branch Coordination State，再以当前完整 branch ref 和登记的 canonical worktree 精确匹配 Scope。无匹配则进入初始化向导；旧未绑定记录须经显式迁移 Review（`bind-scope-identity` 一次性补齐绑定后本进程才登记当前 Scope）；linked worktree（git dir 不等于 common dir）或 detached HEAD 阻塞。不得以 common dir 下 Scope 数量推断当前身份。
+- **启动核验/引导**：`src/interfaces/tui/ports.ts` 的 `ScopeSetupPort` 由 `src/bootstrap/foreground-planning-runtime.ts` 装配，`screens/startup-onboarding.tsx` 消费。`verifyEnvironment?(onCheck?)` 返回 repository/orca/identity 的 `WizardCheck{id,ok,detail}`，`verify(onCheck?)` 再核验 model/tracker；回调按实际完成逐项报告，UI 只显示当前 spinner 和结果。每次普通启动自动运行环境核验，失败后显式重试；无配置按环境、Coordinator、Route Map、最终确认四步进行。最终确认经 IC-14 保存项目后再 verify/proposal/initialize；已有配置复用，精确 Scope 恢复与 legacy Review 沿原身份规则。模型、地图和 Scope 写入不由 render/resize/remount 发起，Worker Profiles 不作为规划前提。
+- **Scope 前地图窄端口**：`ScopeSetupPort.routeMapInitialization?` 消费 `src/application/planning/route-map-initialization.ts` 的 `RouteMapInitializationPort`，只提供 `list()`、`select(number)`、`create()`，返回 `ok{value}` 或 `failed{code,message}`。候选为 `{number,title,url}`，目标为 `{number,url}`，每次最多 20 项；select 核验精确仓库/issue 与领域定义的固定章节，create 只生成空章节及唯一 operation marker。可信 repository/完整 branch ref 由 Bootstrap 提供，不接收 Scope、Session、任意 gh 参数或凭据，也不向 Coordinator 暴露。
+- **地图创建持久化**：应用用例拥有 `RouteMapTrackerBackend`（listCandidates/readIssue/createIssue）和 `RouteMapInitializationRecordStore`（read/begin/recordIssue），实现分别在 `src/adapters/tracker/gh-route-map-initialization.ts`、`src/adapters/storage/route-map-initialization.ts`。创建前在 Git common dir 的 `orca-companion/route-map-initialization/<encoded-full-branch-ref>.json` 保存 schemaVersion=1、revision、operationId、repository、fullBranchRef、title、nullable issue，以 exclusive 短锁/CAS/原子替换/回读拒绝并发覆盖。正文标记为 `<!-- orca-companion-route-map-operation:<operationId> -->`。结果不明、回执无法核验或成功后保存失败保留记录；后续 create 只精确读取已记录 issue，或在最多 20 项中按原 marker 找唯一匹配，零个/多个匹配仍为 `create_unresolved`，不能证明未创建或重发。用户可经 select 核验并绑定既有 issue。该记录不属于 coordination.sqlite，不新增 DB migration。
 - **Session 选择**：选中 Session 与 Sidebar 密度都是进程内展示态。重启后按「存在 Pending Interaction 的 Session 优先，否则最近活动」重新选择；M1 没有「上次选择」的持久来源，本 change 不新增表、文件或 migration。
 - **工作区布局**：Ctrl+B 开合固定项目面板（总览、待答列表、最近事件），100 列及以上替换原右侧区域，更窄时独占主区域。事件沿用本次启动最多 50 条的窗口，旧事件入口进入同一页签；Ctrl+G 在三档尺寸均打开只读 adaptive 检查。面板/栏目/详情/关系选择均为进程内展示态，关闭恢复原会话、草稿、光标与阅读位置；图标与 statusline 的显式保存值由 IC-15 拥有。
 - **命令与审阅**：Palette、slash 与 Help 共享操作元数据和可用性；上方候选采用与执行分开，不可用与错误 slash 保留输入。选择页及审阅使用固定有界框，审阅默认返回；确认沿用 IC-11 的目标/指纹/revision 校验。顶栏、单行会话核心、独立风险与项目详情消费应用只读投影，缺失数据明示不可用；custom 和图标偏好沿 IC-15，可信 metadata 与共享验收摘要沿下述第七批扩展。
@@ -912,7 +915,7 @@ schema 5 的 ProviderConnection 只描述 Coordinator 连接：connectionRef、l
 
 - **Owner (Create)**: `complete-tui-model-configuration`
 - **Canonical paths**: `src/application/ports/credential-store.ts`、`src/adapters/storage/credential-store.ts`、`src/application/configuration/model-settings.ts`、`src/domain/model-configuration.ts`
-- **Extenders (Extend)**: `remove-worker-credential-management` 收缩为 Coordinator-only 并把 Worker 选择改为 `modelSelection`
+- **Extenders (Extend)**: `remove-worker-credential-management` 收缩为 Coordinator-only 并把 Worker 选择改为 `modelSelection`；`simplify-ledger-lab-lifecycle` 复用用户库编辑器并扩展首次配置入口
 - **Consumers (Consume)**: chat model factory、Coordinator 模型设置用例与 `doctor` 的 Coordinator 凭据解析；Worker launcher 与原生目录查询不解析凭据
 
 `CredentialStore` 是同步窄端口：`metadata()` 返回 `{revision, refs}`，`read(credentialRef)` 返回 secret，`save({expectedRevision, secret})` 返回 `{revision, credentialRef}`；任何失败都是 `rejected{code,message}`，不抛异常、不回显原始异常或 secret 载荷。metadata 只含引用集合，不含 secret。
@@ -943,7 +946,9 @@ schema 5 的 ProviderConnection 只描述 Coordinator 连接：connectionRef、l
 
 ## `stabilize-agent-harness-core` 对 IC-14 的扩展
 
-调试会话与协调运行共用同一个 `CredentialStore`、`ProviderLibrary`、固定协议 chat-model adapter 与同一 capability probe，不另建凭据路径、第二个模型解析实现或第二套能力判定。用户在新建或继续时明确选择用户库中已有的连接与模型；会话固定该选择的不可变配置快照，后续目录查询失败或用户库变化都不改写已打开会话的绑定。能力核验不通过时拒绝打开会话，不降级为未核验连接。
+调试会话与协调运行共用同一个 `CredentialStore`、`ProviderLibrary`、固定协议 chat-model adapter 与同一 capability probe，不另建凭据路径、第二个模型解析实现或第二套能力判定。`src/interfaces/tui/components/provider-library-editor.tsx` 消费已有 library/catalog 与模型设置状态转换，普通启动和 debug 空库共用连接/模型保存及可信 effort 选择；只有用户明确输入事件保存，secret 留在编辑内存和 CredentialStore。选择回传 modelRef/effort，编辑器不创建 Scope 或项目配置。用户可新增连接与模型，也可复用用户库；新建或继续会话须明确选择，会话固定不可变配置快照，后续库变化不改写绑定。能力核验不通过时拒绝打开会话。
+
+`ModelSettingsPort.initializeProject?({modelRef,effort,routeMapIssueNumber})` 由前台 Bootstrap 装配，只对不存在的项目文件按 expectedRevision=0 CAS 创建 schema 5，复制可信用户库快照并保存 tracker issue。首次引导在最终确认后调用它，成功后再走 IC-12 的模型/tracker 核验及 Scope 初始化；保存成功不等于 Scope 已创建。用户库连接/模型可能已在前一步保存、地图也可能已创建，失败或退出不跨文件回滚。Worker Profiles 与 Manifest v4 门禁保持原合同。
 
 ## 第七批 IC-11/12 展示扩展
 
@@ -999,13 +1004,14 @@ custom 编辑是内存草稿，同生产 statusline 的主区域宽度、字段�
 
 - **Owner (Create)**：`stabilize-agent-harness-core`
 - **Canonical paths**：`src/application/ports/debug-harness.ts`（界面端口与 DTO）、`src/bootstrap/debug-runtime.ts`（宿主装配）、`src/adapters/storage/debug-session-store.ts`（会话注册表）、`src/application/ports/debug-read-tools.ts` 与 `src/adapters/agents/debug-read-tools.ts`（只读工具 port 与实现）、`src/workflow/coordinator/debug-tools.ts`（工具 schema）、`src/application/coordinator/debug-user-message.ts`（调试消息准入）
+- **Extender (Extend)**：`simplify-ledger-lab-lifecycle` 增加 providerLibrary 窄入口和空库编辑；不改变会话存储与轮次协议
 - **Consumers**：`--debug` 前台与调试 TUI；协调运行时、Controller 与 `ControllerService` 不消费本 seam
 
-`--debug` 是与协调运行并列的独立 launch profile，目录参数缺省为当前工作目录并按 realpath 归一化，允许普通非 Git 目录。用户必须明确选择新建会话或继续该目录下的既有会话，并选定用户模型库中的已有连接与模型；目录、会话与配置的组合不可从 cwd 猜测。
+`--debug` 是与协调运行并列的独立 launch profile，目录参数缺省为当前工作目录并按 realpath 归一化，允许普通非 Git 目录，不要求 Orca、项目配置、Route Map 或 Worker Profiles。用户明确新建会话或继续该目录下的既有会话；空库可先经共享编辑器保存连接与模型，新建再按 modelRef/effort 打开，继续沿原会话快照。目录、会话与配置的组合不可从 cwd 猜测。
 
 会话注册表、checkpoint、UI 输入与诊断都在用户状态目录 `${XDG_STATE_HOME:-~/.local/state}/orca-companion/debug`：`sessions.json` 保存会话注册，`sessions/<coordinatorSessionId>/` 下分别是 `checkpoints.sqlite`、`ui.sqlite` 与 `diagnostics/`，单写者锁覆盖同一会话目录。协调库的 Git common dir 路径、coordination.sqlite 与 Scope 记录都不参与调试，调试也不创建 Execution Graph、Run、Worker 或授权。
 
-`DebugHarnessPort` 是调试界面的唯一依赖，提供目录下的会话列表、模型候选、新建/打开、会话状态、提交、提交核验与事件订阅；界面不构造身份，也不复制端口。轮次使用 IC-04 的同一驱动：请求前落盘 `running`，故障落盘 `halted` 并停止全部自动入口，重开读到 `running`/`halted` 时等待用户明确 `/retry`；退出先 abort 再保存草稿。
+`DebugHarnessPort` 是调试界面的唯一依赖，提供目录下的会话列表、模型候选、新建/打开、会话状态、提交、提交核验与事件订阅，并以 `providerLibrary:{library:ProviderLibrary,catalog:ProviderCatalog}` 暴露同一应用服务供共享编辑器消费；不另建 TUI 版模型端口。home 只读，不探测或取得写者；open 的 new 输入只含 modelRef/可选 effort，continue 只含 coordinatorSessionId，能力核验及会话写者获取只在明确 open 后进行。界面不构造身份，不加载 Scope/Orca 或保存项目配置。轮次使用 IC-04 的同一驱动：请求前落盘 `running`，故障落盘 `halted` 并停止全部自动入口，重开读到 `running`/`halted` 时等待用户明确 `/retry`；退出先 abort 再保存草稿。
 
 模型输入和压缩由 `src/workflow/coordinator/history-input.ts` 共同拥有：两个宿主按同一边界组装、保存压缩结论/Capsule/原生窗口/Shake，`context_exhausted` 与 `compaction_degraded` 在请求前停止。调试默认输入预算为 100000 tokens，沿用生产的预算估算，不作为模型窗口或 UI 百分比。图写入接缝只消费 `SessionWriteAssertion`（valid/fenced）；协调宿主用真实租约证明它，调试宿主用独占会话写者及退出状态证明它。
 
@@ -1057,4 +1063,4 @@ IC-11/12 提供 ExecutionSettings load/save 和显式执行期完整审阅意图
 
 `ProviderCatalog` 的 canonical path 为 `src/application/configuration/provider-catalog.ts`。presets/candidates 同步只读；discover 与 refresh 是分开的显式异步意图，查询有界、可取消。发现非空为唯一候选，失败或空结果按 connectionRef/credentialRef/effective catalog version 的LKG→catalog回退，无发现服务直接catalog。公共内容更新或发布基线更新使旧缓存失效，相同内容刷新保持缓存。自定义只按固定协议提供兼容候选，不按hostname猜供应商，exact ID不重写。
 
-Home initializeProject 意图携带用户所选modelRef/effort/Route Map issue，仅对不存在文件按CAS创建完整schema5；Scope和Session仍需独立核验与批准。响应恢复的原配置引用/必要白名单kwargs与签名内容由checkpoint拥有，计入输出/上下文预算，不进普通metadata页；换模型只用可移植文本/tool结构。
+首次项目配置与 debug 用户库编辑遵守 IC-14，Scope 前地图初始化遵守 IC-12，调试会话打开遵守 IC-16。响应恢复的原配置引用/必要白名单kwargs与签名内容由checkpoint拥有，计入输出/上下文预算，不进普通metadata页；换模型只用可移植文本/tool结构。

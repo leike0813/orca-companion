@@ -742,6 +742,8 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
       }));
       return { kind: 'home', debugDirectoryId: directoryId, directoryPath, sessions, models: modelOptions(library) };
     },
+    // 空库时界面用同一份 library/catalog 配置会话固定的模型；不新建服务、不另建凭据路径。
+    providerLibrary: { library, catalog },
     open,
     state(): DebugStateLoad {
       if (session === null) return { kind: 'no-session' };

@@ -50,6 +50,7 @@ function stubHarness(): StubHarness {
       subscribe: () => () => undefined,
     },
     inputStore: {} as DebugHarnessPort['inputStore'],
+    providerLibrary: {} as DebugHarnessPort['providerLibrary'],
     subscribe: () => () => undefined,
     close: () => { fake.closed += 1; },
   };

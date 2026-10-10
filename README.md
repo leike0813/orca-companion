@@ -20,8 +20,8 @@
 | `pnpm lint`、`pnpm lint:fix` | ESLint，含类型感知规则 |
 | `pnpm test`、`pnpm test:watch` | Vitest（含 TUI 组件与 PTY 用例） |
 | `pnpm build` | 输出 `dist/`；`pnpm start` 运行构建产物 |
-| `pnpm lab` | 运行 ledger-lab 验收工具；子命令支持 `--run` 选择外置 round |
-| `pnpm lab:new` | 构建并进入 ledger-lab 新 round 向导；可用 `--profile cancel` 建立独立取消轮次 |
+| `pnpm lab` | 运行 ledger-lab 验收工具；子命令支持 `--run` 选择外置 round，`list`/`cleanup` 管理 round |
+| `pnpm lab:new` | 构建、创建新 round、安装打包的 ocp、登记 Orca 并打开原生项目终端；可用 `--profile cancel` 建立独立取消轮次 |
 | `pnpm ui:preview planning` | 启动只读假数据 TUI 预览；其他场景见 [TUI 调试工作台](docs/dev/tui-workbench.md) |
 | `pnpm ui:devtools` | 启动独立 React DevTools，配合 `DEV=true pnpm ui:preview execution` |
 
@@ -30,6 +30,7 @@
 | 命令 | 说明 |
 | --- | --- |
 | `orca-companion [repository-path]` | 启动前台 TUI。**需要交互式终端**：stdin 或 stdout 无 TTY 时在挂载 Ink 之前以退出码 2 拒绝，诊断写 stderr |
+| `ocp --debug [directory]` | 启动无 Scope 的调试 TUI；缺省为当前目录，允许非 Git 目录，不要求 Orca 或项目配置 |
 | `orca-companion status [--json]` | 只读输出当前 Coordination Scope 状态（`schemaVersion: 3`，含执行快照分区）；无 TTY 可运行 |
 | `orca-companion doctor` | 核验 Orca 环境与能力；无 TTY 可运行 |
 
@@ -37,20 +38,29 @@
 
 ### ledger-lab 实测
 
-首次运行 `pnpm lab:new` 会进入终端向导，并把可复用设置保存在 XDG 配置目录
-`orca-companion/ledger-lab.json`；使用 `pnpm lab:new --profile cancel` 建立独立取消轮次。
-已有构建产物或运行过新建向导后，可用 `pnpm lab configure` 修改设置；`pnpm lab open --run /abs/round`
-核对原 round 身份并重开，不会推进流程。采集与验收子命令可用 `--run /abs/round`，也保留显式参数。
-`--root` 指定绝对路径的外置 runs 根目录，`--settings` 指定外置 JSON 设置文件。目录结构、人工步骤和证据限制见
-[ledger-lab 实测包](artifacts/ledger-lab/README.md)。
-基础设施的规格、设计与验收进度见 [OpenSpec change](openspec/changes/add-ledger-lab-rehearsal-infrastructure/proposal.md)。
+`pnpm lab:new` 打包当前构建，在新的 round 中创建私有 GitHub 仓库与 `main` 主 checkout，
+把打包产物安装进该仓库，登记 Orca、设置 `origin/main` 并打开原生项目终端；`--profile cancel` 建立独立取消轮次。
+终端仅补充本轮 `node_modules/.bin` 的 PATH 与明确的 `ORCA_CLI_COMMAND`，可直接输入 `ocp` 或 `ocp --debug`。
+准备不配置模型、不创建 Route Map、不运行 `doctor` 或模型探针。`pnpm lab list [--root /abs/dir]` 列出 round，
+`pnpm lab cleanup --run /abs/round` 先预览本轮删除目标，加 `--yes` 才删除私有仓库与主 checkout，
+仓库外的记录、安装包、operator 材料与证据保留。`pnpm lab open --run /abs/round` 核对原 round 身份
+并核验、聚焦原终端，只有确定已退出才替换；未登记的 schema 2 轮次可在显式 `open` 时补登记，不推进业务或启动模型。采集与验收子命令可用 `--run /abs/round`，也保留显式参数；
+`--root` 指定绝对路径的外置 runs 根目录。
+
+普通启动每次自动核验项目环境并逐项显示进度；首次配置按环境、Coordinator 模型、Route Map 创建或选择、最终确认四步完成。
+用户确认后保存配置、核验模型与 tracker，再初始化 Scope。Worker Profiles 留到执行授权前配置。
+调试入口可从空用户库用同一模型编辑器配置连接与模型；需要能力报告时显式运行 `ocp doctor`。
+启动核验与 `doctor` 可能产生模型费用；目录结构、人工步骤和证据限制见
+[ledger-lab 实测包](artifacts/ledger-lab/README.md)。基础设施的规格、设计与验收进度见
+[准备生命周期 change](openspec/changes/simplify-ledger-lab-lifecycle/proposal.md) 与
+[lab 基础设施 change](openspec/changes/add-ledger-lab-rehearsal-infrastructure/proposal.md)。
 
 不存在 `run`、`resume`、`tui` 子命令；传入它们会以非零状态被拒绝并指出受支持入口。
 
 ### 项目配置：`orca-companion.json`
 
 在 `/connections` 中选择服务、地区/产品线或自定义协议，输入地址与隐藏 API Key，再选择或手填模型。
-已有连接可以直接复用。首次项目配置还需填写 Route Map issue；ledger-lab 使用 `pnpm lab configure`。
+已有连接可以直接复用。首次启动复用同一用户库编辑器，随后创建空 Route Map 或选择目标仓库中的既有 issue，最终确认才写入项目配置并初始化 Scope。
 用户库位于 XDG config 的 `orca-companion/providers.json`，Key 位于同目录 `credentials.json`。
 发布 catalog 支持离线选择；非空端点发现独占候选，发现失败回退同版本 last known good，再回退 catalog。
 保存、发现、核验与应用分别进行；离线可以保存，启动和应用必须通过真实工具调用及续接核验。
@@ -194,16 +204,16 @@ Replanning、cancelling 或存在未决派发时不能重新授权。
 用户在连接表单中填写的 API Key 存在独立的用户级凭据文件（XDG 目录，按 XDG 变量解析），文件内容是明文的
 `credentialRef → secret` 映射，权限被拒绝时明确报错而不是放宽。项目配置、checkpoint、UI 输入存储、日志与
 提交内容里只出现 `credentialRef`：聊天模型在最后的构造点按 `credential.credentialRef` 解析 API Key，
-凭据只用于 Coordinator 模型调用。保存凭据先落盘再写项目配置；后者失败
-时输入被保留，可能留下未引用的孤立密钥，但不会激活错误配置。
+凭据只用于 Coordinator 模型调用。保存连接先写凭据，再 CAS 追加用户库；项目选择模型时复制完整非秘密快照。
+后续保存失败会保留输入，可能留下未引用的孤立密钥，但不会激活错误配置。
 
 引用不可变：每次保存生成新的 `credentialRef`，既有引用不被改写。Worker 启动不读取凭据文件，认证由各
 harness 在自己的真实用户环境中提供。文件写入使用短 exclusive 文件锁、
 revision CAS、0600 临时文件原子替换与回读；锁被占用、文件已被其他写者更新、目录或文件权限不安全、指向
 符号链接、内容损坏或超出大小与条目上限时都以结构化错误拒绝，不自动破锁、不修改既有用户目录权限。
 
-配置缺失、schema 无效、默认模型引用不存在或 tracker 不可达时，初始化与模型恢复都会明确拒绝，
-不会选择任意已安装模型，也不会隐式创建 Scope。
+缺少项目配置时进入首次启动引导，由用户设置并最终确认；schema 无效、模型引用缺失或 tracker 不可达时，
+核验明确失败，不选择任意已安装模型或隐式创建 Scope。
 
 ### 前台 TUI 键位与分区
 

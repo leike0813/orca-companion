@@ -14,6 +14,8 @@ import type { CoordinatorModelConfiguration } from '../coordinator/model-config-
 import type { TranscriptReadingPort } from '../coordinator/history.js';
 import type { SubmissionStatus } from '../coordinator/submission-status.js';
 import type { UiInputStore } from './ui-input-store.js';
+import type { ProviderCatalog } from '../configuration/provider-catalog.js';
+import type { ProviderLibrary } from '../configuration/provider-library.js';
 
 /** 拒绝原因的封闭取值；界面按 code 判定，不解析文案。 */
 export const DEBUG_HARNESS_CODES = [
@@ -147,6 +149,13 @@ export type DebugSubmissionQuery = {
 export type DebugHarnessPort = {
   /** 列出该目录的会话与用户模型库里的模型；只读，不探测模型也不取得写者。 */
   readonly home: () => DebugHomeLoad;
+  /**
+   * 用户级 Provider library 与公共模型目录：调试配置模型用的是与普通启动同一份服务和
+   * CredentialStore，因此两个 profile 看到同一份连接、模型与凭据引用。
+   *
+   * 这里是应用层服务而不是 TUI 端口：调试界面与普通启动渲染同一个编辑器组件。
+   */
+  readonly providerLibrary: { readonly library: ProviderLibrary; readonly catalog: ProviderCatalog };
   /** 明确选择新建或继续：只有到这一步才核验能力、打开存储并取得单写者锁。 */
   readonly open: (input: DebugOpenInput) => Promise<DebugOpenResult>;
   readonly state: () => DebugStateLoad;

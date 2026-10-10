@@ -9,8 +9,9 @@ import { verifyProcess, readEvidence } from './process-verifier.mjs';
 import { combineReports, writeReport } from './report.mjs';
 
 const help = `ledger-lab（在本仓库调用；待测项目为独立仓库）
-  prepare [--profile main|cancel] [--root ABS_DIR] [--settings ABS_FILE]
-  configure [--settings ABS_FILE]
+  prepare [--profile main|cancel] [--root ABS_DIR]
+  list [--root ABS_DIR]
+  cleanup --run ROUND_DIR [--yes]（默认仅预览；保留记录与证据）
   open --run ROUND_DIR
   collect --repo PATH --scope ID --out DIR [--watch] [--interval-ms 2000] [--max-samples 1800]
   verify-result --repo PATH --version initial|revised|privacy --out FILE [--entry src/cli.mjs] [--line-ending lf|crlf]
@@ -19,8 +20,9 @@ const help = `ledger-lab（在本仓库调用；待测项目为独立仓库）
 验收命令也可使用 --run ROUND_DIR，自动解析本轮仓库、Scope 和外置路径；显式参数优先。
 退出码：0 通过/采集完成，1 断言失败，2 参数或文件错误，3 未覆盖/阻塞/证据不足。`;
 const definitions = {
-  prepare: { required: [], optional: ['profile', 'root', 'settings'] },
-  configure: { required: [], optional: ['settings'] },
+  prepare: { required: [], optional: ['profile', 'root'] },
+  list: { required: [], optional: ['root'] },
+  cleanup: { required: ['run'], optional: ['yes'] },
   open: { required: ['run'], optional: [] },
   collect: { required: ['repo', 'scope', 'out'], optional: ['watch', 'interval-ms', 'max-samples'] },
   'verify-result': { required: ['repo', 'version', 'out'], optional: ['entry', 'line-ending'] },
@@ -37,9 +39,9 @@ export function parseArguments(argv) {
     const token = args[i];
     if (!token.startsWith('--')) throw new Error('参数必须使用 --name value');
     const name = token.slice(2);
-    const acceptsRun = !['prepare', 'configure', 'open'].includes(command);
+    const acceptsRun = !['prepare', 'list', 'cleanup', 'open'].includes(command);
     if (![...definition.required, ...definition.optional, ...(acceptsRun ? ['run'] : [])].includes(name) || Object.hasOwn(options, name)) throw new Error('未知或重复参数');
-    if (name === 'watch') options[name] = true;
+    if (name === 'watch' || name === 'yes') options[name] = true;
     else {
       const value = args[++i];
       if (!value || value.startsWith('--')) throw new Error('参数缺少值');
@@ -66,18 +68,23 @@ export async function main(argv = process.argv.slice(2)) {
   const command = parsed.command;
   let options = parsed.options;
   if (command === 'help') { process.stdout.write(`${help}\n`); return 0; }
-  if (['prepare', 'configure', 'open'].includes(command)) {
-    const { prepareLab, configureLab, openLab } = await import('./setup.mjs');
+  if (command === 'list') {
+    const { listRuns } = await import('./run-record.mjs');
+    process.stdout.write(`${JSON.stringify(await listRuns(options.root))}\n`);
+    return 0;
+  }
+  if (['prepare', 'cleanup', 'open'].includes(command)) {
+    const { prepareLab, openLab } = await import('./setup.mjs');
     const controller = new globalThis.AbortController();
     const stop = () => controller.abort();
-    if (command === 'prepare') { process.on('SIGINT', stop); process.on('SIGTERM', stop); }
+    if (command !== 'open') { process.on('SIGINT', stop); process.on('SIGTERM', stop); }
     let result;
     try {
       result = command === 'prepare'
         ? await prepareLab(options, { signal: controller.signal, progress: (stage) => process.stderr.write(`ledger-lab: ${stage}\n`) })
-        : command === 'configure' ? await configureLab(options) : await openLab(options);
+        : command === 'cleanup' ? await (await import('./cleanup.mjs')).cleanupLab(options, { signal: controller.signal }) : await openLab(options);
     } finally { process.off('SIGINT', stop); process.off('SIGTERM', stop); }
-    process.stdout.write(`${JSON.stringify(command === 'configure' ? { kind: 'configured', revision: result.revision } : result)}\n`);
+    process.stdout.write(`${JSON.stringify(result)}\n`);
     return 0;
   }
   if (options.run) options = await resolveRunOptions(command, options);
@@ -92,7 +99,9 @@ export async function main(argv = process.argv.slice(2)) {
     if (options.run) {
       const { readRun, cleanEnvironment } = await import('./setup.mjs');
       const run = await readRun(options.run);
-      env = { ...cleanEnvironment(), PATH: `${join(run.directory, 'bin')}:${process.env.PATH ?? ''}`, GH_REPO: run.githubRepository };
+      env = { ...cleanEnvironment(), GH_REPO: run.schemaVersion === 1 ? run.githubRepository : run.github.nameWithOwner,
+        ...(run.schemaVersion === 1 ? { PATH: `${join(run.directory, 'bin')}:${process.env.PATH ?? ''}`, ORCA_CLI_COMMAND: run.orcaExecutable }
+          : run.orca ? { ORCA_CLI_COMMAND: run.orca.executable } : {}) };
     }
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const file = await open(join(directory, 'evidence.jsonl'), 'wx', 0o600);
@@ -148,12 +157,12 @@ export async function main(argv = process.argv.slice(2)) {
   return exitCode(report.status);
 }
 export async function resolveRunOptions(command, options) {
-  const { readRun, scopeForRun, bindOperatorFiles } = await import('./setup.mjs');
+  const { readRun, scopeForRun, verifyScopeForRun, bindOperatorFiles } = await import('./setup.mjs');
   const run = await readRun(options.run);
   const result = { repo: run.repositoryPath, profile: run.profile, ...options };
   const key = new Date().toISOString().replace(/[-:.TZ]/gu, '') + '-' + randomUUID().slice(0, 8);
   if (command === 'collect') {
-    result.scope ??= await scopeForRun(run);
+    result.scope = result.scope ? await verifyScopeForRun(run, result.scope) : await scopeForRun(run);
     await bindOperatorFiles(run, result.scope);
     result.out ??= join(run.directory, 'captures', key);
   } else if (command === 'verify-result') {
@@ -178,7 +187,7 @@ export async function resolveRunOptions(command, options) {
       result.process = join(run.directory, 'checks', processFile);
       if (!result.result && run.profile === 'main' && latest('result-')) result.result = join(run.directory, 'checks', latest('result-'));
     }
-    await bindOperatorFiles(run, await scopeForRun(run));
+    // Offline verification consumes retained evidence, not a live repository or Scope.
   }
   return result;
 }
@@ -186,7 +195,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   try { process.exitCode = await main(); }
   catch (error) {
     process.stderr.write(`${JSON.stringify({ code: 'LAB_INPUT_OR_IO_ERROR', message: error.message,
-      ...(typeof error.code === 'string' ? { causeCode: error.code } : {}) })}\n`);
+      ...(typeof error.code === 'string' ? { causeCode: error.code } : {}),
+      ...(error.result ? { result: error.result } : {}) })}\n`);
     process.exitCode = 2;
   }
 }

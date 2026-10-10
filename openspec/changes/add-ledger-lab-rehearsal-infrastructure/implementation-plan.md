@@ -8,6 +8,8 @@
 
 继续修改代码前，应核对 `git rev-parse HEAD`、`git diff --name-only`、前驱目录和实际调用接缝。若 HEAD 变化，应先解释新增 commit 与工作区差异；若需要改变冻结合同，返回设计，不通过局部特殊分支吸收。`openspec/config.yaml` 内旧「当前 change」叙述属于前驱背景，本 change 的显式前驱、用户模型选择和文件清单以本文件为准。
 
+`testing/ledger-lab-rehearsal` 的行为合同已于 2026-10-09 移交 active `simplify-ledger-lab-lifecycle`，该 delta 不再存放于本 change。本计划现在只覆盖仍属本 change 的短入口、`--run` 默认路径、外置证据边界与未完成的真实业务验收；准备链、记录 schema、仓库内安装和回收以新 change 的 specs 与 D-01–07 为准。下文引用的该 capability Requirement 名称只作历史索引，共享的 `artifacts/ledger-lab`、`package.json` 与规划材料由两个 change 串行编辑。
+
 ## 2. 复用与接缝
 
 | IP-ID | 现有或前驱文件与符号 | 复用方式 | 禁止复制的事实 |
@@ -87,11 +89,11 @@ git diff --check
 
 保护：`references/orca`、lockfile、现有 contract/cases/参考图、collector/verifiers/report、领域/应用/storage schemas、Home/TUI 原型、主规格与其他 change 工件。需要新增依赖、改动权限/公共 DTO、迁移 schema、改变 canonical/unknown/密钥边界或扩大上述文件范围时，先更新设计并明确范围，不借实测框架绕过执行授权。
 
-## 8. 验收 Agent 授权与限定审计
+## 8. 验收授权与限定
 
-验收范围限定本 change 的文件与 Scenario。独立审计检查：外置路径/身份与 shell quoting；settings CAS/secret 生命周期；GitHub/Orca 副作用顺序、超时/取消/unknown 保留；doctor 与业务授权的隔离；原生目录来源提取的回归；`--run` 的证据归属及模板保留。读实际代码和命令，不静态断言文案。范围内修复使用同一 allowlist，受影响测试重跑；不可接受变更返回设计。
+验收范围限定本 change 的文件与 Scenario，由用户直接执行，不设独立审计 Agent。检查项为：外置路径/身份与 shell quoting；settings CAS/secret 生命周期；GitHub/Orca 副作用顺序、超时/取消/unknown 保留；doctor 与业务授权的隔离；原生目录来源提取的回归；`--run` 的证据归属及模板保留。读实际代码和命令，不静态断言文案。范围内修复使用同一 allowlist，受影响测试重跑；不可接受变更返回设计。
 
-固定最终实现 checkpoint 和完成所有任务后才创建 verification.md；输入 HEAD、最终 HEAD、每项证据及审计结果必须可核验。当前本次只补录，不提交、sync 主规格或 archive。
+完成检查后由实施者按用户要求创建 verification.md，写明实现基线与每项证据，无需独立验证 Agent。当前本次只补录，不提交、sync 主规格或 archive。
 
 ## 9. 补录时的实施记录
 
@@ -99,4 +101,4 @@ git diff --check
 
 同会话曾检查真实 Git 初始化/首次提交/credential helper/干净 baseline、启动器、重开 Git 身份，以及 PTY 隐藏输入、后续输入和 Ctrl+C 恢复。这些使用 GitHub/Orca mutation 与模型 doctor 替身，不构成真实外部验收；临时 smoke 现场不是长期证据来源。
 
-未完成：真实 GitHub 创建/推送、Orca 终端采用、真实 Coordinator/Worker doctor 与初始化后的采集衔接；固定最终实现 checkpoint 的独立审计及最终 verification。用户已说明没有可用配置，首次选择留给向导。tasks 中只回填已有实现与工程检查，真实验收和最终审计保持未完成。
+本段记录的是2026-10-08的验收缺口。当前未完成项由 tasks 5.2/5.3 追踪：真实 GitHub/Orca 和生产 TUI 配置、显式 doctor、初始化后的采集及最终 verification。准备链与设置入口以 `simplify-ledger-lab-lifecycle` 为准；用户明确免除独立验证 Agent，已有工程检查不替代未执行的真实实操。

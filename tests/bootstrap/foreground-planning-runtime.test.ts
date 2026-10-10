@@ -488,6 +488,7 @@ test.each(['pause', 'cancel', 'close', 'fence'] as const)('真实流式宿主的
 
 test('配置缺失与 detached HEAD 都是可诊断拒绝，且不建立任何 Session', async () => {
   const withoutConfig = await startHarness({ withConfig: false });
+  expect(await withoutConfig.host.ports.modelSettings!.load()).toMatchObject({ kind: 'failed', code: 'config_unavailable' });
 
   const home = await withoutConfig.host.ports.scopeSetup.resolveHome();
 
@@ -541,6 +542,11 @@ test('向导创建 Scope 后 Home 按精确绑定恢复，且只读查询不产�
   const harness = await startHarness();
 
   expect(await harness.host.ports.scopeSetup.resolveHome()).toEqual({ kind: 'wizard' });
+
+  const environment = await harness.host.ports.scopeSetup.verifyEnvironment!();
+  expect(environment.map(check => check.id)).toEqual(['repository', 'orca', 'identity']);
+  expect(environment.every(check => check.ok)).toBe(true);
+  expect(harness.requests.generations).toBe(0);
 
   const checks = await harness.host.ports.scopeSetup.verify();
   expect(checks.every((check) => check.ok)).toBe(true);

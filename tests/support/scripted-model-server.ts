@@ -10,6 +10,13 @@ export async function scriptedModelServer() {
   const server = createServer((request, response) => { void (async () => {
     totalRequests += 1;
     if (totalRequests > 100) { response.writeHead(400).end(); return; }
+    // 模型发现是无请求体的 GET /models：空 body 不是 JSON，夹具直接回答唯一的候选模型，
+    // 让生产界面的「查询此连接的模型…」有真实响应可解析。它不是对话流量，不进 requests。
+    if (request.method === 'GET' && request.url?.endsWith('/models') === true) {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ object: 'list', data: [{ id: 'fixture-model', object: 'model', owned_by: 'fixture' }] }));
+      return;
+    }
     let body = '';
     for await (const chunk of request) {
       body += String(chunk);

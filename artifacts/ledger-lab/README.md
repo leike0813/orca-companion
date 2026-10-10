@@ -10,26 +10,31 @@
 
 验收关注过程能力：跨 lane 并行、每条 lane 至多一个 Worker、局部阻塞下其他 lane 继续推进、局部汇合与最终汇合、规格修订、原子图补丁、暂停与恢复、退出重入、Worker 恢复、预算不重置、重规划与取消。
 
-准备命令只创建运行环境；规划、批准 Scope 与需求、故障注入、业务操作和结论评估仍按剧本由操作者完成。工具不生成业务骨架、执行图或验收答案，也不自动循环派发。准备阶段的 `doctor` 会产生少量模型费用。
+准备命令创建私有仓库、`main` 主 checkout、仓库内安装的 ocp，并登记 Orca、打开原生项目终端；模型配置、Scope 最终确认、需求批准、故障注入、业务操作和结论评估仍由操作者完成。工具不生成业务骨架、执行图或验收答案，也不自动循环派发。准备不请求模型；启动/应用核验与显式 `doctor` 可能产生模型费用。
 
-## 创建与重开 round
+## 创建、查看与回收 round
 
-- `pnpm lab:new` 首次运行进入终端向导：先核验用户级 Provider Library 与凭据库，再自动更新公共 Provider/模型目录。设置保存在 XDG 配置目录 `orca-companion/ledger-lab.json`；已有设置时直接沿用，不再进入向导，也不更新公共目录。
+- `pnpm lab:new` 打包当前构建，创建外置 round、私有 GitHub 仓库与 `main` 主 checkout，安装 tarball、登记 Orca、设置 `origin/main` 并打开原生项目终端；它不配置模型、不创建 Route Map、不运行 `doctor` 或模型探针。
 - `pnpm lab:new --profile cancel` 建立独立的 `cancel` round。
-- `pnpm lab configure` 重新配置，做同样的核验与目录更新（先运行 `pnpm build`，或先运行过 `pnpm lab:new`）。
-- `pnpm lab open --run /abs/round` 核对 round 原身份后重开；不会推进流程。
+- `pnpm lab list [--root /abs/dir]` 列出该 runs 根目录下的 round 与准备、回收状态；不会自动选择最新一轮执行操作。
+- `pnpm lab cleanup --run /abs/round` 只预览本轮删除目标与保留项；加 `--yes` 才实际删除。
+- `pnpm lab open --run /abs/round` 核对原身份并聚焦记录的终端，仅确定已退出时替换；旧 schema 2 未登记现场可显式补登记，schema 1 保留原有入口。重开不推进业务或启动模型。
 - `collect`、`verify-result`、`verify-process`、`report` 均可接收 `--run /abs/round`。原有显式参数仍可使用。
-- `--root` 指定绝对路径的外置 runs 根目录，`--settings` 指定外置 JSON 设置文件。
+- `--root` 指定绝对路径的外置 runs 根目录。
 
-默认状态根目录为 `$XDG_STATE_HOME/orca-companion/ledger-lab`，未设置时为 `~/.local/state/orca-companion/ledger-lab`。每个 round 包含 `repo/`、`bin/`、`operator/`、`captures/`、`checks/` 和 `run.json`。
+默认状态根目录为 `$XDG_STATE_HOME/orca-companion/ledger-lab`，未设置时为 `~/.local/state/orca-companion/ledger-lab`。每个新 round 包含 `repo/`、`operator/`、`captures/`、`checks/`、`packages/` 和 `run.json`；`packages/` 保留本轮安装用的 tarball。
 
-每轮创建私有 GitHub 仓库和空 Route Map，在本地 `main` 首次提交并推送，向 Orca 注册 canonical 工作区。操作者从终端运行 `ocp`，并亲自创建 Scope、提交需求和批准规划/授权。
+每轮在本地 `main` 首次提交并推送，再经公开 Orca 命令登记并打开项目终端。该终端保留原生 shell，只补本轮 `node_modules/.bin` PATH 和明确 `ORCA_CLI_COMMAND`；直接输入 `ocp` 或 `ocp --debug`，不需要全局安装。
 
-向导分别配置 Coordinator，以及 Planner、Implementation、Validator、Finalizer、Recovery Utility 五个 Worker 角色。Worker 从各自 harness 的原生目录选择模型与 effort。Coordinator 只使用 API Key：复用用户级连接，或在向导中隐蔽输入新密钥；密钥只写入用户级 CredentialStore。
+普通启动自动核验 repository、Orca 与身份，每项显示真实结果和当前 spinner，失败后按 Enter 显式重试。首次配置按环境、Coordinator、Route Map、最终确认四步进行：共享模型编辑器支持复用连接或新增服务/协议、地址、隐藏 Key 和模型；Route Map 可创建只有固定章节的空地图，也可查看最多 20 个候选并按编号选择。确认后保存 schema 5、核验模型与 tracker，再初始化 Scope/cycle/session。规划与 debug 不要求 Worker Profiles；五个生产角色的 harness、原生模型与 effort 在执行授权前配置并按 Manifest 核验。
 
-公共目录更新失败时继续使用已有缓存或随包目录，不阻断配置。目录可用不等于模型能力可用，能力仍由准备阶段的 `doctor` 核验。用户级 Provider/凭据库目录要求 `0700`、文件要求 `0600`；既有目录不会被自动改权限，Provider 库权限不安全时会给出路径、实际权限与修复命令。
+`ocp --debug` 不要求 Orca、项目配置或 Route Map，空用户库也可经同一编辑器配置模型；新建或继续仍须用户明确选择，打开前核验模型能力。`open --run` 核验原仓库与绑定，聚焦原终端，仅确定已退出时替换；旧 schema 2 未登记现场可在显式 open 时补登记，不启动模型或业务。
 
-运行前需配置 Git 作者身份、登录 `gh` 并启动 Orca；所选 harness 也需在本机完成认证。准备完成后，Orca 会打开该轮终端，在其中运行 `ocp`。初始化 Scope 后可采集并填写外置映射与观察：
+Coordinator 只使用 API Key：复用用户级连接，或在 TUI 中隐蔽输入新密钥；密钥只写入用户级 CredentialStore，项目配置只保存不透明引用。用户级 Provider/凭据库目录要求 `0700`、文件要求 `0600`；既有目录不会被自动改权限，权限不安全时会给出路径、实际权限与修复命令。
+
+准备前需配置 Git 作者身份、登录 `gh` 并启动可达的本机 Orca；Worker harness 使用自己的真实用户认证环境。准备成功表示仓库、安装、登记与终端完成，不表示模型能力或业务验收通过。启动/应用会核验模型能力；需留存诊断报告时显式运行 `ocp doctor`，这些核验可能产生模型费用，准备本身不请求模型。
+
+初始化 Scope 后可采集并填写外置映射与观察：
 
 ```sh
 pnpm lab collect --run /abs/round --watch
@@ -40,7 +45,9 @@ pnpm lab report --run /abs/round
 
 首次采集会把空的 `operator/mapping.json`、`operator/observations.json` 绑定到实际 Scope；请按旁边的示例填写，空模板不会产生通过结论。核验默认读取本轮最新采集和报告，其他轮次不会混用。
 
-准备失败时保留 round 供检查，不自动重试、清理或回滚；遇到结果不明时不得换身份重做。`open` 只校验已有 round 身份，不继续任何准备或业务步骤。
+准备失败时保留 round 供检查，不自动重试、清理或回滚；遇到结果不明时不得换身份重做。`open` 核验原 round 并聚焦原终端，确定退出时替换，未登记的旧 schema 2 可显式补登记；不重跑仓库创建、安装或业务步骤。
+
+回收前先停止本轮启动的 ocp 与 Worker，处理/释放相关 Worker、关闭相关终端，再执行 `orca project setup-delete --setup <repoId>` 解除登记。`cleanup` 不结束进程、不注销项目、不删除整个 round：远程仓库与本地 checkout 各自记录结果，仓库外的 `run.json`、`packages/`、`operator/`、`captures/`、`checks/` 与外置报告都保留。旧 schema 1 round 仍可查看并按原入口使用，但没有本地目录身份与远程不可变 ID，`cleanup` 会拒绝删除并给出原路径与远程名称，需人工核对后手工处理。
 
 ## 文件
 
@@ -58,7 +65,7 @@ pnpm lab report --run /abs/round
 
 | 模块 | 用途 |
 | --- | --- |
-| `lab.mjs` | 命令行入口：round 准备/重开、`collect`、`verify-result`、`verify-process`、`report`。 |
+| `lab.mjs` | 命令行入口：round 准备/列表/回收/重开、`collect`、`verify-result`、`verify-process`、`report`。 |
 | `collector.mjs` | 只读采集器，写出 `evidence.jsonl`。 |
 | `process-verifier.mjs` | 过程核验，产出 `process.json`。 |
 | `result-verifier.mjs` | 成品核验，产出 `result.json`。 |

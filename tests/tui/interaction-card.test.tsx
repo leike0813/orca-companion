@@ -57,7 +57,6 @@ function noopActions(): WorkspaceActions {
     enterAnswer: vi.fn(),
     runCommand: vi.fn(),
     openModelRole: vi.fn(),
-    saveModelSettings: vi.fn(),
     submitModelRole: vi.fn(),
     confirmHandoff: vi.fn(),
     cancelHandoff: vi.fn(),

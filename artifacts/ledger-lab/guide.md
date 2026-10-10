@@ -4,11 +4,13 @@
 
 ## 0. 前置条件
 
-- 一个已通过 `pnpm lab:new` 准备好的 round；首次准备会运行 `doctor`，因此产生少量模型费用。
-- 已按项目文档完成 Companion 的安装、Provider 与模型配置以及 Orca 能力核验，`doctor` 通过。
+- 准备前配置 Git 作者身份、登录 `gh` 并启动本机 Orca。`pnpm lab:new` 创建外置 round、私有 GitHub 仓库与 `main` 主 checkout，安装打包 ocp，登记 Orca、设置 `origin/main` 并打开原生项目终端；不配置模型、不创建 Route Map、不运行 `doctor` 或模型探针，准备本身不产生模型费用。
+- 在已打开的项目终端直接运行 `ocp`，或先运行 `ocp --debug` 调试模型；终端仅补本轮 bin PATH 与明确 `ORCA_CLI_COMMAND`。普通启动每次自动核验 repository、Orca 与身份，以逐项结果和 spinner 显示真实进度；失败后处理问题，再按 Enter 显式重试。
+- 首次启动按环境、Coordinator 模型、Route Map、最终确认四步完成。共享编辑器可复用连接或保存服务/协议、地址、隐藏 Key 和模型；Route Map 步骤可创建空地图或按编号选择既有 issue，Ctrl+L 查看最多 20 个候选。按 Enter 最终确认后才保存 schema 5、核验模型与 tracker，再初始化 Scope/cycle/session。准备成功不表示能力或业务通过；Worker Profiles 不作为规划前提，在执行授权前配置五个角色并按完整 Manifest 审阅。
+- debug 不要求 Orca、项目配置、Route Map 或 Worker，空用户库可经同一模型编辑器完成配置，明确新建或继续后才核验并打开会话。需要留存能力证据时显式运行 `ocp doctor` 并保存报告；启动核验及 doctor 可能产生模型费用。
 - 一个仓库外的输出目录，例如 `/abs/out`，用来存放采集证据与报告。
 - 建议把并发上限设为 3、每 lane 上限 1、active Work Package 上限 8（取值见 `contract.json` 的 `executionLimits`）；当前产品的实际并发行为见 `capabilities.md`。
-- 用户级 Provider/凭据库所在的 `orca-companion` 目录要求 `0700`，库文件要求 `0600`。工具不会修改既有目录；Provider 库权限不安全时会给出路径、实际权限与修复命令，例如：
+- 用户级 Provider/凭据库所在的 `orca-companion` 目录要求 `0700`，库文件要求 `0600`。产品不会自动修改既有目录；权限不安全时会给出路径、实际权限与修复命令，例如：
 
   ```sh
   chmod 700 "${XDG_CONFIG_HOME:-$HOME/.config}/orca-companion"
@@ -25,14 +27,16 @@ node artifacts/ledger-lab/lab.mjs verify-process --evidence /abs/out/evidence.js
 node artifacts/ledger-lab/lab.mjs report --process /abs/process.json --observations /abs/obs.json --out /abs/report-dir [--result /abs/result.json]   # main 必需 --result
 ```
 
-所有采集与核验命令可附 `--run /abs/round`；round 根目录默认为 `$XDG_STATE_HOME/orca-companion/ledger-lab`，否则 `~/.local/state/orca-companion/ledger-lab`。`--root` 可指定绝对外置 runs 根目录，`--settings` 可指定外置 JSON 设置。通过 `pnpm lab open --run /abs/round` 重开时只核验原身份，不推进流程；`pnpm lab configure` 修改设置前需已有构建产物或先运行 `pnpm lab:new`，它会先核验用户级 Provider Library 与凭据库，再自动更新公共 Provider/模型目录，更新失败继续使用已有缓存或随包目录。
+所有采集与核验命令可附 `--run /abs/round`；round 根目录默认为 `$XDG_STATE_HOME/orca-companion/ledger-lab`，否则 `~/.local/state/orca-companion/ledger-lab`。`--root` 可指定绝对外置 runs 根目录，`pnpm lab list [--root /abs/dir]` 列出该根目录下的 round 与准备、回收状态，不会自动选择最新一轮执行操作。`pnpm lab open --run /abs/round` 核验原 Git/安装/Orca 身份并聚焦记录的终端，仅明确 exited 才替换；状态无法核验时停止，不重复创建。旧 schema 2 未登记现场可在显式 open 时补登记；schema 1 保留原入口。重开不推进业务或自动恢复模型。回收见第 9 节。
+
+Route Map 创建前会按当前完整 branch ref 保存稳定操作记录，并在 issue 正文附唯一标记。创建结果不明或成功后记录失败时保留原身份，只读对账，不再次创建；无法确认时按原记录核对 tracker，再在引导中选择既有 issue。退出引导不会撤销已经保存的用户连接或已创建的地图。
 
 - `collect`：只读采集，在 `--out` 目录内新建 `evidence.jsonl`。`--watch` 持续采集，`--interval-ms` 默认 2000 毫秒（范围 200 到 60000）；`--max-samples` 是采样上限，默认 1800（范围 1 到 10000），达到上限即停止。
 - `verify-result`：从仓库外运行固定 CLI，用外部输入核对实际输出，`--version` 选择初始、修订或隐私版的预期。`--entry` 默认取 `contract.json` 的 `entry`，`--line-ending` 默认 `lf`。
 - `verify-process`：读取证据、映射与人工观察，按 `main` 或 `cancel` 档案核验过程断言，输出 `process.json`。
 - `report`：把过程结论、结果结论和人工观察合并成 JSON 与 Markdown 报告。`--out` 必须是新目录，已存在则拒绝覆盖。`--result` 在 `main` 档案下必需，`cancel` 档案可省略；缺 `--result` 时不生成成品报告，也不伪造。
 
-命令帮助还列出环境准备、配置和重开入口。版本规则（别名、脱敏、CSV 行序）、默认值、行尾与输出语义由 `contract.json` 的 `projections`、`defaults`、`lineEndings`、`limits`、`outputSemantics` 拥有；本文只引用，具体取值以合同为准。
+命令帮助还列出环境准备、列表、回收和重开入口。版本规则（别名、脱敏、CSV 行序）、默认值、行尾与输出语义由 `contract.json` 的 `projections`、`defaults`、`lineEndings`、`limits`、`outputSemantics` 拥有；本文只引用，具体取值以合同为准。
 
 ### 1.1 证据样本（`evidence.jsonl` 每行一条）
 
@@ -367,3 +371,25 @@ C1 与 A 的修订最容易错过，因为工作包可能很快进入 Accepted�
 - `INCONCLUSIVE`：证据不足或互相矛盾，既不能证明也不能证伪。
 
 功能正确性、过程规则、覆盖率、规划结构与人工体验分开报告；未覆盖与不确定不合并成通过。用量只统计精确绑定的可信 usage，不估算缺失的 token 或费用。
+
+## 9. 回收 round
+
+回收只在准备或实操之后由你显式发起，命令不会出现在任何自动步骤里。
+
+```sh
+pnpm lab list [--root /abs/dir]
+pnpm lab cleanup --run /abs/round
+pnpm lab cleanup --run /abs/round --yes
+```
+
+不带 `--yes` 的 `cleanup` 只读预览：列出本轮要删的私有远程仓库和本地主 checkout、它们的身份、前置条件和保留项，不删除任何资源，也不改写回收进度。确认后再用同一条命令加 `--yes` 执行；执行时会重新核验记录中的目标，预检发现同名但 ID 不同的远程仓库、同路径被替换的目录时会拒绝。仓库里的新提交和未提交文件本来就属于整轮回收范围，不需要回到初始 HEAD。
+
+执行前先由你处理运行资源：停止本轮启动的 ocp 与 Worker，处理或释放相关 Worker，关闭相关终端，再执行 `orca project setup-delete --setup <repoId>` 解除登记。仍检测到活跃运行或未解除的登记时，回收会拒绝并说明具体资源；它不会替你结束进程、注销项目或删除整个 round。
+
+删除顺序是先远程后本地，两项结果分别记在原 `run.json` 里。任何一项拒绝、失败或结果不明都会保留现场与结构化原因，不在同一次调用里自动重试；再次执行会先核对原目标再决定是否继续。远程结果不明时先按 `run.json` 里的 `nameWithOwner` 和记录来源人工核验，不要假定已经删除。
+
+远程删除先核验记录的仓库 ID、名称和 URL，再通过 GitHub REST 按名称删除。回收期间请勿重命名、转移仓库或替换同名仓库：GitHub 的删除接口不能把预检得到的 ID 作为原子条件，预检后的名称变化仍可能导致误删。
+
+回收保留 round 目录本身：`run.json`、`packages/` 里的安装包、`operator/` 材料、`captures/`、`checks/` 和外置报告都留着，GitHub issue 随远程仓库一起删除，用户级模型库、凭据与 debug 历史不动。基于这些外置文件的 `verify-process` 与 `report` 在回收后仍可运行；需要 live 仓库的 `collect` 和 `verify-result` 会明确报告不可用，不会重建现场或伪造通过。
+
+schema 1 的旧 round 没有本地目录身份和远程不可变 ID，仍可查看并按原入口使用；`cleanup` 会拒绝删除并给出原路径与远程名称，需要你自己核对后手工删除。工具不会把旧记录升级成新格式，也不会因为名称相同就认为归属成立。

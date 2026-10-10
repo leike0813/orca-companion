@@ -23,9 +23,12 @@ context: |
   以已归档的 m2-repair-read-only-worker-sandbox 为直接前驱；它可在执行 TUI
   未归档时 apply、验证和 archive，但必须先核验共享执行接缝并串行编辑共享文件。
 
-  当前实施 change 为 stabilize-agent-harness-core，直接前驱 rework-coordinator-provider-configuration
-  已归档（2026-10-08），规划 HEAD c988b89。它是 active add-ledger-lab-rehearsal-infrastructure 的核心
-  解阻塞项，允许 lab 未归档时实施；共享文件串行编辑，lab 剩余真实业务验收保持未完成。
+  stabilize-agent-harness-core 已于 2026-10-09 归档。当前实施 change 为
+  simplify-ledger-lab-lifecycle，直接前驱 stabilize-agent-harness-core 已归档，规划 HEAD a29704b。
+  它重新规划 active add-ledger-lab-rehearsal-infrastructure 的准备流程，并允许 lab 保持 active：
+  `testing/ledger-lab-rehearsal` 的同路径 delta 已移交给本 change，lab 只保留
+  `tui/scope-initialization` delta 与未完成的真实业务验收。共享文件串行编辑，两个 change 不同时写
+  `artifacts/ledger-lab`、`package.json` 与同路径规划材料。
   Coordinator 配置采用内置协议与 API Key、用户级连接/模型库，项目 schema 5；Worker 保持
   modelSelection 与原生认证，Execution Authorization Manifest v4，旧版本明确拒绝且不迁移。
   后续新隔离任务显式使用用户批准的
@@ -57,7 +60,7 @@ rules:
 operations:
   apply:
     guidance:
-      - 默认只实施依赖序列中第一个尚未归档的 change；既定 M2 解阻塞项及 stabilize-agent-harness-core 可以作为各自前台验收 change 的解阻塞项提前实施，前提是直接已归档前驱和共享接缝已核验，且共享文件串行编辑。
+      - 默认只实施依赖序列中第一个尚未归档的 change；既定 M2 解阻塞项及 simplify-ledger-lab-lifecycle 可以作为各自前台验收 change 的解阻塞项提前实施，前提是直接已归档前驱和共享接缝已核验，且共享文件串行编辑。
       - 开始编辑前执行 implementation-plan 的基线和前驱接缝检查；漂移时停止并回到规划。
       - 不在 apply 阶段创建 verification.md。
   archive:

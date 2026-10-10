@@ -1,4 +1,4 @@
-本清单补录已获授权的实现；工程完成项在核对当前代码与证据后回填。真实验收与最终审计单列，准备框架不承担完整业务剧本的自动执行。
+本清单补录已获授权的实现；工程完成项在核对当前代码与证据后回填。准备链合同已于 2026-10-09 移交 active `simplify-ledger-lab-lifecycle`，本 change 剩余范围是短入口、`--run` 默认路径与外置证据边界；真实验收单列，准备框架不承担完整业务剧本的自动执行，未运行项保持未勾选。
 
 ## 1. 前驱接缝与可复用设置
 
@@ -23,5 +23,5 @@
 ## 5. 工程验证与最终验收
 
 - [x] 5.1 完成 T1/T2/T3 并记录工程证据（IP-05）；执行 implementation-plan 第 6 节的 Vitest、typecheck、lint、build、diff 检查，写入 evidence/checks.json，标明 mock 与未验证边界。
-- [ ] 5.2 使用用户在向导选择的可用模型，在独立 main/cancel 轮次完成真实框架验收（IP-02–05）；运行 `pnpm lab:new`、`pnpm lab:new --profile cancel`、`pnpm lab open --run /abs/round`，手动进入 Home 初始化后运行 `pnpm lab collect --run /abs/round`，保存去秘密的 GitHub/Orca/doctor/采集证据。当前没有配置，此项未运行。
-- [ ] 5.3 在获准固定最终实现 checkpoint 后完成 implementation-plan 第 8 节的独立限定审计并移交最终验收（IP-05）；核验 `git rev-parse HEAD`、Requirement/Scenario 证据矩阵和审计结论，缺证据不勾选。全项完成后才进入 verification artifact。
+- [ ] 5.2 使用用户在 TUI 模型设置中选择的可用模型，在独立 main/cancel 轮次完成真实框架验收（IP-02–05）；运行 `pnpm lab:new`、`pnpm lab:new --profile cancel`、`pnpm lab open --run /abs/round`，手工登记并从 Home 初始化 Scope 后运行 `pnpm lab collect --run /abs/round`，保存去秘密的 GitHub/Orca/显式 doctor/采集证据。当前没有配置，此项未运行。
+- [ ] 5.3 在获准固定最终实现 checkpoint 后，由用户按 implementation-plan 第 8 节完成限定验收并创建 verification.md（IP-05）；核验 `git rev-parse HEAD`、Requirement/Scenario 证据与真实业务验收边界，缺证据不勾选。当前未运行。

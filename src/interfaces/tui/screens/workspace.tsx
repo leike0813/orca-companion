@@ -64,7 +64,6 @@ export type WorkspaceActions = {
   /** 进入某个角色的候选菜单；不可用时由容器显示宿主给出的原因。 */
   readonly openModelRole: () => void;
   /** 保存当前内存编辑；只追加不可变记录，不代表应用。 */
-  readonly saveModelSettings: () => void;
   /** 提交候选菜单的当前动作：0 返回，1 应用选择。 */
   readonly submitModelRole: (action: number) => void;
   readonly confirmPending: () => void;

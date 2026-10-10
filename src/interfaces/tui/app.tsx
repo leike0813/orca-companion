@@ -10,6 +10,7 @@
 
 import { Box, Text, useInput, usePaste, useWindowSize, useStdin, type Key } from 'ink';
 import { ThemeProvider } from '@inkjs/ui';
+import { StartupOnboarding } from './screens/startup-onboarding.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { resolveGlobalAction } from './input/keymap.js';
@@ -25,7 +26,7 @@ import {
   workerManualSelection,
 } from './components/model-picker.js';
 import { CommandInvocations, type CommandOutcome, type MutationOutcome } from './command-invocations.js';
-import { PROVIDER_PROTOCOLS, WORKER_HARNESS_IDS, type ProviderProtocol, type WorkerHarnessId, type WorkerModelSelection } from '../../domain/model-configuration.js';
+import { WORKER_HARNESS_IDS, type WorkerHarnessId, type WorkerModelSelection } from '../../domain/model-configuration.js';
 import type { ControllerPlanningHandoffView, ControllerHandoffView } from '../../application/controller-service.js';
 import type { ModelSettingsApplyInput } from './ports.js';
 import type { CommandResultRef } from '../../application/tui/command-result.js';
@@ -72,7 +73,6 @@ import {
   type BasisOrigin,
   type BasisState,
   type ModelRoleMenuState,
-  type ModelSettingsEdit,
   type OverlayKind,
   type PendingConfirmation,
   type TuiAction,
@@ -80,7 +80,7 @@ import {
   type AnswerReturnState,
 } from './state.js';
 import { Home } from './screens/home.js';
-import { ModelSettingsEditor } from './components/model-settings-editor.js';
+import { ProviderLibraryEditor } from './components/provider-library-editor.js';
 import { Wizard, allChecksPassed } from './screens/wizard.js';
 import { Workspace, workspaceLayout, type WorkspaceActions } from './screens/workspace.js';
 import { COMMAND_IDS, COMMAND_METADATA, commandReason, HELP_LINES, slashCandidates, parseSlashInput, type CommandId } from './components/command-palette.js';
@@ -350,7 +350,10 @@ function inputManagerEntriesOf(
 }
 
 export function TuiApp(props: TuiAppProps) {
-  return <ThemeProvider theme={tuiTheme}><TuiAppContent {...props} /></ThemeProvider>;
+  const [startup, setStartup] = useState<{ scopeId: string | null } | null>(null);
+  return <ThemeProvider theme={tuiTheme}>{props.ports.scopeSetup.verifyEnvironment === undefined || startup !== null
+    ? <TuiAppContent {...props} initialScopeId={startup?.scopeId ?? props.initialScopeId} />
+    : <StartupOnboarding ports={props.ports} width={props.terminalWidth} onReady={scopeId => setStartup({ scopeId })} onExit={props.onExit} />}</ThemeProvider>;
 }
 
 type HistoryContext = {
@@ -453,6 +456,9 @@ function TuiAppContent(props: TuiAppProps) {
    * 用户新输入的 key 另存在 `modelSettingsEdit.secret`，只在内存中。
    */
   const modelSettingsSnapshot = useRef<ModelSettingsSnapshotView | null>(null);
+  const [providerLibrary, updateProviderLibrary] = useState<{ origin: 'home' | 'workspace'; snapshot: ModelSettingsSnapshotView | null } | null>(null);
+  const providerLibraryRef = useRef(providerLibrary);
+  const setProviderLibrary = (value: typeof providerLibrary) => { providerLibraryRef.current = value; updateProviderLibrary(value); };
   /**
    * 模型弹窗的调用代次。
    *
@@ -467,7 +473,6 @@ function TuiAppContent(props: TuiAppProps) {
    * 迟到成功不能抹掉这些后续输入。两个闸门保证同一次编辑不会并发提交两次，也就不会重复追加记录。
    */
   const modelEditVersion = useRef(0);
-  const modelSaveInFlight = useRef(false);
   const modelApplyInFlight = useRef(false);
   /**
    * Worker 原生目录查询的代次与在途请求。
@@ -477,8 +482,6 @@ function TuiAppContent(props: TuiAppProps) {
    */
   const modelWorkerQuery = useRef<AbortController | null>(null);
   const modelWorkerGeneration = useRef(0);
-  const providerQuery = useRef<AbortController | null>(null);
-  const providerGeneration = useRef(0);
   const [planningReview, setPlanningReview] = useState<ControllerPlanningHandoffView | null>(null);
   const [executionReview, setExecutionReview] = useState<ControllerHandoffView | null>(null);
   const executionReviewRef = useRef<CommandResultRef | null>(null);
@@ -2524,206 +2527,64 @@ function TuiAppContent(props: TuiAppProps) {
     });
     openModelOverlay('model-role-menu', candidate?.candidateRef ?? null);
   };
-  const discoverProviderModels = async (edit: ModelSettingsEdit, invocation: number) => {
-    const catalog = modelSettingsPort?.catalog;
-    const connection = edit.connections.find((entry) => entry.connectionRef === edit.connectionRef);
-    if (catalog === undefined || connection === undefined) return;
-    providerQuery.current?.abort();
-    const controller = new AbortController();
-    providerQuery.current = controller;
-    const generation = ++providerGeneration.current;
-    const editVersion = modelEditVersion.current;
-    try {
-      const result = await catalog.discover(connection, { signal: controller.signal });
-    const current = stateRef.current.modelSettingsEdit;
-      if (generation !== providerGeneration.current || invocation !== modelInvocation.current || current === null || current.connectionRef !== connection.connectionRef || modelEditVersion.current !== editVersion) return;
-      const remains = result.models.some((item) => item.id === current.selectedModelId);
-      dispatch({ kind: 'model-settings-edit', edit: { ...current, catalogResult: result, selectedIndex: remains ? current.selectedIndex : -1, selectedModelId: remains ? current.selectedModelId : null } });
-    } catch {
-      if (generation === providerGeneration.current && invocation === modelInvocation.current && stateRef.current.modelSettingsEdit?.connectionRef === connection.connectionRef && modelEditVersion.current === editVersion) {
-        dispatch({ kind: 'model-settings-notice', notice: '! catalog_unavailable: 保留当前模型候选，可手动输入 exact ID' });
-      }
-    }
-  };
-  const editProviderField = (edit: ModelSettingsEdit, input: string, key: Key): ModelSettingsEdit => {
-    const field = edit.stage === 'connections' || edit.stage === 'preset' || edit.stage === 'models' ? 'query' : edit.field;
-    const value = field === 'secret' ? edit.secret
-      : field === 'label' ? edit.label
-        : field === 'baseUrl' ? edit.baseUrl
-          : edit.stage === 'project-init' ? edit.routeMapIssueNumber : edit.query;
-    const next = editComposer(textDraft(value), input, key).text.replace(/[\r\n]/gu, '');
-    if (next === value) return edit;
-    if (field === 'secret') return { ...edit, secret: next };
-    if (field === 'label') return { ...edit, label: next };
-    if (field === 'baseUrl') return { ...edit, baseUrl: next };
-    if (edit.stage === 'project-init') return { ...edit, routeMapIssueNumber: next };
-    return { ...edit, query: next, selectedIndex: -1, selectedModelId: null };
-  };
   /**
-   * 载入非秘密快照并打开编辑器。
+   * 打开共享 Provider library 编辑器。
    *
-   * 载入结果绑定本次调用代次：overlay 已关闭或已重新打开时，迟到结果直接丢弃，不会把上一个角色的
-   * 字段写进当前弹窗。
+   * 字段、目录发现、凭据与错误提示都由 `ProviderLibraryEditor` 自己拥有；容器只决定这次保存的去向：
+   * Home 只落用户库，workspace 才按打开时读到的项目 revision 做 CAS 写入，绝不自动应用。
    */
-  const openModelSettingsEditor = async (role?: ModelRoleView) => {
+  const openModelSettingsEditor = async () => {
+    const target = scopeIdRef.current === null ? null : highlightedRole();
+    if (target !== null && target.role !== 'coordinator') { openModelRole(target, { focus: 'harness' }); return; }
     const port = modelSettingsPort;
-    const target = role ?? (scopeIdRef.current === null ? null : highlightedRole());
-    if (target !== null && target.role !== 'coordinator') {
-      // Worker 不再有连接、凭据或 options 表单：直接进入 harness/native ID 手填菜单。
-      openModelRole(target, { focus: 'harness' });
-      return;
-    }
     if (port?.library === undefined || port.catalog === undefined) {
       dispatch({ kind: 'model-settings-notice', notice: '! model_settings_unavailable: Provider library 尚未接通' });
       return;
     }
     const invocation = (modelInvocation.current += 1);
-    const navigation = navigationGeneration.current;
-    dispatch({ kind: 'model-settings-notice', notice: null });
-    const library = port.library.load();
-    if (library.kind !== 'loaded') {
-      dispatch({ kind: 'model-settings-notice', notice: '! ' + library.code + ': ' + library.message });
-      return;
-    }
-    let project: ModelSettingsSnapshotView | null = null;
-    // Home owns the reusable library even when no project file exists. Project snapshot failure must not block it.
-    if (stateRef.current.screen === 'workspace') {
-    try {
+    const origin = stateRef.current.screen === 'workspace' ? 'workspace' : 'home';
+    let snapshot: ModelSettingsSnapshotView | null = null;
+    // Home 拥有可复用的 library：项目配置读不出来也不该挡住它，此时模型只进用户库。
+    if (origin === 'workspace') {
+      try {
         const loaded = await port.load();
-        if (loaded.kind === 'loaded') project = loaded.snapshot;
-    } catch {
-        project = null;
+        if (loaded.kind === 'loaded') snapshot = loaded.snapshot;
+      } catch {
+        snapshot = null;
+      }
     }
-    }
-    if (invocation !== modelInvocation.current || navigation !== navigationGeneration.current) return;
-    const binding = project?.roles.find((entry) => entry.role === 'coordinator');
-    const connectionRef = binding?.connectionRef ?? project?.connections[0]?.connectionRef ?? library.connections[0]?.connectionRef ?? null;
-    const connection = library.connections.find((entry) => entry.connectionRef === connectionRef);
-    const model = library.models.find((entry) => entry.connectionRef === connectionRef && entry.model === binding?.model);
-    modelSettingsSnapshot.current = project;
-    const catalogResult = connection === undefined ? null : port.catalog.candidates(connection);
-    dispatch({ kind: 'overlay-open', overlay: 'model-settings-editor' });
-    dispatch({
-      kind: 'model-settings-edit',
-      edit: {
-        role: 'coordinator', stage: 'connections', connectionRef, credentialRef: connection?.credential.credentialRef ?? null, providerId: connection?.providerId ?? '',
-        providerIntegration: connection?.providerIntegration ?? 'openai-chat', label: '', baseUrl: '',
-        model: model?.model ?? '', modelRef: model?.modelRef ?? null, effort: binding?.effort ?? null,
-        query: '', selectedIndex: connectionRef === null ? -1 : Math.max(0, library.connections.findIndex((item) => item.connectionRef === connectionRef)), selectedModelId: null,
-        field: 'label', connections: library.connections, models: library.models,
-        presets: port.catalog.presets(), catalogResult, libraryRevision: library.revision,
-        routeMapIssueNumber: '', projectAvailable: project !== null,
-        secret: '',
-      },
-    });
-    if (catalogResult?.expired && connection !== undefined) {
-      const edit = stateRef.current.modelSettingsEdit;
-      if (edit !== null) void discoverProviderModels(edit, invocation);
-    }
+    // 载入结果绑定本次调用代次：期间已经退出或重开时，迟到快照直接丢弃。
+    if (invocation !== modelInvocation.current) return;
+    modelSettingsSnapshot.current = snapshot;
+    dispatch({ kind: 'model-settings-notice', notice: null });
+    setProviderLibrary({ origin, snapshot });
   };
-  /**
-   * 保存内存中的编辑。
-   *
-   * 保存只追加不可变记录：成功后抹除 key、逐层返回并说明尚未应用；失败时保留全部字段，只更新
-   * 结构化提示。
-   */
-  const saveModelSettings = async (draftEdit?: ModelSettingsEdit) => {
-    const port = modelSettingsPort;
-    const snapshot = modelSettingsSnapshot.current;
-    const edit = draftEdit ?? stateRef.current.modelSettingsEdit;
-    if (port?.library === undefined || port.catalog === undefined || edit === null) {
-      dispatch({ kind: 'model-settings-notice', notice: '! model_settings_unavailable: Provider library 尚未接通' });
+  /** 编辑器选中模型后的去向：写入项目配置仍要另一次明确应用。 */
+  const selectProviderModel = async (modelRef: string, effort: string | null): Promise<void | string> => {
+    const session = providerLibraryRef.current;
+    if (session?.origin !== 'workspace') {
+      dispatch({ kind: 'notice', notice: '模型已保存到用户库' });
+      void reloadModelCatalog();
       return;
     }
-    if (modelSaveInFlight.current) return;
-    modelSaveInFlight.current = true;
-    const invocation = modelInvocation.current;
-    const navigation = navigationGeneration.current;
-    const editVersion = modelEditVersion.current;
-    dispatch({ kind: 'model-settings-notice', notice: null });
-    const active = () => invocation === modelInvocation.current && navigation === navigationGeneration.current;
-    const preserveNewerEdit = (metadata: Partial<Pick<ModelSettingsEdit, 'connections' | 'models' | 'libraryRevision'>> = {}) => {
-      if (modelEditVersion.current === editVersion) return false;
-      const current = stateRef.current.modelSettingsEdit;
-      if (current !== null) dispatch({ kind: 'model-settings-edit', edit: { ...current, ...metadata } });
-      return true;
-    };
-    try {
-      if (edit.stage === 'connection') {
-        if (edit.label.trim() === '' || edit.baseUrl.trim() === '' || (edit.secret === '' && edit.credentialRef === null)) throw new Error('连接名称、地址与 API Key 不能为空');
-        const saved = await port.library.saveConnection({ expectedRevision: edit.libraryRevision, label: edit.label, providerId: edit.providerId, providerIntegration: edit.providerIntegration, baseUrl: edit.baseUrl, ...(edit.secret === '' ? { credentialRef: edit.credentialRef! } : { newSecret: edit.secret }) });
-        if (!active()) return;
-        if (saved.kind !== 'saved') throw new Error(saved.code + ': ' + saved.message);
-        const library = port.library.load();
-        if (library.kind !== 'loaded') throw new Error(library.code + ': ' + library.message);
-        if (preserveNewerEdit({ connections: library.connections, models: library.models, libraryRevision: library.revision })) {
-          dispatch({ kind: 'model-settings-notice', notice: '原连接已保存；当前编辑保留，请重新确认' });
-          return;
-        }
-        dispatch({ kind: 'model-settings-edit', edit: { ...edit, stage: 'models', connectionRef: saved.connection.connectionRef, credentialRef: saved.connection.credential.credentialRef, connections: library.connections, models: library.models, libraryRevision: library.revision, model: '', modelRef: null, selectedModelId: null, selectedIndex: -1, query: '', secret: '', catalogResult: port.catalog.candidates(saved.connection) } });
-        dispatch({ kind: 'model-settings-notice', notice: '连接已保存，首次模型发现已尝试' });
-        return;
-      }
-      if (edit.stage === 'models') {
-        if (edit.connectionRef === null || edit.model.trim() === '') throw new Error('请选择模型或输入 exact ID');
-        let model = edit.models.find((item) => item.connectionRef === edit.connectionRef && item.model === edit.model);
-        let libraryRevision = edit.libraryRevision;
-        let models = edit.models;
-        if (model === undefined) {
-          const saved = port.library.saveModel({ expectedRevision: edit.libraryRevision, connectionRef: edit.connectionRef, model: edit.model });
-          if (saved.kind !== 'saved') throw new Error(saved.code + ': ' + saved.message);
-          model = saved.model;
-          libraryRevision = saved.revision;
-          models = [...models, model];
-        }
-        const next = { ...edit, modelRef: model.modelRef, models, libraryRevision };
-        if (snapshot === null) {
-          dispatch({ kind: 'model-settings-edit', edit: next });
-          dispatch({ kind: 'model-settings-notice', notice: '模型已保存到用户库；选中项目后可写入项目配置' });
-          return;
-        }
-        const saved = await port.save({ role: 'coordinator', expectedRevision: snapshot.revision, modelRef: model.modelRef, effort: edit.effort });
-        if (!active()) return;
-        const newerEdit = preserveNewerEdit({ models, libraryRevision });
-        if (saved.kind !== 'saved') {
-          if (!newerEdit) dispatch({ kind: 'model-settings-edit', edit: next });
-          throw new Error(saved.code + ': ' + saved.message);
-        }
-        modelSettingsSnapshot.current = { ...snapshot, revision: saved.revision };
-        if (newerEdit) {
-          dispatch({ kind: 'model-settings-notice', notice: '已保存原选择；当前编辑保留，请重新确认' });
-          return;
-        }
-        dispatch({ kind: 'model-settings-notice', notice: '模型已写入项目配置；仍需明确应用' });
-        dispatch({ kind: 'notice', notice: '模型配置已保存，尚未应用' });
-        dispatch({ kind: 'model-settings-edit', edit: null });
-        dispatch({ kind: 'overlay-close-top' });
-        void reloadModelCatalog();
-        return;
-      }
-      if (edit.stage === 'project-init') {
-        const issue = Number(edit.routeMapIssueNumber);
-        if (!Number.isSafeInteger(issue) || issue < 1 || edit.modelRef === null) throw new Error('先保存模型并填写正整数 Route Map issue number');
-        if (port.initializeProject === undefined) throw new Error('项目初始化端口尚未接通');
-        const saved = await port.initializeProject({ modelRef: edit.modelRef, effort: edit.effort, routeMapIssueNumber: issue });
-        if (!active()) return;
-        if (saved.kind !== 'saved') throw new Error(saved.code + ': ' + saved.message);
-        modelSettingsSnapshot.current = null;
-        if (preserveNewerEdit()) {
-          dispatch({ kind: 'model-settings-notice', notice: '原项目配置已初始化；当前编辑保留，请重新确认' });
-          return;
-        }
-        dispatch({ kind: 'model-settings-edit', edit: null });
-        dispatch({ kind: 'model-settings-notice', notice: '项目配置已初始化；模型仍需明确应用' });
-        dispatch({ kind: 'overlay-close-top' });
-        return;
-      }
-      throw new Error('先选择连接和模型');
-    } catch (error) {
-      if (active()) dispatch({ kind: 'model-settings-notice', notice: '! save_failed: ' + (error instanceof Error ? error.message : '保存失败') });
-    } finally {
-      modelSaveInFlight.current = false;
+    const port = modelSettingsPort;
+    if (port === undefined || session.snapshot === null) {
+      return 'project_unavailable: 模型已保存到用户库，该项目还没有可写入的配置';
     }
+    const invocation = (modelInvocation.current += 1);
+    let saved;
+    try { saved = await port.save({ role: 'coordinator', expectedRevision: session.snapshot.revision, modelRef, effort }); }
+    catch { return 'save_failed: 保存失败，请重试'; }
+    if (invocation !== modelInvocation.current) return;
+    if (saved.kind !== 'saved') {
+      return 'save_failed: ' + saved.code + ': ' + saved.message;
+    }
+    modelSettingsSnapshot.current = { ...session.snapshot, revision: saved.revision };
+    const current = providerLibraryRef.current;
+    if (current === session) setProviderLibrary({ ...session, snapshot: modelSettingsSnapshot.current });
+    dispatch({ kind: 'model-settings-notice', notice: '模型已写入项目配置；仍需明确应用' });
+    dispatch({ kind: 'notice', notice: '模型配置已保存，尚未应用' });
+    void reloadModelCatalog();
   };
   /**
    * 提交候选菜单的动作。
@@ -2990,59 +2851,6 @@ function TuiAppContent(props: TuiAppProps) {
       }
     }
   };
-  /**
-   * 连接编辑器的键位。
-   *
-   * 字段值只改内存中的 ModelSettingsEdit，从不构造 UiDraft，因此不会进入 IC-13 的草稿存储、
-   * 提交快照或恢复路径。Enter 直接保存，Esc 由 overlay 关闭路径抹除 key。
-   */
-  const handleModelSettingsEditorKey = (input: string, key: Key) => {
-    const edit=stateRef.current.modelSettingsEdit;
-    if(edit===null)return;
-    if(edit.stage==='models'&&key.ctrl&&input.toLowerCase()==='r'){
-      const catalog=modelSettingsPort?.catalog,connection=edit.connections.find((item)=>item.connectionRef===edit.connectionRef);
-      if(catalog===undefined||connection===undefined)return;
-      const invocation=modelInvocation.current;
-      void (async()=>{try{await catalog.refresh();if(invocation!==modelInvocation.current||stateRef.current.modelSettingsEdit?.connectionRef!==connection.connectionRef)return;const current=stateRef.current.modelSettingsEdit;if(current===null)return;const catalogResult=catalog.candidates(connection);const selectedIndex=current.selectedModelId===null?-1:catalogResult.models.findIndex((item)=>item.id===current.selectedModelId);dispatch({kind:'model-settings-edit',edit:{...current,catalogResult,selectedIndex,selectedModelId:selectedIndex<0?null:current.selectedModelId}});}catch{if(invocation===modelInvocation.current)dispatch({kind:'model-settings-notice',notice:'! catalog_unavailable: 公共模型目录刷新失败，现有候选仍可用'});}})();return;
-    }
-    if(edit.stage==='connections'||edit.stage==='preset'||edit.stage==='models'){
-      const query=edit.query.toLowerCase();
-      const connections=edit.connections.filter((item)=>(item.label+item.providerId+item.providerIntegration).toLowerCase().includes(query));
-      const presets=edit.presets.filter((item)=>(item.label+item.id+item.protocol).toLowerCase().includes(query));
-      const models=(edit.catalogResult?.models??[]).filter((item)=>(item.label+item.id).toLowerCase().includes(query));
-      const count=edit.stage==='connections'?connections.length+2:edit.stage==='preset'?presets.length+1:models.length+2+(!edit.projectAvailable?1:0);
-      if(key.upArrow||key.downArrow){dispatch({kind:'model-settings-edit',edit:{...edit,selectedIndex:Math.max(0,Math.min(count-1,edit.selectedIndex+(key.upArrow?-1:1)))}});return;}
-      if((!key.return&&!key.meta&&!key.ctrl&&input!=='')||key.backspace||key.delete){
-        dispatch({kind:'model-settings-edit',edit:editProviderField(edit,input,key)});return;
-      }
-      if(!key.return||key.meta||key.shift)return;
-      if(edit.stage==='connections'){
-        if(edit.selectedIndex<connections.length){const c=connections[edit.selectedIndex]!;const result=modelSettingsPort?.catalog?.candidates(c)??null;const next={...edit,stage:'models' as const,connectionRef:c.connectionRef,credentialRef:c.credential.credentialRef,providerId:c.providerId,providerIntegration:c.providerIntegration,label:c.label,baseUrl:c.baseUrl,secret:'',query:'',selectedIndex:-1,selectedModelId:null,catalogResult:result};dispatch({kind:'model-settings-edit',edit:next});if(result?.expired)void discoverProviderModels(next,modelInvocation.current);return;}
-        if(edit.selectedIndex===connections.length){const c=edit.connections.find((item)=>item.connectionRef===edit.connectionRef);if(c===undefined){dispatch({kind:'model-settings-notice',notice:'请先选择要编辑的连接'});return;}dispatch({kind:'model-settings-edit',edit:{...edit,stage:'connection',providerId:c.providerId,providerIntegration:c.providerIntegration,label:c.label,baseUrl:c.baseUrl,connectionRef:c.connectionRef,credentialRef:c.credential.credentialRef,secret:'',query:'',field:'label'}});return;}
-        dispatch({kind:'model-settings-edit',edit:{...edit,stage:'preset',query:'',selectedIndex:-1}});return;
-      }
-      if(edit.stage==='preset'){
-        const preset=presets[edit.selectedIndex];const custom=edit.selectedIndex===presets.length;if(preset===undefined&&!custom){dispatch({kind:'model-settings-notice',notice:'请选择 Provider 或自定义协议'});return;}
-        dispatch({kind:'model-settings-edit',edit:{...edit,stage:'connection',providerId:preset?.id??'custom',providerIntegration:preset?.protocol??edit.providerIntegration,label:preset?.label??'',baseUrl:preset?.baseUrl??'',connectionRef:null,credentialRef:null,secret:'',field:'label',query:''}});return;
-      }
-      if(edit.selectedIndex>=0&&edit.selectedIndex<models.length){const model=models[edit.selectedIndex];if(model!==undefined)void saveModelSettings({...edit,model:model.id,selectedModelId:model.id});return;}
-      if(edit.selectedIndex===models.length){if(edit.query.trim()===''){dispatch({kind:'model-settings-notice',notice:'请输入模型编号，或选择目录候选'});return;}void saveModelSettings({...edit,model:edit.query.trim(),selectedModelId:null});return;}
-      if(edit.selectedIndex===models.length+1){const connection=edit.connections.find((item)=>item.connectionRef===edit.connectionRef);if(connection!==undefined)void discoverProviderModels(edit,modelInvocation.current);return;}
-      if(edit.projectAvailable===false&&edit.selectedIndex===models.length+2)dispatch({kind:'model-settings-edit',edit:{...edit,stage:'project-init',field:'query',routeMapIssueNumber:''}});
-      else dispatch({kind:'model-settings-notice',notice:'请先保存模型，再初始化项目配置'});
-      return;
-    }
-    if(edit.stage==='connection'){
-      if(key.upArrow||key.downArrow){const fields=['label','baseUrl','secret'] as const;const i=fields.indexOf(edit.field==='secret'||edit.field==='baseUrl'?edit.field:'label');dispatch({kind:'model-settings-edit',edit:{...edit,field:fields[(i+(key.upArrow?2:1))%fields.length]!}});return;}
-      if((key.leftArrow||key.rightArrow)&&edit.providerId==='custom'){const protocols=PROVIDER_PROTOCOLS.filter((item)=>item!=='google-gemini') as readonly Exclude<ProviderProtocol,'google-gemini'>[];const i=protocols.indexOf(edit.providerIntegration as Exclude<ProviderProtocol,'google-gemini'>);dispatch({kind:'model-settings-edit',edit:{...edit,providerIntegration:protocols[(i+(key.leftArrow?protocols.length-1:1))%protocols.length]!}});return;}
-      if(key.return&&!key.meta&&!key.shift){void saveModelSettings();return;}
-      if(input!==''||key.backspace||key.delete){const next=editProviderField(edit,input,key);if(next!==edit)dispatch({kind:'model-settings-edit',edit:next});}return;
-    }
-    if(edit.stage==='project-init'){
-      if(key.return&&!key.meta&&!key.shift){void saveModelSettings();return;}
-      if(input!==''||key.backspace||key.delete){const next=editProviderField(edit,input,key);if(next!==edit)dispatch({kind:'model-settings-edit',edit:next});}
-    }
-  };
   const workspaceActions: WorkspaceActions = {
     dispatch,
     composerChange: (draft) => {
@@ -3096,9 +2904,6 @@ function TuiAppContent(props: TuiAppProps) {
     },
     openModelRole: () => {
       openModelRole();
-    },
-    saveModelSettings: () => {
-      void saveModelSettings();
     },
     submitModelRole: (action) => {
       void submitModelRole(action);
@@ -3158,6 +2963,10 @@ function TuiAppContent(props: TuiAppProps) {
   };
 
   useInput((input, key) => {
+    if (providerLibraryRef.current !== null) {
+      if (key.ctrl && input === 'c') requestExit();
+      return;
+    }
     if (key.eventType === 'release') return;
     if(resolveGlobalAction(input,key)==='exit'){void runCommand('exit');return;}
     if (scopeIdRef.current === null && home !== null && home.kind === 'wizard' && input === 'p' && modelSettingsPort?.library !== undefined && modelSettingsPort.catalog !== undefined) {
@@ -3366,7 +3175,6 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (topOverlay() === 'model-settings-editor') {
-      handleModelSettingsEditorKey(input, key);
       return;
     }
     if (stateRef.current.screen === 'home') {
@@ -3405,7 +3213,6 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if(overlay==='model-settings-editor'){
-      handleModelSettingsEditorKey(input,key);
       return;
     }
     if(overlay==='command-palette'||overlay==='options'||overlay==='session-picker'||overlay==='handoff-target'){
@@ -3653,6 +3460,7 @@ function TuiAppContent(props: TuiAppProps) {
    * 它不触发发送或命令解析；换行归一，在当前光标插入，长载荷作为原子块编辑。
    */
   usePaste((text) => {
+    if (providerLibraryRef.current !== null) return;
     const current = stateRef.current;
     if (current.screen !== 'workspace') {
       return;
@@ -3692,6 +3500,12 @@ function TuiAppContent(props: TuiAppProps) {
     }
   });
 
+  if (providerLibrary !== null && modelSettingsPort?.library && modelSettingsPort.catalog) {
+    return <ProviderLibraryEditor library={modelSettingsPort.library} catalog={modelSettingsPort.catalog}
+      width={terminalWidth} rows={windowSize.rows ?? 24} onSelect={selectProviderModel}
+      onSelected={() => setProviderLibrary(null)}
+      onCancel={() => { modelInvocation.current++; setProviderLibrary(null); }} />;
+  }
   if (state.screen === 'home' || state.screen === 'legacy-review') {
     return (
       <Box flexDirection="column">
@@ -3707,7 +3521,6 @@ function TuiAppContent(props: TuiAppProps) {
         {...(modelSettingsPort?.library === undefined || modelSettingsPort.catalog === undefined ? {} : { onOpenProviderLibrary: () => { void openModelSettingsEditor(); } })}
         availableWidth={terminalWidth}
       />
-      {topOverlay() === 'model-settings-editor' && state.modelSettingsEdit !== null ? <ModelSettingsEditor edit={state.modelSettingsEdit} notice={state.modelSettingsNotice} failing={false} availableWidth={terminalWidth} rows={windowSize.rows ?? 24} identity="Coordinator · Provider library" /> : null}
       </Box>
     );
   }

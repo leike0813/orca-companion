@@ -2,6 +2,14 @@
 
 本文件只记录与本次实测有关、且会直接影响结论的现状。结论以代码为准，运行期行为以实测观察为准。
 
+## 准备与首次启动
+
+当前准备链包含仓库内打包安装、公开 Orca 登记、`origin/main` 设置与原生终端，终端可直接运行 `ocp` 或 `ocp --debug`。普通启动自动核验环境，首次配置提供环境、Coordinator 模型、Route Map 创建或选择、最终确认四步；debug 空库复用同一模型编辑器，不要求 Orca 或项目配置。Worker Profiles 仍由执行授权核验，不阻塞规划或 debug。
+
+Scope 前的地图创建记录按完整 branch ref 隔离，候选与 unknown 对账最多 20 项；原 operation marker 无唯一匹配时不能证明未创建，返回 `create_unresolved`，不会重发创建。用户可以核对后显式选择既有 issue。
+
+这些是当前实现边界。真实 GitHub/Orca 创建、终端与回收的 T4 实操尚未完成；合成回执、组件测试或本地安装包 PTY 不能代替 T4，也不证明完整业务剧本通过。工程验证由父任务记录，本文件不提供独立验收结论。
+
 ## 并发与 lane
 
 设计目标是最多 3 个并行 Work Package、每条 lane 至多一个 Worker，图容量为 8 个 Work Package。`live` Worker 只阻止其所属包内继续推进，其他独立包可继续。实际观测仍受以下证据限制：

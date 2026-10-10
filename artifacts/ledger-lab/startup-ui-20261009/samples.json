@@ -1,0 +1,331 @@
+{
+  "kind": "production-component-fixture",
+  "samples": [
+    {
+      "stem": "checking-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "failed-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "connections-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ]
+    },
+    {
+      "stem": "models-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ]
+    },
+    {
+      "stem": "route-map-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "confirmation-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "checking-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "failed-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "connections-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ]
+    },
+    {
+      "stem": "models-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ]
+    },
+    {
+      "stem": "route-map-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "confirmation-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "checking-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ]
+    },
+    {
+      "stem": "failed-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ]
+    },
+    {
+      "stem": "connections-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ]
+    },
+    {
+      "stem": "models-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ]
+    },
+    {
+      "stem": "route-map-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ]
+    },
+    {
+      "stem": "confirmation-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ]
+    },
+    {
+      "stem": "checking-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ]
+    },
+    {
+      "stem": "failed-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ]
+    },
+    {
+      "stem": "connections-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ]
+    },
+    {
+      "stem": "models-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ]
+    },
+    {
+      "stem": "route-map-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ]
+    },
+    {
+      "stem": "confirmation-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ]
+    },
+    {
+      "stem": "checking-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "failed-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "connections-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ]
+    },
+    {
+      "stem": "models-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ]
+    },
+    {
+      "stem": "route-map-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "confirmation-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "checking-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "failed-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "connections-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ]
+    },
+    {
+      "stem": "models-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ]
+    },
+    {
+      "stem": "route-map-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    },
+    {
+      "stem": "confirmation-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ]
+    }
+  ],
+  "externalMutations": 0,
+  "modelRequests": 0
+}

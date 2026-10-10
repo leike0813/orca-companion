@@ -4,6 +4,18 @@
 
 直接前驱 `remove-worker-credential-management` 已归档并提供 schema 4、原生模型目录与 Coordinator-only CredentialStore；配置解阻塞 change `rework-coordinator-provider-configuration` 将共享接缝升级为 schema 5。`testing/isolated-control-probe` 负责已有 M0 自动控制探针，不承担本次人工业务演练；演练向导也不同于 Home 初始化向导，不改变后者不收集执行授权设置的约束。
 
+准备链的当前合同属于 active `simplify-ledger-lab-lifecycle`：该 change 以 `stabilize-agent-harness-core`（已归档 2026-10-09）为直接前驱，移走了 `testing/ledger-lab-rehearsal` 同路径 delta，并按其 D-01–D-07 重写下列决策。以下决策保留为已实现的现场事实，被取代的部分不再作为实施依据：
+
+| 本 change 决策 | 当前归属 |
+| --- | --- |
+| D-01 外置 `bin/` 启动器与 Orca 登记 | 新 change D-01：新轮次不生成 wrapper；登记与终端由操作者手工完成 |
+| D-02 空 Route Map 与演练项目配置 | 新 change D-04：Route Map 手工创建，项目配置经生产 TUI 写入 |
+| D-03 开发构建启动入口 | 新 change D-02：每轮把 `pnpm pack` 产物安装进本轮仓库 |
+| D-04 `wizard.mjs` 演练设置与 `lab configure` | 新 change D-01/D-04：删除 lab 专用设置链，配置走正常 TUI |
+| D-05 准备期 doctor 与专用终端 | 新 change D-01/D-04：准备不调用模型，doctor 由用户显式运行 |
+| D-06 `run.json` schema 1 | 新 change D-03：schema 2 补本地目录身份与远程不可变 ID，schema 1 只保留读取 |
+| D-07 `--run` 默认路径与外置证据边界 | 仍然有效；离线报告与 live 采集按用途分离读取 |
+
 ## Goals / Non-Goals
 
 **Goals:**

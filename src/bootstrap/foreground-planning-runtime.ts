@@ -22,6 +22,8 @@ import { existsSync } from 'node:fs';
 import { FileProviderLibraryStore } from '../adapters/storage/provider-library-store.js';
 import { createProviderLibrary } from '../application/configuration/provider-library.js';
 import { createProviderCatalog } from '../adapters/agents/provider-catalog.js';
+import { createGhRouteMapInitialization, readRepositoryIdentity } from '../adapters/tracker/gh-route-map-initialization.js';
+import type { RouteMapInitializationPort } from '../application/planning/route-map-initialization.js';
 import { homedir } from 'node:os';
 import { basename, isAbsolute, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -436,7 +438,7 @@ import {
   startCoordinatorRuntime,
   type StartedCoordinatorRuntime,
 } from './coordinator-runtime.js';
-import { createOrcaDoctorProbe } from './doctor.js';
+import { compareVersions, createOrcaDoctorProbe, MINIMUM_ORCA_VERSION } from './doctor.js';
 import {
   PROJECT_CONFIG_FILENAME,
   PROJECT_CONFIG_SCHEMA_VERSION,
@@ -1294,6 +1296,7 @@ export async function createForegroundPlanningHost(
   const orcaProbe =
     options.orcaProbe ??
     createOrcaDoctorProbe({
+      ...(options.env['ORCA_CLI_COMMAND'] === undefined ? {} : { executable: options.env['ORCA_CLI_COMMAND'] }),
       cwd: options.repositoryPath,
       env: options.env,
       identityWorktreePath: canonicalWorktreePath ?? options.repositoryPath,
@@ -3364,15 +3367,20 @@ export async function createForegroundPlanningHost(
     trackerRef: config === null ? '' : `github#${String(config.tracker.routeMapIssueNumber)}`,
   });
   let verifiedWizardConfigurationRef: string | null = null;
+  const routeMapInitialization = async (): Promise<RouteMapInitializationPort> => {
+    if (canonicalWorktreePath === null || commonDirPath === null || fullBranchRef === null) throw new Error('repository_unresolved: 无法定位项目仓库');
+    const target = await readRepositoryIdentity({ cwd: canonicalWorktreePath, env: options.env });
+    if (target.kind === 'failed') throw new Error(target.message);
+    return createGhRouteMapInitialization({ repository: target.value.nameWithOwner, fullBranchRef,
+      gitCommonDir: commonDirPath, cwd: canonicalWorktreePath, env: options.env });
+  };
 
-  const scopeSetup: ScopeSetupPort = {
-    resolveHome: () => Promise.resolve(resolveHome()),
-    verify: async (): Promise<readonly WizardCheck[]> => {
-      verifiedWizardConfigurationRef = null;
+  const verifyEnvironment = async (onCheck?: (check: WizardCheck) => void): Promise<readonly WizardCheck[]> => {
       const checks: WizardCheck[] = [];
-      checks.push({
+      const report = (check: WizardCheck) => { checks.push(check); onCheck?.(check); };
+      report({
         id: 'repository',
-        ok: blocker === null || blocker.code !== 'repository_unresolved',
+        ok: fullBranchRef !== null && canonicalWorktreePath !== null && blocker === null,
         detail:
           fullBranchRef === null || canonicalWorktreePath === null
             ? (blocker?.message ?? '无法读取当前 Git 身份')
@@ -3380,29 +3388,52 @@ export async function createForegroundPlanningHost(
       });
       const orcaVersion = await orcaProbe.readOrcaVersion();
       const runtime = await orcaProbe.readRuntime();
-      const identity = await orcaProbe.readCoordinatorIdentity();
-      checks.push({
+      const compatible = orcaVersion.ok && (compareVersions(orcaVersion.value, MINIMUM_ORCA_VERSION) ?? -1) >= 0;
+      report({
         id: 'orca',
-        ok: orcaVersion.ok && runtime.ok && runtime.value.reachable,
+        ok: compatible && runtime.ok && runtime.value.reachable,
         detail: orcaVersion.ok
           ? runtime.ok
-            ? `version ${orcaVersion.value} · runtime ${runtime.value.state}`
+            ? compatible ? `version ${orcaVersion.value} · runtime ${runtime.value.state}` : `Orca 版本不兼容：${orcaVersion.value}，需要 ${MINIMUM_ORCA_VERSION} 或更新版本`
             : runtime.detail
           : orcaVersion.detail,
       });
-      checks.push({
+      const identity = await orcaProbe.readCoordinatorIdentity();
+      report({
         id: 'identity',
         ok: identity.ok,
         detail: identity.ok ? identity.value : identity.detail,
       });
+      return checks;
+  };
+
+  const scopeSetup: ScopeSetupPort = {
+    resolveHome: () => Promise.resolve(resolveHome()),
+    verifyEnvironment,
+    routeMapInitialization: {
+      list: async () => (await routeMapInitialization()).list(),
+      select: async number => (await routeMapInitialization()).select(number),
+      create: async () => (await routeMapInitialization()).create(),
+    },
+    verify: async (onCheck): Promise<readonly WizardCheck[]> => {
+      verifiedWizardConfigurationRef = null;
+      const checks = [...await verifyEnvironment(onCheck)];
       checks.push({
         id: 'model',
         ok: false,
         detail: '待核验',
       });
+      if (checks.slice(0, 3).some(check => !check.ok) || startupAbort.signal.aborted) {
+        checks[3] = { id: 'model', ok: false, detail: '环境核验未通过，尚未请求模型' };
+        checks.push({ id: 'tracker', ok: false, detail: '等待环境核验通过' });
+        onCheck?.(checks[3]); onCheck?.(checks[4]!);
+        return checks;
+      }
       if (config === null) {
         checks[3] = { id: 'model', ok: false, detail: blocker?.message ?? '项目配置不可用' };
         checks.push({ id: 'tracker', ok: false, detail: '项目配置不可用：无法确定 tracker 地图' });
+        onCheck?.(checks[3]);
+        onCheck?.(checks[4]!);
         return checks;
       }
       const resolved = await modelFor(config.defaultCoordinatorModelRef === '' ? config.coordinatorModels[0]! : configurationByRef(config, config.defaultCoordinatorModelRef) ?? config.coordinatorModels[0]!);
@@ -3417,6 +3448,7 @@ export async function createForegroundPlanningHost(
         ok: capabilities?.kind === 'verified',
         detail: resolved.kind !== 'resolved' ? resolved.message : capabilities?.kind === 'rejected' ? capabilities.message : config.defaultCoordinatorModelRef,
       };
+      onCheck?.(checks[3]);
       const tracker = trackerFor();
       const mapRef = { kind: 'route-map' as const, id: String(config.tracker.routeMapIssueNumber), version: 0 };
       const mapRead = tracker === null ? null : await tracker.readIssue(mapRef);
@@ -3434,6 +3466,7 @@ export async function createForegroundPlanningHost(
                   ? mapRead.message
                   : mapRead.reason,
       });
+      onCheck?.(checks[4]!);
       return checks;
     },
     proposal: () => Promise.resolve(wizardProposal()),
@@ -4045,6 +4078,7 @@ export async function createForegroundPlanningHost(
       return options.executionBackend;
     }
     executionBackend ??= createOrcaExecutionBackend({
+      ...(options.env['ORCA_CLI_COMMAND'] === undefined ? {} : { executable: options.env['ORCA_CLI_COMMAND'] }),
       cwd: canonicalWorktreePath,
       env: options.env,
       resolveIdentityHandle: async (ref) => {
@@ -10112,7 +10146,7 @@ export async function createForegroundPlanningHost(
           // 读不回就不给快照：拿缓存冒充最新，编辑器的 CAS 基准就是错的。
           return Promise.resolve({
             kind: 'failed',
-            code: reread.code === 'invalid' ? 'config_invalid' : 'config_unreadable',
+            code: reread.code === 'missing' ? 'config_unavailable' : reread.code === 'invalid' ? 'config_invalid' : 'config_unreadable',
             message: reread.message,
           });
         }

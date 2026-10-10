@@ -16,6 +16,7 @@ import { Composer } from './components/composer.js';
 import { Conversation } from './components/conversation.js';
 import { InputRecordManager, type InputManagerEntry, type InputRecordManagerView } from './components/input-record-manager.js';
 import { PasteViewer, type PasteViewerView } from './components/paste-viewer.js';
+import { ProviderLibraryEditor } from './components/provider-library-editor.js';
 import { DialogFrame } from './components/selection-list.js';
 import {
   COMMAND_METADATA,
@@ -129,7 +130,9 @@ type ChoiceOption = { readonly value: string; readonly label: string; readonly d
 function DebugLauncher(props: LauncherProps) {
   const { harness, width, rows, notice, onNotice, onOpened } = props;
   const [home, setHome] = useState<DebugHome | null>(null);
-  const [step, setStep] = useState<'session' | 'model'>('session');
+  const [step, setStep] = useState<'session' | 'model' | 'provider'>('session');
+  const [, setProviderReturnStep, providerReturnStepRef] = useImmediateState<'session' | 'model'>('session');
+  const [configuredModel, setConfiguredModel] = useState<{ readonly modelRef: string; readonly effort: string | null } | null>(null);
   const [busy, setBusy, busyRef] = useImmediateState(false);
 
   useEffect(() => {
@@ -152,11 +155,19 @@ function DebugLauncher(props: LauncherProps) {
   }, [harness, onNotice, onOpened, busyRef, setBusy]);
 
   useInput((input, key) => {
-    if (key.escape && step === 'model') { setStep('session'); return; }
+    if (step === 'provider' || (step === 'model' && home !== null && home.models.length === 0)) {
+      if (resolveGlobalAction(input, key) === 'exit') { harness.exitIntent(); props.onExit(); }
+      return;
+    }
+    if (key.escape && step !== 'session') { setStep('session'); return; }
     // Ctrl+C 在选择阶段同样先取消在途工作再退出，不进入对话就能中止装配。
     if (resolveGlobalAction(input, key) === 'exit') { harness.exitIntent(); props.onExit(); return; }
     if (busyRef.current) return;
     if (step === 'session' && input === 'n') { setStep('model'); return; }
+    if ((step === 'session' || step === 'model') && (input === 'p' || input === 'P')) {
+      providerReturnStepRef.current = step;
+      setProviderReturnStep(step); setStep('provider'); return;
+    }
     // home 按创建时间排序：最近的会话是最后一个。
     const latest = home?.sessions.at(-1);
     if (step === 'session' && (input === 'c' || input === 'C') && latest !== undefined) {
@@ -183,24 +194,44 @@ function DebugLauncher(props: LauncherProps) {
     return <Box flexDirection="column" width={width}>
       {header}
       <DialogFrame title="新建或继续调试会话" summary={home === null ? '读取中' : options.length + ' 项'}
-        width={width} rows={Math.max(6, Math.min(12, rows - 6))} footer="↑↓ 选择 · Enter 确认 · n 新建 · c 继续最近会话">
+        width={width} rows={Math.max(6, Math.min(12, rows - 6))} footer="↑↓ 选择 · Enter 确认 · n 新建 · p 配置模型 · c 继续最近会话">
         <ChoiceList width={width} options={options} disabled={busy || home === null}
           onSelect={(value) => { if (value === 'new') { setStep('model'); return; } open({ kind: 'continue', coordinatorSessionId: value }); }} />
       </DialogFrame>
     </Box>;
   }
 
-  const modelOptions: readonly ChoiceOption[] = (home?.models ?? []).map((entry) => ({
+  // 配置模型与打开会话是两个独立的用户选择。
+  if (step === 'provider' || (step === 'model' && home !== null && home.models.length === 0)) {
+    return <Box flexDirection="column" width={width}>
+      {header}
+      <ProviderLibraryEditor library={harness.providerLibrary.library} catalog={harness.providerLibrary.catalog}
+        onSelect={() => undefined}
+        onSelected={(modelRef, effort) => {
+          const refreshed = harness.home();
+          if (refreshed.kind === 'failed') { onNotice(refreshed.code + ': ' + refreshed.message); return; }
+          setHome(refreshed); setConfiguredModel({ modelRef, effort }); setStep('model');
+        }}
+        onCancel={() => { onNotice(null); setStep(providerReturnStepRef.current); }}
+        width={width} rows={Math.max(10, rows - 6)}
+        identity="调试不需要 Orca、项目配置或 Scope；连接与模型保存在用户库" />
+    </Box>;
+  }
+
+  const modelOptions: ChoiceOption[] = (home?.models ?? []).map((entry) => ({
     value: entry.modelRef,
     label: entry.connectionLabel + ' · ' + entry.model,
     ...(entry.efforts === null ? { description: '没有可信 effort 取值' } : {}),
   }));
+  if (configuredModel !== null && !modelOptions.some((option) => option.value === configuredModel.modelRef)) {
+    modelOptions.push({ value: configuredModel.modelRef, label: '已配置模型 · ' + configuredModel.modelRef });
+  }
   return <Box flexDirection="column" width={width}>
     {header}
     <DialogFrame title="选择模型（会话固定该配置）" summary={home === null ? '读取中' : modelOptions.length + ' 项'}
-      width={width} rows={Math.max(6, Math.min(12, rows - 6))} footer="↑↓ 选择 · Enter 新建会话 · Esc 返回">
+      width={width} rows={Math.max(6, Math.min(12, rows - 6))} footer="↑↓ 选择 · Enter 新建会话 · p 配置模型 · Esc 返回">
       <ChoiceList width={width} options={modelOptions} disabled={busy || modelOptions.length === 0}
-        onSelect={(modelRef) => open({ kind: 'new', modelRef })} />
+        onSelect={(modelRef) => open({ kind: 'new', modelRef, ...(configuredModel?.modelRef === modelRef ? { effort: configuredModel.effort } : {}) })} />
     </DialogFrame>
   </Box>;
 }

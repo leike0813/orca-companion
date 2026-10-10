@@ -33,7 +33,7 @@ export async function canonicalPath(path) {
 }
 export async function assertExternal(path, repositoryPath) {
   const target = await canonicalPath(path);
-  const root = await realpath(repositoryPath);
+  const root = await canonicalPath(repositoryPath);
   const rel = relative(root, target);
   if (rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !rel.startsWith(sep))) {
     throw new Error('验收输出必须在待测仓库之外');

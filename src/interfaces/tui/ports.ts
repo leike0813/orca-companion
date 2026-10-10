@@ -245,7 +245,9 @@ export type WizardCheck = {
  */
 export type ScopeSetupPort = {
   readonly resolveHome: () => Promise<HomeResolution>;
-  readonly verify: () => Promise<readonly WizardCheck[]>;
+  readonly verifyEnvironment?: (onCheck?: (check: WizardCheck) => void) => Promise<readonly WizardCheck[]>;
+  readonly routeMapInitialization?: import('../../application/planning/route-map-initialization.js').RouteMapInitializationPort;
+  readonly verify: (onCheck?: (check: WizardCheck) => void) => Promise<readonly WizardCheck[]>;
   readonly proposal: () => Promise<WizardProposal>;
   readonly initialize: (proposal: WizardProposal) => Promise<ControllerCommandResult>;
   /**

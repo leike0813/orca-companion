@@ -94,8 +94,9 @@ describe('Coordinator Provider library', () => {
     expect(frame).not.toMatch(/module|options JSON|auth type|optionPath/iu);
   });
 
-  test('Home 可保存共享模型并显式初始化项目；缺少配置不会阻塞 library', async () => {
-    const modelSettings = providerPort({ initializeProject: (input) => Promise.resolve({ kind: 'saved', revision: 1, configurationRef: `config-${input.routeMapIssueNumber}`, profileRef: null }) });
+  test('Home 保存共享模型不写项目配置；缺少配置不会阻塞 library', async () => {
+    const initializeProject = vi.fn();
+    const modelSettings = providerPort({ initializeProject });
     const fake = createFakePorts({ modelSettings, home: { kind: 'wizard' } });
     const rendered = renderTui(fake.ports);
     await settle();
@@ -109,11 +110,7 @@ describe('Coordinator Provider library', () => {
     await press(rendered, 'custom/model-v1');
     await press(rendered, DOWN);
     await press(rendered, ENTER);
-    expect(frameText(rendered)).toContain('初始化项目配置');
-    await press(rendered, DOWN); // initialize row
-    await press(rendered, ENTER);
-    await press(rendered, '42');
-    await press(rendered, ENTER);
+    expect(initializeProject).not.toHaveBeenCalled();
     expect(fake.calls.some((call) => call.name === 'modelSettings.load')).toBe(false);
     expect(frameText(rendered)).not.toContain('sk-');
     rendered.unmount();
@@ -172,30 +169,6 @@ describe('Coordinator Provider library', () => {
     } finally { rendered.unmount(); }
   });
 
-  test('项目初始化的迟到成功保留后来编辑的 issue number', async () => {
-    const pending = Promise.withResolvers<Awaited<ReturnType<ModelSettingsPort['save']>>>();
-    const initializeProject = vi.fn(() => pending.promise);
-    const fake = createFakePorts({ home: { kind: 'wizard' }, modelSettings: providerPort({ initializeProject }) });
-    const rendered = renderTui(fake.ports);
-    try {
-      await settle();
-      await press(rendered, 'p');
-      await press(rendered, ENTER);
-      await press(rendered, DOWN);
-      await press(rendered, ENTER); // save a model in the user library
-      await press(rendered, DOWN);
-      await press(rendered, DOWN);
-      await press(rendered, DOWN);
-      await press(rendered, ENTER); // initialize project
-      await press(rendered, '42');
-      await press(rendered, ENTER);
-      expect(initializeProject).toHaveBeenCalledTimes(1);
-      await press(rendered, '1');
-      pending.resolve({ kind: 'saved', revision: 1, configurationRef: 'configuration-a', profileRef: null });
-      await settle(5);
-      expect(frameText(rendered)).toContain('421');
-    } finally { rendered.unmount(); }
-  });
 });
 
 describe('Worker 原生模型目录', () => {
