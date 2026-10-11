@@ -371,10 +371,14 @@ IC-11 图依据读取可选使用 `readFiles` 与 `readFileRange`。调用必须
 
 ## IC-07 Worker Harness、Task Envelope、Session Binding 与候选报告
 
+共享生产只读 launcher 保留真实前台 Session/进程组供 Orca 识别，通过专用继承 FD 将 seccomp 过滤器交给 bwrap，拒绝终端注入 TIOCSTI/TIOCLINUX。CPU ABI 不支持或过滤器无法安装时非零退出；仓库、Git/common dir、协调库的拒写挂载及精确 native state/工件可写规则保持。实际接管与只读哨兵分别核验，不能以 launcher 文件名代替真实 harness 身份。
+
 - **Owner (Create)**: `m1-admit-work-package-specifications`
 - **Canonical paths**: `src/application/ports/worker-harness.ts`、`src/bootstrap/worker-harness.ts`、`src/adapters/agents/`、`src/domain/{task-envelope,worker-report,worker-liveness}.ts`
-- **Extenders (Extend)**: `add-worker-harness-adapters` 增加显式注册表与逐 harness 的精确会话证明；Recovery 只新建符合该合同的 Dispatch/Session Segment
+- **Extenders (Extend)**: `add-worker-harness-adapters` 增加显式注册表与逐 harness 的精确会话证明；`add-testable-worker-harness-adapters` 将 transcript 身份复核与 Recovery 读取配方归还 adapter，并修正共享只读启动；Recovery 只新建符合该合同的 Dispatch/Session Segment
 - **Consumers (Consume)**: Execution、Validation、Recovery、Graph evolution
+
+`WorkerHarness` 同时拥有 `readTranscriptIdentity({ transcriptRef, workspace })` 与 `recoveryInstructions()`：前者独立核验原生 transcript 的精确 Session/cwd，后者描述该格式的活动分支与事件来源读取方式。Bootstrap 按显式注册项委派，不按 harness 名称复制格式判断；不可证明时返回 `transcript_unavailable`，不能改读另一份历史。共享 seccomp 过滤器支持 x64/arm64，拒绝外来 audit ABI；x64 同时拒绝使用独立 syscall 表的 x32。真实主机证据目前限 Ubuntu x86_64。
 
 ```ts
 type TaskEnvelope = {
@@ -414,11 +418,11 @@ Planner 首次派发固定 `specificationUnitPath` 并将 `specBinding` 置空�
 
 Session Segment 记录角色、Task、Dispatch、Attempt、Binding、最后 transcript 位置与可核验终态。信息不足时 liveness 为 `unverifiable`，不能推断退出或触发重复派发。
 
-- **测试 seam**：Worker Harness Adapter contract tests 覆盖 codex、claude、opencode、pi、omp 五个注册项的合同（使用托管 hook/HTTP fixture），并指定四个隔离 probe（claude/opencode/pi/omp 各自的批准模型）在显式隔离项目中验证精确 binding；只有实际运行产生的 artifact（hook/extension 报告、精确 transcript、真实 usage）才计入验证结论，未运行的 probe 如实记录为未验证，不得据此写全 PASS。领域层测试 Task Envelope parser 和三值 liveness。
+- **测试 seam**：Worker Harness Adapter contract tests 覆盖 codex、claude、opencode、pi、omp、command-code、qwen-code 七个注册项。真实矩阵在显式隔离项目中验证精确 binding、四角色、原 Session 续接、Recovery 与生产只读路径；只有实际运行产生的 artifact（hook/extension 报告、精确 transcript、真实 usage）才计入验证结论，未运行项如实记录为未验证，不得据此写全 PASS。领域层测试 Task Envelope parser 和三值 liveness。
 
 ## IC-08 Delivery settlement、Validation 与 Finalizer
 
-Worker Harness 注册项为 codex、claude、opencode、pi、omp。各角色、Recovery Utility 与 Validator 集成续接使用已固定 profile 的 harness；结果结算不按当前默认 harness 解释历史。注册实现返回已有 PreparedTerminalStrategy，创建、激活、Orca 接管及 unknown 对账仍由既有用例拥有。Validator 续接与集成续接真正需要重新 launch 时使用注册项的 `prepareResume`（精确 session 身份），沿用原 Task/Dispatch/Attempt、原绑定与预算；不需要重新 launch 的恢复只重观察原 terminal。原生只读 Finalizer 与 Utility 的启动和探针共享 bwrap 包装器；包装器仅开放真实 native state 目录与 Companion 工件目录，仓库、Git、Git common dir、coordination.sqlite 与 checkpoints.sqlite 拒写，可写根与拒写根重叠且无法证明时不可用。
+Worker Harness 注册项为 codex、claude、opencode、pi、omp、command-code、qwen-code。各角色、Recovery Utility 与 Validator 集成续接使用已固定 profile 的 harness；结果结算不按当前默认 harness 解释历史。注册实现返回已有 PreparedTerminalStrategy，创建、激活、Orca 接管及 unknown 对账仍由既有用例拥有。Validator 续接与集成续接真正需要重新 launch 时使用注册项的 `prepareResume`（精确 session 身份），沿用原 Task/Dispatch/Attempt、原绑定与预算；不需要重新 launch 的恢复只重观察原 terminal。原生只读 Finalizer 与 Utility 的启动和探针共享 bwrap 包装器；包装器仅开放真实 native state 目录与 Companion 工件目录，仓库、Git、Git common dir、coordination.sqlite 与 checkpoints.sqlite 拒写，可写根与拒写根重叠且无法证明时不可用。
 
 - **Owner (Create)**: `m1-execute-and-validate-work-packages`
 - **Canonical paths**: `src/application/delivery/process-delivery.ts`、`record-worker-result.ts`、`src/application/validation/`、`src/application/finalization/`
@@ -449,6 +453,8 @@ type DeliveryVerdict =
 ```
 
 正常 pipeline 固定为 FLOW-03：read without ack → identity/version validation → dedupe → Orca accept/readback → local dedupe/ref/readback → ack。旧 generation/attempt 只补历史引用，不能推进当前 lifecycle。Accepted Worker Result 正文只归 Orca；本地不保存正文。
+
+宿主只在公开 exact Worker 的 Task/Dispatch 一致时接受 `dispatch:<DispatchId>` mailbox 或真实 terminal sender。已经退出的 Validator 步骤问题只将有序消息引用写入原 Validation Attempt 并回读，不向失效 Dispatch 发许可、不扣修复预算、不产生 Wake。`PendingDelivery` 与 `ProgressOnlyDelivery` 的可选 `consumedMessageIds`、`consumed` 传递本轮已持久消费的问题 ID 和精确 Task/Dispatch 结果引用；startup、replay 共用 `ackConsumedDelivery` 整批守卫，未消费消息仍阻止确认。
 
 Delivery 消息的载荷有两条登记形状，归属的**唯一**权威都是 Companion 自己的记录：
 
@@ -501,6 +507,8 @@ type IntegrationWorkspace = { canonicalWorktreePath: string; workPackageWorktree
 `dirtyPaths` 里属于 Worker Harness / agent 工具状态目录（`.agents/`、`.codex/` 等）的路径不是项目改动：它们既不构成 Scope Envelope 越界证据，也不让 canonical 工作区被算作「不干净」，更不参与 Finalizer 的运行前后比较——工具自己写技能、报告与会话材料是正常行为。项目路径仍然必须落在 Scope Envelope 内。该规则只有一处实现（`projectChangedPaths`），越界判定、canonical 干净性与 Finalizer 比较都走它。
 
 ## IC-09 Recovery、Scope control 与 Execution Handoff
+
+替代派发在原 Orca Task 上显式指定原 `sourceDispatchId` 的 `retryOfDispatchId`，业务 Attempt 不变。prepared terminal 接管、提交启动输入并核验精确 Worker 后，才等待原生 Session 证明。已接受但缺精确 Session 的旧派发保持阻塞，不换操作 ID 重发。Capsule 读取可在 FIFO 批次未消费时使用同 Run 的公开 `readMode: all` 查询（最多 100 条）；只匹配 current_delivery 与精确 Utility Task/Dispatch，正文核验并落盘回读后沿原 Delivery 管线消费，读历史本身不确认批次。
 
 原 Session 的 harness 从原物化绑定的授权版本和 profile 读取。各注册项通过精确 transcript 重新证明 provider session；仍存活的 exact Worker 只重观察原 terminal/session，保持原 Session/Segment，不创建 Dispatch、不消费 Recovery Budget，也不登记新 Segment。已退出或身份不可证明时才走原替代路径：新建替代 Dispatch/Binding/Segment，并按原规则消费 Recovery Budget。真正需要重新 launch 时精确 resume 使用 Claude UUID、OpenCode session id 或 pi/omp 完整 session path（注册项 `prepareResume`），沿用原启动报告的 runtime roots，`expectedNative` 只核验不覆盖，随后重新证明同一身份。Capsule 覆盖证据由原 harness 的 transcript inspector 提供，Utility 自报不能覆盖它；恢复、修复及集成续接保持原 Attempt、授权和预算。
 

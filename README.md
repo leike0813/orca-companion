@@ -180,6 +180,22 @@
 `modelSelection`，并经该 harness 显式、有界的原生目录查询核验来源，不写凭据。项目保存失败保留你的输入，
 不覆盖较新配置，也不宣称已生效。
 
+Worker Harness 已正式注册七项：codex、claude、opencode、pi、omp、`command-code` 与 `qwen-code`。
+新增 C/Q 沿用既有角色 Profile 合同，2026-10-11 最终真实资格矩阵已 PASS，见
+[验收报告](artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.md)及
+[结构化证据](artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.json)。
+CodeBuddy 已按 D-01 排除。独立[混合 Controller 闭环验收](artifacts/next-worker-harness-adapters/controller-20261011T085821980Z-89759c30-e5f4-4a09-8624-89e137fe85f5.md)也已通过，包含人工中断后的恢复、集成、deliverable 与同 Scope 重启。Command Code 的原生项目 taste learning 可在启动时生成 `.commandcode/taste/`；范围严格的项目应由用户在原生项目设置中关闭它，Companion 保留原生设置并拒绝越界交接。
+Worker 启动继承真实 `process.env`，使用 harness 原生认证与配置，不读取 Coordinator CredentialStore。
+各 adapter 独立核验精确 transcript 身份，并提供该 harness 的 Recovery Utility 阅读指引；恢复沿原 Task
+绑定读取 profile 与 transcript，不按 cwd 或修改时间猜会话。
+只读启动与探针复用共享生产 launcher/bwrap：保持真实 agent 的前台进程身份，拒写仓库、Git 与协调存储，
+仅开放核验过的 native state 和工件路径；seccomp 拒绝 `TIOCSTI`/`TIOCLINUX` 终端注入，ABI 不支持或
+过滤器安装失败即拒绝启动。C/Q 可写角色的原生 YOLO 模式用于非交互工具执行，不提供 OS 文件隔离；
+共享只读边界不适用于可写角色。
+
+新增 ID 的模型菜单沿用 #52 定稿，布局无需调整；已完成的离线布局、导航与返回核验见
+[UI 证据](artifacts/next-worker-harness-adapters/ui/README.md)。离线证据不替代真实模型资格或完整人工视觉接受。
+
 ### 授权与运行依据
 
 Command Palette 的“执行设置”或 `/concurrency` 可保存并行包额度，默认 3，允许任意正安全整数。

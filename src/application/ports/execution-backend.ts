@@ -135,7 +135,7 @@ export type ExecutionQuery =
     }
   | { readonly operation: 'request-show'; readonly requestId: string }
   /**
-   * 有界读取某条协调身份的原始 mailbox 行（含已确认的原 question message 正文）。
+   * 有界读取某条协调身份的原始 inbox 行；已确认问题可能不在该页。
    *
    * 只按精确 terminal handle 读取，`limit` 必须落在 1..20；Orca `inbox` 没有 Run/message
    * selector，因此这里不假装能按 ID 查询：调用方在有界页里按 Run/messageId 过滤，页里找不到就是

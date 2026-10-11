@@ -1,0 +1,56 @@
+{
+  "phase": "before_close",
+  "repo": "/var/tmp/orca-ip04-controller-proof-p0vZXM/repo",
+  "child": "/home/joshua/orca/workspaces/repo/wp-8e58ee2efd6360bf78c1f82578a1789fd9833d5e9c338c52b5254b148ab8a0ff",
+  "terminals": [
+    {
+      "handle": "term_d807736d-a24d-4580-9674-b7407ad98ad0",
+      "worktreeId": "ec6d9cba-571a-4a22-b33b-5316e44160b2::/home/joshua/orca/workspaces/repo/wp-8e58ee2efd6360bf78c1f82578a1789fd9833d5e9c338c52b5254b148ab8a0ff",
+      "ptyId": "ec6d9cba-571a-4a22-b33b-5316e44160b2::/home/joshua/orca/workspaces/repo/wp-8e58ee2efd6360bf78c1f82578a1789fd9833d5e9c338c52b5254b148ab8a0ff@@95ce1bd1",
+      "incarnationId": "45f127ef-0849-4992-a30c-5160388b8ebc",
+      "connected": true,
+      "agentIdentity": "command-code"
+    },
+    {
+      "handle": "term_0a991755-fee3-47fc-b829-e397d0a3570c",
+      "worktreeId": "ec6d9cba-571a-4a22-b33b-5316e44160b2::/home/joshua/orca/workspaces/repo/wp-8e58ee2efd6360bf78c1f82578a1789fd9833d5e9c338c52b5254b148ab8a0ff",
+      "ptyId": "ec6d9cba-571a-4a22-b33b-5316e44160b2::/home/joshua/orca/workspaces/repo/wp-8e58ee2efd6360bf78c1f82578a1789fd9833d5e9c338c52b5254b148ab8a0ff@@e0b83c13",
+      "incarnationId": "12f9e250-27b0-43f2-8dfa-010234be4046",
+      "connected": true,
+      "agentIdentity": "command-code"
+    },
+    {
+      "handle": "term_2df93a93-c93d-438a-86f2-03e083b9b1db",
+      "worktreeId": "ec6d9cba-571a-4a22-b33b-5316e44160b2::/home/joshua/orca/workspaces/repo/wp-8e58ee2efd6360bf78c1f82578a1789fd9833d5e9c338c52b5254b148ab8a0ff",
+      "ptyId": "ec6d9cba-571a-4a22-b33b-5316e44160b2::/home/joshua/orca/workspaces/repo/wp-8e58ee2efd6360bf78c1f82578a1789fd9833d5e9c338c52b5254b148ab8a0ff@@3ca9007a",
+      "incarnationId": "7a3760bc-92b6-4d7a-bff0-9c51e37eedae",
+      "connected": true,
+      "agentIdentity": "qwen-code"
+    },
+    {
+      "handle": "term_458e85f6-dc0a-407b-a316-f94a530f4dbd",
+      "worktreeId": "ec6d9cba-571a-4a22-b33b-5316e44160b2::/home/joshua/orca/workspaces/repo/wp-8e58ee2efd6360bf78c1f82578a1789fd9833d5e9c338c52b5254b148ab8a0ff",
+      "ptyId": "ec6d9cba-571a-4a22-b33b-5316e44160b2::/home/joshua/orca/workspaces/repo/wp-8e58ee2efd6360bf78c1f82578a1789fd9833d5e9c338c52b5254b148ab8a0ff@@1bd4848b",
+      "incarnationId": "27731731-e2aa-4587-8d95-977fa6d4d5a5",
+      "connected": true,
+      "agentIdentity": "qwen-code"
+    },
+    {
+      "handle": "term_06faffec-e3a7-4d41-92ac-36f40b85caa9",
+      "worktreeId": "ec6d9cba-571a-4a22-b33b-5316e44160b2::/var/tmp/orca-ip04-controller-proof-p0vZXM/repo",
+      "ptyId": "ec6d9cba-571a-4a22-b33b-5316e44160b2::/var/tmp/orca-ip04-controller-proof-p0vZXM/repo@@4e9f035b",
+      "incarnationId": "07f86b5f-a74b-4351-8025-64defd3c505b",
+      "connected": true,
+      "agentIdentity": "qwen-code"
+    },
+    {
+      "handle": "term_708a5389-9e23-4e10-998b-f983e7883f74",
+      "worktreeId": "ec6d9cba-571a-4a22-b33b-5316e44160b2::/var/tmp/orca-ip04-controller-proof-p0vZXM/repo",
+      "ptyId": "ec6d9cba-571a-4a22-b33b-5316e44160b2::/var/tmp/orca-ip04-controller-proof-p0vZXM/repo@@20731c8d",
+      "incarnationId": "0defe1c0-74fa-48bb-9c91-2add8eb07196",
+      "connected": true,
+      "agentIdentity": null
+    }
+  ],
+  "archive": "/var/tmp/orca-harness-evidence/p0vZXM-controller-passed-checkouts.tar.gz"
+}

@@ -1,0 +1,41 @@
+{
+  "head": "1a3eaf7577a3fe62af3e8a35ba5451080ac34e47",
+  "typecheck": {
+    "command": "pnpm typecheck",
+    "exitCode": 0
+  },
+  "lint": {
+    "command": "pnpm lint",
+    "exitCode": 0,
+    "log": "/var/tmp/ocp-harness-final-lint-20261011.log"
+  },
+  "build": {
+    "command": "pnpm build",
+    "exitCode": 0
+  },
+  "vitest": {
+    "command": "pnpm test",
+    "exitCode": 0,
+    "filesPassed": 204,
+    "filesSkipped": 9,
+    "testsPassed": 2381,
+    "testsSkipped": 18,
+    "durationSeconds": 74.89,
+    "log": "/var/tmp/ocp-harness-final-vitest-20261011-v2.log"
+  },
+  "strictSpec": {
+    "command": "openspec validate add-testable-worker-harness-adapters --strict",
+    "exitCode": 0
+  },
+  "diffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "realMatrix": {
+    "passed": 45,
+    "skipped": 2,
+    "durationSeconds": 730.57,
+    "evidence": "ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.json"
+  },
+  "mixedController": "blocked: generated Dispatch mailbox rejected by Controller sender check; Capsule behind unconsumed FIFO question; driver stopped and exact evidence preserved; no PASS inferred"
+}

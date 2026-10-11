@@ -2,7 +2,7 @@
 
 > **硬约束：尊重已确认原型。任何 TUI change 必须直接引用对应定稿决议、源码和画面，并按其布局、信息层级、视觉风格、导航与返回约定实施、验收。未经用户明确批准，不得自行重新设计。交互正常或自动测试通过，不能替代原型一致性验收。**
 
-状态日期：2026-10-10。接手先核对 HEAD、工作区和当前工件；保留已有未提交改动。体验以用户当前指示和 Decision Ticket 最终决议为准；领域、模块与公共合同分别由 [CONTEXT.md](../../CONTEXT.md)、[architecture.md](../architecture.md)、[interface-contracts.md](../interface-contracts.md) 拥有。
+状态日期：2026-10-11。接手先核对 HEAD、工作区和当前工件；保留已有未提交改动。体验以用户当前指示和 Decision Ticket 最终决议为准；领域、模块与公共合同分别由 [CONTEXT.md](../../CONTEXT.md)、[architecture.md](../architecture.md)、[interface-contracts.md](../interface-contracts.md) 拥有。
 
 当前修复批为 [repair-ledger-lab-verification-findings](../../openspec/changes/repair-ledger-lab-verification-findings/implementation-plan.md)，覆盖前驱 verification 的模型配置、用量、初始化、对话与滚动反馈，沿 #40 continuous、#47 above-input、#52 dialog final、#48 custom-direct 实施。新采集材料单独保存在 [修复批证据](../../artifacts/ledger-lab/verification-repairs-20261010/README.md)；合成生产画面不替代真实平台与用户视觉接受。
 
@@ -11,6 +11,8 @@
 对话核心前驱为 [stabilize-agent-harness-core](../../openspec/changes/archive/2026-10-09-stabilize-agent-harness-core/implementation-plan.md)（2026-10-09 已归档）；其直接前驱 [rework-coordinator-provider-configuration](../../openspec/changes/archive/2026-10-08-rework-coordinator-provider-configuration/implementation-plan.md) 已归档。模型设置沿 #52 dialog final 的定稿不变：Worker 角色只选择 harness 与该 harness 原生目录候选（model/effort），不再出现连接、凭据、API key 或任意 options 字段；Coordinator 沿同布局加入用户连接复用、服务/地区产品线、自定义协议、地址与隐藏 Key、模型候选。目录查询失败时可手填 native exact ID 并标记未验证，effort 不可捏造。保存追加 profile，执行应用须经 Manifest v4 审阅。用户于2026-10-08接受 provider 批次功能，明确将TUI美化与完整视觉对照留待后续；已有三档画面保留为审阅材料，不由行为测试或该次功能接受推定逐项呈现验收通过。后续TUI改动仍按本页原型规则执行。
 
 本批只稳定对话核心与新增调试入口：协调与调试共用 transcript/composer 区域和输入保护，新增 Session 级 `/stop`、`/retry`，退出先 abort 模型再保存草稿，并新增 `ocp --debug [directory]` 的无 Scope 前台与 `list_files`/`read_file`/`search`/`git_diff` 有界只读工具。协调工作区的布局、层级、配色、导航与返回约定不变；调试界面是新入口，不构成对六票原型的修改。实施任务已完成，真实链路、MiniMax有限实测及三档有色/无色画面对照见 [实施证据](../../artifacts/agent-harness-core/README.md)；本次对照覆盖对话核心，六票原型的完整人工呈现验收仍以用户确认为准。
+
+新增 Worker Harness `command-code` 与 `qwen-code` 已正式注册，与 codex、claude、opencode、pi、omp 共七项；CodeBuddy 按 D-01 排除。两家沿用 #52 的原生模型选择布局，无需改 UI 设计；限定范围的离线布局、导航与返回核验已完成，见 [新 ID 的 UI 证据](../../artifacts/next-worker-harness-adapters/ui/README.md)。历史 CodeBuddy captures 保留为 provisional 材料，不表示生产支持。C/Q 的 2026-10-11 最终真实资格矩阵已 PASS，见 [验收报告](../../artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.md)及 [结构化证据](../../artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.json)。混合 Controller 闭环也已取得 deliverable，见[真实报告](../../artifacts/next-worker-harness-adapters/controller-20261011T085821980Z-89759c30-e5f4-4a09-8624-89e137fe85f5.md)；这些功能与离线检查也不替代六票完整人工视觉接受。C/Q 可写角色的 YOLO 模式不提供 OS 文件隔离，只读角色仍使用共享 bwrap/seccomp 边界。
 
 ## 1. 六票来源与当前范围
 

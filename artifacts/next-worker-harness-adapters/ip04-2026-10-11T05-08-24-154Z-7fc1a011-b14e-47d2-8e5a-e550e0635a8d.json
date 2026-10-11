@@ -1,0 +1,282 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-11T05:08:24.154Z",
+  "finishedAt": "2026-10-11T05:20:31.754Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-zX9uxn",
+  "runId": "run_8e2931b47a09",
+  "coordinatorTerminalHandle": "term_8091f7ea-5684-4b7e-8f99-e8248cd40368",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "command-code",
+      "modelSelection": {
+        "model": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "ip04:command-code:planner",
+          "taskId": "task_e5c5152283d3",
+          "dispatchId": "ctx_bcbdf40ecefa",
+          "sessionId": "7cbfc194-e162-444d-ba5c-7ff831e52eb7",
+          "transcriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z-x9uxn-project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/7cbfc194-e162-444d-ba5c-7ff831e52eb7.jsonl",
+          "stateRoot": "/home/joshua/.commandcode",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-zX9uxn/state/command-code/dbe76151b35e5186ddd7/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "launchId": "ip04:command-code:implementation",
+          "taskId": "task_c4345b89c972",
+          "dispatchId": "ctx_6da25bc5860f",
+          "sessionId": "db0ed8ce-4db0-498f-b0f6-47ce9a34ddf9",
+          "transcriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z-x9uxn-project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/db0ed8ce-4db0-498f-b0f6-47ce9a34ddf9.jsonl",
+          "stateRoot": "/home/joshua/.commandcode",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-zX9uxn/state/command-code/a7a6ed17024981668d09/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "launchId": "ip04:command-code:validator",
+          "taskId": "task_a570fa9f8ee8",
+          "dispatchId": "ctx_69b58dc9f5db",
+          "sessionId": "5112169f-1551-42a4-9435-38d1ab8674a3",
+          "transcriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z-x9uxn-project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/5112169f-1551-42a4-9435-38d1ab8674a3.jsonl",
+          "stateRoot": "/home/joshua/.commandcode",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-zX9uxn/state/command-code/309a44cd2437360438c6/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "launchId": "ip04:command-code:finalizer",
+          "taskId": "task_7fb9246d4f42",
+          "dispatchId": "ctx_06e528dabd3c",
+          "sessionId": "abee4846-65d6-4bd3-a1df-4dc47a63fe51",
+          "transcriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z-x9uxn-project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/abee4846-65d6-4bd3-a1df-4dc47a63fe51.jsonl",
+          "stateRoot": "/home/joshua/.commandcode",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-zX9uxn/state/command-code/25126d745ebf402385dd/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "harness": "command-code",
+        "kind": "ran",
+        "sessionId": "db0ed8ce-4db0-498f-b0f6-47ce9a34ddf9",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null,
+        "dispatchId": "ctx_3e3d457355b2",
+        "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+        "contextPreserved": null
+      },
+      "validatorContinuation": {
+        "harness": "command-code",
+        "kind": "ran",
+        "sessionId": "5112169f-1551-42a4-9435-38d1ab8674a3",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null,
+        "dispatchId": "ctx_acb5d7c337b5",
+        "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+        "contextPreserved": true
+      },
+      "recovery": {
+        "kind": "ran",
+        "sourceSessionId": "5112169f-1551-42a4-9435-38d1ab8674a3",
+        "sourceTranscriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z-x9uxn-project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/5112169f-1551-42a4-9435-38d1ab8674a3.jsonl",
+        "utility": {
+          "taskId": "task_a88082ba3bb8",
+          "dispatchId": "ctx_b9de47180700",
+          "sessionId": "ac10aa3a-3fe3-4cfb-9b14-a0fc8a228162",
+          "transcriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z-x9uxn-project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/ac10aa3a-3fe3-4cfb-9b14-a0fc8a228162.jsonl",
+          "coverage": "complete",
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "terminalState": "succeeded"
+        },
+        "capsuleRef": "recovery-capsule:ip04:command-code:recovery-utility",
+        "coverage": {
+          "coverage": "complete",
+          "readableRange": {
+            "transcriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z-x9uxn-project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/5112169f-1551-42a4-9435-38d1ab8674a3.jsonl",
+            "fromEventRef": "5c067cf7",
+            "toEventRef": "c1b22679"
+          },
+          "gaps": [],
+          "lastCompleteEventRef": "c1b22679"
+        },
+        "sourceBehaviorVerified": true,
+        "readOnlyVerified": true,
+        "permissionDenied": {
+          "path": "/var/tmp/orca-harness-acceptance-zX9uxn/project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/.companion/utility-write-probe-e5986015-e1b3-4154-9b58-69df80bf56cb",
+          "code": "EROFS",
+          "eventRef": "line:6"
+        },
+        "deliveryId": null,
+        "deliveryAcked": false,
+        "blocker": null
+      },
+      "blockers": []
+    },
+    {
+      "harness": "qwen-code",
+      "modelSelection": {
+        "model": "MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "ip04:qwen-code:planner",
+          "taskId": "task_a4840911703d",
+          "dispatchId": "ctx_9eee64aa50d6",
+          "sessionId": "82b73f5c-4089-4dc8-8f94-ed1b2d2ea76d",
+          "transcriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-zX9uxn-project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/chats/82b73f5c-4089-4dc8-8f94-ed1b2d2ea76d.jsonl",
+          "stateRoot": "/home/joshua/.qwen",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-zX9uxn/state/qwen-code/reporters/82b73f5c40898dc87f94/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "launchId": "ip04:qwen-code:implementation",
+          "taskId": "task_cc7fe6502c74",
+          "dispatchId": "ctx_77b19be50f67",
+          "sessionId": "23fb6c36-126a-4d3b-8f22-c37aab977745",
+          "transcriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-zX9uxn-project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/chats/23fb6c36-126a-4d3b-8f22-c37aab977745.jsonl",
+          "stateRoot": "/home/joshua/.qwen",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-zX9uxn/state/qwen-code/reporters/23fb6c36126add3b7f22/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "launchId": "ip04:qwen-code:validator",
+          "taskId": "task_cbaa1b721ddd",
+          "dispatchId": "ctx_8ca420e467ea",
+          "sessionId": "1233882b-f5e3-4fd5-81eb-fc57eda8d182",
+          "transcriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-zX9uxn-project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/chats/1233882b-f5e3-4fd5-81eb-fc57eda8d182.jsonl",
+          "stateRoot": "/home/joshua/.qwen",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-zX9uxn/state/qwen-code/reporters/1233882bf5e3ffd571eb/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "launchId": "ip04:qwen-code:finalizer",
+          "taskId": "task_858b32a267e4",
+          "dispatchId": "ctx_8dae331f4113",
+          "sessionId": "38d6a8f4-637c-4bfd-8b3a-5db902e602c8",
+          "transcriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-zX9uxn-project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/chats/38d6a8f4-637c-4bfd-8b3a-5db902e602c8.jsonl",
+          "stateRoot": "/home/joshua/.qwen",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-zX9uxn/state/qwen-code/reporters/38d6a8f4637ccbfdcb3a/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "harness": "qwen-code",
+        "kind": "ran",
+        "sessionId": "23fb6c36-126a-4d3b-8f22-c37aab977745",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null,
+        "dispatchId": "ctx_0255b363caff",
+        "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+        "contextPreserved": null
+      },
+      "validatorContinuation": {
+        "harness": "qwen-code",
+        "kind": "ran",
+        "sessionId": "1233882b-f5e3-4fd5-81eb-fc57eda8d182",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null,
+        "dispatchId": "ctx_b363bd56e435",
+        "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+        "contextPreserved": true
+      },
+      "recovery": {
+        "kind": "ran",
+        "sourceSessionId": "1233882b-f5e3-4fd5-81eb-fc57eda8d182",
+        "sourceTranscriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-zX9uxn-project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/chats/1233882b-f5e3-4fd5-81eb-fc57eda8d182.jsonl",
+        "utility": {
+          "taskId": "task_343649218ab6",
+          "dispatchId": "ctx_4dbda69ab575",
+          "sessionId": "289c1f34-e69c-4cc9-8b67-546286c4063f",
+          "transcriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-zX9uxn-project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/chats/289c1f34-e69c-4cc9-8b67-546286c4063f.jsonl",
+          "coverage": "complete",
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "terminalState": "succeeded"
+        },
+        "capsuleRef": "recovery-capsule:ip04:qwen-code:recovery-utility",
+        "coverage": {
+          "coverage": "complete",
+          "readableRange": {
+            "transcriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-zX9uxn-project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/chats/1233882b-f5e3-4fd5-81eb-fc57eda8d182.jsonl",
+            "fromEventRef": "2adfc42c-67dc-4ce9-ba5c-684fb16140e9",
+            "toEventRef": "0e1531f4-9e01-45a9-adf9-4c5805a9efbb"
+          },
+          "gaps": [],
+          "lastCompleteEventRef": "0e1531f4-9e01-45a9-adf9-4c5805a9efbb"
+        },
+        "sourceBehaviorVerified": true,
+        "readOnlyVerified": true,
+        "permissionDenied": {
+          "path": "/var/tmp/orca-harness-acceptance-zX9uxn/project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103/.companion/utility-write-probe-8114e6f6-4166-465c-981a-f12bf69b2a3b",
+          "code": "EROFS",
+          "eventRef": "line:13"
+        },
+        "deliveryId": null,
+        "deliveryAcked": false,
+        "blocker": null
+      },
+      "blockers": []
+    }
+  ]
+}

@@ -4,6 +4,16 @@
 
 ## Worker Harness 当前基线
 
+### 新候选真实验收（2026-10-11）
+
+当前正式注册 codex、claude、opencode、pi、omp、command-code、qwen-code。Orca CLI/runtime 1.4.222，实际使用 `orca-ide`；submodule 保持下述固定 SHA。Command Code 与 Qwen Code 使用中国区 MiniMax M Plan 的 `MiniMax-M3.1-Flash-Preview`，通过四角色、精确同 Session 续接、Validator 续接及只读 Recovery Utility 的完整真实矩阵：45 passed、2 skipped。证据见[本轮矩阵](../artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.md)。独立[混合 Controller 验收](../artifacts/next-worker-harness-adapters/controller-20261011T085821980Z-89759c30-e5f4-4a09-8624-89e137fe85f5.md)也已通过：Command Code 规划/实现，Qwen 验证/恢复/Finalizer；人工中断精确 Validator 后完成 Capsule 与替代 Session、Git 集成和私有 origin 推送，取得 deliverable。同 Scope 重启保持 5 个 binding、1 次 Recovery、4 项结算和已消耗预算。
+
+`references/orca` 已按批准快进至 `cc5c85fb7a43ed52c6cd29157210020cd769d84c`；对应 adapter 回归 77 tests 已通过。本机 Orca 仍为 1.4.222，因此新快照只更新源码依据，不改变运行时能力结论。新源码列出 17 个 Orca builtin agent ID；MiniMax Code (`mcode`) 未出现在 agent union、TUI config 或进程识别中，记录为独立的上游 builtin identity 缺口。上游 builtin 清单不证明本机版本支持，也不证明 hook/transcript 能力或 Companion adapter 通过。
+
+共享只读 bwrap 保留前台 Session/进程组，使用继承 FD 安装 seccomp，拒绝 TIOCSTI/TIOCLINUX；x64/arm64 之外、外来 ABI、x32 或安装失败拒绝启动。Ubuntu x86_64 的实际 ioctl 拒绝、前台身份、文件拒写与精确工件可写已核验；arm64/Windows 未实测。Command Code/Qwen 的原生无 prompt 模型目录不可用，可手填 exact ID，effort/catalogSource 保持 null。可写角色使用原生 `--yolo`，没有额外 OS workspace sandbox。
+
+其余候选的当前资格、版本、公开接口与缺口以[候选研究](research/next-worker-harness-candidates.md)为准；Antigravity 已登录并取得目标模型响应，但未证明完整精确会话与 transcript 合同，未注册。下方带日期的五家基线与旧矩阵保留各自验证范围。
+
 ### 原生环境检查（2026-10-07）
 
 移除 Worker 凭据管理后，本机通过生产目录 adapter 无 prompt 查询：Codex 0.160.0 返回 14 项、Claude 2.1.291 返回 4 项、pi 1.0.0 返回 521 项、OMP 18.4.10 返回 913 项；来源及 effort 只取原生输出。OpenCode 2.0.21 的 `models --standalone` 退出码为 0 且输出为空，记录为 `catalog_empty`，可手填未验证 exact ID。这些结果不证明模型网络调用或认证成功。
@@ -57,12 +67,14 @@ Codex 的 SessionStart hook 共用 `startup|resume` matcher；官方事件的 so
 | --- | --- |
 | 仓库 | `https://github.com/stablyai/orca.git` |
 | 路径 | `references/orca`（Git submodule，只读） |
-| 固定 commit | `de15227a1d321840ea35c6bb2d0cc01e3409e5f1` |
-| commit 时间 | 2026-09-17T03:00:17-07:00 |
-| commit 标题 | `feat(terminal): search match count + Cmd+F focus parity (#9035)` |
+| 固定 commit | `cc5c85fb7a43ed52c6cd29157210020cd769d84c` |
+| commit 时间 | 2026-10-11T00:19:28-07:00 |
+| commit 标题 | `ci: ship the orcad template in hourly and daily builds (#27407)` |
 | 克隆方式 | `git submodule add --depth 1`，浅克隆，工作区约 280 MB |
 
 该目录不参与构建、lint、测试与打包，边界见 `AGENTS.md` 第 3、4 节。
+
+此前记录中的 `de15227a1d321840ea35c6bb2d0cc01e3409e5f1` 是升级前历史快照；引用它的历史诊断保留原链接，不代表当前固定源码或本机 Orca 运行时结论。
 
 ## 验证环境
 

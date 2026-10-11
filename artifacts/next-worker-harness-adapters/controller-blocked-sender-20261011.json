@@ -1,0 +1,1095 @@
+{
+  "result": "blocked",
+  "observedAt": "2026-10-11T07:07:39.953Z",
+  "root": "/var/tmp/orca-ip04-mixed-controller-K9pR5M",
+  "scopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+  "snapshot": {
+    "kind": "snapshot",
+    "snapshot": {
+      "scope": {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "fullBranchRef": "refs/heads/main",
+        "canonicalWorktreePath": "/var/tmp/orca-ip04-mixed-controller-K9pR5M/repo",
+        "mode": "execution_coordination",
+        "controlState": "active",
+        "planningCycleId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-cycle",
+        "mapRevision": 0,
+        "graphId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1",
+        "graphVersion": 1,
+        "authorizationId": "auth:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:a344ebb1056b96edb860e1b90626d403bed58e85912b3e69e724fd9e4b425294",
+        "authorizationVersion": 1,
+        "revision": 72
+      },
+      "laneReservations": [
+        {
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "graphId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1",
+          "generation": 1,
+          "workPackageId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner",
+          "operationId": "work-package-lane:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner",
+          "authorizationId": "auth:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:a344ebb1056b96edb860e1b90626d403bed58e85912b3e69e724fd9e4b425294",
+          "authorizationVersion": 1,
+          "baselineHead": "ee40a42acbc9005c9f86a3dae0861e204eb2d702",
+          "reservedAt": 1791698541037,
+          "releasedAt": null
+        }
+      ],
+      "sessions": [
+        {
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "coordinatorModelConfigurationRef": "ip04-minimax-coordinator",
+          "lifecycleState": "registered",
+          "blockedReason": null,
+          "registeredAt": 1791698527494
+        }
+      ],
+      "leases": [
+        {
+          "kind": "execution_coordination",
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:4befa18b-5ed7-443d-956b-e5a26cfdeda3",
+          "fencingGeneration": 3,
+          "acquiredAt": 1791699783403,
+          "expiresAt": null,
+          "releasedAt": null
+        },
+        {
+          "kind": "runtime",
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:4befa18b-5ed7-443d-956b-e5a26cfdeda3",
+          "fencingGeneration": 4,
+          "acquiredAt": 1791699783364,
+          "expiresAt": 1791702483713,
+          "releasedAt": null
+        }
+      ],
+      "executionLease": {
+        "kind": "execution_coordination",
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+        "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:4befa18b-5ed7-443d-956b-e5a26cfdeda3",
+        "fencingGeneration": 3,
+        "acquiredAt": 1791699783403,
+        "expiresAt": null,
+        "releasedAt": null
+      },
+      "ticketClaims": [],
+      "pendingInteractions": [],
+      "unresolvedIntents": [],
+      "settledGitIntegrationIntents": [],
+      "planningHandoffs": [],
+      "planningResponsibility": {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+        "sourceProposalId": null,
+        "assignedAt": 1791698527494
+      },
+      "sessionSegments": [
+        {
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "segmentId": "segment:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ctx_e1e4769bbdbe:attempt%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aplanner%3Ainitial%3A1",
+          "workPackageId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner",
+          "role": "planner",
+          "workerTaskId": "worker-task:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:initial",
+          "dispatchId": "ctx_e1e4769bbdbe",
+          "attemptId": "attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:initial:1",
+          "sessionBindingId": "session-binding:ctx_e1e4769bbdbe:7cb3d298-6e96-44a9-b21a-ee632e1bcabe",
+          "lastTranscriptRef": "/home/joshua/.commandcode/projects/home-joshua-orca-workspaces-repo-wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1/7cb3d298-6e96-44a9-b21a-ee632e1bcabe.jsonl",
+          "terminalReceiptRef": null,
+          "transcriptReferenceable": true,
+          "verifiable": true,
+          "recordedAt": 1791698574923
+        },
+        {
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "segmentId": "segment:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ctx_3c3e696bfb92:attempt%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aimplementation%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279%3A1",
+          "workPackageId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner",
+          "role": "implementation",
+          "workerTaskId": "worker-task:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279",
+          "dispatchId": "ctx_3c3e696bfb92",
+          "attemptId": "attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1",
+          "sessionBindingId": "session-binding:ctx_3c3e696bfb92:10d1cd69-93b7-4d81-8760-bdeaa15b1c45",
+          "lastTranscriptRef": "/home/joshua/.commandcode/projects/home-joshua-orca-workspaces-repo-wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1/10d1cd69-93b7-4d81-8760-bdeaa15b1c45.jsonl",
+          "terminalReceiptRef": null,
+          "transcriptReferenceable": true,
+          "verifiable": true,
+          "recordedAt": 1791698888017
+        },
+        {
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "segmentId": "segment:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ctx_becb338ce8f1:attempt%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Avalidator%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279%3A1",
+          "workPackageId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner",
+          "role": "validator",
+          "workerTaskId": "worker-task:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279",
+          "dispatchId": "ctx_becb338ce8f1",
+          "attemptId": "attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1",
+          "sessionBindingId": "session-binding:ctx_becb338ce8f1:a160d1f1-312c-4dc5-8b6a-230c369947f6",
+          "lastTranscriptRef": "/home/joshua/.qwen/projects/-home-joshua-orca-workspaces-repo-wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1/chats/a160d1f1-312c-4dc5-8b6a-230c369947f6.jsonl",
+          "terminalReceiptRef": null,
+          "transcriptReferenceable": true,
+          "verifiable": true,
+          "recordedAt": 1791698982002
+        }
+      ],
+      "materializationBindings": [
+        {
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "workPackageId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner",
+          "orcaTaskId": "task_2172c7739186",
+          "creationOperationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:0:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aplanner%3Ainitial:task",
+          "createdAt": 1791698543252,
+          "authorizationId": "auth:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:a344ebb1056b96edb860e1b90626d403bed58e85912b3e69e724fd9e4b425294",
+          "authorizationVersion": 1,
+          "workerProfileRef": {
+            "kind": "worker-profile",
+            "id": "ip04-planner"
+          },
+          "identity": "issued",
+          "role": "planner",
+          "recoveryUtilityRole": null,
+          "workerTaskId": "worker-task:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:initial",
+          "dispatchId": "dispatch:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:initial:1",
+          "attemptId": "attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:initial:1",
+          "worktreeId": "993c740f-ccf6-445f-8bbb-846835cc9b22::/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1",
+          "specBinding": null,
+          "specificationUnitPath": "openspec/changes/ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-g1-readme-banner-e6ede8e4",
+          "launchId": "worker-launch:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:initial:1"
+        },
+        {
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "workPackageId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner",
+          "orcaTaskId": "task_aaefe5da73a6",
+          "creationOperationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:4124367200370191:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aimplementation%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279:task",
+          "createdAt": 1791698856942,
+          "authorizationId": "auth:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:a344ebb1056b96edb860e1b90626d403bed58e85912b3e69e724fd9e4b425294",
+          "authorizationVersion": 1,
+          "workerProfileRef": {
+            "kind": "worker-profile",
+            "id": "ip04-implementation"
+          },
+          "identity": "issued",
+          "role": "implementation",
+          "recoveryUtilityRole": null,
+          "workerTaskId": "worker-task:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279",
+          "dispatchId": "dispatch:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1",
+          "attemptId": "attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1",
+          "worktreeId": "993c740f-ccf6-445f-8bbb-846835cc9b22::/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1",
+          "specBinding": {
+            "provider": "openspec",
+            "relativePath": "openspec/changes/ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-g1-readme-banner-e6ede8e4",
+            "contentDigest": "06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6",
+            "providerVersion": "1",
+            "contractRevision": 4124367200370191,
+            "trackingRevision": 805000327794279
+          },
+          "specificationUnitPath": null,
+          "launchId": "worker-launch:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1"
+        },
+        {
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "workPackageId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner",
+          "orcaTaskId": "task_00102a6965f9",
+          "creationOperationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:4124367200370191:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Avalidator%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279:task",
+          "createdAt": 1791698967003,
+          "authorizationId": "auth:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:a344ebb1056b96edb860e1b90626d403bed58e85912b3e69e724fd9e4b425294",
+          "authorizationVersion": 1,
+          "workerProfileRef": {
+            "kind": "worker-profile",
+            "id": "ip04-validator"
+          },
+          "identity": "issued",
+          "role": "validator",
+          "recoveryUtilityRole": null,
+          "workerTaskId": "worker-task:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279",
+          "dispatchId": "dispatch:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1",
+          "attemptId": "attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1",
+          "worktreeId": "993c740f-ccf6-445f-8bbb-846835cc9b22::/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1",
+          "specBinding": {
+            "provider": "openspec",
+            "relativePath": "openspec/changes/ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-g1-readme-banner-e6ede8e4",
+            "contentDigest": "06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6",
+            "providerVersion": "1",
+            "contractRevision": 4124367200370191,
+            "trackingRevision": 805000327794279
+          },
+          "specificationUnitPath": null,
+          "launchId": "worker-launch:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1"
+        },
+        {
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "workPackageId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner",
+          "orcaTaskId": "task_b785442d8dcd",
+          "creationOperationId": "op:capsule:segment%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Actx_becb338ce8f1%3Aattempt%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%253A1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%25253Areadme-banner%253Avalidator%253Ainitial%25253Aopenspec%25253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%25253A4124367200370191%25253A805000327794279%253A1:task",
+          "createdAt": 1791699827783,
+          "authorizationId": "auth:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:a344ebb1056b96edb860e1b90626d403bed58e85912b3e69e724fd9e4b425294",
+          "authorizationVersion": 1,
+          "workerProfileRef": {
+            "kind": "worker-profile",
+            "id": "ip04-recovery_utility"
+          },
+          "identity": "issued",
+          "role": null,
+          "recoveryUtilityRole": "recovery_utility",
+          "workerTaskId": "op:capsule:segment%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Actx_becb338ce8f1%3Aattempt%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%253A1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%25253Areadme-banner%253Avalidator%253Ainitial%25253Aopenspec%25253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%25253A4124367200370191%25253A805000327794279%253A1:task",
+          "dispatchId": "op:capsule:segment%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Actx_becb338ce8f1%3Aattempt%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%253A1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%25253Areadme-banner%253Avalidator%253Ainitial%25253Aopenspec%25253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%25253A4124367200370191%25253A805000327794279%253A1:worker-start",
+          "attemptId": "op:capsule:segment%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Actx_becb338ce8f1%3Aattempt%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%253A1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%25253Areadme-banner%253Avalidator%253Ainitial%25253Aopenspec%25253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%25253A4124367200370191%25253A805000327794279%253A1:task",
+          "worktreeId": "993c740f-ccf6-445f-8bbb-846835cc9b22::/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1",
+          "specBinding": null,
+          "specificationUnitPath": null,
+          "launchId": "worker-launch:capsule:segment%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Actx_becb338ce8f1%3Aattempt%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%253A1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%25253Areadme-banner%253Avalidator%253Ainitial%25253Aopenspec%25253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%25253A4124367200370191%25253A805000327794279%253A1"
+        }
+      ],
+      "deliverySettlements": [
+        {
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "dedupeKey": "[\"delivery_0facbc4f3001\",\"run_370fd533d5da\",1,\"worker-task:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:initial\",\"ctx_e1e4769bbdbe\",\"attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:initial:1\"]",
+          "deliveryId": "delivery_0facbc4f3001",
+          "runId": "run_370fd533d5da",
+          "consumerGeneration": 1,
+          "workerTaskId": "worker-task:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:initial",
+          "dispatchId": "ctx_e1e4769bbdbe",
+          "attemptId": "attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:initial:1",
+          "role": "planner",
+          "contractRevision": 4124367200370191,
+          "orcaResultRef": "task_2172c7739186#a72a0e603b7bb",
+          "outcome": "succeeded",
+          "validationVerdict": null,
+          "acceptedAt": 1791698852867
+        },
+        {
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "dedupeKey": "[\"delivery_e5d009e4c7f2\",\"run_370fd533d5da\",1,\"worker-task:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279\",\"ctx_3c3e696bfb92\",\"attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1\"]",
+          "deliveryId": "delivery_e5d009e4c7f2",
+          "runId": "run_370fd533d5da",
+          "consumerGeneration": 1,
+          "workerTaskId": "worker-task:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279",
+          "dispatchId": "ctx_3c3e696bfb92",
+          "attemptId": "attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1",
+          "role": "implementation",
+          "contractRevision": 4124367200370191,
+          "orcaResultRef": "task_aaefe5da73a6#63887323adaed",
+          "outcome": "succeeded",
+          "validationVerdict": null,
+          "acceptedAt": 1791698963214
+        }
+      ],
+      "deliveryVerdicts": [],
+      "recoveries": [
+        {
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "recoveryId": "recovery:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:segment:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ctx_becb338ce8f1:attempt%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Avalidator%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279%3A1",
+          "role": "validator",
+          "workPackageId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner",
+          "workerTaskId": "worker-task:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279",
+          "businessAttemptId": "attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1",
+          "sourceSegmentId": "segment:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ctx_becb338ce8f1:attempt%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Avalidator%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279%3A1",
+          "sourceDispatchId": "ctx_becb338ce8f1",
+          "replacementDispatchId": null,
+          "replacementSegmentId": null,
+          "replacementSessionBindingId": null,
+          "supersededSegmentId": null,
+          "status": "blocked",
+          "consumedBudget": 0,
+          "capsuleRef": null,
+          "prewriteOperationId": null,
+          "terminalOutcome": "failed",
+          "blockingReason": "等待 Capsule 报告超时（Dispatch ctx_6935623f8122）：不确定它是否还会报告，因此不重读同一批",
+          "createdAt": 1791699825658,
+          "updatedAt": 1791700087152
+        }
+      ],
+      "executionHandoffs": [],
+      "graphGenerations": [
+        {
+          "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+          "graphId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1",
+          "generation": 1,
+          "planningCycleId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-cycle",
+          "orcaRunId": "run_370fd533d5da",
+          "predecessorGraphId": null,
+          "baselineHead": "ee40a42acbc9005c9f86a3dae0861e204eb2d702",
+          "status": "active",
+          "createdAt": 1791698528125,
+          "updatedAt": 1791698538896
+        }
+      ],
+      "revisionHolds": [],
+      "baselineReconciliations": [],
+      "workPackageLineages": [],
+      "baselineAdoptions": [],
+      "mutationLanes": []
+    }
+  },
+  "intents": {
+    "kind": "intents",
+    "intents": [
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "run-create:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1",
+        "target": {
+          "kind": "orca-run",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1"
+        },
+        "operationCategory": "run-create",
+        "laneKey": "[\"orca-run\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1\",\"run-create\"]",
+        "expectedRevision": 2,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-incarnation"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "97e3ac6c-5ffb-40e8-84e3-d8e3221cd810",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698527544,
+        "settledAt": 1791698528099
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:0:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aplanner%3Ainitial:worktree",
+        "target": {
+          "kind": "worktree",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "materialize-worktree",
+        "laneKey": "[\"worktree\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"materialize-worktree\"]",
+        "expectedRevision": 11,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "71256cc2-56ae-4f73-acd3-6215c6075ecb",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698541062,
+        "settledAt": 1791698542443
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:0:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aplanner%3Ainitial:task",
+        "target": {
+          "kind": "task",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "materialize-task",
+        "laneKey": "[\"task\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"materialize-task\"]",
+        "expectedRevision": 13,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "c4f79d48-f630-4bfb-ad8e-714417644215",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698542728,
+        "settledAt": 1791698543275
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:0:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aplanner%3Ainitial:attempt%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aplanner%3Ainitial%3A1:workerPrepare",
+        "target": {
+          "kind": "worker-task",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "materialize-worker-terminal",
+        "laneKey": "[\"worker-task\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"materialize-worker-terminal\"]",
+        "expectedRevision": 16,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "8827d4a3-828f-4086-8405-7a6a8279c610",
+        "terminalHandle": "term_23da993f-0fca-4add-af27-9bf05b3da2e0",
+        "blockingReason": null,
+        "createdAt": 1791698543514,
+        "settledAt": 1791698543922
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:0:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aplanner%3Ainitial:attempt%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aplanner%3Ainitial%3A1:workerStart",
+        "target": {
+          "kind": "worker-task",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "materialize-worker-start",
+        "laneKey": "[\"worker-task\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"materialize-worker-start\"]",
+        "expectedRevision": 18,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "23dc8b02-5ac9-4940-9481-120e9fd00f6b",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698552471,
+        "settledAt": 1791698559848
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:0:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aplanner%3Ainitial:attempt%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aplanner%3Ainitial%3A1:workerActivate",
+        "target": {
+          "kind": "worker-task",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "materialize-worker-activate",
+        "laneKey": "[\"worker-task\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"materialize-worker-activate\"]",
+        "expectedRevision": 20,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "09e5a179-535d-492b-90fc-17db6ac7789e",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698559858,
+        "settledAt": 1791698560134
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "delivery-ack:delivery_7de16048a5b0",
+        "target": {
+          "kind": "delivery",
+          "id": "delivery_7de16048a5b0"
+        },
+        "operationCategory": "delivery",
+        "laneKey": "[\"delivery\",\"delivery_7de16048a5b0\",\"delivery\"]",
+        "expectedRevision": 23,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "7bd90f58-4853-42d2-9d86-e00c42bb6317",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698794446,
+        "settledAt": 1791698795010
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "delivery-accept-result:delivery_0facbc4f3001:ctx_e1e4769bbdbe:attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:planner:initial:1",
+        "target": {
+          "kind": "task",
+          "id": "task_2172c7739186"
+        },
+        "operationCategory": "task",
+        "laneKey": "[\"task\",\"task_2172c7739186\",\"task\"]",
+        "expectedRevision": 25,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "23730314-f6f4-44a8-89a2-d3e491b7693d",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698851759,
+        "settledAt": 1791698852312
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "delivery-ack:delivery_0facbc4f3001",
+        "target": {
+          "kind": "delivery",
+          "id": "delivery_0facbc4f3001"
+        },
+        "operationCategory": "delivery",
+        "laneKey": "[\"delivery\",\"delivery_0facbc4f3001\",\"delivery\"]",
+        "expectedRevision": 28,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "e8fb1600-2df7-47e6-a7fa-2550773e1816",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698853419,
+        "settledAt": 1791698853975
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:4124367200370191:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aimplementation%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279:task",
+        "target": {
+          "kind": "task",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "materialize-task",
+        "laneKey": "[\"task\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"materialize-task\"]",
+        "expectedRevision": 30,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "ba6ee1bb-be88-4482-9d56-91724ae36744",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698856443,
+        "settledAt": 1791698856954
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:4124367200370191:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aimplementation%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279:attempt%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aimplementation%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279%3A1:workerPrepare",
+        "target": {
+          "kind": "worker-task",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "materialize-worker-terminal",
+        "laneKey": "[\"worker-task\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"materialize-worker-terminal\"]",
+        "expectedRevision": 33,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "854ceb1d-3903-498c-a963-a872d04cab64",
+        "terminalHandle": "term_5535d62f-ed15-4d75-9082-99b44d52fc12",
+        "blockingReason": null,
+        "createdAt": 1791698857235,
+        "settledAt": 1791698857616
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:4124367200370191:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aimplementation%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279:attempt%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aimplementation%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279%3A1:workerStart",
+        "target": {
+          "kind": "worker-task",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "materialize-worker-start",
+        "laneKey": "[\"worker-task\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"materialize-worker-start\"]",
+        "expectedRevision": 35,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "42f4cc8c-5f6f-4b26-af6a-e97c62ec7c39",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698866141,
+        "settledAt": 1791698873469
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:4124367200370191:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aimplementation%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279:attempt%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Aimplementation%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279%3A1:workerActivate",
+        "target": {
+          "kind": "worker-task",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "materialize-worker-activate",
+        "laneKey": "[\"worker-task\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"materialize-worker-activate\"]",
+        "expectedRevision": 37,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "061e1f9c-a773-451d-bfc7-cf4059a74608",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698873480,
+        "settledAt": 1791698873732
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "delivery-accept-result:delivery_e5d009e4c7f2:ctx_3c3e696bfb92:attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:implementation:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1",
+        "target": {
+          "kind": "task",
+          "id": "task_aaefe5da73a6"
+        },
+        "operationCategory": "task",
+        "laneKey": "[\"task\",\"task_aaefe5da73a6\",\"task\"]",
+        "expectedRevision": 40,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "0b44ba3f-a43a-4bdd-bb4f-079f8fb62c13",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698962182,
+        "settledAt": 1791698962698
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "delivery-ack:delivery_e5d009e4c7f2",
+        "target": {
+          "kind": "delivery",
+          "id": "delivery_e5d009e4c7f2"
+        },
+        "operationCategory": "delivery",
+        "laneKey": "[\"delivery\",\"delivery_e5d009e4c7f2\",\"delivery\"]",
+        "expectedRevision": 43,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "fc6b4747-0045-4676-b21a-58e84e1fd3f3",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698963754,
+        "settledAt": 1791698964298
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:4124367200370191:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Avalidator%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279:task",
+        "target": {
+          "kind": "task",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "materialize-task",
+        "laneKey": "[\"task\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"materialize-task\"]",
+        "expectedRevision": 45,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "64344abc-f56f-4b79-9625-c8fe84a08685",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698966466,
+        "settledAt": 1791698967013
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:4124367200370191:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Avalidator%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279:attempt%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Avalidator%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279%3A1:workerPrepare",
+        "target": {
+          "kind": "worker-task",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "materialize-worker-terminal",
+        "laneKey": "[\"worker-task\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"materialize-worker-terminal\"]",
+        "expectedRevision": 48,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "b34b7996-6868-4a7b-b6d9-85868838e61e",
+        "terminalHandle": "term_49741e62-803c-420e-9a97-78ddd1d938db",
+        "blockingReason": null,
+        "createdAt": 1791698967270,
+        "settledAt": 1791698967618
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:4124367200370191:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Avalidator%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279:attempt%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Avalidator%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279%3A1:workerStart",
+        "target": {
+          "kind": "worker-task",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "materialize-worker-start",
+        "laneKey": "[\"worker-task\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"materialize-worker-start\"]",
+        "expectedRevision": 50,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "d0e4eccf-58f5-4f91-839e-e5cec3e1e851",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698978141,
+        "settledAt": 1791698981451
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:4124367200370191:worker-task%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Avalidator%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279:attempt%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%3A1%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%2523g1%253Areadme-banner%3Avalidator%3Ainitial%253Aopenspec%253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%253A4124367200370191%253A805000327794279%3A1:workerActivate",
+        "target": {
+          "kind": "worker-task",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "materialize-worker-activate",
+        "laneKey": "[\"worker-task\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"materialize-worker-activate\"]",
+        "expectedRevision": 52,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:8e0935ff-d4b5-4e62-a5f0-8308c4a76bcc"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "f0d29ed0-65c0-4e7b-90dc-bb73422a61ba",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791698981463,
+        "settledAt": 1791698981728
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "op:capsule:segment%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Actx_becb338ce8f1%3Aattempt%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%253A1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%25253Areadme-banner%253Avalidator%253Ainitial%25253Aopenspec%25253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%25253A4124367200370191%25253A805000327794279%253A1:task",
+        "target": {
+          "kind": "work-package",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "task-create",
+        "laneKey": "[\"work-package\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"task-create\"]",
+        "expectedRevision": 62,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:4befa18b-5ed7-443d-956b-e5a26cfdeda3"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "eb9c91bc-2739-41b1-803b-24cea431c410",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791699827258,
+        "settledAt": 1791699827795
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "op:capsule:segment%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Actx_becb338ce8f1%3Aattempt%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%253A1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%25253Areadme-banner%253Avalidator%253Ainitial%25253Aopenspec%25253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%25253A4124367200370191%25253A805000327794279%253A1:worker-prepare",
+        "target": {
+          "kind": "work-package",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "worker-terminal-prepare",
+        "laneKey": "[\"work-package\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"worker-terminal-prepare\"]",
+        "expectedRevision": 65,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:4befa18b-5ed7-443d-956b-e5a26cfdeda3"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "344b8e6b-af97-45f4-88a5-935db6c88504",
+        "terminalHandle": "term_452b3132-86e2-4b6a-9c48-1d89cf7403db",
+        "blockingReason": null,
+        "createdAt": 1791699828176,
+        "settledAt": 1791699828554
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "op:capsule:segment%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Actx_becb338ce8f1%3Aattempt%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%253A1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%25253Areadme-banner%253Avalidator%253Ainitial%25253Aopenspec%25253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%25253A4124367200370191%25253A805000327794279%253A1:worker-start",
+        "target": {
+          "kind": "work-package",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "worker-start",
+        "laneKey": "[\"work-package\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"worker-start\"]",
+        "expectedRevision": 67,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:4befa18b-5ed7-443d-956b-e5a26cfdeda3"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "0680f87c-9a6a-49a9-86a5-2b0933865c1d",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791699839084,
+        "settledAt": 1791699844184
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1",
+        "operationId": "op:capsule:segment%3Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%3Actx_becb338ce8f1%3Aattempt%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%253A1%253Aip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%252523g1%25253Areadme-banner%253Avalidator%253Ainitial%25253Aopenspec%25253A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%25253A4124367200370191%25253A805000327794279%253A1:worker-activate",
+        "target": {
+          "kind": "work-package",
+          "id": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner"
+        },
+        "operationCategory": "worker-terminal-activate",
+        "laneKey": "[\"work-package\",\"ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1#g1:readme-banner\",\"worker-terminal-activate\"]",
+        "expectedRevision": 69,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1-session:4befa18b-5ed7-443d-956b-e5a26cfdeda3"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "4f94705e-6d94-4824-b2e6-818f2c84a2da",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791699844194,
+        "settledAt": 1791699844447
+      }
+    ]
+  },
+  "attempts": {
+    "kind": "validation-attempt",
+    "attempt": null
+  },
+  "messages": {
+    "id": "4e51cae6-8d13-4ef2-8513-a410f9e231b4",
+    "ok": true,
+    "result": {
+      "messages": [
+        {
+          "id": "msg_b0e8c1054525",
+          "run_id": "run_370fd533d5da",
+          "from_handle": "dispatch:ctx_becb338ce8f1",
+          "to_handle": "run:run_370fd533d5da",
+          "subject": "Question",
+          "body": "{\"schemaVersion\":1,\"kind\":\"validator_step\",\"step\":\"verify\",\"workerTaskId\":\"worker-task:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279\",\"dispatchId\":\"dispatch:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1\",\"attemptId\":\"attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1\",\"outcome\":\"passed\",\"summary\":\"Verified README.md independently against the spec delta rather than trusting the implementer summary: the title line is byte-identical to baseline ee40a42, it is the only heading and sits on line 1, one blank line separates it from a single plain-prose banner paragraph, the banner carries IP-04, mixed and Controller under a case-insensitive check, and the diff is purely additive (5 insertions, 0 deletions) touching only README.md. One non-blocking observation: implementation tasks 1.1 and 1.2 in the change tasks.md are both still unchecked; that file sits outside the approved repair envelope (include README.md only) so I deliberately did not touch it, and the coordinator should get both boxes ticked before openspec finalization, which requires every implementation task checked. Nothing else is outstanding and no repair was needed.\",\"evidence\":[{\"kind\":\"command\",\"coveredPaths\":[\"README.md\"],\"command\":\"diff <(git show ee40a42acbc9005c9f86a3dae0861e204eb2d702:README.md) <(head -n 1 README.md) && grep -c '^#' README.md\",\"summary\":\"First line of README.md is byte-identical to the baseline title; grep counts exactly 1 heading line and 1 H1, located at line 1.\",\"outcome\":\"passed\"},{\"kind\":\"command\",\"coveredPaths\":[\"README.md\"],\"command\":\"tail -n +2 README.md | grep -qiE 'IP-04'; tail -n +2 README.md | grep -qiE '\\\\bmixed\\\\b'; tail -n +2 README.md | grep -qiE '\\\\bcontroller\\\\b'\",\"summary\":\"All three fixture keywords present in the banner region under case-insensitive matching, satisfying task 1.2.\",\"outcome\":\"passed\"},{\"kind\":\"command\",\"coveredPaths\":[\"README.md\"],\"command\":\"awk 'NR==1{...}' README.md; tail -n +2 README.md | grep -qE '(^#{1,6}[[:space:]])|(^[-*+][[:space:]])|(^[[:space:]]*>)|(```)|!\\\\[[^]]*\\\\]\\\\(|\\\\[[^]]*\\\\]\\\\(|(^[[:space:]]*\\\\|)'\",\"summary\":\"File is 6 lines: line 1 H1 title, line 2 blank, lines 3-6 one contiguous banner paragraph with no interior blank line; the structural-markup grep finds no heading, list, blockquote, fence, link, image or table syntax, so the banner is ordinary body text.\",\"outcome\":\"passed\"},{\"kind\":\"command\",\"coveredPaths\":[\"README.md\"],\"command\":\"git diff --numstat HEAD -- README.md; git diff HEAD -- README.md | grep -c '^-[^-]'; git diff --name-only HEAD; git status --porcelain\",\"summary\":\"Diff is 5 insertions and 0 deletions against ee40a42 with no removed lines; README.md is the only tracked modification; the sole untracked entry is the planner-owned openspec change tree, which design.md lists as a non-goal, so the change stays inside the scope envelope.\",\"outcome\":\"passed\"}],\"repairIntent\":null}",
+          "type": "question",
+          "priority": "normal",
+          "thread_id": "msg_b0e8c1054525",
+          "payload": "{\"taskId\":\"task_00102a6965f9\",\"dispatchId\":\"ctx_becb338ce8f1\",\"question\":\"{\\\"schemaVersion\\\":1,\\\"kind\\\":\\\"validator_step\\\",\\\"step\\\":\\\"verify\\\",\\\"workerTaskId\\\":\\\"worker-task:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279\\\",\\\"dispatchId\\\":\\\"dispatch:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1\\\",\\\"attemptId\\\":\\\"attempt:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1:1:ip04-mixed-controller-5c89e963-3e64-406d-9cdb-67fcc4026dc1%23g1%3Areadme-banner:validator:initial%3Aopenspec%3A06ed0a298ab49549cb5518a4cc11ecbf7ad7fcc6faeece04105ce85b32f7d8d6%3A4124367200370191%3A805000327794279:1\\\",\\\"outcome\\\":\\\"passed\\\",\\\"summary\\\":\\\"Verified README.md independently against the spec delta rather than trusting the implementer summary: the title line is byte-identical to baseline ee40a42, it is the only heading and sits on line 1, one blank line separates it from a single plain-prose banner paragraph, the banner carries IP-04, mixed and Controller under a case-insensitive check, and the diff is purely additive (5 insertions, 0 deletions) touching only README.md. One non-blocking observation: implementation tasks 1.1 and 1.2 in the change tasks.md are both still unchecked; that file sits outside the approved repair envelope (include README.md only) so I deliberately did not touch it, and the coordinator should get both boxes ticked before openspec finalization, which requires every implementation task checked. Nothing else is outstanding and no repair was needed.\\\",\\\"evidence\\\":[{\\\"kind\\\":\\\"command\\\",\\\"coveredPaths\\\":[\\\"README.md\\\"],\\\"command\\\":\\\"diff <(git show ee40a42acbc9005c9f86a3dae0861e204eb2d702:README.md) <(head -n 1 README.md) && grep -c '^#' README.md\\\",\\\"summary\\\":\\\"First line of README.md is byte-identical to the baseline title; grep counts exactly 1 heading line and 1 H1, located at line 1.\\\",\\\"outcome\\\":\\\"passed\\\"},{\\\"kind\\\":\\\"command\\\",\\\"coveredPaths\\\":[\\\"README.md\\\"],\\\"command\\\":\\\"tail -n +2 README.md | grep -qiE 'IP-04'; tail -n +2 README.md | grep -qiE '\\\\\\\\bmixed\\\\\\\\b'; tail -n +2 README.md | grep -qiE '\\\\\\\\bcontroller\\\\\\\\b'\\\",\\\"summary\\\":\\\"All three fixture keywords present in the banner region under case-insensitive matching, satisfying task 1.2.\\\",\\\"outcome\\\":\\\"passed\\\"},{\\\"kind\\\":\\\"command\\\",\\\"coveredPaths\\\":[\\\"README.md\\\"],\\\"command\\\":\\\"awk 'NR==1{...}' README.md; tail -n +2 README.md | grep -qE '(^#{1,6}[[:space:]])|(^[-*+][[:space:]])|(^[[:space:]]*>)|(```)|!\\\\\\\\[[^]]*\\\\\\\\]\\\\\\\\(|\\\\\\\\[[^]]*\\\\\\\\]\\\\\\\\(|(^[[:space:]]*\\\\\\\\|)'\\\",\\\"summary\\\":\\\"File is 6 lines: line 1 H1 title, line 2 blank, lines 3-6 one contiguous banner paragraph with no interior blank line; the structural-markup grep finds no heading, list, blockquote, fence, link, image or table syntax, so the banner is ordinary body text.\\\",\\\"outcome\\\":\\\"passed\\\"},{\\\"kind\\\":\\\"command\\\",\\\"coveredPaths\\\":[\\\"README.md\\\"],\\\"command\\\":\\\"git diff --numstat HEAD -- README.md; git diff HEAD -- README.md | grep -c '^-[^-]'; git diff --name-only HEAD; git status --porcelain\\\",\\\"summary\\\":\\\"Diff is 5 insertions and 0 deletions against ee40a42 with no removed lines; README.md is the only tracked modification; the sole untracked entry is the planner-owned openspec change tree, which design.md lists as a non-goal, so the change stays inside the scope envelope.\\\",\\\"outcome\\\":\\\"passed\\\"}],\\\"repairIntent\\\":null}\",\"options\":[]}",
+          "created_at": "2026-10-11T06:11:13Z",
+          "delivered_at": null,
+          "delivery_contract": "current_delivery"
+        }
+      ],
+      "count": 1,
+      "acknowledged": null,
+      "runId": "run_370fd533d5da"
+    },
+    "_meta": {
+      "runtimeId": "75bb80f2-e969-44b6-83e9-2d3a76586c9d"
+    }
+  },
+  "worker": {
+    "id": "341e48ba-7ecf-48f4-901f-cc138de6d344",
+    "ok": true,
+    "result": {
+      "dispatch": {
+        "id": "ctx_becb338ce8f1",
+        "runId": "run_370fd533d5da",
+        "taskId": "task_00102a6965f9",
+        "task_id": "task_00102a6965f9",
+        "contractVersion": 1,
+        "assigneeHandle": "term_49741e62-803c-420e-9a97-78ddd1d938db",
+        "assigneePaneKey": "75cca0dc-24ba-4c3b-a4ff-7e9343485c35:0c4bbdb8-467b-4932-81ea-fe40ea12c02b",
+        "processIncarnation": "993c740f-ccf6-445f-8bbb-846835cc9b22::/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1@@2118b24f:ab636299-df21-429b-9dbb-ff8fc5e6693e",
+        "capabilityRevokedAt": "2026-10-11T06:23:10.699Z",
+        "retryOfDispatchId": null,
+        "creatorDispatchId": null,
+        "hostScope": {
+          "kind": "local",
+          "hostId": "local"
+        },
+        "status": "failed",
+        "failureCount": 1,
+        "lastFailure": "Terminal closed by operator request",
+        "terminationReason": "operator_close",
+        "depth": 1,
+        "dispatchedAt": "2026-10-11 06:09:38",
+        "completedAt": "2026-10-11T06:23:42.362Z",
+        "createdAt": "2026-10-11 06:09:38",
+        "lastHeartbeatAt": "2026-10-11T06:21:31Z"
+      },
+      "worker": {
+        "dispatchId": "ctx_becb338ce8f1",
+        "runtimeEpoch": "75bb80f2-e969-44b6-83e9-2d3a76586c9d",
+        "state": "failed",
+        "stage": "process_exited",
+        "worktreeId": "993c740f-ccf6-445f-8bbb-846835cc9b22::/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1",
+        "agentTerminalHandle": "term_49741e62-803c-420e-9a97-78ddd1d938db",
+        "setupState": "not_applicable",
+        "effects": [
+          {
+            "kind": "worktree",
+            "action": "reused",
+            "id": "993c740f-ccf6-445f-8bbb-846835cc9b22::/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1"
+          },
+          {
+            "kind": "setup",
+            "action": "not_applicable",
+            "state": "not_applicable"
+          },
+          {
+            "kind": "terminal",
+            "role": "agent",
+            "action": "reused",
+            "id": "term_49741e62-803c-420e-9a97-78ddd1d938db"
+          },
+          {
+            "kind": "dispatch_input",
+            "role": "agent",
+            "id": "term_49741e62-803c-420e-9a97-78ddd1d938db",
+            "state": "accepted"
+          }
+        ],
+        "residualResources": [],
+        "startOptions": {
+          "worktree": "993c740f-ccf6-445f-8bbb-846835cc9b22::/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1",
+          "mode": {
+            "mode": "terminal",
+            "preferred": "terminal",
+            "reason": "user_default",
+            "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+          },
+          "resolvedWorktreeId": "993c740f-ccf6-445f-8bbb-846835cc9b22::/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1",
+          "name": null,
+          "repo": null,
+          "baseBranch": null,
+          "terminal": "term_49741e62-803c-420e-9a97-78ddd1d938db",
+          "agent": null,
+          "launch": {
+            "requested": {
+              "agent": null,
+              "model": null,
+              "effort": null
+            },
+            "effective": {
+              "agent": null,
+              "model": null,
+              "effort": null
+            }
+          },
+          "timeoutMs": 60000,
+          "setup": "not_applicable",
+          "setupSource": "existing_worktree"
+        },
+        "lastError": "Terminal closed by operator request",
+        "createdAt": "2026-10-11 06:09:38",
+        "updatedAt": "2026-10-11T06:23:42.363Z"
+      },
+      "projection": {
+        "id": "ctx_becb338ce8f1",
+        "dispatchId": "ctx_becb338ce8f1",
+        "taskId": "task_00102a6965f9",
+        "runId": "run_370fd533d5da",
+        "role": "worker",
+        "parent": null,
+        "provider": null,
+        "host": {
+          "kind": "local",
+          "id": "local"
+        },
+        "workspace": {
+          "id": "993c740f-ccf6-445f-8bbb-846835cc9b22::/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1",
+          "kind": "folder_or_worktree"
+        },
+        "stage": {
+          "worker": "failed",
+          "dispatch": "failed",
+          "detail": "process_exited",
+          "activity": "unknown"
+        },
+        "outcome": "failed",
+        "liveness": {
+          "verdict": "exited",
+          "source": "execution_host"
+        },
+        "evidence": {
+          "durable": true,
+          "liveStatus": "unavailable",
+          "lastObservedAt": null
+        },
+        "resource": {
+          "state": "external",
+          "id": "wtr_f84faf53b000",
+          "ownerDispatchId": "ctx_becb338ce8f1",
+          "releaseState": "not_requested",
+          "terminalState": "retained"
+        },
+        "nextAction": {
+          "kind": "none",
+          "argv": []
+        },
+        "attention": {
+          "categories": [
+            "failure",
+            "interruption"
+          ],
+          "requiresAction": true
+        }
+      },
+      "terminal": {
+        "handle": "term_49741e62-803c-420e-9a97-78ddd1d938db",
+        "ptyId": "993c740f-ccf6-445f-8bbb-846835cc9b22::/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1@@2118b24f",
+        "incarnationId": "ab636299-df21-429b-9dbb-ff8fc5e6693e",
+        "orphaned": true,
+        "recordedPaneKey": "75cca0dc-24ba-4c3b-a4ff-7e9343485c35:0c4bbdb8-467b-4932-81ea-fe40ea12c02b",
+        "worktreeId": "993c740f-ccf6-445f-8bbb-846835cc9b22::/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1",
+        "worktreePath": "/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1",
+        "branch": "refs/heads/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1",
+        "tabId": "75cca0dc-24ba-4c3b-a4ff-7e9343485c35",
+        "leafId": "0c4bbdb8-467b-4932-81ea-fe40ea12c02b",
+        "title": "orca-companion:qwen-code:a160d1f1312cedc53b6a",
+        "connected": false,
+        "writable": false,
+        "lastOutputAt": 1791699822035,
+        "preview": " report the final outcome via worker_done once the reply action arrives.\n●︎ Updated 1 memory\n────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n* check the reply status\n要继续此会话，请运行\nqwen --resume a160d1f1-312c-4dc5-8b6a-230c369947f6",
+        "exitCause": {
+          "kind": "operator_close"
+        },
+        "executionHostId": "local",
+        "agentIdentity": "qwen-code",
+        "paneRuntimeId": -1,
+        "rendererGraphEpoch": 1
+      },
+      "observation": {
+        "status": "exited",
+        "exactWorker": true
+      },
+      "terminalResource": {
+        "id": "wtr_f84faf53b000",
+        "ownershipState": "external",
+        "releaseState": "not_requested",
+        "retainedReason": "external_terminal",
+        "terminalHandle": "term_49741e62-803c-420e-9a97-78ddd1d938db",
+        "worktreeId": "993c740f-ccf6-445f-8bbb-846835cc9b22::/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1",
+        "endpointId": "75bb80f2-e969-44b6-83e9-2d3a76586c9d",
+        "endpointIncarnation": "993c740f-ccf6-445f-8bbb-846835cc9b22::/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1@@2118b24f:ab636299-df21-429b-9dbb-ff8fc5e6693e",
+        "originDispatchId": "ctx_becb338ce8f1",
+        "ownerDispatchId": "ctx_becb338ce8f1",
+        "releaseRequestedAt": null,
+        "releaseCompletedAt": null,
+        "releaseError": null,
+        "recoveryAttemptCount": 0,
+        "lastRecoveryAt": null,
+        "archive": {
+          "source": null,
+          "status": null
+        }
+      }
+    },
+    "_meta": {
+      "runtimeId": "75bb80f2-e969-44b6-83e9-2d3a76586c9d"
+    }
+  }
+}

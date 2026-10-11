@@ -1,0 +1,10 @@
+{
+  "root": "/var/tmp/orca-ip04-mixed-controller-qLmDBK",
+  "checkout": "/var/tmp/orca-ip04-mixed-controller-qLmDBK/repo",
+  "closed": 1,
+  "stopped": 1,
+  "setupDeleted": "82f18054-4981-4a4d-a98c-259b7c70db0c",
+  "archive": "/var/tmp/orca-harness-evidence/qLmDBK-checkout.tar.gz",
+  "reason": "diagnosed fixture configurationRef mismatch before execution authorization",
+  "coordinatorCredentials": "preserved outside checkout"
+}

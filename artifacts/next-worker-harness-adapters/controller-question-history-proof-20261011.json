@@ -1,0 +1,23 @@
+{
+  "result": "passed limited behavior; not Controller acceptance",
+  "sourceArchive": "/var/tmp/orca-harness-evidence/lIir5s-controller-blocked-checkouts.tar.gz",
+  "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+  "checks": [
+    {
+      "name": "read_worker_message",
+      "callId": "call_896f6ba20a3943018c065a58",
+      "operationId": "op:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:step:16c06555-83fa-42ca-a1b6-889d08a8766a:call_896f6ba20a3943018c065a58",
+      "entryId": "entry:tool:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:step:16c06555-83fa-42ca-a1b6-889d08a8766a:call_896f6ba20a3943018c065a58",
+      "resultKind": "ok",
+      "messageId": "msg_e96927ff65be"
+    },
+    {
+      "name": "reply_worker",
+      "callId": "call_627748dbdb2d4593880f2b25",
+      "operationId": "op:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:step:8684be01-4295-4296-8b92-c70071ff66f1:call_627748dbdb2d4593880f2b25",
+      "entryId": "entry:tool:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:step:8684be01-4295-4296-8b92-c70071ff66f1:call_627748dbdb2d4593880f2b25",
+      "resultKind": "ok",
+      "messageId": "msg_e96927ff65be"
+    }
+  ]
+}

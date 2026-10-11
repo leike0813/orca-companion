@@ -1,0 +1,505 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-11T03:51:00.967Z",
+  "finishedAt": "2026-10-11T04:23:15.223Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-Z5yb5Y",
+  "runId": "run_50684a1244a0",
+  "coordinatorTerminalHandle": "term_1510c840-5517-46d8-8a28-c4fa59746d7f",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "command-code",
+      "modelSelection": {
+        "model": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "ip04:command-code:planner",
+          "taskId": "task_367a79b5a730",
+          "dispatchId": "ctx_f6ee01dfdff2",
+          "sessionId": "4bc830a2-46ca-4e2c-9459-3235c1096203",
+          "transcriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z5yb5-y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/4bc830a2-46ca-4e2c-9459-3235c1096203.jsonl",
+          "stateRoot": "/home/joshua/.commandcode",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-Z5yb5Y/state/command-code/dbe76151b35e5186ddd7/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "launchId": "ip04:command-code:implementation",
+          "taskId": "task_93cf30e82bd0",
+          "dispatchId": "ctx_054986c5938a",
+          "sessionId": "2d68d914-7700-442a-a9d3-43478d00fee3",
+          "transcriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z5yb5-y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/2d68d914-7700-442a-a9d3-43478d00fee3.jsonl",
+          "stateRoot": "/home/joshua/.commandcode",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-Z5yb5Y/state/command-code/a7a6ed17024981668d09/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "launchId": "ip04:command-code:validator",
+          "taskId": "task_ae0940bc5e72",
+          "dispatchId": "ctx_58180ea39813",
+          "sessionId": "6c910c63-0299-4a7d-bbe6-2d5cf53d8490",
+          "transcriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z5yb5-y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/6c910c63-0299-4a7d-bbe6-2d5cf53d8490.jsonl",
+          "stateRoot": "/home/joshua/.commandcode",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-Z5yb5Y/state/command-code/309a44cd2437360438c6/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "launchId": "ip04:command-code:finalizer",
+          "taskId": "task_7495fb54da6b",
+          "dispatchId": "ctx_c439e82fa84a",
+          "sessionId": "eed12591-1593-45e3-ab2a-d8be942c8ee8",
+          "transcriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z5yb5-y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/eed12591-1593-45e3-ab2a-d8be942c8ee8.jsonl",
+          "stateRoot": "/home/joshua/.commandcode",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-Z5yb5Y/state/command-code/25126d745ebf402385dd/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "harness": "command-code",
+        "kind": "ran",
+        "sessionId": "2d68d914-7700-442a-a9d3-43478d00fee3",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null,
+        "dispatchId": "ctx_cf11d6855ddb",
+        "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+        "contextPreserved": null
+      },
+      "validatorContinuation": {
+        "harness": "command-code",
+        "kind": "ran",
+        "sessionId": "6c910c63-0299-4a7d-bbe6-2d5cf53d8490",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null,
+        "dispatchId": "ctx_b9bb764c0b82",
+        "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+        "contextPreserved": true
+      },
+      "recovery": {
+        "kind": "ran",
+        "sourceSessionId": "6c910c63-0299-4a7d-bbe6-2d5cf53d8490",
+        "sourceTranscriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z5yb5-y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/6c910c63-0299-4a7d-bbe6-2d5cf53d8490.jsonl",
+        "utility": {
+          "taskId": "task_3fe332faada4",
+          "dispatchId": "ctx_cdfe8f773b5a",
+          "sessionId": "131392b7-5348-4d51-85ad-a93c5c4c2831",
+          "transcriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z5yb5-y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/131392b7-5348-4d51-85ad-a93c5c4c2831.jsonl",
+          "coverage": "complete",
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "terminalState": "succeeded"
+        },
+        "capsuleRef": "recovery-capsule:ip04:command-code:recovery-utility",
+        "coverage": {
+          "coverage": "complete",
+          "readableRange": {
+            "transcriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z5yb5-y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/6c910c63-0299-4a7d-bbe6-2d5cf53d8490.jsonl",
+            "fromEventRef": "30f63699",
+            "toEventRef": "da2e547a"
+          },
+          "gaps": [],
+          "lastCompleteEventRef": "da2e547a"
+        },
+        "sourceBehaviorVerified": true,
+        "readOnlyVerified": false,
+        "permissionDenied": null,
+        "deliveryId": null,
+        "deliveryAcked": false,
+        "blocker": null
+      },
+      "blockers": []
+    },
+    {
+      "harness": "qwen-code",
+      "modelSelection": {
+        "model": "MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "ip04:qwen-code:planner",
+          "taskId": "task_5aaf291db536",
+          "dispatchId": "ctx_7ecb7dd0948a",
+          "sessionId": "82b73f5c-4089-4dc8-8f94-ed1b2d2ea76d",
+          "transcriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-Z5yb5Y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/chats/82b73f5c-4089-4dc8-8f94-ed1b2d2ea76d.jsonl",
+          "stateRoot": "/home/joshua/.qwen",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-Z5yb5Y/state/qwen-code/reporters/82b73f5c40898dc87f94/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "launchId": "ip04:qwen-code:implementation",
+          "taskId": "task_96fb994a5dfd",
+          "dispatchId": "ctx_fe34cdd7ca6f",
+          "sessionId": "23fb6c36-126a-4d3b-8f22-c37aab977745",
+          "transcriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-Z5yb5Y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/chats/23fb6c36-126a-4d3b-8f22-c37aab977745.jsonl",
+          "stateRoot": "/home/joshua/.qwen",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-Z5yb5Y/state/qwen-code/reporters/23fb6c36126add3b7f22/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "launchId": "ip04:qwen-code:validator",
+          "taskId": "task_565c9046668b",
+          "dispatchId": "ctx_7414edae05be",
+          "sessionId": "1233882b-f5e3-4fd5-81eb-fc57eda8d182",
+          "transcriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-Z5yb5Y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/chats/1233882b-f5e3-4fd5-81eb-fc57eda8d182.jsonl",
+          "stateRoot": "/home/joshua/.qwen",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-Z5yb5Y/state/qwen-code/reporters/1233882bf5e3ffd571eb/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "launchId": "ip04:qwen-code:finalizer",
+          "taskId": "task_327a55d3e304",
+          "dispatchId": "ctx_f2e155d42350",
+          "sessionId": "38d6a8f4-637c-4bfd-8b3a-5db902e602c8",
+          "transcriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-Z5yb5Y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/chats/38d6a8f4-637c-4bfd-8b3a-5db902e602c8.jsonl",
+          "stateRoot": "/home/joshua/.qwen",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-Z5yb5Y/state/qwen-code/reporters/38d6a8f4637ccbfdcb3a/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "harness": "qwen-code",
+        "kind": "ran",
+        "sessionId": "23fb6c36-126a-4d3b-8f22-c37aab977745",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null,
+        "dispatchId": "ctx_6d29f635f89f",
+        "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+        "contextPreserved": null
+      },
+      "validatorContinuation": {
+        "harness": "qwen-code",
+        "kind": "ran",
+        "sessionId": "1233882b-f5e3-4fd5-81eb-fc57eda8d182",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null,
+        "dispatchId": "ctx_b53d7650c7f6",
+        "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+        "contextPreserved": true
+      },
+      "recovery": {
+        "kind": "ran",
+        "sourceSessionId": "1233882b-f5e3-4fd5-81eb-fc57eda8d182",
+        "sourceTranscriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-Z5yb5Y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/chats/1233882b-f5e3-4fd5-81eb-fc57eda8d182.jsonl",
+        "utility": {
+          "taskId": "task_0284bc73a4c8",
+          "dispatchId": "ctx_cc13bb049c58",
+          "sessionId": "289c1f34-e69c-4cc9-8b67-546286c4063f",
+          "transcriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-Z5yb5Y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/chats/289c1f34-e69c-4cc9-8b67-546286c4063f.jsonl",
+          "coverage": "complete",
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "terminalState": "succeeded"
+        },
+        "capsuleRef": "recovery-capsule:ip04:qwen-code:recovery-utility",
+        "coverage": {
+          "coverage": "complete",
+          "readableRange": {
+            "transcriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-Z5yb5Y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/chats/1233882b-f5e3-4fd5-81eb-fc57eda8d182.jsonl",
+            "fromEventRef": "6d0241e9-2b40-412a-b4ea-c7688a3960fc",
+            "toEventRef": "610ecb1e-effc-47d9-8011-fdc3feb90354"
+          },
+          "gaps": [],
+          "lastCompleteEventRef": "610ecb1e-effc-47d9-8011-fdc3feb90354"
+        },
+        "sourceBehaviorVerified": true,
+        "readOnlyVerified": true,
+        "permissionDenied": {
+          "path": "/var/tmp/orca-harness-acceptance-Z5yb5Y/project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/.companion/utility-write-probe-8984e17c-b56c-46df-992f-b8d6526a9fa9",
+          "code": "EROFS",
+          "eventRef": "line:7"
+        },
+        "deliveryId": null,
+        "deliveryAcked": false,
+        "blocker": null
+      },
+      "blockers": []
+    },
+    {
+      "harness": "codebuddy",
+      "modelSelection": {
+        "model": "MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "blocked",
+          "launchId": "ip04:codebuddy:planner",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "codebuddy 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_357bfcea5eed\",\"taskId\":\"task_1d7be4ef42a3\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_357bfcea5eed\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"\",\"✘ Hook SessionStart [blocked]\",\"  No stderr output\",\"\",\"────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\",\">\"],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"60\",\"latestCursor\":\"60\",\"returnedLineCount\":6,\"source\":\"stream\"},\"cursor\":\"<redacted>\",\"status\":{\"worker\":\"ready\",\"terminal\":\"running\",\"liveness\":\"live\"},\"fallbackReason\":\"session_not_reported\",\"warnings\":[],\"sourceExact\":false,\"contentComplete\":false,\"clipping\":[\"terminal_fallback\"],\"projection\":{\"id | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"╭─── CodeBuddy Code v2.164.0 ────────────────────────────────────────────────────────────────────────────────╮\",\"│                                   │ Tips for getting started                                               │\",\"│                                   │ Run /init to create a CODEBUDDY.md or AGENTS.md file with instruction… │\",\"│                                   │ Press Ctrl + V to paste URLs, file paths, or images.                   │\",\"│          ████        ████         │ Press Esc twice to reset the input box.                                │\",\"│          ████████████████         │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ Recent activity                                                        │\",\"│        ████  ██    ██  ████       │ No recent activity                                                     │\",\"│        ████  ██    ██  ████       │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ http://127.0.0.1:59628                                                 │\",\"│      "
+          }
+        },
+        {
+          "role": "implementation",
+          "kind": "blocked",
+          "launchId": "ip04:codebuddy:implementation",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "codebuddy 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_967660d9d0bc\",\"taskId\":\"task_373f5f52efe2\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_967660d9d0bc\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"\",\"✘ Hook SessionStart [blocked]\",\"  No stderr output\",\"\",\"────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\",\">\"],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"60\",\"latestCursor\":\"60\",\"returnedLineCount\":6,\"source\":\"stream\"},\"cursor\":\"<redacted>\",\"status\":{\"worker\":\"ready\",\"terminal\":\"running\",\"liveness\":\"live\"},\"fallbackReason\":\"session_not_reported\",\"warnings\":[],\"sourceExact\":false,\"contentComplete\":false,\"clipping\":[\"terminal_fallback\"],\"projection\":{\"id | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"╭─── CodeBuddy Code v2.164.0 ────────────────────────────────────────────────────────────────────────────────╮\",\"│                                   │ Tips for getting started                                               │\",\"│                                   │ Run /init to create a CODEBUDDY.md or AGENTS.md file with instruction… │\",\"│                                   │ Press Esc twice to reset the input box.                                │\",\"│          ████        ████         │ Run /terminal-setup to configure newline key binding for your terminal │\",\"│          ████████████████         │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ Recent activity                                                        │\",\"│        ████  ██    ██  ████       │ No recent activity                                                     │\",\"│        ████  ██    ██  ████       │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ http://127.0.0.1:59629                                                 │\",\"│      "
+          }
+        },
+        {
+          "role": "validator",
+          "kind": "blocked",
+          "launchId": "ip04:codebuddy:validator",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "codebuddy 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_2a50d1107890\",\"taskId\":\"task_b7b6c376a7fc\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_2a50d1107890\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"\",\"✘ Hook SessionStart [blocked]\",\"  No stderr output\",\"\",\"────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\",\">\"],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"60\",\"latestCursor\":\"60\",\"returnedLineCount\":6,\"source\":\"stream\"},\"cursor\":\"<redacted>\",\"status\":{\"worker\":\"ready\",\"terminal\":\"running\",\"liveness\":\"live\"},\"fallbackReason\":\"session_not_reported\",\"warnings\":[],\"sourceExact\":false,\"contentComplete\":false,\"clipping\":[\"terminal_fallback\"],\"projection\":{\"id | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"╭─── CodeBuddy Code v2.164.0 ────────────────────────────────────────────────────────────────────────────────╮\",\"│                                   │ Tips for getting started                                               │\",\"│                                   │ Press Ctrl + V to paste URLs, file paths, or images.                   │\",\"│                                   │ Run /terminal-setup to configure newline key binding for your terminal │\",\"│          ████        ████         │ Open Web UI in browser for a richer interactive experience.            │\",\"│          ████████████████         │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ Recent activity                                                        │\",\"│        ████  ██    ██  ████       │ No recent activity                                                     │\",\"│        ████  ██    ██  ████       │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ http://127.0.0.1:39573                                                 │\",\"│      "
+          }
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "launchId": "ip04:codebuddy:finalizer",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "codebuddy 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_d17ef3efe597\",\"taskId\":\"task_77ace537ebae\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_d17ef3efe597\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"│                                   │ Tips for getting started                                               │\",\"│                                   │ Open Web UI in browser for a richer interactive experience.            │\",\"│                                   │ Press / to use commands, @ to mention files.                           │\",\"│          ████        ████         │ Run /terminal-setup to configure newline key binding for your terminal │\",\"│          ████████████████         │ ───────────────────────────────────────────────────────────────── | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"╭─── CodeBuddy Code v2.164.0 ────────────────────────────────────────────────────────────────────────────────╮\",\"│                                   │ Tips for getting started                                               │\",\"│                                   │ Open Web UI in browser for a richer interactive experience.            │\",\"│                                   │ Press / to use commands, @ to mention files.                           │\",\"│          ████        ████         │ Run /terminal-setup to configure newline key binding for your terminal │\",\"│          ████████████████         │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ Recent activity                                                        │\",\"│        ████  ██    ██  ████       │ No recent activity                                                     │\",\"│        ████  ██    ██  ████       │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ http://127.0.0.1:44791                                                 │\",\"│      "
+          }
+        }
+      ],
+      "resume": {
+        "harness": "codebuddy",
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "dispatchId": null,
+        "contextPreserved": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "validatorContinuation": {
+        "harness": "codebuddy",
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "dispatchId": null,
+        "contextPreserved": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "recovery": {
+        "kind": "blocked",
+        "sourceSessionId": null,
+        "sourceTranscriptRef": null,
+        "utility": null,
+        "capsuleRef": null,
+        "coverage": null,
+        "sourceBehaviorVerified": false,
+        "readOnlyVerified": false,
+        "permissionDenied": null,
+        "deliveryId": null,
+        "deliveryAcked": false,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "Recovery requires the precise original Validator session"
+        }
+      },
+      "blockers": [
+        "planner：session_report_missing codebuddy 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_357bfcea5eed\",\"taskId\":\"task_1d7be4ef42a3\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_357bfcea5eed\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"\",\"✘ Hook SessionStart [blocked]\",\"  No stderr output\",\"\",\"────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\",\">\"],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"60\",\"latestCursor\":\"60\",\"returnedLineCount\":6,\"source\":\"stream\"},\"cursor\":\"<redacted>\",\"status\":{\"worker\":\"ready\",\"terminal\":\"running\",\"liveness\":\"live\"},\"fallbackReason\":\"session_not_reported\",\"warnings\":[],\"sourceExact\":false,\"contentComplete\":false,\"clipping\":[\"terminal_fallback\"],\"projection\":{\"id | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"╭─── CodeBuddy Code v2.164.0 ────────────────────────────────────────────────────────────────────────────────╮\",\"│                                   │ Tips for getting started                                               │\",\"│                                   │ Run /init to create a CODEBUDDY.md or AGENTS.md file with instruction… │\",\"│                                   │ Press Ctrl + V to paste URLs, file paths, or images.                   │\",\"│          ████        ████         │ Press Esc twice to reset the input box.                                │\",\"│          ████████████████         │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ Recent activity                                                        │\",\"│        ████  ██    ██  ████       │ No recent activity                                                     │\",\"│        ████  ██    ██  ████       │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ http://127.0.0.1:59628                                                 │\",\"│      ",
+        "implementation：session_report_missing codebuddy 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_967660d9d0bc\",\"taskId\":\"task_373f5f52efe2\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_967660d9d0bc\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"\",\"✘ Hook SessionStart [blocked]\",\"  No stderr output\",\"\",\"────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\",\">\"],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"60\",\"latestCursor\":\"60\",\"returnedLineCount\":6,\"source\":\"stream\"},\"cursor\":\"<redacted>\",\"status\":{\"worker\":\"ready\",\"terminal\":\"running\",\"liveness\":\"live\"},\"fallbackReason\":\"session_not_reported\",\"warnings\":[],\"sourceExact\":false,\"contentComplete\":false,\"clipping\":[\"terminal_fallback\"],\"projection\":{\"id | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"╭─── CodeBuddy Code v2.164.0 ────────────────────────────────────────────────────────────────────────────────╮\",\"│                                   │ Tips for getting started                                               │\",\"│                                   │ Run /init to create a CODEBUDDY.md or AGENTS.md file with instruction… │\",\"│                                   │ Press Esc twice to reset the input box.                                │\",\"│          ████        ████         │ Run /terminal-setup to configure newline key binding for your terminal │\",\"│          ████████████████         │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ Recent activity                                                        │\",\"│        ████  ██    ██  ████       │ No recent activity                                                     │\",\"│        ████  ██    ██  ████       │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ http://127.0.0.1:59629                                                 │\",\"│      ",
+        "validator：session_report_missing codebuddy 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_2a50d1107890\",\"taskId\":\"task_b7b6c376a7fc\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_2a50d1107890\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"\",\"✘ Hook SessionStart [blocked]\",\"  No stderr output\",\"\",\"────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\",\">\"],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"60\",\"latestCursor\":\"60\",\"returnedLineCount\":6,\"source\":\"stream\"},\"cursor\":\"<redacted>\",\"status\":{\"worker\":\"ready\",\"terminal\":\"running\",\"liveness\":\"live\"},\"fallbackReason\":\"session_not_reported\",\"warnings\":[],\"sourceExact\":false,\"contentComplete\":false,\"clipping\":[\"terminal_fallback\"],\"projection\":{\"id | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"╭─── CodeBuddy Code v2.164.0 ────────────────────────────────────────────────────────────────────────────────╮\",\"│                                   │ Tips for getting started                                               │\",\"│                                   │ Press Ctrl + V to paste URLs, file paths, or images.                   │\",\"│                                   │ Run /terminal-setup to configure newline key binding for your terminal │\",\"│          ████        ████         │ Open Web UI in browser for a richer interactive experience.            │\",\"│          ████████████████         │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ Recent activity                                                        │\",\"│        ████  ██    ██  ████       │ No recent activity                                                     │\",\"│        ████  ██    ██  ████       │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ http://127.0.0.1:39573                                                 │\",\"│      ",
+        "finalizer：session_report_missing codebuddy 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_d17ef3efe597\",\"taskId\":\"task_77ace537ebae\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_d17ef3efe597\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"│                                   │ Tips for getting started                                               │\",\"│                                   │ Open Web UI in browser for a richer interactive experience.            │\",\"│                                   │ Press / to use commands, @ to mention files.                           │\",\"│          ████        ████         │ Run /terminal-setup to configure newline key binding for your terminal │\",\"│          ████████████████         │ ───────────────────────────────────────────────────────────────── | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"╭─── CodeBuddy Code v2.164.0 ────────────────────────────────────────────────────────────────────────────────╮\",\"│                                   │ Tips for getting started                                               │\",\"│                                   │ Open Web UI in browser for a richer interactive experience.            │\",\"│                                   │ Press / to use commands, @ to mention files.                           │\",\"│          ████        ████         │ Run /terminal-setup to configure newline key binding for your terminal │\",\"│          ████████████████         │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ Recent activity                                                        │\",\"│        ████  ██    ██  ████       │ No recent activity                                                     │\",\"│        ████  ██    ██  ████       │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ http://127.0.0.1:44791                                                 │\",\"│      ",
+        "resume：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复",
+        "recovery：original_unavailable Recovery requires the precise original Validator session",
+        "validator-continuation：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复"
+      ]
+    },
+    {
+      "harness": "mixed",
+      "assignment": [
+        "command-code:planner",
+        "qwen-code:implementation",
+        "codebuddy:validator",
+        "codebuddy:finalizer"
+      ],
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "ip04:mixed:command-code:planner",
+          "taskId": "task_9577c32479c8",
+          "dispatchId": "ctx_6965d9214bb0",
+          "sessionId": "cba7a3d0-6df8-44f8-abc5-dfc4e31a1b18",
+          "transcriptRef": "/home/joshua/.commandcode/projects/var-tmp-orca-harness-acceptance-z5yb5-y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/cba7a3d0-6df8-44f8-abc5-dfc4e31a1b18.jsonl",
+          "stateRoot": "/home/joshua/.commandcode",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-Z5yb5Y/state/command-code/330044786310d2720215/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "launchId": "ip04:mixed:qwen-code:implementation",
+          "taskId": "task_acce0f1725c9",
+          "dispatchId": "ctx_9dc40b1f2a10",
+          "sessionId": "8a121423-834f-45a4-8d69-0ddc1b53702f",
+          "transcriptRef": "/home/joshua/.qwen/projects/-var-tmp-orca-harness-acceptance-Z5yb5Y-project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a/chats/8a121423-834f-45a4-8d69-0ddc1b53702f.jsonl",
+          "stateRoot": "/home/joshua/.qwen",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-Z5yb5Y/state/qwen-code/reporters/8a121423834f05a44d69/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "blocked",
+          "launchId": "ip04:mixed:codebuddy:validator",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "codebuddy 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_ee476304f244\",\"taskId\":\"task_75d7e944a5ce\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_ee476304f244\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"\",\"✘ Hook SessionStart [blocked]\",\"  No stderr output\",\"\",\"────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\",\">\"],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"64\",\"latestCursor\":\"64\",\"returnedLineCount\":6,\"source\":\"stream\"},\"cursor\":\"<redacted>\",\"status\":{\"worker\":\"ready\",\"terminal\":\"running\",\"liveness\":\"live\"},\"fallbackReason\":\"session_not_reported\",\"warnings\":[],\"sourceExact\":false,\"contentComplete\":false,\"clipping\":[\"terminal_fallback\"],\"projection\":{\"id | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"╭─── CodeBuddy Code v2.164.0 ────────────────────────────────────────────────────────────────────────────────╮\",\"│                                   │ Tips for getting started                                               │\",\"│                                   │ Run /terminal-setup to configure newline key binding for your terminal │\",\"│                                   │ Press Ctrl + V to paste URLs, file paths, or images.                   │\",\"│          ████        ████         │ Press / to use commands, @ to mention files.                           │\",\"│          ████████████████         │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ Recent activity                                                        │\",\"│        ████  ██    ██  ████       │ No recent activity                                                     │\",\"│        ████  ██    ██  ████       │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ http://127.0.0.1:34131                                                 │\",\"│      "
+          }
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "launchId": "ip04:mixed:codebuddy:finalizer",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "codebuddy 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_2e5218cbe488\",\"taskId\":\"task_680118d68faa\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_2e5218cbe488\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"⏵⏵ bypass permissions on (shift+Tab to cycle)  ← for agents\"],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"64\",\"latestCursor\":\"64\",\"returnedLineCount\":1,\"source\":\"stream\"},\"cursor\":\"<redacted>\",\"status\":{\"worker\":\"ready\",\"terminal\":\"running\",\"liveness\":\"live\"},\"fallbackReason\":\"session_not_reported\",\"warnings\":[],\"sourceExact\":false,\"contentComplete\":false,\"clipping\":[\"terminal_fallback\"],\"projection\":{\"id\":\"ctx_2e5218cbe488\",\"dispatchId\":\"ctx_2e5218cbe488\",\"taskId\":\"task_680118d68faa\",\"runId\":\"run_50684a1244a0\",\"role\":\"worker\" | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"╭─── CodeBuddy Code v2.164.0 ────────────────────────────────────────────────────────────────────────────────╮\",\"│                                   │ Tips for getting started                                               │\",\"│                                   │ Press / to use commands, @ to mention files.                           │\",\"│                                   │ Run /init to create a CODEBUDDY.md or AGENTS.md file with instruction… │\",\"│          ████        ████         │ Open Web UI in browser for a richer interactive experience.            │\",\"│          ████████████████         │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ Recent activity                                                        │\",\"│        ████  ██    ██  ████       │ No recent activity                                                     │\",\"│        ████  ██    ██  ████       │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ http://127.0.0.1:35965                                                 │\",\"│      "
+          }
+        }
+      ],
+      "blockers": [
+        "validator：session_report_missing codebuddy 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_ee476304f244\",\"taskId\":\"task_75d7e944a5ce\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_ee476304f244\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"\",\"✘ Hook SessionStart [blocked]\",\"  No stderr output\",\"\",\"────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\",\">\"],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"64\",\"latestCursor\":\"64\",\"returnedLineCount\":6,\"source\":\"stream\"},\"cursor\":\"<redacted>\",\"status\":{\"worker\":\"ready\",\"terminal\":\"running\",\"liveness\":\"live\"},\"fallbackReason\":\"session_not_reported\",\"warnings\":[],\"sourceExact\":false,\"contentComplete\":false,\"clipping\":[\"terminal_fallback\"],\"projection\":{\"id | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"╭─── CodeBuddy Code v2.164.0 ────────────────────────────────────────────────────────────────────────────────╮\",\"│                                   │ Tips for getting started                                               │\",\"│                                   │ Run /terminal-setup to configure newline key binding for your terminal │\",\"│                                   │ Press Ctrl + V to paste URLs, file paths, or images.                   │\",\"│          ████        ████         │ Press / to use commands, @ to mention files.                           │\",\"│          ████████████████         │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ Recent activity                                                        │\",\"│        ████  ██    ██  ████       │ No recent activity                                                     │\",\"│        ████  ██    ██  ████       │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ http://127.0.0.1:34131                                                 │\",\"│      ",
+        "finalizer：session_report_missing codebuddy 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_2e5218cbe488\",\"taskId\":\"task_680118d68faa\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_2e5218cbe488\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"⏵⏵ bypass permissions on (shift+Tab to cycle)  ← for agents\"],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"64\",\"latestCursor\":\"64\",\"returnedLineCount\":1,\"source\":\"stream\"},\"cursor\":\"<redacted>\",\"status\":{\"worker\":\"ready\",\"terminal\":\"running\",\"liveness\":\"live\"},\"fallbackReason\":\"session_not_reported\",\"warnings\":[],\"sourceExact\":false,\"contentComplete\":false,\"clipping\":[\"terminal_fallback\"],\"projection\":{\"id\":\"ctx_2e5218cbe488\",\"dispatchId\":\"ctx_2e5218cbe488\",\"taskId\":\"task_680118d68faa\",\"runId\":\"run_50684a1244a0\",\"role\":\"worker\" | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"╭─── CodeBuddy Code v2.164.0 ────────────────────────────────────────────────────────────────────────────────╮\",\"│                                   │ Tips for getting started                                               │\",\"│                                   │ Press / to use commands, @ to mention files.                           │\",\"│                                   │ Run /init to create a CODEBUDDY.md or AGENTS.md file with instruction… │\",\"│          ████        ████         │ Open Web UI in browser for a richer interactive experience.            │\",\"│          ████████████████         │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ Recent activity                                                        │\",\"│        ████  ██    ██  ████       │ No recent activity                                                     │\",\"│        ████  ██    ██  ████       │ ────────────────────────────────────────────────────────────────────── │\",\"│        ████            ████       │ http://127.0.0.1:35965                                                 │\",\"│      "
+      ]
+    }
+  ]
+}

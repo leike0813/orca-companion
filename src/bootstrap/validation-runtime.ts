@@ -588,6 +588,7 @@ export function validatorVerificationInstructions(input: {
     '修复步骤报告形状：{"schemaVersion":1,"kind":"validator_step","step":"repair_applied","changedPaths":[...],"note":"..."}。changedPaths 必须与你实际改动一致，且必须落在获批范围内。',
     `只能在获批 Scope Envelope 内直接修复：include=${JSON.stringify([...input.scopeEnvelope.include])}，exclude=${JSON.stringify([...input.scopeEnvelope.exclude])}。需要设计变更、依赖变更或越界改动时，改发 {"schemaVersion":1,"kind":"validator_step","step":"escalation","reason":"scope"|"design"|"dependency"|"authority"|"budget","request":"..."}。`,
     `宿主 reply 是 JSON：{"schemaVersion":1,"kind":"validator_step_reply","action":"repair"|"verify"|"finish"|"refuse","stepId":"...","repairIntent":{...}|null,"reason":"..."|null}。收到 action=repair 时只按给出的 repairIntent 修复并回报 repair_applied；收到 action=verify 时复验并回报 verify；收到 action=finish 时停止验证并以 worker_done 提交最终结论；收到 action=refuse 时停止并提交失败的 worker_done。`,
+    '收到 action=finish 后，worker_done 的正文必须是最后一次 verify 的完整 JSON（包含 outcome 与 evidence），不得改成自然语言总结；单独的 Orca outcome=succeeded 不能证明验证通过。',
     `本次剩余修复预算为 ${remainingRepairs} 次（上限 ${input.repairBudget.limit}，已消耗 ${input.repairBudget.consumed}）；超出后宿主会拒绝修复。`,
   ];
 }

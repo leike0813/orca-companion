@@ -1,0 +1,14 @@
+{
+  "archive": "/var/tmp/orca-harness-evidence/K9pR5M-controller-blocked-checkouts.tar.gz",
+  "removedCheckouts": [
+    "/var/tmp/orca-ip04-mixed-controller-K9pR5M/repo",
+    "/home/joshua/orca/workspaces/repo/wp-e6ede8e410769691b71aac5843a43cf51fe9cb2311e66be9f2e0b464c5fd98e1"
+  ],
+  "closedTerminals": [
+    "term_34b87009-07de-4ad6-ad58-558012c981e0",
+    "term_7751fe32-a40e-4735-ade9-de27e11d6c6d"
+  ],
+  "cumulativeClosedTerminals": 87,
+  "cumulativeRemovedCheckouts": 14,
+  "credentialConfigRetained": true
+}

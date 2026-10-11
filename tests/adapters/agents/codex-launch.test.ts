@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { createCodexResumeLaunch, createCodexWorkerLaunch, installCodexSessionStartReporter } from '../../../src/adapters/agents/codex-launch.js';
-import { codexConfigValue } from '../../../src/adapters/agents/codex-model-launcher.js';
+import { CODEX_MODEL_LAUNCHER_FILENAME, codexConfigValue } from '../../../src/adapters/agents/codex-model-launcher.js';
 import { nativeWorkerRuntime } from '../../../src/adapters/agents/worker-runtime.js';
 import { modelSelectionFixture } from '../../support/model-configurations.js';
 
@@ -48,7 +48,7 @@ test('launcher v2 applies modelSelection and inherits the actual native runtime 
   expect(descriptor.args).toEqual(expect.arrayContaining(['--no-daemon', '--model', 'native-model', 'model_reasoning_effort="medium"']));
   expect(descriptor.args.join(' ')).toContain('hooks.SessionStart=');
   expect(descriptor.args.join(' ')).toContain('startup|resume');
-  execFileSync(process.execPath, [join(prepared.stateRoot, 'codex-model-launcher.mjs'), descriptorPath], {
+  execFileSync(process.execPath, [join(prepared.stateRoot, CODEX_MODEL_LAUNCHER_FILENAME), descriptorPath], {
     env: { ...process.env, CODEX_HOME: f.native, OBSERVATION: f.observed, REPORTER: reporter, TRANSCRIPT: join(f.native, 'sessions', 'launched-session.jsonl') },
     cwd: f.workspace,
   });
@@ -69,7 +69,7 @@ test('只读 launcher 拒绝经符号链接与 workspace 重叠的 native writab
     stateRoot: f.artifacts, codexExecutable: f.executable,
   }).prepare({ worktreePath: f.workspace });
   expect(() => execFileSync(process.execPath, [
-    join(prepared.stateRoot, 'codex-model-launcher.mjs'), join(prepared.stateRoot, 'codex-model-launch.json'),
+    join(prepared.stateRoot, CODEX_MODEL_LAUNCHER_FILENAME), join(prepared.stateRoot, 'codex-model-launch.json'),
   ], { env: { ...process.env, CODEX_HOME: nativeAlias, OBSERVATION: f.observed }, stdio: 'pipe' })).toThrow();
   expect(existsSync(f.observed)).toBe(false);
 });
@@ -83,7 +83,7 @@ test('read-only roles share the wrapper and keep Companion artifacts outside the
 test('resume checks the original native root and never overrides the current environment', async () => {
   const f = fixture();
   const prepared = await createCodexResumeLaunch({ launchId: 'resume', modelSelection: selection, sandboxMode: 'workspace-write', stateRoot: f.artifacts, sessionId: 'exact-session-id', codexHome: f.native, codexExecutable: f.executable }).prepare({ worktreePath: f.workspace });
-  const launcher = join(prepared.stateRoot, 'codex-model-launcher.mjs'), descriptor = join(prepared.stateRoot, 'codex-model-launch.json');
+  const launcher = join(prepared.stateRoot, CODEX_MODEL_LAUNCHER_FILENAME), descriptor = join(prepared.stateRoot, 'codex-model-launch.json');
   execFileSync(process.execPath, [launcher, descriptor], { env: { ...process.env, CODEX_HOME: f.native, OBSERVATION: f.observed } });
   const observed = JSON.parse(readFileSync(f.observed, 'utf8')) as { args: string[] };
   expect(observed.args.slice(0, 2)).toEqual(['resume', 'exact-session-id']);

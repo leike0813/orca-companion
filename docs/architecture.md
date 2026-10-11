@@ -28,7 +28,11 @@ schema 20 的 Branch Store 在副作用前原子登记包级 lane，直到可证
 
 `application/integration-reconciliation.ts` 拥有稳定复验轮次、独立预算与 Git 意图；`bootstrap/integration-reconciliation-runtime.ts` 通过新的真实 Task/Dispatch 续接原 Validator provider Session。先在包内合并 canonical，再验证精确合并树，最后由 Controller 提交并快进 canonical。设置用例 `application/configuration/execution-settings.ts` 复用配置 CAS；保存默认值与批准执行期 Manifest 是两个明确用户意图，批准不重置图、Run 或已消费预算。
 
-Worker Harness 的应用端口位于 `application/ports/worker-harness.ts`，bootstrap 的 `worker-harness.ts` 显式注册 codex、claude、opencode、pi、omp。角色生命周期只使用注册项的启动、恢复、证明、只读启动、探测与原生模型目录查询能力，terminal 创建、激活和接管仍由 `application/worker-launch.ts` 拥有。各 adapter 在 harness 真实用户环境中启动，负责精确 provider transcript 与运行时路径：`adapters/agents/worker-runtime.ts` 从真实 launch 环境解析非秘密 native roots，`adapters/agents/worker-model-catalog.ts` 提供有界、可取消的目录查询；模型、harness 与 effort 沿物化时固定的授权/profile 读取。原生只读启动与探针共用 `adapters/agents/read-only-execution-wrapper.ts`，Coordinator 凭据不经 Worker launcher。
+Worker Harness 的应用端口位于 `application/ports/worker-harness.ts`，bootstrap 的 `worker-harness.ts` 显式注册七项：codex、claude、opencode、pi、omp、`command-code` 与 `qwen-code`。CodeBuddy 按 D-01 排除。新增 C/Q 的 2026-10-11 最终真实资格矩阵已 PASS，见 [验收报告](../artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.md)及 [结构化证据](../artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.json)。独立[混合 Controller 闭环](../artifacts/next-worker-harness-adapters/controller-20261011T085821980Z-89759c30-e5f4-4a09-8624-89e137fe85f5.md)已取得 deliverable，并核验人工中断后的 Capsule/替代 Validator、集成、推送及同 Scope 重启事实不变。
+
+角色生命周期只使用注册项的启动、恢复、证明、只读启动、探测与原生模型目录查询能力，terminal 创建、激活和接管仍由 `application/worker-launch.ts` 拥有。`WorkerHarness.readTranscriptIdentity` 由各 adapter 独立读取精确 provider transcript，`recoveryInstructions` 返回该 harness 的阅读指引；Bootstrap 按注册项委派，不按 harness 名称另写恢复规则。模型、harness 与 effort 沿物化时固定的授权/profile 读取，恢复沿原 Task 的 transcript 与绑定核验，不能按 cwd/mtime 猜会话。
+
+各 adapter 继承真实 `process.env`，使用原生认证与配置；Worker launcher 不读取 Coordinator CredentialStore、不改写 provider 或凭据路径。`adapters/agents/worker-runtime.ts` 从真实 launch 环境解析非秘密 native roots，原生模型目录经 adapter 提供有界、可取消的查询。只读启动与探针共用 `adapters/agents/codex-model-launcher.ts` 和 `read-only-execution-wrapper.ts`：bwrap 保持真实 agent 的前台进程身份，仓库、Git 与协调存储拒写，仅核验后的 native state、report 与工件路径可写。launcher 通过专用继承 FD 提交 seccomp 过滤器，拒绝 `TIOCSTI`/`TIOCLINUX` 终端注入；CPU ABI 不支持或过滤器安装失败时拒绝启动。这是只读角色的共享边界；C/Q 可写角色使用原生 YOLO 非交互模式，不经过该只读包装器，也不具有由 YOLO 提供的 OS 文件隔离。
 
 ## 模块依赖
 
@@ -188,7 +192,7 @@ flowchart LR
   AdapterSet --> ModelAPI[Chat Model Integration]
   AdapterSet --> SQLite[(Git common dir SQLite)]
   OrcaCLI --> Runtime[Orca Runtime]
-  Runtime --> Worker[Codex Worker Harness]
+  Runtime --> Worker[已注册 Worker Harness]
   Worker --> WT[Work Package Worktree]
 ```
 
@@ -287,6 +291,8 @@ sequenceDiagram
 ```
 
 任一核验或落盘步骤不确定时都不 ack、不推进生命周期。Accepted Worker Result 正文只归 Orca，本地只保存稳定引用和去重事实。重放走同一 pipeline。详见 `IC-02`、`IC-08`。
+
+Bootstrap 从公开 exact Worker 核验 Dispatch mailbox/terminal sender；已退出 Validator 的步骤问题只保留原 Attempt 游标引用。startup/replay 把已消费的问题 ID 与 Capsule/普通角色精确结果引用一起交给原整批确认守卫。Recovery Utility 可通过最多 100 条的同 Run 公开历史查询越过旧 FIFO 批次读取报告；替代 Worker 在原 Task 上指定原 Dispatch 的 retry-of，先接管并激活 prepared terminal，再由原生 transcript 证明 Session，最后原子登记 Segment 与恢复预算。
 
 ### FLOW-04 Execution Handoff
 

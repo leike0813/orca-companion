@@ -310,11 +310,13 @@ import type {
 } from '../interfaces/tui/ports.js';
 import {
   approveExecutionAuthorization,
+  capsuleLaunchIdOf,
   createExecutionRecoveryFacts,
   parseDeliveryClaimedPayload,
   parseOrcaWorkerDoneLocator,
   proposeExecutionGraph,
   readPendingDeliveries,
+  recoveryLaunchIdOf,
   reviewExecutionAuthorization,
   type DeliveryWorktreeFactReader,
   type ExecutionAuthorizationFacts,
@@ -330,7 +332,8 @@ import {
   type StartupDeliveryFacts,
   type StartupStep,
 } from './startup.js';
-import { recoverySubjectOf } from '../application/recovery/worker-session-recovery-service.js';
+import { deriveRecoveryId, recoverySubjectOf } from '../application/recovery/worker-session-recovery-service.js';
+import { capsuleRefOf, readRecoveryCapsuleBody } from '../application/recovery/recovery-capsule.js';
 import { createOrcaWorkerStopPort } from '../adapters/orca-cli/worker-stop.js';
 import {
   CODEX_UTILITY_PERMISSION_PROFILE,
@@ -342,7 +345,8 @@ import {
   type ReadOnlyWorkerProbeResult,
 } from '../adapters/agents/codex-read-only-probe.js';
 import { probeHarnessReadOnlyWorker } from '../adapters/agents/read-only-execution-wrapper.js';
-import { dispatchScopedWorker } from '../adapters/agents/utility-worker.js';
+import { dispatchScopedWorker, parseCapsuleReport } from '../adapters/agents/utility-worker.js';
+import { isDeepStrictEqual } from 'node:util';
 import {
   createValidatorStepRunner,
   type ValidatorSessionBindingSource,
@@ -388,7 +392,7 @@ import { readDeliveryBatch } from '../adapters/orca-cli/delivery-reader.js';
 import { readBaselineGitObservations, readWorkspaceFacts, readWorkspaceChangesSince } from '../adapters/git/baseline-observer.js';
 import { runGraphPatchPlannerWorker } from './graph-patch-worker.js';
 import { createBaselineReconciliationDriver } from './baseline-reconciliation-runtime.js';
-import { isMessageInboxPage, type RunSummary, type WorkerListResult, type WorkerShowResult } from '../adapters/orca-cli/operation-catalog.js';
+import { isDeliveryBatch, isMessageInboxPage, type RunSummary, type WorkerListResult, type WorkerShowResult } from '../adapters/orca-cli/operation-catalog.js';
 import type { DeliveryMessage } from '../application/dto/operation-outcome.js';
 import { workPackageComment } from '../application/materialize-work-package.js';
 import { createGhTracker } from '../adapters/tracker/gh-tracker.js';
@@ -4617,7 +4621,13 @@ export async function createForegroundPlanningHost(
       return { kind: 'unavailable' as const, code: 'session_identity_changed', message: 'Session 身份已变更' };
     }
     const backend = backendForExecution();
-    const paths = sessionPathsFor(harness, runtime.launchId);
+    const recovery = snapshot.snapshot.recoveries.find(entry => entry.replacementDispatchId === segment.dispatchId);
+    if (recovery !== undefined && (recovery.status !== 'recovered' || recovery.workerTaskId !== segment.workerTaskId ||
+      recovery.businessAttemptId !== segment.attemptId || recovery.replacementSegmentId !== segment.segmentId ||
+      recovery.replacementSessionBindingId !== segment.sessionBindingId)) {
+      return { kind: 'unavailable', code: 'recovery_binding_unverifiable', message: '替代 Validator 的 Recovery 绑定不可核验' };
+    }
+    const paths = sessionPathsFor(harness, recovery === undefined ? runtime.launchId : recoveryLaunchIdOf(recovery.recoveryId));
     if (paths === null || backend === null || binding?.worktreeId === null || binding === undefined || segment.lastTranscriptRef === null) {
       return { kind: 'unavailable' as const, code: 'report_absent', message: '该次派发的 SessionStart 报告不可读' };
     }
@@ -4875,6 +4885,7 @@ export async function createForegroundPlanningHost(
     session: LiveSession,
     facts: NonNullable<ReturnType<typeof workerMessageFacts>>,
     message: DeliveryMessage,
+    exited: boolean,
   ): Promise<'ignored' | 'consumed' | 'blocked'> => {
     if (message.type !== 'question' || facts.segment.role !== 'validator') {
       return 'ignored';
@@ -4933,7 +4944,11 @@ export async function createForegroundPlanningHost(
     if (observation === null || 'kind' in observation) {
       return 'ignored';
     }
-    if (runtime.blocked) return 'blocked';
+    if (exited) {
+      runtime.abort.abort();
+      runtime.observedStepIds.delete(observation.stepId);
+    }
+    if (runtime.blocked && !exited) return 'blocked';
     // 同一个步骤消息只推进一次；重复投递只按持久消费证明判定。
     if (!runtime.observedStepIds.has(observation.stepId)) {
       const store = requiredStore();
@@ -4953,6 +4968,12 @@ export async function createForegroundPlanningHost(
         initialRepairConsumed: previous?.initialRepairConsumed ?? consumption.find(entry => entry.field === 'validatorRepairs')?.consumed ?? 0,
         messageIds: orderedIds });
       if (written.kind !== 'committed') return 'blocked';
+      // 已退出的 Dispatch 不能再接收许可；原问题引用留给同 Attempt 的恢复链。
+      if (exited) {
+        const retained = store.query({ kind: 'validation-attempt', coordinationScopeId: scopeId, dispatchId: runtime.routing.dispatchId });
+        return retained.kind === 'validation-attempt' && retained.attempt?.messageIds.includes(message.messageId)
+          ? 'consumed' : 'blocked';
+      }
       // 崩溃后只回读原消息引用，在原顺序上重放；有界页不能证明完整链时阻塞。
       const backend = backendForExecution();
       const identity = await readCoordinatorIdentityRef();
@@ -5001,11 +5022,12 @@ export async function createForegroundPlanningHost(
     if (session === undefined || (message.type !== 'question' && message.type !== 'escalation')) return 'blocked';
     const facts = workerMessageFacts(session, message);
     if (facts === null || Buffer.byteLength(message.body ?? '', 'utf8') > 64 * 1024) return 'blocked';
-    if (!await verifyWorkerMessageSender(message, facts)) return 'blocked';
+    const worker = await verifyWorkerMessageSender(message, facts);
+    if (worker === null) return 'blocked';
     // 旧 Attempt 的迟到消息只历史消费：不生成 Wake、不伪造 actionable。
     if (facts.historical) return 'consumed';
     // Validator 的 typed 步骤走确定性通道：先于普通 Wake 路由消费，不唤醒模型。
-    const validation = await observeValidatorStep(session, facts, message);
+    const validation = await observeValidatorStep(session, facts, message, worker.observationStatus === 'exited');
     if (validation !== 'ignored') return validation;
     const source = { sourceKind: message.type === 'question' ? 'worker-question' : 'worker-escalation',
       sourceId: message.messageId, revision: 1 };
@@ -5031,13 +5053,14 @@ export async function createForegroundPlanningHost(
   const verifyWorkerMessageSender = async (
     message: DeliveryMessage,
     facts: NonNullable<ReturnType<typeof workerMessageFacts>>,
-  ): Promise<boolean> => {
+  ): Promise<WorkerShowResult | null> => {
     const backend = backendForExecution();
-    if (backend === null || message.fromHandle === null) return false;
+    if (backend === null || message.fromHandle === null) return null;
     const read = await backend.query({ operation: 'worker-show', dispatchId: facts.segment.dispatchId });
     const worker = read.kind === 'accepted' ? read.value as WorkerShowResult : null;
     return !closed && worker?.exactWorker === true && worker.dispatchId === facts.segment.dispatchId &&
-      worker.taskId === facts.binding.orcaTaskId && worker.agentTerminalHandle === message.fromHandle;
+      worker.taskId === facts.binding.orcaTaskId && (message.fromHandle === `dispatch:${worker.dispatchId}` ||
+        (worker.agentTerminalHandle !== null && worker.agentTerminalHandle === message.fromHandle)) ? worker : null;
   };
 
   const readWorkerMessageFor = async (session: LiveSession, messageId: string) => {
@@ -5046,8 +5069,19 @@ export async function createForegroundPlanningHost(
     if (backend === null || identity === null || closed || session.fencingLost) return null;
     const page = await backend.query({ operation: 'message-inbox', backendIdentityRef: identity, limit: 20 });
     if (page.kind !== 'accepted' || !isMessageInboxPage(page.value)) return null;
-    const message = page.value.messages.find((entry) => entry.messageId === messageId &&
+    let message = page.value.messages.find((entry) => entry.messageId === messageId &&
       (entry.type === 'question' || entry.type === 'escalation'));
+    if (message === undefined) {
+      const scope = scopeRecord(session.incarnation.coordinationScopeId);
+      const runId = scope === null ? null : graphGenerationOf(scope)?.orcaRunId;
+      if (runId == null) return null;
+      // Wake admission may acknowledge the question before the model reads its full body.
+      const history = await backend.query({ operation: 'delivery-read', backendIdentityRef: identity,
+        runId, readMode: 'all', types: ['question', 'escalation'] });
+      if (history.kind !== 'accepted' || !isDeliveryBatch(history.value) || history.value.messages.length > 100) return null;
+      message = history.value.messages.find((entry) => entry.messageId === messageId &&
+        (entry.type === 'question' || entry.type === 'escalation'));
+    }
     const facts = message === undefined ? null : workerMessageFacts(session, message);
     if (message === undefined || facts === null || Buffer.byteLength(message.body ?? '', 'utf8') > 64 * 1024 ||
       facts.historical || !await verifyWorkerMessageSender(message, facts)) return null;
@@ -5065,7 +5099,7 @@ export async function createForegroundPlanningHost(
         const messageId = asRecord(input)?.['messageId'];
         if (typeof messageId !== 'string' || messageId.length === 0) return { kind: 'rejected', code: 'invalid_argument', message: '需要 messageId' };
         const found = await readWorkerMessageFor(session, messageId);
-        return found === null ? { kind: 'rejected', code: 'worker_message_unavailable', message: '有界 inbox 页没有可核验的当前消息' }
+        return found === null ? { kind: 'rejected', code: 'worker_message_unavailable', message: '有界消息查询没有可核验的当前消息' }
           : { kind: 'ok', value: { messageId, type: found.message.type, body: found.message.body, workPackageId: found.facts.binding.workPackageId } };
       },
     }, { name: 'reply_worker', description: '答复已核验的当前 Worker 提问；按稳定操作身份落盘、执行并核验回复。',
@@ -5364,6 +5398,34 @@ export async function createForegroundPlanningHost(
    * 读取范围是**当前 Graph Generation 的 Run**：`no-run` 时「没有未确认 Delivery」是对这个读取范围的
    * 忠实回答（不是推断）；`unreadable` 时 `readPending` 返回显式 `rejected`，绝不用空数组冒充。
    */
+  const consumeCapsuleResult = async (scopeId: CoordinationScopeId, message: DeliveryMessage): Promise<'ignored' | 'consumed' | 'blocked'> => {
+    const locator = parseOrcaWorkerDoneLocator(message.payload, message.body);
+    const read = requiredStore().query({ kind: 'snapshot', coordinationScopeId: scopeId });
+    if (read.kind !== 'snapshot' || locator === null) return 'ignored';
+    const binding = read.snapshot.materializationBindings.find((entry) => entry.recoveryUtilityRole === 'recovery_utility' &&
+      entry.orcaTaskId === locator.orcaTaskId);
+    if (binding === undefined) return 'ignored';
+    const generation = graphGenerationOf(read.snapshot.scope);
+    const backend = backendForExecution();
+    if (backend === null || commonDirPath === null || generation?.orcaRunId !== message.runId ||
+      message.deliveryContract !== 'current_delivery' || binding.authorizationId === null || binding.workerProfileRef === null) return 'blocked';
+    const authorization = requiredStore().query({ kind: 'authorization', coordinationScopeId: scopeId, authorizationId: binding.authorizationId });
+    if (authorization.kind !== 'authorization' || authorization.authorization?.authorizationVersion !== binding.authorizationVersion ||
+      authorization.authorization.manifest.recoveryUtilityProfile.profileRef.id !== binding.workerProfileRef.id) return 'blocked';
+    const source = read.snapshot.sessionSegments.find((entry) => capsuleLaunchIdOf(entry.segmentId) === binding.launchId);
+    if (source === undefined) return 'blocked';
+    const stored = readRecoveryCapsuleBody({ stateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY),
+      capsuleRef: capsuleRefOf(deriveRecoveryId(scopeId, source.segmentId)) });
+    if (stored === null) return 'blocked';
+    const shown = await backend.query({ operation: 'worker-show', dispatchId: locator.orcaDispatchId });
+    const worker = shown.kind === 'accepted' ? shown.value as WorkerShowResult : null;
+    if (worker?.exactWorker !== true || worker.dispatchId !== locator.orcaDispatchId || worker.taskId !== binding.orcaTaskId ||
+      (message.fromHandle !== `dispatch:${worker.dispatchId}` && message.fromHandle !== worker.agentTerminalHandle)) return 'blocked';
+    const parsed = parseCapsuleReport([message], { coverage: stored.coverage, readableRange: stored.readableRange,
+      gaps: stored.gaps, lastCompleteEventRef: stored.lastCompleteEventRef });
+    return parsed.ok && isDeepStrictEqual(parsed.capsule, stored) ? 'consumed' : 'blocked';
+  };
+
   const startupDeliveriesFor = (input: {
     readonly scope: ScopeRecord;
     readonly generation: GraphGenerationRecord | null;
@@ -5419,7 +5481,10 @@ export async function createForegroundPlanningHost(
           consumerGeneration: base.consumerGeneration,
           timeoutMs: base.timeoutMs,
           readWorktreeFacts: readDeliveryWorktreeFacts,
-          consumeProjectResult: (message) => consumeFinalizerResult(input.scope.coordinationScopeId, message),
+          consumeProjectResult: async (message) => {
+            const capsule = await consumeCapsuleResult(input.scope.coordinationScopeId, message);
+            return capsule === 'ignored' ? consumeFinalizerResult(input.scope.coordinationScopeId, message) : capsule;
+          },
           onWorkerMessage: (message) => observeWorkerMessage(input.scope.coordinationScopeId, message),
         }),
     };
@@ -6364,7 +6429,7 @@ export async function createForegroundPlanningHost(
         ...(role === 'planner' ? { specificationUnitPath } : {}),
         // 指令是宿主写出的正文：Planner 的产出位置与结构、Validator 的 ask/reply 步骤协议都由
         // Envelope 说清，不留给 Worker 猜。
-        instructions: [...continuationInstructions, ...(role === 'planner'
+        instructions: [`工作包目标：${input.workPackage.title}`, ...continuationInstructions, ...(role === 'planner'
             ? plannerSpecificationInstructions(specificationUnitPath)
             : role === 'validator'
               ? validatorVerificationInstructions({
@@ -8285,6 +8350,19 @@ export async function createForegroundPlanningHost(
       graphId: graph.graphId,
       generation: graph.generation,
     });
+    const completed = snapshot.deliveryVerdicts.some(verdict =>
+      verdict.verdictId === derivedKey('delivery-verdict', [scopeId, graph.graphId, String(graph.generation)]) &&
+      snapshot.sessionSegments.some(segment => segment.role === 'finalizer' && segment.sessionBindingId === verdict.sessionBindingRef &&
+        segment.workerTaskId === operationIds.workerTaskId && segment.attemptId === operationIds.attemptId &&
+        snapshot.materializationBindings.some(binding => binding.role === 'finalizer' && binding.workerTaskId === segment.workerTaskId &&
+          binding.attemptId === segment.attemptId && pinnedProfileFor({ scopeId, binding, role: 'finalizer' }) !== null &&
+          snapshot.deliverySettlements.some(settlement => settlement.role === 'finalizer' && settlement.workerTaskId === segment.workerTaskId &&
+            settlement.dispatchId === segment.dispatchId && settlement.attemptId === segment.attemptId && settlement.runId === run.runId &&
+            settlement.outcome === (verdict.verdict.kind === 'deliverable' ? 'succeeded' : 'failed')))));
+    if (completed) {
+      clearExecutionBlocker(scopeId, 'finalizer');
+      return;
+    }
     const paths = finalizerCompanionPaths(finalizerHarness, operationIds.launchId);
     if (paths === null) {
       recordExecutionBlocker(scopeId, 'finalizer', 'state_root_unavailable', '无法建立 Finalizer Session reporter');
@@ -9315,6 +9393,13 @@ export async function createForegroundPlanningHost(
       return;
     }
     const blocked = deliveries.unreadable[0] ?? deliveries.replayed.outcomes.find((outcome) => outcome.blockingReason !== null);
+    const confirmedLanes = new Set(deliveries.confirmedDeliveryLaneKeys);
+    const startup = startupOf(scopeId);
+    if (startup?.kind === 'started' && confirmedLanes.size > 0) {
+      scopeStartups.set(scopeId, { ...startup, startup: { ...startup.startup,
+        blockers: startup.startup.blockers.filter(entry => entry.source !== 'delivery' || entry.laneKey === null || !confirmedLanes.has(entry.laneKey)),
+      } });
+    }
     if (blocked === undefined) clearExecutionBlocker(scopeId, 'delivery');
     else recordExecutionBlocker(scopeId, 'delivery', 'delivery_unresolved',
       'message' in blocked ? blocked.message : blocked.blockingReason ?? 'Delivery 尚未结清');
@@ -9990,6 +10075,7 @@ export async function createForegroundPlanningHost(
           .join('；')}`,
       );
     }
+    repointExecutionLeaseFor(ensured.session);
     publish(null, {
       kind: 'state-changed',
       coordinationScopeId: refreshed.facts.coordinationScopeId,

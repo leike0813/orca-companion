@@ -1,0 +1,1972 @@
+{
+  "createdAt": "2026-10-11T09:17:43.452Z",
+  "change": "add-testable-worker-harness-adapters",
+  "head": "1a3eaf7577a3fe62af3e8a35ba5451080ac34e47",
+  "branch": "main",
+  "upstreamHead": "cc5c85fb7a43ed52c6cd29157210020cd769d84c",
+  "upstreamWorkingTreeClean": true,
+  "trackedBinaryDiff": {
+    "path": "artifacts/next-worker-harness-adapters/implementation-diff-20261011.patch",
+    "bytes": 219641,
+    "sha256": "19c2c3a87067895087edfdf86889ec9d29c2d1612534331d27feeb2bd06fe7f3"
+  },
+  "untrackedManifest": [
+    {
+      "path": "artifacts/next-worker-harness-adapters/README.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2542,
+      "sha256": "a9678bc2885a0e1d616189b1626b309fe288e10046c1cf0cb9e3f085d3f6dd76"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/blocked-checkpoint-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 54344,
+      "sha256": "948b0bb195e65fbc7ac773ff5a4bf1f49e1ae935abd8208d911581e217544b96"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-8zuGqr-controller-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 801,
+      "sha256": "69cbcab023fd153177704f25ae2c4289701aff26cdcc7815022af3e3bf35ce2c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-8zuGqr-planner-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 548,
+      "sha256": "0955f78555653d41c16281318defe70075beb8150087100b33f05b82655a6b38"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-K9-controller-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 517,
+      "sha256": "5da6beefb94de8ae5ea73ebd75c9f504e1682e82ef9a257c3623dea800425c91"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-K9-utility-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 531,
+      "sha256": "1db2b6200c4b0532a4b65ff97bc612614c92b887070c5af416b4eb1c1a96ee34"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-WLT15T-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 305,
+      "sha256": "c322cd1b325fda8c08ca1e04f3dc480b1147e533edd0d2ff5cabcea1eb0997d3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-controller-progress-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 490,
+      "sha256": "d92c7a8ec454bd19a7cfdbe8ae53653d6d2f17edfa3b552a79b630b991775e22"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-early-candidates-completed-20261011.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 512,
+      "sha256": "b904b6b87abcf26f776c3a5a630b388328c018ecc946ac54489f526605b98f88"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-early-candidates-terminals-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 13040,
+      "sha256": "98ada3883f9ec08bfcdc6503e1ce2a3bb396f8156a9a124f11f34e34f3cab136"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-lIir5s-controller-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 602,
+      "sha256": "e8c8d4045b446d8cf83ec9b6b55ae033625e7d2551aa5427aaa99f49114a665d"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-p0vZXM-controller-completed-20261011.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 820,
+      "sha256": "b05012ef029d77ae68164668e70c21a181f20129acdfbe03ada7af7ece87dbd5"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-p0vZXM-controller-inventory-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 3268,
+      "sha256": "f17e2a5c6187fa4e34c01eaaa357f832562fd97838401a30e6615e166eea89a8"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-qLmDBK-20261011.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 431,
+      "sha256": "6f5834db3cd6d00b4b7bece183c531f78c49dfcb6dce7baa782a765cfca79e9b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-retired-matrices-20261011.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6126,
+      "sha256": "8276c2885070d018fc4d6ace9e7c969e86f3e3c788725ff060dc23fdb41326c4"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-summary-20261011.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 435,
+      "sha256": "61bb42b207416f1fc4596448877b2c20c4de3876ca5a6b534acc64e469c75315"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/cleanup-zX9uxn-20261011.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 461,
+      "sha256": "d081f4683cf9051dae3c906b5842c708ab1eb5d2898182208610ea1eb2d3ee0c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/codebuddy-excluded-startup-20261011.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6209,
+      "sha256": "f20662be43d2773c37dd4f0501c3fd8d4c4c86efb4929a6582429b28af341264"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/controller-20261011T085821980Z-89759c30-e5f4-4a09-8624-89e137fe85f5.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 13392,
+      "sha256": "2f6b4c032a78d5ec638f4b8a4fadcd6e97d792928b666548dbdd56c91b341d87"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/controller-20261011T085821980Z-89759c30-e5f4-4a09-8624-89e137fe85f5.md",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 749,
+      "sha256": "5d682e9ebf0b09b124d6589e50c224b50b209183fb23a43290f900689cbc6550"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/controller-blocked-sender-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 86687,
+      "sha256": "92b58b37bded0223cd59600ecfac934d2da95028c5716a71582eb51d8a089eab"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/controller-blocked-taste-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 5245,
+      "sha256": "67eba82a7ac258bf8d01b80c0a9a8cb3929264dc1c433cfe9168e6bfa8e415b8"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/controller-blocker-investigation.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3048,
+      "sha256": "c2a944ce9a9156724d413e4e99c304a3fbdf1ac6ef09da978990a7494bdd3aa6"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/controller-capsule-blocked-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 27364,
+      "sha256": "9694448465a69f94ba65b670687278b200378657d435525cc699b9fb27da6d5f"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/controller-final-report-blocked-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 26703,
+      "sha256": "3fc1638b39e60c48d8a889b5469c7c12f328f167048c86b87c6cb64cd5081caa"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/controller-limited-audit-20261011.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2018,
+      "sha256": "724101bc406e3155cb8368aa8dbc75b7e5ff27172fd0ffced7ab7c215659b05d"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/controller-planner-blocked-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 28280,
+      "sha256": "0b73dd2ec1a751a82387a5b4f62d689c023bff08fe0758908c9edbd2f91f26cf"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/controller-question-history-proof-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 1270,
+      "sha256": "a9617e84b577ff21b94b9d50686d7ff64b37ff34d2e6c50afad16c212673bfe3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/controller-replacement-blocked-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 75796,
+      "sha256": "e67469c84a2f1b10b928c0ccc5e4c8dc504970a43965d5d6bb99892375292d22"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/final-checks-20261011.json",
+      "kind": "file",
+      "mode": "600",
+      "bytes": 1150,
+      "sha256": "1e381a5a8a4618a70be9e5c806a8bf10f33928ea8a8dd0fe14c99ff5b8195e97"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/final-checks-20261011.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2414,
+      "sha256": "0b33495964ee341c01e09b0aec4566ac5572fc3b4d46cb25dd1efe81ff1e466c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ip04-2026-10-11T03-44-29-243Z-e4e034af-6008-4924-83b5-e27a7b45bce7.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2718,
+      "sha256": "4bead06b30692132da252c08591b327f9b4a2df1b40d19329d1c50dbbde96c39"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ip04-2026-10-11T03-44-29-243Z-e4e034af-6008-4924-83b5-e27a7b45bce7.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 1394,
+      "sha256": "410056b7519ddcf27c012aed3aa8c33f092952e8bf57bfd6516ffedaea4f00f0"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ip04-2026-10-11T03-51-00-967Z-9232ccd3-6acc-4e9a-810a-24665e4e0f6f.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 59155,
+      "sha256": "6b24ec1a574060676561e5051cca3936013fde74789c0849447a6559a4b3e2a4"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ip04-2026-10-11T03-51-00-967Z-9232ccd3-6acc-4e9a-810a-24665e4e0f6f.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 41035,
+      "sha256": "fd778d132df6eda39f9964d69fa76288149d496a275fb8217c53d6b25cf26ca7"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ip04-2026-10-11T04-42-07-424Z-838d3436-5014-4ad0-964a-98c458c638d1.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 5529,
+      "sha256": "831b31538354cf73f22a2adc732ebec28755bccaf60c4bfb067d460e4f897846"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ip04-2026-10-11T04-42-07-424Z-838d3436-5014-4ad0-964a-98c458c638d1.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2612,
+      "sha256": "e6811bc2ffcc6e40fcf5a14e6cb41c1941846552c2bf277ec0e0c117646ccdc5"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 13389,
+      "sha256": "c739dbd7c203581a23633b282d02a1f7bc906688513e8e411119be17778eb635"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 1668,
+      "sha256": "169da3eeae8f4c4a6a1eae59e49564028c929c1af2c60a9886d1dbbe65d6f7c4"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/limited-audit.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3397,
+      "sha256": "3947b77eedbee373f401542eabe043e8952c053dbb4b34ff0d01c16138efec75"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/setup-controller-fixture.mjs",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 10508,
+      "sha256": "36be3c682f1492caa7c7c74890808cc4b8e35788f4cae8f42f8ebac1f57efa6a"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/README.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 9189,
+      "sha256": "874a49e6f311065b424c771373e54eddfa69c9dc947fbd223f6576d74eb69a35"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/codebuddy-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 7021,
+      "sha256": "b9cfebe36a1ee89cdf3debcbe1252333c256e7fe8f3ca6537bf84e3f067f0c27"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/codebuddy-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6072,
+      "sha256": "cd838ca1804800606fbfe1ebf3a068a66042837e23c19ecaf657f460c4f74a9b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/codebuddy-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3523,
+      "sha256": "7e2760682295373b063db1c8d8d033a90f62e072fe67d9b595ef0d9e87257cfe"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/codebuddy-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "5de0848133d4891815a24c93f9b5726e152dbcaa1281e2d31e80706ac1fa057b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/codebuddy-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3375,
+      "sha256": "ffaeed9fc42b4caeb5f346d44f3e8bbb17233130c3ea0d11841b181eb33448f1"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/codebuddy-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2746,
+      "sha256": "64fc5c8af98f1710fc4c8c09c506932ac83e455dac35330e6c00bc5cb891b3ee"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/command-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 7023,
+      "sha256": "45c7daa22f4985cd63fe472d286670f07d6ce21f37c9656338906e52aa2ff0a4"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/command-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6074,
+      "sha256": "e8b60d55ada75090ea69d4bedb9b70c4874d1241339845534e7fc8ee396e2fa9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/command-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3524,
+      "sha256": "f6b829ccd95bf2900a7d0c656f18838a3a43674eaa1e4334979d48d6ef07e7bb"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/command-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2575,
+      "sha256": "72ecf4968ef94c77fa4f449780b9631d47b8423688a5275dde2aa56f9acc08b9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/command-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3377,
+      "sha256": "cf574ec85146137c9605bc23b4f1300d32ad365ba6b9f8dffb9d7d26172b6ab4"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/command-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2748,
+      "sha256": "4ab6ab44fd23b8dd50fb13b1cc35ad158de1a7e6ece06104d3705c8739e13bfb"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/evidence.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3453,
+      "sha256": "e5277ace69eeb80a48dc85a7ce2c9fb399b7c7061f4aa4c1ab6326ec80df9398"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/qwen-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 7021,
+      "sha256": "2e64809cfabf94a6764a8e9231a9b7f99c8f4493c54b71e8b1985edca22e1189"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/qwen-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6072,
+      "sha256": "dac487d2d315951fa03fd647cb03c8283e2501ed3a91f480d25f20a96f0ec562"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/qwen-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3523,
+      "sha256": "a454dbb8fd8e54c14a53b5853ca69c1246053832ddbb399adbb896d3c2ce9065"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/qwen-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "9d5783a5c0ea4e8734a435253872551b29b7083d4a67cc3c9456f68fd7387951"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/qwen-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3375,
+      "sha256": "5bb213d091d457dcf5a127dfd8976ae4efd32169e59b2045661b088a758d6189"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/qwen-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2746,
+      "sha256": "a1401a95439b2a6209584997d007a580d160860c4546bd725c72a88c769f686c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/roles-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6848,
+      "sha256": "bf5e495449765c9dc094e779dae03087bf7385132a0f4ec9e1068187a5b60975"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/roles-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 5919,
+      "sha256": "63c23b29f891dca521a290e0007b3582f066a3e951bac10c2a5fe28b680cddd1"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/roles-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3553,
+      "sha256": "7484d88fc54ee20d3d15106dc2b60070911e82364c5cda352a4333a8e56b3f86"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/roles-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2606,
+      "sha256": "a120019b03e9713118cb1be8cbc270a8c0137f4f89344469e05f548f214e09fe"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/roles-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3280,
+      "sha256": "b51db7e5c333d664086ed929139a4b34755fa2d43c1456f27a04c8e6487687ce"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693032174/roles-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2671,
+      "sha256": "346625e638fa42a878d0251cd33eaa2b56295618b25f203f903064df9cf19ee5"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/codebuddy-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 7021,
+      "sha256": "b9cfebe36a1ee89cdf3debcbe1252333c256e7fe8f3ca6537bf84e3f067f0c27"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/codebuddy-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6072,
+      "sha256": "cd838ca1804800606fbfe1ebf3a068a66042837e23c19ecaf657f460c4f74a9b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/codebuddy-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3523,
+      "sha256": "7e2760682295373b063db1c8d8d033a90f62e072fe67d9b595ef0d9e87257cfe"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/codebuddy-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "5de0848133d4891815a24c93f9b5726e152dbcaa1281e2d31e80706ac1fa057b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/codebuddy-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3375,
+      "sha256": "ffaeed9fc42b4caeb5f346d44f3e8bbb17233130c3ea0d11841b181eb33448f1"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/codebuddy-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2746,
+      "sha256": "64fc5c8af98f1710fc4c8c09c506932ac83e455dac35330e6c00bc5cb891b3ee"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/command-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 7023,
+      "sha256": "45c7daa22f4985cd63fe472d286670f07d6ce21f37c9656338906e52aa2ff0a4"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/command-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6074,
+      "sha256": "e8b60d55ada75090ea69d4bedb9b70c4874d1241339845534e7fc8ee396e2fa9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/command-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3524,
+      "sha256": "f6b829ccd95bf2900a7d0c656f18838a3a43674eaa1e4334979d48d6ef07e7bb"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/command-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2575,
+      "sha256": "72ecf4968ef94c77fa4f449780b9631d47b8423688a5275dde2aa56f9acc08b9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/command-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3377,
+      "sha256": "cf574ec85146137c9605bc23b4f1300d32ad365ba6b9f8dffb9d7d26172b6ab4"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/command-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2748,
+      "sha256": "4ab6ab44fd23b8dd50fb13b1cc35ad158de1a7e6ece06104d3705c8739e13bfb"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/evidence.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3453,
+      "sha256": "e5277ace69eeb80a48dc85a7ce2c9fb399b7c7061f4aa4c1ab6326ec80df9398"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/qwen-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 7021,
+      "sha256": "2e64809cfabf94a6764a8e9231a9b7f99c8f4493c54b71e8b1985edca22e1189"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/qwen-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6072,
+      "sha256": "dac487d2d315951fa03fd647cb03c8283e2501ed3a91f480d25f20a96f0ec562"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/qwen-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3523,
+      "sha256": "a454dbb8fd8e54c14a53b5853ca69c1246053832ddbb399adbb896d3c2ce9065"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/qwen-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "9d5783a5c0ea4e8734a435253872551b29b7083d4a67cc3c9456f68fd7387951"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/qwen-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3375,
+      "sha256": "5bb213d091d457dcf5a127dfd8976ae4efd32169e59b2045661b088a758d6189"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/qwen-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2746,
+      "sha256": "a1401a95439b2a6209584997d007a580d160860c4546bd725c72a88c769f686c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/roles-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6848,
+      "sha256": "bf5e495449765c9dc094e779dae03087bf7385132a0f4ec9e1068187a5b60975"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/roles-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 5919,
+      "sha256": "63c23b29f891dca521a290e0007b3582f066a3e951bac10c2a5fe28b680cddd1"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/roles-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3553,
+      "sha256": "7484d88fc54ee20d3d15106dc2b60070911e82364c5cda352a4333a8e56b3f86"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/roles-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2606,
+      "sha256": "a120019b03e9713118cb1be8cbc270a8c0137f4f89344469e05f548f214e09fe"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/roles-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3280,
+      "sha256": "b51db7e5c333d664086ed929139a4b34755fa2d43c1456f27a04c8e6487687ce"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791693397420/roles-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2671,
+      "sha256": "346625e638fa42a878d0251cd33eaa2b56295618b25f203f903064df9cf19ee5"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/command-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 7023,
+      "sha256": "45c7daa22f4985cd63fe472d286670f07d6ce21f37c9656338906e52aa2ff0a4"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/command-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6074,
+      "sha256": "e8b60d55ada75090ea69d4bedb9b70c4874d1241339845534e7fc8ee396e2fa9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/command-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3524,
+      "sha256": "f6b829ccd95bf2900a7d0c656f18838a3a43674eaa1e4334979d48d6ef07e7bb"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/command-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2575,
+      "sha256": "72ecf4968ef94c77fa4f449780b9631d47b8423688a5275dde2aa56f9acc08b9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/command-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3377,
+      "sha256": "cf574ec85146137c9605bc23b4f1300d32ad365ba6b9f8dffb9d7d26172b6ab4"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/command-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2748,
+      "sha256": "4ab6ab44fd23b8dd50fb13b1cc35ad158de1a7e6ece06104d3705c8739e13bfb"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/evidence.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2559,
+      "sha256": "973cbcda80e80338470a4f9e52c020c42bc67c1265d6d76dfc824441a4082fc8"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/qwen-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 7021,
+      "sha256": "2e64809cfabf94a6764a8e9231a9b7f99c8f4493c54b71e8b1985edca22e1189"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/qwen-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6072,
+      "sha256": "dac487d2d315951fa03fd647cb03c8283e2501ed3a91f480d25f20a96f0ec562"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/qwen-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3523,
+      "sha256": "a454dbb8fd8e54c14a53b5853ca69c1246053832ddbb399adbb896d3c2ce9065"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/qwen-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "9d5783a5c0ea4e8734a435253872551b29b7083d4a67cc3c9456f68fd7387951"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/qwen-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3375,
+      "sha256": "5bb213d091d457dcf5a127dfd8976ae4efd32169e59b2045661b088a758d6189"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/qwen-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2746,
+      "sha256": "a1401a95439b2a6209584997d007a580d160860c4546bd725c72a88c769f686c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/roles-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6845,
+      "sha256": "ab982a73e281a882c13d3b7449d3338815bf35cdeb8553fc15e176ad35d70fbd"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/roles-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 5916,
+      "sha256": "f0ce1ba9e0cfaa26fb7a84dea4c4cea1a69ea744af8f8634f471c5def4ae59d9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/roles-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3539,
+      "sha256": "e656ca6c3fe0b9d8658ae0c3fcef48b8d8f021bd86f533fcec673f0bbb5e2b69"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/roles-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2592,
+      "sha256": "b0ccd1b5c0cf1a4a4fa268950317618e75352834bd0cde30b7fccab6e9445ad0"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/roles-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3277,
+      "sha256": "f8018d10fcd7e9075f6d460bc3076e2642e44dc11ef167c439646febc6f4fcba"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-color-1791695630611/roles-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2668,
+      "sha256": "14cc794d643dc19bc187a6c98629ead841e00c5b9001a6ccd7d5815852e85fd6"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/codebuddy-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6071,
+      "sha256": "ca20feea1a82cd0c0c11c358b2f207e282e7aa138269833fb953e823530de2e3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/codebuddy-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6072,
+      "sha256": "cd838ca1804800606fbfe1ebf3a068a66042837e23c19ecaf657f460c4f74a9b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/codebuddy-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2573,
+      "sha256": "928c386346997df43d3a68937906ca62ab9a03aea94c1ee177b9855728b2e9e0"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/codebuddy-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "5de0848133d4891815a24c93f9b5726e152dbcaa1281e2d31e80706ac1fa057b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/codebuddy-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2745,
+      "sha256": "26a9b220b8a1429f86654c47d5c32e36838014b20cff31c1216f1602dbcd658c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/codebuddy-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2746,
+      "sha256": "64fc5c8af98f1710fc4c8c09c506932ac83e455dac35330e6c00bc5cb891b3ee"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/command-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6073,
+      "sha256": "3b3523634432087d25920401acec19a34ad1c5859ffea890edb6377851d1cbf1"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/command-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6074,
+      "sha256": "e8b60d55ada75090ea69d4bedb9b70c4874d1241339845534e7fc8ee396e2fa9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/command-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "65df3b86fbcb43da224c27fba3a4c224410d14abf68202ea964a800fadee9ba3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/command-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2575,
+      "sha256": "72ecf4968ef94c77fa4f449780b9631d47b8423688a5275dde2aa56f9acc08b9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/command-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2747,
+      "sha256": "68d16bc9adb659b3a2ca7b226e8a51342abd52064bb39c81e6da79f85df72e73"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/command-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2748,
+      "sha256": "4ab6ab44fd23b8dd50fb13b1cc35ad158de1a7e6ece06104d3705c8739e13bfb"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/qwen-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6071,
+      "sha256": "2e97435d55f76710f420ce107eed97ac9a65594620d38b16e55265aa33991e08"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/qwen-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6072,
+      "sha256": "dac487d2d315951fa03fd647cb03c8283e2501ed3a91f480d25f20a96f0ec562"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/qwen-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2573,
+      "sha256": "d925af171c7aad59fdea97dac4b2a2eabde4ffba98ebce983d00e4e8126c9a7c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/qwen-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "9d5783a5c0ea4e8734a435253872551b29b7083d4a67cc3c9456f68fd7387951"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/qwen-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2745,
+      "sha256": "953abdadf837c8360dc7624b4ead75ac974612522b5059dbd016194218998997"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/qwen-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2746,
+      "sha256": "a1401a95439b2a6209584997d007a580d160860c4546bd725c72a88c769f686c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/roles-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 5918,
+      "sha256": "a31f28e42eb320ed34f487c80cf9520513c43feca6e745c029b87ac719d241a2"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/roles-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 5919,
+      "sha256": "63c23b29f891dca521a290e0007b3582f066a3e951bac10c2a5fe28b680cddd1"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/roles-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2605,
+      "sha256": "428640ac1b19e528d13bfa1f8048da2dc2a3eeb371c128c4b4c0939f43f2aea3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/roles-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2606,
+      "sha256": "a120019b03e9713118cb1be8cbc270a8c0137f4f89344469e05f548f214e09fe"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/roles-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2670,
+      "sha256": "438e87a865b9b00fc9f54871f8cb54b0bbd0d92f0ae83091e43011301febc674"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692879532/roles-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2671,
+      "sha256": "346625e638fa42a878d0251cd33eaa2b56295618b25f203f903064df9cf19ee5"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/codebuddy-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6071,
+      "sha256": "ca20feea1a82cd0c0c11c358b2f207e282e7aa138269833fb953e823530de2e3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/codebuddy-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6072,
+      "sha256": "cd838ca1804800606fbfe1ebf3a068a66042837e23c19ecaf657f460c4f74a9b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/codebuddy-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2573,
+      "sha256": "928c386346997df43d3a68937906ca62ab9a03aea94c1ee177b9855728b2e9e0"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/codebuddy-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "5de0848133d4891815a24c93f9b5726e152dbcaa1281e2d31e80706ac1fa057b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/codebuddy-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2745,
+      "sha256": "26a9b220b8a1429f86654c47d5c32e36838014b20cff31c1216f1602dbcd658c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/codebuddy-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2746,
+      "sha256": "64fc5c8af98f1710fc4c8c09c506932ac83e455dac35330e6c00bc5cb891b3ee"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/command-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6073,
+      "sha256": "3b3523634432087d25920401acec19a34ad1c5859ffea890edb6377851d1cbf1"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/command-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6074,
+      "sha256": "e8b60d55ada75090ea69d4bedb9b70c4874d1241339845534e7fc8ee396e2fa9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/command-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "65df3b86fbcb43da224c27fba3a4c224410d14abf68202ea964a800fadee9ba3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/command-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2575,
+      "sha256": "72ecf4968ef94c77fa4f449780b9631d47b8423688a5275dde2aa56f9acc08b9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/command-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2747,
+      "sha256": "68d16bc9adb659b3a2ca7b226e8a51342abd52064bb39c81e6da79f85df72e73"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/command-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2748,
+      "sha256": "4ab6ab44fd23b8dd50fb13b1cc35ad158de1a7e6ece06104d3705c8739e13bfb"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/evidence.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3208,
+      "sha256": "c28886171b99b029e38989f2c1301c9f2a70be43c4ecbbb977b0a6bb67d80c10"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/qwen-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6071,
+      "sha256": "2e97435d55f76710f420ce107eed97ac9a65594620d38b16e55265aa33991e08"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/qwen-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6072,
+      "sha256": "dac487d2d315951fa03fd647cb03c8283e2501ed3a91f480d25f20a96f0ec562"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/qwen-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2573,
+      "sha256": "d925af171c7aad59fdea97dac4b2a2eabde4ffba98ebce983d00e4e8126c9a7c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/qwen-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "9d5783a5c0ea4e8734a435253872551b29b7083d4a67cc3c9456f68fd7387951"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/qwen-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2745,
+      "sha256": "953abdadf837c8360dc7624b4ead75ac974612522b5059dbd016194218998997"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/qwen-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2746,
+      "sha256": "a1401a95439b2a6209584997d007a580d160860c4546bd725c72a88c769f686c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/roles-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 5918,
+      "sha256": "a31f28e42eb320ed34f487c80cf9520513c43feca6e745c029b87ac719d241a2"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/roles-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 5919,
+      "sha256": "63c23b29f891dca521a290e0007b3582f066a3e951bac10c2a5fe28b680cddd1"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/roles-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2605,
+      "sha256": "428640ac1b19e528d13bfa1f8048da2dc2a3eeb371c128c4b4c0939f43f2aea3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/roles-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2606,
+      "sha256": "a120019b03e9713118cb1be8cbc270a8c0137f4f89344469e05f548f214e09fe"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/roles-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2670,
+      "sha256": "438e87a865b9b00fc9f54871f8cb54b0bbd0d92f0ae83091e43011301febc674"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791692902062/roles-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2671,
+      "sha256": "346625e638fa42a878d0251cd33eaa2b56295618b25f203f903064df9cf19ee5"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/codebuddy-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6071,
+      "sha256": "ca20feea1a82cd0c0c11c358b2f207e282e7aa138269833fb953e823530de2e3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/codebuddy-menu-120x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 41961,
+      "sha256": "f9b058473004ffd34d012e1cc729db9305a62625b49826468566918e596d8e5e"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/codebuddy-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6072,
+      "sha256": "cd838ca1804800606fbfe1ebf3a068a66042837e23c19ecaf657f460c4f74a9b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/codebuddy-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2573,
+      "sha256": "928c386346997df43d3a68937906ca62ab9a03aea94c1ee177b9855728b2e9e0"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/codebuddy-menu-50x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 36882,
+      "sha256": "b24187383e057a932091ed84b9f7b4340d0905998d9240980f8eac98435cce8f"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/codebuddy-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "5de0848133d4891815a24c93f9b5726e152dbcaa1281e2d31e80706ac1fa057b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/codebuddy-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2745,
+      "sha256": "26a9b220b8a1429f86654c47d5c32e36838014b20cff31c1216f1602dbcd658c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/codebuddy-menu-80x24.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 35417,
+      "sha256": "b7e49cbae2184bfd8bc3fd8fb31c44f996290f41e7050db52ab0e529fa07b063"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/codebuddy-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2746,
+      "sha256": "64fc5c8af98f1710fc4c8c09c506932ac83e455dac35330e6c00bc5cb891b3ee"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/command-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6073,
+      "sha256": "3b3523634432087d25920401acec19a34ad1c5859ffea890edb6377851d1cbf1"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/command-code-menu-120x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 42240,
+      "sha256": "bc2e90f48d24b6cfe5314e617ee489523adb0d7fec85578f0ac1e5fb139aae43"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/command-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6074,
+      "sha256": "e8b60d55ada75090ea69d4bedb9b70c4874d1241339845534e7fc8ee396e2fa9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/command-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "65df3b86fbcb43da224c27fba3a4c224410d14abf68202ea964a800fadee9ba3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/command-code-menu-50x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 36102,
+      "sha256": "24264366583d41b7dc9bf2e876af059c2dd43d0afb6d2c2f043c20d3979ce536"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/command-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2575,
+      "sha256": "72ecf4968ef94c77fa4f449780b9631d47b8423688a5275dde2aa56f9acc08b9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/command-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2747,
+      "sha256": "68d16bc9adb659b3a2ca7b226e8a51342abd52064bb39c81e6da79f85df72e73"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/command-code-menu-80x24.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 35613,
+      "sha256": "77ffa64c72951d3b4b171f4286506d9e14eb0268148ef5fda9c96eeafe2c9da3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/command-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2748,
+      "sha256": "4ab6ab44fd23b8dd50fb13b1cc35ad158de1a7e6ece06104d3705c8739e13bfb"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/evidence.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3489,
+      "sha256": "c3dfe1f31d04c290ca8eeeb47d724f3bd707089cc634584a3702a73928f4abe8"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/qwen-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6071,
+      "sha256": "2e97435d55f76710f420ce107eed97ac9a65594620d38b16e55265aa33991e08"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/qwen-code-menu-120x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 41863,
+      "sha256": "2e24e585826218c6efb7bb0fe1b9a241a7384538095a7cf50d0ddead85083317"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/qwen-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6072,
+      "sha256": "dac487d2d315951fa03fd647cb03c8283e2501ed3a91f480d25f20a96f0ec562"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/qwen-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2573,
+      "sha256": "d925af171c7aad59fdea97dac4b2a2eabde4ffba98ebce983d00e4e8126c9a7c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/qwen-code-menu-50x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 36797,
+      "sha256": "c6aa9601dee3599f60c0ee6ce2731ff32b4423bff85cfde79291ec12c71c1654"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/qwen-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "9d5783a5c0ea4e8734a435253872551b29b7083d4a67cc3c9456f68fd7387951"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/qwen-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2745,
+      "sha256": "953abdadf837c8360dc7624b4ead75ac974612522b5059dbd016194218998997"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/qwen-code-menu-80x24.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 35335,
+      "sha256": "7425a987af8d4d689fca057518aa407b1e26c538250abf767e8dcc93b1305bc8"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/qwen-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2746,
+      "sha256": "a1401a95439b2a6209584997d007a580d160860c4546bd725c72a88c769f686c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/roles-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 5918,
+      "sha256": "a31f28e42eb320ed34f487c80cf9520513c43feca6e745c029b87ac719d241a2"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/roles-120x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 44938,
+      "sha256": "49498484eec85cb80dfe276e5f4d13722eaa28275844efb4605748f44c33d168"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/roles-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 5919,
+      "sha256": "63c23b29f891dca521a290e0007b3582f066a3e951bac10c2a5fe28b680cddd1"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/roles-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2605,
+      "sha256": "428640ac1b19e528d13bfa1f8048da2dc2a3eeb371c128c4b4c0939f43f2aea3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/roles-50x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 46353,
+      "sha256": "6a15889df00086fc5eceb899bb742acf9871082623634f848c507a04380a646c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/roles-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2606,
+      "sha256": "a120019b03e9713118cb1be8cbc270a8c0137f4f89344469e05f548f214e09fe"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/roles-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2670,
+      "sha256": "438e87a865b9b00fc9f54871f8cb54b0bbd0d92f0ae83091e43011301febc674"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/roles-80x24.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 38383,
+      "sha256": "fccacaa9f99bf7e13092234278733212c7ddb3e323840a57220abbb59365e65b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693030660/roles-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2671,
+      "sha256": "346625e638fa42a878d0251cd33eaa2b56295618b25f203f903064df9cf19ee5"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/codebuddy-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6071,
+      "sha256": "ca20feea1a82cd0c0c11c358b2f207e282e7aa138269833fb953e823530de2e3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/codebuddy-menu-120x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 41961,
+      "sha256": "f9b058473004ffd34d012e1cc729db9305a62625b49826468566918e596d8e5e"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/codebuddy-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6072,
+      "sha256": "cd838ca1804800606fbfe1ebf3a068a66042837e23c19ecaf657f460c4f74a9b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/codebuddy-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2573,
+      "sha256": "928c386346997df43d3a68937906ca62ab9a03aea94c1ee177b9855728b2e9e0"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/codebuddy-menu-50x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 36882,
+      "sha256": "b24187383e057a932091ed84b9f7b4340d0905998d9240980f8eac98435cce8f"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/codebuddy-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "5de0848133d4891815a24c93f9b5726e152dbcaa1281e2d31e80706ac1fa057b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/codebuddy-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2745,
+      "sha256": "26a9b220b8a1429f86654c47d5c32e36838014b20cff31c1216f1602dbcd658c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/codebuddy-menu-80x24.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 35417,
+      "sha256": "b7e49cbae2184bfd8bc3fd8fb31c44f996290f41e7050db52ab0e529fa07b063"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/codebuddy-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2746,
+      "sha256": "64fc5c8af98f1710fc4c8c09c506932ac83e455dac35330e6c00bc5cb891b3ee"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/command-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6073,
+      "sha256": "3b3523634432087d25920401acec19a34ad1c5859ffea890edb6377851d1cbf1"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/command-code-menu-120x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 42240,
+      "sha256": "bc2e90f48d24b6cfe5314e617ee489523adb0d7fec85578f0ac1e5fb139aae43"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/command-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6074,
+      "sha256": "e8b60d55ada75090ea69d4bedb9b70c4874d1241339845534e7fc8ee396e2fa9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/command-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "65df3b86fbcb43da224c27fba3a4c224410d14abf68202ea964a800fadee9ba3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/command-code-menu-50x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 36102,
+      "sha256": "24264366583d41b7dc9bf2e876af059c2dd43d0afb6d2c2f043c20d3979ce536"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/command-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2575,
+      "sha256": "72ecf4968ef94c77fa4f449780b9631d47b8423688a5275dde2aa56f9acc08b9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/command-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2747,
+      "sha256": "68d16bc9adb659b3a2ca7b226e8a51342abd52064bb39c81e6da79f85df72e73"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/command-code-menu-80x24.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 35613,
+      "sha256": "77ffa64c72951d3b4b171f4286506d9e14eb0268148ef5fda9c96eeafe2c9da3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/command-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2748,
+      "sha256": "4ab6ab44fd23b8dd50fb13b1cc35ad158de1a7e6ece06104d3705c8739e13bfb"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/evidence.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 3489,
+      "sha256": "c3dfe1f31d04c290ca8eeeb47d724f3bd707089cc634584a3702a73928f4abe8"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/qwen-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6071,
+      "sha256": "2e97435d55f76710f420ce107eed97ac9a65594620d38b16e55265aa33991e08"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/qwen-code-menu-120x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 41863,
+      "sha256": "2e24e585826218c6efb7bb0fe1b9a241a7384538095a7cf50d0ddead85083317"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/qwen-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6072,
+      "sha256": "dac487d2d315951fa03fd647cb03c8283e2501ed3a91f480d25f20a96f0ec562"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/qwen-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2573,
+      "sha256": "d925af171c7aad59fdea97dac4b2a2eabde4ffba98ebce983d00e4e8126c9a7c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/qwen-code-menu-50x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 36797,
+      "sha256": "c6aa9601dee3599f60c0ee6ce2731ff32b4423bff85cfde79291ec12c71c1654"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/qwen-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "9d5783a5c0ea4e8734a435253872551b29b7083d4a67cc3c9456f68fd7387951"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/qwen-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2745,
+      "sha256": "953abdadf837c8360dc7624b4ead75ac974612522b5059dbd016194218998997"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/qwen-code-menu-80x24.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 35335,
+      "sha256": "7425a987af8d4d689fca057518aa407b1e26c538250abf767e8dcc93b1305bc8"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/qwen-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2746,
+      "sha256": "a1401a95439b2a6209584997d007a580d160860c4546bd725c72a88c769f686c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/roles-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 5918,
+      "sha256": "a31f28e42eb320ed34f487c80cf9520513c43feca6e745c029b87ac719d241a2"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/roles-120x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 44938,
+      "sha256": "49498484eec85cb80dfe276e5f4d13722eaa28275844efb4605748f44c33d168"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/roles-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 5919,
+      "sha256": "63c23b29f891dca521a290e0007b3582f066a3e951bac10c2a5fe28b680cddd1"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/roles-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2605,
+      "sha256": "428640ac1b19e528d13bfa1f8048da2dc2a3eeb371c128c4b4c0939f43f2aea3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/roles-50x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 46353,
+      "sha256": "6a15889df00086fc5eceb899bb742acf9871082623634f848c507a04380a646c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/roles-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2606,
+      "sha256": "a120019b03e9713118cb1be8cbc270a8c0137f4f89344469e05f548f214e09fe"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/roles-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2670,
+      "sha256": "438e87a865b9b00fc9f54871f8cb54b0bbd0d92f0ae83091e43011301febc674"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/roles-80x24.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 38383,
+      "sha256": "fccacaa9f99bf7e13092234278733212c7ddb3e323840a57220abbb59365e65b"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791693397327/roles-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2671,
+      "sha256": "346625e638fa42a878d0251cd33eaa2b56295618b25f203f903064df9cf19ee5"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/command-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6073,
+      "sha256": "3b3523634432087d25920401acec19a34ad1c5859ffea890edb6377851d1cbf1"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/command-code-menu-120x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 42240,
+      "sha256": "bc2e90f48d24b6cfe5314e617ee489523adb0d7fec85578f0ac1e5fb139aae43"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/command-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6074,
+      "sha256": "e8b60d55ada75090ea69d4bedb9b70c4874d1241339845534e7fc8ee396e2fa9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/command-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "65df3b86fbcb43da224c27fba3a4c224410d14abf68202ea964a800fadee9ba3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/command-code-menu-50x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 36102,
+      "sha256": "24264366583d41b7dc9bf2e876af059c2dd43d0afb6d2c2f043c20d3979ce536"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/command-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2575,
+      "sha256": "72ecf4968ef94c77fa4f449780b9631d47b8423688a5275dde2aa56f9acc08b9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/command-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2747,
+      "sha256": "68d16bc9adb659b3a2ca7b226e8a51342abd52064bb39c81e6da79f85df72e73"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/command-code-menu-80x24.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 35613,
+      "sha256": "77ffa64c72951d3b4b171f4286506d9e14eb0268148ef5fda9c96eeafe2c9da3"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/command-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2748,
+      "sha256": "4ab6ab44fd23b8dd50fb13b1cc35ad158de1a7e6ece06104d3705c8739e13bfb"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/evidence.json",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2586,
+      "sha256": "fd22cd99a5061a85e62f50ab385ec2dd43b4d15ae723c7a91f171521668d8757"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/qwen-code-menu-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6071,
+      "sha256": "2e97435d55f76710f420ce107eed97ac9a65594620d38b16e55265aa33991e08"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/qwen-code-menu-120x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 41863,
+      "sha256": "2e24e585826218c6efb7bb0fe1b9a241a7384538095a7cf50d0ddead85083317"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/qwen-code-menu-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 6072,
+      "sha256": "dac487d2d315951fa03fd647cb03c8283e2501ed3a91f480d25f20a96f0ec562"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/qwen-code-menu-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2573,
+      "sha256": "d925af171c7aad59fdea97dac4b2a2eabde4ffba98ebce983d00e4e8126c9a7c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/qwen-code-menu-50x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 36797,
+      "sha256": "c6aa9601dee3599f60c0ee6ce2731ff32b4423bff85cfde79291ec12c71c1654"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/qwen-code-menu-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2574,
+      "sha256": "9d5783a5c0ea4e8734a435253872551b29b7083d4a67cc3c9456f68fd7387951"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/qwen-code-menu-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2745,
+      "sha256": "953abdadf837c8360dc7624b4ead75ac974612522b5059dbd016194218998997"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/qwen-code-menu-80x24.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 35335,
+      "sha256": "7425a987af8d4d689fca057518aa407b1e26c538250abf767e8dcc93b1305bc8"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/qwen-code-menu-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2746,
+      "sha256": "a1401a95439b2a6209584997d007a580d160860c4546bd725c72a88c769f686c"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/roles-120x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 5915,
+      "sha256": "e041c422ed89872d2bf47df7a3306afdd16dde8711cf5b761c1edfc657864ac9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/roles-120x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 40732,
+      "sha256": "22b495de05b27b8c1be69620f7dbd46f76b380e4efccae884dd5dca4d5ef8b1e"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/roles-120x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 5916,
+      "sha256": "f0ce1ba9e0cfaa26fb7a84dea4c4cea1a69ea744af8f8634f471c5def4ae59d9"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/roles-50x40.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2591,
+      "sha256": "b9c12a82468d603cc6a4808679541114e4e54b69f2c64d471b0e20a2272f5932"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/roles-50x40.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 41219,
+      "sha256": "4d536b486ba5d33e08afeea38eda8d907f35e50405c164fad1ca5d83081b9115"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/roles-50x40.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2592,
+      "sha256": "b0ccd1b5c0cf1a4a4fa268950317618e75352834bd0cde30b7fccab6e9445ad0"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/roles-80x24.ansi",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2667,
+      "sha256": "37b889ee80b218538efd5893de1b76b20e38230e38b120197cf277f4f5cbef05"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/roles-80x24.png",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 34556,
+      "sha256": "fa00191e99ffade007ffbd17052dd8d63b84caa18e79969bbdd9c39e50241aa1"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/capture-no-color-1791695606307/roles-80x24.txt",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 2668,
+      "sha256": "14cc794d643dc19bc187a6c98629ead841e00c5b9001a6ccd7d5815852e85fd6"
+    },
+    {
+      "path": "artifacts/next-worker-harness-adapters/ui/offline-model-dialog.mjs",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 8389,
+      "sha256": "5310e628c5a186af3877692aaba3a18ab981b1162f3961f8fca4e1433cd435b8"
+    },
+    {
+      "path": "docs/research/next-worker-harness-candidates.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 37606,
+      "sha256": "2cca0bc0c74efcbe8f38460b7ddaa2a46cbc75e1dd36b95309b72c11a506cdc8"
+    },
+    {
+      "path": "docs/research/next-worker-harness-external.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 71745,
+      "sha256": "39da34c56e9d7df38370661687dcc1050b9d1398bff91c7c8277f9e681d6ba7f"
+    },
+    {
+      "path": "openspec/changes/add-testable-worker-harness-adapters/.openspec.yaml",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 50,
+      "sha256": "0dff99a319261e7e7a0fe1f411a2e8380096e81957da4a62a916b530d6e709da"
+    },
+    {
+      "path": "openspec/changes/add-testable-worker-harness-adapters/design.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 8271,
+      "sha256": "df6ff1ec75ea2ccf3633ab59727358354b12372e305cbfe8fc9e84ed2adb006e"
+    },
+    {
+      "path": "openspec/changes/add-testable-worker-harness-adapters/implementation-plan.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 11247,
+      "sha256": "7af31dff60b104d0dae44b8a356c9fc7381c64fe2e1a176a8668d1f9b57eecb7"
+    },
+    {
+      "path": "openspec/changes/add-testable-worker-harness-adapters/proposal.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 1827,
+      "sha256": "18d19ec89374bbfc6bdf5be03f6fb93c0c77a6ef91de9ce0ef13b1c39b55411c"
+    },
+    {
+      "path": "openspec/changes/add-testable-worker-harness-adapters/specs/workers/harness-adapters/spec.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 4710,
+      "sha256": "84d241b637678af6da6ffaee97d8bae03c8326fc0d6f64e7d14a14453a370843"
+    },
+    {
+      "path": "openspec/changes/add-testable-worker-harness-adapters/tasks.md",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 1512,
+      "sha256": "06bc76de2bafce51d954808d7d3ac74c5add496d04aab3d2d858dd13393d3c85"
+    },
+    {
+      "path": "src/adapters/agents/command-code-harness.ts",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 26233,
+      "sha256": "6ef5ed853c7e6b3853ba68f31692cccc202a8ff840e4cc4508826bd4112f584b"
+    },
+    {
+      "path": "src/adapters/agents/qwen-harness.ts",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 23977,
+      "sha256": "2738aba27f5001de39bd35a409047c2fe4c5ae55865cedaa5b42b9e37242c514"
+    },
+    {
+      "path": "tests/acceptance/worker-harness-controller.test.ts",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 41596,
+      "sha256": "ebb3834909e36ff7463a8a1fc05ee9f61dfc42ebb262020cc4b2c27cf04c6514"
+    },
+    {
+      "path": "tests/adapters/agents/command-code-harness.test.ts",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 7894,
+      "sha256": "220065cd79512bb6a98e78cf7bf452ee4b7f47200b903be5de3905f92d5bea30"
+    },
+    {
+      "path": "tests/adapters/agents/qwen-harness.test.ts",
+      "kind": "file",
+      "mode": "664",
+      "bytes": 14278,
+      "sha256": "2978a453b8788c7f742627b5db7fd8bf81f0fd21b87f0c5ebea62bde085428d5"
+    }
+  ],
+  "workspaceFingerprintSha256": "64a3ab1b1a8ac322c96a0859103c0879f736af5f46cbaa0ad14b6d317c710dc1",
+  "fingerprintAlgorithm": "SHA-256(tracked git diff --binary HEAD bytes || UTF-8 JSON.stringify(sorted untracked manifest))",
+  "excluded": [
+    "artifacts/next-worker-harness-adapters/implementation-checkpoint-20261011.json",
+    "artifacts/next-worker-harness-adapters/implementation-diff-20261011.patch"
+  ],
+  "exclusionReason": "Checkpoint and generated diff are self-recording evidence; exclude both to avoid circular hashes.",
+  "checks": "final-checks-20261011.md",
+  "auditScope": [
+    "native-auth",
+    "exact-session",
+    "original-task-binding",
+    "readonly-overlap",
+    "catalog-provenance",
+    "bounded-transcript",
+    "unknown-reconciliation",
+    "controller-delivery-recovery-and-settled-finalizer-restart"
+  ],
+  "auditEvidence": [
+    "limited-audit.md",
+    "controller-limited-audit-20261011.md"
+  ],
+  "committed": false,
+  "verificationCreated": false,
+  "archived": false
+}

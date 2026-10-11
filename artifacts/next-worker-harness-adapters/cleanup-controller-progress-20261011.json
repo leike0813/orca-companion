@@ -1,0 +1,10 @@
+{
+  "fixture": "/var/tmp/orca-ip04-mixed-controller-WLT15T",
+  "activeWorktree": "/home/joshua/orca/workspaces/repo/wp-57a9325a233ab99ce29a0fd2b82f35181b92963f15108b27d9e100c25cf379ee",
+  "closedUnusedShell": "term_26fcbfd1-ee74-4f14-ad4f-34a6cd84516b",
+  "ptyKilled": true,
+  "activeCoordinator": "term_a7029f22-094f-4c31-b47e-fa0e2969d120",
+  "activePlanner": "term_8ba6c288-f3a1-4371-ab8e-4906b2804e39",
+  "authorization": "user requested ongoing cleanup",
+  "evidencePreserved": true
+}

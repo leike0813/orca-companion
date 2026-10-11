@@ -178,6 +178,7 @@ test('替代 Session 保留原 Worker Task、contract/revision 与业务 Attempt
   expect(mutations.map((mutation) => mutation.operation)).toEqual(['worker-start']);
   const started = mutations[0];
   expect(started?.operation === 'worker-start' ? started.taskId : null).toBe(ORCA_TASK);
+  expect(started?.operation === 'worker-start' ? started.retryOfDispatchId : null).toBe(SOURCE_DISPATCH);
 });
 
 test('替代派发前原会话到达有效终态时以该终态结束，并把原 Segment 标记为 superseded', async () => {
@@ -370,7 +371,7 @@ test('替代 Segment 的 ID 与原 Segment 不同', () => {
   expect(replacement).not.toBe(SOURCE_SEGMENT);
 });
 
-test('prepared-terminal 激活已 settled accepted：重放续办而不重复提交', async () => {
+test.each([false, true])('prepared-terminal 激活先于原生绑定，已激活=%s 时不重复提交', async (alreadyActivated) => {
   let terminalSubmits = 0;
   const h = createRecoveryHarness({
     query: (input) => {
@@ -414,7 +415,8 @@ test('prepared-terminal 激活已 settled accepted：重放续办而不重复提
     return read.scope.revision;
   };
   // 前一次已按 accepted 收尾的激活事实：重放必须复用它，而不是当作未知或再次提交。
-  const begun = beginIntent(h.store, {
+  if (alreadyActivated) {
+    const begun = beginIntent(h.store, {
     coordinationScopeId: RECOVERY_SCOPE,
     operationId: activateOperationId,
     target,
@@ -431,6 +433,7 @@ test('prepared-terminal 激活已 settled accepted：重放续办而不重复提
     outcome: { kind: 'accepted', operation: { operationId: activateOperationId, backendRequestId: 'seed', target }, value: {} },
   });
   expect(settled.kind).toBe('settled');
+  }
 
   const result = await recoverWorkerSession(recoveryInput(h, {
     replacement: {
@@ -442,11 +445,14 @@ test('prepared-terminal 激活已 settled accepted：重放续办而不重复提
         title: 'prepared-alt',
         prepare: () => Promise.resolve({ title: 'prepared-alt', command: 'codex' }),
       },
-      interpretReceipt: readReplacementReceipt,
+      interpretReceipt: (outcome) => {
+        expect(alreadyActivated || terminalSubmits === 1).toBe(true);
+        return readReplacementReceipt(outcome);
+      },
     },
   }));
 
   // 用户可观察：续办成功，且激活不再重复提交（旧实现此处返回 unknown 并永久 block）。
   expect(result.kind).toBe('alternate_created');
-  expect(terminalSubmits).toBe(0);
+  expect(terminalSubmits).toBe(alreadyActivated ? 0 : 1);
 });

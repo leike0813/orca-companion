@@ -28,12 +28,13 @@ import type { ExecutionQueryResult, OperationOutcome } from '../../src/applicati
 import {
   advanceExecution,
   consumedBudgetForWorkPackage,
+  frontierBlockersOf,
   materializeOperationIdsFor,
   revisionPlannerFacts,
   type AdvanceExecutionInput,
   type AdvanceRoleDispatch,
 } from '../../src/application/execution/advance-execution.js';
-import { noExecutionObservations, type ExecutionObservationFacts } from '../../src/application/execution/execution-view.js';
+import { noExecutionObservations, type ExecutionObservationFacts, type WorkPackageExecutionEntry } from '../../src/application/execution/execution-view.js';
 import { workPackageComment, worktreeNameFor } from '../../src/application/materialize-work-package.js';
 import type {
   ExecutionBackend,
@@ -49,6 +50,17 @@ import type { ExecutionGraph } from '../../src/domain/planning/execution-graph.j
 import type { ExecutionAuthorizationManifest } from '../../src/domain/planning/execution-authorization.js';
 import { modelReauthorizationManifest } from '../../src/application/planning/authorization-service.js';
 import type { TaskEnvelope } from '../../src/domain/task-contract.js';
+
+test('已结束的工作包不作为 Frontier 阻塞，未结清状态仍保留', () => {
+  const states = ['accepted', 'retired', 'cancelled', 'waiting_integration', 'unknown'] as const;
+  const frontier: WorkPackageExecutionEntry[] = states.map(state => ({
+    workPackageId: state, state, role: 'validator', attemptId: null, liveness: null,
+    worktreePath: null, baselineHead: null, validation: null, integration: null, derivedFrom: [], blockerRefs: [],
+  }));
+  expect(frontierBlockersOf(frontier)).toHaveLength(2);
+  expect(frontierBlockersOf(frontier).some(entry => entry.includes('waiting_integration'))).toBe(true);
+  expect(frontierBlockersOf(frontier).some(entry => entry.includes('unknown'))).toBe(true);
+});
 import {
   EXECUTION_AUTHORIZATION_ID,
   EXECUTION_RUN_ID,

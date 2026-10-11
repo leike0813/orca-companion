@@ -3,16 +3,47 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resolveWorkerHarness } from '../../src/application/ports/worker-harness.js';
-import { readLatestHarnessSessionReport, workerHarnessRegistry } from '../../src/bootstrap/worker-harness.js';
+import { readHarnessTranscriptIdentity, readLatestHarnessSessionReport, workerHarnessRegistry } from '../../src/bootstrap/worker-harness.js';
+import { nativeRecoveryInstructions } from '../../src/adapters/agents/native-worker.js';
+import { recoveryCapsuleInstructions } from '../../src/adapters/agents/utility-worker.js';
 import { parseHarnessSessionReport } from '../../src/application/ports/worker-harness.js';
 
-test.each(['codex', 'claude', 'opencode', 'pi', 'omp'])('按显式身份解析 %s', (id) => {
+test.each(['codex', 'claude', 'opencode', 'pi', 'omp', 'command-code', 'qwen-code'])('按显式身份解析 %s', (id) => {
   const result = resolveWorkerHarness(workerHarnessRegistry, id);
   expect(result.kind).toBe('resolved');
   if (result.kind === 'resolved') expect(result.harness.id).toBe(id);
 });
 test('未注册的 harness 在派发前拒绝', () => {
   expect(resolveWorkerHarness(workerHarnessRegistry, 'unknown')).toMatchObject({ kind: 'rejected', code: 'worker_harness_unregistered' });
+});
+
+test.each(['codex', 'claude', 'opencode', 'pi', 'omp', 'command-code', 'qwen-code'])('%s 注册项提供 transcript 身份与 recovery 配方', (id) => {
+  const result = resolveWorkerHarness(workerHarnessRegistry, id);
+  expect(result.kind).toBe('resolved');
+  if (result.kind === 'resolved') {
+    expect(typeof result.harness.readTranscriptIdentity).toBe('function');
+    expect(result.harness.recoveryInstructions().length).toBeGreaterThan(0);
+  }
+});
+
+test('native 配方沿用 adapter 语义，Codex 配方保持通用 builder 默认值', () => {
+  for (const id of ['claude', 'pi', 'omp'] as const) {
+    expect(workerHarnessRegistry.get(id)?.recoveryInstructions()).toEqual(nativeRecoveryInstructions(id));
+  }
+  const evidence = {
+    coverage: 'complete' as const,
+    readableRange: { transcriptRef: '/worker/transcript', fromEventRef: 'event:1', toEventRef: 'event:1' },
+    gaps: [],
+    lastCompleteEventRef: 'event:1',
+  };
+  expect(workerHarnessRegistry.get('codex')?.recoveryInstructions()).toEqual(
+    recoveryCapsuleInstructions('/worker/transcript', evidence).slice(4, 6),
+  );
+});
+
+test('未知 harness 的 transcript 复核保留结构化不可用结果', async () => {
+  await expect(readHarnessTranscriptIdentity({ harness: 'unknown', transcriptRef: '/missing', workspace: '/work' }))
+    .resolves.toEqual({ kind: 'transcript_unavailable', reason: 'Harness transcript 无法重新核验' });
 });
 
 test.each([null, {}, { sessionId: 1, transcriptPath: 'path', cwd: '/work', observedAt: 'time' }])(

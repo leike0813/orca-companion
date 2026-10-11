@@ -93,6 +93,8 @@ export type SeedRealExecutionScopeInput = {
   readonly workspace: string;
   /** 专用 Orca 身份：与宿主同一约定，只接受显式声明的句柄。 */
   readonly identity: string;
+  /** Coordinator Session 必须绑定项目配置中的真实 configurationRef。 */
+  readonly coordinatorModelConfigurationRef?: string;
   /** Optional isolated acceptance scope; omitted by other callers to preserve their stable fixture identities. */
   readonly coordinationScopeId?: string;
   readonly objective: string;
@@ -164,7 +166,7 @@ export async function seedRealExecutionScope(
       store,
       coordinationScopeId,
       coordinatorSessionId,
-      coordinatorModelConfigurationRef: 'planning-default',
+      coordinatorModelConfigurationRef: input.coordinatorModelConfigurationRef ?? 'planning-default',
       planningCycleId,
       fullBranchRef,
       canonicalWorktreePath: input.workspace,

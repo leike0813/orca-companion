@@ -35,6 +35,36 @@ export const READ_ONLY_EXECUTION_WRAPPER = 'bwrap';
 /** 诊断里出现的权限配置名；native 只读角色没有 Codex 的 permission profile，包装器就是它的权限。 */
 export const READ_ONLY_EXECUTION_PROFILE = 'bwrap-read-only';
 
+/** Raw classic BPF for bwrap's inherited FD; reject foreign ABIs and terminal injection. */
+export function readOnlyTerminalFilter(architecture: string = process.arch): Buffer {
+  const abi = architecture === 'x64' ? { audit: 0xc000003e, ioctl: 16 }
+    : architecture === 'arm64' ? { audit: 0xc00000b7, ioctl: 29 } : null;
+  if (abi === null) throw new Error('Unsupported read-only terminal ABI');
+  // seccomp_data: nr at 0, arch at 4, ioctl request (args[1]) at 24.
+  const instructions: readonly (readonly [number, number, number, number])[] = [
+    [0x20, 0, 0, 4],
+    [0x15, 1, 0, abi.audit],
+    [0x06, 0, 0, 0x80000000],
+    [0x20, 0, 0, 0],
+    // x32 shares the x64 audit tag but uses a different syscall table.
+    ...(architecture === 'x64' ? [[0x45, 0, 1, 0x40000000], [0x06, 0, 0, 0x80000000]] as const : []),
+    [0x15, 0, 4, abi.ioctl],
+    [0x20, 0, 0, 24],
+    [0x15, 1, 0, 0x5412],
+    [0x15, 0, 1, 0x541c],
+    [0x06, 0, 0, 0x00050001],
+    [0x06, 0, 0, 0x7fff0000],
+  ];
+  const filter = Buffer.alloc(instructions.length * 8);
+  instructions.forEach(([code, yes, no, value], index) => {
+    filter.writeUInt16LE(code, index * 8);
+    filter.writeUInt8(yes, index * 8 + 2);
+    filter.writeUInt8(no, index * 8 + 3);
+    filter.writeUInt32LE(value, index * 8 + 4);
+  });
+  return filter;
+}
+
 /**
  * 受限启动的 argv 形状（不含 `bwrap` 本身）：仓库与 Git 事实只读，仅精确状态根与 tmp 可写。
  *
@@ -66,7 +96,7 @@ export function readOnlyExecutionArguments(input: ReadOnlyExecutionInput): reado
     .some(shadowed);
   const args: string[] = [
     '--die-with-parent',
-    '--new-session',
+    '--seccomp', '3',
     '--ro-bind', '/', '/',
     '--dev', '/dev',
     '--proc', '/proc',
@@ -92,7 +122,8 @@ export function readOnlyExecutionArguments(input: ReadOnlyExecutionInput): reado
  * 同一段逻辑。launcher 模板以 `const readOnlyArgs = readOnlyExecutionArguments(input)` 使用它。
  */
 export const READ_ONLY_EXECUTION_WRAPPER_SOURCE =
-  `const readOnlyExecutionArguments = ${readOnlyExecutionArguments.toString()};\n`;
+  `const readOnlyExecutionArguments = ${readOnlyExecutionArguments.toString()};\n`
+  + `const readOnlyTerminalFilter = ${readOnlyTerminalFilter.toString()};\n`;
 
 /**
  * 跨 harness 的只读能力结论。
@@ -143,6 +174,8 @@ const HARNESS_EXECUTABLES: Readonly<Record<string, string>> = {
   opencode: 'opencode',
   pi: 'pi',
   omp: 'omp',
+  'command-code': 'command-code',
+  'qwen-code': 'qwen',
 };
 
 /** 诊断行必须短且有界：子进程输出可能整段回显命令与路径。 */

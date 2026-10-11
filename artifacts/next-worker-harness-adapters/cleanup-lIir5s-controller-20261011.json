@@ -1,0 +1,16 @@
+{
+  "fixture": "lIir5s",
+  "archive": "/var/tmp/orca-harness-evidence/lIir5s-controller-blocked-checkouts.tar.gz",
+  "closedTerminals": [
+    "term_99bb98dd-71fa-45e5-a24e-8cbb11fd2b09",
+    "term_a4a10014-5698-410b-b57c-6c63858c8544"
+  ],
+  "removedChild": "/home/joshua/orca/workspaces/repo/wp-8a2815290dffc7b61e2c1943e76e95fc85a579f690f22c15617e13c7d166eb07",
+  "removedSetup": "29ee139b-a4e7-47cf-9e9c-bb68e28030b0",
+  "removedCanonical": "/var/tmp/orca-ip04-controller-fixed-lIir5s/repo",
+  "cumulative": {
+    "terminals": 90,
+    "checkouts": 16
+  },
+  "nativeStateAndCredentials": "retained"
+}

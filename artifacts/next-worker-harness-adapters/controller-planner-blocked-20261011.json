@@ -1,0 +1,455 @@
+{
+  "result": "failed",
+  "reason": "Planner followed an earlier unresolved-content reply and settled failed without a specification; historical question read repaired; no finalizer verdict.",
+  "snapshot": {
+    "kind": "snapshot",
+    "snapshot": {
+      "scope": {
+        "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+        "fullBranchRef": "refs/heads/main",
+        "canonicalWorktreePath": "/var/tmp/orca-ip04-controller-fixed-lIir5s/repo",
+        "mode": "execution_coordination",
+        "controlState": "active",
+        "planningCycleId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-cycle",
+        "mapRevision": 0,
+        "graphId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1",
+        "graphVersion": 1,
+        "authorizationId": "auth:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:8108dddb4de2437222271b7103e5bb9056033459573be2fc61b6ae0030f827e8",
+        "authorizationVersion": 1,
+        "revision": 46
+      },
+      "laneReservations": [
+        {
+          "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+          "graphId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1",
+          "generation": 1,
+          "workPackageId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:readme-banner",
+          "operationId": "work-package-lane:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner",
+          "authorizationId": "auth:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:8108dddb4de2437222271b7103e5bb9056033459573be2fc61b6ae0030f827e8",
+          "authorizationVersion": 1,
+          "baselineHead": "ee40a42acbc9005c9f86a3dae0861e204eb2d702",
+          "reservedAt": 1791705129243,
+          "releasedAt": null
+        }
+      ],
+      "sessions": [
+        {
+          "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+          "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "coordinatorModelConfigurationRef": "ip04-minimax-coordinator",
+          "lifecycleState": "registered",
+          "blockedReason": null,
+          "registeredAt": 1791705118761
+        }
+      ],
+      "leases": [
+        {
+          "kind": "execution_coordination",
+          "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+          "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:e43a1b19-4242-4f51-99c0-23bdc77baf19",
+          "fencingGeneration": 4,
+          "acquiredAt": 1791706269068,
+          "expiresAt": null,
+          "releasedAt": null
+        },
+        {
+          "kind": "runtime",
+          "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+          "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:e43a1b19-4242-4f51-99c0-23bdc77baf19",
+          "fencingGeneration": 4,
+          "acquiredAt": 1791706269037,
+          "expiresAt": 1791706509108,
+          "releasedAt": null
+        }
+      ],
+      "executionLease": {
+        "kind": "execution_coordination",
+        "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+        "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+        "runtimeIncarnationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:e43a1b19-4242-4f51-99c0-23bdc77baf19",
+        "fencingGeneration": 4,
+        "acquiredAt": 1791706269068,
+        "expiresAt": null,
+        "releasedAt": null
+      },
+      "ticketClaims": [],
+      "pendingInteractions": [
+        {
+          "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+          "interactionId": "[\"ask_user\",\"op:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:step:a3dffd8d-ba49-478d-bedb-e63c1cb01c9b:call_01a129f4c1f3779b8b749fb0\"]",
+          "ownerCoordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "subjectRef": {
+            "kind": "coordinator-session",
+            "id": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session"
+          },
+          "expectedRevision": 26,
+          "state": "answered",
+          "answerRef": {
+            "kind": "interaction-answer",
+            "id": "[\"[\\\"ask_user\\\",\\\"op:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:step:a3dffd8d-ba49-478d-bedb-e63c1cb01c9b:call_01a129f4c1f3779b8b749fb0\\\"]\",\"ip04-fixture-answer:[\\\"ask_user\\\",\\\"op:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:step:a3dffd8d-ba49-478d-bedb-e63c1cb01c9b:call_01a129f4c1f3779b8b749fb0\\\"]\"]"
+          },
+          "answerText": "Keep the existing title IP-04 mixed native Controller fixture. Add exactly one sentence below it: This fixture verifies mixed Command Code and Qwen worker coordination. ASCII only, no badges. Keep all approved scope, profiles, permissions and budgets.",
+          "createdAt": 1791705269054,
+          "resolvedAt": 1791705712280
+        }
+      ],
+      "unresolvedIntents": [],
+      "settledGitIntegrationIntents": [],
+      "planningHandoffs": [],
+      "planningResponsibility": {
+        "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+        "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+        "sourceProposalId": null,
+        "assignedAt": 1791705118761
+      },
+      "sessionSegments": [
+        {
+          "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+          "segmentId": "segment:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ctx_3b13dce46679:attempt%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%3A1%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%253Areadme-banner%3Aplanner%3Ainitial%3A1",
+          "workPackageId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:readme-banner",
+          "role": "planner",
+          "workerTaskId": "worker-task:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner:planner:initial",
+          "dispatchId": "ctx_3b13dce46679",
+          "attemptId": "attempt:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner:planner:initial:1",
+          "sessionBindingId": "session-binding:ctx_3b13dce46679:a804312a-9df1-46f8-9027-25b18327cca7",
+          "lastTranscriptRef": "/home/joshua/.commandcode/projects/home-joshua-orca-workspaces-repo-wp-8a2815290dffc7b61e2c1943e76e95fc85a579f690f22c15617e13c7d166eb07/a804312a-9df1-46f8-9027-25b18327cca7.jsonl",
+          "terminalReceiptRef": null,
+          "transcriptReferenceable": true,
+          "verifiable": true,
+          "recordedAt": 1791705160308
+        }
+      ],
+      "materializationBindings": [
+        {
+          "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+          "workPackageId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:readme-banner",
+          "orcaTaskId": "task_9fc0fb091f5d",
+          "creationOperationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner:planner:0:worker-task%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%3A1%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%253Areadme-banner%3Aplanner%3Ainitial:task",
+          "createdAt": 1791705131428,
+          "authorizationId": "auth:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:8108dddb4de2437222271b7103e5bb9056033459573be2fc61b6ae0030f827e8",
+          "authorizationVersion": 1,
+          "workerProfileRef": {
+            "kind": "worker-profile",
+            "id": "ip04-planner"
+          },
+          "identity": "issued",
+          "role": "planner",
+          "recoveryUtilityRole": null,
+          "workerTaskId": "worker-task:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner:planner:initial",
+          "dispatchId": "dispatch:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner:planner:initial:1",
+          "attemptId": "attempt:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner:planner:initial:1",
+          "worktreeId": "29ee139b-a4e7-47cf-9e9c-bb68e28030b0::/home/joshua/orca/workspaces/repo/wp-8a2815290dffc7b61e2c1943e76e95fc85a579f690f22c15617e13c7d166eb07",
+          "specBinding": null,
+          "specificationUnitPath": "openspec/changes/ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-g1-readme-banner-8a281529",
+          "launchId": "worker-launch:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner:planner:initial:1"
+        }
+      ],
+      "deliverySettlements": [],
+      "deliveryVerdicts": [],
+      "recoveries": [
+        {
+          "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+          "recoveryId": "recovery:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:segment:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ctx_3b13dce46679:attempt%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%3A1%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%253Areadme-banner%3Aplanner%3Ainitial%3A1",
+          "role": "planner",
+          "workPackageId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:readme-banner",
+          "workerTaskId": "worker-task:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner:planner:initial",
+          "businessAttemptId": "attempt:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner:planner:initial:1",
+          "sourceSegmentId": "segment:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ctx_3b13dce46679:attempt%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%3A1%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%253Areadme-banner%3Aplanner%3Ainitial%3A1",
+          "sourceDispatchId": "ctx_3b13dce46679",
+          "replacementDispatchId": null,
+          "replacementSegmentId": null,
+          "replacementSessionBindingId": null,
+          "supersededSegmentId": null,
+          "status": "pending",
+          "consumedBudget": 0,
+          "capsuleRef": null,
+          "prewriteOperationId": null,
+          "terminalOutcome": null,
+          "blockingReason": "终端仍在已列举主机上存在",
+          "createdAt": 1791706325291,
+          "updatedAt": 1791706325302
+        }
+      ],
+      "executionHandoffs": [],
+      "graphGenerations": [
+        {
+          "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+          "graphId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1",
+          "generation": 1,
+          "planningCycleId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-cycle",
+          "orcaRunId": "run_26819c240425",
+          "predecessorGraphId": null,
+          "baselineHead": "ee40a42acbc9005c9f86a3dae0861e204eb2d702",
+          "status": "active",
+          "createdAt": 1791705119325,
+          "updatedAt": 1791705126997
+        }
+      ],
+      "revisionHolds": [],
+      "baselineReconciliations": [],
+      "workPackageLineages": [],
+      "baselineAdoptions": [],
+      "mutationLanes": []
+    }
+  },
+  "intents": {
+    "kind": "intents",
+    "intents": [
+      {
+        "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+        "operationId": "run-create:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1",
+        "target": {
+          "kind": "orca-run",
+          "id": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1"
+        },
+        "operationCategory": "run-create",
+        "laneKey": "[\"orca-run\",\"ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1\",\"run-create\"]",
+        "expectedRevision": 2,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-incarnation"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "15e7530d-0a60-4822-b04c-c28f77b81d2f",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791705118786,
+        "settledAt": 1791705119314
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+        "operationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner:planner:0:worker-task%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%3A1%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%253Areadme-banner%3Aplanner%3Ainitial:worktree",
+        "target": {
+          "kind": "worktree",
+          "id": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:readme-banner"
+        },
+        "operationCategory": "materialize-worktree",
+        "laneKey": "[\"worktree\",\"ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:readme-banner\",\"materialize-worktree\"]",
+        "expectedRevision": 11,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:af994f5c-2034-4cc6-b34e-d3539f15797a"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "993d651e-70c3-48e3-b5bb-0690fdc959e5",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791705129253,
+        "settledAt": 1791705130626
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+        "operationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner:planner:0:worker-task%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%3A1%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%253Areadme-banner%3Aplanner%3Ainitial:task",
+        "target": {
+          "kind": "task",
+          "id": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:readme-banner"
+        },
+        "operationCategory": "materialize-task",
+        "laneKey": "[\"task\",\"ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:readme-banner\",\"materialize-task\"]",
+        "expectedRevision": 13,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:af994f5c-2034-4cc6-b34e-d3539f15797a"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "916cd013-96c5-4e8b-b8b7-c03330e87c2c",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791705130892,
+        "settledAt": 1791705131438
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+        "operationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner:planner:0:worker-task%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%3A1%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%253Areadme-banner%3Aplanner%3Ainitial:attempt%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%3A1%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%253Areadme-banner%3Aplanner%3Ainitial%3A1:workerPrepare",
+        "target": {
+          "kind": "worker-task",
+          "id": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:readme-banner"
+        },
+        "operationCategory": "materialize-worker-terminal",
+        "laneKey": "[\"worker-task\",\"ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:readme-banner\",\"materialize-worker-terminal\"]",
+        "expectedRevision": 16,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:af994f5c-2034-4cc6-b34e-d3539f15797a"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "949406fe-1fde-4220-a23b-d20d76f71c73",
+        "terminalHandle": "term_99bb98dd-71fa-45e5-a24e-8cbb11fd2b09",
+        "blockingReason": null,
+        "createdAt": 1791705131706,
+        "settledAt": 1791705132088
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+        "operationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner:planner:0:worker-task%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%3A1%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%253Areadme-banner%3Aplanner%3Ainitial:attempt%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%3A1%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%253Areadme-banner%3Aplanner%3Ainitial%3A1:workerStart",
+        "target": {
+          "kind": "worker-task",
+          "id": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:readme-banner"
+        },
+        "operationCategory": "materialize-worker-start",
+        "laneKey": "[\"worker-task\",\"ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:readme-banner\",\"materialize-worker-start\"]",
+        "expectedRevision": 18,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:af994f5c-2034-4cc6-b34e-d3539f15797a"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "8e1da143-7106-45d5-8fc6-e70d91b44f88",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791705142640,
+        "settledAt": 1791705147970
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+        "operationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1:1:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%23g1%3Areadme-banner:planner:0:worker-task%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%3A1%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%253Areadme-banner%3Aplanner%3Ainitial:attempt%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%3A1%3Aip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3%2523g1%253Areadme-banner%3Aplanner%3Ainitial%3A1:workerActivate",
+        "target": {
+          "kind": "worker-task",
+          "id": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:readme-banner"
+        },
+        "operationCategory": "materialize-worker-activate",
+        "laneKey": "[\"worker-task\",\"ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3#g1:readme-banner\",\"materialize-worker-activate\"]",
+        "expectedRevision": 20,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:af994f5c-2034-4cc6-b34e-d3539f15797a"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "9f2d9fd4-0b54-422f-8d6a-8c41158670ad",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791705147980,
+        "settledAt": 1791705148252
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+        "operationId": "delivery-ack:delivery_5643857a26fa",
+        "target": {
+          "kind": "delivery",
+          "id": "delivery_5643857a26fa"
+        },
+        "operationCategory": "delivery",
+        "laneKey": "[\"delivery\",\"delivery_5643857a26fa\",\"delivery\"]",
+        "expectedRevision": 24,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:af994f5c-2034-4cc6-b34e-d3539f15797a"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "c1c5438f-a9b5-481f-b4b8-9c393a866f8d",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791705243038,
+        "settledAt": 1791705243613
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+        "operationId": "delivery-ack:delivery_03ce0dbe200c",
+        "target": {
+          "kind": "delivery",
+          "id": "delivery_03ce0dbe200c"
+        },
+        "operationCategory": "delivery",
+        "laneKey": "[\"delivery\",\"delivery_03ce0dbe200c\",\"delivery\"]",
+        "expectedRevision": 30,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:51e05892-ac44-4d8f-acdf-4bc54a0d709d"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "3965f934-c1e0-4f5a-8c2f-12a1a4d67d77",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791705708507,
+        "settledAt": 1791705709060
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+        "operationId": "delivery-ack:delivery_d046154d4ca8",
+        "target": {
+          "kind": "delivery",
+          "id": "delivery_d046154d4ca8"
+        },
+        "operationCategory": "delivery",
+        "laneKey": "[\"delivery\",\"delivery_d046154d4ca8\",\"delivery\"]",
+        "expectedRevision": 35,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:51e05892-ac44-4d8f-acdf-4bc54a0d709d"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "5fe461f1-0430-4dab-9d06-f26d9ef99938",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791705891608,
+        "settledAt": 1791705892161
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+        "operationId": "delivery-ack:delivery_f16115273cbf",
+        "target": {
+          "kind": "delivery",
+          "id": "delivery_f16115273cbf"
+        },
+        "operationCategory": "delivery",
+        "laneKey": "[\"delivery\",\"delivery_f16115273cbf\",\"delivery\"]",
+        "expectedRevision": 37,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:51e05892-ac44-4d8f-acdf-4bc54a0d709d"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "92f8e7ea-6c4e-4fc7-acc0-dc70f0b0868b",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791705902413,
+        "settledAt": 1791705902961
+      },
+      {
+        "coordinationScopeId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3",
+        "operationId": "op:ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:step:8684be01-4295-4296-8b92-c70071ff66f1:call_627748dbdb2d4593880f2b25",
+        "target": {
+          "kind": "worker-message",
+          "id": "msg_e96927ff65be"
+        },
+        "operationCategory": "worker-reply",
+        "laneKey": "[\"worker-message\",\"msg_e96927ff65be\",\"worker-reply\"]",
+        "expectedRevision": 42,
+        "expectedHead": null,
+        "initiatedBy": {
+          "coordinatorSessionId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session",
+          "runtimeIncarnationId": "ip04-mixed-controller-ca58cb72-8c19-4bf8-8362-2c8009d19fd3-session:e43a1b19-4242-4f51-99c0-23bdc77baf19"
+        },
+        "state": "settled",
+        "outcomeClass": "accepted",
+        "backendRequestId": "6ff942bc-341d-4cd6-ad93-30b64e84fba5",
+        "terminalHandle": null,
+        "blockingReason": null,
+        "createdAt": 1791706301543,
+        "settledAt": 1791706302058
+      }
+    ]
+  }
+}

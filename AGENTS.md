@@ -119,11 +119,13 @@ type OperationOutcome<T> =
 - Worker liveness 至少保留 `live`、`exited` 与 `unverifiable`；不可达或信息不完整不能推断退出或触发重复派发。
 - 禁止伪造 terminal 身份、写 Orca DB 补绑定或使用私有接口绕过能力缺口。
 
-Worker Harness 经 `src/application/ports/worker-harness.ts` 端口与 `src/bootstrap/worker-harness.ts` 显式注册表接入，注册项为 codex、claude、opencode、pi、omp；未注册身份在派发前拒绝。逐角色 profile 固定 harness 与 `modelSelection`（model、effort 及可信目录来源），恢复、Retry 和 Validator 续接从原 Task 的授权绑定读取它们。端口同时提供原生模型目录的有界查询；启动在 harness 真实用户环境中进行，`worker-runtime.ts` 只把真实 launch 环境解析出的非秘密 runtime roots 写入精确 Session 报告。Planner、Implementation、Validator 和 Finalizer 使用角色隔离 Session；Validator 在同一任务的“验证—范围内修复—复验”内复用同一真实 Session。Finalizer 使用新的只读项目级 Session。精确 Session Binding 由各 adapter 的 hook、extension 或公开 session API 与 transcript 共同证明，不能按 cwd/mtime 猜最新 transcript，也不能用 terminal 输出冒充 provider transcript。
+Worker Harness 经 `src/application/ports/worker-harness.ts` 端口与 `src/bootstrap/worker-harness.ts` 显式注册表接入，注册项为 codex、claude、opencode、pi、omp、command-code、qwen-code；未注册身份在派发前拒绝。逐角色 profile 固定 harness 与 `modelSelection`（model、effort 及可信目录来源），恢复、Retry 和 Validator 续接从原 Task 的授权绑定读取它们。端口同时提供原生模型目录的有界查询、精确 transcript 身份复核与 Recovery 读取配方，由所属 adapter 拥有；启动在 harness 真实用户环境中进行，`worker-runtime.ts` 只把真实 launch 环境解析出的非秘密 runtime roots 写入精确 Session 报告。Planner、Implementation、Validator 和 Finalizer 使用角色隔离 Session；Validator 在同一任务的“验证—范围内修复—复验”内复用同一真实 Session。Finalizer 使用新的只读项目级 Session。精确 Session Binding 由各 adapter 的 hook、extension 或公开 session API 与 transcript 共同证明，不能按 cwd/mtime 猜最新 transcript，也不能用 terminal 输出冒充 provider transcript。
 
 Worker 不管理 provider 连接、凭据或原生配置：认证、登录态与 provider endpoint 由 harness 在自己的真实用户环境中提供，启动继承真实 `process.env`；Codex 用 inline `-c` hooks 与 `--no-daemon`，Claude 用只叠加 report/security 的 `--settings` 并保留 native setting sources，pi/omp 用 extension，OpenCode 用 `--standalone` 与公开 Session API。Coordinator 连接仅使用 managed API Key 引用。只读角色与探针共用 `read-only-execution-wrapper.ts` 的 bwrap 包装器：仓库、Git、Git common dir 与协调库拒写，真实 native state 目录与 Companion 工件目录可写；可写根与拒写根重叠且无法证明时能力判为不可用。
 
 Validator 修复许可绑定原 worktree 的干净 HEAD，并随原答复 Intent 持久保存；实际修复范围由该 HEAD 之后的提交与未提交 Git 路径核验，Worker 自报路径只作补充。基线、范围或精确 Session 不可证明时停止验证链。
+
+共享只读 launcher 保留真实前台 Session/进程组，并以 bwrap seccomp 拒绝 TIOCSTI/TIOCLINUX 终端注入；支持 x64/arm64，外来 ABI、x32 或过滤器安装失败均拒绝启动。Command Code/Qwen 可写角色使用原生 `--yolo`，授权 worktree 是任务范围，未启用额外 OS sandbox。目录不可用时允许手填 exact model ID，effort/catalogSource 保持未知；当前能力与真实证据见 `docs/orca-compatibility.md`。
 
 Worker Session 中断时必须显式记录 Session Segment。需要恢复 Validator 上下文时，由受限 Utility Worker 从精确 transcript 生成 Recovery Capsule；替代 Session 仍属于原 Validation Attempt，并受独立且有限的 Recovery Budget 约束。transcript 不可用或预算耗尽时阻塞，不能伪称保持原会话。
 

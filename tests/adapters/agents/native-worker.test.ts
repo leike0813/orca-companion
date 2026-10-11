@@ -21,6 +21,7 @@ import {
   proveNativeTranscript,
 } from '../../../src/adapters/agents/native-worker.js';
 import type { NativeHarness, NativeWorkerLaunchInput } from '../../../src/adapters/agents/native-worker.js';
+import { CODEX_MODEL_LAUNCHER_FILENAME } from '../../../src/adapters/agents/codex-model-launcher.js';
 import { modelSelectionFixture } from '../../support/model-configurations.js';
 
 const roots: string[] = [];
@@ -78,7 +79,7 @@ test('claude 使用原生 modelSelection 与 reporter 启动', async () => {
   const settings = readFileSync(join(prepared.stateRoot, 'native-settings.json'), 'utf8');
   expect(settings).toContain(reporter);
   expect(settings).toContain('startup|resume');
-  expect(prepared.command).toContain('codex-model-launcher.mjs');
+  expect(prepared.command).toContain(CODEX_MODEL_LAUNCHER_FILENAME);
 });
 
 test('claude resume 只按原 UUID 与原状态根恢复', async () => {

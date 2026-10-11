@@ -1,0 +1,263 @@
+{
+  "phase": "before_close",
+  "root": "/var/tmp/ocp-next-harness-h4PUrG/project",
+  "totalCount": 32,
+  "terminals": [
+    {
+      "handle": "term_09d0b783-393f-419a-82c6-2b7d050a4d2f",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@f7d107bb",
+      "incarnationId": "fe3638a4-4777-45d6-8b2f-06b191b6a635",
+      "agentIdentity": "codex",
+      "connected": true
+    },
+    {
+      "handle": "term_419aeaee-cbb3-4e98-84d6-52beb4d6b885",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@b48b651c",
+      "incarnationId": "b65ff291-b8c4-4169-b306-21accc9118bb",
+      "agentIdentity": "antigravity",
+      "connected": true
+    },
+    {
+      "handle": "term_3a591fc3-5b76-4e1c-be83-97e4383f1ad6",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@637184bc",
+      "incarnationId": "cede73ba-4a22-430a-bc7f-9ba71beeb11c",
+      "agentIdentity": "qwen-code",
+      "connected": true
+    },
+    {
+      "handle": "term_6b00861d-6bef-4307-beb5-62f16a75bc43",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@f3ea819a",
+      "incarnationId": "d5ba899f-5862-410c-959a-03f773982933",
+      "agentIdentity": "antigravity",
+      "connected": true
+    },
+    {
+      "handle": "term_86fc88ce-52db-4bfa-a274-c6d3189d1317",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@570bed5f",
+      "incarnationId": "da3cccc3-768e-4e67-a381-56eefa58bbd9",
+      "agentIdentity": "command-code",
+      "connected": true
+    },
+    {
+      "handle": "term_0987fe25-d370-463b-a46b-2cfb2afb1260",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@8671bbb5",
+      "incarnationId": "954770dd-472d-4eb5-bb78-3b5b7243b128",
+      "agentIdentity": "droid",
+      "connected": true
+    },
+    {
+      "handle": "term_870dead8-06af-4d03-823f-ab6d4e934a45",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@e438bd50",
+      "incarnationId": "f84539d6-9a25-4114-9f1f-5414e854c442",
+      "agentIdentity": "codebuddy",
+      "connected": true
+    },
+    {
+      "handle": "term_fde2628e-776e-4091-82b4-a63c91a223e5",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@ae09b615",
+      "incarnationId": "9c846d8a-1345-4375-8ee4-126b0126fa69",
+      "agentIdentity": "droid",
+      "connected": true
+    },
+    {
+      "handle": "term_7b8daee3-ef7f-4b6f-b2d5-047b51bd8f69",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@58a27618",
+      "incarnationId": "44304ed0-3be5-4313-a5cd-9bc83887e981",
+      "agentIdentity": "qwen-code",
+      "connected": true
+    },
+    {
+      "handle": "term_92ce8978-920d-4883-ae6d-d2fb71844705",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@fa39c742",
+      "incarnationId": "5a8ce3d7-2991-468f-b972-2609dd5e0563",
+      "agentIdentity": "kimi",
+      "connected": true
+    },
+    {
+      "handle": "term_5f9b56b8-09c5-472b-9bc2-286590f1a84d",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@d416ee10",
+      "incarnationId": "9dc82cf2-3dba-451a-9ec9-35a846e02787",
+      "agentIdentity": null,
+      "connected": true
+    },
+    {
+      "handle": "term_551f5d27-22dd-472b-b457-5112d9ae14bf",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@fb0c5d5a",
+      "incarnationId": "878419f4-8fab-45d4-afc9-7b78b5287a74",
+      "agentIdentity": "command-code",
+      "connected": true
+    },
+    {
+      "handle": "term_6a0a7316-d193-426f-acd5-4a4aa58d0640",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@bea586ec",
+      "incarnationId": "5a10211e-4a01-4e58-83ee-8d98cbb5a657",
+      "agentIdentity": null,
+      "connected": true
+    },
+    {
+      "handle": "term_115f7144-9a98-4c0e-95dc-337a2b4cc8a8",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@54022e95",
+      "incarnationId": "0253987d-57d2-4989-a372-d5b95f9a2ac2",
+      "agentIdentity": "kilo",
+      "connected": true
+    },
+    {
+      "handle": "term_a4d1712e-1f8e-4861-86b0-914829c76615",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@a1b3abba",
+      "incarnationId": "aaa3f22a-9232-4ed2-846c-b424c95e8112",
+      "agentIdentity": "hermes",
+      "connected": true
+    },
+    {
+      "handle": "term_97d8d939-6d8c-4bef-ae7a-bb7aa70d57ed",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@c3df1a27",
+      "incarnationId": "f416b77c-5703-4d84-ba71-95dfb8cb198f",
+      "agentIdentity": "cline",
+      "connected": true
+    },
+    {
+      "handle": "term_48f95010-d507-4a4c-9a7d-3de16298dd40",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@00187ce0",
+      "incarnationId": "42165d8a-0caf-4fb8-aa1b-2297ed4767b0",
+      "agentIdentity": "grok",
+      "connected": true
+    },
+    {
+      "handle": "term_6725200d-f285-4409-bcbb-a6a0a6d80b32",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@d2894e23",
+      "incarnationId": "5122ac91-9a77-4da0-8bbd-5820e6fa6f0a",
+      "agentIdentity": "codebuddy",
+      "connected": true
+    },
+    {
+      "handle": "term_2314aaa9-b518-4ab1-889a-d38afc43bf89",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@7be8c4ec",
+      "incarnationId": "5093dc5d-862e-4dbf-bbdd-c094527e6873",
+      "agentIdentity": "grok",
+      "connected": true
+    },
+    {
+      "handle": "term_a1e6c751-00ee-4648-af41-d95a65a48e22",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@fc6815ab",
+      "incarnationId": "8338a45a-63e4-430d-a227-5ad5dfca73a0",
+      "agentIdentity": "command-code",
+      "connected": true
+    },
+    {
+      "handle": "term_71f67818-84b5-4b76-a406-0d187e3581d1",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@b6ddce23",
+      "incarnationId": "de0a0e60-71e2-40e3-add4-44dde095724d",
+      "agentIdentity": null,
+      "connected": true
+    },
+    {
+      "handle": "term_7e1fb9da-b55f-4628-83b8-d38c0863e868",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@76bbdbfd",
+      "incarnationId": "611e50a1-d9ea-4d31-975b-69fd87d01348",
+      "agentIdentity": null,
+      "connected": true
+    },
+    {
+      "handle": "term_8b61bacf-353c-4b21-adae-8f3069833e95",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@89bc65f4",
+      "incarnationId": "c20dd86e-ba98-4f1c-9123-2a31481710e0",
+      "agentIdentity": null,
+      "connected": true
+    },
+    {
+      "handle": "term_278ab438-be26-4237-a132-33e8d6242d29",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@e333c8c7",
+      "incarnationId": "7c1f9126-b03a-4043-8556-9e1674b57948",
+      "agentIdentity": "crush",
+      "connected": true
+    },
+    {
+      "handle": "term_e7736206-292e-4bcd-8707-8c2b41f386a8",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@80aff652",
+      "incarnationId": "9c9dae7e-7d65-4c27-b3b8-118cac4c1c3c",
+      "agentIdentity": null,
+      "connected": true
+    },
+    {
+      "handle": "term_a4632066-42b1-4837-9268-7189207e536f",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@d4ccd324",
+      "incarnationId": "0ad02d50-cabf-4772-b235-df4e98dd75e0",
+      "agentIdentity": null,
+      "connected": true
+    },
+    {
+      "handle": "term_2a7fb665-231b-4850-b162-800cbb98907d",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@5329279c",
+      "incarnationId": "be063ec0-3cdc-424b-802d-1fd5eb5cb0c6",
+      "agentIdentity": "copilot",
+      "connected": true
+    },
+    {
+      "handle": "term_81e2abec-3146-438f-90bb-f76c0318e0f1",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@c3c9cbaa",
+      "incarnationId": "1c9688a2-bba8-4964-97ad-17bcaab71075",
+      "agentIdentity": "command-code",
+      "connected": true
+    },
+    {
+      "handle": "term_df0c40bb-eabe-47f2-920c-564f64ddcb82",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@33b19436",
+      "incarnationId": "b0c8467e-c5f1-4507-bd59-d0a147f44f73",
+      "agentIdentity": "command-code",
+      "connected": true
+    },
+    {
+      "handle": "term_6330cc5e-b464-41fe-9b87-505f41ce5cad",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@3f018bc1",
+      "incarnationId": "d889dda9-4fce-4db6-bf73-a3dd23afc118",
+      "agentIdentity": "antigravity",
+      "connected": true
+    },
+    {
+      "handle": "term_c118f801-57f4-4b80-9f99-b31614fd912f",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@31f31ac4",
+      "incarnationId": "9fb41f2c-d93f-43ff-8a1a-5d57144707b4",
+      "agentIdentity": "droid",
+      "connected": true
+    },
+    {
+      "handle": "term_b31102ad-138e-40c9-92c3-584d549f13f7",
+      "worktreeId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project",
+      "ptyId": "cc671869-17c1-41d4-aed6-1877f1001fa1::/var/tmp/ocp-next-harness-h4PUrG/project@@59817ec2",
+      "incarnationId": "b38f2dc4-4cf0-4bdc-95ae-b21b6de95d0f",
+      "agentIdentity": "codebuddy",
+      "connected": true
+    }
+  ]
+}

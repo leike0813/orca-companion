@@ -45,6 +45,8 @@ const EXECUTABLES: Readonly<Record<WorkerHarnessId, string>> = {
   opencode: 'opencode',
   pi: 'pi',
   omp: 'omp',
+  'command-code': 'command-code',
+  'qwen-code': 'qwen',
 };
 
 type CatalogEntry = {
@@ -101,7 +103,7 @@ export async function queryWorkerModels(options: WorkerModelCatalogOptions): Pro
   }
 
   const command = catalogCommand(options.harness, executable, env);
-  if (command === null) return unavailable('catalog_api_unavailable', 'pi 公开模型 API 不可用');
+  if (command === null) return unavailable('catalog_api_unavailable', `${options.harness} 公开模型目录 API 不可用`);
   const result = await runner(catalogRequest({
     executable: options.harness === 'pi' ? process.execPath : executable,
     command,
@@ -186,6 +188,9 @@ function catalogCommand(harness: WorkerHarnessId, executable: string, env: Reado
       return piCatalogCommand(executable, env);
     case 'omp':
       return { args: ['models', '--json'], provenance: 'models-json', parse: parseOmpCatalog };
+    case 'command-code':
+    case 'qwen-code':
+      return null;
   }
 }
 

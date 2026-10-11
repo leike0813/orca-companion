@@ -1,0 +1,83 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-11T03:44:29.243Z",
+  "finishedAt": "2026-10-11T03:48:07.865Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-6ffaaf17-980e-4d8f-b1e5-3db5dc6a45d0",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-s8dnYq",
+  "runId": "run_228e8dee3f64",
+  "coordinatorTerminalHandle": "term_cd029ad7-e78f-4055-a583-d7cf38d3c0de",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "command-code",
+      "modelSelection": {
+        "model": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "dispatchId": "ctx_ab81dba702f8",
+          "sessionId": "f82b4f87-6883-4dec-83c2-7eed7685bfaf",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "dispatchId": "ctx_d723effcc5f6",
+          "sessionId": "8bab2c1c-9b7d-45e4-9e41-6b077d9a5157",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "dispatchId": "ctx_e6c91bd0300d",
+          "sessionId": "f6e99f21-4916-43bd-82d2-695de26f5783",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "dispatchId": "ctx_dcba970bde97",
+          "sessionId": "82c4fed6-1dff-4444-b59f-a5ef7999ffb0",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "blocker": {
+          "code": "resume_exception",
+          "message": "adapter 返回空命令或不一致的 terminal title"
+        }
+      },
+      "blockers": [
+        "resume：resume_exception adapter 返回空命令或不一致的 terminal title"
+      ]
+    }
+  ]
+}

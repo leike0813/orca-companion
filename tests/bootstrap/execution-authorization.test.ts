@@ -888,6 +888,17 @@ test('审阅与批准各自核验只读 Worker 能力：不可用不写授权，
     });
     expect(approved.kind).toBe('accepted');
     expect(persistedFacts(harness.repository)).toEqual({ authorizations: 1, mode: 'execution_coordination' });
+    const opened = openCoordinationStore({ databasePath: coordinationDatabasePath(join(harness.repository, '.git')), clock });
+    if (opened.kind !== 'opened') throw new Error('Cannot inspect approved execution lease');
+    try {
+      const read = opened.store.query({ kind: 'leases', coordinationScopeId: SCOPE });
+      if (read.kind !== 'leases') throw new Error('Cannot read leases');
+      const runtime = read.leases.find((entry) => entry.kind === 'runtime' && entry.releasedAt === null);
+      const execution = read.leases.find((entry) => entry.kind === 'execution_coordination' && entry.releasedAt === null);
+      expect(runtime).toBeDefined();
+      expect(execution).toMatchObject({ runtimeIncarnationId: runtime?.runtimeIncarnationId,
+        fencingGeneration: runtime?.fencingGeneration });
+    } finally { opened.store.close(); }
     // 审阅与批准各自探测：结论不缓存，旧成功不会替代本次检查。
     expect(harness.probeCalls.value).toBeGreaterThanOrEqual(3);
   } finally {

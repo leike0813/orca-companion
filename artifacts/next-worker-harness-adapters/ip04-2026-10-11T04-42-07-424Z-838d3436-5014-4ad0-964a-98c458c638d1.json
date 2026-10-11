@@ -1,0 +1,156 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-11T04:42:07.424Z",
+  "finishedAt": "2026-10-11T04:43:00.636Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-46c5b4ab-4f7c-4a46-9ef1-4f3a48e9cea3",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-W0Hibl",
+  "runId": "run_70824b8402b4",
+  "coordinatorTerminalHandle": "term_d9734bf4-4cdb-4f7c-8ce8-1c239e60530b",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "codebuddy",
+      "modelSelection": {
+        "model": "MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "blocked",
+          "launchId": "ip04:codebuddy:planner",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "Session Binding 不可用：CodeBuddy native transcript does not match the reported session identity"
+          }
+        },
+        {
+          "role": "implementation",
+          "kind": "blocked",
+          "launchId": "ip04:codebuddy:implementation",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "Session Binding 不可用：CodeBuddy native transcript does not match the reported session identity"
+          }
+        },
+        {
+          "role": "validator",
+          "kind": "blocked",
+          "launchId": "ip04:codebuddy:validator",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "prepare_failed",
+            "message": "prepared-terminal 失败：terminal_handle_stale"
+          }
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "launchId": "ip04:codebuddy:finalizer",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "Session Binding 不可用：CodeBuddy native transcript does not match the reported session identity"
+          }
+        }
+      ],
+      "resume": {
+        "harness": "codebuddy",
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "dispatchId": null,
+        "contextPreserved": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "validatorContinuation": {
+        "harness": "codebuddy",
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "dispatchId": null,
+        "contextPreserved": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "recovery": {
+        "kind": "blocked",
+        "sourceSessionId": null,
+        "sourceTranscriptRef": null,
+        "utility": null,
+        "capsuleRef": null,
+        "coverage": null,
+        "sourceBehaviorVerified": false,
+        "readOnlyVerified": false,
+        "permissionDenied": null,
+        "deliveryId": null,
+        "deliveryAcked": false,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "Recovery requires the precise original Validator session"
+        }
+      },
+      "blockers": [
+        "planner：transcript_unavailable Session Binding 不可用：CodeBuddy native transcript does not match the reported session identity",
+        "implementation：transcript_unavailable Session Binding 不可用：CodeBuddy native transcript does not match the reported session identity",
+        "validator：prepare_failed prepared-terminal 失败：terminal_handle_stale",
+        "finalizer：transcript_unavailable Session Binding 不可用：CodeBuddy native transcript does not match the reported session identity",
+        "resume：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复",
+        "recovery：original_unavailable Recovery requires the precise original Validator session",
+        "validator-continuation：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复"
+      ]
+    }
+  ]
+}

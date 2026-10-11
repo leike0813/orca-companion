@@ -1,0 +1,10 @@
+{
+  "fixture": "WLT15T",
+  "closed": 3,
+  "stopped": 3,
+  "removedCheckouts": 2,
+  "setupDeleted": "99666bbb-158a-4f0f-87cd-21de89c38029",
+  "archive": "/var/tmp/orca-harness-evidence/WLT15T-controller-checkouts.tar.gz",
+  "nativeState": "preserved",
+  "authorization": "user requested ongoing cleanup"
+}

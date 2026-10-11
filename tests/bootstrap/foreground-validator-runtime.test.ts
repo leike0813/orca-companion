@@ -44,6 +44,7 @@ import type {
   GraphVersion,
   OperationId,
   PlanningCycleId,
+  RecoveryId,
   RuntimeIncarnationId,
   SessionSegmentId,
   WorkerTaskId,
@@ -60,7 +61,7 @@ import type {
 } from '../../src/application/ports/execution-backend.js';
 import type { IssueTrackerGateway, TrackerReadOutcome, TrackerWriteOutcome } from '../../src/application/planning/route-map-service.js';
 import type { DoctorProbe } from '../../src/bootstrap/doctor.js';
-import { codexSessionPathsUnder } from '../../src/bootstrap/execution-runtime.js';
+import { codexSessionPathsUnder, recoveryLaunchIdOf } from '../../src/bootstrap/execution-runtime.js';
 import { canonicalPath, coordinationDatabasePath } from '../../src/bootstrap/composition.js';
 import { checkpointDatabasePath } from '../../src/bootstrap/coordinator-runtime.js';
 import { createForegroundPlanningHost } from '../../src/bootstrap/foreground-planning-runtime.js';
@@ -98,6 +99,7 @@ const ATTEMPT = 'attempt-validator-runtime';
 const WORKER_TASK = 'orca-task-validator-runtime' as WorkerTaskId;
 const PROVIDER_SESSION = 'validator-provider-session';
 const LAUNCH_ID = 'launch-validator-runtime';
+const RECOVERY_ID = 'recovery-validator-runtime' as RecoveryId;
 const WORKTREE_ID = 'worktree-validator-runtime';
 const TERMINAL_HANDLE = 'validator-terminal';
 
@@ -123,6 +125,8 @@ type FakeValidatorOrca = {
   /** 把 finish 许可答复成确定失败（模拟 Orca 记录确定失败）。 */
   rejectFinish: boolean;
   hiddenRepair: 'untracked' | 'committed' | null;
+  sender: string;
+  exited: boolean;
   /** worktree-list 返回的 Work Package 隔离 worktree。 */
   readonly worktreePath: string;
 };
@@ -173,6 +177,8 @@ function fakeValidatorOrca(worktreePath: string): FakeValidatorOrca {
     repliedActions,
     rejectFinish: false,
     hiddenRepair: null,
+    sender: `dispatch:${ORCA_DISPATCH}`,
+    exited: false,
     worktreePath,
     backend: {
       query: (input: ExecutionQuery) => {
@@ -206,7 +212,7 @@ function fakeValidatorOrca(worktreePath: string): FakeValidatorOrca {
               kind: 'accepted' as const,
               value: {
                 delivery: { deliveryId: 'delivery-validator-runtime', runId: RUN_ID },
-                messages: validatorMessages(),
+                messages: validatorMessages().map((entry) => ({ ...entry, fromHandle: state.sender })),
                 timedOut: false,
                 cancelled: false,
               },
@@ -214,7 +220,7 @@ function fakeValidatorOrca(worktreePath: string): FakeValidatorOrca {
           case 'message-inbox':
             return Promise.resolve({
               kind: 'accepted' as const,
-              value: { messages: validatorMessages(), count: 3 },
+              value: { messages: validatorMessages().map((entry) => ({ ...entry, fromHandle: state.sender })), count: 3 },
             });
           case 'worker-show':
             return Promise.resolve({
@@ -224,6 +230,7 @@ function fakeValidatorOrca(worktreePath: string): FakeValidatorOrca {
                 dispatchId: ORCA_DISPATCH,
                 taskId: WORKER_TASK,
                 agentTerminalHandle: TERMINAL_HANDLE,
+                observationStatus: state.exited ? 'exited' : 'live',
               },
             });
           case 'terminal-list':
@@ -350,9 +357,9 @@ function manifestFor(head: string, repository: string): ExecutionAuthorizationMa
  * 按生产路径写出该次派发自己的 Codex SessionStart 报告与 transcript：路径由 `launchId` 派生，
  * 报告里的 CODEX_HOME/transcript/cwd 必须逐项与绑定事实一致，`validatorStepBindingOf` 才认。
  */
-function writeValidatorSessionArtifacts(repository: string, worktreePath: string): void {
-  const paths = codexSessionPathsUnder(join(repository, '.git', COMPANION_STATE_DIRECTORY), LAUNCH_ID);
-  const codexHome = join(paths.stateRoot, createHash('sha256').update(LAUNCH_ID).digest('hex').slice(0, 20));
+function writeValidatorSessionArtifacts(repository: string, worktreePath: string, launchId = LAUNCH_ID): void {
+  const paths = codexSessionPathsUnder(join(repository, '.git', COMPANION_STATE_DIRECTORY), launchId);
+  const codexHome = join(paths.stateRoot, createHash('sha256').update(launchId).digest('hex').slice(0, 20));
   const sessionsDir = join(codexHome, 'sessions', '2026', '10', '05');
   mkdirSync(sessionsDir, { recursive: true });
   const transcriptPath = join(sessionsDir, `rollout-2026-10-05T00-00-00-${PROVIDER_SESSION}.jsonl`);
@@ -378,7 +385,7 @@ function writeValidatorSessionArtifacts(repository: string, worktreePath: string
 
 let TRANSCRIPT_PATH = '';
 
-function prepareValidatorState(repository: string, head: string, options?: { readonly seedAdmittedRepair?: boolean }): void {
+function prepareValidatorState(repository: string, head: string, options?: { readonly seedAdmittedRepair?: boolean; readonly recovered?: boolean }): void {
   const opened = openCoordinationStore({ databasePath: coordinationDatabasePath(join(repository, '.git')), clock });
   if (opened.kind !== 'opened') {
     throw new Error(opened.message);
@@ -498,6 +505,21 @@ function prepareValidatorState(repository: string, head: string, options?: { rea
     if (segment.kind === 'rejected') {
       throw new Error(`无法记录 Session Segment：${segment.message}`);
     }
+    if (options?.recovered === true) {
+      const recorded = store.transact({ kind: 'record-recovery', coordinationScopeId: SCOPE,
+        expectedRevision: revision(), writer, recoveryId: RECOVERY_ID, role: 'validator', workPackageId: WP,
+        workerTaskId: WORKER_TASK, businessAttemptId: ATTEMPT,
+        sourceSegmentId: 'interrupted-segment' as SessionSegmentId, sourceDispatchId: 'interrupted-dispatch' as DispatchId });
+      if (recorded.kind === 'rejected') throw new Error(recorded.message);
+      for (const status of ['recovering', 'recovered'] as const) {
+        const advanced = store.transact({ kind: 'advance-recovery', coordinationScopeId: SCOPE,
+          expectedRevision: revision(), writer, recoveryId: RECOVERY_ID, status,
+          ...(status === 'recovered' ? { terminalOutcome: 'replaced' as const, consumedBudget: 1,
+            replacementDispatchId: ORCA_DISPATCH, replacementSegmentId: 'segment-validator-runtime' as SessionSegmentId,
+            replacementSessionBindingId: sessionBindingIdOf(ORCA_DISPATCH, PROVIDER_SESSION) } : {}) });
+        if (advanced.kind === 'rejected') throw new Error(advanced.message);
+      }
+    }
     if (options?.seedAdmittedRepair === true) {
       // 现场：上一个 Incarnation 已经在同一 Attempt 里放行过一次修复（预算已扣、游标首写、许可已答复），
       // 但链还没走到终态。重启后的新 Incarnation 必须按 `initialRepairConsumed` 续办，重放不二次扣减。
@@ -603,14 +625,14 @@ afterEach(() => {
   }
 });
 
-async function openHarness(options?: { readonly rejectFinish?: boolean; readonly seedAdmittedRepair?: boolean }): Promise<Harness> {
+async function openHarness(options?: { readonly rejectFinish?: boolean; readonly seedAdmittedRepair?: boolean; readonly recovered?: boolean }): Promise<Harness> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-validator-runtime-'));
   const { repository, head } = prepareRepository(directory);
   const worktreePath = join(directory, 'worktrees', 'validator-runtime');
   mkdirSync(join(directory, 'worktrees'), { recursive: true });
   execFileSync('git', ['-C', repository, 'worktree', 'add', '--detach', worktreePath, head], { stdio: 'pipe' });
-  writeValidatorSessionArtifacts(repository, worktreePath);
-  prepareValidatorState(repository, head, { ...(options?.seedAdmittedRepair === true ? { seedAdmittedRepair: true } : {}) });
+  writeValidatorSessionArtifacts(repository, worktreePath, options?.recovered === true ? recoveryLaunchIdOf(RECOVERY_ID) : LAUNCH_ID);
+  prepareValidatorState(repository, head, options);
   const fake = fakeValidatorOrca(worktreePath);
   fake.rejectFinish = options?.rejectFinish === true;
   const host = await createForegroundPlanningHost({
@@ -714,11 +736,16 @@ async function waitFor(assertion: () => unknown): Promise<void> {
 /* 测试                                                                        */
 /* -------------------------------------------------------------------------- */
 
-test(
-  '生产 pump 走完 Validator 同会话修复链：finish 才写终态游标，修复只扣一次预算，且不产生 Wake',
+test.each([
+  { sender: TERMINAL_HANDLE, recovered: false },
+  { sender: `dispatch:${ORCA_DISPATCH}`, recovered: false },
+  { sender: `dispatch:${ORCA_DISPATCH}`, recovered: true },
+])(
+  '生产 pump 从 $sender 走完 Validator 修复链（recovered=$recovered）：finish 才写终态游标，修复只扣一次预算，且不产生 Wake',
   { timeout: TEST_TIMEOUT_MS },
-  async () => {
-    const harness = await openHarness();
+  async ({ sender, recovered }) => {
+    const harness = await openHarness({ recovered });
+    harness.fake.sender = sender;
     await openSession(harness);
     const repository = harness.repository;
 
@@ -746,8 +773,45 @@ test(
     expect(validatorRepairConsumed(repository)).toBe(1);
     expect(harness.fake.repliedActions).toEqual(['repair', 'verify', 'finish']);
     expect(validationAttempt(repository)?.terminal).toBe(MSG_VERIFY_PASSED);
+    const snapshot = await harness.host.ports.snapshot(SESSION);
+    expect(snapshot.kind).toBe('snapshot');
+    if (snapshot.kind === 'snapshot') {
+      expect(snapshot.snapshot.blockers.some(entry => entry.code === 'worker_message_unconsumed')).toBe(false);
+    }
   },
 );
+
+test.each(['unrelated-terminal', 'dispatch:unrelated'])('不消费无关发送方 %s 的 Validator 步骤',
+  { timeout: TEST_TIMEOUT_MS }, async (sender) => {
+    const harness = await openHarness();
+    harness.fake.sender = sender;
+    await openSession(harness);
+    await waitFor(async () => {
+      const loaded = await harness.host.ports.snapshot(SESSION);
+      expect(loaded.kind === 'snapshot' ? loaded.snapshot.blockers.map((entry) => entry.code) : [])
+        .toContain('worker_message_unconsumed');
+    });
+    expect(validationAttempt(harness.repository)).toBeNull();
+    expect(harness.fake.repliedActions).toEqual([]);
+  });
+
+test('精确退出的 Validator 问题保留游标引用后消费，不发许可或写终态',
+  { timeout: TEST_TIMEOUT_MS }, async () => {
+    const harness = await openHarness();
+    harness.fake.exited = true;
+    await openSession(harness);
+    await waitFor(() => expect(validationAttempt(harness.repository)?.messageIds)
+      .toEqual([MSG_VERIFY_FAILED, MSG_REPAIR_APPLIED, MSG_VERIFY_PASSED]));
+    await waitFor(async () => {
+      const loaded = await harness.host.ports.snapshot(SESSION);
+      expect(harness.fake.mutations.some((entry) => entry.operation === 'delivery-ack'),
+        JSON.stringify(loaded.kind === 'snapshot' ? loaded.snapshot.blockers : loaded)).toBe(true);
+    });
+    expect(validationAttempt(harness.repository)?.terminal).toBeNull();
+    expect(harness.fake.repliedActions).toEqual([]);
+    expect(validatorRepairConsumed(harness.repository)).toBe(0);
+    expect(workerWakeAdmissions(harness.repository)).toBe(0);
+  });
 
 test(
   'finish 许可被拒时：不写终态游标、不伪造完成，前台留下可区分的 Validator 链 blocker',

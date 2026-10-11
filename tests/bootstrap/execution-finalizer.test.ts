@@ -960,6 +960,26 @@ test('门禁满足时：以新的只读 Session 在 canonical worktree 派发，
   } finally {
     store.close();
   }
+  harness.dispose();
+  const restarted = await createForegroundPlanningHost({ repositoryPath: harness.repository,
+    env: credentialFixtureEnvironment(harness.directory), clock: () => 62_000,
+    heartbeatIntervalMs: 1_000, leaseTtlMs: 60_000, reconciliationIntervalMs: 20,
+    orcaProbe: fakeProbe(), trackerFactory: fakeTracker, executionBackend: harness.fake.backend,
+    loadIntegration: () => Promise.resolve({ ChatOpenAICompletions: CapableChatModel }),
+    readOnlyWorkerProbe: fixedReadOnlyWorkerProbe(READ_ONLY_WORKER_UNAVAILABLE),
+  });
+  try {
+    expect((await restarted.ports.scopeSetup.resolveHome()).kind).toBe('restore');
+    const restored = { ...harness, host: restarted };
+    await sendMessage(restored, '读取已有交付结论');
+    await waitForSnapshot(restored, loaded => {
+      expect(loaded.kind === 'snapshot' ? loaded.snapshot.finalizer.verdict?.kind : null).toBe('deliverable');
+      if (loaded.kind === 'snapshot') expect(loaded.snapshot.blockers.some(entry => entry.code === 'finalizer_read_only_unprovable')).toBe(false);
+    });
+    expect(workerStarts(restored)).toBe(1);
+  } finally {
+    restarted.close();
+  }
 });
 
 test.each([false, true])('真实 Orca 原生载荷：有效 JSON 结论被接受，先有拒绝诊断=%s', { timeout: TEST_TIMEOUT_MS }, async (rejectedLifecycleFirst) => {

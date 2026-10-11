@@ -39,7 +39,6 @@ import type {
   SessionSegmentRecord,
 } from '../application/ports/branch-coordination-store.js';
 import { readDeliveryBatch } from '../adapters/orca-cli/delivery-reader.js';
-import { ackConsumedDelivery } from '../application/delivery/process-delivery.js';
 import {
   parseDeliveryClaimedPayload,
   parseOrcaWorkerDoneLocator,
@@ -56,6 +55,7 @@ import { deriveRecoveryId } from '../application/recovery/worker-session-recover
 import type { DeliveryBatch, DeliveryMessage } from '../application/dto/operation-outcome.js';
 import {
   buildExecutionScope,
+  orcaDispatchIdFromReceipt,
   type ExecutionAuthority,
   type ExecutionBackend,
   type WorktreeListResult,
@@ -64,11 +64,9 @@ import {
   type TerminalListResult,
   type WorkerListResult,
   type WorkerShowResult,
-  type WorkerStartReceipt,
 } from '../adapters/orca-cli/operation-catalog.js';
 import { requireWorkerHarness, workerHarnessRegistry, workerSessionPathsUnder, prepareHarnessWorkerLaunch, installHarnessSessionReporter, bindHarnessSessionFromStartReport, readHarnessTranscriptIdentity, readLatestHarnessSessionReport } from './worker-harness.js';
 import { prepareOpencodeRecoveryMaterial } from '../adapters/agents/opencode-harness.js';
-import { nativeRecoveryInstructions } from '../adapters/agents/native-worker.js';
 import {
   readOnlyWorkerUnavailableReason,
   type ReadOnlyWorkerProbe,
@@ -1534,7 +1532,8 @@ export async function readPendingDeliveries(
     return {
       kind: 'read',
       pending: [],
-      progressAcks: [{ deliveryId, runId: batch.delivery.runId }],
+      progressAcks: [{ deliveryId, runId: batch.delivery.runId,
+        ...(workerMessages.length === 0 ? {} : { consumedMessageIds: workerMessages.map((message) => message.messageId) }) }],
     };
   }
   if (batch.messages.length === 0) {
@@ -1580,6 +1579,7 @@ export async function readPendingDeliveries(
   const pending: PendingDelivery[] = [];
   const blocked: { readonly code: string; readonly message: string; readonly laneKey: string | null }[] = [];
   let projectResultsConsumed = 0;
+  const consumedProjectResults: import('../application/delivery/process-delivery.js').ConsumedDeliveryResult[] = [];
   for (const message of resultMessages) {
     if (message.runId !== null && message.runId !== input.runId) {
       blocked.push({
@@ -1590,7 +1590,17 @@ export async function readPendingDeliveries(
       continue;
     }
     const project = await input.consumeProjectResult?.(message, batch) ?? 'ignored';
-    if (project === 'consumed') { projectResultsConsumed += 1; continue; }
+    if (project === 'consumed') {
+      const locator = parseOrcaWorkerDoneLocator(message.payload, message.body);
+      if (locator === null) {
+        blocked.push({ code: 'project_result_unverifiable', message: '已消费结果缺少精确 Task/Dispatch', laneKey: ackLaneKey(deliveryId) });
+        continue;
+      }
+      consumedProjectResults.push({ orcaTaskId: locator.orcaTaskId, dispatchId: locator.orcaDispatchId,
+        workerTaskId: null, attemptId: null });
+      projectResultsConsumed += 1;
+      continue;
+    }
     if (project === 'blocked') {
       blocked.push({ code: 'project_result_unconsumed', message: '项目级结果尚未完成持久结算', laneKey: ackLaneKey(deliveryId) });
       continue;
@@ -1673,6 +1683,7 @@ export async function readPendingDeliveries(
         acceptedResult: intake.acceptedResult,
       },
       trusted: facts.trusted,
+      consumedMessageIds: workerMessages.map((message) => message.messageId),
       orcaTaskId: facts.orcaTaskId,
       operationIds: {
         // 只在「该 lane 从未登记过 intent」时使用；候选身份必须按 attempt 唯一，否则同一 Task 的
@@ -1683,10 +1694,12 @@ export async function readPendingDeliveries(
       },
     });
   }
+  const pendingWithConsumed = pending.map((entry) => ({ ...entry, consumed: consumedProjectResults }));
   return blocked.length === 0
-    ? { kind: 'read', pending, ...(projectResultsConsumed === resultMessages.length
-        ? { progressAcks: [{ deliveryId, runId: batch.delivery.runId }] } : {}) }
-    : { kind: 'read', pending, blocked };
+    ? { kind: 'read', pending: pendingWithConsumed, ...(projectResultsConsumed === resultMessages.length
+        ? { progressAcks: [{ deliveryId, runId: batch.delivery.runId,
+          consumedMessageIds: workerMessages.map((message) => message.messageId), consumed: consumedProjectResults }] } : {}) }
+    : { kind: 'read', pending: pendingWithConsumed, blocked };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2148,14 +2161,15 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
       }
       installHarnessSessionReporter(harness.id, paths);
       const materialRoot = join(paths.stateRoot, createHash('sha256').update(launchId).digest('hex').slice(0, 20));
-      const readingInstructions = sourceHarness === 'opencode'
+      const harnessInstructions = requireWorkerHarness(sourceHarness).recoveryInstructions();
+      const materialInstructions = sourceHarness === 'opencode'
         ? await prepareOpencodeRecoveryMaterial(request.transcriptRef, materialRoot, evidence.evidence)
-        : sourceHarness === 'claude' || sourceHarness === 'pi' || sourceHarness === 'omp'
-          ? nativeRecoveryInstructions(sourceHarness) : undefined;
-      if (readingInstructions === null) return { kind: 'transcript_unavailable', reason: 'OpenCode 精确 transcript 材料无法核验' };
+        : [];
+      if (materialInstructions === null) return { kind: 'transcript_unavailable', reason: 'OpenCode 精确 transcript 材料无法核验' };
+      const readingInstructions = [...harnessInstructions, ...materialInstructions];
       const dispatchStartedAt = new Date(input.clock()).toISOString();
       const dispatch = await dispatchCapsuleWorker({
-        ...(readingInstructions === undefined ? {} : { instructions: readingInstructions }),
+        instructions: readingInstructions,
         store: input.store(),
         backend: input.backend,
         writer: input.writer,
@@ -2232,7 +2246,7 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
         return { kind: 'failed', reason: dispatch.reason };
       }
 
-      // 正文先落 Companion 私有状态根、回读确认，再确认它的 Delivery：顺序与 Delivery 处理一致。
+      // 正文先落盘并回读；Delivery 由原重放流程以精确消费证明确认。
       const capsuleRef = capsuleRefOf(deriveRecoveryId(scopeId, request.segmentId));
       const written = writeRecoveryCapsuleBody({
         stateRoot: input.companionStateRoot,
@@ -2244,24 +2258,6 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
       }
       if (readRecoveryCapsuleBody({ stateRoot: input.companionStateRoot, capsuleRef }) === null) {
         return { kind: 'failed', reason: `Recovery Capsule 正文回读失败：${written.path}` };
-      }
-      if (dispatch.delivery !== null) {
-        const acked = await ackConsumedDelivery({
-          store: input.store(),
-          backend: input.backend,
-          writer: input.writer,
-          coordinationScopeId: scopeId,
-          backendIdentityRef: execution.backendIdentityRef,
-          graphGeneration: execution.graphGeneration,
-          authorizationId: execution.authorizationId,
-          runId: execution.runId,
-          consumerGeneration: execution.consumerGeneration,
-          timeoutMs: execution.timeoutMs,
-          deliveryId: dispatch.delivery.deliveryId,
-          deliveryRunId: dispatch.delivery.runId,
-        });
-        // 确认失败不丢弃已生成并落盘的 Capsule：lane 阻塞会在投影里可见，重放会按同一 OperationId 续办。
-        void acked;
       }
       return { kind: 'extracted', capsule: dispatch.capsule };
     },
@@ -2303,9 +2299,8 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
           sessionStartReporterPath: paths.reporterPath,
         }),
         interpretReceipt: async (outcome) => {
-          const receipt = outcome.value as WorkerStartReceipt;
-          const dispatchId = receipt.dispatchId;
-          if (typeof dispatchId !== 'string' || dispatchId.length === 0) {
+          const dispatchId = orcaDispatchIdFromReceipt(outcome.value);
+          if (dispatchId === null) {
             return { failure: '替代派发回执缺少可核验的 Dispatch 身份' };
           }
           const worktree = await readIsolatedWorktree(recovery.workPackageId);

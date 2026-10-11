@@ -21,6 +21,7 @@ import { beginIntent } from '../../src/application/coordination/intent-service.j
 import { acquireRuntimeLease } from '../../src/application/coordination/lease-service.js';
 import {
   acceptResultLaneKey,
+  ackLaneKey,
   type SettleDeliveryInput,
   type SettleDeliveryResult,
 } from '../../src/application/delivery/process-delivery.js';
@@ -34,7 +35,7 @@ import type {
   WorkerTaskId,
 } from '../../src/application/dto/identity.js';
 import { laneKeyOf } from '../../src/application/dto/operation-intent.js';
-import type { ExecutionQueryResult, OperationOutcome } from '../../src/application/dto/operation-outcome.js';
+import type { DeliveryMessage, ExecutionQueryResult, OperationOutcome } from '../../src/application/dto/operation-outcome.js';
 import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
 import type { CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
 import type {
@@ -48,6 +49,7 @@ import {
   type PendingDelivery,
   type ReplayDeliveriesInput,
 } from '../../src/application/reconciliation/replay-deliveries.js';
+import { replayPendingDeliveries } from '../../src/bootstrap/startup.js';
 import type { RoleAuthorities } from '../../src/domain/planning/execution-authorization.js';
 import type { SpecBinding } from '../../src/domain/task-contract.js';
 import type {
@@ -195,6 +197,7 @@ function budgetCounters(): readonly unknown[] {
 }
 
 type BackendScript = {
+  readonly messages?: readonly DeliveryMessage[];
   readonly deliveryId?: string;
   readonly deliveryRunId?: string | null;
   readonly taskRows?: unknown;
@@ -221,7 +224,7 @@ function fakeBackend(script: BackendScript = {}): {
           kind: 'accepted',
           value: {
             delivery: acked.value ? null : { deliveryId, runId: deliveryRunId },
-            messages: [],
+            messages: script.messages ?? [],
             timedOut: false,
             cancelled: false,
           },
@@ -365,6 +368,23 @@ test('启动时逐条重放有效 Delivery，且只走既有 pipeline 并沿用�
   expect(spy.calls[1]?.operationIds.acceptResult).toBe('delivery-2-accept-candidate');
   // 重放编排自身不写结算记录。
   expect(settlementCount()).toBe(0);
+});
+
+test.each([true, false])('启动重放仅投影已确认批次的 Delivery lane（confirmed=%s）', async (confirmed) => {
+  const pending = [pendingDelivery('orca-task-1', 'delivery-1')];
+  const spy = spySettle([confirmed
+    ? { kind: 'settled', dedupeKey: 'dedupe-1', orcaResultRef: 'orca-task-1#abc', verification: ACCEPTED_VERIFICATION }
+    : { kind: 'unknown', operationId: 'op-unknown' as OperationId, reason: 'response_lost' }]);
+  const input = replayInput(fakeBackend().backend, pending, { settle: spy.settle });
+  const result = await replayPendingDeliveries({
+    ...input,
+    deliveries: { ...input, readPending: () => Promise.resolve({ kind: 'read', pending }) },
+  });
+  expect(result.kind).toBe('replayed');
+  if (result.kind === 'replayed') {
+    expect(result.confirmedDeliveryLaneKeys).toEqual(confirmed ? [ackLaneKey('delivery-1')] : []);
+    expect(result.replayed.unconfirmed).toEqual(confirmed ? [] : ['delivery-1']);
+  }
 });
 
 test('pipeline 返回 unknown 时保持未确认，以原 OperationId 阻塞 lane 且可重复执行', async () => {
@@ -579,6 +599,27 @@ test('同批两条普通 role 共享 deliveryId：两条 settlement 都落盘，
   expect(result.unconfirmed).toEqual([]);
   expect(settlementCount()).toBe(2);
   expect(backend.mutations.filter((mutation) => mutation.operation === 'delivery-ack')).toHaveLength(1);
+});
+
+test.each([false, true])('同批普通结果与 Capsule：仅已消费 Capsule=%s 时确认整批', async (capsuleConsumed) => {
+  const message = (taskId: string, dispatchId: string): DeliveryMessage => ({
+    messageId: taskId, runId: 'run-1', deliveryContract: 'current_delivery',
+    fromHandle: `dispatch:${dispatchId}`, toHandle: null, type: 'worker_done',
+    subject: null, priority: null, body: null,
+    payload: JSON.stringify({ taskId, dispatchId, outcome: 'succeeded' }),
+  });
+  const backend = fakeBackend({ messages: [
+    message('orca-task-1', 'orca-task-1-dispatch'), message('capsule-task', 'capsule-dispatch'),
+  ] });
+  const pending = { ...pendingDelivery('orca-task-1', 'delivery-1'),
+    consumed: capsuleConsumed ? [{ orcaTaskId: 'capsule-task', dispatchId: 'capsule-dispatch',
+      workerTaskId: null, attemptId: null }] : [] };
+  const result = await replayDeliveries(replayInput(backend.backend, [pending]));
+  expect(result.kind).toBe('replayed');
+  if (result.kind !== 'replayed') return;
+  expect(result.outcomes[0]?.confirmed).toBe(capsuleConsumed);
+  expect(settlementCount()).toBe(1);
+  expect(backend.mutations.filter((entry) => entry.operation === 'delivery-ack')).toHaveLength(capsuleConsumed ? 1 : 0);
 });
 
 test('同批两条 stale 共享 deliveryId：都只补历史且只 ack 一次，不死锁', async () => {

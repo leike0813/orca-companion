@@ -59,6 +59,8 @@ export type PendingDelivery = {
   readonly trusted: SettleDeliveryInput['trusted'];
   readonly orcaTaskId: string;
   readonly operationIds: SettleDeliveryInput['operationIds'];
+  readonly consumedMessageIds?: readonly string[];
+  readonly consumed?: readonly ConsumedDeliveryResult[];
 };
 
 export type ReplayDeliveriesInput = {
@@ -329,7 +331,11 @@ export async function replayDeliveries(input: ReplayDeliveriesInput): Promise<Re
       deliveryId,
       deliveryRunId: input.runId,
       operationId: ackOperationId,
-      consumed: group.consumed,
+      consumed: [...group.consumed, ...input.pending
+        .filter((entry) => entry.delivery.deliveryId === deliveryId)
+        .flatMap((entry) => entry.consumed ?? [])],
+      consumedMessageIds: input.pending.filter((entry) => entry.delivery.deliveryId === deliveryId)
+        .flatMap((entry) => entry.consumedMessageIds ?? []),
     });
     for (const outcomeIndex of group.outcomeIndexes) {
       const outcome = outcomes[outcomeIndex];

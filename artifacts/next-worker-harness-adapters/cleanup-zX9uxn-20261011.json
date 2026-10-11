@@ -1,0 +1,11 @@
+{
+  "fixture": "/var/tmp/orca-harness-acceptance-zX9uxn",
+  "checkout": "/var/tmp/orca-harness-acceptance-zX9uxn/project-companion-harness-matrix-a98ca7ab-be5b-4fae-a5ab-850075090103",
+  "archive": "/var/tmp/orca-harness-evidence/zX9uxn-checkout.tar.gz",
+  "closed": 15,
+  "stopped": 15,
+  "setupDeleted": "73944a52-a0c1-4056-bbd6-067a34600763",
+  "authorization": "user requested ongoing cleanup",
+  "nativeState": "preserved",
+  "fixtureState": "preserved"
+}

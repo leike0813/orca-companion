@@ -1,0 +1,119 @@
+{
+  "samples": [
+    {
+      "name": "roles-120x40",
+      "width": 120,
+      "rows": 40,
+      "mode": "no-color",
+      "source": "production source component / synthetic read-only props"
+    },
+    {
+      "name": "command-code-menu-120x40",
+      "width": 120,
+      "rows": 40,
+      "mode": "no-color",
+      "source": "production source component / synthetic read-only props"
+    },
+    {
+      "name": "qwen-code-menu-120x40",
+      "width": 120,
+      "rows": 40,
+      "mode": "no-color",
+      "source": "production source component / synthetic read-only props"
+    },
+    {
+      "name": "codebuddy-menu-120x40",
+      "width": 120,
+      "rows": 40,
+      "mode": "no-color",
+      "source": "production source component / synthetic read-only props"
+    },
+    {
+      "name": "roles-80x24",
+      "width": 80,
+      "rows": 24,
+      "mode": "no-color",
+      "source": "production source component / synthetic read-only props"
+    },
+    {
+      "name": "command-code-menu-80x24",
+      "width": 80,
+      "rows": 24,
+      "mode": "no-color",
+      "source": "production source component / synthetic read-only props"
+    },
+    {
+      "name": "qwen-code-menu-80x24",
+      "width": 80,
+      "rows": 24,
+      "mode": "no-color",
+      "source": "production source component / synthetic read-only props"
+    },
+    {
+      "name": "codebuddy-menu-80x24",
+      "width": 80,
+      "rows": 24,
+      "mode": "no-color",
+      "source": "production source component / synthetic read-only props"
+    },
+    {
+      "name": "roles-50x40",
+      "width": 50,
+      "rows": 40,
+      "mode": "no-color",
+      "source": "production source component / synthetic read-only props"
+    },
+    {
+      "name": "command-code-menu-50x40",
+      "width": 50,
+      "rows": 40,
+      "mode": "no-color",
+      "source": "production source component / synthetic read-only props"
+    },
+    {
+      "name": "qwen-code-menu-50x40",
+      "width": 50,
+      "rows": 40,
+      "mode": "no-color",
+      "source": "production source component / synthetic read-only props"
+    },
+    {
+      "name": "codebuddy-menu-50x40",
+      "width": 50,
+      "rows": 40,
+      "mode": "no-color",
+      "source": "production source component / synthetic read-only props"
+    }
+  ],
+  "checks": [
+    {
+      "harness": "command-code",
+      "explicitQuery": true,
+      "defaultReturn": true,
+      "noSaveOrApply": true,
+      "draftPreserved": true,
+      "source": "production TuiApp / existing isolated fake ports at 100 columns"
+    },
+    {
+      "harness": "qwen-code",
+      "explicitQuery": true,
+      "defaultReturn": true,
+      "noSaveOrApply": true,
+      "draftPreserved": true,
+      "source": "production TuiApp / existing isolated fake ports at 100 columns"
+    },
+    {
+      "harness": "codebuddy",
+      "explicitQuery": true,
+      "defaultReturn": true,
+      "noSaveOrApply": true,
+      "draftPreserved": true,
+      "source": "production TuiApp / existing isolated fake ports at 100 columns"
+    }
+  ],
+  "limits": [
+    "Synthetic source render; not native catalogue/model/Orca proof",
+    "Behavior at 100 columns; other sizes are component renders",
+    "No native TTY or IME acceptance"
+  ]
+}

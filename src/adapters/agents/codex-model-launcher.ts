@@ -5,7 +5,8 @@ import { workerModelSelectionSchema, type WorkerHarnessId, type WorkerModelSelec
 import { READ_ONLY_EXECUTION_WRAPPER_SOURCE } from './read-only-execution-wrapper.js';
 import { WORKER_RUNTIME_SOURCE } from './worker-runtime.js';
 
-export const CODEX_MODEL_LAUNCHER_FILENAME = 'codex-model-launcher.mjs';
+// Orca recognizes codex-* process entrypoints as Codex before inspecting children.
+export const CODEX_MODEL_LAUNCHER_FILENAME = 'worker-model-launcher.mjs';
 export const CODEX_MODEL_DESCRIPTOR_FILENAME = 'codex-model-launch.json';
 export const CODEX_MODEL_DESCRIPTOR_VERSION = 2;
 export const SAFE_CODEX_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -94,8 +95,11 @@ try {
   if (descriptor.runtimeReportPath !== undefined && runtime) writeFileSync(descriptor.runtimeReportPath, JSON.stringify(runtime) + '\\n', { mode: 0o600 });
 } catch { fail('native runtime unavailable'); }
 let readOnlyArgs = null;
+let terminalFilter = null;
 if (descriptor.readOnly !== undefined) {
   try {
+    if (process.platform !== 'linux') fail('read-only terminal protection requires Linux');
+    terminalFilter = readOnlyTerminalFilter();
     const boundary = descriptor.readOnly;
     const workspace = realpathSync(boundary.workspace);
     const artifacts = realpathSync(boundary.stateRoot);
@@ -130,7 +134,12 @@ if (descriptor.readOnly !== undefined) {
     });
   } catch { fail('read-only runtime unavailable'); }
 }
-const child = spawn(readOnlyArgs === null ? descriptor.executable : 'bwrap', readOnlyArgs ?? descriptor.args, { env, stdio: 'inherit' });
+const child = spawn(readOnlyArgs === null ? descriptor.executable : 'bwrap', readOnlyArgs ?? descriptor.args,
+  { env, stdio: terminalFilter === null ? 'inherit' : ['inherit', 'inherit', 'inherit', 'pipe'] });
+if (terminalFilter !== null) {
+  child.stdio[3].on('error', () => { child.kill('SIGTERM'); });
+  child.stdio[3].end(terminalFilter);
+}
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => { if (!child.killed) child.kill(signal); });
 child.on('error', error => {
   process.stderr.write('companion worker launcher: spawn failed (' + (error.code ?? 'unknown') + ')\\n');

@@ -22,12 +22,14 @@ import {
   probeHarnessReadOnlyWorker,
   probeReadOnlyExecution,
   readOnlyExecutionArguments,
+  readOnlyTerminalFilter,
   type ReadOnlyExecutionInput,
 } from '../../../src/adapters/agents/read-only-execution-wrapper.js';
 import {
   CODEX_MODEL_DESCRIPTOR_FILENAME,
   CODEX_MODEL_LAUNCHER_FILENAME,
   codexModelLaunchCommand,
+  writeCodexModelLaunch,
 } from '../../../src/adapters/agents/codex-model-launcher.js';
 import type { WorkerModelSelection } from '../../../src/domain/model-configuration.js';
 import type {
@@ -55,7 +57,7 @@ const SAMPLE: ReadOnlyExecutionInput = {
 test('只读 argv 只由唯一工厂生成，且顺序把状态根绑在 tmpfs 之后', () => {
   expect(readOnlyExecutionArguments(SAMPLE)).toEqual([
     '--die-with-parent',
-    '--new-session',
+    '--seccomp', '3',
     '--ro-bind', '/', '/',
     '--dev', '/dev',
     '--proc', '/proc',
@@ -332,6 +334,68 @@ test('生产前置核验在包装器不可用时抛错，可用时静默通过',
 });
 
 const bwrapUsable = spawnSync('bwrap', ['--version'], { encoding: 'utf8' }).status === 0;
+
+test('终端过滤器拒绝外来 ABI 与注入，同时允许普通 ioctl', () => {
+  expect(() => readOnlyTerminalFilter('ia32')).toThrow();
+  const run = (filter: Buffer, arch: number, syscall: number, request: number): number => {
+    let accumulator = 0;
+    for (let pc = 0; pc < filter.length; pc += 8) {
+      const code = filter.readUInt16LE(pc);
+      const value = filter.readUInt32LE(pc + 4);
+      if (code === 0x20) accumulator = value === 4 ? arch : value === 0 ? syscall : request;
+      else if (code === 0x45) pc += 8 * filter.readUInt8(pc + ((accumulator & value) !== 0 ? 2 : 3));
+      else if (code === 0x15) pc += 8 * filter.readUInt8(pc + (accumulator === value ? 2 : 3));
+      else if (code === 0x06) return value;
+      else throw new Error('Unexpected BPF instruction');
+    }
+    throw new Error('BPF did not return');
+  };
+  for (const [architecture, arch, ioctl] of [['x64', 0xc000003e, 16], ['arm64', 0xc00000b7, 29]] as const) {
+    const filter = readOnlyTerminalFilter(architecture);
+    for (const request of [0x5412, 0x541c]) expect(run(filter, arch, ioctl, request)).toBe(0x50001);
+    expect(run(filter, arch, ioctl, 0x5413)).toBe(0x7fff0000);
+    expect(run(filter, arch, ioctl + 1, 0x5412)).toBe(0x7fff0000);
+    expect(run(filter, 0x40000003, ioctl, 0x5412)).toBe(0x80000000);
+  }
+  for (const syscall of [0x40000010, 0x40000202]) {
+    expect(run(readOnlyTerminalFilter('x64'), 0xc000003e, syscall, 0x5412)).toBe(0x80000000);
+  }
+});
+
+const ccUsable = spawnSync('cc', ['--version'], { encoding: 'utf8' }).status === 0;
+test.skipIf(!bwrapUsable || !ccUsable)('生产 launcher 实际拒绝注入 ioctl 且保持原 Session/进程组', () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-terminal-filter-'));
+  try {
+    const source = join(root, 'probe.c');
+    const executable = join(root, 'probe');
+    writeFileSync(source, `#include <sys/ioctl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <stdio.h>
+int main(void) {
+  char ch = 0;
+  int first = ioctl(-1, 0x5412, &ch); int a = errno;
+  int second = ioctl(-1, 0x541c, &ch); int b = errno;
+  int ordinary = ioctl(-1, 0x5413, &ch); int c = errno;
+  printf("%ld %ld\\n", (long)getsid(0), (long)getpgrp());
+  return !(first == -1 && a == EPERM && second == -1 && b == EPERM && ordinary == -1 && c == EBADF);
+}
+`, 'utf8');
+    expect(spawnSync('cc', [source, '-o', executable], { encoding: 'utf8' }).status).toBe(0);
+    const baseline = spawnSync(executable, [], { encoding: 'utf8' });
+    // Keep artifacts outside the protected workspace.
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-terminal-workspace-'));
+    try {
+      const protectedLaunch = writeCodexModelLaunch({ stateRoot: root, descriptor: {
+        version: 2, executable, args: [], readOnly: { workspace, stateRoot: root },
+      } });
+      const actual = spawnSync(process.execPath, [protectedLaunch.launcherPath, protectedLaunch.descriptorPath], { encoding: 'utf8' });
+      expect(actual.stderr).toBe('');
+      expect(actual.status).toBe(0);
+      expect(actual.stdout).toBe(baseline.stdout);
+    } finally { rmSync(workspace, { recursive: true, force: true }); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
 
 /** 注入的 harness：把参数原样转交给 Node，用来证明包装器能经生产 descriptor 拉起任意可执行文件。 */
 function fakeHarness(directory: string): string {

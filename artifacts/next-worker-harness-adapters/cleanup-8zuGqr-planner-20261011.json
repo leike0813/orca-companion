@@ -1,0 +1,22 @@
+{
+  "dispatchId": "ctx_34c9202aa9a9",
+  "acceptedPlanner": "confirmed by Companion settlement and public succeeded Worker",
+  "receipt": {
+    "id": "1eb22378-8fef-4c70-b904-cfb84eb12a99",
+    "ok": true,
+    "result": {
+      "close": {
+        "handle": "term_111fc2eb-868c-467a-8a3d-3ed0839cf92c",
+        "tabId": "d5a12b46-ea18-498b-9e74-617ade663c4f",
+        "ptyKilled": true
+      }
+    },
+    "_meta": {
+      "runtimeId": "75bb80f2-e969-44b6-83e9-2d3a76586c9d"
+    }
+  },
+  "cumulative": {
+    "terminals": 92,
+    "checkouts": 16
+  }
+}

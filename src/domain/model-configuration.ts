@@ -20,7 +20,7 @@ const optionPath = z.string().regex(/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9
  * harness 自己拥有模型、认证、provider endpoint 与真实会话：Companion 只登记身份，能力探测与启动绑定
  * 交给 adapter。这里不描述任何原生连接形状。
  */
-export const WORKER_HARNESS_IDS = ['codex', 'claude', 'opencode', 'pi', 'omp'] as const;
+export const WORKER_HARNESS_IDS = ['codex', 'claude', 'opencode', 'pi', 'omp', 'command-code', 'qwen-code'] as const;
 export type WorkerHarnessId = (typeof WORKER_HARNESS_IDS)[number];
 
 function urlContainsCredentials(value: string): boolean {

@@ -30,6 +30,16 @@ function resolveNativeWorkerRuntime(
       stateRoot = absolute(env['CLAUDE_CONFIG_DIR'] || join(home, '.claude'));
       roots = [stateRoot];
       break;
+    case 'command-code':
+      stateRoot = absolute(join(env['HOME'] || env['USERPROFILE'] || home, '.commandcode'));
+      roots = [stateRoot];
+      break;
+    case 'qwen-code': {
+      const configRoot = absolute(env['QWEN_HOME'] || join(home, '.qwen'));
+      stateRoot = absolute(env['QWEN_RUNTIME_DIR'] || configRoot);
+      roots = [configRoot, stateRoot];
+      break;
+    }
     case 'pi':
       stateRoot = absolute(env['PI_CODING_AGENT_DIR'] || join(home, '.pi', 'agent'));
       roots = [stateRoot];

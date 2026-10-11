@@ -21,7 +21,7 @@ import {
   sessionPathsUnder,
   type OpencodeExecutionInput,
 } from '../../../src/adapters/agents/opencode-harness.js';
-import { CODEX_MODEL_DESCRIPTOR_FILENAME } from '../../../src/adapters/agents/codex-model-launcher.js';
+import { CODEX_MODEL_DESCRIPTOR_FILENAME, CODEX_MODEL_LAUNCHER_FILENAME } from '../../../src/adapters/agents/codex-model-launcher.js';
 import { nativeWorkerRuntime } from '../../../src/adapters/agents/worker-runtime.js';
 import { modelSelectionFixture } from '../../support/model-configurations.js';
 import type { TranscriptCoverageEvidence } from '../../../src/application/recovery/recovery-capsule.js';
@@ -179,7 +179,7 @@ test('launcher v2 binds the native model selector and reports actual runtime roo
   expect(readJson(descriptor.args[1]!).runtimeReportPath).toBe(descriptor.runtimeReportPath);
   expect(descriptor).not.toHaveProperty('environment');
   expect(descriptor.readOnly).toBeUndefined();
-  execFileSync(process.execPath, [join(actual, 'codex-model-launcher.mjs'), join(actual, CODEX_MODEL_DESCRIPTOR_FILENAME)], { env: process.env, cwd: worktree });
+  execFileSync(process.execPath, [join(actual, CODEX_MODEL_LAUNCHER_FILENAME), join(actual, CODEX_MODEL_DESCRIPTOR_FILENAME)], { env: process.env, cwd: worktree });
   const runtime = readJson(descriptor.runtimeReportPath);
   expect(runtime['writableRoots']).toContain(runtime['stateRoot']);
   expect(runtime['stateRoot']).toBe(join(process.env['XDG_DATA_HOME'], 'opencode'));

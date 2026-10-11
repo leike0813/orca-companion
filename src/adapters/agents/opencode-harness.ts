@@ -807,6 +807,11 @@ export function opencodeRecoveryInstructions(
   return lines;
 }
 
+const OPENCODE_RECOVERY_INSTRUCTIONS = [
+  'opencode 转录材料读取（host 经公开分页 API 提取的派生副本；coverage 绑定原 transcriptRef）',
+  '禁止直读 opencode.db、禁止连接公开 API、禁止使用更宽权限；材料缺失或截断即按不可用阻塞。',
+] as const;
+
 /**
  * 签发证据必须与本次实读逐项一致：事件范围、lastCompleteEventRef、coverage 与缺口都要相同，
  * 防止已签 partial 被静默升格为 complete，或范围漂移后仍签同一份材料。
@@ -860,11 +865,12 @@ export async function prepareOpencodeRecoveryMaterial(
     encoding: 'utf8',
     mode: 0o600,
   });
-  return opencodeRecoveryInstructions(transcriptRef, {
+  const instructions = opencodeRecoveryInstructions(transcriptRef, {
     writableRoot,
     materialized: true,
     gap: collected.gap,
   });
+  return instructions?.slice(1, -1) ?? null;
 }
 
 /** 应用层 WorkerHarness 端口实现；由 bootstrap registry 显式注册。 */
@@ -875,6 +881,8 @@ export const opencodeHarness: WorkerHarness = {
   probe: (modelSelection) => probeHarnessReadOnlyWorker(OPENCODE_HARNESS_ID, modelSelection),
   queryModels: (input) => queryWorkerModels({ ...input, harness: OPENCODE_HARNESS_ID }),
   prepareResume: (input) => createOpencodeResumeLaunch(input),
+  readTranscriptIdentity: readOpencodeTranscriptIdentity,
+  recoveryInstructions: () => OPENCODE_RECOVERY_INSTRUCTIONS,
   sessionPaths: (companionStateRoot, launchId) => sessionPathsUnder(companionStateRoot, launchId),
   installReporter: (paths) => {
     // opencode 没有 hook/extension 上报通道：会话事实由 adapter 经公开 API 主动观察（pull），

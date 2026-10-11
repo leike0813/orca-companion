@@ -129,6 +129,7 @@ function prepareCodexSession(input: {
 test.each([
   ['codex', 'payload'], ['codex', 'body'], ['claude', 'payload'],
   ['opencode', 'payload'], ['pi', 'payload'], ['omp', 'payload'],
+  ['codex', 'behind-question'],
 ] as const)('Capsule 提取：%s 的可信会话事实经 %s 读回报告并交回 Delivery 身份', { timeout: 30_000 }, async (harnessId, location) => {
   harness = createRecoveryHarness();
   harness.recordSourceSegment({
@@ -206,21 +207,28 @@ test.each([
         };
       }
       if (input.operation === 'delivery-read') {
+        if (location === 'behind-question' && input.readMode !== 'all') {
+          return { kind: 'accepted', value: { delivery: { deliveryId: 'older-question', runId: 'run-recovery' },
+            messages: [{ messageId: 'old-question', runId: 'run-recovery', deliveryContract: 'current_delivery',
+              fromHandle: 'dispatch:old', toHandle: 'run:run-recovery', type: 'question', subject: null,
+              priority: null, body: 'still pending', payload: JSON.stringify({ taskId: 'old', dispatchId: 'old' }) }],
+            timedOut: false, cancelled: false } };
+        }
         return {
           kind: 'accepted',
           value: {
-            delivery: { deliveryId: 'delivery-capsule', runId: 'run-capsule' },
+            delivery: input.readMode === 'all' ? null : { deliveryId: 'delivery-capsule', runId: 'run-recovery' },
             messages: [
               {
                 messageId: 'message-capsule',
-                runId: 'run-capsule',
+                runId: 'run-recovery',
                 deliveryContract: 'current_delivery',
                 fromHandle: 'terminal-capsule',
                 toHandle: 'coordinator',
                 type: 'worker_done',
                 subject: 'Recovery Capsule',
                 priority: null,
-                body: location === 'body' ? JSON.stringify(CAPSULE) : 'capsule 见 payload',
+                body: location !== 'payload' ? JSON.stringify(CAPSULE) : 'capsule 见 payload',
                 payload: JSON.stringify({
                   taskId: CAPSULE_TASK,
                   dispatchId: CAPSULE_DISPATCH,
@@ -289,7 +297,8 @@ test.each([
   }
   expect(outcome.capsule.coverage).toBe('complete');
   // 整批都属于本次派发：交回 Delivery 身份，由调用方落盘后再确认。
-  expect(outcome.delivery).toEqual({ deliveryId: 'delivery-capsule', runId: 'run-capsule' });
+  expect(outcome.delivery).toEqual(location === 'behind-question' ? null
+    : { deliveryId: 'delivery-capsule', runId: 'run-recovery' });
   // 信封是 Capsule 提取，且派发走的是只读沙箱。
   const created = backend.calls.find(
     (call) => call.kind === 'mutate' && call.operation.operation === 'task-create',
@@ -373,11 +382,11 @@ test.each(['coverage', 'task', 'dispatch'] as const)('Capsule 的 %s 不匹配�
         return {
           kind: 'accepted',
           value: {
-            delivery: { deliveryId: 'delivery-capsule', runId: 'run-capsule' },
+            delivery: { deliveryId: 'delivery-capsule', runId: 'run-recovery' },
             messages: [
               {
                 messageId: 'message-capsule',
-                runId: 'run-capsule',
+                runId: 'run-recovery',
                 deliveryContract: 'current_delivery',
                 fromHandle: 'terminal-capsule',
                 toHandle: 'coordinator',
@@ -506,11 +515,11 @@ test('重启后续办：按信封内容回读已派发的 Worker，不再新建 
         return {
           kind: 'accepted',
           value: {
-            delivery: { deliveryId: 'delivery-capsule', runId: 'run-capsule' },
+            delivery: { deliveryId: 'delivery-capsule', runId: 'run-recovery' },
             messages: [
               {
                 messageId: 'message-capsule',
-                runId: 'run-capsule',
+                runId: 'run-recovery',
                 deliveryContract: 'current_delivery',
                 fromHandle: 'terminal-capsule',
                 toHandle: 'coordinator',
@@ -561,7 +570,7 @@ test('重启后续办：按信封内容回读已派发的 Worker，不再新建 
   if (outcome.kind !== 'extracted') {
     return;
   }
-  expect(outcome.delivery).toEqual({ deliveryId: 'delivery-capsule', runId: 'run-capsule' });
+  expect(outcome.delivery).toEqual({ deliveryId: 'delivery-capsule', runId: 'run-recovery' });
   // 关键：没有新建任何 Task / Worker —— 续办复用 Orca 里已经存在的那次派发。
   expect(backend.mutations()).toEqual([]);
 });

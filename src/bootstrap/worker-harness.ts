@@ -5,9 +5,10 @@ import type { WorkerHarness, WorkerHarnessLaunchInput, WorkerHarnessRegistry, Pr
 import { resolveWorkerHarness } from '../application/ports/worker-harness.js';
 import { parseHarnessSessionReport } from '../application/ports/worker-harness.js';
 import { codexHarness } from '../adapters/agents/codex-harness.js';
-import { opencodeHarness, readOpencodeTranscriptIdentity } from '../adapters/agents/opencode-harness.js';
-import { createNativeWorkerLaunch, installNativeSessionStartReporter, proveNativeTranscript, inspectNativeTranscript, nativeTranscriptIdentity, type NativeHarness } from '../adapters/agents/native-worker.js';
-import { readCodexTranscriptIdentity } from '../adapters/agents/codex-transcript.js';
+import { opencodeHarness } from '../adapters/agents/opencode-harness.js';
+import { commandCodeHarness } from '../adapters/agents/command-code-harness.js';
+import { qwenHarness } from '../adapters/agents/qwen-harness.js';
+import { createNativeWorkerLaunch, installNativeSessionStartReporter, proveNativeTranscript, inspectNativeTranscript, nativeTranscriptIdentity, nativeRecoveryInstructions, type NativeHarness } from '../adapters/agents/native-worker.js';
 import { probeHarnessReadOnlyWorker, assertReadOnlyExecutionWrapperAvailable } from '../adapters/agents/read-only-execution-wrapper.js';
 import { bindHarnessSession, type HarnessSessionFacts, type SessionBindingResult } from '../adapters/agents/session-binding.js';
 import { workerModelQuery } from '../adapters/agents/worker-model-catalog.js';
@@ -47,6 +48,8 @@ function nativeHarness(id: NativeHarness): WorkerHarness {
     prepareResume: (input) => createNativeWorkerLaunch(id, { ...input, resume: {
       sessionId: input.sessionId, stateRoot: input.originalStateRoot, transcriptRef: input.transcriptRef,
     }, assertReadOnlyWrapperAvailable: assertReadOnlyExecutionWrapperAvailable, ...(input.sessionStartReporterPath === undefined ? {} : { reporterPath: input.sessionStartReporterPath }) }),
+    readTranscriptIdentity: (input) => Promise.resolve(nativeTranscriptIdentity(id, input)),
+    recoveryInstructions: () => nativeRecoveryInstructions(id),
     sessionPaths: (root, launchId) => {
       const stateRoot = join(root, id);
       const digest = createHash('sha256').update(launchId).digest('hex').slice(0, 20);
@@ -61,6 +64,8 @@ function nativeHarness(id: NativeHarness): WorkerHarness {
 export const workerHarnessRegistry: WorkerHarnessRegistry = new Map([
   ['codex', codexHarness],
   ['opencode', opencodeHarness],
+  ['command-code', commandCodeHarness],
+  ['qwen-code', qwenHarness],
   ...(['claude', 'pi', 'omp'] as const).map((id) => [id, nativeHarness(id)] as const),
 ]);
 
@@ -103,8 +108,6 @@ export async function bindHarnessSessionFromStartReport(input: Omit<ProveHarness
   return bindHarnessSession(input.facts.harness, { ...input.facts, ...result.proof }, input);
 }
 export function readHarnessTranscriptIdentity(input: { readonly harness: string; readonly transcriptRef: string; readonly workspace: string }) {
-  if (input.harness === 'codex') return Promise.resolve(readCodexTranscriptIdentity(input));
-  if (input.harness === 'claude' || input.harness === 'pi' || input.harness === 'omp') return Promise.resolve(nativeTranscriptIdentity(input.harness, input));
-  if (input.harness === 'opencode') return readOpencodeTranscriptIdentity(input);
-  return Promise.resolve({ kind: 'transcript_unavailable' as const, reason: 'Harness transcript 无法重新核验' });
+  return workerHarnessRegistry.get(input.harness)?.readTranscriptIdentity(input)
+    ?? Promise.resolve({ kind: 'transcript_unavailable' as const, reason: 'Harness transcript 无法重新核验' });
 }

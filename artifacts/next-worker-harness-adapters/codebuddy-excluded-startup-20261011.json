@@ -1,0 +1,104 @@
+{
+  "status": "not-qualified",
+  "reason": "No complete four-role, exact resume and Recovery production proof. Ordinary acceptEdits blocks common shell actions; the bypass diagnostic completed three roles but Finalizer attempted a denied write and left an unsettled ask. Relaxed native approvals are also used by Command Code/Qwen and are not a CodeBuddy-only exclusion rule.",
+  "retainedSessionReports": [
+    {
+      "fixtureRoot": "/var/tmp/orca-harness-acceptance-GSKMM6",
+      "reportPath": "/var/tmp/orca-harness-acceptance-GSKMM6/state/codebuddy/9b023df0de10139561dd/session-start.jsonl",
+      "harness": "codebuddy",
+      "sessionId": "01a1294d-945e-71a6-befc-165cfc3ef895",
+      "transcriptPath": "/home/joshua/.codebuddy/projects/var-tmp-orca-harness-acceptance-GSKMM6-project-companion-harness-matrix-f0d28cda-99e1-4125-a0ad-df768526456c/01a1294d-945e-71a6-befc-165cfc3ef895.jsonl",
+      "stateRoot": "/home/joshua/.codebuddy",
+      "runtimeRoots": [
+        "/home/joshua/.codebuddy",
+        "/home/joshua/.codebuddy/projects"
+      ],
+      "cwd": "/var/tmp/orca-harness-acceptance-GSKMM6/project-companion-harness-matrix-f0d28cda-99e1-4125-a0ad-df768526456c",
+      "observedAt": "2026-10-11T04:51:54.445Z"
+    },
+    {
+      "fixtureRoot": "/var/tmp/orca-harness-acceptance-vHXxxQ",
+      "reportPath": "/var/tmp/orca-harness-acceptance-vHXxxQ/state/codebuddy/9b023df0de10139561dd/session-start.jsonl",
+      "harness": "codebuddy",
+      "sessionId": "01a12952-0d60-79ac-aa96-7520fa5a1b54",
+      "transcriptPath": "/home/joshua/.codebuddy/projects/var-tmp-orca-harness-acceptance-vHXxxQ-project-companion-harness-matrix-d990185d-fe0d-43a2-b568-43c001feaec6/01a12952-0d60-79ac-aa96-7520fa5a1b54.jsonl",
+      "stateRoot": "/home/joshua/.codebuddy",
+      "runtimeRoots": [
+        "/home/joshua/.codebuddy",
+        "/home/joshua/.codebuddy/projects"
+      ],
+      "cwd": "/var/tmp/orca-harness-acceptance-vHXxxQ/project-companion-harness-matrix-d990185d-fe0d-43a2-b568-43c001feaec6",
+      "observedAt": "2026-10-11T04:56:47.609Z"
+    },
+    {
+      "fixtureRoot": "/var/tmp/orca-harness-acceptance-c9YsQ6",
+      "reportPath": "/var/tmp/orca-harness-acceptance-c9YsQ6/state/codebuddy/9b023df0de10139561dd/session-start.jsonl",
+      "harness": "codebuddy",
+      "sessionId": "01a12953-864e-7f5d-807a-177044f19fc1",
+      "transcriptPath": "/home/joshua/.codebuddy/projects/var-tmp-orca-harness-acceptance-c9YsQ6-project-companion-harness-matrix-0eaa1a20-59c9-4094-839b-9475d6d2f8d3/01a12953-864e-7f5d-807a-177044f19fc1.jsonl",
+      "stateRoot": "/home/joshua/.codebuddy",
+      "runtimeRoots": [
+        "/home/joshua/.codebuddy",
+        "/home/joshua/.codebuddy/projects"
+      ],
+      "cwd": "/var/tmp/orca-harness-acceptance-c9YsQ6/project-companion-harness-matrix-0eaa1a20-59c9-4094-839b-9475d6d2f8d3",
+      "observedAt": "2026-10-11T04:58:23.993Z"
+    },
+    {
+      "fixtureRoot": "/var/tmp/orca-harness-acceptance-c9YsQ6",
+      "reportPath": "/var/tmp/orca-harness-acceptance-c9YsQ6/state/codebuddy/aef2ebbf9fd86045e1e5/session-start.jsonl",
+      "harness": "codebuddy",
+      "sessionId": "01a12953-f3fc-784e-8c8b-c120dd81cd2b",
+      "transcriptPath": "/home/joshua/.codebuddy/projects/var-tmp-orca-harness-acceptance-c9YsQ6-project-companion-harness-matrix-0eaa1a20-59c9-4094-839b-9475d6d2f8d3/01a12953-f3fc-784e-8c8b-c120dd81cd2b.jsonl",
+      "stateRoot": "/home/joshua/.codebuddy",
+      "runtimeRoots": [
+        "/home/joshua/.codebuddy",
+        "/home/joshua/.codebuddy/projects"
+      ],
+      "cwd": "/var/tmp/orca-harness-acceptance-c9YsQ6/project-companion-harness-matrix-0eaa1a20-59c9-4094-839b-9475d6d2f8d3",
+      "observedAt": "2026-10-11T04:58:53.283Z"
+    },
+    {
+      "fixtureRoot": "/var/tmp/orca-harness-acceptance-c9YsQ6",
+      "reportPath": "/var/tmp/orca-harness-acceptance-c9YsQ6/state/codebuddy/bb588bf654b4a3b6642e/session-start.jsonl",
+      "harness": "codebuddy",
+      "sessionId": "01a12954-5129-7419-b9f0-17898f28e767",
+      "transcriptPath": "/home/joshua/.codebuddy/projects/var-tmp-orca-harness-acceptance-c9YsQ6-project-companion-harness-matrix-0eaa1a20-59c9-4094-839b-9475d6d2f8d3/01a12954-5129-7419-b9f0-17898f28e767.jsonl",
+      "stateRoot": "/home/joshua/.codebuddy",
+      "runtimeRoots": [
+        "/home/joshua/.codebuddy",
+        "/home/joshua/.codebuddy/projects"
+      ],
+      "cwd": "/var/tmp/orca-harness-acceptance-c9YsQ6/project-companion-harness-matrix-0eaa1a20-59c9-4094-839b-9475d6d2f8d3",
+      "observedAt": "2026-10-11T04:59:16.187Z"
+    },
+    {
+      "fixtureRoot": "/var/tmp/orca-harness-acceptance-c9YsQ6",
+      "reportPath": "/var/tmp/orca-harness-acceptance-c9YsQ6/state/codebuddy/f48cfd24f49b857d0f71/session-start.jsonl",
+      "harness": "codebuddy",
+      "sessionId": "01a12954-cd31-7e4f-83e8-365927eae999",
+      "transcriptPath": "/home/joshua/.codebuddy/projects/var-tmp-orca-harness-acceptance-c9YsQ6-project-companion-harness-matrix-0eaa1a20-59c9-4094-839b-9475d6d2f8d3/01a12954-cd31-7e4f-83e8-365927eae999.jsonl",
+      "stateRoot": "/home/joshua/.codebuddy",
+      "runtimeRoots": [
+        "/home/joshua/.codebuddy",
+        "/home/joshua/.codebuddy/projects"
+      ],
+      "cwd": "/var/tmp/orca-harness-acceptance-c9YsQ6/project-companion-harness-matrix-0eaa1a20-59c9-4094-839b-9475d6d2f8d3",
+      "observedAt": "2026-10-11T04:59:49.733Z"
+    },
+    {
+      "fixtureRoot": "/var/tmp/orca-harness-acceptance-9juidq",
+      "reportPath": "/var/tmp/orca-harness-acceptance-9juidq/state/codebuddy/9b023df0de10139561dd/session-start.jsonl",
+      "harness": "codebuddy",
+      "sessionId": "01a12956-ce6a-733d-97c2-bf40e2bb7abb",
+      "transcriptPath": "/home/joshua/.codebuddy/projects/var-tmp-orca-harness-acceptance-9juidq-project-companion-harness-matrix-10d2bee7-b9c8-47ea-a0b8-601d9a61c92f/01a12956-ce6a-733d-97c2-bf40e2bb7abb.jsonl",
+      "stateRoot": "/home/joshua/.codebuddy",
+      "runtimeRoots": [
+        "/home/joshua/.codebuddy",
+        "/home/joshua/.codebuddy/projects"
+      ],
+      "cwd": "/var/tmp/orca-harness-acceptance-9juidq/project-companion-harness-matrix-10d2bee7-b9c8-47ea-a0b8-601d9a61c92f",
+      "observedAt": "2026-10-11T05:01:59.194Z"
+    }
+  ]
+}

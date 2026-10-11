@@ -284,9 +284,9 @@ export function nextAdvanceRoleOf(entry: {
   }
 }
 
-/** 没有可推进的候选时，把 Frontier 的现状作为 blocker 如实列出，而不是只说一句「没有候选」。 */
+/** 没有候选时列出尚未结束的 Frontier 等待原因。 */
 export function frontierBlockersOf(frontier: readonly WorkPackageExecutionEntry[]): readonly string[] {
-  return frontier.map(
+  return frontier.filter(entry => !['accepted', 'retired', 'cancelled'].includes(entry.state)).map(
     (entry) =>
       `frontier:${entry.workPackageId}:${entry.state}${entry.role === null ? '' : `:${entry.role}`}`,
   );

@@ -901,10 +901,21 @@ export async function dispatchCapsuleWorker(input: CapsuleDispatchInput): Promis
     if (batchRead.kind !== 'accepted') {
       return { kind: 'failed', reason: `Capsule 报告读取失败：${batchRead.message}` };
     }
-    const batch = batchRead.value;
-    const mine = batch.messages.filter((message) =>
-      messageFromDispatch(message, dispatched.orcaTaskId, dispatched.dispatchId),
-    );
+    let batch = batchRead.value;
+    const belongs = (message: DeliveryMessage) => message.runId === input.execution.runId &&
+      message.type === 'worker_done' && message.deliveryContract === 'current_delivery' &&
+      messageFromDispatch(message, dispatched.orcaTaskId, dispatched.dispatchId);
+    if (!batch.messages.some(belongs)) {
+      // Orca 的 Run history 查询最多返回 100 条；旧 FIFO 批次保持未确认。
+      const history = await readDeliveryBatch(input.backend, {
+        backendIdentityRef: input.execution.backendIdentityRef, runId: input.execution.runId,
+        types: ['worker_done'], readMode: 'all', timeoutMs: input.execution.timeoutMs,
+      });
+      if (history.kind !== 'accepted') return { kind: 'failed', reason: `Capsule 历史读取失败：${history.message}` };
+      if (history.value.messages.length > 100) return { kind: 'failed', reason: 'Capsule 历史查询超出有界页' };
+      batch = { ...history.value, delivery: null };
+    }
+    const mine = batch.messages.filter(belongs);
     if (mine.length > 0) {
       const parsed = parseCapsuleReport(mine, input.evidence);
       if (!parsed.ok) {
@@ -932,7 +943,7 @@ export async function dispatchCapsuleWorker(input: CapsuleDispatchInput): Promis
   }
 }
 
-function parseCapsuleReport(
+export function parseCapsuleReport(
   messages: readonly DeliveryMessage[],
   evidence: TranscriptCoverageEvidence,
 ): RecoveryCapsuleReportParse {

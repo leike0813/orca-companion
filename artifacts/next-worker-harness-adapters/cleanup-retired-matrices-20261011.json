@@ -1,0 +1,91 @@
+{
+  "createdAt": "2026-10-11",
+  "scope": "retired harness acceptance matrix checkouts only",
+  "excluded": [
+    "zX9uxn: already closed, setup deleted, archived, and removed by parent; not repeated",
+    "qLmDBK: active Controller fixture explicitly retained"
+  ],
+  "items": [
+    {
+      "fixture": "2ZDJdV",
+      "repoId": "b215a14e-cbc4-441d-b97b-b2e7f3fb29dd",
+      "path": "/var/tmp/orca-harness-acceptance-2ZDJdV/project-companion-harness-matrix-1b8b26a3-0760-4ce5-a026-e40ef16e1e1b",
+      "projectHostSetupId": "b215a14e-cbc4-441d-b97b-b2e7f3fb29dd",
+      "terminalClose": { "closed": 17, "stopped": 17, "retiredSurfaces": true, "receipt": "orca-ide terminal close --worktree path:<exact-path> --all --json; exec session 31021 completed successfully" },
+      "archive": { "path": "/var/tmp/orca-harness-evidence/2ZDJdV-checkout.tar.gz", "result": "created" },
+      "setupDelete": { "setup": "b215a14e-cbc4-441d-b97b-b2e7f3fb29dd", "result": "success" },
+      "checkoutRemoval": "success"
+    },
+    {
+      "fixture": "9juidq",
+      "repoId": "d3897b48-6ece-4c29-99d9-60da223a5dfd",
+      "path": "/var/tmp/orca-harness-acceptance-9juidq/project-companion-harness-matrix-10d2bee7-b9c8-47ea-a0b8-601d9a61c92f",
+      "projectHostSetupId": "d3897b48-6ece-4c29-99d9-60da223a5dfd",
+      "terminalClose": { "closed": 2, "stopped": 2, "retiredSurfaces": true, "receipt": "orca-ide terminal close --worktree path:<exact-path> --all --json" },
+      "archive": { "path": "/var/tmp/orca-harness-evidence/9juidq-checkout.tar.gz", "result": "created" },
+      "setupDelete": { "setup": "d3897b48-6ece-4c29-99d9-60da223a5dfd", "result": "success" },
+      "checkoutRemoval": "success"
+    },
+    {
+      "fixture": "GSKMM6",
+      "repoId": "581c60b1-902b-4272-a939-ecc813fd8f9e",
+      "path": "/var/tmp/orca-harness-acceptance-GSKMM6/project-companion-harness-matrix-f0d28cda-99e1-4125-a0ad-df768526456c",
+      "projectHostSetupId": "581c60b1-902b-4272-a939-ecc813fd8f9e",
+      "terminalClose": { "closed": 2, "stopped": 2, "retiredSurfaces": true, "receipt": "orca-ide terminal close --worktree path:<exact-path> --all --json" },
+      "archive": { "path": "/var/tmp/orca-harness-evidence/GSKMM6-checkout.tar.gz", "result": "created" },
+      "setupDelete": { "setup": "581c60b1-902b-4272-a939-ecc813fd8f9e", "result": "success" },
+      "checkoutRemoval": "success"
+    },
+    {
+      "fixture": "W0Hibl",
+      "repoId": "9ee60302-5309-440f-bfe4-bb827a8364d6",
+      "path": "/var/tmp/orca-harness-acceptance-W0Hibl/project-companion-harness-matrix-46c5b4ab-4f7c-4a46-9ef1-4f3a48e9cea3",
+      "projectHostSetupId": "9ee60302-5309-440f-bfe4-bb827a8364d6",
+      "terminalClose": { "closed": 5, "stopped": 5, "retiredSurfaces": true, "receipt": "orca-ide terminal close --worktree path:<exact-path> --all --json; initial mistyped selector was rejected without effect" },
+      "archive": { "path": "/var/tmp/orca-harness-evidence/W0Hibl-checkout.tar.gz", "result": "created" },
+      "setupDelete": { "setup": "9ee60302-5309-440f-bfe4-bb827a8364d6", "result": "success" },
+      "checkoutRemoval": "success"
+    },
+    {
+      "fixture": "Z5yb5Y",
+      "repoId": "48132e68-5c9f-4222-aaff-32cb65e15cf3",
+      "path": "/var/tmp/orca-harness-acceptance-Z5yb5Y/project-companion-harness-matrix-815b2167-9a10-4ede-9016-502f2785c15a",
+      "projectHostSetupId": "48132e68-5c9f-4222-aaff-32cb65e15cf3",
+      "terminalClose": { "closed": 23, "stopped": 23, "retiredSurfaces": true, "receipt": "orca-ide terminal close --worktree path:<exact-path> --all --json; exec session 94027 completed successfully" },
+      "archive": { "path": "/var/tmp/orca-harness-evidence/Z5yb5Y-checkout.tar.gz", "result": "created" },
+      "setupDelete": { "setup": "48132e68-5c9f-4222-aaff-32cb65e15cf3", "result": "success" },
+      "checkoutRemoval": "success"
+    },
+    {
+      "fixture": "c9YsQ6",
+      "repoId": "ce51130e-b54f-4496-912a-dc207dbb7e60",
+      "path": "/var/tmp/orca-harness-acceptance-c9YsQ6/project-companion-harness-matrix-0eaa1a20-59c9-4094-839b-9475d6d2f8d3",
+      "projectHostSetupId": "ce51130e-b54f-4496-912a-dc207dbb7e60",
+      "terminalClose": { "closed": 5, "stopped": 5, "retiredSurfaces": true, "receipt": "orca-ide terminal close --worktree path:<exact-path> --all --json" },
+      "archive": { "path": "/var/tmp/orca-harness-evidence/c9YsQ6-checkout.tar.gz", "result": "created" },
+      "setupDelete": { "setup": "ce51130e-b54f-4496-912a-dc207dbb7e60", "result": "success" },
+      "checkoutRemoval": "success"
+    },
+    {
+      "fixture": "s8dnYq",
+      "repoId": "bbbb8637-eb03-43e3-a972-548555be4239",
+      "path": "/var/tmp/orca-harness-acceptance-s8dnYq/project-companion-harness-matrix-6ffaaf17-980e-4d8f-b1e5-3db5dc6a45d0",
+      "projectHostSetupId": "bbbb8637-eb03-43e3-a972-548555be4239",
+      "terminalClose": { "closed": 5, "stopped": 5, "retiredSurfaces": true, "receipt": "orca-ide terminal close --worktree path:<exact-path> --all --json; exact worktree show confirmed the setup id" },
+      "archive": { "path": "/var/tmp/orca-harness-evidence/s8dnYq-checkout.tar.gz", "result": "created" },
+      "setupDelete": { "setup": "bbbb8637-eb03-43e3-a972-548555be4239", "result": "success" },
+      "checkoutRemoval": "success"
+    },
+    {
+      "fixture": "vHXxxQ",
+      "repoId": "214071a3-6bd3-444f-ac73-443da28e9df7",
+      "path": "/var/tmp/orca-harness-acceptance-vHXxxQ/project-companion-harness-matrix-d990185d-fe0d-43a2-b568-43c001feaec6",
+      "projectHostSetupId": "214071a3-6bd3-444f-ac73-443da28e9df7",
+      "terminalClose": { "closed": 2, "stopped": 2, "retiredSurfaces": true, "receipt": "orca-ide terminal close --worktree path:<exact-path> --all --json" },
+      "archive": { "path": "/var/tmp/orca-harness-evidence/vHXxxQ-checkout.tar.gz", "result": "created" },
+      "setupDelete": { "setup": "214071a3-6bd3-444f-ac73-443da28e9df7", "result": "success" },
+      "checkoutRemoval": "success"
+    }
+  ],
+  "retention": "Fixture root/state/report/native global directories were retained; only the exact project checkout directories listed above were removed."
+}

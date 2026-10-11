@@ -46,7 +46,7 @@ import type {
   SessionSegmentRecord,
 } from '../ports/branch-coordination-store.js';
 import type { ExecutionBackend, ExecutionMutation, ExecutionScope } from '../ports/execution-backend.js';
-import { buildExecutionScope, orcaTerminalHandleFromReceipt, reconcileOperation } from '../ports/execution-backend.js';
+import { buildExecutionScope, orcaDispatchIdFromReceipt, orcaTerminalHandleFromReceipt, reconcileOperation } from '../ports/execution-backend.js';
 import { beginIntent, blockLane, settleIntent } from '../coordination/intent-service.js';
 import { activeAuthorization, recoveryAllowance } from '../planning/authorization-service.js';
 import { readScope } from '../planning/scope-read.js';
@@ -1083,6 +1083,7 @@ async function attemptAlternateSession(
     {
       operation: 'worker-start',
       taskId: orcaTaskId,
+      retryOfDispatchId: input.sourceDispatchId,
       worktree: input.workspace.worktreeId,
       ...launch.worker,
     },
@@ -1107,10 +1108,10 @@ async function attemptAlternateSession(
     return blockRecovery(input, recovery, 'dispatch_unconfirmed', `替代派发被拒绝：${outcome.message}`);
   }
 
-  const receipt = await input.replacement.interpretReceipt(outcome);
-  if ('failure' in receipt) {
+  const dispatchId = orcaDispatchIdFromReceipt(outcome.value);
+  if (dispatchId === null) {
     settleAccepted(input, prewrite.operationId, outcome);
-    return blockRecovery(input, recovery, 'dispatch_unconfirmed', receipt.failure);
+    return blockRecovery(input, recovery, 'dispatch_unconfirmed', '替代派发回执缺少可核验的 Dispatch 身份');
   }
   const activated = await activatePreparedWorker({
     backend: input.backend,
@@ -1135,7 +1136,7 @@ async function attemptAlternateSession(
     }
     return blockRecovery(input, recovery, 'dispatch_unconfirmed', launchFailureReason(activated));
   }
-  const adoption = await verifyPreparedWorker(input.backend, receipt.dispatchId, launch.preparedTerminal);
+  const adoption = await verifyPreparedWorker(input.backend, dispatchId, launch.preparedTerminal);
   if (adoption !== null) {
     const revisionToBlock = freshRevision(input.store, input.coordinationScopeId);
     if (revisionToBlock !== null) {
@@ -1148,6 +1149,12 @@ async function attemptAlternateSession(
       });
     }
     return blockRecovery(input, recovery, 'dispatch_identity_unknown', launchFailureReason(adoption));
+  }
+  const receipt = await input.replacement.interpretReceipt(outcome);
+  if ('failure' in receipt || receipt.dispatchId !== dispatchId) {
+    settleAccepted(input, prewrite.operationId, outcome);
+    return blockRecovery(input, recovery, 'dispatch_unconfirmed',
+      'failure' in receipt ? receipt.failure : '替代 Session 与已接管的 Dispatch 不匹配');
   }
   const settled = settleAccepted(input, prewrite.operationId, outcome);
   if (settled.kind === 'failed') {

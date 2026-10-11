@@ -1,0 +1,15 @@
+{
+  "createdAt": "2026-10-11T09:09:17.767Z",
+  "totals": {
+    "terminals": 135,
+    "checkouts": 21
+  },
+  "basis": {
+    "baseline": "cleanup-8zuGqr-controller-20261011.json",
+    "early": "cleanup-early-candidates-completed-20261011.json",
+    "current": "cleanup-p0vZXM-controller-completed-20261011.json"
+  },
+  "countsAreDistinctResources": true,
+  "nativeConfigAndTranscriptsPreserved": true,
+  "otherProjectsUntouched": true
+}

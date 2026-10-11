@@ -1,0 +1,17 @@
+{
+  "archive": "/var/tmp/orca-harness-evidence/8zuGqr-controller-blocked-checkouts.tar.gz",
+  "closedTerminals": [
+    "term_5a0eb833-45bf-4050-8c7c-6ee3e71a31f7",
+    "term_b18ddb1f-15d6-4675-87f0-4a351efb6df4",
+    "term_d28aa828-3d94-4d9e-a08c-e08229e538a8"
+  ],
+  "child": "/home/joshua/orca/workspaces/repo/wp-d6a34c6d7a5ca8346d6039ba8b7842856b2174c76f12148b9852b682f11d3ff6",
+  "removedCanonical": "/var/tmp/orca-ip04-controller-final-8zuGqr/repo",
+  "removalReceiptId": "28704d76-6717-4120-9d62-2691e1413f96",
+  "cleanupNote": "Dirty child was archived before public force removal. Re-registered exact repository after premature setup deletion so public child removal could complete.",
+  "cumulative": {
+    "terminals": 95,
+    "checkouts": 18
+  },
+  "nativeStateAndCredentials": "retained"
+}

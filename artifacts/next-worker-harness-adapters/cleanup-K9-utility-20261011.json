@@ -1,0 +1,22 @@
+{
+  "observedAt": "2026-10-11T07:11:58.664Z",
+  "handle": "term_452b3132-86e2-4b6a-9c48-1d89cf7403db",
+  "receipt": {
+    "id": "0f080d17-4a9d-48dc-816a-122d3c179609",
+    "ok": true,
+    "result": {
+      "close": {
+        "handle": "term_452b3132-86e2-4b6a-9c48-1d89cf7403db",
+        "tabId": "ab8da70a-2cc5-4fd8-8690-7ce0e3adf901",
+        "ptyKilled": true
+      }
+    },
+    "_meta": {
+      "runtimeId": "75bb80f2-e969-44b6-83e9-2d3a76586c9d"
+    }
+  },
+  "priorReclaimed": {
+    "terminals": 84,
+    "checkouts": 12
+  }
+}

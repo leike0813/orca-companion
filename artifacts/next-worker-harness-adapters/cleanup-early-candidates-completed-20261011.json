@@ -1,0 +1,17 @@
+{
+  "phase": "completed",
+  "repoId": "cc671869-17c1-41d4-aed6-1877f1001fa1",
+  "project": "/var/tmp/ocp-next-harness-h4PUrG/project",
+  "archive": "/var/tmp/orca-harness-evidence/h4PUrG-candidate-project.tar.gz",
+  "closeResponse": "runtime_unavailable",
+  "closeReadback": {
+    "runtimeReady": true,
+    "totalCount": 0,
+    "truncated": false
+  },
+  "closeNotRetried": true,
+  "closedTerminals": 32,
+  "setupDeletionConfirmed": true,
+  "projectRemoved": true,
+  "nativeConfigAndTranscriptsPreserved": true
+}

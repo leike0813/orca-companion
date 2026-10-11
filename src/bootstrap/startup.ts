@@ -44,7 +44,7 @@ import type { TerminalLivenessFacts } from '../domain/worker-liveness.js';
 import { writerFor } from '../application/coordinator/runtime-guard.js';
 import type { CoordinationScopeId, RecoveryId } from '../application/dto/identity.js';
 import { laneKeyOf } from '../application/dto/operation-intent.js';
-import { ackConsumedDelivery } from '../application/delivery/process-delivery.js';
+import { ackConsumedDelivery, ackLaneKey } from '../application/delivery/process-delivery.js';
 import type { SettleDeliveryInput, SettleDeliveryResult } from '../application/delivery/process-delivery.js';
 import {
   createScopeControlService,
@@ -144,6 +144,8 @@ export type StartupPendingDeliveryBlock = {
 export type ProgressOnlyDelivery = {
   readonly deliveryId: string;
   readonly runId: string | null;
+  readonly consumedMessageIds?: readonly string[];
+  readonly consumed?: readonly import('../application/delivery/process-delivery.js').ConsumedDeliveryResult[];
 };
 
 export type PendingDeliveryRead =
@@ -738,6 +740,7 @@ export async function replayPendingDeliveries(input: {
       readonly kind: 'replayed';
       readonly replayed: Extract<ReplayDeliveriesResult, { readonly kind: 'replayed' }>;
       readonly unreadable: readonly StartupPendingDeliveryBlock[];
+      readonly confirmedDeliveryLaneKeys: readonly string[];
     }
   | { readonly kind: 'rejected'; readonly code: string; readonly message: string }
 > {
@@ -749,6 +752,7 @@ export async function replayPendingDeliveries(input: {
   // 只带进度消息的批次必须确认，否则真实结果消息不会被 Orca 推进为当前批次（进度消息不承载结果，
   // 也没有要落盘的权威事实）。确认失败按可读性阻塞上报，绝不推断「没有新工作」。
   const progressFailures: StartupPendingDeliveryBlock[] = [];
+  const confirmedDeliveryLaneKeys: string[] = [];
   for (const progress of read.progressAcks ?? []) {
     const acked = await ackConsumedDelivery({
       store: input.store,
@@ -763,6 +767,8 @@ export async function replayPendingDeliveries(input: {
       timeoutMs: facts.timeoutMs,
       deliveryId: progress.deliveryId,
       deliveryRunId: progress.runId,
+      ...(progress.consumedMessageIds === undefined ? {} : { consumedMessageIds: progress.consumedMessageIds }),
+      ...(progress.consumed === undefined ? {} : { consumed: progress.consumed }),
     });
     if (acked.kind === 'blocked') {
       progressFailures.push({
@@ -770,6 +776,8 @@ export async function replayPendingDeliveries(input: {
         message: `只含进度消息的 Delivery ${progress.deliveryId} 无法确认：${acked.message}`,
         laneKey: acked.laneKey,
       });
+    } else {
+      confirmedDeliveryLaneKeys.push(ackLaneKey(progress.deliveryId));
     }
   }
   const replayed = await replayDeliveries({
@@ -789,7 +797,8 @@ export async function replayPendingDeliveries(input: {
   if (replayed.kind !== 'replayed') {
     return { kind: 'rejected', code: replayed.code, message: replayed.message };
   }
-  return { kind: 'replayed', replayed, unreadable: [...(read.blocked ?? []), ...progressFailures] };
+  return { kind: 'replayed', replayed, unreadable: [...(read.blocked ?? []), ...progressFailures],
+    confirmedDeliveryLaneKeys: [...confirmedDeliveryLaneKeys, ...replayed.outcomes.filter(entry => entry.confirmed).map(entry => ackLaneKey(entry.deliveryId))] };
 }
 
 /** 读到了消息、但事实证明不了的 Delivery：不作 blocker 记录，只把 lane 报给调用方。 */

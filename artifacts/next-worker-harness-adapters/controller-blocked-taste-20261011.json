@@ -1,0 +1,65 @@
+{
+  "result": "blocked; no PASS",
+  "scope": {
+    "coordinationScopeId": "ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f",
+    "fullBranchRef": "refs/heads/main",
+    "canonicalWorktreePath": "/var/tmp/orca-ip04-mixed-controller-WLT15T/repo",
+    "mode": "execution_coordination",
+    "controlState": "active",
+    "planningCycleId": "ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f-cycle",
+    "mapRevision": 0,
+    "graphId": "ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f#g1",
+    "graphVersion": 1,
+    "authorizationId": "auth:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f#g1:306fcd10c692054acaca9a2d72ff65a647127935da110f69f76822afed0b308a",
+    "authorizationVersion": 1,
+    "revision": 32
+  },
+  "bindings": [
+    {
+      "coordinationScopeId": "ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f",
+      "workPackageId": "ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f#g1:readme-banner",
+      "orcaTaskId": "task_21647f5267bb",
+      "creationOperationId": "ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%23g1:1:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%23g1%3Areadme-banner:planner:0:worker-task%3Aip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%3Aip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%2523g1%3A1%3Aip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%2523g1%253Areadme-banner%3Aplanner%3Ainitial:task",
+      "createdAt": 1791697851205,
+      "authorizationId": "auth:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f#g1:306fcd10c692054acaca9a2d72ff65a647127935da110f69f76822afed0b308a",
+      "authorizationVersion": 1,
+      "workerProfileRef": {
+        "kind": "worker-profile",
+        "id": "ip04-planner"
+      },
+      "identity": "issued",
+      "role": "planner",
+      "recoveryUtilityRole": null,
+      "workerTaskId": "worker-task:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%23g1:1:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%23g1%3Areadme-banner:planner:initial",
+      "dispatchId": "dispatch:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%23g1:1:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%23g1%3Areadme-banner:planner:initial:1",
+      "attemptId": "attempt:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%23g1:1:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%23g1%3Areadme-banner:planner:initial:1",
+      "worktreeId": "99666bbb-158a-4f0f-87cd-21de89c38029::/home/joshua/orca/workspaces/repo/wp-57a9325a233ab99ce29a0fd2b82f35181b92963f15108b27d9e100c25cf379ee",
+      "specBinding": null,
+      "specificationUnitPath": "openspec/changes/ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f-g1-readme-banner-57a9325a",
+      "launchId": "worker-launch:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%23g1:1:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%23g1%3Areadme-banner:planner:initial:1"
+    }
+  ],
+  "segments": [
+    {
+      "coordinationScopeId": "ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f",
+      "segmentId": "segment:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f:ctx_b6dbe481c2e2:attempt%3Aip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%3Aip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%2523g1%3A1%3Aip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%2523g1%253Areadme-banner%3Aplanner%3Ainitial%3A1",
+      "workPackageId": "ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f#g1:readme-banner",
+      "role": "planner",
+      "workerTaskId": "worker-task:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%23g1:1:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%23g1%3Areadme-banner:planner:initial",
+      "dispatchId": "ctx_b6dbe481c2e2",
+      "attemptId": "attempt:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%23g1:1:ip04-mixed-controller-4a98d39a-a7f4-484c-9a03-ecb6af4e333f%23g1%3Areadme-banner:planner:initial:1",
+      "sessionBindingId": "session-binding:ctx_b6dbe481c2e2:73d88df8-1f61-44a3-8a33-300bb9719fa6",
+      "lastTranscriptRef": "/home/joshua/.commandcode/projects/home-joshua-orca-workspaces-repo-wp-57a9325a233ab99ce29a0fd2b82f35181b92963f15108b27d9e100c25cf379ee/73d88df8-1f61-44a3-8a33-300bb9719fa6.jsonl",
+      "terminalReceiptRef": null,
+      "transcriptReferenceable": true,
+      "verifiable": true,
+      "recordedAt": 1791697885657
+    }
+  ],
+  "settlements": [],
+  "blocker": "scope_envelope_exceeded: native .commandcode/taste/taste.md",
+  "nativeFileBytes": 0,
+  "archive": "/var/tmp/orca-harness-evidence/WLT15T-controller-checkouts.tar.gz",
+  "coordinatorStoppedByInterrupt": true,
+  "disposition": "replacement fixture baseline disables native project taste; no global/native default changed"
+}

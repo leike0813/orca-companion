@@ -106,6 +106,10 @@ export interface WorkerHarness {
     readonly originalStateRoot: string;
     readonly transcriptRef: string;
   }): PreparedTerminalStrategy<PreparedHarnessTerminal>;
+  readTranscriptIdentity(input: { readonly transcriptRef: string; readonly workspace: string }): Promise<
+    { readonly providerSessionId: string } | { readonly kind: 'transcript_unavailable'; readonly reason: string }
+  >;
+  recoveryInstructions(): readonly string[];
   sessionPaths(companionStateRoot: string, launchId: string): {
     readonly stateRoot: string;
     readonly reporterPath: string;

@@ -605,7 +605,7 @@ test('Worker 提问经 callback 证明已耐久消费后才确认批次', async 
   expect(read.kind).toBe('read');
   if (read.kind === 'read') {
     expect(read.blocked ?? []).toEqual([]);
-    expect(read.progressAcks).toEqual([{ deliveryId: 'delivery-question', runId: RUN }]);
+    expect(read.progressAcks).toEqual([{ deliveryId: 'delivery-question', runId: RUN, consumedMessageIds: ['message-1'] }]);
   }
 });
 
@@ -687,6 +687,20 @@ test('未确认 Delivery 由载荷声称归属 + store/Git 事实装配成可重
   expect(pending.trusted.scopeEnvelope).toEqual(SCOPE_ENVELOPE);
   expect(pending.trusted.authority.validator).toBe(true);
   expect(pending.trusted.dispatchId).toBe(DISPATCH);
+});
+
+test('普通结果与已消费 Capsule 同批：消费证明随重放输入传递', async () => {
+  const fixture = createDeliveryFixture();
+  const capsule = deliveryMessage({ taskId: 'capsule-task', dispatchId: 'capsule-dispatch', outcome: 'succeeded' });
+  const orca = fakeDeliveryBackend({ messages: [deliveryMessage(workerResultPayload()), capsule] });
+  const read = await readPendingDeliveries({ ...fixture.readInput, store: fixture.store, backend: orca.backend,
+    consumeProjectResult: (message) => Promise.resolve(message === capsule ? 'consumed' : 'ignored') });
+  expect(read.kind).toBe('read');
+  if (read.kind !== 'read') return;
+  expect(read.blocked ?? []).toEqual([]);
+  expect(read.pending).toHaveLength(1);
+  expect(read.pending[0]?.consumed).toEqual([{ orcaTaskId: 'capsule-task', dispatchId: 'capsule-dispatch',
+    workerTaskId: null, attemptId: null }]);
 });
 
 test('装配出的 Delivery 走完唯一 pipeline：先记录结果与去重键，最后才确认', async () => {

@@ -1,0 +1,29 @@
+{
+  "phase": "completed",
+  "repoId": "ec6d9cba-571a-4a22-b33b-5316e44160b2",
+  "root": "/var/tmp/orca-ip04-controller-proof-p0vZXM",
+  "child": "/home/joshua/orca/workspaces/repo/wp-8e58ee2efd6360bf78c1f82578a1789fd9833d5e9c338c52b5254b148ab8a0ff",
+  "archives": [
+    "/var/tmp/orca-harness-evidence/p0vZXM-controller-passed-checkouts.tar.gz",
+    "/var/tmp/orca-harness-evidence/p0vZXM-controller-private-origin.tar.gz"
+  ],
+  "closedAfterArchive": 6,
+  "previouslyClosed": {
+    "initialValidator": 1,
+    "unusedFallback": 1
+  },
+  "publicClose": {
+    "child": {
+      "closed": 4,
+      "stopped": 4
+    },
+    "canonical": {
+      "closed": 2,
+      "stopped": 2
+    }
+  },
+  "childRemovalConfirmed": true,
+  "setupDeletionConfirmed": true,
+  "rootRemoved": true,
+  "nativeConfigAndTranscriptsPreserved": true
+}
