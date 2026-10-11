@@ -61,7 +61,7 @@ import { answerPendingInteraction, createUserQuestion } from '../application/coo
 import { recordAcceptedTaskResult } from '../application/delivery/process-delivery.js';
 import { userQuestionTool } from '../workflow/coordinator/interaction-tools.js';
 import { AgentTurnDriver } from '../workflow/coordinator/turn-driver.js';
-import type { AgentTurnResult } from '../application/ports/agent-turn.js';
+import type { AgentTurnResult, AgentTurnState } from '../application/ports/agent-turn.js';
 import { asRecord, toolInputSchema } from '../workflow/coordinator/tool-definition.js';
 import { querySubmission, type SubmissionQuery, type SubmissionStatus } from '../application/coordinator/submission-status.js';
 import type { UiInputStore, UiInputRecord } from '../application/ports/ui-input-store.js';
@@ -131,13 +131,14 @@ import {
 import { readProjectDetailPage, type ProjectDetailField } from '../application/tui/project-details.js';
 import {
   contextObservationSchema,
-  projectContextObservation,
+  projectContextStatus,
   projectDetailQuerySchema,
   unavailableBudget,
   type ProjectDetailQuery,
   type ProjectPresentation,
   type ProjectDetailsPort,
 } from '../application/tui/project-presentation.js';
+import { configurationContextWindow } from '../application/coordinator/model-config-switch.js';
 import { toBindableTools } from '../workflow/coordinator/planning-tools.js';
 import { consumedRecoveryBudget } from '../domain/recovery/recovery-budget.js';
 import {
@@ -1814,6 +1815,18 @@ export async function createForegroundPlanningHost(
   // 模型输入与压缩
   // ---------------------------------------------------------------------
 
+  /**
+   * 有效输入预算：项目预算与该模型声明窗口的较小值。
+   *
+   * 窗口是模型元数据里用户或目录的声明，不是 backend 能力核验；未声明时按项目预算走，不发明一个
+   * 默认上限。项目配置里的原预算不改写，压缩与请求只用这个更小的有效值。
+   */
+  const inputBudgetFor = (session: LiveSession): number =>
+    Math.min(
+      config?.context.maxInputTokens ?? 100_000,
+      configurationContextWindow(session.configuration) ?? Number.MAX_SAFE_INTEGER,
+    );
+
   const contextRequestFor = (
     session: LiveSession,
     tools: readonly PlanningToolDefinition[],
@@ -1821,7 +1834,7 @@ export async function createForegroundPlanningHost(
   ) => ({
     configurationRef: session.configuration.configurationRef,
     fixedOverhead: toolSchemaTokens(tools),
-    budgetTokens: config?.context.maxInputTokens ?? 100_000,
+    budgetTokens: inputBudgetFor(session),
     nativeCompaction: session.nativeCompaction,
     instructions: FOREGROUND_COORDINATOR_INSTRUCTIONS,
     toolSchema: toolSchemaOf(tools),
@@ -1946,12 +1959,15 @@ export async function createForegroundPlanningHost(
       }).catch(() => null);
       const latestState = liveStateOf(session, 'metadata');
       if (latestState !== null) refreshEffectiveInputRevision(session, latestState, toolSchemaOf(session.boundTools));
+      // 项目输入预算限制准入；模型容量只来自精确能力及声明的模型窗口。
+      const capacity = measured === null ? null : Math.min(measured.capacity,
+        configurationContextWindow(session.configuration) ?? Number.MAX_SAFE_INTEGER);
       if (measured !== null && Number.isSafeInteger(measured.used) && measured.used >= 0 &&
-        Number.isSafeInteger(measured.capacity) && measured.capacity > 0 && measured.used <= measured.capacity &&
+        capacity !== null && Number.isSafeInteger(capacity) && capacity > 0 && measured.used <= capacity &&
         revision === session.effectiveInputRevision && configurationRef === session.configuration.configurationRef &&
         !session.fencingLost && !session.modelAbort?.signal.aborted) {
         session.contextObservation = contextObservationSchema.parse({
-          status: 'available', used: measured.used, capacity: measured.capacity,
+          status: 'available', used: measured.used, capacity,
           observationId: newId(), coordinatorSessionId: session.coordinatorSessionId,
           modelConfigurationRef: configurationRef, effectiveInputRevision: revision,
         });
@@ -2020,6 +2036,7 @@ export async function createForegroundPlanningHost(
     return buildCoordinatorGraph({
       model: session.model,
       configurationRef: session.configuration.configurationRef,
+      providerIntegration: session.configuration.providerIntegration,
       checkpointer: session.checkpoints.checkpointer,
       sessionRecords: session.checkpoints,
       assertFencing: () => closed || session.fencingLost ? { kind: 'fenced', code: 'released_lease' }
@@ -2031,6 +2048,8 @@ export async function createForegroundPlanningHost(
         const observed = previews.observe(event, sequence);
         if (observed.kind === 'not_saved' && observed.reason === 'items_capacity') previewCapacityUnavailable = true;
         if (event.kind === 'committed' || event.kind === 'started' && observed.kind === 'accepted') previewCapacityUnavailable = false;
+        // 提交会留下派生索引的待办（工具配对、显示投影）：交回后台有界补齐，读取方随后才看到就绪。
+        if (event.kind === 'committed') prepareInspection();
       },
       buildMessages: buildMessagesFor(session),
       newStepId: () => `${session.coordinatorSessionId}:step:${newId()}`,
@@ -2394,6 +2413,10 @@ export async function createForegroundPlanningHost(
     session.turn = new AgentTurnDriver({
       coordinatorSessionId, turns: session.checkpoints.turns, isClosing: () => closed,
       execute: signal => executeModelTurn(session, signal),
+      // 轮次进入与结束都来自驱动自己的持久写入；Scope active 或本进程持有租约都不是「在途」。
+      onStateChange: (turn) => publish(coordinatorSessionId, {
+        kind: 'turn-changed', coordinationScopeId: session.incarnation.coordinationScopeId, turn,
+      }),
     });
     session.graph = graphForSession(session);
     const withGraph = session;
@@ -2476,6 +2499,7 @@ export async function createForegroundPlanningHost(
         role: 'system', content: `Pending Interaction ${answer.interactionId} 的回答引用`,
       });
       if (written.kind === 'failed') throw new Error(`无法保存回答引用：${written.message}`);
+      prepareInspection();
     }
   };
 
@@ -2706,6 +2730,7 @@ export async function createForegroundPlanningHost(
         session.contextObservation = null;
         session.effectiveInputBinding = null;
         session.effectiveInputRevision++;
+        prepareInspection();
         publish(session.coordinatorSessionId, {
           kind: 'state-changed',
           coordinationScopeId: session.incarnation.coordinationScopeId,
@@ -2765,7 +2790,7 @@ export async function createForegroundPlanningHost(
           segments: resolution.segments,
           estimate: estimatorInput,
           fixedOverhead: toolSchemaTokens(tools),
-          budgetTokens: config?.context.maxInputTokens ?? 100_000,
+          budgetTokens: inputBudgetFor(session),
           native: nativeForManualCompaction,
           shaken: resolution.kind === 'reapplied',
           instructions: FOREGROUND_COORDINATOR_INSTRUCTIONS,
@@ -2989,6 +3014,27 @@ export async function createForegroundPlanningHost(
     return result.kind === 'graph-version-membership' ? new Set(result.members.map(entry => entry.version)) : new Set();
   };
 
+  /**
+   * 各注册 Session 的真实轮次状态。
+   *
+   * 在途 Session 直接取驱动自己的状态；只有已注册但本进程未打开的 Session 才读持久行——没有
+   * 轮次行的既有会话按首次 idle 读出，而损坏的轮次行让读取抛错，整次快照因此不会把不可证明的
+   * 状态显示成「空闲」。租约和 Scope 控制状态都不是轮次在途的替代事实。
+   */
+  const sessionTurnsFor = (sessionIds: readonly string[]): ReadonlyMap<string, AgentTurnState> => {
+    const turns = new Map<string, AgentTurnState>();
+    const checkpoints = checkpointStoreForScope();
+    for (const sessionId of sessionIds) {
+      const live = liveSessions.get(sessionId);
+      if (live?.turn !== undefined && live.turn !== null) {
+        turns.set(sessionId, live.turn.state);
+        continue;
+      }
+      if (checkpoints !== null) turns.set(sessionId, checkpoints.turns.readTurnState(sessionId as CoordinatorSessionId));
+    }
+    return turns;
+  };
+
   const readSnapshot = async (selectedSessionId: string | null): Promise<SnapshotLoad> => {
     if (blocker !== null) {
       return { kind: 'failed', code: blocker.code, message: blocker.message };
@@ -3098,11 +3144,16 @@ export async function createForegroundPlanningHost(
         const entry = currentVersion?.graph.workPackages.find(node => node.workPackageId === id);
         return entry === undefined ? [] : [{ id, title: entry.title }];
       }),
-      context: projectContextObservation(selectedLive?.contextObservation, {
-        coordinatorSessionId: selectedRegistration?.coordinatorSessionId ?? null,
-        modelConfigurationRef: selectedRegistration?.coordinatorModelConfigurationRef ?? null,
-        effectiveInputRevision: selectedLive?.effectiveInputRevision ?? null,
-      }),
+      context: projectContextStatus(selectedLive?.contextObservation ?? null,
+        selectedRegistration === undefined ? null
+          : checkpointStoreForScope()?.readLatestModelUsage(selectedRegistration.coordinatorSessionId) ?? null,
+        {
+          coordinatorSessionId: selectedRegistration?.coordinatorSessionId ?? null,
+          modelConfigurationRef: selectedRegistration?.coordinatorModelConfigurationRef ?? null,
+          effectiveInputRevision: selectedLive?.effectiveInputRevision ?? null,
+          contextWindow: selectedRegistration === undefined || configuration === null
+            ? null : configurationContextWindow(configuration),
+        }),
       acceptance: validatorAcceptanceSummary({ snapshot: snapshot.snapshot, graphVersion: currentVersion,
         graphVersions, authorizations: acceptanceAuthorizations,
         approvedGraphVersions: graphMembership(current, scope, acceptanceAuthorizations.map(entry => entry.manifest.graph.version)) }),
@@ -3148,6 +3199,7 @@ export async function createForegroundPlanningHost(
       maintenance:
         selectedSessionId === null ? null : (liveSessions.get(selectedSessionId)?.maintenance ?? null),
       selectedSessionId: selectedSessionId as CoordinatorSessionId | null,
+      sessionTurns: sessionTurnsFor(snapshot.snapshot.sessions.map(entry => entry.coordinatorSessionId)),
       graphVersions,
       authorizedGraphVersions: graphMembership(current, scope, authorization === undefined ? [] : [authorization.manifest.graph.version]),
       authorizationGraphRef:
@@ -3327,6 +3379,14 @@ export async function createForegroundPlanningHost(
       if (query.source.kind === 'arguments') return checkpoints.readHistoryArguments({ coordinatorSessionId: query.coordinatorSessionId,
         entryId: query.source.entryId, stepId: query.source.stepId, callId: query.source.callId, contentRevision: 1,
         offset: query.offset, maxBytes: query.maxBytes });
+      // 派生显示来源与权威正文是两份坐标：读不到投影就返回空，而不是拿原文冒充显示文本。
+      if (query.source.kind === 'display') {
+        const display = checkpoints.readHistoryDisplay({ coordinatorSessionId: query.coordinatorSessionId,
+          entryId: query.source.entryId, contentRevision: query.source.contentRevision, offset: query.offset,
+          maxBytes: query.maxBytes });
+        return display === null ? null : { source: query.source, offset: display.offset, end: display.end,
+          byteLength: display.byteLength, text: display.text };
+      }
       const range = checkpoints.readHistoryBody({ coordinatorSessionId: query.coordinatorSessionId,
         entryId: query.source.entryId, contentRevision: query.source.contentRevision, offset: query.offset, maxBytes: query.maxBytes });
       if (range === null) return null;

@@ -24,6 +24,7 @@ export type AgentTurnDriverOptions = {
   readonly bridgeSignal?: AbortSignal;
   /** 进程正在退出时为 true：不再写可能已关闭的存储，也不再发起请求。 */
   readonly isClosing?: () => boolean;
+  readonly onStateChange?: (state: AgentTurnState) => void;
   /**
    * 把抛出的异常转成可持久化的诊断。默认只保留错误类型名：provider 原始消息可能带响应体、
    * 请求头或凭据片段；宿主需要更细的诊断时在这里显式脱敏后返回。
@@ -45,6 +46,7 @@ export class AgentTurnDriver {
   private readonly execute: AgentTurnExecution;
   private readonly isClosing: () => boolean;
   private readonly describeError: (error: unknown) => string;
+  private readonly onStateChange: (state: AgentTurnState) => void;
   private latch: AgentTurnFailure | null = null;
   private active = false;
   private controller: AbortController | null = null;
@@ -55,6 +57,7 @@ export class AgentTurnDriver {
     this.turns = options.turns;
     this.execute = options.execute;
     this.isClosing = options.isClosing ?? (() => false);
+    this.onStateChange = options.onStateChange ?? (() => {});
     this.describeError = options.describeError
       ?? ((error: unknown) => (error instanceof Error ? error.name : typeof error));
     // 构造即读取持久状态：running 说明上次进程在请求途中消失，halted 说明故障待用户处理，
@@ -125,6 +128,7 @@ export class AgentTurnDriver {
     } finally {
       this.active = false;
       if (this.controller === controller) this.controller = null;
+      if (!this.isClosing()) this.notify(this.state);
     }
   }
 
@@ -167,6 +171,7 @@ export class AgentTurnDriver {
     if (unfinished !== null) return rejected(unfinished);
     this.stopRevision += 1;
     this.latch = null;
+    this.notify({ kind: 'idle' });
     return { kind: 'cleared' };
   }
 
@@ -201,7 +206,10 @@ export class AgentTurnDriver {
       // 退出期间存储可能已关闭：跳过写入，本地 latch 仍然决定本进程不再发请求。
       if (this.isClosing()) return null;
       const written = this.turns.writeTurnState(this.coordinatorSessionId, state);
-      if (written.kind === 'saved') return null;
+      if (written.kind === 'saved') {
+        this.notify(state);
+        return null;
+      }
       return this.block(failureOf('state_unavailable', this.describeError(written.message)));
     } catch (error) {
       return this.block(failureOf('state_unavailable', this.describeError(error)));
@@ -213,5 +221,9 @@ export class AgentTurnDriver {
     this.latch = bounded;
     this.persist({ kind: 'halted', failure: bounded });
     return bounded;
+  }
+
+  private notify(state: AgentTurnState): void {
+    try { this.onStateChange(state); } catch { /* Observers cannot change a committed turn outcome. */ }
   }
 }

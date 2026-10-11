@@ -85,6 +85,7 @@ function graphWith(model: unknown, overrides: {
   return buildCoordinatorGraph({
     model: model as never,
     configurationRef: overrides.configurationRef ?? 'test-configuration',
+    providerIntegration: 'openai-responses',
     checkpointer: store.checkpointer,
     sessionRecords: (overrides.sessionRecords as never) ?? store,
     assertFencing: overrides.assertFencing ?? (() => ({ kind: 'valid', lease: {} as never })),
@@ -190,6 +191,7 @@ test('模型输入拿到本次正要消费的那条 Actionable Work', async () =
   const graph = buildCoordinatorGraph({
     model: new FakeListChatModel({ responses: ['一', '二'] }),
     configurationRef: 'test-configuration',
+    providerIntegration: 'openai-responses',
     checkpointer: store.checkpointer,
     sessionRecords: store,
     newStepId: () => `step-${String((step += 1))}`,
@@ -371,6 +373,9 @@ test('逐 chunk 产生的响应只在完整返回后被接受，预览按 starte
   ]);
   // 单一完整 usage 报告被保存：这是 provider 实际给出的数字。
   expect(committedSteps()[0]?.usage).toEqual({ inputTokens: 7, outputTokens: 4, totalTokens: 11 });
+  expect(store.readLatestModelUsage(SESSION)).toMatchObject({
+    configurationRef: 'test-configuration', usage: { inputTokens: 7, outputTokens: 4, totalTokens: 11 },
+  });
 
   expect(model.producedChunks).toBeGreaterThan(1);
   expect(events[0]).toEqual({
@@ -566,20 +571,20 @@ test('预览观察者故障只让预览不可用，不重复模型调用', async
   ]);
 });
 
-test('只有单个完整 usage 报告才被保存：不完整或多片段一律留空', async () => {
+test('usage 按固定协议归一：增量片段取 SDK 聚合，不完整报告一律留空', async () => {
   seedSession();
   const scenarios = [
     { label: '单个完整报告', usage: [{ input_tokens: 5, output_tokens: 6, total_tokens: 11 }], expected: { inputTokens: 5, outputTokens: 6, totalTokens: 11 } },
     {
+      // Gemini 形态：SDK 已把累计值相减成增量，拼接即整次请求的真实用量。
       label: '两个非空片段',
       usage: [
         { input_tokens: 5, output_tokens: 1, total_tokens: 6 },
         { input_tokens: 0, output_tokens: 2, total_tokens: 2 },
       ],
-      expected: null,
+      expected: { inputTokens: 5, outputTokens: 3, totalTokens: 8 },
     },
     {
-      // 片段多于两个时结论不变：计数是饱和的，内存里也不会为一次调用留一份无界数组。
       label: '四个非空片段',
       usage: [
         { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
@@ -587,7 +592,7 @@ test('只有单个完整 usage 报告才被保存：不完整或多片段一律�
         { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
         { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
       ],
-      expected: null,
+      expected: { inputTokens: 4, outputTokens: 4, totalTokens: 8 },
     },
     {
       // 只报了一个数字的报告不是可确认的完整报告：提交它就是把「没拿到」写成「是 0」。
@@ -671,6 +676,31 @@ test('调用开始前已取消时不发起模型调用，预览直接以 interru
   expect(model.received).toEqual([]);
   // 临时源不会因为「没有 started 也没有终态」而永远停在 streaming。
   expect(events.map((event) => event.kind)).toEqual(['interrupted']);
+});
+
+test('Anthropic 的累计输出取最后值，不与 message_start 的种子相加', async () => {
+  // 已安装 SDK 的真实形态：首段 input 已含 cache 读取与写入并带 output 种子，末段 output 是累计值。
+  const seed = { input_tokens: 25, output_tokens: 1, total_tokens: 26 };
+  const cumulative = { input_tokens: 0, output_tokens: 19, total_tokens: 19 };
+  const cases = [
+    { reports: [seed, cumulative], expected: { inputTokens: 25, outputTokens: 19, totalTokens: 44 } },
+    { reports: [{ input_tokens: 0, output_tokens: 4, total_tokens: 4 }], expected: null },
+    { reports: [seed, { input_tokens: 0 }], expected: null },
+  ] as const;
+
+  for (const [index, scenario] of cases.entries()) {
+    const model = new ScriptedStreamingChatModel([{ kind: 'text', text: '回答', usage: [...scenario.reports] }]);
+    const outcome = await streamModelCall({
+      model,
+      messages: [new AIMessage('输入')],
+      providerIntegration: 'anthropic-messages',
+      assertFencing: () => ({ kind: 'valid', lease: {} as never }),
+      coordinatorSessionId: SESSION,
+      previewId: 'preview:usage-' + String(index),
+    });
+    expect(outcome.kind).toBe('response');
+    if (outcome.kind === 'response') expect(outcome.usage).toEqual(scenario.expected);
+  }
 });
 
 test('响应无法落盘时不提交历史，并让这次预览以 interrupted 结束', async () => {

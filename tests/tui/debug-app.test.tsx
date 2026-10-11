@@ -21,6 +21,7 @@ import type {
 import type { SubmissionStatus } from '../../src/application/coordinator/submission-status.js';
 import type { CoordinatorModelConfiguration } from '../../src/application/coordinator/model-config-switch.js';
 import type { UiInputStore } from '../../src/application/ports/ui-input-store.js';
+import { targetDraftKey, type UiInputTarget } from '../../src/application/ports/ui-input-store.js';
 import type { ProviderCatalog } from '../../src/application/configuration/provider-catalog.js';
 import type { ProviderLibrary } from '../../src/application/configuration/provider-library.js';
 import { openUiInputStore } from '../../src/adapters/storage/ui-input-store.js';
@@ -234,6 +235,27 @@ function recordsOf(fake: FakeHarness) {
 }
 
 describe('tui/debug-app / 调试前台对话', () => {
+  test('提交中的原快照立即显示，新草稿在受理后保留', async () => {
+    let accept!: (result: DebugSendResult) => void;
+    const fake = fakeHarness({ send: () => new Promise(resolve => { accept = resolve; }) });
+    const { rendered } = await renderConversation(fake);
+    await typeText(rendered, '原调试消息');
+    rendered.stdin.write('\r');
+    await settle(10);
+    expect(frameText(rendered)).toContain('原调试消息');
+    expect(recordsOf(fake).some(record => record.kind === 'draft')).toBe(false);
+    await typeText(rendered, '后来草稿');
+    await new Promise(resolve => setTimeout(resolve, 300));
+    rendered.stdin.write('\r');
+    await settle();
+    expect(fake.sent).toHaveLength(1);
+    accept({ kind: 'accepted', submissionId: fake.sent[0]!.submissionId, replayed: false });
+    await settle(10);
+    expect(recordsOf(fake).find(record => record.kind === 'draft')?.draft.text).toBe('后来草稿');
+    expect(frameText(rendered)).toContain('后来草稿');
+    rendered.unmount();
+  });
+
   test('同批文字与 Enter 提交完整草稿，连续 Enter 采用并执行 slash 命令', async () => {
     const fake = fakeHarness();
     const { rendered } = await renderConversation(fake);
@@ -249,6 +271,51 @@ describe('tui/debug-app / 调试前台对话', () => {
     await settle(10);
     expect(fake.counters.stops).toBe(1);
     expect(fake.sent).toHaveLength(1);
+  });
+
+  test('分离失败后晚到的 accepted 不按新 revision 补清：并发写入方的草稿仍在', async () => {
+    let accept!: (result: DebugSendResult) => void;
+    const fake = fakeHarness({ send: () => new Promise(resolve => { accept = resolve; }) });
+    const base = fake.harness.inputStore;
+    const target: UiInputTarget = { kind: 'debug-message', debugDirectoryId: 'debug-dir-1', coordinatorSessionId: SESSION };
+    // 另一个窗口在提交快照落盘的同一时刻改写了同一目标的草稿：本次分离的 CAS 必然失配。
+    const inputStore: UiInputStore = {
+      read: (key) => base.read(key),
+      list: (namespace) => base.list(namespace),
+      remove: (input) => base.remove(input),
+      write: (input) => {
+        const written = base.write(input);
+        if (written.kind === 'saved' && input.record.kind === 'submission') {
+          const current = base.read(targetDraftKey(target));
+          if (current.kind === 'record') {
+            base.write({
+              key: targetDraftKey(target), expectedRevision: current.revision,
+              record: { kind: 'draft', target, draft: { text: '并发草稿', cursor: 4, pasteBlocks: [] } },
+            });
+          }
+        }
+        return written;
+      },
+    };
+    const rendered = render(createElement(DebugApp, {
+      harness: { ...fake.harness, inputStore }, terminalWidth: 100, onExit: vi.fn(),
+    }));
+    await settle();
+    rendered.stdin.write('n'); await settle();
+    rendered.stdin.write('\r'); await settle(6);
+    rendered.stdin.write('\r'); await settle(6);
+
+    await typeText(rendered, '原调试消息');
+    await new Promise(resolve => setTimeout(resolve, 300));
+    rendered.stdin.write('\r');
+    await settle(10);
+    expect(fake.sent).toHaveLength(1);
+    accept({ kind: 'accepted', submissionId: fake.sent[0]!.submissionId, replayed: false });
+    await settle(10);
+
+    // 受理只结清自己的提交快照：分离失败的并发草稿原样留给显式恢复。
+    expect(recordsOf(fake).find(record => record.kind === 'draft')?.draft.text).toBe('并发草稿');
+    rendered.unmount();
   });
   test('核验已受理的未知提交释放等待位，Ctrl+P 打开可执行目录且保留草稿', async () => {
     let unknown = true;
@@ -518,8 +585,9 @@ describe('tui/debug-app / 调试前台对话', () => {
     expect(fake.saves.models).toEqual([{ expectedRevision: 1, connectionRef: 'conn-new', model: 'gpt-fixture' }]);
 
     // 有可信 effort 取值：先明确选 effort，再打开会话。
-    expect(frameText(rendered)).toContain('不指定 effort');
-    rendered.stdin.write('\u001b[B'); await settle(2);
+    rendered.stdin.write('\u001b[C'); await settle(2);
+    rendered.stdin.write('\r'); await settle(2);
+    rendered.stdin.write('\u001b[C'); await settle(2);
     rendered.stdin.write('\r'); await settle(6);
     expect(fake.opens).toHaveLength(0);
     expect(frameText(rendered)).toContain('选择模型（会话固定该配置）');

@@ -58,7 +58,7 @@ export function ModelSettingsEditor(props: ModelSettingsEditorProps) {
     : edit.stage === 'preset' ? '↑↓ Provider · Enter 选择 · Esc 返回'
       : edit.stage === 'connection' ? '↑↓ 字段 · ←→ 协议 · Enter 保存并发现 · Esc 返回'
         : edit.stage === 'project-init' ? '输入正整数 issue number · Enter 初始化配置 · Esc 返回'
-          : '公共目录 Ctrl+R · 连接查询 Enter';
+          : '↑↓ 选择 · Enter 继续 · 手填 Enter 声明并保存 · Ctrl+R 公共目录';
   return (
     <DialogFrame title={title} summary={props.identity ?? '保存配置不会自动应用'} width={props.availableWidth} rows={rows} footer={footer}>
       <Box flexDirection="column" height={Math.max(1, rows - 8)} overflow="hidden">

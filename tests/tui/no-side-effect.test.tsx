@@ -28,7 +28,7 @@ import {
 } from './harness.js';
 
 /** 只读端口白名单：渲染路径只允许 query 与只读 store 读取，不允许任何写。 */
-const READ_ONLY_PORTS = ['resolveHome', 'snapshot', 'history', 'transcript-body', 'inputStore.read', 'submissionStatus', 'modelCatalog'];
+const READ_ONLY_PORTS = ['resolveHome', 'snapshot', 'history', 'transcript-body', 'inputStore.read', 'inputStore.list', 'submissionStatus', 'modelCatalog'];
 
 async function pressKey(rendered: RenderedTui, input: string): Promise<void> {
   rendered.stdin.write(input);
@@ -314,7 +314,7 @@ describe('重挂载与 resize 零业务副作用', () => {
     expect(fake.executeCount()).toBe(0);
     expect(fake.executeIntents).toEqual([]);
     const names = [...new Set(fake.calls.map((call) => call.name))];
-    expect(names.every((name) => READ_ONLY_PORTS.includes(name))).toBe(true);
+    expect(names.filter(name => !READ_ONLY_PORTS.includes(name))).toEqual([]);
     // 只读加载确实发生过（不是「什么都没跑」的假绿）。
     expect(names).toContain('snapshot');
     expect(names).toContain('history');

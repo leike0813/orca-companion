@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction 
 
 import { CommandPalette } from './components/command-palette.js';
 import { Composer } from './components/composer.js';
+import { formatContextStatus } from './components/status-line.js';
 import { Conversation } from './components/conversation.js';
 import { InputRecordManager, type InputManagerEntry, type InputRecordManagerView } from './components/input-record-manager.js';
 import { PasteViewer, type PasteViewerView } from './components/paste-viewer.js';
@@ -34,6 +35,7 @@ import { handleComposerKey } from './input/composer-key.js';
 import { createInputProtection, type SaveOutcome } from './input/input-protection.js';
 import { resolveGlobalAction } from './input/keymap.js';
 import { TranscriptReader, type TranscriptFrame } from './render/transcript-reader.js';
+import { useTranscriptMouse, inTranscript, type TranscriptRegion } from './input/transcript-mouse.js';
 import { composerContentWidth, truncateToDisplayWidth } from './render/width.js';
 import type { ComposerMode } from './state.js';
 import { tuiColors, tuiTheme } from './theme.js';
@@ -296,6 +298,7 @@ function DebugConversation(props: ConversationProps) {
   const [protection] = useState(() => createInputProtection({ store: harness.inputStore }));
   const [reader] = useState(() => new TranscriptReader(harness.reading));
   const [frame, setFrame] = useState<TranscriptFrame | null>(null);
+  const [pendingSubmission, setPendingSubmission] = useState<{ submissionId: string; text: string; status: string } | null>(null);
   const [draft, setDraft, draftRef] = useImmediateState<UiDraft>(emptyDraft());
   const [, setResubmitId, resubmitIdRef] = useImmediateState<string | null>(null);
   const [slashIndex, setSlashIndex, slashIndexRef] = useImmediateState(0);
@@ -303,6 +306,7 @@ function DebugConversation(props: ConversationProps) {
   const [detailed, setDetailed] = useState(false);
   const [turn, setTurn] = useState<AgentTurnState>(session.turn);
   const [running, setRunning] = useState(session.running);
+  const [context, setContext] = useState(session.context ?? { status: 'unavailable' } as const);
   const [overlay, setOverlay, overlayRef] = useImmediateState<'none' | 'palette' | 'help' | 'paste' | 'inputs'>('none');
   const [helpScroll, setHelpScroll] = useState(0);
   const [commandIndex, setCommandIndex, commandIndexRef] = useImmediateState(0);
@@ -310,6 +314,13 @@ function DebugConversation(props: ConversationProps) {
   const [pasteView, setPasteView, pasteViewRef] = useImmediateState<PasteViewerView | null>(null);
   const [inputManager, setInputManager, inputManagerRef] = useImmediateState<InputRecordManagerView | null>(null);
   const [, setConfirmExit, confirmExitRef] = useImmediateState(false);
+  const transcriptRegion = useRef<TranscriptRegion | null>(null);
+  const recordTranscriptRegion = useCallback((region: TranscriptRegion | null) => { transcriptRegion.current = region; }, []);
+  const filterMouse = useTranscriptMouse(overlay === 'none', wheel => {
+    if (overlayRef.current !== 'none' || confirmExitRef.current || !inTranscript(wheel, transcriptRegion.current)) return;
+    void reader.move(wheel.direction, 3).then(next => { if (next) setFrame(next); })
+      .catch(error => onNotice('历史读取失败：' + errorText(error)));
+  });
 
   const transcriptHeight = useRef(Math.max(4, rows - 14));
   const widthRef = useRef(width);
@@ -323,6 +334,13 @@ function DebugConversation(props: ConversationProps) {
     if (loaded.status === 'loaded') setDraft(loaded.draft);
     if (loaded.status === 'failed') onNotice('草稿读取失败：' + loaded.code + ' ' + loaded.message);
     const lane = protection.pendingSubmission(targetNamespace(target), sessionId);
+    const listed = protection.list(targetNamespace(target));
+    if (listed.status === 'ok') {
+      const pending = listed.records.find(record => record.kind === 'submission' &&
+        record.target.coordinatorSessionId === sessionId && (record.status === 'awaiting' || record.status === 'unknown'));
+      if (pending?.kind === 'submission') setPendingSubmission({
+        submissionId: pending.submissionId, text: pending.draft.text, status: pending.status });
+    }
     if (lane.status === 'active') onNotice('该会话有待核验提交 ' + lane.submissionId + '（' + lane.state + '）：先用 /inputs 恢复或删除');
     if (lane.status === 'failed') onNotice('待核验提交读取失败：' + lane.code + ' ' + lane.message);
   }, [protection, target, sessionId, onNotice]);
@@ -333,6 +351,7 @@ function DebugConversation(props: ConversationProps) {
     if (loaded.kind === 'no-session') { onNotice('not_open: 尚未打开调试会话'); return; }
     setTurn(loaded.state.turn);
     setRunning(loaded.state.running);
+    setContext(loaded.state.context ?? { status: 'unavailable' });
   }, [harness, onNotice]);
 
   const loadLatest = useCallback(async () => {
@@ -388,7 +407,7 @@ function DebugConversation(props: ConversationProps) {
     protection.edit(target, next);
   }, [protection, target]);
 
-  /** 只有已受理或已结清才清空界面正文；未保存的编辑仍走 protection，不会被静默丢弃。 */
+  /** 原输入已保存到提交快照后，新的草稿使用独立输入状态。 */
   const resetDraft = useCallback(() => {
     setDraft(emptyDraft());
     setResubmitId(null);
@@ -492,7 +511,6 @@ function DebugConversation(props: ConversationProps) {
     if (flushed.status !== 'saved') { onNotice('输入未保存，未发起提交：' + reasonText(flushed)); return; }
     // 恢复回来的待核验提交沿用原身份：不换 submissionId，也不丢正文。
     const submissionId = resubmitIdRef.current ?? globalThis.crypto.randomUUID();
-    const generation = protection.generation(target);
     const snapshot = protection.draftOf(target) ?? draft;
     const begun = protection.beginSubmission({ target, draft: snapshot, submissionId });
     if (begun.status !== 'started') {
@@ -501,7 +519,10 @@ function DebugConversation(props: ConversationProps) {
         : '提交快照未保存，未发起提交：' + begun.code + ' ' + begun.message);
       return;
     }
-    setResubmitId(submissionId);
+    const detached = protection.clearDraft(target);
+    if (detached.status === 'saved') resetDraft();
+    else onNotice('提交快照已保存，草稿分离失败：' + reasonText(detached));
+    setPendingSubmission({ submissionId, text, status: 'awaiting' });
     let result: Awaited<ReturnType<DebugHarnessPort['send']>>;
     try {
       result = await harness.send({ submissionId, content: text });
@@ -518,15 +539,13 @@ function DebugConversation(props: ConversationProps) {
     });
     refreshState();
     if (result.kind === 'accepted') {
-      if (settled.status === 'saved' && protection.generation(target) === generation) {
-        const cleared = protection.clearDraft(target);
-        if (cleared.status === 'saved') resetDraft();
-        else onNotice('已受理，但草稿清理失败：' + reasonText(cleared));
-      }
-      onNotice(null);
+      setPendingSubmission(previous => previous?.submissionId === submissionId ? null : previous);
+      // 分离失败（CAS 冲突等）后不再补清：晚到的 accepted 只按最新 revision 清理，会删掉并发
+      // 写入方的草稿。原记录原样留给 /inputs 显式恢复，并如实告知本次未结清。
+      onNotice(detached.status === 'saved' ? null : '提交快照已保存，草稿分离失败：' + reasonText(detached));
       return;
     }
-    // 拒绝与未知都保留原输入与原提交身份，等待显式处理。
+    setPendingSubmission(previous => previous?.submissionId === submissionId ? { ...previous, status: result.kind } : previous);
     onNotice(result.kind + ': ' + (result.kind === 'rejected' ? result.code + ' ' + result.message : result.reason)
       + (settled.status === 'saved' ? '' : ' · 状态回写失败：' + reasonText(settled)));
   }, [draftRef, resubmitIdRef, protection, target, sessionId, harness, runCommand, resetDraft, onNotice, refreshState, setResubmitId]);
@@ -549,6 +568,9 @@ function DebugConversation(props: ConversationProps) {
   useInput((input, key) => {
     if (key.eventType === 'release') return;
     const draft = draftRef.current;
+    const filtered = filterMouse(input);
+    if (filtered !== input && filtered === '') return;
+    input = filtered;
     const overlay = overlayRef.current;
     const commandQuery = commandQueryRef.current;
     const commandIndex = commandIndexRef.current;
@@ -606,6 +628,10 @@ function DebugConversation(props: ConversationProps) {
           if (entry === undefined) return;
           const removed = protection.removeRecord(entry.kind === 'invalid' ? entry.key : entry.record.key,
             entry.kind === 'invalid' ? entry.revision : entry.record.revision);
+          if (removed.status === 'saved' && entry.kind === 'record' && entry.record.kind === 'submission') {
+            const submissionId = entry.record.submissionId;
+            setPendingSubmission(previous => previous?.submissionId === submissionId ? null : previous);
+          }
           const listed = protection.list(targetNamespace(target));
           setInputManager({ ...inputManager, confirmDelete: false, feedback: removed.status === 'saved' ? '记录已删除' : reasonText(removed),
             ...(listed.status === 'ok' ? { entries: entriesOf(listed.records, listed.invalidRecords), usage: listed.usage,
@@ -620,6 +646,8 @@ function DebugConversation(props: ConversationProps) {
             let feedback: string | null = null;
             if (status.kind === 'accepted') {
               const removed = protection.removeRecord(entry.record.key, entry.record.revision);
+              const submissionId = entry.record.submissionId;
+              if (removed.status === 'saved') setPendingSubmission(previous => previous?.submissionId === submissionId ? null : previous);
               feedback = removed.status === 'saved' ? '已受理，提交记录已清理' : '已受理，清理失败：' + reasonText(removed);
             } else if (status.kind === 'conflict' || status.kind === 'unverifiable') {
               const marked = protection.markVerified({ key: entry.record.key, status: status.kind,
@@ -694,8 +722,10 @@ function DebugConversation(props: ConversationProps) {
 
   return <Box flexDirection="column" width={width} height={rows}>
     <DebugHeader width={width} title={'调试 ' + session.directoryPath}
-      status={modelLabel(session.configuration) + ' · ' + status + ' · ' + sessionId.slice(0, 8)} />
+      status={status + ' · ' + formatContextStatus(context, 'tokens') + ' · ' + modelLabel(session.configuration)} />
     <Conversation width={width} height={Math.max(4, rows - 4)} transcript={transcriptView} frame={frame}
+      pendingSubmission={pendingSubmission}
+      origin={{ x: 0, y: 4 }} onTranscriptRegion={recordTranscriptRegion}
       expandedToolIds={[]} onToggleTool={() => undefined} availableWidth={width} onTranscriptHeight={recordTranscriptHeight}>
       {candidates.length > 0
         ? <CommandPalette commands={candidates} selectedIndex={Math.min(slashIndex, candidates.length - 1)} onRun={(command) => void runCommandRef.current(command)}

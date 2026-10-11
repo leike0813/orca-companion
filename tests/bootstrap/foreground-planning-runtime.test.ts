@@ -88,13 +88,21 @@ function initializeRepository(root: string): string {
   return repository;
 }
 
-function writeProjectConfig(repository: string, options: { readonly maxInputTokens?: number; readonly keepaliveEnabled?: boolean } = {}): void {
+function writeProjectConfig(repository: string, options: { readonly maxInputTokens?: number; readonly keepaliveEnabled?: boolean; readonly contextWindow?: number } = {}): void {
+  const metadata = options.contextWindow === undefined ? undefined
+    : { contextWindow: options.contextWindow, inputModalities: ['text'], source: 'user_declared' };
+  const connections = projectConnectionsFixture();
+  const declared = (configuration: ReturnType<typeof coordinatorConfigurationFixture>) =>
+    metadata === undefined ? configuration : { ...configuration, metadata };
   writeFileSync(
     join(repository, 'orca-companion.json'),
     JSON.stringify({
       schemaVersion: 5,
-      ...projectConnectionsFixture(),
-      coordinatorModels: [coordinatorConfigurationFixture('planning-default'), coordinatorConfigurationFixture('planning-spare')],
+      // 配置里的元数据快照必须与所引用的 Model 一致，否则项目配置本身不成立。
+      ...(metadata === undefined ? connections : {
+        ...connections, models: connections.models.map(model => ({ ...model, metadata })),
+      }),
+      coordinatorModels: [declared(coordinatorConfigurationFixture('planning-default')), coordinatorConfigurationFixture('planning-spare')],
       defaultCoordinatorModelRef: 'planning-default',
       tracker: { kind: 'github', routeMapIssueNumber: 7 },
       planning: { maxMutations: 2 },
@@ -140,6 +148,7 @@ async function startHarness(
     readonly heartbeatIntervalMs?: number;
     readonly repository?: string;
     readonly maxInputTokens?: number;
+    readonly contextWindow?: number;
     readonly keepaliveEnabled?: boolean;
     readonly companionKeepalive?: KeepaliveCapability;
     readonly executionBackend?: ExecutionBackend;
@@ -160,6 +169,7 @@ async function startHarness(
     writeProjectConfig(repository, {
       ...(overrides.maxInputTokens === undefined ? {} : { maxInputTokens: overrides.maxInputTokens }),
       ...(overrides.keepaliveEnabled === undefined ? {} : { keepaliveEnabled: overrides.keepaliveEnabled }),
+      ...(overrides.contextWindow === undefined ? {} : { contextWindow: overrides.contextWindow }),
     });
   }
   if (overrides.detachHead === true) {
@@ -1202,6 +1212,45 @@ test('精确 context 只测量准备好的完整输入和实际 bindTools defs�
   expect(await waitFor(() => modelRounds(harness) >= 2 && measurements.length === 2)).toBe(true);
   expect(measurements[1]?.messages.some(message => JSON.stringify(message).includes('the next committed user input'))).toBe(true);
 
+});
+
+test.each([16_000, undefined])('模型容量只采用能力与声明窗口，不借项目预算（窗口 %s）', async contextWindow => {
+  const streamGate = Promise.withResolvers<void>();
+  let measured = 0;
+  const harness = await startHarness({
+    maxInputTokens: 20_000,
+    ...(contextWindow === undefined ? {} : { contextWindow }),
+    streamGate: streamGate.promise,
+    exactMeasure: () => {
+      measured += 1;
+      return Promise.resolve({ used: 37, capacity: 1_000_000 });
+    },
+  });
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  await initializeScope(harness, proposal);
+  await harness.host.ports.execute({ kind: 'send-session-message',
+    coordinatorSessionId: proposal.coordinatorSessionId, submissionId: 'declared-window',
+    content: '__STREAM_HOST__ measure under the declared window' });
+  expect(await waitFor(() => measured === 1)).toBe(true);
+  const snapshot = await harness.host.ports.snapshot(proposal.coordinatorSessionId);
+  // backend 报告 1,000,000 并不是本次真正的上限：声明窗口更小，展示与压缩都用 16,000。
+  expect(snapshot.kind === 'snapshot' ? snapshot.snapshot.projectPresentation?.context : null)
+    .toMatchObject({ status: 'available', used: 37, capacity: contextWindow ?? 1_000_000 });
+  streamGate.resolve();
+});
+
+test('轮次进入与结束各自发布真实的 turn-changed 事件', async () => {
+  const streamGate = Promise.withResolvers<void>();
+  const harness = await startHarness({ streamGate: streamGate.promise });
+  const proposal = await harness.host.ports.scopeSetup.proposal();
+  await initializeScope(harness, proposal);
+  await harness.host.ports.execute({ kind: 'send-session-message',
+    coordinatorSessionId: proposal.coordinatorSessionId, submissionId: 'turn-event',
+    content: '__STREAM_HOST__ stay pending until the stream resolves' });
+  expect(await waitFor(() => harness.events.some(event => event.kind === 'turn-changed' && event.turn.kind === 'running'))).toBe(true);
+  expect(harness.events.find(event => event.kind === 'turn-changed')?.coordinatorSessionId).toBe(proposal.coordinatorSessionId);
+  streamGate.resolve();
+  expect(await waitFor(() => harness.events.some(event => event.kind === 'turn-changed' && event.turn.kind !== 'running'))).toBe(true);
 });
 
 test('新输入受理后迟到的精确 context 测量不能恢复旧读数', async () => {

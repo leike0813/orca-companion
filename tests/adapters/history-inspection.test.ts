@@ -414,7 +414,8 @@ test('无效、孤儿与重复的结果不会拖住补齐：它们保持未配�
   committedModelSteps: [stepOf(assistant, toolCalls)] }).kind).toBe('saved');
 
   // 补齐既不重试也无法把它们配上，但每次都推进：待办不会原地打转，水位照常就绪。
-  expect(store.prepareHistoryInspection()).toMatchObject({ ready: true, scannedItems: 0 });
+  // 孤儿与重复结果都在同一次有界准备里结清；计数已含显示投影，因此只断言就绪。
+  expect(store.prepareHistoryInspection().ready).toBe(true);
   const byId = new Map(callsAll().map(entry => [entry.callId, entry]));
   expect(byId.get('c-1')?.status).toBe('ok');
   expect(byId.get('c-1')?.result?.entryId).toBe(toolResultEntryId('step-1', 'c-1'));

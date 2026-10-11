@@ -34,7 +34,8 @@ test('save persists a connection despite discovery failure; model metadata requi
   if (connection.kind !== 'saved') return;
   expect(JSON.stringify(library.load())).not.toContain('api-secret');
   const saved = library.saveModel({ expectedRevision: 1, connectionRef: connection.connection.connectionRef, model: 'gpt-test' });
-  expect(saved).toMatchObject({ kind: 'saved', revision: 2, model: { effortCapability: null } });
+  // 目录没有精确 effort 能力：记录取该固定协议的预设，界面提供的取值因此都能被装配核验。
+  expect(saved).toMatchObject({ kind: 'saved', revision: 2, model: { effortCapability: { optionPath: 'reasoning.effort' } } });
   expect(library.resolveModel(saved.kind === 'saved' ? saved.model.modelRef : '')).toMatchObject({ kind: 'resolved' });
 });
 
@@ -49,4 +50,32 @@ test('custom protocols and endpoint secrets are validated before credential writ
   expect(await library.saveConnection({ expectedRevision: 0, label: 'x', providerId: 'custom', providerIntegration: 'openai-chat', baseUrl: 'https://example.test', credentialRef: 'invalid-ref' })).toMatchObject({ kind: 'rejected' });
   expect(await library.saveConnection({ expectedRevision: 0, label: 'x', providerId: 'custom', providerIntegration: 'openai-chat', baseUrl: 'https://example.test', newSecret: 123 } as never)).toMatchObject({ kind: 'rejected' });
   expect(writes).toBe(0);
+});
+
+test('目录精确元数据随模型保存，手填声明按 user_declared 保存并取得固定协议 effort 预设', async () => {
+  const store = new Store();
+  const catalogWithMetadata: ProviderCatalog = {
+    ...catalog,
+    candidates: () => ({ models: [{ id: 'gpt-test', label: 'GPT Test', providerId: 'openai', protocol: 'openai-chat', effortCapability: null, contextWindow: 128000, inputModalities: ['text', 'image'] }], source: 'catalog', catalogVersion: 'v1', expired: false }),
+  };
+  const library = createProviderLibrary({ store, credentials, catalog: catalogWithMetadata });
+  const connection = await library.saveConnection({ expectedRevision: 0, label: 'OpenAI', providerId: 'openai', providerIntegration: 'openai-chat', baseUrl: 'https://api.openai.com/v1', newSecret: 'api-secret' });
+  if (connection.kind !== 'saved') throw new Error(connection.message);
+  const catalogModel = library.saveModel({ expectedRevision: 1, connectionRef: connection.connection.connectionRef, model: 'gpt-test' });
+  expect(catalogModel).toMatchObject({ kind: 'saved', model: { metadata: { contextWindow: 128000, inputModalities: ['text', 'image'], source: 'catalog' } } });
+
+  const manual = library.saveModel({
+    expectedRevision: 2,
+    connectionRef: connection.connection.connectionRef,
+    model: 'vendor/manual-model',
+    metadata: { contextWindow: 64000, inputModalities: ['text'], source: 'user_declared' },
+  });
+  // 目录没有这条模型：effort 能力来自该固定协议的预设，声明原样保存。
+  expect(manual).toMatchObject({ kind: 'saved', model: { metadata: { contextWindow: 64000, inputModalities: ['text'], source: 'user_declared' }, effortCapability: { optionPath: 'reasoning.effort' } } });
+  if (manual.kind !== 'saved') return;
+
+  // 非法声明与未知键都在写入前拒绝，用户输入不因此丢失。
+  expect(library.saveModel({ expectedRevision: 3, connectionRef: connection.connection.connectionRef, model: 'vendor/manual-model', metadata: { contextWindow: 0, inputModalities: ['text'], source: 'user_declared' } })).toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  expect(library.saveModel({ expectedRevision: 3, connectionRef: connection.connection.connectionRef, model: 'vendor/manual-model', metadata: { contextWindow: 1000, inputModalities: ['image'], source: 'user_declared' } })).toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  expect(library.saveModel({ expectedRevision: 3, connectionRef: connection.connection.connectionRef, model: 'vendor/manual-model', window: 1000 } as never)).toMatchObject({ kind: 'rejected', code: 'invalid_input' });
 });

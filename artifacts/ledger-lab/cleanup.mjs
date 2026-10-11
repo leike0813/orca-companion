@@ -34,10 +34,13 @@ async function remoteTarget(record, call) {
     throw labError('LAB_OPERATION_UNKNOWN', '远程仓库可见性无法核验');
   }
   const node = response.data.node;
+  if (!Object.hasOwn(response.data, 'node') || !Object.hasOwn(response.data, 'repository')) {
+    return { state: 'unknown', code: 'LAB_OPERATION_UNKNOWN' };
+  }
   if (node === null) {
     // A null node can mean lost access to a private repository, not deletion.
     if (response.data.repository) return { state: 'rejected', code: 'LAB_IDENTITY_MISMATCH' };
-    if (response.data.viewer.login.toLowerCase() === owner.toLowerCase()) return { state: 'absent', code: null };
+    if (response.data.repository === null && response.data.viewer.login.toLowerCase() === owner.toLowerCase()) return { state: 'absent', code: null };
     return { state: 'unknown', code: 'LAB_OPERATION_UNKNOWN' };
   }
   if (node?.id !== record.github.nodeId || node.nameWithOwner !== record.github.nameWithOwner ||
@@ -178,16 +181,33 @@ export async function cleanupLab(options, dependencies = {}) {
       await update('remote', 'deleting');
       try {
         assertNotCancelled();
+        // Immediate identity recheck: drift or unverifiable visibility refuses before any DELETE is sent.
+        const before = await remoteTarget(record, call);
+        if (before.state === 'rejected') throw labError('LAB_IDENTITY_MISMATCH', '删除前远程目标已漂移，未发送 DELETE');
+        if (before.state === 'unknown') throw labError(before.code ?? 'LAB_OPERATION_UNKNOWN', '删除前远程目标无法核验，未发送 DELETE');
         // GitHub GraphQL 没有 deleteRepository mutation，只能走 REST。
-        await call('gh', ['api', '--method', 'DELETE', '--hostname', record.github.host, `/repos/${record.github.nameWithOwner}`]);
+        if (before.state === 'present') {
+          await call('gh', ['api', '--method', 'DELETE', '--hostname', record.github.host, `/repos/${record.github.nameWithOwner}`]);
+        }
+      } catch (error) {
+        const code = error.code ?? 'LAB_OPERATION_UNKNOWN';
+        await update('remote', code === 'LAB_IDENTITY_MISMATCH' ? 'rejected' : 'unknown', code);
+        result.remote = { ...record.cleanup.remote };
+        throw Object.assign(labError(code, '远程回收未确认；请查看原记录并在下次显式回收前核验'), { result });
+      }
+      try {
+        // Only a fresh absence proof of the original node and owner/name turns `deleting` into `deleted`.
+        const after = await remoteTarget(record, call);
+        if (after.state !== 'absent') throw labError(after.code ?? 'LAB_OPERATION_UNKNOWN', 'DELETE 后无法证明原远程目标已删除');
         await update('remote', 'deleted');
         result.remote = { state: 'deleted', code: null };
       } catch (error) {
-        const code = error.code ?? 'LAB_OPERATION_UNKNOWN';
-        // A CLI failure can follow an accepted deletion (for example, a lost HTTP response).
+        // After a sent DELETE, only drift stays distinguishable; every other failure is an unknown outcome.
+        const code = error.code === 'LAB_IDENTITY_MISMATCH' ? error.code : 'LAB_OPERATION_UNKNOWN';
+        // A lost response or unreachable host never proves the delete landed, and nothing retries it.
         await update('remote', 'unknown', code);
         result.remote = { ...record.cleanup.remote };
-        throw Object.assign(labError(code, '远程回收未确认；请查看原记录并在下次显式回收前核验'), { result });
+        throw Object.assign(labError(code, 'DELETE 后远程状态不明，本地现场保留；请在下次显式回收前核验'), { result });
       }
     } else if (result.remote.state !== 'deleted') {
       const code = result.remote.code ?? 'LAB_OPERATION_UNKNOWN';

@@ -22,7 +22,7 @@ function fixture(messages: readonly CommittedMessageEntry[], session = 'reader')
       reads.push(query);
       if (query.source.kind === 'preview') return previews.body(query);
       if (query.source.kind === 'interaction') return null;
-      const range = store.readHistoryBody({ coordinatorSessionId: query.coordinatorSessionId, offset: query.offset,
+      const range = (query.source.kind === 'display' ? store.readHistoryDisplay : store.readHistoryBody)({ coordinatorSessionId: query.coordinatorSessionId, offset: query.offset,
         maxBytes: query.maxBytes, entryId: query.source.entryId, contentRevision: 1 });
       return range === null ? null : { source: query.source, offset: range.offset, end: range.end, byteLength: range.byteLength, text: range.text };
     }), previews: id => Promise.resolve(previews.list(id)), pin: previews.pin, subscribe: previews.subscribe,
@@ -35,6 +35,87 @@ const message = (id: string, content: string, role: CommittedMessageEntry['role'
   ({ entryId: id, stepId: id, role, content, ...(role === 'tool' ? { toolCallId: id, toolName: 'read' } : {}) });
 
 describe('bounded source reader', () => {
+  it('reads protocol text from the visible source while retaining raw replay', async () => {
+    const raw = JSON.stringify([{ type: 'text', text: '你好！\n\n这是正文。' },
+      { type: 'text', text: '隐藏推理', thought: true }, { type: 'tool_use', name: 'read', input: { path: 'x' } }]);
+    const f = fixture([{ ...message('blocks', raw), contentFormat: 'json_blocks' }]);
+    const frame = await f.reader.open(f.session, 80, 12, []);
+    expect(frame!.lines.map(line => line.text).join('\n')).toContain('这是正文。');
+    expect(frame!.lines.map(line => line.text).join('\n')).not.toMatch(/隐藏推理|tool_use/u);
+    expect(frame!.anchor!.source.kind).toBe('display');
+    expect(f.store.readEntry(f.session, 'blocks')!.content).toBe(raw);
+  });
+  it('serializes rapid navigation, follows at the bottom and moves wheel by three lines', async () => {
+    const f = fixture([message('lines', Array.from({ length: 40 }, (_, index) => 'line-' + index).join('\n'))]);
+    const latest = await f.reader.open(f.session, 80, 8, []);
+    const [first, second] = await Promise.all([f.reader.move('older'), f.reader.move('older')]);
+    expect(first!.anchor!.offset).toBeLessThan(latest!.anchor!.offset);
+    expect(second!.anchor!.offset).toBeLessThan(first!.anchor!.offset);
+    await f.reader.move('newer');
+    const bottom = await f.reader.move('newer');
+    expect(bottom!.atLatest).toBe(true);
+    const wheel = await f.reader.move('older', 3);
+    expect(wheel!.lines[0]!.text).toBe('line-29');
+  });
+
+  it('keeps following after a no-op older move on short history', async () => {
+    const f = fixture([message('short', 'one\ntwo\nthree\nfour')]);
+    await f.reader.open(f.session, 80, 16, []);
+    expect((await f.reader.move('older'))!.atLatest).toBe(true);
+    expect(f.reader.atLatest).toBe(true);
+  });
+  it('never reads raw protocol text before its visible projection is ready', async () => {
+    const f = fixture([message('legacy', 'hidden-thought')]);
+    const reader = new TranscriptReader({ ...f.port, history: async query => {
+      const page = await f.port.history(query);
+      return { ...page, entries: page.entries.map(entry => ({ ...entry, contentFormat: 'json_blocks' as const })) };
+    } });
+    cleanup.push(() => reader.dispose());
+    const frame = await reader.open(f.session, 80, 8, []);
+    expect(frame!.lines.map(line => line.text).join('')).not.toContain('hidden-thought');
+    expect(frame!.lines.some(line => line.kind === 'status')).toBe(true);
+    expect(f.reads).toEqual([]);
+  });
+  it('a failed bottom check retains the prior viewport and following state', async () => {
+    const f = fixture([message('lines', Array.from({ length: 40 }, (_, index) => 'line-' + index).join('\n'))]);
+    let failBottom = false;
+    const reader = new TranscriptReader({ ...f.port, history: query => {
+      if (failBottom && query.direction === 'newer') return Promise.reject(new Error('bottom unavailable'));
+      return f.port.history(query);
+    } });
+    cleanup.push(() => reader.dispose());
+    await reader.open(f.session, 80, 8, []);
+    const before = await reader.move('older');
+    failBottom = true;
+    await expect(reader.move('newer')).rejects.toThrow('bottom unavailable');
+    expect(reader.frame).toBe(before);
+    expect(reader.atLatest).toBe(false);
+    failBottom = false;
+    expect((await reader.move('newer'))!.atLatest).toBe(true);
+  });
+  it('a late error from the old Session cannot change the new Session follow state', async () => {
+    const f = fixture([message('lines', Array.from({ length: 40 }, (_, index) => 'line-' + index).join('\n'))]);
+    const gate = Promise.withResolvers<never>();
+    let delayOld = false;
+    const reader = new TranscriptReader({ ...f.port, history: query => {
+      if (query.coordinatorSessionId === f.session && delayOld) return gate.promise;
+      if (query.coordinatorSessionId === 'new-session') return Promise.resolve({ entries: [], hasMore: false });
+      return f.port.history(query);
+    } });
+    cleanup.push(() => reader.dispose());
+    await reader.open(f.session, 80, 8, []);
+    await reader.move('older');
+    delayOld = true;
+    const old = reader.read('latest');
+    await new Promise(resolve => setImmediate(resolve));
+    await reader.open('new-session', 80, 8, []);
+    gate.reject(new Error('old transport failed'));
+    expect(await old).toBeNull();
+    expect(reader.frame!.coordinatorSessionId).toBe('new-session');
+    expect(reader.frame!.atLatest).toBe(true);
+    expect(reader.atLatest).toBe(true);
+  });
+
   it('navigates real keysets and omits collapsed tool bodies', async () => {
     const f = fixture(Array.from({ length: 320 }, (_, n) => message(`entry-${n}`, n === 319 ? 'result'.repeat(100000) : `record ${n}`, n === 319 ? 'tool' : 'assistant')));
     const latest = await f.reader.open(f.session, 76, 8, []);

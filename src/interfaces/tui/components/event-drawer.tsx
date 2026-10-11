@@ -49,6 +49,7 @@ export function semanticEventCategory(event: SemanticEvent): SemanticEventCatego
     case 'generation-cutover-committed':
       return 'graph';
     case 'scope-control-changed':
+    case 'turn-changed':
       return 'control';
     case 'interaction-opened':
     case 'interaction-resolved':
@@ -79,6 +80,8 @@ export function describeSemanticEvent(event: SemanticEvent): string {
       return `recovery-status-changed ${event.recoveryId} -> ${event.status}`;
     case 'scope-control-changed':
       return `scope-control-changed -> ${event.controlState}`;
+    case 'turn-changed':
+      return `turn-changed ${event.coordinatorSessionId} -> ${event.turn.kind}`;
     case 'graph-version-appended':
       return `graph-version-appended ${event.graphId} v${String(event.graphVersion)}`;
     case 'revision-hold-changed':

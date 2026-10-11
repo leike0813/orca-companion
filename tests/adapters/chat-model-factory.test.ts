@@ -50,6 +50,27 @@ test('invalid config and missing key fail closed; construction errors never reve
   expect(resolveChatModel({ ...configuration(), effort: 'high', effortCapability: null }, resolver, credentials)).toMatchObject({ code: 'invalid_effort' });
 });
 
+test('effort 只按固定协议预设映射，未知 option 路径与越界取值拒绝', () => {
+  const created = new FakeListChatModel({ responses: ['ok'] });
+  let options: Record<string, unknown> = {};
+  const integration: ProviderIntegration = { integrationRef: 'fixed', createChatModel: input => { options = { ...input.modelOptions }; return created; } };
+  const capability = (path: string, values: readonly string[]) => ({ values: [...values], source: 'declared', optionPath: path });
+  const cases = [
+    { protocol: 'openai-responses', capability: capability('reasoning.effort', ['low', 'high']), effort: 'high', expected: { reasoning: { effort: 'high' } } },
+    { protocol: 'openai-chat', capability: capability('reasoningEffort', ['low']), effort: 'low', expected: { reasoning: { effort: 'low' } } },
+    { protocol: 'anthropic-messages', capability: capability('outputConfig.effort', ['low', 'high']), effort: 'low', expected: { outputConfig: { effort: 'low' } } },
+    { protocol: 'google-gemini', capability: capability('thinkingLevel', ['minimal', 'high']), effort: 'minimal', expected: { thinkingLevel: 'minimal' } },
+  ] as const;
+  for (const entry of cases) {
+    const result = resolveChatModel({ ...configuration(entry.protocol), effort: entry.effort, effortCapability: entry.capability }, () => integration, credentials);
+    expect(result).toMatchObject({ kind: 'resolved' });
+    for (const [key, value] of Object.entries(entry.expected)) expect(options[key]).toEqual(value);
+  }
+  // 任意 SDK 路径不是声明来源，超出协议预设的取值同样拒绝。
+  expect(resolveChatModel({ ...configuration('google-gemini'), effort: 'high', effortCapability: capability('thinkingConfig.thinkingBudget', ['high']) }, () => integration, credentials)).toMatchObject({ code: 'invalid_effort' });
+  expect(resolveChatModel({ ...configuration('anthropic-messages'), effort: 'extreme', effortCapability: capability('outputConfig.effort', ['extreme']) }, () => integration, credentials)).toMatchObject({ code: 'invalid_effort' });
+});
+
 test('explicit integration capabilities survive injection without approximate tokenizer claims', async () => {
   class Installed extends FakeListChatModel {
     static companionExactContext: ExactContextCapability = { measure: () => Promise.resolve({ used: 42, capacity: 128000 }) };

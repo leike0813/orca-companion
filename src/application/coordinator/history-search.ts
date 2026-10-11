@@ -51,7 +51,7 @@ export class HistoryIndexNotReadyError extends HistorySearchError {}
 export class HistorySearchCursorError extends HistorySearchError {}
 
 /** 搜索只读已提交来源；运行期预览没有稳定位置，不进搜索。 */
-type SearchableSource = Extract<TranscriptSourceRef, { readonly kind: 'history' } | { readonly kind: 'arguments' }>;
+type SearchableSource = Extract<TranscriptSourceRef, { readonly kind: 'history' } | { readonly kind: 'display' } | { readonly kind: 'arguments' }>;
 
 /**
  * 扫描位置。`metadata` 是元数据键集；`entry` 表示「这个 entry 的正文已读完，继续走它的参数」；
@@ -81,6 +81,7 @@ const identity = z.string().min(1);
 const integer = z.number().int().nonnegative();
 const searchableSourceSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('history'), entryId: identity, contentRevision: z.literal(1) }),
+  z.strictObject({ kind: z.literal('display'), entryId: identity, contentRevision: z.literal(1) }),
   z.strictObject({ kind: z.literal('arguments'), entryId: identity, stepId: identity, callId: identity, contentRevision: z.literal(1) }),
 ]);
 const positionSchema = z.discriminatedUnion('kind', [
@@ -146,7 +147,7 @@ function takePrefixBytes(text: string, bytes: number): string {
   return decoder.decode(encoder.encode(text).subarray(0, bytes));
 }
 
-const historySource = (entryId: string): SearchableSource => ({ kind: 'history', entryId, contentRevision: 1 });
+const historySource = (entryId: string, projected: boolean): SearchableSource => ({ kind: projected ? 'display' : 'history', entryId, contentRevision: 1 });
 const argumentsSource = (call: HistoryCall): SearchableSource => ({
   kind: 'arguments', entryId: call.entryId, stepId: call.stepId, callId: call.callId, contentRevision: 1,
 });
@@ -440,8 +441,12 @@ export async function scanHistory(
       continue;
     }
     if (entry.sequence > state.upperSequence) { complete = true; break; }
+    if (entry.contentFormat === 'json_blocks' && entry.displayByteLength === undefined) {
+      throw new HistorySearchError('history display projection is not ready: ' + entry.entryId);
+    }
     position = { kind: 'body', entryId: entry.entryId, sequence: entry.sequence, role: entry.role,
-      source: historySource(entry.entryId), offset: 0, byteLength: entry.byteLength, afterCall: null };
+      source: historySource(entry.entryId, entry.displayByteLength !== undefined), offset: 0,
+      byteLength: entry.displayByteLength ?? entry.byteLength, afterCall: null };
   }
 
   return { hits: state.hits, cursor: complete ? null : encodeCursor(parsed, position, hasCalls), complete,

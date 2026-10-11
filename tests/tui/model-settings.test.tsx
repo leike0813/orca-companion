@@ -157,6 +157,9 @@ describe('Coordinator Provider library', () => {
       await press(rendered, ENTER);
       await press(rendered, DOWN);
       await press(rendered, ENTER); // save the catalog model
+      await press(rendered, ENTER); // 候选确认独立横向 effort：进入动作区
+      await press(rendered, RIGHT); // 默认返回，显式选择确认动作
+      await press(rendered, ENTER);
       expect(save).toHaveBeenCalledTimes(1);
       await press(rendered, 'new/model');
       if (outcome === 'throw') pending.reject(new Error('offline'));

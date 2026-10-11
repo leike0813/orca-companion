@@ -163,7 +163,8 @@ describe('容器输入路径', () => {
     await press(rendered, '后续编辑');
     pending.resolve({ kind: 'accepted', revision: 8, summary: '已受理' });
     await settle(6);
-    expect(rendered.lastFrame()).toContain('答案后续编辑');
+    expect(fake.executeIntents).toMatchObject([{ kind: 'answer-pending-interaction', answer: '答案' }]);
+    expect(rendered.lastFrame()).toContain('后续编辑');
     expect(rendered.lastFrame()).toContain('回答 1/1');
     rendered.unmount();
   });
@@ -412,7 +413,8 @@ describe('跨会话待答往返', () => {
     await waitFor(rendered, () => fake.calls.some(call => call.name === 'history'));
     await enterProjectQuestion(rendered); await press(rendered, '回答'); await press(rendered, ENTER); await press(rendered, '后来编辑');
     pending.resolve({ kind: 'accepted', revision: 8, summary: '已受理' }); await settle(8);
-    expect(rendered.lastFrame()).toContain('回答后来编辑'); expect(rendered.lastFrame()).not.toContain('项目面板');
+    expect(fake.executeIntents).toMatchObject([{ kind: 'answer-pending-interaction', answer: '回答' }]);
+    expect(rendered.lastFrame()).toContain('后来编辑'); expect(rendered.lastFrame()).not.toContain('项目面板');
     await press(rendered, '\u001b'); expect(rendered.lastFrame()).toContain('项目面板');
     rendered.unmount();
   });

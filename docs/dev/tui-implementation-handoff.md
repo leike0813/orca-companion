@@ -2,9 +2,11 @@
 
 > **硬约束：尊重已确认原型。任何 TUI change 必须直接引用对应定稿决议、源码和画面，并按其布局、信息层级、视觉风格、导航与返回约定实施、验收。未经用户明确批准，不得自行重新设计。交互正常或自动测试通过，不能替代原型一致性验收。**
 
-状态日期：2026-10-09。接手先核对 HEAD、工作区和当前工件；保留已有未提交改动。体验以用户当前指示和 Decision Ticket 最终决议为准；领域、模块与公共合同分别由 [CONTEXT.md](../../CONTEXT.md)、[architecture.md](../architecture.md)、[interface-contracts.md](../interface-contracts.md) 拥有。
+状态日期：2026-10-10。接手先核对 HEAD、工作区和当前工件；保留已有未提交改动。体验以用户当前指示和 Decision Ticket 最终决议为准；领域、模块与公共合同分别由 [CONTEXT.md](../../CONTEXT.md)、[architecture.md](../architecture.md)、[interface-contracts.md](../interface-contracts.md) 拥有。
 
-当前新增启动流程由 [simplify-ledger-lab-lifecycle](../../openspec/changes/simplify-ledger-lab-lifecycle/implementation-plan.md) 实施：普通启动自动逐项核验，首次配置提供环境、Coordinator、Route Map 和最终确认；debug 空库复用同一模型编辑器。该启动引导已获用户批准，沿用 #52 的 DialogFrame、反色动作和主题；协调工作区仍按下列六票来源验收。当前画面与证据边界见 [启动流程画面](../../artifacts/ledger-lab/startup-ui-20261009/README.md)。
+当前修复批为 [repair-ledger-lab-verification-findings](../../openspec/changes/repair-ledger-lab-verification-findings/implementation-plan.md)，覆盖前驱 verification 的模型配置、用量、初始化、对话与滚动反馈，沿 #40 continuous、#47 above-input、#52 dialog final、#48 custom-direct 实施。新采集材料单独保存在 [修复批证据](../../artifacts/ledger-lab/verification-repairs-20261010/README.md)；合成生产画面不替代真实平台与用户视觉接受。
+
+当前新增启动流程由 [simplify-ledger-lab-lifecycle](../../openspec/changes/archive/2026-10-10-simplify-ledger-lab-lifecycle/implementation-plan.md) 实施：普通启动自动逐项核验，首次配置提供环境、Coordinator、Route Map 和最终确认；debug 空库复用同一模型编辑器。该启动引导已获用户批准，沿用 #52 的 DialogFrame、反色动作和主题；协调工作区仍按下列六票来源验收。当前画面与证据边界见 [启动流程画面](../../artifacts/ledger-lab/startup-ui-20261009/README.md)。
 
 对话核心前驱为 [stabilize-agent-harness-core](../../openspec/changes/archive/2026-10-09-stabilize-agent-harness-core/implementation-plan.md)（2026-10-09 已归档）；其直接前驱 [rework-coordinator-provider-configuration](../../openspec/changes/archive/2026-10-08-rework-coordinator-provider-configuration/implementation-plan.md) 已归档。模型设置沿 #52 dialog final 的定稿不变：Worker 角色只选择 harness 与该 harness 原生目录候选（model/effort），不再出现连接、凭据、API key 或任意 options 字段；Coordinator 沿同布局加入用户连接复用、服务/地区产品线、自定义协议、地址与隐藏 Key、模型候选。目录查询失败时可手填 native exact ID 并标记未验证，effort 不可捏造。保存追加 profile，执行应用须经 Manifest v4 审阅。用户于2026-10-08接受 provider 批次功能，明确将TUI美化与完整视觉对照留待后续；已有三档画面保留为审阅材料，不由行为测试或该次功能接受推定逐项呈现验收通过。后续TUI改动仍按本页原型规则执行。
 

@@ -49,13 +49,14 @@ import { submitDebugUserMessage } from '../application/coordinator/debug-user-me
 import { pendingWorkFromHistory } from '../application/coordinator/actionable-work.js';
 import {
   coordinatorModelConfigurationSchema,
+  configurationContextWindow,
   type CoordinatorModelConfiguration,
 } from '../application/coordinator/model-config-switch.js';
 import { COORDINATOR_SESSION_STATE_SCHEMA_VERSION, threadIdFor, userEntryId, userStepId, type CoordinatorSessionState } from '../domain/coordinator/session-state.js';
 import type { ModelDefinition, ProviderConnection } from '../domain/model-configuration.js';
 import type { CoordinatorSessionId } from '../application/dto/identity.js';
 import { AGENT_TURN_MESSAGE_CHARS } from '../application/ports/agent-turn.js';
-import type { AgentTurnResult, AgentTurnRetryOutcome } from '../application/ports/agent-turn.js';
+import type { AgentTurnResult, AgentTurnRetryOutcome, AgentTurnState } from '../application/ports/agent-turn.js';
 import type {
   DebugEvent,
   DebugHarnessCode,
@@ -72,6 +73,7 @@ import type {
   DebugSubmissionQuery,
 } from '../application/ports/debug-harness.js';
 import type { TranscriptReadingPort } from '../application/coordinator/history.js';
+import { projectContextStatus } from '../application/tui/project-presentation.js';
 import type { UiInputStoreHandle } from '../application/ports/ui-input-store.js';
 import type { SubmissionStatus } from '../application/coordinator/submission-status.js';
 import { createProviderCatalog } from '../adapters/agents/provider-catalog.js';
@@ -202,6 +204,8 @@ function configurationFor(input: {
     modelRef: input.model.modelRef,
     effortCapability: capability,
     effort: input.effort,
+    // 不可变元数据快照随配置一起保存：没有它的会话之后拿不到自己声明的上下文窗口。
+    ...(input.model.metadata === undefined ? {} : { metadata: input.model.metadata }),
   });
   return parsed.success ? parsed.data : null;
 }
@@ -267,6 +271,7 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
   // 打开阶段的取消：Ctrl+C 或退出意图必须能中断能力核验的请求链，而不是等它跑完五条探测。
   const startupAbort = new AbortController();
   let loopRunning = false;
+  let inspectionPreparing = false;
   const listeners = new Set<(event: DebugEvent) => void>();
   const readingListeners = new Set<(coordinatorSessionId: string) => void>();
   const publish = (event: DebugEvent): void => {
@@ -324,6 +329,36 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
     }
   };
 
+  /**
+   * 有界地补齐会话的派生关联索引。
+   *
+   * 每次调用只是一个短事务的准备单元，因此循环必须让出事件循环；就绪后只通知重读，不推进任何
+   * 状态。守卫是「本进程打开的这个会话」：会话被替换或关闭后旧循环立刻停止，不会去写别人的库。
+   */
+  const prepareInspection = (current: OpenSession): void => {
+    // 一次只跑一条补齐链：open、轮次结束与提交可能同时触发，重复排队只会让同一个全库进度
+    // 被多轮重复扫描，通知也因此重复。已在跑的那条会自己走到就绪并通知。
+    if (inspectionPreparing || closing) return;
+    inspectionPreparing = true;
+    const step = (): void => {
+      if (closing || session !== current) { inspectionPreparing = false; return; }
+      try {
+        if (!current.checkpoints.prepareHistoryInspection().ready) {
+          setImmediate(step);
+          return;
+        }
+      } catch (error) {
+        inspectionPreparing = false;
+        appendDiagnostic(current, { kind: 'inspection_failed', code: 'inspection_failed',
+          message: error instanceof Error ? error.name : typeof error });
+        return;
+      }
+      inspectionPreparing = false;
+      notifyReading(current.coordinatorSessionId);
+    };
+    setImmediate(step);
+  };
+
   const readingFor = (current: OpenSession): TranscriptReadingPort => {
     const bound = (sessionId: string): CheckpointStore => {
       if (sessionId !== current.coordinatorSessionId) {
@@ -353,6 +388,14 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
               maxBytes: query.maxBytes,
             }),
           );
+        }
+        // 显示来源与权威正文是两份坐标：读不到投影就返回空，不拿原文冒充显示文本。
+        if (query.source.kind === 'display') {
+          const display = checkpoints.readHistoryDisplay({ coordinatorSessionId: query.coordinatorSessionId,
+            entryId: query.source.entryId, contentRevision: query.source.contentRevision,
+            offset: query.offset, maxBytes: query.maxBytes });
+          return Promise.resolve(display === null ? null : { source: query.source, offset: display.offset,
+            end: display.end, byteLength: display.byteLength, text: display.text });
         }
         if (query.source.kind !== 'history') return Promise.resolve(null);
         const range = checkpoints.readHistoryBody({
@@ -435,6 +478,13 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
     configuration: current.configuration,
     turn: current.turn.state,
     running: loopRunning,
+    // 调试没有项目配置：这里呈现最近一次已提交请求的真实用量与该模型声明的窗口，读不到即不可用。
+    context: projectContextStatus(null, current.checkpoints.readLatestModelUsage(current.coordinatorSessionId), {
+      coordinatorSessionId: current.coordinatorSessionId,
+      modelConfigurationRef: current.configuration.configurationRef,
+      effectiveInputRevision: null,
+      contextWindow: configurationContextWindow(current.configuration),
+    }),
   });
 
   /**
@@ -472,6 +522,11 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
     });
   };
 
+  /** 发布驱动刚刚落盘的轮次状态；停止 latch 尚未清除时只有这份落盘事实是可靠的。 */
+  const publishPersistedTurn = (current: OpenSession, turn: AgentTurnState): void => {
+    publish({ kind: 'turn-changed', coordinatorSessionId: current.coordinatorSessionId, turn });
+  };
+
   /**
    * 跑完当前所有未回答的用户消息。
    *
@@ -485,7 +540,6 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
       for (;;) {
         const before = committedSequence(current);
         const outcome = await current.turn.run();
-        publishTurn(current);
         if (outcome.kind === 'stopped') {
           appendDiagnostic(current, {
             kind: 'turn_stopped',
@@ -510,9 +564,10 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
       });
     } finally {
       loopRunning = false;
-      // 先落定「没有在途轮次」再通知：提前通知会让界面读到一个仍然 running 的状态并停在那里。
+      // 循环本身结束（没有再发起轮次）时也要通知一次：界面据此把「正在运行」落回空闲。
       // 退出路径不再读已释放的存储。
       if (!closing) {
+        prepareInspection(current);
         publishTurn(current);
         notifyReading(current.coordinatorSessionId);
       }
@@ -634,6 +689,7 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
     const dependencies: CoordinatorGraphDependencies = {
       model: model.model,
       configurationRef: record.configuration.configurationRef,
+      providerIntegration: record.configuration.providerIntegration,
       checkpointer: checkpoints.store.checkpointer,
       sessionRecords: checkpoints.store,
       // 调试没有协调租约：单写者由本会话的 writer.lock 承担，因此这里的判据只回答「本进程是否还在
@@ -654,7 +710,11 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
           configurationRef: record.configuration.configurationRef,
           tailSequence: checkpoints.store.readHistoryInspection(coordinatorSessionId).upperSequence,
           fixedOverhead: schemaTokens,
-          budgetTokens: DEBUG_CONTEXT_BUDGET_TOKENS,
+          // 与协调宿主同一条规则：有效输入预算是项目缺省预算与该模型声明窗口的较小值。
+          budgetTokens: Math.min(
+            DEBUG_CONTEXT_BUDGET_TOKENS,
+            configurationContextWindow(record.configuration) ?? Number.MAX_SAFE_INTEGER,
+          ),
           nativeCompaction: model.nativeCompaction,
           instructions: instructionsFor(directoryPath),
           toolSchema: tools.map((tool) => ({ name: tool.name, description: tool.description, schema: tool.inputSchema })),
@@ -688,8 +748,11 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
       turns: checkpoints.store.turns,
       isClosing: () => closing,
       execute: (signal) => executeTurn(opened, signal),
+      // 轮次状态只来自驱动自己的持久写入；本进程是否空闲不是模型在途的证据。
+      onStateChange: (turn) => publishPersistedTurn(opened, turn),
     });
     session = opened;
+    prepareInspection(opened);
     return {
       kind: 'opened',
       state: stateOf(opened),
@@ -776,7 +839,6 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
       startupAbort.abort();
       if (session === null) return;
       session.turn.stop();
-      publishTurn(session);
     },
     async retry(): Promise<AgentTurnRetryOutcome> {
       if (session === null) return { kind: 'rejected', failure: { code: 'recovery_rejected', message: '尚未打开调试会话' } };
@@ -795,8 +857,9 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
           return false;
         }
       });
-      publishTurn(current);
-      if (outcome.kind === 'cleared') void runLoop(current);
+      if (outcome.kind === 'cleared') {
+        void runLoop(current);
+      }
       return outcome;
     },
     exitIntent(): void {
@@ -806,7 +869,6 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
       // 空闲退出不是故障：没有在途轮次时不写 halted，否则下次继续会凭空多出一次恢复。
       if (session !== null && loopRunning) {
         session.turn.stop();
-        publishTurn(session);
       }
       closing = true;
     },
@@ -832,6 +894,7 @@ export function startDebugHarness(options: DebugRuntimeOptions = {}): Promise<De
       if (session !== null && loopRunning) session.turn.stop();
       session?.release();
       session = null;
+      inspectionPreparing = false;
       previews.close();
       listeners.clear();
     },

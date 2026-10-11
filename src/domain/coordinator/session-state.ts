@@ -125,6 +125,8 @@ export type CommittedModelStep = {
   readonly messages: readonly unknown[];
   readonly toolCalls: readonly CommittedToolCall[];
   readonly usage: ModelUsageObservation | null;
+  /** 请求的可信配置归属；旧记录缺失时不推断。 */
+  readonly configurationRef?: string;
 };
 
 /** Authoritative Fact 或 Control Record 的稳定引用；不复制 Delivery 正文或外部记录。 */
@@ -316,6 +318,7 @@ const LEGACY_SESSION_STATE_FIELDS: readonly string[] = [
 ];
 
 const COMPACTED_STEP_FIELDS: readonly string[] = [
+  'configurationRef',
   'stepId',
   'entryId',
   'committedAt',
@@ -787,6 +790,9 @@ function parseStep(raw: unknown, field: string): IdentityResult<CommittedModelSt
   if (!usage.ok) {
     return usage;
   }
+  const configurationRef = raw['configurationRef'] === undefined ? null
+    : requireNonEmptyString(raw['configurationRef'], `${field}.configurationRef`);
+  if (configurationRef !== null && !configurationRef.ok) return configurationRef;
   return {
     ok: true,
     value: {
@@ -796,6 +802,7 @@ function parseStep(raw: unknown, field: string): IdentityResult<CommittedModelSt
       messages: messages.value,
       toolCalls,
       usage: usage.value,
+      ...(configurationRef === null ? {} : { configurationRef: configurationRef.value }),
     },
   };
 }

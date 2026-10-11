@@ -1,8 +1,9 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, test } from 'vitest';
 import { createProviderCatalog } from '../../src/adapters/agents/provider-catalog.js';
+import { convertModelsDev } from '../../src/application/configuration/provider-catalog-conversion.js';
 import type { ProviderConnection } from '../../src/domain/model-configuration.js';
 
 const dirs: string[] = [];
@@ -13,6 +14,21 @@ function setup(fetch: typeof globalThis.fetch, now = () => 1_000) {
 const connection: ProviderConnection = { connectionRef: 'conn-a', label: 'Test', providerId: 'custom', providerIntegration: 'openai-chat', baseUrl: 'https://example.test/v1', credential: { kind: 'managed', credentialRef: 'cred-a' } };
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
+
+test('models.dev 的 modalities.input 变成目录候选的输入模态', () => {
+  const models = convertModelsDev({
+    '@ai-sdk/openai': {
+      npm: '@ai-sdk/openai', name: 'OpenAI', env: ['OPENAI_API_KEY'], api: 'https://api.openai.com/v1',
+      models: {
+        'vision-model': { name: 'Vision', limit: { context: 128000 }, modalities: { input: ['text', 'image', 'pdf'], output: ['text'] } },
+        'text-only': { name: 'Text', limit: {}, modalities: { input: ['text'] } },
+      },
+    },
+  }).models;
+  // 目录只承认 Companion 承认的模态；没有窗口的模型不写窗口。
+  expect(models.find((model) => model.id === 'vision-model')).toMatchObject({ contextWindow: 128000, inputModalities: ['text', 'image'] });
+  expect(models.find((model) => model.id === 'text-only')).toMatchObject({ contextWindow: null, inputModalities: ['text'] });
+});
 
 describe('provider catalog', () => {
   it('uses nonempty endpoint discovery as the only candidate source', async () => {

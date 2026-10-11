@@ -151,6 +151,7 @@ export function StartupOnboarding({ ports, width, onReady, onExit }: {
         </Text>;
       }) : null}
       {step === 'route-map' ? <>
+        {busy ? <Text color={tuiColors.muted}>{frame} {action === 0 ? '正在创建 Route Map…' : '正在读取 Route Map…'}</Text> : null}
         <Text inverse={action === 0}> 创建空 Route Map </Text>
         <Text inverse={action === 1}>{fit(' 选择已有 issue  #' + (number || '输入编号'))}</Text>
         {issues.slice(0, Math.max(0, rows - 14)).map(item => <Text key={item.number} dimColor>{fit(`#${item.number}  ${item.title}`)}</Text>)}

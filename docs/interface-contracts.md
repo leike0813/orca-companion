@@ -200,6 +200,8 @@ schema 13 给修订持有（`revision_holds`）加上内容版本边界：`prior
 
 ## IC-04 Coordinator Session checkpoint、Wake 与 Context maintenance
 
+`checkpoints.sqlite` schema 5 追加可见文本投影及来源映射。assistant 的 `json_blocks` 原文继续用于 replay；非 thought 的 text 块形成独立 UTF-8 显示来源，工具仍经活动来源阅读。新提交生成投影，旧记录由 Bootstrap 准备阶段每批最多 64 KiB 增量处理，正文与续扫游标共用预算；游标最多 64 KiB、容器嵌套最多 64 层，损坏结构或游标明确拒绝。投影未就绪时阅读显示准备状态、搜索拒绝该来源；查询、render 与 resize 不补写。最新模型用量以 step/configuration metadata 查询，不扫描历史正文。已登记而尚无 checkpoint 的 Session 阅读为空；未知身份、损坏记录与模型恢复仍按原错误语义处理。
+
 - **Owner (Create)**: `m1-run-coordinator-sessions`
 - **Canonical paths**: `src/domain/coordinator/session-state.ts`、`src/adapters/storage/checkpoint-store.ts`、`src/application/coordinator/{actionable-work,wake-admission,suspension}.ts`
 - **Extenders (Extend)**: `m1-wire-foreground-planning-runtime` 增加用户消息准入、tool-call 配对结果与最近压缩结论；后继通过同一路径消费
@@ -247,7 +249,7 @@ Ctrl+T 切换整体详细，手动展开独立；F4 选择/开合活动，Esc �
 
 Capsule 的替换区间在保存时绑定固定序号边界；摘要包含实际被替换的全部条目，包括交错的用户输入和工具结果。压缩前缀保留完整最新 step，同载荷重放保持原边界，后续追加不会扩大已替换区间。
 
-`CoordinatorSessionRecordPort.appendModelStep` 与 `appendToolResult` 在既有 storage 事务中读取最新 core、核验稳定条目身份并追加。相同身份与内容的重放返回 `saved`，身份相同但内容冲突返回 `failed`；等待期间受理的用户消息与 Wake Batch 保留。Workflow 使用这两个方法提交响应和工具结果，路由与消费字段维持原语义。
+`CoordinatorSessionRecordPort.appendModelStep` 与 `appendToolResult` 在既有 storage 事务中读取最新 core、核验稳定条目身份并追加。相同身份与内容的重放返回 `saved`，身份相同但内容冲突返回 `failed`；等待期间受理的用户消息与 Wake Batch 保留。Workflow 使用这两个方法提交响应和工具结果，路由与消费字段维持原语义。新 model step 同时保存可信 `configurationRef`；最新 usage 只读取该 step 的 metadata，并绑定原配置。旧 step 无此字段时仅可使用已保留的 replay owner，二者皆缺失则保持未知。
 
 受理当前工作的 `ok` 工具结果可以携带 `completedWorkSource`（完整 source kind/id/revision），表示该次工作已处理。拒绝、unknown 与未落盘结果不带此字段；宿主按精确来源重建待处理工作。该字段只允许出现在 tool 消息中。外部 Actionable Work 通过 `commitWakeBatch` 同事务追加带 `workSource` 的 system 来源引用条目，不复制外部正文；Worker 问答、已确认的角色失败与项目交付结论按精确来源完成或由最终 assistant 响应消费。
 
@@ -603,6 +605,8 @@ Replanning 停止新派发并结清在途/Delivery/Interaction/Intent，建立�
 
 ## IC-11 ControllerService、Snapshot、SemanticEvent 与用户 intent
 
+Session summary 可携带宿主 `AgentTurnDriver` 的真实 `turn`。轮次开始、停止及结束发出 `turn-changed`，界面重新读取选中 Session；Scope active、lease 与 Worker 进度均不代替模型运行态。可见文本投影具有独立 `display` 来源，阅读与全文搜索使用相同字节坐标，raw 来源继续保留。阅读器串行执行导航；切 Session 或 dispose 使旧队列失效，读失败保留原 frame，到底和短历史无位移时保持跟随。
+
 命令结果引用由 `src/application/tui/command-result.ts` 拥有；`accepted` 与 `unknown` 可携带 `resultRef`。闭合引用覆盖 Scope 控制、Session 模型绑定、规划/执行交接与授权，宿主从确定写入/回读产生 ID 和版本。`TuiPorts.commandStatus(ref)` 校验 schema 和绑定 Scope，精确读取原记录。交接必须匹配记录 revision/phase，Scope/模型绑定须匹配产生结果时的 Scope revision；后续写入覆盖事实后保持 unknown。授权按 ID/version 读取原记录。引用证明已记录事实，不证明 Worker 完成或整个执行成功。UI 的 `refreshFailed` 单独表达已受理后的展示读取失败，保留受理事实和原输入；防重发覆盖精确读取与刷新，核验只重读状态。压缩没有独立调用结果身份；无可证明引用的异常保持不可核验。
 
 `ModelCatalogPort.load(SessionId)` 精确读取当前 Scope 的该 Session，不替换为规划责任方。交接 `prepare` 返回本次 ID；`read(id)` 复用 Controller 投影；`cutover/cancel(id, expectedRecordRevision)` 校验用户所见提案版本。规划接收方异步读取事实后、review 写入前重验版本，cutover 仅沿用本次 review 的返回版本。授权审阅字段由宿主投影为 `ReviewSection[]`，批准仍只回传 fingerprint 与 Scope revision。
@@ -799,6 +803,8 @@ Service 只委派既有用例，不打开 store、不调用具体 adapter、不�
 
 ## IC-12 Presentation projection、CLI 输出与进程生命周期
 
+协调与调试的 transcript 区域共同消费终端 SGR 滚轮，每次三行。区域由组件公开 box metrics 提供；overlay 内禁止导航，鼠标协议不进入 composer。挂载启用终端报告，卸载和退出恢复模式。工作区单行核心为真实运行状态保留空间，Route Map 创建及最终确认仅在实际调用期间绘制 spinner。
+
 正式 continuous transcript 保留当前有界页。PgUp/PgDn 先在当前页阅读，到边界再使用权威游标；Ctrl+Home/End 分别直达最早/最新，Esc 在关闭更高层界面后返回最新。离开底部时新事件保留当前页与输入；失败保留原页并展示原因，切 Session 或更晚请求使迟到响应失效。entry ID 用于工具展开身份。视口高度改变仅调整本地滚动位置，不查询或持久写入。此处是 3A 基本阅读合同，Markdown、局部解析、缓存和流式性能由 3B 实现。
 
 - **Owner (Create)**: `m0-orca-control-baseline`
@@ -868,6 +874,8 @@ type StatusJson = {
 
 ## IC-13 UI 输入存储
 
+提交先持久保存原快照和 submissionId，然后分离原 composer 草稿、在 transcript 展示 pending，再调用业务用例。新的草稿可编辑，原 lane 未结清时不能再次发送。草稿分离遇到 CAS 冲突时保留并发输入并提示失败；受理后仅结清原提交，不再次清除草稿。已提交 entry 按 submissionId 去重。拒绝和 unknown 保留原快照，经 `/inputs` 显式恢复或核验，不自动回填覆盖新草稿；回答仍核验原 interaction/revision。
+
 - **Owner (Create)**: `protect-tui-input`
 - **Canonical paths**: `src/application/ports/ui-input-store.ts`、`src/adapters/storage/ui-input-store.ts`
 - **Consumers (Consume)**: Bootstrap、TUI 输入保护与输入记录管理
@@ -911,6 +919,8 @@ SQLite 位于 Git common dir 的 `orca-companion/ui.sqlite`。短事务中完成
 
 ## IC-14 CredentialStore 与模型设置
 
+`ModelDefinition.metadata?` 由领域 schema 拥有，包含正安全整数 `contextWindow`、唯一且含 text 的 `inputModalities`（text/image/audio/video）及 `source: catalog|user_declared`；缺失为未知。用户库、项目配置与 debug 注册快照保留完整定义，同一引用不可改写。手填 exact ID 和 metadata 有独立入口；effort 使用固定协议预设，映射只由 chat-model adapter 拥有。声明不替代能力探针，也不启用附件。运行与压缩的输入上限为项目预算和声明窗口的较小值，不改项目预算。精确当前测量优先，否则展示同配置最新已提交请求 usage，明确标为上次请求；窗口未知时只显示真实 tokens。
+
 schema 5 的 ProviderConnection 只描述 Coordinator 连接：connectionRef、label、providerId、固定协议 providerIntegration、baseUrl 与 credential（managed API Key 引用）；Worker-only 的 `codex` 与 `nativeWorker` 字段被删除，出现即拒绝。Worker Profile 改为 `modelSelection`：`{model, effort, effortCapability: {values, source} | null, catalogSource: string | null}`；effortCapability 非空要求 catalogSource 非空，effort 非空必须属于 capability.values，catalogSource 为 null 表示手填未验证 native exact ID 且 effort 为 null。SaveModelSettingsInput 对 Worker 角色是只含 harness、model 与 effort 的判别联合，连接、秘密与任意 options 字段明确拒绝；服务经 `verifyWorkerSelection` 绑定本次显式原生目录查询的有界缓存核验来源。保存追加不可变 profile，应用沿完整 Manifest v4 审阅。Coordinator 仅使用 API Key，Worker 启动不读取 CredentialStore。
 
 - **Owner (Create)**: `complete-tui-model-configuration`
@@ -942,7 +952,7 @@ schema 5 的 ProviderConnection 只描述 Coordinator 连接：connectionRef、l
 - **IC-14 模型设置**：项目 schema 5；ProviderConnection 为 Coordinator-only 的固定协议/API Key 连接；Worker Profile 只带 harness 与 `modelSelection`，保存经显式原生目录查询缓存核验来源，零 CredentialStore 访问。
 - **IC-07 Worker Harness**：启动输入不含 CredentialStore、凭据路径或可覆盖原生环境的隔离 root；`worker-runtime.ts` 从真实 launch 环境解析非 secret runtime roots 并写入精确 Session 报告，`runtimeReportPath` 只承载非秘密路径；端口增加逐 harness 原生模型目录查询（codex `debug models`、Claude streamJSON control_request `list_models` 无 prompt、OpenCode `models --standalone`、pi 公开 availability/thinking API、omp `models --json` 实际 thinking）。查询总时限 30 秒，最多 4096 项、1 MiB/20000 行；控制协议经既有 process-runner 的可选 stdin 传入（最多 1 MiB），使用参数数组并支持取消。
 - **IC-08/IC-09 恢复与只读**：恢复按原 launch report/binding 的精确身份与 runtime roots，`expectedNative` 只核验；bwrap 继续让仓库、Git、common dir 与协调库拒写，真实 native state 目录与 Companion 工件目录可写，重叠不可证明即 unavailable。
-- **IC-11/IC-12 界面**：#52 定稿下 Worker 角色只编辑 harness 与原生目录候选（model/effort），无连接、凭据、API key 或任意 options；Coordinator 表单使用服务/地区产品线或自定义协议、地址、隐藏Key与模型选择；目录查询失败可手填 exact ID（未验证、无 effort），迟到结果仍按原入口归属。
+- **IC-11/IC-12 界面**：#52 定稿下 Worker 角色只编辑 harness 与原生目录候选（model/effort），无连接、凭据、API key 或任意 options；Coordinator 表单使用服务/地区产品线或自定义协议、地址、隐藏Key与模型选择；目录查询失败可手填 exact ID（未验证，可声明固定协议 effort 预设与模型元数据），迟到结果仍按原入口归属。
 
 ## `stabilize-agent-harness-core` 对 IC-14 的扩展
 
@@ -955,7 +965,7 @@ schema 5 的 ProviderConnection 只描述 Coordinator 连接：connectionRef、l
 Owner 为 `complete-tui-project-statusline` 的 Extend，canonical DTO 在 `src/application/tui/project-presentation.ts`。`ControllerSnapshot.projectPresentation` 与 `TuiViewModel.projectPresentation` 消费同一形状，不在组件内复制业务判断。
 
 - **metadata 权威**：repository/fullBranchRef 来自注册 Scope；模型/provider/effort 来自选中 Session 的准确不可变 configuration；Ticket 是该 Session 精确 Claim 的 tracker summary，只查 title/ref、不读取 body。当前 Work Package 来自当前 Dispatch/Attempt。缺少来源保留 null/unavailable，effort 区分 configured/not_configured/not_supported/unavailable。
-- **context**：installed integration 的可选精确测量能力接收完整有效输入和 tools、返回实际 used 与可信 capacity；观察绑定 Session/configuration/effective input revision。每次准备真实请求都会取得新输入版本，包含当次 Actionable Work；版本校验同时检查已提交历史位置、完整 Context Material、压缩结论、系统指令、权威事实和工具定义。能力由 `ProviderIntegration.exactContext` 表达，模块导出的模型构造函数可显式提供静态 `companionExactContext.measure({model,messages,tools,signal})`；一般 `BaseChatModel` 不被当作具备精确能力。消息/tool step 接受、压缩、换模型后失效。读取快照不测量；不使用近似 tokenizer、字符估算、上一轮/累计 usage、配置读回预算替代窗口。未提供能力的 adapter 为 unavailable。
+- **context**：installed integration 的可选精确测量能力接收完整有效输入和 tools、返回实际 used 与可信 capacity；观察绑定 Session/configuration/effective input revision。每次准备真实请求都会取得新输入版本，包含当次 Actionable Work；版本校验同时检查已提交历史位置、完整 Context Material、压缩结论、系统指令、权威事实和工具定义。能力由 `ProviderIntegration.exactContext` 表达，模块导出的模型构造函数可显式提供静态 `companionExactContext.measure({model,messages,tools,signal})`；一般 `BaseChatModel` 不被当作具备精确能力。消息/tool step 接受、压缩、换模型后失效。读取快照不测量；不使用近似 tokenizer、字符估算或累计 usage 冒充当前输入；没有精确能力时可显示绑定 Session/configuration 的最新已提交请求 usage，标注为上次请求，并使用有来源的模型窗口声明。窗口未知时不画百分比，项目预算不作为模型窗口。
 - **验收摘要**：唯一 application owner 从当前 GraphId/generation/version 全部未 retire Work Packages 与 `currentContractSettlements` 派生 `{validatedCount,totalCount}`；精确当前合同 Validator 接受结果每包一次，状态栏/Sidebar/Inspector 共同消费。Task done、Implementation 或 integration 状态、局部窗口不能派生分子。
 - **预算**：明确类别 work-packages/implementation-attempts/recovery，各自携 consumed、limit、subject 与 approvedLimitRef。work-packages 是当前未 retire 数/maxWorkPackages；implementation-attempts 读取精确包的 budget counter，recovery 复用按 businessAttemptId 汇总的 Recovery records，以上限对应的批准引用核验。缺少 ledger 或原 Task 的授权绑定显示不可用，不取 ledger 首项或当前配置上限冒充原授权。
 - **projectDetails**：Bootstrap 绑定 Scope，UI 请求精确 Session/object/seen revision/cursor。每次20项、64KiB总正文；长字段按UTF-8完整字符边界续读，游标跨对象/版本拒绝。批准后 Manifest 精确读取已批准 ID/version，候选入口独立。页面失败/失效保留原入口，迟到结果仅属于原对象；查询不产生业务动作。

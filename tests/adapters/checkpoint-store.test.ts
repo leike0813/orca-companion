@@ -975,3 +975,222 @@ test('v3 库增量迁移出轮次表：既有会话保留，未结束的轮次�
   verify.close();
   expect(Number(version.value)).toBe(CHECKPOINT_SCHEMA_VERSION);
 });
+
+/** 一条 assistant 的 json_blocks 响应：可见正文与原始协议块并存。 */
+function blocksEntry(stepId: string, blocks: readonly unknown[], replay?: CommittedMessageEntry['providerReplay']): CommittedMessageEntry {
+  return {
+    ...assistantEntry(stepId, JSON.stringify(blocks)),
+    contentFormat: 'json_blocks',
+    ...(replay === undefined ? {} : { providerReplay: replay }),
+  };
+}
+
+/** 直接写入一条 schema 5 之前的历史：有正文与 metadata，但没有显示投影。 */
+function insertLegacy(id: string, entry: CommittedMessageEntry): void {
+  const metadata = JSON.stringify({ entryId: entry.entryId, stepId: entry.stepId, role: entry.role, contentFormat: entry.contentFormat });
+  const raw = rawDatabase();
+  raw.prepare('INSERT INTO conversation_entries VALUES(?,?,?,?,?,?,?,?,?,NULL)').run(
+    id, 1, entry.entryId, entry.stepId, entry.role,
+    metadata, metadata,
+    Buffer.byteLength(entry.content, 'utf8'), 0);
+  const legacyBytes = Buffer.from(entry.content, 'utf8');
+  for (let start = 0; start < legacyBytes.length; start += HISTORY_CHUNK_BYTES)
+    raw.prepare('INSERT INTO conversation_bodies VALUES(?,?,?,?)').run(id, entry.entryId, start, legacyBytes.subarray(start, start + HISTORY_CHUNK_BYTES));
+  raw.close();
+}
+
+/** 落盘游标一行的编码字节；补齐过程用它证明游标本身也在预算内。 */
+function displayCursorBytes(id: string, entryId: string): number | undefined {
+  const raw = rawDatabase();
+  const row = raw.prepare('SELECT length(CAST(state AS BLOB)) AS bytes FROM history_display_scans WHERE coordinator_session_id=? AND entry_id=?')
+    .get(id, entryId) as { bytes: number } | undefined;
+  raw.close();
+  return row?.bytes;
+}
+
+test('schema 5 新增派生显示表，旧库按无损补齐升级并可重开', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A)).kind).toBe('saved');
+  const before = rawDatabase();
+  before.exec("UPDATE checkpoint_meta SET value='4' WHERE key='checkpoint_schema_version'");
+  before.exec('DROP TABLE history_display_sources');
+  before.exec('DROP TABLE history_display_chunks');
+  before.exec('DROP TABLE history_display_progress');
+  before.close();
+
+  store.close();
+  const upgraded = open();
+  expect(rawDatabase().prepare("SELECT value FROM checkpoint_meta WHERE key='checkpoint_schema_version'").get()).toEqual({ value: String(CHECKPOINT_SCHEMA_VERSION) });
+  expect(CHECKPOINT_SCHEMA_VERSION).toBe(5);
+  // 旧正文原样还在：升级只补表，不改任何既有行。
+  expect(upgraded.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries.map(entry => entry.entryId)).toContain(userEntryId('submission-1'));
+});
+
+test('新提交的 json_blocks 响应立即有可见投影，原文与续接身份不变', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
+  const entry = blocksEntry('visible', [
+    { type: 'text', text: '你好！' },
+    { type: 'thinking', thinking: '不该显示的推理' },
+    { type: 'text', text: '这是正文🙂', thought: false },
+  ], { configurationRef: 'config-a', additionalKwargs: { reasoning_content: 'R'.repeat(2_000) } });
+  expect(store.appendModelStep({ coordinatorSessionId: SESSION_A, entry, step: { ...step('visible', entry.content, 5), usage: { inputTokens: 12, outputTokens: 7, totalTokens: 19 } },
+    graphPosition: 'model' }).kind).toBe('saved');
+
+  const visible = '你好！\n这是正文🙂';
+  const page = store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries.find(item => item.entryId === entry.entryId)!;
+  expect(page.displayByteLength).toBe(Buffer.byteLength(visible, 'utf8'));
+  expect(page.byteLength).toBe(Buffer.byteLength(entry.content, 'utf8'));
+
+  const display = store.readHistoryDisplay({ coordinatorSessionId: SESSION_A, entryId: entry.entryId, contentRevision: 1, offset: 0 });
+  expect(display?.text).toBe(visible);
+  expect(display?.byteLength).toBe(page.displayByteLength);
+
+  // 原始协议块仍然是唯一权威正文，工具与推理没有被投影改写。
+  expect(store.readHistoryBody({ coordinatorSessionId: SESSION_A, entryId: entry.entryId, contentRevision: 1, offset: 0 })?.text).toBe(entry.content);
+  expect(store.readEntry(SESSION_A, entry.entryId)?.providerReplay?.configurationRef).toBe('config-a');
+  expect(store.readEntry(SESSION_A, entry.entryId)?.content).toBe(entry.content);
+
+  // 最近一次请求的 usage 是真实观测，并带着它自己的配置身份。
+  expect(store.readLatestModelUsage(SESSION_A)).toEqual({
+    stepId: 'visible', entryId: entry.entryId, sequence: page.sequence, configurationRef: 'config-a',
+    usage: { inputTokens: 12, outputTokens: 7, totalTokens: 19 },
+  });
+
+  // 没有 provider replay 的响应同样读得到 usage，配置身份缺失时如实未知。
+  const plain = { ...assistantEntry('plain', '{"type":"text","text":"纯文本回复"}'), contentFormat: 'json_blocks' as const };
+  expect(store.appendModelStep({ coordinatorSessionId: SESSION_A, entry: plain,
+    step: { ...step('plain', plain.content, 6), messages: [plain], usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } },
+    graphPosition: 'model' }).kind).toBe('saved');
+  expect(store.readLatestModelUsage(SESSION_A)).toEqual({
+    stepId: 'plain', entryId: plain.entryId, sequence: page.sequence + 1, configurationRef: null,
+    usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 },
+  });
+});
+
+test('显示投影按范围读取、有 UTF-8 边界与上界，没有投影的条目如实为空', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
+  const entry = blocksEntry('ranged', [{ type: 'text', text: '开头🙂' + '中文abc\n'.repeat(9_000) + '结尾' }]);
+  expect(store.appendModelStep({ coordinatorSessionId: SESSION_A, entry, step: { ...step('ranged', entry.content, 5), messages: [entry] }, graphPosition: 'model' }).kind).toBe('saved');
+  const page = store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries.find(item => item.entryId === entry.entryId)!;
+  const byteLength = page.displayByteLength!;
+  expect(byteLength).toBeGreaterThan(HISTORY_BODY_BYTES);
+
+  let offset = 0, original = '';
+  while (offset < byteLength) {
+    const range = store.readHistoryDisplay({ coordinatorSessionId: SESSION_A, entryId: entry.entryId, contentRevision: 1, offset, maxBytes: HISTORY_BODY_BYTES })!;
+    expect(Buffer.byteLength(range.text)).toBeLessThanOrEqual(HISTORY_BODY_BYTES);
+    expect(range.end).toBeGreaterThan(offset);
+    original += range.text;
+    offset = range.end;
+  }
+  expect(original).toBe('开头🙂' + '中文abc\n'.repeat(9_000) + '结尾');
+  expect(() => store.readHistoryDisplay({ coordinatorSessionId: SESSION_A, entryId: entry.entryId, contentRevision: 1, offset: byteLength + 1 })).toThrow();
+  expect(store.readHistoryDisplay({ coordinatorSessionId: SESSION_A, entryId: 'missing', contentRevision: 1, offset: 0 })).toBeNull();
+  expect(store.readHistoryDisplay({ coordinatorSessionId: SESSION_A, entryId: userEntryId('submission-1'), contentRevision: 1, offset: 0 })).toBeNull();
+});
+
+test('旧 json_blocks 历史按固定预算补齐投影，准备完成前不冒充显示来源', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
+  const entry = blocksEntry('legacy', [{ type: 'text', text: '旧正文🙂'.repeat(30_000) }, { type: 'tool_use', id: 'call-1', name: 'read', input: {} }]);
+  // 直接写旧记录：有正文与 metadata，但没有投影，模拟 schema 5 之前的历史。
+  const metadata = JSON.stringify({ entryId: entry.entryId, stepId: entry.stepId, role: entry.role, contentFormat: entry.contentFormat });
+  const raw = rawDatabase();
+  raw.prepare('INSERT INTO conversation_entries VALUES(?,?,?,?,?,?,?,?,?,NULL)').run(
+    SESSION_A, 1, entry.entryId, entry.stepId, entry.role,
+    metadata, metadata,
+    Buffer.byteLength(entry.content, 'utf8'), 0);
+  const legacyBytes = Buffer.from(entry.content, 'utf8');
+  for (let start = 0; start < legacyBytes.length; start += HISTORY_CHUNK_BYTES)
+    raw.prepare('INSERT INTO conversation_bodies VALUES(?,?,?,?)').run(SESSION_A, entry.entryId, start, legacyBytes.subarray(start, start + HISTORY_CHUNK_BYTES));
+  raw.close();
+
+  expect(store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries[0]!.displayByteLength).toBeUndefined();
+  let progress = store.prepareHistoryInspection();
+  let calls = 1;
+  while (!progress.ready && calls < 2_000) { progress = store.prepareHistoryInspection(); calls += 1; }
+  expect(progress.ready).toBe(true);
+  // 一次调用最多读 64 KiB，因此旧响应需要多次有界推进。
+  expect(calls).toBeGreaterThan(1);
+  const visible = '旧正文🙂'.repeat(30_000);
+  const page = store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries[0]!;
+  expect(page.displayByteLength).toBe(Buffer.byteLength(visible, 'utf8'));
+  const head = store.readHistoryDisplay({ coordinatorSessionId: SESSION_A, entryId: entry.entryId, contentRevision: 1, offset: 0, maxBytes: HISTORY_BODY_BYTES })!;
+  expect(Buffer.byteLength(head.text)).toBeLessThanOrEqual(HISTORY_BODY_BYTES);
+  expect(visible.startsWith(head.text)).toBe(true);
+  expect(store.readEntry(SESSION_A, entry.entryId)?.content).toBe(entry.content);
+});
+
+test('旧 json_blocks 正文不是完整 JSON 时准备显式失败，不把截断前缀发布成显示来源', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
+  const entry = blocksEntry('truncated', [{ type: 'text', text: '旧正文' }]);
+  insertLegacy(SESSION_A, { ...entry, content: entry.content.slice(0, -1) });
+  expect(() => store.prepareHistoryInspection()).toThrow(/Corrupt display projection structure/);
+  // 没有登记来源，也没有推进水位：读者看不到半截文本，原始正文仍然完整。
+  expect(store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries[0]!.displayByteLength).toBeUndefined();
+  expect(store.readHistoryDisplay({ coordinatorSessionId: SESSION_A, entryId: entry.entryId, contentRevision: 1, offset: 0 })).toBeNull();
+  expect(store.readEntry(SESSION_A, entry.entryId)?.content).toBe(entry.content.slice(0, -1));
+  expect(store.readHistoryInspection(SESSION_A).ready).toBe(false);
+});
+
+test('深度越界的旧正文不被当成完整显示来源，准备显式失败', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
+  const deep = '[{"type":"tool_use","input":' + '['.repeat(2000) + '"' + 'x'.repeat(100_000) + '"' + ']'.repeat(2000) + '},{"type":"text","text":"可见"}]';
+  insertLegacy(SESSION_A, { ...blocksEntry('deep', []), content: deep });
+  expect(() => store.prepareHistoryInspection()).toThrow(/Corrupt display projection structure/);
+  expect(store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries[0]!.displayByteLength).toBeUndefined();
+});
+
+test('嵌套仍在上限内的旧正文按固定预算补齐，游标本身也在同一个预算内', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
+  const nested = { type: 'tool_use', id: 'call-1', name: 'read', input: Array.from({ length: 30 }, (_, index) => ({ n: index })) };
+  const entry = blocksEntry('bounded', [nested, { type: 'text', text: '旧正文🙂'.repeat(30_000) }]);
+  insertLegacy(SESSION_A, entry);
+  let progress = store.prepareHistoryInspection(), calls = 1, peakCursor = 0;
+  // 一次调用最多 64 KiB：正文与落盘游标共用这一个预算，游标因此必须先扣掉。
+  expect(progress.scannedBytes).toBeLessThanOrEqual(64 * 1024);
+  peakCursor = Math.max(peakCursor, displayCursorBytes(SESSION_A, entry.entryId) ?? 0);
+  while (!progress.ready && calls < 2000) { progress = store.prepareHistoryInspection(); calls += 1; }
+  expect(progress.scannedBytes).toBeLessThanOrEqual(64 * 1024);
+  expect(progress.ready).toBe(true);
+  expect(calls).toBeGreaterThan(1);
+  expect(peakCursor).toBeGreaterThan(0);
+  expect(peakCursor).toBeLessThanOrEqual(64 * 1024);
+  const visible = '旧正文🙂'.repeat(30_000);
+  expect(store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries[0]!.displayByteLength).toBe(Buffer.byteLength(visible, 'utf8'));
+  // 结清后游标行随之删除：它只服务续扫，不是常驻状态。
+  expect(displayCursorBytes(SESSION_A, entry.entryId)).toBeUndefined();
+});
+
+test('每次旧历史补齐都核过游标上限，损坏或超限的游标按损坏身份拒绝', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
+  const entry = blocksEntry('cursor', [{ type: 'text', text: '旧正文' }]);
+  insertLegacy(SESSION_A, entry);
+  const saveCursor = (state: string): void => {
+    const raw = rawDatabase();
+    raw.prepare('INSERT OR REPLACE INTO history_display_scans VALUES(?,?,?,?)').run(SESSION_A, entry.entryId, state, 1);
+    raw.close();
+  };
+  saveCursor('x'.repeat(64 * 1024 + 1));
+  expect(() => store.prepareHistoryInspection()).toThrow(/cursor exceeds byte budget/);
+  saveCursor('{"scan":{}}');
+  expect(() => store.prepareHistoryInspection()).toThrow(/not in the current format/);
+  saveCursor('{不是 JSON');
+  expect(() => store.prepareHistoryInspection()).toThrow(/cursor is corrupt/);
+  // 游标是续扫幂等的依据：坏游标不会退回重扫，因此显示来源仍未被登记。
+  expect(store.readHistoryPage({ coordinatorSessionId: SESSION_A }).entries[0]!.displayByteLength).toBeUndefined();
+});
+
+test('新的 json_blocks 响应不是完整 JSON 时连同这次提交一起回滚', () => {
+  expect(store.saveCheckpoint(sessionState(SESSION_A, { committedMessages: [], committedModelSteps: [] })).kind).toBe('saved');
+  const entry = { ...assistantEntry('broken', '[{"type":"text","text":"正文"}]垃圾'), contentFormat: 'json_blocks' as const };
+  expect(store.appendModelStep({ coordinatorSessionId: SESSION_A, entry,
+    step: { ...step('broken', entry.content, 5), messages: [entry] }, graphPosition: 'model' }).kind).toBe('failed');
+  expect(store.readEntry(SESSION_A, entry.entryId)).toBeNull();
+  expect(store.readHistoryDisplay({ coordinatorSessionId: SESSION_A, entryId: entry.entryId, contentRevision: 1, offset: 0 })).toBeNull();
+});
+
+test('已登记但没有首个 checkpoint 的会话读回空历史，恢复仍然是 absent', () => {
+  expect(store.readHistoryPage({ coordinatorSessionId: SESSION_B }).entries).toEqual([]);
+  expect(store.readHistoryDisplay({ coordinatorSessionId: SESSION_B, entryId: 'any', contentRevision: 1, offset: 0 })).toBeNull();
+  expect(store.readLatestModelUsage(SESSION_B)).toBeNull();
+  expect(store.loadCheckpoint(SESSION_B).kind).toBe('absent');
+});

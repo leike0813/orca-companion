@@ -506,6 +506,7 @@ test('执行工具被注册进图：已提交调用由 tools 节点按持久化�
   const graph = buildCoordinatorGraph({
     model,
     configurationRef: 'test-configuration',
+   providerIntegration: 'openai-responses',
     checkpointer: checkpointStore.checkpointer,
     sessionRecords: checkpointStore,
     planningTools: [],

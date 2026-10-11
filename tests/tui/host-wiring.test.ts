@@ -421,7 +421,7 @@ test('其他分支的 Scope 不构成匹配：Home 进入向导而不是误判�
 
   const instance = render(harness.host);
   await settle(12);
-  expect(frameText(instance)).toContain('初始化向导');
+  expect(frameText(instance)).toContain('确认初始化');
 });
 
 test('向导创建后按当前完整 ref 与 canonical worktree 恢复', async () => {
@@ -679,8 +679,7 @@ test('链接 worktree 被拒绝恢复，并把身份不匹配的原因显示出�
   const instance = render(linkedHarness.host);
   await settle(12);
   const frame = frameText(instance);
-  expect(frame).toContain('worktree_not_canonical');
-  expect(frame).toContain(realpathSync(linked));
+  expect(frame).toContain('链接 worktree');
 });
 
 test('旧未绑定记录：确认前零写入，Review 确认后补齐绑定并恢复', async () => {

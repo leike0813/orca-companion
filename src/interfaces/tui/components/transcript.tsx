@@ -11,6 +11,7 @@ export type TranscriptProps = {
   readonly onToggleTool: (entryId: string) => void;
   readonly availableWidth: number;
   readonly maxLines?: number;
+  readonly pendingSubmission?: { readonly submissionId: string; readonly text: string; readonly status: string } | null;
 };
 export const TOOL_COLLAPSED_MARKER = '▸';
 export const TOOL_EXPANDED_MARKER = '▾';
@@ -30,11 +31,19 @@ function Row({ line, width }: { readonly line: TranscriptLine; readonly width: n
       underline={span.style === 'link'} strikethrough={span.style === 'deleted'} dimColor={span.style === 'code'}>{span.text}</Text>)}</Text>;
 }
 export function Transcript(props: TranscriptProps) {
-  const height = props.maxLines ?? 24;
-  const lines = props.frame === undefined ? staticTranscriptLines(props.transcript, props.expandedToolIds, props.availableWidth, height)
+  const height = Math.max(1, (props.maxLines ?? 24) - (props.pendingSubmission ? 1 : 0));
+  let lines = props.frame === undefined ? staticTranscriptLines(props.transcript, props.expandedToolIds, props.availableWidth, height)
     : props.frame?.lines ?? [];
+  const pending = props.pendingSubmission;
+  if (pending && props.frame?.atLatest !== false && !lines.some(line => line.id === 'entry:user:' + pending.submissionId)) {
+    const pendingLines = staticTranscriptLines({ ...props.transcript, scrollOffset: 0,
+      entries: [{ kind: 'user', id: 'pending:' + pending.submissionId, text: pending.text }] }, [], props.availableWidth, height);
+    lines = [...lines, ...pendingLines];
+  }
   if (lines.length === 0) return <Text dimColor>{props.transcript.historyStatus === 'loading' ? '正在读取对话…'
     : props.transcript.historyStatus === 'unavailable' ? '对话尚未载入' : '尚无对话记录'}</Text>;
-  const visible = props.frame?.atLatest ? lines.slice(-height) : lines.slice(0, height);
-  return <Box flexDirection="column">{visible.map(line => <Box key={line.key}><Row line={line} width={props.availableWidth}/></Box>)}</Box>;
+  const visible = props.frame?.atLatest !== false ? lines.slice(-height) : lines.slice(0, height);
+  return <Box flexDirection="column">{visible.map(line => <Box key={line.key}><Row line={line} width={props.availableWidth}/></Box>)}
+    {pending ? <Text dimColor>{pending.status === 'awaiting' ? '正在提交…' : '提交' + pending.status + ' · /inputs 恢复或核验'}</Text> : null}
+  </Box>;
 }

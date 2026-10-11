@@ -216,6 +216,48 @@ function renderWorkspace(
   );
 }
 
+/**
+ * 等到工作区真正可以接收输入。
+ *
+ * 固定 tick 数把「异步解析 Home 有多快」写成了断言。这里等两件用户能感知的事：composer 占位符出现，
+ * 且连续几次观察都没有新的端口读取——首屏出现与「能接收输入」不是同一时刻，落在这段加载里的按键不会
+ * 进草稿。
+ */
+async function waitForWorkspace(rendered: RenderedTui, ports?: { readonly calls: readonly unknown[] }, tries = 200): Promise<void> {
+  let previous = -1;
+  let stable = 0;
+  for (let index = 0; index < tries; index += 1) {
+    const ready = (rendered.lastFrame() ?? '').includes('输入消息…');
+    if (ready) {
+      const reads = ports?.calls.length ?? 0;
+      stable = reads === previous ? stable + 1 : 0;
+      previous = reads;
+      if (ports === undefined || stable >= 3) return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error('工作区没有就绪');
+}
+
+/** 等到某段可见内容出现；用于异步端口返回后的断言。 */
+async function waitForFrame(rendered: RenderedTui, marker: string, tries = 200): Promise<void> {
+  for (let index = 0; index < tries; index += 1) {
+    if ((rendered.lastFrame() ?? '').includes(marker)) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error(`画面没有出现：${marker}`);
+}
+
+/** 把项目面板光标停在指定可见行：面板分组会变化，按可见标记定位而不是按下标数。 */
+async function focusPanelRow(rendered: RenderedTui, label: string, tries = 12): Promise<void> {
+  for (let index = 0; index < tries; index += 1) {
+    if ((rendered.lastFrame() ?? '').includes('› ' + label)) return;
+    rendered.stdin.write('\u001b[B');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error(`面板里找不到行：${label}`);
+}
+
 describe('planning-workspace / 常驻 transcript 与 composer 主视图', () => {
   test.each([[80, 24], [50, 40]])('长问题、选项和答案在 %ix%i 保留时间线与不可提交原因', async (terminalWidth, terminalHeight) => {
     const repository = '/home/joshua/projects/orca-companion-with-a-long-directory-name';
@@ -394,9 +436,10 @@ describe('planning-workspace / 常驻 transcript 与 composer 主视图', () => 
     // 容器级：真实输入路径下普通字符让 placeholder 让位，且没有打开任何 overlay。
     const fake = createFakePorts();
     const app = renderTui(fake.ports);
-    await settle(12);
+    await waitForWorkspace(app);
     expect(app.lastFrame() ?? '').toContain('输入消息…');
 
+    await waitForWorkspace(app, fake);
     app.stdin.write('p');
     await settle(2);
     const frame = app.lastFrame() ?? '';
@@ -504,15 +547,12 @@ describe('planning-workspace / 信息分层', () => {
         } },
     });
     try {
-      await settle();
+      await waitForWorkspace(rendered);
       rendered.stdin.write('\u0002');
-      await settle();
-      for (let index = 0; index < 1; index += 1) {
-        rendered.stdin.write('\u001b[B');
-        await settle();
-      }
+      await settle(2);
+      await focusPanelRow(rendered, '预算与授权');
       rendered.stdin.write('\r');
-      await settle();
+      await waitForFrame(rendered, 'approved-budget-value');
 
       expect(requests).toEqual([{
         objectKey: 'budget',
@@ -541,10 +581,10 @@ describe('planning-workspace / 信息分层', () => {
       projectDetails: { read: () => new Promise(resolve => pending.push(resolve)) },
     });
     try {
-      await settle();
-      rendered.stdin.write('\u0002'); await settle();
-      for (let index = 0; index < 3; index += 1) { rendered.stdin.write('\u001b[B'); await settle(); }
-      rendered.stdin.write('\r'); await settle();
+      await waitForWorkspace(rendered);
+      rendered.stdin.write('\u0002'); await settle(2);
+      await focusPanelRow(rendered, '项目与会话');
+      rendered.stdin.write('\r'); await settle(2);
       rendered.stdin.write('\u001b'); await new Promise(resolve => setTimeout(resolve, 100)); await settle();
       rendered.stdin.write('\r'); await settle();
       expect(pending).toHaveLength(2);
@@ -570,10 +610,11 @@ describe('planning-workspace / 信息分层', () => {
       projectDetails: { read: () => Promise.resolve({ kind: 'page' as const, page }) },
     });
     try {
-      await settle();
-      rendered.stdin.write('\u0002'); await settle();
-      rendered.stdin.write('\u001b[B'); await settle();
-      rendered.stdin.write('\r'); await settle();
+      await waitForWorkspace(rendered);
+      rendered.stdin.write('\u0002'); await settle(2);
+      await focusPanelRow(rendered, '预算与授权');
+      rendered.stdin.write('\r'); await settle(2);
+      await waitForFrame(rendered, '详情响应不匹配');
       expect(rendered.lastFrame()).not.toContain('must-not-render');
       expect(rendered.lastFrame()).toContain('详情响应不匹配');
     } finally { rendered.unmount(); fake.closeInputStore(); }

@@ -81,6 +81,7 @@ import type { ExecutionHandoffReviewFacts } from './handoff/execution-handoff.js
 import type { HandoffReviewFacts } from './planning/planning-handoff.js';
 import type { SubmissionQuery, SubmissionStatus } from './coordinator/submission-status.js';
 import type { ProjectPresentation } from './tui/project-presentation.js';
+import type { AgentTurnState } from './ports/agent-turn.js';
 
 /* -------------------------------------------------------------------------- */
 /* 查询：只读快照与 transcript                                                 */
@@ -102,6 +103,8 @@ export type ControllerSessionSummary = {
   readonly holdsExecutionLease: boolean;
   readonly planningResponsible: boolean;
   readonly openInteractionCount: number;
+  /** 该 Session 的真实轮次状态；宿主未提供该事实时缺省，界面不得由租约或 Scope 推断。 */
+  readonly turn?: AgentTurnState;
 };
 
 export type ControllerBudgetView = {
@@ -708,6 +711,12 @@ export type ControllerNotification =
       readonly code: string;
       readonly message: string;
     }
+  | {
+      /** 真实轮次进入或结束；归属 Session 由 envelope 给出，界面只更新该 Session。 */
+      readonly kind: 'turn-changed';
+      readonly coordinationScopeId: string;
+      readonly turn: AgentTurnState;
+    }
   | { readonly kind: 'keepalive'; readonly at: number }
   | { readonly kind: 'stderr'; readonly line: string }
   | { readonly kind: 'poll-timeout'; readonly source: string }
@@ -902,6 +911,13 @@ export type ControllerSnapshotFacts = {
   /** Runtime 观察到的最近一次压缩结论（IC-11 Extend）；从未观察到时为 `null`。 */
   readonly compaction: ControllerCompactionView | null;
   readonly projectPresentation?: ProjectPresentation;
+  /**
+   * 各 Session 的真实轮次状态，由宿主从会话库读回后注入。
+   *
+   * 它是「模型请求是否在途」的唯一事实：Scope active 或 Runtime lease 都不等价于轮次在运行，
+   * 因此这里按 Session 精确提供，缺项只是不呈现，绝不用协调事实补齐。
+   */
+  readonly sessionTurns?: ReadonlyMap<string, AgentTurnState> | undefined;
 };
 
 function projectInteraction(interaction: Omit<PendingInteractionRecord, 'answerText'> & { questionPreview?: string; answerPreview?: string }): ControllerInteractionView {
@@ -1168,6 +1184,9 @@ export function projectControllerSnapshot(facts: ControllerSnapshotFacts): Contr
           interaction.state === 'open' &&
           interaction.ownerCoordinatorSessionId === session.coordinatorSessionId,
       ).length : 0),
+      ...(facts.sessionTurns?.has(session.coordinatorSessionId) === true
+        ? { turn: facts.sessionTurns.get(session.coordinatorSessionId)! }
+        : {}),
     })),
     budgets: facts.budgets.map(projectBudget),
     frontier: facts.frontier.map((entry) => ({

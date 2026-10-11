@@ -37,6 +37,7 @@ import { StatuslineSettings } from '../components/statusline-settings.js';
 import { ExecutionSettings } from '../components/execution-settings.js';
 import { TopBar } from '../components/top-bar.js';
 import { Conversation } from '../components/conversation.js';
+import type { TranscriptRegion } from '../input/transcript-mouse.js';
 import type { TranscriptFrame } from '../render/transcript-reader.js';
 import { sidebarWidthFor, truncateToDisplayWidth } from '../render/width.js';
 import type { ExecutionAuthorizationLoad, ModelCatalog, ModelRoleView } from '../ports.js';
@@ -83,7 +84,9 @@ export type WorkspaceProps = {
   readonly terminalWidth: number;
   readonly terminalHeight?: number;
   readonly onTranscriptHeight?: (height: number) => void;
+  readonly onTranscriptRegion?: (region: TranscriptRegion | null) => void;
   readonly transcriptFrame?: TranscriptFrame | null;
+  readonly pendingSubmission?: { readonly submissionId: string; readonly text: string; readonly status: string } | null;
   readonly historyContext?: ContextSearchView | null;
   readonly historyPreview?: UiDraft | null;
   readonly events: readonly SemanticEvent[];
@@ -184,6 +187,7 @@ export function Workspace(props: WorkspaceProps) {
   const view=props.viewModel,ui=props.ui,rows=props.terminalHeight??24;
   const {width,bodyRows,alerts,projectWidth}=workspaceLayout(view,ui,props.terminalWidth,rows);
   const selected=ui.selectedSessionId,input=props.historyPreview??composerInputFor(ui,selected),readOnly=isComposerReadOnly(ui,selected);
+  const turn = view.sessions.find(session => session.coordinatorSessionId === selected)?.turn;
   const overlay=ui.overlayStack.at(-1)??null;
   const focus=overlay===null&&ui.pendingConfirmation===null&&!ui.projectPanel.open&&!props.historyContext;
   const interactions=view.interactions.filter(i=>i.state==='open'&&i.ownerCoordinatorSessionId===selected);
@@ -216,6 +220,9 @@ export function Workspace(props: WorkspaceProps) {
     <Box ref={rowRef} flexDirection="row" height={bodyRows} flexShrink={0}>
       <Box ref={bodyRef} flexDirection="column" width={width} height={bodyRows}>
         <Conversation width={width} height={bodyRows} transcript={view.transcript}
+          origin={{ x: origin.x, y: origin.y + 1 + alerts.slice(0, 2).length }}
+          {...(props.onTranscriptRegion === undefined ? {} : { onTranscriptRegion: props.onTranscriptRegion })}
+          {...(props.pendingSubmission === undefined ? {} : { pendingSubmission: props.pendingSubmission })}
           {...(props.transcriptFrame === undefined ? {} : { frame: props.transcriptFrame })}
           expandedToolIds={ui.expandedToolIds} onToggleTool={props.actions.toggleTool} availableWidth={width}
           {...(props.onTranscriptHeight === undefined ? {} : { onTranscriptHeight: props.onTranscriptHeight })}>
@@ -227,6 +234,7 @@ export function Workspace(props: WorkspaceProps) {
         <Composer value={composerDraftFor(ui,selected)} draft={input} terminalHeight={rows} focused={focus} externalCursor={!!props.historyContext} origin={origin} mode={ui.composerMode} readOnly={readOnly}
           disabledReason={props.composerDisabledReason} newlineHint={props.newlineHint} availableWidth={width}/></>}
         <StatusLine scope={view.scope} compaction={view.compaction} maintenance={view.maintenance} blockerCount={view.blockers.length} notice={ui.notice}
+          {...(turn === undefined ? {} : { turn })}
           sidebarDensity={ui.sidebarDensity} execution={view.execution} availableWidth={width} model={model} graph={view.graph} {...(view.projectPresentation===undefined?{}:{presentation:view.projectPresentation})} {...(props.savedStatusline===undefined?{}:{preferences:props.savedStatusline})}/>
         </Conversation>
       </Box>

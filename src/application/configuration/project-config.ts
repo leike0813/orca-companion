@@ -447,6 +447,14 @@ function validateReferences(config: ProjectConfig): IdentityFailure | null {
           message: `与所引用的 Model 能力来源不一致：${configuration.modelRef}`,
         };
       }
+      // 元数据同样是不可变快照：配置携带的声明必须与所引用 Model 一致，缺省表示未知而不是默认。
+      if (configuration.metadata !== undefined && !semanticEqual(configuration.metadata, model.metadata)) {
+        return {
+          ok: false,
+          field: `${field}.metadata`,
+          message: `与所引用的 Model 元数据不一致：${configuration.modelRef}`,
+        };
+      }
     }
 
     const capability = configuration.effortCapability ?? model?.effortCapability ?? null;

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ValidatorAcceptanceSummary } from '../execution/execution-view.js';
+import type { ModelUsageObservation } from '../../domain/coordinator/session-state.js';
 
 /** Trusted statusline and project-panel facts derived from current authoritative bindings. */
 export type ProjectPresentation = {
@@ -18,7 +19,23 @@ export type ProjectPresentation = {
   readonly ticket: { readonly ref: string; readonly title: string } | null;
   /** 当前世代真实占用额度的包；多包时完整列出，不取第一个冒充唯一活动包。空数组表示执行空闲。 */
   readonly activeWorkPackages: readonly { readonly id: string; readonly title: string }[];
-  readonly context:
+  readonly context: ProjectContextStatus;
+  readonly acceptance: ValidatorAcceptanceSummary | null;
+  readonly budgets: {
+    readonly workPackages: BudgetPresentation | null;
+    readonly implementationAttempts: BudgetPresentation | null;
+    readonly recovery: BudgetPresentation | null;
+  };
+};
+
+/**
+ * 上下文状态的三个互斥事实来源。
+ *
+ * `available` 是当前这次有效输入的精确测量；`last_request` 是最近一次**已提交请求**的真实用量，
+ * 它是历史观察而不是当前输入；`unavailable` 表示两者都无法证明。缺失一律保持未知，不估算、不把
+ * 累计用量或 cache 读数当作本次输入。
+ */
+export type ProjectContextStatus =
     | {
         readonly status: 'available';
         readonly used: number;
@@ -28,14 +45,18 @@ export type ProjectPresentation = {
         readonly modelConfigurationRef: string;
         readonly effectiveInputRevision: number;
       }
+    | {
+        readonly status: 'last_request';
+        readonly inputTokens: number | null;
+        readonly outputTokens: number | null;
+        readonly totalTokens: number | null;
+        /** 声明的模型窗口；未声明时为 `null`，界面因此不显示虚假百分比。 */
+        readonly capacity: number | null;
+        readonly coordinatorSessionId: string;
+        readonly modelConfigurationRef: string;
+        readonly stepId: string;
+      }
     | { readonly status: 'unavailable' };
-  readonly acceptance: ValidatorAcceptanceSummary | null;
-  readonly budgets: {
-    readonly workPackages: BudgetPresentation | null;
-    readonly implementationAttempts: BudgetPresentation | null;
-    readonly recovery: BudgetPresentation | null;
-  };
-};
 
 export type BudgetPresentation = {
   readonly status: 'available' | 'unavailable';
@@ -49,6 +70,19 @@ export type ContextObservationBinding = {
   readonly coordinatorSessionId: string | null;
   readonly modelConfigurationRef: string | null;
   readonly effectiveInputRevision: number | null;
+  /** 声明的模型窗口；`null` 表示未知，只能如实呈现已知的用量。 */
+  readonly contextWindow: number | null;
+};
+
+/**
+ * 一次已提交模型 step 的真实 usage 与它的可信身份；形状与存储层的 `LatestModelUsage` 一致。
+ *
+ * `usage` 或 `configurationRef` 缺失就是「没有取得」：它不补零，也不借当前配置的窗口来编一个数字。
+ */
+export type LastModelUsage = {
+  readonly stepId: string;
+  readonly configurationRef: string | null;
+  readonly usage: ModelUsageObservation | null;
 };
 
 export type ProjectDetailQuery = {
@@ -110,6 +144,40 @@ export function projectContextObservation(
     current.effectiveInputRevision !== binding.effectiveInputRevision ||
     current.used > current.capacity) return { status: 'unavailable' };
   return current;
+}
+
+/**
+ * 当前精确测量优先；没有时退回同一配置下最近一次已提交请求的真实用量。
+ *
+ * 其它配置产生的用量一律拒绝呈现：换个模型之后那份数字不再描述当前会话，用它画百分比只会把
+ * 不确定说成确定。三个 token 值保持 provider 报告的原始未知，不补零、不累加历史轮次。
+ */
+export function projectContextStatus(
+  observation: unknown,
+  lastRequest: LastModelUsage | null,
+  binding: ContextObservationBinding,
+): ProjectContextStatus {
+  const current = projectContextObservation(observation, binding);
+  if (current.status === 'available') return current;
+  if (binding.coordinatorSessionId === null || binding.modelConfigurationRef === null ||
+    lastRequest === null || lastRequest.usage === null || lastRequest.configurationRef === null) {
+    return { status: 'unavailable' };
+  }
+  if (lastRequest.configurationRef !== binding.modelConfigurationRef) {
+    return { status: 'unavailable' };
+  }
+  const { inputTokens, outputTokens, totalTokens } = lastRequest.usage;
+  if (inputTokens === null && outputTokens === null && totalTokens === null) return { status: 'unavailable' };
+  return {
+    status: 'last_request',
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    capacity: binding.contextWindow,
+    coordinatorSessionId: binding.coordinatorSessionId,
+    modelConfigurationRef: lastRequest.configurationRef,
+    stepId: lastRequest.stepId,
+  };
 }
 
 export const projectDetailQuerySchema = z.strictObject({

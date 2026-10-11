@@ -23,6 +23,7 @@ type Source = {
   readonly part?: 'arguments' | 'result' | 'question' | 'answer';
   readonly interaction?: InteractionSummary | null;
   readonly questionIndexPending?: boolean;
+  readonly displayPreparing?: boolean;
 };
 export type TranscriptAnchor = {
   readonly coordinatorSessionId: string; readonly source: TranscriptSourceRef;
@@ -194,6 +195,8 @@ type Context = { fence: string | null };
 export class TranscriptReader {
   private session = '';
   private generation = 0;
+  private navigationEpoch = 0;
+  private queue: Promise<unknown> = Promise.resolve();
   private width = 80;
   private height = 12;
   private expanded: readonly string[] = [];
@@ -224,9 +227,17 @@ export class TranscriptReader {
     layoutBytes: this.layouts.bytes + this.inspectionBytes + this.expanded.reduce((n, id) => n + id.length * 2 + 64, 0) + [...this.contexts].reduce((n, [key]) => n + key.length * 2 + 256, 0), layoutItems: this.layouts.size + this.contexts.size + (this.inspectionBytes > 0 ? 1 : 0) + (this.expanded.length > 0 ? 1 : 0), lastReadBytes: this.readBytes,
     lastLayoutRows: this.layoutRows, metadataItems: this.sources.length }; }
   dispose(): void {
+    this.navigationEpoch += 1;
+    this.queue = Promise.resolve();
     this.generation += 1; this.bodies.clear(); this.layouts.clear(); this.contexts.clear(); this.currentSources.clear(); this.inspectionBytes = 0; this.upperSequence = undefined;
     for (const release of this.previewPins.values()) release(); this.previewPins.clear();
     this.interactions.clear();
+  }
+  private enqueue(work: () => Promise<TranscriptFrame | null>): Promise<TranscriptFrame | null> {
+    const epoch = this.navigationEpoch;
+    const next = this.queue.then(() => epoch === this.navigationEpoch ? work() : null);
+    this.queue = next.catch(() => undefined);
+    return next;
   }
   private check(request: number): void { if (request !== this.generation) throw new StaleRead(); }
   private async metadata(direction: 'older' | 'newer', sequence: number | undefined, request: number): Promise<Source[]> {
@@ -238,8 +249,9 @@ export class TranscriptReader {
     this.check(request); this.previews = previews;
     let histories = page.entries.filter((entry): entry is HistoryMetadata & { role: Source['role'] } =>
       entry.role === 'user' || entry.role === 'assistant' || entry.role === 'tool').map((entry): Source => ({
-        ref: { kind: 'history', entryId: entry.entryId, contentRevision: 1 }, sequence: entry.sequence,
-        byteLength: entry.byteLength, role: entry.role, name: entry.toolName ?? 'tool',
+        ref: { kind: entry.contentFormat === 'json_blocks' || entry.displayByteLength !== undefined ? 'display' : 'history', entryId: entry.entryId, contentRevision: 1 }, sequence: entry.sequence,
+        byteLength: entry.displayByteLength ?? (entry.contentFormat === 'json_blocks' ? 0 : entry.byteLength), role: entry.role, name: entry.toolName ?? 'tool',
+        displayPreparing: entry.contentFormat === 'json_blocks' && entry.displayByteLength === undefined,
       }));
     const inspection = this.port.inspection;
     if (inspection !== undefined) {
@@ -409,7 +421,7 @@ export class TranscriptReader {
         ? `${sources.get(sourceKey(line.anchor.source))?.name ?? 'tool'}\n${line.kind === 'tool-detail' ? line.text : ''}` : line.text,
     })) };
   }
-  private async collect(source: Source | null, offset: number, direction: 'start' | 'end', request: number): Promise<TranscriptFrame> {
+  private async collect(source: Source | null, offset: number, direction: 'start' | 'end', request: number, checkBottom = false): Promise<TranscriptFrame> {
     const lines: TranscriptLine[] = [], bodyKeys = new Set<string>(), layoutKeys = new Set<string>();
     const nextPins = new Map<string, () => void>();
     const nextSources = new Map<string, Source>();
@@ -426,7 +438,9 @@ export class TranscriptReader {
         const activityId = current.call?.activityId ?? id;
         const temporary = this.hit !== null && sourceKey(this.hit.source) === sourceKey(current.ref);
         const collapsed = current.role === 'tool' && !this.detailed && !this.expanded.includes(activityId) && !this.expanded.includes(id) && !temporary;
-        if (current.ref.kind === 'interaction' && current.interaction === null) {
+        if (current.displayPreparing) {
+          rows = [this.line(current, { text: '正在准备历史显示…', spans: [], start: 0, end: 0, first: true }, 'status')];
+        } else if (current.ref.kind === 'interaction' && current.interaction === null) {
           rows = [this.line(current, { text: this.port.interactions === undefined ? '问题关联不可用' : '问题记录缺失', spans: [], start: 0, end: 0, first: true }, 'status')];
         } else if (collapsed && current.ref.kind === 'interaction') {
           const summary = current.interaction!;
@@ -484,6 +498,13 @@ export class TranscriptReader {
       }
       this.check(request);
       const visible = direction === 'start' ? lines.slice(0, this.height) : lines.slice(-this.height);
+      if (checkBottom) {
+        const last = visible.filter(line => line.kind !== 'gap' && line.kind !== 'status').at(-1);
+        const finalSource = last === undefined ? undefined : nextSources.get(sourceKey(last.anchor.source));
+        if (last !== undefined && finalSource !== undefined && last.end >= finalSource.byteLength &&
+          await this.neighbor(finalSource, 'newer', request) === null) this.following = true;
+        this.check(request);
+      }
       const anchor = visible.find(line => line.kind !== 'gap')?.anchor ?? null;
       const frame: TranscriptFrame = { coordinatorSessionId: this.session, lines: visible, anchor,
         atLatest: this.following, width: this.width, page: this.page(visible, nextSources) };
@@ -511,17 +532,23 @@ export class TranscriptReader {
   }
   async open(session: string, width: number, height: number, expanded: readonly string[], anchor: TranscriptAnchor | null = null): Promise<TranscriptFrame | null> {
     if (this.session !== session) { this.dispose(); this.session = session; this.current = null; this.sources = []; this.previews = []; }
-    this.width = Math.max(1, width); this.height = Math.max(1, height); this.expanded = expanded;
-    this.following = anchor === null;
-    return this.read(anchor === null ? 'latest' : 'anchor', anchor);
+    return this.enqueue(async () => {
+      this.width = Math.max(1, width); this.height = Math.max(1, height); this.expanded = expanded;
+      return this.readNow(anchor === null ? 'latest' : 'anchor', anchor);
+    });
   }
   async resize(width: number, height: number, expanded: readonly string[]): Promise<TranscriptFrame | null> {
-    if (!this.detailChanged && width === this.width && height === this.height && expanded.join('\0') === this.expanded.join('\0')) return this.current;
-    this.detailChanged = false;
-    this.width = Math.max(1, width); this.height = Math.max(1, height); this.expanded = expanded;
-    return this.read(this.following ? 'latest' : 'anchor', this.current?.anchor ?? null);
+    return this.enqueue(async () => {
+      if (!this.detailChanged && width === this.width && height === this.height && expanded.join('\0') === this.expanded.join('\0')) return this.current;
+      this.detailChanged = false;
+      this.width = Math.max(1, width); this.height = Math.max(1, height); this.expanded = expanded;
+      return this.readNow(this.following ? 'latest' : 'anchor', this.current?.anchor ?? null);
+    });
   }
   async read(mode: 'latest' | 'oldest' | 'anchor', anchor: TranscriptAnchor | null = null): Promise<TranscriptFrame | null> {
+    return this.enqueue(() => this.readNow(mode, anchor));
+  }
+  private async readNow(mode: 'latest' | 'oldest' | 'anchor', anchor: TranscriptAnchor | null = null): Promise<TranscriptFrame | null> {
     const request = ++this.generation; this.readBytes = 0; this.layoutRows = 0;
     const before = this.following;
     this.following = mode === 'latest';
@@ -540,12 +567,15 @@ export class TranscriptReader {
       if (mode === 'anchor' && source === undefined) throw new Error('原阅读来源不可用');
       return await this.collect(source ?? null, mode === 'anchor' && anchor !== null ? anchor.offset
         : mode === 'oldest' ? 0 : source?.byteLength ?? 0, mode === 'latest' ? 'end' : 'start', request);
-    } catch (error) { if (error instanceof StaleRead) return null; this.following = before; throw error; }
+    } catch (error) { if (request !== this.generation || error instanceof StaleRead) return null; this.following = before; throw error; }
   }
-  async move(direction: 'older' | 'newer'): Promise<TranscriptFrame | null> {
-    if (this.current === null) return this.read('latest');
+  async move(direction: 'older' | 'newer', lines = this.height): Promise<TranscriptFrame | null> {
+    return this.enqueue(() => this.moveNow(direction, Math.max(1, Math.min(this.height, Math.floor(lines)))));
+  }
+  private async moveNow(direction: 'older' | 'newer', lines: number): Promise<TranscriptFrame | null> {
+    if (this.current === null) return this.readNow('latest');
     const visible = this.current.lines.filter(line => line.kind !== 'gap' && line.kind !== 'status');
-    const edge = direction === 'older' ? visible[0] : visible.at(-1);
+    const edge = direction === 'older' ? visible[Math.max(0, visible.length - lines)] : visible[Math.min(visible.length, lines) - 1];
     if (edge === undefined) return this.current;
     const wasFollowing = this.following;
     this.following = false;
@@ -560,14 +590,14 @@ export class TranscriptReader {
       if (offset === 0 && direction === 'older' || offset >= source.byteLength && direction === 'newer') {
         const adjacent = await this.neighbor(source, direction, request);
         if (adjacent === null) {
-          if (direction === 'newer') return this.read('latest');
-          this.current = { ...this.current, atLatest: false };
+          if (direction === 'newer') return this.readNow('latest');
+          this.following = wasFollowing;
           return this.current;
         }
         source = adjacent; offset = direction === 'older' ? source.byteLength : 0;
       }
-      return await this.collect(source, offset, direction === 'older' ? 'end' : 'start', request);
-    } catch (error) { if (error instanceof StaleRead) return null; this.following = wasFollowing; throw error; }
+      return await this.collect(source, offset, direction === 'older' ? 'end' : 'start', request, direction === 'newer');
+    } catch (error) { if (request !== this.generation || error instanceof StaleRead) return null; this.following = wasFollowing; throw error; }
   }
 }
 

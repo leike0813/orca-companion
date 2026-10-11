@@ -457,17 +457,66 @@ describe('TuiApp 输入保护集成（真实组件行为）', () => {
     rendered.stdin.write(ENTER);
     await settle(2);
     expect(fake.executeIntents).toHaveLength(1);
+    expect(frameText(rendered)).toContain('第一条');
+    expect(recordAt(fake.inputStore, targetDraftKey(targetB))).toBeNull();
     // 结果还没回来时继续编辑。
     await press(rendered, '第二条');
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(draftText(recordAt(fake.inputStore, targetDraftKey(targetB)))).toBe('第二条');
     release();
     await settle(6);
 
     // 已受理：原快照被结清，但等待期间的新输入没有被清掉。
     const frame = frameText(rendered);
     expect(frame).toContain('第二条');
+    expect(draftText(recordAt(fake.inputStore, targetDraftKey(targetB)))).toBe('第二条');
     const intent = fake.executeIntents[0];
     expect(intent?.kind === 'send-session-message' && intent.submissionId.length > 0).toBe(true);
     expect(fake.calls.filter((call) => call.name === 'inputStore.remove').length).toBeGreaterThan(0);
+    rendered.unmount();
+  });
+
+  test('分离失败后晚到的 accepted 不按新 revision 补清：并发写入方的草稿仍在', async () => {
+    const fake = createFakePorts();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ports: TuiPorts = {
+      ...fake.ports,
+      execute: (intent) => {
+        fake.executeIntents.push(intent);
+        return gate.then(
+          (): ControllerCommandResult => ({ kind: 'accepted', revision: 1, summary: 'ok' }),
+        );
+      },
+    };
+    const rendered = renderTui(ports);
+    await ready(rendered, fake);
+
+    await press(rendered, '并发前的一条');
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(draftText(recordAt(fake.inputStore, targetDraftKey(targetB)))).toBe('并发前的一条');
+
+    // 另一个窗口在同一目标上写入：库内 revision 前移，本次分离的 CAS 必然失配。
+    const current = fake.inputStore.read(targetDraftKey(targetB));
+    if (current.kind !== 'record') throw new Error(`读取失败：${current.kind}`);
+    const concurrent = fake.inputStore.write({
+      key: targetDraftKey(targetB),
+      expectedRevision: current.revision,
+      record: { kind: 'draft', target: targetB, draft: { text: '并发草稿', cursor: 4, pasteBlocks: [] } },
+    });
+    expect(concurrent.kind).toBe('saved');
+
+    rendered.stdin.write(ENTER);
+    for (let step = 0; step < 20 && fake.executeIntents.length === 0; step += 1) await settle(2);
+    expect(fake.executeIntents).toHaveLength(1);
+    release();
+    await settle(6);
+
+    // 受理只结清自己的提交快照：分离失败的并发草稿原样留给显式恢复，不被晚到的结果删掉。
+    expect(draftText(recordAt(fake.inputStore, targetDraftKey(targetB)))).toBe('并发草稿');
+    expect(frameText(rendered)).toContain('并发前的一条');
     rendered.unmount();
   });
 

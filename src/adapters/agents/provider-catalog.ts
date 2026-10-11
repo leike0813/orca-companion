@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { z } from 'zod';
 import baseline from './provider-catalog.json' with { type: 'json' };
 import { convertModelsDev, type ProviderCatalogData } from '../../application/configuration/provider-catalog-conversion.js';
-import { effortCapabilitySchema, providerBaseUrlSchema, providerProtocolSchema } from '../../domain/model-configuration.js';
+import { MODEL_INPUT_MODALITIES, effortCapabilitySchema, providerBaseUrlSchema, providerProtocolSchema } from '../../domain/model-configuration.js';
 import type { ProviderCatalog, ProviderCatalogResult, CatalogModel } from '../../application/configuration/provider-catalog.js';
 import type { CredentialStore } from '../../application/ports/credential-store.js';
 import type { ProviderConnection } from '../../domain/model-configuration.js';
@@ -15,7 +15,7 @@ type DiskCache = { baselineVersion: string; discoveries: Record<string, Cache>; 
 const TTL = 24 * 60 * 60 * 1000, TIMEOUT = 10_000, MAX_BYTES = 8 * 1024 * 1024, MAX_MODELS = 10_000, MAX_PAGES = 20, MAX_CACHE_BYTES = 8 * 1024 * 1024;
 const BASELINE = baseline as ProviderCatalogData;
 const protocol = providerProtocolSchema;
-const modelSchema = z.strictObject({ id: z.string().min(1).max(2048), label: z.string().min(1).max(2048), providerId: z.string().min(1).max(256), protocol, effortCapability: effortCapabilitySchema.nullable(), contextWindow: z.number().int().positive().safe().nullable() });
+const modelSchema = z.strictObject({ id: z.string().min(1).max(2048), label: z.string().min(1).max(2048), providerId: z.string().min(1).max(256), protocol, effortCapability: effortCapabilitySchema.nullable(), contextWindow: z.number().int().positive().safe().nullable(), inputModalities: z.array(z.enum(MODEL_INPUT_MODALITIES)).optional() });
 const presetSchema = z.strictObject({ id: z.string().min(1).max(256), label: z.string().min(1).max(2048), protocol, baseUrl: providerBaseUrlSchema.nullable(), discovery: z.boolean() });
 const catalogSchema = z.strictObject({ version: z.string().min(1).max(128), presets: z.array(presetSchema).min(1).max(1000), models: z.array(modelSchema).min(1).max(MAX_MODELS) });
 const cacheSchema = z.strictObject({ catalogVersion: z.string().min(1).max(128), baselineVersion: z.string().min(1).max(128), savedAt: z.number().finite(), expiresAt: z.number().finite(), models: z.array(modelSchema).min(1).max(MAX_MODELS) });
@@ -93,7 +93,9 @@ export function createProviderCatalog(options: { credentials: Pick<CredentialSto
         seen.add(id);
         const trusted = current.models.find((model) => model.id === id && model.providerId === c.providerId && model.protocol === api);
         models.push(modelSchema.parse({ id, label: typeof row['displayName'] === 'string' && row['displayName'] ? row['displayName'] : trusted?.label ?? id,
-          providerId: c.providerId, protocol: api, effortCapability: trusted?.effortCapability ?? null, contextWindow: trusted?.contextWindow ?? null }));
+          providerId: c.providerId, protocol: api, effortCapability: trusted?.effortCapability ?? null, contextWindow: trusted?.contextWindow ?? null,
+          // 实时列表没有窗口与模态；精确值只来自可信目录行，没有就不写入。
+          ...(trusted?.inputModalities === undefined ? {} : { inputModalities: trusted.inputModalities }) }));
       }
       if (api === 'anthropic-messages') token = body['has_more'] === true && typeof body['last_id'] === 'string' && body['last_id'] ? body['last_id'] : undefined;
       else { const next = body['next_page_token'] ?? body['nextPageToken']; token = typeof next === 'string' && next ? next : undefined; }

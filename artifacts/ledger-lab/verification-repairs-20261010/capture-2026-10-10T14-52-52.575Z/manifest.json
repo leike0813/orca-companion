@@ -1,0 +1,293 @@
+{
+  "generatedAt": "2026-10-10T14:53:22.142Z",
+  "fixture": "artifacts/ledger-lab/verification-repairs-20261010/fixture.mjs",
+  "scenes": [
+    {
+      "scene": "declare-candidate",
+      "size": "80x24",
+      "variant": "color/nerd",
+      "conditions": [
+        "合成 ProviderLibrary/Catalog：1 个连接、1 个带 effortCapability 与窗口/模态的目录候选",
+        "目录候选选定即保存，随后只确认独立横向 effort，不出现元数据字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "declare-manual",
+      "size": "80x24",
+      "variant": "color/nerd",
+      "conditions": [
+        "同一合成端口；手填 exact ID 不发起目录查询，确认后才保存",
+        "手填步才显示上下文窗口、输入模态与来源字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "declare-candidate",
+      "size": "80x24",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "合成 ProviderLibrary/Catalog：1 个连接、1 个带 effortCapability 与窗口/模态的目录候选",
+        "目录候选选定即保存，随后只确认独立横向 effort，不出现元数据字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "declare-manual",
+      "size": "80x24",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "同一合成端口；手填 exact ID 不发起目录查询，确认后才保存",
+        "手填步才显示上下文窗口、输入模态与来源字段"
+      ],
+      "error": null
+    }
+  ],
+  "samples": [
+    {
+      "stem": "declare-candidate-80x24-color-nerd-declare-candidate-effort-default",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "Coordinator · effort",
+          "ok": true
+        },
+        {
+          "fragment": "Model",
+          "ok": true
+        },
+        {
+          "fragment": "Effort",
+          "ok": true
+        },
+        {
+          "fragment": "不指定",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-80x24-color-nerd-declare-candidate-effort",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：Effort · medium",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-80x24-color-nerd-declare-candidate-applied",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-80x24-color-nerd-declare-manual-metadata",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "vendor/manual-model-x",
+          "ok": true
+        },
+        {
+          "fragment": "128000",
+          "ok": true
+        },
+        {
+          "fragment": "未声明（未知）",
+          "ok": true
+        },
+        {
+          "fragment": "user_declared",
+          "ok": true
+        },
+        {
+          "fragment": "当前区域：上下文窗口",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-80x24-color-nerd-declare-manual-modalities",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：输入模态",
+          "ok": true
+        },
+        {
+          "fragment": "image",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-80x24-color-nerd-declare-manual-saved",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-80x24-no-color-ascii-declare-candidate-effort-default",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "Coordinator · effort",
+          "ok": true
+        },
+        {
+          "fragment": "Model",
+          "ok": true
+        },
+        {
+          "fragment": "Effort",
+          "ok": true
+        },
+        {
+          "fragment": "不指定",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-80x24-no-color-ascii-declare-candidate-effort",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：Effort · medium",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-80x24-no-color-ascii-declare-candidate-applied",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-80x24-no-color-ascii-declare-manual-metadata",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "vendor/manual-model-x",
+          "ok": true
+        },
+        {
+          "fragment": "128000",
+          "ok": true
+        },
+        {
+          "fragment": "未声明（未知）",
+          "ok": true
+        },
+        {
+          "fragment": "user_declared",
+          "ok": true
+        },
+        {
+          "fragment": "当前区域：上下文窗口",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-80x24-no-color-ascii-declare-manual-modalities",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：输入模态",
+          "ok": true
+        },
+        {
+          "fragment": "image",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-80x24-no-color-ascii-declare-manual-saved",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "failures": []
+}

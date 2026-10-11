@@ -12,7 +12,7 @@ import { ChatGoogle } from '@langchain/google';
 
 import { coordinatorModelConfigurationSchema, type CoordinatorModelConfiguration } from '../../application/coordinator/model-config-switch.js';
 import type { CredentialStore } from '../../application/ports/credential-store.js';
-import { providerProtocolSchema, withModelOption } from '../../domain/model-configuration.js';
+import { protocolEffortCapability, providerProtocolSchema, withModelOption } from '../../domain/model-configuration.js';
 import type { NativeWindowItemRef } from '../../domain/coordinator/session-state.js';
 
 /**
@@ -186,9 +186,16 @@ export function resolveChatModel(
       if (capability === undefined || capability === null || !capability.values.includes(configuration.effort)) {
         return { kind: 'rejected', code: 'invalid_effort', message: '推理强度缺少可信能力来源' };
       }
-      const optionPath = configuration.providerIntegration.startsWith('openai-') && capability.optionPath === 'reasoningEffort'
-        ? 'reasoning.effort' : capability.optionPath;
-      modelOptions = withModelOption(modelOptions, optionPath, configuration.effort);
+      // adapter 是 effort 到协议参数的**唯一**映射点：取值来自可信能力来源，路径只来自固定协议预设。
+      const preset = protocolEffortCapability(configuration.providerIntegration);
+      // 目录里遗留的 `reasoningEffort` 别名只属于 OpenAI；其余未知路径与越界取值一律拒绝，
+      // 不把任意 SDK option 路径透传给集成。
+      const knownPath = preset !== null && (capability.optionPath === preset.optionPath ||
+        (preset.optionPath === 'reasoning.effort' && capability.optionPath === 'reasoningEffort'));
+      if (preset === null || !knownPath || !preset.values.includes(configuration.effort)) {
+        return { kind: 'rejected', code: 'invalid_effort', message: '推理强度来源不是该固定协议的受支持预设' };
+      }
+      modelOptions = withModelOption(modelOptions, preset.optionPath, configuration.effort);
     }
     const model = integration.createChatModel({
       model: configuration.model,

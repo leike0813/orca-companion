@@ -576,12 +576,12 @@ export const FAKE_MODEL_SETTINGS_SNAPSHOT: ModelSettingsSnapshotView = {
     },
   ],
   models: [
-    { modelRef: 'model-a', connectionRef: 'connection-a', model: 'model-a', effortCapability: FAKE_EFFORT_CAPABILITY },
-    { modelRef: 'model-b', connectionRef: 'connection-a', model: 'model-b', effortCapability: FAKE_EFFORT_CAPABILITY },
+    { modelRef: 'model-a', connectionRef: 'connection-a', model: 'model-a', effortCapability: FAKE_EFFORT_CAPABILITY, metadata: null },
+    { modelRef: 'model-b', connectionRef: 'connection-a', model: 'model-b', effortCapability: FAKE_EFFORT_CAPABILITY, metadata: null },
   ],
   coordinatorConfigurations: [
-    { configurationRef: 'config-a', model: 'model-a', effort: 'high' },
-    { configurationRef: 'config-b', model: 'model-b', effort: 'medium' },
+    { configurationRef: 'config-a', model: 'model-a', effort: 'high', metadata: null },
+    { configurationRef: 'config-b', model: 'model-b', effort: 'medium', metadata: null },
   ],
 };
 

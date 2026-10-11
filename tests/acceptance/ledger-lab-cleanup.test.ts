@@ -133,6 +133,49 @@ describe('ledger lab recorded repository reclamation', () => {
     await expect(stat(f.repo)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('refuses a target replaced between preflight and delete, sending no DELETE and keeping the local checkout', async () => {
+    const f = await fixture();
+    const original = f.call.getMockImplementation()!;
+    let queries = 0;
+    f.call.mockImplementation((file: string, args: string[]) => {
+      // Preflight sees the recorded repository; the immediate recheck right before DELETE sees a replacement.
+      if (args.includes('graphql') && ++queries > 1) {
+        return Promise.resolve(JSON.stringify({ data: { viewer: { login: 'fixture-user' },
+          node: { id: 'R_replacement', nameWithOwner: f.record.github.nameWithOwner, url: f.record.github.url },
+          repository: { id: 'R_replacement' } } }));
+      }
+      return original(file, args);
+    });
+    await expect(cleanup.cleanupLab({ run: f.directory, yes: true }, f.deps)).rejects.toMatchObject({ code: 'LAB_IDENTITY_MISMATCH' });
+    expect(f.deletes).toEqual([]);
+    expect(await stat(f.repo)).toBeTruthy();
+    expect((await records.readRun(f.directory)).cleanup.remote.state).toBe('rejected');
+  });
+
+  it.each(['transport', 'missing-repository', 'missing-node'])('keeps the local checkout when post-delete proof is %s and never retries deletion', async reason => {
+    const f = await fixture();
+    const original = f.call.getMockImplementation()!;
+    let deleted = false;
+    let blindProof = true;
+    f.call.mockImplementation(async (file: string, args: string[]) => {
+      if (args.includes('DELETE')) deleted = true;
+      // Only the first proof after the accepted deletion fails; later runs can query the now absent repository.
+      if (deleted && blindProof && args.includes('graphql')) {
+        blindProof = false;
+        if (reason === 'transport') throw Object.assign(new Error('host unreachable'), { code: 'LAB_COMMAND_FAILED' });
+        return JSON.stringify({ data: { viewer: { login: 'fixture-user' }, ...(reason === 'missing-repository' ? { node: null } : { repository: null }) } });
+      }
+      return original(file, args);
+    });
+    await expect(cleanup.cleanupLab({ run: f.directory, yes: true }, f.deps)).rejects.toMatchObject({ code: 'LAB_OPERATION_UNKNOWN' });
+    expect(f.deletes).toHaveLength(1);
+    expect(await stat(f.repo)).toBeTruthy();
+    expect((await records.readRun(f.directory)).cleanup.remote.state).toBe('unknown');
+    await cleanup.cleanupLab({ run: f.directory, yes: true }, f.deps);
+    expect(f.deletes).toHaveLength(1);
+    await expect(stat(f.repo)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it.each(['LAB_ACTIVE_RESOURCE', 'LAB_RESOURCE_UNVERIFIABLE'])('known running or unverifiable resource blocks all deletion (%s)', async code => {
     const f = await fixture();
     await expect(cleanup.cleanupLab({ run: f.directory, yes: true }, { ...f.deps,

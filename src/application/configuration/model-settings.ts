@@ -31,6 +31,7 @@ import {
   workerProfileConfigurationSchema,
   WORKER_HARNESS_IDS,
   type EffortCapability,
+  type ModelMetadata,
   type ModelProfileRole,
   type ModelSettingsRole,
   type ProviderConnection,
@@ -234,6 +235,8 @@ export function createModelSettingsService(dependencies: ModelSettingsDependenci
       modelRef: resolved.model.modelRef,
       effortCapability: capability,
       effort: input.effort ?? null,
+      // 元数据快照随配置一起冻结：此后 Model 记录再改也不影响已保存的配置。
+      ...(resolved.model.metadata === undefined ? {} : { metadata: resolved.model.metadata }),
     });
     if (!configuration.success) return reject('invalid_input', 'Coordinator Model Configuration 无效');
     const next: ProjectConfig = {
@@ -358,6 +361,8 @@ export type ModelSettingsModelSummary = {
   readonly connectionRef: string;
   readonly model: string;
   readonly effortCapability: EffortCapability | null;
+  /** 元数据声明；未声明时为 null（未知），供上下文预算与展示如实呈现。 */
+  readonly metadata: ModelMetadata | null;
 };
 
 export type ModelSettingsRoleBinding = {
@@ -387,6 +392,7 @@ export type ModelSettingsSnapshot = {
     readonly configurationRef: string;
     readonly model: string;
     readonly effort: string | null;
+    readonly metadata: ModelMetadata | null;
   }[];
 };
 
@@ -476,11 +482,13 @@ export function modelSettingsSnapshot(config: ProjectConfig): ModelSettingsSnaps
       connectionRef: model.connectionRef,
       model: model.model,
       effortCapability: model.effortCapability,
+      metadata: model.metadata ?? null,
     })),
     coordinatorConfigurations: config.coordinatorModels.map((configuration) => ({
       configurationRef: configuration.configurationRef,
       model: configuration.model,
       effort: configuration.effort ?? null,
+      metadata: configuration.metadata ?? null,
     })),
   };
 }

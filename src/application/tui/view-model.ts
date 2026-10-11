@@ -63,6 +63,7 @@ export type ScopeView = {
 };
 
 export type SessionSummaryView = {
+  readonly turn?: import('../ports/agent-turn.js').AgentTurnState;
   readonly coordinatorSessionId: string;
   readonly coordinatorModelConfigurationRef: string;
   readonly lifecycleState: string;
@@ -236,6 +237,7 @@ export function projectSessionSummaryView(
     coordinatorSessionId: session.coordinatorSessionId,
     coordinatorModelConfigurationRef: session.coordinatorModelConfigurationRef,
     lifecycleState: session.lifecycleState,
+    ...(session.turn === undefined ? {} : { turn: session.turn }),
     holdsRuntimeLease: session.holdsRuntimeLease,
     holdsExecutionLease: session.holdsExecutionLease,
     planningResponsible: session.planningResponsible,

@@ -21,6 +21,7 @@ import type {
   SessionWriteAssertion as FencingAssertion,
 } from '../../application/coordinator/runtime-guard.js';
 import type { CoordinatorSessionId } from '../../application/dto/identity.js';
+import type { ProviderProtocol } from '../../domain/model-configuration.js';
 import {
   assistantEntryId,
   toolMapOperationId,
@@ -90,6 +91,13 @@ export type CoordinatorNodeDependencies = {
    * 提交成可恢复的历史。请求之前先校验，避免「先发一次请求、再发现提交不了」。
    */
   readonly configurationRef: string;
+  /**
+   * 本 Session 绑定的固定协议。
+   *
+   * 必填而不设默认值：usage 的归约语义完全取决于协议，猜错会把 provider 报告的用量算错。
+   * 它与 `configurationRef` 同源，由 Session registry 的模型快照给出，模型与工具都无法影响。
+   */
+  readonly providerIntegration: ProviderProtocol;
   readonly sessionRecords: CoordinatorSessionRecordPort;
   /** 每次模型调用和 checkpoint 写入紧前都回读当前 Runtime Lease。 */
   readonly assertFencing: () => FencingAssertion;
@@ -160,6 +168,7 @@ async function streamModelWithRetry(input: {
     const outcome = await streamModelCall({
       model: input.dependencies.model,
       messages: input.messages,
+      providerIntegration: input.dependencies.providerIntegration,
       ...(input.signal === undefined ? {} : { signal: input.signal }),
       ...(input.dependencies.maxResponseBytes === undefined
         ? {}
@@ -320,6 +329,7 @@ export function createModelNode(dependencies: CoordinatorNodeDependencies) {
     const step: CommittedModelStep = {
       stepId,
       entryId,
+      configurationRef: dependencies.configurationRef,
       committedAt: clock(),
       // 只有完整返回的响应才会走到这里，并且落盘的是 Companion 自己的持久化形状：
       // 直接存 provider 对象在重开后会丢失角色，历史就再也读不出来了。

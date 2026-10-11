@@ -672,6 +672,7 @@ function defineProfileSuite(plan: Extract<SmokePlan, { kind: 'run' }>, profile: 
       const graph = buildCoordinatorGraph({
         model: current.model,
         configurationRef: current.configuration.configurationRef,
+        providerIntegration: current.configuration.providerIntegration,
         checkpointer: current.checkpoints.checkpointer,
         sessionRecords: current.checkpoints,
         // 每次模型调用与 checkpoint 写入之前都回读当前 Runtime Lease。

@@ -36,6 +36,7 @@ import type { ControllerInteractionView, ControllerQuestionResult } from '../../
 import type { InteractionPageCursor } from '../../application/ports/branch-coordination-store.js';
 import { bodyWidth } from './screens/workspace.js';
 import { TranscriptReader, type TranscriptFrame, type TranscriptAnchor } from './render/transcript-reader.js';
+import { useTranscriptMouse, inTranscript, type TranscriptRegion } from './input/transcript-mouse.js';
 import { InputHistory, readHistoricalInput } from './input/input-history.js';
 import { scanHistory } from '../../application/coordinator/history-search.js';
 import type { HistorySearchHit, HistoryCall } from '../../application/coordinator/history-inspection.js';
@@ -127,6 +128,7 @@ import type {
   UiInputTarget,
 } from '../../application/ports/ui-input-store.js';
 import type { SubmissionQuery, SubmissionStatus } from '../../application/coordinator/submission-status.js';
+import { targetNamespace } from '../../application/ports/ui-input-store.js';
 import type {
   ExecutionAuthorizationLoad,
   HomeResolution,
@@ -406,11 +408,24 @@ function TuiAppContent(props: TuiAppProps) {
   const [transcript, setTranscript] = useState<ControllerTranscriptPage | null>(null);
   const [reader] = useState(() => new TranscriptReader(ports.reading));
   const [transcriptFrame, setTranscriptFrame] = useState<TranscriptFrame | null>(null);
+  const [pendingSubmission, setPendingSubmission] = useState<{ sessionId: string; submissionId: string; text: string; status: string } | null>(null);
+  const transcriptRegion = useRef<TranscriptRegion | null>(null);
+  const mouseFrame = useRef<(frame: TranscriptFrame | null) => void>(() => {});
+  const recordTranscriptRegion = useCallback((region: TranscriptRegion | null) => { transcriptRegion.current = region; }, []);
+  const historyContextRef = useRef<HistoryContext | null>(null);
+  const mouseEnabled = state.screen === 'workspace' && state.overlayStack.length === 0 &&
+    state.pendingConfirmation === null && !state.projectPanel.open && historyContextRef.current === null;
+  const filterMouse = useTranscriptMouse(mouseEnabled, wheel => {
+    const current = stateRef.current;
+    if (current.screen !== 'workspace' || current.overlayStack.length || current.pendingConfirmation ||
+      current.projectPanel.open || historyContextRef.current || !inTranscript(wheel, transcriptRegion.current)) return;
+    void reader.move(wheel.direction, 3).then(frame => mouseFrame.current(frame))
+      .catch(error => dispatch({ kind: 'notice', notice: '历史读取失败：' + String(error) }));
+  });
   const [inputHistory] = useState(() => new InputHistory(ports.reading));
   const [historyPreview, setHistoryPreview] = useState<UiDraft | null>(null);
   const historyPreviewRef = useRef<UiDraft | null>(null);
   const [historyContext, setHistoryContext] = useState<HistoryContext | null>(null);
-  const historyContextRef = useRef<HistoryContext | null>(null);
   const functionKeyRef = useRef<(action: 'search-history' | 'navigate-activity') => void>(() => {});
   const { stdin } = useStdin();
   useEffect(() => {
@@ -1205,6 +1220,7 @@ function TuiAppContent(props: TuiAppProps) {
       if (request === transcriptRequest.current) dispatch({ kind: 'notice', notice: '历史读取失败：' + (error instanceof Error ? error.message : String(error)) });
     } finally { if (request === transcriptRequest.current) setHistoryLoading(false); }
   }, [reader, dispatch, applyTranscriptFrame]);
+  mouseFrame.current = applyTranscriptFrame;
   const resizeTranscript = useCallback(async () => {
     try { reader.setDetailed(stateRef.current.detailedTranscript); applyTranscriptFrame(await reader.resize(bodyWidth(terminalWidthRef.current, stateRef.current.sidebarDensity), transcriptHeight.current, stateRef.current.expandedToolIds)); }
     catch (error) { dispatch({ kind: 'notice', notice: '历史读取失败：' + (error instanceof Error ? error.message : String(error)) }); }
@@ -1274,7 +1290,7 @@ function TuiAppContent(props: TuiAppProps) {
         pendingSessionIds.clear();
         flushScheduled = false;
         setEvents((current) => [...current, ...batch].slice(-EVENT_WINDOW));
-        if (batch.some(event => event.kind === 'interaction-opened' || event.kind === 'interaction-resolved')) {
+        if (batch.some(event => event.kind === 'interaction-opened' || event.kind === 'interaction-resolved' || event.kind === 'turn-changed')) {
           void loadSnapshot(stateRef.current.selectedSessionId);
           const selected = stateRef.current.selectedSessionId;
           if (selected !== null && sessionIds.includes(selected) && historyReading.current) {
@@ -1344,6 +1360,13 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     const loaded = protection.load(target);
+    const listed = protection.list(targetNamespace(target));
+    if (listed.status === 'ok') {
+      const pending = listed.records.find(record => record.kind === 'submission' &&
+        record.target.coordinatorSessionId === target.coordinatorSessionId && (record.status === 'awaiting' || record.status === 'unknown'));
+      if (pending?.kind === 'submission') setPendingSubmission({ sessionId: target.coordinatorSessionId,
+        submissionId: pending.submissionId, text: pending.draft.text, status: pending.status });
+    }
     if (loaded.status === 'failed') {
       dispatch({ kind: 'notice', notice: `草稿载入失败：${loaded.code} ${loaded.message}` });
       return;
@@ -1643,6 +1666,11 @@ function TuiAppContent(props: TuiAppProps) {
     const submittedMode = current.composerMode;
     const submittedRequest = answerRequest.current;
     const returnContext = answerReturn.current;
+    const detached = protection.clearDraft(target);
+    const detachNote = detached.status === 'saved' ? null : '提交快照已保存，草稿分离失败：' + saveOutcomeText(detached);
+    if (detached.status === 'saved') dispatch(draftActionFor(target, emptyDraft()));
+    if (detachNote !== null) dispatch({ kind: 'notice', notice: detachNote });
+    setPendingSubmission({ sessionId: session, submissionId, text, status: 'awaiting' });
     let result: ControllerCommandResult;
     try {
       result =
@@ -1686,33 +1714,23 @@ function TuiAppContent(props: TuiAppProps) {
           ? `已受理，但输入快照清理失败：${saveOutcomeText(settled)}（可在 /inputs 重新核验或删除）`
           : `提交状态回写失败：${saveOutcomeText(settled)}；原提交 ${submissionId} 仍待核验`;
     // 失败优先：结算异常与拒绝/未知原因一起展示，绝不被成功文案遮蔽。
-    const notes = [settlementNote, resultNotice(result)].filter(
+    const notes = [settlementNote, detachNote, resultNotice(result)].filter(
       (entry): entry is string => entry !== null,
     );
     dispatch({ kind: 'notice', notice: notes.length === 0 ? null : notes.join(' · ') });
     if (result.kind === 'accepted') {
-      // 只结清原提交：用户已继续编辑（代际变化）时保留新输入，也不复位模式以免隐藏新回答草稿。
-      if (settled.status === 'saved' && protection.generation(target) === generation) {
-        const cleared = protection.clearDraft(target);
-        if (cleared.status === 'saved') {
-          // 只有持久草稿真的被清除才清界面正文；清理失败时保留输入并如实提示。
-          dispatch(draftActionFor(target, emptyDraft()));
-          // 只有界面仍停在这条提交对应的 Session 与 composer 模式时才复位。
-          if (
-            stateRef.current.selectedSessionId === session &&
-            sameComposerMode(stateRef.current.composerMode, submittedMode) && answerRequest.current === submittedRequest
-          ) {
-            dispatch({ kind: 'composer-mode-reset' });
-            if (submittedMode.kind === 'answer') {
-              updateAnswerPanel(null);
-              if (returnContext === null || answerReturn.current !== returnContext || !returnAnswerRef.current()) await openAnswerRef.current(undefined, submittedMode.interactionId);
-            }
-          }
-        } else {
-          dispatch({ kind: 'notice', notice: `已受理，但草稿未清除：${saveOutcomeText(cleared)}` });
-        }
-      }
+      setPendingSubmission(previous => previous?.submissionId === submissionId ? null : previous);
+      // 分离失败后不按新 revision 补清：那会删掉并发写入方的草稿，原记录留给 /inputs 显式恢复。
       await reload();
+      if (detached.status === 'saved' && protection.generation(target) === generation &&
+        stateRef.current.selectedSessionId === session && sameComposerMode(stateRef.current.composerMode, submittedMode) &&
+        answerRequest.current === submittedRequest && submittedMode.kind === 'answer') {
+        dispatch({ kind: 'composer-mode-reset' });
+        updateAnswerPanel(null);
+        if (returnContext === null || answerReturn.current !== returnContext || !returnAnswerRef.current()) await openAnswerRef.current(undefined, submittedMode.interactionId);
+      }
+    } else {
+      setPendingSubmission(previous => previous?.submissionId === submissionId ? { ...previous, status: result.kind } : previous);
     }
     // 拒绝（含 stale revision）时保留输入内容，只提示重读。
   }, [dispatch, ports, protection, reload]);
@@ -2073,6 +2091,8 @@ function TuiAppContent(props: TuiAppProps) {
     let feedback: string;
     if (status.kind === 'accepted') {
       const removed = protection.removeRecord(entry.record.key, entry.record.revision);
+      const submissionId = entry.record.kind === 'submission' ? entry.record.submissionId : null;
+      if (removed.status === 'saved') setPendingSubmission(previous => previous?.submissionId === submissionId ? null : previous);
       feedback =
         removed.status === 'saved'
           ? `已受理（${status.ref.kind}:${status.ref.id}）并已清理记录`
@@ -2112,6 +2132,10 @@ function TuiAppContent(props: TuiAppProps) {
     const key = entry.kind === 'record' ? entry.record.key : entry.key;
     const revision = entry.kind === 'record' ? entry.record.revision : entry.revision;
     const removed = protection.removeRecord(key, revision);
+    if (removed.status === 'saved' && entry.kind === 'record' && entry.record.kind === 'submission') {
+      const submissionId = entry.record.submissionId;
+      setPendingSubmission(previous => previous?.submissionId === submissionId ? null : previous);
+    }
     setInputManager((current) =>
       current === null
         ? null
@@ -2963,6 +2987,9 @@ function TuiAppContent(props: TuiAppProps) {
   };
 
   useInput((input, key) => {
+    const filtered = filterMouse(input);
+    if (filtered !== input && filtered === '') return;
+    input = filtered;
     if (providerLibraryRef.current !== null) {
       if (key.ctrl && input === 'c') requestExit();
       return;
@@ -3561,7 +3588,9 @@ function TuiAppContent(props: TuiAppProps) {
       terminalWidth={terminalWidth}
       terminalHeight={windowSize.rows ?? process.stdout.rows ?? 24}
       onTranscriptHeight={recordTranscriptHeight}
+      onTranscriptRegion={recordTranscriptRegion}
       transcriptFrame={transcriptFrame}
+      pendingSubmission={pendingSubmission?.sessionId === state.selectedSessionId ? pendingSubmission : null}
       historyPreview={historyPreview}
       historyContext={historyContext === null ? null : { label: historyContext.kind === 'transcript' ? 'F3 查找' : historyContext.kind === 'users' ? 'Ctrl+R 输入历史' : 'F4 活动',
         draft: historyContext.query, feedback: historyContext.feedback, editable: historyContext.kind !== 'activity' }}

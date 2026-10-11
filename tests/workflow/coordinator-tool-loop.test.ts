@@ -203,6 +203,7 @@ function graphWith(input: {
   return buildCoordinatorGraph({
     model: input.model as never,
     configurationRef: 'test-configuration',
+   providerIntegration: 'openai-responses',
     checkpointer: store.checkpointer,
     sessionRecords: store,
     planningTools: input.tools,

@@ -58,6 +58,19 @@ const counting = (onCall: () => void): AgentTurnExecution => () => {
 };
 const halting = (failure: AgentTurnFailure): AgentTurnExecution => () => Promise.resolve({ kind: 'halted', failure });
 
+test('observers see a durable running turn and its settled state', async () => {
+  const store = memoryPort(), gate = Promise.withResolvers<AgentTurnResult>(), states: AgentTurnState[] = [];
+  const driver = new AgentTurnDriver({ coordinatorSessionId: SESSION, turns: store.port,
+    execute: () => gate.promise, onStateChange: state => states.push(state) });
+  const running = driver.run();
+  expect(store.durable().kind).toBe('running');
+  expect(states.at(-1)?.kind).toBe('running');
+  gate.resolve(completed);
+  await running;
+  expect(states.at(-1)?.kind).toBe('idle');
+  expect(driver.state.kind).toBe('idle');
+});
+
 test('并发恢复仅一个核验结果可以放行，迟到结果不能覆盖新轮次故障', async () => {
   const store = memoryPort({ kind: 'halted', failure: { code: 'stopped', message: '停止' } });
   const driver = driverOf(store.port, halting({ code: 'execution_failed', message: '新的故障' }));

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { modelDefinitionSchema, providerBaseUrlSchema, providerConnectionSchema, type ModelDefinition, type ProviderConnection } from '../../domain/model-configuration.js';
+import { modelDefinitionSchema, modelMetadataSchema, protocolEffortCapability, providerBaseUrlSchema, providerConnectionSchema, type ModelDefinition, type ModelMetadata, type ProviderConnection } from '../../domain/model-configuration.js';
 import type { CredentialStore } from '../ports/credential-store.js';
 import type { ProviderLibraryStore } from '../ports/provider-library-store.js';
 import type { ProviderCatalog } from './provider-catalog.js';
@@ -9,7 +9,7 @@ type Loaded = { readonly kind: 'loaded'; readonly revision: number; readonly con
 export type ProviderLibrary = {
   load(): Loaded | Rejected;
   saveConnection(input: { expectedRevision: number; label: string; providerId: string; providerIntegration: ProviderConnection['providerIntegration']; baseUrl: string; credentialRef?: string; newSecret?: string }): Promise<{ kind: 'saved'; revision: number; connection: ProviderConnection } | Rejected>;
-  saveModel(input: { expectedRevision: number; connectionRef: string; model: string }): { kind: 'saved'; revision: number; model: ModelDefinition } | Rejected;
+  saveModel(input: { expectedRevision: number; connectionRef: string; model: string; metadata?: ModelMetadata }): { kind: 'saved'; revision: number; model: ModelDefinition } | Rejected;
   resolveModel(modelRef: string): { kind: 'resolved'; connection: ProviderConnection; model: ModelDefinition } | Rejected;
 };
 export type ProviderLibraryService = ProviderLibrary;
@@ -62,7 +62,7 @@ export function createProviderLibrary(dependencies: { store: ProviderLibraryStor
   }
   function saveModel(input: Parameters<ProviderLibrary['saveModel']>[0]) {
     if (typeof input !== 'object' || input === null || Array.isArray(input)) return rejected('invalid_input');
-    if (Object.keys(input).some((key) => !['expectedRevision', 'connectionRef', 'model'].includes(key))) return rejected('invalid_input');
+    if (Object.keys(input).some((key) => !['expectedRevision', 'connectionRef', 'model', 'metadata'].includes(key))) return rejected('invalid_input');
     const current = read();
     if (current.kind !== 'loaded') return rejected(current.code, current.message);
     if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0) return rejected('invalid_input');
@@ -71,7 +71,25 @@ export function createProviderLibrary(dependencies: { store: ProviderLibraryStor
     if (connection === undefined || typeof input.model !== 'string' || input.model.trim() === '') return rejected('invalid_input');
     const candidates = catalog.candidates(connection).models;
     const candidate = candidates.find((item) => item.id === input.model);
-    const model = modelDefinitionSchema.safeParse({ modelRef: randomUUID(), connectionRef: connection.connectionRef, model: input.model, effortCapability: candidate !== undefined && candidate.protocol === connection.providerIntegration && candidate.providerId === connection.providerId ? candidate.effortCapability : null });
+    const fromCatalog = candidate !== undefined && candidate.protocol === connection.providerIntegration && candidate.providerId === connection.providerId ? candidate : undefined;
+    // 目录给出完整精确元数据时按 catalog 来源保存；缺失或非法即不保存，声明留给用户手填。
+    const catalogMetadata = fromCatalog === undefined ? null : modelMetadataSchema.safeParse({
+      contextWindow: fromCatalog.contextWindow,
+      inputModalities: fromCatalog.inputModalities,
+      source: 'catalog',
+    });
+    const declared = input.metadata === undefined ? null : modelMetadataSchema.safeParse(input.metadata);
+    if (input.metadata !== undefined && !declared?.success) return rejected('invalid_input');
+    // 目录有精确能力就用它，否则取该固定协议的预设：模型记录里存在的 effort 取值就是界面能提供、
+    // 保存后也能被装配核验的那些，不提供「能选但会被拒绝」的 effort。
+    const effortCapability = fromCatalog?.effortCapability ?? protocolEffortCapability(connection.providerIntegration);
+    const model = modelDefinitionSchema.safeParse({
+      modelRef: randomUUID(),
+      connectionRef: connection.connectionRef,
+      model: input.model,
+      effortCapability,
+      ...(declared?.success ? { metadata: declared.data } : catalogMetadata?.success ? { metadata: catalogMetadata.data } : {}),
+    });
     if (!model.success) return rejected('invalid_input');
     const saved = store.save({ expectedRevision: current.library.revision, next: { ...current.library, revision: current.library.revision + 1, models: [...current.library.models, model.data] } });
     return saved.kind === 'loaded' ? { kind: 'saved' as const, revision: saved.library.revision, model: model.data } : rejected(saved.code, saved.message);

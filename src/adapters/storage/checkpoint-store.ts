@@ -3,19 +3,22 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
+import { z } from 'zod';
 import type { CoordinatorSessionId } from '../../application/dto/identity.js';
 import type { CoordinatorSessionRecordPort, CheckpointRecoveryRead, CheckpointWriteResult } from '../../application/coordinator/runtime-guard.js';
 import type { WakeCheckpointCommit } from '../../application/coordinator/wake-admission.js';
-import { HistoryBoundaryError, HISTORY_CHUNK_BYTES, HISTORY_PAGE_BYTES, HISTORY_PAGE_ITEMS, HISTORY_BODY_BYTES, CONTEXT_READ_BYTES, CONTEXT_READ_ITEMS, historyBodyQuerySchema, historyPageQuerySchema, type CheckpointReadPurpose, type HistoryReadPort, type HistoryMetadata, type HistoryMetadataPage, type TranscriptBodyRange } from '../../application/coordinator/history.js';
+import { HistoryBoundaryError, HISTORY_CHUNK_BYTES, HISTORY_PAGE_BYTES, HISTORY_PAGE_ITEMS, HISTORY_BODY_BYTES, CONTEXT_READ_BYTES, CONTEXT_READ_ITEMS, historyBodyQuerySchema, historyDisplayQuerySchema, historyPageQuerySchema, type CheckpointReadPurpose, type HistoryReadPort, type HistoryMetadata, type HistoryMetadataPage, type TranscriptBodyRange } from '../../application/coordinator/history.js';
 import { historyArgumentsQuerySchema, historyCallQuerySchema, userHistoryQuerySchema, type HistoryArgumentsQuery, type HistoryCall, type HistoryCallPage, type HistoryCallQuery, type HistoryInspectionSnapshot, type HistoryInspectionStorePort, type HistoryToolObservation } from '../../application/coordinator/history-inspection.js';
 import { COORDINATOR_SESSION_STATE_SCHEMA_VERSION, parseCoordinatorSessionState, userEntryId, userStepId, workEntryId, type MechanicalShakeArtifact, type NativeCompactedWindowOwner, type PortableContextCapsule, type CommittedMessageEntry, type CommittedModelStep, type CoordinatorSessionState, type WakeBatch } from '../../domain/coordinator/session-state.js';
+import type { ModelUsageObservation } from '../../domain/coordinator/session-state.js';
 import { activityStatusOf, createMetadataScanState, scanMetadataBytes, scanMetadataText, tallyOf, TOOL_CALL_SCAN_CHUNK_BYTES, type ActivityTally, type CallStatus, type MetadataScanState, type ToolCallSpan } from './history-inspection-index.js';
+import { advanceDisplayProjection, createDisplayProjectionState, projectDisplayText, DISPLAY_PROJECTION_MAX_DEPTH, DISPLAY_PROJECTION_STATE_BYTES, type DisplayProjectionState } from './history-display-projection.js';
 import { describeError } from './schema.js';
 import { AGENT_TURN_FAILURE_CODES, AGENT_TURN_MESSAGE_CHARS, type AgentTurnFailure, type AgentTurnPort, type AgentTurnState } from '../../application/ports/agent-turn.js';
-export const CHECKPOINT_SCHEMA_VERSION = 4;
+export const CHECKPOINT_SCHEMA_VERSION = 5;
 
 /** 可无损升级到当前版本的前驱库 schema；旧库按 `CREATE TABLE IF NOT EXISTS` 补齐后写回新版本号。 */
-const UPGRADABLE_CHECKPOINT_SCHEMA_VERSIONS: ReadonlySet<number> = new Set([2, 3, CHECKPOINT_SCHEMA_VERSION]);
+const UPGRADABLE_CHECKPOINT_SCHEMA_VERSIONS: ReadonlySet<number> = new Set([2, 3, 4, CHECKPOINT_SCHEMA_VERSION]);
 
 /** 一次 Wake Batch metadata 读取的有界上限；超过即拒绝，不为了读一条 batch 拉进无界正文。 */
 const WAKE_BATCH_METADATA_BYTES = 64 * 1024;
@@ -29,6 +32,19 @@ export type CommittedMessageRange = {
     readonly replacedFromStepId: string;
     readonly replacedToStepId: string;
 };
+/**
+ * 最近一次已提交模型响应的真实用量观测（design D-02）。
+ *
+ * 它是**上次请求**的观察，不是当前精确测量：`usage` 为 null 即没有取得，不估算；
+ * `configurationRef` 说明这次观察属于哪套连接配置，换配置后调用方据此判它失效。
+ */
+export type LatestModelUsage = {
+    readonly stepId: string;
+    readonly entryId: string;
+    readonly sequence: number;
+    readonly configurationRef: string | null;
+    readonly usage: ModelUsageObservation | null;
+};
 export type CheckpointStore = CoordinatorSessionRecordPort & HistoryReadPort & HistoryInspectionStorePort & {
     readonly checkpointer: BaseCheckpointSaver;
     /** 轮次状态：idle / running / halted 与结构化失败，独立于正文与协调状态。 */
@@ -36,6 +52,8 @@ export type CheckpointStore = CoordinatorSessionRecordPort & HistoryReadPort & H
     /** 可信 unknown 观测；只存真实观测，不补配对结果。 */
     readonly recordToolObservation: (input: HistoryToolObservation) => CheckpointWriteResult;
     readCommittedMessages(id: CoordinatorSessionId, range?: CommittedMessageRange): readonly CommittedMessageEntry[];
+    /** 最近一次已提交模型响应的真实 usage 与其 step 身份；只读 metadata，不读任何正文。 */
+    readLatestModelUsage(id: CoordinatorSessionId): LatestModelUsage | null;
     saveNativeWindowOwner(id: CoordinatorSessionId, owner: NativeCompactedWindowOwner): CheckpointWriteResult;
     loadNativeWindowOwner(id: CoordinatorSessionId): NativeCompactedWindowOwner | null;
     clearNativeWindowOwner(id: CoordinatorSessionId): CheckpointWriteResult;
@@ -87,6 +105,7 @@ type RecoveryRow = {
 };
 type EntryRow = {
     seq: number;
+    entry_id: string;
     metadata: string;
     byte_length: number;
 };
@@ -176,6 +195,12 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
                 'CREATE TABLE IF NOT EXISTS history_call_observations (coordinator_session_id TEXT NOT NULL,call_entry_id TEXT NOT NULL,call_id TEXT NOT NULL,step_id TEXT NOT NULL,operation_id TEXT NOT NULL,reason TEXT NOT NULL,recorded_at INTEGER NOT NULL,observed_seq INTEGER NOT NULL,PRIMARY KEY(coordinator_session_id,call_entry_id,call_id)) STRICT;',
                 'CREATE TABLE IF NOT EXISTS history_inspection_progress (coordinator_session_id TEXT PRIMARY KEY,indexed_through_seq INTEGER NOT NULL,open_activity_id TEXT,updated_at INTEGER NOT NULL) STRICT;',
                 'CREATE TABLE IF NOT EXISTS history_inspection_scans (coordinator_session_id TEXT NOT NULL,entry_id TEXT NOT NULL,state TEXT NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(coordinator_session_id,entry_id)) STRICT;',
+                // 派生显示投影（design D-03）：正文仍是唯一权威原文，这里只保存有界可见文本与它到原文的字节对应。
+                'CREATE TABLE IF NOT EXISTS history_display_sources (coordinator_session_id TEXT NOT NULL,entry_id TEXT NOT NULL,byte_length INTEGER NOT NULL,PRIMARY KEY(coordinator_session_id,entry_id)) STRICT;',
+                'CREATE TABLE IF NOT EXISTS history_display_chunks (coordinator_session_id TEXT NOT NULL,entry_id TEXT NOT NULL,start INTEGER NOT NULL,data BLOB NOT NULL,PRIMARY KEY(coordinator_session_id,entry_id,start)) STRICT;',
+                'CREATE TABLE IF NOT EXISTS history_display_map (coordinator_session_id TEXT NOT NULL,entry_id TEXT NOT NULL,ordinal INTEGER NOT NULL,source_start INTEGER NOT NULL,source_end INTEGER NOT NULL,display_start INTEGER NOT NULL,display_end INTEGER NOT NULL,PRIMARY KEY(coordinator_session_id,entry_id,ordinal)) STRICT;',
+                'CREATE TABLE IF NOT EXISTS history_display_scans (coordinator_session_id TEXT NOT NULL,entry_id TEXT NOT NULL,state TEXT NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(coordinator_session_id,entry_id)) STRICT;',
+                'CREATE TABLE IF NOT EXISTS history_display_progress (coordinator_session_id TEXT PRIMARY KEY,indexed_through_seq INTEGER NOT NULL,updated_at INTEGER NOT NULL) STRICT;',
                 // 轮次状态独立于正文：没有轮次行的既有会话按 idle 读取，补表不重写任何历史。
                 'CREATE TABLE IF NOT EXISTS agent_turns (coordinator_session_id TEXT PRIMARY KEY,status TEXT NOT NULL,failure_code TEXT,failure_message TEXT,updated_at INTEGER NOT NULL) STRICT;',
             ].join('\n'));
@@ -186,6 +211,8 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
         atomic(() => {
             for (const row of stmt('SELECT coordinator_session_id FROM coordinator_sessions').all() as { coordinator_session_id: string }[])
                 stmt('INSERT OR IGNORE INTO history_inspection_progress VALUES(?,?,NULL,?)').run(row.coordinator_session_id, 0, clock());
+            for (const row of stmt('SELECT coordinator_session_id FROM coordinator_sessions').all() as { coordinator_session_id: string }[])
+                stmt('INSERT OR IGNORE INTO history_display_progress VALUES(?,?,?)').run(row.coordinator_session_id, 0, clock());
         });
     }
     catch (error) {
@@ -208,6 +235,7 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
             .run(head.coordinatorSessionId, head.schemaVersion, JSON.stringify(head), clock());
         // 每个会话都带一行索引水位：待办探测因此只扫会话注册表，不必扫已索引的历史前缀。
         stmt('INSERT OR IGNORE INTO history_inspection_progress VALUES(?,?,NULL,?)').run(head.coordinatorSessionId, 0, clock());
+        stmt('INSERT OR IGNORE INTO history_display_progress VALUES(?,?,?)').run(head.coordinatorSessionId, 0, clock());
     }
     function requireCore(id: string): Core { const head = core(id); if (head === null)
         throw new Error('Session has no checkpoint: ' + id); return head; }
@@ -217,19 +245,27 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
         writeCore(headOf(empty(id)));
     }
     function rowFor(id: string, entryId: string, summary = false): EntryRow | undefined {
-        return stmt('SELECT seq,' + (summary ? 'summary_metadata AS metadata' : 'metadata') + ',byte_length FROM conversation_entries WHERE coordinator_session_id=? AND entry_id=?').get(id, entryId) as EntryRow | undefined;
+        return stmt('SELECT seq,entry_id,' + (summary ? 'summary_metadata AS metadata' : 'metadata') + ',byte_length FROM conversation_entries WHERE coordinator_session_id=? AND entry_id=?').get(id, entryId) as EntryRow | undefined;
     }
-    function metadata(row: EntryRow): HistoryMetadata {
+    /** 派生显示来源长度；没有投影的条目返回 undefined，读取方因此按权威原文处理。 */
+    function displayLength(id: string, entryId: string): number | undefined {
+        const row = stmt('SELECT byte_length FROM history_display_sources WHERE coordinator_session_id=? AND entry_id=?').get(id, entryId) as { byte_length: number } | undefined;
+        return row?.byte_length;
+    }
+    function metadata(id: string, row: EntryRow): HistoryMetadata {
         const entry = valid({ ...empty('metadata' as CoordinatorSessionId), committedMessages: [{ ...(JSON.parse(row.metadata) as CommittedMessageEntry), content: '' }] }).committedMessages[0]!;
         const { content, toolCalls, ...rest } = entry;
         void content;
         void toolCalls;
-        return { ...rest, sequence: row.seq, contentRevision: 1, byteLength: row.byte_length };
+        const display = displayLength(id, row.entry_id);
+        return { ...rest, sequence: row.seq, contentRevision: 1, byteLength: row.byte_length, ...(display === undefined ? {} : { displayByteLength: display }) };
     }
     const decoder = new TextDecoder('utf-8', { fatal: true });
     const readHistoryBody: HistoryReadPort['readHistoryBody'] = (input) => {
         const q = historyBodyQuerySchema.parse(input);
-        requireCore(q.coordinatorSessionId);
+        // 与分页一致：还没有首个 checkpoint 的会话没有可读正文，也不产生写入。
+        if (core(q.coordinatorSessionId) === null)
+            return null;
         const row = rowFor(q.coordinatorSessionId, q.entryId, true);
         if (row === undefined)
             return null;
@@ -260,6 +296,50 @@ export function openCheckpointStore(options: OpenCheckpointStoreOptions): OpenCh
         if (q.offset < row.byte_length && absoluteEnd === q.offset)
             throw new Error('Body range missing');
         return { entryId: q.entryId, contentRevision: 1, offset: q.offset, end: absoluteEnd, byteLength: row.byte_length, text };
+    };
+    /**
+     * 派生可见文本来源的 UTF-8 范围。
+     *
+     * 坐标与正文各自独立，因此一次显示读取永远不触碰原始块；没有投影的条目返回 null，
+     * 调用方据此按权威原文处理，而不是把缺失当成空文本。
+     */
+    const readHistoryDisplay: HistoryReadPort['readHistoryDisplay'] = (input) => {
+        const q = historyDisplayQuerySchema.parse(input);
+        const byteLength = displayLength(q.coordinatorSessionId, q.entryId);
+        if (byteLength === undefined)
+            return null;
+        if (q.offset > byteLength)
+            throw new Error('Display offset is outside the source');
+        const limit = q.maxBytes ?? HISTORY_BODY_BYTES;
+        if (q.offset === byteLength)
+            return { entryId: q.entryId, contentRevision: 1, offset: q.offset, end: q.offset, byteLength, text: '' };
+        // 投影块按解码窗口落盘，长度不齐：因此按重叠取回后验证连续覆盖，而不是假设固定块长。
+        const blocks = stmt('SELECT start,data FROM history_display_chunks WHERE coordinator_session_id=? AND entry_id=? AND start>=? AND start<? ORDER BY start')
+            .all(q.coordinatorSessionId, q.entryId, Math.max(0, q.offset - HISTORY_CHUNK_BYTES), q.offset + limit + HISTORY_CHUNK_BYTES) as {
+            start: number;
+            data: Uint8Array;
+        }[];
+        const wanted = Math.min(byteLength, q.offset + limit), covering = blocks.filter(block => block.start + block.data.byteLength > q.offset);
+        if (covering.length === 0 || covering[0]!.start > q.offset)
+            throw new Error('Missing display blocks');
+        let at = covering[0]!.start;
+        for (const block of covering) {
+            if (block.start !== at) throw new Error('Corrupt display blocks');
+            at += block.data.byteLength;
+            if (at >= wanted) break;
+        }
+        if (at < wanted) throw new Error('Missing display blocks');
+        const buffer = Buffer.concat(covering.map(block => Buffer.from(block.data))), start = q.offset - covering[0]!.start;
+        if ((buffer[start]! & 0xc0) === 0x80)
+            throw new HistoryBoundaryError('Display offset is not a UTF-8 boundary');
+        let end = Math.min(buffer.length, start + limit);
+        while (end < buffer.length && end > start && (buffer[end]! & 0xc0) === 0x80)
+            end -= 1;
+        if (end === 0) throw new HistoryBoundaryError('Display range missing a complete character');
+        const text = decoder.decode(buffer.subarray(start, end)), absoluteEnd = q.offset + end - start;
+        if (absoluteEnd <= q.offset)
+            throw new Error('Display range missing');
+        return { entryId: q.entryId, contentRevision: 1, offset: q.offset, end: absoluteEnd, byteLength, text };
     };
     function readEntry(id: string, entryId: string): CommittedMessageEntry | null {
         requireCore(id);
@@ -518,6 +598,180 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
     function deferToolResult(id: string, entryId: string, stepId: string, seq: number, byteLength: number): void {
         stmt('INSERT OR IGNORE INTO history_call_deferred VALUES(?,?,?,?,?,?)').run(id, entryId, stepId, seq, byteLength, clock());
     }
+    // ---------------------------------------------------------------- 派生显示投影
+    const offset = z.number().int().min(0);
+    const displayCursorSchema: z.ZodType<DisplayProjectionState> = z.object({
+        scan: z.object({
+            pos: offset,
+            stack: z.array(z.object({
+                kind: z.enum(['object', 'array']), key: z.string().nullable(), element: z.boolean(),
+                expect: z.enum(['value', 'key', 'colon', 'comma', 'done']), nonEmpty: z.boolean(),
+                state: z.object({ type: z.string().nullable(), thought: z.boolean(),
+                    textStart: offset.nullable(), textEnd: offset.nullable() }).nullable(),
+            })).max(DISPLAY_PROJECTION_MAX_DEPTH),
+            open: z.object({ start: offset, asKey: z.boolean(), over: z.boolean(),
+                escape: z.number().int().min(-1).max(5), bytes: z.array(z.number().int().min(0).max(255)).max(512) }).nullable(),
+            bare: z.object({ over: z.boolean(), bytes: z.array(z.number().int().min(0).max(255)).max(32) }).nullable(),
+            expect: z.enum(['value', 'key', 'colon', 'comma', 'done']),
+            invalid: z.boolean(), malformed: z.boolean(), complete: z.boolean(), ordinal: offset,
+            pending: z.array(z.object({ ordinal: offset, start: offset, end: offset })).max(1),
+        }),
+        span: z.object({ ordinal: offset, start: offset, end: offset }).nullable(),
+        decodePos: offset,
+        decodeTail: z.array(z.number().int().min(0).max(255)).max(12),
+        displayBytes: offset, blocks: offset, openStart: offset.nullable(),
+    });
+    /** 投影回读原文的一个窗口；正文按块存放，因此按块对齐读回而不是拼出整段。 */
+    function readBodyBytes(id: string, entryId: string, offset: number, length: number): Uint8Array {
+        if (length <= 0) return new Uint8Array(0);
+        // 只取窗口本身：整块读回来再切片会让一次 1 字节的读取也搬 16 KiB，预算就名不副实了。
+        // 窗口可能跨块，因此逐块补齐，但一次调用最多搬 length 字节。
+        const window = Buffer.alloc(length);
+        let filled = 0;
+        while (filled < length) {
+            const at = offset + filled, blockStart = Math.floor(at / HISTORY_CHUNK_BYTES) * HISTORY_CHUNK_BYTES;
+            const row = stmt('SELECT substr(CAST(data AS BLOB),?,?) AS part FROM conversation_bodies WHERE coordinator_session_id=? AND entry_id=? AND start=?')
+                .get(at - blockStart + 1, length - filled, id, entryId, blockStart) as { part: Uint8Array | null } | undefined;
+            const part = row === undefined ? null : row.part === null ? null : Buffer.from(row.part);
+            // 只有真正读到正文末尾才算读完；中间缺块按损坏拒绝，否则投影会在半截正文上宣告完成。
+            if (part === null || part.length === 0) {
+                if (at >= byteLengthOf(id, entryId)) break;
+                throw new Error('Corrupt body blocks');
+            }
+            part.copy(window, filled);
+            filled += part.length;
+        }
+        return window.subarray(0, filled);
+    }
+    function byteLengthOf(id: string, entryId: string): number {
+        return (stmt('SELECT byte_length FROM conversation_entries WHERE coordinator_session_id=? AND entry_id=?').get(id, entryId) as { byte_length: number } | undefined)?.byte_length ?? 0;
+    }
+    /**
+     * 落盘一次投影推进的块与映射。
+     *
+     * 块按显示偏移唯一键幂等写入，因此同一段被重新投影不会重复；来源行只在投影完成时登记，
+     * 读取方在准备期间看到的是“没有投影”，而不是半截文本。
+     */
+    function writeDisplay(id: string, entryId: string, chunks: readonly { start: number; data: Uint8Array }[],
+        mapping: readonly { ordinal: number; sourceStart: number; sourceEnd: number; displayStart: number; displayEnd: number }[]): void {
+        for (const chunk of chunks)
+            stmt('INSERT OR REPLACE INTO history_display_chunks VALUES(?,?,?,?)').run(id, entryId, chunk.start, Buffer.from(chunk.data));
+        for (const span of mapping)
+            stmt('INSERT OR REPLACE INTO history_display_map VALUES(?,?,?,?,?,?,?)').run(id, entryId, span.ordinal, span.sourceStart, span.sourceEnd, span.displayStart, span.displayEnd);
+    }
+    /** 新提交的一条 json_blocks 响应：写入路径已经持有完整正文，一次扫完并同事务落盘。 */
+    function projectDisplay(id: string, entryId: string, content: string): void {
+        const bytes = Buffer.from(content, 'utf8');
+        const result = projectDisplayText((offset, length) => bytes.subarray(offset, offset + length), bytes.length);
+        // 新响应必须是一份完整的 JSON：非法正文连同这次提交一起回滚，不落块也不登记来源。
+        if (result.state.scan.malformed) throw new Error('Corrupt display projection structure: ' + entryId);
+        writeDisplay(id, entryId, result.chunks, result.mapping);
+        stmt('INSERT INTO history_display_sources VALUES(?,?,?)').run(id, entryId, result.byteLength);
+    }
+    function displayWatermark(id: string): number {
+        return (stmt('SELECT indexed_through_seq FROM history_display_progress WHERE coordinator_session_id=?').get(id) as { indexed_through_seq: number } | undefined)?.indexed_through_seq ?? 0;
+    }
+    /** 只有连续推进才移动水位：后段条目不会越过仍待投影的前段。 */
+    function advanceDisplayWatermark(id: string, seq: number): void {
+        stmt('INSERT OR IGNORE INTO history_display_progress VALUES(?,?,?)').run(id, 0, clock());
+        stmt('UPDATE history_display_progress SET indexed_through_seq=?,updated_at=? WHERE coordinator_session_id=? AND indexed_through_seq+1=?')
+            .run(seq, clock(), id, seq);
+    }
+    /** 唯一还欠显示投影的会话；只探注册表与水位两张小表。 */
+    function pendingDisplaySession(): string | undefined {
+        // 缺水位行按 0 处理：补齐因此不依赖打开时是否已经登记过这个会话。
+        return (stmt("SELECT s.coordinator_session_id AS id FROM coordinator_sessions s WHERE (SELECT MAX(seq) FROM conversation_entries WHERE coordinator_session_id=s.coordinator_session_id) > COALESCE((SELECT indexed_through_seq FROM history_display_progress WHERE coordinator_session_id=s.coordinator_session_id),0) ORDER BY s.updated_at DESC,s.coordinator_session_id LIMIT 1").get() as { id: string } | undefined)?.id;
+    }
+    /** 会话内从水位往后是主键区间扫描：已投影的前缀一次也不会被读到。 */
+    function pendingDisplayEntry(): PendingEntry | undefined {
+        const session = pendingDisplaySession();
+        return session === undefined ? undefined : pendingDisplayEntryOf(session);
+    }
+    /** 某个会话自己还欠投影的头一条目；就绪判断只看本会话，别人的欠账不阻塞它。 */
+    function pendingDisplayEntryOf(session: string): PendingEntry | undefined {
+        return stmt('SELECT coordinator_session_id,seq,entry_id,step_id,role,byte_length,length(CAST(summary_metadata AS BLOB)) AS metadata_length FROM conversation_entries WHERE coordinator_session_id=? AND seq>? ORDER BY seq LIMIT 1')
+            .get(session, displayWatermark(session)) as PendingEntry | undefined;
+    }
+    /**
+     * 只有 assistant 的 json_blocks 正文需要投影；其余条目的显示就是权威原文本身。
+     *
+     * 返回读过的字节数：判断本身要读一次 summary metadata，因此它和扫描共用同一份预算，
+     * 不能只算扫描那部分。
+     */
+    function displayKind(id: string, entry: PendingEntry): { readonly needed: boolean; readonly readBytes: number } {
+        if (entry.role !== 'assistant' || entry.byte_length === 0)
+            return { needed: false, readBytes: 0 };
+        const row = rowFor(id, entry.entry_id, true);
+        if (row === undefined)
+            return { needed: false, readBytes: 0 };
+        const metadata = row.metadata;
+        if (metadata.length > HISTORY_PAGE_BYTES)
+            throw new Error('History metadata exceeds page budget');
+        // 损坏的 metadata 不等于“没有投影”：形状不认识就拒绝，不把它读成普通 assistant 正文。
+        const parsed = JSON.parse(metadata) as unknown;
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+            throw new Error('Corrupt history metadata');
+        return { needed: (parsed as CommittedMessageEntry).contentFormat === 'json_blocks', readBytes: Buffer.byteLength(metadata, 'utf8') };
+    }
+    function finishDisplay(id: string, entry: PendingEntry): void {
+        stmt('DELETE FROM history_display_scans WHERE coordinator_session_id=? AND entry_id=?').run(id, entry.entry_id);
+        advanceDisplayWatermark(id, entry.seq);
+    }
+    /**
+     * 为一条旧历史推进一个块的显示投影；预算耗尽时停下，等待下一次调用。
+     *
+     * 投影按块推进、逐块落盘：崩溃后从未完成的那一块续扫，已写的块幂等，不重复也不丢字。
+     */
+    function advanceDisplayEntry(entry: PendingEntry, budget: number): number {
+        const id = entry.coordinator_session_id;
+        // 先只查长度：超限的游标不整段进内存，也不会被 JSON.parse 放大。
+        const cursorBytes = stmt('SELECT length(CAST(state AS BLOB)) AS size FROM history_display_scans WHERE coordinator_session_id=? AND entry_id=?')
+            .get(id, entry.entry_id) as { size: number } | undefined;
+        const size = cursorBytes?.size ?? 0;
+        if (size > DISPLAY_PROJECTION_STATE_BYTES) throw new Error('Display projection cursor exceeds byte budget: ' + entry.entry_id);
+        // 游标本身是这次准备的真实成本：它先从预算里扣掉，正文只拿剩下的部分。
+        if (budget <= size) return 0;
+        const state = readDisplayCursor(id, entry.entry_id, size);
+        const step = advanceDisplayProjection(state, (offset, length) => readBodyBytes(id, entry.entry_id, offset, length), budget - size);
+        // 结构非法的正文不落任何块，也不登记来源：它既不会被当成完整显示，也不会退化成把原文当可见文本。
+        if (step.state.scan.malformed) throw new Error('Corrupt display projection structure: ' + entry.entry_id);
+        writeDisplay(id, entry.entry_id, step.chunks, step.mapping);
+        // 根不是内容块数组：正文形状不是内容块，没有可投影的显示来源，读取方因此不把它当可见正文。
+        if (step.state.scan.invalid) { finishDisplay(id, entry); return step.scannedBytes + size; }
+        if (step.complete) {
+            // 没有可见块的正文同样登记投影：读者据此知道这是空显示，而不是没有投影。
+            // 幂等：新提交已经投影过的条目不会因此违反唯一键。
+            stmt('INSERT INTO history_display_sources VALUES(?,?,?) ON CONFLICT(coordinator_session_id,entry_id) DO UPDATE SET byte_length=excluded.byte_length')
+                .run(id, entry.entry_id, step.state.displayBytes);
+            finishDisplay(id, entry);
+            return step.scannedBytes + size;
+        }
+        // 预算已经用完却没有前进：这次调用就此结束，下一次从同一游标继续。
+        if (step.scannedBytes === 0) return size;
+        const encoded = JSON.stringify(step.state);
+        if (Buffer.byteLength(encoded, 'utf8') > DISPLAY_PROJECTION_STATE_BYTES) throw new Error('Display projection cursor exceeds byte budget: ' + entry.entry_id);
+        stmt('INSERT INTO history_display_scans VALUES(?,?,?,?) ON CONFLICT(coordinator_session_id,entry_id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at')
+            .run(id, entry.entry_id, encoded, clock());
+        return step.scannedBytes + size;
+    }
+    /**
+     * 取回一条落盘游标。
+     *
+     * 调用方已经按长度核过预算，这里才取值：损坏或形状不认识一律显式拒绝，不按没有游标重扫——重扫会
+     * 丢掉这条游标与正文的对应关系，而那条关系正是续扫幂等的依据。
+     */
+    function readDisplayCursor(id: string, entryId: string, size: number): DisplayProjectionState {
+        if (size === 0) return createDisplayProjectionState();
+        const row = stmt('SELECT substr(CAST(state AS BLOB),1,?) AS state FROM history_display_scans WHERE coordinator_session_id=? AND entry_id=?')
+            .get(size, id, entryId) as { state: string | null } | undefined;
+        if (row?.state === null || row?.state === undefined) throw new Error('Display projection cursor is unreadable: ' + entryId);
+        try {
+            return displayCursorSchema.parse(JSON.parse(row.state));
+        } catch (error) {
+            if (error instanceof SyntaxError) throw new Error('Display projection cursor is corrupt: ' + entryId, { cause: error });
+            throw new Error('Display projection cursor is not in the current format: ' + entryId, { cause: error });
+        }
+    }
     function resolveDeferredToolResult(id: string, entryId: string): void {
         stmt('DELETE FROM history_call_deferred WHERE coordinator_session_id=? AND entry_id=?').run(id, entryId);
     }
@@ -547,6 +801,10 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
             stmt('INSERT INTO conversation_bodies VALUES(?,?,?,?)').run(id, entry.entryId, start, bytes.subarray(start, start + HISTORY_CHUNK_BYTES));
         // 派生定位与权威原文同事务落盘：写入路径已经持有完整对象，不需要回读整段 metadata。
         indexCommittedEntry(id, seq + 1, entry, metadataJson, content);
+        // 显示投影同事务落盘：新响应因此立即有可见文本，旧历史才需要补齐路径。
+        if (entry.role === 'assistant' && entry.contentFormat === 'json_blocks')
+            projectDisplay(id, entry.entryId, content);
+        advanceDisplayWatermark(id, seq + 1);
         const source = entry.completedWorkSource;
         if (source !== undefined) {
             // 外部工作按稳定 work entry 身份消费；user / interaction 各自沿用既有身份，不另建引用条目。
@@ -928,7 +1186,10 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
      * 为一次翻页付出与整页历史相同的代价。
      */
     function metadataPage(query: { readonly coordinatorSessionId: string; readonly before?: number | undefined; readonly after?: number | undefined; readonly direction?: 'older' | 'newer' | undefined; readonly upperSequence?: number | undefined; readonly role?: 'user' | undefined }): HistoryMetadataPage {
-        requireCore(query.coordinatorSessionId);
+        // 已登记但还没有首个 checkpoint 的会话是空历史，不是读取失败；不因此创建任何记录。
+        // 损坏的既有 core 仍由 core() 抛错，读取方不会把损坏当成空。
+        if (core(query.coordinatorSessionId) === null)
+            return { entries: [], hasMore: false };
         const newer = query.direction === 'newer';
         const rows = stmt('SELECT seq,entry_id,length(CAST(summary_metadata AS BLOB)) AS metadata_length FROM conversation_entries WHERE coordinator_session_id=? AND ' + (query.role === 'user' ? "role='user'" : "role!='system'") + ' AND seq<=? AND seq' + (newer ? '>' : '<') + '? ORDER BY seq ' + (newer ? 'ASC' : 'DESC') + ' LIMIT ?')
             .all(query.coordinatorSessionId, query.upperSequence ?? Number.MAX_SAFE_INTEGER, newer ? query.after ?? 0 : query.before ?? Number.MAX_SAFE_INTEGER, HISTORY_PAGE_ITEMS + 1) as {
@@ -946,7 +1207,7 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
             const stored = rowFor(query.coordinatorSessionId, row.entry_id, true);
             if (stored === undefined)
                 throw new Error('History entry absent');
-            const item = metadata(stored), size = Buffer.byteLength(JSON.stringify(item)) + (entries.length > 0 ? 1 : 0);
+            const item = metadata(query.coordinatorSessionId, stored), size = Buffer.byteLength(JSON.stringify(item)) + (entries.length > 0 ? 1 : 0);
             if (size > HISTORY_PAGE_BYTES)
                 throw new Error('History metadata exceeds page budget');
             if (bytes + size > HISTORY_PAGE_BYTES)
@@ -962,7 +1223,49 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
         // 水位只说明条目定位完成；延后的结果配对未接上时，读取方仍应看到“处理中”。
         const deferred = stmt('SELECT 1 AS pending FROM history_call_deferred WHERE coordinator_session_id=? LIMIT 1').get(coordinatorSessionId);
         const replay = stmt('SELECT 1 AS pending FROM history_activity_replay WHERE coordinator_session_id=? LIMIT 1').get(coordinatorSessionId);
-        return { upperSequence: upper, indexedThroughSequence: indexed, ready: indexed >= upper && deferred === undefined && replay === undefined };
+        return { upperSequence: upper, indexedThroughSequence: indexed,
+            ready: indexed >= upper && deferred === undefined && replay === undefined && pendingDisplayEntryOf(coordinatorSessionId) === undefined };
+    }
+    /** provider usage 的三个计数都必须是整数或 null；形状不认识就按未取得处理，不估算。 */
+    function usageOf(value: unknown): ModelUsageObservation | null {
+        if (typeof value !== 'object' || value === null || Array.isArray(value))
+            return null;
+        const field = (name: string): number | null => {
+            const raw = (value as Record<string, unknown>)[name];
+            return raw === null || Number.isSafeInteger(raw) ? raw as number | null : Number.NaN;
+        };
+        const inputTokens = field('inputTokens'), outputTokens = field('outputTokens'), totalTokens = field('totalTokens');
+        if (Number.isNaN(inputTokens) || Number.isNaN(outputTokens) || Number.isNaN(totalTokens))
+            return null;
+        if (inputTokens === null && outputTokens === null && totalTokens === null)
+            return null;
+        return { inputTokens, outputTokens, totalTokens };
+    }
+    /**
+     * 最近一次已提交模型响应的真实 usage（design D-02）。
+     *
+     * 只读 model step 的 metadata 与该条目的 replay 绑定，不读任何正文，因此与上下文预算无关。
+     * configurationRef 取这次响应真正写入的 provider replay 绑定；没有该绑定时为 null，
+     * 调用方据此知道这次观察没有可证明的配置身份，而不是沿用当前配置。
+     */
+    function readLatestModelUsage(id: CoordinatorSessionId): LatestModelUsage | null {
+        // 已登记但还没有首个 checkpoint 的会话是空历史，不是错误。
+        if (core(id) === null)
+            return null;
+        const row = stmt('SELECT step_id,entry_id,seq,CAST(substr(CAST(metadata AS BLOB),1,?) AS TEXT) AS metadata,length(CAST(metadata AS BLOB)) AS bytes FROM conversation_model_steps WHERE coordinator_session_id=? ORDER BY seq DESC LIMIT 1')
+            .get(HISTORY_PAGE_BYTES + 1, id) as { step_id: string; entry_id: string; seq: number; metadata: string; bytes: number } | undefined;
+        if (row === undefined)
+            return null;
+        if (row.bytes > HISTORY_PAGE_BYTES)
+            throw new Error('Model step metadata exceeds budget');
+        const parsed = JSON.parse(row.metadata) as { usage?: unknown; configurationRef?: unknown };
+        // 新记录带可信 configurationRef；旧记录没有这个字段时退回它真正写入的 provider replay 绑定，
+        // 两者都没有就是未知，不沿用当前配置。
+        const owner = stmt('SELECT configuration_ref FROM conversation_replay_owners WHERE coordinator_session_id=? AND entry_id=?').get(id, row.entry_id) as { configuration_ref: string } | undefined;
+        const configurationRef = typeof parsed.configurationRef === 'string' && parsed.configurationRef.length > 0
+            ? parsed.configurationRef
+            : owner?.configuration_ref ?? null;
+        return { stepId: row.step_id, entryId: row.entry_id, sequence: row.seq, configurationRef, usage: usageOf(parsed.usage) };
     }
     // ---------------------------------------------------------------- 显式索引补齐
     type PendingEntry = { readonly coordinator_session_id: string; readonly seq: number; readonly entry_id: string; readonly step_id: string; readonly role: string; readonly byte_length: number; readonly metadata_length: number };
@@ -1002,7 +1305,7 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
      */
     function linkToolResultEntry(id: string, entryId: string, stepId: string, seq: number, byteLength: number, summary?: EntryRow): ResultLink {
         const row = summary ?? rowFor(id, entryId, true);
-        const summaryEntry = row === undefined ? undefined : metadata(row);
+        const summaryEntry = row === undefined ? undefined : metadata(id, row);
         return linkResult(id, callEntryForStep(id, stepId), summaryEntry?.toolCallId ?? '', summaryEntry?.toolName, entryId, seq, byteLength, statusOfOutcome(outcomeOfBody(id, entryId)));
     }
     /** 延后待办：只登记过、且生产者 step 尚未落盘的结果。表通常为空，因此探测是常数成本。 */
@@ -1077,15 +1380,29 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
                 }
                 // 回填留下的陈旧计数链按条目预算逐段重放；重放未完成前读取方看到的是“处理中”。
                 const replay = pendingTallyReplay();
-                if (replay === undefined)
+                if (replay !== undefined) {
+                    const replayed = replayTallyStep(replay.coordinator_session_id, replay.activity_id, HISTORY_PAGE_ITEMS - scannedItems);
+                    if (replayed === 0)
+                        break;
+                    scannedItems += replayed;
+                    continue;
+                }
+                // 旧 json_blocks 响应的显示投影与调用索引共用同一份有界预算：投影完成后读取方才看到文本。
+                const display = pendingDisplayEntry();
+                if (display === undefined)
                     break;
-                const replayed = replayTallyStep(replay.coordinator_session_id, replay.activity_id, HISTORY_PAGE_ITEMS - scannedItems);
-                if (replayed === 0)
-                    break;
-                scannedItems += replayed;
+                if (display.metadata_length > HISTORY_PAGE_BYTES) throw new Error('History metadata exceeds page budget');
+                if (display.role === 'assistant' && display.metadata_length > HISTORY_PAGE_BYTES - scannedBytes) break;
+                const kind = displayKind(display.coordinator_session_id, display);
+                scannedBytes += kind.readBytes;
+                if (!kind.needed) { finishDisplay(display.coordinator_session_id, display); scannedItems += 1; continue; }
+                const advanced = advanceDisplayEntry(display, Math.max(0, HISTORY_PAGE_BYTES - scannedBytes));
+                if (advanced === 0) break;
+                scannedBytes += advanced;
+                scannedItems += 1;
             }
             // 就绪判断只探会话注册表和两张小待办表，不扫历史。
-            return { ready: pendingSession() === undefined && deferredToolResult() === undefined && pendingTallyReplay() === undefined, scannedBytes, scannedItems };
+            return { ready: pendingSession() === undefined && deferredToolResult() === undefined && pendingTallyReplay() === undefined && pendingDisplaySession() === undefined, scannedBytes, scannedItems };
         });
     }
     function recordToolObservation(input: HistoryToolObservation): CheckpointWriteResult {
@@ -1153,7 +1470,7 @@ const emptyTally: ActivityTally = { memberCount: 0, okCount: 0, rejectedCount: 0
         }
     }
     const store: CheckpointStore = {
-        checkpointer: saver, loadCheckpoint, updateCheckpoint, readEntry, readHistoryBody,
+        checkpointer: saver, loadCheckpoint, updateCheckpoint, readEntry, readHistoryBody, readHistoryDisplay, readLatestModelUsage,
         turns: { readTurnState, writeTurnState },
         saveCheckpoint(input) { try {
             const state = valid(input);

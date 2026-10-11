@@ -35,6 +35,25 @@ import type {
 import type { DurableMessageRole } from '../../src/domain/coordinator/session-state.js';
 
 const SESSION = 'session-search';
+
+test('searches projected text coordinates and excludes raw protocol fields', async () => {
+  const fixture = createSearchFixture({ entries: [{ role: 'assistant',
+    content: '[{"type":"text","text":"你好"},{"type":"thinking","thinking":"secret-thought"}]',
+    display: '你好\n可见匹配' }] });
+  const page = await scanHistory(fixture.port, search(SESSION, '可见匹配', 1));
+  expect(page.hits).toMatchObject([{ source: { kind: 'display', entryId: 'e1' }, offset: 7, end: 19 }]);
+  expect((await scanHistory(fixture.port, search(SESSION, 'secret-thought', 1))).hits).toEqual([]);
+  expect(fixture.reads.every(read => read.sourceKind === 'display')).toBe(true);
+});
+test('does not search raw protocol blocks while their visible projection is preparing', async () => {
+  const fixture = createSearchFixture({ entries: [{ role: 'assistant', content: 'hidden-thought' }] });
+  const port = { ...fixture.port, history: async (query: HistoryPageQuery) => {
+    const page = await fixture.port.history(query);
+    return { ...page, entries: page.entries.map(entry => ({ ...entry, contentFormat: 'json_blocks' as const })) };
+  } };
+  await expect(scanHistory(port, search(SESSION, 'hidden-thought', 1))).rejects.toBeInstanceOf(HistorySearchError);
+  expect(fixture.reads).toEqual([]);
+});
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const byteLengthOf = (text: string): number => encoder.encode(text).length;
@@ -45,6 +64,7 @@ type FixtureCall = { readonly callId: string; readonly stepId: string; readonly 
 type FixtureEntry = {
   readonly role: DurableMessageRole;
   readonly content: string;
+  readonly display?: string;
   readonly calls?: readonly FixtureCall[];
 };
 type FixtureRead = {
@@ -73,11 +93,12 @@ function createSearchFixture(options: FixtureOptions = {}) {
   const metadata = (index: number): HistoryMetadata => ({
     entryId: entryIdOf(index), stepId: 's' + String(index + 1), role: entries[index]!.role,
     sequence: index + 1, contentRevision: 1, byteLength: byteLengthOf(entries[index]!.content),
+    ...(entries[index]!.display === undefined ? {} : { displayByteLength: byteLengthOf(entries[index]!.display) }),
   });
   const textOf = (source: TranscriptBodyQuery['source']): string | null => {
-    if (source.kind === 'history') {
+    if (source.kind === 'history' || source.kind === 'display') {
       const index = entries.findIndex((_, position) => entryIdOf(position) === source.entryId);
-      return index === -1 ? null : entries[index]!.content;
+      return index === -1 ? null : source.kind === 'display' ? entries[index]!.display ?? null : entries[index]!.content;
     }
     if (source.kind === 'arguments') {
       for (const [index, entry] of entries.entries()) {

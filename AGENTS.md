@@ -198,7 +198,7 @@ Graph Patch 采用原子的 `add + revise + retire`：
 - `coordination.sqlite` 保存模式、Planning Cycle、当前 graph/authorization 引用、Session 注册及 Coordinator Model Configuration binding、Ticket Claim、Pending Interaction、Operation Intent、Runtime/Execution lease、fencing、共享预算状态和 CAS revision；
 - `checkpoints.sqlite` 由 LangGraph SqliteSaver 保存每个 Session 的已提交消息/tool step、图位置、Wake Batch 与 Context Capsule。
 
-`checkpoints.sqlite` 当前为 schema 4，每个 Session 另有一行轮次状态 `idle`/`running`/`halted`，独立于正文与协调状态；请求前先落盘 `running`，写失败即本进程停止，正常结束落盘 `idle`，故障或用户停止落盘 `halted`。停止的顺序固定为先 abort 在途请求、再上进程内 latch、最后落盘。`halted` 以及重开时读到的 `running`（视为中断）都拒绝全部自动 invoke、pending Wake、定时 wake 与维护；期间受理的用户消息按原身份保留。`/retry` 需重新核验历史可读、Runtime Lease 与 fencing、Session 注册、Scope 控制状态与未决 mutation/Operation Intent，通过后才恢复；已提交响应、工具与 submission 身份不改写。详见 IC-04/11。
+`checkpoints.sqlite` 当前为 schema 5，每个 Session 另有一行轮次状态 `idle`/`running`/`halted`，独立于正文与协调状态；请求前先落盘 `running`，写失败即本进程停止，正常结束落盘 `idle`，故障或用户停止落盘 `halted`。停止的顺序固定为先 abort 在途请求、再上进程内 latch、最后落盘。`halted` 以及重开时读到的 `running`（视为中断）都拒绝全部自动 invoke、pending Wake、定时 wake 与维护；期间受理的用户消息按原身份保留。`/retry` 需重新核验历史可读、Runtime Lease 与 fencing、Session 注册、Scope 控制状态与未决 mutation/Operation Intent，通过后才恢复；已提交响应、工具与 submission 身份不改写。详见 IC-04/11。
 
 `coordination.sqlite` 当前为 schema 20：每个 Scope/Session 只有一个 active Ticket Claim；Session blocked 保存结构化原因，损坏的执行 Lease holder 同时阻塞 Scope。角色结算保存明确 outcome 与 Validator verdict，历史缺失值按不可证明处理。实现尝试随派发准入、Validator 修复随稳定步骤准入原子计费，重放不重复扣预算。物化绑定要求 `authorization_id`、`authorization_version` 与 `worker_profile_ref`；同一契约 Retry 保持 Task 和授权，只追加 Attempt/Dispatch 绑定。初始图记录 nullable `initial_plan_json`，初始 v1 写入必须携带与 `planRevision` 一致的归一化 Implementation Plan，并与图记录在同一事务提交。旧行保持 `null`，读取时明确显示原计划未记录，不推断回填；accepted revision 不改写原计划。prepared terminal 的原创建回执句柄随 Operation Intent 结算保存；恢复在精确 worktree 内重新核验该资源，显示标题不承担身份语义。原句柄缺失或失效时阻塞，不能重发已接受的创建操作。
 
@@ -251,13 +251,13 @@ Transcript 只显示用户/Agent 消息和折叠 tool 记录；运行事实按�
 
 对话阅读统一经 IC-11 的 metadata/body/preview 端口和 `render/transcript-reader.ts`，锚点绑定 Session/来源版本/UTF-8 offset。正文与派生布局缓存各限 8 MiB/64 项；折叠工具只读 metadata，render 只绘制有限 frame。流式片段只写 Runtime 临时来源，SDK 完整响应经 appendModelStep 接受后才进入历史；输出/上下文读回预算由项目配置归一化并注入所有调用点。离底更新和 resize 保留原来源，取消/失去 fencing/退出中止模型；合同和测量方法见 docs/interface-contracts.md IC-04/11 与原型交接。
 
-修改 Coordinator 历史存储、恢复、压缩或 transcript 分页时，先读 `docs/interface-contracts.md` 的 IC-04/11/12。生产读写按目的访问增量权威记录；分页读取与有效上下文读取各自有界，正文与调度状态保持单一 owner。
+修改 Coordinator 历史存储、恢复、压缩或 transcript 分页时，先读 `docs/interface-contracts.md` 的 IC-04/11/12。生产读写按目的访问增量权威记录；分页读取与有效上下文读取各自有界，正文与调度状态保持单一 owner。checkpoint schema 5 的可见 text 投影供阅读与搜索使用同一来源坐标，原始内容继续用于 replay；Bootstrap 每批正文与续扫游标合计最多 64 KiB，游标最多 64 KiB、嵌套最多 64 层，损坏时明确拒绝。投影待准备时呈现状态，查询/render/resize 不补写。阅读器串行导航，到底和短历史无位移保持跟随；共享 SGR 滚轮仅在 transcript 区域每次三行，overlay 禁止，退出恢复终端模式。
 
 命令、别名、固定键位和帮助统一由 `src/interfaces/tui/commands.ts` 定义。修改命令搜索、审阅或异步返回时，先读 IC-11/12 的结果引用与页面绑定合同；交接使用本次提案 ID 和所见 record revision，迟到结果只影响原入口，切换 Session 由用户明确选择。
 
 最小全局键位为 `Ctrl+P` 打开 Command Palette、`Ctrl+B` 开合项目面板、`Ctrl+G` 打开 Graph Inspector、`Esc` 逐层返回，方向键与 Enter 用于导航。slash 上方候选先采用、再明确执行；审阅默认返回。Session Picker 和新事件不得自动切换 transcript、抢占 composer 或改变 Scope 级 Graph；M2 不实现自定义键位。用户级 Nerd/ASCII 与 statusline 偏好由 IC-15 拥有：只在明确输入意图中分区 CAS 保存，环境图标覆盖保持临时，失败保留编辑及未保存选择。render/effect/resize/remount 只读。
 
-第七批 metadata 由应用 `project-presentation.ts` 投影注册身份、选中 Session 的精确模型/Claim、当前 Dispatch Work Package 和绑定批准上限的预算，缺来源不可用。context 只接受 installed integration 对当前完整有效输入与 tools 的精确测量及可信模型窗口，并绑定 Session/configuration/输入版本；消息/tool/压缩/换模型后失效，禁止近似 tokenizer、字符估算或累计 usage 冒充。statusline、Sidebar 与 Inspector 共用当前全图未 retire 包的 Accepted Validator Result 摘要，不从局部窗口或 Task done 猜进度。项目详情只经 IC-11/12 有界端口，每页20项/64KiB，批准后 Manifest 与候选区分，旧对象/版本结果不得替换当前页。
+第七批 metadata 由应用 `project-presentation.ts` 投影注册身份、选中 Session 的精确模型/Claim、当前 Dispatch Work Package 和绑定批准上限的预算，缺来源不可用。context 优先使用 installed integration 对当前完整有效输入与 tools 的精确测量，绑定 Session/configuration/输入版本；输入变化后失效。没有精确能力时，显示同配置最新已提交请求的真实 usage，明确标注上次请求；模型声明窗口限制实际输入预算，未知窗口不画百分比。禁止用估算或累计 usage 冒充当前输入。statusline、Sidebar 与 Inspector 共用当前全图未 retire 包的 Accepted Validator Result 摘要，不从局部窗口或 Task done 猜进度。项目详情只经 IC-11/12 有界端口，每页20项/64KiB，批准后 Manifest 与候选区分，旧对象/版本结果不得替换当前页。
 
 `/stop` 与 `/retry` 只作用于 Session 级模型轮次，不改变 Scope 控制状态；`stop` 先 abort 再持久化，`retry` 核验后恢复原会话，输入与阅读位置保留。Exit 与 `Ctrl+C` 先中止在途模型，再走草稿保存与退出流程；取消不触发重试。
 

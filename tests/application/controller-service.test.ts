@@ -74,6 +74,7 @@ import type {
 } from '../../src/application/ports/branch-coordination-store.js';
 import type { ExecutionBackend } from '../../src/application/ports/execution-backend.js';
 import type { ProjectPresentation } from '../../src/application/tui/project-presentation.js';
+import type { AgentTurnState } from '../../src/application/ports/agent-turn.js';
 import type { GraphVersionRecord } from '../../src/domain/planning/execution-graph.js';
 
 const SCOPE = 'scope-controller' as CoordinationScopeId;
@@ -304,6 +305,43 @@ test('ControllerSnapshot carries the application-owned project presentation unch
   };
 
   expect(snapshotOf(SCOPE, presentation).projectPresentation).toBe(presentation);
+});
+
+test('每个 Session 的轮次状态按宿主读回的事实投影，缺项时不推断', () => {
+  const snapshot = store.query({ kind: 'snapshot', coordinationScopeId: SCOPE });
+  if (snapshot.kind !== 'snapshot') throw new Error('无法读取 snapshot');
+  const counters = store.query({ kind: 'budget-counters', coordinationScopeId: SCOPE });
+  const execution = deriveExecutionFacts({
+    snapshot: snapshot.snapshot,
+    nodes: [],
+    baselineHead: null,
+    authority: null,
+    observations: noExecutionObservations('controller-service-test'),
+  });
+  const project = (sessionTurns: ReadonlyMap<string, AgentTurnState> | undefined): ControllerSnapshot =>
+    projectControllerSnapshot({
+      snapshot: snapshot.snapshot,
+      budgets: counters.kind === 'budget-counters' ? counters.counters : [],
+      graphGeneration: null,
+      frontier: execution.frontier,
+      workers: [],
+      execution,
+      recoveryBudgetLimit: null,
+      extraBlockers: [],
+      maintenance: null,
+      selectedSessionId: null,
+      graphVersions: [],
+      authorizationGraphRef: null,
+      compaction: null,
+      ...(sessionTurns === undefined ? {} : { sessionTurns }),
+    });
+  const running = new Map<string, AgentTurnState>([[SESSION, { kind: 'running' }]]);
+  expect(project(running).sessions.find(entry => entry.coordinatorSessionId === SESSION)?.turn)
+    .toEqual({ kind: 'running' });
+  expect(project(undefined).sessions.find(entry => entry.coordinatorSessionId === SESSION)?.turn).toBeUndefined();
+  // 另一个 Session 的轮次不得串到当前 Session 上。
+  expect(project(new Map<string, AgentTurnState>([['session-other', { kind: 'running' }]]))
+    .sessions.find(entry => entry.coordinatorSessionId === SESSION)?.turn).toBeUndefined();
 });
 
 /**

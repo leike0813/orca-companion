@@ -18,6 +18,7 @@ import type {
 } from '../../domain/coordinator/session-state.js';
 import {
   effortCapabilitySchema,
+  modelMetadataSchema,
   providerConnectionSchema,
   providerProtocolSchema,
   type EffortCapability,
@@ -56,6 +57,8 @@ export const coordinatorModelConfigurationSchema = z.strictObject({
   effortCapability: effortCapabilitySchema.nullable().optional(),
   /** 选定的 effort；null 表示交给 provider 默认值。 */
   effort: identity.nullable().optional(),
+  /** 所引用 Model 的元数据快照；缺省表示未知，既有配置不改写。 */
+  metadata: modelMetadataSchema.optional(),
 });
 
 export type CoordinatorModelConfiguration = z.infer<typeof coordinatorModelConfigurationSchema>;
@@ -71,6 +74,11 @@ export function configurationConnection(
 export function isEffortSelectable(configuration: CoordinatorModelConfiguration): boolean {
   const capability: EffortCapability | null | undefined = configuration.effortCapability;
   return capability !== null && capability !== undefined;
+}
+
+/** 该配置声明的上下文窗口；未声明为 `null`，未知不产生虚假上限。 */
+export function configurationContextWindow(configuration: CoordinatorModelConfiguration): number | null {
+  return configuration.metadata?.contextWindow ?? null;
 }
 
 /** 模型相关操作的在途情况；只有为零时才允许切换。 */

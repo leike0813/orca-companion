@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { CatalogModel, ProviderPreset } from './provider-catalog.js';
-import type { EffortCapability, ProviderProtocol } from '../../domain/model-configuration.js';
+import { MODEL_INPUT_MODALITIES, type EffortCapability, type ModelInputModality, type ProviderProtocol } from '../../domain/model-configuration.js';
 
 export type ProviderCatalogData = { version: string; presets: ProviderPreset[]; models: CatalogModel[] };
 
@@ -58,8 +58,12 @@ export function convertModelsDev(raw: unknown): ProviderCatalogData {
       if (!modelId || !isRecord(modelValue)) continue;
       const limit = modelValue['limit'];
       const contextWindow = isRecord(limit) && Number.isSafeInteger(limit['context']) && Number(limit['context']) > 0 ? Number(limit['context']) : null;
+      const modalities = isRecord(modelValue['modalities']) ? modelValue['modalities'] : null;
+      const declared = Array.isArray(modalities?.['input']) ? modalities['input'] : [];
+      const inputModalities = declared.filter((value): value is ModelInputModality =>
+        typeof value === 'string' && (MODEL_INPUT_MODALITIES as readonly string[]).includes(value));
       providerModels.push({ id: modelId, label: typeof modelValue['name'] === 'string' ? modelValue['name'] : modelId, providerId: id, protocol,
-        effortCapability: verifiedEffort.get(`${id}\0${modelId}`) ?? null, contextWindow });
+        effortCapability: verifiedEffort.get(`${id}\0${modelId}`) ?? null, contextWindow, inputModalities });
     }
     models.push(...providerModels);
     if (id === 'openai') {

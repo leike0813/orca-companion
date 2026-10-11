@@ -16,6 +16,13 @@ export type HistoryMetadata = Omit<CommittedMessageEntry, 'content' | 'toolCalls
   readonly sequence: number;
   readonly contentRevision: 1;
   readonly byteLength: number;
+  /**
+   * 有界可见文本来源的长度。
+   *
+   * 它与 `byteLength` 是两份坐标：正文仍是唯一权威原文，这里只是派生显示来源，因此阅读、
+   * 排版和搜索可以消费它而不解析响应。缺省即没有投影，读取方按原文处理。
+   */
+  readonly displayByteLength?: number;
 };
 export type HistoryPageQuery = {
   readonly coordinatorSessionId: string;
@@ -42,9 +49,18 @@ export type HistoryBodyRange = {
   readonly byteLength: number;
   readonly text: string;
 };
+export type HistoryDisplayQuery = {
+  readonly coordinatorSessionId: string;
+  readonly entryId: string;
+  readonly contentRevision: 1;
+  readonly offset: number;
+  readonly maxBytes?: number;
+};
 export type HistoryReadPort = {
   readonly readHistoryPage: (query: HistoryPageQuery) => HistoryMetadataPage;
   readonly readHistoryBody: (query: HistoryBodyQuery) => HistoryBodyRange | null;
+  /** 派生可见文本来源的 UTF-8 范围；没有投影的条目返回 `null`，读取方按原文处理。 */
+  readonly readHistoryDisplay: (query: HistoryDisplayQuery) => HistoryBodyRange | null;
   readonly readEntry: (coordinatorSessionId: string, entryId: string) => CommittedMessageEntry | null;
 };
 
@@ -61,6 +77,7 @@ export type TranscriptStreamEvent = {
 export type TranscriptStreamObserver = (event: TranscriptStreamEvent) => void;
 export type TranscriptSourceRef =
   | { readonly kind: 'history'; readonly entryId: string; readonly contentRevision: 1 }
+  | { readonly kind: 'display'; readonly entryId: string; readonly contentRevision: 1 }
   | { readonly kind: 'arguments'; readonly entryId: string; readonly stepId: string; readonly callId: string; readonly contentRevision: 1 }
   | { readonly kind: 'interaction'; readonly interactionId: string; readonly part: 'question' | 'answer'; readonly contentRevision: string }
   | { readonly kind: 'preview'; readonly previewId: string; readonly contentRevision: number };
@@ -96,6 +113,7 @@ export const transcriptBodyQuerySchema = z.strictObject({
   coordinatorSessionId: z.string().min(1),
   source: z.discriminatedUnion('kind', [
     z.strictObject({ kind: z.literal('history'), entryId: z.string().min(1), contentRevision: z.literal(1) }),
+    z.strictObject({ kind: z.literal('display'), entryId: z.string().min(1), contentRevision: z.literal(1) }),
     z.strictObject({ kind: z.literal('arguments'), entryId: z.string().min(1), stepId: z.string().min(1), callId: z.string().min(1), contentRevision: z.literal(1) }),
     z.strictObject({ kind: z.literal('interaction'), interactionId: z.string().min(1), part: z.enum(['question', 'answer']), contentRevision: z.string().min(1) }),
     z.strictObject({ kind: z.literal('preview'), previewId: z.string().min(1), contentRevision: z.number().int().positive() }),
@@ -112,6 +130,7 @@ export const historyBodyQuerySchema = z.strictObject({
   coordinatorSessionId: z.string().min(1), entryId: z.string().min(1), contentRevision: z.literal(1),
   offset: integer, maxBytes: z.number().int().min(4).max(HISTORY_BODY_BYTES).optional(),
 });
+export const historyDisplayQuerySchema = historyBodyQuerySchema;
 const cursorSchema = z.tuple([z.string().min(1), integer, integer, z.enum(['older', 'newer'])]);
 export type HistoryCursor = z.infer<typeof cursorSchema>;
 export function parseHistoryCursor(cursor: string, sessionId: string): HistoryCursor {

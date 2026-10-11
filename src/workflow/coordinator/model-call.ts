@@ -11,6 +11,9 @@
  *    聚合结果，而不是这里再 concat 一份可能与 SDK 语义不同的副本。
  * 2. **未完整返回的响应没有价值**。输出超限、取消、fencing 失效都在这里实际 abort 这次调用，
  *    结果只能是失败；部分 chunk 只能作为临时预览出现，永远不进入已提交历史。
+ *
+ * usage 在这里按协议归约：Anthropic 输入含缓存用量、输出取最后累计值；其它协议采用 SDK 聚合。
+ * 不完整的报告保持未知；只读取公开片段字段，调用方未给出协议时按聚合语义处理。
  */
 
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
@@ -26,6 +29,7 @@ import {
 } from '../../application/coordinator/history.js';
 import type { SessionWriteAssertion as FencingAssertion } from '../../application/coordinator/runtime-guard.js';
 import type { ModelUsageObservation } from '../../domain/coordinator/session-state.js';
+import type { ProviderProtocol } from '../../domain/model-configuration.js';
 
 /**
  * 模型节点真正需要的模型能力：只有「流」。
@@ -138,6 +142,36 @@ function isCompleteUsage(usage: ModelUsageObservation | null): usage is ModelUsa
     usage.outputTokens !== null &&
     usage.totalTokens !== null
   );
+}
+
+/**
+ * 把协议报告归一成本次请求的真实用量。
+ *
+ * - OpenAI / Gemini：chunk 已是增量（Gemini 由 SDK 从累计值相减得到），SDK 的聚合响应就是整次请求的
+ *   总量，直接采用。聚合会把缺失的数字补成 0，因此只有**每一片段都完整**时才采用；任何片段缺数都
+ *   意味着这次归约不可确认，一律留空。
+ * - Anthropic：`message_start` 归一后的 input 已含 cache_creation 与 cache_read，且带一个 output 种子；
+ *   `message_delta` 的 output 是**累计值**，concat 会把种子与各次累计相加。因此输入取观察到的最大值、
+ *   输出取最后一次累计值，缺失任何一个都保持未知，不补零。
+ */
+function normalizeUsage(input: {
+  readonly providerIntegration: ProviderProtocol | undefined;
+  readonly aggregate: ModelUsageObservation | null;
+  readonly allFragmentsComplete: boolean;
+  readonly observed: ModelUsageObservation | null;
+  readonly fragmentCount: number;
+  readonly maxInputTokens: number | null;
+  readonly lastOutputTokens: number | null;
+}): ModelUsageObservation | null {
+  if (input.providerIntegration === 'anthropic-messages') {
+    if (!input.allFragmentsComplete) return null;
+    const output = input.lastOutputTokens;
+    const inputTokens = input.maxInputTokens;
+    // 没有任何片段报告输入用量时保持未知：delta 片段恒报 0，0 不是「这次请求没有输入」的证据。
+    return output === null || inputTokens === null || inputTokens <= 0 ? null : { inputTokens, outputTokens: output, totalTokens: inputTokens + output };
+  }
+  if (input.allFragmentsComplete && isCompleteUsage(input.aggregate)) return input.aggregate;
+  return input.fragmentCount === 1 && isCompleteUsage(input.observed) ? input.observed : null;
 }
 
 /**
@@ -328,6 +362,13 @@ export function isRetryableModelCallFailure(failure: ModelCallFailure): boolean 
 export async function streamModelCall(input: {
   readonly model: StreamingModelHandle;
   readonly messages: readonly unknown[];
+  /**
+   * 本次调用的固定协议；决定 usage 的归约语义。
+   *
+   * 由持有 Coordinator Model Configuration 的调用方给出，模型与工具都无法伪造。缺省按 SDK 聚合语义
+   * 处理——只有 Anthropic 的累计输出需要额外校正。
+   */
+  readonly providerIntegration?: ProviderProtocol;
   /** 宿主信号（Scope Cancel / Exit 组合而成）；与本次调用的局部 abort 控制器合并。 */
   readonly signal?: AbortSignal;
   readonly maxResponseBytes?: number;
@@ -373,6 +414,11 @@ export async function streamModelCall(input: {
   // 部分报告被静默忽略。是否完整留到最后统一判断。
   let observedUsage: ModelUsageObservation | null = null;
   let usageFragmentCount = 0;
+  // 累计语义只需要两个有界事实：观察到的最大输入与最后一次累计输出。
+  let maxInputTokens: number | null = null;
+  let lastOutputTokens: number | null = null;
+  // 任一片段缺数即不可确认：聚合会把缺失补成 0，提交它就是把「没拿到」写成「是 0」。
+  let allFragmentsComplete = true;
   // 失败原因在流循环里由闭包写入；放在对象里而不是裸变量，读写两侧才看到同一份事实。
   const attempt: { failure: ModelCallFailure | null } = { failure: null };
   const fail = (next: ModelCallFailure): void => {
@@ -414,7 +460,11 @@ export async function streamModelCall(input: {
       const usage = usageOf(chunk);
       if (usage !== null) {
         observedUsage ??= usage;
+        allFragmentsComplete &&= isCompleteUsage(usage);
         usageFragmentCount = Math.min(usageFragmentCount + 1, 2);
+        maxInputTokens = maxInputTokens === null ? usage.inputTokens
+          : usage.inputTokens === null ? maxInputTokens : Math.max(maxInputTokens, usage.inputTokens);
+        if (usage.outputTokens !== null) lastOutputTokens = usage.outputTokens;
       }
       const text = deltaTextOf(chunk);
       if (text.length > 0) {
@@ -448,11 +498,18 @@ export async function streamModelCall(input: {
     publish({ ...preview, kind: 'interrupted', reason: unconfirmed.detail });
     return unconfirmed;
   }
-  // 多个 usage 片段的归约语义无法从通用合同确认，因此不猜；唯一那次观察也必须本身完整。
-  // 宁可留空，也不把不完整或不明归约的数字写成费用事实。
   return {
     kind: 'response',
     response: collector.response,
-    usage: usageFragmentCount === 1 && isCompleteUsage(observedUsage) ? observedUsage : null,
+    // 宁可留空，也不把不完整或不明归约的数字写成费用事实。
+    usage: normalizeUsage({
+      providerIntegration: input.providerIntegration,
+      aggregate: usageOf(collector.response),
+      allFragmentsComplete,
+      observed: observedUsage,
+      fragmentCount: usageFragmentCount,
+      maxInputTokens,
+      lastOutputTokens,
+    }),
   };
 }

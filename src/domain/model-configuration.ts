@@ -81,13 +81,69 @@ export const providerConnectionSchema = z.strictObject({
 });
 export type ProviderConnection = z.infer<typeof providerConnectionSchema>;
 
+/** 模型声明的输入模态；`text` 恒为必选，其余按模型实际支持声明。 */
+export const MODEL_INPUT_MODALITIES = ['text', 'image', 'audio', 'video'] as const;
+export type ModelInputModality = (typeof MODEL_INPUT_MODALITIES)[number];
+
+/**
+ * 模型元数据声明（唯一 schema owner）。
+ *
+ * 这是**用户或目录的声明**，不是 backend 能力核验：保存它不代表 provider 接受这些输入或窗口，
+ * 启动与应用的真实探针仍然必需。窗口为正安全整数；模态唯一、非空且必含 `text`，否则「模型能接收
+ * 什么」在上下文预算是无意义的。缺省（旧记录）表示未知，不回填默认值。
+ */
+export const modelMetadataSchema = z.strictObject({
+  contextWindow: z.number().int().refine((value) => Number.isSafeInteger(value) && value > 0, {
+    message: '上下文窗口必须是正安全整数',
+  }),
+  inputModalities: z.array(z.enum(MODEL_INPUT_MODALITIES)).min(1)
+    .refine((values) => new Set(values).size === values.length && values.includes('text'), {
+      message: '输入模态必须唯一、非空且包含 text',
+    }),
+  source: z.enum(['catalog', 'user_declared']),
+});
+export type ModelMetadata = z.infer<typeof modelMetadataSchema>;
+
 export const modelDefinitionSchema = z.strictObject({
   modelRef: identity,
   connectionRef: identity,
   model: identity,
   effortCapability: effortCapabilitySchema.nullable(),
+  /** 不可变的元数据快照；缺省表示未知，既有记录不改写。 */
+  metadata: modelMetadataSchema.optional(),
 });
 export type ModelDefinition = z.infer<typeof modelDefinitionSchema>;
+
+/**
+ * 固定协议的推理预设（唯一事实源）。
+ *
+ * 用户声明的 effort 只能来自这里的取值，adapter 也只按这里的 `optionPath` 映射成协议参数；
+ * 不存在任意 SDK option 路径。两个 OpenAI 协议共用 `reasoning.effort`。
+ */
+const openAiEffort: EffortCapability = {
+  values: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'],
+  source: 'OpenAI reasoning.effort',
+  optionPath: 'reasoning.effort',
+};
+const PROTOCOL_EFFORT_PRESETS: Readonly<Record<ProviderProtocol, EffortCapability | null>> = {
+  'openai-chat': openAiEffort,
+  'openai-responses': openAiEffort,
+  'anthropic-messages': {
+    values: ['low', 'medium', 'high', 'xhigh', 'max'],
+    source: 'Anthropic outputConfig.effort',
+    optionPath: 'outputConfig.effort',
+  },
+  'google-gemini': {
+    values: ['minimal', 'low', 'medium', 'high'],
+    source: 'Gemini thinkingLevel',
+    optionPath: 'thinkingLevel',
+  },
+};
+
+/** 该固定协议支持的推理预设；没有该参数时为 `null`。 */
+export function protocolEffortCapability(protocol: ProviderProtocol): EffortCapability | null {
+  return PROTOCOL_EFFORT_PRESETS[protocol];
+}
 
 /**
  * Worker 的不可变模型选择。

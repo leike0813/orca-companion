@@ -1,9 +1,13 @@
 import { Box, Text } from 'ink';
+import { useSpinner } from '@inkjs/ui';
 import { displayWidth, truncateToDisplayWidth } from '../render/width.js';
 import type { CompactionView, ExecutionProjectionView, GraphView, MaintenanceView, ScopeView } from '../../../application/tui/view-model.js';
 import type { SidebarDensity } from '../state.js';
 import { tuiColors } from '../theme.js';
 import type { ProjectPresentation } from '../../../application/tui/project-presentation.js';
+import type { ProjectContextStatus } from '../../../application/tui/project-presentation.js';
+import type { AgentTurnState } from '../../../application/ports/agent-turn.js';
+import { tuiIconMode } from '../theme.js';
 import { DEFAULT_TUI_PREFERENCES, type StatuslinePreferences } from '../../../application/configuration/tui-preferences.js';
 
 export type StatusLineProps = {
@@ -13,6 +17,8 @@ export type StatusLineProps = {
   readonly model?: string | null; readonly graph?: GraphView | null;
   readonly presentation?: ProjectPresentation;
   readonly preferences?: StatuslinePreferences;
+  /** 选中 Session 的真实轮次状态；缺省时只呈现上下文，不猜是否在运行。 */
+  readonly turn?: AgentTurnState | null;
 };
 export function compactionLabel(compaction: CompactionView | null): string | null {
   if (compaction === null || compaction.status === 'not_needed') return null;
@@ -22,19 +28,26 @@ export function StatusLine(props: StatusLineProps) {
   const width = Math.max(1, props.availableWidth);
   const presentation = props.presentation;
   const preferences = props.preferences ?? DEFAULT_TUI_PREFERENCES.statusline;
+  const { frame } = useSpinner({ type: tuiIconMode === 'ascii' ? 'line' : 'dots' });
   const model = presentation?.session?.model ?? props.model ?? null;
   const effort = presentation?.session?.effort;
   const context = presentation?.context;
   const effortText = effort?.status === 'configured' ? `推理 ${effort.value}` : effort?.status === 'not_configured' ? '推理 未配置' : effort?.status === 'not_supported' ? '推理 不支持' : '推理 不可用';
-  const contextText = context?.status === 'available' ? formatContext(context.used, context.capacity, preferences.contextFormat) : '上下文 不可用';
+  const contextText = formatContextStatus(context ?? { status: 'unavailable' }, preferences.contextFormat);
   const rawCore = [model ?? '模型不可用', effortText, contextText];
   const minimumCoreWidth = [1, 8, 10];
   const coreColors = [tuiColors.accent, tuiColors.focus, tuiColors.success];
+  // 轮次在途是用户最需要立刻看到的事实，因此它先占住宽度，核心字段在剩下的空间里收缩。
+  const turnText = props.turn === undefined || props.turn === null ? null
+    : props.turn.kind === 'running' ? `${frame} 运行中`
+    : props.turn.kind === 'halted' ? '轮次 已停止' : null;
+  const turnWidth = turnText === null ? 0 : displayWidth(' · ') + displayWidth(turnText);
+  const coreWidth = Math.max(1, width - turnWidth);
   const core: {text:string;color:string}[] = [];
   let usedWidth = 0;
   for (let index = 0; index < rawCore.length; index += 1) {
     const separator = core.length === 0 ? 0 : displayWidth(' · ');
-    const remaining = width - usedWidth - separator;
+    const remaining = coreWidth - usedWidth - separator;
     if (remaining < 1) break;
     const reserved = rawCore.slice(index + 1).reduce((sum, text, offset) =>
       sum + displayWidth(' · ') + Math.min(displayWidth(text), minimumCoreWidth[index + offset + 1]!), 0);
@@ -71,6 +84,8 @@ export function StatusLine(props: StatusLineProps) {
     }
   }
   const visible = [...core];
+  if (turnText !== null && coreWidth >= 1) visible.push({ text: turnText,
+    color: props.turn?.kind === 'running' ? tuiColors.accent : tuiColors.warning });
   for (const part of extras) {
     const prefix = visible.map(s=>s.text).join(' · ');
     const room = width - displayWidth(prefix) - 3;
@@ -90,4 +105,23 @@ function formatContext(used:number, capacity:number, format:StatuslinePreference
   if(format==='remaining')return `上下文 剩余 ${Math.round(Math.max(0,capacity-used)*100/capacity)}%`;
   if(format==='tokens')return `上下文 ${used}/${capacity} tokens`;
   return `上下文 已用 ${Math.round(used*100/capacity)}%`;
+}
+
+/**
+ * 把上下文状态渲染成一行文本。
+ *
+ * `last_request` 是**上一次请求**的真实用量而不是当前输入，因此标出它的来源；窗口未知时只如实
+ * 给出 token 数，不换算百分比。导出它是为了让调试宿主用同一段文案，而不是另写一份近似显示。
+ */
+export function formatContextStatus(context: ProjectContextStatus, format: StatuslinePreferences['contextFormat']): string {
+  if (context.status === 'unavailable') return '上下文 不可用';
+  if (context.status === 'available') return formatContext(context.used, context.capacity, format);
+  const { inputTokens, outputTokens, capacity } = context;
+  const input = inputTokens === null ? '未知' : format === 'tokens' ? `${inputTokens} tokens`
+    : capacity === null || capacity <= 0 ? `${inputTokens}`
+    : format === 'remaining' ? `剩余 ${Math.round(Math.max(0, capacity - inputTokens) * 100 / capacity)}%`
+    : `${Math.round(inputTokens * 100 / capacity)}%`;
+  const usage = `上下文 上次请求 输入 ${input}` + (outputTokens === null ? '' : ` · 输出 ${outputTokens}`)
+    + (capacity === null ? ' · 窗口未知' : '');
+  return usage;
 }

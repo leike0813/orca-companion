@@ -9,18 +9,27 @@
  * 落盘也不读取已保存的凭据内容。组件自己持有状态与按键处理，宿主不要为它再分发一次按键。
  */
 
-import { Box, Text, useInput } from 'ink';
+import { Text, useInput } from 'ink';
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react';
 
 import { ModelSettingsEditor } from './model-settings-editor.js';
-import { DialogFrame } from './selection-list.js';
+import { ActionRow, DialogFrame, fieldRows } from './selection-list.js';
+import { effortWindow } from './model-picker.js';
 import { editComposer, textDraft } from '../input/composer-editor.js';
 import { truncateToDisplayWidth } from '../render/width.js';
 import { EMPTY_MODEL_SETTINGS_EDIT, type ModelSettingsEdit } from '../state.js';
 import { tuiColors } from '../theme.js';
 import type { ProviderCatalog } from '../../../application/configuration/provider-catalog.js';
 import type { ProviderLibrary } from '../../../application/configuration/provider-library.js';
-import { PROVIDER_PROTOCOLS, type ModelDefinition, type ProviderProtocol } from '../../../domain/model-configuration.js';
+import {
+  MODEL_INPUT_MODALITIES,
+  PROVIDER_PROTOCOLS,
+  protocolEffortCapability,
+  semanticEqual,
+  type ModelInputModality,
+  type ModelMetadata,
+  type ProviderProtocol,
+} from '../../../domain/model-configuration.js';
 
 export type ProviderLibraryEditorProps = {
   readonly library: ProviderLibrary;
@@ -37,15 +46,38 @@ export type ProviderLibraryEditorProps = {
   readonly identity?: string;
 };
 
-/** 已保存模型、等待用户明确选择 effort 的一步；`null` 表示没有可信 effort 取值。 */
-type EffortStep = { readonly model: ModelDefinition; readonly values: readonly string[] };
+/**
+ * 选定模型后的确认步。
+ *
+ * 目录候选沿定稿只确认独立的横向 effort，元数据由目录精确值随记录保存；手填 exact ID 没有目录事实，
+ * 因此同一步还要确认上下文窗口与输入模态，并且确认后才保存——手填不依赖目录查询。
+ * 窗口与模态都可以留空：留空即未知，不写默认值，保存的模型因此没有元数据声明。
+ */
+type DeclareStep = {
+  readonly model: string;
+  /** true 表示手填：需要元数据声明并在此保存；目录候选已在选定模型时保存。 */
+  readonly manual: boolean;
+  /** 目录候选保存后的 modelRef；手填在确认时才有。 */
+  readonly modelRef: string | null;
+  /** 目录给出的精确元数据起点；用户改动后来源即改为 user_declared。 */
+  readonly catalogMetadata: ModelMetadata | null;
+  readonly effortValues: readonly string[];
+  /** 0 表示不指定 effort，之后是可信取值。 */
+  readonly effortIndex: number;
+  readonly contextWindow: string;
+  readonly modalities: readonly ModelInputModality[];
+  readonly modalityIndex: number;
+  readonly focus: 'window' | 'modalities' | 'effort' | 'action';
+  /** ActionRow：0 返回模型列表，1 确认并交接。 */
+  readonly action: number;
+  /** 聚焦区域；目录候选只有 effort 与动作两区。 */
+  readonly regions: readonly DeclareStep['focus'][];
+};
 
 type EditorState = {
   readonly edit: ModelSettingsEdit;
   readonly notice: string | null;
-  readonly effort: EffortStep | null;
-  /** 0 是「不指定」，之后是可信取值。 */
-  readonly effortIndex: number;
+  readonly declare: DeclareStep | null;
 };
 
 // 同一 PTY 批次里的后续按键必须读到前一键的结果，不能等 React 提交下一帧。
@@ -59,17 +91,11 @@ function useImmediateState<T>(initial: () => T) {
   return [value, update, current] as const;
 }
 
-/** 只有可信能力来源才给 effort 选择步；没有可信取值时直接以 `null` 交接。 */
-function effortStep(model: ModelDefinition): EffortStep | null {
-  const values = model.effortCapability?.values ?? [];
-  return values.length === 0 ? null : { model, values };
-}
-
 function initialState(library: ProviderLibrary, catalog: ProviderCatalog): EditorState {
   // 共享编辑器不写项目配置，因此按「项目始终可用」隐藏模型列表里的初始化项。
   const base: ModelSettingsEdit = { ...EMPTY_MODEL_SETTINGS_EDIT, presets: catalog.presets(), projectAvailable: true };
   const loaded = library.load();
-  if (loaded.kind !== 'loaded') return { edit: base, notice: '! ' + loaded.code + ': ' + loaded.message, effort: null, effortIndex: 0 };
+  if (loaded.kind !== 'loaded') return { edit: base, notice: '! ' + loaded.code + ': ' + loaded.message, declare: null };
   const connection = loaded.connections[0] ?? null;
   return {
     edit: {
@@ -85,8 +111,7 @@ function initialState(library: ProviderLibrary, catalog: ProviderCatalog): Edito
       libraryRevision: loaded.revision,
     },
     notice: null,
-    effort: null,
-    effortIndex: 0,
+    declare: null,
   };
 }
 
@@ -102,6 +127,66 @@ function editProviderField(edit: ModelSettingsEdit, input: string, key: Paramete
   if (field === 'label') return { ...edit, label: next };
   if (field === 'baseUrl') return { ...edit, baseUrl: next };
   return { ...edit, query: next, selectedIndex: -1, selectedModelId: null };
+}
+
+/** 目录候选的精确元数据（窗口与模态齐备才算）；目录没声明就是未知，不猜默认值。 */
+function catalogMetadataOf(
+  candidate: ReturnType<ProviderCatalog['candidates']>['models'][number] | undefined,
+): ModelMetadata | null {
+  if (candidate === undefined) return null;
+  const modalities = candidate.inputModalities;
+  if (candidate.contextWindow === null || modalities == null || modalities.length === 0) return null;
+  return { contextWindow: candidate.contextWindow, inputModalities: [...modalities], source: 'catalog' };
+}
+
+/** 本次声明要保存的元数据；两者都为空即未知，不写入记录。 */
+function declaredMetadata(step: DeclareStep): ModelMetadata | null {
+  if (step.contextWindow === '' && step.modalities.length === 0) return null;
+  if (step.contextWindow === '' || step.modalities.length === 0) {
+    // 只有一半的声明没有意义：窗口限制与输入模态要么都声明，要么都未知。
+    throw new Error('窗口与输入模态必须同时声明');
+  }
+  const contextWindow = Number(step.contextWindow);
+  if (!/^[0-9]+$/u.test(step.contextWindow) || !Number.isSafeInteger(contextWindow) || contextWindow <= 0) {
+    throw new Error('上下文窗口必须是正安全整数');
+  }
+  // text 恒在：声明了输入能力就必须包含文字输入，否则模型无法承担任何协调会话。
+  const inputModalities = step.modalities.includes('text') ? [...step.modalities] : ['text' as const, ...step.modalities];
+  const metadata = { contextWindow, inputModalities };
+  // 与目录精确元数据逐字段相同才算目录来源；改过任何一项就是用户声明。
+  const source = step.catalogMetadata !== null &&
+    semanticEqual({ ...metadata, source: 'catalog' }, step.catalogMetadata) ? 'catalog' : 'user_declared';
+  return { ...metadata, source };
+}
+
+function openDeclare(edit: ModelSettingsEdit, model: string, manual: boolean, modelRef: string | null): DeclareStep {
+  const connection = edit.connections.find((entry) => entry.connectionRef === edit.connectionRef);
+  const candidate = manual ? undefined : edit.catalogResult?.models.find((entry) => entry.id === model);
+  const catalogMetadata = catalogMetadataOf(candidate);
+  const saved = edit.models.find((entry) => entry.modelRef === modelRef) ??
+    edit.models.findLast((entry) => entry.connectionRef === edit.connectionRef && entry.model === model);
+  const metadata = saved?.metadata ?? catalogMetadata;
+  // effort 取值只来自**这条记录本身**：既有记录按它已保存的能力来源，新保存的记录按目录能力来源，
+  // 两者都没有时才是手填的固定协议预设（那正是 saveModel 会写进去的能力）。界面因此不会提供任何
+  // 保存后会缺少能力来源的 effort。
+  const efforts = saved !== undefined ? saved.effortCapability?.values ?? []
+    : candidate?.effortCapability?.values ??
+      (connection === undefined ? [] : protocolEffortCapability(connection.providerIntegration)?.values ?? []);
+  return {
+    model,
+    manual,
+    modelRef,
+    catalogMetadata,
+    effortValues: efforts,
+    effortIndex: 0,
+    contextWindow: metadata === null ? '' : String(metadata.contextWindow),
+    modalities: metadata === null ? [] : [...metadata.inputModalities],
+    modalityIndex: 0,
+    focus: manual ? 'window' : 'effort',
+    // 定稿：进入动作区时默认动作永远是「返回」，确认必须显式选择。
+    action: 0,
+    regions: manual ? ['window', 'modalities', 'effort', 'action'] : ['effort', 'action'],
+  };
 }
 
 export function ProviderLibraryEditor(props: ProviderLibraryEditorProps) {
@@ -156,7 +241,7 @@ export function ProviderLibraryEditor(props: ProviderLibraryEditorProps) {
     };
   }, [discover, stateRef]);
 
-  /** 保存连接或模型；失败保留全部输入，只更新结构化提示。 */
+  /** 保存连接；失败保留全部输入，只更新结构化提示。模型由声明步保存。 */
   const save = useCallback((edit: ModelSettingsEdit) => {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -175,7 +260,7 @@ export function ProviderLibraryEditor(props: ProviderLibraryEditorProps) {
     };
     if (edit.stage === 'connection') {
       if (edit.label.trim() === '' || edit.baseUrl.trim() === '' || (edit.secret === '' && edit.credentialRef === null)) {
-        finish({ edit, notice: '! save_failed: 连接名称、地址与 API Key 不能为空', effort: null, effortIndex: 0 });
+        finish({ edit, notice: '! save_failed: 连接名称、地址与 API Key 不能为空', declare: null });
         return;
       }
       void library.saveConnection({
@@ -187,12 +272,12 @@ export function ProviderLibraryEditor(props: ProviderLibraryEditorProps) {
         ...(edit.secret === '' ? { credentialRef: edit.credentialRef! } : { newSecret: edit.secret }),
       }).then((saved) => {
         if (saved.kind !== 'saved') {
-          finish({ edit, notice: '! save_failed: ' + saved.code + ': ' + saved.message, effort: null, effortIndex: 0 });
+          finish({ edit, notice: '! save_failed: ' + saved.code + ': ' + saved.message, declare: null });
           return;
         }
         const loaded = library.load();
         if (loaded.kind !== 'loaded') {
-          finish({ edit, notice: '! save_failed: ' + loaded.code + ': ' + loaded.message, effort: null, effortIndex: 0 });
+          finish({ edit, notice: '! save_failed: ' + loaded.code + ': ' + loaded.message, declare: null });
           return;
         }
         finish({
@@ -217,47 +302,88 @@ export function ProviderLibraryEditor(props: ProviderLibraryEditorProps) {
             catalogResult: catalog.candidates(saved.connection),
           },
           notice: '连接已保存，首次模型发现已尝试',
-          effort: null,
-          effortIndex: 0,
+          declare: null,
         });
       }, (error: unknown) => {
-        finish({ edit, notice: '! save_failed: ' + (error instanceof Error ? error.message : '保存失败'), effort: null, effortIndex: 0 });
+        finish({ edit, notice: '! save_failed: ' + (error instanceof Error ? error.message : '保存失败'), declare: null });
       });
       return;
     }
-    if (edit.stage === 'models') {
-      if (edit.connectionRef === null || edit.model.trim() === '') {
-        finish({ edit, notice: '! save_failed: 请选择模型或输入 exact ID', effort: null, effortIndex: 0 });
-        return;
-      }
-      const existing = edit.models.find((item) => item.connectionRef === edit.connectionRef && item.model === edit.model);
-      if (existing !== undefined) {
-        const effort = effortStep(existing);
-        finish({ edit: { ...edit, modelRef: existing.modelRef }, notice: null, effort, effortIndex: 0 });
-        if (effort === null) select(existing.modelRef, null);
-        return;
-      }
-      const saved = library.saveModel({ expectedRevision: edit.libraryRevision, connectionRef: edit.connectionRef, model: edit.model });
-      if (saved.kind !== 'saved') {
-        finish({ edit, notice: '! save_failed: ' + saved.code + ': ' + saved.message, effort: null, effortIndex: 0 });
-        return;
-      }
-      finish({
-        edit: { ...edit, modelRef: saved.model.modelRef, models: [...edit.models, saved.model], libraryRevision: saved.revision },
-        notice: null,
-        effort: effortStep(saved.model),
-        effortIndex: 0,
-      });
-      if (effortStep(saved.model) === null) select(saved.model.modelRef, null);
+    if (edit.connectionRef === null || edit.model.trim() === '') {
+      finish({ edit, notice: '! save_failed: 请选择模型或输入 exact ID', declare: null });
       return;
     }
-    finish({ edit, notice: '! save_failed: 先选择连接和模型', effort: null, effortIndex: 0 });
-  }, [library, catalog, select, update]);
+    // 目录候选：沿定稿先保存记录，再确认独立横向 effort。目录的精确元数据随记录保存，无需额外一步。
+    const existing = edit.models.findLast((item) => item.connectionRef === edit.connectionRef && item.model === edit.model);
+    if (existing !== undefined) {
+      const next = { ...edit, model: existing.model, modelRef: existing.modelRef };
+      finish({ edit: next, notice: null, declare: openDeclare(next, existing.model, false, existing.modelRef) });
+      return;
+    }
+    const saved = library.saveModel({ expectedRevision: edit.libraryRevision, connectionRef: edit.connectionRef, model: edit.model });
+    if (saved.kind !== 'saved') {
+      finish({ edit, notice: '! save_failed: ' + saved.code + ': ' + saved.message, declare: null });
+      return;
+    }
+    const next = { ...edit, model: saved.model.model, modelRef: saved.model.modelRef, models: [...edit.models, saved.model], libraryRevision: saved.revision };
+    finish({ edit: next, notice: null, declare: openDeclare(next, saved.model.model, false, saved.model.modelRef) });
+  }, [library, catalog, update]);
+
+  /** 确认步：目录候选直接交接已保存的引用，手填先校验声明再追加记录并交接。 */
+  const confirmDeclare = useCallback((step: DeclareStep) => {
+    if (inFlight.current) return;
+    const edit = stateRef.current.edit;
+    if (edit.connectionRef === null) {
+      update((state) => ({ ...state, notice: '! save_failed: 请先选择连接' }));
+      return;
+    }
+    const effort = step.effortIndex === 0 ? null : step.effortValues[step.effortIndex - 1] ?? null;
+    if (!step.manual) {
+      if (step.modelRef === null) { update((state) => ({ ...state, notice: '! save_failed: 模型记录不存在' })); return; }
+      update((state) => ({ ...state, declare: null, notice: null }));
+      select(step.modelRef, effort);
+      return;
+    }
+    let metadata: ModelMetadata | null;
+    try {
+      metadata = declaredMetadata(step);
+    } catch (error) {
+      update((state) => ({ ...state, declare: { ...step, focus: 'window', action: 0 }, notice: '! save_failed: ' + (error instanceof Error ? error.message : '元数据无效') }));
+      return;
+    }
+    const existing = edit.models.findLast((item) => item.connectionRef === edit.connectionRef && item.model === step.model);
+    // 声明与既有记录逐字段相同就复用原记录：编辑只追加，也不为同一模型反复制造新引用。
+    if (existing !== undefined && semanticEqual(existing.metadata ?? null, metadata)) {
+      update((state) => ({ ...state, declare: null, notice: null }));
+      select(existing.modelRef, effort);
+      return;
+    }
+    inFlight.current = true;
+    const saved = library.saveModel({
+      expectedRevision: edit.libraryRevision,
+      connectionRef: edit.connectionRef,
+      model: step.model,
+      ...(metadata === null ? {} : { metadata }),
+    });
+    if (saved.kind !== 'saved') {
+      inFlight.current = false;
+      update((state) => ({ ...state, declare: step, notice: '! save_failed: ' + saved.code + ': ' + saved.message }));
+      return;
+    }
+    inFlight.current = false;
+    update((state) => ({
+      ...state,
+      edit: { ...state.edit, model: '', modelRef: saved.model.modelRef, models: [...state.edit.models, saved.model], libraryRevision: saved.revision },
+      notice: null,
+      declare: null,
+    }));
+    select(saved.model.modelRef, effort);
+  }, [library, select, stateRef, update]);
 
   const cancel = useCallback(() => {
     generation.current += 1;
     discovery.current?.abort();
-    update((current) => ({ ...current, edit: { ...current.edit, secret: '' }, effort: null }));
+    update((current) => ({ ...current, edit: { ...current.edit, secret: '' }, declare: null }));
     props.onCancel();
   }, [props, update]);
 
@@ -266,16 +392,55 @@ export function ProviderLibraryEditor(props: ProviderLibraryEditorProps) {
     editGeneration.current += 1;
     const current = stateRef.current;
     const edit = current.edit;
-    if (key.escape) { cancel(); return; }
-    if (current.effort !== null) {
-      if (key.upArrow) { update((state) => ({ ...state, effortIndex: Math.max(0, state.effortIndex - 1) })); return; }
-      if (key.downArrow) { update((state) => ({ ...state, effortIndex: Math.min(state.effort?.values.length ?? 0, state.effortIndex + 1) })); return; }
-      if (key.return && !key.meta && !key.shift && !inFlight.current) {
-        select(current.effort.model.modelRef,
-          current.effortIndex === 0 ? null : current.effort.values[current.effortIndex - 1] ?? null);
+    if (current.declare !== null) {
+      const step = current.declare;
+      const back = (): void => { update((state) => ({ ...state, declare: null, notice: null })); };
+      if (key.tab) {
+        const regions = step.regions;
+        const next = regions[(regions.indexOf(step.focus) + (key.shift ? regions.length - 1 : 1)) % regions.length]!;
+        update((state) => ({ ...state, declare: { ...step, focus: next, action: next === 'action' ? 0 : step.action } }));
+        return;
+      }
+      if (key.escape) { back(); return; }
+      if (step.focus === 'window' && !key.return && (input !== '' || key.backspace || key.delete)) {
+        const next = editComposer(textDraft(step.contextWindow), input, key).text.replace(/[^0-9]/gu, '');
+        if (next !== step.contextWindow) update((state) => ({ ...state, declare: { ...step, contextWindow: next } }));
+        return;
+      }
+      if (step.focus === 'modalities') {
+        if (key.leftArrow || key.rightArrow) {
+          const next = (step.modalityIndex + (key.leftArrow ? MODEL_INPUT_MODALITIES.length - 1 : 1)) % MODEL_INPUT_MODALITIES.length;
+          update((state) => ({ ...state, declare: { ...step, modalityIndex: next } }));
+          return;
+        }
+        if (input === ' ') {
+          const modality = MODEL_INPUT_MODALITIES[step.modalityIndex]!;
+          // text 恒在：还没有任何声明时，第一格就是 text，按一次即可声明 text-only；
+          // 已经有声明之后 text 不可取消——没有文字输入的模型无法承担协调会话。
+          const modalities = step.modalities.length === 0 ? ['text' as const]
+            : modality === 'text' ? step.modalities
+              : step.modalities.includes(modality)
+                ? step.modalities.filter((entry) => entry !== modality)
+                : [...step.modalities, modality];
+          update((state) => ({ ...state, declare: { ...step, modalities } }));
+          return;
+        }
+      }
+      if ((step.focus === 'effort' || step.focus === 'action') && (key.leftArrow || key.rightArrow || key.upArrow || key.downArrow)) {
+        const bound = step.focus === 'effort' ? step.effortValues.length + 1 : 2;
+        update((state) => ({ ...state, declare: step.focus === 'effort'
+          ? { ...step, effortIndex: (step.effortIndex + (key.leftArrow ? bound - 1 : 1)) % bound }
+          : { ...step, action: (step.action + (key.leftArrow ? 1 : 1)) % 2 } }));
+        return;
+      }
+      if (key.return && !key.meta && !key.shift) {
+        if (step.focus !== 'action') { update((state) => ({ ...state, declare: { ...step, focus: 'action', action: 0 } })); return; }
+        if (step.action === 0) { back(); return; }
+        confirmDeclare(step);
       }
       return;
     }
+    if (key.escape) { cancel(); return; }
     if (edit.stage === 'models' && key.ctrl && input.toLowerCase() === 'r') {
       const connection = edit.connections.find((item) => item.connectionRef === edit.connectionRef);
       if (connection === undefined) return;
@@ -331,9 +496,12 @@ export function ProviderLibraryEditor(props: ProviderLibraryEditorProps) {
       }
       const model = models[edit.selectedIndex];
       if (model !== undefined) { save({ ...edit, model: model.id, selectedModelId: model.id }); return; }
-      if (edit.selectedIndex === models.length) {
+      // 没有选中候选（刚输入过搜索词，selectedIndex 因此为 -1）就是手填状态：Enter 进入声明，不查询目录。
+      if (edit.selectedIndex === models.length || edit.selectedIndex < 0) {
         if (edit.query.trim() === '') { update((state) => ({ ...state, notice: '请输入模型编号，或选择目录候选' })); return; }
-        save({ ...edit, model: edit.query.trim(), selectedModelId: null });
+        // 手填 exact ID 是独立状态：Enter 直接进入声明并保存，不发起目录查询，也不因无匹配而丢弃输入。
+        const manual = edit.query.trim();
+        update((state) => ({ ...state, edit: { ...state.edit, model: manual, selectedModelId: null }, declare: openDeclare(state.edit, manual, true, null), notice: null }));
         return;
       }
       discover(edit);
@@ -359,19 +527,74 @@ export function ProviderLibraryEditor(props: ProviderLibraryEditorProps) {
     }
   });
 
-  if (state.effort !== null) {
-    const bodyWidth = Math.max(1, width - 8);
-    return <DialogFrame title="Coordinator · effort" summary={state.effort.model.model} width={width} rows={Math.max(6, rows)}
-      footer="↑↓ 选择 · Enter 确认 · Esc 返回">
-      <Box flexDirection="column">
-        {['不指定 effort', ...state.effort.values].map((label, index) => <Text key={label}
-          inverse={index === state.effortIndex} {...(index === state.effortIndex ? { color: tuiColors.focus } : {})}>
-          {truncateToDisplayWidth((index === state.effortIndex ? '› ' : '  ') + label, bodyWidth)}
-        </Text>)}
-        {state.notice === null ? null : <Text dimColor>{truncateToDisplayWidth(state.notice, bodyWidth)}</Text>}
-      </Box>
-    </DialogFrame>;
-  }
+  if (state.declare !== null) return renderDeclare(state.declare, state.notice, width, rows, props.identity ?? '保存配置不会自动应用');
   return <ModelSettingsEditor edit={state.edit} notice={state.notice} failing={false} availableWidth={width} rows={rows}
     identity={props.identity ?? '保存配置不会自动应用'} />;
+}
+
+/**
+ * 声明步视图（定稿 #52）：字段区 + 独立横向 effort + 区域行 + 动作行。
+ *
+ * 纯渲染：区域、取值与动作都由容器计算后传入，render 不可能提交或改写任何声明。
+ */
+function renderDeclare(step: DeclareStep, notice: string | null, width: number, rows: number, identity: string) {
+  const inner = Math.max(1, width - 8);
+  const efforts = [null, ...step.effortValues];
+  const effort = efforts[step.effortIndex] ?? null;
+  const window = effortWindow(step.effortValues, effort, inner, step.effortValues.length > 0);
+  const effortLine = step.effortValues.length === 0 ? '不适用' : window.values.map((value) =>
+    ' [' + truncateToDisplayWidth(value, window.labelWidth) + '] ').join('');
+  const modalities = step.modalities.length === 0 ? '未声明（未知）' : step.modalities.join(' · ');
+  const metadataFields = fieldRows([
+    { label: 'Model', value: step.model },
+    { label: '上下文窗口', value: step.contextWindow === '' ? '未声明（未知）' : step.contextWindow },
+    { label: '输入模态', value: modalities },
+    { label: '来源', value: step.catalogMetadata === null ? 'user_declared' : 'catalog 可编辑' },
+  ], inner);
+  const fields = step.manual ? metadataFields : fieldRows([{ label: 'Model', value: step.model }], inner);
+  let reason: string | null = null;
+  if (step.manual) {
+    try {
+      declaredMetadata(step);
+    } catch (error) {
+      reason = error instanceof Error ? error.message : '元数据无效';
+    }
+  }
+  const area = step.focus === 'window' ? '当前区域：上下文窗口 · 数字键输入'
+    : step.focus === 'modalities' ? '当前区域：输入模态 · ←→ 选择 · 空格切换（text 恒在）'
+      : step.focus === 'effort' ? '当前区域：Effort · ' + (effort ?? '不指定')
+        : '当前区域：操作按钮 · ' + (step.action === 0 ? '返回' : step.manual ? '保存模型' : '应用选择');
+  return (
+    <DialogFrame title={step.manual ? 'Coordinator · 模型声明' : 'Coordinator · effort'} summary={identity} width={width} rows={rows}
+      footer={step.manual ? 'Tab 区域 · ←→ 选项 · 空格切换 · Enter 保存' : 'Tab 区域 · ←→ effort · Enter 应用'}>
+      {fields.map((line, index) => (
+        <Text key={index} {...(step.focus === 'window' && line.startsWith('上下文窗口') ? { color: tuiColors.focus } : {})}>
+          {truncateToDisplayWidth(line, inner)}
+        </Text>
+      ))}
+      <Text>
+        <Text color={step.focus === 'effort' ? tuiColors.focus : tuiColors.muted}>Effort </Text>
+        {step.effortValues.length === 0 ? <Text dimColor>{effortLine}</Text>
+          : <Text>
+              <Text inverse={effort === null} bold={effort === null}>{' [不指定] '}</Text>
+              {window.values.map((value) => <Text key={value} inverse={value === effort} bold={value === effort}>
+                {' [' + truncateToDisplayWidth(value, window.labelWidth) + '] '}
+              </Text>)}
+            </Text>}
+      </Text>
+      {step.manual ? <Text>
+        <Text color={step.focus === 'modalities' ? tuiColors.focus : tuiColors.muted}>模态 </Text>
+        {MODEL_INPUT_MODALITIES.map((modality) => {
+          const on = step.modalities.includes(modality);
+          return <Text key={modality} inverse={step.focus === 'modalities' && MODEL_INPUT_MODALITIES[step.modalityIndex] === modality}
+            bold={on}>{on ? ' [' + modality + '] ' : ' ' + modality + ' '}</Text>;
+        })}
+      </Text> : null}
+      <Text color={tuiColors.border}>{'─'.repeat(inner)}</Text>
+      <Text color={tuiColors.warning}>{truncateToDisplayWidth(area, inner)}</Text>
+      {notice === null ? null : <Text color={tuiColors.warning}>{truncateToDisplayWidth(notice, inner)}</Text>}
+      <ActionRow index={step.action} allowed={reason === null} label={step.manual ? '保存模型' : '应用选择'} />
+      {reason === null ? null : <Text dimColor>{truncateToDisplayWidth(reason, inner)}</Text>}
+    </DialogFrame>
+  );
 }

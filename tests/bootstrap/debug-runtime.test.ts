@@ -35,7 +35,7 @@ let stateDirectory = '';
 
 const clock = (): number => Date.now();
 
-function writeProviderLibrary(configHome: string): void {
+function writeProviderLibrary(configHome: string, metadata?: Record<string, unknown>): void {
   const directory = join(configHome, 'orca-companion');
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   writeFileSync(
@@ -54,7 +54,8 @@ function writeProviderLibrary(configHome: string): void {
         },
       ],
       models: [
-        { modelRef: MODEL_REF, connectionRef: 'connection-1', model: 'fixture-model', effortCapability: null },
+        { modelRef: MODEL_REF, connectionRef: 'connection-1', model: 'fixture-model', effortCapability: null,
+          ...(metadata === undefined ? {} : { metadata }) },
       ],
     }),
     { encoding: 'utf8', mode: 0o600 },
@@ -121,6 +122,20 @@ beforeEach(() => {
   writeProviderLibrary(environment['XDG_CONFIG_HOME'] as string);
 });
 
+test('调试会话的固定配置快照保留模型声明的元数据，未声明时没有窗口', async () => {
+  writeProviderLibrary(environment['XDG_CONFIG_HOME'] as string,
+    { contextWindow: 16_384, inputModalities: ['text'], source: 'user_declared' });
+  const { harness } = await startHarness();
+  const opened = await harness.open({ kind: 'new', modelRef: MODEL_REF });
+  expect(opened.kind).toBe('opened');
+  if (opened.kind !== 'opened') return;
+  // 元数据是不可变快照：会话之后只读这份配置，不回查用户库。
+  expect(opened.state.configuration.metadata).toEqual({
+    contextWindow: 16_384, inputModalities: ['text'], source: 'user_declared',
+  });
+  harness.close();
+});
+
 test('home 只列出该目录的会话与用户模型库模型，不创建任何状态', async () => {
   const { harness } = await startHarness();
   const home = harness.home();
@@ -162,6 +177,10 @@ test('非 Git 目录可调试：新建会话落盘真实历史，重开沿用同
   const roles = page.entries.map((entry) => entry.role);
   expect(roles).toContain('user');
   expect(roles).toContain('assistant');
+  const context = first.state();
+  expect(context.kind === 'state' ? context.state.context : null)
+    .toMatchObject({ status: 'last_request', inputTokens: 1, outputTokens: 1,
+      modelConfigurationRef: opened.state.configuration.configurationRef });
   first.close();
 
   const { harness: second } = await startHarness();
@@ -172,6 +191,7 @@ test('非 Git 目录可调试：新建会话落盘真实历史，重开沿用同
   if (reopened.kind !== 'opened') return;
   expect(reopened.recovered).toBe(true);
   expect(reopened.state.configuration.configurationRef).toBe(opened.state.configuration.configurationRef);
+  expect(reopened.state.context).toEqual(context.kind === 'state' ? context.state.context : null);
   expect(await second.reading.history({ coordinatorSessionId: sessionId })).toEqual(page);
   second.close();
 });

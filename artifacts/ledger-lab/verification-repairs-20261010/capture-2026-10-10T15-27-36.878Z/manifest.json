@@ -1,0 +1,2451 @@
+{
+  "generatedAt": "2026-10-10T15:32:20.311Z",
+  "fixture": "artifacts/ledger-lab/verification-repairs-20261010/fixture.mjs",
+  "scenes": [
+    {
+      "scene": "declare-candidate",
+      "size": "120x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "合成 ProviderLibrary/Catalog：1 个连接、1 个带 effortCapability 与窗口/模态的目录候选",
+        "目录候选选定即保存，随后只确认独立横向 effort，不出现元数据字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "declare-manual",
+      "size": "120x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "同一合成端口；手填 exact ID 不发起目录查询，确认后才保存",
+        "手填步才显示上下文窗口、输入模态与来源字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "onboarding-route-create",
+      "size": "120x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "scopeSetup.verifyEnvironment 逐项报告后全部通过",
+        "home=wizard；modelSettings.load=config_unavailable 进入模型步",
+        "routeMapInitialization.create() 永不结算，界面停在真实在途 spinner"
+      ],
+      "error": null
+    },
+    {
+      "scene": "onboarding-final-busy",
+      "size": "120x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "routeMapInitialization.create() 返回 #42 后进入确认步",
+        "确认后 verify 只报告 repository/orca/identity 三项并保持未决，画面停在五项 busy 核验"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-running",
+      "size": "120x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "TuiApp + 合成 ports；snapshot.sessions[0].turn = running（真实轮次事实，不由租约推断）"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-empty",
+      "size": "120x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "新注册会话：transcript 与 reading 端口都为空页"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-pending",
+      "size": "120x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "输入「修复输入隔离回归」并提交；execute 永不结算，界面停在真实 pending 状态"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-mouse",
+      "size": "120x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "40 条历史 + 未提交草稿；PTY 直接发送 SGR 滚轮报告（button 64）",
+        "公开出口：Ctrl+C 退出，退出时鼠标模式必须恢复"
+      ],
+      "error": null
+    },
+    {
+      "scene": "declare-candidate",
+      "size": "120x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "合成 ProviderLibrary/Catalog：1 个连接、1 个带 effortCapability 与窗口/模态的目录候选",
+        "目录候选选定即保存，随后只确认独立横向 effort，不出现元数据字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "declare-manual",
+      "size": "120x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "同一合成端口；手填 exact ID 不发起目录查询，确认后才保存",
+        "手填步才显示上下文窗口、输入模态与来源字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "onboarding-route-create",
+      "size": "120x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "scopeSetup.verifyEnvironment 逐项报告后全部通过",
+        "home=wizard；modelSettings.load=config_unavailable 进入模型步",
+        "routeMapInitialization.create() 永不结算，界面停在真实在途 spinner"
+      ],
+      "error": null
+    },
+    {
+      "scene": "onboarding-final-busy",
+      "size": "120x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "routeMapInitialization.create() 返回 #42 后进入确认步",
+        "确认后 verify 只报告 repository/orca/identity 三项并保持未决，画面停在五项 busy 核验"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-running",
+      "size": "120x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "TuiApp + 合成 ports；snapshot.sessions[0].turn = running（真实轮次事实，不由租约推断）"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-empty",
+      "size": "120x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "新注册会话：transcript 与 reading 端口都为空页"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-pending",
+      "size": "120x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "输入「修复输入隔离回归」并提交；execute 永不结算，界面停在真实 pending 状态"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-mouse",
+      "size": "120x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "40 条历史 + 未提交草稿；PTY 直接发送 SGR 滚轮报告（button 64）",
+        "公开出口：Ctrl+C 退出，退出时鼠标模式必须恢复"
+      ],
+      "error": null
+    },
+    {
+      "scene": "declare-candidate",
+      "size": "80x24",
+      "variant": "color/nerd",
+      "conditions": [
+        "合成 ProviderLibrary/Catalog：1 个连接、1 个带 effortCapability 与窗口/模态的目录候选",
+        "目录候选选定即保存，随后只确认独立横向 effort，不出现元数据字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "declare-manual",
+      "size": "80x24",
+      "variant": "color/nerd",
+      "conditions": [
+        "同一合成端口；手填 exact ID 不发起目录查询，确认后才保存",
+        "手填步才显示上下文窗口、输入模态与来源字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "onboarding-route-create",
+      "size": "80x24",
+      "variant": "color/nerd",
+      "conditions": [
+        "scopeSetup.verifyEnvironment 逐项报告后全部通过",
+        "home=wizard；modelSettings.load=config_unavailable 进入模型步",
+        "routeMapInitialization.create() 永不结算，界面停在真实在途 spinner"
+      ],
+      "error": null
+    },
+    {
+      "scene": "onboarding-final-busy",
+      "size": "80x24",
+      "variant": "color/nerd",
+      "conditions": [
+        "routeMapInitialization.create() 返回 #42 后进入确认步",
+        "确认后 verify 只报告 repository/orca/identity 三项并保持未决，画面停在五项 busy 核验"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-running",
+      "size": "80x24",
+      "variant": "color/nerd",
+      "conditions": [
+        "TuiApp + 合成 ports；snapshot.sessions[0].turn = running（真实轮次事实，不由租约推断）"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-empty",
+      "size": "80x24",
+      "variant": "color/nerd",
+      "conditions": [
+        "新注册会话：transcript 与 reading 端口都为空页"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-pending",
+      "size": "80x24",
+      "variant": "color/nerd",
+      "conditions": [
+        "输入「修复输入隔离回归」并提交；execute 永不结算，界面停在真实 pending 状态"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-mouse",
+      "size": "80x24",
+      "variant": "color/nerd",
+      "conditions": [
+        "40 条历史 + 未提交草稿；PTY 直接发送 SGR 滚轮报告（button 64）",
+        "公开出口：Ctrl+C 退出，退出时鼠标模式必须恢复"
+      ],
+      "error": null
+    },
+    {
+      "scene": "declare-candidate",
+      "size": "80x24",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "合成 ProviderLibrary/Catalog：1 个连接、1 个带 effortCapability 与窗口/模态的目录候选",
+        "目录候选选定即保存，随后只确认独立横向 effort，不出现元数据字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "declare-manual",
+      "size": "80x24",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "同一合成端口；手填 exact ID 不发起目录查询，确认后才保存",
+        "手填步才显示上下文窗口、输入模态与来源字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "onboarding-route-create",
+      "size": "80x24",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "scopeSetup.verifyEnvironment 逐项报告后全部通过",
+        "home=wizard；modelSettings.load=config_unavailable 进入模型步",
+        "routeMapInitialization.create() 永不结算，界面停在真实在途 spinner"
+      ],
+      "error": null
+    },
+    {
+      "scene": "onboarding-final-busy",
+      "size": "80x24",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "routeMapInitialization.create() 返回 #42 后进入确认步",
+        "确认后 verify 只报告 repository/orca/identity 三项并保持未决，画面停在五项 busy 核验"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-running",
+      "size": "80x24",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "TuiApp + 合成 ports；snapshot.sessions[0].turn = running（真实轮次事实，不由租约推断）"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-empty",
+      "size": "80x24",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "新注册会话：transcript 与 reading 端口都为空页"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-pending",
+      "size": "80x24",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "输入「修复输入隔离回归」并提交；execute 永不结算，界面停在真实 pending 状态"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-mouse",
+      "size": "80x24",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "40 条历史 + 未提交草稿；PTY 直接发送 SGR 滚轮报告（button 64）",
+        "公开出口：Ctrl+C 退出，退出时鼠标模式必须恢复"
+      ],
+      "error": null
+    },
+    {
+      "scene": "declare-candidate",
+      "size": "50x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "合成 ProviderLibrary/Catalog：1 个连接、1 个带 effortCapability 与窗口/模态的目录候选",
+        "目录候选选定即保存，随后只确认独立横向 effort，不出现元数据字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "declare-manual",
+      "size": "50x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "同一合成端口；手填 exact ID 不发起目录查询，确认后才保存",
+        "手填步才显示上下文窗口、输入模态与来源字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "onboarding-route-create",
+      "size": "50x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "scopeSetup.verifyEnvironment 逐项报告后全部通过",
+        "home=wizard；modelSettings.load=config_unavailable 进入模型步",
+        "routeMapInitialization.create() 永不结算，界面停在真实在途 spinner"
+      ],
+      "error": null
+    },
+    {
+      "scene": "onboarding-final-busy",
+      "size": "50x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "routeMapInitialization.create() 返回 #42 后进入确认步",
+        "确认后 verify 只报告 repository/orca/identity 三项并保持未决，画面停在五项 busy 核验"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-running",
+      "size": "50x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "TuiApp + 合成 ports；snapshot.sessions[0].turn = running（真实轮次事实，不由租约推断）"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-empty",
+      "size": "50x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "新注册会话：transcript 与 reading 端口都为空页"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-pending",
+      "size": "50x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "输入「修复输入隔离回归」并提交；execute 永不结算，界面停在真实 pending 状态"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-mouse",
+      "size": "50x40",
+      "variant": "color/nerd",
+      "conditions": [
+        "40 条历史 + 未提交草稿；PTY 直接发送 SGR 滚轮报告（button 64）",
+        "公开出口：Ctrl+C 退出，退出时鼠标模式必须恢复"
+      ],
+      "error": null
+    },
+    {
+      "scene": "declare-candidate",
+      "size": "50x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "合成 ProviderLibrary/Catalog：1 个连接、1 个带 effortCapability 与窗口/模态的目录候选",
+        "目录候选选定即保存，随后只确认独立横向 effort，不出现元数据字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "declare-manual",
+      "size": "50x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "同一合成端口；手填 exact ID 不发起目录查询，确认后才保存",
+        "手填步才显示上下文窗口、输入模态与来源字段"
+      ],
+      "error": null
+    },
+    {
+      "scene": "onboarding-route-create",
+      "size": "50x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "scopeSetup.verifyEnvironment 逐项报告后全部通过",
+        "home=wizard；modelSettings.load=config_unavailable 进入模型步",
+        "routeMapInitialization.create() 永不结算，界面停在真实在途 spinner"
+      ],
+      "error": null
+    },
+    {
+      "scene": "onboarding-final-busy",
+      "size": "50x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "routeMapInitialization.create() 返回 #42 后进入确认步",
+        "确认后 verify 只报告 repository/orca/identity 三项并保持未决，画面停在五项 busy 核验"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-running",
+      "size": "50x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "TuiApp + 合成 ports；snapshot.sessions[0].turn = running（真实轮次事实，不由租约推断）"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-empty",
+      "size": "50x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "新注册会话：transcript 与 reading 端口都为空页"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-pending",
+      "size": "50x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "输入「修复输入隔离回归」并提交；execute 永不结算，界面停在真实 pending 状态"
+      ],
+      "error": null
+    },
+    {
+      "scene": "workspace-mouse",
+      "size": "50x40",
+      "variant": "no-color/ascii",
+      "conditions": [
+        "40 条历史 + 未提交草稿；PTY 直接发送 SGR 滚轮报告（button 64）",
+        "公开出口：Ctrl+C 退出，退出时鼠标模式必须恢复"
+      ],
+      "error": null
+    }
+  ],
+  "samples": [
+    {
+      "stem": "declare-candidate-effort-default-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "Coordinator · effort",
+          "ok": true
+        },
+        {
+          "fragment": "Model",
+          "ok": true
+        },
+        {
+          "fragment": "Effort",
+          "ok": true
+        },
+        {
+          "fragment": "不指定",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-effort-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：Effort · medium",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-applied-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-metadata-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "vendor/manual-model-x",
+          "ok": true
+        },
+        {
+          "fragment": "128000",
+          "ok": true
+        },
+        {
+          "fragment": "未声明（未知）",
+          "ok": true
+        },
+        {
+          "fragment": "user_declared",
+          "ok": true
+        },
+        {
+          "fragment": "当前区域：上下文窗口",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-modalities-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：输入模态",
+          "ok": true
+        },
+        {
+          "fragment": "输入模态 text · image",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-saved-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-route-map-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "设置 Route Map",
+          "ok": true
+        },
+        {
+          "fragment": "创建空 Route Map",
+          "ok": true
+        },
+        {
+          "fragment": "选择已有 issue",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-route-create-busy-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "正在创建 Route Map",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-confirm-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "准备开始规划",
+          "ok": true
+        },
+        {
+          "fragment": "Route Map  #42",
+          "ok": true
+        },
+        {
+          "fragment": "确认初始化",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-confirm-busy-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "模型能力",
+          "ok": true
+        },
+        {
+          "fragment": "Route Map",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-running-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "历史条目",
+          "ok": true
+        },
+        {
+          "fragment": "运行中",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-empty-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        2,
+        36
+      ],
+      "checks": [
+        {
+          "fragment": "尚无对话记录",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-pending-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        2,
+        36
+      ],
+      "checks": [
+        {
+          "fragment": "修复输入隔离回归",
+          "ok": true
+        },
+        {
+          "fragment": "正在提交",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-before-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": [
+        {
+          "fragment": "草稿ABC-输入隔离",
+          "ok": true
+        },
+        {
+          "fragment": "历史条目",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-after-transcript-wheel-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-after-split-wheel-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-composer-wheel-ignored-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-overlay-open-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "Command Palette · 命令目录",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-overlay-wheel-ignored-120x40-color-nerd",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        39
+      ],
+      "checks": []
+    },
+    {
+      "stem": "declare-candidate-effort-default-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "Coordinator · effort",
+          "ok": true
+        },
+        {
+          "fragment": "Model",
+          "ok": true
+        },
+        {
+          "fragment": "Effort",
+          "ok": true
+        },
+        {
+          "fragment": "不指定",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-effort-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：Effort · medium",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-applied-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-metadata-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "vendor/manual-model-x",
+          "ok": true
+        },
+        {
+          "fragment": "128000",
+          "ok": true
+        },
+        {
+          "fragment": "未声明（未知）",
+          "ok": true
+        },
+        {
+          "fragment": "user_declared",
+          "ok": true
+        },
+        {
+          "fragment": "当前区域：上下文窗口",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-modalities-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：输入模态",
+          "ok": true
+        },
+        {
+          "fragment": "输入模态 text · image",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-saved-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        118,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-route-map-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "设置 Route Map",
+          "ok": true
+        },
+        {
+          "fragment": "创建空 Route Map",
+          "ok": true
+        },
+        {
+          "fragment": "选择已有 issue",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-route-create-busy-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "正在创建 Route Map",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-confirm-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "准备开始规划",
+          "ok": true
+        },
+        {
+          "fragment": "Route Map  #42",
+          "ok": true
+        },
+        {
+          "fragment": "确认初始化",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-confirm-busy-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "模型能力",
+          "ok": true
+        },
+        {
+          "fragment": "Route Map",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-running-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "历史条目",
+          "ok": true
+        },
+        {
+          "fragment": "运行中",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-empty-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        2,
+        36
+      ],
+      "checks": [
+        {
+          "fragment": "尚无对话记录",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-pending-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        2,
+        36
+      ],
+      "checks": [
+        {
+          "fragment": "修复输入隔离回归",
+          "ok": true
+        },
+        {
+          "fragment": "正在提交",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-before-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": [
+        {
+          "fragment": "草稿ABC-输入隔离",
+          "ok": true
+        },
+        {
+          "fragment": "历史条目",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-after-transcript-wheel-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-after-split-wheel-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-composer-wheel-ignored-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-overlay-open-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "Command Palette · 命令目录",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-overlay-wheel-ignored-120x40-no-color-ascii",
+      "columns": 120,
+      "rows": 40,
+      "cursor": [
+        0,
+        39
+      ],
+      "checks": []
+    },
+    {
+      "stem": "declare-candidate-effort-default-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "Coordinator · effort",
+          "ok": true
+        },
+        {
+          "fragment": "Model",
+          "ok": true
+        },
+        {
+          "fragment": "Effort",
+          "ok": true
+        },
+        {
+          "fragment": "不指定",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-effort-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：Effort · medium",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-applied-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-metadata-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "vendor/manual-model-x",
+          "ok": true
+        },
+        {
+          "fragment": "128000",
+          "ok": true
+        },
+        {
+          "fragment": "未声明（未知）",
+          "ok": true
+        },
+        {
+          "fragment": "user_declared",
+          "ok": true
+        },
+        {
+          "fragment": "当前区域：上下文窗口",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-modalities-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：输入模态",
+          "ok": true
+        },
+        {
+          "fragment": "输入模态 text · image",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-saved-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-route-map-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ],
+      "checks": [
+        {
+          "fragment": "设置 Route Map",
+          "ok": true
+        },
+        {
+          "fragment": "创建空 Route Map",
+          "ok": true
+        },
+        {
+          "fragment": "选择已有 issue",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-route-create-busy-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ],
+      "checks": [
+        {
+          "fragment": "正在创建 Route Map",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-confirm-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ],
+      "checks": [
+        {
+          "fragment": "准备开始规划",
+          "ok": true
+        },
+        {
+          "fragment": "Route Map  #42",
+          "ok": true
+        },
+        {
+          "fragment": "确认初始化",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-confirm-busy-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ],
+      "checks": [
+        {
+          "fragment": "模型能力",
+          "ok": true
+        },
+        {
+          "fragment": "Route Map",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-running-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "历史条目",
+          "ok": true
+        },
+        {
+          "fragment": "运行中",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-empty-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        2,
+        20
+      ],
+      "checks": [
+        {
+          "fragment": "尚无对话记录",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-pending-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        2,
+        20
+      ],
+      "checks": [
+        {
+          "fragment": "修复输入隔离回归",
+          "ok": true
+        },
+        {
+          "fragment": "正在提交",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-before-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        18,
+        20
+      ],
+      "checks": [
+        {
+          "fragment": "草稿ABC-输入隔离",
+          "ok": true
+        },
+        {
+          "fragment": "历史条目",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-after-transcript-wheel-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        18,
+        20
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-after-split-wheel-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        18,
+        20
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-composer-wheel-ignored-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        18,
+        20
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-overlay-open-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "Command Palette · 命令目录",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-overlay-wheel-ignored-80x24-color-nerd",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        23
+      ],
+      "checks": []
+    },
+    {
+      "stem": "declare-candidate-effort-default-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "Coordinator · effort",
+          "ok": true
+        },
+        {
+          "fragment": "Model",
+          "ok": true
+        },
+        {
+          "fragment": "Effort",
+          "ok": true
+        },
+        {
+          "fragment": "不指定",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-effort-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：Effort · medium",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-applied-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-metadata-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "vendor/manual-model-x",
+          "ok": true
+        },
+        {
+          "fragment": "128000",
+          "ok": true
+        },
+        {
+          "fragment": "未声明（未知）",
+          "ok": true
+        },
+        {
+          "fragment": "user_declared",
+          "ok": true
+        },
+        {
+          "fragment": "当前区域：上下文窗口",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-modalities-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：输入模态",
+          "ok": true
+        },
+        {
+          "fragment": "输入模态 text · image",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-saved-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        78,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-route-map-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ],
+      "checks": [
+        {
+          "fragment": "设置 Route Map",
+          "ok": true
+        },
+        {
+          "fragment": "创建空 Route Map",
+          "ok": true
+        },
+        {
+          "fragment": "选择已有 issue",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-route-create-busy-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ],
+      "checks": [
+        {
+          "fragment": "正在创建 Route Map",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-confirm-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ],
+      "checks": [
+        {
+          "fragment": "准备开始规划",
+          "ok": true
+        },
+        {
+          "fragment": "Route Map  #42",
+          "ok": true
+        },
+        {
+          "fragment": "确认初始化",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-confirm-busy-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        22
+      ],
+      "checks": [
+        {
+          "fragment": "模型能力",
+          "ok": true
+        },
+        {
+          "fragment": "Route Map",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-running-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "历史条目",
+          "ok": true
+        },
+        {
+          "fragment": "运行中",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-empty-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        2,
+        20
+      ],
+      "checks": [
+        {
+          "fragment": "尚无对话记录",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-pending-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        2,
+        20
+      ],
+      "checks": [
+        {
+          "fragment": "修复输入隔离回归",
+          "ok": true
+        },
+        {
+          "fragment": "正在提交",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-before-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        18,
+        20
+      ],
+      "checks": [
+        {
+          "fragment": "草稿ABC-输入隔离",
+          "ok": true
+        },
+        {
+          "fragment": "历史条目",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-after-transcript-wheel-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        18,
+        20
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-after-split-wheel-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        18,
+        20
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-composer-wheel-ignored-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        18,
+        20
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-overlay-open-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        23
+      ],
+      "checks": [
+        {
+          "fragment": "Command Palette · 命令目录",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-overlay-wheel-ignored-80x24-no-color-ascii",
+      "columns": 80,
+      "rows": 24,
+      "cursor": [
+        0,
+        23
+      ],
+      "checks": []
+    },
+    {
+      "stem": "declare-candidate-effort-default-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "Coordinator · effort",
+          "ok": true
+        },
+        {
+          "fragment": "Model",
+          "ok": true
+        },
+        {
+          "fragment": "Effort",
+          "ok": true
+        },
+        {
+          "fragment": "不指定",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-effort-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：Effort · medium",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-applied-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-metadata-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "vendor/manual-model-x",
+          "ok": true
+        },
+        {
+          "fragment": "128000",
+          "ok": true
+        },
+        {
+          "fragment": "未声明（未知）",
+          "ok": true
+        },
+        {
+          "fragment": "user_declared",
+          "ok": true
+        },
+        {
+          "fragment": "当前区域：上下文窗口",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-modalities-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：输入模态",
+          "ok": true
+        },
+        {
+          "fragment": "输入模态 text · image",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-saved-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-route-map-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "设置 Route Map",
+          "ok": true
+        },
+        {
+          "fragment": "创建空 Route Map",
+          "ok": true
+        },
+        {
+          "fragment": "选择已有 issue",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-route-create-busy-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "正在创建 Route Map",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-confirm-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "准备开始规划",
+          "ok": true
+        },
+        {
+          "fragment": "Route Map  #42",
+          "ok": true
+        },
+        {
+          "fragment": "确认初始化",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-confirm-busy-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "模型能力",
+          "ok": true
+        },
+        {
+          "fragment": "Route Map",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-running-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "历史条目",
+          "ok": true
+        },
+        {
+          "fragment": "运行中",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-empty-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        2,
+        36
+      ],
+      "checks": [
+        {
+          "fragment": "尚无对话记录",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-pending-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        2,
+        36
+      ],
+      "checks": [
+        {
+          "fragment": "修复输入隔离回归",
+          "ok": true
+        },
+        {
+          "fragment": "正在提交",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-before-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": [
+        {
+          "fragment": "草稿ABC-输入隔离",
+          "ok": true
+        },
+        {
+          "fragment": "历史条目",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-after-transcript-wheel-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-after-split-wheel-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-composer-wheel-ignored-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-overlay-open-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "Command Palette · 命令目录",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-overlay-wheel-ignored-50x40-color-nerd",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        39
+      ],
+      "checks": []
+    },
+    {
+      "stem": "declare-candidate-effort-default-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "Coordinator · effort",
+          "ok": true
+        },
+        {
+          "fragment": "Model",
+          "ok": true
+        },
+        {
+          "fragment": "Effort",
+          "ok": true
+        },
+        {
+          "fragment": "不指定",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-effort-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：Effort · medium",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-candidate-applied-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-metadata-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "vendor/manual-model-x",
+          "ok": true
+        },
+        {
+          "fragment": "128000",
+          "ok": true
+        },
+        {
+          "fragment": "未声明（未知）",
+          "ok": true
+        },
+        {
+          "fragment": "user_declared",
+          "ok": true
+        },
+        {
+          "fragment": "当前区域：上下文窗口",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-modalities-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "当前区域：输入模态",
+          "ok": true
+        },
+        {
+          "fragment": "输入模态 text · image",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "declare-manual-saved-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        48,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "模型候选与手动填写",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-route-map-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "设置 Route Map",
+          "ok": true
+        },
+        {
+          "fragment": "创建空 Route Map",
+          "ok": true
+        },
+        {
+          "fragment": "选择已有 issue",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-route-create-busy-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "正在创建 Route Map",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-confirm-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "准备开始规划",
+          "ok": true
+        },
+        {
+          "fragment": "Route Map  #42",
+          "ok": true
+        },
+        {
+          "fragment": "确认初始化",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "onboarding-confirm-busy-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        38
+      ],
+      "checks": [
+        {
+          "fragment": "模型能力",
+          "ok": true
+        },
+        {
+          "fragment": "Route Map",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-running-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "历史条目",
+          "ok": true
+        },
+        {
+          "fragment": "运行中",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-empty-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        2,
+        36
+      ],
+      "checks": [
+        {
+          "fragment": "尚无对话记录",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "workspace-pending-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        2,
+        36
+      ],
+      "checks": [
+        {
+          "fragment": "修复输入隔离回归",
+          "ok": true
+        },
+        {
+          "fragment": "正在提交",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-before-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": [
+        {
+          "fragment": "草稿ABC-输入隔离",
+          "ok": true
+        },
+        {
+          "fragment": "历史条目",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-after-transcript-wheel-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-after-split-wheel-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-composer-wheel-ignored-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        18,
+        36
+      ],
+      "checks": []
+    },
+    {
+      "stem": "mouse-overlay-open-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        39
+      ],
+      "checks": [
+        {
+          "fragment": "Command Palette · 命令目录",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "stem": "mouse-overlay-wheel-ignored-50x40-no-color-ascii",
+      "columns": 50,
+      "rows": 40,
+      "cursor": [
+        0,
+        39
+      ],
+      "checks": []
+    }
+  ],
+  "failures": []
+}

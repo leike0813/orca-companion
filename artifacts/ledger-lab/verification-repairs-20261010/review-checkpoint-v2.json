@@ -1,0 +1,2922 @@
+{
+  "head": "e6203fb43269a49005888daa8bda78735c34907f",
+  "createdAt": "2026-10-10T15:32:44.412Z",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "af8506782f30a2fc5cb9f221d0c40e42a84332d3d324eb64b6309055e02e7217"
+    },
+    {
+      "path": "artifacts/ledger-lab/cleanup.mjs",
+      "sha256": "94d2abb81b9b7fdee65c308d7c08a58e0ee5d1b806797cb5692f46c0368ab548"
+    },
+    {
+      "path": "artifacts/ledger-lab/guide.md",
+      "sha256": "fbb4fc050536ffca5a9fd06372b4e0e79f2fd8bb2fb815dd0e6c3860680306bb"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/README.md",
+      "sha256": "6034477392a56c3c46ec76fd95daafee00172a2d426dd18438bcb1e434a5214d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/declare-candidate-applied.png",
+      "sha256": "03a9f36a8975c3c5bed99814b1faba71bba154cb36f9982f48bd20b9a49fb3ac"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/declare-candidate-applied.txt",
+      "sha256": "d63b17a87d3bf83d06237213e151405843959d49db4e3a9ec65fbf423c864b99"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/declare-candidate-effort-default.png",
+      "sha256": "0421ff1ef6d16bce6abd5d4113c32dca8ba09ac976d7eed7e71f32994e3deed0"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/declare-candidate-effort-default.txt",
+      "sha256": "9c8ed68f2b745be9cd473b071b6c6c3cec317a36cdc9fec3e92b722814cfc140"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/declare-candidate-effort.png",
+      "sha256": "99950208d48d61ed8e90d32262656d2489da8fddcc7c5b5e382aa914db58324e"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/declare-candidate-effort.txt",
+      "sha256": "b716552e7c9f56663fb847dc10746adc53cad943929813824914dbd660f003eb"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/declare-manual-metadata.png",
+      "sha256": "5a1157822fb82fbef9f081e5b5d0ecc6cd5f3bd094f71cf9d97fc5fb8e39ab8f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/declare-manual-metadata.txt",
+      "sha256": "7f58f9ecd45d22cc6de3f3d1fe9e49ab3a6a387c31e9124ff0db0c6591c22107"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/declare-manual-modalities.png",
+      "sha256": "6f3acc1a095cc7984df40ba39150d5d7dc67ab318bd67bddfc64be6ff14b992d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/declare-manual-modalities.txt",
+      "sha256": "2a07fd1e2b258278f943a7a9bd731b3e55a0ecb6b5a0969441ba2d41c0d1e910"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/declare-manual-saved.png",
+      "sha256": "e409a34a183d8727ceff5a91cf28e15632d8c85ea3036da86ad224e651cd497e"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/declare-manual-saved.txt",
+      "sha256": "67c85e17182e4c9b9a276ce6e0493450b58b08e8e8361caf961f757e613a7057"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/manifest.json",
+      "sha256": "fb3b562cdcd87fffbfe16d671242315d3f1d760de6fb6d8e48eaf1c1023913d6"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/mouse-after-transcript-wheel.png",
+      "sha256": "672746fb264a44fc6c0499a688eda0d57f13842540464248fd09f14ca9899960"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/mouse-after-transcript-wheel.txt",
+      "sha256": "b6c9a87d9b106f2b3586ff24268c22817e22aeb1e08cbaf9bc4b9c937729b280"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/mouse-before.png",
+      "sha256": "be8f456370bce6be79481111dd32a16ba719b178d95ab0499eecf2c189185314"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/mouse-before.txt",
+      "sha256": "c480a13fab26d8e9d9d8198a800bc905bc678917d1eeb73f31db5439828f2773"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/mouse-composer-wheel-ignored.png",
+      "sha256": "672746fb264a44fc6c0499a688eda0d57f13842540464248fd09f14ca9899960"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/mouse-composer-wheel-ignored.txt",
+      "sha256": "b6c9a87d9b106f2b3586ff24268c22817e22aeb1e08cbaf9bc4b9c937729b280"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/mouse-overlay-open.png",
+      "sha256": "744f23c0179ebcc7838dc0e73c524b536cf1986d35e69bd71557c59927ec8c7d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/mouse-overlay-open.txt",
+      "sha256": "1bd72947ae37baacddcc8138672153f5819aab4226e62edfff82ab1f3291f915"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/mouse-overlay-wheel-ignored.png",
+      "sha256": "744f23c0179ebcc7838dc0e73c524b536cf1986d35e69bd71557c59927ec8c7d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/mouse-overlay-wheel-ignored.txt",
+      "sha256": "1bd72947ae37baacddcc8138672153f5819aab4226e62edfff82ab1f3291f915"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/onboarding-confirm-busy.png",
+      "sha256": "f0250aa401ab6fcf2dcde0e525ca8ce0b55a774471bc7696285bc13754137fac"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/onboarding-confirm-busy.txt",
+      "sha256": "8e0e928e1b2bf5446b1b9d0d1b2fc0228ac1f9ae3919926d4383506073e6c222"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/onboarding-confirm.png",
+      "sha256": "a65621f0234def3f4486c6d02d01f36bd2bf1ca0044f57ed2d866d4295aaf9a8"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/onboarding-confirm.txt",
+      "sha256": "bff3e2970a51e6c7556371acd86974cd7dc1be8c822e25ced7f08608dd66026a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/onboarding-route-create-busy.png",
+      "sha256": "79d8941f270143e44f30e42b3e55e0360f2129369ea8ecc0c32beccbbd4ab1f6"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/onboarding-route-create-busy.txt",
+      "sha256": "076a2f819a87e2ec6ef6403d2dab16775e8beb17ae7336a91af2a0e40d9c87c9"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/onboarding-route-map.png",
+      "sha256": "11cb3ea567da3780ee3e0719f757bc9c3319f3ab262d70f9ecfeea963db1bebf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/onboarding-route-map.txt",
+      "sha256": "5f477d2e19ff6ca6594c9fe3a578ec39148d8a4cb26f5bb1057c7e36d822a734"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/workspace-empty.png",
+      "sha256": "0a2f57ba7be3bae31aeae67a2f0c2c5f58c1fa07a8ecb80479e95dccb9f23c1f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/workspace-empty.txt",
+      "sha256": "eff6c47d100f427567971a570b1f41534360506368b1d925a53a22ba99ac95a3"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/workspace-pending.png",
+      "sha256": "21f022bf94da4817773b576edfe2a5dfb10fd7c8b759094aa910c329f2fe9374"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/workspace-pending.txt",
+      "sha256": "192ac3772ac258780fb9c7ea2e8ab044ffecf8a8edbffa1bac9aa4e1fc10e9d7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/workspace-running.png",
+      "sha256": "c57138ad05832296d68de2d7cf57693bafd1af5bd18b84f1ccd7e47a8f92e845"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-39-01.467Z/workspace-running.txt",
+      "sha256": "8ffd20db59fe5e25ba5318016127514524f398c6826fc3a40f959e9060920632"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-candidate-120x40-color-nerd-declare-candidate-applied.png",
+      "sha256": "fd7b0dea8786c047efab804b81f62d7f2fb35ab1fa18be3f39fe4cf2a84ba27a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-candidate-120x40-color-nerd-declare-candidate-applied.txt",
+      "sha256": "02e3f38e7e4c9afca4d5ea44c429a81c08d0243d37c03031fe94e63558298edf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-candidate-120x40-color-nerd-declare-candidate-effort-default.png",
+      "sha256": "7490c86135f90743aafe3d1f1e0ed4a32416bea05c576e539775469028778f2b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-candidate-120x40-color-nerd-declare-candidate-effort-default.txt",
+      "sha256": "61aaeea6086b25dee3bdd78c84655ada2922f21427100679923e0a6e5a094c25"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-candidate-120x40-color-nerd-declare-candidate-effort.png",
+      "sha256": "827b74ad6d1f0ef911d1ee358127f081755ec065b75634f1cd4d3f62b2f6af37"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-candidate-120x40-color-nerd-declare-candidate-effort.txt",
+      "sha256": "1a9c4eb283b6d961a4512e077de9a5b74414ec4dacaed423171a2e6e70ccb4e1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-candidate-120x40-no-color-ascii-declare-candidate-applied.png",
+      "sha256": "a502f9787309103469ad3e1b0c39c9ac81458908929882be5097d385308650b5"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-candidate-120x40-no-color-ascii-declare-candidate-applied.txt",
+      "sha256": "02e3f38e7e4c9afca4d5ea44c429a81c08d0243d37c03031fe94e63558298edf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-candidate-120x40-no-color-ascii-declare-candidate-effort-default.png",
+      "sha256": "cb4f46eea59b40223e0b7a9747caab2f170333ee819c5f2e79bb4638c93419ea"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-candidate-120x40-no-color-ascii-declare-candidate-effort-default.txt",
+      "sha256": "61aaeea6086b25dee3bdd78c84655ada2922f21427100679923e0a6e5a094c25"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-candidate-120x40-no-color-ascii-declare-candidate-effort.png",
+      "sha256": "fa2ef454175b51fed95e6d8d78a2bef7b05e75517842ccd4587f16c37f04cb9d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-candidate-120x40-no-color-ascii-declare-candidate-effort.txt",
+      "sha256": "1a9c4eb283b6d961a4512e077de9a5b74414ec4dacaed423171a2e6e70ccb4e1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-manual-120x40-color-nerd-declare-manual-metadata.png",
+      "sha256": "d40d6816bfa9056562e0164f86cfbdc8e4f525ef00903005a9591231fd7a3d3f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-manual-120x40-color-nerd-declare-manual-metadata.txt",
+      "sha256": "c65d52a94d8d26d2fa9863d02555e80ab2cd49e0c779940eefa39ebefaed4c68"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-manual-120x40-color-nerd-declare-manual-modalities.png",
+      "sha256": "a683ae387c2f610c5c24999ad13c3f8985ee10333423fe32b814c8cc5f125235"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-manual-120x40-color-nerd-declare-manual-modalities.txt",
+      "sha256": "96adddcf18e5986c04c2e0b980d334047050067c5c9d586e8b52a4f113035a18"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-manual-120x40-color-nerd-declare-manual-saved.png",
+      "sha256": "6a6b6f0cef621a44304ff4067dc228699ecfb3f54fe3ddf185dc9e50df219c79"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-manual-120x40-color-nerd-declare-manual-saved.txt",
+      "sha256": "8d7d5a268df287bfa9066997bf1b78c1563b35b6e5ef8e932be2c90ef82d72f1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-manual-120x40-no-color-ascii-declare-manual-metadata.png",
+      "sha256": "78c803b8d1872d001dd9f3e65c16007122e9ecae305e4567b6692ef2d6ad22d6"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-manual-120x40-no-color-ascii-declare-manual-metadata.txt",
+      "sha256": "c65d52a94d8d26d2fa9863d02555e80ab2cd49e0c779940eefa39ebefaed4c68"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-manual-120x40-no-color-ascii-declare-manual-modalities.png",
+      "sha256": "42ec82e9a738399d50266aa429905c4bfe6feab1edc3eac143a47204c0c88ac9"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-manual-120x40-no-color-ascii-declare-manual-modalities.txt",
+      "sha256": "96adddcf18e5986c04c2e0b980d334047050067c5c9d586e8b52a4f113035a18"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-manual-120x40-no-color-ascii-declare-manual-saved.png",
+      "sha256": "3b697308bc45b85a21c018dd492c610c80eb8149f42cf5add57c4abcd2ac3aee"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/declare-manual-120x40-no-color-ascii-declare-manual-saved.txt",
+      "sha256": "8d7d5a268df287bfa9066997bf1b78c1563b35b6e5ef8e932be2c90ef82d72f1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-final-busy-120x40-color-nerd-onboarding-confirm-busy.png",
+      "sha256": "c2adfc3354832a6f4a2ec67d3723ff41fb3d8164b2b6de0d914ab32596e16ec7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-final-busy-120x40-color-nerd-onboarding-confirm-busy.txt",
+      "sha256": "68ab7932a303e9c704dc9b1d034a02b0f0fa2c13dc70e08997698a0dd76b48a7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-final-busy-120x40-color-nerd-onboarding-confirm.png",
+      "sha256": "f542634cc68b75ef34eb15dbbf7aaafdaffb3a0b8e8551bc33347a8081a74032"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-final-busy-120x40-color-nerd-onboarding-confirm.txt",
+      "sha256": "b1363c1bfeecffe6de7ef24e4e75db7e84cd4e2de936ef1b97dea7e9f5a940cf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-final-busy-120x40-no-color-ascii-onboarding-confirm-busy.png",
+      "sha256": "0fac3461194ce65ac4bfa663d4295cbbaeb12cfd636edea0be4a288d5a7bbb25"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-final-busy-120x40-no-color-ascii-onboarding-confirm-busy.txt",
+      "sha256": "c82b167b8c2504f9321054cdc999dc11fda04dd7a206c0ac3c61f265d34ee3f3"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-final-busy-120x40-no-color-ascii-onboarding-confirm.png",
+      "sha256": "f980c2295b05e7a6c5108c6b2110c806eacce014243845059b393924ff8d1e61"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-final-busy-120x40-no-color-ascii-onboarding-confirm.txt",
+      "sha256": "b1363c1bfeecffe6de7ef24e4e75db7e84cd4e2de936ef1b97dea7e9f5a940cf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-route-create-120x40-color-nerd-onboarding-route-create-busy.png",
+      "sha256": "cffaf94ce754883219fe8254eb18577a5c57640590f2ab56c8e77af4ffa3284c"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-route-create-120x40-color-nerd-onboarding-route-create-busy.txt",
+      "sha256": "8a9428ceed950f7957843dad7321b5ed60906901c0e843b1567ff32d41935374"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-route-create-120x40-color-nerd-onboarding-route-map.png",
+      "sha256": "73a41734fe7d7629a6fab9a8baed041043545e6ef822fdb0a10ff826fcca2343"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-route-create-120x40-color-nerd-onboarding-route-map.txt",
+      "sha256": "a6861bb55f946307d6d76ab4a8a1919ab12ff1e53fcd4ccb97ae0177c6622032"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-route-create-120x40-no-color-ascii-onboarding-route-create-busy.png",
+      "sha256": "4d0646b5e910333f264ceb904e8839604d61baf123ed1bd133b365ab462d1d4e"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-route-create-120x40-no-color-ascii-onboarding-route-create-busy.txt",
+      "sha256": "70e500f635b9d7cbc862fc848a95a8a336a7225f5bfbd0eed75083ae823c9162"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-route-create-120x40-no-color-ascii-onboarding-route-map.png",
+      "sha256": "e79c6ba7399337eaf60edc6a3da7305b0d16c5ac31da9825a6b2d558e7456030"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/onboarding-route-create-120x40-no-color-ascii-onboarding-route-map.txt",
+      "sha256": "a6861bb55f946307d6d76ab4a8a1919ab12ff1e53fcd4ccb97ae0177c6622032"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-empty-120x40-color-nerd-workspace-empty.png",
+      "sha256": "d3b4a815fbd49cee65fdbb64ebad513317a0d47834f7df2903b2ae05d97d0e32"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-empty-120x40-color-nerd-workspace-empty.txt",
+      "sha256": "6506482f6cdca717fc8dfd4431872939fc14f36105803818c8eb15826487bf23"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-mouse-120x40-color-nerd-mouse-after-transcript-wheel.png",
+      "sha256": "9d1ebb162c6823b5f4b7be05ba59339ef48b49cb1a0dbff126e4f750ec734623"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-mouse-120x40-color-nerd-mouse-after-transcript-wheel.txt",
+      "sha256": "876e11ada07d726fe3ca833143bc45f4ee3ad55f8cbb40339b607b8b0914ff41"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-mouse-120x40-color-nerd-mouse-before.png",
+      "sha256": "45c155b2e481e104edbe78356dc9d72a06ef42da8a17875d10c5f44e22cd49f2"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-mouse-120x40-color-nerd-mouse-before.txt",
+      "sha256": "0fd5b133efc07ca86db96e21159dfa82c739a08b3e2da399924b394f97d1e42a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-mouse-120x40-color-nerd-mouse-composer-wheel-ignored.png",
+      "sha256": "9d1ebb162c6823b5f4b7be05ba59339ef48b49cb1a0dbff126e4f750ec734623"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-mouse-120x40-color-nerd-mouse-composer-wheel-ignored.txt",
+      "sha256": "876e11ada07d726fe3ca833143bc45f4ee3ad55f8cbb40339b607b8b0914ff41"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-mouse-120x40-color-nerd-mouse-overlay-open.png",
+      "sha256": "a2061b004c8903137e87463cd59c8f02e11e0ef121099f02c32331723ca93d3f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-mouse-120x40-color-nerd-mouse-overlay-open.txt",
+      "sha256": "63dd94ad28233fd607921a98fb10f163162feeca11bed0281f2084581122a942"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-mouse-120x40-color-nerd-mouse-overlay-wheel-ignored.png",
+      "sha256": "a2061b004c8903137e87463cd59c8f02e11e0ef121099f02c32331723ca93d3f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-mouse-120x40-color-nerd-mouse-overlay-wheel-ignored.txt",
+      "sha256": "63dd94ad28233fd607921a98fb10f163162feeca11bed0281f2084581122a942"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-pending-120x40-color-nerd-workspace-pending.png",
+      "sha256": "56d81b1a8a080a46d07b0fda0dd236b8d7c2178c63d69f340478e857eeeace08"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-pending-120x40-color-nerd-workspace-pending.txt",
+      "sha256": "fc6099345ab6ba689bce526d16808bd6a5190075eb51f647d548758db441fb96"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-running-120x40-color-nerd-workspace-running.png",
+      "sha256": "806bfe6c75b5a63a81156cd0db19ca491fb3b26aaf719962d187c8f4ac46ca12"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-running-120x40-color-nerd-workspace-running.txt",
+      "sha256": "4f745ef0f9ba64ea984cdc54f3084b23fef52bcefeccc15b92ac71866feea7a0"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-running-120x40-no-color-ascii-workspace-running.png",
+      "sha256": "054ce44411b58e54dc9bdbb80817fc797f3db9187d67557581f99cf9906b7d16"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-44-07.433Z/workspace-running-120x40-no-color-ascii-workspace-running.txt",
+      "sha256": "807a69c20c7cb52f3e3263758edef05e7ed5244aae2b298177df15b42f8a1a8d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-candidate-120x40-color-nerd-declare-candidate-applied.png",
+      "sha256": "fd7b0dea8786c047efab804b81f62d7f2fb35ab1fa18be3f39fe4cf2a84ba27a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-candidate-120x40-color-nerd-declare-candidate-applied.txt",
+      "sha256": "02e3f38e7e4c9afca4d5ea44c429a81c08d0243d37c03031fe94e63558298edf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-candidate-120x40-color-nerd-declare-candidate-effort-default.png",
+      "sha256": "5d9ca60d2ed7e523bfa0a706667018b95ca9d19227913ab7fd2523af78ebf858"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-candidate-120x40-color-nerd-declare-candidate-effort-default.txt",
+      "sha256": "a9a25cba1e2b5f4c9e6b7f930868323715fbb43c9f6c4231ca7c6e0e7f05f717"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-candidate-120x40-color-nerd-declare-candidate-effort.png",
+      "sha256": "5d9ca60d2ed7e523bfa0a706667018b95ca9d19227913ab7fd2523af78ebf858"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-candidate-120x40-color-nerd-declare-candidate-effort.txt",
+      "sha256": "a9a25cba1e2b5f4c9e6b7f930868323715fbb43c9f6c4231ca7c6e0e7f05f717"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-candidate-120x40-no-color-ascii-declare-candidate-applied.png",
+      "sha256": "a502f9787309103469ad3e1b0c39c9ac81458908929882be5097d385308650b5"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-candidate-120x40-no-color-ascii-declare-candidate-applied.txt",
+      "sha256": "02e3f38e7e4c9afca4d5ea44c429a81c08d0243d37c03031fe94e63558298edf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-candidate-120x40-no-color-ascii-declare-candidate-effort-default.png",
+      "sha256": "4feee51ce3fe0dc24974188f1e01aa9bf6e360d6c6511f4fc0fa4cbaac9d9976"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-candidate-120x40-no-color-ascii-declare-candidate-effort-default.txt",
+      "sha256": "a9a25cba1e2b5f4c9e6b7f930868323715fbb43c9f6c4231ca7c6e0e7f05f717"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-candidate-120x40-no-color-ascii-declare-candidate-effort.png",
+      "sha256": "4feee51ce3fe0dc24974188f1e01aa9bf6e360d6c6511f4fc0fa4cbaac9d9976"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-candidate-120x40-no-color-ascii-declare-candidate-effort.txt",
+      "sha256": "a9a25cba1e2b5f4c9e6b7f930868323715fbb43c9f6c4231ca7c6e0e7f05f717"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-candidate-80x24-color-nerd-declare-candidate-effort-default.png",
+      "sha256": "190a24e558e73f5169752300f299e73f41b3074255dfe3587a0fa35a3f30ca7c"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-candidate-80x24-color-nerd-declare-candidate-effort-default.txt",
+      "sha256": "23393845520a02f901244264c9c7bc4df8519ac28043185f006db1a1970f9dca"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-manual-120x40-color-nerd-declare-manual-metadata.png",
+      "sha256": "d40d6816bfa9056562e0164f86cfbdc8e4f525ef00903005a9591231fd7a3d3f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-manual-120x40-color-nerd-declare-manual-metadata.txt",
+      "sha256": "c65d52a94d8d26d2fa9863d02555e80ab2cd49e0c779940eefa39ebefaed4c68"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-manual-120x40-color-nerd-declare-manual-modalities.png",
+      "sha256": "bfef4a5a715951b2f2415ff960240d80e4820beccdc2dd24cbfe8f7758c330cd"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-manual-120x40-color-nerd-declare-manual-modalities.txt",
+      "sha256": "741ed1fc5e23d3f2ecd65e970778c61faf4a54e47ff5b3da816ebb912fdf2f13"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-manual-120x40-color-nerd-declare-manual-saved.png",
+      "sha256": "6a6b6f0cef621a44304ff4067dc228699ecfb3f54fe3ddf185dc9e50df219c79"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-manual-120x40-color-nerd-declare-manual-saved.txt",
+      "sha256": "8d7d5a268df287bfa9066997bf1b78c1563b35b6e5ef8e932be2c90ef82d72f1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-manual-120x40-no-color-ascii-declare-manual-metadata.png",
+      "sha256": "78c803b8d1872d001dd9f3e65c16007122e9ecae305e4567b6692ef2d6ad22d6"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-manual-120x40-no-color-ascii-declare-manual-metadata.txt",
+      "sha256": "c65d52a94d8d26d2fa9863d02555e80ab2cd49e0c779940eefa39ebefaed4c68"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-manual-120x40-no-color-ascii-declare-manual-modalities.png",
+      "sha256": "abc5a6148a583438c216cc872803f15a310cb1d3fac33774993249cb08aac941"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-manual-120x40-no-color-ascii-declare-manual-modalities.txt",
+      "sha256": "741ed1fc5e23d3f2ecd65e970778c61faf4a54e47ff5b3da816ebb912fdf2f13"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-manual-120x40-no-color-ascii-declare-manual-saved.png",
+      "sha256": "3b697308bc45b85a21c018dd492c610c80eb8149f42cf5add57c4abcd2ac3aee"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/declare-manual-120x40-no-color-ascii-declare-manual-saved.txt",
+      "sha256": "8d7d5a268df287bfa9066997bf1b78c1563b35b6e5ef8e932be2c90ef82d72f1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-final-busy-120x40-color-nerd-onboarding-confirm-busy.png",
+      "sha256": "67e4555437bd3038f5f80c2d034784341b144dd23ba601b280593988839243aa"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-final-busy-120x40-color-nerd-onboarding-confirm-busy.txt",
+      "sha256": "6672931dc5089a6bdae199f40a013ded6eedc23066ec10c1ac415bd3fbc865c8"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-final-busy-120x40-color-nerd-onboarding-confirm.png",
+      "sha256": "f542634cc68b75ef34eb15dbbf7aaafdaffb3a0b8e8551bc33347a8081a74032"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-final-busy-120x40-color-nerd-onboarding-confirm.txt",
+      "sha256": "b1363c1bfeecffe6de7ef24e4e75db7e84cd4e2de936ef1b97dea7e9f5a940cf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-final-busy-120x40-no-color-ascii-onboarding-confirm-busy.png",
+      "sha256": "0fac3461194ce65ac4bfa663d4295cbbaeb12cfd636edea0be4a288d5a7bbb25"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-final-busy-120x40-no-color-ascii-onboarding-confirm-busy.txt",
+      "sha256": "c82b167b8c2504f9321054cdc999dc11fda04dd7a206c0ac3c61f265d34ee3f3"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-final-busy-120x40-no-color-ascii-onboarding-confirm.png",
+      "sha256": "f980c2295b05e7a6c5108c6b2110c806eacce014243845059b393924ff8d1e61"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-final-busy-120x40-no-color-ascii-onboarding-confirm.txt",
+      "sha256": "b1363c1bfeecffe6de7ef24e4e75db7e84cd4e2de936ef1b97dea7e9f5a940cf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-route-create-120x40-color-nerd-onboarding-route-create-busy.png",
+      "sha256": "0c5c439a5740004cfe62bb6c755a4cabcc14f1130b43dcbf07bcadc000af9012"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-route-create-120x40-color-nerd-onboarding-route-create-busy.txt",
+      "sha256": "c408beaecc6fda5ab4eb9904ccde900f84e52aa44f04168324b277aa6e418f65"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-route-create-120x40-color-nerd-onboarding-route-map.png",
+      "sha256": "73a41734fe7d7629a6fab9a8baed041043545e6ef822fdb0a10ff826fcca2343"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-route-create-120x40-color-nerd-onboarding-route-map.txt",
+      "sha256": "a6861bb55f946307d6d76ab4a8a1919ab12ff1e53fcd4ccb97ae0177c6622032"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-route-create-120x40-no-color-ascii-onboarding-route-create-busy.png",
+      "sha256": "4d0646b5e910333f264ceb904e8839604d61baf123ed1bd133b365ab462d1d4e"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-route-create-120x40-no-color-ascii-onboarding-route-create-busy.txt",
+      "sha256": "70e500f635b9d7cbc862fc848a95a8a336a7225f5bfbd0eed75083ae823c9162"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-route-create-120x40-no-color-ascii-onboarding-route-map.png",
+      "sha256": "e79c6ba7399337eaf60edc6a3da7305b0d16c5ac31da9825a6b2d558e7456030"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/onboarding-route-create-120x40-no-color-ascii-onboarding-route-map.txt",
+      "sha256": "a6861bb55f946307d6d76ab4a8a1919ab12ff1e53fcd4ccb97ae0177c6622032"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-empty-120x40-color-nerd-workspace-empty.png",
+      "sha256": "d3b4a815fbd49cee65fdbb64ebad513317a0d47834f7df2903b2ae05d97d0e32"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-empty-120x40-color-nerd-workspace-empty.txt",
+      "sha256": "6506482f6cdca717fc8dfd4431872939fc14f36105803818c8eb15826487bf23"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-empty-120x40-no-color-ascii-workspace-empty.png",
+      "sha256": "b8d79965e60b41a28bfe0b4ce0b164b9efd95cd2ed35a7d38ff3eb74f1347013"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-empty-120x40-no-color-ascii-workspace-empty.txt",
+      "sha256": "48580952d012244537f003f8b698a8512843fc4b3dfeea7bdabdc12910b39924"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-color-nerd-mouse-after-transcript-wheel.png",
+      "sha256": "9d1ebb162c6823b5f4b7be05ba59339ef48b49cb1a0dbff126e4f750ec734623"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-color-nerd-mouse-after-transcript-wheel.txt",
+      "sha256": "876e11ada07d726fe3ca833143bc45f4ee3ad55f8cbb40339b607b8b0914ff41"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-color-nerd-mouse-before.png",
+      "sha256": "45c155b2e481e104edbe78356dc9d72a06ef42da8a17875d10c5f44e22cd49f2"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-color-nerd-mouse-before.txt",
+      "sha256": "0fd5b133efc07ca86db96e21159dfa82c739a08b3e2da399924b394f97d1e42a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-color-nerd-mouse-composer-wheel-ignored.png",
+      "sha256": "9d1ebb162c6823b5f4b7be05ba59339ef48b49cb1a0dbff126e4f750ec734623"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-color-nerd-mouse-composer-wheel-ignored.txt",
+      "sha256": "876e11ada07d726fe3ca833143bc45f4ee3ad55f8cbb40339b607b8b0914ff41"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-color-nerd-mouse-overlay-open.png",
+      "sha256": "a2061b004c8903137e87463cd59c8f02e11e0ef121099f02c32331723ca93d3f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-color-nerd-mouse-overlay-open.txt",
+      "sha256": "63dd94ad28233fd607921a98fb10f163162feeca11bed0281f2084581122a942"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-color-nerd-mouse-overlay-wheel-ignored.png",
+      "sha256": "a2061b004c8903137e87463cd59c8f02e11e0ef121099f02c32331723ca93d3f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-color-nerd-mouse-overlay-wheel-ignored.txt",
+      "sha256": "63dd94ad28233fd607921a98fb10f163162feeca11bed0281f2084581122a942"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-no-color-ascii-mouse-after-transcript-wheel.png",
+      "sha256": "e92e3819ea78a7544b48f486f4dc3d8446c3caf0e0ff024447601e9cf65d101f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-no-color-ascii-mouse-after-transcript-wheel.txt",
+      "sha256": "503bc3e014200106ab4e740b744dac868856392019dbf301cbbde41624d7d7ad"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-no-color-ascii-mouse-before.png",
+      "sha256": "7b4e6a9573100338a3465a805e76d099402f2ec632919a75fd05ff8f33f2ec3c"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-no-color-ascii-mouse-before.txt",
+      "sha256": "43a3a6c9bcbde9e40c3bd627d1bd13fa37dd6005ff6f434bb492965da3dd02c7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-no-color-ascii-mouse-composer-wheel-ignored.png",
+      "sha256": "e92e3819ea78a7544b48f486f4dc3d8446c3caf0e0ff024447601e9cf65d101f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-no-color-ascii-mouse-composer-wheel-ignored.txt",
+      "sha256": "503bc3e014200106ab4e740b744dac868856392019dbf301cbbde41624d7d7ad"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-no-color-ascii-mouse-overlay-open.png",
+      "sha256": "6a001f95a99911109a354815e3fbcc1bb75341cdd3a627e2faa3da564c392d7b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-no-color-ascii-mouse-overlay-open.txt",
+      "sha256": "63dd94ad28233fd607921a98fb10f163162feeca11bed0281f2084581122a942"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-no-color-ascii-mouse-overlay-wheel-ignored.png",
+      "sha256": "6a001f95a99911109a354815e3fbcc1bb75341cdd3a627e2faa3da564c392d7b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-mouse-120x40-no-color-ascii-mouse-overlay-wheel-ignored.txt",
+      "sha256": "63dd94ad28233fd607921a98fb10f163162feeca11bed0281f2084581122a942"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-pending-120x40-color-nerd-workspace-pending.png",
+      "sha256": "56d81b1a8a080a46d07b0fda0dd236b8d7c2178c63d69f340478e857eeeace08"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-pending-120x40-color-nerd-workspace-pending.txt",
+      "sha256": "fc6099345ab6ba689bce526d16808bd6a5190075eb51f647d548758db441fb96"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-pending-120x40-no-color-ascii-workspace-pending.png",
+      "sha256": "1e0dcc9e4d76baf5482d8d0a98b2e562aaeb860c6981cb5f9d21817cf5b7d0eb"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-pending-120x40-no-color-ascii-workspace-pending.txt",
+      "sha256": "6d11353e1f1183d9f9aa8849885c35bd406cbd8a12f0087ae4532df7b64082fe"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-running-120x40-color-nerd-workspace-running.png",
+      "sha256": "806bfe6c75b5a63a81156cd0db19ca491fb3b26aaf719962d187c8f4ac46ca12"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-running-120x40-color-nerd-workspace-running.txt",
+      "sha256": "4f745ef0f9ba64ea984cdc54f3084b23fef52bcefeccc15b92ac71866feea7a0"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-running-120x40-no-color-ascii-workspace-running.png",
+      "sha256": "054ce44411b58e54dc9bdbb80817fc797f3db9187d67557581f99cf9906b7d16"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-50-34.503Z/workspace-running-120x40-no-color-ascii-workspace-running.txt",
+      "sha256": "807a69c20c7cb52f3e3263758edef05e7ed5244aae2b298177df15b42f8a1a8d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-candidate-80x24-color-nerd-declare-candidate-applied.png",
+      "sha256": "ce7f50b7a42364602004c44635d924bc8ac5c25ca1b09ca9c8da2a253aa6bc72"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-candidate-80x24-color-nerd-declare-candidate-applied.txt",
+      "sha256": "661381f8e03535fa90006f57a5451f954499b818d9cfd7ccce95c747f72e167d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-candidate-80x24-color-nerd-declare-candidate-effort-default.png",
+      "sha256": "180f46681da70324a54bb5436b9f593735634a20c6634602eaa33f8fc08c1e49"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-candidate-80x24-color-nerd-declare-candidate-effort-default.txt",
+      "sha256": "6f3365e9e5661f4c34560c01d4a524673e87660fa2333ea81a5e351a6686290d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-candidate-80x24-color-nerd-declare-candidate-effort.png",
+      "sha256": "bf7c24e273fb02b3fcd1367922a3cf1047dae2f80ed76008f9b2e7f3146f801d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-candidate-80x24-color-nerd-declare-candidate-effort.txt",
+      "sha256": "8d0cd1a449debb64922bd07e66276d9726201cd36bc8f28440e87ea7ef0e5296"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-candidate-80x24-no-color-ascii-declare-candidate-applied.png",
+      "sha256": "d2e5c0188a884864585a4027b58fdeedfb66937e75f72c05b0fd2d487be2beea"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-candidate-80x24-no-color-ascii-declare-candidate-applied.txt",
+      "sha256": "661381f8e03535fa90006f57a5451f954499b818d9cfd7ccce95c747f72e167d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-candidate-80x24-no-color-ascii-declare-candidate-effort-default.png",
+      "sha256": "75285193a9fd5103e1e729883de718f8e9e362cfbf764210065f319c8b021852"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-candidate-80x24-no-color-ascii-declare-candidate-effort-default.txt",
+      "sha256": "6f3365e9e5661f4c34560c01d4a524673e87660fa2333ea81a5e351a6686290d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-candidate-80x24-no-color-ascii-declare-candidate-effort.png",
+      "sha256": "9bebf5820cc39ec425a5a5c203a1f3ce6278066e088c8d8a2aead8d89c56f5a2"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-candidate-80x24-no-color-ascii-declare-candidate-effort.txt",
+      "sha256": "8d0cd1a449debb64922bd07e66276d9726201cd36bc8f28440e87ea7ef0e5296"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-manual-80x24-color-nerd-declare-manual-metadata.png",
+      "sha256": "9f4d191df45659e855238e6f00e1a4fd7346a2dab99339554adb2ed2b3f0f361"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-manual-80x24-color-nerd-declare-manual-metadata.txt",
+      "sha256": "b8665d0fd5472c9bd9ace5e0e0874f3c0270e813a3a24311b426691fe03f0165"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-manual-80x24-color-nerd-declare-manual-modalities.png",
+      "sha256": "06137a8476fb90c6006b685dfe704cc51e782f35c2985d802552dd5a248c3619"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-manual-80x24-color-nerd-declare-manual-modalities.txt",
+      "sha256": "ce7ee87e0b5e0fdfe1de70fe4bf61f37f3d6652fa0bc58ff05dd9e3e34cd1f5b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-manual-80x24-color-nerd-declare-manual-saved.png",
+      "sha256": "69777a823c1d9b99035f1a5ddbff2a3b6550137f612e6831d37523c710612471"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-manual-80x24-color-nerd-declare-manual-saved.txt",
+      "sha256": "1ae55ff7c44aba12c9c8d1d311ef127f4e60310b619bdc05c8b46cb9616be909"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-manual-80x24-no-color-ascii-declare-manual-metadata.png",
+      "sha256": "2519713f750188196a61f061f90423fb48003e7f02ba372bf0a305e0fe138e80"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-manual-80x24-no-color-ascii-declare-manual-metadata.txt",
+      "sha256": "b8665d0fd5472c9bd9ace5e0e0874f3c0270e813a3a24311b426691fe03f0165"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-manual-80x24-no-color-ascii-declare-manual-modalities.png",
+      "sha256": "01522bdcef69e66ab31b9fb944254c6ea178d951bcc37583e217b2bb5bd269f9"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-manual-80x24-no-color-ascii-declare-manual-modalities.txt",
+      "sha256": "ce7ee87e0b5e0fdfe1de70fe4bf61f37f3d6652fa0bc58ff05dd9e3e34cd1f5b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-manual-80x24-no-color-ascii-declare-manual-saved.png",
+      "sha256": "bee4b552f357d4719b073c73f2cebb709c8d1057272c52a94b7ae573e90cebec"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/declare-manual-80x24-no-color-ascii-declare-manual-saved.txt",
+      "sha256": "1ae55ff7c44aba12c9c8d1d311ef127f4e60310b619bdc05c8b46cb9616be909"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-52-52.575Z/manifest.json",
+      "sha256": "7fccc26d7c5357525808db4f2f4ac2d6344f50771c40f1cc23860a2228a8b8dd"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-applied-120x40-color-nerd.png",
+      "sha256": "fd7b0dea8786c047efab804b81f62d7f2fb35ab1fa18be3f39fe4cf2a84ba27a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-applied-120x40-color-nerd.txt",
+      "sha256": "02e3f38e7e4c9afca4d5ea44c429a81c08d0243d37c03031fe94e63558298edf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-applied-120x40-no-color-ascii.png",
+      "sha256": "a502f9787309103469ad3e1b0c39c9ac81458908929882be5097d385308650b5"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-applied-120x40-no-color-ascii.txt",
+      "sha256": "02e3f38e7e4c9afca4d5ea44c429a81c08d0243d37c03031fe94e63558298edf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-applied-50x40-color-nerd.png",
+      "sha256": "43bbbb8f1a288594c2322a4b3517488785aaba8b3350c2ab71a2c3edff770226"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-applied-50x40-color-nerd.txt",
+      "sha256": "d63b17a87d3bf83d06237213e151405843959d49db4e3a9ec65fbf423c864b99"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-applied-50x40-no-color-ascii.png",
+      "sha256": "03a9f36a8975c3c5bed99814b1faba71bba154cb36f9982f48bd20b9a49fb3ac"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-applied-50x40-no-color-ascii.txt",
+      "sha256": "d63b17a87d3bf83d06237213e151405843959d49db4e3a9ec65fbf423c864b99"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-applied-80x24-color-nerd.png",
+      "sha256": "ce7f50b7a42364602004c44635d924bc8ac5c25ca1b09ca9c8da2a253aa6bc72"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-applied-80x24-color-nerd.txt",
+      "sha256": "661381f8e03535fa90006f57a5451f954499b818d9cfd7ccce95c747f72e167d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-applied-80x24-no-color-ascii.png",
+      "sha256": "d2e5c0188a884864585a4027b58fdeedfb66937e75f72c05b0fd2d487be2beea"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-applied-80x24-no-color-ascii.txt",
+      "sha256": "661381f8e03535fa90006f57a5451f954499b818d9cfd7ccce95c747f72e167d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-120x40-color-nerd.png",
+      "sha256": "827b74ad6d1f0ef911d1ee358127f081755ec065b75634f1cd4d3f62b2f6af37"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-120x40-color-nerd.txt",
+      "sha256": "1a9c4eb283b6d961a4512e077de9a5b74414ec4dacaed423171a2e6e70ccb4e1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-120x40-no-color-ascii.png",
+      "sha256": "fa2ef454175b51fed95e6d8d78a2bef7b05e75517842ccd4587f16c37f04cb9d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-120x40-no-color-ascii.txt",
+      "sha256": "1a9c4eb283b6d961a4512e077de9a5b74414ec4dacaed423171a2e6e70ccb4e1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-50x40-color-nerd.png",
+      "sha256": "ee482f1d4bd6340cefd7f526718fd1ea143e1012c9c3ae93639eb75a4a951a9d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-50x40-color-nerd.txt",
+      "sha256": "b716552e7c9f56663fb847dc10746adc53cad943929813824914dbd660f003eb"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-50x40-no-color-ascii.png",
+      "sha256": "99950208d48d61ed8e90d32262656d2489da8fddcc7c5b5e382aa914db58324e"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-50x40-no-color-ascii.txt",
+      "sha256": "b716552e7c9f56663fb847dc10746adc53cad943929813824914dbd660f003eb"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-80x24-color-nerd.png",
+      "sha256": "bf7c24e273fb02b3fcd1367922a3cf1047dae2f80ed76008f9b2e7f3146f801d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-80x24-color-nerd.txt",
+      "sha256": "8d0cd1a449debb64922bd07e66276d9726201cd36bc8f28440e87ea7ef0e5296"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-80x24-no-color-ascii.png",
+      "sha256": "9bebf5820cc39ec425a5a5c203a1f3ce6278066e088c8d8a2aead8d89c56f5a2"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-80x24-no-color-ascii.txt",
+      "sha256": "8d0cd1a449debb64922bd07e66276d9726201cd36bc8f28440e87ea7ef0e5296"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-default-120x40-color-nerd.png",
+      "sha256": "7490c86135f90743aafe3d1f1e0ed4a32416bea05c576e539775469028778f2b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-default-120x40-color-nerd.txt",
+      "sha256": "61aaeea6086b25dee3bdd78c84655ada2922f21427100679923e0a6e5a094c25"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-default-120x40-no-color-ascii.png",
+      "sha256": "cb4f46eea59b40223e0b7a9747caab2f170333ee819c5f2e79bb4638c93419ea"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-default-120x40-no-color-ascii.txt",
+      "sha256": "61aaeea6086b25dee3bdd78c84655ada2922f21427100679923e0a6e5a094c25"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-default-50x40-color-nerd.png",
+      "sha256": "38ce44895e2f59aaca05dd38b1e22e2384b7da1efe282d5280cc09ca5e111788"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-default-50x40-color-nerd.txt",
+      "sha256": "9c8ed68f2b745be9cd473b071b6c6c3cec317a36cdc9fec3e92b722814cfc140"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-default-50x40-no-color-ascii.png",
+      "sha256": "0421ff1ef6d16bce6abd5d4113c32dca8ba09ac976d7eed7e71f32994e3deed0"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-default-50x40-no-color-ascii.txt",
+      "sha256": "9c8ed68f2b745be9cd473b071b6c6c3cec317a36cdc9fec3e92b722814cfc140"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-default-80x24-color-nerd.png",
+      "sha256": "180f46681da70324a54bb5436b9f593735634a20c6634602eaa33f8fc08c1e49"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-default-80x24-color-nerd.txt",
+      "sha256": "6f3365e9e5661f4c34560c01d4a524673e87660fa2333ea81a5e351a6686290d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-default-80x24-no-color-ascii.png",
+      "sha256": "75285193a9fd5103e1e729883de718f8e9e362cfbf764210065f319c8b021852"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-candidate-effort-default-80x24-no-color-ascii.txt",
+      "sha256": "6f3365e9e5661f4c34560c01d4a524673e87660fa2333ea81a5e351a6686290d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-metadata-120x40-color-nerd.png",
+      "sha256": "ce1f24fe873dd326721873121a6d86af5a213b5f9c40972d0b5020a08bc8da53"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-metadata-120x40-color-nerd.txt",
+      "sha256": "0744822197da5c5e8a82484eabf4a952252258763fc2eccd7351edaeec34444d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-metadata-120x40-no-color-ascii.png",
+      "sha256": "09e8e65ff853352fc553e0d33229555ac79c284f587f7e056d0dc729c4ffe017"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-metadata-120x40-no-color-ascii.txt",
+      "sha256": "0744822197da5c5e8a82484eabf4a952252258763fc2eccd7351edaeec34444d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-metadata-50x40-color-nerd.png",
+      "sha256": "a588e843a8e1da0fcab08240f6cfbbc231821a19ace403e0c234f13b8e4a0e97"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-metadata-50x40-color-nerd.txt",
+      "sha256": "6c0a2515e29b3e5154ebf579188602010147e7f7ac585ebd48ad908af8565c54"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-metadata-50x40-no-color-ascii.png",
+      "sha256": "ca501045f3f33e194c87ccfe1a951dbead08baaa0133e4ebe2dfd63612e70489"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-metadata-50x40-no-color-ascii.txt",
+      "sha256": "6c0a2515e29b3e5154ebf579188602010147e7f7ac585ebd48ad908af8565c54"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-metadata-80x24-color-nerd.png",
+      "sha256": "9f4d191df45659e855238e6f00e1a4fd7346a2dab99339554adb2ed2b3f0f361"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-metadata-80x24-color-nerd.txt",
+      "sha256": "b8665d0fd5472c9bd9ace5e0e0874f3c0270e813a3a24311b426691fe03f0165"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-metadata-80x24-no-color-ascii.png",
+      "sha256": "2519713f750188196a61f061f90423fb48003e7f02ba372bf0a305e0fe138e80"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-metadata-80x24-no-color-ascii.txt",
+      "sha256": "b8665d0fd5472c9bd9ace5e0e0874f3c0270e813a3a24311b426691fe03f0165"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-modalities-120x40-color-nerd.png",
+      "sha256": "2b0b4527fdcac1cc133734b77e62774a80c81a96d0e7f8e384f882443297ed16"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-modalities-120x40-color-nerd.txt",
+      "sha256": "f352b31c9fcff8ab68d2c1e43f05a43e1e2de2420176fb44b9dc17b0b1ad1a39"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-modalities-120x40-no-color-ascii.png",
+      "sha256": "152aca76cbf88f4c24e967490aa631eade33fc3eb789d173dc4154ecc5f482ad"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-modalities-120x40-no-color-ascii.txt",
+      "sha256": "f352b31c9fcff8ab68d2c1e43f05a43e1e2de2420176fb44b9dc17b0b1ad1a39"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-modalities-50x40-color-nerd.png",
+      "sha256": "b5ae65366f9be65ba0cba68b73096718e40561e626c07d9cc772ff090d789193"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-modalities-50x40-color-nerd.txt",
+      "sha256": "acf737d96328af066f3a6c2af86c6517c8b1b732257f53d004ba3217c01d2a7a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-modalities-50x40-no-color-ascii.png",
+      "sha256": "b940bbc4dd03de979a74498523f847c222c40f86090913ce290d93213dbadc59"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-modalities-50x40-no-color-ascii.txt",
+      "sha256": "acf737d96328af066f3a6c2af86c6517c8b1b732257f53d004ba3217c01d2a7a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-modalities-80x24-color-nerd.png",
+      "sha256": "ff30d1e81b1a43adb483d3f137cf7477d7ef692b1394e824a2503de16c74d7b5"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-modalities-80x24-color-nerd.txt",
+      "sha256": "c072d52340c4bb049ef95c507874eafb543dcc39626bbf965391417588eb034b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-modalities-80x24-no-color-ascii.png",
+      "sha256": "39310605b80ec5d136940dada2c7980b5a6010fd459cc73f7dfb488710fcf385"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-modalities-80x24-no-color-ascii.txt",
+      "sha256": "c072d52340c4bb049ef95c507874eafb543dcc39626bbf965391417588eb034b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-saved-120x40-color-nerd.png",
+      "sha256": "4086f83cd10e9aa7182eebdae4f8cb36688b7ab3bdee7aee109cf78bbc161836"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-saved-120x40-color-nerd.txt",
+      "sha256": "fa1cbd077d966fb79c27c52aaebeabb7a24163ca532eefa4f3a2f255cb54b5ce"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-saved-120x40-no-color-ascii.png",
+      "sha256": "4ac62d48a4cb0fbc36c13ce208eaa40a5bb31a587112bb16960364736d176da4"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-saved-120x40-no-color-ascii.txt",
+      "sha256": "fa1cbd077d966fb79c27c52aaebeabb7a24163ca532eefa4f3a2f255cb54b5ce"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-saved-50x40-color-nerd.png",
+      "sha256": "5d7b2ee41a6446e3c7c87344fb961945dc82a89aef9eaac7a85f183051c1d0bd"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-saved-50x40-color-nerd.txt",
+      "sha256": "97adb567939716907a39c65ca5c8e41bcb3954ec3bffaaa1df8dde323313a9ab"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-saved-50x40-no-color-ascii.png",
+      "sha256": "0ecd71c150fbe9516f0975c174b968dbfbec1e40f82dcd2ac31ef63d36b41d59"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-saved-50x40-no-color-ascii.txt",
+      "sha256": "97adb567939716907a39c65ca5c8e41bcb3954ec3bffaaa1df8dde323313a9ab"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-saved-80x24-color-nerd.png",
+      "sha256": "69777a823c1d9b99035f1a5ddbff2a3b6550137f612e6831d37523c710612471"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-saved-80x24-color-nerd.txt",
+      "sha256": "1ae55ff7c44aba12c9c8d1d311ef127f4e60310b619bdc05c8b46cb9616be909"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-saved-80x24-no-color-ascii.png",
+      "sha256": "bee4b552f357d4719b073c73f2cebb709c8d1057272c52a94b7ae573e90cebec"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/declare-manual-saved-80x24-no-color-ascii.txt",
+      "sha256": "1ae55ff7c44aba12c9c8d1d311ef127f4e60310b619bdc05c8b46cb9616be909"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/manifest.json",
+      "sha256": "b4d78101fb455e71b205c73d61c173d5944f4795b776ec679689a9430bfa3726"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-after-transcript-wheel-120x40-color-nerd.png",
+      "sha256": "9d1ebb162c6823b5f4b7be05ba59339ef48b49cb1a0dbff126e4f750ec734623"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-after-transcript-wheel-120x40-color-nerd.txt",
+      "sha256": "876e11ada07d726fe3ca833143bc45f4ee3ad55f8cbb40339b607b8b0914ff41"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-after-transcript-wheel-120x40-no-color-ascii.png",
+      "sha256": "e92e3819ea78a7544b48f486f4dc3d8446c3caf0e0ff024447601e9cf65d101f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-after-transcript-wheel-120x40-no-color-ascii.txt",
+      "sha256": "503bc3e014200106ab4e740b744dac868856392019dbf301cbbde41624d7d7ad"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-after-transcript-wheel-50x40-color-nerd.png",
+      "sha256": "2b85535c09a034c1c363716fe4913c6193d5c56f9038203b52e0798c6cec5341"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-after-transcript-wheel-50x40-color-nerd.txt",
+      "sha256": "b6c9a87d9b106f2b3586ff24268c22817e22aeb1e08cbaf9bc4b9c937729b280"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-after-transcript-wheel-50x40-no-color-ascii.png",
+      "sha256": "672746fb264a44fc6c0499a688eda0d57f13842540464248fd09f14ca9899960"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-after-transcript-wheel-50x40-no-color-ascii.txt",
+      "sha256": "b6c9a87d9b106f2b3586ff24268c22817e22aeb1e08cbaf9bc4b9c937729b280"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-after-transcript-wheel-80x24-color-nerd.png",
+      "sha256": "101421ed9200d8e01c9c9e5a707e31aec97bcf7f99864a41dc912c96c9700b53"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-after-transcript-wheel-80x24-color-nerd.txt",
+      "sha256": "83f263d8c4554f34b1687b87f9011e942bbc77f12925302ab058de1f6fa3f39a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-after-transcript-wheel-80x24-no-color-ascii.png",
+      "sha256": "393d2f89ea0a3165ec81c34b71dad5195868e1699c32801c9b68e807d6a68440"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-after-transcript-wheel-80x24-no-color-ascii.txt",
+      "sha256": "8f4f16d6742a6065d0587cc6ba108a67cfc211fe2a1eba30fb8cedd6a23c7350"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-before-120x40-color-nerd.png",
+      "sha256": "45c155b2e481e104edbe78356dc9d72a06ef42da8a17875d10c5f44e22cd49f2"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-before-120x40-color-nerd.txt",
+      "sha256": "0fd5b133efc07ca86db96e21159dfa82c739a08b3e2da399924b394f97d1e42a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-before-120x40-no-color-ascii.png",
+      "sha256": "7b4e6a9573100338a3465a805e76d099402f2ec632919a75fd05ff8f33f2ec3c"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-before-120x40-no-color-ascii.txt",
+      "sha256": "43a3a6c9bcbde9e40c3bd627d1bd13fa37dd6005ff6f434bb492965da3dd02c7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-before-50x40-color-nerd.png",
+      "sha256": "f4cb9207ea81fd5f56b0620c8114e3f51fefd1d53cea6c407b9e8231681b3410"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-before-50x40-color-nerd.txt",
+      "sha256": "c480a13fab26d8e9d9d8198a800bc905bc678917d1eeb73f31db5439828f2773"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-before-50x40-no-color-ascii.png",
+      "sha256": "be8f456370bce6be79481111dd32a16ba719b178d95ab0499eecf2c189185314"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-before-50x40-no-color-ascii.txt",
+      "sha256": "c480a13fab26d8e9d9d8198a800bc905bc678917d1eeb73f31db5439828f2773"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-before-80x24-color-nerd.png",
+      "sha256": "e665dea3a07f1a68db64dfd8a52dc23ec1b9ce7799c3fab64a0561ee04dbf547"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-before-80x24-color-nerd.txt",
+      "sha256": "e0a5e6d1ba56d73d9023d9088d9ed285579d5a9bc606a98c2934be0efa15b330"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-before-80x24-no-color-ascii.png",
+      "sha256": "322b2da98cf8f2cfcbfe1300ca6033f2386ac8cb400f9894f80b6f1c4a8ffd37"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-before-80x24-no-color-ascii.txt",
+      "sha256": "f20c2da7a4e72a0a1c42efe85e7cc696f26a8d53bc14750b54c0e91220fcb21f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-composer-wheel-ignored-120x40-color-nerd.png",
+      "sha256": "9d1ebb162c6823b5f4b7be05ba59339ef48b49cb1a0dbff126e4f750ec734623"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-composer-wheel-ignored-120x40-color-nerd.txt",
+      "sha256": "876e11ada07d726fe3ca833143bc45f4ee3ad55f8cbb40339b607b8b0914ff41"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-composer-wheel-ignored-120x40-no-color-ascii.png",
+      "sha256": "e92e3819ea78a7544b48f486f4dc3d8446c3caf0e0ff024447601e9cf65d101f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-composer-wheel-ignored-120x40-no-color-ascii.txt",
+      "sha256": "503bc3e014200106ab4e740b744dac868856392019dbf301cbbde41624d7d7ad"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-composer-wheel-ignored-50x40-color-nerd.png",
+      "sha256": "2b85535c09a034c1c363716fe4913c6193d5c56f9038203b52e0798c6cec5341"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-composer-wheel-ignored-50x40-color-nerd.txt",
+      "sha256": "b6c9a87d9b106f2b3586ff24268c22817e22aeb1e08cbaf9bc4b9c937729b280"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-composer-wheel-ignored-50x40-no-color-ascii.png",
+      "sha256": "672746fb264a44fc6c0499a688eda0d57f13842540464248fd09f14ca9899960"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-composer-wheel-ignored-50x40-no-color-ascii.txt",
+      "sha256": "b6c9a87d9b106f2b3586ff24268c22817e22aeb1e08cbaf9bc4b9c937729b280"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-composer-wheel-ignored-80x24-color-nerd.png",
+      "sha256": "101421ed9200d8e01c9c9e5a707e31aec97bcf7f99864a41dc912c96c9700b53"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-composer-wheel-ignored-80x24-color-nerd.txt",
+      "sha256": "83f263d8c4554f34b1687b87f9011e942bbc77f12925302ab058de1f6fa3f39a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-composer-wheel-ignored-80x24-no-color-ascii.png",
+      "sha256": "393d2f89ea0a3165ec81c34b71dad5195868e1699c32801c9b68e807d6a68440"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-composer-wheel-ignored-80x24-no-color-ascii.txt",
+      "sha256": "8f4f16d6742a6065d0587cc6ba108a67cfc211fe2a1eba30fb8cedd6a23c7350"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-open-120x40-color-nerd.png",
+      "sha256": "a2061b004c8903137e87463cd59c8f02e11e0ef121099f02c32331723ca93d3f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-open-120x40-color-nerd.txt",
+      "sha256": "63dd94ad28233fd607921a98fb10f163162feeca11bed0281f2084581122a942"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-open-120x40-no-color-ascii.png",
+      "sha256": "6a001f95a99911109a354815e3fbcc1bb75341cdd3a627e2faa3da564c392d7b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-open-120x40-no-color-ascii.txt",
+      "sha256": "63dd94ad28233fd607921a98fb10f163162feeca11bed0281f2084581122a942"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-open-50x40-color-nerd.png",
+      "sha256": "128b038070cec6e4f3a105238f38064cac0b275f386d23d7364923e1c440b899"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-open-50x40-color-nerd.txt",
+      "sha256": "1bd72947ae37baacddcc8138672153f5819aab4226e62edfff82ab1f3291f915"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-open-50x40-no-color-ascii.png",
+      "sha256": "744f23c0179ebcc7838dc0e73c524b536cf1986d35e69bd71557c59927ec8c7d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-open-50x40-no-color-ascii.txt",
+      "sha256": "1bd72947ae37baacddcc8138672153f5819aab4226e62edfff82ab1f3291f915"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-open-80x24-color-nerd.png",
+      "sha256": "01ce20d8c6a21b568046b796615c988cd6e7c6e9825c6a1bb8c7cd240e75fe13"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-open-80x24-color-nerd.txt",
+      "sha256": "b818aae67e3944620d9b67479e96a42af959937f84b7bff166701246dc5382a7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-open-80x24-no-color-ascii.png",
+      "sha256": "ed0ddf822e99e299d720d41539f9655ac0038c25489f66e39eb0229ecf9f76a1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-open-80x24-no-color-ascii.txt",
+      "sha256": "b818aae67e3944620d9b67479e96a42af959937f84b7bff166701246dc5382a7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-wheel-ignored-120x40-color-nerd.png",
+      "sha256": "a2061b004c8903137e87463cd59c8f02e11e0ef121099f02c32331723ca93d3f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-wheel-ignored-120x40-color-nerd.txt",
+      "sha256": "63dd94ad28233fd607921a98fb10f163162feeca11bed0281f2084581122a942"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-wheel-ignored-120x40-no-color-ascii.png",
+      "sha256": "6a001f95a99911109a354815e3fbcc1bb75341cdd3a627e2faa3da564c392d7b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-wheel-ignored-120x40-no-color-ascii.txt",
+      "sha256": "63dd94ad28233fd607921a98fb10f163162feeca11bed0281f2084581122a942"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-wheel-ignored-50x40-color-nerd.png",
+      "sha256": "128b038070cec6e4f3a105238f38064cac0b275f386d23d7364923e1c440b899"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-wheel-ignored-50x40-color-nerd.txt",
+      "sha256": "1bd72947ae37baacddcc8138672153f5819aab4226e62edfff82ab1f3291f915"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-wheel-ignored-50x40-no-color-ascii.png",
+      "sha256": "744f23c0179ebcc7838dc0e73c524b536cf1986d35e69bd71557c59927ec8c7d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-wheel-ignored-50x40-no-color-ascii.txt",
+      "sha256": "1bd72947ae37baacddcc8138672153f5819aab4226e62edfff82ab1f3291f915"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-wheel-ignored-80x24-color-nerd.png",
+      "sha256": "01ce20d8c6a21b568046b796615c988cd6e7c6e9825c6a1bb8c7cd240e75fe13"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-wheel-ignored-80x24-color-nerd.txt",
+      "sha256": "b818aae67e3944620d9b67479e96a42af959937f84b7bff166701246dc5382a7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-wheel-ignored-80x24-no-color-ascii.png",
+      "sha256": "ed0ddf822e99e299d720d41539f9655ac0038c25489f66e39eb0229ecf9f76a1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/mouse-overlay-wheel-ignored-80x24-no-color-ascii.txt",
+      "sha256": "b818aae67e3944620d9b67479e96a42af959937f84b7bff166701246dc5382a7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-120x40-color-nerd.png",
+      "sha256": "f542634cc68b75ef34eb15dbbf7aaafdaffb3a0b8e8551bc33347a8081a74032"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-120x40-color-nerd.txt",
+      "sha256": "b1363c1bfeecffe6de7ef24e4e75db7e84cd4e2de936ef1b97dea7e9f5a940cf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-120x40-no-color-ascii.png",
+      "sha256": "f980c2295b05e7a6c5108c6b2110c806eacce014243845059b393924ff8d1e61"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-120x40-no-color-ascii.txt",
+      "sha256": "b1363c1bfeecffe6de7ef24e4e75db7e84cd4e2de936ef1b97dea7e9f5a940cf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-50x40-color-nerd.png",
+      "sha256": "459cf3ee8e2ce7e6f75df889fc60f1b4b786be841d5871addcd9fd9519cb7ef9"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-50x40-color-nerd.txt",
+      "sha256": "bff3e2970a51e6c7556371acd86974cd7dc1be8c822e25ced7f08608dd66026a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-50x40-no-color-ascii.png",
+      "sha256": "a65621f0234def3f4486c6d02d01f36bd2bf1ca0044f57ed2d866d4295aaf9a8"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-50x40-no-color-ascii.txt",
+      "sha256": "bff3e2970a51e6c7556371acd86974cd7dc1be8c822e25ced7f08608dd66026a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-80x24-color-nerd.png",
+      "sha256": "cd0d97f250f02177bf6e1403d7fdd78178fc567ea8ad41c4f34f0834e333c096"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-80x24-color-nerd.txt",
+      "sha256": "72b63cd0b1c9503891daf5b1e4f24bac58d367ca30b04428e8d3df6cbf6a7a19"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-80x24-no-color-ascii.png",
+      "sha256": "d1cf5346e4c8787830e017f4ece23d38c02e82e9f9ca9a229fcc31554f9dd4d6"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-80x24-no-color-ascii.txt",
+      "sha256": "72b63cd0b1c9503891daf5b1e4f24bac58d367ca30b04428e8d3df6cbf6a7a19"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-busy-120x40-color-nerd.png",
+      "sha256": "fc3d79f811568a3e4839352571d6651ff8da1b9358d75cb52c46b02e014ddb2b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-busy-120x40-color-nerd.txt",
+      "sha256": "288570666cb7b68d7cecbf152119a7e8edaae37a2a4e11bea7b5ff1dc9a62f31"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-busy-120x40-no-color-ascii.png",
+      "sha256": "30fbbbee89b2b6aaa9f3c239e14bf48ee1e65f18c15e5994c332ab0a666fca2a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-busy-120x40-no-color-ascii.txt",
+      "sha256": "6b9459918daccd9c9bec0ccae9c81f352ea775c11fc3090f82cd0a676ec13c2b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-busy-50x40-color-nerd.png",
+      "sha256": "952a4544537434838352744803c4f7248e072d8c8faf1695c16c83db19c9011d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-busy-50x40-color-nerd.txt",
+      "sha256": "48c145a6fd586e1a3c318a8978a7d959e22c3429eb31fbb1bbf4d812c6af4e0e"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-busy-50x40-no-color-ascii.png",
+      "sha256": "f0250aa401ab6fcf2dcde0e525ca8ce0b55a774471bc7696285bc13754137fac"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-busy-50x40-no-color-ascii.txt",
+      "sha256": "8e0e928e1b2bf5446b1b9d0d1b2fc0228ac1f9ae3919926d4383506073e6c222"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-busy-80x24-color-nerd.png",
+      "sha256": "ceafa48f72d058595ba11aea7fde618f6998956235973e90bf6e10b1b8f73f0e"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-busy-80x24-color-nerd.txt",
+      "sha256": "b429506bab39fc535a2b4010d7dd049766989752c8872d1c0a01fcad6227315d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-busy-80x24-no-color-ascii.png",
+      "sha256": "ad772d92b49d20622e1c0ae8194798358c3a0fd542847a05a6b155b27354bd96"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-confirm-busy-80x24-no-color-ascii.txt",
+      "sha256": "dc28330168d10166ee3657dbe6d000212208b7300c073c0d51672a0daaefdca8"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-create-busy-120x40-color-nerd.png",
+      "sha256": "0c5c439a5740004cfe62bb6c755a4cabcc14f1130b43dcbf07bcadc000af9012"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-create-busy-120x40-color-nerd.txt",
+      "sha256": "c408beaecc6fda5ab4eb9904ccde900f84e52aa44f04168324b277aa6e418f65"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-create-busy-120x40-no-color-ascii.png",
+      "sha256": "780108882e7068bcdf900d77e3723dad56601d6b667a8b001cfa6526ecbe37ab"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-create-busy-120x40-no-color-ascii.txt",
+      "sha256": "72b6fe735ba3d89c1b11521f1a7977b921a32d00a67627af7b423a665cd9e3bf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-create-busy-50x40-color-nerd.png",
+      "sha256": "6cfd3d5b212784927134389a6517f557d9007c6bae6afb1ee947ed473289914a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-create-busy-50x40-color-nerd.txt",
+      "sha256": "3de006aefd674113e1fa14d29fed8070b5bc69ca4bc419f1c04f5bbe4fb1100a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-create-busy-50x40-no-color-ascii.png",
+      "sha256": "79d8941f270143e44f30e42b3e55e0360f2129369ea8ecc0c32beccbbd4ab1f6"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-create-busy-50x40-no-color-ascii.txt",
+      "sha256": "076a2f819a87e2ec6ef6403d2dab16775e8beb17ae7336a91af2a0e40d9c87c9"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-create-busy-80x24-color-nerd.png",
+      "sha256": "28e99915849e311430c8325fb3d89efbba11669c631fb8d41727605c9d1fdf28"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-create-busy-80x24-color-nerd.txt",
+      "sha256": "dc824282f05709c94d38587615137089b0097aa91fd4ada2740f9a5dc5adb1a7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-create-busy-80x24-no-color-ascii.png",
+      "sha256": "48526811cc5d31cb0c2a1453844040ad43210c97ad0d8adc18cf2bbdfed4d3e1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-create-busy-80x24-no-color-ascii.txt",
+      "sha256": "133b146dd2e633e57bef472bf48da68317ca404ae1c0a25ac65285d937dc9c5d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-map-120x40-color-nerd.png",
+      "sha256": "73a41734fe7d7629a6fab9a8baed041043545e6ef822fdb0a10ff826fcca2343"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-map-120x40-color-nerd.txt",
+      "sha256": "a6861bb55f946307d6d76ab4a8a1919ab12ff1e53fcd4ccb97ae0177c6622032"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-map-120x40-no-color-ascii.png",
+      "sha256": "e79c6ba7399337eaf60edc6a3da7305b0d16c5ac31da9825a6b2d558e7456030"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-map-120x40-no-color-ascii.txt",
+      "sha256": "a6861bb55f946307d6d76ab4a8a1919ab12ff1e53fcd4ccb97ae0177c6622032"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-map-50x40-color-nerd.png",
+      "sha256": "2e885ae671d657fca680fd55643f7392225a17268cede24e1c7b70fefb473500"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-map-50x40-color-nerd.txt",
+      "sha256": "5f477d2e19ff6ca6594c9fe3a578ec39148d8a4cb26f5bb1057c7e36d822a734"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-map-50x40-no-color-ascii.png",
+      "sha256": "11cb3ea567da3780ee3e0719f757bc9c3319f3ab262d70f9ecfeea963db1bebf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-map-50x40-no-color-ascii.txt",
+      "sha256": "5f477d2e19ff6ca6594c9fe3a578ec39148d8a4cb26f5bb1057c7e36d822a734"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-map-80x24-color-nerd.png",
+      "sha256": "c445fcafb7ee4eb1f74a78aeb1382a80189e3cd6f0dd0a72f8da7b190b716cf2"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-map-80x24-color-nerd.txt",
+      "sha256": "42512a90840a804ee687e03900eefda0ef518b810a87865627ca1be672d1c75a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-map-80x24-no-color-ascii.png",
+      "sha256": "2eca13a4fefa46666721b7ac2906e0d73a782c050dcfd7f3c67708b4a1b416c7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/onboarding-route-map-80x24-no-color-ascii.txt",
+      "sha256": "42512a90840a804ee687e03900eefda0ef518b810a87865627ca1be672d1c75a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-empty-120x40-color-nerd.png",
+      "sha256": "d3b4a815fbd49cee65fdbb64ebad513317a0d47834f7df2903b2ae05d97d0e32"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-empty-120x40-color-nerd.txt",
+      "sha256": "6506482f6cdca717fc8dfd4431872939fc14f36105803818c8eb15826487bf23"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-empty-120x40-no-color-ascii.png",
+      "sha256": "b8d79965e60b41a28bfe0b4ce0b164b9efd95cd2ed35a7d38ff3eb74f1347013"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-empty-120x40-no-color-ascii.txt",
+      "sha256": "48580952d012244537f003f8b698a8512843fc4b3dfeea7bdabdc12910b39924"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-empty-50x40-color-nerd.png",
+      "sha256": "c7abcf4b0a49fa79f0abeaf84fc570d5f1577416757da45d301081d5601dec67"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-empty-50x40-color-nerd.txt",
+      "sha256": "eff6c47d100f427567971a570b1f41534360506368b1d925a53a22ba99ac95a3"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-empty-50x40-no-color-ascii.png",
+      "sha256": "0a2f57ba7be3bae31aeae67a2f0c2c5f58c1fa07a8ecb80479e95dccb9f23c1f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-empty-50x40-no-color-ascii.txt",
+      "sha256": "eff6c47d100f427567971a570b1f41534360506368b1d925a53a22ba99ac95a3"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-empty-80x24-color-nerd.png",
+      "sha256": "f6dc0523234269fb0e809955d26da96253ddea8f6095e846de502b7e69040438"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-empty-80x24-color-nerd.txt",
+      "sha256": "177c88eac7c677a8032e31164609f58ad6f329b10b861e1b43f51019e7b4c6e8"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-empty-80x24-no-color-ascii.png",
+      "sha256": "50ffd6e26ff8fb60a34a88bf5c7efc053d3bf9fb44e046a85833e144d417117f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-empty-80x24-no-color-ascii.txt",
+      "sha256": "4b5e91c3a52331136564c23ae0002b82d55683305b4ee051fe08482d21a1bf64"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-pending-120x40-color-nerd.png",
+      "sha256": "56d81b1a8a080a46d07b0fda0dd236b8d7c2178c63d69f340478e857eeeace08"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-pending-120x40-color-nerd.txt",
+      "sha256": "fc6099345ab6ba689bce526d16808bd6a5190075eb51f647d548758db441fb96"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-pending-120x40-no-color-ascii.png",
+      "sha256": "1e0dcc9e4d76baf5482d8d0a98b2e562aaeb860c6981cb5f9d21817cf5b7d0eb"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-pending-120x40-no-color-ascii.txt",
+      "sha256": "6d11353e1f1183d9f9aa8849885c35bd406cbd8a12f0087ae4532df7b64082fe"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-pending-50x40-color-nerd.png",
+      "sha256": "b71d9f995660187122d1e03bcbe2dcee35ee62788157aa8f0b179a995a8af14d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-pending-50x40-color-nerd.txt",
+      "sha256": "192ac3772ac258780fb9c7ea2e8ab044ffecf8a8edbffa1bac9aa4e1fc10e9d7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-pending-50x40-no-color-ascii.png",
+      "sha256": "21f022bf94da4817773b576edfe2a5dfb10fd7c8b759094aa910c329f2fe9374"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-pending-50x40-no-color-ascii.txt",
+      "sha256": "192ac3772ac258780fb9c7ea2e8ab044ffecf8a8edbffa1bac9aa4e1fc10e9d7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-pending-80x24-color-nerd.png",
+      "sha256": "0858374d64cd72265fb69dec84e36a89ecda2968445e287fa5db69015538f53e"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-pending-80x24-color-nerd.txt",
+      "sha256": "06b61f5dd8199763519a35d80b680773c9bc75fea6c531251e1343c68939c32b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-pending-80x24-no-color-ascii.png",
+      "sha256": "37c740929b880ce77c76c133446c0738fbe3db1a9fc7f9cbcf73fc9e8d291cbc"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-pending-80x24-no-color-ascii.txt",
+      "sha256": "9c6501c70f298f28399f2ee92d17940291a546e31371e3ebae5db072cce6ef3f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-running-120x40-color-nerd.png",
+      "sha256": "806bfe6c75b5a63a81156cd0db19ca491fb3b26aaf719962d187c8f4ac46ca12"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-running-120x40-color-nerd.txt",
+      "sha256": "4f745ef0f9ba64ea984cdc54f3084b23fef52bcefeccc15b92ac71866feea7a0"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-running-120x40-no-color-ascii.png",
+      "sha256": "054ce44411b58e54dc9bdbb80817fc797f3db9187d67557581f99cf9906b7d16"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-running-120x40-no-color-ascii.txt",
+      "sha256": "807a69c20c7cb52f3e3263758edef05e7ed5244aae2b298177df15b42f8a1a8d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-running-50x40-color-nerd.png",
+      "sha256": "47f593558e60f0da8a195e7ebcdef06d0c04fea686584e83fd63f29d908f11e3"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-running-50x40-color-nerd.txt",
+      "sha256": "cb43eb9156dfcea6c712f65343db74f148e634453334d8845aa24c7d932d7f06"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-running-50x40-no-color-ascii.png",
+      "sha256": "c57138ad05832296d68de2d7cf57693bafd1af5bd18b84f1ccd7e47a8f92e845"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-running-50x40-no-color-ascii.txt",
+      "sha256": "8ffd20db59fe5e25ba5318016127514524f398c6826fc3a40f959e9060920632"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-running-80x24-color-nerd.png",
+      "sha256": "dcca941751bfb25772d84b749738fa26f83a676c6d994dad90b3366ece3fcc74"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-running-80x24-color-nerd.txt",
+      "sha256": "33a80680e92fc7b4defe9b90fb99a39a4e9779b62be3fe506c41220e30686c98"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-running-80x24-no-color-ascii.png",
+      "sha256": "022307cd5f99f9c66f9ca725ba65dcd5008d9b99a28c62d9e85374b5f007ef89"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T14-54-53.484Z/workspace-running-80x24-no-color-ascii.txt",
+      "sha256": "7cecd666d4e0888892d825e4983ed53b2d5047851aef56012eede8e570e86059"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-applied-120x40-color-nerd.png",
+      "sha256": "fd7b0dea8786c047efab804b81f62d7f2fb35ab1fa18be3f39fe4cf2a84ba27a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-applied-120x40-color-nerd.txt",
+      "sha256": "02e3f38e7e4c9afca4d5ea44c429a81c08d0243d37c03031fe94e63558298edf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-applied-120x40-no-color-ascii.png",
+      "sha256": "a502f9787309103469ad3e1b0c39c9ac81458908929882be5097d385308650b5"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-applied-120x40-no-color-ascii.txt",
+      "sha256": "02e3f38e7e4c9afca4d5ea44c429a81c08d0243d37c03031fe94e63558298edf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-applied-50x40-color-nerd.png",
+      "sha256": "43bbbb8f1a288594c2322a4b3517488785aaba8b3350c2ab71a2c3edff770226"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-applied-50x40-color-nerd.txt",
+      "sha256": "d63b17a87d3bf83d06237213e151405843959d49db4e3a9ec65fbf423c864b99"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-applied-50x40-no-color-ascii.png",
+      "sha256": "03a9f36a8975c3c5bed99814b1faba71bba154cb36f9982f48bd20b9a49fb3ac"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-applied-50x40-no-color-ascii.txt",
+      "sha256": "d63b17a87d3bf83d06237213e151405843959d49db4e3a9ec65fbf423c864b99"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-applied-80x24-color-nerd.png",
+      "sha256": "ce7f50b7a42364602004c44635d924bc8ac5c25ca1b09ca9c8da2a253aa6bc72"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-applied-80x24-color-nerd.txt",
+      "sha256": "661381f8e03535fa90006f57a5451f954499b818d9cfd7ccce95c747f72e167d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-applied-80x24-no-color-ascii.png",
+      "sha256": "d2e5c0188a884864585a4027b58fdeedfb66937e75f72c05b0fd2d487be2beea"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-applied-80x24-no-color-ascii.txt",
+      "sha256": "661381f8e03535fa90006f57a5451f954499b818d9cfd7ccce95c747f72e167d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-120x40-color-nerd.png",
+      "sha256": "827b74ad6d1f0ef911d1ee358127f081755ec065b75634f1cd4d3f62b2f6af37"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-120x40-color-nerd.txt",
+      "sha256": "1a9c4eb283b6d961a4512e077de9a5b74414ec4dacaed423171a2e6e70ccb4e1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-120x40-no-color-ascii.png",
+      "sha256": "fa2ef454175b51fed95e6d8d78a2bef7b05e75517842ccd4587f16c37f04cb9d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-120x40-no-color-ascii.txt",
+      "sha256": "1a9c4eb283b6d961a4512e077de9a5b74414ec4dacaed423171a2e6e70ccb4e1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-50x40-color-nerd.png",
+      "sha256": "ee482f1d4bd6340cefd7f526718fd1ea143e1012c9c3ae93639eb75a4a951a9d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-50x40-color-nerd.txt",
+      "sha256": "b716552e7c9f56663fb847dc10746adc53cad943929813824914dbd660f003eb"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-50x40-no-color-ascii.png",
+      "sha256": "99950208d48d61ed8e90d32262656d2489da8fddcc7c5b5e382aa914db58324e"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-50x40-no-color-ascii.txt",
+      "sha256": "b716552e7c9f56663fb847dc10746adc53cad943929813824914dbd660f003eb"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-80x24-color-nerd.png",
+      "sha256": "bf7c24e273fb02b3fcd1367922a3cf1047dae2f80ed76008f9b2e7f3146f801d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-80x24-color-nerd.txt",
+      "sha256": "8d0cd1a449debb64922bd07e66276d9726201cd36bc8f28440e87ea7ef0e5296"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-80x24-no-color-ascii.png",
+      "sha256": "9bebf5820cc39ec425a5a5c203a1f3ce6278066e088c8d8a2aead8d89c56f5a2"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-80x24-no-color-ascii.txt",
+      "sha256": "8d0cd1a449debb64922bd07e66276d9726201cd36bc8f28440e87ea7ef0e5296"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-default-120x40-color-nerd.png",
+      "sha256": "7490c86135f90743aafe3d1f1e0ed4a32416bea05c576e539775469028778f2b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-default-120x40-color-nerd.txt",
+      "sha256": "61aaeea6086b25dee3bdd78c84655ada2922f21427100679923e0a6e5a094c25"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-default-120x40-no-color-ascii.png",
+      "sha256": "cb4f46eea59b40223e0b7a9747caab2f170333ee819c5f2e79bb4638c93419ea"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-default-120x40-no-color-ascii.txt",
+      "sha256": "61aaeea6086b25dee3bdd78c84655ada2922f21427100679923e0a6e5a094c25"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-default-50x40-color-nerd.png",
+      "sha256": "38ce44895e2f59aaca05dd38b1e22e2384b7da1efe282d5280cc09ca5e111788"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-default-50x40-color-nerd.txt",
+      "sha256": "9c8ed68f2b745be9cd473b071b6c6c3cec317a36cdc9fec3e92b722814cfc140"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-default-50x40-no-color-ascii.png",
+      "sha256": "0421ff1ef6d16bce6abd5d4113c32dca8ba09ac976d7eed7e71f32994e3deed0"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-default-50x40-no-color-ascii.txt",
+      "sha256": "9c8ed68f2b745be9cd473b071b6c6c3cec317a36cdc9fec3e92b722814cfc140"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-default-80x24-color-nerd.png",
+      "sha256": "180f46681da70324a54bb5436b9f593735634a20c6634602eaa33f8fc08c1e49"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-default-80x24-color-nerd.txt",
+      "sha256": "6f3365e9e5661f4c34560c01d4a524673e87660fa2333ea81a5e351a6686290d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-default-80x24-no-color-ascii.png",
+      "sha256": "75285193a9fd5103e1e729883de718f8e9e362cfbf764210065f319c8b021852"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-candidate-effort-default-80x24-no-color-ascii.txt",
+      "sha256": "6f3365e9e5661f4c34560c01d4a524673e87660fa2333ea81a5e351a6686290d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-metadata-120x40-color-nerd.png",
+      "sha256": "ce1f24fe873dd326721873121a6d86af5a213b5f9c40972d0b5020a08bc8da53"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-metadata-120x40-color-nerd.txt",
+      "sha256": "0744822197da5c5e8a82484eabf4a952252258763fc2eccd7351edaeec34444d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-metadata-120x40-no-color-ascii.png",
+      "sha256": "09e8e65ff853352fc553e0d33229555ac79c284f587f7e056d0dc729c4ffe017"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-metadata-120x40-no-color-ascii.txt",
+      "sha256": "0744822197da5c5e8a82484eabf4a952252258763fc2eccd7351edaeec34444d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-metadata-50x40-color-nerd.png",
+      "sha256": "a588e843a8e1da0fcab08240f6cfbbc231821a19ace403e0c234f13b8e4a0e97"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-metadata-50x40-color-nerd.txt",
+      "sha256": "6c0a2515e29b3e5154ebf579188602010147e7f7ac585ebd48ad908af8565c54"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-metadata-50x40-no-color-ascii.png",
+      "sha256": "ca501045f3f33e194c87ccfe1a951dbead08baaa0133e4ebe2dfd63612e70489"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-metadata-50x40-no-color-ascii.txt",
+      "sha256": "6c0a2515e29b3e5154ebf579188602010147e7f7ac585ebd48ad908af8565c54"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-metadata-80x24-color-nerd.png",
+      "sha256": "9f4d191df45659e855238e6f00e1a4fd7346a2dab99339554adb2ed2b3f0f361"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-metadata-80x24-color-nerd.txt",
+      "sha256": "b8665d0fd5472c9bd9ace5e0e0874f3c0270e813a3a24311b426691fe03f0165"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-metadata-80x24-no-color-ascii.png",
+      "sha256": "2519713f750188196a61f061f90423fb48003e7f02ba372bf0a305e0fe138e80"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-metadata-80x24-no-color-ascii.txt",
+      "sha256": "b8665d0fd5472c9bd9ace5e0e0874f3c0270e813a3a24311b426691fe03f0165"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-modalities-120x40-color-nerd.png",
+      "sha256": "2b0b4527fdcac1cc133734b77e62774a80c81a96d0e7f8e384f882443297ed16"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-modalities-120x40-color-nerd.txt",
+      "sha256": "f352b31c9fcff8ab68d2c1e43f05a43e1e2de2420176fb44b9dc17b0b1ad1a39"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-modalities-120x40-no-color-ascii.png",
+      "sha256": "152aca76cbf88f4c24e967490aa631eade33fc3eb789d173dc4154ecc5f482ad"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-modalities-120x40-no-color-ascii.txt",
+      "sha256": "f352b31c9fcff8ab68d2c1e43f05a43e1e2de2420176fb44b9dc17b0b1ad1a39"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-modalities-50x40-color-nerd.png",
+      "sha256": "b5ae65366f9be65ba0cba68b73096718e40561e626c07d9cc772ff090d789193"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-modalities-50x40-color-nerd.txt",
+      "sha256": "acf737d96328af066f3a6c2af86c6517c8b1b732257f53d004ba3217c01d2a7a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-modalities-50x40-no-color-ascii.png",
+      "sha256": "b940bbc4dd03de979a74498523f847c222c40f86090913ce290d93213dbadc59"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-modalities-50x40-no-color-ascii.txt",
+      "sha256": "acf737d96328af066f3a6c2af86c6517c8b1b732257f53d004ba3217c01d2a7a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-modalities-80x24-color-nerd.png",
+      "sha256": "ff30d1e81b1a43adb483d3f137cf7477d7ef692b1394e824a2503de16c74d7b5"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-modalities-80x24-color-nerd.txt",
+      "sha256": "c072d52340c4bb049ef95c507874eafb543dcc39626bbf965391417588eb034b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-modalities-80x24-no-color-ascii.png",
+      "sha256": "39310605b80ec5d136940dada2c7980b5a6010fd459cc73f7dfb488710fcf385"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-modalities-80x24-no-color-ascii.txt",
+      "sha256": "c072d52340c4bb049ef95c507874eafb543dcc39626bbf965391417588eb034b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-saved-120x40-color-nerd.png",
+      "sha256": "4086f83cd10e9aa7182eebdae4f8cb36688b7ab3bdee7aee109cf78bbc161836"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-saved-120x40-color-nerd.txt",
+      "sha256": "fa1cbd077d966fb79c27c52aaebeabb7a24163ca532eefa4f3a2f255cb54b5ce"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-saved-120x40-no-color-ascii.png",
+      "sha256": "4ac62d48a4cb0fbc36c13ce208eaa40a5bb31a587112bb16960364736d176da4"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-saved-120x40-no-color-ascii.txt",
+      "sha256": "fa1cbd077d966fb79c27c52aaebeabb7a24163ca532eefa4f3a2f255cb54b5ce"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-saved-50x40-color-nerd.png",
+      "sha256": "5d7b2ee41a6446e3c7c87344fb961945dc82a89aef9eaac7a85f183051c1d0bd"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-saved-50x40-color-nerd.txt",
+      "sha256": "97adb567939716907a39c65ca5c8e41bcb3954ec3bffaaa1df8dde323313a9ab"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-saved-50x40-no-color-ascii.png",
+      "sha256": "0ecd71c150fbe9516f0975c174b968dbfbec1e40f82dcd2ac31ef63d36b41d59"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-saved-50x40-no-color-ascii.txt",
+      "sha256": "97adb567939716907a39c65ca5c8e41bcb3954ec3bffaaa1df8dde323313a9ab"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-saved-80x24-color-nerd.png",
+      "sha256": "69777a823c1d9b99035f1a5ddbff2a3b6550137f612e6831d37523c710612471"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-saved-80x24-color-nerd.txt",
+      "sha256": "1ae55ff7c44aba12c9c8d1d311ef127f4e60310b619bdc05c8b46cb9616be909"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-saved-80x24-no-color-ascii.png",
+      "sha256": "bee4b552f357d4719b073c73f2cebb709c8d1057272c52a94b7ae573e90cebec"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/declare-manual-saved-80x24-no-color-ascii.txt",
+      "sha256": "1ae55ff7c44aba12c9c8d1d311ef127f4e60310b619bdc05c8b46cb9616be909"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/manifest.json",
+      "sha256": "50ec8763c12377f3af4bea9d1e88f83af5047e0d0a07215428d0711a1fc41044"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-split-wheel-120x40-color-nerd.png",
+      "sha256": "024186603f2f2ed589b50eafb5f93a76d7271db927297d578b129210e8e8d230"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-split-wheel-120x40-color-nerd.txt",
+      "sha256": "2682f966f94f03468f86eea4b5aa27ba8cb4515980f02e47f4fddff3cf4c34a0"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-split-wheel-120x40-no-color-ascii.png",
+      "sha256": "0b8e0d6a8d107c85866dc1025eb4d298fa1d8cbade9c4c5c7f3c6f3779bd9efa"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-split-wheel-120x40-no-color-ascii.txt",
+      "sha256": "9558bff77e1a79e742e1577ff5f6baeb2ebfa43a8b2a0c32c9fdacb2f9b8f4c1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-split-wheel-50x40-color-nerd.png",
+      "sha256": "40c5c37b86b3a6b4e97516af2b8c13f2a0385e6aede3c7a48615c4c380e39672"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-split-wheel-50x40-color-nerd.txt",
+      "sha256": "a5d6633d8c90e14c263a8dd3d54807931b9035841978a3efb545fab87bc452bd"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-split-wheel-50x40-no-color-ascii.png",
+      "sha256": "dcffb24fbb1133b0d514899eb0770d0e843d71f5d4d4b5e5e6384944cb020dc6"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-split-wheel-50x40-no-color-ascii.txt",
+      "sha256": "a5d6633d8c90e14c263a8dd3d54807931b9035841978a3efb545fab87bc452bd"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-split-wheel-80x24-color-nerd.png",
+      "sha256": "8679cf4566b512049b96c8f5dbb5ca6596d2006bdfbfc3ced52d22506e6648f0"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-split-wheel-80x24-color-nerd.txt",
+      "sha256": "04978e738980a2635fffa811799a3ac2576bc7589d1861b35379c7246fca6012"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-split-wheel-80x24-no-color-ascii.png",
+      "sha256": "51f7490db4bc73112ebadd9326d3d1c7a8b945a3429147ac3ce32ef20cacaca1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-split-wheel-80x24-no-color-ascii.txt",
+      "sha256": "90cd35f6c96479eec18fca6eb9119f31b2d7a5033308e085cdb8f7c344bd2670"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-transcript-wheel-120x40-color-nerd.png",
+      "sha256": "9d1ebb162c6823b5f4b7be05ba59339ef48b49cb1a0dbff126e4f750ec734623"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-transcript-wheel-120x40-color-nerd.txt",
+      "sha256": "876e11ada07d726fe3ca833143bc45f4ee3ad55f8cbb40339b607b8b0914ff41"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-transcript-wheel-120x40-no-color-ascii.png",
+      "sha256": "e92e3819ea78a7544b48f486f4dc3d8446c3caf0e0ff024447601e9cf65d101f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-transcript-wheel-120x40-no-color-ascii.txt",
+      "sha256": "503bc3e014200106ab4e740b744dac868856392019dbf301cbbde41624d7d7ad"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-transcript-wheel-50x40-color-nerd.png",
+      "sha256": "2b85535c09a034c1c363716fe4913c6193d5c56f9038203b52e0798c6cec5341"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-transcript-wheel-50x40-color-nerd.txt",
+      "sha256": "b6c9a87d9b106f2b3586ff24268c22817e22aeb1e08cbaf9bc4b9c937729b280"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-transcript-wheel-50x40-no-color-ascii.png",
+      "sha256": "672746fb264a44fc6c0499a688eda0d57f13842540464248fd09f14ca9899960"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-transcript-wheel-50x40-no-color-ascii.txt",
+      "sha256": "b6c9a87d9b106f2b3586ff24268c22817e22aeb1e08cbaf9bc4b9c937729b280"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-transcript-wheel-80x24-color-nerd.png",
+      "sha256": "101421ed9200d8e01c9c9e5a707e31aec97bcf7f99864a41dc912c96c9700b53"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-transcript-wheel-80x24-color-nerd.txt",
+      "sha256": "83f263d8c4554f34b1687b87f9011e942bbc77f12925302ab058de1f6fa3f39a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-transcript-wheel-80x24-no-color-ascii.png",
+      "sha256": "393d2f89ea0a3165ec81c34b71dad5195868e1699c32801c9b68e807d6a68440"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-after-transcript-wheel-80x24-no-color-ascii.txt",
+      "sha256": "8f4f16d6742a6065d0587cc6ba108a67cfc211fe2a1eba30fb8cedd6a23c7350"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-before-120x40-color-nerd.png",
+      "sha256": "45c155b2e481e104edbe78356dc9d72a06ef42da8a17875d10c5f44e22cd49f2"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-before-120x40-color-nerd.txt",
+      "sha256": "0fd5b133efc07ca86db96e21159dfa82c739a08b3e2da399924b394f97d1e42a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-before-120x40-no-color-ascii.png",
+      "sha256": "7b4e6a9573100338a3465a805e76d099402f2ec632919a75fd05ff8f33f2ec3c"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-before-120x40-no-color-ascii.txt",
+      "sha256": "43a3a6c9bcbde9e40c3bd627d1bd13fa37dd6005ff6f434bb492965da3dd02c7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-before-50x40-color-nerd.png",
+      "sha256": "f4cb9207ea81fd5f56b0620c8114e3f51fefd1d53cea6c407b9e8231681b3410"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-before-50x40-color-nerd.txt",
+      "sha256": "c480a13fab26d8e9d9d8198a800bc905bc678917d1eeb73f31db5439828f2773"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-before-50x40-no-color-ascii.png",
+      "sha256": "be8f456370bce6be79481111dd32a16ba719b178d95ab0499eecf2c189185314"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-before-50x40-no-color-ascii.txt",
+      "sha256": "c480a13fab26d8e9d9d8198a800bc905bc678917d1eeb73f31db5439828f2773"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-before-80x24-color-nerd.png",
+      "sha256": "e665dea3a07f1a68db64dfd8a52dc23ec1b9ce7799c3fab64a0561ee04dbf547"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-before-80x24-color-nerd.txt",
+      "sha256": "e0a5e6d1ba56d73d9023d9088d9ed285579d5a9bc606a98c2934be0efa15b330"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-before-80x24-no-color-ascii.png",
+      "sha256": "322b2da98cf8f2cfcbfe1300ca6033f2386ac8cb400f9894f80b6f1c4a8ffd37"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-before-80x24-no-color-ascii.txt",
+      "sha256": "f20c2da7a4e72a0a1c42efe85e7cc696f26a8d53bc14750b54c0e91220fcb21f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-composer-wheel-ignored-120x40-color-nerd.png",
+      "sha256": "024186603f2f2ed589b50eafb5f93a76d7271db927297d578b129210e8e8d230"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-composer-wheel-ignored-120x40-color-nerd.txt",
+      "sha256": "2682f966f94f03468f86eea4b5aa27ba8cb4515980f02e47f4fddff3cf4c34a0"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-composer-wheel-ignored-120x40-no-color-ascii.png",
+      "sha256": "0b8e0d6a8d107c85866dc1025eb4d298fa1d8cbade9c4c5c7f3c6f3779bd9efa"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-composer-wheel-ignored-120x40-no-color-ascii.txt",
+      "sha256": "9558bff77e1a79e742e1577ff5f6baeb2ebfa43a8b2a0c32c9fdacb2f9b8f4c1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-composer-wheel-ignored-50x40-color-nerd.png",
+      "sha256": "40c5c37b86b3a6b4e97516af2b8c13f2a0385e6aede3c7a48615c4c380e39672"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-composer-wheel-ignored-50x40-color-nerd.txt",
+      "sha256": "a5d6633d8c90e14c263a8dd3d54807931b9035841978a3efb545fab87bc452bd"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-composer-wheel-ignored-50x40-no-color-ascii.png",
+      "sha256": "dcffb24fbb1133b0d514899eb0770d0e843d71f5d4d4b5e5e6384944cb020dc6"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-composer-wheel-ignored-50x40-no-color-ascii.txt",
+      "sha256": "a5d6633d8c90e14c263a8dd3d54807931b9035841978a3efb545fab87bc452bd"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-composer-wheel-ignored-80x24-color-nerd.png",
+      "sha256": "8679cf4566b512049b96c8f5dbb5ca6596d2006bdfbfc3ced52d22506e6648f0"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-composer-wheel-ignored-80x24-color-nerd.txt",
+      "sha256": "04978e738980a2635fffa811799a3ac2576bc7589d1861b35379c7246fca6012"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-composer-wheel-ignored-80x24-no-color-ascii.png",
+      "sha256": "51f7490db4bc73112ebadd9326d3d1c7a8b945a3429147ac3ce32ef20cacaca1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-composer-wheel-ignored-80x24-no-color-ascii.txt",
+      "sha256": "90cd35f6c96479eec18fca6eb9119f31b2d7a5033308e085cdb8f7c344bd2670"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-open-120x40-color-nerd.png",
+      "sha256": "a2061b004c8903137e87463cd59c8f02e11e0ef121099f02c32331723ca93d3f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-open-120x40-color-nerd.txt",
+      "sha256": "63dd94ad28233fd607921a98fb10f163162feeca11bed0281f2084581122a942"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-open-120x40-no-color-ascii.png",
+      "sha256": "6a001f95a99911109a354815e3fbcc1bb75341cdd3a627e2faa3da564c392d7b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-open-120x40-no-color-ascii.txt",
+      "sha256": "63dd94ad28233fd607921a98fb10f163162feeca11bed0281f2084581122a942"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-open-50x40-color-nerd.png",
+      "sha256": "128b038070cec6e4f3a105238f38064cac0b275f386d23d7364923e1c440b899"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-open-50x40-color-nerd.txt",
+      "sha256": "1bd72947ae37baacddcc8138672153f5819aab4226e62edfff82ab1f3291f915"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-open-50x40-no-color-ascii.png",
+      "sha256": "744f23c0179ebcc7838dc0e73c524b536cf1986d35e69bd71557c59927ec8c7d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-open-50x40-no-color-ascii.txt",
+      "sha256": "1bd72947ae37baacddcc8138672153f5819aab4226e62edfff82ab1f3291f915"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-open-80x24-color-nerd.png",
+      "sha256": "01ce20d8c6a21b568046b796615c988cd6e7c6e9825c6a1bb8c7cd240e75fe13"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-open-80x24-color-nerd.txt",
+      "sha256": "b818aae67e3944620d9b67479e96a42af959937f84b7bff166701246dc5382a7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-open-80x24-no-color-ascii.png",
+      "sha256": "ed0ddf822e99e299d720d41539f9655ac0038c25489f66e39eb0229ecf9f76a1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-open-80x24-no-color-ascii.txt",
+      "sha256": "b818aae67e3944620d9b67479e96a42af959937f84b7bff166701246dc5382a7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-wheel-ignored-120x40-color-nerd.png",
+      "sha256": "a2061b004c8903137e87463cd59c8f02e11e0ef121099f02c32331723ca93d3f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-wheel-ignored-120x40-color-nerd.txt",
+      "sha256": "63dd94ad28233fd607921a98fb10f163162feeca11bed0281f2084581122a942"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-wheel-ignored-120x40-no-color-ascii.png",
+      "sha256": "6a001f95a99911109a354815e3fbcc1bb75341cdd3a627e2faa3da564c392d7b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-wheel-ignored-120x40-no-color-ascii.txt",
+      "sha256": "63dd94ad28233fd607921a98fb10f163162feeca11bed0281f2084581122a942"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-wheel-ignored-50x40-color-nerd.png",
+      "sha256": "128b038070cec6e4f3a105238f38064cac0b275f386d23d7364923e1c440b899"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-wheel-ignored-50x40-color-nerd.txt",
+      "sha256": "1bd72947ae37baacddcc8138672153f5819aab4226e62edfff82ab1f3291f915"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-wheel-ignored-50x40-no-color-ascii.png",
+      "sha256": "744f23c0179ebcc7838dc0e73c524b536cf1986d35e69bd71557c59927ec8c7d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-wheel-ignored-50x40-no-color-ascii.txt",
+      "sha256": "1bd72947ae37baacddcc8138672153f5819aab4226e62edfff82ab1f3291f915"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-wheel-ignored-80x24-color-nerd.png",
+      "sha256": "01ce20d8c6a21b568046b796615c988cd6e7c6e9825c6a1bb8c7cd240e75fe13"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-wheel-ignored-80x24-color-nerd.txt",
+      "sha256": "b818aae67e3944620d9b67479e96a42af959937f84b7bff166701246dc5382a7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-wheel-ignored-80x24-no-color-ascii.png",
+      "sha256": "ed0ddf822e99e299d720d41539f9655ac0038c25489f66e39eb0229ecf9f76a1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/mouse-overlay-wheel-ignored-80x24-no-color-ascii.txt",
+      "sha256": "b818aae67e3944620d9b67479e96a42af959937f84b7bff166701246dc5382a7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-120x40-color-nerd.png",
+      "sha256": "f542634cc68b75ef34eb15dbbf7aaafdaffb3a0b8e8551bc33347a8081a74032"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-120x40-color-nerd.txt",
+      "sha256": "b1363c1bfeecffe6de7ef24e4e75db7e84cd4e2de936ef1b97dea7e9f5a940cf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-120x40-no-color-ascii.png",
+      "sha256": "f980c2295b05e7a6c5108c6b2110c806eacce014243845059b393924ff8d1e61"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-120x40-no-color-ascii.txt",
+      "sha256": "b1363c1bfeecffe6de7ef24e4e75db7e84cd4e2de936ef1b97dea7e9f5a940cf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-50x40-color-nerd.png",
+      "sha256": "459cf3ee8e2ce7e6f75df889fc60f1b4b786be841d5871addcd9fd9519cb7ef9"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-50x40-color-nerd.txt",
+      "sha256": "bff3e2970a51e6c7556371acd86974cd7dc1be8c822e25ced7f08608dd66026a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-50x40-no-color-ascii.png",
+      "sha256": "a65621f0234def3f4486c6d02d01f36bd2bf1ca0044f57ed2d866d4295aaf9a8"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-50x40-no-color-ascii.txt",
+      "sha256": "bff3e2970a51e6c7556371acd86974cd7dc1be8c822e25ced7f08608dd66026a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-80x24-color-nerd.png",
+      "sha256": "cd0d97f250f02177bf6e1403d7fdd78178fc567ea8ad41c4f34f0834e333c096"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-80x24-color-nerd.txt",
+      "sha256": "72b63cd0b1c9503891daf5b1e4f24bac58d367ca30b04428e8d3df6cbf6a7a19"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-80x24-no-color-ascii.png",
+      "sha256": "d1cf5346e4c8787830e017f4ece23d38c02e82e9f9ca9a229fcc31554f9dd4d6"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-80x24-no-color-ascii.txt",
+      "sha256": "72b63cd0b1c9503891daf5b1e4f24bac58d367ca30b04428e8d3df6cbf6a7a19"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-busy-120x40-color-nerd.png",
+      "sha256": "fc3d79f811568a3e4839352571d6651ff8da1b9358d75cb52c46b02e014ddb2b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-busy-120x40-color-nerd.txt",
+      "sha256": "288570666cb7b68d7cecbf152119a7e8edaae37a2a4e11bea7b5ff1dc9a62f31"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-busy-120x40-no-color-ascii.png",
+      "sha256": "0fac3461194ce65ac4bfa663d4295cbbaeb12cfd636edea0be4a288d5a7bbb25"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-busy-120x40-no-color-ascii.txt",
+      "sha256": "c82b167b8c2504f9321054cdc999dc11fda04dd7a206c0ac3c61f265d34ee3f3"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-busy-50x40-color-nerd.png",
+      "sha256": "952a4544537434838352744803c4f7248e072d8c8faf1695c16c83db19c9011d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-busy-50x40-color-nerd.txt",
+      "sha256": "48c145a6fd586e1a3c318a8978a7d959e22c3429eb31fbb1bbf4d812c6af4e0e"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-busy-50x40-no-color-ascii.png",
+      "sha256": "f0250aa401ab6fcf2dcde0e525ca8ce0b55a774471bc7696285bc13754137fac"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-busy-50x40-no-color-ascii.txt",
+      "sha256": "8e0e928e1b2bf5446b1b9d0d1b2fc0228ac1f9ae3919926d4383506073e6c222"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-busy-80x24-color-nerd.png",
+      "sha256": "d69b4fc383949a3d534747df03099e02e5636ab9270b4284d8c7d69f43cd7cde"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-busy-80x24-color-nerd.txt",
+      "sha256": "f917e1381ca9e3f89ca0fca9530ffbdce9a0e6ad5c616fa825c0d11df50d19fd"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-busy-80x24-no-color-ascii.png",
+      "sha256": "3164a72cbeeea8eddabe4c71d45efa9a192015745670216df94d4271c00a1b21"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-confirm-busy-80x24-no-color-ascii.txt",
+      "sha256": "24470d0ca681a5c9748040193902d36fc82647466a01b00b09382358e14015b1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-create-busy-120x40-color-nerd.png",
+      "sha256": "cb0ff52a19b987f0bf901060f1d40d33b72b3e841dde9d90f75e36acb0042fb1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-create-busy-120x40-color-nerd.txt",
+      "sha256": "3051d5a1807a3c3e3513110e9e2ebf5b3cc04551499598cd65a1badd40498692"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-create-busy-120x40-no-color-ascii.png",
+      "sha256": "780108882e7068bcdf900d77e3723dad56601d6b667a8b001cfa6526ecbe37ab"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-create-busy-120x40-no-color-ascii.txt",
+      "sha256": "72b6fe735ba3d89c1b11521f1a7977b921a32d00a67627af7b423a665cd9e3bf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-create-busy-50x40-color-nerd.png",
+      "sha256": "6cfd3d5b212784927134389a6517f557d9007c6bae6afb1ee947ed473289914a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-create-busy-50x40-color-nerd.txt",
+      "sha256": "3de006aefd674113e1fa14d29fed8070b5bc69ca4bc419f1c04f5bbe4fb1100a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-create-busy-50x40-no-color-ascii.png",
+      "sha256": "04fe6fb138f8a989bf6a104e91eba1e60d07894753494d382be07f9154a5486d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-create-busy-50x40-no-color-ascii.txt",
+      "sha256": "d6b5803afca2b89a76a3a176920165bac8ef5c4df9e942bc06c1a1a7be90e06b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-create-busy-80x24-color-nerd.png",
+      "sha256": "30bf2f9165d2e6227ec966a845d25b0a364cdaa3bb4b06d1edef4b9bfe9b05a6"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-create-busy-80x24-color-nerd.txt",
+      "sha256": "f596d7134e8d5fd06dc9ddabaca5fc7867dfa95d50526bd8124b166eeda4ccd3"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-create-busy-80x24-no-color-ascii.png",
+      "sha256": "48526811cc5d31cb0c2a1453844040ad43210c97ad0d8adc18cf2bbdfed4d3e1"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-create-busy-80x24-no-color-ascii.txt",
+      "sha256": "133b146dd2e633e57bef472bf48da68317ca404ae1c0a25ac65285d937dc9c5d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-map-120x40-color-nerd.png",
+      "sha256": "73a41734fe7d7629a6fab9a8baed041043545e6ef822fdb0a10ff826fcca2343"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-map-120x40-color-nerd.txt",
+      "sha256": "a6861bb55f946307d6d76ab4a8a1919ab12ff1e53fcd4ccb97ae0177c6622032"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-map-120x40-no-color-ascii.png",
+      "sha256": "e79c6ba7399337eaf60edc6a3da7305b0d16c5ac31da9825a6b2d558e7456030"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-map-120x40-no-color-ascii.txt",
+      "sha256": "a6861bb55f946307d6d76ab4a8a1919ab12ff1e53fcd4ccb97ae0177c6622032"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-map-50x40-color-nerd.png",
+      "sha256": "2e885ae671d657fca680fd55643f7392225a17268cede24e1c7b70fefb473500"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-map-50x40-color-nerd.txt",
+      "sha256": "5f477d2e19ff6ca6594c9fe3a578ec39148d8a4cb26f5bb1057c7e36d822a734"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-map-50x40-no-color-ascii.png",
+      "sha256": "11cb3ea567da3780ee3e0719f757bc9c3319f3ab262d70f9ecfeea963db1bebf"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-map-50x40-no-color-ascii.txt",
+      "sha256": "5f477d2e19ff6ca6594c9fe3a578ec39148d8a4cb26f5bb1057c7e36d822a734"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-map-80x24-color-nerd.png",
+      "sha256": "c445fcafb7ee4eb1f74a78aeb1382a80189e3cd6f0dd0a72f8da7b190b716cf2"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-map-80x24-color-nerd.txt",
+      "sha256": "42512a90840a804ee687e03900eefda0ef518b810a87865627ca1be672d1c75a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-map-80x24-no-color-ascii.png",
+      "sha256": "2eca13a4fefa46666721b7ac2906e0d73a782c050dcfd7f3c67708b4a1b416c7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/onboarding-route-map-80x24-no-color-ascii.txt",
+      "sha256": "42512a90840a804ee687e03900eefda0ef518b810a87865627ca1be672d1c75a"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-empty-120x40-color-nerd.png",
+      "sha256": "d3b4a815fbd49cee65fdbb64ebad513317a0d47834f7df2903b2ae05d97d0e32"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-empty-120x40-color-nerd.txt",
+      "sha256": "6506482f6cdca717fc8dfd4431872939fc14f36105803818c8eb15826487bf23"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-empty-120x40-no-color-ascii.png",
+      "sha256": "b8d79965e60b41a28bfe0b4ce0b164b9efd95cd2ed35a7d38ff3eb74f1347013"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-empty-120x40-no-color-ascii.txt",
+      "sha256": "48580952d012244537f003f8b698a8512843fc4b3dfeea7bdabdc12910b39924"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-empty-50x40-color-nerd.png",
+      "sha256": "c7abcf4b0a49fa79f0abeaf84fc570d5f1577416757da45d301081d5601dec67"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-empty-50x40-color-nerd.txt",
+      "sha256": "eff6c47d100f427567971a570b1f41534360506368b1d925a53a22ba99ac95a3"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-empty-50x40-no-color-ascii.png",
+      "sha256": "0a2f57ba7be3bae31aeae67a2f0c2c5f58c1fa07a8ecb80479e95dccb9f23c1f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-empty-50x40-no-color-ascii.txt",
+      "sha256": "eff6c47d100f427567971a570b1f41534360506368b1d925a53a22ba99ac95a3"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-empty-80x24-color-nerd.png",
+      "sha256": "f6dc0523234269fb0e809955d26da96253ddea8f6095e846de502b7e69040438"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-empty-80x24-color-nerd.txt",
+      "sha256": "177c88eac7c677a8032e31164609f58ad6f329b10b861e1b43f51019e7b4c6e8"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-empty-80x24-no-color-ascii.png",
+      "sha256": "50ffd6e26ff8fb60a34a88bf5c7efc053d3bf9fb44e046a85833e144d417117f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-empty-80x24-no-color-ascii.txt",
+      "sha256": "4b5e91c3a52331136564c23ae0002b82d55683305b4ee051fe08482d21a1bf64"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-pending-120x40-color-nerd.png",
+      "sha256": "56d81b1a8a080a46d07b0fda0dd236b8d7c2178c63d69f340478e857eeeace08"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-pending-120x40-color-nerd.txt",
+      "sha256": "fc6099345ab6ba689bce526d16808bd6a5190075eb51f647d548758db441fb96"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-pending-120x40-no-color-ascii.png",
+      "sha256": "1e0dcc9e4d76baf5482d8d0a98b2e562aaeb860c6981cb5f9d21817cf5b7d0eb"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-pending-120x40-no-color-ascii.txt",
+      "sha256": "6d11353e1f1183d9f9aa8849885c35bd406cbd8a12f0087ae4532df7b64082fe"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-pending-50x40-color-nerd.png",
+      "sha256": "b71d9f995660187122d1e03bcbe2dcee35ee62788157aa8f0b179a995a8af14d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-pending-50x40-color-nerd.txt",
+      "sha256": "192ac3772ac258780fb9c7ea2e8ab044ffecf8a8edbffa1bac9aa4e1fc10e9d7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-pending-50x40-no-color-ascii.png",
+      "sha256": "21f022bf94da4817773b576edfe2a5dfb10fd7c8b759094aa910c329f2fe9374"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-pending-50x40-no-color-ascii.txt",
+      "sha256": "192ac3772ac258780fb9c7ea2e8ab044ffecf8a8edbffa1bac9aa4e1fc10e9d7"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-pending-80x24-color-nerd.png",
+      "sha256": "0858374d64cd72265fb69dec84e36a89ecda2968445e287fa5db69015538f53e"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-pending-80x24-color-nerd.txt",
+      "sha256": "06b61f5dd8199763519a35d80b680773c9bc75fea6c531251e1343c68939c32b"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-pending-80x24-no-color-ascii.png",
+      "sha256": "37c740929b880ce77c76c133446c0738fbe3db1a9fc7f9cbcf73fc9e8d291cbc"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-pending-80x24-no-color-ascii.txt",
+      "sha256": "9c6501c70f298f28399f2ee92d17940291a546e31371e3ebae5db072cce6ef3f"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-running-120x40-color-nerd.png",
+      "sha256": "806bfe6c75b5a63a81156cd0db19ca491fb3b26aaf719962d187c8f4ac46ca12"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-running-120x40-color-nerd.txt",
+      "sha256": "4f745ef0f9ba64ea984cdc54f3084b23fef52bcefeccc15b92ac71866feea7a0"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-running-120x40-no-color-ascii.png",
+      "sha256": "054ce44411b58e54dc9bdbb80817fc797f3db9187d67557581f99cf9906b7d16"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-running-120x40-no-color-ascii.txt",
+      "sha256": "807a69c20c7cb52f3e3263758edef05e7ed5244aae2b298177df15b42f8a1a8d"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-running-50x40-color-nerd.png",
+      "sha256": "47f593558e60f0da8a195e7ebcdef06d0c04fea686584e83fd63f29d908f11e3"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-running-50x40-color-nerd.txt",
+      "sha256": "cb43eb9156dfcea6c712f65343db74f148e634453334d8845aa24c7d932d7f06"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-running-50x40-no-color-ascii.png",
+      "sha256": "c57138ad05832296d68de2d7cf57693bafd1af5bd18b84f1ccd7e47a8f92e845"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-running-50x40-no-color-ascii.txt",
+      "sha256": "8ffd20db59fe5e25ba5318016127514524f398c6826fc3a40f959e9060920632"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-running-80x24-color-nerd.png",
+      "sha256": "936e76270e9e38398a438764b2ab541c9c139c9c6fec9499fff298dab8196446"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-running-80x24-color-nerd.txt",
+      "sha256": "602d65e90e21b6771039bd3ca975bb10f38bc936e01fa4aee4f7648afb978226"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-running-80x24-no-color-ascii.png",
+      "sha256": "022307cd5f99f9c66f9ca725ba65dcd5008d9b99a28c62d9e85374b5f007ef89"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture-2026-10-10T15-27-36.878Z/workspace-running-80x24-no-color-ascii.txt",
+      "sha256": "7cecd666d4e0888892d825e4983ed53b2d5047851aef56012eede8e570e86059"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/capture.mjs",
+      "sha256": "c9248b880b6947f9be1e632ecaad0a3a6a4357f47627fa592019037abdf720d6"
+    },
+    {
+      "path": "artifacts/ledger-lab/verification-repairs-20261010/fixture.mjs",
+      "sha256": "eb9c11588938e40e88f3f7800e198934d815b499e204da1bd2dcf71117f1f619"
+    },
+    {
+      "path": "docs/architecture.md",
+      "sha256": "29211ace9f6e662e83e94268306731b40fa8bd198bc93fc64477fd416e69c3af"
+    },
+    {
+      "path": "docs/dev/tui-implementation-handoff.md",
+      "sha256": "ae6b35f91addc68c18ca151dd4e20b922ff737cd18e687f31fb9c9acfaf919e2"
+    },
+    {
+      "path": "docs/interface-contracts.md",
+      "sha256": "ecce3c09472d3708baadd9f7bfad0d91127249a271a9cadef028480b3fc1923c"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/.openspec.yaml",
+      "sha256": "9455b4b6647c936971321c0640f303e6a700095e614abb9f082158a07f68f703"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/design.md",
+      "sha256": "b45a644717379fb505f00a9cca72b8349a69a9d15b8f0b9467e5a6cf862b7215"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/implementation-plan.md",
+      "sha256": "59c8d0c91940bdfe733e4e87e3a086b5eaab08db744846f3a64bfc22e429a552"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/proposal.md",
+      "sha256": "b24772a90788585be56beb522ba232a1106807b4f3402095eef04da89f8c0adc"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/specs/agent/debug-harness/spec.md",
+      "sha256": "5af9a06e9cc3b200633f6ca76f0cf1874a137729aa032b5b50bc6510293cf789"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/specs/configuration/model-settings/spec.md",
+      "sha256": "838bd8faec0ede8156f714152c5a9a500e837348205ae200b95a0c4f5bba037a"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/specs/configuration/provider-catalog/spec.md",
+      "sha256": "e413fb89b33481866b39bbac6e63a89bb444e536577e3c11fc222add31d8ea46"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/specs/coordinator/context-maintenance/spec.md",
+      "sha256": "6a2ec20ecc24433cedcd970be12f37196b964d08aa5d63eb07ff71ae7587e54b"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/specs/coordinator/model-configuration/spec.md",
+      "sha256": "bb17d500c0cee8f52adf1a2ce5fa4d2c38ffc6a3d546d70b6f4897f8a803044f"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/specs/coordinator/session-runtime/spec.md",
+      "sha256": "b7f007075a9ae40b9fd23b4b6899484ff74bfc5df96c813e33b5c86398167e35"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/specs/testing/ledger-lab-rehearsal/spec.md",
+      "sha256": "017ebcd66429922536d5b856cccc34e2502b22ad545ba90263368eac22200aa7"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/specs/tui/input-protection/spec.md",
+      "sha256": "4d8b0e16f7d3ca2e4a719d789ef49c1da9e1ea600d66e9666145257a639913d8"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/specs/tui/planning-workspace/spec.md",
+      "sha256": "7c0c633906699ebac1a85a2275ed0175a2071340fcf6c7e7b39b25e7dc150cca"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/specs/tui/scope-initialization/spec.md",
+      "sha256": "8c634b2d24a656da29fc2bd57b4a51e33fd638903c1a78491d35872810ecaefc"
+    },
+    {
+      "path": "openspec/changes/repair-ledger-lab-verification-findings/tasks.md",
+      "sha256": "6979caae2604c5390d01a2953bf446c81c5ff7f48ebcb31bd5b5a3d2954f6c9b"
+    },
+    {
+      "path": "openspec/config.yaml",
+      "sha256": "44da7c7f3281ba614a9899287d7cf3f7681f212febb89610efb0ba2a2753e707"
+    },
+    {
+      "path": "src/adapters/agents/chat-model-factory.ts",
+      "sha256": "3eeed75d0ea39db69e1d367ca9bcc2c8e5252cc92bd50e69b07fe6b75c236e8b"
+    },
+    {
+      "path": "src/adapters/agents/provider-catalog.ts",
+      "sha256": "055888228e712a1d3f37e6a00f8631beb69a5140bb477f511ee739402280244a"
+    },
+    {
+      "path": "src/adapters/storage/checkpoint-store.ts",
+      "sha256": "db41e4ebccb6dee4466bf32b4a61e3cba82eb03cf11a39cbc95c80b80ce56f2a"
+    },
+    {
+      "path": "src/adapters/storage/history-display-projection.ts",
+      "sha256": "3b74905b3ce215671cccb5ab041d74ef0d90f0125ffc0271d01ab4d1b2214f06"
+    },
+    {
+      "path": "src/application/configuration/model-settings.ts",
+      "sha256": "0abe30e2a95be50d858d67e4e7bad2839da5ab1e4d2a885ec255bbaec5faca74"
+    },
+    {
+      "path": "src/application/configuration/project-config.ts",
+      "sha256": "cc3b10fd910ae6b82d6da75151ef818d35df0ff5a1bf9e9148f2b52de45f6573"
+    },
+    {
+      "path": "src/application/configuration/provider-catalog-conversion.ts",
+      "sha256": "12a6a8fb37b571e2c03846a72d2e7e967db65e66d48167187b6b3cf72640a3ca"
+    },
+    {
+      "path": "src/application/configuration/provider-catalog.ts",
+      "sha256": "c3927df8641b35b35a5f7e71f79f7a8868cc563f4f8f9a07898337bc4b0a088d"
+    },
+    {
+      "path": "src/application/configuration/provider-library.ts",
+      "sha256": "e6e96385ac6f15f0809d4ffd43ef55ef80dd6616752294b6b297c996b0b2d8b4"
+    },
+    {
+      "path": "src/application/controller-service.ts",
+      "sha256": "e555ac768f93b719fc1525346b05437dc8b361cc70a89a257063f9c4797309de"
+    },
+    {
+      "path": "src/application/coordinator/history-search.ts",
+      "sha256": "5dd1c2b93a6c9dddd035153ead202f4dc20cd3609a79e7a211987b13dad20570"
+    },
+    {
+      "path": "src/application/coordinator/history.ts",
+      "sha256": "74f38f6430a1287b6b316268c178b309323d90ebb9376bfe2ebb3eecdd8a871d"
+    },
+    {
+      "path": "src/application/coordinator/model-config-switch.ts",
+      "sha256": "75695185263a1f79d546bdda7402fe365fcf346bc4eca30bad84af482e695adb"
+    },
+    {
+      "path": "src/application/ports/debug-harness.ts",
+      "sha256": "607e3407fdddab6a65a1e98c282071519ae20868b9995f404adb79c93abf7edb"
+    },
+    {
+      "path": "src/application/tui/project-presentation.ts",
+      "sha256": "7c6e09501d9efda14d063a706e18df8a080872ad3af8ea9ab2817a95918a80e0"
+    },
+    {
+      "path": "src/application/tui/view-model.ts",
+      "sha256": "dcf5b0c424c64d3ade0cffb880e4e0fb6fa0c7b96425f1f32f0d96eb6c92d8b7"
+    },
+    {
+      "path": "src/bootstrap/debug-runtime.ts",
+      "sha256": "41475a8e61bba977c5c2b21d6e8076859882af7fb52db87d7ab72369e632a4a1"
+    },
+    {
+      "path": "src/bootstrap/foreground-planning-runtime.ts",
+      "sha256": "699c6adea21c5f90768ebf52b361b3c963a7be229eeca14d23ae3c89626125bd"
+    },
+    {
+      "path": "src/domain/coordinator/session-state.ts",
+      "sha256": "056389afaa53c9fc9d4162422be26f7a8b964493a0dd55b0f73bf9218f584a7e"
+    },
+    {
+      "path": "src/domain/model-configuration.ts",
+      "sha256": "e8a08e4aa42e97fe5746bc63871ffeb3cc46199b6bbcd58c9e57ac8ea4315f87"
+    },
+    {
+      "path": "src/interfaces/tui/app.tsx",
+      "sha256": "46790576dcdbbfd4e1a4a8cc9f7a12ae8681d2c4342b75698f00996106ab7a8e"
+    },
+    {
+      "path": "src/interfaces/tui/components/conversation.tsx",
+      "sha256": "2b886e7bcc7a251531d35f1456966d465557d326879ec319f35ebd56b09722e1"
+    },
+    {
+      "path": "src/interfaces/tui/components/event-drawer.tsx",
+      "sha256": "150b2353b2d8d574e6fe62def44630f02dbe168feebd3680d74f735716cc45fb"
+    },
+    {
+      "path": "src/interfaces/tui/components/model-settings-editor.tsx",
+      "sha256": "0503418be384b430c269afeea479a3ccd5ab858cd3165ee476629218fc00a684"
+    },
+    {
+      "path": "src/interfaces/tui/components/provider-library-editor.tsx",
+      "sha256": "3c67818c71830179b3124e852e6d30c7432f9aacecd6138a81a85cc17d1d23ba"
+    },
+    {
+      "path": "src/interfaces/tui/components/status-line.tsx",
+      "sha256": "fd79bb3f396f2f801e35a2308512358a23f7f3ae54c2511bd340772a58b4f9d9"
+    },
+    {
+      "path": "src/interfaces/tui/components/transcript.tsx",
+      "sha256": "322c942556fae9e71246596959819ccc9bf03c545776d1deff8d4e32719dda1b"
+    },
+    {
+      "path": "src/interfaces/tui/debug-app.tsx",
+      "sha256": "f02c78392bd142760980cebd0527a8b5d24fcfe57b2dd62ca709e93c82c0b368"
+    },
+    {
+      "path": "src/interfaces/tui/input/transcript-mouse.ts",
+      "sha256": "c62efb1721cc8d33b61742506ec73b9084b54ea0e1920dde6fe0c3a615e9cc2b"
+    },
+    {
+      "path": "src/interfaces/tui/render/transcript-reader.ts",
+      "sha256": "fa505a1ef25d11759d834265b6b515f8aba7f1e3fb02d3ba0e254d4e4fc7033a"
+    },
+    {
+      "path": "src/interfaces/tui/screens/startup-onboarding.tsx",
+      "sha256": "a5efcb2ac109af465e6bbc3f1cf2f7e0d1aafef5ac7b1b21653751af3064c1f1"
+    },
+    {
+      "path": "src/interfaces/tui/screens/workspace.tsx",
+      "sha256": "62da9adea48a2aeef9f1767ab195b0406d24fb3c96f958bdf6b721fdb05957d3"
+    },
+    {
+      "path": "src/workflow/coordinator/model-call.ts",
+      "sha256": "83e0588e20d18bf1f6fc9f81298638f267f3828f63c952956514c4656213598d"
+    },
+    {
+      "path": "src/workflow/coordinator/nodes.ts",
+      "sha256": "aecdb188ec0fcfdf3a6ff953ae0a069f009763f9bca8a5240f155e1021896232"
+    },
+    {
+      "path": "src/workflow/coordinator/turn-driver.ts",
+      "sha256": "82d1a3d4ab26af78f9cf32d9f92eb086a1902fda7649e80ac6af85bea67130dd"
+    },
+    {
+      "path": "tests/acceptance/ledger-lab-cleanup.test.ts",
+      "sha256": "17e07bf985a9a1b9f1257a6a72c0d428468e4e82cc4107f8288a7274740e46fe"
+    },
+    {
+      "path": "tests/adapters/chat-model-factory.test.ts",
+      "sha256": "35a19f46024259861d2afaf7a738b353008829e8c3efca20ea86a9e261eaf0ac"
+    },
+    {
+      "path": "tests/adapters/checkpoint-store.test.ts",
+      "sha256": "9ee8478fa802c5bcf769ec537d96f7e2d303a2599ce03d1fbfa3fcbb057c4a19"
+    },
+    {
+      "path": "tests/adapters/history-display-projection.test.ts",
+      "sha256": "3dd72d0d84f07dae0a7521c4420b67bbe88ca46317c3685af6be355de6dde009"
+    },
+    {
+      "path": "tests/adapters/history-inspection.test.ts",
+      "sha256": "3a133181fb65c7802c3c966ce463d16f223643706bb16e5526f8dd264200804e"
+    },
+    {
+      "path": "tests/application/controller-service.test.ts",
+      "sha256": "4acecbd4a601636b6541ddfce5879b5333dd3563f7e439ee6b65a043b5a4ecda"
+    },
+    {
+      "path": "tests/application/history-search.test.ts",
+      "sha256": "e18a63a691dc9f1f3c477503ea9747c003616166411dbe10a04d5ec29def3830"
+    },
+    {
+      "path": "tests/application/project-presentation.test.ts",
+      "sha256": "0d1c6f65eddad3297de9c1432395f37a16e9c49772bb0d37a7c6e5091a3f758c"
+    },
+    {
+      "path": "tests/bootstrap/debug-runtime.test.ts",
+      "sha256": "a60315d17bc25063751ce98e22191ce8363c15f2439594ce6104bec56547022f"
+    },
+    {
+      "path": "tests/bootstrap/foreground-planning-runtime.test.ts",
+      "sha256": "d4bc3e225200cb0f7af3d682d5d918c6de53587ae9b95a118ea6750d9e2c1629"
+    },
+    {
+      "path": "tests/configuration/provider-catalog.test.ts",
+      "sha256": "8b5bc229c389b7e4f9d8822c55f024d1ee65a93acb1fadd96e7ff2e6a021585f"
+    },
+    {
+      "path": "tests/configuration/provider-library.test.ts",
+      "sha256": "d9aad8573841b9cea04324fdeb08c49b2a54d4a9282a030ec782eb22844d533b"
+    },
+    {
+      "path": "tests/integration/minimax-m3-coordinator-smoke.test.ts",
+      "sha256": "b78a457b91b176e315c007de2f28f56ba34b09ab6b9f805f1bb6ef327315bd8e"
+    },
+    {
+      "path": "tests/tui/debug-app.test.tsx",
+      "sha256": "7adba9b477426f40bca06bb34bfea20e991300c3fd868e93a0f7fb782ed3f27b"
+    },
+    {
+      "path": "tests/tui/harness.ts",
+      "sha256": "cde193c168a898a7c6da029dc0316349cd23c0318fa60ca8ff9925bca8799c90"
+    },
+    {
+      "path": "tests/tui/host-wiring.test.ts",
+      "sha256": "683a1cb9d00c4becb703db52d4c2af128e7641176078de6d4422c3a30b740ef6"
+    },
+    {
+      "path": "tests/tui/input-paths.test.tsx",
+      "sha256": "5a43e1740fcf01c576687958daea4318a23812093e510f11ea5d7d0e69a9b272"
+    },
+    {
+      "path": "tests/tui/input-protection.test.tsx",
+      "sha256": "615cf541071a9837135852ec46a706a82efcd1b91899190b1c3aca51201eef74"
+    },
+    {
+      "path": "tests/tui/model-settings.test.tsx",
+      "sha256": "ce9ff4b19f6456e64201b0f47c5df319ee67e634bce9f59e645ae84dc85d7042"
+    },
+    {
+      "path": "tests/tui/no-side-effect.test.tsx",
+      "sha256": "442fd96c1de5f4f716fc7f172fa254d280ba59b95c417a6a7f124c7fb685eaa2"
+    },
+    {
+      "path": "tests/tui/provider-library-editor.test.tsx",
+      "sha256": "47e430723a277202b29eea6be785371b101fb3ee0c5e05e1d627dad270e96c98"
+    },
+    {
+      "path": "tests/tui/status-line.test.tsx",
+      "sha256": "2f9aa7536074beee8bb3ab1d65a950d1966aa5908dfee7e1223d59cf1863c990"
+    },
+    {
+      "path": "tests/tui/transcript-mouse.test.ts",
+      "sha256": "634f4f3c6239f0118c98c54ee36a789ad3c33f411a6cdcad04622013d7bac3ae"
+    },
+    {
+      "path": "tests/tui/transcript-reader.test.ts",
+      "sha256": "50b6e8b90fc5cd1b23b1e295a1881eac04b64f4cdf5ddd60fa4cc63197554c5f"
+    },
+    {
+      "path": "tests/tui/workspace.test.tsx",
+      "sha256": "05955b7a5e8fa27f252f4be6f85c881a07b3ff58f12b02701da020fb44a291bd"
+    },
+    {
+      "path": "tests/workflow/agent-turn-driver.test.ts",
+      "sha256": "252e26d8321ff06627a47ef797ba455db7486130c35ce2277dd4096fcf02fa7b"
+    },
+    {
+      "path": "tests/workflow/coordinator-graph.test.ts",
+      "sha256": "60ee412c7a002cd4e9d17d16092b1bccf13eb0fb00f3169f38d5d703af98ae21"
+    },
+    {
+      "path": "tests/workflow/coordinator-tool-loop.test.ts",
+      "sha256": "e676583af97358a4d8ca1d4bd3fc35cd51739cf5e53311bb256513a855c416e1"
+    },
+    {
+      "path": "tests/workflow/execution-tools.test.ts",
+      "sha256": "3b81339b3cac77514ed9ed870b5796ae3734b5af77e34d4a3ea37a61e6746419"
+    }
+  ]
+}

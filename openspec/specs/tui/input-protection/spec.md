@@ -125,6 +125,7 @@
 #### Scenario: 重新核验未决提交
 - **WHEN** 用户在记录管理中对一条核验不可用的提交触发重新核验
 - **THEN** 系统以原身份重新查询，并按已受理、未发现、内容冲突或不可核验更新状态
+
 ### Requirement: 光标插入与原子粘贴块
 粘贴 SHALL 在光标处插入，把 CRLF/CR 规范为 LF，保留缩进、tab 与末尾空行。超过 1000 Unicode code points 的单次粘贴 SHALL 显示有稳定身份、序号和字符数的折叠块；1000 及以下 SHALL 为普通文本。块 SHALL 原子移动和删除，内部不可编辑。完整展开正文 SHALL 是唯一发送载荷；保存 SHALL 只记录块身份与有序非重叠范围，光标 SHALL 位于 grapheme 边界且不在块内。容量 SHALL 按全文计量一次，不截断。`/paste` 与 Palette SHALL 提供有界全文查看，Esc SHALL 恢复原草稿和光标。
 
@@ -171,3 +172,12 @@
 #### Scenario: 调试草稿与未知提交恢复
 - **WHEN** 调试中编辑含折叠粘贴的多行草稿，或提交结果未知后退出重启
 - **THEN** 原正文、光标、粘贴范围与原提交身份可恢复，未知结果仅核验而不自动重发，其他会话输入不变
+
+### Requirement: Immediate pending submission presentation
+完整提交快照落盘后 SHALL 立即从 composer 分离原草稿并在 transcript 标记待受理正文，允许编辑下一条但原 lane 未结清前不再次发送。accepted SHALL 按稳定 submissionId 去重；拒绝/unknown SHALL 保留原快照供显式恢复，MUST NOT 覆盖后来输入。回答 SHALL 保留原 interaction/revision。
+#### Scenario: 延迟受理继续编辑
+- **WHEN** 用户发送消息且应用受理延迟，立即编辑下一条
+- **THEN** 原文作为待受理消息可见，composer 只含新草稿，旧结果不清空它且不产生第二次发送
+#### Scenario: 快照写失败与未知
+- **WHEN** 保存快照失败或已保存提交返回 unknown
+- **THEN** 保存失败不发送且保留原草稿，unknown 保留原身份与快照等待核验而不重发

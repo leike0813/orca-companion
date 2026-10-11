@@ -16,6 +16,7 @@ import type { SubmissionStatus } from '../coordinator/submission-status.js';
 import type { UiInputStore } from './ui-input-store.js';
 import type { ProviderCatalog } from '../configuration/provider-catalog.js';
 import type { ProviderLibrary } from '../configuration/provider-library.js';
+import type { ProjectContextStatus } from '../tui/project-presentation.js';
 
 /** 拒绝原因的封闭取值；界面按 code 判定，不解析文案。 */
 export const DEBUG_HARNESS_CODES = [
@@ -109,6 +110,8 @@ export type DebugSessionState = {
   readonly turn: AgentTurnState;
   /** 本进程是否有在途轮次；界面据此显示「正在运行」而不必猜轮次状态。 */
   readonly running: boolean;
+  /** 最近一次已提交请求的真实用量与声明窗口；读不到时为 `unavailable`，界面据此渲染共享状态行。 */
+  readonly context?: ProjectContextStatus;
 };
 
 export type DebugStateLoad =
