@@ -1,0 +1,2286 @@
+{
+  "observedAt": "2026-10-12T14:00:29.671Z",
+  "tasks": {
+    "done": 7,
+    "total": 12
+  },
+  "newProductionRegistrations": [],
+  "validation": {
+    "scopedVitest": { "passed": 76, "skipped": 2 },
+    "typecheck": "passed",
+    "scopedEslint": "passed",
+    "build": "passed",
+    "openSpecStrict": "passed",
+    "gitDiffCheck": "passed",
+    "fullTestsRerun": false
+  },
+  "kilo": {
+    "package": {
+      "name": "@kilocode/cli",
+      "version": "7.8.8",
+      "path": "/home/joshua/.nvm/versions/node/v24.12.0/lib/node_modules/@kilocode/cli"
+    },
+    "defaultTui": {
+      "observedAt": "2026-10-12T13:58:45.927Z",
+      "package": {
+        "name": "@kilocode/cli",
+        "version": "7.8.8",
+        "path": "/home/joshua/.nvm/versions/node/v24.12.0/lib/node_modules/@kilocode/cli"
+      },
+      "entry": "default-full-tui",
+      "launchId": "default-tui-probe-20261012:kilo",
+      "taskId": "task_7a600e0eb80f",
+      "dispatchId": "ctx_354f0f437f96",
+      "terminalHandle": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+      "report": {
+        "harness": "kilo",
+        "sessionId": "ses_ecf98ec5affesgpu9oYvvS77w0",
+        "transcriptPath": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ecf98ec5affesgpu9oYvvS77w0.json",
+        "cwd": "/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+        "observedAt": "2026-10-12T13:57:47.382Z",
+        "stateRoot": "/home/joshua/.local/share/kilo",
+        "runtimeRoots": [
+          "/home/joshua/.local/share/kilo",
+          "/home/joshua/.local/state/kilo",
+          "/home/joshua/.cache/kilo"
+        ]
+      },
+      "proof": {
+        "kind": "proven",
+        "proof": {
+          "providerSessionId": "ses_ecf98ec5affesgpu9oYvvS77w0",
+          "transcriptRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ecf98ec5affesgpu9oYvvS77w0.json",
+          "observedAt": "2026-10-12T13:57:47.382Z"
+        }
+      },
+      "coverage": {
+        "kind": "covered",
+        "evidence": {
+          "coverage": "complete",
+          "readableRange": {
+            "transcriptRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ecf98ec5affesgpu9oYvvS77w0.json",
+            "fromEventRef": "msg_1306726aa001aAtEP4FRMfhPKM",
+            "toEventRef": "msg_130676a4e001zmzuvc3Zqq3Xhs"
+          },
+          "gaps": [],
+          "lastCompleteEventRef": "msg_130676a4e001zmzuvc3Zqq3Xhs"
+        }
+      },
+      "models": [
+        "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview"
+      ],
+      "messageCount": 3,
+      "receipts": "/var/tmp/orca-harness-acceptance-ncWTVr/kilo-default-probe-20261012-receipts.jsonl",
+      "qualification": "input/session probe only; full role/resume/recovery/mixed matrix incomplete"
+    },
+    "defaultOutcomes": [
+      {
+        "at": "2026-10-12T13:43:46.923Z",
+        "args": [
+          "terminal",
+          "create"
+        ],
+        "response": {
+          "id": "8a6da0bc-ddec-4392-904d-780cc6fcd5b3",
+          "ok": true,
+          "result": {
+            "terminal": {
+              "handle": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+              "tabId": "068dcf6e-0b5a-494f-b69a-b355b6ec041d",
+              "paneKey": "068dcf6e-0b5a-494f-b69a-b355b6ec041d:283b219e-dada-4ceb-ad55-3ec5cc51174f",
+              "ptyId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@f565fd23",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "title": "ocp-kilo-default-tui-probe",
+              "executionHostId": "local",
+              "incarnationId": "2c27ec82-042f-45ed-8239-ac5727b27c14",
+              "hostPlatform": "linux",
+              "surface": "background",
+              "warning": "Terminal term_7f0f3740-8a8c-46bb-986f-da323f9ff82d is running, but Orca could not make it discoverable. Run `orca terminal focus --terminal term_7f0f3740-8a8c-46bb-986f-da323f9ff82d` to reveal and focus it."
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "at": "2026-10-12T13:43:48.308Z",
+        "args": [
+          "orchestration",
+          "worker-show"
+        ],
+        "response": {
+          "id": "54b99a43-7663-4102-a36c-76d6747617c2",
+          "ok": true,
+          "result": {
+            "dispatch": {
+              "id": "ctx_3b76eba70c9d",
+              "runId": "run_d394e13d9181",
+              "taskId": "task_fea23fc4b8d0",
+              "task_id": "task_fea23fc4b8d0",
+              "contractVersion": 1,
+              "assigneeHandle": "term_09e64615-86eb-4da3-9322-fa6f1bda7930",
+              "assigneePaneKey": "aeb191da-6139-4ee0-921c-e37c4f992ee6:984d4cba-94ba-4be3-b9e1-54805a62c261",
+              "processIncarnation": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@a745f52b:b8ea7060-62a1-446c-a26c-12e92011cf86",
+              "capabilityRevokedAt": "2026-10-12T13:24:02.007Z",
+              "retryOfDispatchId": null,
+              "creatorDispatchId": null,
+              "hostScope": {
+                "kind": "local",
+                "hostId": "local"
+              },
+              "status": "completed",
+              "failureCount": 0,
+              "lastFailure": null,
+              "terminationReason": null,
+              "depth": 1,
+              "dispatchedAt": "2026-10-12 13:22:56",
+              "completedAt": "2026-10-12T13:24:02.007Z",
+              "createdAt": "2026-10-12 13:22:56",
+              "lastHeartbeatAt": null
+            },
+            "worker": {
+              "dispatchId": "ctx_3b76eba70c9d",
+              "runtimeEpoch": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+              "state": "succeeded",
+              "stage": "settled",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "agentTerminalHandle": "term_09e64615-86eb-4da3-9322-fa6f1bda7930",
+              "setupState": "not_applicable",
+              "effects": [
+                {
+                  "kind": "worktree",
+                  "action": "reused",
+                  "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2"
+                },
+                {
+                  "kind": "setup",
+                  "action": "not_applicable",
+                  "state": "not_applicable"
+                },
+                {
+                  "kind": "terminal",
+                  "role": "agent",
+                  "action": "reused",
+                  "id": "term_09e64615-86eb-4da3-9322-fa6f1bda7930"
+                },
+                {
+                  "kind": "dispatch_input",
+                  "role": "agent",
+                  "id": "term_09e64615-86eb-4da3-9322-fa6f1bda7930",
+                  "state": "accepted"
+                }
+              ],
+              "residualResources": [],
+              "startOptions": {
+                "worktree": "path:/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "mode": {
+                  "mode": "terminal",
+                  "preferred": "terminal",
+                  "reason": "user_default",
+                  "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+                },
+                "resolvedWorktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "name": null,
+                "repo": null,
+                "baseBranch": null,
+                "terminal": "term_09e64615-86eb-4da3-9322-fa6f1bda7930",
+                "agent": null,
+                "launch": {
+                  "requested": {
+                    "agent": null,
+                    "model": null,
+                    "effort": null
+                  },
+                  "effective": {
+                    "agent": null,
+                    "model": null,
+                    "effort": null
+                  }
+                },
+                "timeoutMs": 300000,
+                "setup": "not_applicable",
+                "setupSource": "existing_worktree"
+              },
+              "lastError": null,
+              "createdAt": "2026-10-12 13:22:56",
+              "updatedAt": "2026-10-12T13:24:02.008Z"
+            },
+            "projection": {
+              "id": "ctx_3b76eba70c9d",
+              "dispatchId": "ctx_3b76eba70c9d",
+              "taskId": "task_fea23fc4b8d0",
+              "runId": "run_d394e13d9181",
+              "role": "worker",
+              "parent": null,
+              "provider": null,
+              "host": {
+                "kind": "local",
+                "id": "local"
+              },
+              "workspace": {
+                "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "kind": "folder_or_worktree"
+              },
+              "stage": {
+                "worker": "succeeded",
+                "dispatch": "completed",
+                "detail": "settled",
+                "activity": "unknown"
+              },
+              "outcome": "succeeded",
+              "liveness": {
+                "verdict": "unverifiable",
+                "reason": "missing_status"
+              },
+              "evidence": {
+                "durable": true,
+                "liveStatus": "unavailable",
+                "lastObservedAt": null
+              },
+              "resource": {
+                "state": "external",
+                "id": "wtr_1f7193ae3103",
+                "ownerDispatchId": "ctx_3b76eba70c9d",
+                "releaseState": "not_requested",
+                "terminalState": "retained"
+              },
+              "nextAction": {
+                "kind": "none",
+                "argv": []
+              },
+              "attention": {
+                "categories": [
+                  "unverifiable",
+                  "root_completion"
+                ],
+                "requiresAction": true
+              }
+            },
+            "terminal": {
+              "handle": "term_09e64615-86eb-4da3-9322-fa6f1bda7930",
+              "ptyId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@a745f52b",
+              "incarnationId": "b8ea7060-62a1-446c-a26c-12e92011cf86",
+              "orphaned": false,
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "worktreePath": "/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "branch": "refs/heads/main",
+              "tabId": "aeb191da-6139-4ee0-921c-e37c4f992ee6",
+              "leafId": "984d4cba-94ba-4be3-b9e1-54805a62c261",
+              "title": "'node'",
+              "connected": true,
+              "writable": true,
+              "lastOutputAt": 1791812628273,
+              "preview": "⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝■⬝⬝⬝⬝⬝⬝⬝■■⬝⬝⬝⬝⬝⬝■■■⬝⬝⬝⬝⬝■■■■⬝⬝⬝⬝■■■■■⬝⬝⬝■■■■■■⬝⬝⬝■■■■■■⬝⬝⬝■■■■■■⬝⬝⬝■■■■■⬝⬝⬝⬝■■■■⬝⬝⬝⬝⬝■■■⬝⬝⬝⬝⬝⬝■■⬝⬝⬝⬝⬝⬝⬝■⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝■■⬝⬝⬝⬝⬝■■■⬝⬝⬝⬝■■■■⬝⬝⬝■■■■■⬝⬝■■■■■■⬝■■■■■■⬝■■■■■■⬝⬝■■■■■⬝⬝⬝",
+              "executionHostId": "local",
+              "agentIdentity": "kilo",
+              "paneRuntimeId": -1,
+              "rendererGraphEpoch": 0,
+              "agentWait": null
+            },
+            "observation": {
+              "status": "live",
+              "exactWorker": true,
+              "agentWait": null
+            },
+            "terminalResource": {
+              "id": "wtr_1f7193ae3103",
+              "ownershipState": "external",
+              "releaseState": "not_requested",
+              "retainedReason": "external_terminal",
+              "terminalHandle": "term_09e64615-86eb-4da3-9322-fa6f1bda7930",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "endpointId": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+              "endpointIncarnation": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@a745f52b:b8ea7060-62a1-446c-a26c-12e92011cf86",
+              "originDispatchId": "ctx_3b76eba70c9d",
+              "ownerDispatchId": "ctx_3b76eba70c9d",
+              "releaseRequestedAt": null,
+              "releaseCompletedAt": null,
+              "releaseError": null,
+              "recoveryAttemptCount": 0,
+              "lastRecoveryAt": null,
+              "archive": {
+                "source": null,
+                "status": null
+              }
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "at": "2026-10-12T13:44:19.498Z",
+        "args": [
+          "terminal",
+          "close"
+        ],
+        "response": {
+          "id": "895f6805-5d7a-4c3a-85e5-7e215bb5e4ca",
+          "ok": true,
+          "result": {
+            "close": {
+              "handle": "term_09e64615-86eb-4da3-9322-fa6f1bda7930",
+              "tabId": "aeb191da-6139-4ee0-921c-e37c4f992ee6",
+              "ptyKilled": true
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "at": "2026-10-12T13:53:57.806Z",
+        "args": [
+          "terminal",
+          "read"
+        ],
+        "response": {
+          "id": "d9890b70-dce3-4e51-9f38-2fac199381bb",
+          "ok": true,
+          "result": {
+            "terminal": {
+              "handle": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+              "status": "running",
+              "tail": [
+                "                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏",
+                "                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██",
+                "                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████",
+                "                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀",
+                "                       ┃",
+                "                       ┃  Ask anything... \"Fix broken tests\"",
+                "                       ┃",
+                "                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)",
+                "                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
+                "                                                      ctrl+t variants  tab agents  ctrl+p commands",
+                "                          ● Try Kilo with Your Team — Free for 14 Days (6 new)",
+                "                            Get usage analytics, centralized billing, shared context, and other",
+                "                            features you need to scale AI coding across your org.",
+                "                          ● Tip Press ctrl+g , home to jump to the beginning of the conversation",
+                "  /var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-     ⊙ 4 MCP /status    7.8.8",
+                "  40d9-99fe-3f17689570f2:main"
+              ],
+              "truncated": false,
+              "limited": false,
+              "oldestCursor": "0",
+              "nextCursor": "2",
+              "latestCursor": "2",
+              "returnedLineCount": 16,
+              "source": "screen"
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "at": "2026-10-12T13:53:58.320Z",
+        "args": [
+          "terminal",
+          "wait"
+        ],
+        "response": {
+          "id": "c607631b-9ac6-4f01-81cb-bb0d543fdefc",
+          "ok": true,
+          "result": {
+            "wait": {
+              "handle": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+              "condition": "tui-idle",
+              "satisfied": true,
+              "status": "running",
+              "exitCode": null
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "at": "2026-10-12T13:57:03.991Z",
+        "args": [
+          "orchestration",
+          "worker-start"
+        ],
+        "response": {
+          "id": "f45819fd-b0af-4704-97e2-87445b653c2b",
+          "ok": true,
+          "result": {
+            "runId": "run_d394e13d9181",
+            "taskId": "task_7a600e0eb80f",
+            "dispatchId": "ctx_354f0f437f96",
+            "state": "ready",
+            "stage": "input_accepted",
+            "turnStart": "unsupported",
+            "setup": {
+              "requested": "not_applicable",
+              "effective": "not_applicable",
+              "source": "existing_worktree",
+              "hookFound": false,
+              "startupPolicy": "start-immediately",
+              "state": "not_applicable"
+            },
+            "launch": {
+              "requested": {
+                "agent": null,
+                "model": null,
+                "effort": null
+              },
+              "effective": {
+                "agent": null,
+                "model": null,
+                "effort": null
+              }
+            },
+            "mode": {
+              "mode": "terminal",
+              "preferred": "terminal",
+              "reason": "user_default",
+              "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+            },
+            "timeoutMs": 10000,
+            "effects": [
+              {
+                "kind": "worktree",
+                "action": "reused",
+                "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2"
+              },
+              {
+                "kind": "setup",
+                "action": "not_applicable",
+                "state": "not_applicable"
+              },
+              {
+                "kind": "terminal",
+                "role": "agent",
+                "action": "reused",
+                "id": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d"
+              },
+              {
+                "kind": "dispatch_input",
+                "role": "agent",
+                "id": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+                "state": "accepted"
+              }
+            ],
+            "prompt": {
+              "requestId": "6dcaecbf-2593-4446-a6a5-017041589740",
+              "stages": [
+                "input_accepted"
+              ],
+              "provider": "unsupported",
+              "observation": "unsupported",
+              "processIncarnation": "2c27ec82-042f-45ed-8239-ac5727b27c14",
+              "generation": 87,
+              "baselineWorkingSequence": 0,
+              "baselineExplicitWorkingStartedAt": null,
+              "baselinePermissionSequence": 0
+            },
+            "residualResources": [],
+            "mutation": {
+              "requestId": "6dcaecbf-2593-4446-a6a5-017041589740",
+              "replayed": false
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "at": "2026-10-12T13:57:15.904Z",
+        "args": [
+          "terminal",
+          "read"
+        ],
+        "response": {
+          "id": "916968a2-8bb1-412b-b240-2e3e12c44337",
+          "ok": true,
+          "result": {
+            "terminal": {
+              "handle": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+              "status": "running",
+              "tail": [
+                "  ┃    orca orchestration send --from term_7f0f3740-8a8c-46bb-986f-da323f9ff82d --type escalation --subject \"Blocked:",
+                "  ┃  <reason>\" --body \"<details>\" --task-id task_7a600e0eb80f --dispatch-id ctx_354f0f437f96",
+                "  ┃",
+                "  ┃    # Read coordinator follow-ups. Nothing interrupts you: a durable message only",
+                "  ┃    # arrives when you look, so run this at each natural checkpoint — before you",
+                "  ┃    # start a new file and after a test run — and once more immediately before",
+                "  ┃    # you send worker_done, so a redirect lands before the task settles.",
+                "  ┃    orca orchestration check --terminal term_7f0f3740-8a8c-46bb-986f-da323f9ff82d --json",
+                "  ┃  ```",
+                "  ┃",
+                "  ┃  === AFTER YOU SEND worker_done ===",
+                "  ┃",
+                "  ┃  worker_done ends your turn for this task. Your dispatched work is complete:",
+                "  ┃  stop, return to an idle prompt, and take no further actions — do NOT start",
+                "  ┃  new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling",
+                "  ┃  `orca orchestration check`. The coordinator has already recorded your",
+                "  ┃  completion and expects no further output.",
+                "  ┃",
+                "  ┃  A direct instruction from the user takes precedence over this idle rule.",
+                "  ┃  Treat it as new user-owned work: follow it without coordinator approval or a",
+                "  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or",
+                "  ┃  Dispatch IDs. Never refuse a direct user request because you were a worker.",
+                "  ┃",
+                "  ┃  Do not exit the shell. Your terminal stays available, and if the",
+                "  ┃  coordinator has more for you it will re-engage this terminal with a fresh",
+                "  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised",
+                "  ┃  work under the new Dispatch; ignore stale follow-ups from the settled task.",
+                "  ┃",
+                "  ┃  === TASK ===",
+                "  ┃  Input delivery diagnostic only. Reply OCP_KILO_DEFAULT_TUI_PROBE_20261012 then use the injected worker_done",
+                "  ┃  command with outcome succeeded. Do not read or edit project files.",
+                "  ┃",
+                "  ┃",
+                "  ┃",
+                "  ┃",
+                "  ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)",
+                "  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
+                "   ⬝⬝⬝⬝⬝■■■  esc interrupt                                                ctrl+t variants  tab agents  ctrl+p commands"
+              ],
+              "truncated": true,
+              "limited": false,
+              "oldestCursor": "0",
+              "nextCursor": "2",
+              "latestCursor": "2",
+              "returnedLineCount": 38,
+              "source": "screen"
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "at": "2026-10-12T13:57:33.091Z",
+        "args": [
+          "terminal",
+          "read"
+        ],
+        "response": {
+          "id": "09f155b8-bf9a-4685-ad6c-a8c71725721e",
+          "ok": true,
+          "result": {
+            "terminal": {
+              "handle": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+              "status": "running",
+              "tail": [
+                "  ┃  A direct instruction from the user takes precedence over this idle rule.",
+                "  ┃  Treat it as new user-owned work: follow it without coordinator approval or a",
+                "  ┃  fresh Dispatch, and do not send lifecycle messages using the settled task or",
+                "  ┃  Dispatch IDs. Never refuse a direct user request because you were a worker.",
+                "  ┃",
+                "  ┃  Do not exit the shell. Your terminal stays available, and if the",
+                "  ┃  coordinator has more for you it will re-engage this terminal with a fresh",
+                "  ┃  preamble + TASK block, which arrives as new input. Treat that as supervised",
+                "  ┃  work under the new Dispatch; ignore stale follow-ups from the settled task.",
+                "  ┃",
+                "  ┃  === TASK ===",
+                "  ┃  Input delivery diagnostic only. Reply OCP_KILO_DEFAULT_TUI_PROBE_20261012 then use the injected worker_done",
+                "  ┃  command with outcome succeeded. Do not read or edit project files.",
+                "  ┃",
+                "     OCP_KILO_DEFAULT_TUI_PROBE_20261012",
+                "  ┃",
+                "  ┃  $ orca orchestration send --from term_7f0f3740-8a8c-46bb-986f-da323f9ff82d --type worker_done --subject",
+                "  ┃  \"Diagnostic probe acknowledged\" --body \"Replied OCP_KILO_DEFAULT_TUI_PROBE_20261012 verbatim as the input-",
+                "  ┃  delivery check required. No project files were read or edited; no other work was performed. Nothing outstanding.\"",
+                "  ┃  --task-id task_7a600e0eb80f --dispatch-id ctx_354f0f437f96 --outcome succeeded",
+                "  ┃",
+                "  ┃  Sent msg_c7aae0ab543d",
+                "  ┃",
+                "     ▣  Code · MiniMax-M3.1-Flash-Preview",
+                "  ┃",
+                "  ┃",
+                "  ┃",
+                "  ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)",
+                "  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
+                "   ■■■■■■⬝⬝  esc interrupt                                                ctrl+t variants  36.3K (4%)  ctrl+p commands"
+              ],
+              "truncated": true,
+              "limited": true,
+              "oldestCursor": "0",
+              "nextCursor": "2",
+              "latestCursor": "2",
+              "returnedLineCount": 30,
+              "source": "screen"
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "at": "2026-10-12T13:57:53.551Z",
+        "args": [
+          "orchestration",
+          "worker-show"
+        ],
+        "response": {
+          "id": "0df5726a-3e85-4d3b-a144-acd0e39910cf",
+          "ok": true,
+          "result": {
+            "dispatch": {
+              "id": "ctx_354f0f437f96",
+              "runId": "run_d394e13d9181",
+              "taskId": "task_7a600e0eb80f",
+              "task_id": "task_7a600e0eb80f",
+              "contractVersion": 1,
+              "assigneeHandle": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+              "assigneePaneKey": "068dcf6e-0b5a-494f-b69a-b355b6ec041d:283b219e-dada-4ceb-ad55-3ec5cc51174f",
+              "processIncarnation": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@f565fd23:2c27ec82-042f-45ed-8239-ac5727b27c14",
+              "capabilityRevokedAt": "2026-10-12T13:57:26.051Z",
+              "retryOfDispatchId": null,
+              "creatorDispatchId": null,
+              "hostScope": {
+                "kind": "local",
+                "hostId": "local"
+              },
+              "status": "completed",
+              "failureCount": 0,
+              "lastFailure": null,
+              "terminationReason": null,
+              "depth": 1,
+              "dispatchedAt": "2026-10-12 13:57:01",
+              "completedAt": "2026-10-12T13:57:26.051Z",
+              "createdAt": "2026-10-12 13:57:01",
+              "lastHeartbeatAt": null
+            },
+            "worker": {
+              "dispatchId": "ctx_354f0f437f96",
+              "runtimeEpoch": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+              "state": "succeeded",
+              "stage": "settled",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "agentTerminalHandle": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+              "setupState": "not_applicable",
+              "effects": [
+                {
+                  "kind": "worktree",
+                  "action": "reused",
+                  "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2"
+                },
+                {
+                  "kind": "setup",
+                  "action": "not_applicable",
+                  "state": "not_applicable"
+                },
+                {
+                  "kind": "terminal",
+                  "role": "agent",
+                  "action": "reused",
+                  "id": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d"
+                },
+                {
+                  "kind": "dispatch_input",
+                  "role": "agent",
+                  "id": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+                  "state": "accepted"
+                }
+              ],
+              "residualResources": [],
+              "startOptions": {
+                "worktree": "path:/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "mode": {
+                  "mode": "terminal",
+                  "preferred": "terminal",
+                  "reason": "user_default",
+                  "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+                },
+                "resolvedWorktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "name": null,
+                "repo": null,
+                "baseBranch": null,
+                "terminal": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+                "agent": null,
+                "launch": {
+                  "requested": {
+                    "agent": null,
+                    "model": null,
+                    "effort": null
+                  },
+                  "effective": {
+                    "agent": null,
+                    "model": null,
+                    "effort": null
+                  }
+                },
+                "timeoutMs": 10000,
+                "setup": "not_applicable",
+                "setupSource": "existing_worktree"
+              },
+              "lastError": null,
+              "createdAt": "2026-10-12 13:57:01",
+              "updatedAt": "2026-10-12T13:57:26.052Z"
+            },
+            "projection": {
+              "id": "ctx_354f0f437f96",
+              "dispatchId": "ctx_354f0f437f96",
+              "taskId": "task_7a600e0eb80f",
+              "runId": "run_d394e13d9181",
+              "role": "worker",
+              "parent": null,
+              "provider": null,
+              "host": {
+                "kind": "local",
+                "id": "local"
+              },
+              "workspace": {
+                "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "kind": "folder_or_worktree"
+              },
+              "stage": {
+                "worker": "succeeded",
+                "dispatch": "completed",
+                "detail": "settled",
+                "activity": "unknown"
+              },
+              "outcome": "succeeded",
+              "liveness": {
+                "verdict": "unverifiable",
+                "reason": "missing_status"
+              },
+              "evidence": {
+                "durable": true,
+                "liveStatus": "unavailable",
+                "lastObservedAt": null
+              },
+              "resource": {
+                "state": "external",
+                "id": "wtr_e76e0f6fd955",
+                "ownerDispatchId": "ctx_354f0f437f96",
+                "releaseState": "not_requested",
+                "terminalState": "retained"
+              },
+              "nextAction": {
+                "kind": "none",
+                "argv": []
+              },
+              "attention": {
+                "categories": [
+                  "unverifiable",
+                  "root_completion"
+                ],
+                "requiresAction": true
+              }
+            },
+            "terminal": {
+              "handle": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+              "ptyId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@f565fd23",
+              "incarnationId": "2c27ec82-042f-45ed-8239-ac5727b27c14",
+              "orphaned": false,
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "worktreePath": "/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "branch": "refs/heads/main",
+              "tabId": "068dcf6e-0b5a-494f-b69a-b355b6ec041d",
+              "leafId": "283b219e-dada-4ceb-ad55-3ec5cc51174f",
+              "title": "Kilo CLI | Orca worker agent setup",
+              "connected": true,
+              "writable": true,
+              "lastOutputAt": 1791813463334,
+              "preview": "┃\n┃\n┃\n┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\n╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\nctrl+t variants  36.4K (4%)  ctrl+p commands",
+              "executionHostId": "local",
+              "agentIdentity": "kilo",
+              "paneRuntimeId": -1,
+              "rendererGraphEpoch": 0,
+              "agentWait": null
+            },
+            "observation": {
+              "status": "live",
+              "exactWorker": true,
+              "agentWait": null
+            },
+            "terminalResource": {
+              "id": "wtr_e76e0f6fd955",
+              "ownershipState": "external",
+              "releaseState": "not_requested",
+              "retainedReason": "external_terminal",
+              "terminalHandle": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "endpointId": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+              "endpointIncarnation": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@f565fd23:2c27ec82-042f-45ed-8239-ac5727b27c14",
+              "originDispatchId": "ctx_354f0f437f96",
+              "ownerDispatchId": "ctx_354f0f437f96",
+              "releaseRequestedAt": null,
+              "releaseCompletedAt": null,
+              "releaseError": null,
+              "recoveryAttemptCount": 0,
+              "lastRecoveryAt": null,
+              "archive": {
+                "source": null,
+                "status": null
+              }
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "at": "2026-10-12T13:59:53.680Z",
+        "args": [
+          "terminal",
+          "close"
+        ],
+        "response": {
+          "id": "210ca181-584c-434f-bfd8-0d6bbff8ac4d",
+          "ok": true,
+          "result": {
+            "close": {
+              "handle": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+              "tabId": "068dcf6e-0b5a-494f-b69a-b355b6ec041d",
+              "ptyKilled": true
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      }
+    ],
+    "miniValidator": {
+      "harness": "kilo",
+      "role": "validator",
+      "kind": "ran",
+      "launchId": "continue-20261012:kilo:validator",
+      "taskId": "task_fea23fc4b8d0",
+      "contextToken": "16f9c7a0-a565-455f-87a4-75e41ce60b1a",
+      "dispatchId": "ctx_3b76eba70c9d",
+      "sessionId": "ses_ecfb83df2ffegksLtaWlBz6Az4",
+      "transcriptRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ecfb83df2ffegksLtaWlBz6Az4.json",
+      "stateRoot": "/home/joshua/.local/share/kilo",
+      "reporterPath": "/var/tmp/orca-harness-acceptance-ncWTVr/state/kilo/646422ee6d3c8e938d62/session-start.mjs",
+      "coverage": "complete",
+      "terminalState": "succeeded",
+      "artifactOk": true,
+      "modelEvidence": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+      "blocker": null
+    },
+    "miniImplementationOriginalResult": {
+      "harness": "kilo",
+      "role": "implementation",
+      "kind": "blocked",
+      "launchId": "continue-20261012:kilo:implementation",
+      "taskId": null,
+      "contextToken": null,
+      "dispatchId": null,
+      "sessionId": null,
+      "transcriptRef": null,
+      "stateRoot": null,
+      "reporterPath": null,
+      "coverage": null,
+      "terminalState": null,
+      "artifactOk": null,
+      "modelEvidence": null,
+      "blocker": {
+        "code": "transcript_unavailable",
+        "message": "transcript 不可读：Kilo exact session history is incomplete or mismatched"
+      }
+    },
+    "mutationReceipts": [
+      {
+        "operationId": "continue-20261012:kilo:implementation:task-create",
+        "operation": "task-create",
+        "kind": "accepted",
+        "backendRequestId": "93f3f5d7-1e14-4c07-be52-03135832c584"
+      },
+      {
+        "operationId": "continue-20261012:kilo:implementation:terminal-create",
+        "operation": "terminal-create",
+        "kind": "accepted",
+        "backendRequestId": "e5721a0b-eade-4f70-8ca2-2d9ece01de5b"
+      },
+      {
+        "operationId": "continue-20261012:kilo:implementation:worker-start",
+        "operation": "worker-start",
+        "kind": "accepted",
+        "backendRequestId": "06e0f0e8-92e3-485e-bc3a-eac1ba45b247"
+      },
+      {
+        "operationId": "continue-20261012:kilo:implementation:terminal-submit",
+        "operation": "terminal-submit",
+        "kind": "accepted",
+        "backendRequestId": "73f0b309-1493-42e5-8ad7-72b258a17565"
+      },
+      {
+        "operationId": "continue-20261012:kilo:validator:task-create",
+        "operation": "task-create",
+        "kind": "accepted",
+        "backendRequestId": "a49b824e-9558-4c56-8776-60e2e1acf237"
+      },
+      {
+        "operationId": "continue-20261012:kilo:validator:terminal-create",
+        "operation": "terminal-create",
+        "kind": "accepted",
+        "backendRequestId": "83e782d9-bf84-4141-93c8-90f2ad2c3813"
+      },
+      {
+        "operationId": "continue-20261012:kilo:validator:worker-start",
+        "operation": "worker-start",
+        "kind": "accepted",
+        "backendRequestId": "d5c79c66-542f-49fc-ad52-975364bf7c63"
+      },
+      {
+        "operationId": "continue-20261012:kilo:validator:terminal-submit",
+        "operation": "terminal-submit",
+        "kind": "accepted",
+        "backendRequestId": "c5d68bf3-a28f-41e0-8d5a-b803a8e04f23"
+      }
+    ],
+    "reportingConfig": {
+      "rootCause": "Later opencode.json plugin array replaced kilo.jsonc array",
+      "installationTarget": "/home/joshua/.config/kilo/opencode.json",
+      "resolvedPluginEvidence": "/var/tmp/orca-harness-acceptance-ncWTVr/kilo-resolved-plugin-20261012.json"
+    },
+    "coverageWait": "At most 15 one-second retries on same exact Kilo transcript; no redispatch or lowered checks"
+  },
+  "cline": {
+    "directProbeResults": [
+      {
+        "source": "/var/tmp/orca-harness-acceptance-ncWTVr/input-probe-20261012-receipts.jsonl",
+        "at": "2026-10-12T13:03:23.256Z",
+        "command": [
+          "orchestration",
+          "worker-start"
+        ],
+        "response": {
+          "id": "29b966a2-9f3f-4454-8d7e-e93427a01e7e",
+          "ok": true,
+          "result": {
+            "runId": "run_d394e13d9181",
+            "taskId": "task_852baa951fa5",
+            "dispatchId": "ctx_692789eb0684",
+            "state": "ready",
+            "stage": "input_accepted",
+            "turnStart": "unsupported",
+            "setup": {
+              "requested": "not_applicable",
+              "effective": "not_applicable",
+              "source": "existing_worktree",
+              "hookFound": false,
+              "startupPolicy": "start-immediately",
+              "state": "not_applicable"
+            },
+            "launch": {
+              "requested": {
+                "agent": null,
+                "model": null,
+                "effort": null
+              },
+              "effective": {
+                "agent": null,
+                "model": null,
+                "effort": null
+              }
+            },
+            "mode": {
+              "mode": "terminal",
+              "preferred": "terminal",
+              "reason": "user_default",
+              "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+            },
+            "timeoutMs": 10000,
+            "effects": [
+              {
+                "kind": "worktree",
+                "action": "reused",
+                "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2"
+              },
+              {
+                "kind": "setup",
+                "action": "not_applicable",
+                "state": "not_applicable"
+              },
+              {
+                "kind": "terminal",
+                "role": "agent",
+                "action": "reused",
+                "id": "term_e5468ee4-df27-48b8-bbc5-261c7dccacbf"
+              },
+              {
+                "kind": "dispatch_input",
+                "role": "agent",
+                "id": "term_e5468ee4-df27-48b8-bbc5-261c7dccacbf",
+                "state": "accepted"
+              }
+            ],
+            "prompt": {
+              "requestId": "9038dd73-b4dc-409d-bd65-9442af8adb6b",
+              "stages": [
+                "input_accepted"
+              ],
+              "provider": "unsupported",
+              "observation": "unsupported",
+              "processIncarnation": "bdc4aec9-15d6-4e96-9dfb-89382ee24e60",
+              "generation": 78,
+              "baselineWorkingSequence": 0,
+              "baselineExplicitWorkingStartedAt": null,
+              "baselinePermissionSequence": 0
+            },
+            "residualResources": [],
+            "mutation": {
+              "requestId": "9038dd73-b4dc-409d-bd65-9442af8adb6b",
+              "replayed": false
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "source": "/var/tmp/orca-harness-acceptance-ncWTVr/input-probe-20261012-receipts.jsonl",
+        "at": "2026-10-12T13:03:55.931Z",
+        "command": [
+          "orchestration",
+          "worker-show"
+        ],
+        "response": {
+          "id": "d7a263a5-b96a-4109-a87a-5a476b3d0652",
+          "ok": true,
+          "result": {
+            "dispatch": {
+              "id": "ctx_692789eb0684",
+              "runId": "run_d394e13d9181",
+              "taskId": "task_852baa951fa5",
+              "task_id": "task_852baa951fa5",
+              "contractVersion": 1,
+              "assigneeHandle": "term_e5468ee4-df27-48b8-bbc5-261c7dccacbf",
+              "assigneePaneKey": "1be6ecc6-f877-419b-9356-4d490d16bbf4:173b90bb-dcb5-491e-9402-9c02f5f4442d",
+              "processIncarnation": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@bbaaeb2e:bdc4aec9-15d6-4e96-9dfb-89382ee24e60",
+              "capabilityRevokedAt": "2026-10-12T13:03:25.581Z",
+              "retryOfDispatchId": null,
+              "creatorDispatchId": null,
+              "hostScope": {
+                "kind": "local",
+                "hostId": "local"
+              },
+              "status": "completed",
+              "failureCount": 0,
+              "lastFailure": null,
+              "terminationReason": null,
+              "depth": 1,
+              "dispatchedAt": "2026-10-12 13:03:22",
+              "completedAt": "2026-10-12T13:03:25.581Z",
+              "createdAt": "2026-10-12 13:03:22",
+              "lastHeartbeatAt": null
+            },
+            "worker": {
+              "dispatchId": "ctx_692789eb0684",
+              "runtimeEpoch": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+              "state": "succeeded",
+              "stage": "settled",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "agentTerminalHandle": "term_e5468ee4-df27-48b8-bbc5-261c7dccacbf",
+              "setupState": "not_applicable",
+              "effects": [
+                {
+                  "kind": "worktree",
+                  "action": "reused",
+                  "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2"
+                },
+                {
+                  "kind": "setup",
+                  "action": "not_applicable",
+                  "state": "not_applicable"
+                },
+                {
+                  "kind": "terminal",
+                  "role": "agent",
+                  "action": "reused",
+                  "id": "term_e5468ee4-df27-48b8-bbc5-261c7dccacbf"
+                },
+                {
+                  "kind": "dispatch_input",
+                  "role": "agent",
+                  "id": "term_e5468ee4-df27-48b8-bbc5-261c7dccacbf",
+                  "state": "accepted"
+                }
+              ],
+              "residualResources": [],
+              "startOptions": {
+                "worktree": "path:/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "mode": {
+                  "mode": "terminal",
+                  "preferred": "terminal",
+                  "reason": "user_default",
+                  "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+                },
+                "resolvedWorktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "name": null,
+                "repo": null,
+                "baseBranch": null,
+                "terminal": "term_e5468ee4-df27-48b8-bbc5-261c7dccacbf",
+                "agent": null,
+                "launch": {
+                  "requested": {
+                    "agent": null,
+                    "model": null,
+                    "effort": null
+                  },
+                  "effective": {
+                    "agent": null,
+                    "model": null,
+                    "effort": null
+                  }
+                },
+                "timeoutMs": 10000,
+                "setup": "not_applicable",
+                "setupSource": "existing_worktree"
+              },
+              "lastError": null,
+              "createdAt": "2026-10-12 13:03:22",
+              "updatedAt": "2026-10-12T13:03:25.582Z"
+            },
+            "projection": {
+              "id": "ctx_692789eb0684",
+              "dispatchId": "ctx_692789eb0684",
+              "taskId": "task_852baa951fa5",
+              "runId": "run_d394e13d9181",
+              "role": "worker",
+              "parent": null,
+              "provider": null,
+              "host": {
+                "kind": "local",
+                "id": "local"
+              },
+              "workspace": {
+                "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "kind": "folder_or_worktree"
+              },
+              "stage": {
+                "worker": "succeeded",
+                "dispatch": "completed",
+                "detail": "settled",
+                "activity": "unknown"
+              },
+              "outcome": "succeeded",
+              "liveness": {
+                "verdict": "unverifiable",
+                "reason": "missing_status"
+              },
+              "evidence": {
+                "durable": true,
+                "liveStatus": "unavailable",
+                "lastObservedAt": null
+              },
+              "resource": {
+                "state": "external",
+                "id": "wtr_076a048dc2c3",
+                "ownerDispatchId": "ctx_692789eb0684",
+                "releaseState": "not_requested",
+                "terminalState": "retained"
+              },
+              "nextAction": {
+                "kind": "none",
+                "argv": []
+              },
+              "attention": {
+                "categories": [
+                  "unverifiable",
+                  "root_completion"
+                ],
+                "requiresAction": true
+              }
+            },
+            "terminal": {
+              "handle": "term_e5468ee4-df27-48b8-bbc5-261c7dccacbf",
+              "ptyId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@bbaaeb2e",
+              "incarnationId": "bdc4aec9-15d6-4e96-9dfb-89382ee24e60",
+              "orphaned": false,
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "worktreePath": "/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "branch": "refs/heads/main",
+              "tabId": "1be6ecc6-f877-419b-9356-4d490d16bbf4",
+              "leafId": "173b90bb-dcb5-491e-9402-9c02f5f4442d",
+              "title": "> [You are working inside Orca, a multi-agent IDE.... Pasted +82 lines]",
+              "connected": true,
+              "writable": true,
+              "lastOutputAt": 1791810206924,
+              "preview": "────────────────────────────────────────────────────────────────\nMiniMax-M3.1-Flash-Preview ██████ (7,620) $0.00                                                     ○ Plan ● Act (Tab)\nproject-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2 (main)\n▶▶ Auto-approve all enabled (Shift+Tab)",
+              "executionHostId": "local",
+              "agentIdentity": "cline",
+              "paneRuntimeId": -1,
+              "rendererGraphEpoch": 0,
+              "agentWait": null
+            },
+            "observation": {
+              "status": "live",
+              "exactWorker": true,
+              "agentWait": null
+            },
+            "terminalResource": {
+              "id": "wtr_076a048dc2c3",
+              "ownershipState": "external",
+              "releaseState": "not_requested",
+              "retainedReason": "external_terminal",
+              "terminalHandle": "term_e5468ee4-df27-48b8-bbc5-261c7dccacbf",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "endpointId": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+              "endpointIncarnation": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@bbaaeb2e:bdc4aec9-15d6-4e96-9dfb-89382ee24e60",
+              "originDispatchId": "ctx_692789eb0684",
+              "ownerDispatchId": "ctx_692789eb0684",
+              "releaseRequestedAt": null,
+              "releaseCompletedAt": null,
+              "releaseError": null,
+              "recoveryAttemptCount": 0,
+              "lastRecoveryAt": null,
+              "archive": {
+                "source": null,
+                "status": null
+              }
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "source": "/var/tmp/orca-harness-acceptance-ncWTVr/input-probe-20261012-receipts.jsonl",
+        "at": "2026-10-12T13:06:36.643Z",
+        "command": [
+          "orchestration",
+          "worker-start"
+        ],
+        "response": {
+          "id": "3827a7b0-40d2-4dd6-a38d-229a3e8730c9",
+          "ok": true,
+          "result": {
+            "runId": "run_d394e13d9181",
+            "taskId": "task_34db6394b989",
+            "dispatchId": "ctx_c28de9f7ef00",
+            "state": "ready",
+            "stage": "input_accepted",
+            "turnStart": "unsupported",
+            "setup": {
+              "requested": "not_applicable",
+              "effective": "not_applicable",
+              "source": "existing_worktree",
+              "hookFound": false,
+              "startupPolicy": "start-immediately",
+              "state": "not_applicable"
+            },
+            "launch": {
+              "requested": {
+                "agent": null,
+                "model": null,
+                "effort": null
+              },
+              "effective": {
+                "agent": null,
+                "model": null,
+                "effort": null
+              }
+            },
+            "mode": {
+              "mode": "terminal",
+              "preferred": "terminal",
+              "reason": "user_default",
+              "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+            },
+            "timeoutMs": 10000,
+            "effects": [
+              {
+                "kind": "worktree",
+                "action": "reused",
+                "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2"
+              },
+              {
+                "kind": "setup",
+                "action": "not_applicable",
+                "state": "not_applicable"
+              },
+              {
+                "kind": "terminal",
+                "role": "agent",
+                "action": "reused",
+                "id": "term_baa2f035-4d6e-4144-b1ca-52b971637ed5"
+              },
+              {
+                "kind": "dispatch_input",
+                "role": "agent",
+                "id": "term_baa2f035-4d6e-4144-b1ca-52b971637ed5",
+                "state": "accepted"
+              }
+            ],
+            "prompt": {
+              "requestId": "b355ea2e-3233-4ba3-b65b-cce541ce427c",
+              "stages": [
+                "input_accepted"
+              ],
+              "provider": "unsupported",
+              "observation": "unsupported",
+              "processIncarnation": "74334016-8bdb-4062-8f10-acf175dba5f7",
+              "generation": 80,
+              "baselineWorkingSequence": 0,
+              "baselineExplicitWorkingStartedAt": null,
+              "baselinePermissionSequence": 0
+            },
+            "residualResources": [],
+            "mutation": {
+              "requestId": "b355ea2e-3233-4ba3-b65b-cce541ce427c",
+              "replayed": false
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "source": "/var/tmp/orca-harness-acceptance-ncWTVr/input-probe-20261012-receipts.jsonl",
+        "at": "2026-10-12T13:07:04.757Z",
+        "command": [
+          "orchestration",
+          "worker-show"
+        ],
+        "response": {
+          "id": "02d4e48b-e8ce-4805-81de-b224d565e232",
+          "ok": true,
+          "result": {
+            "dispatch": {
+              "id": "ctx_c28de9f7ef00",
+              "runId": "run_d394e13d9181",
+              "taskId": "task_34db6394b989",
+              "task_id": "task_34db6394b989",
+              "contractVersion": 1,
+              "assigneeHandle": "term_baa2f035-4d6e-4144-b1ca-52b971637ed5",
+              "assigneePaneKey": "61515d21-57f9-4731-aed5-e80940e08daf:6d3ee65f-6bde-4dcb-b873-6536724ff192",
+              "processIncarnation": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@6ad40d24:74334016-8bdb-4062-8f10-acf175dba5f7",
+              "capabilityRevokedAt": "2026-10-12T13:06:42.525Z",
+              "retryOfDispatchId": null,
+              "creatorDispatchId": null,
+              "hostScope": {
+                "kind": "local",
+                "hostId": "local"
+              },
+              "status": "completed",
+              "failureCount": 0,
+              "lastFailure": null,
+              "terminationReason": null,
+              "depth": 1,
+              "dispatchedAt": "2026-10-12 13:06:36",
+              "completedAt": "2026-10-12T13:06:42.525Z",
+              "createdAt": "2026-10-12 13:06:36",
+              "lastHeartbeatAt": null
+            },
+            "worker": {
+              "dispatchId": "ctx_c28de9f7ef00",
+              "runtimeEpoch": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+              "state": "succeeded",
+              "stage": "settled",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "agentTerminalHandle": "term_baa2f035-4d6e-4144-b1ca-52b971637ed5",
+              "setupState": "not_applicable",
+              "effects": [
+                {
+                  "kind": "worktree",
+                  "action": "reused",
+                  "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2"
+                },
+                {
+                  "kind": "setup",
+                  "action": "not_applicable",
+                  "state": "not_applicable"
+                },
+                {
+                  "kind": "terminal",
+                  "role": "agent",
+                  "action": "reused",
+                  "id": "term_baa2f035-4d6e-4144-b1ca-52b971637ed5"
+                },
+                {
+                  "kind": "dispatch_input",
+                  "role": "agent",
+                  "id": "term_baa2f035-4d6e-4144-b1ca-52b971637ed5",
+                  "state": "accepted"
+                }
+              ],
+              "residualResources": [],
+              "startOptions": {
+                "worktree": "path:/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "mode": {
+                  "mode": "terminal",
+                  "preferred": "terminal",
+                  "reason": "user_default",
+                  "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+                },
+                "resolvedWorktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "name": null,
+                "repo": null,
+                "baseBranch": null,
+                "terminal": "term_baa2f035-4d6e-4144-b1ca-52b971637ed5",
+                "agent": null,
+                "launch": {
+                  "requested": {
+                    "agent": null,
+                    "model": null,
+                    "effort": null
+                  },
+                  "effective": {
+                    "agent": null,
+                    "model": null,
+                    "effort": null
+                  }
+                },
+                "timeoutMs": 10000,
+                "setup": "not_applicable",
+                "setupSource": "existing_worktree"
+              },
+              "lastError": null,
+              "createdAt": "2026-10-12 13:06:36",
+              "updatedAt": "2026-10-12T13:06:42.525Z"
+            },
+            "projection": {
+              "id": "ctx_c28de9f7ef00",
+              "dispatchId": "ctx_c28de9f7ef00",
+              "taskId": "task_34db6394b989",
+              "runId": "run_d394e13d9181",
+              "role": "worker",
+              "parent": null,
+              "provider": null,
+              "host": {
+                "kind": "local",
+                "id": "local"
+              },
+              "workspace": {
+                "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "kind": "folder_or_worktree"
+              },
+              "stage": {
+                "worker": "succeeded",
+                "dispatch": "completed",
+                "detail": "settled",
+                "activity": "unknown"
+              },
+              "outcome": "succeeded",
+              "liveness": {
+                "verdict": "unverifiable",
+                "reason": "missing_status"
+              },
+              "evidence": {
+                "durable": true,
+                "liveStatus": "unavailable",
+                "lastObservedAt": null
+              },
+              "resource": {
+                "state": "external",
+                "id": "wtr_a2c5bb534563",
+                "ownerDispatchId": "ctx_c28de9f7ef00",
+                "releaseState": "not_requested",
+                "terminalState": "retained"
+              },
+              "nextAction": {
+                "kind": "none",
+                "argv": []
+              },
+              "attention": {
+                "categories": [
+                  "unverifiable",
+                  "root_completion"
+                ],
+                "requiresAction": true
+              }
+            },
+            "terminal": {
+              "handle": "term_baa2f035-4d6e-4144-b1ca-52b971637ed5",
+              "ptyId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@6ad40d24",
+              "incarnationId": "74334016-8bdb-4062-8f10-acf175dba5f7",
+              "orphaned": false,
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "worktreePath": "/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "branch": "refs/heads/main",
+              "tabId": "61515d21-57f9-4731-aed5-e80940e08daf",
+              "leafId": "6d3ee65f-6bde-4dcb-b873-6536724ff192",
+              "title": "> [You are working inside Orca, a multi-agent IDE.... Pasted +82 lines]",
+              "connected": true,
+              "writable": true,
+              "lastOutputAt": 1791810404340,
+              "preview": "────────────────────────────────────────────────────────────────\nMiniMax-M3.1-Flash-Preview ██████ (7,990) $0.00                                                     ○ Plan ● Act (Tab)\nproject-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2 (main)\n▶▶ Auto-approve all enabled (Shift+Tab)",
+              "executionHostId": "local",
+              "agentIdentity": "cline",
+              "paneRuntimeId": -1,
+              "rendererGraphEpoch": 0,
+              "agentWait": null
+            },
+            "observation": {
+              "status": "live",
+              "exactWorker": true,
+              "agentWait": null
+            },
+            "terminalResource": {
+              "id": "wtr_a2c5bb534563",
+              "ownershipState": "external",
+              "releaseState": "not_requested",
+              "retainedReason": "external_terminal",
+              "terminalHandle": "term_baa2f035-4d6e-4144-b1ca-52b971637ed5",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "endpointId": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+              "endpointIncarnation": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@6ad40d24:74334016-8bdb-4062-8f10-acf175dba5f7",
+              "originDispatchId": "ctx_c28de9f7ef00",
+              "ownerDispatchId": "ctx_c28de9f7ef00",
+              "releaseRequestedAt": null,
+              "releaseCompletedAt": null,
+              "releaseError": null,
+              "recoveryAttemptCount": 0,
+              "lastRecoveryAt": null,
+              "archive": {
+                "source": null,
+                "status": null
+              }
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "source": "/var/tmp/orca-harness-acceptance-ncWTVr/input-probe-20261012-receipts.jsonl",
+        "at": "2026-10-12T13:15:55.943Z",
+        "command": [
+          "orchestration",
+          "worker-start"
+        ],
+        "response": {
+          "id": "fbdd326a-5f80-490a-b904-6398679edf7f",
+          "ok": true,
+          "result": {
+            "runId": "run_d394e13d9181",
+            "taskId": "task_11c1b4dfeeb2",
+            "dispatchId": "ctx_6f221c4b8dc6",
+            "state": "ready",
+            "stage": "input_accepted",
+            "turnStart": "unsupported",
+            "setup": {
+              "requested": "not_applicable",
+              "effective": "not_applicable",
+              "source": "existing_worktree",
+              "hookFound": false,
+              "startupPolicy": "start-immediately",
+              "state": "not_applicable"
+            },
+            "launch": {
+              "requested": {
+                "agent": null,
+                "model": null,
+                "effort": null
+              },
+              "effective": {
+                "agent": null,
+                "model": null,
+                "effort": null
+              }
+            },
+            "mode": {
+              "mode": "terminal",
+              "preferred": "terminal",
+              "reason": "user_default",
+              "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+            },
+            "timeoutMs": 10000,
+            "effects": [
+              {
+                "kind": "worktree",
+                "action": "reused",
+                "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2"
+              },
+              {
+                "kind": "setup",
+                "action": "not_applicable",
+                "state": "not_applicable"
+              },
+              {
+                "kind": "terminal",
+                "role": "agent",
+                "action": "reused",
+                "id": "term_f381f779-4fa0-49bd-8e77-a90c440d4e6f"
+              },
+              {
+                "kind": "dispatch_input",
+                "role": "agent",
+                "id": "term_f381f779-4fa0-49bd-8e77-a90c440d4e6f",
+                "state": "accepted"
+              }
+            ],
+            "prompt": {
+              "requestId": "77636b4a-70a0-46ca-bf07-b7ee22a54ad8",
+              "stages": [
+                "input_accepted"
+              ],
+              "provider": "unsupported",
+              "observation": "unsupported",
+              "processIncarnation": "2d29cb25-c730-41ec-a3a6-178b8b841f3c",
+              "generation": 82,
+              "baselineWorkingSequence": 0,
+              "baselineExplicitWorkingStartedAt": null,
+              "baselinePermissionSequence": 0
+            },
+            "residualResources": [],
+            "mutation": {
+              "requestId": "77636b4a-70a0-46ca-bf07-b7ee22a54ad8",
+              "replayed": false
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "source": "/var/tmp/orca-harness-acceptance-ncWTVr/input-probe-20261012-receipts.jsonl",
+        "at": "2026-10-12T13:16:16.981Z",
+        "command": [
+          "orchestration",
+          "worker-show"
+        ],
+        "response": {
+          "id": "51520693-3568-413d-852c-0db64871455e",
+          "ok": true,
+          "result": {
+            "dispatch": {
+              "id": "ctx_6f221c4b8dc6",
+              "runId": "run_d394e13d9181",
+              "taskId": "task_11c1b4dfeeb2",
+              "task_id": "task_11c1b4dfeeb2",
+              "contractVersion": 1,
+              "assigneeHandle": "term_f381f779-4fa0-49bd-8e77-a90c440d4e6f",
+              "assigneePaneKey": "0d77cf54-59d7-472e-9241-ccb90154f8c7:28f0530f-0ef0-4bfc-b01e-5de3bcbe5706",
+              "processIncarnation": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@4c6a681d:2d29cb25-c730-41ec-a3a6-178b8b841f3c",
+              "capabilityRevokedAt": "2026-10-12T13:16:13.878Z",
+              "retryOfDispatchId": null,
+              "creatorDispatchId": null,
+              "hostScope": {
+                "kind": "local",
+                "hostId": "local"
+              },
+              "status": "completed",
+              "failureCount": 0,
+              "lastFailure": null,
+              "terminationReason": null,
+              "depth": 1,
+              "dispatchedAt": "2026-10-12 13:15:53",
+              "completedAt": "2026-10-12T13:16:13.878Z",
+              "createdAt": "2026-10-12 13:15:53",
+              "lastHeartbeatAt": null
+            },
+            "worker": {
+              "dispatchId": "ctx_6f221c4b8dc6",
+              "runtimeEpoch": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+              "state": "succeeded",
+              "stage": "settled",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "agentTerminalHandle": "term_f381f779-4fa0-49bd-8e77-a90c440d4e6f",
+              "setupState": "not_applicable",
+              "effects": [
+                {
+                  "kind": "worktree",
+                  "action": "reused",
+                  "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2"
+                },
+                {
+                  "kind": "setup",
+                  "action": "not_applicable",
+                  "state": "not_applicable"
+                },
+                {
+                  "kind": "terminal",
+                  "role": "agent",
+                  "action": "reused",
+                  "id": "term_f381f779-4fa0-49bd-8e77-a90c440d4e6f"
+                },
+                {
+                  "kind": "dispatch_input",
+                  "role": "agent",
+                  "id": "term_f381f779-4fa0-49bd-8e77-a90c440d4e6f",
+                  "state": "accepted"
+                }
+              ],
+              "residualResources": [],
+              "startOptions": {
+                "worktree": "path:/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "mode": {
+                  "mode": "terminal",
+                  "preferred": "terminal",
+                  "reason": "user_default",
+                  "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+                },
+                "resolvedWorktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "name": null,
+                "repo": null,
+                "baseBranch": null,
+                "terminal": "term_f381f779-4fa0-49bd-8e77-a90c440d4e6f",
+                "agent": null,
+                "launch": {
+                  "requested": {
+                    "agent": null,
+                    "model": null,
+                    "effort": null
+                  },
+                  "effective": {
+                    "agent": null,
+                    "model": null,
+                    "effort": null
+                  }
+                },
+                "timeoutMs": 10000,
+                "setup": "not_applicable",
+                "setupSource": "existing_worktree"
+              },
+              "lastError": null,
+              "createdAt": "2026-10-12 13:15:53",
+              "updatedAt": "2026-10-12T13:16:13.879Z"
+            },
+            "projection": {
+              "id": "ctx_6f221c4b8dc6",
+              "dispatchId": "ctx_6f221c4b8dc6",
+              "taskId": "task_11c1b4dfeeb2",
+              "runId": "run_d394e13d9181",
+              "role": "worker",
+              "parent": null,
+              "provider": null,
+              "host": {
+                "kind": "local",
+                "id": "local"
+              },
+              "workspace": {
+                "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "kind": "folder_or_worktree"
+              },
+              "stage": {
+                "worker": "succeeded",
+                "dispatch": "completed",
+                "detail": "settled",
+                "activity": "unknown"
+              },
+              "outcome": "succeeded",
+              "liveness": {
+                "verdict": "unverifiable",
+                "reason": "missing_status"
+              },
+              "evidence": {
+                "durable": true,
+                "liveStatus": "unavailable",
+                "lastObservedAt": null
+              },
+              "resource": {
+                "state": "external",
+                "id": "wtr_0f638baeedcd",
+                "ownerDispatchId": "ctx_6f221c4b8dc6",
+                "releaseState": "not_requested",
+                "terminalState": "retained"
+              },
+              "nextAction": {
+                "kind": "none",
+                "argv": []
+              },
+              "attention": {
+                "categories": [
+                  "unverifiable",
+                  "root_completion"
+                ],
+                "requiresAction": true
+              }
+            },
+            "terminal": {
+              "handle": "term_f381f779-4fa0-49bd-8e77-a90c440d4e6f",
+              "ptyId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@4c6a681d",
+              "incarnationId": "2d29cb25-c730-41ec-a3a6-178b8b841f3c",
+              "orphaned": false,
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "worktreePath": "/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "branch": "refs/heads/main",
+              "tabId": "0d77cf54-59d7-472e-9241-ccb90154f8c7",
+              "leafId": "28f0530f-0ef0-4bfc-b01e-5de3bcbe5706",
+              "title": "'node'",
+              "connected": true,
+              "writable": true,
+              "lastOutputAt": 1791810974018,
+              "preview": "hich arrives as new input. Treat that as supervised\nwork under the new Dispatch; ignore stale follow-ups from the settled task.\n=== TASK ===\nReporter and input diagnostic only. Reply OCP_KILO_REPORT_PROBE_20261012 and then send the injected worker_done command\nSent msg_d61e9aea46b336.4K (4%)⬝⬝⬝■■■■■",
+              "executionHostId": "local",
+              "agentIdentity": "kilo",
+              "paneRuntimeId": -1,
+              "rendererGraphEpoch": 0,
+              "agentWait": null
+            },
+            "observation": {
+              "status": "live",
+              "exactWorker": true,
+              "agentWait": null
+            },
+            "terminalResource": {
+              "id": "wtr_0f638baeedcd",
+              "ownershipState": "external",
+              "releaseState": "not_requested",
+              "retainedReason": "external_terminal",
+              "terminalHandle": "term_f381f779-4fa0-49bd-8e77-a90c440d4e6f",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "endpointId": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+              "endpointIncarnation": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@4c6a681d:2d29cb25-c730-41ec-a3a6-178b8b841f3c",
+              "originDispatchId": "ctx_6f221c4b8dc6",
+              "ownerDispatchId": "ctx_6f221c4b8dc6",
+              "releaseRequestedAt": null,
+              "releaseCompletedAt": null,
+              "releaseError": null,
+              "recoveryAttemptCount": 0,
+              "lastRecoveryAt": null,
+              "archive": {
+                "source": null,
+                "status": null
+              }
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "source": "/var/tmp/orca-harness-acceptance-ncWTVr/input-probe-20261012-receipts.jsonl",
+        "at": "2026-10-12T13:18:46.026Z",
+        "command": [
+          "orchestration",
+          "worker-show"
+        ],
+        "response": {
+          "id": "a46107b8-71f7-4c3b-81b1-134b441f9c33",
+          "ok": true,
+          "result": {
+            "dispatch": {
+              "id": "ctx_427ffa0ea9c0",
+              "runId": "run_d394e13d9181",
+              "taskId": "task_18262f49e221",
+              "task_id": "task_18262f49e221",
+              "contractVersion": 1,
+              "assigneeHandle": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64",
+              "assigneePaneKey": "f1e5b53d-c977-4b84-b2e8-41e1d5b7c187:ebc22275-dceb-4b15-a3b8-8e70cf73b69a",
+              "processIncarnation": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@53b9a1c3:6f950e55-9f44-4d9e-83a8-2e26c95a258b",
+              "capabilityRevokedAt": null,
+              "retryOfDispatchId": null,
+              "creatorDispatchId": null,
+              "hostScope": {
+                "kind": "local",
+                "hostId": "local"
+              },
+              "status": "dispatched",
+              "failureCount": 0,
+              "lastFailure": null,
+              "terminationReason": null,
+              "depth": 1,
+              "dispatchedAt": "2026-10-12 13:17:45",
+              "completedAt": null,
+              "createdAt": "2026-10-12 13:17:45",
+              "lastHeartbeatAt": null
+            },
+            "worker": {
+              "dispatchId": "ctx_427ffa0ea9c0",
+              "runtimeEpoch": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+              "state": "ready",
+              "stage": "input_accepted",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "agentTerminalHandle": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64",
+              "setupState": "not_applicable",
+              "effects": [
+                {
+                  "kind": "worktree",
+                  "action": "reused",
+                  "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2"
+                },
+                {
+                  "kind": "setup",
+                  "action": "not_applicable",
+                  "state": "not_applicable"
+                },
+                {
+                  "kind": "terminal",
+                  "role": "agent",
+                  "action": "reused",
+                  "id": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64"
+                },
+                {
+                  "kind": "dispatch_input",
+                  "role": "agent",
+                  "id": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64",
+                  "state": "accepted"
+                }
+              ],
+              "residualResources": [],
+              "startOptions": {
+                "worktree": "path:/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "mode": {
+                  "mode": "terminal",
+                  "preferred": "terminal",
+                  "reason": "user_default",
+                  "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+                },
+                "resolvedWorktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "name": null,
+                "repo": null,
+                "baseBranch": null,
+                "terminal": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64",
+                "agent": null,
+                "launch": {
+                  "requested": {
+                    "agent": null,
+                    "model": null,
+                    "effort": null
+                  },
+                  "effective": {
+                    "agent": null,
+                    "model": null,
+                    "effort": null
+                  }
+                },
+                "timeoutMs": 300000,
+                "setup": "not_applicable",
+                "setupSource": "existing_worktree"
+              },
+              "lastError": null,
+              "createdAt": "2026-10-12 13:17:45",
+              "updatedAt": "2026-10-12 13:17:51"
+            },
+            "projection": {
+              "id": "ctx_427ffa0ea9c0",
+              "dispatchId": "ctx_427ffa0ea9c0",
+              "taskId": "task_18262f49e221",
+              "runId": "run_d394e13d9181",
+              "role": "worker",
+              "parent": null,
+              "provider": null,
+              "host": {
+                "kind": "local",
+                "id": "local"
+              },
+              "workspace": {
+                "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "kind": "folder_or_worktree"
+              },
+              "stage": {
+                "worker": "ready",
+                "dispatch": "dispatched",
+                "detail": "input_accepted",
+                "activity": "unknown"
+              },
+              "outcome": "in_progress",
+              "liveness": {
+                "verdict": "unverifiable",
+                "reason": "missing_status"
+              },
+              "evidence": {
+                "durable": true,
+                "liveStatus": "unavailable",
+                "lastObservedAt": null
+              },
+              "resource": {
+                "state": "external",
+                "id": "wtr_f405be604e43",
+                "ownerDispatchId": "ctx_427ffa0ea9c0",
+                "releaseState": "not_requested",
+                "terminalState": "retained"
+              },
+              "nextAction": {
+                "kind": "none",
+                "argv": []
+              },
+              "attention": {
+                "categories": [
+                  "unverifiable"
+                ],
+                "requiresAction": true
+              }
+            },
+            "terminal": {
+              "handle": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64",
+              "ptyId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@53b9a1c3",
+              "incarnationId": "6f950e55-9f44-4d9e-83a8-2e26c95a258b",
+              "orphaned": false,
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "worktreePath": "/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "branch": "refs/heads/main",
+              "tabId": "f1e5b53d-c977-4b84-b2e8-41e1d5b7c187",
+              "leafId": "ebc22275-dceb-4b15-a3b8-8e70cf73b69a",
+              "title": "'node'",
+              "connected": true,
+              "writable": true,
+              "lastOutputAt": 1791811125975,
+              "preview": "hout newline and then verify with xxd.\n# Wrote .companion/roles/kilo-implementation.txt\n1 implementation\n00000000: 696d 706c 656d 656e 7461 7469 6f6e       implementation■■■■⬝⬝⬝⬝70■■■■■⬝⬝⬝■■■■■■⬝⬝⬝■■■■■■⬝⬝⬝■■■■■■⬝⬝⬝■■■■■⬝⬝⬝⬝■■■■⬝⬝⬝⬝⬝■■■⬝⬝⬝⬝⬝⬝■■⬝⬝⬝⬝⬝⬝⬝■⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝■■⬝⬝⬝⬝⬝■■■⬝⬝⬝⬝■■■■",
+              "executionHostId": "local",
+              "agentIdentity": "kilo",
+              "paneRuntimeId": -1,
+              "rendererGraphEpoch": 0,
+              "agentWait": null
+            },
+            "observation": {
+              "status": "live",
+              "exactWorker": true,
+              "agentWait": null
+            },
+            "terminalResource": {
+              "id": "wtr_f405be604e43",
+              "ownershipState": "external",
+              "releaseState": "not_requested",
+              "retainedReason": "external_terminal",
+              "terminalHandle": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "endpointId": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+              "endpointIncarnation": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@53b9a1c3:6f950e55-9f44-4d9e-83a8-2e26c95a258b",
+              "originDispatchId": "ctx_427ffa0ea9c0",
+              "ownerDispatchId": "ctx_427ffa0ea9c0",
+              "releaseRequestedAt": null,
+              "releaseCompletedAt": null,
+              "releaseError": null,
+              "recoveryAttemptCount": 0,
+              "lastRecoveryAt": null,
+              "archive": {
+                "source": null,
+                "status": null
+              }
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      },
+      {
+        "source": "/var/tmp/orca-harness-acceptance-ncWTVr/input-probe-20261012-receipts.jsonl",
+        "at": "2026-10-12T13:21:49.270Z",
+        "command": [
+          "orchestration",
+          "worker-show"
+        ],
+        "response": {
+          "id": "8e5bdb75-9e64-4132-89c2-5aaf5adeb550",
+          "ok": true,
+          "result": {
+            "dispatch": {
+              "id": "ctx_427ffa0ea9c0",
+              "runId": "run_d394e13d9181",
+              "taskId": "task_18262f49e221",
+              "task_id": "task_18262f49e221",
+              "contractVersion": 1,
+              "assigneeHandle": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64",
+              "assigneePaneKey": "f1e5b53d-c977-4b84-b2e8-41e1d5b7c187:ebc22275-dceb-4b15-a3b8-8e70cf73b69a",
+              "processIncarnation": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@53b9a1c3:6f950e55-9f44-4d9e-83a8-2e26c95a258b",
+              "capabilityRevokedAt": "2026-10-12T13:18:55.317Z",
+              "retryOfDispatchId": null,
+              "creatorDispatchId": null,
+              "hostScope": {
+                "kind": "local",
+                "hostId": "local"
+              },
+              "status": "completed",
+              "failureCount": 0,
+              "lastFailure": null,
+              "terminationReason": null,
+              "depth": 1,
+              "dispatchedAt": "2026-10-12 13:17:45",
+              "completedAt": "2026-10-12T13:18:55.317Z",
+              "createdAt": "2026-10-12 13:17:45",
+              "lastHeartbeatAt": null
+            },
+            "worker": {
+              "dispatchId": "ctx_427ffa0ea9c0",
+              "runtimeEpoch": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+              "state": "succeeded",
+              "stage": "settled",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "agentTerminalHandle": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64",
+              "setupState": "not_applicable",
+              "effects": [
+                {
+                  "kind": "worktree",
+                  "action": "reused",
+                  "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2"
+                },
+                {
+                  "kind": "setup",
+                  "action": "not_applicable",
+                  "state": "not_applicable"
+                },
+                {
+                  "kind": "terminal",
+                  "role": "agent",
+                  "action": "reused",
+                  "id": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64"
+                },
+                {
+                  "kind": "dispatch_input",
+                  "role": "agent",
+                  "id": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64",
+                  "state": "accepted"
+                }
+              ],
+              "residualResources": [],
+              "startOptions": {
+                "worktree": "path:/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "mode": {
+                  "mode": "terminal",
+                  "preferred": "terminal",
+                  "reason": "user_default",
+                  "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+                },
+                "resolvedWorktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "name": null,
+                "repo": null,
+                "baseBranch": null,
+                "terminal": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64",
+                "agent": null,
+                "launch": {
+                  "requested": {
+                    "agent": null,
+                    "model": null,
+                    "effort": null
+                  },
+                  "effective": {
+                    "agent": null,
+                    "model": null,
+                    "effort": null
+                  }
+                },
+                "timeoutMs": 300000,
+                "setup": "not_applicable",
+                "setupSource": "existing_worktree"
+              },
+              "lastError": null,
+              "createdAt": "2026-10-12 13:17:45",
+              "updatedAt": "2026-10-12T13:18:55.318Z"
+            },
+            "projection": {
+              "id": "ctx_427ffa0ea9c0",
+              "dispatchId": "ctx_427ffa0ea9c0",
+              "taskId": "task_18262f49e221",
+              "runId": "run_d394e13d9181",
+              "role": "worker",
+              "parent": null,
+              "provider": null,
+              "host": {
+                "kind": "local",
+                "id": "local"
+              },
+              "workspace": {
+                "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "kind": "folder_or_worktree"
+              },
+              "stage": {
+                "worker": "succeeded",
+                "dispatch": "completed",
+                "detail": "settled",
+                "activity": "unknown"
+              },
+              "outcome": "succeeded",
+              "liveness": {
+                "verdict": "unverifiable",
+                "reason": "missing_status"
+              },
+              "evidence": {
+                "durable": true,
+                "liveStatus": "unavailable",
+                "lastObservedAt": null
+              },
+              "resource": {
+                "state": "external",
+                "id": "wtr_f405be604e43",
+                "ownerDispatchId": "ctx_427ffa0ea9c0",
+                "releaseState": "not_requested",
+                "terminalState": "retained"
+              },
+              "nextAction": {
+                "kind": "none",
+                "argv": []
+              },
+              "attention": {
+                "categories": [
+                  "unverifiable",
+                  "root_completion"
+                ],
+                "requiresAction": true
+              }
+            },
+            "terminal": {
+              "handle": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64",
+              "ptyId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@53b9a1c3",
+              "incarnationId": "6f950e55-9f44-4d9e-83a8-2e26c95a258b",
+              "orphaned": false,
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "worktreePath": "/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "branch": "refs/heads/main",
+              "tabId": "f1e5b53d-c977-4b84-b2e8-41e1d5b7c187",
+              "leafId": "ebc22275-dceb-4b15-a3b8-8e70cf73b69a",
+              "title": "'node'",
+              "connected": true,
+              "writable": true,
+              "lastOutputAt": 1791811146306,
+              "preview": "work under the new Dispatch; ignore stale follow-ups from the settled task.\n=== TASK ===\n\"implementation\" without newline and then verify with xxd.\n# Wrote .companion/roles/kilo-implementation.txt\n1 implementation\n▣ Build · MiniMax-M3.1-Flash-Preview · 1m 8s",
+              "executionHostId": "local",
+              "agentIdentity": "kilo",
+              "paneRuntimeId": -1,
+              "rendererGraphEpoch": 0,
+              "agentWait": null
+            },
+            "observation": {
+              "status": "live",
+              "exactWorker": true,
+              "agentWait": null
+            },
+            "terminalResource": {
+              "id": "wtr_f405be604e43",
+              "ownershipState": "external",
+              "releaseState": "not_requested",
+              "retainedReason": "external_terminal",
+              "terminalHandle": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64",
+              "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+              "endpointId": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+              "endpointIncarnation": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2@@53b9a1c3:6f950e55-9f44-4d9e-83a8-2e26c95a258b",
+              "originDispatchId": "ctx_427ffa0ea9c0",
+              "ownerDispatchId": "ctx_427ffa0ea9c0",
+              "releaseRequestedAt": null,
+              "releaseCompletedAt": null,
+              "releaseError": null,
+              "recoveryAttemptCount": 0,
+              "lastRecoveryAt": null,
+              "archive": {
+                "source": null,
+                "status": null
+              }
+            }
+          },
+          "_meta": {
+            "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90"
+          }
+        }
+      }
+    ],
+    "completedDispatches": [
+      "ctx_692789eb0684",
+      "ctx_c28de9f7ef00"
+    ],
+    "qualification": "Input diagnostics only; production-launcher empty-task cause and exact Session qualifications remain unproven",
+    "originalProviderFileUnchanged": true
+  },
+  "hermesKimi": {
+    "modelEvidence": "No provider-response model evidence; request/alias/session configuration does not qualify"
+  },
+  "unresolved": [
+    "Full default Kilo roles/resume/Validator continuation/Recovery/read-only and mixed Controller matrix",
+    "Cline production launcher and complete transcript qualification",
+    "Hermes complete coverage and actual model evidence",
+    "Kimi actual model evidence",
+    "Antigravity Recovery complete coverage",
+    "Muse/Cursor real environment unavailable"
+  ],
+  "sources": [
+    "/var/tmp/orca-harness-acceptance-ncWTVr/kilo-report-probe-20261012-proof.json",
+    "/var/tmp/orca-harness-acceptance-ncWTVr/kilo-report-probe-20261012-coverage.json",
+    "/var/tmp/orca-harness-acceptance-ncWTVr/kilo-default-probe-20261012-receipts.jsonl",
+    "/var/tmp/orca-harness-acceptance-ncWTVr/continue-20261012-mutations.jsonl"
+  ]
+}

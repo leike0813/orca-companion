@@ -375,10 +375,14 @@ IC-11 图依据读取可选使用 `readFiles` 与 `readFileRange`。调用必须
 
 - **Owner (Create)**: `m1-admit-work-package-specifications`
 - **Canonical paths**: `src/application/ports/worker-harness.ts`、`src/bootstrap/worker-harness.ts`、`src/adapters/agents/`、`src/domain/{task-envelope,worker-report,worker-liveness}.ts`
-- **Extenders (Extend)**: `add-worker-harness-adapters` 增加显式注册表与逐 harness 的精确会话证明；`add-testable-worker-harness-adapters` 将 transcript 身份复核与 Recovery 读取配方归还 adapter，并修正共享只读启动；Recovery 只新建符合该合同的 Dispatch/Session Segment
+- **Extenders (Extend)**: `add-worker-harness-adapters` 增加显式注册表与逐 harness 的精确会话证明；`add-testable-worker-harness-adapters` 将 transcript 身份复核与 Recovery 读取配方归还 adapter，并修正共享只读启动；`add-next-worker-harness-adapters` 增加独立原生报告安装与候选 adapter；Recovery 只新建符合该合同的 Dispatch/Session Segment
 - **Consumers (Consume)**: Execution、Validation、Recovery、Graph evolution
 
 `WorkerHarness` 同时拥有 `readTranscriptIdentity({ transcriptRef, workspace })` 与 `recoveryInstructions()`：前者独立核验原生 transcript 的精确 Session/cwd，后者描述该格式的活动分支与事件来源读取方式。Bootstrap 按显式注册项委派，不按 harness 名称复制格式判断；不可证明时返回 `transcript_unavailable`，不能改读另一份历史。共享 seccomp 过滤器支持 x64/arm64，拒绝外来 audit ABI；x64 同时拒绝使用独立 syscall 表的 x32。真实主机证据目前限 Ubuntu x86_64。
+
+候选原生报告安装由各 adapter 定义、`scripts/worker-harness-reporting.mjs` 独立分派 install/status/uninstall；只维护 Companion 自有条目并保留其他原生配置。Worker 启动只检查安装状态，可信 descriptor 设置本次 reporter 路径并清除继承的 reporter 值；普通启动无 launch 上下文时报告插件无动作。报告必须与精确 native metadata/export 独立核验。prepared terminal 仅在同一 handle 的 tui-idle wait 明确 satisfied/running 后可被接管；报告或覆盖不可证明时拒绝推进。候选离线通过不扩大生产注册表。
+
+七家新候选共用 `candidate-worker-launch.ts`，其 prepared strategy 为 `activation: 'none'`：当前 Orca `worker-start` 拥有 preamble 的写入与提交。Companion 在该回执后只核验接管与原生 Session；`input_accepted` 仍不证明模型轮次开始，启动就绪或输入交付缺口保持阻塞。
 
 ```ts
 type TaskEnvelope = {

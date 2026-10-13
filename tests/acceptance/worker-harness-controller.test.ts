@@ -2,8 +2,12 @@
  * IP-04: mixed native Worker Harnesses through the real foreground Controller.
  *
  * Requires a one-shot schema-5 project with a dedicated Orca identity, exact
- * Command Code/Qwen profiles, and a local bare `origin`. This file is
- * inert unless explicitly enabled; it never creates or cleans up that fixture.
+ * planning/validation profiles, and a local bare `origin`. Planner and
+ * Implementation run on the harness selected by
+ * ORCA_COMPANION_IP04_MIXED_CONTROLLER_PLANNING_HARNESS (default command-code,
+ * only command-code/antigravity accepted on a real run); Validator, Finalizer
+ * and Recovery Utility stay on Qwen. This file is inert unless explicitly
+ * enabled; it never creates or cleans up that fixture.
  */
 import { closeSync, constants, fstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -21,7 +25,7 @@ import { parseProjectConfig } from '../../src/application/configuration/project-
 import type { IssueTrackerGateway } from '../../src/application/planning/route-map-service.js';
 import { emptyRouteMapBody } from '../../src/application/planning/route-map-initialization.js';
 import { qwenHarness } from '../../src/adapters/agents/qwen-harness.js';
-import { resolveAcceptancePlan, installAcceptanceCandidates } from '../support/worker-harness-acceptance.js';
+import { HARNESS_MATRIX, resolveAcceptancePlan, installAcceptanceCandidates } from '../support/worker-harness-acceptance.js';
 import { REAL_LOOP_SINGLE_PLAN, seedRealExecutionScope } from '../support/real-execution-scope.js';
 import { toChildEnvironment } from '../../src/interfaces/cli/main.js';
 import type { CoordinationScopeId } from '../../src/application/dto/identity.js';
@@ -34,14 +38,20 @@ const CONFIG_HOME = process.env['ORCA_COMPANION_IP04_MIXED_CONTROLLER_CONFIG_HOM
 const SCOPE_ID = process.env['ORCA_COMPANION_IP04_MIXED_CONTROLLER_SCOPE'] ?? '';
 const FIXTURE_ANSWER = process.env['ORCA_COMPANION_IP04_MIXED_CONTROLLER_ANSWER'] ?? '';
 const MAX_TRANSCRIPT_BYTES = 1024 * 1024;
-const HARNESS_SELECTION = 'command-code,qwen-code';
-const EXPECTED_PROFILES = {
-  planner: ['command-code', 'minimax-cn/MiniMax-M3.1-Flash-Preview'],
-  implementation: ['command-code', 'minimax-cn/MiniMax-M3.1-Flash-Preview'],
+const PLANNING_HARNESS = process.env['ORCA_COMPANION_IP04_MIXED_CONTROLLER_PLANNING_HARNESS']?.trim() || 'command-code';
+if (ENABLED && !['command-code', 'antigravity'].includes(PLANNING_HARNESS)) {
+  throw new Error(`ORCA_COMPANION_IP04_MIXED_CONTROLLER_PLANNING_HARNESS 只接受 command-code 或 antigravity：${PLANNING_HARNESS}`);
+}
+const PLANNING_MODEL = HARNESS_MATRIX.find((entry) => entry.harness === PLANNING_HARNESS)?.modelSelection.model ?? '';
+const HARNESS_SELECTION = `${PLANNING_HARNESS},qwen-code`;
+const EXPECTED_PROFILES: Readonly<Record<'planner' | 'implementation' | 'validator' | 'finalizer' | 'recovery_utility',
+  readonly [string, string]>> = {
+  planner: [PLANNING_HARNESS, PLANNING_MODEL],
+  implementation: [PLANNING_HARNESS, PLANNING_MODEL],
   validator: ['qwen-code', MODEL],
   finalizer: ['qwen-code', MODEL],
   recovery_utility: ['qwen-code', MODEL],
-} as const;
+};
 const candidatePlan = resolveAcceptancePlan({
   ...process.env,
   ORCA_COMPANION_REAL_ACCEPTANCE: '1',
@@ -112,7 +122,7 @@ function fixtureTracker(routeMapIssueNumber: number): IssueTrackerGateway {
 }
 
 function hostEnvironment(): Readonly<Record<string, string>> {
-  const env: Record<string, string> = { ...process.env, ...(CONFIG_HOME.length > 0 ? { XDG_CONFIG_HOME: CONFIG_HOME } : {}) };
+  const env: Record<string, string> = { ...toChildEnvironment(process.env), ...(CONFIG_HOME.length > 0 ? { XDG_CONFIG_HOME: CONFIG_HOME } : {}) };
   delete env['MINIMAX_CN_API_KEY'];
   return env;
 }
@@ -416,11 +426,13 @@ async function hasRecordedValidatorInterruption(backend: ExecutionBackend, env: 
 }
 
 describe.skipIf(!ENABLED || PROJECT.length === 0 || IDENTITY.length === 0 || CONFIG_HOME.length === 0)('IP-04 mixed Harness Controller acceptance', () => {
-  test('Command Code → Qwen, Recovery Utility, deliverable verdict and restart identity', async () => {
+  test('mixed native roles, Recovery Utility, deliverable verdict and restart identity', async () => {
     expect(PROJECT.startsWith('/')).toBe(true);
     expect(IDENTITY.trim().length).toBeGreaterThan(0);
-    const nativeSettings: unknown = JSON.parse(readFileSync(join(PROJECT, '.commandcode', 'settings.json'), 'utf8'));
-    expect(nativeSettings, 'fixture disables native project learning before Worker launch').toMatchObject({ tasteLearning: false });
+    if (PLANNING_HARNESS === 'command-code') {
+      const nativeSettings: unknown = JSON.parse(readFileSync(join(PROJECT, '.commandcode', 'settings.json'), 'utf8'));
+      expect(nativeSettings, 'fixture disables native project learning before Worker launch').toMatchObject({ tasteLearning: false });
+    }
     const rawConfig: unknown = JSON.parse(readFileSync(join(PROJECT, 'orca-companion.json'), 'utf8'));
     const parsed = parseProjectConfig(rawConfig);
     expect(parsed.ok, 'isolated fixture must have valid schema-5 project config').toBe(true);
@@ -624,7 +636,7 @@ describe.skipIf(!ENABLED || PROJECT.length === 0 || IDENTITY.length === 0 || CON
           observedAt: new Date().toISOString(),
           coordinationScopeId: seeded.coordinationScopeId,
           orcaRunId: seeded.orcaRunId,
-          profiles: 'planner/implementation=command-code; validator/finalizer/recovery_utility=qwen-code',
+          profiles: `planner/implementation=${PLANNING_HARNESS} (${PLANNING_MODEL}); validator/finalizer/recovery_utility=qwen-code (${MODEL})`,
           verdictId: finalizerVerdict.verdictId,
           verdictKind: finalizerVerdict.verdict.kind,
           verdictRefs: finalizerVerdict.verdict.kind === 'deliverable' ? finalizerVerdict.verdict.evidenceRefs : [],

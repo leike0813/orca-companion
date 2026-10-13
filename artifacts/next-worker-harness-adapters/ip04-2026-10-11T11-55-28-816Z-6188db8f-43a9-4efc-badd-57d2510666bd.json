@@ -1,0 +1,46 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-11T11:55:28.816Z",
+  "finishedAt": "2026-10-11T11:56:14.694Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ncWTVr",
+  "runId": "run_d394e13d9181",
+  "coordinatorTerminalHandle": "term_1e076f90-455d-43d4-8522-0f2f14bc898a",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "kimi",
+      "roles": [
+        {
+          "harness": "kimi",
+          "role": "planner",
+          "kind": "blocked",
+          "launchId": "next-kimi2:planner",
+          "taskId": null,
+          "contextToken": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "Session Binding 不可用：Kimi Code report, native roots, manifest, or workspace mismatch；worker-show={\"dispatchId\":\"ctx_0f5a71a7ca9b\",\"taskId\":\"task_71ef844324b0\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_0f5a71a7ca9b\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"      # distinguish \\\"still thinking\\\" from \\\"hung / crashed.\\\" Skip\",\"    heartbeats only\",\"      # while blocked inside `check --wait` or `ask` — those calls are\",\"   Press Ctrl+B to run in background\",\" ─────────────────────────────────────────────────────────────────────────\",\"   ▶ Run this command?\",\"\",\"   cwd: /var/tmp/<redacted>/project-companion-harne...\",\"   $ orca orchestration check --terminal\",\"     <redacted> --json\",\"\",\"   ▶ 1. Approve once\",\"     2. Approve for this session\",\"     3. Reject\",\"     4. Reject with feedback\",\"\",\"   ↑/↓ s | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"    === TASK ===\",\"    You are the planner worker for work package WP-1 in a throwaway\",\"    repository.\",\"    Work only inside the current directory. Do not install dependencies,\",\"    do not use the network, do not commit or push.\",\"    Use native Read/Glob/Edit/Write tools for repository inspection and\",\"    artifacts; reserve Bash for the required Orca reporting command.\",\"    Create the file .companion/roles/kimi-planner.txt containing exactly:\",\"    planner\",\"    Use your native file editing tool to create this artifact. The file\",\"    content ends after that single word.\",\"    The completion token belongs only in your assistant response. Do not\",\"    create a token file.\",\"    Print exactly the token HARNESS-kimi-planner-OK on its own line.\",\"    Then use the exact orca orchestration send completion command from the\",\"    supervision preamble, with its original dispatch capability, to report\",\"    worker_done --outcome succeeded. This reporting command is required to\",\"    complete the task.\",\" ● I'll create the artifact file first.\",\" ● Used Write (.companion/roles/kimi-planner.txt) · 1 line\",\"      1  planner\","
+          }
+        }
+      ],
+      "blockers": [
+        {
+          "code": "transcript_unavailable",
+          "message": "Session Binding 不可用：Kimi Code report, native roots, manifest, or workspace mismatch；worker-show={\"dispatchId\":\"ctx_0f5a71a7ca9b\",\"taskId\":\"task_71ef844324b0\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_0f5a71a7ca9b\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"      # distinguish \\\"still thinking\\\" from \\\"hung / crashed.\\\" Skip\",\"    heartbeats only\",\"      # while blocked inside `check --wait` or `ask` — those calls are\",\"   Press Ctrl+B to run in background\",\" ─────────────────────────────────────────────────────────────────────────\",\"   ▶ Run this command?\",\"\",\"   cwd: /var/tmp/<redacted>/project-companion-harne...\",\"   $ orca orchestration check --terminal\",\"     <redacted> --json\",\"\",\"   ▶ 1. Approve once\",\"     2. Approve for this session\",\"     3. Reject\",\"     4. Reject with feedback\",\"\",\"   ↑/↓ s | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"    === TASK ===\",\"    You are the planner worker for work package WP-1 in a throwaway\",\"    repository.\",\"    Work only inside the current directory. Do not install dependencies,\",\"    do not use the network, do not commit or push.\",\"    Use native Read/Glob/Edit/Write tools for repository inspection and\",\"    artifacts; reserve Bash for the required Orca reporting command.\",\"    Create the file .companion/roles/kimi-planner.txt containing exactly:\",\"    planner\",\"    Use your native file editing tool to create this artifact. The file\",\"    content ends after that single word.\",\"    The completion token belongs only in your assistant response. Do not\",\"    create a token file.\",\"    Print exactly the token HARNESS-kimi-planner-OK on its own line.\",\"    Then use the exact orca orchestration send completion command from the\",\"    supervision preamble, with its original dispatch capability, to report\",\"    worker_done --outcome succeeded. This reporting command is required to\",\"    complete the task.\",\" ● I'll create the artifact file first.\",\" ● Used Write (.companion/roles/kimi-planner.txt) · 1 line\",\"      1  planner\","
+        }
+      ]
+    }
+  ]
+}

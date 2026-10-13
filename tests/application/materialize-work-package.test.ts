@@ -559,7 +559,7 @@ test.each([
         };
       }
       if (query.operation === 'terminal-wait') {
-        return { kind: 'accepted', value: { state: 'tui-idle' } };
+        return { kind: 'accepted', value: { wait: { handle: query.terminal, condition: 'tui-idle', status: 'running', satisfied: true } } };
       }
       if (query.operation === 'worker-list') {
         return { kind: 'accepted', value: { workers: [{ taskId: 'orca-task-1', dispatchId: 'dispatch-1' }] } };
@@ -671,7 +671,7 @@ test('句柄已持久化时 start 失败后新尝试复用句柄，标题已变�
           },
         };
       }
-      if (query.operation === 'terminal-wait') return { kind: 'accepted', value: { state: 'tui-idle' } };
+      if (query.operation === 'terminal-wait') return { kind: 'accepted', value: { wait: { handle: query.terminal, condition: 'tui-idle', status: 'running', satisfied: true } } };
       if (query.operation === 'worker-show') {
         return { kind: 'accepted', value: { dispatchId: 'dispatch-1', exactWorker: true, agentTerminalHandle: 'terminal-prepared-1' } };
       }

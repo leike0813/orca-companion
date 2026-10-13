@@ -1,7 +1,7 @@
 /** Native Worker launcher: inherit authentication and configuration from the actual terminal. */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { workerModelSelectionSchema, type WorkerHarnessId, type WorkerModelSelection } from '../../domain/model-configuration.js';
+import { workerModelSelectionSchema, type WorkerModelSelection } from '../../domain/model-configuration.js';
 import { READ_ONLY_EXECUTION_WRAPPER_SOURCE } from './read-only-execution-wrapper.js';
 import { WORKER_RUNTIME_SOURCE } from './worker-runtime.js';
 
@@ -14,7 +14,9 @@ export type CodexModelLaunchDescriptor = {
   readonly version: typeof CODEX_MODEL_DESCRIPTOR_VERSION;
   readonly executable: string;
   readonly args: readonly string[];
-  readonly harness?: WorkerHarnessId;
+  readonly harness?: string;
+  /** Non-secret private reporter path supplied by the adapter, never by the Worker. */
+  readonly reporterPath?: string;
   readonly expectedStateRoot?: string;
   readonly runtimeReportPath?: string;
   readonly readOnly?: {
@@ -81,12 +83,17 @@ function fail(message) {
 let descriptor;
 try { descriptor = JSON.parse(readFileSync(process.argv[2], 'utf8')); }
 catch { fail('cannot read launch descriptor'); }
-const allowed = ['version', 'executable', 'args', 'harness', 'expectedStateRoot', 'runtimeReportPath', 'readOnly'];
+const allowed = ['version', 'executable', 'args', 'harness', 'reporterPath', 'expectedStateRoot', 'runtimeReportPath', 'readOnly'];
 if (!descriptor || descriptor.version !== ${CODEX_MODEL_DESCRIPTOR_VERSION}
   || Object.keys(descriptor).some(key => !allowed.includes(key))
   || typeof descriptor.executable !== 'string' || !Array.isArray(descriptor.args)
   || descriptor.args.some(arg => typeof arg !== 'string')) fail('invalid launch descriptor');
 const env = { ...process.env };
+delete env.ORCA_COMPANION_SESSION_REPORTER;
+if (descriptor.reporterPath !== undefined) {
+  if (typeof descriptor.reporterPath !== 'string' || !isAbsolute(descriptor.reporterPath)) fail('invalid reporter path');
+  env.ORCA_COMPANION_SESSION_REPORTER = descriptor.reporterPath;
+}
 let runtime;
 try {
   runtime = descriptor.harness === undefined ? null : nativeWorkerRuntime(descriptor.harness, env);

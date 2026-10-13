@@ -1,0 +1,74 @@
+{
+  "change": "add-next-worker-harness-adapters",
+  "policy": "Each candidate independently reaches full qualification or a documented deferral; deferred candidates never count as PASS or production registrations.",
+  "priority": ["antigravity", "kilo"],
+  "candidates": {
+    "antigravity": {
+      "status": "worker_matrix_passed_controller_blocked",
+      "evidence": "antigravity-qualification-20261011.json",
+      "remaining": ["mixed Controller with interruption and same-Scope restart"],
+      "controller": {
+        "evidence": "controller-preparation-20261012.json",
+        "coordinationScopeId": "ip04-mixed-controller-485da76f-4ba2-4c13-941a-ff479dde1049",
+        "blocker": "Original prepared terminal never returned tui-idle satisfied/running after native trust confirmation; readiness remains unproven.",
+        "resumeWhen": "Recheck the original terminal through the public wait API, then continue the same authorized Scope."
+      },
+      "recovery": {
+        "resultRef": "/var/tmp/orca-harness-acceptance-ncWTVr/explore-20261012-antigravity-validator-recovery.json",
+        "taskId": "task_37c0eaa6859a",
+        "dispatchId": "ctx_8b80837d560c",
+        "sessionId": "ad8a90c7-4b0b-441c-aa43-3f3c3efdcfef",
+        "coverage": "complete",
+        "modelEvidence": "gemini-3.8-flash-medium",
+        "capsuleRef": "recovery-capsule:explore-20261012:antigravity:validator-recovery",
+        "sourceBehaviorVerified": true,
+        "readOnlyVerified": true,
+        "permissionDeniedCode": "EROFS",
+        "deliveryAcked": false,
+        "deliveryNote": "Harness fixture reads public --all snapshot without acknowledging unrelated messages; Controller verification remains separate."
+      }
+    },
+    "kilo": {
+      "status": "deferred",
+      "version": "@kilocode/cli 7.8.8 / default full TUI",
+      "evidence": "default-tui-matrix-20261012.json",
+      "attempted": ["reporter native config precedence repair", "default full TUI input probe", "remove duplicate Enter", "real Implementation and Validator", "Planner", "exact Validator resume", "readonly Finalizer", "65-second delay comparison", "readonly Recovery Utility against a complete source transcript"],
+      "blockers": ["Default full TUI does not reliably receive the prepared Worker task; source identity and input acceptance do not prove a model turn", "Latest readonly Recovery also produced an empty Session and no worker_done after the full settlement window"],
+      "resultRef": "/var/tmp/orca-harness-acceptance-ncWTVr/full-tui-fixed-20261012-kilo-validator-recovery.json",
+      "dispatchId": "ctx_a7c88f86524f",
+      "taskId": "task_669c822504ef",
+      "terminalHandle": "term_fbde4b8b-1a8a-486e-92f9-523b7cd92a5c",
+      "sessionId": "ses_ecf473907ffeGyKFEedQerK2Fi",
+      "exportMessageCount": 0,
+      "blockerCode": "worker_not_succeeded",
+      "resumeWhen": "A public/native readiness and input submission path reliably starts default-TUI task turns and exact resumes under both writable and readonly launch; rerun the complete matrix and Controller. EROFS logs are observed but causality is unproven."
+    },
+    "cline": {
+      "status": "deferred",
+      "version": "cline 3.0.70 / @cline 0.0.92",
+      "attempted": ["native manifest/plugin setup", "local --tui --yolo launch", "isolated provider settings", "multiline input probes", "real Validator role"],
+      "blockers": ["Native messages artifact is an overwritten context snapshot without reliable full active-history coverage evidence", "assistant modelInfo is copied request configuration, not provider-response model evidence"],
+      "sources": ["docs/research/next-worker-harness-adapters.md", "artifacts/next-worker-harness-adapters/default-tui-matrix-20261012.json", "installed @cline/core/dist/index.js sj and persistSessionMessages; @cline/agents/dist/index.js messageModelInfo"],
+      "resumeWhen": "Native public Session/export protocol proves transcript coverage and retains response model identity; rerun the full matrix and Controller before registration."
+    },
+    "hermes": {
+      "status": "deferred",
+      "version": "banner 0.17.0 / installed checkout e20ff352b91623d51ae05ea586a1800aee852402",
+      "attempted": ["--tui hooks/cwd investigation", "--cli startup and exact hook binding", "real readonly Finalizer", "public exact-ID Session export"],
+      "blockers": ["Public export omits inactive/compacted history evidence and coverage remains partial", "No actual provider-response model evidence in the inspected native hook/export"],
+      "sources": ["docs/research/next-worker-harness-adapters.md", "artifacts/next-worker-harness-adapters/continuation-20261012.json"],
+      "resumeWhen": "Public native export and response metadata can prove required coverage/model facts; then repeat roles, resume, Recovery and mixed Controller."
+    },
+    "kimi": {
+      "status": "deferred",
+      "version": "2.1.1",
+      "attempted": ["native SessionStart hook", "exact cwd partition/ZIP manifest and wire verification", "real Planner", "usage-record model source tracing"],
+      "blockers": ["usage.record.model comes from request.modelAlias; inspected native protocol does not retain actual provider-response model evidence"],
+      "sources": ["docs/research/next-worker-harness-adapters.md", "artifacts/next-worker-harness-adapters/implementation-progress-20261011.json", "artifacts/next-worker-harness-adapters/ip04-2026-10-11T12-15-26-092Z-df6fe0d7-73bf-43df-8729-0af0e189980b.json"],
+      "resumeWhen": "A public native response/hook/export supplies actual model evidence for the exact Session; rerun the full matrix and Controller."
+    },
+    "muse": { "status": "deferred", "blockers": ["Official CLI and native subscription login unavailable on this machine"], "sources": ["docs/research/next-worker-harness-adapters.md"], "resumeWhen": "Install/login, then execute the complete real matrix and Controller." },
+    "cursor": { "status": "deferred", "blockers": ["Official CLI and native subscription login unavailable on this machine"], "sources": ["docs/research/next-worker-harness-adapters.md"], "resumeWhen": "Install/login with a supported model, then execute the complete real matrix and Controller." }
+  },
+  "newProductionRegistrations": []
+}

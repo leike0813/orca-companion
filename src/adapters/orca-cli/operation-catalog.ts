@@ -983,6 +983,7 @@ export const ORCA_OPERATIONS = {
       const args = ['terminal', 'create', '--worktree', input.worktree, '--json'];
       pushFlag(args, '--title', input.title);
       pushFlag(args, '--command', input.command);
+      if (input.focus === true) args.push('--focus');
       return args;
     },
   },

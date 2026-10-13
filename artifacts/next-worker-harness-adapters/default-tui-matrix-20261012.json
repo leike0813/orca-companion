@@ -1,0 +1,394 @@
+{
+  "observedAt": "2026-10-12T14:33:40Z",
+  "change": "add-next-worker-harness-adapters",
+  "progress": {
+    "complete": 7,
+    "total": 12,
+    "newProductionRegistrations": 0
+  },
+  "finding": "Current public worker-start owns preamble submission. Removing candidate additional Enter removes duplicate input; Kilo Implementation/Validator succeeded, but Planner/resume/readonly Finalizer remain blocked. A 65-second diagnostic delay produced only an empty Session and did not establish reliable startup.",
+  "codeChange": {
+    "path": "src/adapters/agents/candidate-worker-launch.ts",
+    "activation": "none",
+    "scope": "seven explicitly injected candidates; existing registered harness activation unchanged"
+  },
+  "oldBehavior": {
+    "planner": {
+      "harness": "kilo",
+      "role": "planner",
+      "kind": "blocked",
+      "launchId": "full-tui-20261012:kilo:planner",
+      "taskId": null,
+      "contextToken": null,
+      "dispatchId": null,
+      "sessionId": null,
+      "transcriptRef": null,
+      "stateRoot": null,
+      "reporterPath": null,
+      "coverage": null,
+      "terminalState": null,
+      "artifactOk": null,
+      "modelEvidence": null,
+      "blocker": {
+        "code": "session_report_missing",
+        "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_a29424a31caa\",\"taskId\":\"task_1e968dcd55b5\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_a29424a31caa\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                                                                        ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                                                                        ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                                                                        ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                                                                        ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀        | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                                                                        ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                                                                        ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                                                                        ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                                                                        ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                                                                            ┃\",\"                                                                            ┃  Ask anything... \\\"Fix broken tests\\\"\",\"                                                                            ┃\",\"                                                                            ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"                                                                            ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀"
+      }
+    },
+    "validatorLoadedBeforeBuild": {
+      "harness": "kilo",
+      "role": "validator",
+      "kind": "blocked",
+      "launchId": "full-tui-20261012:kilo:validator",
+      "taskId": null,
+      "contextToken": null,
+      "dispatchId": null,
+      "sessionId": null,
+      "transcriptRef": null,
+      "stateRoot": null,
+      "reporterPath": null,
+      "coverage": null,
+      "terminalState": null,
+      "artifactOk": null,
+      "modelEvidence": null,
+      "blocker": {
+        "code": "session_report_missing",
+        "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_daeb4c675219\",\"taskId\":\"task_4e17e805e60e\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_daeb4c675219\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix broken tests\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Tok | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix broken tests\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                                                      ctrl+t variants  tab agents  ctrl+p commands\",\"                          ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"                            Get usage analytics, centralized billing, shared context, and other\",\"                            features you need to scale AI coding across your org.\",\"                                 ● Tip Run kilo auth list to see all configured providers\",\"  "
+      }
+    }
+  },
+  "singleVariableNoEnter": {
+    "kiloImplementation": {
+      "harness": "kilo",
+      "role": "implementation",
+      "kind": "ran",
+      "launchId": "full-tui-noenter-20261012:kilo:implementation",
+      "taskId": "task_29a89e2ce115",
+      "contextToken": null,
+      "dispatchId": "ctx_b7b9763255f0",
+      "sessionId": "ses_ecf8d8d22ffeI7sT04RqTmrk0O",
+      "transcriptRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ecf8d8d22ffeI7sT04RqTmrk0O.json",
+      "stateRoot": "/home/joshua/.local/share/kilo",
+      "reporterPath": "/var/tmp/orca-harness-acceptance-ncWTVr/state/kilo/b6793b90afbd461835cc/session-start.mjs",
+      "coverage": "complete",
+      "terminalState": "succeeded",
+      "artifactOk": true,
+      "modelEvidence": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+      "blocker": null
+    },
+    "clineValidator": {
+      "harness": "cline",
+      "role": "validator",
+      "kind": "ran",
+      "launchId": "full-tui-noenter-20261012:cline:validator",
+      "taskId": "task_9e6332b13c96",
+      "contextToken": "82bea5b6-bca1-489e-8a6a-12a36d0552be",
+      "dispatchId": "ctx_f452547b015a",
+      "sessionId": "1791814275714_4auqg",
+      "transcriptRef": "cline-session:1791814275714_4auqg",
+      "stateRoot": "/home/joshua/.cline/data",
+      "reporterPath": "/var/tmp/orca-harness-acceptance-ncWTVr/state/cline/6499a28b724d73ccc8bc/session-start.mjs",
+      "coverage": "partial",
+      "terminalState": "succeeded",
+      "artifactOk": true,
+      "modelEvidence": null,
+      "blocker": null
+    }
+  },
+  "fixedDefaultTui": {
+    "validator": {
+      "harness": "kilo",
+      "role": "validator",
+      "kind": "ran",
+      "launchId": "full-tui-fixed-20261012:kilo:validator",
+      "taskId": "task_563e73a62b0b",
+      "contextToken": "60f48fb1-053b-4c40-acc5-3a80dde659da",
+      "dispatchId": "ctx_084559fbdac7",
+      "sessionId": "ses_ecf88a937ffeN4xv5Qd6dPY65f",
+      "transcriptRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ecf88a937ffeN4xv5Qd6dPY65f.json",
+      "stateRoot": "/home/joshua/.local/share/kilo",
+      "reporterPath": "/var/tmp/orca-harness-acceptance-ncWTVr/state/kilo/0697a238273f0677c33f/session-start.mjs",
+      "coverage": "complete",
+      "terminalState": "succeeded",
+      "artifactOk": true,
+      "modelEvidence": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+      "blocker": null
+    }
+  },
+  "mutations": [
+    {
+      "file": "/var/tmp/orca-harness-acceptance-ncWTVr/full-tui-20261012-mutations.jsonl",
+      "operations": [
+        {
+          "operationId": "full-tui-20261012:kilo:planner:task-create",
+          "operation": "task-create",
+          "kind": "accepted",
+          "backendRequestId": "00979c17-c7c3-4475-820d-ecbdeb509998",
+          "taskId": "task_1e968dcd55b5"
+        },
+        {
+          "operationId": "full-tui-20261012:kilo:planner:terminal-create",
+          "operation": "terminal-create",
+          "kind": "accepted",
+          "backendRequestId": "c10dadeb-f3ee-4545-8af5-5f8b4dbd3966",
+          "terminalHandle": "term_a2188a8c-427c-4e9f-a13b-f2ef68636975"
+        },
+        {
+          "operationId": "full-tui-20261012:kilo:planner:worker-start",
+          "operation": "worker-start",
+          "kind": "accepted",
+          "backendRequestId": "99d1f80e-607d-4848-a48f-5a8d9d155c65",
+          "dispatchId": "ctx_a29424a31caa"
+        },
+        {
+          "operationId": "full-tui-20261012:kilo:planner:terminal-submit",
+          "operation": "terminal-submit",
+          "kind": "accepted",
+          "backendRequestId": "46296b96-f5a8-423f-9fb9-d3834f8bc26b"
+        },
+        {
+          "operationId": "full-tui-20261012:kilo:validator:task-create",
+          "operation": "task-create",
+          "kind": "accepted",
+          "backendRequestId": "75217b79-39ae-45df-9d7e-00ee7e69b0f8",
+          "taskId": "task_4e17e805e60e"
+        },
+        {
+          "operationId": "full-tui-20261012:kilo:validator:terminal-create",
+          "operation": "terminal-create",
+          "kind": "accepted",
+          "backendRequestId": "a57bcafa-a779-403b-bf37-52363be46476",
+          "terminalHandle": "term_7d91f0bf-0852-4cad-8bcd-f8960e40b2ad"
+        },
+        {
+          "operationId": "full-tui-20261012:kilo:validator:worker-start",
+          "operation": "worker-start",
+          "kind": "accepted",
+          "backendRequestId": "c4146da9-bbd7-4585-baa7-e3230d2a7128",
+          "dispatchId": "ctx_daeb4c675219"
+        },
+        {
+          "operationId": "full-tui-20261012:kilo:validator:terminal-submit",
+          "operation": "terminal-submit",
+          "kind": "accepted",
+          "backendRequestId": "7931fc2a-5eee-4241-bbba-9e036d1d7dd4"
+        }
+      ]
+    },
+    {
+      "file": "/var/tmp/orca-harness-acceptance-ncWTVr/full-tui-noenter-20261012-mutations.jsonl",
+      "operations": [
+        {
+          "operationId": "full-tui-noenter-20261012:kilo:implementation:task-create",
+          "operation": "task-create",
+          "kind": "accepted",
+          "backendRequestId": "c54a48de-1390-4804-b199-1d9c336fb667",
+          "taskId": "task_29a89e2ce115"
+        },
+        {
+          "operationId": "full-tui-noenter-20261012:kilo:implementation:terminal-create",
+          "operation": "terminal-create",
+          "kind": "accepted",
+          "backendRequestId": "67419213-5f0e-47b9-a2ee-1edaea138011",
+          "terminalHandle": "term_21b73544-b7c5-40fc-bf41-422e0910cf72"
+        },
+        {
+          "operationId": "full-tui-noenter-20261012:kilo:implementation:worker-start",
+          "operation": "worker-start",
+          "kind": "accepted",
+          "backendRequestId": "d59c4549-032d-40c2-81c0-d80c806e93f5",
+          "dispatchId": "ctx_b7b9763255f0"
+        },
+        {
+          "operationId": "full-tui-noenter-20261012:cline:validator:task-create",
+          "operation": "task-create",
+          "kind": "accepted",
+          "backendRequestId": "893444b4-80b6-4937-8ef1-0570a82a2760",
+          "taskId": "task_9e6332b13c96"
+        },
+        {
+          "operationId": "full-tui-noenter-20261012:cline:validator:terminal-create",
+          "operation": "terminal-create",
+          "kind": "accepted",
+          "backendRequestId": "86c75f7c-6006-4f61-8084-7adee608e8d9",
+          "terminalHandle": "term_21a33f54-a71a-4b63-b945-04eff3bdb99f"
+        },
+        {
+          "operationId": "full-tui-noenter-20261012:cline:validator:worker-start",
+          "operation": "worker-start",
+          "kind": "accepted",
+          "backendRequestId": "a7ef4f30-18ed-48f5-ad01-8eee67dcfc06",
+          "dispatchId": "ctx_f452547b015a"
+        }
+      ]
+    },
+    {
+      "file": "/var/tmp/orca-harness-acceptance-ncWTVr/full-tui-fixed-20261012-mutations.jsonl",
+      "operations": [
+        {
+          "operationId": "full-tui-fixed-20261012:kilo:validator:task-create",
+          "operation": "task-create",
+          "kind": "accepted",
+          "backendRequestId": "173b4478-dd3f-4952-96f5-7c1c0de3f869",
+          "taskId": "task_563e73a62b0b"
+        },
+        {
+          "operationId": "full-tui-fixed-20261012:kilo:validator:terminal-create",
+          "operation": "terminal-create",
+          "kind": "accepted",
+          "backendRequestId": "3cbab989-f33a-442b-a742-3c18a80d8729",
+          "terminalHandle": "term_2d93b900-1c50-4de3-9b9a-b1df4c676619"
+        },
+        {
+          "operationId": "full-tui-fixed-20261012:kilo:validator:worker-start",
+          "operation": "worker-start",
+          "kind": "accepted",
+          "backendRequestId": "b7aed4a1-4ed0-4574-aae7-434b24b52bee",
+          "dispatchId": "ctx_084559fbdac7"
+        },
+        {
+          "operationId": "full-tui-fixed-20261012:kilo:validator-resume:task-create",
+          "operation": "task-create",
+          "kind": "accepted",
+          "backendRequestId": "1bbbabeb-681e-48fe-9ab2-f410e9eb7394",
+          "taskId": "task_10475bca8c41"
+        },
+        {
+          "operationId": "full-tui-fixed-20261012:kilo:validator-resume:terminal-create",
+          "operation": "terminal-create",
+          "kind": "accepted",
+          "backendRequestId": "89c0f691-ace1-4e54-8cd8-47f385ca6aa9",
+          "terminalHandle": "term_6c83aaef-8ea4-4eb3-bc56-2eae1d6bbfce"
+        },
+        {
+          "operationId": "full-tui-fixed-20261012:kilo:validator-resume:worker-start",
+          "operation": "worker-start",
+          "kind": "accepted",
+          "backendRequestId": "a1b31f17-1336-4d97-9c37-eaf2c5214af8",
+          "dispatchId": "ctx_5ec18b3c01e5"
+        }
+      ]
+    }
+  ],
+  "additionalAttempts": [
+    {
+      "launchId": "full-tui-fixed-20261012:kilo:validator-resume",
+      "resultRef": "/var/tmp/orca-harness-acceptance-ncWTVr/full-tui-fixed-20261012-kilo-validator-resume.json",
+      "taskId": "task_10475bca8c41",
+      "dispatchId": "ctx_5ec18b3c01e5",
+      "terminalHandle": "term_6c83aaef-8ea4-4eb3-bc56-2eae1d6bbfce",
+      "requestedSessionId": "ses_ecf88a937ffeN4xv5Qd6dPY65f",
+      "kind": "blocked",
+      "blockerCode": "session_report_missing",
+      "observation": "Original Session history visible; no new launch report or task turn.",
+      "requests": {
+        "taskCreate": { "backendRequestId": "1bbbabeb-681e-48fe-9ab2-f410e9eb7394", "durableRequestId": "11becd32-7579-4460-9423-9f5a4c88e716" },
+        "terminalCreate": { "backendRequestId": "89c0f691-ace1-4e54-8cd8-47f385ca6aa9" },
+        "workerStart": { "backendRequestId": "a1b31f17-1336-4d97-9c37-eaf2c5214af8" }
+      }
+    },
+    {
+      "launchId": "full-tui-fixed-20261012:kilo:finalizer",
+      "resultRef": "/var/tmp/orca-harness-acceptance-ncWTVr/full-tui-fixed-20261012-kilo-finalizer.json",
+      "taskId": "task_d4d09fa1157f",
+      "dispatchId": "ctx_bf4790e84daa",
+      "terminalHandle": "term_f3567ae6-e149-4eda-874a-910d6a71c985",
+      "kind": "blocked",
+      "blockerCode": "session_report_missing",
+      "requests": {
+        "taskCreate": { "backendRequestId": "2abe27e9-1b44-4f2b-b052-775deab1c321", "durableRequestId": "f3ca5302-e0e3-470d-a8eb-93ae4949d413" },
+        "terminalCreate": { "backendRequestId": "44a26de2-f24c-495c-b6dc-369cd9441c40" },
+        "workerStart": { "backendRequestId": "3f0186a9-1731-47a7-8527-9610924adea6" }
+      }
+    },
+    {
+      "launchId": "full-tui-fixed-20261012:kilo:planner",
+      "resultRef": "/var/tmp/orca-harness-acceptance-ncWTVr/full-tui-fixed-20261012-kilo-planner.json",
+      "taskId": "task_f0ff93499253",
+      "dispatchId": "ctx_2d5c0b835751",
+      "terminalHandle": "term_a11cd906-1223-4ba4-9dfc-bc969e805911",
+      "kind": "blocked",
+      "blockerCode": "session_report_missing",
+      "requests": {
+        "taskCreate": { "backendRequestId": "83378a5d-89ee-4fb9-8326-ae7e47e1322d", "durableRequestId": "fcd7602d-4f09-470e-8c42-3184b0d6f767" },
+        "terminalCreate": { "backendRequestId": "bcea49eb-0db5-457a-9810-a7cbb82ce418" },
+        "workerStart": { "backendRequestId": "9a41a70a-4160-4efc-8a1a-06d55f6143af" }
+      }
+    },
+    {
+      "launchId": "full-tui-delay-probe-20261012:kilo:finalizer",
+      "resultRef": "/var/tmp/orca-harness-acceptance-ncWTVr/full-tui-delay-probe-20261012-kilo-finalizer.json",
+      "mutationRef": "/var/tmp/orca-harness-acceptance-ncWTVr/full-tui-delay-probe-20261012-mutations.jsonl",
+      "taskId": "task_944475e67603",
+      "dispatchId": "ctx_4c412ecb90f2",
+      "terminalHandle": "term_81d5c84f-8301-439b-a566-461328494de5",
+      "kind": "blocked",
+      "blockerCode": "worker_not_succeeded",
+      "diagnosticOnly": true,
+      "delayAfterPositiveReadinessMs": 65000,
+      "reportPresent": true,
+      "reportedSessionId": "ses_ecf7ecc31ffe7q1Yj0uAJ8awVz",
+      "exactExportRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ecf7ecc31ffe7q1Yj0uAJ8awVz.json",
+      "exportMessageCount": 0,
+      "workerStage": "input_accepted",
+      "workerState": "ready",
+      "observationStatus": "live",
+      "workerDone": false,
+      "observation": "Empty Session does not prove model startup. OpenViking EROFS is observed but its causal role is unproven; native plugins and readonly permissions were retained.",
+      "requests": {
+        "taskCreate": { "backendRequestId": "12f0e7f8-6629-46f8-89cd-1ff16ff847c5", "durableRequestId": "296f1d97-1bf4-4774-8ec6-b7cdd21e4745" },
+        "terminalCreate": { "backendRequestId": "95292e45-653f-49e2-ba4d-6a793e9be7f0" },
+        "workerStart": { "backendRequestId": "15f6c4ca-8510-49ff-9c3e-0ac74b6c9e21" }
+      }
+    }
+  ],
+  "requestIdentityNote": "backendRequestId is the transport envelope ID where reported; durableRequestId is value.mutation.requestId where present. Original complete receipts are retained; absent fields are not guessed.",
+  "publicProtocolInvestigation": {
+    "sourceSnapshot": "cc5c85fb7a43ed52c6cd29157210020cd769d84c",
+    "installedOrcaVersion": "1.4.222",
+    "snapshotFacts": {
+      "kiloTurnStartObservation": "unsupported",
+      "kiloPasteReadySignal": null,
+      "kiloQuietReadinessLane": "after-paint",
+      "workerStartUnsupportedProvider": "ready on input acceptance"
+    },
+    "installedObservations": {
+      "dispatchId": "ctx_4c412ecb90f2",
+      "workerStage": "input_accepted",
+      "agentWait": null,
+      "receiptRef": "/var/tmp/orca-harness-acceptance-ncWTVr/kilo-default-probe-20261012-receipts.jsonl"
+    },
+    "limit": "Source snapshot differs from installed runtime. No reliable public task-turn signal was established; root cause of missing task input is still unproven. wait-submit is not a read-only query of worker-start input; no text was reconstructed or resent."
+  },
+  "validation": {
+    "candidateAndLaunchMatrixTests": {
+      "passed": 163,
+      "skipped": 2
+    },
+    "kiloClineAfterTestUpdate": 29,
+    "typecheck": "passed",
+    "scopedEslint": "passed",
+    "build": "passed",
+    "fullTests": { "command": "pnpm exec vitest run --maxWorkers=4", "passed": 2510, "skipped": 18, "filesPassed": 212, "filesSkipped": 9, "exitCode": 0 },
+    "openspecStrict": "passed",
+    "diffCheck": "passed",
+    "independentFinalVerification": "not_run"
+  },
+  "pending": [
+    "Kilo default TUI planner/finalizer, implementation resume, Validator continuation, Recovery and mixed Controller",
+    "Cline full transcript coverage and response model evidence",
+    "Other candidate qualifications unchanged"
+  ],
+  "preservedUnsettled": [
+    "ctx_a29424a31caa",
+    "ctx_daeb4c675219",
+    "ctx_5ec18b3c01e5",
+    "ctx_bf4790e84daa",
+    "ctx_2d5c0b835751",
+    "ctx_4c412ecb90f2"
+  ],
+  "closedAfterSettlement": [
+    { "dispatchId": "ctx_b7b9763255f0", "terminalHandle": "term_21b73544-b7c5-40fc-bf41-422e0910cf72" },
+    { "dispatchId": "ctx_f452547b015a", "terminalHandle": "term_21a33f54-a71a-4b63-b945-04eff3bdb99f" },
+    { "dispatchId": "ctx_084559fbdac7", "terminalHandle": "term_2d93b900-1c50-4de3-9b9a-b1df4c676619" }
+  ]
+}

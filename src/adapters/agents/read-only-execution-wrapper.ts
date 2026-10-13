@@ -27,7 +27,7 @@ import { join } from 'node:path';
 
 import { runProcess, type ProcessRunner, type ProcessResult } from '../orca-cli/process-runner.js';
 import type { ReadOnlyWorkerProbeStage } from './codex-read-only-probe.js';
-import { WORKER_HARNESS_IDS, workerModelSelectionSchema, type WorkerHarnessId, type WorkerModelSelection } from '../../domain/model-configuration.js';
+import { WORKER_HARNESS_IDS, workerModelSelectionSchema, type WorkerModelSelection } from '../../domain/model-configuration.js';
 
 /** 包装器可执行文件；探针与生产 launcher 用同一份事实。 */
 export const READ_ONLY_EXECUTION_WRAPPER = 'bwrap';
@@ -320,7 +320,7 @@ async function runUnderProductionDescriptor(
   payload: { readonly executable: string; readonly args: readonly string[] },
   timeoutMs: number,
   env: Readonly<Record<string, string>>,
-  harness?: WorkerHarnessId,
+  harness?: string,
 ): Promise<ProcessResult> {
   // 动态 import：launcher 静态内嵌本模块的源码常量，静态反向 import 会形成
   // launcher → wrapper → codex-model-launcher → launcher 的顶层初始化环。
@@ -433,7 +433,7 @@ async function runSentinelEvidence(
   input: ReadOnlyExecutionProbeInput,
   timeoutMs: number,
   env: Readonly<Record<string, string>>,
-  harness?: WorkerHarnessId,
+  harness?: string,
 ): Promise<{ readonly result: WorkerHarnessProbeResult; readonly layout: ProbeLayout | null; readonly diagnostics: string[] }> {
   const diagnostics: string[] = [];
   let layout: ProbeLayout | null = null;
@@ -502,7 +502,7 @@ export async function probeHarnessReadOnlyWorker(
   modelSelection?: Readonly<WorkerModelSelection>,
   input: HarnessReadOnlyProbeInput = {},
 ): Promise<WorkerHarnessProbeResult> {
-  if (!(WORKER_HARNESS_IDS as readonly string[]).includes(harness)
+  if (!(WORKER_HARNESS_IDS as readonly string[]).includes(harness) && input.harnessExecutable === undefined
     || (modelSelection !== undefined && !workerModelSelectionSchema.safeParse(modelSelection).success)) {
     return unknown('codex-version', ['Worker harness/model selection 无效']);
   }
@@ -512,7 +512,7 @@ export async function probeHarnessReadOnlyWorker(
   }
   const timeoutMs = input.timeoutMs ?? READ_ONLY_EXECUTION_PROBE_TIMEOUT_MS;
   const env = input.env ?? (process.env as Readonly<Record<string, string>>);
-  const evidence = await runSentinelEvidence(input, timeoutMs, env, harness as WorkerHarnessId);
+  const evidence = await runSentinelEvidence(input, timeoutMs, env, harness);
   let result: WorkerHarnessProbeResult;
   try {
     if (evidence.result.kind !== 'available' || evidence.layout === null) {
@@ -520,7 +520,7 @@ export async function probeHarnessReadOnlyWorker(
     } else {
       // 第二次运行复用同一 descriptor：证明 harness 可执行文件与本包装器兼容。
       const version = versionFrom(
-        await runUnderProductionDescriptor(input, evidence.layout, { executable, args: ['--version'] }, timeoutMs, env, harness as WorkerHarnessId),
+        await runUnderProductionDescriptor(input, evidence.layout, { executable, args: ['--version'] }, timeoutMs, env, harness),
       );
       if (version === null) {
         evidence.diagnostics.push(`${harness} 在同一生产 descriptor 下没有输出版本：无法证明该 harness 只读能力可用`);

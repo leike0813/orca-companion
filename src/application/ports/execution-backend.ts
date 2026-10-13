@@ -161,6 +161,7 @@ export type ExecutionMutation =
   | {
       readonly operation: 'terminal-create';
       readonly worktree: string;
+      readonly focus?: boolean;
       readonly title?: string;
       readonly command?: string;
     }

@@ -1,5 +1,7 @@
 # 下一批 Worker Harness：候选资格与证据边界
 
+本页的候选 disposition 对应已归档的 `add-testable-worker-harness-adapters`。后续七家接入的当前资格与独立报告安装规则见[新一批接入记录](next-worker-harness-adapters.md)。
+
 记录日期：2026-10-11。范围为 Ubuntu 本机、本次 `add-testable-worker-harness-adapters` change；Orca 实际版本为 **1.4.222**，Linux 公共命令为 `orca-ide`（父线程已核验）。本文汇总既有消息、留存现场、已安装包与官方源码/文档，不新增模型调用、Orca 操作、安装或配置修改。IP-01/03 对本文列出的 18 个候选所需官方 help/source bounded 资格评估均已完成；这表示本轮文档调查已闭合，不代表所有候选的真实运行验收通过，也不替 parent 作最终资格决定。
 
 ## 结论与证据层级

@@ -1,0 +1,51 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-11T10:51:35.812Z",
+  "finishedAt": "2026-10-11T10:51:46.547Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-76f34149-033e-46d6-9111-d08d1dcf6724",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-m5DJtB",
+  "runId": "run_29050ec0b187",
+  "coordinatorTerminalHandle": "term_86653f61-f3e3-49d7-9105-73cba621d466",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "antigravity",
+      "modelSelection": {
+        "model": "gemini-3.8-flash-medium",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "gemini-3.8-flash-medium",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "blocked",
+          "launchId": "ip04:antigravity:planner",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "adoption_unverifiable",
+            "message": "无法核验接管：worker-start 后无法读回 exact Worker 与 prepared terminal 绑定"
+          }
+        }
+      ],
+      "resume": null,
+      "validatorContinuation": null,
+      "recovery": null,
+      "blockers": [
+        "planner：adoption_unverifiable 无法核验接管：worker-start 后无法读回 exact Worker 与 prepared terminal 绑定"
+      ]
+    }
+  ]
+}

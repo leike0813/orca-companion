@@ -1,0 +1,71 @@
+{
+  "schema": "worker-harness-attempt/1",
+  "change": "add-next-worker-harness-adapters",
+  "harness": "kilo",
+  "launchId": "next-kilo3:planner",
+  "role": "planner",
+  "nativeVersion": "7.8.8",
+  "sourceCommit": "e2887f08e5a6394299c810ba508f358aaf4c5bc3",
+  "launchSelection": {
+    "interactiveArgument": "--mini",
+    "invocationEnvironment": { "KILO_NO_DAEMON": "1" },
+    "model": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+    "homeAndNativeAuthenticationPreserved": true,
+    "readOnlyBoundaryUnchanged": true
+  },
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ncWTVr",
+  "runId": "run_d394e13d9181",
+  "coordinatorTerminal": "term_1e076f90-455d-43d4-8522-0f2f14bc898a",
+  "runtimeId": "75bb80f2-e969-44b6-83e9-2d3a76586c9d",
+  "mutations": [
+    {
+      "observedAt": "2026-10-11T12:52:36.996Z",
+      "operationId": "next-kilo3:planner:task-create",
+      "outcome": "accepted",
+      "backendRequestId": "857c0753-4eaf-4414-acc1-f34d083cbab2",
+      "nativeMutationRequestId": "e28326c2-0761-4113-b649-6874cf345190",
+      "taskId": "task_07edbe46400e"
+    },
+    {
+      "observedAt": "2026-10-11T12:52:47.290Z",
+      "operationId": "next-kilo3:planner:terminal-create",
+      "outcome": "unknown",
+      "backendRequestId": "15d00764-778b-4006-889b-4fd3778e4a38",
+      "targetTaskId": "task_07edbe46400e",
+      "reason": "unclassified runtime_error; fail closed",
+      "requestShow": {
+        "queryEnvelopeId": "991c5828-6130-4b6f-90c6-5b0b3c2b14b8",
+        "state": "absent",
+        "provesNoSideEffect": false
+      }
+    }
+  ],
+  "realQualification": {
+    "workerStartCalled": false,
+    "modelTurnObserved": false,
+    "sessionBinding": "not tested",
+    "productionRegistered": false,
+    "blocker": "terminal_create_unknown"
+  },
+  "cleanupObservation": {
+    "queryEnvelopeId": "67d03bac-bc42-42fb-b9e0-fec7c1aff5c9",
+    "truncated": false,
+    "omittedHostIds": [],
+    "terminalHandles": ["term_1e076f90-455d-43d4-8522-0f2f14bc898a"],
+    "newWorktreesCreated": 0,
+    "kimiExitedTerminalStillListed": false,
+    "unknownOperationsPreserved": true
+  },
+  "offlineChecks": {
+    "kiloAdapterTestsPassed": 21,
+    "typecheck": "passed",
+    "build": "passed",
+    "scopedLint": "passed",
+    "strictOpenSpec": "passed",
+    "diffCheck": "passed"
+  },
+  "remainingNativeRisks": [
+    "Mini resume marks the session headless in native code; interactive permission behavior requires real validation.",
+    "Mini input submission and reporter execution have not been tested through Orca."
+  ]
+}

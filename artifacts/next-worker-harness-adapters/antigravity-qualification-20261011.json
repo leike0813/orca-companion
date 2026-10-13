@@ -1,0 +1,156 @@
+{
+  "schema": "next-harness-qualification/1",
+  "at": "2026-10-11T11:42:20.709Z",
+  "orcaVersion": "1.4.222",
+  "harnessVersion": "1.3.3",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ncWTVr",
+  "runId": "run_d394e13d9181",
+  "roles": [
+    {
+      "role": "planner",
+      "taskId": "task_7f9d2d86f316",
+      "dispatchId": "ctx_12e838de8d90",
+      "sessionId": "04f1bfde-31fb-4ccc-a25b-071416bb7464",
+      "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/04f1bfde-31fb-4ccc-a25b-071416bb7464/.system_generated/logs/transcript_full.jsonl",
+      "roleArtifactOk": true,
+      "coverage": "complete",
+      "modelEvidence": {
+        "sessionId": "04f1bfde-31fb-4ccc-a25b-071416bb7464",
+        "transcriptPath": "/home/joshua/.gemini/antigravity-cli/brain/04f1bfde-31fb-4ccc-a25b-071416bb7464/.system_generated/logs/transcript_full.jsonl",
+        "model": "gemini-3.8-flash-medium"
+      },
+      "usage": {
+        "inputTokens": 16161,
+        "cacheReadTokens": 90521,
+        "outputTokens": 3116
+      }
+    },
+    {
+      "role": "implementation",
+      "taskId": "task_0be3e15dca5f",
+      "dispatchId": "ctx_07827a25b410",
+      "sessionId": "28aa0ace-d183-49d7-a6b3-a9872fff643d",
+      "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/28aa0ace-d183-49d7-a6b3-a9872fff643d/.system_generated/logs/transcript_full.jsonl",
+      "roleArtifactOk": true,
+      "coverage": "complete",
+      "modelEvidence": {
+        "sessionId": "28aa0ace-d183-49d7-a6b3-a9872fff643d",
+        "transcriptPath": "/home/joshua/.gemini/antigravity-cli/brain/28aa0ace-d183-49d7-a6b3-a9872fff643d/.system_generated/logs/transcript_full.jsonl",
+        "model": "gemini-3.8-flash-medium"
+      },
+      "usage": {
+        "inputTokens": 82521,
+        "cacheReadTokens": 607570,
+        "outputTokens": 7926
+      }
+    },
+    {
+      "role": "validator",
+      "taskId": "task_1b9af186eee9",
+      "dispatchId": "ctx_b9abc50ff143",
+      "sessionId": "6bd0d669-804e-4177-b754-32ce5b7a3f26",
+      "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/6bd0d669-804e-4177-b754-32ce5b7a3f26/.system_generated/logs/transcript_full.jsonl",
+      "roleArtifactOk": true,
+      "coverage": "complete",
+      "modelEvidence": {
+        "sessionId": "6bd0d669-804e-4177-b754-32ce5b7a3f26",
+        "transcriptPath": "/home/joshua/.gemini/antigravity-cli/brain/6bd0d669-804e-4177-b754-32ce5b7a3f26/.system_generated/logs/transcript_full.jsonl",
+        "model": "gemini-3.8-flash-medium"
+      },
+      "usage": {
+        "inputTokens": 15631,
+        "cacheReadTokens": 90542,
+        "outputTokens": 3209
+      }
+    },
+    {
+      "role": "finalizer",
+      "taskId": "task_488eef81f19a",
+      "dispatchId": "ctx_234f9a8bc88c",
+      "sessionId": "37af612d-5a81-489c-ae6e-8e05fc1672e9",
+      "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/37af612d-5a81-489c-ae6e-8e05fc1672e9/.system_generated/logs/transcript_full.jsonl",
+      "roleArtifactOk": true,
+      "coverage": "complete",
+      "modelEvidence": {
+        "sessionId": "37af612d-5a81-489c-ae6e-8e05fc1672e9",
+        "transcriptPath": "/home/joshua/.gemini/antigravity-cli/brain/37af612d-5a81-489c-ae6e-8e05fc1672e9/.system_generated/logs/transcript_full.jsonl",
+        "model": "gemini-3.8-flash-medium"
+      },
+      "usage": {
+        "inputTokens": 45208,
+        "cacheReadTokens": 37598,
+        "outputTokens": 2357
+      }
+    }
+  ],
+  "implementationResume": {
+    "harness": "antigravity",
+    "kind": "ran",
+    "sessionId": "28aa0ace-d183-49d7-a6b3-a9872fff643d",
+    "sameSession": true,
+    "coverage": "complete",
+    "blocker": null,
+    "dispatchId": "ctx_e079d6366aaa",
+    "modelEvidence": "gemini-3.8-flash-medium",
+    "contextPreserved": null
+  },
+  "validatorResume": {
+    "harness": "antigravity",
+    "kind": "ran",
+    "sessionId": "e2e65976-678b-4add-bcad-5ba02da7fcb4",
+    "sameSession": true,
+    "coverage": "complete",
+    "blocker": null,
+    "dispatchId": "ctx_1cc1f2474eba",
+    "modelEvidence": "gemini-3.8-flash-medium",
+    "contextPreserved": true
+  },
+  "recovery": {
+    "kind": "blocked",
+    "sourceSessionId": "e2e65976-678b-4add-bcad-5ba02da7fcb4",
+    "sourceTranscriptRef": "/home/joshua/.gemini/antigravity-cli/brain/e2e65976-678b-4add-bcad-5ba02da7fcb4/.system_generated/logs/transcript_full.jsonl",
+    "utility": null,
+    "capsuleRef": null,
+    "coverage": {
+      "coverage": "complete",
+      "readableRange": {
+        "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/e2e65976-678b-4add-bcad-5ba02da7fcb4/.system_generated/logs/transcript_full.jsonl",
+        "fromEventRef": "step:0",
+        "toEventRef": "step:25"
+      },
+      "gaps": [],
+      "lastCompleteEventRef": "step:25"
+    },
+    "sourceBehaviorVerified": false,
+    "readOnlyVerified": false,
+    "permissionDenied": null,
+    "deliveryId": null,
+    "deliveryAcked": false,
+    "blocker": {
+      "code": "transcript_unavailable",
+      "message": "transcript 不可读：Antigravity 精确活动 transcript 不可完整核验"
+    }
+  },
+  "supplementalReadonlyProbe": {
+    "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/39a26fb1-c422-49fc-9975-194b5f1791ab/.system_generated/logs/transcript_full.jsonl",
+    "eventRef": "step:2",
+    "result": {
+      "path": "/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2/.companion/utility-write-probe-87f3b112-b783-4a15-a9ce-e903723fca27",
+      "permissionDenied": true,
+      "code": "EROFS"
+    }
+  },
+  "nonDoneEvents": [
+    {
+      "eventRef": "step:8",
+      "type": "GENERIC",
+      "status": "RUNNING"
+    },
+    {
+      "eventRef": "step:57",
+      "type": "GENERIC",
+      "status": "RUNNING"
+    }
+  ],
+  "registered": false
+}

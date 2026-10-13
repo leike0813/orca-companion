@@ -1,0 +1,722 @@
+{
+  "schema": "worker-harness-continuation/1",
+  "change": "add-next-worker-harness-adapters",
+  "observedAt": "2026-10-12T12:36:29.123Z",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ncWTVr",
+  "runId": "run_d394e13d9181",
+  "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+  "coordinatorTerminalHandle": "term_fc9e2f9f-3ad7-4d49-9513-aab36e4f49b9",
+  "consumerGeneration": 2,
+  "previousUnknown": {
+    "operationId": "next-kilo3:planner:terminal-create",
+    "backendRequestId": "15d00764-778b-4006-889b-4fd3778e4a38",
+    "requestShow": "absent",
+    "replayed": false,
+    "provesNoSideEffect": false
+  },
+  "terminalRecovery": {
+    "repoAdd": {
+      "observedAt": "2026-10-12T11:52:43.260Z",
+      "executable": "orca-ide",
+      "args": [
+        "repo",
+        "add",
+        "--path",
+        "/var/tmp/orca-terminal-check-gkaUFl/project",
+        "--json"
+      ],
+      "status": 0,
+      "stdout": "{\n  \"id\": \"92615f78-44b3-408e-8230-3c77377635c4\",\n  \"ok\": true,\n  \"result\": {\n    \"repo\": {\n      \"id\": \"c4e7f327-9077-4d09-a9d6-09fd7c248655\",\n      \"path\": \"/var/tmp/orca-terminal-check-gkaUFl/project\",\n      \"displayName\": \"project\",\n      \"badgeColor\": \"#737373\",\n      \"addedAt\": 1791805963237,\n      \"kind\": \"git\",\n      \"externalWorktreeVisibilityLegacy\": false,\n      \"upstream\": null,\n      \"gitUsername\": \"\",\n      \"hookSettings\": {\n        \"mode\": \"auto\",\n        \"setupRunPolicy\": \"run-by-default\",\n        \"setupAgentStartupPolicy\": \"start-immediately\",\n        \"scripts\": {\n          \"setup\": \"\",\n          \"archive\": \"\"\n        }\n      },\n      \"externalWorktreeVisibility\": \"hide\"\n    }\n  },\n  \"_meta\": {\n    \"runtimeId\": \"746f8486-8a24-48d0-a076-84f6d2fe7f90\"\n  }\n}\n",
+      "stderr": ""
+    },
+    "terminalCreate": {
+      "observedAt": "2026-10-12T11:54:23.589Z",
+      "executable": "orca-ide",
+      "args": [
+        "terminal",
+        "create",
+        "--worktree",
+        "path:/var/tmp/orca-terminal-check-gkaUFl/project",
+        "--json"
+      ],
+      "status": 0,
+      "stdout": "{\n  \"id\": \"b6b498ab-65c7-4c8a-870a-53af83241d4f\",\n  \"ok\": true,\n  \"result\": {\n    \"terminal\": {\n      \"handle\": \"term_a55f4784-d26e-4803-a2e9-0455271afab7\",\n      \"tabId\": \"7ed052ee-7371-4c55-9116-fc7bfe6ecaa1\",\n      \"paneKey\": \"7ed052ee-7371-4c55-9116-fc7bfe6ecaa1:9de3145c-c779-47a4-997a-1a849bbff197\",\n      \"ptyId\": \"c4e7f327-9077-4d09-a9d6-09fd7c248655::/var/tmp/orca-terminal-check-gkaUFl/project@@ce6e527e\",\n      \"worktreeId\": \"c4e7f327-9077-4d09-a9d6-09fd7c248655::/var/tmp/orca-terminal-check-gkaUFl/project\",\n      \"title\": null,\n      \"executionHostId\": \"local\",\n      \"incarnationId\": \"1b9bf8a5-71d6-4729-9402-b81c4b6910a2\",\n      \"hostPlatform\": \"linux\",\n      \"surface\": \"background\",\n      \"warning\": \"Terminal term_a55f4784-d26e-4803-a2e9-0455271afab7 is running, but Orca could not make it discoverable. Run `orca terminal focus --terminal term_a55f4784-d26e-4803-a2e9-0455271afab7` to reveal and focus it.\"\n    }\n  },\n  \"_meta\": {\n    \"runtimeId\": \"746f8486-8a24-48d0-a076-84f6d2fe7f90\"\n  }\n}\n",
+      "stderr": ""
+    },
+    "diagnosticClose": {
+      "envelopeId": "29798a6e-c502-4045-8dfd-f6692fe06230",
+      "handle": "term_a55f4784-d26e-4803-a2e9-0455271afab7",
+      "ptyKilled": true
+    }
+  },
+  "roles": [
+    {
+      "harness": "kilo",
+      "role": "finalizer",
+      "taskId": "task_32be5aa429e1",
+      "dispatchId": "ctx_fea1b2f2249a",
+      "terminalHandle": "term_5e93127a-9f95-4ba2-ae58-3ad223a7b07c",
+      "result": {
+        "harness": "kilo",
+        "role": "finalizer",
+        "kind": "blocked",
+        "launchId": "continue-20261012:kilo:finalizer",
+        "taskId": null,
+        "contextToken": null,
+        "dispatchId": null,
+        "sessionId": null,
+        "transcriptRef": null,
+        "stateRoot": null,
+        "reporterPath": null,
+        "coverage": null,
+        "terminalState": null,
+        "artifactOk": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "session_report_missing",
+          "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_fea1b2f2249a\",\"taskId\":\"task_32be5aa429e1\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_fea1b2f2249a\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"\",\"      at log (/home/joshua/.cache/kilo/packages/@openviking/opencode-plugin@latest/node_modules/@openviking/opencode-plugin/lib/utils.mjs:50:8)\",\"      at saveState (/home/joshua/.cache/kilo/packages/@openviking/opencode-plugin@latest/node_modules/@openviking/opencode-plugin/lib/memory-session.mjs:94:7)\",\"\",\"Failed to write OpenViking plugin log: 45 |     if (normalizedLevel === \\\"ERROR\\\") console.error(message, data ?? \\\"\\\")\",\"46 |     return\",\"47 |   }\",\"48 |\",\"49 |   try {\",\"50 |     fs.appendFileSync(logFilePath, `${JSON.stringify(entry)}\\\\n` | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"      at async <anonymous> (/home/joshua/.cache/kilo/packages/@openviking/opencode-plugin@latest/node_modules/@openvikin\",\"g/opencode-plugin/index.mjs:59:28)\",\"Failed to write OpenViking plugin log: 45 |     if (normalizedLevel === \\\"ERROR\\\") console.error(message, data ?? \\\"\\\")\",\"46 |     return\",\"47 |   }\",\"48 |\",\"49 |   try {\",\"50 |     fs.appendFileSync(logFilePath, `${JSON.stringify(entry)}\\\\n`, \\\"utf8\\\")\",\"            ^\",\"EROFS: read-only file system, open '/home/joshua/.config/opencode/openviking/openviking-memory.log'\",\"    path: \\\"/home/joshua/.config/opencode/openviking/openviking-memory.log\\\",\",\" syscall: \\\"open\\\",\",\"   errno: -30,\",\"    code: \\\"EROFS\\\"\",\"      at log (/home/joshua/.cache/kilo/packages/@openviking/opencode-plugin@latest/node_modules/@openviking/opencode-plu\",\"gin/lib/utils.mjs:50:8)\",\"      at saveState (/home/joshua/.cache/kilo/packages/@openviking/opencode-plugin@latest/node_modules/@openviking/openco\",\"de-plugin/lib/memory-session.mjs:94:7)\",\"Failed to write OpenViking plugin log: 45 |     if (normalizedLevel === \\\"ERROR\\\") console.error(message, data ?? \\\"\\\")\",\"46 |     return\",\"47 |   }\""
+        }
+      },
+      "qualificationPassed": false
+    },
+    {
+      "harness": "cline",
+      "role": "finalizer",
+      "taskId": "task_a545545c9536",
+      "dispatchId": "ctx_5e75b7a6d86c",
+      "terminalHandle": "term_cedbf86e-c427-4603-b92c-538bb4a62205",
+      "result": {
+        "harness": "cline",
+        "role": "finalizer",
+        "kind": "blocked",
+        "launchId": "continue-20261012:cline:finalizer",
+        "taskId": null,
+        "contextToken": null,
+        "dispatchId": null,
+        "sessionId": null,
+        "transcriptRef": null,
+        "stateRoot": null,
+        "reporterPath": null,
+        "coverage": null,
+        "terminalState": null,
+        "artifactOk": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "transcript_unavailable",
+          "message": "Session Binding 不可用：Cline report 与原生 manifest/workspace/runtime 身份不一致；worker-show={\"dispatchId\":\"ctx_5e75b7a6d86c\",\"taskId\":\"task_a545545c9536\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_5e75b7a6d86c\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                               @@@@@@     *@@@     @@@@@@\",\"                                                 @@@@@    @@@@.   @@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                    @@@@@@@@@@@@@@@@.\",\"                                                 Signing in with Cline\",\"                          ╭──────────────────────────────────────────────────────────────────╮\",\"                 | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                                           @@\",\"                                                         @@@@@@\",\"                                                    @@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@    @@@@    @@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                                 @@@@@    @@@@.   @@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                    @@@@@@@@@@@@@@@@.\",\"                                                 Signing in with Cline\",\"                          ╭──────────────────────────────────────────────────────────────────╮\",\"                          │                                                                  │\",\"   "
+        }
+      },
+      "qualificationPassed": false
+    },
+    {
+      "harness": "hermes",
+      "role": "finalizer",
+      "taskId": "task_18db1dbe2f08",
+      "dispatchId": "ctx_00fe2e1b29e5",
+      "terminalHandle": "term_4fd6d1e6-5781-485f-ba3a-f59610b35e26",
+      "result": {
+        "harness": "hermes",
+        "role": "finalizer",
+        "kind": "ran",
+        "launchId": "continue-20261012:hermes:finalizer",
+        "taskId": "task_18db1dbe2f08",
+        "contextToken": null,
+        "dispatchId": "ctx_00fe2e1b29e5",
+        "sessionId": "20261012_201125_de271b",
+        "transcriptRef": "hermes-session:20261012_201125_de271b",
+        "stateRoot": "/home/joshua/.hermes",
+        "reporterPath": "/var/tmp/orca-harness-acceptance-ncWTVr/state/hermes/e10b43d9495b3bc1d079/session-start.mjs",
+        "coverage": "partial",
+        "terminalState": "succeeded",
+        "artifactOk": true,
+        "modelEvidence": null,
+        "blocker": null
+      },
+      "qualificationPassed": false
+    },
+    {
+      "harness": "cline",
+      "role": "implementation",
+      "taskId": "task_e1f6a153197f",
+      "dispatchId": "ctx_dd523c61e72f",
+      "terminalHandle": "term_bed59c9c-261d-4b0d-81c9-6e523602ee63",
+      "result": {
+        "harness": "cline",
+        "role": "implementation",
+        "kind": "blocked",
+        "launchId": "continue-20261012:cline:implementation",
+        "taskId": null,
+        "contextToken": null,
+        "dispatchId": null,
+        "sessionId": null,
+        "transcriptRef": null,
+        "stateRoot": null,
+        "reporterPath": null,
+        "coverage": null,
+        "terminalState": null,
+        "artifactOk": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "transcript_unavailable",
+          "message": "Session Binding 不可用：Cline report 与原生 manifest/workspace/runtime 身份不一致；worker-show={\"dispatchId\":\"ctx_dd523c61e72f\",\"taskId\":\"task_e1f6a153197f\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_dd523c61e72f\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                                           @@\",\"                                                         @@@@@@\",\"                                                    @@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@    @@@@    @@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                               @@@@@@     | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                                           @@\",\"                                                         @@@@@@\",\"                                                    @@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@    @@@@    @@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                                 @@@@@    @@@@.   @@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                    @@@@@@@@@@@@@@@@.\",\"                                                 What can I do for you?\",\"                             Use / for slash commands, @ for file mentions, Ctrl+P for menu\",\"                          ────────────────────────────────────────────────────────────────────\",\"     "
+        }
+      },
+      "qualificationPassed": false
+    }
+  ],
+  "mutations": [
+    {
+      "observedAt": "2026-10-12T11:57:46.350Z",
+      "operationId": "continue-20261012:coordinator-create",
+      "operation": "terminal-create",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:coordinator-create",
+        "backendRequestId": "f885604b-60ad-4b5f-aa5a-a6817c104254",
+        "target": {
+          "kind": "work-package",
+          "id": "companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2:setup"
+        }
+      },
+      "nativeMutationRequestId": null,
+      "taskId": null,
+      "dispatchId": null,
+      "terminalHandle": "term_fc9e2f9f-3ad7-4d49-9513-aab36e4f49b9"
+    },
+    {
+      "observedAt": "2026-10-12T11:57:46.909Z",
+      "operationId": "continue-20261012:run-use",
+      "operation": "run-use",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:run-use",
+        "backendRequestId": "e904b542-ee75-4998-ad42-bf68993afd5e",
+        "target": {
+          "kind": "run",
+          "id": "run_d394e13d9181"
+        }
+      },
+      "nativeMutationRequestId": "65a76d59-540d-4228-8818-96bb28736900",
+      "taskId": null,
+      "dispatchId": null,
+      "terminalHandle": null
+    },
+    {
+      "observedAt": "2026-10-12T11:58:12.687Z",
+      "operationId": "continue-20261012:kilo:finalizer:task-create",
+      "operation": "task-create",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:kilo:finalizer:task-create",
+        "backendRequestId": "3483d892-fa53-4fa4-9f6d-b7e9f82a6f90",
+        "target": {
+          "kind": "work-package",
+          "id": "WP-1"
+        }
+      },
+      "nativeMutationRequestId": "d69125b7-3ff9-4ff4-a559-e5664478ee93",
+      "taskId": "task_32be5aa429e1",
+      "dispatchId": null,
+      "terminalHandle": null
+    },
+    {
+      "observedAt": "2026-10-12T11:58:13.089Z",
+      "operationId": "continue-20261012:kilo:finalizer:terminal-create",
+      "operation": "terminal-create",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:kilo:finalizer:terminal-create",
+        "backendRequestId": "f71660bb-f1cb-4fbc-8147-c28a605e6108",
+        "target": {
+          "kind": "worker-task",
+          "id": "task_32be5aa429e1"
+        }
+      },
+      "nativeMutationRequestId": null,
+      "taskId": null,
+      "dispatchId": null,
+      "terminalHandle": "term_5e93127a-9f95-4ba2-ae58-3ad223a7b07c"
+    },
+    {
+      "observedAt": "2026-10-12T11:58:36.428Z",
+      "operationId": "continue-20261012:kilo:finalizer:worker-start",
+      "operation": "worker-start",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:kilo:finalizer:worker-start",
+        "backendRequestId": "c9c7be5b-8589-42fc-874d-dea1163d26c9",
+        "target": {
+          "kind": "worker-task",
+          "id": "task_32be5aa429e1"
+        }
+      },
+      "nativeMutationRequestId": null,
+      "taskId": null,
+      "dispatchId": "ctx_fea1b2f2249a",
+      "terminalHandle": null
+    },
+    {
+      "observedAt": "2026-10-12T11:58:36.680Z",
+      "operationId": "continue-20261012:kilo:finalizer:terminal-submit",
+      "operation": "terminal-submit",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:kilo:finalizer:terminal-submit",
+        "backendRequestId": "7dd0b1ec-f847-452d-a5f6-cf5d598aa8f1",
+        "target": {
+          "kind": "worker-task",
+          "id": "task_32be5aa429e1"
+        }
+      },
+      "nativeMutationRequestId": null,
+      "taskId": null,
+      "dispatchId": null,
+      "terminalHandle": null
+    },
+    {
+      "observedAt": "2026-10-12T12:02:26.368Z",
+      "operationId": "continue-20261012:cline:finalizer:task-create",
+      "operation": "task-create",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:cline:finalizer:task-create",
+        "backendRequestId": "10c21ffb-173d-4120-b462-62eccbf37bd1",
+        "target": {
+          "kind": "work-package",
+          "id": "WP-1"
+        }
+      },
+      "nativeMutationRequestId": "75afbd49-9fb9-42d7-8f22-8198e3dec28e",
+      "taskId": "task_a545545c9536",
+      "dispatchId": null,
+      "terminalHandle": null
+    },
+    {
+      "observedAt": "2026-10-12T12:02:26.773Z",
+      "operationId": "continue-20261012:cline:finalizer:terminal-create",
+      "operation": "terminal-create",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:cline:finalizer:terminal-create",
+        "backendRequestId": "15a785dc-9282-47b9-82ed-3805532cca92",
+        "target": {
+          "kind": "worker-task",
+          "id": "task_a545545c9536"
+        }
+      },
+      "nativeMutationRequestId": null,
+      "taskId": null,
+      "dispatchId": null,
+      "terminalHandle": "term_cedbf86e-c427-4603-b92c-538bb4a62205"
+    },
+    {
+      "observedAt": "2026-10-12T12:02:40.132Z",
+      "operationId": "continue-20261012:cline:finalizer:worker-start",
+      "operation": "worker-start",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:cline:finalizer:worker-start",
+        "backendRequestId": "f736ff53-6014-49a9-aec8-89ccae14e331",
+        "target": {
+          "kind": "worker-task",
+          "id": "task_a545545c9536"
+        }
+      },
+      "nativeMutationRequestId": null,
+      "taskId": null,
+      "dispatchId": "ctx_5e75b7a6d86c",
+      "terminalHandle": null
+    },
+    {
+      "observedAt": "2026-10-12T12:02:40.396Z",
+      "operationId": "continue-20261012:cline:finalizer:terminal-submit",
+      "operation": "terminal-submit",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:cline:finalizer:terminal-submit",
+        "backendRequestId": "12d0512b-9835-4f80-ad2f-b71ab7200092",
+        "target": {
+          "kind": "worker-task",
+          "id": "task_a545545c9536"
+        }
+      },
+      "nativeMutationRequestId": null,
+      "taskId": null,
+      "dispatchId": null,
+      "terminalHandle": null
+    },
+    {
+      "observedAt": "2026-10-12T12:11:18.737Z",
+      "operationId": "continue-20261012:hermes:finalizer:task-create",
+      "operation": "task-create",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:hermes:finalizer:task-create",
+        "backendRequestId": "0659281f-bd07-4006-aa3d-ae58b2dc78f8",
+        "target": {
+          "kind": "work-package",
+          "id": "WP-1"
+        }
+      },
+      "nativeMutationRequestId": "0cafab70-5d98-42a6-9f2b-b3ac51bda9dc",
+      "taskId": "task_18db1dbe2f08",
+      "dispatchId": null,
+      "terminalHandle": null
+    },
+    {
+      "observedAt": "2026-10-12T12:11:19.194Z",
+      "operationId": "continue-20261012:hermes:finalizer:terminal-create",
+      "operation": "terminal-create",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:hermes:finalizer:terminal-create",
+        "backendRequestId": "ca1f55d7-264a-4a89-94ae-bae1266665de",
+        "target": {
+          "kind": "worker-task",
+          "id": "task_18db1dbe2f08"
+        }
+      },
+      "nativeMutationRequestId": null,
+      "taskId": null,
+      "dispatchId": null,
+      "terminalHandle": "term_4fd6d1e6-5781-485f-ba3a-f59610b35e26"
+    },
+    {
+      "observedAt": "2026-10-12T12:11:32.527Z",
+      "operationId": "continue-20261012:hermes:finalizer:worker-start",
+      "operation": "worker-start",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:hermes:finalizer:worker-start",
+        "backendRequestId": "6b138eec-b718-4d67-a454-7831fa9e6253",
+        "target": {
+          "kind": "worker-task",
+          "id": "task_18db1dbe2f08"
+        }
+      },
+      "nativeMutationRequestId": null,
+      "taskId": null,
+      "dispatchId": "ctx_00fe2e1b29e5",
+      "terminalHandle": null
+    },
+    {
+      "observedAt": "2026-10-12T12:11:32.782Z",
+      "operationId": "continue-20261012:hermes:finalizer:terminal-submit",
+      "operation": "terminal-submit",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:hermes:finalizer:terminal-submit",
+        "backendRequestId": "c31b9229-750a-4a93-a703-9d3b27ef0711",
+        "target": {
+          "kind": "worker-task",
+          "id": "task_18db1dbe2f08"
+        }
+      },
+      "nativeMutationRequestId": null,
+      "taskId": null,
+      "dispatchId": null,
+      "terminalHandle": null
+    },
+    {
+      "observedAt": "2026-10-12T12:15:53.073Z",
+      "operationId": "continue-20261012:cline:implementation:task-create",
+      "operation": "task-create",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:cline:implementation:task-create",
+        "backendRequestId": "d6e704aa-d76f-48d0-9a68-22632e69adab",
+        "target": {
+          "kind": "work-package",
+          "id": "WP-1"
+        }
+      },
+      "nativeMutationRequestId": "4f6b3c99-eed2-4b9f-956f-7cced85af8be",
+      "taskId": "task_e1f6a153197f",
+      "dispatchId": null,
+      "terminalHandle": null
+    },
+    {
+      "observedAt": "2026-10-12T12:15:53.433Z",
+      "operationId": "continue-20261012:cline:implementation:terminal-create",
+      "operation": "terminal-create",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:cline:implementation:terminal-create",
+        "backendRequestId": "a717fcdf-f2e3-4f23-8dd8-8d0bef0899fa",
+        "target": {
+          "kind": "worker-task",
+          "id": "task_e1f6a153197f"
+        }
+      },
+      "nativeMutationRequestId": null,
+      "taskId": null,
+      "dispatchId": null,
+      "terminalHandle": "term_bed59c9c-261d-4b0d-81c9-6e523602ee63"
+    },
+    {
+      "observedAt": "2026-10-12T12:16:06.772Z",
+      "operationId": "continue-20261012:cline:implementation:worker-start",
+      "operation": "worker-start",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:cline:implementation:worker-start",
+        "backendRequestId": "403490a5-1ae6-4137-8d55-474e1996f4f6",
+        "target": {
+          "kind": "worker-task",
+          "id": "task_e1f6a153197f"
+        }
+      },
+      "nativeMutationRequestId": null,
+      "taskId": null,
+      "dispatchId": "ctx_dd523c61e72f",
+      "terminalHandle": null
+    },
+    {
+      "observedAt": "2026-10-12T12:16:07.036Z",
+      "operationId": "continue-20261012:cline:implementation:terminal-submit",
+      "operation": "terminal-submit",
+      "kind": "accepted",
+      "operationRef": {
+        "operationId": "continue-20261012:cline:implementation:terminal-submit",
+        "backendRequestId": "cc214f06-ede7-4dfc-a859-b2a0d1538d11",
+        "target": {
+          "kind": "worker-task",
+          "id": "task_e1f6a153197f"
+        }
+      },
+      "nativeMutationRequestId": null,
+      "taskId": null,
+      "dispatchId": null,
+      "terminalHandle": null
+    }
+  ],
+  "kiloNativeDiagnostic": {
+    "status": 0,
+    "id": "ses_ed0058ff3ffe4I7oiMx7aHXkA0",
+    "cwd": "/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+    "messagesCount": 0,
+    "messages": []
+  },
+  "clineLaunchCorrection": {
+    "finalizerProviderPathPassedOnlyToDriver": true,
+    "implementationProviderPathInTerminalCommand": true,
+    "providerSettingsPath": "/home/joshua/.cline/data/settings/providers-minimax-mplan.json",
+    "originalProviderSideEffect": {
+      "path": "/home/joshua/.cline/data/settings/providers.json",
+      "observedUpdatedAt": "2026-10-12T12:02:31.976Z",
+      "lastUsedProvider": "minimax-cn-coding-plan",
+      "addedSettingsFields": [
+        "provider",
+        "model"
+      ],
+      "addedCredentials": false,
+      "rolledBack": false
+    },
+    "implementationOriginalProviderUnchanged": true
+  },
+  "cleanup": {
+    "hermes": {
+      "dispatchId": "ctx_00fe2e1b29e5",
+      "acceptedWorkerOutcome": "succeeded",
+      "terminalHandle": "term_4fd6d1e6-5781-485f-ba3a-f59610b35e26",
+      "closeEnvelopeId": "08f54890-2fba-4d92-a22a-f37827fdfe64",
+      "ptyKilled": true
+    },
+    "blockedAttemptsRetained": true,
+    "newWorktreesCreated": 0,
+    "currentObservation": {
+      "observedAt": "2026-10-12T12:35:17.260Z",
+      "queries": [
+        {
+          "args": [
+            "terminal",
+            "list",
+            "--worktree",
+            "path:/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+            "--json"
+          ],
+          "envelopeId": "c58d11f6-58a5-4e10-b6dd-64a1968cd0d9",
+          "ok": true,
+          "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+          "result": {
+            "terminals": [
+              {
+                "handle": "term_fc9e2f9f-3ad7-4d49-9513-aab36e4f49b9",
+                "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "connected": true,
+                "writable": true,
+                "agentIdentity": null
+              },
+              {
+                "handle": "term_5e93127a-9f95-4ba2-ae58-3ad223a7b07c",
+                "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "connected": true,
+                "writable": true,
+                "agentIdentity": "kilo"
+              },
+              {
+                "handle": "term_cedbf86e-c427-4603-b92c-538bb4a62205",
+                "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "connected": true,
+                "writable": true,
+                "agentIdentity": "cline"
+              },
+              {
+                "handle": "term_d894f920-3480-4f50-a7ee-2f6f7a556fd5",
+                "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "connected": true,
+                "writable": true,
+                "agentIdentity": null
+              },
+              {
+                "handle": "term_6b9cf4aa-8ee7-4129-b2e5-89a56af94374",
+                "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "connected": true,
+                "writable": true,
+                "agentIdentity": null
+              },
+              {
+                "handle": "term_bed59c9c-261d-4b0d-81c9-6e523602ee63",
+                "worktreeId": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+                "connected": true,
+                "writable": true,
+                "agentIdentity": "cline"
+              }
+            ],
+            "truncated": false,
+            "hostScope": {
+              "hostIds": [
+                "local"
+              ],
+              "omittedHostIds": []
+            }
+          }
+        },
+        {
+          "args": [
+            "orchestration",
+            "run-show",
+            "--id",
+            "run_d394e13d9181",
+            "--json"
+          ],
+          "envelopeId": "2618c7f8-9946-45e6-a99b-9f1dcfd4620c",
+          "ok": true,
+          "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+          "result": {
+            "run": {
+              "id": "run_d394e13d9181",
+              "objective": "IP-04 worker harness adapters isolated acceptance",
+              "coordinator_handle": "term_fc9e2f9f-3ad7-4d49-9513-aab36e4f49b9",
+              "consumer_generation": 2,
+              "legacy": 0,
+              "created_at": "2026-10-11T11:01:52Z",
+              "updated_at": "2026-10-12T11:57:46Z"
+            }
+          }
+        },
+        {
+          "args": [
+            "orchestration",
+            "worker-list",
+            "--run",
+            "run_d394e13d9181",
+            "--limit",
+            "20",
+            "--json"
+          ],
+          "envelopeId": "9c6fa678-ba12-46f6-8f42-3325f0886f1c",
+          "ok": true,
+          "runtimeId": "746f8486-8a24-48d0-a076-84f6d2fe7f90",
+          "result": {
+            "workers": [
+              {
+                "dispatchId": "ctx_dd523c61e72f",
+                "taskId": "task_e1f6a153197f",
+                "state": "ready",
+                "dispatchStatus": "dispatched",
+                "terminalHandle": "term_bed59c9c-261d-4b0d-81c9-6e523602ee63",
+                "terminalState": "retained",
+                "liveness": {
+                  "verdict": "unverifiable",
+                  "reason": "missing_status"
+                }
+              },
+              {
+                "dispatchId": "ctx_00fe2e1b29e5",
+                "taskId": "task_18db1dbe2f08",
+                "state": "succeeded",
+                "dispatchStatus": "completed",
+                "terminalHandle": "term_4fd6d1e6-5781-485f-ba3a-f59610b35e26",
+                "terminalState": "retained",
+                "liveness": {
+                  "verdict": "unverifiable",
+                  "reason": "missing_status"
+                }
+              },
+              {
+                "dispatchId": "ctx_5e75b7a6d86c",
+                "taskId": "task_a545545c9536",
+                "state": "ready",
+                "dispatchStatus": "dispatched",
+                "terminalHandle": "term_cedbf86e-c427-4603-b92c-538bb4a62205",
+                "terminalState": "retained",
+                "liveness": {
+                  "verdict": "unverifiable",
+                  "reason": "missing_status"
+                }
+              },
+              {
+                "dispatchId": "ctx_fea1b2f2249a",
+                "taskId": "task_32be5aa429e1",
+                "state": "ready",
+                "dispatchStatus": "dispatched",
+                "terminalHandle": "term_5e93127a-9f95-4ba2-ae58-3ad223a7b07c",
+                "terminalState": "retained",
+                "liveness": {
+                  "verdict": "unverifiable",
+                  "reason": "missing_status"
+                }
+              }
+            ],
+            "page": {
+              "limit": 20,
+              "total": 20,
+              "hasMore": false,
+              "nextCursor": null
+            }
+          }
+        }
+      ]
+    }
+  },
+  "validation": {
+    "typecheck": "passed",
+    "lint": "passed",
+    "build": "passed",
+    "scopedTests": {
+      "passed": 122,
+      "skipped": 2
+    },
+    "fullTestsInitial": {
+      "passed": 2506,
+      "failed": 1,
+      "reason": "ledger-lab explicit scope test 5000ms timeout"
+    },
+    "timeoutIsolatedRerun": "passed",
+    "fullTestsLimitedWorkers": {
+      "command": "pnpm exec vitest run --maxWorkers=4",
+      "passed": 2507,
+      "skipped": 18
+    },
+    "openSpecStrict": "passed",
+    "diffCheck": "passed"
+  },
+  "completion": {
+    "tasksComplete": 7,
+    "tasksTotal": 12,
+    "newProductionRegistrations": 0,
+    "mixedController": "not run",
+    "independentVerification": "not run"
+  }
+}

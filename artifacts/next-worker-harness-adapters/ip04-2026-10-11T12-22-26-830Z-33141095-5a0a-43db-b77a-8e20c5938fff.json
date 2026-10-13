@@ -1,0 +1,46 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-11T12:22:26.830Z",
+  "finishedAt": "2026-10-11T12:27:28.481Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ncWTVr",
+  "runId": "run_d394e13d9181",
+  "coordinatorTerminalHandle": "term_1e076f90-455d-43d4-8522-0f2f14bc898a",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "hermes",
+      "roles": [
+        {
+          "harness": "hermes",
+          "role": "planner",
+          "kind": "blocked",
+          "launchId": "next-hermes2:planner",
+          "taskId": null,
+          "contextToken": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "prepare_failed",
+            "message": "prepared-terminal 失败：timeout"
+          }
+        }
+      ],
+      "blockers": [
+        {
+          "code": "prepare_failed",
+          "message": "prepared-terminal 失败：timeout"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-11T11:57:16.722Z",
+  "finishedAt": "2026-10-11T12:00:32.792Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ncWTVr",
+  "runId": "run_d394e13d9181",
+  "coordinatorTerminalHandle": "term_1e076f90-455d-43d4-8522-0f2f14bc898a",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "kilo",
+      "roles": [
+        {
+          "harness": "kilo",
+          "role": "planner",
+          "kind": "blocked",
+          "launchId": "next-kilo2:planner",
+          "taskId": null,
+          "contextToken": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_6eef17c19400\",\"taskId\":\"task_5a810a7e7e08\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_6eef17c19400\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"            ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"            ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"            ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"            ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"  ┃\",\"  ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"  ┃\",\"  ┃  Code  ·MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"  ┃\",\"  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                             ctrl+t variants  tab agents  ctrl | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"            ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"            ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"            ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"            ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"  ┃\",\"  ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"  ┃\",\"  ┃  Code  ·MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"  ┃\",\"  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                             ctrl+t variants  tab agents  ctrl+p commands\",\"   ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"     Get usage analytics, centralized billing, shared context, and other\",\"     features you need to scale AI coding across your org.\",\"         ● Tip Run /unshare to remove a session from public access\",\"  /var/tmp/<redacted>/       ⊙ 4 MCP /status    7.8.8\",\"  <redacted>\",\"  <redacted>:main\"],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"2\",\"latestCursor\":\"2\",\"returnedLineCount\":18,\"source\":\"screen\"}}"
+          }
+        }
+      ],
+      "blockers": [
+        {
+          "code": "session_report_missing",
+          "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_6eef17c19400\",\"taskId\":\"task_5a810a7e7e08\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_6eef17c19400\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"            ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"            ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"            ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"            ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"  ┃\",\"  ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"  ┃\",\"  ┃  Code  ·MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"  ┃\",\"  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                             ctrl+t variants  tab agents  ctrl | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"            ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"            ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"            ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"            ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"  ┃\",\"  ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"  ┃\",\"  ┃  Code  ·MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"  ┃\",\"  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                             ctrl+t variants  tab agents  ctrl+p commands\",\"   ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"     Get usage analytics, centralized billing, shared context, and other\",\"     features you need to scale AI coding across your org.\",\"         ● Tip Run /unshare to remove a session from public access\",\"  /var/tmp/<redacted>/       ⊙ 4 MCP /status    7.8.8\",\"  <redacted>\",\"  <redacted>:main\"],\"truncated\":false,\"limited\":false,\"oldestCursor\":\"0\",\"nextCursor\":\"2\",\"latestCursor\":\"2\",\"returnedLineCount\":18,\"source\":\"screen\"}}"
+        }
+      ]
+    }
+  ]
+}

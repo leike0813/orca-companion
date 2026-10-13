@@ -1,0 +1,46 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-11T11:37:12.450Z",
+  "finishedAt": "2026-10-11T11:40:26.604Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ncWTVr",
+  "runId": "run_d394e13d9181",
+  "coordinatorTerminalHandle": "term_1e076f90-455d-43d4-8522-0f2f14bc898a",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "hermes",
+      "roles": [
+        {
+          "harness": "hermes",
+          "role": "planner",
+          "kind": "blocked",
+          "launchId": "next-hermes1:planner",
+          "taskId": null,
+          "contextToken": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "hermes 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_80eb9967dced\",\"taskId\":\"task_9fd1f7d2cd2e\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_80eb9967dced\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  # of creating a duplicate question.\",\"  orca orchestration ask --from <redacted> --question \\\"<your question>\\\" --options \\\"<optional,comma,separated>\\\" --timeout-ms 600000\",\"\",\"  # Escalate a blocker or failure (pre-completion, when you need the\",\"  # coordinator to do something before you can continue):\",\"  orca orchestration send --from <redacted> --type escalation --subject \\\"Blocked: <reason>\\\" --body \\\"<details>\\\" --task-id task_9fd1f7d2cd2e --dispatch-id ctx_80eb9967dced\",\"\",\"  # Read coordinator follow-ups. Nothing interrupts you: a durabl | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"    /var/t/<redacted>/<redacted>\",\"<redacted>    main ?1 \"],\"truncated\":false,\"limited\":true,\"oldestCursor\":\"0\",\"nextCursor\":\"70\",\"latestCursor\":\"70\",\"returnedLineCount\":2,\"source\":\"screen\"}}"
+          }
+        }
+      ],
+      "blockers": [
+        {
+          "code": "session_report_missing",
+          "message": "hermes 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_80eb9967dced\",\"taskId\":\"task_9fd1f7d2cd2e\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_80eb9967dced\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  # of creating a duplicate question.\",\"  orca orchestration ask --from <redacted> --question \\\"<your question>\\\" --options \\\"<optional,comma,separated>\\\" --timeout-ms 600000\",\"\",\"  # Escalate a blocker or failure (pre-completion, when you need the\",\"  # coordinator to do something before you can continue):\",\"  orca orchestration send --from <redacted> --type escalation --subject \\\"Blocked: <reason>\\\" --body \\\"<details>\\\" --task-id task_9fd1f7d2cd2e --dispatch-id ctx_80eb9967dced\",\"\",\"  # Read coordinator follow-ups. Nothing interrupts you: a durabl | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"    /var/t/<redacted>/<redacted>\",\"<redacted>    main ?1 \"],\"truncated\":false,\"limited\":true,\"oldestCursor\":\"0\",\"nextCursor\":\"70\",\"latestCursor\":\"70\",\"returnedLineCount\":2,\"source\":\"screen\"}}"
+        }
+      ]
+    }
+  ]
+}

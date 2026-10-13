@@ -1,0 +1,21 @@
+{
+  "schema": "next-harness-readiness/1",
+  "checkedAt": "2026-10-11T11:44:16.687Z",
+  "providers": {
+    "kilo": "additive native provider minimax-cn-coding-plan via MINIMAX_CN_API_KEY",
+    "kimi": "additive native provider minimax-cn-coding-plan via MINIMAX_CN_API_KEY",
+    "hermes": "existing minimax-cn; invocation --model override; default MiniMax-M3 unchanged",
+    "cline": "pending source-backed recipe"
+  },
+  "hermes": {
+    "runId": "run_d394e13d9181",
+    "taskId": "task_9fd1f7d2cd2e",
+    "dispatchId": "ctx_80eb9967dced",
+    "terminal": "term_0c09320d-f49b-42b8-8fd4-e026c2300338",
+    "observedNativeWorkspace": "/home/joshua/Workspace/hermes",
+    "report": "missing",
+    "result": "blocked",
+    "cleanedTerminal": true
+  },
+  "productionRegistered": []
+}

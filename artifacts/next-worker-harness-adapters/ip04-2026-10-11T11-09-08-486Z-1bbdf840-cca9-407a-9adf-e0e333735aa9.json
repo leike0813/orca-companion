@@ -1,0 +1,92 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-11T11:09:08.486Z",
+  "finishedAt": "2026-10-11T11:12:04.813Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ncWTVr",
+  "runId": "run_d394e13d9181",
+  "coordinatorTerminalHandle": "term_1e076f90-455d-43d4-8522-0f2f14bc898a",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "antigravity",
+      "roles": [
+        {
+          "harness": "antigravity",
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "next-reuse2:antigravity:planner",
+          "taskId": "task_7f9d2d86f316",
+          "contextToken": null,
+          "dispatchId": "ctx_12e838de8d90",
+          "sessionId": "04f1bfde-31fb-4ccc-a25b-071416bb7464",
+          "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/04f1bfde-31fb-4ccc-a25b-071416bb7464/.system_generated/logs/transcript_full.jsonl",
+          "stateRoot": "/home/joshua/.gemini/antigravity-cli",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-ncWTVr/state/antigravity/3c564bb0e6a82d40486a/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": null,
+          "blocker": null
+        },
+        {
+          "harness": "antigravity",
+          "role": "implementation",
+          "kind": "ran",
+          "launchId": "next-reuse2:antigravity:implementation",
+          "taskId": "task_0be3e15dca5f",
+          "contextToken": null,
+          "dispatchId": "ctx_07827a25b410",
+          "sessionId": "28aa0ace-d183-49d7-a6b3-a9872fff643d",
+          "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/28aa0ace-d183-49d7-a6b3-a9872fff643d/.system_generated/logs/transcript_full.jsonl",
+          "stateRoot": "/home/joshua/.gemini/antigravity-cli",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-ncWTVr/state/antigravity/1bc33e5b02fd8d8f832c/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": null,
+          "blocker": null
+        },
+        {
+          "harness": "antigravity",
+          "role": "validator",
+          "kind": "ran",
+          "launchId": "next-reuse2:antigravity:validator",
+          "taskId": "task_1b9af186eee9",
+          "contextToken": "808cb99e-6a11-477a-afbc-729797133214",
+          "dispatchId": "ctx_b9abc50ff143",
+          "sessionId": "6bd0d669-804e-4177-b754-32ce5b7a3f26",
+          "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/6bd0d669-804e-4177-b754-32ce5b7a3f26/.system_generated/logs/transcript_full.jsonl",
+          "stateRoot": "/home/joshua/.gemini/antigravity-cli",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-ncWTVr/state/antigravity/041c6f61a3b8bc200b26/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": null,
+          "blocker": null
+        },
+        {
+          "harness": "antigravity",
+          "role": "finalizer",
+          "kind": "ran",
+          "launchId": "next-reuse2:antigravity:finalizer",
+          "taskId": "task_488eef81f19a",
+          "contextToken": null,
+          "dispatchId": "ctx_234f9a8bc88c",
+          "sessionId": "37af612d-5a81-489c-ae6e-8e05fc1672e9",
+          "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/37af612d-5a81-489c-ae6e-8e05fc1672e9/.system_generated/logs/transcript_full.jsonl",
+          "stateRoot": "/home/joshua/.gemini/antigravity-cli",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-ncWTVr/state/antigravity/84927531e3777311ea4f/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": null,
+          "blocker": null
+        }
+      ],
+      "blockers": []
+    }
+  ]
+}

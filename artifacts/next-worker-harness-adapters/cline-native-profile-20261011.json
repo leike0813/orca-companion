@@ -1,0 +1,10 @@
+{
+  "schema": "native-profile-readiness/1",
+  "harness": "cline",
+  "model": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+  "providerSettingsPath": "/home/joshua/.cline/data/settings/providers-minimax-mplan.json",
+  "originalProviderFileUnchanged": true,
+  "secretInLaunchArguments": false,
+  "homeAndAuthPreserved": true,
+  "productionRegistered": false
+}

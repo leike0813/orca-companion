@@ -226,7 +226,7 @@ function fakeOrca(options: {
               },
             });
           case 'terminal-wait':
-            return Promise.resolve({ kind: 'accepted' as const, value: { terminal: { state: 'idle' } } });
+            return Promise.resolve({ kind: 'accepted' as const, value: { wait: { handle: input.terminal, condition: 'tui-idle', status: 'running', satisfied: true } } });
           case 'terminal-read':
             return Promise.resolve({ kind: 'accepted' as const, value: { terminal: { draft: '' } } });
           case 'worker-show':

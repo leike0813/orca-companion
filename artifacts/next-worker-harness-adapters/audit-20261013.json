@@ -1,0 +1,57 @@
+{
+  "change": "add-next-worker-harness-adapters",
+  "scope": "Independent read-only review of seven candidate adapters, reporting installer and direct lifecycle/identity/readonly seams; targeted re-review of repairs.",
+  "findings": [
+    {
+      "id": "kimi-hook-table-boundary",
+      "file": "src/adapters/agents/kimi-harness.ts",
+      "problem": "Blank lines before TOML hook headers were consumed by the header regexp, so status missed installed hooks and repeated install/uninstall was incorrect.",
+      "repair": "Limit header whitespace to spaces/tabs and derive ranges from the actual header bracket.",
+      "regression": "Blank-line and indented hook tables, idempotent installation, exact own-entry removal preserving user content.",
+      "independentRecheck": "closed"
+    },
+    {
+      "id": "kimi-command-comment-boundary",
+      "file": "src/adapters/agents/kimi-harness.ts",
+      "problem": "A # inside the quoted reporting command path was interpreted as a TOML comment.",
+      "repair": "Match the whole quoted JSON string or unquoted primitive followed only by whitespace and an optional comment; malformed fields refuse installation/uninstallation without changing the original file.",
+      "regression": "# in XDG data path, inline comments, escaped quoted strings and non-comment trailing tokens; malformed install/uninstall preserves bytes with zero writes and releases the lock.",
+      "independentRecheck": "closed"
+    },
+    {
+      "id": "muse-unknown-retained-record",
+      "file": "src/adapters/agents/muse-harness.ts",
+      "problem": "Unknown or damaged retained records were silently skipped while inspectTranscript issued complete coverage.",
+      "repair": "Validate every expanded record and known payload shape; reject unrecognized records and bound the expanded count.",
+      "independentRecheck": "closed"
+    },
+    {
+      "id": "muse-conflicting-workspace",
+      "file": "src/adapters/agents/muse-harness.ts",
+      "problem": "Only the first workspace declaration was retained, so conflicting metadata/route facts could pass identity and resume admission.",
+      "repair": "Normalize and verify every absolute workspace declaration in the shared parser used by identity, resume and coverage.",
+      "independentRecheck": "closed"
+    }
+  ],
+  "scopedValidation": {
+    "museWithReporting": { "passed": 16 },
+    "kimiWithReporting": { "passed": 39 },
+    "kimiMuseWithReportingAfterFinalHardening": { "passed": 52 },
+    "museIndependentMemoryChecks": { "passed": 7 }
+  },
+  "finalValidation": {
+    "fullTests": { "passed": 2521, "skipped": 18, "filesPassed": 212, "filesSkipped": 9, "exitCode": 0 },
+    "typecheck": "passed",
+    "lint": "passed",
+    "build": "passed",
+    "openspecStrict": "passed",
+    "diffCheck": "passed"
+  },
+  "limits": [
+    "No live installer, model or Orca actions were performed by review or repair agents.",
+    "Muse native compatibility remains unverified; it is not registered.",
+    "Kimi hook parsing supports the installer-generated JSON values, not arbitrary hand-edited TOML literal syntax.",
+    "Mixed Controller remains blocked on public exact-terminal readiness and has not been counted as PASS.",
+    "This audit is not the schema-required final verification artifact."
+  ]
+}

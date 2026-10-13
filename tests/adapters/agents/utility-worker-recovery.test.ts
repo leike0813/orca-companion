@@ -33,7 +33,7 @@ test('绑定晚到后重试复用 exact terminal/Task：不重发 create/start/s
           hostIds: ['local'], omittedHostIds: [], totalCount: terminalCreated ? 1 : 0, truncated: false,
         } });
       }
-      if (query.operation === 'terminal-wait') return Promise.resolve({ kind: 'accepted', value: { state: 'tui-idle' } });
+      if (query.operation === 'terminal-wait') return Promise.resolve({ kind: 'accepted', value: { wait: { handle: query.terminal, condition: 'tui-idle', status: 'running', satisfied: true } } });
       if (query.operation === 'terminal-read') return Promise.resolve({ kind: 'accepted', value: { terminal: { draft: '[Pasted Content]' } } });
       if (query.operation === 'worker-show') {
         return Promise.resolve({ kind: 'accepted', value: { dispatchId: 'disp-1', exactWorker: true, agentTerminalHandle: 'term-1' } });

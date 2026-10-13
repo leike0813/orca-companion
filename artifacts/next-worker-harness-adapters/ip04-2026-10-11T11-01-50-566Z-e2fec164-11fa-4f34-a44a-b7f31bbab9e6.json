@@ -1,0 +1,51 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-11T11:01:50.566Z",
+  "finishedAt": "2026-10-11T11:02:00.796Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ncWTVr",
+  "runId": "run_d394e13d9181",
+  "coordinatorTerminalHandle": "term_1e076f90-455d-43d4-8522-0f2f14bc898a",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "antigravity",
+      "modelSelection": {
+        "model": "gemini-3.8-flash-medium",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "gemini-3.8-flash-medium",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "blocked",
+          "launchId": "ip04:antigravity:planner",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "prepare_failed",
+            "message": "prepared-terminal 失败：agent-trust-workspace"
+          }
+        }
+      ],
+      "resume": null,
+      "validatorContinuation": null,
+      "recovery": null,
+      "blockers": [
+        "planner：prepare_failed prepared-terminal 失败：agent-trust-workspace"
+      ]
+    }
+  ]
+}

@@ -49,6 +49,11 @@ import { buildExecutionScope, orcaTerminalHandleFromReceipt } from '../../src/ap
 import type { HarnessSessionReport, WorkerHarness, WorkerHarnessLaunchInput } from '../../src/application/ports/worker-harness.js';
 import { commandCodeHarness } from '../../src/adapters/agents/command-code-harness.js';
 import { qwenHarness } from '../../src/adapters/agents/qwen-harness.js';
+import { antigravityHarness } from '../../src/adapters/agents/antigravity-harness.js';
+import { kiloHarness } from '../../src/adapters/agents/kilo-harness.js';
+import { kimiHarness } from '../../src/adapters/agents/kimi-harness.js';
+import { hermesHarness, prepareHermesRecoveryMaterial, hermesRecoveryMaterialPath } from '../../src/adapters/agents/hermes-harness.js';
+import { clineHarness, prepareClineRecoveryMaterial, clineRecoveryMaterialPath } from '../../src/adapters/agents/cline-harness.js';
 import {
   activatePreparedWorker,
   prepareWorkerLaunch,
@@ -84,7 +89,7 @@ export function installAcceptanceCandidates(plan: AcceptancePlan): () => void {
   if (!(workerHarnessRegistry instanceof Map)) throw new Error('Qualification requires the bootstrap Map registry');
   const registry = workerHarnessRegistry as Map<string, WorkerHarness>;
   const installed: { id: string; candidate: WorkerHarness; previous: WorkerHarness | undefined }[] = [];
-  for (const candidate of [commandCodeHarness, qwenHarness]) {
+  for (const candidate of [commandCodeHarness, qwenHarness, antigravityHarness, kiloHarness, kimiHarness, hermesHarness, clineHarness]) {
     if (!plan.harnesses.includes(candidate.id)) continue;
     installed.push({ id: candidate.id, candidate, previous: registry.get(candidate.id) });
     registry.set(candidate.id, candidate);
@@ -123,6 +128,11 @@ export const HARNESS_MATRIX: readonly HarnessBinding[] = [
   { harness: 'omp', modelSelection: { model: 'minimax-code-cn/MiniMax-M3.1-Flash-Preview', effort: null, effortCapability: null, catalogSource: null }, expectedModel: 'MiniMax-M3.1-Flash-Preview' },
   { harness: 'command-code', modelSelection: { model: 'minimax-cn/MiniMax-M3.1-Flash-Preview', effort: null, effortCapability: null, catalogSource: null }, expectedModel: 'MiniMax-M3.1-Flash-Preview' },
   { harness: 'qwen-code', modelSelection: { model: 'MiniMax-M3.1-Flash-Preview', effort: null, effortCapability: null, catalogSource: null }, expectedModel: 'MiniMax-M3.1-Flash-Preview' },
+  { harness: 'antigravity', modelSelection: { model: 'gemini-3.8-flash-medium', effort: null, effortCapability: null, catalogSource: null }, expectedModel: 'gemini-3.8-flash-medium' },
+  { harness: 'kilo', modelSelection: { model: 'minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview', effort: null, effortCapability: null, catalogSource: null }, expectedModel: 'MiniMax-M3.1-Flash-Preview' },
+  { harness: 'kimi', modelSelection: { model: 'MiniMax-M3.1-Flash-Preview', effort: null, effortCapability: null, catalogSource: null }, expectedModel: 'MiniMax-M3.1-Flash-Preview' },
+  { harness: 'hermes', modelSelection: { model: 'MiniMax-M3.1-Flash-Preview', effort: null, effortCapability: null, catalogSource: null }, expectedModel: 'MiniMax-M3.1-Flash-Preview' },
+  { harness: 'cline', modelSelection: { model: 'minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview', effort: null, effortCapability: null, catalogSource: null }, expectedModel: 'MiniMax-M3.1-Flash-Preview' },
 ];
 export const ACCEPTANCE_HARNESSES = HARNESS_MATRIX.map((binding) => binding.harness);
 
@@ -277,7 +287,7 @@ export async function prepareAcceptanceWorker(input: {
     throw new AcceptanceBlocker('invalid_worker_launcher', 'adapter 返回空命令或不一致的 terminal title');
   }
   const handle = await createAcceptanceTerminal(input.backend, {
-    operation: 'terminal-create', worktree: 'path:' + input.worktreePath, title: launch.title, command: launch.command,
+    operation: 'terminal-create', worktree: 'path:' + input.worktreePath, title: launch.title, command: launch.command, focus: true,
   }, input.scope);
   return prepareWorkerLaunch({
     backend: input.backend,
@@ -468,6 +478,14 @@ function outputTextOf(value: unknown): string {
 function assistantMessage(value: unknown): Record<string, unknown> | undefined {
   const record = readRecord(value);
   if (record === undefined) return undefined;
+  if (record['role'] === 'assistant' && typeof record['id'] === 'number' && record['active'] === 1 && record['compacted'] === 0) return record;
+  if (record['type'] === 'PLANNER_RESPONSE' && record['source'] === 'MODEL' && record['status'] === 'DONE') return record;
+  if (record['type'] === 'agent.message.appended') {
+    const envelope = readRecord(record['message']);
+    const meta = readRecord(envelope?.['meta']);
+    const message = readRecord(envelope?.['message']);
+    return meta?.['source'] === 'llm' && message?.['role'] === 'assistant' ? message : undefined;
+  }
   const info = readRecord(record['info']);
   if (info?.['role'] === 'assistant') return { ...info, parts: record['parts'] };
   const message = record['type'] === 'assistant'
@@ -510,6 +528,20 @@ export function assistantTextFromRecord(value: unknown): string {
   }).join('\n');
 }
 
+/** Native export JSON and JSONL retain the same assistant evidence boundary. */
+export function transcriptRecords(text: string): readonly unknown[] {
+  try {
+    const value: unknown = JSON.parse(text);
+    const exported = readRecord(value);
+    return Array.isArray(exported?.['messages']) ? exported['messages'] : [value];
+  } catch {
+    return text.split('\n').flatMap((line): unknown[] => {
+      if (!line) return [];
+      try { return [JSON.parse(line) as unknown]; } catch { return []; }
+    });
+  }
+}
+
 /** 真实 assistant 文本与模型同源；终端画面与用户消息不承担结果证据。 */
 function extractTranscriptEvidence(transcriptRef: string): { model: string | null; output: string } {
   const result: { model: string | null; output: string } = { model: null, output: '' };
@@ -521,16 +553,10 @@ function extractTranscriptEvidence(transcriptRef: string): { model: string | nul
   } catch {
     return result;
   }
-  for (const line of text.split('\n')) {
-    if (line.length === 0) continue;
-    try {
-      const record: unknown = JSON.parse(line);
+  for (const record of transcriptRecords(text)) {
       result.model ??= modelEvidenceFromAssistant(record);
       const assistantText = assistantTextFromRecord(record);
       if (assistantText.length > 0) result.output += assistantText + '\n';
-    } catch {
-      continue;
-    }
   }
   return result;
 }
@@ -538,7 +564,7 @@ function extractTranscriptEvidence(transcriptRef: string): { model: string | nul
 export type PermissionDeniedEvidence = { readonly path: string; readonly code: string; readonly eventRef: string };
 
 /** Only native tool outputs can prove the bounded write probe; assistant claims cannot. */
-export function permissionDeniedFromToolRecord(value: unknown, path: string, eventRef: string): PermissionDeniedEvidence | null {
+export function permissionDeniedFromToolRecord(value: unknown, path: string, eventRef: string, previous?: unknown): PermissionDeniedEvidence | null {
   const record = readRecord(value);
   if (record === undefined) return null;
   const message = readRecord(record['message']);
@@ -546,6 +572,18 @@ export function permissionDeniedFromToolRecord(value: unknown, path: string, eve
   const toolCall = readRecord(record['toolCallResult']);
   const display = readRecord(toolCall?.['resultDisplay']);
   const texts: string[] = [];
+  const event = readRecord(record['event']);
+  const result = readRecord(event?.['result']);
+  if (record['type'] === 'context.append_loop_event' && event?.['type'] === 'tool.result'
+    && typeof event['toolCallId'] === 'string' && typeof result?.['output'] === 'string') texts.push(result['output']);
+  const preceding = readRecord(previous);
+  if (record['type'] === 'GENERIC' && record['source'] === 'MODEL' && record['status'] === 'DONE'
+    && preceding?.['type'] === 'PLANNER_RESPONSE' && preceding['source'] === 'MODEL' && preceding['status'] === 'DONE'
+    && typeof record['step_index'] === 'number' && preceding['step_index'] === record['step_index'] - 1
+    && Array.isArray(preceding['tool_calls']) && preceding['tool_calls'].length === 1
+    && readRecord(preceding['tool_calls'][0])?.['name'] === 'run_command' && typeof record['content'] === 'string') {
+    texts.push(record['content']);
+  }
   if (record['type'] === 'function_call_result' && typeof output?.['text'] === 'string') texts.push(output['text']);
   if (record['type'] === 'tool_result' && typeof display?.['output'] === 'string') texts.push(display['output']);
   const blocks = message?.['content'] ?? record['parts'];
@@ -578,11 +616,15 @@ export function permissionDeniedFromToolRecord(value: unknown, path: string, eve
 function readPermissionDeniedEvidence(transcriptRef: string, path: string): PermissionDeniedEvidence | null {
   if (!existsSync(transcriptRef) || statSync(transcriptRef).size > 512 * 1024) return null;
   const lines = readFileSync(transcriptRef, 'utf8').split('\n');
+  let previous: unknown;
   for (const [index, line] of lines.entries()) {
     try {
-      const proof = permissionDeniedFromToolRecord(JSON.parse(line) as unknown, path, 'line:' + (index + 1));
+      const record: unknown = JSON.parse(line);
+      const step = readRecord(record)?.['step_index'];
+      const proof = permissionDeniedFromToolRecord(record, path, typeof step === 'number' ? 'step:' + step : 'line:' + (index + 1), previous);
+      previous = record;
       if (proof !== null) return proof;
-    } catch { continue; }
+    } catch { previous = undefined; }
   }
   return null;
 }
@@ -763,6 +805,11 @@ async function launchPreparedTerminal(input: {
   }
   // coverage 必须在真正 settled 之后读取，否则首个 event 后即 complete 会掩盖后续 tail 截断。
   let coverage = await requireWorkerHarness(binding.harness).inspectTranscript(bound.binding.transcriptRef);
+  // Kilo's session.updated export can finish after worker_done; observe the same snapshot without redelivery.
+  for (let attempt = 0; binding.harness === 'kilo' && coverage.kind !== 'covered' && attempt < 15; attempt += 1) {
+    await new Promise((settle) => setTimeout(settle, 1_000));
+    coverage = await requireWorkerHarness(binding.harness).inspectTranscript(bound.binding.transcriptRef);
+  }
   if (coverage.kind !== 'covered') return { kind: 'blocked', code: 'transcript_unavailable', message: 'transcript 不可读：' + coverage.reason };
   let modelTranscript = bound.binding.transcriptRef;
   if (binding.harness === 'opencode') {
@@ -777,6 +824,14 @@ async function launchPreparedTerminal(input: {
     if (material === null) return { kind: 'blocked', code: 'transcript_unavailable', message: '公开消息与已核验范围不一致' };
     modelTranscript = opencodeRecoveryMaterialPath(input.stateRoot, modelTranscript);
   }
+  if (binding.harness === 'hermes') {
+    if (await prepareHermesRecoveryMaterial(modelTranscript, input.stateRoot, coverage.evidence) === null) return { kind: 'blocked', code: 'transcript_unavailable', message: 'Hermes 公开消息与已核验范围不一致' };
+    modelTranscript = hermesRecoveryMaterialPath(input.stateRoot, modelTranscript);
+  }
+  if (binding.harness === 'cline') {
+    if (prepareClineRecoveryMaterial(modelTranscript, input.stateRoot, coverage.evidence) === null) return { kind: 'blocked', code: 'transcript_unavailable', message: 'Cline 原生消息与已核验范围不一致' };
+    modelTranscript = clineRecoveryMaterialPath(input.stateRoot, modelTranscript);
+  }
   let transcriptEvidence = extractTranscriptEvidence(modelTranscript);
   // worker_done 可以先于最终 assistant 响应落盘；只从精确来源等待，不用终端回显补结果。
   for (let attempt = 0; role === 'finalizer' && !transcriptEvidence.output.includes(completionToken(binding.harness, role)) && attempt < 15; attempt += 1) {
@@ -785,6 +840,12 @@ async function launchPreparedTerminal(input: {
     if (coverage.kind !== 'covered') return { kind: 'blocked', code: 'transcript_unavailable', message: coverage.reason };
     if (binding.harness === 'opencode' && await prepareOpencodeRecoveryMaterial(bound.binding.transcriptRef, input.stateRoot, coverage.evidence) === null) continue;
     transcriptEvidence = extractTranscriptEvidence(modelTranscript);
+  }
+
+  if (binding.harness === 'antigravity') {
+    const native = readRecord(JSON.parse(readFileSync(input.reportPath + '.model.json', 'utf8')) as unknown);
+    if (native?.['sessionId'] === bound.binding.providerSessionId && native['transcriptPath'] === bound.binding.transcriptRef
+      && typeof native['model'] === 'string') transcriptEvidence.model = native['model'];
   }
 
   return {
@@ -977,6 +1038,7 @@ export function qwenRecoverySourcesVerified(records: readonly unknown[], capsule
   for (const value of records) {
     const record = readRecord(value);
     if (typeof record?.['uuid'] === 'string') events.set(record['uuid'], value);
+    if (typeof record?.['step_index'] === 'number') events.set('step:' + record['step_index'], value);
   }
   return capsule.sourceRefs.every((ref) => events.has(ref))
     && capsule.openActions.every((action) => events.has(action.sourceRef))
@@ -1017,7 +1079,11 @@ export async function runRecoveryUtility(input: {
     }));
     const recipe = binding.harness === 'opencode'
       ? await prepareOpencodeRecoveryMaterial(original.transcriptRef, roots.actual, covered.evidence)
-      : harness.recoveryInstructions();
+      : binding.harness === 'hermes'
+        ? await prepareHermesRecoveryMaterial(original.transcriptRef, roots.actual, covered.evidence)
+        : binding.harness === 'cline'
+          ? prepareClineRecoveryMaterial(original.transcriptRef, roots.actual, covered.evidence)
+          : harness.recoveryInstructions();
     if (recipe === null) throw new AcceptanceBlocker('source_transcript_unavailable', 'Precise public export unavailable');
     const probe = join('.companion', 'utility-write-probe-' + randomUUID());
     const probePath = join(fixture.projectDir, probe);
@@ -1040,7 +1106,9 @@ export async function runRecoveryUtility(input: {
     });
     if (launched.kind !== 'ran') throw new AcceptanceBlocker(launched.code, launched.message);
     const utilityTranscript = binding.harness === 'opencode'
-      ? opencodeRecoveryMaterialPath(roots.actual, launched.worker.transcriptRef) : launched.worker.transcriptRef;
+      ? opencodeRecoveryMaterialPath(roots.actual, launched.worker.transcriptRef)
+      : binding.harness === 'hermes' ? hermesRecoveryMaterialPath(roots.actual, launched.worker.transcriptRef)
+        : binding.harness === 'cline' ? clineRecoveryMaterialPath(roots.actual, launched.worker.transcriptRef) : launched.worker.transcriptRef;
     const permissionDenied = readPermissionDeniedEvidence(utilityTranscript, probePath);
     result = { ...result, utility: launched.worker, permissionDenied,
       readOnlyVerified: permissionDenied !== null && !existsSync(probePath) };
@@ -1072,7 +1140,7 @@ export async function runRecoveryUtility(input: {
         }
         let sourceBehaviorVerified = parsed.capsule.openActions.some((action) =>
           action.description.includes(original.contextToken ?? '') && parsed.capsule.sourceRefs.includes(action.sourceRef));
-        if (binding.harness === 'qwen-code') {
+        if (binding.harness === 'qwen-code' || binding.harness === 'antigravity') {
           sourceBehaviorVerified = statSync(original.transcriptRef).size <= 512 * 1024
             && qwenRecoverySourcesVerified(readFileSync(original.transcriptRef, 'utf8').split('\n')
               .filter((line) => line.length > 0).map((line): unknown => JSON.parse(line) as unknown), parsed.capsule, original.contextToken);
@@ -1156,7 +1224,7 @@ export function writeAcceptanceEvidence(directory: string, evidence: AcceptanceE
       lines.push('| ' + name + ' | ' + role.role + ' | ' + role.kind + ' | ' + (role.terminalState ?? '') + ' | ' + (role.sessionId ?? '') + ' | ' + (role.coverage ?? '') + ' | ' + String(role.artifactOk ?? '') + ' | ' + (role.blocker === null || role.blocker === undefined ? '' : JSON.stringify(role.blocker)) + ' |');
     }
     const resume = harness['resume'] as Record<string, unknown> | undefined;
-    if (resume !== undefined) {
+    if (resume !== undefined && resume !== null) {
       lines.push('| ' + name + ' | resume | ' + text(resume['kind']) + ' | | sameSession=' + text(resume['sameSession']) + ' | ' + text(resume['coverage']) + ' | | ' + (resume['blocker'] === null || resume['blocker'] === undefined ? '' : JSON.stringify(resume['blocker'])) + ' |');
     }
     for (const blocker of Array.isArray(harness['blockers']) ? (harness['blockers'] as readonly string[]) : []) {

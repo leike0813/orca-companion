@@ -1,0 +1,83 @@
+{
+  "change": "add-next-worker-harness-adapters",
+  "result": "blocked_before_worker_start",
+  "productionRegistration": false,
+  "orcaVersion": "1.4.222",
+  "qualificationBuild": "/var/tmp/ocp-antigravity-qualification-build-jnQ7Ta",
+  "fixtureRoot": "/var/tmp/orca-ip04-mixed-controller-R6AahD",
+  "repository": "/var/tmp/orca-ip04-mixed-controller-R6AahD/repo",
+  "coordinationScopeId": "ip04-mixed-controller-485da76f-4ba2-4c13-941a-ff479dde1049",
+  "coordinatorTerminalHandle": "term_9fa3f57a-c016-4d1f-adeb-e3f10e00fa02",
+  "orcaRunId": "run_3c725fe4d971",
+  "profiles": {
+    "planner": "antigravity/gemini-3.8-flash-medium",
+    "implementation": "antigravity/gemini-3.8-flash-medium",
+    "validator": "qwen-code/MiniMax-M3.1-Flash-Preview",
+    "finalizer": "qwen-code/MiniMax-M3.1-Flash-Preview",
+    "recovery_utility": "qwen-code/MiniMax-M3.1-Flash-Preview"
+  },
+  "identityFix": {
+    "problem": "The acceptance host inherited the parent terminal's Orca attestation and returned consumer_fenced for the explicit fixture identity.",
+    "file": "tests/acceptance/worker-harness-controller.test.ts",
+    "fix": "Reuse toChildEnvironment(process.env) in hostEnvironment.",
+    "sameScopeRestored": true,
+    "originalAuthorizationRetained": true
+  },
+  "preparedTerminal": {
+    "worktree": "/home/joshua/orca/workspaces/repo/wp-03ea5cb8acd988a9afaa7fc37665aec402158ff3fea6bde51e16352d949905cd",
+    "handle": "term_dbf35862-aad9-454b-868f-10e78551eee4",
+    "terminalCreateBackendRequestId": "87c71bb8-dc8a-4b7a-9023-0205ffe4292e",
+    "terminalCreateIntentState": "settled",
+    "incarnationId": "5090d715-9cf1-484a-95e4-c9a36ef7a803",
+    "orcaTaskId": "task_e5664e96498c",
+    "agentIdentity": "antigravity",
+    "connected": true,
+    "writable": true,
+    "paneRuntimeId": -1,
+    "rendererGraphEpoch": 0,
+    "agentWait": null,
+    "nativeTrustConfirmationReceiptId": "904ab233-c7a3-4750-a425-e16dc424a980",
+    "nativeTrustMenuGone": true,
+    "redrawInputReceiptId": "232d2afd-73b7-4acf-a416-2c118d1b442e",
+    "readiness": "unproven",
+    "waitReceiptIds": [
+      "0f4f8e6f-c9ed-4972-b4c7-0f9f8408f0b5",
+      "87a9faa3-b1a8-4b33-a88e-c616301d2996",
+      "834e76bf-8218-47d7-85e0-700c798cdd6e",
+      "8b0382bd-4bac-4c21-a13a-52cdb283e68e",
+      "ec7028b4-857c-46d8-8ae8-88577356c9a5"
+    ],
+    "waitResult": "timeout",
+    "attempts": [
+      "Confirmed the isolated native workspace trust menu and read back the idle composer.",
+      "Retried public tui-idle waits with 10s, 15s and 30s bounds.",
+      "Switched the exact terminal through the public CLI, then rechecked readiness.",
+      "Repeated switch/wait with the parent terminal identity environment removed.",
+      "Sent native Ctrl-L once to test whether stale trust text prevented readiness.",
+      "Tried Computer Use; Linux provider requires unavailable python3-gi/AT-SPI system packages."
+    ]
+  },
+  "controllerTestProcesses": "stopped; no Worker turn was started",
+  "unusedShellCleanup": {
+    "handle": "term_71a48ae7-250c-4206-8ae7-7a0888647787",
+    "receiptId": "6dc71340-fadd-49cb-ba89-dfca68db32a6",
+    "ptyKilled": true
+  },
+  "resourcePolicy": "Keep the original prepared terminal and Scope. Never replace accepted terminal-create or count a rendered composer as a satisfied/running wait.",
+  "resumeWhen": "The original exact terminal returns a public tui-idle receipt with satisfied=true and status=running. Continue the same authorized Scope; do not create a new Scope or launch ID.",
+  "uncertainty": "Missing renderer metadata is observed, but has not been proven to cause the readiness timeout.",
+  "validation": {
+    "pnpm typecheck": "passed",
+    "pnpm lint": "passed",
+    "pnpm build": "passed",
+    "pnpm exec vitest run --maxWorkers=4": {
+      "exitCode": 0,
+      "testFilesPassed": 212,
+      "testFilesSkipped": 9,
+      "testsPassed": 2521,
+      "testsSkipped": 18
+    },
+    "openspec validate add-next-worker-harness-adapters --strict": "passed",
+    "controller": "blocked; not a PASS"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-11T12:31:02.708Z",
+  "finishedAt": "2026-10-11T12:37:28.372Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ncWTVr",
+  "runId": "run_d394e13d9181",
+  "coordinatorTerminalHandle": "term_1e076f90-455d-43d4-8522-0f2f14bc898a",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "kimi",
+      "roles": [
+        {
+          "harness": "kimi",
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "next-kimi3:planner",
+          "taskId": "task_8f92bac42ea6",
+          "contextToken": null,
+          "dispatchId": "ctx_e7c4598ce9f8",
+          "sessionId": "session_d1d1e2cc-c89d-4c8a-aade-c1ce1802b358",
+          "transcriptRef": "/home/joshua/.kimi-code/sessions/wd_project-companion-harness-matrix-0881258_3ebc338b1854/session_d1d1e2cc-c89d-4c8a-aade-c1ce1802b358/agents/main/wire.jsonl",
+          "stateRoot": "/home/joshua/.kimi-code",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-ncWTVr/state/kimi/9b15e1040a206155d664/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": null,
+          "blocker": null
+        }
+      ],
+      "blockers": []
+    }
+  ]
+}

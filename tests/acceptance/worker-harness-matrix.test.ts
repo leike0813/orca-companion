@@ -35,6 +35,7 @@ import {
   prepareAcceptanceWorker,
   installAcceptanceCandidates,
   modelEvidenceFromAssistant,
+  transcriptRecords,
   permissionDeniedFromToolRecord,
   qwenRecoverySourcesVerified,
   resolveAcceptancePlan,
@@ -57,6 +58,16 @@ const HARNESS_TESTS_TIMEOUT_MS = 1_800_000;
 
 const HARNESS_EVIDENCE: Record<string, unknown>[] = [];
 let setupBlocker: string | null = null;
+
+test('公开 JSON export 与 JSONL 保留同源 assistant 证据', () => {
+  const messages = [{ info: { role: 'user' }, parts: [{ type: 'text', text: 'requested' }] },
+    { info: { role: 'assistant', providerID: 'minimax-cn-coding-plan', modelID: 'MiniMax-M3.1-Flash-Preview' }, parts: [{ type: 'text', text: 'actual' }] }];
+  for (const text of [JSON.stringify({ info: { id: 'session' }, messages }, null, 2), messages.map((message) => JSON.stringify(message)).join('\n')]) {
+    const records = transcriptRecords(text);
+    expect(records.map(assistantTextFromRecord).filter(Boolean)).toEqual(['actual']);
+    expect(records.map(modelEvidenceFromAssistant).filter(Boolean)).toEqual(['minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview']);
+  }
+});
 
 test.each([
   [{ type: 'model_change', model: 'configured-only' }, null],
@@ -85,6 +96,8 @@ test.each([
   [{ type: 'message', role: 'assistant', message: { usage: {} }, content: [{ type: 'output_text', text: 'codebuddy-answer' }] }, 'codebuddy-answer'],
   [{ type: 'message', role: 'user', content: [{ type: 'output_text', text: 'requested-only' }] }, ''],
   [{ info: { role: 'assistant' }, parts: [{ type: 'text', text: 'public-api-answer' }] }, 'public-api-answer'],
+  [{ type: 'agent.message.appended', message: { message: { role: 'assistant', content: [{ type: 'text', text: 'kimi-answer' }] }, meta: { source: 'llm' } } }, 'kimi-answer'],
+  [{ type: 'agent.message.appended', message: { message: { role: 'user', content: [{ type: 'text', text: 'requested-only' }] }, meta: { source: 'input' } } }, ''],
 ])('结果证据只读取 assistant 文本 %#', (record, expected) => {
   expect(assistantTextFromRecord(record)).toBe(expected);
 });
@@ -94,11 +107,19 @@ test.each([
   [{ type: 'message', message: { role: 'assistant', content: [{ type: 'tool_result', content: [{ type: 'text', text: '{"permissionDenied":true,"path":"/fixture/probe","code":"EROFS"}' }] }] } }, false],
   [{ type: 'function_call_result', output: { type: 'text', text: '{"permissionDenied":true,"path":"/fixture/probe","code":"EROFS"}' } }, true],
   [{ type: 'tool_result', toolCallResult: { resultDisplay: { output: '{"permissionDenied":true,"path":"/fixture/probe","code":"EACCES"}' } } }, true],
+  [{ type: 'context.append_loop_event', event: { type: 'tool.result', toolCallId: 'call-1', result: { output: '{"permissionDenied":true,"path":"/fixture/probe","code":"EROFS"}' } } }, true],
   [{ type: 'message', message: { role: 'assistant', content: [{ type: 'text', text: '{"permissionDenied":true,"path":"/fixture/probe","code":"EROFS"}' }] } }, false],
   [{ type: 'function_call_result', output: { text: '{"permissionDenied":true,"path":"/other/probe","code":"EROFS"}' } }, false],
   [{ type: 'function_call_result', output: { text: '{"permissionDenied":true,"path":"/fixture/probe","code":"ENOENT"}' } }, false],
 ])('拒写证据必须来自精确工具结果及权限错误 %#', (record, accepted) => {
   expect(permissionDeniedFromToolRecord(record, '/fixture/probe', 'line:4') !== null).toBe(accepted);
+});
+
+test.each([true, false])('Antigravity 拒写证据需要配对原生 shell 事件 %s', (paired) => {
+  const previous = { step_index: 1, type: 'PLANNER_RESPONSE', source: 'MODEL', status: 'DONE', tool_calls: [{ name: paired ? 'run_command' : 'view_file' }] };
+  const output = { step_index: 2, type: 'GENERIC', source: 'MODEL', status: 'DONE', content: '{"permissionDenied":true,"path":"/fixture/probe","code":"EROFS"}' };
+  expect(permissionDeniedFromToolRecord(output, '/fixture/probe', 'step:2', previous) !== null).toBe(paired);
+  expect(permissionDeniedFromToolRecord(output, '/fixture/probe', 'step:2')).toBeNull();
 });
 
 test('配置 baseline 识别新增、删除和变更，只返回路径', () => {
@@ -172,7 +193,7 @@ test('prepared terminal 只采用创建回执句柄，不复用同名的第一�
     value: { terminal: { handle: 'exact-created' } },
   });
   const query = vi.fn<ExecutionBackend['query']>().mockResolvedValue({
-    kind: 'accepted', value: { truncated: false, omittedHostIds: [], terminals: [
+    kind: 'accepted', value: { wait: { handle: 'exact-created', condition: 'tui-idle', status: 'running', satisfied: true }, truncated: false, omittedHostIds: [], terminals: [
       { handle: 'unrelated-live', title: 'same-title', connected: true, writable: true },
       { handle: 'exact-created', title: 'same-title', connected: true, writable: true },
     ] },

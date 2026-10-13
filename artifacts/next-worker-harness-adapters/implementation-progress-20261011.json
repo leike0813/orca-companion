@@ -1,0 +1,70 @@
+{
+  "schema": "next-harness-progress/1",
+  "change": "add-next-worker-harness-adapters",
+  "baselineHead": "13b203f62bbb68a60456c5acd7d28e4c54c625a4",
+  "orcaVersion": "1.4.222",
+  "completedTasks": 7,
+  "totalTasks": 12,
+  "implementationAndOffline": ["antigravity", "kilo", "kimi", "hermes", "cline", "muse", "cursor"],
+  "newProductionRegistrations": [],
+  "kiloMini": {
+    "launchId": "next-kilo3:planner",
+    "launchSelection": "--mini with KILO_NO_DAEMON=1",
+    "offlineTestsPassed": 21,
+    "taskId": "task_07edbe46400e",
+    "terminalCreateOutcome": "unknown",
+    "backendRequestId": "15d00764-778b-4006-889b-4fd3778e4a38",
+    "requestShowState": "absent",
+    "realQualification": "not reached",
+    "evidence": "kilo-mini-attempt-20261011.json"
+  },
+  "kimiPlanner": {
+    "launchId": "next-kimi3:planner",
+    "taskId": "task_8f92bac42ea6",
+    "dispatchId": "ctx_e7c4598ce9f8",
+    "terminal": "term_f7fa4205-230b-444a-86b6-5fde28f05cf9",
+    "sessionId": "session_d1d1e2cc-c89d-4c8a-aade-c1ce1802b358",
+    "sessionBinding": "passed",
+    "coverage": "complete",
+    "artifactOk": true,
+    "workerState": "succeeded",
+    "actualModelEvidence": null,
+    "qualification": "incomplete"
+  },
+  "cline": {
+    "pluginManifestValidatedByInstalledSdk": "@cline/shared@0.0.92",
+    "originalProviderFileUnchanged": true,
+    "interactiveAutoBackend": "existing hub; current launch reporter unavailable",
+    "localLaunchSelection": "--tui --yolo; installed CLI source confirms forceLocalBackend",
+    "localLaunchRealRetest": "not completed",
+    "unresolvedOperationId": "next-cline3:planner:terminal-create",
+    "operationOutcome": "unknown"
+  },
+  "runtimeBlocker": {
+    "code": "ProfileStateWriterError",
+    "reason": "Profile state writer command timed out",
+    "affectedActions": ["terminal-create", "terminal-close"],
+    "kimiNativeCliExited": true,
+    "kimiTerminalProcessExit": { "satisfied": true, "status": "exited", "exitCode": 0 },
+    "kimiTerminalCloseConfirmed": false,
+    "kimiTerminalObservedOrphaned": true,
+    "latestCompleteTerminalList": {
+      "queryEnvelopeId": "67d03bac-bc42-42fb-b9e0-fec7c1aff5c9",
+      "terminalHandles": ["term_1e076f90-455d-43d4-8522-0f2f14bc898a"],
+      "kimiTerminalStillListed": false,
+      "historicalCloseReceiptConfirmed": false
+    },
+    "latestTerminalCreateUnknown": "next-kilo3:planner:terminal-create",
+    "latestTerminalCreateReason": "unclassified runtime_error; exact writer error message not retained in this outcome",
+    "newCreatesStopped": true,
+    "fixturePreserved": "/var/tmp/orca-harness-acceptance-ncWTVr",
+    "coordinatorTerminalPreserved": "term_1e076f90-455d-43d4-8522-0f2f14bc898a"
+  },
+  "checks": {
+    "fullSuiteBeforeFinalClineAndKiloEdits": { "filesPassed": 212, "filesSkipped": 9, "testsPassed": 2507, "testsSkipped": 18 },
+    "finalFocusedSuite": { "filesPassed": 4, "testsPassed": 91, "testsSkipped": 2 },
+    "realMatrix": "incomplete",
+    "mixedController": "not run for new candidates",
+    "verificationArtifact": "not created during apply"
+  }
+}

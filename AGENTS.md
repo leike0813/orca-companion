@@ -123,6 +123,8 @@ Worker Harness 经 `src/application/ports/worker-harness.ts` 端口与 `src/boot
 
 Worker 不管理 provider 连接、凭据或原生配置：认证、登录态与 provider endpoint 由 harness 在自己的真实用户环境中提供，启动继承真实 `process.env`；Codex 用 inline `-c` hooks 与 `--no-daemon`，Claude 用只叠加 report/security 的 `--settings` 并保留 native setting sources，pi/omp 用 extension，OpenCode 用 `--standalone` 与公开 Session API。Coordinator 连接仅使用 managed API Key 引用。只读角色与探针共用 `read-only-execution-wrapper.ts` 的 bwrap 包装器：仓库、Git、Git common dir 与协调库拒写，真实 native state 目录与 Companion 工件目录可写；可写根与拒写根重叠且无法证明时能力判为不可用。
 
+候选报告插件由 `scripts/worker-harness-reporting.mjs` 独立 install/status/uninstall，仅维护 Companion 自有原生条目；Worker 启动只检查和使用。普通原生启动无可信 launch reporter 时无动作。七家候选的实现、离线验证、真实验收与生产注册分别记录于 `docs/research/next-worker-harness-adapters.md`；完整真实矩阵与 mixed Controller 未通过者不加入生产注册。prepared terminal 接管前必须读回同一 handle 的 tui-idle wait satisfied/running，不能以成功调用或超时返回代替就绪。候选 launcher 的输入提交归属按 IC-07 核验。
+
 Validator 修复许可绑定原 worktree 的干净 HEAD，并随原答复 Intent 持久保存；实际修复范围由该 HEAD 之后的提交与未提交 Git 路径核验，Worker 自报路径只作补充。基线、范围或精确 Session 不可证明时停止验证链。
 
 共享只读 launcher 保留真实前台 Session/进程组，并以 bwrap seccomp 拒绝 TIOCSTI/TIOCLINUX 终端注入；支持 x64/arm64，外来 ABI、x32 或过滤器安装失败均拒绝启动。Command Code/Qwen 可写角色使用原生 `--yolo`，授权 worktree 是任务范围，未启用额外 OS sandbox。目录不可用时允许手填 exact model ID，effort/catalogSource 保持未知；当前能力与真实证据见 `docs/orca-compatibility.md`。

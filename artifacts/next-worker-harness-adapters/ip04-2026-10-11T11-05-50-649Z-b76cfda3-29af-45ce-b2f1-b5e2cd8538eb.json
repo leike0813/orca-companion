@@ -1,0 +1,46 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-11T11:05:50.649Z",
+  "finishedAt": "2026-10-11T11:07:08.362Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ncWTVr",
+  "runId": "run_d394e13d9181",
+  "coordinatorTerminalHandle": "term_1e076f90-455d-43d4-8522-0f2f14bc898a",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "antigravity",
+      "roles": [
+        {
+          "harness": "antigravity",
+          "role": "planner",
+          "kind": "blocked",
+          "launchId": "next-reuse1:antigravity:planner",
+          "taskId": null,
+          "contextToken": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "transcript 不可读：Antigravity 精确活动 transcript 不可完整核验"
+          }
+        }
+      ],
+      "blockers": [
+        {
+          "code": "transcript_unavailable",
+          "message": "transcript 不可读：Antigravity 精确活动 transcript 不可完整核验"
+        }
+      ]
+    }
+  ]
+}

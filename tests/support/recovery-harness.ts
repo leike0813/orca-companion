@@ -135,6 +135,11 @@ export function fakeRecoveryBackend(script?: {
       if (input.operation === 'request-show') {
         return Promise.resolve({ kind: 'accepted', value: { requestId: input.requestId, state: 'pending' } });
       }
+      if (input.operation === 'terminal-wait') {
+        return Promise.resolve({ kind: 'accepted', value: { wait: {
+          handle: input.terminal, condition: input.waitFor, satisfied: true, status: 'running',
+        } } });
+      }
       return Promise.resolve({ kind: 'accepted', value: {} });
     },
     mutate: (input: ExecutionMutation, scope: ExecutionScope): Promise<OperationOutcome<unknown>> => {

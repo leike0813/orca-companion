@@ -1,0 +1,46 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-11T11:43:43.002Z",
+  "finishedAt": "2026-10-11T11:47:09.101Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ncWTVr",
+  "runId": "run_d394e13d9181",
+  "coordinatorTerminalHandle": "term_1e076f90-455d-43d4-8522-0f2f14bc898a",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "kilo",
+      "roles": [
+        {
+          "harness": "kilo",
+          "role": "planner",
+          "kind": "blocked",
+          "launchId": "next-kilo1:planner",
+          "taskId": null,
+          "contextToken": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_0dc0914ec772\",\"taskId\":\"task_3d54db6532c6\",\"dispatchStatus\":\"completed\",\"workerState\":\"succeeded\",\"workerStage\":\"settled\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_0dc0914ec772\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃  artifact created\\\" --body \\\"Created .companion/roles/kilo-planner.txt\",\"  ┃  containing exactly the single word 'planner', matching the existing\",\"  ┃  companion role file convention in this repo. Verified by reading the\",\"  ┃  file back: one line, no trailing content. Nothing else was changed,\",\"  ┃  installed, committed, or pushed, and no token file was created. No\",\"  ┃  outstanding work remains for this task.\\\" --task-id task_3d54db6532c6\",\"  ┃  --dispatch-id ctx_0dc0914ec772 --outcome succeeded --files-modified\",\"  ┃  .companion/roles/kilo | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃  $ orca orchestration check --terminal <redacted>\",\"  ┃  aaa275547fbf --json\",\"  ┃\",\"  ┃  {\",\"  ┃    \\\"id\\\": \\\"<redacted>\\\",\",\"  ┃    \\\"ok\\\": true,\",\"  ┃    \\\"result\\\": {\",\"  ┃      \\\"runId\\\": \\\"run_d394e13d9181\\\",\",\"  ┃      \\\"dispatchId\\\": \\\"ctx_0dc0914ec772\\\",\",\"  ┃      \\\"deliveryId\\\": null,\",\"  ┃      \\\"messages\\\": [],\",\"  ┃      \\\"count\\\": 0,\",\"  ┃      \\\"replayed\\\": false,\",\"  ┃  …\",\"  ┃\",\"  ┃  Click to expand\",\"  ┃\",\"  ┃\",\"  ┃  $ orca orchestration send --from <redacted>\",\"  ┃  aaa275547fbf --type worker_done --subject \\\"WP-1 planner role\",\"  ┃  artifact created\\\" --body \\\"Created .companion/roles/kilo-planner.txt\",\"  ┃  containing exactly the single word 'planner', matching the existing\",\"  ┃  companion role file convention in this repo. Verified by reading the\",\"  ┃  file back: one line, no trailing content. Nothing else was changed,\",\"  ┃  installed, committed, or pushed, and no token file was created. No\",\"  ┃  outstanding work remains for this task.\\\" --task-id task_3d54db6532c6\",\"  ┃  --dispatch-id ctx_0dc0914ec772 --outcome succeeded --files-modified\",\"  ┃  .companion/roles/kilo-planner.txt\",\"  ┃\",\"  "
+          }
+        }
+      ],
+      "blockers": [
+        {
+          "code": "session_report_missing",
+          "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_0dc0914ec772\",\"taskId\":\"task_3d54db6532c6\",\"dispatchStatus\":\"completed\",\"workerState\":\"succeeded\",\"workerStage\":\"settled\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_0dc0914ec772\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃  artifact created\\\" --body \\\"Created .companion/roles/kilo-planner.txt\",\"  ┃  containing exactly the single word 'planner', matching the existing\",\"  ┃  companion role file convention in this repo. Verified by reading the\",\"  ┃  file back: one line, no trailing content. Nothing else was changed,\",\"  ┃  installed, committed, or pushed, and no token file was created. No\",\"  ┃  outstanding work remains for this task.\\\" --task-id task_3d54db6532c6\",\"  ┃  --dispatch-id ctx_0dc0914ec772 --outcome succeeded --files-modified\",\"  ┃  .companion/roles/kilo | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃  $ orca orchestration check --terminal <redacted>\",\"  ┃  aaa275547fbf --json\",\"  ┃\",\"  ┃  {\",\"  ┃    \\\"id\\\": \\\"<redacted>\\\",\",\"  ┃    \\\"ok\\\": true,\",\"  ┃    \\\"result\\\": {\",\"  ┃      \\\"runId\\\": \\\"run_d394e13d9181\\\",\",\"  ┃      \\\"dispatchId\\\": \\\"ctx_0dc0914ec772\\\",\",\"  ┃      \\\"deliveryId\\\": null,\",\"  ┃      \\\"messages\\\": [],\",\"  ┃      \\\"count\\\": 0,\",\"  ┃      \\\"replayed\\\": false,\",\"  ┃  …\",\"  ┃\",\"  ┃  Click to expand\",\"  ┃\",\"  ┃\",\"  ┃  $ orca orchestration send --from <redacted>\",\"  ┃  aaa275547fbf --type worker_done --subject \\\"WP-1 planner role\",\"  ┃  artifact created\\\" --body \\\"Created .companion/roles/kilo-planner.txt\",\"  ┃  containing exactly the single word 'planner', matching the existing\",\"  ┃  companion role file convention in this repo. Verified by reading the\",\"  ┃  file back: one line, no trailing content. Nothing else was changed,\",\"  ┃  installed, committed, or pushed, and no token file was created. No\",\"  ┃  outstanding work remains for this task.\\\" --task-id task_3d54db6532c6\",\"  ┃  --dispatch-id ctx_0dc0914ec772 --outcome succeeded --files-modified\",\"  ┃  .companion/roles/kilo-planner.txt\",\"  ┃\",\"  "
+        }
+      ]
+    }
+  ]
+}

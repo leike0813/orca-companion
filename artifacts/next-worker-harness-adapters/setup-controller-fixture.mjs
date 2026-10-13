@@ -25,6 +25,8 @@ function fail(message) {
 if (process.argv[2] !== '--prepare') {
   fail('Usage: node artifacts/next-worker-harness-adapters/setup-controller-fixture.mjs --prepare');
 }
+const planningHarness = process.env['ORCA_COMPANION_IP04_MIXED_CONTROLLER_PLANNING_HARNESS']?.trim() || 'command-code';
+if (!['command-code', 'antigravity'].includes(planningHarness)) fail('Planning harness must be command-code or antigravity.');
 if (typeof key !== 'string' || key.trim().length === 0) fail('MINIMAX_CN_API_KEY is required; its value is never displayed.');
 for (const modulePath of [credentialModule, configModule, backendModule, scopeModule, acceptanceHelper]) {
   if (!existsSync(modulePath)) fail('Build the current project first; required compiled project modules are missing.');
@@ -78,9 +80,12 @@ try {
     credential: { kind: 'managed', credentialRef: saved.credentialRef },
   };
   const model = 'MiniMax-M3.1-Flash-Preview';
+  const { HARNESS_MATRIX } = await import(pathToFileURL(acceptanceHelper).href);
+  const planning = HARNESS_MATRIX.find((entry) => entry.harness === planningHarness);
+  if (planning === undefined) throw new Error('Approved planning harness binding is missing.');
   const roles = [
-    ['planner', 'command-code', 'minimax-cn/MiniMax-M3.1-Flash-Preview'],
-    ['implementation', 'command-code', 'minimax-cn/MiniMax-M3.1-Flash-Preview'],
+    ['planner', planningHarness, planning.modelSelection.model],
+    ['implementation', planningHarness, planning.modelSelection.model],
     ['validator', 'qwen-code', model],
     ['finalizer', 'qwen-code', model],
     ['recovery_utility', 'qwen-code', model],
@@ -106,7 +111,7 @@ try {
     planning: { maxMutations: 8 },
     context: { maxInputTokens: 20000 },
     execution: {
-      harness: 'command-code',
+      harness: planningHarness,
       workerProfiles: roles.map(([role, harness, selection]) => ({
         profileRef: `ip04-${role}`,
         role,
@@ -136,8 +141,10 @@ try {
   writeFileSync(join(project, '.gitignore'), '', { mode: 0o644 });
   writeFileSync(join(project, 'README.md'), '# IP-04 mixed native Controller fixture\n', { mode: 0o644 });
   // Native startup learning must not add files outside the approved README task.
-  mkdirSync(join(project, '.commandcode'), { recursive: true });
-  writeFileSync(join(project, '.commandcode', 'settings.json'), '{"tasteLearning":false}\n', { mode: 0o644 });
+  if (planningHarness === 'command-code') {
+    mkdirSync(join(project, '.commandcode'), { recursive: true });
+    writeFileSync(join(project, '.commandcode', 'settings.json'), '{"tasteLearning":false}\n', { mode: 0o644 });
+  }
   mkdirSync(join(project, 'openspec', 'specs'), { recursive: true });
   mkdirSync(join(project, 'openspec', 'changes', 'archive'), { recursive: true });
   writeFileSync(join(project, 'openspec', 'config.yaml'), 'schema: spec-driven\n', { mode: 0o644 });
@@ -206,6 +213,7 @@ try {
     `ORCA_COMPANION_IP04_MIXED_CONTROLLER_REPO=${project}`,
     `ORCA_COMPANION_IP04_MIXED_CONTROLLER_IDENTITY=${terminalHandle}`,
     `ORCA_COMPANION_IP04_MIXED_CONTROLLER_CONFIG_HOME=${configHome}`,
+    `ORCA_COMPANION_IP04_MIXED_CONTROLLER_PLANNING_HARNESS=${planningHarness}`,
   ].join('\n') + '\n');
 } catch (error) {
   const message = error instanceof Error ? error.message : 'unknown fixture setup error';

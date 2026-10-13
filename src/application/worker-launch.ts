@@ -231,6 +231,7 @@ export async function prepareWorkerLaunch(input: {
       worktree: selector,
       title: prepared.title,
       command: prepared.command,
+      focus: true,
     });
     if (created.kind !== 'accepted') {
       return created;
@@ -251,6 +252,11 @@ export async function prepareWorkerLaunch(input: {
   });
   if (waited.kind === 'rejected') {
     return waited;
+  }
+  const wait = (waited.value as { readonly wait?: { readonly handle?: unknown; readonly condition?: unknown; readonly satisfied?: unknown; readonly status?: unknown; readonly blockedReason?: unknown } }).wait;
+  if (wait?.handle !== terminal.handle || wait.condition !== 'tui-idle' || wait.status !== 'running' || wait.satisfied !== true) {
+    return rejected('worker_terminal_not_ready', typeof wait?.blockedReason === 'string'
+      ? wait.blockedReason : 'Orca 未证明原 prepared terminal 已就绪');
   }
   return {
     kind: 'ready',

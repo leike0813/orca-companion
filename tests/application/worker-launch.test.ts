@@ -13,6 +13,7 @@ import type { BranchCoordinationStore } from '../../src/application/ports/branch
 import {
   activatePreparedWorker,
   knownTerminalHandleFor,
+  prepareWorkerLaunch,
   type PreparedTerminalBinding,
   type WorkerLaunchMutationResult,
 } from '../../src/application/worker-launch.js';
@@ -20,6 +21,24 @@ import type { ExecutionBackend } from '../../src/application/ports/execution-bac
 
 const SCOPE = 'scope-1' as CoordinationScopeId;
 const OPERATION = 'op:terminal' as OperationId;
+
+test.each([
+  { handle: 'terminal-1', condition: 'tui-idle', status: 'running', satisfied: true },
+  { handle: 'terminal-1', condition: 'tui-idle', status: 'running', satisfied: false, blockedReason: 'agent-trust-workspace' },
+  { handle: 'other', condition: 'tui-idle', status: 'running', satisfied: true },
+  {},
+])('prepared Worker requires exact positive readiness %#', async (wait) => {
+  const backend = { query: () => Promise.resolve({ kind: 'accepted', value: {
+    terminals: [{ handle: 'terminal-1', connected: true, writable: true, title: 'title' }],
+    truncated: false, omittedHostIds: [], wait,
+  } }) } as unknown as ExecutionBackend;
+  const result = await prepareWorkerLaunch({ backend, worktreeId: 'wt', worktreePath: '/workspace',
+    strategy: { kind: 'prepared_terminal', harness: 'candidate', activation: 'none', title: 'title',
+      prepare: () => { throw new Error('existing terminal must be reused'); } },
+    timeoutMs: 1000, createTerminal: () => { throw new Error('existing terminal must be reused'); },
+  });
+  expect(result.kind).toBe(wait.satisfied === true && wait.handle === 'terminal-1' ? 'ready' : 'rejected');
+});
 
 function intent(overrides: Partial<OperationIntent> = {}): OperationIntent {
   return {

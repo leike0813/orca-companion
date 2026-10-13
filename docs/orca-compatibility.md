@@ -12,7 +12,7 @@
 
 共享只读 bwrap 保留前台 Session/进程组，使用继承 FD 安装 seccomp，拒绝 TIOCSTI/TIOCLINUX；x64/arm64 之外、外来 ABI、x32 或安装失败拒绝启动。Ubuntu x86_64 的实际 ioctl 拒绝、前台身份、文件拒写与精确工件可写已核验；arm64/Windows 未实测。Command Code/Qwen 的原生无 prompt 模型目录不可用，可手填 exact ID，effort/catalogSource 保持 null。可写角色使用原生 `--yolo`，没有额外 OS workspace sandbox。
 
-其余候选的当前资格、版本、公开接口与缺口以[候选研究](research/next-worker-harness-candidates.md)为准；Antigravity 已登录并取得目标模型响应，但未证明完整精确会话与 transcript 合同，未注册。下方带日期的五家基线与旧矩阵保留各自验证范围。
+新一批 Antigravity/Kilo/Kimi/Hermes/Cline/Muse/Cursor 的当前资格、原生版本、独立报告安装与阻塞原因见[接入记录](research/next-worker-harness-adapters.md)。Antigravity 已通过四角色、精确 Session 续接与 Recovery；mixed Controller 暂停在新 worktree 的 prepared terminal 就绪核验，尚未通过。这批七家均未注册。其他候选的具体延期与重验条件见[探索记录](../artifacts/next-worker-harness-adapters/exploration-20261012.json)。前驱的其他[候选研究](research/next-worker-harness-candidates.md)及下方带日期的基线与旧矩阵保留各自验证范围。
 
 ### 原生环境检查（2026-10-07）
 

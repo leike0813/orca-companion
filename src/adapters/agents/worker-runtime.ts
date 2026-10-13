@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import type { WorkerHarnessId } from '../../domain/model-configuration.js';
 
 export type WorkerRuntime = {
   readonly stateRoot: string;
@@ -10,7 +9,7 @@ export type WorkerRuntime = {
 
 /** Non-secret native paths, evaluated inside the actual terminal's launch environment. */
 function resolveNativeWorkerRuntime(
-  harness: WorkerHarnessId,
+  harness: string,
   env: Readonly<Record<string, string | undefined>>,
   home: string,
   { existsSync, dirname, isAbsolute, join, resolve }: { existsSync: typeof import('node:fs').existsSync; dirname: typeof import('node:path').dirname; isAbsolute: typeof import('node:path').isAbsolute; join: typeof import('node:path').join; resolve: typeof import('node:path').resolve },
@@ -22,6 +21,39 @@ function resolveNativeWorkerRuntime(
   let stateRoot: string;
   let roots: string[];
   switch (harness) {
+    case 'antigravity':
+      stateRoot = absolute(join(home, '.gemini', 'antigravity-cli'));
+      roots = [stateRoot];
+      break;
+    case 'kimi':
+      stateRoot = absolute(env['KIMI_CODE_HOME']?.trim() || join(home, '.kimi-code'));
+      roots = [stateRoot];
+      break;
+    case 'kilo':
+      stateRoot = absolute(join(env['XDG_DATA_HOME'] || join(home, '.local', 'share'), 'kilo'));
+      roots = [stateRoot,
+        absolute(join(env['XDG_STATE_HOME'] || join(home, '.local', 'state'), 'kilo')),
+        absolute(join(env['XDG_CACHE_HOME'] || join(home, '.cache'), 'kilo'))];
+      break;
+    case 'hermes':
+      stateRoot = absolute(env['HERMES_HOME'] || join(home, '.hermes'));
+      roots = [stateRoot];
+      break;
+    case 'muse':
+      stateRoot = absolute(join(env['XDG_DATA_HOME'] || join(home, '.local', 'share'), 'muse'));
+      roots = [stateRoot, absolute(join(env['XDG_CONFIG_HOME'] || join(home, '.config'), 'muse'))];
+      break;
+    case 'cursor':
+      stateRoot = absolute(env['CURSOR_CONFIG_DIR'] || (env['XDG_CONFIG_HOME'] ? join(env['XDG_CONFIG_HOME'], 'cursor') : join(home, '.cursor')));
+      roots = [stateRoot];
+      break;
+    case 'cline': {
+      const config = absolute(env['CLINE_DIR'] || join(home, '.cline'));
+      const data = absolute(env['CLINE_DATA_DIR'] || join(config, 'data'));
+      stateRoot = data;
+      roots = [config, data, absolute(env['CLINE_SESSION_DATA_DIR'] || join(data, 'sessions'))];
+      break;
+    }
     case 'codex':
       stateRoot = absolute(env['CODEX_HOME'] || join(home, '.codex'));
       roots = [stateRoot];
@@ -77,7 +109,7 @@ function resolveNativeWorkerRuntime(
   return { stateRoot, writableRoots: [...new Set(roots)] };
 }
 
-export function nativeWorkerRuntime(harness: WorkerHarnessId, env: Readonly<Record<string, string | undefined>> = process.env, home = homedir()): WorkerRuntime {
+export function nativeWorkerRuntime(harness: string, env: Readonly<Record<string, string | undefined>> = process.env, home = homedir()): WorkerRuntime {
   return resolveNativeWorkerRuntime(harness, env, home, { existsSync, dirname, isAbsolute, join, resolve });
 }
 export const WORKER_RUNTIME_SOURCE = 'const resolveNativeWorkerRuntime = ' + resolveNativeWorkerRuntime.toString() + ';\n'
