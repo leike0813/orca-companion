@@ -195,7 +195,10 @@ export type IntegrateWorkPackageInput = {
   readonly consumerGeneration: number;
   readonly timeoutMs: number;
   readonly workPackageId: WorkPackageId;
-  readonly status: WorkPackageStatus;
+  readonly status: WorkPackageStatus | {
+    readonly kind: 'finalizer'; readonly workPackageId: WorkPackageId;
+    readonly verifiedHead: string; readonly verifiedTree: string;
+  };
   /** 当前 Session 是否持有本 Scope 的 Execution Coordination Lease。 */
   readonly executionLeaseHeldByCurrentSession: boolean;
   readonly authority: RoleAuthorities;
@@ -308,7 +311,8 @@ export async function integrateWorkPackage(
   if (input.status.workPackageId !== input.workPackageId) {
     return rejection('work_package_mismatch', '验证状态不属于待集成的 Work Package');
   }
-  if (input.status.validation.kind !== 'validated') {
+  const finalizer = 'kind' in input.status && input.status.kind === 'finalizer' ? input.status : null;
+  if (finalizer === null && 'validation' in input.status && input.status.validation.kind !== 'validated') {
     return rejection(
       'validation_not_accepted',
       `Work Package ${input.workPackageId} 的验证状态为 ${input.status.validation.kind}，不接受集成`,
@@ -316,6 +320,13 @@ export async function integrateWorkPackage(
   }
   if (!input.executionLeaseHeldByCurrentSession) {
     return rejection('lease_not_held', '只有 Execution Coordination Lease 持有者可以执行集成');
+  }
+  if (finalizer !== null) {
+    if (!input.authority.finalizer) return rejection('finalizer_not_authorized', 'Finalizer 集成未获授权');
+    const source = await input.port.readHead({ kind: 'source', worktreePath: input.workspace.workPackageWorktreePath });
+    const tree = await input.port.readTree({ worktreePath: input.workspace.workPackageWorktreePath });
+    if (source.kind !== 'read' || tree.kind !== 'read' || source.head !== finalizer.verifiedHead || tree.tree !== finalizer.verifiedTree)
+      return rejection('finalizer_version_changed', 'Finalizer 的最终验证版本已变化');
   }
 
   // 步骤 2：Policy 核验。commit 只需 canonical 分支；integrate 与 push 还需要获批 remote/ref。
@@ -348,7 +359,7 @@ export async function integrateWorkPackage(
     );
   }
 
-  const target = { kind: 'work-package', id: input.workPackageId };
+  const target = { kind: finalizer === null ? 'work-package' : 'finalizer', id: input.workPackageId };
   const operationIdFor: Readonly<Record<GitIntegrationStep, OperationId>> = {
     commit: input.operationIds.commit,
     integrate_canonical: input.operationIds.integrate,
@@ -369,7 +380,7 @@ export async function integrateWorkPackage(
   // 每步只核验自己的目标：commit 核验 source worktree，integrate/push 核验 canonical。因此这里按目标
   // 分别记录 expected HEAD，而不是把上一步的回读值顺延给下一步——commit 后 source HEAD 已经前移，
   // 拿它去核验 canonical 会必然不符。
-  let sourceExpectedHead = input.baselineHead;
+  let sourceExpectedHead = finalizer?.verifiedHead ?? input.baselineHead;
   let canonicalExpectedHead: string | null = null;
   const expectedHeadFor = (step: GitIntegrationStep): string =>
     step === 'commit' ? sourceExpectedHead : (canonicalExpectedHead ?? sourceExpectedHead);
@@ -391,6 +402,8 @@ export async function integrateWorkPackage(
     };
   }
   canonicalExpectedHead = canonicalBefore.head;
+  if (finalizer !== null && canonicalBefore.head !== input.baselineHead && canonicalBefore.head !== finalizer.verifiedHead)
+    return rejection('canonical_head_mismatch', 'Finalizer 运行期间 canonical 已变化，需重新复验');
 
   const completed: GitIntegrationStep[] = [];
 
@@ -541,7 +554,9 @@ export async function integrateWorkPackage(
 
   let roundsDone = input.reconciliation === null;
 
-  for (const step of GIT_INTEGRATION_STEPS) {
+  // Finalizer 已提交并复验最终 HEAD；宿主只集成和推送，不能再 git add/commit 改变复验版本。
+  const steps = finalizer === null ? GIT_INTEGRATION_STEPS : (['integrate_canonical', 'push'] as const);
+  for (const step of steps) {
     // commit 之后、integrate 之前完成所有需要的合并树复验；这样 integrate 的 expected HEAD 一定是
     // 复验完成后重新归属的 canonical HEAD。
     if (step === 'integrate_canonical' && !roundsDone) {
@@ -721,5 +736,8 @@ export async function integrateWorkPackage(
     completed.push(step);
   }
 
-  return { kind: 'integrated', head: canonicalExpectedHead ?? sourceExpectedHead, steps: completed };
+  const integratedHead = canonicalExpectedHead ?? sourceExpectedHead;
+  if (finalizer !== null && integratedHead !== finalizer.verifiedHead)
+    return rejection('finalizer_version_changed', '集成结果与 Finalizer 验证版本不一致');
+  return { kind: 'integrated', head: integratedHead, steps: completed };
 }

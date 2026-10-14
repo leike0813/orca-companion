@@ -312,6 +312,7 @@ export type SessionSegmentRecord = {
   readonly transcriptReferenceable: boolean;
   readonly verifiable: boolean;
   readonly recordedAt: number;
+  readonly executionBinding?: import('../../domain/task-contract.js').WorkerExecutionBinding;
 };
 
 
@@ -430,6 +431,30 @@ export type DeliveryVerdictRecord = {
   readonly verdict: DeliveryVerdict;
   readonly finalizerRole: 'finalizer';
   readonly sessionBindingRef: string;
+  /**
+   * Finalizer 只读复核证明的实际 HEAD 与 tree（schema 22）。
+   *
+   * 历史行没有这项事实，一律读作 `null`；调用方必须把它当作「未证明」，不得据此断定交付对象。
+   */
+  readonly verifiedHead: string | null;
+  readonly verifiedTree: string | null;
+  readonly recordedAt: number;
+};
+
+/**
+ * 一次 Finalizer 准入的最小持久记录（schema 22）。
+ *
+ * 它是「这次 Finalizer 修复派发在原授权与基线下已经获准」的唯一本地依据：重启后要在创建 Task 之前
+ * 复原的是这份绑定，而不是 Work Package 预算或任何第二份状态机。`(coordinationScopeId, workerTaskId)`
+ * 唯一，因此同一个 Worker Task 只可能有一条准入。
+ */
+export type FinalizerAdmissionRecord = {
+  readonly coordinationScopeId: CoordinationScopeId;
+  readonly workerTaskId: WorkerTaskId;
+  readonly graphId: GraphId;
+  readonly graphGeneration: number;
+  readonly authorizationId: string;
+  readonly baselineHead: string;
   readonly recordedAt: number;
 };
 
@@ -908,6 +933,16 @@ export type CoordinationQuery =
     }
   | { readonly kind: 'intent'; readonly coordinationScopeId: CoordinationScopeId; readonly operationId: OperationId }
   | { readonly kind: 'budget-counters'; readonly coordinationScopeId: CoordinationScopeId; readonly approvedLimitRef?: string }
+  /**
+   * 读取一次 Finalizer 准入；`(scope, workerTaskId)` 精确命中，缺失返回 `null`。
+   *
+   * 有界读取：只回放原授权与基线，不携带任何第二份 Finalizer 状态机。
+   */
+  | {
+      readonly kind: 'finalizer-admission';
+      readonly coordinationScopeId: CoordinationScopeId;
+      readonly workerTaskId: WorkerTaskId;
+    }
   | {
       readonly kind: 'validation-step-admission';
       readonly coordinationScopeId: CoordinationScopeId;
@@ -1115,6 +1150,7 @@ export type CoordinationQueryResult =
   | { readonly kind: 'intents'; readonly intents: readonly OperationIntent[] }
   | { readonly kind: 'intent'; readonly intent: OperationIntent | null }
   | { readonly kind: 'budget-counters'; readonly counters: readonly BudgetCounterRecord[] }
+  | { readonly kind: 'finalizer-admission'; readonly admission: FinalizerAdmissionRecord | null }
   | {
       readonly kind: 'validation-step-admission';
       readonly admission: ValidationStepAdmissionRecord | null;
@@ -1489,6 +1525,17 @@ export type CoordinationCommand =
       readonly verifiable: boolean;
     })
   | (CoordinationCommandBase & {
+      readonly kind: 'record-worker-execution-binding';
+      readonly segmentId: SessionSegmentId;
+      readonly workPackageId: WorkPackageId;
+      readonly role: 'planner' | 'implementation';
+      readonly workerTaskId: WorkerTaskId;
+      readonly dispatchId: DispatchId;
+      readonly attemptId: string;
+      readonly orcaTaskId: string;
+      readonly terminalHandle: string;
+    })
+  | (CoordinationCommandBase & {
       readonly kind: 'record-materialization-binding';
       readonly workPackageId: WorkPackageId;
       /** 四主角色派发；与 `recoveryUtilityRole` 互斥。 */
@@ -1538,6 +1585,29 @@ export type CoordinationCommand =
       readonly verdict: DeliveryVerdict;
       readonly finalizerRole: 'finalizer';
       readonly sessionBindingRef: string;
+      /**
+       * Finalizer 最终复验通过的 HEAD / tree（schema 22）。
+       *
+       * 省略即写入 `null`（旧调用方的历史语义）；给出时必须成对且都是完整 Git 对象 ID，
+       * 不存在「只证明了一半」的接收形态。
+       */
+      readonly verifiedHead?: string | null;
+      readonly verifiedTree?: string | null;
+    })
+  | (CoordinationCommandBase & {
+      /**
+       * 持久准入一次 Finalizer 修复派发，并在同一事务里消耗一次该代际的 Finalizer 修复额度。
+       *
+       * 幂等键是 `(scope, workerTaskId)`：同一组依据重放是成功空操作、不再扣减；依据不同即拒绝覆盖。
+       * 额度键为 `finalizer:<graphId>:<graphGeneration>`，与 Validator 的 Work Package 预算互不相干，
+       * 且不随重新授权而复位。`baselineHead` 与 `authorizationId` 是重启后创建 Task 前必须复原的全部依据。
+       */
+      readonly kind: 'admit-finalizer';
+      readonly workerTaskId: WorkerTaskId;
+      readonly graphId: GraphId;
+      readonly graphGeneration: number;
+      readonly authorizationId: string;
+      readonly baselineHead: string;
     })
   | (CoordinationCommandBase & {
       /**

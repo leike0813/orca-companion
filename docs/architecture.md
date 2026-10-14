@@ -24,15 +24,15 @@ Companion 是单个前台进程，只运行 Coordinator Agent。Orca 拥有 Run�
 
 Execution Coordination 的唯一 lease holder 可同时协调多个独立 Work Package。`ExecutionLimits.maxActiveWorkPackages` 是用户可配置的并行包额度（默认 3），`maxWorkPackages` 是图容量（默认 8）；同包角色顺序推进，canonical 集成串行。额度属于已批准 Manifest，ExecutionGraph 只描述工作与预算。
 
-schema 20 的 Branch Store 在副作用前原子登记包级 lane，直到可证明集成或终止才释放；unknown 和待恢复的包继续占位。自动触发与 Coordinator 工具共用 `application/execution/advance-execution.ts` 的选包规则和事务准入。Bootstrap 只串行化 Scope 的短派发步骤，等待包级补救或合并复验时允许其他包继续推进。terminal 创建回执的精确句柄与原 Operation Intent 同事务结算；恢复重新核验原资源，不依赖可变显示标题，也不重新执行已接受的操作。
+Branch Store（当前 schema 22）在副作用前原子登记包级 lane，直到可证明集成或终止才释放；unknown 和待恢复的包继续占位。自动触发与 Coordinator 工具共用 `application/execution/advance-execution.ts` 的选包规则和事务准入。Bootstrap 只串行化 Scope 的短派发步骤，等待包级补救或合并复验时允许其他包继续推进。terminal 创建回执的精确句柄与原 Operation Intent 同事务结算；恢复重新核验原资源，不依赖可变显示标题，也不重新执行已接受的操作。schema 22 的 Finalizer 修复准入与代际修复额度在同一事务登记，同依据重放不重复扣减、重新授权不复位。
 
 `application/integration-reconciliation.ts` 拥有稳定复验轮次、独立预算与 Git 意图；`bootstrap/integration-reconciliation-runtime.ts` 通过新的真实 Task/Dispatch 续接原 Validator provider Session。先在包内合并 canonical，再验证精确合并树，最后由 Controller 提交并快进 canonical。设置用例 `application/configuration/execution-settings.ts` 复用配置 CAS；保存默认值与批准执行期 Manifest 是两个明确用户意图，批准不重置图、Run 或已消费预算。
 
-Worker Harness 的应用端口位于 `application/ports/worker-harness.ts`，bootstrap 的 `worker-harness.ts` 显式注册八项：codex、claude、opencode、pi、omp、`command-code`、`qwen-code` 与 `antigravity`。CodeBuddy 按 D-01 排除。新增 C/Q 的 2026-10-11 最终真实资格矩阵已 PASS，见 [验收报告](../artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.md)及 [结构化证据](../artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.json)。独立[混合 Controller 闭环](../artifacts/next-worker-harness-adapters/controller-20261011T085821980Z-89759c30-e5f4-4a09-8624-89e137fe85f5.md)已取得 deliverable，并核验人工中断后的 Capsule/替代 Validator、集成、推送及同 Scope 重启事实不变。Antigravity 在未修改 Orca 1.4.224 与原生 agy 1.3.4、Ubuntu x86_64 上的原生 TUI 矩阵已 PASS，见[资格证据](../artifacts/next-worker-harness-adapters/antigravity-tui-qualification-20261014.json)；独立[混合 Controller 闭环](../artifacts/next-worker-harness-adapters/controller-20261014T033336705Z-09c8d325-3fc7-4e49-bcd9-aebad90db5e1.json)取得 deliverable，并核验 restart 保留与一次 Recovery。
+Worker Harness 的应用端口位于 `application/ports/worker-harness.ts`，bootstrap 的 `worker-harness.ts` 显式注册 14 项：codex、claude、opencode、pi、omp、`command-code`、`qwen-code`、antigravity、kilo、kimi、hermes、cline、muse、cursor；登记只表达身份，准入由 `domain/worker-harness-support.ts` 的递进等级从 `adapters/agents/worker-harness-qualifications.ts` 的证据推导（basic：真实 Orca Task/Dispatch/terminal 绑定下的单次 Planner/Implementation；enhanced：另加精确原生 Session、续接与实测 Validator/Finalizer；complete：另加完整历史、Recovery 与 mixed Controller；当前 complete = command-code、qwen-code、antigravity，enhanced = codex，basic = claude、opencode、pi、omp、kilo，其余已登记但未达 basic）。只读是任务级可选能力，不参与等级推导：只有实际需要只读的操作（Recovery Utility、只读 Graph Patch/纯分析、按旧授权 policy 的只读 Finalizer）在派发前核验只读能力组与真实拒写探针，普通 Validator 与可写 Finalizer 不因缺少只读能力被拒绝。每个角色派发先取得 Worker Execution Binding；schema 21 的 `worker_execution_bindings` 与 `session_segments` 共用同一 Segment 投影，基础行以 `executionBinding.kind='orca_worker'`、空 `sessionBindingId` 与 null transcript 显式表示没有原生身份。CodeBuddy 按 D-01 排除。新增 C/Q 的 2026-10-11 最终真实资格矩阵已 PASS，见 [验收报告](../artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.md)及 [结构化证据](../artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.json)。独立[混合 Controller 闭环](../artifacts/next-worker-harness-adapters/controller-20261011T085821980Z-89759c30-e5f4-4a09-8624-89e137fe85f5.md)已取得 deliverable，并核验人工中断后的 Capsule/替代 Validator、集成、推送及同 Scope 重启事实不变。Antigravity 在未修改 Orca 1.4.224 与原生 agy 1.3.4、Ubuntu x86_64 上的原生 TUI 矩阵已 PASS，见[资格证据](../artifacts/next-worker-harness-adapters/antigravity-tui-qualification-20261014.json)；独立[混合 Controller 闭环](../artifacts/next-worker-harness-adapters/controller-20261014T033336705Z-09c8d325-3fc7-4e49-bcd9-aebad90db5e1.json)取得 deliverable，并核验 restart 保留与一次 Recovery。
 
-角色生命周期只使用注册项的启动、恢复、证明、只读启动、探测与原生模型目录查询能力，terminal 创建、激活和接管仍由 `application/worker-launch.ts` 拥有。`WorkerHarness.readTranscriptIdentity` 由各 adapter 独立读取精确 provider transcript，`recoveryInstructions` 返回该 harness 的阅读指引；Bootstrap 按注册项委派，不按 harness 名称另写恢复规则。模型、harness 与 effort 沿物化时固定的授权/profile 读取，恢复沿原 Task 的 transcript 与绑定核验，不能按 cwd/mtime 猜会话。
+角色生命周期只使用注册项的启动、恢复、证明、只读启动、探测与原生模型目录查询能力，这些能力按可选能力组访问，缺所需能力组即结构化拒绝（只读能力组只在实际需要只读的操作上核验）、基础级不读取原生 Session；terminal 创建、激活和接管仍由 `application/worker-launch.ts` 拥有。`WorkerHarness.readTranscriptIdentity` 由各 adapter 独立读取精确 provider transcript，`recoveryInstructions` 返回该 harness 的阅读指引；Bootstrap 按注册项委派，不按 harness 名称另写恢复规则。模型、harness 与 effort 沿物化时固定的授权/profile 读取，恢复沿原 Task 的 transcript 与绑定核验，不能按 cwd/mtime 猜会话。
 
-各 adapter 继承真实 `process.env`，使用原生认证与配置；Worker launcher 不读取 Coordinator CredentialStore、不改写 provider 或凭据路径。`adapters/agents/worker-runtime.ts` 从真实 launch 环境解析非秘密 native roots，原生模型目录经 adapter 提供有界、可取消的查询。只读启动与探针共用 `adapters/agents/codex-model-launcher.ts` 和 `read-only-execution-wrapper.ts`：bwrap 保持真实 agent 的前台进程身份，仓库、Git 与协调存储拒写，仅核验后的 native state、report 与工件路径可写。launcher 通过专用继承 FD 提交 seccomp 过滤器，拒绝 `TIOCSTI`/`TIOCLINUX` 终端注入；CPU ABI 不支持或过滤器安装失败时拒绝启动。这是只读角色的共享边界；C/Q 可写角色使用原生 YOLO 非交互模式，不经过该只读包装器，也不具有由 YOLO 提供的 OS 文件隔离。
+各 adapter 继承真实 `process.env`，使用原生认证与配置；Worker launcher 不读取 Coordinator CredentialStore、不改写 provider 或凭据路径。`adapters/agents/worker-runtime.ts` 从真实 launch 环境解析非秘密 native roots，原生模型目录经 adapter 提供有界、可取消的查询。只读启动与探针共用 `adapters/agents/codex-model-launcher.ts` 和 `read-only-execution-wrapper.ts`：bwrap 保持真实 agent 的前台进程身份，仓库、Git 与协调存储拒写，仅核验后的 native state、report 与工件路径可写。launcher 通过专用继承 FD 提交 seccomp 过滤器，拒绝 `TIOCSTI`/`TIOCLINUX` 终端注入；CPU ABI 不支持或过滤器安装失败时拒绝启动。这是需要只读的任务的共享边界（Recovery Utility、只读分析与按旧授权 policy 的只读 Finalizer）；普通 Validator 与修复 Finalizer 在授权 worktree 内以可写方式运行。C/Q 可写角色使用原生 YOLO 非交互模式，不经过该只读包装器，也不具有由 YOLO 提供的 OS 文件隔离。
 
 ## 模块依赖
 
@@ -67,7 +67,7 @@ flowchart TB
 | 项目 | 合同 |
 |---|---|
 | Canonical path | `src/domain/` |
-| 职责 | Coordination Scope、模式、授权、Execution Graph、预算、Worker 生命周期与纯状态规则 |
+| 职责 | Coordination Scope、模式、授权、Execution Graph、预算、Worker 生命周期、Worker Harness 支持等级与纯状态规则 |
 | 允许依赖 | TypeScript 标准语言能力及同层领域模块 |
 | Interface | 纯类型、判别联合和确定性函数；输入事实，返回决定或结构化拒绝 |
 | 禁止 | LangGraph、Orca、Ink、React、进程、文件路径、SQL、时钟读取、网络或 adapter 类型 |
@@ -172,7 +172,7 @@ Composer 的纯编辑模块拥有 grapheme 光标、原子粘贴范围和有界 
 | 项目 | 合同 |
 |---|---|
 | Canonical path | `src/bootstrap/` |
-| 职责 | 配置、依赖注入、能力核验、启动顺序、信号和进程生命周期；前台宿主的执行阶段装配：启动对账与 Resume 门、Execution Authorization 授权切换、单步 Frontier 推进（`advanceExecution`）、Delivery 结算与 Recovery 续办、受控 Git 集成、只读 Finalizer 派发，以及 Scope 控制与 Execution Handoff 意图接线；另装配无 Scope 的调试宿主（`debug-runtime.ts`、`debug-entry.ts`） |
+| 职责 | 配置、依赖注入、能力核验、启动顺序、信号和进程生命周期；前台宿主的执行阶段装配：启动对账与 Resume 门、Execution Authorization 授权切换、单步 Frontier 推进（`advanceExecution`）、Delivery 结算与 Recovery 续办、受控 Git 集成、Finalizer 派发（缺省只读或在独立项目级 worktree 修复后按原 Git intent 集成），以及 Scope 控制与 Execution Handoff 意图接线；另装配无 Scope 的调试宿主（`debug-runtime.ts`、`debug-entry.ts`） |
 | 允许依赖 | 所有 module 的公开 interface 以完成组合 |
 | Interface | core/CLI/TUI 启动入口与 `doctor` 组合报告 |
 | 禁止 | 持有领域规则、复制用例、在 import 时启动进程、让核心入口加载 UI 或数据库 |
@@ -224,6 +224,7 @@ ledger-lab 准备属于外置演练工具：`setup.mjs` 创建/推送私有 main
 | 可复用连接与模型 | 用户级 `providers.json` | 不可变连接/模型追加记录与 revision CAS，一个连接可保存多个模型 |
 | 模型与连接设置 | 项目 `orca-companion.json`（schema 5） | 明确选定的完整 Coordinator 快照、角色 Worker Profiles（harness + `modelSelection`）与当前选择引用 |
 | Worker Harness session/transcript | Worker Harness | 精确 Session Binding、Segment 与 transcript 引用 |
+| Worker Harness 支持等级与资格 | 显式真实验收证据 | 随发布包分发的资格摘要（等级与逐条证据引用）；运行时按角色复核相关能力 |
 
 ## 跨接缝流程
 
@@ -342,15 +343,17 @@ sequenceDiagram
   B->>B: 已确认退出的 Session Segment → Recovery（原身份续办；unverifiable 不触发）
   B->>B: advanceExecution（单步：候选 → 门禁 → 稳定身份 → 物化）
   B->>O: worktree-create → task-create → worker-start
+  B->>S: Worker Execution Binding（基础：Orca Task/Dispatch/terminal；增强/完整：另加精确原生 Session）
   W-->>O: Delivery（角色结果）
   B->>S: 结算 → Accepted Worker Result 引用 → ack
   B->>O: Validator 同 Session 验证/修复/复验
   B->>O: 受控 Git 集成（source → canonical → 获批 remote/ref，分目标读回）
-  B->>O: 只读 Finalizer Session（canonical worktree，运行前后工作区比较）
+  B->>O: Finalizer Session（缺省只读比较 canonical；修复 policy 在项目级 worktree 修复/复验）
+  B->>O: Finalizer 集成（仅 integrate_canonical → push，不重做 commit）
   B->>S: finalizeProject 接受 Delivery Verdict
 ```
 
-推进权只属于当前 Execution Coordination Lease 持有者，且每次调用最多推进一个需要外部副作用的阶段；Pause/Cancel、失去租约或未决 mutation 都阻止新的派发。任何 `unknown` 保留原 OperationId 并阻塞对应 lane，重启与 Resume 只按原身份对账。详见 `IC-03`、`IC-05`、`IC-08`、`IC-09`、`IC-11`。
+推进权只属于当前 Execution Coordination Lease 持有者，且每次调用最多推进一个需要外部副作用的阶段；Pause/Cancel、失去租约或未决 mutation 都阻止新的派发。任何 `unknown` 保留原 OperationId 并阻塞对应 lane，重启与 Resume 只按原身份对账；历史恢复仅在原任务支持等级与 Recovery 开关允许时续办，否则保留原身份与预算阻塞。详见 `IC-03`、`IC-05`、`IC-08`、`IC-09`、`IC-11`。
 
 ### FLOW-06 模型设置保存与应用
 

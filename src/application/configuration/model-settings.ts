@@ -40,6 +40,11 @@ import {
   type WorkerModelSelection,
 } from '../../domain/model-configuration.js';
 import { parseProjectConfig, type ProjectConfig } from './project-config.js';
+import {
+  minimumWorkerSupportLevel,
+  workerSupportLevelAllows,
+  type WorkerSupportLevel,
+} from '../../domain/worker-harness-support.js';
 
 export const MODEL_SETTINGS_REJECTION_CODES = [
   'invalid_input',
@@ -100,6 +105,25 @@ export type SaveModelSettingsResult =
 
 export type ModelSettingsService = {
   readonly save: (input: SaveModelSettingsInput) => SaveModelSettingsResult;
+  /**
+   * 关闭 Recovery Utility：只移除该角色的当前 profile 引用。
+   *
+   * 已保存的 profile、其他角色选择与全部其他字段原样保留；已批准的 Manifest 与当前 Session 不因此
+   * 改动——重新授权仍由用户显式完成。
+   */
+  readonly disableRecoveryUtility: (input: {
+    readonly expectedRevision: number;
+  }) => SaveModelSettingsResult;
+};
+
+/**
+ * 可信的 harness 支持等级查询。
+ *
+ * 由宿主注入显式验收得出的等级与资格引用；应用层不 import adapter，也不自行探测 harness。
+ */
+export type WorkerSupportLookup = (harness: string) => {
+  readonly level: WorkerSupportLevel;
+  readonly qualificationRef: string;
 };
 
 /** 一次显式原生目录查询的可信结果；null 来源表示该 harness 没有可核验的目录来源。 */
@@ -127,6 +151,13 @@ export type ModelSettingsDependencies = {
    * 的 source/capability/effort 都以 invalid_input 拒绝，避免调用方自报来源冒充原生结果。
    */
   readonly verifyWorkerSelection?: WorkerSelectionVerifier;
+  /**
+   * 可选的支持等级来源。
+   *
+   * 提供时，Worker 保存会按该角色的最低等级拒绝等级不足的 harness；缺省表示宿主尚未提供等级事实，
+   * 此时保持既有行为，不凭空推断等级。
+   */
+  readonly supportFor?: WorkerSupportLookup;
 };
 
 function reject(code: ModelSettingsRejectionCode, message: string): ModelSettingsRejection {
@@ -170,6 +201,7 @@ function selectedWorkerHarness(input: SaveWorkerModelSettingsInput, current: Pro
 export function createModelSettingsService(dependencies: ModelSettingsDependencies): ModelSettingsService {
   const { projectStore, credentials } = dependencies;
   const verifyWorkerSelection = dependencies.verifyWorkerSelection;
+  const supportFor = dependencies.supportFor;
 
   /** 读权威配置并核 revision；冲突时调用方不该写任何东西。 */
   function loadCurrent(
@@ -275,7 +307,19 @@ export function createModelSettingsService(dependencies: ModelSettingsDependenci
       return reject('invalid_input', `不支持的 Worker harness：${harness}`);
     }
 
-    // 3. 结构先过 schema。非 null 的来源与能力 claim 必须与本次可信目录核验一致；手填的
+    // 3. 支持等级门禁（可选）：宿主注入可信等级来源时才生效，低于该角色最低等级即拒绝，
+    //    不因为 harness 已登记就当作能承担该角色。
+    if (supportFor !== undefined) {
+      const support = supportFor(harness);
+      if (!workerSupportLevelAllows(support.level, minimumWorkerSupportLevel(input.role))) {
+        return reject(
+          'invalid_input',
+          `harness ${harness} 的支持等级 ${support.level} 低于 ${input.role} 的最低要求`,
+        );
+      }
+    }
+
+    // 4. 结构先过 schema。非 null 的来源与能力 claim 必须与本次可信目录核验一致；手填的
     //    catalogSource/effortCapability 均为 null 时跳过核验，允许已有的未验证 native ID（effort 为 null）。
     const claimed = workerModelSelectionSchema.safeParse(input.modelSelection);
     if (!claimed.success) {
@@ -297,7 +341,7 @@ export function createModelSettingsService(dependencies: ModelSettingsDependenci
       catalogSource = actualSource;
     }
 
-    // 4. 保存的 selection 采用核验后的实际能力与来源（手填为 null）；effort 由 schema 按实际能力取值判定。
+    // 5. 保存的 selection 采用核验后的实际能力与来源（手填为 null）；effort 由 schema 按实际能力取值判定。
     const selection = workerModelSelectionSchema.safeParse({
       model: claimed.data.model,
       effort: claimed.data.effort,
@@ -317,7 +361,7 @@ export function createModelSettingsService(dependencies: ModelSettingsDependenci
       return reject('invalid_input', 'Worker Profile 无效');
     }
 
-    // 5. 只追加 profile 并前移角色当前选择；不触碰 providerConnections/models。
+    // 6. 只追加 profile 并前移角色当前选择；不触碰 providerConnections/models。
     const next: ProjectConfig = {
       ...current,
       revision: current.revision + 1,
@@ -337,10 +381,43 @@ export function createModelSettingsService(dependencies: ModelSettingsDependenci
     return persist(input.expectedRevision, next, null, profile.data.profileRef);
   }
 
+  /**
+   * 关闭 Recovery Utility。
+   *
+   * 与 `save` 一样是一次 CAS 写入，但**不**追加记录：只删除 `execution.workerProfileRefs`
+   * 的当前恢复引用，已保存的 profile、其他角色选择、连接、模型与 Coordinator 配置原样保留。
+   * 已批准的 Manifest 与当前 Session 不在这里改动——它们由宿主经重新授权表达，避免一次界面
+   * 动作悄悄改写在途事实的含义。
+   */
+  function disableRecoveryUtility(input: { readonly expectedRevision: number }): SaveModelSettingsResult {
+    if (Object.keys(input).some((key) => key !== 'expectedRevision')) {
+      return reject('invalid_input', '关闭 Recovery Utility 只接受 expectedRevision');
+    }
+    const loaded = loadCurrent(input.expectedRevision);
+    if (loaded.kind !== 'current') {
+      return loaded;
+    }
+    const current = loaded.config;
+    if (current.execution.workerProfileRefs.recovery_utility === undefined) {
+      return reject('invalid_input', '当前没有配置 Recovery Utility profile');
+    }
+    const workerProfileRefs = { ...current.execution.workerProfileRefs };
+    delete workerProfileRefs.recovery_utility;
+    const next: ProjectConfig = {
+      ...current,
+      revision: current.revision + 1,
+      execution: { ...current.execution, workerProfileRefs },
+    };
+    const validated = parseProjectConfig(next);
+    if (!validated.ok) return reject('invalid_input', `${validated.field}: ${validated.message}`);
+    return persist(input.expectedRevision, next, null, null);
+  }
+
   return {
     save(input: SaveModelSettingsInput): SaveModelSettingsResult {
       return input.role === 'coordinator' ? saveCoordinator(input) : saveWorker(input);
     },
+    disableRecoveryUtility,
   };
 }
 

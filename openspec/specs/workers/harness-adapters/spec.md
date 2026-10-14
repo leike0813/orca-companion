@@ -2,13 +2,13 @@
 
 ## Purpose
 
-定义 Companion 的 Worker Harness 端口、显式注册表与四个新 harness 的隔离启动、精确会话身份、精确恢复、认证来源与只读执行合同，使新增或替换 harness 不改变 Worker 生命周期、预算与角色语义。
+定义 Companion 的 Worker Harness 端口、显式注册表、证据推导的准入等级与新候选 harness 的隔离启动、精确会话身份、精确恢复、认证来源与只读执行合同，使新增或替换 harness 不改变 Worker 生命周期、预算与角色语义。
 
 ## Requirements
 
 ### Requirement: 应用层 WorkerHarness 端口与显式注册表
 
-Companion SHALL 通过应用层 `WorkerHarness` 端口访问 Worker Harness，并由 bootstrap 显式注册通过完整验收的 adapter，保留 codex、claude、opencode、pi、omp。端口 SHALL 封闭表达新建 Session 启动、按精确身份恢复、Session 身份证明与 transcript 身份复核、只读启动、能力探测、原生模型目录查询与精确 transcript Recovery 读取配方。启动输入 MUST NOT 携带 CredentialStore、凭据路径或任何可设置/覆盖原生环境与隔离根的字段；launch 只可指定 Companion reporter/launcher 工件目录，resume MAY 额外携带已证明的 `expectedNative` 路径，仅用于核验且 MUST NOT 覆盖真实环境。每个 harness id SHALL 至多对应一个注册实现；未注册 id SHALL 在派发前以结构化原因拒绝，SHALL NOT 回退默认 harness、按文件扫描自动发现或按名称推断能力。新增 harness SHALL 只需实现端口并注册，SHALL NOT 修改 Worker 生命周期、预算或角色规则。
+Companion SHALL 通过应用层 `WorkerHarness` 端口访问 Worker Harness，登记与准入分别表达：由 bootstrap 显式登记 adapter 身份，准入等级由证据单独推导，保留 codex、claude、opencode、pi、omp。端口 SHALL 封闭表达新建 Session 启动、按精确身份恢复、Session 身份证明与 transcript 身份复核、只读启动、能力探测、原生模型目录查询与精确 transcript Recovery 读取配方。启动和原生模型查询为公共能力；精确会话、只读、续接和恢复 SHALL 按可选能力组提供，所需能力组缺失即结构化拒绝，不自动回退。启动输入 MUST NOT 携带 CredentialStore、凭据路径或任何可设置/覆盖原生环境与隔离根的字段；launch 只可指定 Companion reporter/launcher 工件目录，resume MAY 额外携带已证明的 `expectedNative` 路径，仅用于核验且 MUST NOT 覆盖真实环境。每个 harness id SHALL 至多对应一个注册实现；未注册 id SHALL 在派发前以结构化原因拒绝，SHALL NOT 回退默认 harness、按文件扫描自动发现或按名称推断能力。新增 harness SHALL 只需实现端口并注册，SHALL NOT 修改 Worker 生命周期、预算或角色规则。
 
 #### Scenario: 已注册 harness 进入既有生命周期
 
@@ -35,24 +35,34 @@ Companion SHALL 通过应用层 `WorkerHarness` 端口访问 Worker Harness，�
 - **WHEN** Recovery 需要复核 transcript 身份并读取原 Session 历史
 - **THEN** 使用该注册项的身份复核与读取配方，无法证明时阻塞，不把其它 harness 的格式或活动分支语义套入原 transcript
 
+#### Scenario: 已登记但未验证
+
+- **WHEN** adapter 已登记而基础真实证据缺失
+- **THEN** 可展示其身份及未验证原因，但不能派发
+
 ### Requirement: 新候选以真实能力证据纳入
 
-新注册候选 SHALL 使用批准的真实模型、原生认证与公开接口，证明 Orca 接管真实 agent、精确 Session 与可寻址原生 transcript、原 Session 精确恢复、生产只读包装器、四角色及 Recovery 读取。中国区 MiniMax 测试 SHALL 使用 MiniMax-M3.1-Flash-Preview；Antigravity SHALL 使用用户登录后的 gemini-3.8-flash-medium。证据 SHALL 记录版本、原生模型依据、精确资源身份、测试结果与边界，且不含秘密。未通过候选 SHALL 不注册并记录缺口；不因单项失败阻止其它已通过候选。目录查询缺失 MAY 沿用未验证 exact ID 手填，SHALL NOT 捏造 effort 能力。
+候选 SHALL 使用批准的真实模型、原生认证与公开接口，并按 harness-support 的等级合同取得准入，不要求基础角色通过全部角色、完整历史和 Recovery。中国区 MiniMax 测试 SHALL 使用 MiniMax-M3.1-Flash-Preview；Antigravity SHALL 使用用户登录后的 gemini-3.8-flash-medium。证据 SHALL 保留版本、环境、原生模型依据、精确资源身份、测试结果、边界与缺口，且不包含秘密。未通过候选 SHALL 不注册并记录缺口；不因单项失败阻止其它已通过候选。目录查询缺失 MAY 沿用未验证 exact ID 手填，SHALL NOT 捏造 effort 能力。
 
 #### Scenario: 完整证据后纳入候选
 
 - **WHEN** 新候选在独立测试项目中通过全部必要能力与真实角色、恢复和隔离验证
-- **THEN** 正式注册该 adapter 并提供一致的模型选择和 doctor 能力结果
+- **THEN** 将已登记 adapter 的支持等级提升为 complete，并提供一致的模型选择、支持等级与 doctor 能力结果
 
 #### Scenario: 缺必要能力时排除
 
-- **WHEN** 候选无法证明精确 Session、原 Session 恢复、Orca 接管或只读隔离
-- **THEN** 记录证据与排除原因，不注册、不伪造身份、不放宽权限，其他候选继续验证
+- **WHEN** 候选无法证明基础级必要能力（输入、精确 Orca 归属、Planner 与 Implementation 结果及产出核验）
+- **THEN** 记录证据与准入拒绝原因，不授予 basic、不派发、不伪造身份、不放宽权限；更高等级的能力缺口只限制需要这些能力的操作，其他候选继续验证
 
 #### Scenario: 未运行的验收如实保留
 
 - **WHEN** 登录、安装或真实测试尚未完成
 - **THEN** 该项标记待验证，不把官方接口说明或历史 PASS 当作本轮运行证据
+
+#### Scenario: 模型响应不回显 ID
+
+- **WHEN** 启动固定获批 exact ID、基础任务通过，而 provider 不回显模型或 usage
+- **THEN** 按执行证据准入并显示模型/usage 未验证，不推算费用
 
 ### Requirement: 生产只读启动保留真实前台身份与终端注入防护
 
@@ -70,12 +80,17 @@ Companion SHALL 通过应用层 `WorkerHarness` 端口访问 Worker Harness，�
 
 ### Requirement: 隔离启动与精确 provider session 身份
 
-每个 adapter SHALL 在 harness 自身的真实用户环境中启动 Worker，继承真实 launch 的 `process.env`，不再建立隔离 HOME/XDG、复制或链接认证资产，也不再生成原生 provider 配置；模型、effort 与 report/security 设置 SHALL 只经该 harness 公开的逐次调用参数或 overlay 表达。只接受该 harness 可核验的 provider session 身份与可寻址 transcript 来源：claude 以 SessionStart hook 上报的 session id 与精确 transcript path 为准；pi 以原生 `session_start` extension 上报的 session id、transcript path 与 active branch header 为准；omp 以 extension 等待真实 session 文件出现后回读的 exact session id 与 fullpath 为准；opencode 以 `--standalone` 私有子进程的公开 `GET /api/session`（`{data, cursor:{previous, next}}` 形状）为准，消息只经 v2 分页接口 `/api/session/:sessionID/message` 的 limit/cursor 读取。`worker-runtime` SHALL 从真实 launch 环境解析该进程的原生有效路径，并只把非 secret paths 经 `runtimeReportPath` 写入报告，MUST NOT 记录整个环境变量表、反向从报告生成环境或写入任何秘密。事实缺失、冲突、候选不唯一或观察陈旧时 SHALL 判为不可用并阻塞该 Dispatch；adapter MUST NOT 按 cwd、mtime、终端输出、最近会话或直接读取 harness 数据库推断身份。
+每个 adapter SHALL 在 harness 自身的真实用户环境中启动 Worker，继承真实 launch 的 `process.env`，非秘密 runtime roots 由真实 launch 环境解析；不再建立隔离 HOME/XDG、复制或链接认证资产，也不再生成原生 provider 配置；模型、effort 与 report/security 设置 SHALL 只经该 harness 公开的逐次调用参数或 overlay 表达。增强与完整级 SHALL 使用独立核验的精确 provider session 与 transcript，不按 cwd、mtime、最近会话或终端输出推断；基础级 MAY 只使用真实 Orca Worker 执行绑定见证。只接受该 harness 可核验的 provider session 身份与可寻址 transcript 来源：claude 以 SessionStart hook 上报的 session id 与精确 transcript path 为准；pi 以原生 `session_start` extension 上报的 session id、transcript path 与 active branch header 为准；omp 以 extension 等待真实 session 文件出现后回读的 exact session id 与 fullpath 为准；opencode 以 `--standalone` 私有子进程的公开 `GET /api/session`（`{data, cursor:{previous, next}}` 形状）为准，消息只经 v2 分页接口 `/api/session/:sessionID/message` 的 limit/cursor 读取。`worker-runtime` SHALL 从真实 launch 环境解析该进程的原生有效路径，并只把非 secret paths 经 `runtimeReportPath` 写入报告，MUST NOT 记录整个环境变量表、反向从报告生成环境或写入任何秘密。事实缺失、冲突、候选不唯一或观察陈旧时 SHALL 判为不可用并阻塞该 Dispatch；adapter MUST NOT 按 cwd、mtime、终端输出、最近会话或直接读取 harness 数据库推断身份。
 
 #### Scenario: 四个 harness 各自给出精确绑定
 
-- **WHEN** claude、pi、omp 或 opencode 的 Dispatch 报告其 hook、extension 或公开 metadata 身份
-- **THEN** adapter 只在该 harness 的 id、path 与观察窗口一致且候选唯一时签发 Session Binding，否则返回不可用
+- **WHEN** claude、pi、omp 或 opencode 的增强或完整级 Dispatch 报告其 hook、extension 或公开 metadata 身份
+- **THEN** adapter 只在该 harness 的 id、path 与观察窗口一致且候选唯一时签发原生 Session Binding，否则返回不可用
+
+#### Scenario: 基础级没有 SessionStart
+
+- **WHEN** 已获准基础任务未提供原生 Session 报告
+- **THEN** 按真实 Orca 执行绑定结算，不填造 Session 或 transcript
 
 #### Scenario: opencode 不以数据库或终端猜身份
 

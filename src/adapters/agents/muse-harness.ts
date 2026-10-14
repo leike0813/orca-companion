@@ -1,8 +1,9 @@
 import { constants, closeSync, fstatSync, mkdirSync, openSync, readSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import type { HarnessSessionReport, ProveHarnessSessionInput, WorkerHarness, WorkerHarnessLaunchInput } from '../../application/ports/worker-harness.js';
+import type { HarnessSessionReport, ProveHarnessSessionInput, WorkerHarnessLaunchInput } from '../../application/ports/worker-harness.js';
 import type { HarnessTranscriptCoverageResult } from '../../application/ports/worker-harness.js';
+import { createWorkerHarness } from '../../application/ports/worker-harness.js';
 import { candidateSessionPaths, installCandidateReporter, prepareCandidateLaunch, type CandidateResume } from './candidate-worker-launch.js';
 import { probeHarnessReadOnlyWorker } from './read-only-execution-wrapper.js';
 import { reportingCommand, reportingRoot, REPORT_TRAMPOLINE, readReportingJson, readReportingText } from './worker-harness-reporting.js';
@@ -359,7 +360,7 @@ export function inspectMuseTranscript(transcriptRef: string): Promise<HarnessTra
   return Promise.resolve({ kind: 'covered', evidence: { coverage: 'complete', readableRange: { transcriptRef, fromEventRef: `record:${first}`, toEventRef: `record:${last}` }, gaps: [], lastCompleteEventRef: `record:${last}` } });
 }
 
-export const museHarness: WorkerHarness = {
+export const museHarness = createWorkerHarness({
   id: 'muse',
   prepareLaunch: (input) => launch(input),
   prepareReadOnlyLaunch: (input) => launch({ ...input, sandboxMode: 'read-only-local-control' }),
@@ -380,4 +381,4 @@ export const museHarness: WorkerHarness = {
     '以 record:N 引用 retained record 顺序；保留 retained_frame 的 children[].record_json 原生顺序。',
     'UTF-8、JSONL、workspace_root/cwd 或活动 user/assistant 事件缺失时停止恢复。',
   ],
-};
+});

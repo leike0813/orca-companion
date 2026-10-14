@@ -6,9 +6,10 @@ import {
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type {
   HarnessSessionReport, HarnessTranscriptCoverageResult, HarnessTranscriptProofResult,
-  PreparedHarnessTerminal, ProveHarnessSessionInput, WorkerHarness, WorkerHarnessLaunchInput,
+  PreparedHarnessTerminal, ProveHarnessSessionInput, WorkerHarnessLaunchInput,
   WorkerModelCatalogResult,
 } from '../../application/ports/worker-harness.js';
+import { createWorkerHarness } from '../../application/ports/worker-harness.js';
 import type { TranscriptGap } from '../../application/recovery/recovery-capsule.js';
 import type { PreparedTerminalStrategy } from '../../application/worker-launch.js';
 import { workerModelSelectionSchema } from '../../domain/model-configuration.js';
@@ -383,7 +384,7 @@ export const QWEN_RECOVERY_INSTRUCTIONS = [
   'coverage 只在 transcript 有界、无损坏/重复/分叉且 parentUuid 形成唯一连续主链时为 complete；否则 unavailable。',
 ] as const;
 
-export const qwenHarness: WorkerHarness = {
+export const qwenHarness = createWorkerHarness({
   id: QWEN_HARNESS_ID,
   prepareLaunch: createQwenWorkerLaunch,
   prepareReadOnlyLaunch: input => createQwenWorkerLaunch({ ...input, sandboxMode: 'read-only-local-control' }),
@@ -404,4 +405,4 @@ export const qwenHarness: WorkerHarness = {
   proveSession: proveQwenTranscript,
   inspectTranscript: inspectQwenTranscript,
   recoveryInstructions: () => QWEN_RECOVERY_INSTRUCTIONS,
-};
+});

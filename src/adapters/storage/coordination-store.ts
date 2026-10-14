@@ -133,6 +133,7 @@ import {
   type DeliveryVerdictRecord,
   type ExecutionHandoffPhase,
   type ExecutionHandoffRecord,
+  type FinalizerAdmissionRecord,
   type GraphGenerationRecord,
   type GraphPatchRecord,
   type GraphVersionPatchInput,
@@ -255,6 +256,24 @@ function requireCount(raw: unknown, field: string): Decoded<number> {
     return fail(`${field} 必须是非负整数`);
   }
   return ok(raw);
+}
+
+/** 完整 Git 对象 ID：SHA-1（40）或 SHA-256（64）十六进制；短哈希一律拒绝。 */
+const FULL_GIT_OID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
+
+function requireFullGitOid(raw: unknown, field: string): Decoded<string> {
+  if (typeof raw !== 'string' || !FULL_GIT_OID.test(raw)) {
+    return fail(`${field} 必须是完整的 Git 对象 ID`);
+  }
+  return ok(raw);
+}
+
+/** 省略或 `null` 表示「本行没有这项事实」；给出值则必须是完整对象 ID。 */
+function requireOptionalFullGitOid(raw: unknown, field: string): Decoded<string | null> {
+  if (raw === undefined || raw === null) {
+    return ok(null);
+  }
+  return requireFullGitOid(raw, field);
 }
 
 function requireStringArray(raw: unknown, field: string): Decoded<readonly string[]> {
@@ -1771,6 +1790,21 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       }
       return ok({ ...base, kind: 'advance-map-revision', mapRevision: mapRevision.value });
     }
+    case 'record-worker-execution-binding': {
+      const fields = ['segmentId', 'workPackageId', 'workerTaskId', 'dispatchId', 'attemptId', 'orcaTaskId', 'terminalHandle'] as const;
+      const values: Record<string, string> = {};
+      for (const field of fields) {
+        const value = requireString(command[field], field);
+        if (!value.ok) return value;
+        values[field] = value.value;
+      }
+      const role = requireEnum(command['role'], ['planner', 'implementation'] as const, 'role');
+      if (!role.ok) return role;
+      return ok({ ...base, kind: 'record-worker-execution-binding',
+        segmentId: values['segmentId'] as SessionSegmentId, workPackageId: values['workPackageId'] as WorkPackageId,
+        workerTaskId: values['workerTaskId'] as WorkerTaskId, dispatchId: values['dispatchId'] as DispatchId,
+        attemptId: values['attemptId']!, orcaTaskId: values['orcaTaskId']!, terminalHandle: values['terminalHandle']!, role: role.value });
+    }
     case 'record-session-segment': {
       const segmentId = requireString(command['segmentId'], 'segmentId');
       if (!segmentId.ok) {
@@ -2020,6 +2054,17 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
       if (!sessionBindingRef.ok) {
         return sessionBindingRef;
       }
+      const verifiedHead = requireOptionalFullGitOid(command['verifiedHead'], 'verifiedHead');
+      if (!verifiedHead.ok) {
+        return verifiedHead;
+      }
+      const verifiedTree = requireOptionalFullGitOid(command['verifiedTree'], 'verifiedTree');
+      if (!verifiedTree.ok) {
+        return verifiedTree;
+      }
+      if ((verifiedHead.value === null) !== (verifiedTree.value === null)) {
+        return fail('verifiedHead 与 verifiedTree 必须成对给出');
+      }
       return ok({
         ...base,
         kind: 'record-delivery-verdict',
@@ -2027,6 +2072,39 @@ function decodeCommand(command: unknown): Decoded<CoordinationCommand> {
         verdict: verdict.value,
         finalizerRole: 'finalizer',
         sessionBindingRef: sessionBindingRef.value,
+        verifiedHead: verifiedHead.value,
+        verifiedTree: verifiedTree.value,
+      });
+    }
+    case 'admit-finalizer': {
+      const workerTaskId = requireString(command['workerTaskId'], 'workerTaskId');
+      if (!workerTaskId.ok) {
+        return workerTaskId;
+      }
+      const graphId = requireString(command['graphId'], 'graphId');
+      if (!graphId.ok) {
+        return graphId;
+      }
+      const graphGeneration = requireCount(command['graphGeneration'], 'graphGeneration');
+      if (!graphGeneration.ok || graphGeneration.value === 0) {
+        return fail('graphGeneration 必须是正的安全整数');
+      }
+      const authorizationId = requireString(command['authorizationId'], 'authorizationId');
+      if (!authorizationId.ok) {
+        return authorizationId;
+      }
+      const baselineHead = requireFullGitOid(command['baselineHead'], 'baselineHead');
+      if (!baselineHead.ok) {
+        return baselineHead;
+      }
+      return ok({
+        ...base,
+        kind: 'admit-finalizer',
+        workerTaskId: workerTaskId.value as WorkerTaskId,
+        graphId: graphId.value as GraphId,
+        graphGeneration: graphGeneration.value,
+        authorizationId: authorizationId.value,
+        baselineHead: baselineHead.value,
       });
     }
     case 'record-recovery': {
@@ -2763,6 +2841,16 @@ type ValidationAttemptRow = {
   readonly updated_at: number;
 };
 
+type FinalizerAdmissionRow = {
+  readonly coordination_scope_id: string;
+  readonly worker_task_id: string;
+  readonly graph_id: string;
+  readonly graph_generation: number;
+  readonly authorization_id: string;
+  readonly baseline_head: string;
+  readonly recorded_at: number;
+};
+
 type WakeAdmissionRow = {
   readonly coordination_scope_id: string;
   readonly coordinator_session_id: string;
@@ -2906,6 +2994,8 @@ type SessionSegmentRow = {
   readonly transcript_referenceable: number;
   readonly verifiable: number;
   readonly recorded_at: number;
+  readonly orca_task_id?: string | null;
+  readonly terminal_handle?: string | null;
 };
 
 type MaterializationBindingRow = {
@@ -2953,6 +3043,8 @@ type DeliveryVerdictRow = {
   readonly verdict_refs: string;
   readonly finalizer_role: string;
   readonly session_binding_ref: string;
+  readonly verified_head: string | null;
+  readonly verified_tree: string | null;
   readonly recorded_at: number;
 };
 
@@ -3243,6 +3335,9 @@ function decodeSessionSegmentRow(row: SessionSegmentRow): Decoded<SessionSegment
     transcriptReferenceable: row.transcript_referenceable === 1,
     verifiable: row.verifiable === 1,
     recordedAt: row.recorded_at,
+    ...(row.orca_task_id == null ? {} : { executionBinding: {
+      kind: 'orca_worker' as const, orcaTaskId: row.orca_task_id, terminalHandle: row.terminal_handle!,
+    } }),
   });
 }
 
@@ -3430,8 +3525,22 @@ function decodeDeliveryVerdictRow(row: DeliveryVerdictRow): Decoded<DeliveryVerd
     verdict,
     finalizerRole: 'finalizer',
     sessionBindingRef: row.session_binding_ref,
+    verifiedHead: row.verified_head,
+    verifiedTree: row.verified_tree,
     recordedAt: row.recorded_at,
   });
+}
+
+function decodeFinalizerAdmissionRow(row: FinalizerAdmissionRow): FinalizerAdmissionRecord {
+  return {
+    coordinationScopeId: row.coordination_scope_id as CoordinationScopeId,
+    workerTaskId: row.worker_task_id as WorkerTaskId,
+    graphId: row.graph_id as GraphId,
+    graphGeneration: row.graph_generation,
+    authorizationId: row.authorization_id,
+    baselineHead: row.baseline_head,
+    recordedAt: row.recorded_at,
+  };
 }
 
 function decodeRecoveryRow(row: RecoveryRow): Decoded<RecoveryRecord> {
@@ -4537,23 +4646,16 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
   const readSessionSegmentRows = (
     scopeId: string,
     workPackageId: string | undefined,
-  ): readonly SessionSegmentRow[] =>
-    workPackageId === undefined
-      ? many<SessionSegmentRow>(
-          db.prepare(
-            `SELECT * FROM session_segments
-             WHERE coordination_scope_id = ? ORDER BY recorded_at, segment_id`,
-          ),
-          scopeId,
-        )
-      : many<SessionSegmentRow>(
-          db.prepare(
-            `SELECT * FROM session_segments
-             WHERE coordination_scope_id = ? AND work_package_id = ? ORDER BY recorded_at, segment_id`,
-          ),
-          scopeId,
-          workPackageId,
-        );
+  ): readonly SessionSegmentRow[] => many<SessionSegmentRow>(db.prepare(`
+      SELECT * FROM (
+        SELECT *, NULL AS orca_task_id, NULL AS terminal_handle FROM session_segments
+        UNION ALL
+        SELECT coordination_scope_id, segment_id, work_package_id, role, worker_task_id, dispatch_id,
+          attempt_id, '' AS session_binding_id, NULL AS last_transcript_ref, NULL AS terminal_receipt_ref,
+          0 AS transcript_referenceable, 1 AS verifiable, recorded_at, orca_task_id, terminal_handle
+        FROM worker_execution_bindings
+      ) WHERE coordination_scope_id = ? ${workPackageId === undefined ? '' : 'AND work_package_id = ?'}
+      ORDER BY recorded_at, segment_id`), scopeId, ...(workPackageId === undefined ? [] : [workPackageId]));
 
   const readMaterializationBindingRows = (
     scopeId: string,
@@ -5002,6 +5104,17 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         }
         case 'budget-counters':
           return { kind: 'budget-counters', counters: readBudgetRows(scopeId, input.approvedLimitRef).map(decodeBudgetRow) };
+        case 'finalizer-admission': {
+          const row = one<FinalizerAdmissionRow>(
+            db.prepare('SELECT * FROM finalizer_admissions WHERE coordination_scope_id = ? AND worker_task_id = ?'),
+            scopeId,
+            input.workerTaskId,
+          );
+          return {
+            kind: 'finalizer-admission',
+            admission: row === undefined ? null : decodeFinalizerAdmissionRow(row),
+          };
+        }
         case 'validation-step-admission': {
           const row = one<ValidationStepAdmissionRow>(
             db.prepare(
@@ -6197,11 +6310,40 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         );
         return ok(null);
       }
+      case 'record-worker-execution-binding': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) return holder;
+        const materialization = one<MaterializationBindingRow>(db.prepare(`SELECT * FROM materialization_bindings
+          WHERE coordination_scope_id = ? AND work_package_id = ? AND worker_task_id = ? AND role = ? AND attempt_id = ?`),
+          cmd.coordinationScopeId, cmd.workPackageId, cmd.workerTaskId, cmd.role, cmd.attemptId);
+        if (materialization === undefined || materialization.orca_task_id !== cmd.orcaTaskId || materialization.authorization_id === null)
+          return fail('Orca Worker 绑定缺少匹配的物化与授权', 'constraint');
+        const authorizationRow = readAuthorizationRow(cmd.coordinationScopeId, materialization.authorization_id);
+        const authorization = authorizationRow === undefined ? null : decodeAuthorizationRow(authorizationRow);
+        if (authorization === null || !authorization.ok || authorization.value.authorizationVersion !== materialization.authorization_version ||
+          authorization.value.manifest.manifestVersion !== 5 || !authorization.value.manifest.workerProfiles.some(profile =>
+            profile.role === cmd.role && profile.profileRef.id === materialization.worker_profile_ref && profile.supportLevel === 'basic'))
+          return fail('基础执行绑定未获原任务授权', 'constraint');
+        const segments = readSessionSegmentRows(cmd.coordinationScopeId, undefined);
+        const existing = segments.find(entry => entry.segment_id === cmd.segmentId || entry.dispatch_id === cmd.dispatchId);
+        if (existing !== undefined) return existing.orca_task_id === cmd.orcaTaskId && existing.terminal_handle === cmd.terminalHandle &&
+          existing.worker_task_id === cmd.workerTaskId && existing.attempt_id === cmd.attemptId && existing.role === cmd.role
+          ? ok(null) : fail('Worker 执行绑定与已记录派发冲突', 'constraint');
+        db.prepare(`INSERT INTO worker_execution_bindings
+          (coordination_scope_id, segment_id, work_package_id, role, worker_task_id, dispatch_id, attempt_id,
+           orca_task_id, terminal_handle, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(cmd.coordinationScopeId, cmd.segmentId, cmd.workPackageId, cmd.role, cmd.workerTaskId, cmd.dispatchId,
+            cmd.attemptId, cmd.orcaTaskId, cmd.terminalHandle, now);
+        return ok(null);
+      }
       case 'record-session-segment': {
         const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
         if (!holder.ok) {
           return holder;
         }
+        if (readSessionSegmentRows(cmd.coordinationScopeId, undefined).some(entry => entry.orca_task_id != null &&
+          (entry.segment_id === cmd.segmentId || entry.dispatch_id === cmd.dispatchId)))
+          return fail('该派发已有 Orca 执行绑定', 'constraint');
         const existing = one<SessionSegmentRow>(
           db.prepare(
             `SELECT * FROM session_segments WHERE coordination_scope_id = ? AND segment_id = ?`,
@@ -6358,8 +6500,8 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
         db.prepare(
           `INSERT INTO delivery_verdicts (
              coordination_scope_id, verdict_id, verdict_sequence, verdict_kind, verdict_refs,
-             finalizer_role, session_binding_ref, recorded_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+             finalizer_role, session_binding_ref, verified_head, verified_tree, recorded_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).run(
           cmd.coordinationScopeId,
           cmd.verdictId,
@@ -6368,8 +6510,110 @@ export function openCoordinationStore(options: OpenCoordinationStoreOptions): Op
           JSON.stringify(refs),
           cmd.finalizerRole,
           cmd.sessionBindingRef,
+          cmd.verifiedHead ?? null,
+          cmd.verifiedTree ?? null,
           now,
         );
+        return ok(null);
+      }
+      case 'admit-finalizer': {
+        const holder = executionHolderViolation(cmd.coordinationScopeId, cmd.writer);
+        if (!holder.ok) {
+          return holder;
+        }
+        const scope = readScopeRow(cmd.coordinationScopeId);
+        if (scope === undefined || scope.graph_id === null || scope.graph_version === null) {
+          return fail('当前 Scope 没有可用的执行图，无法接纳 Finalizer', 'invalid_state');
+        }
+        // 当前图与当前授权必须同时吻合：拿旧代际或旧授权的依据都不足以创建 Finalizer Task。
+        if (scope.graph_id !== cmd.graphId) {
+          return fail('Finalizer 准入的图不是当前执行图', 'constraint');
+        }
+        const graphRow = readGraphVersionRow(cmd.coordinationScopeId, scope.graph_id, scope.graph_version);
+        if (graphRow === undefined) {
+          return fail('当前执行图不可读，无法接纳 Finalizer', 'invalid_state');
+        }
+        const graph = decodeGraphVersionRow(graphRow);
+        if (!graph.ok) {
+          return graph;
+        }
+        if (graph.value.generation !== cmd.graphGeneration) {
+          return fail('Finalizer 准入的代际不是当前图代际', 'constraint');
+        }
+        const authRow = readAuthorizationRow(cmd.coordinationScopeId, cmd.authorizationId);
+        if (authRow === undefined) {
+          return fail('Finalizer 准入引用的执行授权不存在', 'constraint');
+        }
+        const auth = decodeAuthorizationRow(authRow);
+        if (!auth.ok) {
+          return auth;
+        }
+        if (
+          auth.value.manifest.graph.graphId !== scope.graph_id ||
+          auth.value.manifest.graph.generation !== graph.value.generation
+        ) {
+          return fail('Finalizer 准入的授权不属于当前图代际', 'constraint');
+        }
+        const policy = auth.value.manifest.finalizerPolicy;
+        if (
+          policy === undefined ||
+          policy.mode !== 'repair' ||
+          !auth.value.manifest.permissions.finalizer ||
+          !auth.value.manifest.permissions.gitIntegration
+        ) {
+          return fail('Manifest 未授予可证明的 Finalizer 修复授权', 'constraint');
+        }
+        // 幂等键是 (scope, workerTaskId)：同一组依据重放是成功空操作，不再扣减。
+        const existing = one<FinalizerAdmissionRow>(
+          db.prepare('SELECT * FROM finalizer_admissions WHERE coordination_scope_id = ? AND worker_task_id = ?'),
+          cmd.coordinationScopeId,
+          cmd.workerTaskId,
+        );
+        if (existing !== undefined) {
+          const identical =
+            existing.graph_id === cmd.graphId &&
+            existing.graph_generation === cmd.graphGeneration &&
+            existing.authorization_id === cmd.authorizationId &&
+            existing.baseline_head === cmd.baselineHead;
+          return identical
+            ? ok(null)
+            : fail(`Finalizer 准入 ${cmd.workerTaskId} 已按另一组依据登记：拒绝覆盖`, 'constraint');
+        }
+        // 额度按 Scope 与代际累计，不随重新授权复位；与 Validator 的 Work Package 预算互不相干。
+        if (scope.authorization_id !== cmd.authorizationId) {
+          return fail('新 Finalizer 准入的授权不是当前生效授权', 'constraint');
+        }
+        const budgetKey = `finalizer:${cmd.graphId}:${String(cmd.graphGeneration)}`;
+        const counter = one<BudgetRow>(
+          db.prepare('SELECT * FROM budget_counters WHERE coordination_scope_id = ? AND budget_key = ?'),
+          cmd.coordinationScopeId,
+          budgetKey,
+        );
+        if ((counter?.consumed ?? 0) >= policy.repairLimit) {
+          return fail(
+            `Finalizer 修复预算不可用或已耗尽（已消耗 ${String(counter?.consumed ?? 0)}，上限 ${String(policy.repairLimit)}）`,
+            'constraint',
+          );
+        }
+        db.prepare(
+          `INSERT INTO finalizer_admissions (
+             coordination_scope_id, worker_task_id, graph_id, graph_generation, authorization_id,
+             baseline_head, recorded_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          cmd.coordinationScopeId,
+          cmd.workerTaskId,
+          cmd.graphId,
+          cmd.graphGeneration,
+          cmd.authorizationId,
+          cmd.baselineHead,
+          now,
+        );
+        db.prepare(
+          `INSERT INTO budget_counters (coordination_scope_id, budget_key, approved_limit_ref, consumed)
+           VALUES (?, ?, ?, 1)
+           ON CONFLICT (coordination_scope_id, budget_key) DO UPDATE SET consumed = consumed + 1`,
+        ).run(cmd.coordinationScopeId, budgetKey, cmd.authorizationId);
         return ok(null);
       }
       case 'record-recovery': {

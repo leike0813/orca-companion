@@ -8,8 +8,9 @@
 import { expect, test } from 'vitest';
 
 import { dispatchScopedWorker } from '../../../src/adapters/agents/utility-worker.js';
+import type { ScopedWorkerDispatchInput } from '../../../src/adapters/agents/utility-worker.js';
 import type { HarnessSessionFacts } from '../../../src/adapters/agents/session-binding.js';
-import type { DispatchId, OperationId, WorkPackageId, WorkerTaskId } from '../../../src/application/dto/identity.js';
+import type { DispatchId, OperationId, WorkerTaskId } from '../../../src/application/dto/identity.js';
 import type { ExecutionBackend, ExecutionMutation, ExecutionQuery } from '../../../src/application/ports/execution-backend.js';
 import { createExecutionScopeHarness, EXECUTION_AUTHORIZATION_ID, EXECUTION_RUN_ID } from '../../support/execution-harness.js';
 
@@ -71,7 +72,7 @@ test('绑定晚到后重试复用 exact terminal/Task：不重发 create/start/s
       backendIdentityRef: 'coordinator', graphGeneration: harness.generation,
       authorizationId: EXECUTION_AUTHORIZATION_ID, runId: EXECUTION_RUN_ID, consumerGeneration: 1, timeoutMs: 5_000,
     },
-    workPackageId: 'wp-1' as WorkPackageId,
+    workPackageId: 'wp-1',
     spec: JSON.stringify({ schemaVersion: 1, kind: 'test' }),
     workerLaunch: {
       kind: 'prepared_terminal' as const,
@@ -116,5 +117,131 @@ test('绑定晚到后重试复用 exact terminal/Task：不重发 create/start/s
   expect(mutates('worker-start')).toBe(1);
   expect(mutates('terminal-submit')).toBe(1);
 
+  harness.close();
+});
+
+/** 稳定 OperationId 组：断言最小化，由输入类型本身保证品牌。 */
+function operationIdsFor(prefix: string): ScopedWorkerDispatchInput['operationIds'] {
+  return {
+    task: `${prefix}-task` as OperationId,
+    workerPrepare: `${prefix}-prepare` as OperationId,
+    workerStart: `${prefix}-start` as OperationId,
+    workerActivate: `${prefix}-activate` as OperationId,
+  };
+}
+
+test.each([
+  { name: 'worker-show 读回同一个 Task/Dispatch/terminal', terminal: 'term-1', taskId: 'orca-task-1', exactWorker: true, expected: 'dispatched' as const },
+  { name: 'Task 不一致不合成归属', terminal: 'term-1', taskId: 'orca-other', exactWorker: true, expected: 'binding_unavailable' as const },
+  { name: 'terminal 在接管核验处就不一致', terminal: 'term-other', taskId: 'orca-task-1', exactWorker: true, expected: 'rejected' as const },
+  { name: 'worker 不是 exact', terminal: 'term-1', taskId: 'orca-task-1', exactWorker: false, expected: 'rejected' as const },
+])('basic 模式：$name', async ({ terminal, taskId, exactWorker, expected }) => {
+  const harness = createExecutionScopeHarness();
+  let terminalCreated = false;
+  let sessionCalls = 0;
+  const backend: ExecutionBackend = {
+    query: (query: ExecutionQuery) => {
+      if (query.operation === 'terminal-list') {
+        return Promise.resolve({ kind: 'accepted', value: {
+          terminals: terminalCreated ? [{ handle: 'term-1', connected: true, writable: true, title: 'title-1' }] : [],
+          hostIds: ['local'], omittedHostIds: [], totalCount: terminalCreated ? 1 : 0, truncated: false,
+        } });
+      }
+      if (query.operation === 'terminal-wait') return Promise.resolve({ kind: 'accepted', value: { wait: { handle: query.terminal, condition: 'tui-idle', status: 'running', satisfied: true } } });
+      if (query.operation === 'terminal-read') return Promise.resolve({ kind: 'accepted', value: { terminal: { draft: '[Pasted Content]' } } });
+      if (query.operation === 'worker-show') {
+        return Promise.resolve({ kind: 'accepted', value: { dispatchId: 'disp-1', taskId, exactWorker, agentTerminalHandle: terminal } });
+      }
+      return Promise.resolve({ kind: 'rejected', code: 'unregistered_query', message: query.operation });
+    },
+    mutate: (mutation: ExecutionMutation, scope) => {
+      if (mutation.operation === 'terminal-create') terminalCreated = true;
+      const value =
+        mutation.operation === 'task-create' ? { id: 'orca-task-1' }
+          : mutation.operation === 'terminal-create' ? { handle: 'term-1' }
+            : mutation.operation === 'worker-start' ? { dispatchId: 'disp-1' }
+              : null;
+      return Promise.resolve({ kind: 'accepted', operation: { operationId: scope.operationId, target: scope.target }, value });
+    },
+  };
+  const dispatched = await dispatchScopedWorker({
+    store: harness.store,
+    backend,
+    writer: harness.writer,
+    coordinationScopeId: harness.scopeId,
+    execution: {
+      backendIdentityRef: 'coordinator', graphGeneration: harness.generation,
+      authorizationId: EXECUTION_AUTHORIZATION_ID, runId: EXECUTION_RUN_ID, consumerGeneration: 1, timeoutMs: 5_000,
+    },
+    workPackageId: 'wp-1',
+    spec: JSON.stringify({ schemaVersion: 1, kind: 'baseline-reconciliation' }),
+    identity: 'basic',
+    workerLaunch: {
+      kind: 'prepared_terminal',
+      harness: 'claude',
+      activation: 'submit_draft',
+      title: 'title-1',
+      prepare: () => Promise.resolve({ title: 'title-1', command: 'claude-launch' }),
+    },
+    worktree: 'path:/tmp/wt',
+    operationIds: operationIdsFor('basic'),
+    observeSession: () => { sessionCalls += 1; return Promise.resolve(null); },
+  });
+  expect(dispatched.kind).toBe(expected);
+  expect(sessionCalls).toBe(0);
+  if (dispatched.kind === 'dispatched' && expected === 'dispatched' && 'executionBinding' in dispatched) {
+    expect(dispatched.executionBinding).toEqual({ kind: 'orca_worker', orcaTaskId: 'orca-task-1', terminalHandle: 'term-1' });
+  }
+  harness.close();
+});
+
+test('basic 模式：第二次权威 read 与已核验 terminal 不一致时不接受归属', async () => {
+  const harness = createExecutionScopeHarness();
+  let terminalCreated = false;
+  let shows = 0;
+  const backend: ExecutionBackend = {
+    query: (query: ExecutionQuery) => {
+      if (query.operation === 'terminal-list') {
+        return Promise.resolve({ kind: 'accepted', value: {
+          terminals: terminalCreated ? [{ handle: 'term-1', connected: true, writable: true, title: 'title-1' }] : [],
+          hostIds: ['local'], omittedHostIds: [], totalCount: terminalCreated ? 1 : 0, truncated: false,
+        } });
+      }
+      if (query.operation === 'terminal-wait') return Promise.resolve({ kind: 'accepted', value: { wait: { handle: query.terminal, condition: 'tui-idle', status: 'running', satisfied: true } } });
+      if (query.operation === 'terminal-read') return Promise.resolve({ kind: 'accepted', value: { terminal: { draft: '[Pasted Content]' } } });
+      if (query.operation === 'worker-show') {
+        shows += 1;
+        return Promise.resolve({ kind: 'accepted', value: {
+          dispatchId: 'disp-1', taskId: 'orca-task-1', exactWorker: true,
+          agentTerminalHandle: shows === 1 ? 'term-1' : 'term-other',
+        } });
+      }
+      return Promise.resolve({ kind: 'rejected', code: 'unregistered_query', message: query.operation });
+    },
+    mutate: (mutation: ExecutionMutation, scope) => {
+      if (mutation.operation === 'terminal-create') terminalCreated = true;
+      const value =
+        mutation.operation === 'task-create' ? { id: 'orca-task-1' }
+          : mutation.operation === 'terminal-create' ? { handle: 'term-1' }
+            : mutation.operation === 'worker-start' ? { dispatchId: 'disp-1' }
+              : null;
+      return Promise.resolve({ kind: 'accepted', operation: { operationId: scope.operationId, target: scope.target }, value });
+    },
+  };
+  const dispatched = await dispatchScopedWorker({
+    store: harness.store, backend, writer: harness.writer, coordinationScopeId: harness.scopeId,
+    execution: { backendIdentityRef: 'coordinator', graphGeneration: harness.generation,
+      authorizationId: EXECUTION_AUTHORIZATION_ID, runId: EXECUTION_RUN_ID, consumerGeneration: 1, timeoutMs: 5_000 },
+    workPackageId: 'wp-1',
+    spec: JSON.stringify({ schemaVersion: 1, kind: 'baseline-reconciliation' }),
+    identity: 'basic',
+    workerLaunch: { kind: 'prepared_terminal', harness: 'claude', activation: 'submit_draft', title: 'title-1',
+      prepare: () => Promise.resolve({ title: 'title-1', command: 'claude-launch' }) },
+    worktree: 'path:/tmp/wt',
+    operationIds: operationIdsFor('stale'),
+    observeSession: () => Promise.resolve(null),
+  });
+  expect(dispatched.kind).toBe('binding_unavailable');
+  expect(shows).toBe(2);
   harness.close();
 });

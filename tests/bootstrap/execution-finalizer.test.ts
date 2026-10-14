@@ -115,10 +115,19 @@ type FakeOrca = {
   readonly verdict: { value: unknown };
   /** task-update 写入、task-list 回读的 Orca Task 记录。 */
   readonly task: { readonly status: string | null; readonly result: unknown };
+  /** 真实建立的 Finalizer worktree（baseBranch 即准入基线，comment 是 `finalizerTaskId=<workerTaskId>`）。 */
+  readonly worktrees: readonly {
+    readonly worktreeId: string;
+    readonly path: string;
+    readonly branch: string;
+    readonly comment: string | null;
+  }[];
 };
 
 function fakeOrca(options: {
   readonly canonicalWorktreePath: string;
+  /** 独立 worktree 的宿主目录；`git worktree add` 在这里建立真实工作树。 */
+  readonly worktreeRoot: string;
   readonly workerStartUnknown?: boolean | undefined;
   readonly rejectedLifecycleFirst?: boolean | undefined;
 }): FakeOrca {
@@ -130,10 +139,19 @@ function fakeOrca(options: {
   const task = { status: null as string | null, result: undefined as unknown };
   /** delivery-ack 之后未确认批次里不再有这条 Delivery。 */
   const acked = { value: false };
+  const extraWorktrees: { worktreeId: string; path: string; branch: string; comment: string | null }[] = [];
+  const headOf = (path: string): string | null => {
+    try {
+      return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: path, encoding: 'utf8' }).trim();
+    } catch {
+      return null;
+    }
+  };
   return {
     mutations,
     verdict,
     task,
+    worktrees: extraWorktrees,
     backend: {
       query: (input: ExecutionQuery) => {
         switch (input.operation) {
@@ -147,16 +165,27 @@ function fakeOrca(options: {
             return Promise.resolve({
               kind: 'accepted' as const,
               value: {
-                worktrees: [{
-                  worktreeId: 'worktree-canonical',
-                  path: options.canonicalWorktreePath,
-                  branch: 'main',
-                  head: null,
-                  displayName: null,
-                  comment: null,
-                  isMainWorktree: true,
-                }],
-                totalCount: 1,
+                worktrees: [
+                  {
+                    worktreeId: 'worktree-canonical',
+                    path: options.canonicalWorktreePath,
+                    branch: 'main',
+                    head: null,
+                    displayName: null,
+                    comment: null,
+                    isMainWorktree: true,
+                  },
+                  ...extraWorktrees.map((worktree) => ({
+                    worktreeId: worktree.worktreeId,
+                    path: worktree.path,
+                    branch: worktree.branch,
+                    head: headOf(worktree.path),
+                    displayName: null,
+                    comment: worktree.comment,
+                    isMainWorktree: false,
+                  })),
+                ],
+                totalCount: 1 + extraWorktrees.length,
                 truncated: false,
                 hostScope: { hostIds: ['host-local'], omittedHostIds: [] },
               },
@@ -192,6 +221,7 @@ function fakeOrca(options: {
                   messages: [
                     ...(options?.rejectedLifecycleFirst === true ? [{
                       messageId: 'message-finalizer-rejected',
+                      type: 'worker_done',
                       fromHandle: 'terminal-finalizer',
                       runId: null,
                       payload: JSON.stringify({ taskId: FINALIZER_TASK, dispatchId, outcome: 'succeeded',
@@ -200,6 +230,7 @@ function fakeOrca(options: {
                     }] : []),
                     {
                       messageId: 'message-finalizer',
+                      type: 'worker_done',
                       fromHandle: 'terminal-finalizer',
                       runId: null,
                       payload: JSON.stringify({ taskId: FINALIZER_TASK, dispatchId, outcome: 'succeeded' }),
@@ -281,6 +312,18 @@ function fakeOrca(options: {
           terminals.push({ handle: 'terminal-finalizer', title: input.title ?? '' });
           return accepted({ handle: 'terminal-finalizer' });
         }
+        if (input.operation === 'worktree-create') {
+          // 真实建立工作树：可写 Finalizer 的修复提交与集成必须是真实的 Git 事实。
+          const branch = input.name;
+          const path = join(options.worktreeRoot, branch);
+          execFileSync('git', ['worktree', 'add', '-q', '-b', branch, path, input.baseBranch ?? 'main'], {
+            cwd: options.canonicalWorktreePath,
+            encoding: 'utf8',
+          });
+          const worktreeId = `worktree-${branch}`;
+          extraWorktrees.push({ worktreeId, path, branch: `refs/heads/${branch}`, comment: input.comment ?? null });
+          return accepted({ worktreeId });
+        }
         if (input.operation === 'worker-start') {
           if (options?.workerStartUnknown === true) {
             // 传输失败：没有回执，只能靠事实对账。
@@ -319,15 +362,23 @@ afterEach(() => {
   }
 });
 
-/** 一份可核验的 fixture：项目配置、唯一的 active OpenSpec change 与干净的工作区。 */
+/**
+ * 一份可核验的 fixture：项目配置、唯一的 active OpenSpec change、干净的 canonical 工作区，
+ * 以及一个真实 bare `origin`（可写 Finalizer 的受控集成要真的 push 到它）。
+ */
 function prepareRepository(directory: string): { readonly repository: string; readonly head: string } {
   const repository = join(directory, 'repo');
+  const origin = join(directory, 'origin.git');
   mkdirSync(repository);
   const git = (...args: string[]): string =>
     execFileSync('git', args, { cwd: repository, encoding: 'utf8' }).trim();
+  execFileSync('git', ['init', '-q', '--bare', origin], { encoding: 'utf8' });
   git('init', '-q', '-b', 'main');
   git('config', 'user.name', 'Verification');
   git('config', 'user.email', 'verification@example.invalid');
+  git('remote', 'add', 'origin', origin);
+  // 复验会生成 ignored 测试产物：它必须真的落在 .gitignore 里，否则「干净工作区」核验会失败。
+  writeFileSync(join(repository, '.gitignore'), 'coverage/\n');
   writeFileSync(join(repository, 'README.md'), '# repo\n');
   writeFileSync(
     join(repository, 'orca-companion.json'),
@@ -363,12 +414,19 @@ function prepareRepository(directory: string): { readonly repository: string; re
   writeFileSync(join(change, 'specs', 'demo', 'spec.md'), '### Requirement: 甲\n');
   git('add', '.');
   git('commit', '-qm', 'fixture');
+  git('push', '-q', '-u', 'origin', 'main');
   return { repository, head: git('rev-parse', 'HEAD') };
 }
 
-function manifestFor(head: string, repository: string): ExecutionAuthorizationManifest {
+/** 可写 Finalizer 用显式 v5 `finalizerPolicy`：修复额度 1、权限模式 repair。 */
+function manifestFor(
+  head: string,
+  repository: string,
+  options?: { readonly repair?: boolean },
+): ExecutionAuthorizationManifest {
+  const repair = options?.repair === true;
   return {
-    manifestVersion: 4,
+    manifestVersion: repair ? 5 : 4,
     coordinationScopeId: SCOPE,
     planningCycleId: CYCLE,
     destinationRef: { kind: 'destination', id: 'dest-1', version: 1 },
@@ -394,6 +452,7 @@ function manifestFor(head: string, repository: string): ExecutionAuthorizationMa
     gitPolicy: { canonicalBranch: 'main', remotes: ['origin'], refs: ['refs/heads/main'], allowForcePush: false },
     dependencyPolicy: { allowDependencyChanges: false, registry: null },
     acceptedRisks: [],
+    ...(repair ? { finalizerPolicy: { mode: 'repair' as const, repairLimit: 1 } } : {}),
   };
 }
 
@@ -401,7 +460,7 @@ function manifestFor(head: string, repository: string): ExecutionAuthorizationMa
  * 现场：图、世代与 Run 已绑定，授权已批准，Scope 已进入执行协调态，且 wp-a 的三角色结果与集成
  * Operation 都已接受——Finalizer 门禁因此满足。
  */
-function prepareExecutionState(repository: string, head: string): void {
+function prepareExecutionState(repository: string, head: string, options?: { readonly repair?: boolean }): void {
   const opened = openCoordinationStore({
     databasePath: coordinationDatabasePath(join(repository, '.git')),
     clock: () => 1_000,
@@ -498,10 +557,10 @@ function prepareExecutionState(repository: string, head: string): void {
       writer,
       authorizationId: AUTH_ID,
       authorizationVersion: 1,
-      manifestVersion: 4,
+      manifestVersion: options?.repair === true ? 5 : 4,
       fingerprint: 'fingerprint-finalizer',
       approvalRef: 'approval-finalizer',
-      manifest: manifestFor(head, repository),
+      manifest: manifestFor(head, repository, options),
     });
     if (authorized.kind === 'rejected') {
       throw new Error(`无法记录授权：${authorized.message}`);
@@ -672,7 +731,7 @@ function fakeTracker(): IssueTrackerGateway {
 /**
  * 原生会话位于用户状态根；调用生产 reporter 写入 Companion 的精确启动报告。
  */
-function writeSessionStartReport(repository: string): void {
+function writeSessionStartReport(repository: string, workspace: string = canonicalPath(repository)): void {
   const reporters = join(repository, '.git', COMPANION_STATE_DIRECTORY, 'codex', 'reporters');
   const candidates = readdirSync(reporters).filter((name) => name.endsWith('.mjs'));
   if (candidates.length !== 1) throw new Error('Finalizer 的精确 reporter 不唯一');
@@ -684,14 +743,71 @@ function writeSessionStartReport(repository: string): void {
   const transcriptPath = join(sessionsDir, `rollout-2026-09-23T00-00-00-${sessionId}.jsonl`);
   writeFileSync(
     transcriptPath,
-    `${JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: canonicalPath(repository) } })}\n`,
+    `${JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: workspace } })}\n`,
     'utf8',
   );
   execFileSync(process.execPath, [reporterPath], {
-    cwd: canonicalPath(repository),
+    cwd: workspace,
     env: { ...process.env, CODEX_HOME: stateRoot },
-    input: JSON.stringify({ session_id: sessionId, transcript_path: transcriptPath, cwd: canonicalPath(repository) }),
+    input: JSON.stringify({ session_id: sessionId, transcript_path: transcriptPath, cwd: workspace }),
   });
+}
+
+/**
+ * 模拟可写 Finalizer 的真实工作：在独立 worktree 里提交授权范围内的修复，跑一次真实 node 复验并生成
+ * ignored 产物，然后返回 worker_done 正文里的结论 JSON（含最终 head/tree 与复验命令）。
+ *
+ * `broken` 制造三类真实失败：修复越出 Scope Envelope、报告旧 HEAD、复验命令失败。
+ */
+function performRepair(worktreePath: string, broken?: 'scope' | 'head' | 'commands'): Record<string, unknown> {
+  const git = (...args: string[]): string =>
+    execFileSync('git', args, { cwd: worktreePath, encoding: 'utf8' }).trim();
+  const baseline = git('rev-parse', 'HEAD');
+  const changedPaths: string[] = ['src/fix.ts'];
+  mkdirSync(join(worktreePath, 'src'), { recursive: true });
+  writeFileSync(join(worktreePath, 'src', 'fix.ts'), 'export const fixed = true;\n');
+  if (broken === 'scope') {
+    mkdirSync(join(worktreePath, 'docs'), { recursive: true });
+    writeFileSync(join(worktreePath, 'docs', 'out-of-scope.ts'), 'export const outside = true;\n');
+    changedPaths.push('docs/out-of-scope.ts');
+  }
+  git('add', '-A');
+  git('commit', '-qm', 'finalizer repair');
+  // 真实复验：node 检查修复内容并写入 ignored 的 coverage/ 产物。
+  const check = "const fs=require('node:fs');fs.mkdirSync('coverage',{recursive:true});"
+    + "const source=fs.readFileSync('src/fix.ts','utf8');"
+    + "fs.writeFileSync('coverage/finalizer-check.txt',source.trim());"
+    + "if(!source.includes('fixed'))process.exit(1);";
+  if (broken === 'commands') {
+    // 真正的失败复验：命令必须真的跑起来并非零退出，否则这条用例就没有测失败路径。
+    let status = 0;
+    try {
+      execFileSync(process.execPath, ['-e', 'process.exit(1)'], { cwd: worktreePath, encoding: 'utf8' });
+    } catch (error) {
+      status = typeof (error as { status?: unknown }).status === 'number' ? (error as { status: number }).status : 1;
+    }
+    if (status !== 1) throw new Error(`失败复验命令未以 1 退出：${String(status)}`);
+  } else {
+    execFileSync(process.execPath, ['-e', check], { cwd: worktreePath, encoding: 'utf8' });
+  }
+  const head = git('rev-parse', 'HEAD');
+  const tree = git('rev-parse', 'HEAD^{tree}');
+  return {
+    coveredWorkPackageIds: [WP],
+    verdict: { kind: 'deliverable', evidenceRefs: ['orca-result:validator'] },
+    verification: {
+      head: broken === 'head' ? baseline : head,
+      tree,
+      commands: [{
+        evidenceId: 'reverify-1',
+        kind: 'command',
+        coveredPaths: changedPaths,
+        command: broken === 'commands' ? 'node -e "process.exit(1)"' : `node -e "${check}"`,
+        summary: broken === 'commands' ? '真实复验失败' : '真实复验通过',
+        outcome: broken === 'commands' ? 'failed' : 'passed',
+      }],
+    },
+  };
 }
 
 async function openHarness(options?: {
@@ -704,11 +820,17 @@ async function openHarness(options?: {
   readonly rejectedLifecycleFirst?: boolean;
   /** 本机只读 Worker 能力；默认「可用」，与实际受限命令无关的用例因此不依赖主机沙箱。 */
   readonly readOnlyWorkerProbe?: ReadOnlyWorkerProbe;
+  /** 可写 Finalizer（v5 显式 repair policy）；派发时真实提交修复、复验并生成 ignored 产物。 */
+  readonly repair?: boolean;
+  /** 制造一次真实核验失败：越界修复、报告旧 HEAD、或复验命令失败。 */
+  readonly repairCase?: 'scope' | 'head' | 'commands';
 }): Promise<Harness> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-finalizer-'));
   const { repository, head } = prepareRepository(directory);
-  prepareExecutionState(repository, head);
-  const fake = fakeOrca({ canonicalWorktreePath: canonicalPath(repository),
+  prepareExecutionState(repository, head, { repair: options?.repair === true });
+  const worktreeRoot = join(directory, 'worktrees');
+  mkdirSync(worktreeRoot);
+  const fake = fakeOrca({ canonicalWorktreePath: canonicalPath(repository), worktreeRoot,
     workerStartUnknown: options?.workerStartUnknown,
     rejectedLifecycleFirst: options?.rejectedLifecycleFirst });
   const verdict = options?.verdict;
@@ -718,10 +840,14 @@ async function openHarness(options?: {
   fake.backend.mutate = (input, scope) => {
     // 副作用发生在 Finalizer 的 Session 启动之后：报告、结论与（可能注入的）工作区变化都在这里产生。
     if (input.operation === 'worker-start') {
+      // 可写 Finalizer 的真实工作树是它自己的修复提交场所；报告 cwd 必须与之精确一致。
+      const repairWorktree = fake.worktrees[0]?.path;
       if (reportSessionStart) {
-        writeSessionStartReport(repository);
+        writeSessionStartReport(repository, repairWorktree ?? canonicalPath(repository));
       }
-      if (verdict !== undefined) {
+      if (options?.repair === true && repairWorktree !== undefined) {
+        fake.verdict.value = JSON.stringify(performRepair(repairWorktree, options.repairCase));
+      } else if (verdict !== undefined) {
         fake.verdict.value = verdict;
       }
       drift?.(repository);
@@ -1127,4 +1253,147 @@ test('能力变化不改写已派发的 Finalizer：环境随后不可用也不�
   });
   expect(snapshot.kind === 'snapshot' ? snapshot.snapshot.finalizer.readOnlyProfile : null).toBe('enforced');
   expect(harness.fake.mutations.filter((mutation) => mutation.operation === 'worker-start')).toHaveLength(1);
+});
+
+/* -------------------------------------------------------------------------- */
+/* IP-08：可写 Finalizer（v5 显式 repair policy）                                */
+/* -------------------------------------------------------------------------- */
+
+/** 修复派发建立的真实 worktree；未派发时为 undefined。 */
+function repairWorktree(harness: Harness): string | undefined {
+  return harness.fake.worktrees[0]?.path;
+}
+
+function gitOut(directory: string, ...args: string[]): string {
+  return execFileSync('git', args, { cwd: directory, encoding: 'utf8' }).trim();
+}
+
+/** 本 Scope 的项目级 Finalizer 预算键（与 store 的 `admit-finalizer` 同源）。 */
+const FINALIZER_BUDGET_KEY = `finalizer:${GRAPH_ID}:${String(GENERATION)}`;
+
+function finalizerBudgetConsumed(harness: Harness): number | null {
+  const store = readStore(harness);
+  try {
+    const read = store.query({ kind: 'budget-counters', coordinationScopeId: SCOPE });
+    return read.kind === 'budget-counters'
+      ? (read.counters.find((entry) => entry.budgetKey === FINALIZER_BUDGET_KEY)?.consumed ?? 0)
+      : null;
+  } finally {
+    store.close();
+  }
+}
+
+/** 派发的同步绑定是否已落盘：`onTaskCreated`/`onDispatchStarted` 先写物化绑定再 settle 意图。 */
+function finalizerBound(harness: Harness): boolean {
+  const store = readStore(harness);
+  try {
+    const read = store.query({ kind: 'snapshot', coordinationScopeId: SCOPE });
+    return read.kind === 'snapshot'
+      && read.snapshot.materializationBindings.some((entry) => entry.role === 'finalizer');
+  } finally {
+    store.close();
+  }
+}
+
+test('v5 修复授权：可写 Finalizer 提交修复 → 受控集成并推送 → 持久化最终 head/tree 与一次预算', { timeout: TEST_TIMEOUT_MS }, async () => {
+  // 只读探针此时不可用：可写 Finalizer 的准入不依赖只读能力，首派发必须照常成功。
+  const harness = await openHarness({ repair: true, readOnlyWorkerProbe: fixedReadOnlyWorkerProbe(READ_ONLY_WORKER_UNAVAILABLE) });
+  await sendMessage(harness, '开始收尾');
+  await waitFor(() => expect(workerStarts(harness)).toBe(1));
+  const worktree = repairWorktree(harness);
+  expect(worktree).toBeDefined();
+
+  await sendMessage(harness, '继续');
+  const snapshot = await waitForSnapshot(harness, (loaded) => {
+    expect(loaded.kind === 'snapshot' ? loaded.snapshot.finalizer.verdict?.kind : null).toBe('deliverable');
+  });
+  if (snapshot.kind !== 'snapshot') {
+    throw new Error('快照应当可读');
+  }
+  // 可写 Finalizer 不需要只读探测：交付投影明确是 not_required。
+  expect(snapshot.snapshot.finalizer.readOnlyProfile).toBe('not_required');
+
+  // 真实集成：canonical 停在修复后的最终提交（普通 ff 集成），并已推送到 bare origin。
+  const canonical = canonicalPath(harness.repository);
+  const canonicalHead = gitOut(canonical, 'rev-parse', 'HEAD');
+  const canonicalTree = gitOut(canonical, 'rev-parse', 'HEAD^{tree}');
+  const originHead = gitOut(join(harness.directory, 'origin.git'), 'rev-parse', 'refs/heads/main');
+  expect(originHead).toBe(canonicalHead);
+  expect(worktree).toBeDefined();
+  expect(canonicalTree).toBe(gitOut(worktree!, 'rev-parse', 'HEAD^{tree}'));
+  expect(gitOut(canonical, 'status', '--porcelain')).toBe('');
+
+  const store = readStore(harness);
+  try {
+    const read = store.query({ kind: 'snapshot', coordinationScopeId: SCOPE });
+    if (read.kind !== 'snapshot') throw new Error('快照应当可读');
+    const verdict = read.snapshot.deliveryVerdicts.find((entry) => entry.verdict.kind === 'deliverable');
+    // 交付版本绑定最终 HEAD/tree，不沿用修复前证据。
+    expect(verdict?.verifiedHead).toBe(canonicalHead);
+    expect(verdict?.verifiedTree).toBe(canonicalTree);
+  } finally {
+    store.close();
+  }
+  // 项目级 Finalizer 预算只扣一次。
+  expect(finalizerBudgetConsumed(harness)).toBe(1);
+  // 同一个 Turn 只派发一次：结论读回不产生第二个 Task。
+  expect(harness.fake.mutations.filter((mutation) => mutation.operation === 'task-create')).toHaveLength(1);
+});
+
+test.each(['scope', 'head', 'commands'] as const)('v5 修复核验失败（%s）：报 finalizer_repair_unverified，不集成、不呈现 deliverable', { timeout: TEST_TIMEOUT_MS }, async (repairCase) => {
+  const harness = await openHarness({ repair: true, repairCase });
+  await sendMessage(harness, '开始收尾');
+  await waitFor(() => expect(workerStarts(harness)).toBe(1));
+  await sendMessage(harness, '继续');
+
+  const snapshot = await waitForSnapshot(harness, (loaded) => {
+    expect(
+      loaded.kind === 'snapshot' ? loaded.snapshot.blockers.map((blocker) => blocker.code) : [],
+    ).toContain('finalizer_repair_unverified');
+  });
+  if (snapshot.kind !== 'snapshot') {
+    throw new Error('快照应当可读');
+  }
+  expect(snapshot.snapshot.finalizer.verdict).toBeNull();
+  // 核验未通过就不集成：canonical 与 origin 都仍停在基线版本。
+  const canonicalHead = gitOut(canonicalPath(harness.repository), 'rev-parse', 'HEAD');
+  expect(gitOut(join(harness.directory, 'origin.git'), 'rev-parse', 'refs/heads/main')).toBe(canonicalHead);
+});
+
+test('重启沿原准入与 Task 复用：不重复 Task/Worker，预算沿用一次', { timeout: TEST_TIMEOUT_MS }, async () => {
+  const harness = await openHarness({ repair: true });
+  await sendMessage(harness, '开始收尾');
+  await waitFor(() => expect(workerStarts(harness)).toBe(1));
+  // 等同步绑定落盘再重启：真实 worker-start 已有副作用，但 onTaskCreated/onDispatchStarted 与
+  // segment 可能还没写完；过早 dispose 会让重启读不到原 Task 身份。
+  await waitFor(() => expect(finalizerBound(harness)).toBe(true));
+  harness.dispose();
+
+  const restarted = await createForegroundPlanningHost({
+    repositoryPath: harness.repository,
+    env: credentialFixtureEnvironment(harness.directory),
+    clock: () => 62_000,
+    heartbeatIntervalMs: 1_000,
+    leaseTtlMs: 60_000,
+    sessionBindingWindowMs: 200,
+    orcaProbe: fakeProbe(),
+    trackerFactory: fakeTracker,
+    executionBackend: harness.fake.backend,
+    loadIntegration: () => Promise.resolve({ ChatOpenAICompletions: CapableChatModel }),
+    readOnlyWorkerProbe: fixedReadOnlyWorkerProbe(READ_ONLY_WORKER_UNAVAILABLE),
+  });
+  try {
+    expect((await restarted.ports.scopeSetup.resolveHome()).kind).toBe('restore');
+    const restored: Harness = { ...harness, host: restarted };
+    await sendMessage(restored, '沿原 Task 继续');
+    await waitForSnapshot(restored, (loaded) => {
+      expect(loaded.kind === 'snapshot' ? loaded.snapshot.finalizer.verdict?.kind : null).toBe('deliverable');
+    });
+    // 原准入与物化绑定被复用：没有第二个 Task，没有第二次 Worker 启动。
+    expect(harness.fake.mutations.filter((mutation) => mutation.operation === 'task-create')).toHaveLength(1);
+    expect(workerStarts(restored)).toBe(1);
+  } finally {
+    restarted.close();
+  }
+  expect(finalizerBudgetConsumed(harness)).toBe(1);
 });

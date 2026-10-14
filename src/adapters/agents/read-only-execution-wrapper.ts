@@ -177,6 +177,7 @@ const HARNESS_EXECUTABLES: Readonly<Record<string, string>> = {
   'command-code': 'command-code',
   'qwen-code': 'qwen',
   antigravity: 'agy',
+  kilo: 'kilo', kimi: 'kimi', hermes: 'hermes', cline: 'cline', muse: 'muse', cursor: 'cursor-agent',
 };
 
 /** 诊断行必须短且有界：子进程输出可能整段回显命令与路径。 */

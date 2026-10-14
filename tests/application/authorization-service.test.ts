@@ -330,6 +330,7 @@ function reauthorizedProfiles(model: string): readonly WorkerProfileRef[] {
     role,
     harness: 'codex',
     modelSelection: executionModelConfiguration({ model }),
+    supportLevel: 'complete', qualificationRef: 'fixture:qualification',
   }));
 }
 
@@ -344,6 +345,7 @@ function reauthorize(overrides: Partial<Parameters<typeof recordModelReauthoriza
       profileRef: { kind: 'worker-profile', id: 'p-recovery-next' },
       harness: 'codex',
       modelSelection: executionModelConfiguration({ model: 'next-model' }),
+      supportLevel: 'complete', qualificationRef: 'fixture:qualification',
     },
     graphVersion: candidate.version,
     authorizationId: 'auth-reapproved',
@@ -541,6 +543,20 @@ test('批准落盘前地图或计划已变化时拒绝旧 Manifest', () => {
 // 授权边界
 // ---------------------------------------------------------------------------
 
+test('v4 更换模型必须带 v5 资格，原绑定不变时额度调整保留 v4', () => {
+  const first = proposeAndApprove('auth-1', manifestFor(candidate, limitsWithRecoveries(2)));
+  enterExecution(first);
+  const unqualified = reauthorize({ workerProfiles: first.manifest.workerProfiles.map(profile => ({
+    ...profile, modelSelection: { ...profile.modelSelection, model: 'new-model' },
+  })), recoveryUtilityProfile: first.manifest.recoveryUtilityProfile });
+  expect(unqualified.kind).toBe('rejected');
+  expect(authorizations()).toHaveLength(1);
+  const quota = reauthorize({ workerProfiles: first.manifest.workerProfiles,
+    recoveryUtilityProfile: first.manifest.recoveryUtilityProfile, maxActiveWorkPackages: 4 });
+  expect(quota.kind).toBe('recorded');
+  if (quota.kind === 'recorded') expect(quota.authorization.manifestVersion).toBe(4);
+});
+
 test('模型限定重新授权只换模型绑定与 Graph head，其余字段与预算原样继承', () => {
   const first = proposeAndApprove('auth-1', manifestFor(candidate, limitsWithRecoveries(2)));
   enterExecution(first);
@@ -560,7 +576,7 @@ test('模型限定重新授权只换模型绑定与 Graph head，其余字段与
   expect(next.manifest.workerProfiles.find((profile) => profile.role === 'validator')?.modelSelection.model).toBe(
     'next-model',
   );
-  expect(next.manifest.recoveryUtilityProfile.modelSelection.model).toBe('next-model');
+  expect(next.manifest.recoveryUtilityProfile?.modelSelection.model).toBe('next-model');
   // 旧授权仍在历史里：既有 Task 的运行依据不因新授权而改变。
   expect(authorizations().map((record) => record.authorizationId)).toEqual(['auth-1', 'auth-reapproved']);
 });

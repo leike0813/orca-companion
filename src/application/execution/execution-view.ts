@@ -221,6 +221,8 @@ export type FinalizerVerdictView = {
   readonly refs: readonly string[];
   readonly sessionBindingRef: string;
   readonly recordedAt: number;
+  readonly verifiedHead?: string | null;
+  readonly verifiedTree?: string | null;
 };
 
 /**
@@ -233,7 +235,7 @@ export type FinalizerView = {
   readonly gate: { readonly ready: boolean; readonly blockers: readonly string[] };
   readonly coversWorkPackageIds: readonly string[];
   readonly worktreePath: string | null;
-  readonly readOnlyProfile: 'enforced' | 'unenforceable' | 'unverified';
+  readonly readOnlyProfile: 'enforced' | 'unenforceable' | 'unverified' | 'not_required';
   readonly integrationFrozen: 'frozen' | 'unknown';
   readonly workspace: {
     readonly before: FinalizerWorkspaceFacts;
@@ -283,7 +285,8 @@ export type WorkerObservation = {
 };
 
 export type FinalizerObservationFacts = {
-  readonly readOnlyProfile: 'enforced' | 'unenforceable' | 'unverified';
+  readonly verifiedVersionMatches?: boolean;
+  readonly readOnlyProfile: 'enforced' | 'unenforceable' | 'unverified' | 'not_required';
   readonly integrationFrozen: 'frozen' | 'unknown';
   readonly worktreePath: string | null;
   readonly workspace: {
@@ -1042,10 +1045,11 @@ export function deriveExecutionFacts(input: DeriveExecutionFactsInput): DerivedE
   const observation = input.observations.finalizer;
   const workspace = observation?.workspace ?? null;
   const gateBlockers = dispatch.kind === 'not_ready' ? [...dispatch.blockers] : [];
+  if (observation?.verifiedVersionMatches === false) gateBlockers.push('finalizer-version-changed');
   if (observation !== null && observation.readOnlyProfile === 'unenforceable') {
     gateBlockers.push('finalizer-read-only-not-enforceable');
   }
-  if (workspace !== null && workspaceChanged(workspace)) {
+  if (workspace !== null && observation?.readOnlyProfile !== 'not_required' && workspaceChanged(workspace)) {
     gateBlockers.push('finalizer-workspace-changed');
   }
 
@@ -1086,6 +1090,8 @@ export function deriveExecutionFacts(input: DeriveExecutionFactsInput): DerivedE
                   : [...verdict.verdict.blockerRefs],
               sessionBindingRef: verdict.sessionBindingRef,
               recordedAt: verdict.recordedAt,
+              verifiedHead: verdict.verifiedHead,
+              verifiedTree: verdict.verifiedTree,
             },
     },
     executionReconciliation: {

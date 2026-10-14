@@ -19,6 +19,7 @@ import {
   candidateLabel,
   dedupeRoleCandidates,
   effortValues,
+  harnessChoices,
   modelRoleAdmission,
   modelRoles,
   modelSwitchAdmission,
@@ -2520,9 +2521,14 @@ function TuiAppContent(props: TuiAppProps) {
       return;
     }
     if (target.role !== 'coordinator') {
-      // Worker：候选来自该 harness 的原生目录，因此先确定 harness，再显式查询。手填入口只是同一菜单
-      // 的一个焦点，不另开表单，也就不会出现连接、凭据或 options 字段。
-      const harness = target.current?.harness ?? WORKER_HARNESS_IDS[0];
+      // Worker：候选来自该 harness 的原生目录，因此先确定 harness，再显式查询。可切换的项由宿主
+      // 投影的可用等级决定；当前绑定只在它仍可用时沿用，否则落到第一个可用项（缺省回落到注册顺序）。
+      // 手填入口只是同一菜单的一个焦点，不另开表单，也就不会出现连接、凭据或 options 字段。
+      const choosable = harnessChoices(target);
+      const bound = target.current?.harness ?? null;
+      const harness = bound !== null && choosable.includes(bound)
+        ? bound
+        : choosable[0] ?? bound ?? WORKER_HARNESS_IDS[0];
       dispatch({ kind: 'model-settings-notice', notice: null });
       dispatch({
         kind: 'model-role-menu',
@@ -2800,6 +2806,48 @@ function TuiAppContent(props: TuiAppProps) {
     openModelOverlay('authorization-review');
   };
   /**
+   * 关闭 Recovery Utility（Ctrl+D，只在编辑该角色时）。
+   *
+   * 这是一次 CAS 保存：只移除该角色的当前 profile 引用，保留已保存 profile 与所有其他字段，也不改
+   * 已批准的 Manifest 或当前 Session——授权替换仍由用户显式重新批准。端口未接通时给明确提示。
+   */
+  const disableRecoveryUtilityForRole = async () => {
+    const port = modelSettingsPort;
+    if (port?.disableRecoveryUtility === undefined) {
+      dispatch({ kind: 'model-settings-notice', notice: '! model_settings_unavailable: 关闭 Recovery Utility 的端口尚未接通' });
+      return;
+    }
+    const revision = modelCatalog.configurationRevision;
+    if (revision === undefined) {
+      dispatch({ kind: 'model-settings-notice', notice: '! config_unreadable: 没有可用的配置 revision' });
+      return;
+    }
+    // 与角色应用共用同一条 mutation lane：关闭与保存/应用不能并发写同一份配置。
+    if (modelApplyInFlight.current) {
+      dispatch({ kind: 'model-settings-notice', notice: '! apply_in_flight: 原应用仍在途，请等待结果' });
+      return;
+    }
+    const invocation = modelInvocation.current;
+    let saved;
+    modelApplyInFlight.current = true;
+    try {
+      saved = await port.disableRecoveryUtility({ expectedRevision: revision });
+    } catch {
+      modelApplyInFlight.current = false;
+      if (invocation !== modelInvocation.current) return;
+      dispatch({ kind: 'model-settings-notice', notice: '! save_failed: 关闭 Recovery Utility 未完成，原设置保留' });
+      return;
+    }
+    modelApplyInFlight.current = false;
+    if (invocation !== modelInvocation.current) return;
+    if (saved.kind !== 'saved') {
+      dispatch({ kind: 'model-settings-notice', notice: '! ' + saved.code + ': ' + saved.message });
+      return;
+    }
+    void reloadModelCatalog();
+    dispatch({ kind: 'model-settings-notice', notice: 'Recovery Utility 已关闭；已批准的授权与当前 Session 未改动' });
+  };
+  /**
    * 角色候选菜单的键位。
    *
    * 三块区域按定稿顺序循环：候选列表 → 独立 effort → 动作。只有当所选模型自己带可信能力来源时
@@ -2812,9 +2860,16 @@ function TuiAppContent(props: TuiAppProps) {
     const selection=current.dialogSelections['model-role-menu']??{query:emptyDraft(),selectedId:null};
     const choices=dialogChoicesFor('model-role-menu',selection.query.text);
     const candidate=()=>role===null?null:selectedRoleCandidate(role,menu.selectedCandidateRef);
+    // Recovery Utility 的直接关闭：只在编辑该角色时生效，且不改已批准授权与当前 Session。
+    if(key.ctrl&&input==='d'&&menu.role==='recovery_utility'){
+      void disableRecoveryUtilityForRole();
+      return;
+    }
     if(menu.focus==='harness'&&(key.leftArrow||key.rightArrow)){
-      const index=WORKER_HARNESS_IDS.indexOf(menu.harness??'codex');
-      const harness=WORKER_HARNESS_IDS[(index+(key.rightArrow?1:WORKER_HARNESS_IDS.length-1))%WORKER_HARNESS_IDS.length]!;
+      const choosable=role===null?WORKER_HARNESS_IDS:harnessChoices(role);
+      if(choosable.length===0)return;
+      const index=Math.max(0,choosable.indexOf(menu.harness??choosable[0]!));
+      const harness=choosable[(index+(key.rightArrow?1:choosable.length-1))%choosable.length]!;
       dispatch({kind:'dialog-selection',overlay:'model-role-menu',query:emptyDraft(),selectedId:null});
       dispatch({kind:'model-role-menu',menu:{...menu,harness,selectedCandidateRef:null,effort:null,action:0}});
       void queryWorkerModelsFor(menu.role,harness);

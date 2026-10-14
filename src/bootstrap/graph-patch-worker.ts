@@ -5,6 +5,8 @@ import { createHash } from 'node:crypto';
 import type { HarnessSessionReport } from '../application/ports/worker-harness.js';
 import type { HarnessSessionFacts } from '../adapters/agents/session-binding.js';
 import { resolveWorkerHarness } from '../application/ports/worker-harness.js';
+import { workerHarnessSupport } from '../adapters/agents/worker-harness-qualifications.js';
+import { workerSupportLevelAllows } from '../domain/worker-harness-support.js';
 import {
   bindHarnessSessionFromStartReport,
   installHarnessSessionReporter,
@@ -101,7 +103,7 @@ export async function runGraphPatchPlannerWorker(input: GraphPatchWorkerInput): 
   });
   if (authorization.kind !== 'authorization' || authorization.authorization === null ||
       !authorization.authorization.manifest.permissions.planner ||
-      !authorization.authorization.manifest.workerProfiles.some((profile) => profile.role === 'planner' && workerHarnessRegistry.has(profile.harness))) {
+      !authorization.authorization.manifest.workerProfiles.some((profile) => profile.role === 'planner' && profile.harness === input.harness && workerHarnessRegistry.has(profile.harness))) {
     return { kind: 'rejected', code: 'planner_not_authorized', message: '当前授权未批准已注册 harness 的 Planner' };
   }
   // 运行依据来自该次派发钉住的 Planner profile harness；未注册即结构化拒绝。
@@ -109,6 +111,13 @@ export async function runGraphPatchPlannerWorker(input: GraphPatchWorkerInput): 
   const registered = resolveWorkerHarness(workerHarnessRegistry, harness);
   if (registered.kind === 'rejected') {
     return { kind: 'rejected', code: registered.code, message: registered.message };
+  }
+  const manifest = authorization.authorization.manifest;
+  const profile = manifest.workerProfiles.find((entry) => entry.role === 'planner' && entry.harness === harness)!;
+  if (manifest.manifestVersion === 5 &&
+      (!workerSupportLevelAllows(profile.supportLevel ?? 'unavailable', 'enhanced') ||
+       !workerSupportLevelAllows(workerHarnessSupport(harness).level, 'enhanced'))) {
+    return { kind: 'rejected', code: 'worker_support_insufficient', message: '只读 Graph Patch Planner 需要 enhanced 能力及授权' };
   }
   const operationId = (step: string): OperationId => `${request.operationId}:${step}` as OperationId;
   const workerTaskId = `${request.patchId}:planner-task` as WorkerTaskId;
@@ -143,6 +152,11 @@ export async function runGraphPatchPlannerWorker(input: GraphPatchWorkerInput): 
   }
   if (prior.intent !== null && (prior.intent.state !== 'settled' || prior.intent.outcomeClass !== 'accepted')) {
     return { kind: 'unknown', reason: `Planner 派发 ${operationId('task')} 尚未确定，须按原身份对账` };
+  }
+  if (prior.intent === null) {
+    const readOnly = registered.harness.capabilities?.readOnly;
+    if (readOnly === undefined || (await readOnly.probe(input.modelSelection)).kind !== 'available')
+      return { kind: 'rejected', code: 'worker_read_only_unavailable', message: 'Graph Patch 草案任务需要当前只读能力' };
   }
   const workers = await input.backend.query({ operation: 'worker-list', runId: execution.runId });
   if (workers.kind !== 'accepted') {

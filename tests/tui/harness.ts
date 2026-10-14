@@ -616,6 +616,12 @@ function createFakeModelSettings(options: FakePortsOptions, calls: PortCall[]): 
     ...(options.modelSettings?.library === undefined ? {} : { library: options.modelSettings.library }),
     ...(options.modelSettings?.catalog === undefined ? {} : { catalog: options.modelSettings.catalog }),
     ...(options.modelSettings?.initializeProject === undefined ? {} : { initializeProject: options.modelSettings.initializeProject }),
+    ...(options.modelSettings?.disableRecoveryUtility === undefined ? {} : {
+      disableRecoveryUtility: (input: { readonly expectedRevision: number }) => {
+        calls.push({ name: 'modelSettings.disableRecoveryUtility', detail: input });
+        return Promise.resolve(options.modelSettings!.disableRecoveryUtility!(input));
+      },
+    }),
   };
 }
 

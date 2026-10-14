@@ -1,0 +1,98 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-14T10:55:18.402Z",
+  "finishedAt": "2026-10-14T10:57:05.259Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-2e86449e-4cac-4469-a2fd-add4092c8b28",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-uUxIxc",
+  "runId": "run_7adf4c5a4e47",
+  "coordinatorTerminalHandle": "term_86dadd91-1d4f-473f-babc-3b403c996dc9",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "command-code",
+      "level": "basic",
+      "modelSelection": {
+        "model": "minimax-cn/MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "ip04:command-code:planner",
+          "taskId": "task_7495176d83b4",
+          "dispatchId": "ctx_c80fa59e86d8",
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": "/var/tmp/orca-harness-acceptance-uUxIxc/state/command-code/dbe76151b35e5186ddd7",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-uUxIxc/state/command-code/dbe76151b35e5186ddd7/session-start.mjs",
+          "coverage": null,
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_0eb7967b-b22e-4c6b-b72c-f72cc428830f",
+          "modelEvidence": null,
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "launchId": "ip04:command-code:implementation",
+          "taskId": "task_535367f9289f",
+          "dispatchId": "ctx_c694fdb2a7fd",
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": "/var/tmp/orca-harness-acceptance-uUxIxc/state/command-code/a7a6ed17024981668d09",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-uUxIxc/state/command-code/a7a6ed17024981668d09/session-start.mjs",
+          "coverage": null,
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_748df426-6c2b-42ad-af5f-2cc83017f05d",
+          "modelEvidence": null,
+          "blocker": null
+        }
+      ],
+      "resume": null,
+      "validatorContinuation": null,
+      "recovery": null,
+      "blockers": [],
+      "qualification": {
+        "harness": "command-code",
+        "evidenceRef": "report:ip04/companion-harness-matrix-2e86449e-4cac-4469-a2fd-add4092c8b28#command-code",
+        "facts": [
+          {
+            "capability": "planner_result",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-2e86449e-4cac-4469-a2fd-add4092c8b28#command-code/roles.planner",
+            "diagnostic": null
+          },
+          {
+            "capability": "implementation_result",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-2e86449e-4cac-4469-a2fd-add4092c8b28#command-code/roles.implementation",
+            "diagnostic": null
+          },
+          {
+            "capability": "task_input",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-2e86449e-4cac-4469-a2fd-add4092c8b28#command-code/roles",
+            "diagnostic": null
+          },
+          {
+            "capability": "orca_binding",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-2e86449e-4cac-4469-a2fd-add4092c8b28#command-code/roles.dispatchId",
+            "diagnostic": null
+          }
+        ]
+      },
+      "derivedLevel": "basic"
+    }
+  ]
+}

@@ -635,6 +635,32 @@ test('Session Segment 在重启后仍可读取，且不带恢复副作用', () =
   });
 });
 
+test('基础 Orca 绑定核验物化身份，重启不伪造原生 Session', () => {
+  createScope(); activateSession(); acquireExecutionLease();
+  expect(recordInitialGraph().kind).toBe('committed'); recordAuthorization(GRAPH_ID, true);
+  const materialized = submit(expectedRevision => ({ kind: 'record-materialization-binding', coordinationScopeId: SCOPE,
+    expectedRevision, writer: writer(), workPackageId: 'wp-1' as WorkPackageId, role: 'implementation',
+    workerTaskId: 'task-basic' as WorkerTaskId, dispatchId: 'logical-basic' as DispatchId, attemptId: 'attempt-basic',
+    worktreeId: 'worktree-basic', specBinding: SPEC_BINDING, specificationUnitPath: null, orcaTaskId: 'orca-basic',
+    launchId: 'launch-basic', creationOperationId: 'create-basic' as OperationId, ...AUTHORIZATION_PIN }));
+  if (materialized.kind !== 'committed') throw new Error(materialized.message);
+  const command = { kind: 'record-worker-execution-binding' as const, coordinationScopeId: SCOPE, writer: writer(),
+    segmentId: 'segment-basic' as SessionSegmentId, workPackageId: 'wp-1' as WorkPackageId, role: 'implementation' as const,
+    workerTaskId: 'task-basic' as WorkerTaskId, dispatchId: 'physical-basic' as DispatchId, attemptId: 'attempt-basic',
+    orcaTaskId: 'orca-basic', terminalHandle: 'terminal-basic' };
+  expect(submit(expectedRevision => ({ ...command, expectedRevision, orcaTaskId: 'other-task' })).kind).toBe('rejected');
+  expect(submit(expectedRevision => ({ ...command, expectedRevision })).kind).toBe('committed');
+  expect(submit(expectedRevision => ({ ...command, expectedRevision })).kind).toBe('committed');
+  expect(submit(expectedRevision => ({ ...command, expectedRevision, terminalHandle: 'other-terminal' })).kind).toBe('rejected');
+  store.close();
+  const reopened = openCoordinationStore({ databasePath: join(directory, 'coordination.sqlite'), clock });
+  if (reopened.kind !== 'opened') throw new Error(reopened.message);
+  store = reopened.store;
+  const read = store.query({ kind: 'session-segments', coordinationScopeId: SCOPE });
+  expect(read).toMatchObject({ kind: 'session-segments', segments: [{ dispatchId: 'physical-basic', sessionBindingId: '',
+    lastTranscriptRef: null, transcriptReferenceable: false, executionBinding: { kind: 'orca_worker', orcaTaskId: 'orca-basic', terminalHandle: 'terminal-basic' } }] });
+});
+
 test('Materialization Binding 按角色与 Attempt 读回完整派发身份，且不复制 worktree 路径或 Task 状态', () => {
   createScope();
   activateSession();
@@ -3535,7 +3561,12 @@ function implementationManifest(graphId: GraphId = GRAPH_ID): ExecutionAuthoriza
   };
 }
 
-function recordAuthorization(graphId: GraphId = GRAPH_ID): void {
+function recordAuthorization(graphId: GraphId = GRAPH_ID, basic = false): void {
+  const manifest = implementationManifest(graphId);
+  if (basic) {
+    Object.assign(manifest, { manifestVersion: 5, workerProfiles: manifest.workerProfiles.map(profile => profile.role === 'implementation'
+      ? { ...profile, supportLevel: 'basic' } : profile) });
+  }
   const recorded = submit((expectedRevision) => ({
     kind: 'record-authorization',
     coordinationScopeId: SCOPE,
@@ -3543,10 +3574,10 @@ function recordAuthorization(graphId: GraphId = GRAPH_ID): void {
     writer: writer(),
     authorizationId: 'auth-1',
     authorizationVersion: 1,
-    manifestVersion: 4,
+    manifestVersion: manifest.manifestVersion,
     fingerprint: 'fingerprint-1',
     approvalRef: 'approval-1',
-    manifest: implementationManifest(graphId),
+    manifest,
   }));
   if (recorded.kind !== 'committed') {
     throw new Error('无法记录测试授权: ' + recorded.message);
@@ -3905,4 +3936,143 @@ test('migration v19 → v20 补齐 Session 原因、Delivery 结论与修复步�
   } finally {
     migrated.store.close();
   }
+});
+
+/* -------------------------------------------------------------------------- */
+/* schema 22：Finalizer 修复准入与 Delivery Verdict 的只读复核事实              */
+/* -------------------------------------------------------------------------- */
+
+const BASELINE_HEAD = '1234567890abcdef1234567890abcdef12345678';
+const OTHER_HEAD = 'fedcba0987654321fedcba0987654321fedcba09';
+const VERIFIED_TREE = 'a'.repeat(64);
+
+/** 显式 v5 且授予 Finalizer 修复策略的授权：没有它就没有任何可证明的 Finalizer 修复依据。 */
+function finalizerRepairManifest(repairLimit: number): ExecutionAuthorizationManifest {
+  return {
+    ...implementationManifest(GRAPH_ID),
+    manifestVersion: 5,
+    permissions: {
+      planner: true,
+      implementation: true,
+      validator: true,
+      finalizer: true,
+      gitIntegration: true,
+      dependencyChanges: false,
+    },
+    finalizerPolicy: { mode: 'repair', repairLimit },
+  };
+}
+
+function recordAuthorizationWith(version: number, authorizationId: string, manifest: ExecutionAuthorizationManifest): void {
+  const recorded = submit((expectedRevision) => ({
+    kind: 'record-authorization',
+    coordinationScopeId: SCOPE,
+    expectedRevision,
+    writer: writer(),
+    authorizationId,
+    authorizationVersion: version,
+    manifestVersion: manifest.manifestVersion,
+    fingerprint: `fingerprint-${authorizationId}`,
+    approvalRef: `approval-${authorizationId}`,
+    manifest,
+  }));
+  if (recorded.kind !== 'committed') {
+    throw new Error(`无法记录测试授权 ${authorizationId}: ${recorded.message}`);
+  }
+}
+
+test('Finalizer 准入按 WorkerTask 幂等并扣减该代际额度，重启后按原身份精确读回', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+  expect(recordInitialGraph().kind).toBe('committed');
+  recordAuthorization(GRAPH_ID);
+  recordAuthorizationWith(2, 'auth-2', finalizerRepairManifest(1));
+
+  const admit = (overrides: Record<string, unknown> = {}): CoordinationCommandResult =>
+    submit((expectedRevision) => ({
+      kind: 'admit-finalizer',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(SESSION_A),
+      workerTaskId: 'finalizer-task-1' as WorkerTaskId,
+      graphId: GRAPH_ID,
+      graphGeneration: 1,
+      authorizationId: 'auth-2',
+      baselineHead: BASELINE_HEAD,
+      ...overrides,
+    }));
+  const consumed = (): number => {
+    const read = store.query({ kind: 'budget-counters', coordinationScopeId: SCOPE, approvedLimitRef: 'auth-2' });
+    return read.kind === 'budget-counters'
+      ? read.counters.find((counter) => counter.budgetKey === 'finalizer:g1:1')?.consumed ?? 0
+      : -1;
+  };
+
+  // 没有 finalizerPolicy 的授权不能证明修复依据，因此即便它是当时的生效授权也不予准入。
+  expect(admit({ authorizationId: 'auth-1' }).kind).toBe('rejected');
+  expect(admit({ graphGeneration: 2 }).kind).toBe('rejected');
+  expect(admit({ baselineHead: 'head-1' }).kind).toBe('rejected');
+  expect(consumed()).toBe(0);
+
+  expect(admit().kind).toBe('committed');
+  expect(consumed()).toBe(1);
+  // 同一组依据重放是幂等空操作；换基线或换授权绝不覆盖既有准入。
+  expect(admit().kind).toBe('committed');
+  expect(admit({ baselineHead: OTHER_HEAD }).kind).toBe('rejected');
+  expect(consumed()).toBe(1);
+  // 额度在准入前核验：代际额度用尽后不再为另一个 Finalizer Task 开门。
+  expect(admit({ workerTaskId: 'finalizer-task-2' }).kind).toBe('rejected');
+  expect(consumed()).toBe(1);
+
+  recordAuthorizationWith(3, 'auth-3', finalizerRepairManifest(1));
+  expect(admit().kind).toBe('committed');
+  expect(admit({ workerTaskId: 'finalizer-task-2', authorizationId: 'auth-3' }).kind).toBe('rejected');
+  expect(consumed()).toBe(1);
+
+  store.close();
+  const reopened = openCoordinationStore({ databasePath: join(directory, 'coordination.sqlite'), clock });
+  if (reopened.kind !== 'opened') throw new Error(reopened.message);
+  store = reopened.store;
+  expect(store.query({ kind: 'finalizer-admission', coordinationScopeId: SCOPE, workerTaskId: 'finalizer-task-1' as WorkerTaskId }))
+    .toMatchObject({
+      kind: 'finalizer-admission',
+      admission: { graphId: GRAPH_ID, graphGeneration: 1, authorizationId: 'auth-2', baselineHead: BASELINE_HEAD },
+    });
+  expect(store.query({ kind: 'finalizer-admission', coordinationScopeId: SCOPE, workerTaskId: 'finalizer-task-2' as WorkerTaskId }))
+    .toEqual({ kind: 'finalizer-admission', admission: null });
+});
+
+test('Delivery Verdict 的最终复验版本成对持久化，未给出的历史语义保持未证明', () => {
+  createScope();
+  activateSession();
+  acquireExecutionLease();
+
+  const record = (verdictId: string, verification: Record<string, string> = {}): CoordinationCommandResult =>
+    submit((expectedRevision) => ({
+      kind: 'record-delivery-verdict',
+      coordinationScopeId: SCOPE,
+      expectedRevision,
+      writer: writer(SESSION_A),
+      verdictId,
+      verdict: { kind: 'deliverable', evidenceRefs: ['evidence-1'] },
+      finalizerRole: 'finalizer',
+      sessionBindingRef: 'binding-1',
+      ...verification,
+    }));
+
+  expect(record('verdict-1', { verifiedHead: BASELINE_HEAD, verifiedTree: VERIFIED_TREE }).kind).toBe('committed');
+  expect(record('verdict-2').kind).toBe('committed');
+  // 只证明 HEAD 或只证明 tree 都不是可接收的形态。
+  expect(record('verdict-3', { verifiedHead: BASELINE_HEAD }).kind).toBe('rejected');
+  expect(record('verdict-4', { verifiedTree: VERIFIED_TREE }).kind).toBe('rejected');
+  expect(record('verdict-5', { verifiedHead: BASELINE_HEAD, verifiedTree: VERIFIED_TREE }).kind).toBe('committed');
+
+  const read = store.query({ kind: 'delivery-verdicts', coordinationScopeId: SCOPE });
+  expect(read.kind === 'delivery-verdicts' ? read.verdicts.map((verdict) => [verdict.verdictId, verdict.verifiedHead, verdict.verifiedTree]) : null)
+    .toEqual([
+      ['verdict-1', BASELINE_HEAD, VERIFIED_TREE],
+      ['verdict-2', null, null],
+      ['verdict-5', BASELINE_HEAD, VERIFIED_TREE],
+    ]);
 });

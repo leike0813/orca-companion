@@ -673,6 +673,7 @@ function capsuleFacts(input: {
   readonly backend: ExecutionBackend;
   readonly companionStateRoot: string;
   readonly probe: ReadOnlyWorkerProbe;
+  readonly supportLevel?: 'complete' | 'enhanced';
 }) {
   const scope = harness!.store.query({ kind: 'scope', coordinationScopeId: RECOVERY_SCOPE });
   if (scope.kind !== 'scope' || scope.scope === null) throw new Error('Scope 不存在');
@@ -695,6 +696,7 @@ function capsuleFacts(input: {
     if (recorded.kind === 'rejected') throw new Error(`${recorded.code}: ${recorded.message}`);
   }
   return createExecutionRecoveryFacts({
+    workerSupportFor: () => ({ level: input.supportLevel ?? 'complete', qualificationRef: 'fixture:qualification' }),
     store: () => harness!.store,
     backend: input.backend,
     coordinationScopeId: RECOVERY_SCOPE,
@@ -733,7 +735,7 @@ function extractRequest(transcriptRef: string) {
   };
 }
 
-test('Capsule 派发前能力不可用：零 Orca mutation、不消耗恢复预算，只留可诊断 blocker', { timeout: 30_000 }, async () => {
+test.each(['read_only', 'support_level'] as const)('Capsule 派发前 %s 不可用：零 Orca mutation', { timeout: 30_000 }, async (failure) => {
   harness = createRecoveryHarness();
   harness.recordSourceSegment({
     segmentId: SEGMENT,
@@ -774,20 +776,23 @@ test('Capsule 派发前能力不可用：零 Orca mutation、不消耗恢复预�
   const outcome = await capsuleFacts({
     backend: backend.backend,
     companionStateRoot: join(scratch, 'state'),
+    supportLevel: failure === 'support_level' ? 'enhanced' : 'complete',
     probe: () => {
       probeCalls += 1;
       return Promise.resolve(READ_ONLY_WORKER_UNAVAILABLE);
     },
   }).extractCapsule(extractRequest(transcript.path));
 
-  expect(probeCalls).toBe(1);
+  expect(probeCalls).toBe(failure === 'support_level' ? 0 : 1);
   expect(outcome.kind).toBe('failed');
   if (outcome.kind !== 'failed') {
     return;
   }
   // 失败原因是稳定的能力 token 与阶段，而不是 120 秒报告超时。
-  expect(outcome.reason).toContain('read_only_worker_unavailable');
-  expect(outcome.reason).toContain('sandbox-read');
+  if (failure === 'read_only') {
+    expect(outcome.reason).toContain('read_only_worker_unavailable');
+    expect(outcome.reason).toContain('sandbox-read');
+  }
   expect(outcome.reason).not.toContain('超时');
   // 零新派发：没有建 Task、没有启 Worker、没有确认任何 Delivery。
   expect(backend.mutations()).toEqual([]);

@@ -5,7 +5,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import type { WorkerHarness } from '../../application/ports/worker-harness.js';
+import { createWorkerHarness } from '../../application/ports/worker-harness.js';
 import type {
   HarnessSessionReport, HarnessTranscriptCoverageResult, HarnessTranscriptProofResult,
   PreparedHarnessTerminal, ProveHarnessSessionInput, WorkerHarnessLaunchInput,
@@ -423,7 +423,7 @@ async function queryCommandCodeModels(input: {
     : { kind: 'available', source: `command-code:${version.stdout.text.trim()}:--list-models:local-only`, models: [...models].sort().map((model) => ({ model, effortCapability: null })) };
 }
 
-export const commandCodeHarness: WorkerHarness = {
+export const commandCodeHarness = createWorkerHarness({
   id: COMMAND_CODE_HARNESS_ID,
   prepareLaunch: (input) => createLaunch(input, false),
   prepareReadOnlyLaunch: (input) => createLaunch(input, true),
@@ -452,4 +452,4 @@ export const commandCodeHarness: WorkerHarness = {
   installReporter: installCommandCodeReporter,
   proveSession: proveCommandCodeTranscript,
   inspectTranscript: inspectCommandCodeTranscript,
-};
+});

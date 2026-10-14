@@ -4,11 +4,18 @@ import { dirname, join } from 'node:path';
 import type { WorkerHarness, WorkerHarnessLaunchInput, WorkerHarnessRegistry, ProveHarnessSessionInput, HarnessSessionReport } from '../application/ports/worker-harness.js';
 import { resolveWorkerHarness } from '../application/ports/worker-harness.js';
 import { parseHarnessSessionReport } from '../application/ports/worker-harness.js';
+import { createWorkerHarness, requireHarnessCapability } from '../application/ports/worker-harness.js';
 import { codexHarness } from '../adapters/agents/codex-harness.js';
 import { opencodeHarness } from '../adapters/agents/opencode-harness.js';
 import { commandCodeHarness } from '../adapters/agents/command-code-harness.js';
 import { qwenHarness } from '../adapters/agents/qwen-harness.js';
 import { antigravityHarness } from '../adapters/agents/antigravity-harness.js';
+import { kiloHarness } from '../adapters/agents/kilo-harness.js';
+import { kimiHarness } from '../adapters/agents/kimi-harness.js';
+import { hermesHarness } from '../adapters/agents/hermes-harness.js';
+import { clineHarness } from '../adapters/agents/cline-harness.js';
+import { museHarness } from '../adapters/agents/muse-harness.js';
+import { cursorHarness } from '../adapters/agents/cursor-harness.js';
 import { createNativeWorkerLaunch, installNativeSessionStartReporter, proveNativeTranscript, inspectNativeTranscript, nativeTranscriptIdentity, nativeRecoveryInstructions, type NativeHarness } from '../adapters/agents/native-worker.js';
 import { probeHarnessReadOnlyWorker, assertReadOnlyExecutionWrapperAvailable } from '../adapters/agents/read-only-execution-wrapper.js';
 import { bindHarnessSession, type HarnessSessionFacts, type SessionBindingResult } from '../adapters/agents/session-binding.js';
@@ -39,8 +46,8 @@ export function readLatestHarnessSessionReport(path: string): HarnessSessionRepo
   }
 }
 
-function nativeHarness(id: NativeHarness): WorkerHarness {
-  return {
+function nativeHarness(id: NativeHarness) {
+  return createWorkerHarness({
     id,
     prepareLaunch: (input) => createNativeWorkerLaunch(id, { ...input, assertReadOnlyWrapperAvailable: assertReadOnlyExecutionWrapperAvailable, ...(input.sessionStartReporterPath === undefined ? {} : { reporterPath: input.sessionStartReporterPath }) }),
     prepareReadOnlyLaunch: (input) => createNativeWorkerLaunch(id, { ...input, sandboxMode: 'read-only-local-control', assertReadOnlyWrapperAvailable: assertReadOnlyExecutionWrapperAvailable, ...(input.sessionStartReporterPath === undefined ? {} : { reporterPath: input.sessionStartReporterPath }) }),
@@ -59,7 +66,7 @@ function nativeHarness(id: NativeHarness): WorkerHarness {
     installReporter: (paths) => installNativeSessionStartReporter(id, { ...paths, stateRoot: dirname(paths.reporterPath) }),
     proveSession: (input) => Promise.resolve(proveNativeTranscript(id, input)),
     inspectTranscript: (ref) => inspectNativeTranscript(id, ref),
-  };
+  });
 }
 
 export const workerHarnessRegistry: WorkerHarnessRegistry = new Map([
@@ -68,6 +75,13 @@ export const workerHarnessRegistry: WorkerHarnessRegistry = new Map([
   ['command-code', commandCodeHarness],
   ['qwen-code', qwenHarness],
   ['antigravity', antigravityHarness],
+  // 已实现即登记；登记只表达身份，不表达已核验支持等级（准入由 harness-support 证据判定）。
+  ['kilo', kiloHarness],
+  ['kimi', kimiHarness],
+  ['hermes', hermesHarness],
+  ['cline', clineHarness],
+  ['muse', museHarness],
+  ['cursor', cursorHarness],
   ...(['claude', 'pi', 'omp'] as const).map((id) => [id, nativeHarness(id)] as const),
 ]);
 
@@ -92,7 +106,7 @@ export function prepareHarnessWorkerLaunch(id: string, input: WorkerHarnessLaunc
 export function prepareHarnessResumeLaunch(id: string, input: WorkerHarnessLaunchInput & {
   readonly sessionId: string; readonly codexHome: string; readonly transcriptRef: string;
 }) {
-  return requireWorkerHarness(id).prepareResume({ ...input, originalStateRoot: input.codexHome });
+  return requireHarnessCapability(requireWorkerHarness(id), 'resume').prepareResume({ ...input, originalStateRoot: input.codexHome });
 }
 export async function bindHarnessSessionFromStartReport(input: Omit<ProveHarnessSessionInput, 'expectedStateRoot'> & {
   readonly expectedCodexHome: string;
@@ -105,11 +119,13 @@ export async function bindHarnessSessionFromStartReport(input: Omit<ProveHarness
   const report = parseHarnessSessionReport(input.report);
   if (report === null) return { kind: 'unavailable', code: 'transcript_unavailable', message: 'Session 报告字段不可核验', blocksDispatch: true };
   if (report.harness !== undefined && report.harness !== harness.id) return { kind: 'unavailable', code: 'harness_mismatch', message: 'Session 报告与获批 Harness 不一致', blocksDispatch: true };
-  const result = await harness.proveSession({ ...input, report, expectedStateRoot: input.expectedCodexHome });
+  const nativeSession = harness.capabilities?.nativeSession;
+  if (nativeSession === undefined) return { kind: 'unavailable', code: 'transcript_unavailable', message: 'Worker Harness 未提供原生 Session 能力', blocksDispatch: true };
+  const result = await nativeSession.proveSession({ ...input, report, expectedStateRoot: input.expectedCodexHome });
   if (result.kind !== 'proven') return { kind: 'unavailable', code: 'transcript_unavailable', message: result.reason, blocksDispatch: true };
   return bindHarnessSession(input.facts.harness, { ...input.facts, ...result.proof }, input);
 }
 export function readHarnessTranscriptIdentity(input: { readonly harness: string; readonly transcriptRef: string; readonly workspace: string }) {
-  return workerHarnessRegistry.get(input.harness)?.readTranscriptIdentity(input)
+  return workerHarnessRegistry.get(input.harness)?.capabilities?.nativeSession?.readTranscriptIdentity(input)
     ?? Promise.resolve({ kind: 'transcript_unavailable' as const, reason: 'Harness transcript 无法重新核验' });
 }

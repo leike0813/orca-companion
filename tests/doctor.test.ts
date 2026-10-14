@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -63,6 +63,17 @@ function captureIO() {
 }
 
 const environment = { cwd: process.cwd(), env: {} };
+
+/** 可写角色的 doctor 核验只跑 `--version`：给一个只答版本的假可执行文件即可。 */
+function fakeExecutable(name: string, version: string): { readonly bin: string; readonly env: Record<string, string> } {
+  const directory = mkdtempSync(path.join(tmpdir(), 'ocp-doctor-bin-'));
+  const bin = path.join(directory, 'bin');
+  mkdirSync(bin);
+  const executable = path.join(bin, name);
+  writeFileSync(executable, `#!/bin/sh\necho "${version}"\n`, 'utf8');
+  chmodSync(executable, 0o755);
+  return { bin: directory, env: { PATH: `${bin}:${process.env['PATH'] ?? ''}` } };
+}
 
 test('环境完整时结论为 ok，且每项检查都有结论', async () => {
   const report = await runDoctor(probe());
@@ -367,8 +378,9 @@ test('doctor 命令把结构化缺失能力写进诊断行，退出码为非零'
   ]);
 });
 
-test('doctor 使用所属 harness 的原生目录并报告 Antigravity 可用，不读取 Coordinator 凭据', async () => {
+test('doctor 用原生目录报告各角色可用：可写 Finalizer 不做只读探针，只有只读角色才跑', async () => {
   const cwd = mkdtempSync(path.join(tmpdir(), 'ocp-doctor-catalog-'));
+  const fake = fakeExecutable('agy', '1.0.0');
   const profiles = projectExecutionProfilesFixture();
   const credentials = credentialStoreFixture();
   const catalog = vi.spyOn(antigravityHarness, 'queryModels').mockResolvedValue({
@@ -391,22 +403,27 @@ test('doctor 使用所属 harness 的原生目录并报告 Antigravity 可用，
       context: { maxInputTokens: 120_000 },
       execution: {
         harness: 'antigravity', codexSandbox: 'workspace-write', acceptedRisks: [],
-        workerProfiles: profiles.workerProfiles.map((profile) => ({ ...profile, harness: 'antigravity' })),
-        workerProfileRefs: profiles.workerProfileRefs,
+        workerProfiles: profiles.workerProfiles.filter(profile => profile.role === 'finalizer' || profile.role === 'recovery_utility')
+          .map((profile) => ({ ...profile, harness: 'antigravity' })),
+        workerProfileRefs: { finalizer: profiles.workerProfileRefs.finalizer, recovery_utility: profiles.workerProfileRefs.recovery_utility },
       },
     }), 'utf8');
-    const result = await createOrcaDoctorProbe({ cwd, env: {}, credentialStore: credentials }).readReadOnlyWorkers!();
+    const result = await createOrcaDoctorProbe({ cwd, env: fake.env, credentialStore: credentials }).readReadOnlyWorkers!();
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.detail);
-    expect(result.value).toHaveLength(profiles.workerProfiles.length);
+    expect(result.value).toHaveLength(2);
     for (const fact of result.value) {
       expect(fact).toMatchObject({ harness: 'antigravity', capability: 'available' });
       expect(fact.detail).toContain('原生模型目录可用');
     }
+    // 可写 Finalizer 只做有界 `--version` 核验；真实 bwrap 只读探针只留给任务级需要只读的角色。
+    expect(readOnly).toHaveBeenCalledTimes(1);
+    expect(readOnly.mock.calls[0]?.[0]).toBe('antigravity');
     expect(credentials.reads).toEqual([]);
   } finally {
     catalog.mockRestore();
     readOnly.mockRestore();
+    rmSync(fake.bin, { recursive: true, force: true });
     rmSync(cwd, { recursive: true, force: true });
   }
 });

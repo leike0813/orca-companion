@@ -19,6 +19,7 @@ export type FinalizerPanelProps = {
 };
 
 const READ_ONLY_LABEL = {
+  not_required: '允许修复与生成测试产物',
   enforced: 'read-only enforced',
   unenforceable: 'read-only 无法强制',
   unverified: 'read-only 未核验',
@@ -66,11 +67,16 @@ export function finalizerRows(finalizer: FinalizerView): readonly string[] {
     return rows;
   }
   rows.push(
-    verdict.kind === 'deliverable'
+    verdict.kind === 'deliverable' && finalizer.gate.blockers.includes('finalizer-version-changed')
+      ? 'verdict 已失效 · 项目版本已变化，需要重新验收'
+      : verdict.kind === 'deliverable'
       ? `verdict deliverable · evidence ${verdict.refs.join(',') || 'none'}`
       : `verdict blocked · ${verdict.refs.join(',') || 'none'}`,
   );
   rows.push(`verdictRecording ${verdict.verdictId} · session ${verdict.sessionBindingRef}`);
+  if (verdict.verifiedHead != null && verdict.verifiedTree != null) {
+    rows.push(`verified HEAD ${verdict.verifiedHead} · tree ${verdict.verifiedTree}`);
+  }
   return rows;
 }
 

@@ -48,6 +48,7 @@ const EXECUTABLES: Readonly<Record<WorkerHarnessId, string>> = {
   'command-code': 'command-code',
   'qwen-code': 'qwen',
   antigravity: 'agy',
+  kilo: 'kilo', kimi: 'kimi', hermes: 'hermes', cline: 'cline', muse: 'muse', cursor: 'cursor-agent',
 };
 
 type CatalogEntry = {
@@ -192,6 +193,7 @@ function catalogCommand(harness: WorkerHarnessId, executable: string, env: Reado
     case 'command-code':
     case 'qwen-code':
     case 'antigravity':
+    case 'kilo': case 'kimi': case 'hermes': case 'cline': case 'muse': case 'cursor':
       return null;
   }
 }

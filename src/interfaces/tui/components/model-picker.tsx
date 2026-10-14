@@ -19,7 +19,9 @@ import type {
   ModelRoleGroup,
   ModelRoleView,
   ModelSettingsRole,
+  WorkerHarnessOption,
 } from '../ports.js';
+import { WORKER_HARNESS_IDS, type WorkerHarnessId } from '../../../domain/model-configuration.js';
 import type { ModelRoleMenuState, ModelWorkerCatalogState } from '../state.js';
 
 /** 定稿三分区的标题；角色顺序由宿主的 roles 给定，界面不重排。 */
@@ -61,7 +63,7 @@ const ROLE_PURPOSES: Readonly<Record<ModelSettingsRole, string>> = {
   specification_validator: '独立规格验证 · 可选',
   implementation: '实现工作包',
   validator: '验证、修复与复验',
-  finalizer: '只读项目验收',
+  finalizer: '项目验收与修复',
   recovery_utility: '生成恢复材料',
 };
 
@@ -181,8 +183,34 @@ export function modelRoleAdmission(
     }
     return modelSwitchAdmission(catalog);
   }
+  // 宿主给出等级事实时，没有任何达到该角色最低等级的 harness 就不进入菜单；等级与原因都由宿主投影，
+  // 界面不自行探测。缺省（旧端口）保持既有行为。
+  if (role.harnessOptions !== undefined && harnessChoices(role).length === 0) {
+    return { allowed: false, reason: '没有达到该角色最低支持等级的 harness' };
+  }
   // Worker 候选来自该 harness 的原生目录（进入菜单后才显式查询），因此不以静态候选列表准入。
   return { allowed: true, reason: null };
+}
+
+/**
+ * 该角色可切换的 harness。
+ *
+ * 宿主给出 `harnessOptions` 时只用已 `available` 的项；缺省表示旧端口没有等级事实，回落到固定注册
+ * 顺序。这里只读投影，不探测任何 harness。
+ */
+export function harnessChoices(role: ModelRoleView): readonly WorkerHarnessId[] {
+  if (role.harnessOptions === undefined) {
+    return WORKER_HARNESS_IDS;
+  }
+  return role.harnessOptions.filter((option) => option.available).map((option) => option.id);
+}
+
+/** 选中 harness 的等级与可用性事实；旧端口没有等级来源时返回 `null`，界面因此不显示等级。 */
+export function harnessSupport(role: ModelRoleView, harness: string | null): WorkerHarnessOption | null {
+  if (harness === null || role.harnessOptions === undefined) {
+    return null;
+  }
+  return role.harnessOptions.find((option) => option.id === harness) ?? null;
 }
 
 export function candidateLabel(candidate: ModelRoleCandidate): string {
@@ -452,6 +480,7 @@ export function RoleModelMenu(props: RoleModelMenuProps) {
   const manual = worker && workerManualSelection(props.role, props.query);
   const manualModel = props.query.trim();
   const harness = menu.harness ?? null;
+  const harnessOption = harnessSupport(props.role, harness);
   const catalogLoad =
     props.workerCatalog !== null && props.workerCatalog !== undefined &&
     props.workerCatalog.role === props.role.role && props.workerCatalog.harness === harness
@@ -526,11 +555,21 @@ export function RoleModelMenu(props: RoleModelMenuProps) {
       summary={props.identity ?? scope}
       width={props.availableWidth}
       rows={rows}
-      footer="Tab 区域 · ↑↓模型 · ←→选项 · Enter"
+      footer={props.role.role === 'recovery_utility'
+        ? 'Tab 区域 · ↑↓模型 · ←→选项 · Enter · Ctrl+D 关闭 Recovery Utility'
+        : 'Tab 区域 · ↑↓模型 · ←→选项 · Enter'}
     >
       {!worker ? null : (
         <Text color={menu.focus === 'harness' ? tuiColors.focus : tuiColors.muted}>
-          {truncateToDisplayWidth('Harness › ' + (harness ?? 'codex') + '  ←→ 切换 · ' + (manual ? '未验证手填' : catalogNotice ?? ''), inner)}
+          {truncateToDisplayWidth(
+            'Harness › ' + (harness ?? 'codex') +
+              (harnessOption === null ? '' : ' · 等级 ' + harnessOption.level) +
+              '  ←→ 切换 · ' +
+              (harnessOption !== null && !harnessOption.available
+                ? harnessOption.reason ?? '不可用'
+                : manual ? '未验证手填' : catalogNotice ?? ''),
+            inner,
+          )}
         </Text>
       )}
       <Text {...(menu.focus === 'list' ? { color: tuiColors.focus } : {})}>

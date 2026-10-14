@@ -2,8 +2,9 @@ import { constants, closeSync, fstatSync, lstatSync, linkSync, mkdirSync, openSy
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import type { HarnessSessionReport, ProveHarnessSessionInput, WorkerHarness, WorkerHarnessLaunchInput } from '../../application/ports/worker-harness.js';
+import type { HarnessSessionReport, ProveHarnessSessionInput, WorkerHarnessLaunchInput } from '../../application/ports/worker-harness.js';
 import type { HarnessTranscriptCoverageResult } from '../../application/ports/worker-harness.js';
+import { createWorkerHarness } from '../../application/ports/worker-harness.js';
 import type { TranscriptCoverageEvidence } from '../../application/recovery/recovery-capsule.js';
 import { candidateSessionPaths, installCandidateReporter, prepareCandidateLaunch, type CandidateResume } from './candidate-worker-launch.js';
 import { probeHarnessReadOnlyWorker } from './read-only-execution-wrapper.js';
@@ -260,7 +261,7 @@ export function prepareClineRecoveryMaterial(
   } catch { return null; }
 }
 
-export const clineHarness: WorkerHarness = {
+export const clineHarness = createWorkerHarness({
   id: 'cline', prepareLaunch: (input) => launch(input),
   prepareReadOnlyLaunch: (input) => launch({ ...input, sandboxMode: 'read-only-local-control' }),
   prepareResume: (input) => launch(input, input),
@@ -283,4 +284,4 @@ export const clineHarness: WorkerHarness = {
   recoveryInstructions: () => ['只读取精确 Session 的原生 JSON manifest 与 messages artifact；不得查询 Cline SQLite 数据库。',
     'manifest.session_id 与 workspace_root 必须匹配；messages_path 使用 manifest 字段，缺省时按 SDK 默认 artifact 路径读取。',
     '由宿主调用 prepareClineRecoveryMaterial，将与 coverage 一致的持久消息写为 Utility 私有 JSONL；事件引用格式为 message:N，coverage 保持 partial。'],
-};
+});

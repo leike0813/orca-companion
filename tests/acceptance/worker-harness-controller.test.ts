@@ -210,7 +210,7 @@ async function readExistingScope(input: {
     }
     const recovery = manifest.recoveryUtilityProfile;
     const [recoveryHarness, recoveryModel] = EXPECTED_PROFILES.recovery_utility;
-    if (recovery.profileRef.id !== input.config.execution.workerProfileRefs.recovery_utility
+    if (recovery === null || recovery.profileRef.id !== input.config.execution.workerProfileRefs.recovery_utility
       || recovery.harness !== recoveryHarness || recovery.modelSelection.model !== recoveryModel) {
       throw new Error('Scope authorization does not retain the configured recovery utility profile');
     }

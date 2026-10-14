@@ -27,6 +27,7 @@ import type {
   WorkerModelSelection,
   ProviderConnection,
 } from '../../domain/model-configuration.js';
+import type { WorkerSupportLevel } from '../../domain/worker-harness-support.js';
 import type {
   ModelSettingsSnapshot,
   SaveModelSettingsInput,
@@ -384,6 +385,22 @@ export type ModelRoleView = {
   readonly candidates: readonly ModelRoleCandidate[];
   /** 不可用时必须给出原因；界面原样显示，不替宿主判断可行性。 */
   readonly availability: { readonly available: boolean; readonly reason: string | null };
+  /**
+   * 该角色可选的 harness 与各自的支持等级。
+   *
+   * 缺省表示宿主尚未提供等级事实（旧端口），界面回落到固定注册顺序。界面只在 `available` 的项之间
+   * 切换，没有可用项时按 `reason` 拒绝进入，且不在 render 中探测任何 harness。
+   */
+  readonly harnessOptions?: readonly WorkerHarnessOption[];
+};
+
+/** 一个 harness 对某角色的准入事实；等级、可用性与原因都由宿主核验后给出。 */
+export type WorkerHarnessOption = {
+  readonly id: WorkerHarnessId;
+  readonly level: WorkerSupportLevel;
+  readonly available: boolean;
+  readonly reason: string | null;
+  readonly qualificationRef: string;
 };
 
 /**
@@ -453,6 +470,16 @@ export type ModelSettingsPort = {
   readonly load: () => Promise<ModelSettingsLoad>;
   readonly save: (input: SaveModelSettingsInput) => Promise<SaveModelSettingsResult>;
   readonly apply: (input: ModelSettingsApplyInput) => Promise<SaveModelSettingsResult>;
+  /**
+   * 关闭 Recovery Utility（可选）。
+   *
+   * 只删除 `execution.workerProfileRefs.recovery_utility`，保留已保存 profile、其他角色选择与全部其他
+   * 字段；不改已批准的 Manifest 或当前 Session。缺省表示宿主未接通该动作，界面据此显示明确提示，
+   * 不伪造成功。
+   */
+  readonly disableRecoveryUtility?: (input: {
+    readonly expectedRevision: number;
+  }) => Promise<SaveModelSettingsResult>;
   readonly library?: ProviderLibrary;
   readonly catalog?: ProviderCatalog;
   readonly initializeProject?: (input: { readonly modelRef: string; readonly effort: string | null; readonly routeMapIssueNumber: number }) => Promise<SaveModelSettingsResult>;

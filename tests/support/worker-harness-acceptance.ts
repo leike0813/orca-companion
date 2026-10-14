@@ -46,7 +46,8 @@ import type {
 } from '../../src/application/dto/identity.js';
 import type { ExecutionBackend, ExecutionMutation, ExecutionScope } from '../../src/application/ports/execution-backend.js';
 import { buildExecutionScope, orcaTerminalHandleFromReceipt } from '../../src/application/ports/execution-backend.js';
-import type { HarnessSessionReport, WorkerHarness, WorkerHarnessLaunchInput } from '../../src/application/ports/worker-harness.js';
+import type { HarnessSessionReport, HarnessTranscriptCoverageResult, WorkerHarness, WorkerHarnessLaunchInput } from '../../src/application/ports/worker-harness.js';
+import { requireHarnessCapability } from '../../src/application/ports/worker-harness.js';
 import { commandCodeHarness } from '../../src/adapters/agents/command-code-harness.js';
 import { qwenHarness } from '../../src/adapters/agents/qwen-harness.js';
 import { antigravityHarness } from '../../src/adapters/agents/antigravity-harness.js';
@@ -80,6 +81,7 @@ export const REAL_ACCEPTANCE_SWITCH = 'ORCA_COMPANION_REAL_ACCEPTANCE';
 export const REAL_ACCEPTANCE_BASE_VAR = 'ORCA_COMPANION_REAL_ACCEPTANCE_BASE';
 export const REAL_ACCEPTANCE_HARNESSES_VAR = 'ORCA_COMPANION_REAL_ACCEPTANCE_HARNESSES';
 export const REAL_ACCEPTANCE_ROLES_VAR = 'ORCA_COMPANION_REAL_ACCEPTANCE_ROLES';
+export const REAL_ACCEPTANCE_LEVEL_VAR = 'ORCA_COMPANION_REAL_ACCEPTANCE_LEVEL';
 /** 现场始终保留；KEEP 不授权自动 stop/release、关闭终端或删除目录。 */
 export const REAL_ACCEPTANCE_KEEP_VAR = 'ORCA_COMPANION_REAL_ACCEPTANCE_KEEP';
 
@@ -136,6 +138,16 @@ export const HARNESS_MATRIX: readonly HarnessBinding[] = [
 ];
 export const ACCEPTANCE_HARNESSES = HARNESS_MATRIX.map((binding) => binding.harness);
 
+/** 目标等级：basic 只跑 Planner/Implementation，enhanced 增加四角色与精确 Session，complete 再增加历史恢复。 */
+export const ACCEPTANCE_LEVELS = ['basic', 'enhanced', 'complete'] as const;
+export type AcceptanceLevel = (typeof ACCEPTANCE_LEVELS)[number];
+
+const LEVEL_ROLES: Readonly<Record<AcceptanceLevel, readonly AcceptanceRole[]>> = {
+  basic: ['planner', 'implementation'],
+  enhanced: ACCEPTANCE_ROLES,
+  complete: ACCEPTANCE_ROLES,
+};
+
 export type AcceptancePlan =
   | { readonly kind: 'skip'; readonly reason: string }
   | {
@@ -143,6 +155,7 @@ export type AcceptancePlan =
       readonly baseDir: string;
       readonly identity: string;
       readonly orcaExecutable: string;
+      readonly level: AcceptanceLevel;
       readonly harnesses: readonly AcceptanceHarnessId[];
       readonly roles: readonly AcceptanceRole[];
     };
@@ -153,7 +166,13 @@ export function resolveAcceptancePlan(env: Readonly<Record<string, string | unde
     return { kind: 'skip', reason: REAL_ACCEPTANCE_SWITCH + ' 未显式开启' };
   }
   const harnesses = parseSelection(env[REAL_ACCEPTANCE_HARNESSES_VAR], ACCEPTANCE_HARNESSES, REAL_ACCEPTANCE_HARNESSES_VAR);
-  const roles = parseSelection(env[REAL_ACCEPTANCE_ROLES_VAR], ACCEPTANCE_ROLES, REAL_ACCEPTANCE_ROLES_VAR);
+  const level = parseLevel(env[REAL_ACCEPTANCE_LEVEL_VAR]);
+  const allowed = LEVEL_ROLES[level];
+  const roles = (env[REAL_ACCEPTANCE_ROLES_VAR] ?? '').trim().length === 0
+    ? allowed
+    : parseSelection(env[REAL_ACCEPTANCE_ROLES_VAR], ACCEPTANCE_ROLES, REAL_ACCEPTANCE_ROLES_VAR);
+  const unsupported = roles.filter((role) => !allowed.includes(role));
+  if (unsupported.length > 0) throw new Error(`${level} 等级不支持的角色：${unsupported.join(', ')}`);
   const orcaExecutable = env['ORCA_CLI_COMMAND']?.trim() || (process.platform === 'linux' ? 'orca-ide' : '');
   if (orcaExecutable.length === 0) throw new AcceptanceBlocker('orca_command_missing', '真实验收需要明确 ORCA_CLI_COMMAND');
   return {
@@ -161,9 +180,20 @@ export function resolveAcceptancePlan(env: Readonly<Record<string, string | unde
     baseDir: resolve(env[REAL_ACCEPTANCE_BASE_VAR] ?? DEFAULT_ACCEPTANCE_BASE),
     identity: 'companion-harness-matrix-' + randomUUID(),
     orcaExecutable,
+    level,
     harnesses,
     roles,
   };
+}
+
+/** 等级缺省 complete；未知取值立即拒绝，不回退到更低等级。 */
+function parseLevel(raw: string | undefined): AcceptanceLevel {
+  const value = (raw ?? '').trim();
+  if (value.length === 0) return 'complete';
+  if (!(ACCEPTANCE_LEVELS as readonly string[]).includes(value)) {
+    throw new Error(REAL_ACCEPTANCE_LEVEL_VAR + ' 只接受 ' + ACCEPTANCE_LEVELS.join('、') + '：' + value);
+  }
+  return value as AcceptanceLevel;
 }
 
 function parseSelection<T extends string>(raw: string | undefined, allowed: readonly T[], varName: string): readonly T[] {
@@ -188,6 +218,12 @@ export class AcceptanceBlocker extends Error {
     this.code = code;
     this.name = 'AcceptanceBlocker';
   }
+}
+
+/** 能力组缺失等结构化拒绝保留自己的 code，其余按站点分类。 */
+function failureCode(error: unknown, fallback: string): string {
+  const code = readRecord(error)?.['code'];
+  return typeof code === 'string' && code.length > 0 ? code : fallback;
 }
 
 /** 拒绝把真实 harness 跑在 Companion 自身仓库、其上级目录或混入非本次产物的工作区；只读，不建目录。 */
@@ -256,6 +292,7 @@ export type AcceptanceFixture = {
   readonly runId: string;
   readonly coordinatorTerminalHandle: string;
   readonly identity: string;
+  readonly level: AcceptanceLevel;
   readonly configBefore: GlobalConfigSnapshot;
   readonly scopeFor: (operationId: string, target: { readonly kind: string; readonly id: string }) => ExecutionScope;
   readonly dispose: () => Promise<void>;
@@ -413,6 +450,7 @@ export async function createAcceptanceFixture(plan: Extract<AcceptancePlan, { ki
     runId,
     coordinatorTerminalHandle: handle,
     identity: plan.identity,
+    level: plan.level,
     configBefore,
     scopeFor,
     dispose,
@@ -423,29 +461,24 @@ export async function createAcceptanceFixture(plan: Extract<AcceptancePlan, { ki
 // 启动 / 绑定 / 恢复
 // ---------------------------------------------------------------------------------------------
 
-export function sandboxModeFor(role: AcceptanceRole): 'workspace-write' | 'read-only' {
-  return role === 'finalizer' ? 'read-only' : 'workspace-write';
-}
-
 function completionToken(harness: AcceptanceHarnessId, role: AcceptanceRole): string {
   return 'HARNESS-' + harness + '-' + role + '-OK';
 }
 
-export function roleSpec(harness: AcceptanceHarnessId, role: AcceptanceRole): { spec: string; artifactPath: string | null; artifactBody: string | null } {
+/** 可写 Finalizer 与其它角色一样在 workspace-write 下写独立工件，因此全部角色都产出验收工件。 */
+export function roleSpec(harness: AcceptanceHarnessId, role: AcceptanceRole): { spec: string; artifactPath: string; artifactBody: string } {
   const token = completionToken(harness, role);
-  const artifactPath = role === 'finalizer' ? null : join('.companion', 'roles', harness + '-' + role + '.txt');
-  const artifactBody = role === 'finalizer' ? null : role === 'validator' ? 'pass' : role;
+  const artifactPath = join('.companion', 'roles', harness + '-' + role + '.txt');
+  const artifactBody = role === 'validator' ? 'pass' : role;
   const header = [
     'You are the ' + role + ' worker for work package WP-1 in a throwaway repository.',
     'Work only inside the current directory. Do not install dependencies, do not use the network, do not commit or push.',
     'Use native Read/Glob/Edit/Write tools for repository inspection and artifacts; reserve Bash for the required Orca reporting command.',
   ];
-  const body = artifactPath === null
-    ? ['Read the repository and state a short delivery verdict; do not modify any file.']
-    : ['Create the file ' + artifactPath + ' containing exactly: ' + artifactBody];
+  const body = ['Create the file ' + artifactPath + ' containing exactly: ' + artifactBody];
   return {
     spec: [...header, ...body,
-      ...(artifactPath === null ? [] : ['Use your native file editing tool to create this artifact. The file content ends after that single word.']),
+      'Use your native file editing tool to create this artifact. The file content ends after that single word.',
       'The completion token belongs only in your assistant response. Do not create a token file.',
       'Print exactly the token ' + token + ' on its own line.',
       'Then use the exact orca orchestration send completion command from the supervision preamble, with its original dispatch capability, to report worker_done --outcome succeeded. This reporting command is required to complete the task.',
@@ -535,9 +568,9 @@ export function transcriptRecords(text: string): readonly unknown[] {
     const exported = readRecord(value);
     return Array.isArray(exported?.['messages']) ? exported['messages'] : [value];
   } catch {
-    return text.split('\n').flatMap((line): unknown[] => {
-      if (!line) return [];
-      try { return [JSON.parse(line) as unknown]; } catch { return []; }
+    return text.split('\n').map((line): unknown => {
+      // Preserve source lines and break adjacent-tool proof across unreadable records.
+      try { return JSON.parse(line) as unknown; } catch { return undefined; }
     });
   }
 }
@@ -613,18 +646,34 @@ export function permissionDeniedFromToolRecord(value: unknown, path: string, eve
   return null;
 }
 
-function readPermissionDeniedEvidence(transcriptRef: string, path: string): PermissionDeniedEvidence | null {
+/** 只读核验的唯一写入例外：一次性有界探针，用 shell 单引号安全引用内层单引号。 */
+function readOnlyProbeCommand(probePath: string): string {
+  const script = 'const fs=require("node:fs");const path=' + JSON.stringify(probePath)
+    + ';try{fs.writeFileSync(path,"unexpected-write",{flag:"wx"});console.log(JSON.stringify({path,permissionDenied:false,code:null}));}'
+    + 'catch(e){console.log(JSON.stringify({path,permissionDenied:["EROFS","EACCES","EPERM"].includes(e.code),code:e.code}));}';
+  return "node -e '" + script.replaceAll("'", `'"'"'`) + "'";
+}
+
+/** 只读角色与 Recovery Utility 共用同一措辞：探针是唯一允许的写入，结果只从原生工具记录读取。 */
+function readOnlyProbeInstruction(probePath: string): string {
+  return 'Qualification check, the sole exception to the no-write instruction: run this exact bounded probe once using your native shell tool: '
+    + readOnlyProbeCommand(probePath) + '. Retain its actual tool output (permissionDenied/code/path); never retry or write elsewhere.';
+}
+
+/** 只读角色只有在原生记录证明拒写且目标文件确实不存在时才算核验通过。 */
+function readOnlyVerifiedFor(transcriptRef: string, probePath: string): boolean {
+  return readPermissionDeniedEvidence(transcriptRef, probePath) !== null && !existsSync(probePath);
+}
+
+/** Public JSON export 与 JSONL 共用同一有界读取。 */
+export function readPermissionDeniedEvidence(transcriptRef: string, path: string): PermissionDeniedEvidence | null {
   if (!existsSync(transcriptRef) || statSync(transcriptRef).size > 512 * 1024) return null;
-  const lines = readFileSync(transcriptRef, 'utf8').split('\n');
   let previous: unknown;
-  for (const [index, line] of lines.entries()) {
-    try {
-      const record: unknown = JSON.parse(line);
-      const step = readRecord(record)?.['step_index'];
-      const proof = permissionDeniedFromToolRecord(record, path, typeof step === 'number' ? 'step:' + step : 'line:' + (index + 1), previous);
-      previous = record;
-      if (proof !== null) return proof;
-    } catch { previous = undefined; }
+  for (const [index, record] of transcriptRecords(readFileSync(transcriptRef, 'utf8')).entries()) {
+    const step = readRecord(record)?.['step_index'];
+    const proof = permissionDeniedFromToolRecord(record, path, typeof step === 'number' ? 'step:' + step : 'line:' + (index + 1), previous);
+    previous = record;
+    if (proof !== null) return proof;
   }
   return null;
 }
@@ -641,19 +690,29 @@ async function waitForReportFile(reportPath: string, workspace: string, deadline
   return null;
 }
 
+/** 真实 Worker 的成功终态只有一个：Orca 的 succeeded。completed/done 不是执行成功，不能据此准入。 */
+export const SETTLED_SUCCESS_STATES = new Set(['succeeded']);
+// completed/done 只是「已停止」的终态，仍要停止等待，但它们不是成功，不能据此准入。
+const SETTLED_STATES = new Set([...SETTLED_SUCCESS_STATES, 'completed', 'done', 'failed', 'cancelled', 'exited', 'abandoned', 'timed_out']);
+
 async function waitForSettle(backend: ExecutionBackend, dispatchId: string, deadlineMs: number): Promise<string | null> {
-  const terminalStates = new Set(['succeeded', 'failed', 'cancelled', 'exited', 'abandoned', 'completed', 'done', 'timed_out']);
   const deadline = Date.now() + deadlineMs;
   let last: string | null = null;
   while (Date.now() < deadline) {
     const shown = await backend.query({ operation: 'worker-show', dispatchId });
     if (shown.kind === 'accepted') {
       last = stringField(shown.value, 'workerState');
-      if (last !== null && terminalStates.has(last)) return last;
+      if (last !== null && SETTLED_STATES.has(last)) return last;
     }
     await new Promise((settle) => setTimeout(settle, 2_000));
   }
   return last;
+}
+
+/** 基础级的结果证据是 Orca 自己记录的 Worker 输出，不是原生 transcript。 */
+async function readTrustedWorkerResult(fixture: AcceptanceFixture, dispatchId: string): Promise<string> {
+  const read = await fixture.backend.query({ operation: 'worker-read', dispatchId, source: 'auto', limit: 40 });
+  return read.kind === 'accepted' ? outputTextOf(read.value) : '';
 }
 
 /** 有界、脱敏的现场诊断：只取 screen/worker-read/worker-show 的前若干字符，长 token 一律遮蔽。 */
@@ -681,19 +740,25 @@ export type LaunchedWorker = {
   readonly stateRoot: string;
   readonly reporterPath: string;
   readonly reportPath: string;
-  readonly sessionId: string;
-  readonly transcriptRef: string;
-  readonly coverage: string;
+  /** 基础级没有原生报告，原生字段保持 null，不用 Orca terminal 身份冒充。 */
+  readonly sessionId: string | null;
+  readonly transcriptRef: string | null;
+  readonly coverage: string | null;
   readonly terminalState: string | null;
+  /** 只读角色的拒写探针结论；null 表示本次没有跑探针。 */
+  readonly readOnlyVerified: boolean | null;
   readonly output: string;
   readonly modelEvidence: string | null;
 };
 
+/** 已取得的真实身份；未知字段整体省略，阻塞结果不把实际事实写成 null。 */
+type LaunchIdentity = { taskId?: string; dispatchId?: string; terminalHandle?: string };
+
 export type LaunchOutcome =
   | { readonly kind: 'ran'; readonly worker: LaunchedWorker }
-  | { readonly kind: 'blocked'; readonly code: string; readonly message: string };
+  | ({ readonly kind: 'blocked'; readonly code: string; readonly message: string } & LaunchIdentity);
 
-async function launchPreparedTerminal(input: {
+export async function launchPreparedTerminal(input: {
   readonly fixture: AcceptanceFixture;
   readonly binding: HarnessBinding;
   readonly role: AcceptanceRole | 'utility';
@@ -704,8 +769,10 @@ async function launchPreparedTerminal(input: {
   readonly reportPath: string;
   readonly spec?: string;
   readonly expectedAssistantText?: string;
+  readonly readOnlyProbePath?: string;
 }): Promise<LaunchOutcome> {
   const { fixture, binding, role, launchId, strategy } = input;
+  const identity: LaunchIdentity = {};
   const taskCreated = await fixture.backend.mutate(
     {
       operation: 'task-create',
@@ -716,11 +783,12 @@ async function launchPreparedTerminal(input: {
     },
     fixture.scopeFor(launchId + ':task-create', { kind: 'work-package', id: 'WP-1' }),
   );
-  if (taskCreated.kind !== 'accepted') return { kind: 'blocked', code: 'task_create_failed', message: 'task-create 未接受：' + taskCreated.kind };
+  if (taskCreated.kind !== 'accepted') return { kind: 'blocked', code: 'task_create_failed', message: 'task-create 未接受：' + taskCreated.kind, ...identity };
   const taskRecord = readRecord(taskCreated.value);
   const task = taskRecord === undefined ? undefined : readRecord(taskRecord['task']);
   const taskId = task === undefined ? null : stringField(task, 'id', 'taskId', 'task_id');
-  if (taskId === null) return { kind: 'blocked', code: 'task_identity_missing', message: 'task-create 回执缺少可核验 Task 身份' };
+  if (taskId === null) return { kind: 'blocked', code: 'task_identity_missing', message: 'task-create 回执缺少可核验 Task 身份', ...identity };
+  identity.taskId = taskId;
 
   const dispatchStartedAt = new Date().toISOString();
   const prepared = await prepareAcceptanceWorker({
@@ -729,15 +797,18 @@ async function launchPreparedTerminal(input: {
     worktreePath: fixture.projectDir,
     scope: fixture.scopeFor(launchId + ':terminal-create', { kind: 'worker-task', id: taskId }),
   });
-  if (prepared.kind !== 'ready') return { kind: 'blocked', code: 'prepare_failed', message: 'prepared-terminal 失败：' + ('message' in prepared ? prepared.message : prepared.reason) };
+  if (prepared.kind !== 'ready') return { kind: 'blocked', code: 'prepare_failed', message: 'prepared-terminal 失败：' + ('message' in prepared ? prepared.message : prepared.reason), ...identity };
+  const terminalHandle = prepared.preparedTerminal?.handle ?? null;
+  if (terminalHandle !== null) identity.terminalHandle = terminalHandle;
 
   const started = await fixture.backend.mutate(
     { operation: 'worker-start', taskId, ...prepared.worker, worktree: 'path:' + fixture.projectDir, runId: fixture.runId, timeoutMs: WORKER_START_TIMEOUT_MS },
     fixture.scopeFor(launchId + ':worker-start', { kind: 'worker-task', id: taskId }),
   );
-  if (started.kind !== 'accepted') return { kind: 'blocked', code: 'worker_start_failed', message: 'Orca 未接受 prepared Worker：' + started.kind };
+  if (started.kind !== 'accepted') return { kind: 'blocked', code: 'worker_start_failed', message: 'Orca 未接受 prepared Worker：' + started.kind, ...identity };
   const dispatchId = stringField(started.value, 'dispatchId', 'dispatch_id');
-  if (dispatchId === null) return { kind: 'blocked', code: 'dispatch_identity_missing', message: 'worker-start 回执缺少 dispatch id' };
+  if (dispatchId === null) return { kind: 'blocked', code: 'dispatch_identity_missing', message: 'worker-start 回执缺少 dispatch id', ...identity };
+  identity.dispatchId = dispatchId;
   ACCEPTANCE_DIAGNOSTICS.harnessLaunched = true;
 
   const activated = await activatePreparedWorker({
@@ -750,20 +821,38 @@ async function launchPreparedTerminal(input: {
       return outcome.kind === 'rejected' ? outcome : { kind: 'unknown', operationId, reason: outcome.reason };
     },
   });
-  if (activated.kind !== 'accepted') return { kind: 'blocked', code: 'activate_failed', message: 'prepared Worker draft 提交失败' };
+  if (activated.kind !== 'accepted') return { kind: 'blocked', code: 'activate_failed', message: 'prepared Worker draft 提交失败', ...identity };
   const adoption = await verifyPreparedWorker(fixture.backend, dispatchId, prepared.preparedTerminal);
-  if (adoption !== null || prepared.preparedTerminal === null) {
-    return { kind: 'blocked', code: 'adoption_unverifiable', message: adoption === null ? 'prepared Worker 缺少 external terminal 绑定' : '无法核验接管：' + ('message' in adoption ? adoption.message : adoption.reason) };
+  if (adoption !== null || terminalHandle === null) {
+    return { kind: 'blocked', code: 'adoption_unverifiable', message: adoption === null ? 'prepared Worker 缺少 external terminal 绑定' : '无法核验接管：' + ('message' in adoption ? adoption.message : adoption.reason), ...identity };
+  }
+
+  // 基础级只用真实 Orca 执行绑定：等待同一 Task/Dispatch 的确定成功态并读取结果，不等待原生报告。
+  if (fixture.level === 'basic') {
+    const terminalState = await waitForSettle(fixture.backend, dispatchId, SETTLE_DEADLINE_MS);
+    if (terminalState === null || !SETTLED_SUCCESS_STATES.has(terminalState)) {
+      return { kind: 'blocked', code: 'worker_not_succeeded', message: `Worker 未完成：${terminalState ?? 'unknown'}；${await diagnoseDispatch(fixture, dispatchId, terminalHandle)}`, ...identity };
+    }
+    return {
+      kind: 'ran',
+      worker: {
+        taskId, dispatchId, terminalHandle,
+        stateRoot: input.stateRoot, reporterPath: input.reporterPath, reportPath: input.reportPath,
+        sessionId: null, transcriptRef: null, coverage: null, terminalState,
+        readOnlyVerified: null,
+        output: await readTrustedWorkerResult(fixture, dispatchId), modelEvidence: null,
+      },
+    };
   }
 
   const report = await waitForReportFile(input.reportPath, fixture.projectDir, REPORT_DEADLINE_MS);
   if (report === null) {
-    const diagnosis = await diagnoseDispatch(fixture, dispatchId, prepared.preparedTerminal.handle);
+    const diagnosis = await diagnoseDispatch(fixture, dispatchId, terminalHandle);
     // 首次隔离启动常见的交互阻塞：文件夹信任对话框 / 首启欢迎，均不触发 SessionStart。
     const code = /safety check|trust this folder|trust the folder/i.test(diagnosis)
       ? 'harness_trust_prompt_blocked'
       : 'session_report_missing';
-    return { kind: 'blocked', code, message: binding.harness + ' 未在绑定窗口内上报可核验 Session 报告；' + diagnosis };
+    return { kind: 'blocked', code, message: binding.harness + ' 未在绑定窗口内上报可核验 Session 报告；' + diagnosis, ...identity };
   }
 
   const proofInput = {
@@ -774,7 +863,7 @@ async function launchPreparedTerminal(input: {
     bindingDeadlineAt: new Date(Date.parse(dispatchStartedAt) + WORKER_START_TIMEOUT_MS + REPORT_DEADLINE_MS).toISOString(),
   };
   const proveBinding = () => role === 'utility'
-    ? requireWorkerHarness(binding.harness).proveSession(proofInput).then((proof) => proof.kind === 'proven'
+    ? requireHarnessCapability(requireWorkerHarness(binding.harness), 'nativeSession').proveSession(proofInput).then((proof) => proof.kind === 'proven'
       ? { kind: 'bound' as const, binding: proof.proof }
       : { kind: 'unavailable' as const, code: 'transcript_unavailable', message: proof.reason })
     : bindHarnessSessionFromStartReport({
@@ -797,40 +886,49 @@ async function launchPreparedTerminal(input: {
     bound = await proveBinding();
   }
   if (bound.kind !== 'bound') {
-    const diagnosis = await diagnoseDispatch(fixture, dispatchId, prepared.preparedTerminal.handle);
-    return { kind: 'blocked', code: bound.code, message: 'Session Binding 不可用：' + bound.message + '；' + diagnosis };
+    const diagnosis = await diagnoseDispatch(fixture, dispatchId, terminalHandle);
+    return { kind: 'blocked', code: bound.code, message: 'Session Binding 不可用：' + bound.message + '；' + diagnosis, ...identity };
   }
   const terminalState = await waitForSettle(fixture.backend, dispatchId, SETTLE_DEADLINE_MS);
-  if (terminalState !== 'succeeded' && terminalState !== 'completed' && terminalState !== 'done') {
-    return { kind: 'blocked', code: 'worker_not_succeeded', message: `Worker 未完成：${terminalState ?? 'unknown'}；${await diagnoseDispatch(fixture, dispatchId, prepared.preparedTerminal.handle)}` };
+  if (terminalState === null || !SETTLED_SUCCESS_STATES.has(terminalState)) {
+    return { kind: 'blocked', code: 'worker_not_succeeded', message: `Worker 未完成：${terminalState ?? 'unknown'}；${await diagnoseDispatch(fixture, dispatchId, terminalHandle)}`, ...identity };
+  }
+  // 增强级只需要精确原生 Session：recovery 能力组只是可选的覆盖证据，缺失时有界直读同一精确 transcript。
+  const inspector = requireWorkerHarness(binding.harness).capabilities?.recovery?.inspectTranscript;
+  if (fixture.level === 'complete' && inspector === undefined) {
+    return { kind: 'blocked', code: 'worker_harness_capability_unavailable', message: binding.harness + ' 缺少 recovery 能力组：完整级要求完整历史覆盖', ...identity };
   }
   // coverage 必须在真正 settled 之后读取，否则首个 event 后即 complete 会掩盖后续 tail 截断。
-  let coverage = await requireWorkerHarness(binding.harness).inspectTranscript(bound.binding.transcriptRef);
+  let coverage: HarnessTranscriptCoverageResult | null = inspector === undefined ? null : await inspector(bound.binding.transcriptRef);
   // Kilo's session.updated export can finish after worker_done; observe the same snapshot without redelivery.
-  for (let attempt = 0; binding.harness === 'kilo' && coverage.kind !== 'covered' && attempt < 15; attempt += 1) {
+  for (let attempt = 0; inspector !== undefined && binding.harness === 'kilo' && coverage?.kind !== 'covered' && attempt < 15; attempt += 1) {
     await new Promise((settle) => setTimeout(settle, 1_000));
-    coverage = await requireWorkerHarness(binding.harness).inspectTranscript(bound.binding.transcriptRef);
+    coverage = await inspector(bound.binding.transcriptRef);
   }
-  if (coverage.kind !== 'covered') return { kind: 'blocked', code: 'transcript_unavailable', message: 'transcript 不可读：' + coverage.reason };
+  if (coverage !== null && coverage.kind !== 'covered') {
+    return { kind: 'blocked', code: 'transcript_unavailable', message: 'transcript 不可读：' + coverage.reason, ...identity };
+  }
+  const evidence = coverage === null ? null : coverage.evidence;
   let modelTranscript = bound.binding.transcriptRef;
-  if (binding.harness === 'opencode') {
-    let material = await prepareOpencodeRecoveryMaterial(modelTranscript, input.stateRoot, coverage.evidence);
+  if (evidence !== null && binding.harness === 'opencode') {
+    let material = await prepareOpencodeRecoveryMaterial(modelTranscript, input.stateRoot, evidence);
     // worker_done 可先于最后一条 assistant/idle 消息落盘；重读范围并重新核验，绝不沿旧证据签材料。
-    for (let attempt = 0; material === null && attempt < 5; attempt += 1) {
+    for (let attempt = 0; inspector !== undefined && material === null && attempt < 5; attempt += 1) {
       await new Promise((settle) => setTimeout(settle, 1_000));
-      coverage = await requireWorkerHarness(binding.harness).inspectTranscript(modelTranscript);
-      if (coverage.kind !== 'covered') return { kind: 'blocked', code: 'transcript_unavailable', message: coverage.reason };
-      material = await prepareOpencodeRecoveryMaterial(modelTranscript, input.stateRoot, coverage.evidence);
+      const refreshed = await inspector(modelTranscript);
+      if (refreshed.kind !== 'covered') return { kind: 'blocked', code: 'transcript_unavailable', message: refreshed.reason, ...identity };
+      coverage = refreshed;
+      material = await prepareOpencodeRecoveryMaterial(modelTranscript, input.stateRoot, refreshed.evidence);
     }
-    if (material === null) return { kind: 'blocked', code: 'transcript_unavailable', message: '公开消息与已核验范围不一致' };
+    if (material === null) return { kind: 'blocked', code: 'transcript_unavailable', message: '公开消息与已核验范围不一致', ...identity };
     modelTranscript = opencodeRecoveryMaterialPath(input.stateRoot, modelTranscript);
   }
-  if (binding.harness === 'hermes') {
-    if (await prepareHermesRecoveryMaterial(modelTranscript, input.stateRoot, coverage.evidence) === null) return { kind: 'blocked', code: 'transcript_unavailable', message: 'Hermes 公开消息与已核验范围不一致' };
+  if (evidence !== null && binding.harness === 'hermes') {
+    if (await prepareHermesRecoveryMaterial(modelTranscript, input.stateRoot, evidence) === null) return { kind: 'blocked', code: 'transcript_unavailable', message: 'Hermes 公开消息与已核验范围不一致', ...identity };
     modelTranscript = hermesRecoveryMaterialPath(input.stateRoot, modelTranscript);
   }
-  if (binding.harness === 'cline') {
-    if (prepareClineRecoveryMaterial(modelTranscript, input.stateRoot, coverage.evidence) === null) return { kind: 'blocked', code: 'transcript_unavailable', message: 'Cline 原生消息与已核验范围不一致' };
+  if (evidence !== null && binding.harness === 'cline') {
+    if (prepareClineRecoveryMaterial(modelTranscript, input.stateRoot, evidence) === null) return { kind: 'blocked', code: 'transcript_unavailable', message: 'Cline 原生消息与已核验范围不一致', ...identity };
     modelTranscript = clineRecoveryMaterialPath(input.stateRoot, modelTranscript);
   }
   let transcriptEvidence = extractTranscriptEvidence(modelTranscript);
@@ -839,18 +937,21 @@ async function launchPreparedTerminal(input: {
   // worker_done 可以先于最终 assistant 响应落盘；只从精确来源等待，不用终端回显补结果。
   for (let attempt = 0; expectedAssistantText !== null && !transcriptEvidence.output.includes(expectedAssistantText) && attempt < 15; attempt += 1) {
     await new Promise((settle) => setTimeout(settle, 1_000));
-    coverage = await requireWorkerHarness(binding.harness).inspectTranscript(bound.binding.transcriptRef);
-    if (coverage.kind !== 'covered') return { kind: 'blocked', code: 'transcript_unavailable', message: coverage.reason };
-    if (binding.harness === 'opencode' && await prepareOpencodeRecoveryMaterial(bound.binding.transcriptRef, input.stateRoot, coverage.evidence) === null) continue;
+    if (inspector !== undefined) {
+      const refreshed = await inspector(bound.binding.transcriptRef);
+      if (refreshed.kind !== 'covered') return { kind: 'blocked', code: 'transcript_unavailable', message: refreshed.reason, ...identity };
+      coverage = refreshed;
+      if (binding.harness === 'opencode' && await prepareOpencodeRecoveryMaterial(bound.binding.transcriptRef, input.stateRoot, refreshed.evidence) === null) continue;
+    }
     transcriptEvidence = extractTranscriptEvidence(modelTranscript);
   }
   if (input.expectedAssistantText !== undefined && !transcriptEvidence.output.includes(input.expectedAssistantText)) {
-    return { kind: 'blocked', code: 'assistant_evidence_missing', message: '精确 transcript 的预期 assistant 证据尚不可读' };
+    return { kind: 'blocked', code: 'assistant_evidence_missing', message: '精确 transcript 的预期 assistant 证据尚不可读', ...identity };
   }
 
   if (binding.harness === 'antigravity') {
     const native = readRecord(JSON.parse(readFileSync(input.reportPath + '.model.json', 'utf8')) as unknown);
-    if (native?.['sessionId'] === bound.binding.providerSessionId && native['transcriptPath'] === bound.binding.transcriptRef
+    if (native !== undefined && native['sessionId'] === bound.binding.providerSessionId && native['transcriptPath'] === bound.binding.transcriptRef
       && typeof native['model'] === 'string') transcriptEvidence.model = native['model'];
   }
 
@@ -859,14 +960,15 @@ async function launchPreparedTerminal(input: {
     worker: {
       taskId,
       dispatchId,
-      terminalHandle: prepared.preparedTerminal.handle,
+      terminalHandle,
       stateRoot: report.stateRoot ?? report.codexHome ?? input.stateRoot,
       reporterPath: input.reporterPath,
       reportPath: input.reportPath,
       sessionId: bound.binding.providerSessionId,
       transcriptRef: bound.binding.transcriptRef,
-      coverage: coverage.evidence.coverage,
+      coverage: coverage === null || coverage.kind !== 'covered' ? null : coverage.evidence.coverage,
       terminalState,
+      readOnlyVerified: input.readOnlyProbePath === undefined ? null : readOnlyVerifiedFor(modelTranscript, input.readOnlyProbePath),
       output: transcriptEvidence.output,
       modelEvidence: transcriptEvidence.model,
     },
@@ -884,7 +986,7 @@ function harnessLaunchInput(input: {
   readonly launchId: string;
   readonly stateRoot: string;
   readonly reporterPath: string;
-  readonly sandboxMode: ReturnType<typeof sandboxModeFor>;
+  readonly sandboxMode: 'workspace-write' | 'read-only';
 }): WorkerHarnessLaunchInput {
   return {
     launchId: input.launchId,
@@ -902,6 +1004,7 @@ export type RoleRun = {
   readonly role: AcceptanceRole;
   readonly kind: 'ran' | 'blocked';
   readonly launchId: string;
+  readonly terminalHandle: string | null;
   readonly dispatchId: string | null;
   readonly sessionId: string | null;
   readonly transcriptRef: string | null;
@@ -910,12 +1013,19 @@ export type RoleRun = {
   readonly coverage: string | null;
   readonly terminalState: string | null;
   readonly artifactOk: boolean | null;
+  readonly readOnlyVerified: boolean | null;
   readonly modelEvidence: string | null;
   readonly blocker: { readonly code: string; readonly message: string } | null;
 };
 
-function blockedRole(harness: AcceptanceHarnessId, role: AcceptanceRole, launchId: string, code: string, message: string): RoleRun {
-  return { harness, role, kind: 'blocked', launchId, taskId: null, contextToken: null, dispatchId: null, sessionId: null, transcriptRef: null, stateRoot: null, reporterPath: null, coverage: null, terminalState: null, artifactOk: null, modelEvidence: null, blocker: { code, message } };
+/** 阻塞证据保留已知的真实身份，只在确实未知的字段上用 null。 */
+function blockedRole(harness: AcceptanceHarnessId, role: AcceptanceRole, launchId: string, code: string, message: string, identity: LaunchIdentity = {}): RoleRun {
+  return {
+    harness, role, kind: 'blocked', launchId,
+    taskId: identity.taskId ?? null, dispatchId: identity.dispatchId ?? null, terminalHandle: identity.terminalHandle ?? null,
+    contextToken: null, sessionId: null, transcriptRef: null, stateRoot: null, reporterPath: null,
+    coverage: null, terminalState: null, artifactOk: null, readOnlyVerified: null, modelEvidence: null, blocker: { code, message },
+  };
 }
 
 export async function runRole(input: {
@@ -932,13 +1042,14 @@ export async function runRole(input: {
   const roots = stateRootsFor(paths);
   installHarnessSessionReporter(binding.harness, paths);
   const strategy = prepareHarnessWorkerLaunch(binding.harness, harnessLaunchInput({
-    fixture, binding, launchId, stateRoot: roots.parent, reporterPath: paths.reporterPath, sandboxMode: sandboxModeFor(role),
+    fixture, binding, launchId, stateRoot: roots.parent, reporterPath: paths.reporterPath, sandboxMode: 'workspace-write',
   }));
   const contextToken = role === 'validator' ? randomUUID() : null;
   const expected = roleSpec(binding.harness, role);
-  const spec = contextToken === null ? expected.spec : expected.spec + '\n\n'
+  const spec = expected.spec
+    + (contextToken === null ? '' : '\n\n'
     + 'Remember this continuation marker only in this conversation (never in a repository file): ' + contextToken + '. '
-    + 'State it in your assistant response as a pending follow-up: on the next Validator continuation, recall the marker and write it to the requested continuation file. Do not perform that follow-up now.';
+    + 'State it in your assistant response as a pending follow-up: on the next Validator continuation, recall the marker and write it to the requested continuation file. Do not perform that follow-up now.');
   let outcome: LaunchOutcome;
   try {
     outcome = await launchPreparedTerminal({
@@ -948,19 +1059,20 @@ export async function runRole(input: {
       stateRoot: roots.actual, reporterPath: paths.reporterPath, reportPath: paths.reportPath,
     });
   } catch (error) {
-    return blockedRole(binding.harness, role, launchId, 'launch_exception', error instanceof Error ? error.message : String(error));
+    return blockedRole(binding.harness, role, launchId, failureCode(error, 'launch_exception'), error instanceof Error ? error.message : String(error));
   }
-  if (outcome.kind === 'blocked') return blockedRole(binding.harness, role, launchId, outcome.code, outcome.message);
+  if (outcome.kind === 'blocked') return blockedRole(binding.harness, role, launchId, outcome.code, outcome.message, outcome);
   const worker = outcome.worker;
-  const artifactOk = expected.artifactPath === null
-    ? worker.output.includes(completionToken(binding.harness, role))
-    : existsSync(join(fixture.projectDir, expected.artifactPath)) && readFileSync(join(fixture.projectDir, expected.artifactPath), 'utf8').trim() === expected.artifactBody;
+  const artifactOk = existsSync(join(fixture.projectDir, expected.artifactPath))
+    && readFileSync(join(fixture.projectDir, expected.artifactPath), 'utf8').trim() === expected.artifactBody;
   return {
     harness: binding.harness, role, kind: 'ran', launchId,
     taskId: worker.taskId, contextToken,
+    terminalHandle: worker.terminalHandle,
     dispatchId: worker.dispatchId, sessionId: worker.sessionId, transcriptRef: worker.transcriptRef,
     stateRoot: worker.stateRoot, reporterPath: worker.reporterPath, coverage: worker.coverage,
-    terminalState: worker.terminalState, artifactOk, modelEvidence: worker.modelEvidence, blocker: null,
+    terminalState: worker.terminalState, artifactOk, readOnlyVerified: worker.readOnlyVerified,
+    modelEvidence: worker.modelEvidence, blocker: null,
   };
 }
 
@@ -992,7 +1104,7 @@ export async function resumeRole(input: {
   installHarnessSessionReporter(binding.harness, { reporterPath: newPaths.reporterPath, reportPath: newPaths.reportPath });
   const base = harnessLaunchInput({
     fixture, binding, launchId: input.resumeLaunchId,
-    stateRoot: stateRootsFor(newPaths).parent, reporterPath, sandboxMode: sandboxModeFor(original.role),
+    stateRoot: stateRootsFor(newPaths).parent, reporterPath, sandboxMode: 'workspace-write',
   });
   const strategy = prepareHarnessResumeLaunch(binding.harness, {
     ...base,
@@ -1071,17 +1183,18 @@ export async function runRecoveryUtility(input: {
       throw new AcceptanceBlocker('original_unavailable', 'Recovery requires the precise original Validator session');
     }
     const harness = requireWorkerHarness(binding.harness);
-    const identity = await harness.readTranscriptIdentity({ transcriptRef: original.transcriptRef, workspace: fixture.projectDir });
+    const identity = await requireHarnessCapability(harness, 'nativeSession')
+      .readTranscriptIdentity({ transcriptRef: original.transcriptRef, workspace: fixture.projectDir });
     if (!('providerSessionId' in identity) || identity.providerSessionId !== original.sessionId) {
       throw new AcceptanceBlocker('source_identity_unavailable', 'Independent original transcript identity failed');
     }
-    const covered = await harness.inspectTranscript(original.transcriptRef);
+    const covered = await requireHarnessCapability(harness, 'recovery').inspectTranscript(original.transcriptRef);
     if (covered.kind !== 'covered') throw new AcceptanceBlocker('source_transcript_unavailable', covered.reason);
     result = { ...result, coverage: covered.evidence };
     const paths = workerSessionPathsUnder(binding.harness, join(fixture.root, 'state'), launchId);
     const roots = stateRootsFor(paths);
     installHarnessSessionReporter(binding.harness, paths);
-    const strategy = harness.prepareReadOnlyLaunch(harnessLaunchInput({
+    const strategy = requireHarnessCapability(harness, 'readOnly').prepareReadOnlyLaunch(harnessLaunchInput({
       fixture, binding, launchId, stateRoot: roots.parent, reporterPath: paths.reporterPath, sandboxMode: 'read-only',
     }));
     const recipe = binding.harness === 'opencode'
@@ -1090,14 +1203,9 @@ export async function runRecoveryUtility(input: {
         ? await prepareHermesRecoveryMaterial(original.transcriptRef, roots.actual, covered.evidence)
         : binding.harness === 'cline'
           ? prepareClineRecoveryMaterial(original.transcriptRef, roots.actual, covered.evidence)
-          : harness.recoveryInstructions();
+          : requireHarnessCapability(harness, 'recovery').recoveryInstructions();
     if (recipe === null) throw new AcceptanceBlocker('source_transcript_unavailable', 'Precise public export unavailable');
-    const probe = join('.companion', 'utility-write-probe-' + randomUUID());
-    const probePath = join(fixture.projectDir, probe);
-    const probeScript = 'const fs=require("node:fs");const path=' + JSON.stringify(probePath)
-      + ';try{fs.writeFileSync(path,"unexpected-write",{flag:"wx"});console.log(JSON.stringify({path,permissionDenied:false,code:null}));}'
-      + 'catch(e){console.log(JSON.stringify({path,permissionDenied:["EROFS","EACCES","EPERM"].includes(e.code),code:e.code}));}';
-    const probeCommand = "node -e '" + probeScript.replaceAll("'", "'\\''") + "'";
+    const probePath = join(fixture.projectDir, '.companion', 'utility-write-probe-' + randomUUID());
     const envelope = buildUtilityWorkerEnvelope({
       workPackageId: 'WP-1', sourceWorkerTaskId: original.taskId as WorkerTaskId,
       sourceSegmentId: ('acceptance-segment:' + original.dispatchId) as SessionSegmentId, transcriptRef: original.transcriptRef,
@@ -1105,17 +1213,19 @@ export async function runRecoveryUtility(input: {
     const spec = JSON.stringify({ ...envelope, instructions: [
       ...recoveryCapsuleInstructions(original.transcriptRef, covered.evidence, recipe),
       ...(binding.harness === 'qwen-code' ? ['Qwen event sourceRefs are exact record.uuid strings, matching host coverage. Do not invent ordinal or line aliases. Cite the actual assistant event containing the pending marker.'] : []),
-      'Qualification check, the sole exception to the no-write instruction: run this exact bounded probe once using your native shell tool: ' + probeCommand + '. Retain its actual tool output (permissionDenied/code/path); never retry or write elsewhere. Then read the precise original transcript. Include its pending continuation-marker follow-up in openActions, with the actual marker in description and its actual event sourceRef. This prompt does not supply the marker.',
+      readOnlyProbeInstruction(probePath) + ' Then read the precise original transcript. Include its pending continuation-marker follow-up in openActions, with the actual marker in description and its actual event sourceRef. This prompt does not supply the marker.',
     ] });
     const launched = await launchPreparedTerminal({
       fixture, binding, role: 'utility', launchId, strategy, spec,
       stateRoot: roots.actual, reporterPath: paths.reporterPath, reportPath: paths.reportPath,
     });
     if (launched.kind !== 'ran') throw new AcceptanceBlocker(launched.code, launched.message);
+    const utilityRef = launched.worker.transcriptRef;
+    if (utilityRef === null) throw new AcceptanceBlocker('transcript_unavailable', '只读 Utility 缺少精确 transcript 身份，无法核验拒写探针');
     const utilityTranscript = binding.harness === 'opencode'
-      ? opencodeRecoveryMaterialPath(roots.actual, launched.worker.transcriptRef)
-      : binding.harness === 'hermes' ? hermesRecoveryMaterialPath(roots.actual, launched.worker.transcriptRef)
-        : binding.harness === 'cline' ? clineRecoveryMaterialPath(roots.actual, launched.worker.transcriptRef) : launched.worker.transcriptRef;
+      ? opencodeRecoveryMaterialPath(roots.actual, utilityRef)
+      : binding.harness === 'hermes' ? hermesRecoveryMaterialPath(roots.actual, utilityRef)
+        : binding.harness === 'cline' ? clineRecoveryMaterialPath(roots.actual, utilityRef) : utilityRef;
     const permissionDenied = readPermissionDeniedEvidence(utilityTranscript, probePath);
     result = { ...result, utility: launched.worker, permissionDenied,
       readOnlyVerified: permissionDenied !== null && !existsSync(probePath) };
@@ -1164,7 +1274,7 @@ export async function runRecoveryUtility(input: {
     }
     throw new AcceptanceBlocker('utility_delivery_timeout', 'No exact Utility worker_done in the bounded window');
   } catch (error) {
-    return { ...result, blocker: { code: error instanceof AcceptanceBlocker ? error.code : 'utility_exception', message: error instanceof Error ? error.message : String(error) } };
+    return { ...result, blocker: { code: failureCode(error, 'utility_exception'), message: error instanceof Error ? error.message : String(error) } };
   }
 }
 
@@ -1224,9 +1334,21 @@ export function writeAcceptanceEvidence(directory: string, evidence: AcceptanceE
     '| harness | role | 结果 | terminal | session | coverage | artifact | blocker |',
     '| --- | --- | --- | --- | --- | --- | --- | --- |',
   ];
+  // 逐能力事实与派生等级由 qualificationFromAcceptance 从本文件同一份 JSON 导出，md 只做展示。
+  const qualificationLines: string[] = [
+    '', '## 资格事实', '', '| harness | 等级 | capability | state | diagnostic |', '| --- | --- | --- | --- | --- |',
+  ];
   for (const harness of evidence.harnesses) {
     const name = text(harness['harness']);
     const roles = Array.isArray(harness['roles']) ? (harness['roles'] as readonly EvidenceRole[]) : [];
+    const qualification = readRecord(harness['qualification']);
+    const level = text(harness['derivedLevel'], 'unavailable');
+    const facts = qualification !== undefined && Array.isArray(qualification['facts']) ? (qualification['facts'] as readonly unknown[]) : [];
+    if (facts.length === 0) qualificationLines.push('| ' + name + ' | ' + level + ' | （无可核验事实） | | |');
+    for (const fact of facts) {
+      const entry = readRecord(fact);
+      qualificationLines.push('| ' + name + ' | ' + level + ' | ' + text(entry?.['capability']) + ' | ' + text(entry?.['state']) + ' | ' + text(entry?.['diagnostic']) + ' |');
+    }
     for (const role of roles) {
       lines.push('| ' + name + ' | ' + role.role + ' | ' + role.kind + ' | ' + (role.terminalState ?? '') + ' | ' + (role.sessionId ?? '') + ' | ' + (role.coverage ?? '') + ' | ' + String(role.artifactOk ?? '') + ' | ' + (role.blocker === null || role.blocker === undefined ? '' : JSON.stringify(role.blocker)) + ' |');
     }
@@ -1238,6 +1360,7 @@ export function writeAcceptanceEvidence(directory: string, evidence: AcceptanceE
       lines.push('| ' + name + ' | - | blocker | | | | | ' + blocker + ' |');
     }
   }
+  lines.push(...qualificationLines);
   writeFileSync(join(directory, 'ip04-' + stamp + '.md'), lines.join('\n') + '\n', { encoding: 'utf8', flag: 'wx' });
   return jsonPath;
 }

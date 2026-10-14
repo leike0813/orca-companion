@@ -11,8 +11,16 @@ import { loadCurrentGraph } from '../../application/planning/graph-history.js';
 import type { WorktreeListResult } from '../../application/ports/execution-backend.js';
 import type { WorktreeSummary } from '../../application/ports/execution-backend.js';
 import { workPackageOf } from '../../domain/planning/execution-graph.js';
+import { workerSupportLevelAllows } from '../../domain/worker-harness-support.js';
 import { readBaselineGitObservations } from '../git/baseline-observer.js';
-import { dispatchScopedWorker, type ScopedWorkerDispatchInput, type ScopedWorkerDispatchResult } from './utility-worker.js';
+import { workerHarnessSupport } from './worker-harness-qualifications.js';
+import {
+  dispatchScopedWorker,
+  type BasicScopedWorkerDispatchResult,
+  type ScopedWorkerDispatchInput,
+  type ScopedWorkerDispatchResult,
+  type ScopedWorkerIdentityMode,
+} from './utility-worker.js';
 
 export type BaselineWorkerDispatchInput = Omit<
   ScopedWorkerDispatchInput,
@@ -25,6 +33,7 @@ export type BaselineWorkerDispatchInput = Omit<
 
 export type BaselineWorkerDispatchResult =
   | ScopedWorkerDispatchResult
+  | BasicScopedWorkerDispatchResult
   | { readonly kind: 'already_dispatched'; readonly orcaTaskId: string; readonly dispatchId: DispatchId };
 
 async function ownedWorktree(input: Pick<BaselineWorkerDispatchInput, 'backend' | 'repoSelector' | 'worktree' | 'canonicalWorktree' | 'plan'>): Promise<
@@ -77,19 +86,39 @@ export async function dispatchBaselineWorker(input: BaselineWorkerDispatchInput)
   if (scope.kind !== 'scope' || scope.scope === null || scope.scope.mode !== 'execution_coordination' || scope.scope.controlState !== 'active' || scope.scope.authorizationId !== input.execution.authorizationId) {
     return { kind: 'rejected', code: 'invalid_scope', message: '当前 Scope 不允许派发基线补救' };
   }
-  if ((input.workerLaunch.kind === 'orca_managed' && input.workerLaunch.agent !== 'codex') ||
-      (input.workerLaunch.kind === 'prepared_terminal' && input.workerLaunch.harness !== 'codex')) {
-    return { kind: 'rejected', code: 'harness_mismatch', message: '基线补救要求 Codex Planner Worker' };
-  }
   const authorization = input.store.query({
     kind: 'authorization', coordinationScopeId: input.coordinationScopeId,
     authorizationId: input.execution.authorizationId,
   });
-  if (authorization.kind !== 'authorization' || authorization.authorization === null ||
-      !authorization.authorization.manifest.permissions.planner ||
-      !authorization.authorization.manifest.workerProfiles.some((profile) => profile.role === 'planner' && profile.harness === 'codex')) {
-    return { kind: 'rejected', code: 'planner_not_authorized', message: '当前授权未批准 Codex Planner' };
+  if (authorization.kind !== 'authorization' || authorization.authorization === null) {
+    return { kind: 'rejected', code: 'planner_not_authorized', message: '无法读取当前授权' };
   }
+  const manifest = authorization.authorization.manifest;
+  const plannerProfile = manifest.workerProfiles.find((profile) => profile.role === 'planner');
+  if (!manifest.permissions.planner || plannerProfile === undefined) {
+    return { kind: 'rejected', code: 'planner_not_authorized', message: '当前授权未批准 Planner 角色' };
+  }
+  // 运行依据只看已批准 profile：启动 harness 必须与它一致，不从调用方或模型连接另取一个身份。
+  const launchHarness = input.workerLaunch.kind === 'prepared_terminal' ? input.workerLaunch.harness : input.workerLaunch.agent;
+  if (launchHarness !== plannerProfile.harness) {
+    return {
+      kind: 'rejected',
+      code: 'harness_mismatch',
+      message: `基线补救必须使用已批准 Planner profile 的 harness（${plannerProfile.harness}）`,
+    };
+  }
+  if (manifest.manifestVersion === 5 && !workerSupportLevelAllows(workerHarnessSupport(plannerProfile.harness).level, 'basic')) {
+    return {
+      kind: 'rejected',
+      code: 'worker_harness_capability_unavailable',
+      message: `${plannerProfile.harness} 当前不满足 basic 支持等级，不派发基线补救 Planner`,
+    };
+  }
+  // v5 的归属模式由原授权 profile 钉住的等级决定；v4 保持原生 Session 语义，不因当前摘要自动降级。
+  const identity: ScopedWorkerIdentityMode = manifest.manifestVersion === 5
+    && !workerSupportLevelAllows(plannerProfile.supportLevel ?? 'unavailable', 'enhanced')
+    ? 'basic'
+    : 'native';
   const graph = scope.scope.graphId === null ? null : loadCurrentGraph({ store: input.store, coordinationScopeId: input.coordinationScopeId, graphId: scope.scope.graphId });
   const workPackage = graph?.kind === 'loaded' ? workPackageOf(graph.version.graph, plan.workPackageId) : null;
   if (workPackage === null || graph?.kind !== 'loaded' || graph.version.generation !== input.execution.graphGeneration || graph.version.orcaRunId !== input.execution.runId) {
@@ -125,20 +154,23 @@ export async function dispatchBaselineWorker(input: BaselineWorkerDispatchInput)
       'dirty paths 与 scope：任何与 requiredBaselineHead 不等的 HEAD 都会被判为未对账。不要执行实现角色工作。' +
       '完成后按 Orca Dispatch 指令提交 worker_done。',
   });
-  return dispatchScopedWorker({
+  const dispatchInput = {
     ...input,
     workPackageId: plan.workPackageId,
     spec,
     ...(record.orcaTaskId === null ? {} : { existingOrcaTaskId: record.orcaTaskId }),
-    onTaskCreated: (taskId) => bind(input, taskId),
-    onDispatchStarted: (taskId, dispatchId) => bind(input, taskId, dispatchId as DispatchId),
-    observeSession: async (dispatchId) => {
+    onTaskCreated: (taskId: string) => bind(input, taskId),
+    onDispatchStarted: (taskId: string, dispatchId: string) => bind(input, taskId, dispatchId as DispatchId),
+    observeSession: async (dispatchId: string) => {
       const facts = await input.observeSession(dispatchId);
       return facts?.role === 'planner' && facts.workerTaskId === plan.reconciliationId && facts.dispatchId === dispatchId
         ? facts
         : null;
     },
-  });
+  };
+  return identity === 'basic'
+    ? dispatchScopedWorker({ ...dispatchInput, identity: 'basic' })
+    : dispatchScopedWorker({ ...dispatchInput, identity: 'native' });
 }
 
 /** 正常 Delivery 已结算后，重新读取 Git 与当前图，四项检查通过才解除补救门禁。 */

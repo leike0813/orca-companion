@@ -20,7 +20,7 @@ import type {
 import type { ExecutionBackend, ExecutionMutation } from '../../src/application/ports/execution-backend.js';
 import type { SessionBinding } from '../../src/domain/task-contract.js';
 import { createExecutionScopeHarness, EXECUTION_AUTHORIZATION_ID, EXECUTION_RUN_ID } from '../support/execution-harness.js';
-import { modelConfigurationFixture } from '../support/model-configurations.js';
+import { modelConfigurationFixture, profileRefFor } from '../support/model-configurations.js';
 
 const BINDING: SessionBinding = {
   harness: 'codex',
@@ -57,6 +57,7 @@ test.each([
   { name: 'idle 等待未满足', owner: true, workerState: 'succeeded', idle: false, unknown: false, closes: 0 },
   { name: '已关闭后重放不重复关闭', owner: true, workerState: 'succeeded', idle: true, unknown: false, closes: 1 },
   { name: '响应丢失后按原意图对账', owner: true, workerState: 'succeeded', idle: true, unknown: true, closes: 1 },
+  { name: '原 profile 无法核验时不关闭 owner', owner: true, workerState: 'succeeded', idle: true, unknown: false, closes: 0, invalidProfile: true },
 ])('$name', async (scenario) => {
   const harness = createExecutionScopeHarness();
   const mutations: ExecutionMutation[] = [];
@@ -104,7 +105,7 @@ test.each([
     sandboxMode: 'danger-full-access',
     companionStateRoot: dirname(harness.databasePath),
     canonicalWorktreePath: '/tmp/canonical',
-    originalMaterializationBinding: { launchId: 'orig-launch' },
+    originalMaterializationBinding: { launchId: 'orig-launch', workerProfileRef: 'invalidProfile' in scenario ? 'missing' : profileRefFor('validator') },
     workPackage: { workPackageId: 'wp-1', scopeEnvelope: { include: ['src'], exclude: [] } },
     bindingWindowMs: 1_000,
     resultTimeoutMs: 1_000,
@@ -113,7 +114,8 @@ test.each([
     const first = await runner(REQUEST);
     expect(first.kind).toBe('step_failed');
     if (first.kind === 'step_failed') expect(first.code).toBe(
-      scenario.closes === 0 || scenario.unknown ? 'owner_release_blocked' : 'acceptance_stop_after_close',
+      'invalidProfile' in scenario ? 'worker_support_insufficient' :
+        scenario.closes === 0 || scenario.unknown ? 'owner_release_blocked' : 'acceptance_stop_after_close',
     );
     expect(mutations.filter(mutation => mutation.operation === 'terminal-close')).toHaveLength(scenario.closes);
     if (scenario.closes > 0) {

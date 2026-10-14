@@ -210,6 +210,11 @@ export type SessionBinding = {
   readonly observedAt: string;
 };
 
+/** Orca 运行身份与原生会话身份分别表达，terminal 不冒充 provider Session。 */
+export type WorkerExecutionBinding =
+  | { readonly kind: 'orca_worker'; readonly orcaTaskId: string; readonly terminalHandle: string }
+  | { readonly kind: 'native_session'; readonly session: SessionBinding };
+
 /** 角色是否被授权执行该角色的工作；`gitIntegration` 与 `dependencyChanges` 不属于角色的执行权限。 */
 export function roleIsAuthorized(authority: RoleAuthorities, role: WorkerRole): boolean {
   return authority[role];

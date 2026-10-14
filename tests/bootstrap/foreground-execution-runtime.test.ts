@@ -667,7 +667,9 @@ function fakeAdvanceOrca(options: {
           case 'worker-show':
             return Promise.resolve({
               kind: 'accepted' as const,
-              value: { exactWorker: true, agentTerminalHandle: terminals[0]?.handle ?? null },
+              value: { exactWorker: true, dispatchId: input.dispatchId,
+                taskId: workers.find(worker => worker.dispatchId === input.dispatchId)?.taskId ?? null,
+                agentTerminalHandle: terminals[0]?.handle ?? null },
             });
           default:
             return Promise.resolve({
@@ -727,7 +729,7 @@ function fakeAdvanceOrca(options: {
 }
 
 /** 现场：两个互相独立的 Work Package（因此有两个候选），授权已批准且已进入执行协调态。 */
-function prepareAdvanceState(repository: string, head: string): void {
+function prepareAdvanceState(repository: string, head: string, basic = false): void {
   const opened = openCoordinationStore({
     databasePath: coordinationDatabasePath(join(repository, '.git')),
     clock,
@@ -824,7 +826,8 @@ function prepareAdvanceState(repository: string, head: string): void {
       graph: { graphId: EXEC_GRAPH, generation: EXEC_GENERATION, version: 1 as GraphVersion },
       baselineHead: head,
       orcaRunId: EXEC_RUN,
-      workerProfiles: executionWorkerProfiles(),
+      workerProfiles: executionWorkerProfiles().map(profile => basic && profile.role === 'planner'
+        ? { ...profile, supportLevel: 'basic' } : profile),
       recoveryUtilityProfile: recoveryUtilityProfileFixture(),
       permissions: {
         planner: true,
@@ -847,7 +850,7 @@ function prepareAdvanceState(repository: string, head: string): void {
       writer,
       authorizationId: EXEC_AUTH,
       authorizationVersion: 1,
-      manifestVersion: 4,
+      manifestVersion: MANIFEST_VERSION,
       fingerprint: 'fingerprint-advance',
       approvalRef: 'approval-advance',
       manifest,
@@ -925,7 +928,7 @@ afterEach(() => {
   }
 });
 
-async function openAdvanceHarness(options?: { readonly unknownWorkerStart?: boolean }): Promise<AdvanceHarness> {
+async function openAdvanceHarness(options?: { readonly unknownWorkerStart?: boolean; readonly basic?: boolean }): Promise<AdvanceHarness> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-advance-'));
   const repository = join(directory, 'repo');
   mkdirSync(repository);
@@ -969,7 +972,7 @@ async function openAdvanceHarness(options?: { readonly unknownWorkerStart?: bool
   git('add', '.');
   git('commit', '-qm', 'fixture');
   const head = git('rev-parse', 'HEAD');
-  prepareAdvanceState(repository, head);
+  prepareAdvanceState(repository, head, options?.basic);
 
   const worktreeRoot = join(directory, 'worktrees');
   mkdirSync(worktreeRoot, { recursive: true });
@@ -1087,6 +1090,21 @@ test('授权后宿主真的推进一次 Frontier：一个候选获得隔离 work
   }, { timeout: ADVANCE_WAIT_MS, interval: 25 });
   expect(mutationCount(harness, 'worktree-create')).toBe(1);
   expect(mutationCount(harness, 'task-create')).toBe(1);
+  expect(mutationCount(harness, 'worker-start')).toBe(1);
+});
+
+test('基础 Planner 派发记录 Orca 执行绑定，不等待 SessionStart 或重复启动', { timeout: ADVANCE_TIMEOUT_MS }, async () => {
+  const harness = await openAdvanceHarness({ basic: true });
+  await sendAdvanceMessage(harness, '开始执行');
+  await vi.waitFor(() => {
+    const current = readAdvanceStore(harness.repository);
+    try {
+      const read = current.query({ kind: 'session-segments', coordinationScopeId: EXEC_SCOPE });
+      expect(read).toMatchObject({ kind: 'session-segments', segments: [{ role: 'planner', sessionBindingId: '',
+        lastTranscriptRef: null, executionBinding: { kind: 'orca_worker' } }] });
+    } finally { current.close(); }
+  }, { timeout: ADVANCE_WAIT_MS, interval: 25 });
+  await sendAdvanceMessage(harness, '继续观察');
   expect(mutationCount(harness, 'worker-start')).toBe(1);
 });
 

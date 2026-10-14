@@ -2,7 +2,8 @@ import { constants, closeSync, fstatSync, lstatSync, openSync, readSync, realpat
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import type { HarnessSessionReport, ProveHarnessSessionInput, WorkerHarness, WorkerHarnessLaunchInput } from '../../application/ports/worker-harness.js';
+import type { HarnessSessionReport, ProveHarnessSessionInput, WorkerHarnessLaunchInput } from '../../application/ports/worker-harness.js';
+import { createWorkerHarness } from '../../application/ports/worker-harness.js';
 import { candidateSessionPaths, installCandidateReporter, prepareCandidateLaunch, type CandidateResume } from './candidate-worker-launch.js';
 import { probeHarnessReadOnlyWorker } from './read-only-execution-wrapper.js';
 import { antigravityReportingDefinition, readReportingJson, reportingInstalled } from './worker-harness-reporting.js';
@@ -152,7 +153,7 @@ export function inspectAntigravityTranscript(transcriptRef: string) {
   finally { if (fd !== undefined) closeSync(fd); }
 }
 
-export const antigravityHarness: WorkerHarness = {
+export const antigravityHarness = createWorkerHarness({
   id: 'antigravity', prepareLaunch: (input) => launch(input),
   prepareReadOnlyLaunch: (input) => launch({ ...input, sandboxMode: 'read-only-local-control' }),
   prepareResume: (input) => launch(input, input),
@@ -189,4 +190,4 @@ export const antigravityHarness: WorkerHarness = {
     'Task Envelope 已给出完整输出字段与可信覆盖证据；taskKind 是任务标签，无需搜索 schema、测试程序、Orca 安装文件或其他目录。',
     '用有界 Node 读取精确 JSONL，逐行 JSON.parse 并输出必要 step_index/content。run_command 使用 RunPersistent=false、WaitMsBeforeAsync=30000，在前台完成读取。',
     '只接受 DONE 与紧接原生工具调用的 GENERIC/ERROR 终态；活动事件、缺失事件或未知结构时停止。input_tokens/cache_read_tokens/output_tokens 是原生 usage。'],
-};
+});

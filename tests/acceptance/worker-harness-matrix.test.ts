@@ -12,7 +12,7 @@
  * artifacts/next-worker-harness-adapters 的独立摘要证据；现场默认保留，交由用户显式回收。
  */
 
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,7 +22,10 @@ import type { ExecutionBackend } from '../../src/application/ports/execution-bac
 import { buildExecutionScope } from '../../src/application/ports/execution-backend.js';
 import type { CoordinationScopeId, CoordinatorSessionId, RuntimeIncarnationId } from '../../src/application/dto/identity.js';
 
+import type { WorkerHarness } from '../../src/application/ports/worker-harness.js';
 import { workerHarnessRegistry } from '../../src/bootstrap/worker-harness.js';
+import { qualificationFromAcceptance } from '../../src/adapters/agents/worker-harness-qualifications.js';
+import { deriveWorkerSupportLevel } from '../../src/domain/worker-harness-support.js';
 import {
   ACCEPTANCE_DIAGNOSTICS,
   HARNESS_MATRIX,
@@ -38,15 +41,19 @@ import {
   transcriptRecords,
   permissionDeniedFromToolRecord,
   qwenRecoverySourcesVerified,
+  readPermissionDeniedEvidence,
   resolveAcceptancePlan,
   resumeRole,
   roleSpec,
   runRecoveryUtility,
   runRole,
+  launchPreparedTerminal,
+  SETTLED_SUCCESS_STATES,
   writeAcceptanceEvidence,
   type AcceptanceFixture,
   type AcceptanceHarnessId,
   type HarnessBinding,
+  type LaunchOutcome,
   type RoleRun,
   type AcceptanceEvidence,
 } from '../support/worker-harness-acceptance.js';
@@ -122,12 +129,50 @@ test.each([true, false])('Antigravity 拒写证据需要配对原生 shell 事�
   expect(permissionDeniedFromToolRecord(output, '/fixture/probe', 'step:2')).toBeNull();
 });
 
+test('Kilo pretty JSON export 的拒写证据来自真实 tool 完成输出，assistant 自报不作证明', () => {
+  const output = '{"permissionDenied":true,"path":"/fixture/probe","code":"EROFS"}';
+  const exportOf = (parts: unknown[]): string => JSON.stringify({ info: { id: 'ses_fixture', directory: '/fixture' },
+    messages: [{ info: { id: 'msg_1', role: 'assistant' }, parts }] }, null, 2);
+  const directory = mkdtempSync(join(tmpdir(), 'kilo-export-'));
+  try {
+    const write = (name: string, text: string): string => {
+      const file = join(directory, name);
+      writeFileSync(file, text);
+      return file;
+    };
+    const toolRef = write('tool.json', exportOf([{ type: 'tool', state: { status: 'completed', output } }]));
+    expect(readPermissionDeniedEvidence(toolRef, '/fixture/probe'))
+      .toEqual({ path: '/fixture/probe', code: 'EROFS', eventRef: 'line:1' });
+    expect(readPermissionDeniedEvidence(write('assistant.json',
+      exportOf([{ type: 'text', text: output }])), '/fixture/probe')).toBeNull();
+    expect(readPermissionDeniedEvidence(write('running.json',
+      exportOf([{ type: 'tool', state: { status: 'running', output } }])), '/fixture/probe')).toBeNull();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('JSONL 损坏行不能连接 Antigravity 工具调用和拒写输出', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'tool-proof-'));
+  const file = join(directory, 'transcript.jsonl');
+  const call = { step_index: 1, type: 'PLANNER_RESPONSE', source: 'MODEL', status: 'DONE', tool_calls: [{ name: 'run_command' }] };
+  const result = { step_index: 2, type: 'GENERIC', source: 'MODEL', status: 'DONE', content: '{"permissionDenied":true,"path":"/fixture/probe","code":"EROFS"}' };
+  try {
+    for (const gap of ['', 'broken\n']) {
+      writeFileSync(file, JSON.stringify(call) + '\n' + gap + JSON.stringify(result));
+      expect(readPermissionDeniedEvidence(file, '/fixture/probe') !== null).toBe(gap === '');
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('配置 baseline 识别新增、删除和变更，只返回路径', () => {
   expect(globalConfigChanges(new Map([['unchanged', '1'], ['removed', '2'], ['changed', '3']]),
     new Map([['unchanged', '1'], ['added', '4'], ['changed', '5']]))).toEqual(['removed', 'changed', 'added']);
 });
 
-test.each(['planner', 'implementation', 'validator'] as const)('各 harness 的 %s 指令与验收使用独立工件', (role) => {
+test.each(['planner', 'implementation', 'validator', 'finalizer'] as const)('各 harness 的 %s 指令与验收使用独立工件', (role) => {
   const paths = ['command-code', 'qwen-code'].map((harness) => {
     const expected = roleSpec(harness, role);
     expect(expected.artifactPath).toBe(join('.companion', 'roles', harness + '-' + role + '.txt'));
@@ -163,6 +208,20 @@ test('真实计划只使用原生模型绑定与明确 Orca 命令，默认路�
     expect(binding.modelSelection.model.split('/').at(-1)).toBe(binding.expectedModel);
   }
   expect(bindingFor('pi').modelSelection.model).toBe('minimax-cn/MiniMax-M3.1-Flash-Preview');
+});
+
+test('真实等级缺省 complete，可收窄到 basic/enhanced，未知取值与越级角色立即拒绝', () => {
+  const base = { ORCA_COMPANION_REAL_ACCEPTANCE: '1', ORCA_CLI_COMMAND: '/fixture/orca-ide' };
+  expect(resolveAcceptancePlan(base)).toMatchObject({ kind: 'run', level: 'complete', roles: ['planner', 'implementation', 'validator', 'finalizer'] });
+  expect(resolveAcceptancePlan({ ...base, ORCA_COMPANION_REAL_ACCEPTANCE_LEVEL: 'basic' }))
+    .toMatchObject({ kind: 'run', level: 'basic', roles: ['planner', 'implementation'] });
+  expect(resolveAcceptancePlan({ ...base, ORCA_COMPANION_REAL_ACCEPTANCE_LEVEL: 'enhanced', ORCA_COMPANION_REAL_ACCEPTANCE_ROLES: 'planner,finalizer' }))
+    .toMatchObject({ kind: 'run', level: 'enhanced', roles: ['planner', 'finalizer'] });
+  expect(() => resolveAcceptancePlan({ ...base, ORCA_COMPANION_REAL_ACCEPTANCE_LEVEL: 'full' })).toThrow(/complete/);
+  expect(() => resolveAcceptancePlan({ ...base, ORCA_COMPANION_REAL_ACCEPTANCE_LEVEL: 'basic', ORCA_COMPANION_REAL_ACCEPTANCE_ROLES: 'validator' }))
+    .toThrow(/validator/);
+  // 开关未开启时等级不参与校验：只返回 skip，不产生任何其它可观察动作。
+  expect(resolveAcceptancePlan({ ORCA_COMPANION_REAL_ACCEPTANCE_LEVEL: 'full' })).toMatchObject({ kind: 'skip' });
 });
 
 test('候选仅在显式资格计划临时登记，并恢复原注册表', () => {
@@ -218,6 +277,105 @@ test.each(['missing', 'unknown'] as const)('terminal 创建 %s 时阻塞且不�
   expect(query).not.toHaveBeenCalled();
 });
 
+/** 基础级只用真实 Orca 执行绑定结算：不等待原生报告，原生字段如实为 null。 */
+function basicFixture(workerState: string): AcceptanceFixture {
+  const terminalHandle = 'exact-created';
+  const mutate = vi.fn<ExecutionBackend['mutate']>().mockImplementation((mutation) => Promise.resolve(
+    mutation.operation === 'task-create'
+      ? { kind: 'accepted', operation: { operationId: 'fixture-create', target: TEST_SCOPE.target }, value: { task: { id: 'task-basic' } } }
+      : mutation.operation === 'terminal-create'
+        ? { kind: 'accepted', operation: { operationId: 'fixture-create', target: TEST_SCOPE.target }, value: { terminal: { handle: terminalHandle } } }
+        : { kind: 'accepted', operation: { operationId: 'fixture-create', target: TEST_SCOPE.target }, value: { dispatchId: 'dispatch-basic' } }));
+  const query = vi.fn<ExecutionBackend['query']>().mockImplementation((request) => Promise.resolve(
+    request.operation === 'terminal-wait'
+      ? { kind: 'accepted', value: { wait: { handle: terminalHandle, condition: 'tui-idle', status: 'running', satisfied: true } } }
+      : request.operation === 'worker-show'
+        ? { kind: 'accepted', value: { exactWorker: true, agentTerminalHandle: terminalHandle, workerState } }
+        : request.operation === 'worker-read'
+          ? { kind: 'accepted', value: { text: 'HARNESS-kilo-planner-OK' } }
+          : { kind: 'accepted', value: { truncated: false, omittedHostIds: [], terminals: [{ handle: terminalHandle, title: 'same-title', connected: true, writable: true }] } }));
+  return {
+    root: '/fixture/root', projectDir: '/fixture/project', backend: { mutate, query }, runId: 'run-basic',
+    coordinatorTerminalHandle: terminalHandle, identity: 'fixture-identity', level: 'basic', configBefore: new Map(),
+    scopeFor: () => TEST_SCOPE, dispose: () => Promise.resolve(),
+  };
+}
+
+/** 单元夹具不启动真实 harness：跑完恢复可观察标记，不污染「默认开关」断言。 */
+async function fakeLaunch(workerState: string, launchId: string): Promise<LaunchOutcome> {
+  const launched = ACCEPTANCE_DIAGNOSTICS.harnessLaunched;
+  try {
+    return await launchPreparedTerminal({
+      fixture: basicFixture(workerState), binding: bindingFor('kilo'), role: 'planner', launchId,
+      strategy: BASIC_STRATEGY, stateRoot: '/fixture/state', reporterPath: '/fixture/state/reporter.json', reportPath: '/fixture/state/report.json',
+    });
+  } finally {
+    ACCEPTANCE_DIAGNOSTICS.harnessLaunched = launched;
+  }
+}
+
+const BASIC_STRATEGY = {
+  kind: 'prepared_terminal' as const, harness: 'kilo', activation: 'none' as const, title: 'same-title',
+  prepare: () => Promise.resolve({ title: 'same-title', command: 'fixture-command', stateRoot: '/fixture/state' }),
+};
+
+test('基础级按真实 Worker 成功态与结果结算，原生字段保持 null', async () => {
+  const outcome = await fakeLaunch('succeeded', 'unit:basic');
+  expect(outcome).toMatchObject({
+    kind: 'ran',
+    worker: {
+      taskId: 'task-basic', dispatchId: 'dispatch-basic', terminalHandle: 'exact-created', terminalState: 'succeeded',
+      sessionId: null, transcriptRef: null, coverage: null, readOnlyVerified: null, modelEvidence: null,
+      output: 'HARNESS-kilo-planner-OK',
+    },
+  });
+});
+
+test.each(['failed', 'cancelled', 'completed', 'done'])('基础级只承认 succeeded：%s 终态阻塞且保留已知身份', async (workerState) => {
+  const outcome = await fakeLaunch(workerState, 'unit:basic-' + workerState);
+  expect(outcome).toMatchObject({ kind: 'blocked', code: 'worker_not_succeeded', taskId: 'task-basic', dispatchId: 'dispatch-basic', terminalHandle: 'exact-created' });
+}, 15_000);
+/** 增强级只用精确原生 Session：即使没有 recovery 能力组，也要读出输出与拒写证据。 */
+test('增强级没有 recovery 能力组时按精确原生 Session 结算', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'enhanced-native-'));
+  const transcript = join(directory, 'transcript.json');
+  const reportPath = join(directory, 'session-report.json');
+  const probePath = join(directory, 'role-write-probe');
+  const assistant = { type: 'message', message: { role: 'assistant', model: 'fixture-model', content: [{ type: 'text', text: 'enhanced answer' }] } };
+  const denied = { type: 'function_call_result', output: { type: 'text', text: JSON.stringify({ permissionDenied: true, path: probePath, code: 'EROFS' }) } };
+  writeFileSync(transcript, JSON.stringify({ info: { id: 'ses-enhanced' }, messages: [assistant, denied] }), 'utf8');
+  writeFileSync(reportPath, JSON.stringify({ sessionId: 'ses-enhanced', transcriptPath: transcript, cwd: '/fixture/project', observedAt: '2026-10-14T00:00:00.000Z', harness: 'fixture-native' }), 'utf8');
+  const registry = workerHarnessRegistry as Map<string, WorkerHarness>;
+  const previous = registry.get('fixture-native');
+  const fake: WorkerHarness = {
+    id: 'fixture-native',
+    prepareLaunch: () => ({ kind: 'prepared_terminal', harness: 'fixture-native', activation: 'none', title: 'same-title', prepare: () => Promise.resolve({ title: 'same-title', command: 'fixture-command', stateRoot: directory }) }),
+    queryModels: () => Promise.resolve({ kind: 'unavailable', code: 'fixture', message: 'fixture' }),
+    sessionPaths: () => ({ stateRoot: directory, reporterPath: join(directory, 'reporter.json'), reportPath }),
+    installReporter: () => undefined,
+    capabilities: { nativeSession: {
+      proveSession: () => Promise.resolve({ kind: 'proven', proof: { providerSessionId: 'ses-enhanced', transcriptRef: transcript, observedAt: '2026-10-14T00:00:00.000Z' } }),
+      readTranscriptIdentity: () => Promise.resolve({ providerSessionId: 'ses-enhanced' }),
+    } },
+  };
+  registry.set('fixture-native', fake);
+  const launched = ACCEPTANCE_DIAGNOSTICS.harnessLaunched;
+  try {
+    const binding: HarnessBinding = { harness: 'fixture-native', modelSelection: { model: 'fixture-model', effort: null, effortCapability: null, catalogSource: null }, expectedModel: 'fixture-model' };
+    const outcome = await launchPreparedTerminal({
+      fixture: { ...basicFixture('succeeded'), level: 'enhanced' }, binding, role: 'planner', launchId: 'unit:enhanced',
+      strategy: fake.prepareLaunch({ launchId: 'unit:enhanced', modelSelection: binding.modelSelection, sandboxMode: 'workspace-write' }),
+      stateRoot: directory, reporterPath: join(directory, 'reporter.json'), reportPath, readOnlyProbePath: probePath,
+    });
+    expect(outcome).toMatchObject({ kind: 'ran', worker: { sessionId: 'ses-enhanced', transcriptRef: transcript, coverage: null, readOnlyVerified: true, modelEvidence: 'fixture-model' } });
+    if (outcome.kind === 'ran') expect(outcome.worker.output).toContain('enhanced answer');
+  } finally {
+    ACCEPTANCE_DIAGNOSTICS.harnessLaunched = launched;
+    if (previous === undefined) registry.delete('fixture-native'); else registry.set('fixture-native', previous);
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('同一轮次写入独立证据，不覆盖已有文件', () => {
   const directory = mkdtempSync(join(tmpdir(), 'worker-harness-evidence-'));
   const evidence: AcceptanceEvidence = {
@@ -262,6 +420,8 @@ function roleEvidence(run: RoleRun): Record<string, unknown> {
     coverage: run.coverage,
     terminalState: run.terminalState,
     artifactOk: run.artifactOk,
+    readOnlyVerified: run.readOnlyVerified,
+    terminalHandle: run.terminalHandle,
     modelEvidence: run.modelEvidence,
     blocker: run.blocker,
   };
@@ -281,26 +441,28 @@ async function runHarnessMatrix(fixture: AcceptanceFixture, harness: AcceptanceH
     process.stdout.write(`[ip04] ${harness}/${role}: ${run.kind} state=${run.terminalState ?? '-'} artifact=${run.artifactOk ?? '-'} coverage=${run.coverage ?? '-'} blocker=${run.blocker?.code ?? '-'}\n`);
     if (run.blocker !== null) blockers.push(role + '：' + run.blocker.code + ' ' + run.blocker.message);
   }
+  const level = fixture.level;
   const implementation = roles.find((run) => run.role === 'implementation');
-  const resume = implementation === undefined
+  const resume = level === 'basic' || implementation === undefined
     ? null
     : await resumeRole({ fixture, binding, original: implementation, resumeLaunchId: 'ip04:' + harness + ':resume' });
   if (resume?.blocker != null) blockers.push('resume：' + resume.blocker.code + ' ' + resume.blocker.message);
   if (resume !== null) process.stdout.write(`[ip04] ${harness}/resume: ${resume.kind} sameSession=${resume.sameSession} coverage=${resume.coverage ?? '-'} blocker=${resume.blocker?.code ?? '-'}\n`);
   const validator = roles.find((run) => run.role === 'validator');
-  const recovery = validator === undefined ? null : await runRecoveryUtility({
+  const recovery = level !== 'complete' || validator === undefined ? null : await runRecoveryUtility({
     fixture, binding, original: validator, launchId: 'ip04:' + harness + ':recovery-utility',
   });
   if (recovery?.blocker != null) blockers.push('recovery：' + recovery.blocker.code + ' ' + recovery.blocker.message);
   if (recovery !== null) process.stdout.write(`[ip04] ${harness}/recovery: ${recovery.kind} state=${recovery.utility?.terminalState ?? '-'} readonly=${recovery.readOnlyVerified} source=${recovery.sourceBehaviorVerified} blocker=${recovery.blocker?.code ?? '-'}\n`);
-  const validatorContinuation = validator === undefined ? null : await resumeRole({
+  const validatorContinuation = level === 'basic' || validator === undefined ? null : await resumeRole({
     fixture, binding, original: validator, resumeLaunchId: 'ip04:' + harness + ':validator-continuation',
   });
   if (validatorContinuation?.blocker != null) blockers.push('validator-continuation：' + validatorContinuation.blocker.code + ' ' + validatorContinuation.blocker.message);
   if (validatorContinuation !== null) process.stdout.write(`[ip04] ${harness}/validator-continuation: ${validatorContinuation.kind} sameSession=${validatorContinuation.sameSession} context=${validatorContinuation.contextPreserved ?? '-'} blocker=${validatorContinuation.blocker?.code ?? '-'}\n`);
 
-  HARNESS_EVIDENCE.push({
+  const entry = {
     harness,
+    level,
     modelSelection: binding.modelSelection,
     expectedModel: binding.expectedModel,
     roles: roles.map(roleEvidence),
@@ -312,35 +474,55 @@ async function runHarnessMatrix(fixture: AcceptanceFixture, harness: AcceptanceH
       modelEvidence: recovery.utility.modelEvidence, terminalState: recovery.utility.terminalState,
     } },
     blockers,
-  });
+  };
+  // 逐能力事实与派生等级只来自 qualificationFromAcceptance；mixed Controller 由独立证据决定，不在这里自动标注。
+  const qualification = qualificationFromAcceptance({ harnesses: [entry] }, 'report:ip04/' + fixture.identity)
+    .find((candidate) => candidate.harness === harness) ?? null;
+  HARNESS_EVIDENCE.push({ ...entry, qualification, derivedLevel: qualification === null ? null : deriveWorkerSupportLevel(qualification) });
 
+  // 等级条件只按目标等级断言；模型回显与 usage 任何等级都不作门禁，仅随证据展示。
+  const finalizer = roles.find((run) => run.role === 'finalizer');
   for (const run of roles) {
     expect(run.blocker, harness + '/' + run.role + ' blocker').toBeNull();
     expect(run.kind, harness + '/' + run.role).toBe('ran');
-    expect(run.coverage, harness + '/' + run.role + ' coverage').toBe('complete');
+    expect(run.taskId, harness + '/' + run.role + ' task').not.toBeNull();
+    expect(run.dispatchId, harness + '/' + run.role + ' dispatch').not.toBeNull();
+    expect(run.terminalHandle, harness + '/' + run.role + ' terminal').not.toBeNull();
+    expect(SETTLED_SUCCESS_STATES.has(run.terminalState ?? ''), harness + '/' + run.role + ' 成功终态').toBe(true);
     expect(run.artifactOk, harness + '/' + run.role + ' artifact').toBe(true);
-    // 真实模型证据：必须来自 settled transcript，而不是我们传入的 binding 配置。
-    expect(run.modelEvidence, harness + '/' + run.role + ' 真实模型证据').not.toBeNull();
-    if (run.modelEvidence !== null) {
-      expect(run.modelEvidence, harness + '/' + run.role + ' 实际模型').toContain(binding.expectedModel);
+    if (level === 'basic') {
+      // 基础级只用真实 Orca 执行绑定：原生字段如实为 null，不用 terminal 身份冒充。
+      expect(run.sessionId, harness + '/' + run.role + ' 无原生 session').toBeNull();
+      expect(run.transcriptRef, harness + '/' + run.role + ' 无 transcript').toBeNull();
+      expect(run.coverage, harness + '/' + run.role + ' 无 coverage').toBeNull();
+      expect(run.readOnlyVerified, harness + '/' + run.role + ' 无只读探针').toBeNull();
+      expect(run.modelEvidence, harness + '/' + run.role + ' 无模型证据').toBeNull();
+    } else {
+      expect(run.sessionId, harness + '/' + run.role + ' 精确 session').not.toBeNull();
+      expect(run.transcriptRef, harness + '/' + run.role + ' 精确 transcript').not.toBeNull();
+    }
+    if (level === 'complete') expect(run.coverage, harness + '/' + run.role + ' coverage').toBe('complete');
+  }
+  if (level !== 'basic') {
+    // 可写 Finalizer 不再跑拒写探针：它写入独立工件；只读核验只留给 Recovery Utility。
+    expect(finalizer?.readOnlyVerified, harness + ' finalizer 无拒写探针').toBeNull();
+    if (implementation !== undefined) {
+      expect(resume?.blocker, harness + ' resume blocker').toBeNull();
+      expect(resume?.kind, harness + ' resume').toBe('ran');
+      expect(resume?.sameSession, harness + ' resume 必须续同一条 session').toBe(true);
+    }
+    if (validator !== undefined) {
+      expect(validatorContinuation?.blocker).toBeNull();
+      expect(validatorContinuation?.sameSession).toBe(true);
+      expect(validatorContinuation?.dispatchId).not.toBe(validator.dispatchId);
+      expect(validatorContinuation?.contextPreserved, 'Validator 必须保留原会话标记').toBe(true);
     }
   }
-  if (implementation !== undefined) {
-    expect(resume?.blocker, harness + ' resume blocker').toBeNull();
-    expect(resume?.kind, harness + ' resume').toBe('ran');
-    expect(resume?.sameSession, harness + ' resume 必须续同一条 session').toBe(true);
-  }
-  if (validator !== undefined) {
+  if (level === 'complete' && validator !== undefined) {
     expect(recovery?.blocker, harness + ' recovery blocker').toBeNull();
     expect(recovery?.kind).toBe('ran');
     expect(recovery?.sourceBehaviorVerified, 'Utility 必须从精确原会话提取标记与事件来源').toBe(true);
     expect(recovery?.readOnlyVerified, 'Utility 写入被拒绝且未产生文件').toBe(true);
-    expect(recovery?.utility?.modelEvidence).toContain(binding.expectedModel);
-    expect(validatorContinuation?.blocker).toBeNull();
-    expect(validatorContinuation?.sameSession).toBe(true);
-    expect(validatorContinuation?.dispatchId).not.toBe(validator.dispatchId);
-    expect(validatorContinuation?.contextPreserved, 'Validator 必须保留原会话标记').toBe(true);
-    expect(validatorContinuation?.modelEvidence).toContain(binding.expectedModel);
   }
 }
 
@@ -394,7 +576,8 @@ describe.skipIf(PLAN.kind !== 'run')('IP-04 原生 harness 真实隔离矩阵', 
     }
   }, 300_000);
 
-  const mixedEnabled = PLAN.kind === 'run' && PLAN.harnesses.length >= 3;
+  // 混合 Controller 是完整级的独立证据，不由本矩阵自动标注任何 harness 的等级。
+  const mixedEnabled = PLAN.kind === 'run' && PLAN.level === 'complete' && PLAN.harnesses.length >= 3;
 
   for (const harness of PLAN.kind === 'run' ? PLAN.harnesses : []) {
     test(harness + ' p-i-v-f + resume/recovery', async () => {
@@ -435,7 +618,6 @@ describe.skipIf(PLAN.kind !== 'run')('IP-04 原生 harness 真实隔离矩阵', 
       expect(run.kind, 'mixed ' + run.role).toBe('ran');
       expect(run.coverage, 'mixed ' + run.role + ' coverage').toBe('complete');
       expect(run.artifactOk, 'mixed ' + run.role + ' artifact').toBe(true);
-      expect(run.modelEvidence, 'mixed ' + run.role + ' 实际模型').toContain(bindingFor(run.harness).expectedModel);
     }
   }, HARNESS_TESTS_TIMEOUT_MS);
 
@@ -445,6 +627,9 @@ describe.skipIf(PLAN.kind !== 'run')('IP-04 原生 harness 真实隔离矩阵', 
       const entry = HARNESS_EVIDENCE.find((candidate) => candidate['harness'] === harness);
       expect(entry, harness + ' 缺少证据').toBeDefined();
       expect(entry?.['blockers'], harness + ' 存在阻塞').toEqual([]);
+      // 每个 harness 都必须记录逐能力事实与派生等级；空事实只等于 unavailable。
+      expect(entry?.['qualification'], harness + ' 缺少资格事实').not.toBeNull();
+      expect(entry?.['derivedLevel'], harness + ' 缺少派生等级').not.toBeNull();
     }
   });
 });

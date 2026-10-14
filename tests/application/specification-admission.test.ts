@@ -97,6 +97,16 @@ function makeWorktree(options: { readonly changeName?: string; readonly impact?:
   return root;
 }
 
+test.each(['orca-worker', 'worker'] as const)('Planner 规格准入使用 %s 执行来源，保留原结构检查', async kind => {
+  const input = admissionInput();
+  const producer = kind === 'orca-worker'
+    ? { kind, role: 'planner' as const, dispatchId: 'exact-dispatch' }
+    : { kind, role: 'planner' as const, sessionBindingId: 'native-binding' };
+  expect((await admitSpecification({ ...input, declaration: { ...input.declaration, producer } })).kind).toBe('admitted');
+  const missing = kind === 'orca-worker' ? { ...producer, dispatchId: '' } : { ...producer, sessionBindingId: '' };
+  expect((await admitSpecification({ ...input, declaration: { ...input.declaration, producer: missing } })).kind).toBe('rejected');
+});
+
 function providerFor(roots: Readonly<Record<string, string>>) {
   return createOpenSpecProvider({ resolveWorktreeRoot: (worktreeId) => roots[worktreeId] ?? null });
 }

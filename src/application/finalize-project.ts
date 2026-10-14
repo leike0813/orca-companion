@@ -33,14 +33,16 @@ export type FinalizerGateFacts = {
   /** 未结算的 mutation 意图数量；非零即不得收尾。 */
   readonly unresolvedMutationCount: number;
   readonly authority: RoleAuthorities;
+  /** 已批准 Manifest 的 Finalizer 修复策略；缺省即保持旧的只读 Finalizer。 */
+  readonly finalizerPolicy?: { readonly mode: 'repair'; readonly repairLimit: number };
 };
 
 export type FinalizerDispatchPlan = {
   readonly role: 'finalizer';
   /** Finalizer 使用新的项目级会话。 */
   readonly sessionKind: 'new';
-  /** 权限限定为只读：不能改代码、规格、配置或 Git 历史。 */
-  readonly readOnly: true;
+  /** 缺省只读；已批准修复 policy 时为可写。 */
+  readonly readOnly: boolean;
   readonly coversWorkPackageIds: readonly WorkPackageStatus['workPackageId'][];
 };
 
@@ -55,6 +57,7 @@ export type FinalizerGateDecision =
  * Manifest 未授权 finalizer 角色时，都不派发 Finalizer。
  */
 export function planFinalizerDispatch(facts: FinalizerGateFacts): FinalizerGateDecision {
+  const readOnly = facts.finalizerPolicy?.mode !== 'repair';
   const blockers: string[] = [];
   for (const status of facts.workPackageStatuses) {
     if (status.validation.kind !== 'validated') {
@@ -81,7 +84,7 @@ export function planFinalizerDispatch(facts: FinalizerGateFacts): FinalizerGateD
     plan: {
       role: 'finalizer',
       sessionKind: 'new',
-      readOnly: true,
+      readOnly,
       coversWorkPackageIds: facts.workPackageStatuses.map((status) => status.workPackageId),
     },
   };
@@ -145,6 +148,27 @@ export function finalizeProject(input: FinalizeProjectInput): FinalizeProjectRes
     return { kind: 'not_ready', blockers: gate.blockers };
   }
 
+  // 执行授权绑定：报告的会话形态必须与已批准 policy 一致，不能仅凭报告升级写权限。
+  const session = input.report.session;
+  if (session.kind === 'new_read_only' || session.kind === 'new_project') {
+    if (gate.plan.readOnly && (session.kind === 'new_project' || !input.report.readOnly)) {
+      return {
+        kind: 'blocked',
+        code: 'session_not_authorized',
+        mismatches: ['session'],
+        message: '已批准的 Finalizer policy 为只读：报告不能自行升级为可写会话',
+      };
+    }
+    if (!gate.plan.readOnly && session.kind === 'new_read_only') {
+      return {
+        kind: 'blocked',
+        code: 'session_not_authorized',
+        mismatches: ['session'],
+        message: '已批准 Finalizer 修复 policy：报告必须来自新的可写项目级会话',
+      };
+    }
+  }
+
   const decision: DeliveryVerdictDecision = evaluateDeliveryVerdict({
     ...input.report,
     expectedWorkPackageIds: gate.plan.coversWorkPackageIds,
@@ -153,12 +177,12 @@ export function finalizeProject(input: FinalizeProjectInput): FinalizeProjectRes
   if (decision.kind === 'blocked') {
     return decision;
   }
-  if (input.report.session.kind !== 'new_read_only') {
+  if (session.kind !== 'new_read_only' && session.kind !== 'new_project') {
     return {
       kind: 'blocked',
       code: 'session_not_read_only',
       mismatches: ['session'],
-      message: 'Finalizer 会话未被核验为新的只读会话',
+      message: 'Finalizer 会话未被核验为新的项目级会话',
     };
   }
 
@@ -181,7 +205,9 @@ export function finalizeProject(input: FinalizeProjectInput): FinalizeProjectRes
     verdictId: input.verdictId,
     verdict: decision.verdict,
     finalizerRole: 'finalizer',
-    sessionBindingRef: input.report.session.sessionBindingId,
+    sessionBindingRef: session.sessionBindingId,
+    // 旧只读形态没有复验，写入空引用；可写形态写入核验通过的最终版本。
+    ...{ verifiedHead: input.report.verification?.head ?? null, verifiedTree: input.report.verification?.tree ?? null },
   });
   if (recorded.kind === 'rejected') {
     return { kind: 'persist_failed', code: recorded.code, message: recorded.message };

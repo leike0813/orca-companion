@@ -24,6 +24,8 @@ import {
 import { verifyModelCapabilities } from '../adapters/agents/capability-probe.js';
 import { JsonCredentialStore } from '../adapters/storage/credential-store.js';
 import { requireWorkerHarness } from './worker-harness.js';
+import { workerHarnessSupport } from '../adapters/agents/worker-harness-qualifications.js';
+import { minimumWorkerSupportLevel, workerSupportLevelAllows } from '../domain/worker-harness-support.js';
 import type { CredentialStore } from '../application/ports/credential-store.js';
 import {
   configurationByRef,
@@ -340,7 +342,7 @@ export async function runDoctor(probe: DoctorProbe, options: DoctorOptions = {})
       checks.push({
         id: 'read-only-worker',
         status: available ? 'ok' : 'capability-missing',
-        detail: `只读 Worker 能力［${fact.harness} ${fact.harnessVersion ?? '未读到'} · ${fact.profileRef}］：${fact.detail}`,
+        detail: `Worker 能力［${fact.harness} ${fact.harnessVersion ?? '未读到'} · ${fact.profileRef}］：${fact.detail}`,
         ...(available ? {} : { missing: [fact.profileRef] }),
       });
     }
@@ -476,13 +478,20 @@ async function verifyConfiguredCoordinatorModel(
 }
 
 /**
- * 单个被配置 harness 的只读核验。
- *
- * 结论只来自真实受限命令；harness 名称、版本字符串或配置文件存在都不构成能力证明。Worker 的模型、
- * 凭据与 provider endpoint 由 harness 自身拥有，doctor 只按被引用 harness 与其 `modelSelection` 用
- * 同一生产包装器探针，不解析凭据、也不读原生连接。
+ * 任务级需要真实只读能力的角色：Recovery Utility 与只读的规划/规格辅助操作。
+ * 普通 Validator 与可写 Finalizer 不在此列——它们不因缺只读能力被拒绝，doctor 也不为它们跑只读探针。
  */
-async function probeConfiguredReadOnlyHarness(
+const READ_ONLY_ROLES: ReadonlySet<string> = new Set(['planning_utility', 'specification_validator', 'recovery_utility']);
+
+/**
+ * 单个被配置角色的能力核验。
+ *
+ * 结论只来自真实受限命令；harness 名称、版本字符串或配置文件存在都不构成能力证明。只有任务级需要
+ * 只读的角色才跑真实 bwrap 拒写探针；可写的 Planner、Implementation、Validator 与 Finalizer 只做有界
+ * `--version` 可执行性核验，不跑只读探针、也不调用模型。Worker 的模型、凭据与 provider endpoint 由
+ * harness 自身拥有，doctor 不解析凭据、也不读原生连接。
+ */
+async function probeConfiguredWorkerRole(
   profile: WorkerProfileConfiguration,
   env: Readonly<Record<string, string>>,
 ): Promise<ReadOnlyHarnessFacts> {
@@ -496,13 +505,25 @@ async function probeConfiguredReadOnlyHarness(
   if (!(WORKER_HARNESS_IDS as readonly string[]).includes(harness)) {
     return fail('unknown', `未注册的 Worker harness：${String(harness)}`);
   }
+  const support = workerHarnessSupport(harness);
+  if (!workerSupportLevelAllows(support.level, minimumWorkerSupportLevel(profile.role)))
+    return fail('unavailable', `支持等级 ${support.level} 不满足 ${profile.role}；证据 ${support.qualificationRef}`);
+  if (!READ_ONLY_ROLES.has(profile.role)) {
+    const binaries: Record<string, string> = { 'qwen-code': 'qwen', antigravity: 'agy', cursor: 'cursor-agent' };
+    const version = await runProcess({ executable: binaries[harness] ?? harness, args: ['--version'], cwd: process.cwd(), env,
+      timeoutMs: 30_000, limits: { maxBytes: 16 * 1024, maxLines: 100 } });
+    if (version.kind !== 'completed' || version.exitCode !== 0 || version.stdout.truncated)
+      return fail(version.kind === 'unknown' ? 'unknown' : 'unavailable', `${harness} 当前可执行文件不可用`);
+    return { ...base, capability: 'available', harnessVersion: null,
+      detail: `支持等级 ${support.level}；证据 ${support.qualificationRef}；当前可执行；启动和结果由实际派发核验` };
+  }
   try {
     const result = await probeHarnessReadOnlyWorker(harness, profile.modelSelection, { env });
     return {
       ...base,
       capability: result.kind,
       harnessVersion: result.harnessVersion,
-      detail: describeHarnessReadOnlyCapability(result),
+      detail: `支持等级 ${support.level}；证据 ${support.qualificationRef}；${describeHarnessReadOnlyCapability(result)}`,
     };
   } catch (error) {
     // 原始 error.message 会被子进程与 SDK 放大，可能带出命令行、模型参数或凭据片段。doctor 是给人看的
@@ -706,7 +727,7 @@ export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): 
             : `原生模型目录不可用（${result.code}），可手填未验证模型 ID`;
           catalogs.set(profile.harness, catalog);
         }
-        const fact = await probeConfiguredReadOnlyHarness(profile, environment.env);
+        const fact = await probeConfiguredWorkerRole(profile, environment.env);
         facts.push({ ...fact, detail: `${fact.detail}；${catalog}；精确 Session/runtime roots 由实际派发报告核验` });
       }
       return { ok: true, value: facts };

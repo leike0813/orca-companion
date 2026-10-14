@@ -375,6 +375,8 @@ function makeVerdict(input: {
     verdict: input.verdict,
     finalizerRole: 'finalizer',
     sessionBindingRef: 'finalizer-session-binding',
+    verifiedHead: null,
+    verifiedTree: null,
     recordedAt: input.recordedAt ?? 500,
   };
 }
@@ -976,6 +978,16 @@ describe('deriveExecutionFacts：Frontier 阶段只由持久事实推出', () =>
     expect(facts.finalizer.verdict?.verdictId).toBe('verdict-2');
     expect(facts.finalizer.verdict?.kind).toBe('blocked');
     expect(facts.finalizer.verdict?.refs).toEqual(['unvalidated-work-package']);
+  });
+
+  test('Finalizer repair workspace changes are allowed but a stale verified version blocks delivery', () => {
+    const facts = derive({ snapshot: snapshot(), observations: observations({ finalizer: finalizerObservation({
+      readOnlyProfile: 'not_required', verifiedVersionMatches: false,
+      workspace: { before: { head: 'before', indexRevision: 'old', dirtyPaths: [] },
+        after: { head: 'after', indexRevision: 'new', dirtyPaths: [] } },
+    }) }) });
+    expect(facts.finalizer.gate.blockers).not.toContain('finalizer-workspace-changed');
+    expect(facts.finalizer.gate.blockers).toContain('finalizer-version-changed');
   });
 
   test('Scenario 重启先对账：未决 intent 或无法核验的 Worker 让对账门保持打开', () => {

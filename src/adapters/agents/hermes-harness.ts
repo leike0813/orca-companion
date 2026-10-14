@@ -2,8 +2,9 @@ import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readSy
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import type { HarnessSessionReport, ProveHarnessSessionInput, WorkerHarness, WorkerHarnessLaunchInput } from '../../application/ports/worker-harness.js';
+import type { HarnessSessionReport, ProveHarnessSessionInput, WorkerHarnessLaunchInput } from '../../application/ports/worker-harness.js';
 import type { HarnessTranscriptCoverageResult } from '../../application/ports/worker-harness.js';
+import { createWorkerHarness } from '../../application/ports/worker-harness.js';
 import type { TranscriptCoverageEvidence } from '../../application/recovery/recovery-capsule.js';
 import { candidateSessionPaths, installCandidateReporter, prepareCandidateLaunch, type CandidateResume } from './candidate-worker-launch.js';
 import { probeHarnessReadOnlyWorker } from './read-only-execution-wrapper.js';
@@ -423,7 +424,7 @@ export async function prepareHermesRecoveryMaterial(
   ];
 }
 
-export const hermesHarness: WorkerHarness = {
+export const hermesHarness = createWorkerHarness({
   id: 'hermes', prepareLaunch: (input) => launch(input),
   prepareReadOnlyLaunch: (input) => launch({ ...input, sandboxMode: 'read-only-local-control' }),
   prepareResume: (input) => launch(input, input),
@@ -446,4 +447,4 @@ export const hermesHarness: WorkerHarness = {
   recoveryInstructions: () => ['只通过 `hermes sessions export --session-id <exact-id> -` 读取会话；不得访问 Hermes 私有数据库。',
     '先由宿主调用 prepareHermesRecoveryMaterial，将与 coverage 一致的公开 export messages 写为 Utility 私有 JSONL。',
     '仅引用公开 export 中的 messages，事件引用格式为 message:<id>；coverage 为 partial，结构不完整时停止恢复。'],
-};
+});

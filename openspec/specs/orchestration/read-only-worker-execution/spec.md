@@ -2,7 +2,7 @@
 
 ## Purpose
 
-定义本机只读 Worker Harness 的可运行性与权限核验，让 Recovery Capsule Utility Worker 和 Finalizer 仅在受限命令确实可执行时派发，并在能力缺失时给出明确、可恢复的阻塞原因。
+定义本机只读 Worker Harness 的可运行性与权限核验：只读作为任务级可选能力，只对实际需要只读的操作在派发前核验受限命令确实可执行，并在能力缺失时给出明确、可恢复的阻塞原因。
 
 ## Requirements
 
@@ -32,33 +32,33 @@ Companion MUST 使用与各只读角色实际启动相同的 harness 权限配�
 
 ### Requirement: doctor 与授权审阅暴露同一能力结论
 
-`doctor` 在既有前置检查通过后 MUST 输出按被引用 harness 区分的只读 Worker 能力结论及其原因；被引用的只读角色 harness 能力缺失时 SHALL 以非零退出码结束。Execution Authorization 审阅 MUST 显示 Capsule Utility Worker 与 Finalizer 实际绑定的 harness、只读配置、能力结论和诊断；该结论不可用或未知时，SHALL 阻止批准会依赖这两个角色的执行授权。Route Planning 本身 SHALL 仍可启动。授权审阅不能复用未核验的旧结论；环境或 harness 版本变化后 MUST 重新核验。
+`doctor` 与 Execution Authorization 审阅 SHALL 暴露同一只读能力结论：只读是任务级可选能力，只对实际需要只读的操作（Recovery Utility、只读 Graph Patch/规划辅助操作、原授权 policy 为只读的 Finalizer）在派发前核验对应 harness 的能力组与真实拒写探针。普通 Validator 与可写 Finalizer MUST NOT 因缺少只读能力而被拒绝；不参与等级推导，也不因此降低通用等级。
 
 #### Scenario: 授权前发现本机只读沙箱不可用
 
-- **WHEN** 执行授权审阅时某个被绑定的只读 harness 能力不可用或未知
-- **THEN** 审阅显示原因并阻止批准，且 `doctor` 报告对应失败检查项
+- **WHEN** 启用 Recovery Utility 的授权所绑定 harness 缺少只读能力
+- **THEN** 对应检查拒绝，不影响关闭 Recovery 的普通可写角色
 
 #### Scenario: 环境修复后重新审阅
 
-- **WHEN** 环境变化后重新运行能力核验且读写探针通过
-- **THEN** 新审阅可显示能力可用；之前的失败结论 SHALL NOT 永久锁住该 Scope
+- **WHEN** 当前只读探针重新通过
+- **THEN** 按实际新结果审阅，不永久锁住 Scope
 
 ### Requirement: 执行期按受限能力失败关闭
 
-Capsule Utility Worker 与 Finalizer MUST 保持只读权限与受限包装器。派发前若当前只读命令能力不能核验，Controller MUST 产生带原因的 blocker，不得发起受限 Worker 派发、消耗 Recovery 预算或把 Scope 标为 deliverable。已派发 Worker 的结果仍按其原有 Dispatch、Session 与 Delivery 身份对账；能力结论变化不得创建第二次派发或替代既有事实。
+只读 Task SHALL 在派发前单独核验 readOnly 能力组及真实拒写探针。失败仅阻塞依赖它的任务，不能降低通用等级、自动更换 harness 或扩大权限。已派发 Worker 的结果仍按其原有 Dispatch、Session 与 Delivery 身份对账；能力结论变化不得创建第二次派发或替代既有事实。
 
 #### Scenario: Recovery 前能力不可用
 
-- **WHEN** 执行态中断需要 Capsule，且该角色 harness 的只读命令能力不可用
-- **THEN** Recovery 记录可诊断的能力 blocker，不等待 Capsule 报告超时、不消耗恢复预算、不以更宽权限派发 Utility Worker
+- **WHEN** Recovery Utility 不能证明当前只读能力
+- **THEN** 派发前阻塞，零新 Task/Dispatch，不以更宽权限执行
 
 #### Scenario: Finalizer 前能力不可用
 
-- **WHEN** 项目满足 Finalizer 门禁，但该角色 harness 的只读命令能力不可用
-- **THEN** Controller 显示 Finalizer 能力 blocker，不派发 Finalizer，也不接受 Delivery Verdict
+- **WHEN** 可写 Finalizer 没有只读能力但满足自身准入和授权
+- **THEN** 正常派发；旧只读 policy 仍单独要求只读能力
 
 #### Scenario: 已派发角色遇到能力变化
 
-- **WHEN** 受限 Worker 已派发，之后的能力检查失败或进程重启
-- **THEN** Controller 按原身份核验该 Worker 的真实状态与结果；未知状态保持阻塞，SHALL NOT 换身份重试或伪造失败结果
+- **WHEN** 任务已派发后环境变化
+- **THEN** 以原身份对账，不换 ID 重试或编造终态

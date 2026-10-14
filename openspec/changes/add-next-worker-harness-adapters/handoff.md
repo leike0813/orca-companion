@@ -4,6 +4,21 @@
 本工件供后续接入者续办，事实来源为[研究记录][research]、各轮原始证据和
 [独立验收](verification.md)。本次仅整理已有结论，没有重新操作原生配置、Orca 或模型。
 
+2026-10-14 已另开六家续探，当前进展见
+[本轮研究](../../../docs/research/next-worker-harness-continuation-20261014.md)。
+已归档并公开回收成功 Controller 的 Worker worktree、解除该 fixture 登记；
+其余旧失效 handle/unknown 现场保留。Kilo 在新 Run `run_69d30cfe1205` 的
+Implementation/Finalizer prepared 派发仍无报告；独立可写原生提示与公开
+terminal send 的短、多行、长提示已由精确 export 证明，首次只读仍需单独解阻塞。
+修正了验收 helper 对 pretty JSON 拒写证据的读取，未新增生产注册。
+下面表格与保留身份仍描述原轮次，不替代本轮证据。
+
+继续调查已修复 `kilo-sandbox-policy` 原生状态根遗漏：最终生产 launcher 的首次
+只读提示取得精确 Session 与 complete coverage。独立 PTY 与输入桥未通过完整
+矩阵，已从生产实现撤下；prepared 输入、精确 resume 和 Recovery 仍阻塞。
+修复与正式失败轮次见
+[Kilo 后续证据](../../../artifacts/next-worker-harness-adapters/kilo-readonly-resolution-20261014.json)。
+
 ## 当前边界
 
 六家均已完成 WorkerHarness adapter、独立报告插件维护与离线验证，均未进入生产

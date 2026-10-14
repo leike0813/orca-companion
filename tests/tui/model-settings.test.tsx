@@ -71,6 +71,21 @@ const PLANNER: ModelRoleView = {
   availability: { available: true, reason: null },
 };
 
+/** 宿主投影的等级事实：codex 未达该角色最低等级，claude 可用。 */
+const PLANNER_HARNESSES: NonNullable<ModelRoleView['harnessOptions']> = [
+  { id: 'codex', level: 'basic', available: false, reason: 'codex 未完成真实验收', qualificationRef: 'qualification:codex' },
+  { id: 'claude', level: 'enhanced', available: true, reason: null, qualificationRef: 'qualification:claude' },
+];
+
+const RECOVERY_ROLE: ModelRoleView = {
+  role: 'recovery_utility',
+  label: 'Recovery Utility',
+  group: 'execution',
+  current: null,
+  candidates: [],
+  availability: { available: true, reason: null },
+};
+
 async function openPlannerMenu(rendered: RenderedTui): Promise<void> {
   await chooseCommand(rendered, 'model-picker');
   await press(rendered, DOWN);
@@ -285,5 +300,122 @@ describe('Worker 原生模型目录', () => {
     await settle(4);
     rendered.unmount();
     expect(signal?.aborted).toBe(true);
+  });
+});
+
+describe('Worker harness 等级准入', () => {
+  const queried = (fake: ReturnType<typeof createFakePorts>): readonly unknown[] =>
+    fake.calls.filter((call) => call.name === 'modelCatalog.queryWorkerModels').map((call) => call.detail);
+
+  test('只在可用项之间切换 harness，并显示等级与目录来源', async () => {
+    const fake = createFakePorts({
+      modelCatalog: { roles: [{ ...PLANNER, harnessOptions: PLANNER_HARNESSES }], configurationRevision: 5 },
+      workerModels: () => Promise.resolve({ kind: 'available', source: 'claude:list_models', models: [{ model: 'claude-sonnet', effortCapability: null }] }),
+      modelSettings: {},
+    });
+    const rendered = renderTui(fake.ports);
+    await settle();
+    await openPlannerMenu(rendered);
+    await settle(4);
+    expect(queried(fake)).toEqual(['claude']);
+
+    await press(rendered, RIGHT);
+    await settle(4);
+    expect(queried(fake)).not.toContain('codex');
+    expect(frameText(rendered)).toContain('enhanced');
+    rendered.unmount();
+  });
+
+  test('没有达到最低等级的 harness 时拒绝进入且不探测', async () => {
+    const fake = createFakePorts({
+      modelCatalog: { roles: [{ ...PLANNER, harnessOptions: [PLANNER_HARNESSES[0]!] }], configurationRevision: 5 },
+      workerModels: () => Promise.resolve({ kind: 'available', source: 'codex:list_models', models: [] }),
+      modelSettings: {},
+    });
+    const rendered = renderTui(fake.ports);
+    await settle();
+    await chooseCommand(rendered, 'model-picker');
+    await press(rendered, 'e');
+    await settle(4);
+
+    expect(frameText(rendered)).toContain('最低支持等级');
+    expect(queried(fake)).toHaveLength(0);
+    rendered.unmount();
+  });
+});
+
+describe('Recovery Utility 关闭', () => {
+  async function openRecoveryMenu(rendered: RenderedTui): Promise<void> {
+    await chooseCommand(rendered, 'model-picker');
+    await press(rendered, 'e');
+    await settle(4);
+  }
+
+  test('Ctrl+D 按当前 revision 关闭，并保留已批准授权', async () => {
+    const disableRecoveryUtility = vi.fn(() => Promise.resolve({ kind: 'saved' as const, revision: 4, configurationRef: null, profileRef: null }));
+    const fake = createFakePorts({
+      modelCatalog: { roles: [RECOVERY_ROLE], configurationRevision: 3 },
+      workerModels: () => Promise.resolve({ kind: 'available', source: 'codex:list_models', models: [] }),
+      modelSettings: { disableRecoveryUtility },
+    });
+    const rendered = renderTui(fake.ports);
+    await settle();
+    await openRecoveryMenu(rendered);
+    expect(frameText(rendered)).toContain('Ctrl+D');
+
+    await press(rendered, '\u0004');
+    await settle(4);
+
+    expect(disableRecoveryUtility).toHaveBeenCalledWith({ expectedRevision: 3 });
+    expect(frameText(rendered)).toContain('已关闭');
+    rendered.unmount();
+  });
+
+  test('端口未接通时给出明确提示，不伪造关闭', async () => {
+    const fake = createFakePorts({
+      modelCatalog: { roles: [RECOVERY_ROLE], configurationRevision: 3 },
+      workerModels: () => Promise.resolve({ kind: 'available', source: 'codex:list_models', models: [] }),
+      modelSettings: {},
+    });
+    const rendered = renderTui(fake.ports);
+    await settle();
+    await openRecoveryMenu(rendered);
+
+    await press(rendered, '\u0004');
+    await settle(4);
+
+    expect(frameText(rendered)).toContain('尚未接通');
+    expect(fake.calls.some((call) => call.name === 'modelSettings.disableRecoveryUtility')).toBe(false);
+    rendered.unmount();
+  });
+
+  test('角色应用在途时 Ctrl+D 不并发写入，共用同一条 mutation lane', async () => {
+    const pending = Promise.withResolvers<Awaited<ReturnType<ModelSettingsPort['apply']>>>();
+    const disableRecoveryUtility = vi.fn(() => Promise.resolve({ kind: 'saved' as const, revision: 4, configurationRef: null, profileRef: null }));
+    const fake = createFakePorts({
+      modelCatalog: { roles: [RECOVERY_ROLE], configurationRevision: 3 },
+      workerModels: () => Promise.resolve({ kind: 'available', source: 'codex:list_models', models: [{ model: 'codex-max', effortCapability: null }] }),
+      modelSettings: { apply: () => pending.promise, disableRecoveryUtility },
+      authorizationReview: makeAuthorizationReview(),
+    });
+    const rendered = renderTui(fake.ports);
+    await settle();
+    await openRecoveryMenu(rendered);
+    await settle(4);
+    await press(rendered, ENTER); // harness -> 候选列表
+    await press(rendered, '\t'); // 候选列表 -> 动作
+    await press(rendered, RIGHT); // 默认返回 -> 应用选择
+    await press(rendered, ENTER); // 提交，应用在途
+    await settle(4);
+    expect(fake.calls.some((call) => call.name === 'modelSettings.apply')).toBe(true);
+
+    await press(rendered, '\u0004');
+    await settle(4);
+    expect(disableRecoveryUtility).not.toHaveBeenCalled();
+    expect(frameText(rendered)).toContain('在途');
+
+    pending.resolve({ kind: 'saved', revision: 4, configurationRef: null, profileRef: 'profile-saved' });
+    await settle(6);
+    rendered.unmount();
   });
 });

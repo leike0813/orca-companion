@@ -5,7 +5,7 @@ import type { OperationId } from '../../src/application/dto/identity.js';
 import { runGraphPatchPlannerWorker } from '../../src/bootstrap/graph-patch-worker.js';
 import { createExecutionScopeHarness, executionModelConfiguration, forbiddenExecutionBackend } from '../support/execution-harness.js';
 
-test('Planner Task 意图未决时沿原身份阻塞，不创建第二个 Task', async () => {
+test.each(['pending_intent', 'basic_profile'] as const)('Graph Patch 准入 %s 时不创建第二个 Task', async (scenario) => {
   const harness = createExecutionScopeHarness();
   try {
     const operationId = 'op:graph-patch:test' as OperationId;
@@ -20,7 +20,19 @@ test('Planner Task 意图未决时沿原身份阻塞，不创建第二个 Task',
     expect(begun.kind).toBe('registered');
     const { backend, calls } = forbiddenExecutionBackend();
     const result = await runGraphPatchPlannerWorker({
-      store: harness.store,
+      store: scenario === 'basic_profile' ? {
+        transact: command => harness.store.transact(command),
+        query: query => {
+          const read = harness.store.query(query);
+          return read.kind === 'authorization' && read.authorization !== null ? {
+            ...read, authorization: { ...read.authorization, manifest: {
+              ...read.authorization.manifest,
+              workerProfiles: read.authorization.manifest.workerProfiles.map(profile =>
+                profile.role === 'planner' ? { ...profile, supportLevel: 'basic' as const } : profile),
+            } },
+          } : read;
+        },
+      } : harness.store,
       backend,
       writer: harness.writer,
       request: {
@@ -50,7 +62,8 @@ test('Planner Task 意图未决时沿原身份阻塞，不创建第二个 Task',
       modelSelection: executionModelConfiguration({ model: 'test-model' }),
       bindingWindowMs: 1_000, reportTimeoutMs: 1_000,
     });
-    expect(result.kind).toBe('unknown');
+    expect(result.kind).toBe(scenario === 'basic_profile' ? 'rejected' : 'unknown');
+    if (result.kind === 'rejected') expect(result.code).toBe('worker_support_insufficient');
     expect(calls).toEqual({ query: 0, mutate: 0 });
   } finally {
     harness.close();

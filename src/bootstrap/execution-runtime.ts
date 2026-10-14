@@ -66,6 +66,9 @@ import {
   type WorkerShowResult,
 } from '../adapters/orca-cli/operation-catalog.js';
 import { requireWorkerHarness, workerHarnessRegistry, workerSessionPathsUnder, prepareHarnessWorkerLaunch, installHarnessSessionReporter, bindHarnessSessionFromStartReport, readHarnessTranscriptIdentity, readLatestHarnessSessionReport } from './worker-harness.js';
+import { workerHarnessSupport } from '../adapters/agents/worker-harness-qualifications.js';
+import { requireHarnessCapability } from '../application/ports/worker-harness.js';
+import { minimumWorkerSupportLevel, workerSupportLevelAllows } from '../domain/worker-harness-support.js';
 import { prepareOpencodeRecoveryMaterial } from '../adapters/agents/opencode-harness.js';
 import {
   readOnlyWorkerUnavailableReason,
@@ -460,6 +463,7 @@ export async function proposeExecutionGraph(
 /* -------------------------------------------------------------------------- */
 
 export type ExecutionAuthorizationFacts = {
+  readonly workerSupportFor?: typeof workerHarnessSupport;
   readonly store: BranchCoordinationStore;
   readonly coordinationScopeId: CoordinationScopeId;
   /** 版本化项目配置里的执行策略；Manifest 的长期字段全部来自它。 */
@@ -551,6 +555,7 @@ function handoffFactsFor(input: {
 export function reviewExecutionAuthorization(
   facts: ExecutionAuthorizationFacts,
 ): ExecutionAuthorizationReviewResult {
+  const supportFor = facts.workerSupportFor ?? workerHarnessSupport;
   const blockers: ExecutionRuntimeBlocker[] = [];
   const scopeRead = readScope(facts.store, facts.coordinationScopeId);
   if (scopeRead.kind === 'rejected') {
@@ -598,6 +603,12 @@ export function reviewExecutionAuthorization(
     };
   }
 
+  for (const role of [...WORKER_ROLES, 'recovery_utility'] as const) {
+    const profile = facts.policy.workerProfiles.find(entry => entry.role === role && entry.profileRef === facts.policy.workerProfileRefs[role]);
+    if (profile !== undefined && !workerSupportLevelAllows(supportFor(profile.harness).level, minimumWorkerSupportLevel(role)))
+      blockers.push({ code: 'worker_harness_capability_unavailable', message: `${profile.harness} 不满足 ${role} 所需支持等级` });
+  }
+  if (blockers.length > 0) return { kind: 'blocked', blockers };
   const rawManifest = {
     manifestVersion: MANIFEST_VERSION,
     coordinationScopeId: facts.coordinationScopeId,
@@ -625,6 +636,8 @@ export function reviewExecutionAuthorization(
         role,
         harness: profile.harness,
         modelSelection: profile.modelSelection,
+        supportLevel: supportFor(profile.harness).level,
+        qualificationRef: supportFor(profile.harness).qualificationRef,
       };
     }),
     recoveryUtilityProfile: (() => {
@@ -633,9 +646,13 @@ export function reviewExecutionAuthorization(
         profileRef: { kind: 'worker-profile', id: profile.profileRef },
         harness: profile.harness,
         modelSelection: profile.modelSelection,
+        supportLevel: supportFor(profile.harness).level,
+        qualificationRef: supportFor(profile.harness).qualificationRef,
       };
     })(),
     permissions: facts.policy.permissions,
+    ...(facts.policy.permissions.finalizer && facts.policy.permissions.gitIntegration
+      ? { finalizerPolicy: { mode: 'repair', repairLimit: facts.policy.limits.validatorRepairs } } : {}),
     limits: facts.policy.limits,
     workspacePolicy: {
       canonicalWorktree: facts.workspace.canonicalWorktreePath,
@@ -670,9 +687,11 @@ export function reviewExecutionAuthorization(
     }
     const manifest = {
       ...previous.manifest,
+      manifestVersion: MANIFEST_VERSION,
       graph: { ...previous.manifest.graph, version: candidate.version },
       workerProfiles: rawManifest.workerProfiles,
       recoveryUtilityProfile: rawManifest.recoveryUtilityProfile,
+      ...(rawManifest.finalizerPolicy === undefined ? {} : { finalizerPolicy: rawManifest.finalizerPolicy }),
       // 重新授权只允许改动并行包额度；它随完整指纹与 CAS 一起批准，不构成 Graph Revision。
       limits: { ...previous.manifest.limits, maxActiveWorkPackages: facts.policy.limits.maxActiveWorkPackages },
     };
@@ -815,6 +834,7 @@ export function approveExecutionAuthorization(
           writer: input.writer, authorizationId: authorizationIdFor(review.manifest),
           expectedScopeRevision: input.expectedRevision,
           workerProfiles: review.manifest.workerProfiles, recoveryUtilityProfile: review.manifest.recoveryUtilityProfile,
+          ...(review.manifest.finalizerPolicy === undefined ? {} : { finalizerPolicy: review.manifest.finalizerPolicy }),
           graphVersion: review.manifest.graph.version,
           maxActiveWorkPackages: input.policy.limits.maxActiveWorkPackages,
           approvalRef: `user-approval:${review.fingerprint.slice(0, 16)}` })
@@ -1351,6 +1371,13 @@ async function readDeliveryTrustedFacts(input: {
       laneKey: acceptResultLaneKey(materialization.orcaTaskId),
     };
   }
+  if (segment.executionBinding?.kind === 'orca_worker') {
+    const profile = pinned.authorization.manifest.workerProfiles.find(entry => entry.role === segment.role);
+    if (pinned.authorization.manifest.manifestVersion !== 5 || profile?.supportLevel !== 'basic' ||
+      (segment.role !== 'planner' && segment.role !== 'implementation') || segment.executionBinding.orcaTaskId !== materialization.orcaTaskId)
+      return { kind: 'blocked', code: 'execution_binding_mismatch', message: '基础执行绑定与原授权或 Orca Task 不一致',
+        laneKey: acceptResultLaneKey(materialization.orcaTaskId) };
+  }
   if (
     pinned.authorization.manifest.coordinationScopeId !== input.input.coordinationScopeId ||
     pinned.authorization.manifest.orcaRunId !== input.input.runId ||
@@ -1386,7 +1413,7 @@ async function readDeliveryTrustedFacts(input: {
       segment,
       specBinding: worktree.specBinding,
       worktreeId: worktree.worktreeId,
-      execution: input.input,
+      execution: { ...input.input, authorizationId: pinned.authorizationId },
     }),
     trusted: {
       runId: input.input.runId,
@@ -1759,6 +1786,7 @@ export function recoveryLaunchIdOf(recoveryId: string): string {
 }
 
 export type ExecutionRecoveryFactsInput = {
+  readonly workerSupportFor?: typeof workerHarnessSupport;
   /** 协调状态读取；懒取是因为前台宿主按需要打开/重开 store，而事实读取发生在启动对账期间。 */
   readonly store: () => BranchCoordinationStore;
   readonly backend: ExecutionBackend;
@@ -1847,6 +1875,18 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
     const read = input.store().query({ kind: 'authorization', coordinationScopeId: scopeId, authorizationId: binding.authorizationId });
     if (read.kind !== 'authorization' || read.authorization === null || read.authorization.authorizationVersion !== binding.authorizationVersion) return null;
     return read.authorization.manifest.workerProfiles.find((profile) => profile.profileRef.id === binding.workerProfileRef?.id)?.harness ?? null;
+  };
+
+  const historicalRecoveryAllowed = (subject: Pick<RecoveryFactSubject, 'workPackageId' | 'role' | 'businessAttemptId'>): boolean => {
+    const binding = bindingFor(subject);
+    if (binding?.authorizationId == null) return false;
+    const read = input.store().query({ kind: 'authorization', coordinationScopeId: scopeId, authorizationId: binding.authorizationId });
+    if (read.kind !== 'authorization' || read.authorization === null) return false;
+    const manifest = read.authorization.manifest;
+    const profile = manifest.workerProfiles.find(entry => entry.role === subject.role && entry.profileRef.id === binding.workerProfileRef?.id);
+    return manifest.recoveryUtilityProfile !== null && (manifest.manifestVersion === 4 ||
+      (profile?.supportLevel === 'complete' &&
+        workerSupportLevelAllows((input.workerSupportFor ?? workerHarnessSupport)(profile.harness).level, 'complete')));
   };
 
   /** 该 Work Package 的隔离 worktree；未列举完整或不存在时给出可区分的原因。 */
@@ -2088,10 +2128,14 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
     },
 
     extractCapsule: async (request) => {
+      if (!historicalRecoveryAllowed({ workPackageId: request.workPackageId as WorkPackageId, role: request.role, businessAttemptId: request.attemptId }))
+        return { kind: 'failed', reason: '历史恢复已关闭或原任务支持等级不足；保留原作业与预算' };
       const sourceHarness = sourceHarnessOf({ workPackageId: request.workPackageId as WorkPackageId, role: request.role, businessAttemptId: request.attemptId });
       if (sourceHarness === null) return { kind: 'transcript_unavailable', reason: '缺少原 Session 的 harness 授权绑定' };
       if (!workerHarnessRegistry.has(sourceHarness)) return { kind: 'transcript_unavailable', reason: '原 Session 的 harness 未注册' };
-      const evidence = await requireWorkerHarness(sourceHarness).inspectTranscript(request.transcriptRef);
+      const sourceRecovery = requireWorkerHarness(sourceHarness).capabilities?.recovery;
+      if (sourceRecovery === undefined) return { kind: 'transcript_unavailable', reason: '原 harness 不提供历史恢复能力' };
+      const evidence = await sourceRecovery.inspectTranscript(request.transcriptRef);
       if (evidence.kind !== 'covered') {
         // transcript 读不到是确定性结论：重派读的还是同一份，因此直接上报，不在这里重试。
         return { kind: 'transcript_unavailable', reason: evidence.reason };
@@ -2118,6 +2162,9 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
       }
       const harness = workerHarnessRegistry.get(profile.harness);
       if (harness === undefined) return { kind: 'failed', reason: 'Recovery Utility harness 未注册' };
+      if (authorization.manifest.manifestVersion === 5 &&
+          !workerSupportLevelAllows((input.workerSupportFor ?? workerHarnessSupport)(profile.harness).level, 'complete'))
+        return { kind: 'failed', reason: 'Recovery Utility 当前支持等级不足 complete' };
       if (input.companionStateRoot === null) {
         return { kind: 'failed', reason: '无法定位 Companion 私有的状态根：Utility Worker 的 SessionStart 不可证' };
       }
@@ -2161,7 +2208,7 @@ export function createExecutionRecoveryFacts(input: ExecutionRecoveryFactsInput)
       }
       installHarnessSessionReporter(harness.id, paths);
       const materialRoot = join(paths.stateRoot, createHash('sha256').update(launchId).digest('hex').slice(0, 20));
-      const harnessInstructions = requireWorkerHarness(sourceHarness).recoveryInstructions();
+      const harnessInstructions = requireHarnessCapability(requireWorkerHarness(sourceHarness), 'recovery').recoveryInstructions();
       const materialInstructions = sourceHarness === 'opencode'
         ? await prepareOpencodeRecoveryMaterial(request.transcriptRef, materialRoot, evidence.evidence)
         : [];

@@ -19,6 +19,9 @@ import { projectHandoff, projectPlanningHandoff } from '../application/controlle
  */
 
 import { existsSync } from 'node:fs';
+import { z } from 'zod';
+import { prepareFinalizerWorktree, finalizerPathsOutsideScope } from '../application/finalizer-execution.js';
+import { buildExecutionScope } from '../application/ports/execution-backend.js';
 import { FileProviderLibraryStore } from '../adapters/storage/provider-library-store.js';
 import { createProviderLibrary } from '../application/configuration/provider-library.js';
 import { createProviderCatalog } from '../adapters/agents/provider-catalog.js';
@@ -266,7 +269,7 @@ import {
   withValidationStatus,
   type WorkPackageStatus,
 } from '../domain/work-package-status.js';
-import type { DeliveryVerdict } from '../domain/delivery-verdict.js';
+import { evaluateFinalizerEvidence, type DeliveryVerdict } from '../domain/delivery-verdict.js';
 import type { ClaimProjection } from '../domain/planning/ticket-claim.js';
 import type {
   CoordinatorSessionState,
@@ -371,6 +374,8 @@ import { workPackageOf } from '../domain/planning/execution-graph.js';
 import { verifyModelCapabilities } from '../adapters/agents/capability-probe.js';
 import { sessionBindingIdOf, type HarnessSessionFacts } from '../adapters/agents/session-binding.js';
 import { resolveWorkerHarness } from '../application/ports/worker-harness.js';
+import { workerHarnessSupport } from '../adapters/agents/worker-harness-qualifications.js';
+import { minimumWorkerSupportLevel, workerSupportLevelAllows } from '../domain/worker-harness-support.js';
 import {
   bindHarnessSessionFromStartReport,
   installHarnessSessionReporter,
@@ -597,6 +602,7 @@ export type ForegroundPlanningHostOptions = {
    * 因此不必为了验证失败关闭而真的把主机弄坏。
    */
   readonly readOnlyWorkerProbe?: ReadOnlyWorkerProbe;
+  readonly workerSupportFor?: typeof workerHarnessSupport;
 };
 
 export type ForegroundPlanningHost = {
@@ -866,6 +872,7 @@ async function admitPlannerUnit(input: {
   readonly workPackageId: WorkPackageId;
   readonly worktreeId: string;
   readonly sessionBindingId: string;
+  readonly orcaDispatchId?: string;
   readonly scopeEnvelope: ScopeEnvelopeShape;
   readonly authority: RoleAuthorities;
   readonly consumedSpecificationRevisions: number;
@@ -878,7 +885,9 @@ async function admitPlannerUnit(input: {
       provider: input.provider,
       declaration: {
         role: 'planner',
-        producer: { kind: 'worker', role: 'planner', sessionBindingId: input.sessionBindingId },
+        producer: input.orcaDispatchId === undefined
+          ? { kind: 'worker', role: 'planner', sessionBindingId: input.sessionBindingId }
+          : { kind: 'orca-worker', role: 'planner', dispatchId: input.orcaDispatchId },
         workPackageId: input.workPackageId,
         worktreeId: input.worktreeId,
         relativePath,
@@ -926,6 +935,7 @@ export async function createForegroundPlanningHost(
   options: ForegroundPlanningHostOptions,
 ): Promise<ForegroundPlanningHost> {
   const clock = options.clock ?? (() => Date.now());
+  const supportFor = options.workerSupportFor ?? workerHarnessSupport;
   const newId = options.newId ?? (() => randomUUID());
   const heartbeatIntervalMs = options.heartbeatIntervalMs ?? RUNTIME_HEARTBEAT_INTERVAL_MS;
   const bindingWindowMs = options.sessionBindingWindowMs ?? FINALIZER_BINDING_WINDOW_MS;
@@ -3719,6 +3729,12 @@ export async function createForegroundPlanningHost(
         role,
         label: ROLE_LABELS[role],
         group: 'execution',
+        harnessOptions: WORKER_HARNESS_IDS.map(id => {
+          const support = supportFor(id);
+          const available = workerSupportLevelAllows(support.level, minimumWorkerSupportLevel(role));
+          return { id, level: support.level, qualificationRef: support.qualificationRef, available,
+            reason: available ? null : `需要 ${minimumWorkerSupportLevel(role)}，当前 ${support.level}` };
+        }),
         current:
           selection === null
             ? null
@@ -4308,7 +4324,7 @@ export async function createForegroundPlanningHost(
     }
     let specBinding = binding.specBinding;
     if (segment.role === 'planner') {
-      if (binding.specificationUnitPath === null || segment.sessionBindingId.length === 0) {
+      if (binding.specificationUnitPath === null || (segment.sessionBindingId.length === 0 && segment.executionBinding?.kind !== 'orca_worker')) {
         return { kind: 'unavailable', code: 'planner_declaration_unreadable', message: 'Planner 的规格路径或 Session Binding 不可读' };
       }
       const counters = requiredStore().query({ kind: 'budget-counters', coordinationScopeId: segment.coordinationScopeId });
@@ -4320,6 +4336,7 @@ export async function createForegroundPlanningHost(
         workPackageId,
         worktreeId: match.worktreeId,
         sessionBindingId: segment.sessionBindingId,
+        ...(segment.executionBinding?.kind === 'orca_worker' ? { orcaDispatchId: segment.dispatchId } : {}),
         scopeEnvelope,
         authority,
         consumedSpecificationRevisions: counters.counters.find(
@@ -5411,7 +5428,7 @@ export async function createForegroundPlanningHost(
       message.deliveryContract !== 'current_delivery' || binding.authorizationId === null || binding.workerProfileRef === null) return 'blocked';
     const authorization = requiredStore().query({ kind: 'authorization', coordinationScopeId: scopeId, authorizationId: binding.authorizationId });
     if (authorization.kind !== 'authorization' || authorization.authorization?.authorizationVersion !== binding.authorizationVersion ||
-      authorization.authorization.manifest.recoveryUtilityProfile.profileRef.id !== binding.workerProfileRef.id) return 'blocked';
+      authorization.authorization.manifest.recoveryUtilityProfile?.profileRef.id !== binding.workerProfileRef.id) return 'blocked';
     const source = read.snapshot.sessionSegments.find((entry) => capsuleLaunchIdOf(entry.segmentId) === binding.launchId);
     if (source === undefined) return 'blocked';
     const stored = readRecoveryCapsuleBody({ stateRoot: join(commonDirPath, COMPANION_STATE_DIRECTORY),
@@ -5603,6 +5620,7 @@ export async function createForegroundPlanningHost(
       clock,
       readDeliveries: () => currentDeliveryFacts(scopeId),
       recovery: createExecutionRecoveryFacts({
+        workerSupportFor: supportFor,
         // store 懒取：与其它装配一样按需要读，避免把「已经关闭的 store」捕获进长期 seam。
         store: () => {
           const current = requireStore();
@@ -5642,9 +5660,8 @@ export async function createForegroundPlanningHost(
   /**
    * 执行阶段的外部观察。
    *
-   * 只在 Execution Coordination 模式下读取，且只提交两个只读查询：`worktree-list`（按归属标记定位每个
-   * Work Package 的隔离 worktree）与 `worker-list`（当前 Graph Generation 的 Run）。任何一项不可用时
-   * 只记录原因，不把它读成「没有 Worker 在运行」。
+   * 在 Execution Coordination 模式按 worktree 与当前 Run 列举观察；交付后另核对 canonical 验证版本。
+   * 读取不可用时保留原因，不推断没有 Worker 或版本仍有效。
    */
   const executionObservations = async (
     scope: ScopeRecord,
@@ -5720,20 +5737,28 @@ export async function createForegroundPlanningHost(
         if (accepted('repair') && !accepted('verify') && !accepted('finish') && !accepted('refuse')) repairingAttemptIds.add(segment.attemptId);
       }
     }
+    const savedVerdict = snapshot?.kind === 'snapshot' ? snapshot.snapshot.deliveryVerdicts.at(-1) : undefined;
+    let verifiedVersionMatches: boolean | undefined;
+    if (savedVerdict?.verifiedHead != null && savedVerdict.verifiedTree !== null && canonicalWorktreePath !== null) {
+      const workspace = await readWorkspaceFacts({ worktreePath: canonicalWorktreePath, env: options.env });
+      const tree = await integrationPortFor()?.readTree({ worktreePath: canonicalWorktreePath });
+      verifiedVersionMatches = workspace.kind === 'observed' && workspace.facts.head === savedVerdict.verifiedHead &&
+        projectChangedPaths(workspace.facts.dirtyPaths).length === 0 && tree?.kind === 'read' && tree.tree === savedVerdict.verifiedTree;
+    }
     return {
       workersEnumerated,
       repairingAttemptIds,
       workers,
       worktreePaths,
       unavailableReasons,
-      finalizer: finalizerObservations.get(scope.coordinationScopeId) ?? {
+      finalizer: { ...(finalizerObservations.get(scope.coordinationScopeId) ?? {
         // 本进程还没有读到 Finalizer 的只读证明与运行前后工作区：如实标为未核验/未记录。
         readOnlyProfile: 'unverified',
         integrationFrozen: 'unknown',
         worktreePath: canonicalWorktreePath,
         workspace: null,
         evidenceRefs: [],
-      },
+      }), ...(verifiedVersionMatches === undefined ? {} : { verifiedVersionMatches }) },
     };
   };
 
@@ -5770,7 +5795,7 @@ export async function createForegroundPlanningHost(
   /** Worker Result 的结构版本；与 `worker-report-dto` 接受的值一致（它不导出该常量）。 */
   const WORKER_RESULT_SCHEMA_VERSION = 1;
 
-  /** 执行推进可能的角色：Finalizer 不是 Frontier 角色，它由项目级只读派发拥有。 */
+  /** Finalizer 由项目级派发拥有，不属于 Frontier 角色。 */
   type AdvanceRole = Exclude<WorkerRole, 'finalizer'>;
 
   /** 稳定派生的分段编码：同一组事实必须得到同一个身份，且不同分段不会在边界碰撞。 */
@@ -6252,6 +6277,7 @@ export async function createForegroundPlanningHost(
           workPackageId: input.workPackage.workPackageId,
           worktreeId: worktree.worktreeId,
           sessionBindingId: planner.sessionBindingId,
+          ...(planner.executionBinding?.kind === 'orca_worker' ? { orcaDispatchId: planner.dispatchId } : {}),
           scopeEnvelope: input.workPackage.scopeEnvelope,
           authority: input.manifest.permissions,
           consumedSpecificationRevisions: consumed('specificationRevisions'),
@@ -6326,6 +6352,8 @@ export async function createForegroundPlanningHost(
       const contractSpecBinding = priorBinding === null ? specBinding : priorBinding.specBinding;
       const workerProfile = dispatchAuthorization.profile;
       const harness = workerProfile.harness;
+      if (basisManifest.manifestVersion === 5 && !workerSupportLevelAllows(supportFor(harness).level, minimumWorkerSupportLevel(role)))
+        return { kind: 'blocked', code: 'worker_harness_capability_unavailable', message: `${harness} 不满足 ${role} 所需等级` };
       if (resolveWorkerHarness(workerHarnessRegistry, harness).kind === 'rejected') {
         return {
           kind: 'blocked',
@@ -6915,6 +6943,30 @@ export async function createForegroundPlanningHost(
    * 落成 blocker。窗口错过之后的补记走 `reconcileUnboundRoleSessions`——两条路径共用同一个签发与写入
    * 实现，因此补记的结论与派发时完全一致。
    */
+  const recordOrcaRoleBinding = async (input: {
+    readonly session: LiveSession; readonly segmentId: string; readonly workPackageId: WorkPackageId;
+    readonly role: WorkerRole; readonly workerTaskId: WorkerTaskId; readonly dispatchId: DispatchId;
+    readonly attemptId: string; readonly orcaTaskId: string;
+  }): Promise<{ readonly code: string; readonly message: string } | null> => {
+    if (input.role !== 'planner' && input.role !== 'implementation')
+      return { code: 'worker_harness_capability_unavailable', message: '该角色要求精确原生 Session' };
+    const backend = backendForExecution();
+    if (backend === null) return { code: 'backend_unavailable', message: '无法回读 Orca Worker 身份' };
+    const shown = await backend.query({ operation: 'worker-show', dispatchId: input.dispatchId });
+    const worker = shown.kind === 'accepted' ? shown.value as WorkerShowResult : null;
+    if (worker?.exactWorker !== true || worker.taskId !== input.orcaTaskId || worker.dispatchId !== input.dispatchId || worker.agentTerminalHandle === null)
+      return { code: 'worker_identity_unverifiable', message: 'Orca Worker 的 Task/Dispatch/terminal 无法精确核验' };
+    const scopeId = input.session.incarnation.coordinationScopeId;
+    const scope = scopeRecord(scopeId);
+    if (scope === null) return { code: 'scope_unavailable', message: '无法读取执行 Scope' };
+    const written = requiredStore().transact({ kind: 'record-worker-execution-binding', coordinationScopeId: scopeId,
+      expectedRevision: scope.revision, writer: writerFor(input.session.incarnation),
+      segmentId: input.segmentId as never, workPackageId: input.workPackageId, role: input.role,
+      workerTaskId: input.workerTaskId, dispatchId: input.dispatchId, attemptId: input.attemptId,
+      orcaTaskId: input.orcaTaskId, terminalHandle: worker.agentTerminalHandle });
+    return written.kind === 'committed' ? null : { code: written.code, message: written.message };
+  };
+
   const recordRoleSession = async (input: {
     readonly session: LiveSession;
     readonly assembled: Extract<AdvanceInputAssembly, { readonly kind: 'ready' }>;
@@ -6948,6 +7000,17 @@ export async function createForegroundPlanningHost(
     const harness = dispatch.workerLaunch.kind === 'prepared_terminal'
       ? dispatch.workerLaunch.harness
       : dispatch.workerLaunch.agent;
+    const bindingRead = requiredStore().query({ kind: 'materialization-bindings', coordinationScopeId: session.incarnation.coordinationScopeId,
+      workPackageId: result.workPackageId });
+    const binding = bindingRead.kind === 'materialization-bindings' ? bindingRead.bindings.find(entry =>
+      entry.workerTaskId === dispatch.taskEnvelope.workerTaskId && entry.attemptId === dispatch.taskEnvelope.attemptId && entry.role === result.role) : undefined;
+    const authorizationRead = binding?.authorizationId == null ? null : requiredStore().query({ kind: 'authorization',
+      coordinationScopeId: session.incarnation.coordinationScopeId, authorizationId: binding.authorizationId });
+    const profile = authorizationRead?.kind === 'authorization' ? authorizationRead.authorization?.manifest.workerProfiles.find(entry => entry.role === result.role) : null;
+    if (profile?.supportLevel === 'basic' && binding !== undefined)
+      return recordOrcaRoleBinding({ session, segmentId: derivedKey('segment', [session.incarnation.coordinationScopeId, result.dispatchId, dispatch.taskEnvelope.attemptId]),
+        workPackageId: result.workPackageId, role: result.role, workerTaskId: dispatch.taskEnvelope.workerTaskId,
+        dispatchId: result.dispatchId as DispatchId, attemptId: dispatch.taskEnvelope.attemptId, orcaTaskId: binding.orcaTaskId });
     const proven = await sessionBindingFromStartReport({
       reportPath: assembled.reportPath,
       harness,
@@ -7034,6 +7097,15 @@ export async function createForegroundPlanningHost(
         binding.attemptId === entry.attemptId && binding.role === entry.role) ?? null;
       const harness = harnessForPinnedBinding(pinnedBinding, entry.role);
       if (harness === null) {
+        continue;
+      }
+      const authorizationRead = pinnedBinding?.authorizationId == null ? null : current.query({ kind: 'authorization',
+        coordinationScopeId: scopeId, authorizationId: pinnedBinding.authorizationId });
+      const profile = authorizationRead?.kind === 'authorization' ? authorizationRead.authorization?.manifest.workerProfiles.find(item => item.role === entry.role) : null;
+      if (profile?.supportLevel === 'basic' && pinnedBinding !== null) {
+        await recordOrcaRoleBinding({ session, segmentId: entry.segmentId, workPackageId: entry.workPackageId,
+          role: entry.role, workerTaskId: entry.workerTaskId, dispatchId: entry.orcaDispatchId,
+          attemptId: entry.attemptId, orcaTaskId: pinnedBinding.orcaTaskId });
         continue;
       }
       const paths = sessionPathsFor(harness, entry.launchId);
@@ -8162,7 +8234,7 @@ export async function createForegroundPlanningHost(
       : resolved.harness.sessionPaths(join(commonDirPath, COMPANION_STATE_DIRECTORY), launchId);
   };
 
-  /** 本进程读到的 Finalizer 派发事实；重启后不存在，因此重启期间无法证明只读（见下）。 */
+  /** 本进程的 Finalizer 运行缓存；修复模式重启时从持久绑定重建。 */
   type FinalizerRun = {
     readonly workerTaskId: WorkerTaskId;
     /** 本次派发在 Orca 里取得的 Task 身份；结论读回时按它配对，不用 Finalizer 自报身份。 */
@@ -8172,6 +8244,8 @@ export async function createForegroundPlanningHost(
     readonly sessionBindingId: string;
     readonly before: FinalizerWorkspaceFacts;
     readonly authorizationId: string;
+    readonly worktreePath?: string;
+    readonly sourceBranch?: string;
   };
   const finalizerRuns = new Map<string, FinalizerRun>();
 
@@ -8214,14 +8288,21 @@ export async function createForegroundPlanningHost(
     snapshot: CoordinationSnapshot,
     scopeId: CoordinationScopeId,
   ): ReadonlySet<string> => {
+    const finalizerTaskIds = new Set<string>();
+    const currentGeneration = snapshot.graphGenerations.find(entry => entry.graphId === snapshot.scope.graphId)?.generation;
+    if (snapshot.scope.graphId !== null && currentGeneration !== undefined) {
+      finalizerTaskIds.add(String(finalizerOperationIdsFor({ scopeId, graphId: snapshot.scope.graphId,
+        generation: currentGeneration }).workerTaskId));
+    }
     const orcaTaskId = snapshot.materializationBindings.find(
-      (binding) => binding.role === 'finalizer' && String(binding.workPackageId) === String(scopeId),
+      (binding) => binding.role === 'finalizer' && finalizerTaskIds.has(String(binding.workerTaskId)),
     )?.orcaTaskId ?? null;
     const ids = new Set<string>();
     for (const intent of snapshot.unresolvedIntents) {
       // 派发意图的 target 是 pseudo Work Package，其 id 就是 Scope id；两者是不同品牌的身份类型，
       // 这里按不透明字符串比较。
-      if (String(intent.target.id) === String(scopeId)) {
+      if (String(intent.target.id) === String(scopeId) ||
+          ((intent.target.kind === 'finalizer-worktree' || intent.target.kind === 'finalizer') && finalizerTaskIds.has(String(intent.target.id)))) {
         ids.add(intent.operationId);
       } else if (orcaTaskId !== null && intent.operationCategory === 'task' && intent.target.id === orcaTaskId) {
         ids.add(intent.operationId);
@@ -8240,14 +8321,8 @@ export async function createForegroundPlanningHost(
   };
 
   /**
-   * 项目级收尾：门禁 → 运行前工作区事实 → 新的只读 Codex Session → 运行后工作区事实 → 独立 verdict。
-   *
-   * 三条不可让步的边界：
-   * - 门禁未通过（任一 Work Package 未验证接受、有未决交互、有未结算 mutation、未授权 finalizer）或
-   *   仍有 Work Package 尚未完成集成时，既不派发也不呈现 deliverable；
-   * - 只读无法证明（Session Binding 读不回、或该派发发生在本进程之前的 Incarnation）时只报 blocker，
-   *   绝不谎称只读；
-   * - 运行前后 canonical 工作区发生变化时不接受任何 verdict，交付保持 blocker。
+   * 项目级收尾按原授权选择只读检查或独立 worktree 修复。
+   * 修复模式核验固定基线、范围、最终版本与复验后才集成；旧只读模式核验工作区未变。
    */
   const runFinalizerForScope = async (session: LiveSession): Promise<void> => {
     const scopeId = session.incarnation.coordinationScopeId;
@@ -8283,9 +8358,21 @@ export async function createForegroundPlanningHost(
     if (authorizationRead.kind === 'rejected' || authorizationRead.authorization === null) {
       return;
     }
-    const manifest = authorizationRead.authorization.manifest;
-    // 项目级 Finalizer 是一次新的只读派发，因此固定**当前**授权的 Finalizer profile；
-    // 它不继承任何 Work Package 的绑定。
+    let manifest = authorizationRead.authorization.manifest;
+    let finalizerAuthorization = authorizationRead.authorization;
+    const savedSnapshot = current.query({ kind: 'snapshot', coordinationScopeId: scopeId });
+    const currentFinalizerId = finalizerOperationIdsFor({ scopeId, graphId: graph.graphId, generation: graph.generation }).workerTaskId;
+    const savedBinding = savedSnapshot.kind === 'snapshot'
+      ? savedSnapshot.snapshot.materializationBindings.find(entry => entry.role === 'finalizer' && entry.workerTaskId === currentFinalizerId) : undefined;
+    const originalAdmission = current.query({ kind: 'finalizer-admission', coordinationScopeId: scopeId, workerTaskId: currentFinalizerId });
+    const originalAuthorizationId = savedBinding?.authorizationId ?? (originalAdmission.kind === 'finalizer-admission' ? originalAdmission.admission?.authorizationId : null);
+    if (originalAuthorizationId != null) {
+      const original = current.query({ kind: 'authorization', coordinationScopeId: scopeId, authorizationId: originalAuthorizationId });
+      if (original.kind !== 'authorization' || original.authorization === null) return;
+      finalizerAuthorization = original.authorization;
+      manifest = original.authorization.manifest;
+    }
+    const repair = manifest.finalizerPolicy?.mode === 'repair';
     const finalizerProfile = manifestProfileFor(manifest, 'finalizer');
     if (finalizerProfile === null) {
       recordExecutionBlocker(
@@ -8294,6 +8381,10 @@ export async function createForegroundPlanningHost(
         'worker_profile_unresolved',
         '当前已批准 Manifest 没有绑定 Finalizer Worker Profile：不伪造模型派发只读检查',
       );
+      return;
+    }
+    if (manifest.manifestVersion === 5 && !workerSupportLevelAllows(supportFor(finalizerProfile.harness).level, 'enhanced')) {
+      recordExecutionBlocker(scopeId, 'finalizer', 'worker_harness_capability_unavailable', 'Finalizer harness 当前支持等级不足');
       return;
     }
     const finalizerHarness = finalizerProfile.harness;
@@ -8315,6 +8406,7 @@ export async function createForegroundPlanningHost(
       establishedStatusOf(snapshot, workPackage.workPackageId),
     );
     const gate: FinalizerGateFacts = {
+      ...(manifest.finalizerPolicy === undefined ? {} : { finalizerPolicy: manifest.finalizerPolicy }),
       workPackageStatuses: statuses,
       pendingInteractionCount: snapshot.pendingInteractions.filter(
         (interaction) => interaction.state === 'open',
@@ -8360,6 +8452,15 @@ export async function createForegroundPlanningHost(
             settlement.dispatchId === segment.dispatchId && settlement.attemptId === segment.attemptId && settlement.runId === run.runId &&
             settlement.outcome === (verdict.verdict.kind === 'deliverable' ? 'succeeded' : 'failed')))));
     if (completed) {
+      const verdict = snapshot.deliveryVerdicts.find(entry => entry.verdictId === derivedKey('delivery-verdict', [scopeId, graph.graphId, String(graph.generation)]));
+      if (verdict?.verdict.kind === 'deliverable' && verdict.verifiedHead !== null && verdict.verifiedTree !== null) {
+        const workspace = await readWorkspaceFacts({ worktreePath: canonicalWorktreePath, env: options.env });
+        const tree = await integrationPortFor()?.readTree({ worktreePath: canonicalWorktreePath });
+        if (workspace.kind !== 'observed' || workspace.facts.head !== verdict.verifiedHead || tree?.kind !== 'read' ||
+            tree.tree !== verdict.verifiedTree || projectChangedPaths(workspace.facts.dirtyPaths).length > 0) {
+          recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_version_changed', '当前项目版本已偏离持久化交付版本'); return;
+        }
+      }
       clearExecutionBlocker(scopeId, 'finalizer');
       return;
     }
@@ -8368,7 +8469,7 @@ export async function createForegroundPlanningHost(
       recordExecutionBlocker(scopeId, 'finalizer', 'state_root_unavailable', '无法建立 Finalizer Session reporter');
       return;
     }
-    const existing = finalizerRuns.get(scopeId);
+    let existing = finalizerRuns.get(scopeId);
     const before = await readWorkspaceFacts({ worktreePath: canonicalWorktreePath, env: options.env });
     if (before.kind !== 'observed') {
       recordExecutionBlocker(
@@ -8379,12 +8480,58 @@ export async function createForegroundPlanningHost(
       );
       return;
     }
+    let finalizerWorktreePath = existing?.worktreePath ?? canonicalWorktreePath;
+    let finalizerSourceBranch = existing?.sourceBranch ?? manifest.gitPolicy.canonicalBranch;
+    let finalizerBaseline = existing?.before ?? before.facts;
+    if (repair && existing === undefined) {
+      const admissionRead = current.query({ kind: 'finalizer-admission', coordinationScopeId: scopeId, workerTaskId: operationIds.workerTaskId });
+      if (admissionRead.kind === 'finalizer-admission' && admissionRead.admission !== null) {
+        const original = current.query({ kind: 'authorization', coordinationScopeId: scopeId, authorizationId: admissionRead.admission.authorizationId });
+        if (original.kind !== 'authorization' || original.authorization === null) return;
+        finalizerAuthorization = original.authorization;
+        manifest = original.authorization.manifest;
+      } else if (projectChangedPaths(before.facts.dirtyPaths).length > 0) {
+        recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_baseline_dirty', 'Finalizer 修复要求干净的 canonical 基线');
+        return;
+      }
+      const worktreeOperationId = derivedKey('finalizer-worktree', [scopeId, graph.graphId, String(graph.generation)]) as OperationId;
+      const prepared = await prepareFinalizerWorktree({ store: current, backend, writer: writerFor(session.incarnation),
+        coordinationScopeId: scopeId, graphId: graph.graphId, graphGeneration: graph.generation,
+        workerTaskId: operationIds.workerTaskId, authorizationId: finalizerAuthorization.authorizationId,
+        baselineHead: before.facts.head, canonicalWorktree: canonicalWorktreePath, operationId: worktreeOperationId,
+        executionScope: revision => buildExecutionScope({ coordinationScopeId: scopeId, coordinatorSessionId: session.coordinatorSessionId,
+          runtimeIncarnationId: session.incarnation.runtimeIncarnationId, fencingGeneration: session.incarnation.fencingGeneration,
+          backendIdentityRef: identity, operationId: worktreeOperationId, target: { kind: 'finalizer-worktree', id: operationIds.workerTaskId },
+          expectedRevision: revision, timeoutMs: MUTATION_TIMEOUT_MS, authority: { kind: 'execution_coordination', graphGeneration: graph.generation,
+            authorizationId: finalizerAuthorization.authorizationId, runId: run.runId, consumerGeneration: run.consumerGeneration } }) });
+      if (prepared.kind !== 'ready') {
+        recordExecutionBlocker(scopeId, 'finalizer', prepared.code, prepared.message); return;
+      }
+      finalizerWorktreePath = prepared.worktree.path;
+      finalizerSourceBranch = prepared.worktree.branch!;
+      finalizerBaseline = { head: prepared.admission.baselineHead, indexRevision: '', dirtyPaths: [] };
+      const priorBinding = snapshot.materializationBindings.find(entry => entry.role === 'finalizer' && entry.workerTaskId === operationIds.workerTaskId);
+      const priorSegment = snapshot.sessionSegments.find(entry => entry.role === 'finalizer' && entry.workerTaskId === operationIds.workerTaskId);
+      if (priorBinding !== undefined && priorSegment !== undefined) {
+        const proof = await sessionBindingFromStartReport({ reportPath: paths.reportPath, harness: finalizerHarness,
+          role: 'finalizer', workerTaskId: priorSegment.workerTaskId, dispatchId: priorSegment.dispatchId,
+          attemptId: priorSegment.attemptId, workspace: finalizerWorktreePath, expectedCodexHome: '',
+          dispatchStartedAt: new Date(priorBinding.createdAt).toISOString(), waitMs: bindingWindowMs });
+        if (proof.kind !== 'bound' || sessionBindingIdOf(priorSegment.dispatchId, proof.binding.providerSessionId) !== priorSegment.sessionBindingId) {
+          recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_session_unverifiable', '原 Finalizer Session 无法复核'); return;
+        }
+        existing = { workerTaskId: operationIds.workerTaskId, orcaTaskId: priorBinding.orcaTaskId, dispatchId: priorSegment.dispatchId,
+          attemptId: priorSegment.attemptId, sessionBindingId: priorSegment.sessionBindingId, before: finalizerBaseline,
+          authorizationId: prepared.admission.authorizationId, worktreePath: finalizerWorktreePath, sourceBranch: finalizerSourceBranch };
+        finalizerRuns.set(scopeId, existing);
+      }
+    }
     if (existing === undefined) {
       if (scope.controlState !== 'active') return;
       // 本进程没有这次派发的记录：可能是上一个 Incarnation 派发的。settled intent 是它的证据，
       // 但只读约束只有本进程构造的启动策略能证明，因此这里只报 blocker，不伪称只读。
       const prior = current.query({ kind: 'intent', coordinationScopeId: scopeId, operationId: operationIds.task });
-      if (prior.kind === 'intent' && prior.intent !== null) {
+      if (!repair && prior.kind === 'intent' && prior.intent !== null) {
         recordExecutionBlocker(
           scopeId,
           'finalizer',
@@ -8394,20 +8541,41 @@ export async function createForegroundPlanningHost(
         return;
       }
       // 确认没有既有派发/意图之后才探测：能力不可用时零新 Task/Dispatch，交付保持 blocker。
-      const readOnlyWorker = await probeForProfile(finalizerProfile.harness, finalizerProfile.modelSelection);
-      const readOnlyBlocker = readOnlyWorkerUnavailableReason(readOnlyWorker);
+      const readOnlyBlocker = repair ? null : readOnlyWorkerUnavailableReason(
+        await probeForProfile(finalizerProfile.harness, finalizerProfile.modelSelection));
       if (readOnlyBlocker !== null) {
         recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_read_only_unavailable', readOnlyBlocker);
         return;
       }
+      const materialized = snapshot.materializationBindings.find(entry => entry.role === 'finalizer' && entry.workerTaskId === operationIds.workerTaskId);
+      if (repair && codexSandboxForDispatch(manifest.acceptedRisks) === null) {
+        recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_sandbox_unauthorized', 'Finalizer 沙箱风险未获原授权'); return;
+      }
       installHarnessSessionReporter(finalizerHarness, paths);
-      const dispatchStartedAt = new Date().toISOString();
+      const dispatchStartedAt = new Date(materialized?.createdAt ?? (prior.kind === 'intent' ? prior.intent?.createdAt : undefined) ?? Date.now()).toISOString();
+      const listedWorktrees = await backend.query({ operation: 'worktree-list', repo: `path:${canonicalWorktreePath}`, limit: 1_000 });
+      const listed = listedWorktrees.kind === 'accepted' ? listedWorktrees.value as WorktreeListResult : null;
+      const dispatchWorktree = listed !== null && !listed.truncated && listed.hostScope !== null && listed.hostScope.omittedHostIds.length === 0
+        ? listed.worktrees.find(entry => entry.path === finalizerWorktreePath) : undefined;
+      if (dispatchWorktree === undefined) { recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_worktree_unverifiable', 'Finalizer worktree 身份不可读'); return; }
+      const bindTask = (orcaTaskId: string): { readonly code: string; readonly message: string } | null => {
+        const saved = current.transact({ kind: 'record-materialization-binding', coordinationScopeId: scopeId,
+          expectedRevision: scopeRecord(scopeId)!.revision, writer: writerFor(session.incarnation), workPackageId: scopeId as unknown as WorkPackageId,
+          role: 'finalizer', workerTaskId: operationIds.workerTaskId, dispatchId: operationIds.dispatchId,
+          attemptId: operationIds.attemptId, worktreeId: dispatchWorktree.worktreeId, specBinding: null, specificationUnitPath: null,
+          authorizationId: finalizerAuthorization.authorizationId, authorizationVersion: finalizerAuthorization.authorizationVersion,
+          workerProfileRef: finalizerProfile.profileRef.id, orcaTaskId, launchId: operationIds.launchId, creationOperationId: operationIds.task });
+        return saved.kind === 'committed' ? null : { code: saved.code, message: saved.message };
+      };
       const dispatched = await dispatchScopedWorker({
         store: current,
         backend,
         writer: writerFor(session.incarnation),
         coordinationScopeId: scopeId,
         workPackageId: scopeId,
+        ...(repair && materialized !== undefined ? { existingOrcaTaskId: materialized.orcaTaskId } : {}),
+        onTaskCreated: bindTask,
+        onDispatchStarted: bindTask,
         spec: JSON.stringify({
           schemaVersion: TASK_ENVELOPE_SCHEMA_VERSION,
           // 项目级任务的稳定身份：结论读回时按它配对，不用 Finalizer 自报的身份。
@@ -8416,14 +8584,19 @@ export async function createForegroundPlanningHost(
           attemptId: operationIds.attemptId,
           role: 'finalizer',
           taskKind: 'project-delivery-verdict',
-          readOnly: true,
+          readOnly: !repair,
           coversWorkPackageIds: [...dispatch.plan.coversWorkPackageIds],
           expectedWorkPackageIds: statuses.map((status) => status.workPackageId),
           // 运行前的工作区事实是这次 Finalizer 检查的固定输入：Worker 只能核对，不能改写。
-          workspaceBefore: before.facts,
+          workspaceBefore: finalizerBaseline,
+          ...(repair ? { repairLimit: manifest.finalizerPolicy!.repairLimit,
+            scopeEnvelopes: graph.workPackages.map(workPackage => workPackage.scopeEnvelope),
+            dependencyChanges: manifest.permissions.dependencyChanges } : {}),
           // 结论只有一种可接受形状：只输出一个 JSON 对象，作为 worker_done 正文提交，不要写成叙述。
           instructions: [
-            '你是项目级只读 Finalizer。完成只读检查后，只输出一个 JSON 对象（不要 Markdown、代码围栏或叙述文字），并把它作为 worker_done 正文提交。',
+            repair ? '你是项目级 Finalizer。在本独立 worktree 检查项目并修复授权范围内缺陷。可以生成测试产物，使用 ignored 或临时目录。不要改设计、不要 force push，不自行集成或推送 canonical。将代码修复提交为普通 commit 后对最终 HEAD 运行完整验证，保持 Git 工作区干净。只进行一次有界修复与复验；无法完成时报告 blocked。返回 JSON 并作为 worker_done 正文提交。'
+              : '你是项目级只读 Finalizer。完成只读检查后，只输出一个 JSON 对象，并把它作为 worker_done 正文提交。',
+            ...(repair ? ['JSON 必须附 verification: {head: "最终完整 Git HEAD", tree: "该 HEAD 的完整 tree OID", commands: [{evidenceId:"test-1",kind:"command",coveredPaths:["项目路径"],command:"真实复验命令",outcome:"passed",summary:"真实结果"}]}。失败必须标记 failed；不得使用修复前证据或编造版本。允许的修复路径来自 scopeEnvelopes；依赖变更须获 dependencyChanges 授权。'] : []),
             'JSON 形状固定为：{"coveredWorkPackageIds":[...],"verdict":{"kind":"deliverable","evidenceRefs":[...]}} 或 {"coveredWorkPackageIds":[...],"verdict":{"kind":"blocked","blockerRefs":[...]}}。',
             `coveredWorkPackageIds 必须覆盖全部待验证 Work Package：${JSON.stringify(statuses.map((status) => status.workPackageId))}。`,
             'deliverable 的 evidenceRefs 只能引用下面这些既有权威结果引用，不得自造其它字符串；任一项无法核对时改用 blocked。',
@@ -8433,7 +8606,7 @@ export async function createForegroundPlanningHost(
         execution: {
           backendIdentityRef: identity,
           graphGeneration: graph.generation,
-          authorizationId: authorizationRead.authorization.authorizationId,
+          authorizationId: finalizerAuthorization.authorizationId,
           runId: run.runId,
           consumerGeneration: run.consumerGeneration,
           timeoutMs: MUTATION_TIMEOUT_MS,
@@ -8441,14 +8614,13 @@ export async function createForegroundPlanningHost(
         workerLaunch: prepareHarnessWorkerLaunch(finalizerHarness, {
           launchId: operationIds.launchId,
           modelSelection: finalizerProfile.modelSelection,
-          // 与常规角色派发同源：只读 Finalizer 的 managed 凭据也在准备阶段证明存在。
-          // Finalizer 只读（profile 继承 `:read-only`），只为本机控制通道回报结论而开启该通道网络。
-          sandboxMode: 'read-only-local-control',
+          // 沙箱由原授权决定；本机控制通道用于回报结构化结论。
+          sandboxMode: repair ? codexSandboxForDispatch(manifest.acceptedRisks) ?? 'workspace-write' : 'read-only-local-control',
           stateRoot: paths.stateRoot,
           sessionStartReporterPath: paths.reporterPath,
         }),
-        worktree: `path:${canonicalWorktreePath}`,
-        taskTitle: '项目级交付结论（只读 Finalizer）',
+        worktree: `path:${finalizerWorktreePath}`,
+        taskTitle: '项目级 Finalizer',
         operationIds: {
           task: operationIds.task,
           workerPrepare: operationIds.workerPrepare,
@@ -8470,7 +8642,7 @@ export async function createForegroundPlanningHost(
                   attemptId: operationIds.attemptId,
                 },
                 report,
-                workspace: canonicalWorktreePath,
+                workspace: finalizerWorktreePath,
                 expectedCodexHome: report.stateRoot ?? report.codexHome ?? '',
                 dispatchStartedAt,
                 bindingDeadlineAt: new Date().toISOString(),
@@ -8496,23 +8668,12 @@ export async function createForegroundPlanningHost(
         },
       });
       if (dispatched.kind === 'dispatched') {
-        const canonical = await backend.query({ operation: 'worktree-list', repo: `path:${canonicalWorktreePath}`, limit: 1_000 });
-        const worktrees = canonical.kind === 'accepted' ? canonical.value as WorktreeListResult : null;
-        const worktree = worktrees !== null && !worktrees.truncated && worktrees.hostScope !== null && worktrees.hostScope.omittedHostIds.length === 0
-          ? worktrees.worktrees.find(entry => entry.path === canonicalWorktreePath) : undefined;
-        if (worktree === undefined) { recordExecutionBlocker(scopeId, 'finalizer', 'canonical_worktree_unverifiable', 'Finalizer 的 canonical worktree 身份不可读'); return; }
-        const binding = current.transact({ kind: 'record-materialization-binding', coordinationScopeId: scopeId,
-          expectedRevision: scopeRecord(scopeId)!.revision, writer: writerFor(session.incarnation), workPackageId: scopeId as unknown as WorkPackageId,
-          role: 'finalizer', workerTaskId: operationIds.workerTaskId, dispatchId: operationIds.dispatchId,
-          attemptId: operationIds.attemptId, worktreeId: worktree.worktreeId, specBinding: null, specificationUnitPath: null,
-          authorizationId: authorizationRead.authorization.authorizationId, authorizationVersion: authorizationRead.authorization.authorizationVersion,
-          workerProfileRef: finalizerProfile.profileRef.id, orcaTaskId: dispatched.orcaTaskId, launchId: operationIds.launchId,
-          creationOperationId: operationIds.task });
-        const segment = binding.kind === 'committed' ? recordRoleSegment({ session,
+        const bindingFailure = bindTask(dispatched.orcaTaskId);
+        const segment = bindingFailure === null ? recordRoleSegment({ session,
           segmentId: derivedKey('finalizer-segment', [scopeId, dispatched.dispatchId]), workPackageId: scopeId as unknown as WorkPackageId,
           role: 'finalizer', workerTaskId: operationIds.workerTaskId, dispatchId: dispatched.dispatchId as DispatchId,
           attemptId: operationIds.attemptId, binding: { ...dispatched.binding, harness: finalizerHarness, role: 'finalizer', attemptId: operationIds.attemptId } })
-          : { code: binding.code, message: binding.message };
+          : bindingFailure;
         if (segment !== null) { recordExecutionBlocker(scopeId, 'finalizer', segment.code, segment.message); return; }
         finalizerRuns.set(scopeId, {
           workerTaskId: operationIds.workerTaskId,
@@ -8520,8 +8681,9 @@ export async function createForegroundPlanningHost(
           dispatchId: dispatched.dispatchId,
           attemptId: operationIds.attemptId,
           sessionBindingId: sessionBindingIdOf(dispatched.dispatchId, dispatched.binding.providerSessionId),
-          before: before.facts,
-          authorizationId: authorizationRead.authorization.authorizationId,
+          before: finalizerBaseline,
+          authorizationId: finalizerAuthorization.authorizationId,
+          worktreePath: finalizerWorktreePath, sourceBranch: finalizerSourceBranch,
         });
         clearExecutionBlocker(scopeId, 'finalizer');
         publish(session.coordinatorSessionId, {
@@ -8560,7 +8722,7 @@ export async function createForegroundPlanningHost(
     ) {
       return;
     }
-    const report = await readFinalizerReport({
+    const reportRead = await readFinalizerReport({
       backend,
       backendIdentityRef: identity,
       runId: run.runId,
@@ -8568,13 +8730,22 @@ export async function createForegroundPlanningHost(
       orcaTaskId: existing.orcaTaskId,
       dispatchId: existing.dispatchId,
     });
-    if (report.kind === 'pending') {
+    if (reportRead.kind === 'pending') {
       return;
     }
-    if (report.kind === 'blocked') {
-      recordExecutionBlocker(scopeId, 'finalizer', report.code, report.message);
+    if (reportRead.kind === 'blocked') {
+      recordExecutionBlocker(scopeId, 'finalizer', reportRead.code, reportRead.message);
       return;
     }
+    const report = { ...reportRead, authoritativeRefs: [...reportRead.authoritativeRefs],
+      verdict: reportRead.verdict.kind === 'deliverable'
+        ? { kind: 'deliverable' as const, evidenceRefs: [...reportRead.verdict.evidenceRefs] } : reportRead.verdict };
+    // 集成前先核验报告覆盖与引用；集成不能先于报告准入。
+    const reportAdmission = evaluateFinalizerEvidence({
+      coveredWorkPackageIds: report.coveredWorkPackageIds as readonly WorkPackageId[],
+      expectedWorkPackageIds: statuses.map(status => status.workPackageId), verdict: report.verdict,
+      authoritativeRefs: report.authoritativeRefs });
+    if (reportAdmission.kind === 'blocked') { recordExecutionBlocker(scopeId, 'finalizer', reportAdmission.code, reportAdmission.message); return; }
     const after = await readWorkspaceFacts({ worktreePath: canonicalWorktreePath, env: options.env });
     if (after.kind !== 'observed') {
       recordExecutionBlocker(
@@ -8585,8 +8756,59 @@ export async function createForegroundPlanningHost(
       );
       return;
     }
-    const workspaceChanged =
-      workspaceBeforeAfterChanged(existing.before, after.facts);
+    const finalWorkspace = repair ? await readWorkspaceFacts({ worktreePath: existing.worktreePath!, env: options.env }) : after;
+    if (finalWorkspace.kind !== 'observed') {
+      recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_workspace_unreadable', '最终验证工作区无法读回'); return;
+    }
+    let verification: import('../domain/delivery-verdict.js').FinalizerReportFacts['verification'];
+    if (repair && report.verdict.kind === 'deliverable') {
+      const port = integrationPortFor();
+      const proved = report.verification;
+      const changed = await readWorkspaceChangesSince({ worktreePath: existing.worktreePath!, baselineHead: existing.before.head, env: options.env });
+      const tree = port === null ? null : await port.readTree({ worktreePath: existing.worktreePath! });
+      const ancestry = port === null ? null : await port.isAncestor({ ancestor: existing.before.head, descendant: finalWorkspace.facts.head });
+      if (proved === undefined || port === null || tree?.kind !== 'read' || ancestry?.kind !== 'yes' ||
+          proved.head !== finalWorkspace.facts.head || proved.tree !== tree.tree ||
+          projectChangedPaths(finalWorkspace.facts.dirtyPaths).length > 0 || changed.kind !== 'observed' ||
+          finalizerPathsOutsideScope(graph, changed.changedPaths).length > 0 ||
+          !proved.commands.some(command => command.kind === 'command' && command.outcome === 'passed' && command.command !== null && command.command.trim().length > 0) ||
+          proved.commands.some(command => command.outcome !== 'passed')) {
+        recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_repair_unverified', 'Finalizer 最终版本、修复范围或复验结果未通过核验'); return;
+      }
+      if (!manifest.permissions.dependencyChanges && changed.changedPaths.some(path => /(^|\/)(package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock|pyproject\.toml|uv\.lock|requirements[^/]*\.txt)$/.test(path))) {
+        recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_dependency_unauthorized', 'Finalizer 修改了未授权的依赖'); return;
+      }
+      const candidate = await recordAcceptedTaskResult({ store: current, backend, coordinationScopeId: scopeId,
+        writer: writerFor(session.incarnation), backendIdentityRef: identity, graphGeneration: graph.generation,
+        authorizationId: existing.authorizationId, runId: run.runId, consumerGeneration: run.consumerGeneration,
+        timeoutMs: MUTATION_TIMEOUT_MS, orcaTaskId: existing.orcaTaskId,
+        acceptedResult: { verdict: report.verdict, coveredWorkPackageIds: report.coveredWorkPackageIds, verification: proved },
+        operationId: derivedKey('finalizer-accept', [scopeId, existing.dispatchId]) as OperationId });
+      if (candidate.kind !== 'recorded') { recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_accept_incomplete', 'Finalizer 结果接受尚未确定'); return; }
+      const ids = integrationOperationIdsFor({ scopeId, graphId: graph.graphId, generation: graph.generation,
+        workPackageId: existing.workerTaskId as unknown as WorkPackageId });
+      const integrated = await integrateWorkPackage({ port, store: current, writer: writerFor(session.incarnation), coordinationScopeId: scopeId,
+        expectedRevision: scopeRecord(scopeId)!.revision, backendIdentityRef: identity, graphId: graph.graphId, graphGeneration: graph.generation,
+        authorizationId: existing.authorizationId, runId: run.runId, consumerGeneration: run.consumerGeneration, timeoutMs: MUTATION_TIMEOUT_MS,
+        workPackageId: existing.workerTaskId as unknown as WorkPackageId,
+        status: { kind: 'finalizer', workPackageId: existing.workerTaskId as unknown as WorkPackageId,
+          verifiedHead: proved.head, verifiedTree: proved.tree }, executionLeaseHeldByCurrentSession: holdsExecutionLease(scopeId, session.coordinatorSessionId),
+        authority: manifest.permissions, policy: manifest.gitPolicy, request: { kind: 'integrate_canonical',
+          branch: manifest.gitPolicy.canonicalBranch, sourceBranch: existing.sourceBranch!, remote: manifest.gitPolicy.remotes[0] ?? null,
+          ref: manifest.gitPolicy.refs[0] ?? null }, workspace: { canonicalWorktreePath, workPackageWorktreePath: existing.worktreePath! },
+        baselineHead: existing.before.head, commitMessage: 'Finalizer verified project repairs', operationIds: ids, reconciliation: null });
+      if (integrated.kind !== 'integrated') {
+        recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_integration_incomplete', integrated.kind === 'rejected' ? integrated.failure.message : integrated.reason); return;
+      }
+      const canonical = await readWorkspaceFacts({ worktreePath: canonicalWorktreePath, env: options.env });
+      if (canonical.kind !== 'observed' || canonical.facts.head !== proved.head || projectChangedPaths(canonical.facts.dirtyPaths).length > 0) {
+        recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_version_changed', 'canonical 未保留 Finalizer 复验版本'); return;
+      }
+      verification = { ...proved, expectedHead: canonical.facts.head, expectedTree: tree.tree, integrationRef: ids.push };
+      report.authoritativeRefs.push(candidate.orcaResultRef, ids.push);
+      if (report.verdict.kind === 'deliverable') report.verdict.evidenceRefs.push(candidate.orcaResultRef, ids.push);
+    }
+    const workspaceChanged = !repair && workspaceBeforeAfterChanged(existing.before, after.facts);
     if (workspaceChanged) {
       setFinalizerObservation(scopeId, {
         readOnlyProfile: 'enforced',
@@ -8611,6 +8833,7 @@ export async function createForegroundPlanningHost(
       return;
     }
     const freshGate: FinalizerGateFacts = {
+      ...(manifest.finalizerPolicy === undefined ? {} : { finalizerPolicy: manifest.finalizerPolicy }),
       workPackageStatuses: graph.workPackages.map((workPackage) =>
         establishedStatusOf(freshSnapshotRead.snapshot, workPackage.workPackageId),
       ),
@@ -8631,8 +8854,9 @@ export async function createForegroundPlanningHost(
       gate: freshGate,
       report: {
         role: 'finalizer',
-        session: { kind: 'new_read_only', sessionBindingId: existing.sessionBindingId },
-        readOnly: true,
+        session: { kind: repair ? 'new_project' : 'new_read_only', sessionBindingId: existing.sessionBindingId },
+        readOnly: !repair,
+        ...(verification === undefined ? {} : { verification }),
         coveredWorkPackageIds: report.coveredWorkPackageIds as readonly WorkPackageId[],
         expectedWorkPackageIds: freshGate.workPackageStatuses.map((status) => status.workPackageId),
         verdict: report.verdict,
@@ -8642,10 +8866,10 @@ export async function createForegroundPlanningHost(
       verdictId: derivedKey('delivery-verdict', [scopeId, graph.graphId, String(graph.generation)]),
     });
     setFinalizerObservation(scopeId, {
-      readOnlyProfile: 'enforced',
+      readOnlyProfile: repair ? 'not_required' : 'enforced',
       integrationFrozen: 'frozen',
-      worktreePath: canonicalWorktreePath,
-      workspace: { before: existing.before, after: after.facts },
+      worktreePath: existing.worktreePath ?? canonicalWorktreePath,
+      workspace: { before: existing.before, after: finalWorkspace.facts },
       evidenceRefs: report.verdict.kind === 'deliverable' ? [...report.verdict.evidenceRefs] : [],
     });
     const verdictRead = current.query({ kind: 'snapshot', coordinationScopeId: scopeId });
@@ -8657,7 +8881,8 @@ export async function createForegroundPlanningHost(
         writer: writerFor(session.incarnation), backendIdentityRef: identity, graphGeneration: graph.generation,
         authorizationId: existing.authorizationId, runId: run.runId, consumerGeneration: run.consumerGeneration,
         timeoutMs: MUTATION_TIMEOUT_MS, orcaTaskId: existing.orcaTaskId,
-        acceptedResult: { verdict: report.verdict, coveredWorkPackageIds: report.coveredWorkPackageIds },
+        acceptedResult: { verdict: repair ? reportRead.verdict : report.verdict, coveredWorkPackageIds: report.coveredWorkPackageIds,
+          ...(report.verification === undefined ? {} : { verification: report.verification }) },
         operationId: derivedKey('finalizer-accept', [scopeId, existing.dispatchId]) as OperationId });
       if (accepted.kind !== 'recorded') {
         recordExecutionBlocker(scopeId, 'finalizer', 'finalizer_accept_incomplete', 'Finalizer 的 Orca 接受记录尚未完成');
@@ -8720,7 +8945,17 @@ export async function createForegroundPlanningHost(
       entry.role === 'finalizer' && entry.dispatchId === identity.dispatchId &&
       (identity.attemptId === null || entry.attemptId === identity.attemptId) &&
       (identity.workerTaskId === null || entry.workerTaskId === identity.workerTaskId));
-    if (segment === undefined) return 'ignored';
+    if (segment === undefined) {
+      const materialized = snapshot.materializationBindings.find(entry => entry.role === 'finalizer' &&
+        (identity.orcaTaskId !== null ? entry.orcaTaskId === identity.orcaTaskId :
+          entry.workerTaskId === identity.workerTaskId && entry.attemptId === identity.attemptId));
+      if (materialized === undefined) return 'ignored';
+      // 启动已发生但精确 Session 尚未落盘时，结果仍属于项目级链路，不能交给普通角色当历史消息确认。
+      const holder = [...liveSessions.values()].find(entry => entry.incarnation.coordinationScopeId === scopeId &&
+        holdsExecutionLease(scopeId, entry.coordinatorSessionId) && !entry.fencingLost);
+      if (holder !== undefined) await runFinalizerForScope(holder);
+      return 'blocked';
+    }
     const settled = () => {
       const read = requiredStore().query({ kind: 'delivery-settlements', coordinationScopeId: scopeId });
       return read.kind === 'delivery-settlements' && read.settlements.some((entry) => entry.role === 'finalizer' &&
@@ -8729,10 +8964,12 @@ export async function createForegroundPlanningHost(
     if (settled()) return 'consumed';
     // 只读约束只有本进程构造的启动策略能证明：重启后没有这次派发的原始事实时如实阻塞，不伪称只读。
     const run = finalizerRuns.get(scopeId);
-    if (run === undefined || run.dispatchId !== segment.dispatchId) return 'blocked';
+    const admission = store.query({ kind: 'finalizer-admission', coordinationScopeId: scopeId, workerTaskId: segment.workerTaskId });
+    if ((run === undefined && (admission.kind !== 'finalizer-admission' || admission.admission === null)) ||
+        (run !== undefined && run.dispatchId !== segment.dispatchId)) return 'blocked';
     const binding = snapshot.materializationBindings.find((entry) =>
       entry.role === 'finalizer' && entry.workerTaskId === segment.workerTaskId && entry.attemptId === segment.attemptId);
-    if (binding === undefined || binding.orcaTaskId !== run.orcaTaskId ||
+    if (binding === undefined || (run !== undefined && binding.orcaTaskId !== run.orcaTaskId) ||
       (identity.orcaTaskId !== null && identity.orcaTaskId !== binding.orcaTaskId)) return 'blocked';
     // 发送者身份按宿主事实核验：worker-show 必须证明同一个 Task/Dispatch/terminal handle。
     const backend = backendForExecution();
@@ -8839,6 +9076,7 @@ export async function createForegroundPlanningHost(
         readonly verdict: DeliveryVerdict;
         readonly authoritativeRefs: readonly string[];
         readonly deliveryId: string;
+        readonly verification?: { readonly head: string; readonly tree: string; readonly commands: readonly import('../domain/worker-report.js').EvidenceRecord[] };
       }
   > => {
     const batch = await readDeliveryBatch(input.backend, {
@@ -8886,6 +9124,7 @@ export async function createForegroundPlanningHost(
       verdict: read.verdict,
       authoritativeRefs,
       deliveryId: batch.value.delivery.deliveryId,
+      ...(read.verification === undefined ? {} : { verification: read.verification }),
     };
   };
 
@@ -8904,7 +9143,8 @@ export async function createForegroundPlanningHost(
    */
   const readFinalizerVerdict = (
     raw: unknown,
-  ): { readonly coveredWorkPackageIds: readonly string[]; readonly verdict: DeliveryVerdict } | null => {
+  ): { readonly coveredWorkPackageIds: readonly string[]; readonly verdict: DeliveryVerdict;
+    readonly verification?: { readonly head: string; readonly tree: string; readonly commands: readonly import('../domain/worker-report.js').EvidenceRecord[] } } | null => {
     if (typeof raw !== 'object' || raw === null) {
       return null;
     }
@@ -8926,9 +9166,17 @@ export async function createForegroundPlanningHost(
     if (strings.length !== refs.length) {
       return null;
     }
+    const verification = record['verification'] === undefined ? null : z.object({
+      head: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/), tree: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
+      commands: z.array(z.object({ evidenceId: z.string().min(1), kind: z.enum(['command', 'inspection', 'review']),
+        coveredPaths: z.array(z.string().min(1)).max(200), command: z.string().min(1).nullable(),
+        summary: z.string().min(1), outcome: z.enum(['passed', 'failed']) })).min(1).max(100),
+    }).safeParse(record['verification']);
+    if (verification !== null && !verification.success) return null;
     return {
       coveredWorkPackageIds: covered as readonly string[],
       verdict: kind === 'deliverable' ? { kind: 'deliverable', evidenceRefs: strings } : { kind: 'blocked', blockerRefs: strings },
+      ...(verification?.success ? { verification: verification.data } : {}),
     };
   };
 
@@ -9064,6 +9312,20 @@ export async function createForegroundPlanningHost(
     if (segment === null) {
       return false;
     }
+    const materialization = snapshot.materializationBindings.find(entry => entry.workerTaskId === segment.workerTaskId &&
+      entry.role === segment.role && entry.attemptId === segment.attemptId);
+    const approval = materialization?.authorizationId == null ? null : current.query({ kind: 'authorization',
+      coordinationScopeId: scopeId, authorizationId: materialization.authorizationId });
+    const manifest = approval?.kind === 'authorization' ? approval.authorization?.manifest : null;
+    const profile = manifest?.workerProfiles.find(entry => entry.role === segment.role && entry.profileRef.id === materialization?.workerProfileRef?.id);
+    if (segment.executionBinding?.kind === 'orca_worker' || manifest?.recoveryUtilityProfile === null ||
+      (manifest?.manifestVersion === 5 && (profile?.supportLevel !== 'complete' ||
+        !workerSupportLevelAllows(supportFor(profile.harness).level, 'complete') ||
+        (manifest.recoveryUtilityProfile !== null &&
+          !workerSupportLevelAllows(supportFor(manifest.recoveryUtilityProfile.harness).level, 'complete'))))) {
+      recordExecutionBlocker(scopeId, 'recovery', 'worker_recovery_unavailable', '原任务不支持历史恢复或恢复已关闭；保留原身份、产出与预算');
+      return false;
+    }
     const continuation = await continueWorkerSessionRecovery({
       store: current,
       backend,
@@ -9071,6 +9333,7 @@ export async function createForegroundPlanningHost(
       coordinationScopeId: scopeId,
       subject: recoverySubjectOf(scopeId, segment),
       facts: createExecutionRecoveryFacts({
+        workerSupportFor: supportFor,
         store: () => {
           const store = requireStore();
           if (store === null) {
@@ -9739,6 +10002,7 @@ export async function createForegroundPlanningHost(
       kind: 'ok',
       facts: {
         store: current,
+        workerSupportFor: supportFor,
         coordinationScopeId: scopeId,
         policy: config.execution,
         workspace: {
@@ -9780,18 +10044,22 @@ export async function createForegroundPlanningHost(
       { section: 'overview', label: 'Orca Run', value: manifest.orcaRunId },
       {
         section: 'permissions', label: 'Worker Profiles',
-        value: manifest.workerProfiles.map((profile) => `${profile.role}→${profile.harness}`).join(' '),
+        value: manifest.workerProfiles.map((profile) => `${profile.role}→${profile.harness} (${profile.supportLevel ?? '原生会话合同'}；${profile.qualificationRef ?? 'v4'})`).join(' '),
       },
+      { section: 'permissions', label: '历史恢复', value: manifest.recoveryUtilityProfile === null ? '关闭：中断后需显式处理'
+        : `${manifest.recoveryUtilityProfile.harness} (${manifest.recoveryUtilityProfile.supportLevel ?? '原生会话合同'}；${manifest.recoveryUtilityProfile.qualificationRef ?? 'v4'})` },
       {
         // 沙箱模式必须在审阅里可见：它是「Worker 能写什么」的直接约束，放宽与否只能由用户看到后批准。
-        // Capsule Utility Worker 与 Finalizer 走同一条只读 profile，且本机能否运行它由本次探针回答。
+        // Recovery 与旧只读 Finalizer 在需要时分别探测；修复 Finalizer 使用获批可写策略。
         section: 'permissions', label: 'Worker Sandbox',
-        value: `codex=${config?.execution.codexSandbox ?? DEFAULT_PROJECT_EXECUTION.codexSandbox} capsule=${CODEX_UTILITY_PERMISSION_PROFILE} finalizer=${CODEX_UTILITY_PERMISSION_PROFILE}`,
+        value: `codex=${config?.execution.codexSandbox ?? DEFAULT_PROJECT_EXECUTION.codexSandbox} capsule=${CODEX_UTILITY_PERMISSION_PROFILE} finalizer=${manifest.finalizerPolicy === undefined ? CODEX_UTILITY_PERMISSION_PROFILE : codexSandboxForDispatch(manifest.acceptedRisks) ?? '未授权'}`,
       },
       {
         section: 'permissions', label: 'Read-only Workers',
         value: readOnlyWorker,
       },
+      { section: 'permissions', label: 'Finalizer', value: manifest.finalizerPolicy === undefined ? '只读'
+        : `范围内修复与复验；额度 ${manifest.finalizerPolicy.repairLimit}；完成后受控集成` },
       {
         section: 'permissions', label: 'Permissions',
         value: `planner=${String(manifest.permissions.planner)} implementation=${String(manifest.permissions.implementation)} validator=${String(manifest.permissions.validator)} finalizer=${String(manifest.permissions.finalizer)} git=${String(manifest.permissions.gitIntegration)} deps=${String(manifest.permissions.dependencyChanges)}`,
@@ -9916,13 +10184,13 @@ export async function createForegroundPlanningHost(
     if (reapprovalBlocked !== null) {
       return { kind: 'blocked', code: reapprovalBlocked.code, message: reapprovalBlocked.message };
     }
-    // 审阅每次重新探测：授权依赖 Capsule Utility 与 Finalizer 两个只读角色，环境变了就不能沿用上
-    // 一次的结论。两个角色用各自固定的模型配置探测——正式只读会话拿到什么设置，探针就核验什么。
+    // 按审阅策略探测实际需要只读的角色，不把上一次环境结论当作本次许可。
     const finalizerProfile = config === null ? null : currentWorkerProfile(config, 'finalizer');
-    const readOnlyWorker = await probeForProfile(
-      finalizerProfile?.harness ?? '', finalizerProfile?.modelSelection ?? null,
-    );
-    const readOnlyBlocker = readOnlyWorkerUnavailableReason(readOnlyWorker);
+    const preview = reviewExecutionAuthorization(read.facts);
+    const repairFinalizer = preview.kind === 'review' && preview.review.manifest.finalizerPolicy !== undefined;
+    const readOnlyWorker = repairFinalizer ? null : await probeForProfile(
+      finalizerProfile?.harness ?? '', finalizerProfile?.modelSelection ?? null);
+    const readOnlyBlocker = readOnlyWorker === null ? null : readOnlyWorkerUnavailableReason(readOnlyWorker);
     const reviewed = reviewExecutionAuthorization(read.facts);
     if (reviewed.kind === 'blocked') {
       return {
@@ -9939,6 +10207,11 @@ export async function createForegroundPlanningHost(
       ...(gate.kind === 'allowed' ? [] : gate.blockers.map((blocker) => `${blocker.code}: ${blocker.message}`)),
       ...(readOnlyBlocker === null ? [] : [readOnlyBlocker]),
     ];
+    const utility = reviewed.review.manifest.recoveryUtilityProfile;
+    if (utility !== null) {
+      const reason = readOnlyWorkerUnavailableReason(await probeForProfile(utility.harness, utility.modelSelection));
+      if (reason !== null) gateBlockers.push(reason);
+    }
     return {
       kind: 'review',
       review: {
@@ -9951,7 +10224,7 @@ export async function createForegroundPlanningHost(
           baselineHead: reviewed.review.candidate.baselineHead,
           workPackageCount: reviewed.review.candidate.workPackageCount,
         },
-        ...authorizationManifestRows(reviewed.review, describeReadOnlyWorkerCapability(readOnlyWorker)),
+        ...authorizationManifestRows(reviewed.review, readOnlyWorker === null ? 'Finalizer 可写；仅 Recovery/纯分析任务核验只读' : describeReadOnlyWorkerCapability(readOnlyWorker)),
         gate: { ready: gateBlockers.length === 0, blockers: gateBlockers },
       },
     };
@@ -10051,11 +10324,16 @@ export async function createForegroundPlanningHost(
     }
     // 批准前重查能力：审阅时的成功结论不构成本次批准的许可，环境可能在两次检查之间变化。
     const approveProfile = config === null ? null : currentWorkerProfile(config, 'finalizer');
-    const readOnlyBlocker = readOnlyWorkerUnavailableReason(
-      await probeForProfile(approveProfile?.harness ?? '', approveProfile?.modelSelection ?? null),
-    );
+    const approving = reviewExecutionAuthorization(refreshed.facts);
+    const readOnlyBlocker = approving.kind === 'review' && approving.review.manifest.finalizerPolicy !== undefined ? null
+      : readOnlyWorkerUnavailableReason(await probeForProfile(approveProfile?.harness ?? '', approveProfile?.modelSelection ?? null));
     if (readOnlyBlocker !== null) {
       return rejected('read_only_worker_unavailable', readOnlyBlocker);
+    }
+    const utilityProfile = config === null ? null : currentWorkerProfile(config, 'recovery_utility');
+    if (utilityProfile !== null) {
+      const reason = readOnlyWorkerUnavailableReason(await probeForProfile(utilityProfile.harness, utilityProfile.modelSelection));
+      if (reason !== null) return rejected('read_only_worker_unavailable', reason);
     }
     const modeBeforeApproval = scopeRecord(refreshed.facts.coordinationScopeId)?.mode;
     const result = approveExecutionAuthorization({
@@ -10205,6 +10483,7 @@ export async function createForegroundPlanningHost(
       credentials: credentialStore(),
       library: providerLibrary,
       verifyWorkerSelection,
+      supportFor,
     });
   };
 
@@ -10316,6 +10595,13 @@ export async function createForegroundPlanningHost(
        * 任何一步失败都原样返回 rejected，界面据此保留编辑内容；已写入的凭据不回滚，孤立 key 是已知
        * 取舍——它不会被任何配置引用，因此不会激活错误的模型。
        */
+      disableRecoveryUtility: (input) => {
+        const available = service();
+        if (available === null) return Promise.resolve({ kind: 'rejected', code: 'config_unreadable', message: '项目配置不可用' });
+        const result = available.disableRecoveryUtility(input);
+        reloadProjectConfigFromDisk();
+        return Promise.resolve(result);
+      },
       save: (input) => {
         const available = service();
         if (available === null) {

@@ -9,7 +9,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const SCHEMA_VERSION = 20;
+export const SCHEMA_VERSION = 22;
 
 export const SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -21,6 +21,8 @@ export const SCHEMA_VERSION_KEY = 'schema_version';
  * WakeBatchId 准入过」，不保存批内容——内容留在 checkpoint 里。
  */
 export const COORDINATION_TABLES: readonly string[] = [
+  'worker_execution_bindings',
+  'finalizer_admissions',
   'meta',
   'scope',
   'session_registry',
@@ -732,6 +734,31 @@ const MIGRATION_20: readonly string[] = [
      WHERE utility_role IS NOT NULL AND attempt_id IS NOT NULL`,
 ];
 
+/**
+ * M22：Finalizer 修复准入与 Delivery Verdict 的只读复核事实。
+ *
+ * `finalizer_admissions` 保存一次 Finalizer 修复派发在原授权与基线下获准的最小依据：重启后要在创建
+ * Task 之前复原的就是它，`(coordination_scope_id, worker_task_id)` 唯一，因此同一 Worker Task 只可能有
+ * 一条准入。它不保存任何 Finalizer 状态机、报告或结论正文。
+ *
+ * `delivery_verdicts` 追加两列可空的只读复核事实（`verified_head` / `verified_tree`）。schema 22 之前
+ * 的历史行一律 `NULL`：当时确实没有这项事实，读取方必须按「未证明」呈现，不从当前 Git 状态反推。
+ */
+const MIGRATION_22: readonly string[] = [
+  `CREATE TABLE IF NOT EXISTS finalizer_admissions (
+     coordination_scope_id TEXT NOT NULL,
+     worker_task_id TEXT NOT NULL,
+     graph_id TEXT NOT NULL,
+     graph_generation INTEGER NOT NULL CHECK (graph_generation > 0),
+     authorization_id TEXT NOT NULL,
+     baseline_head TEXT NOT NULL,
+     recorded_at INTEGER NOT NULL,
+     PRIMARY KEY (coordination_scope_id, worker_task_id)
+   ) STRICT`,
+  `ALTER TABLE delivery_verdicts ADD COLUMN verified_head TEXT`,
+  `ALTER TABLE delivery_verdicts ADD COLUMN verified_tree TEXT`,
+];
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, statements: MIGRATION_1 },
   { version: 2, statements: MIGRATION_2 },
@@ -797,6 +824,23 @@ export const MIGRATIONS: readonly Migration[] = [
     `ALTER TABLE operation_intents ADD COLUMN terminal_handle TEXT`,
   ] },
   { version: 20, statements: MIGRATION_20 },
+  { version: 21, statements: [
+    `CREATE TABLE worker_execution_bindings (
+       coordination_scope_id TEXT NOT NULL,
+       segment_id TEXT NOT NULL,
+       work_package_id TEXT NOT NULL,
+       role TEXT NOT NULL CHECK (role IN ('planner', 'implementation')),
+       worker_task_id TEXT NOT NULL,
+       dispatch_id TEXT NOT NULL,
+       attempt_id TEXT NOT NULL,
+       orca_task_id TEXT NOT NULL,
+       terminal_handle TEXT NOT NULL,
+       recorded_at INTEGER NOT NULL,
+       PRIMARY KEY (coordination_scope_id, segment_id),
+       UNIQUE (coordination_scope_id, dispatch_id)
+     ) STRICT`,
+  ] },
+  { version: 22, statements: MIGRATION_22 },
 ];
 
 export function readSchemaVersion(db: DatabaseSync): number | null {

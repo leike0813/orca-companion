@@ -85,7 +85,7 @@ A bounded round in which a Work Package incorporates an attributable canonical a
 _Avoid_: Worker retry, Validator repair, new Validation Attempt, baseline adoption
 
 **Execution Authorization Manifest**:
-The complete, versioned proposal presented for one atomic user decision before a Graph Generation may execute, binding its destination and planning artifacts to an exact Coordination Scope and baseline, the model selection of every production Worker Profile plus the Recovery Utility Profile, role authorities, budget caps, workspace policy, and accepted risks. A manifest that omits a role's model selection is not an authorization to run that role, and an earlier version without those bindings is never read as one.
+The complete, versioned proposal presented for one atomic user decision before a Graph Generation may execute, binding its destination and planning artifacts to an exact Coordination Scope and baseline, the model selection and support-level qualification of every selected Worker Profile, the Recovery Utility Profile or its explicit absence (which closes historical recovery), an explicitly approved Finalizer repair policy or its absence (absence keeps the original read-only Finalizer semantics and grants no default permission), role authorities, budget caps, workspace policy, and accepted risks. A manifest that omits a role's model selection or support-level binding is not an authorization to run that role; v1–v3 manifests are never read as authorizations, and a v4 manifest keeps its original shape instead of being converted; no manifest is ever read as carrying a repair policy it did not explicitly approve.
 _Avoid_: Partial approval, per-task approval, execution status
 
 **Execution Authorization**:
@@ -144,6 +144,10 @@ _Avoid_: Coordinator, Companion agent
 An existing coding-agent environment, such as Codex or Claude Code, that runs a Worker and provides its model, authentication, session, and code-operation capabilities in its own user environment.
 _Avoid_: Coordinator Harness
 
+**Worker Harness Support Level**:
+The evidence-derived progressive admission level of an explicitly registered Worker Harness — unavailable, basic, enhanced, or complete — where a higher level requires the full previous level: basic enables bounded single Planner/Implementation dispatches bound to a real Orca Task, Dispatch, and terminal; enhanced adds the exact native session, resume, and measured Validator/Finalizer results; complete adds complete transcript history, Recovery, and mixed Controller operation. Missing, failed, and unrun capabilities are recorded separately; model echo, usage, and catalogs are diagnostic only, and registration alone never grants a level. Read-only is task-level: it is verified per dispatch for the operations that actually need it (Recovery Utility and read-only analysis), not derived from this level, and ordinary Validator and Finalizer dispatches do not depend on it.
+_Avoid_: Registration as admission, version comparison, all-or-nothing harness approval
+
 **Worker Role**:
 The bounded responsibility assigned to a Worker, such as planning, implementation, or validation/finalization.
 _Avoid_: Workflow phase
@@ -153,7 +157,7 @@ A Worker that independently checks one Worker Task and may repair defects only w
 _Avoid_: Finalizer, implementation worker
 
 **Finalizer**:
-An independent, read-only Worker that evaluates the whole project after task validation and returns project-level delivery evidence or blockers.
+An independent Worker that evaluates the whole project after task validation and returns project-level delivery evidence or blockers. It runs read-only by default in its own new project-level session; an explicitly approved repair policy lets it fix defects inside the approved Work Package scope envelopes (dependency and design changes still escalate) in a separate project-level worktree and re-verify the final clean HEAD/tree before controlled Git integration.
 _Avoid_: Validator, last validator
 
 **Specification Validator**:
@@ -175,6 +179,10 @@ _Avoid_: General-purpose worker, coordinator, fallback validator
 **Session Binding**:
 A controller-validated association between one Worker Dispatch and its exact Worker Harness session, transcript source, and the non-secret native runtime roots recorded by that launch.
 _Avoid_: Terminal handle, guessed latest session
+
+**Worker Execution Binding**:
+The single runtime-identity association the controller establishes for one Worker Task dispatch: a basic-level binding pins the exact Orca Task, Dispatch, role, Attempt, and terminal handle to the materializing authorization, while an enhanced or complete binding additionally carries the exact native Session Binding. A dispatch advances only the operations its binding supports, and an empty session identity records the absence of native evidence instead of standing in for a provider session.
+_Avoid_: Orca terminal as provider session, binding-free dispatch, guessed session identity
 
 **Recovery Capsule**:
 A read-only Utility Worker report that compresses an interrupted Session Segment's progress, decisions, pending work, and evidence references for a replacement segment.
@@ -229,7 +237,7 @@ A non-terminal request for coordination when continuing would exceed the Worker'
 _Avoid_: Worker question, task failure
 
 **Delivery Verdict**:
-The project-level deliverable-or-blocked judgment returned by an independent, read-only Finalizer and accepted by the deterministic controller.
+The project-level deliverable-or-blocked judgment returned by an independent Finalizer and accepted by the deterministic controller. A deliverable verdict records the final verified HEAD/tree when repair was approved; a missing version fact means it was never proven and is never backfilled from the current Git state.
 _Avoid_: Worker completion, task validation
 
 **Authoritative Fact**:

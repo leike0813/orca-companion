@@ -1,0 +1,152 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-14T08:44:08.445Z",
+  "finishedAt": "2026-10-14T08:53:25.186Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-05e65563-aff9-494d-97e8-5dc84ba62fb0",
+  "orcaExecutable": "/home/joshua/.local/bin/orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-0FbJ8r",
+  "runId": "run_4b006bfc667d",
+  "coordinatorTerminalHandle": "term_a6380ced-bb94-4ce1-a311-6cc0c36ca289",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "kilo",
+      "modelSelection": {
+        "model": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "ip04:kilo:planner",
+          "taskId": "task_908ff482138b",
+          "dispatchId": "ctx_edd006f3a256",
+          "sessionId": "ses_ec66a5d14ffe4C9bzZH2K8WxMq",
+          "transcriptRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ec66a5d14ffe4C9bzZH2K8WxMq.json",
+          "stateRoot": "/home/joshua/.local/share/kilo",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-0FbJ8r/state/kilo/d81795aabdaf49ee8053/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "blocked",
+          "launchId": "ip04:kilo:implementation",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_b21860217af6\",\"taskId\":\"task_87134ef8d602\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_b21860217af6\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview M | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                                                      ctrl+t variants  tab agents  ctrl+p commands\",\"                          ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"                            Get usage analytics, centralized billing, shared context, and other\",\"                            features you need to scale AI coding across your org.\",\"                                  ● Tip Press shift+enter to add newlines in your pr"
+          }
+        },
+        {
+          "role": "validator",
+          "kind": "blocked",
+          "launchId": "ip04:kilo:validator",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_4f094bbe9f32\",\"taskId\":\"task_1875eb2f66f2\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_4f094bbe9f32\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview M | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                                                      ctrl+t variants  tab agents  ctrl+p commands\",\"                          ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"                            Get usage analytics, centralized billing, shared context, and other\",\"                            features you need to scale AI coding across your org.\",\"                            ● Tip Run /connect to add API keys for 75+ supported LLM"
+          }
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "launchId": "ip04:kilo:finalizer",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "Kilo exact session history is incomplete or mismatched"
+          }
+        }
+      ],
+      "resume": {
+        "harness": "kilo",
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "dispatchId": null,
+        "contextPreserved": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "validatorContinuation": {
+        "harness": "kilo",
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "dispatchId": null,
+        "contextPreserved": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "recovery": {
+        "kind": "blocked",
+        "sourceSessionId": null,
+        "sourceTranscriptRef": null,
+        "utility": null,
+        "capsuleRef": null,
+        "coverage": null,
+        "sourceBehaviorVerified": false,
+        "readOnlyVerified": false,
+        "permissionDenied": null,
+        "deliveryId": null,
+        "deliveryAcked": false,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "Recovery requires the precise original Validator session"
+        }
+      },
+      "blockers": [
+        "implementation：session_report_missing kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_b21860217af6\",\"taskId\":\"task_87134ef8d602\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_b21860217af6\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview M | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                                                      ctrl+t variants  tab agents  ctrl+p commands\",\"                          ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"                            Get usage analytics, centralized billing, shared context, and other\",\"                            features you need to scale AI coding across your org.\",\"                                  ● Tip Press shift+enter to add newlines in your pr",
+        "validator：session_report_missing kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_4f094bbe9f32\",\"taskId\":\"task_1875eb2f66f2\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_4f094bbe9f32\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview M | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                                                      ctrl+t variants  tab agents  ctrl+p commands\",\"                          ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"                            Get usage analytics, centralized billing, shared context, and other\",\"                            features you need to scale AI coding across your org.\",\"                            ● Tip Run /connect to add API keys for 75+ supported LLM",
+        "finalizer：transcript_unavailable Kilo exact session history is incomplete or mismatched",
+        "resume：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复",
+        "recovery：original_unavailable Recovery requires the precise original Validator session",
+        "validator-continuation：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复"
+      ]
+    }
+  ]
+}

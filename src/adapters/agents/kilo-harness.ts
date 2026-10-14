@@ -4,9 +4,10 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { isDeepStrictEqual } from 'node:util';
 import type {
   HarnessSessionReport, HarnessTranscriptCoverageResult, HarnessTranscriptProofResult,
-  PreparedHarnessTerminal, ProveHarnessSessionInput, WorkerHarness, WorkerHarnessLaunchInput,
+  PreparedHarnessTerminal, ProveHarnessSessionInput, WorkerHarnessLaunchInput,
   WorkerModelCatalogResult,
 } from '../../application/ports/worker-harness.js';
+import { createWorkerHarness } from '../../application/ports/worker-harness.js';
 import type { TranscriptCoverageEvidence } from '../../application/recovery/recovery-capsule.js';
 import type { PreparedTerminalStrategy } from '../../application/worker-launch.js';
 import type { WorkerModelSelection } from '../../domain/model-configuration.js';
@@ -450,7 +451,7 @@ export const KILO_RECOVERY_INSTRUCTIONS = [
   '导出超限、结构不完整或 ID/cwd 不一致时停止；不要改用最近 Session。',
 ] as const;
 
-export const kiloHarness: WorkerHarness = {
+export const kiloHarness = createWorkerHarness({
   id: KILO_HARNESS_ID,
   prepareLaunch: (input) => launch(input),
   prepareReadOnlyLaunch: (input) => launch({ ...input, sandboxMode: 'read-only-local-control' }),
@@ -489,5 +490,5 @@ export const kiloHarness: WorkerHarness = {
   proveSession: proveKiloTranscript,
   inspectTranscript: inspectKiloTranscript,
   recoveryInstructions: () => KILO_RECOVERY_INSTRUCTIONS,
-};
+});
 

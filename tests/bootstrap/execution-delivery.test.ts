@@ -179,7 +179,7 @@ type DeliveryFixture = {
   readonly readInput: Omit<PendingDeliveryReadInput, 'store' | 'backend'>;
 };
 
-function createDeliveryFixture(): DeliveryFixture {
+function createDeliveryFixture(basic = false): DeliveryFixture {
   directory = mkdtempSync(join(tmpdir(), 'orca-delivery-'));
   const opened = openCoordinationStore({ databasePath: join(directory, 'coordination.sqlite'), clock });
   if (opened.kind !== 'opened') {
@@ -268,11 +268,13 @@ function createDeliveryFixture(): DeliveryFixture {
         role,
         harness: 'codex',
         modelSelection: executionModelConfiguration({ model: 'original-model' }),
+        supportLevel: basic && role === 'implementation' ? 'basic' : 'complete', qualificationRef: 'fixture:qualification',
       })),
       recoveryUtilityProfile: {
         profileRef: { kind: 'worker-profile' as const, id: 'profile-recovery-utility' },
         harness: 'codex',
         modelSelection: executionModelConfiguration({ model: 'original-model' }),
+        supportLevel: 'complete', qualificationRef: 'fixture:qualification',
       },
       permissions: {
         planner: true,
@@ -333,14 +335,14 @@ function createDeliveryFixture(): DeliveryFixture {
     throw new Error(`无法更新 Scope 引用: ${refs.message}`);
   }
   // 派发时 Controller 写入的中断 Segment：Delivery 的归属必须能在这里被证明。
-  const segment = created.transact({
+  const segment = basic ? { kind: 'committed' as const } : created.transact({
     kind: 'record-session-segment',
     coordinationScopeId: SCOPE,
     expectedRevision: revisionOf(),
     writer,
     segmentId: 'segment-delivery-1' as SessionSegmentId,
     workPackageId: WORK_PACKAGE,
-    role: 'validator',
+    role: basic ? 'implementation' : 'validator',
     workerTaskId: WORKER_TASK,
     dispatchId: DISPATCH,
     attemptId: 'attempt-1',
@@ -359,7 +361,7 @@ function createDeliveryFixture(): DeliveryFixture {
     expectedRevision: revisionOf(),
     writer,
     workPackageId: WORK_PACKAGE,
-    role: 'validator',
+    role: basic ? 'implementation' : 'validator',
     workerTaskId: WORKER_TASK,
     dispatchId: DISPATCH,
     attemptId: 'attempt-1',
@@ -368,13 +370,20 @@ function createDeliveryFixture(): DeliveryFixture {
     specificationUnitPath: null,
     authorizationId: 'auth-delivery',
     authorizationVersion: 1,
-    workerProfileRef: 'profile-validator',
+    workerProfileRef: basic ? 'profile-implementation' : 'profile-validator',
     orcaTaskId: ORCA_TASK,
     creationOperationId: `op:${ORCA_TASK}:create` as OperationId,
     launchId: `launch:${ORCA_TASK}`,
   });
   if (binding.kind === 'rejected') {
     throw new Error(`无法记录物化绑定: ${binding.message}`);
+  }
+  if (basic) {
+    const written = created.transact({ kind: 'record-worker-execution-binding', coordinationScopeId: SCOPE,
+      expectedRevision: revisionOf(), writer, segmentId: 'segment-basic-delivery' as SessionSegmentId,
+      workPackageId: WORK_PACKAGE, role: 'implementation', workerTaskId: WORKER_TASK, dispatchId: DISPATCH,
+      attemptId: 'attempt-1', orcaTaskId: ORCA_TASK, terminalHandle: 'terminal-basic' });
+    if (written.kind === 'rejected') throw new Error(written.message);
   }
 
   const backend = fakeDeliveryBackend();
@@ -701,6 +710,36 @@ test('普通结果与已消费 Capsule 同批：消费证明随重放输入传�
   expect(read.pending).toHaveLength(1);
   expect(read.pending[0]?.consumed).toEqual([{ orcaTaskId: 'capsule-task', dispatchId: 'capsule-dispatch',
     workerTaskId: null, attemptId: null }]);
+});
+
+test('基础执行绑定无原生 Session 也可结算，重启不重复消费', async () => {
+  const fixture = createDeliveryFixture(true);
+  fixture.store.close();
+  const reopened = openCoordinationStore({ databasePath: join(directory!, 'coordination.sqlite'), clock });
+  if (reopened.kind !== 'opened') throw new Error(reopened.message);
+  store = reopened.store;
+  const backend = fakeDeliveryBackend({ deliveryId: 'delivery-basic', messages: [deliveryMessage({ taskId: ORCA_TASK,
+    dispatchId: DISPATCH, outcome: 'succeeded', filesModified: ['src/a.ts'] })] });
+  const read = await readPendingDeliveries({ ...fixture.readInput, store, backend: backend.backend });
+  expect(read.kind).toBe('read');
+  if (read.kind !== 'read') return;
+  expect(read.blocked ?? []).toEqual([]);
+  expect(read.pending[0]?.trusted.role).toBe('implementation');
+  const continued = { ...fixture, store, backend };
+  const originalQuery = backend.backend.query.bind(backend.backend);
+  backend.backend.query = (input) => input.operation === 'task-list'
+    ? Promise.resolve({ kind: 'accepted', value: { tasks: [{ id: ORCA_TASK, status: 'completed', result: read.pending[0]?.delivery.acceptedResult }] } })
+    : originalQuery(input);
+  const accepted = await replay(continued, read.pending, store, fixture.writer);
+  expect(accepted.kind).toBe('replayed');
+  if (accepted.kind === 'replayed') {
+    const outcome = accepted.outcomes[0];
+    if (outcome?.kind !== 'settled') throw new Error(JSON.stringify(outcome));
+  }
+  const again = await readPendingDeliveries({ ...fixture.readInput, store, backend: backend.backend });
+  if (again.kind === 'read') await replay(continued, again.pending, store, fixture.writer);
+  const settlements = store.query({ kind: 'delivery-settlements', coordinationScopeId: SCOPE });
+  expect(settlements.kind === 'delivery-settlements' ? settlements.settlements.length : -1).toBe(1);
 });
 
 test('装配出的 Delivery 走完唯一 pipeline：先记录结果与去重键，最后才确认', async () => {
@@ -1067,6 +1106,7 @@ test('生产事实装配读不到归属时：以结构化 blocker 呈现，不�
   const fixture = createCompanionStartupFixture({
     recovery: (harness) =>
       createExecutionRecoveryFacts({
+        workerSupportFor: () => ({ level: 'complete', qualificationRef: 'fixture:qualification' }),
         store: () => harness.store,
         backend: harness.backend.backend,
         coordinationScopeId: RECOVERY_SCOPE,
@@ -1206,6 +1246,7 @@ function factsFor(input: {
 }): ReturnType<typeof createExecutionRecoveryFacts> {
   const harness = input.harness;
   return createExecutionRecoveryFacts({
+    workerSupportFor: () => ({ level: 'complete', qualificationRef: 'fixture:qualification' }),
     store: () => harness.store,
     backend: fakeRecoveryBackend({ query: input.query }).backend,
     coordinationScopeId: RECOVERY_SCOPE,
@@ -1578,6 +1619,7 @@ test('生产替代派发：只复用原 Worker Profile，SessionStart 报告读�
 
     // 缺少 Worker 模型或 Companion 状态根时如实不可读，而不是派发一个无法证明的 Session。
     const modeless = createExecutionRecoveryFacts({
+      workerSupportFor: () => ({ level: 'complete', qualificationRef: 'fixture:qualification' }),
       store: () => fixture.harness.store,
       backend: fixture.harness.backend.backend,
       coordinationScopeId: RECOVERY_SCOPE,
@@ -1784,6 +1826,14 @@ test('重新授权后旧 Task 的 Delivery 按其物化绑定的原授权结算�
   expect(read.pending).toHaveLength(1);
   // 关键判据：核验用的授权身份取自该 Task 的物化绑定，不是当前的新授权。
   expect(read.pending[0]!.trusted.authorizationId).toBe(AUTHORIZATION);
+  expect(read.pending[0]!.delivery.claimed.authorizationId).toBe(AUTHORIZATION);
+  const originalQuery = orca.backend.query.bind(orca.backend);
+  orca.backend.query = query => query.operation === 'task-list'
+    ? Promise.resolve({ kind: 'accepted', value: { tasks: [{ id: ORCA_TASK, status: 'completed', result: read.pending[0]?.delivery.acceptedResult }] } })
+    : originalQuery(query);
+  const settled = await replay({ ...fixture, backend: orca }, read.pending, fixture.store, fixture.writer);
+  expect(settled.kind).toBe('replayed');
+  if (settled.kind === 'replayed') expect(settled.outcomes[0]?.kind).toBe('settled');
   // 角色权限也取自该 Task 当时批准的 Manifest：换模型不追溯改变在途 Task 的权限边界。
   const current = activeAuthorization(fixture.store, SCOPE);
   if (current.kind !== 'read' || current.authorization === null) {

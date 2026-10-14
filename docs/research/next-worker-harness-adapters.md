@@ -2,13 +2,38 @@
 
 对应 change：`add-next-worker-harness-adapters`。本页记录本轮资格；前驱的候选调查与 PASS 保留原验证范围。
 
-基线 HEAD 为 `13b203f62bbb68a60456c5acd7d28e4c54c625a4`，直接前驱已归档。早期候选矩阵使用 Orca CLI/runtime 1.4.222；Antigravity 当前完整闭环使用未修改的 1.4.224。Ubuntu 使用 `orca-ide`。submodule 固定 `cc5c85fb7a43ed52c6cd29157210020cd769d84c`；七个新候选均有上游 builtin identity，生产现注册 codex、claude、opencode、pi、omp、command-code、qwen-code、antigravity。
+六家候选的 2026-10-14 续探见
+[续探记录](next-worker-harness-continuation-20261014.md)：包括旧资源精确回收、
+Kilo 新 Run 的 prepared 派发失败、Kimi 基础两角色的 agent-trust-workspace 阻塞，
+以及其余候选的公开能力核验。准入已改为显式登记与分级支持（change
+`grade-worker-harness-admission`）：登记表含全部 14 家已实现 adapter（codex、claude、
+opencode、pi、omp、command-code、qwen-code、antigravity、kilo、kimi、hermes、
+cline、muse、cursor），等级由 `src/domain/worker-harness-support.ts` 从
+`src/adapters/agents/worker-harness-qualifications.ts` 的证据推导。当前等级：
+complete = command-code、qwen-code、antigravity；enhanced = codex；basic = claude、
+opencode、pi、omp、kilo；kimi、hermes、cline、muse、cursor 未达 basic。2026-10-14
+以 Command Code 独立验证基础路径（隔离现场 `/var/tmp/orca-harness-acceptance-uUxIxc`，
+Planner/Implementation 均 ran/succeeded、工件核验通过、原生字段全为 null，55 passed /
+2 skipped，[证据](../../artifacts/next-worker-harness-adapters/ip04-2026-10-14T10-55-18-402Z-43432fa6-df72-4e03-b63f-5cb3f5fe6d1d.json)）；
+Kimi 的基础真实运行在 prepared 阶段被 `agent-trust-workspace` 阻塞（两个角色均
+`prepare_failed`、无 Task 启动，现场 `/var/tmp/orca-harness-acceptance-ehbi1C`，
+[证据](../../artifacts/next-worker-harness-adapters/ip04-2026-10-14T10-54-18-998Z-5e735251-9a5b-40fa-8d19-00ab562e274e.json)）。
+Recovery Utility 与历史恢复只开放 complete 级。下文带日期的轮次记录保留当轮结论；
+「未注册」不再表示当前可用性。
+
+只读是任务级可选能力，不参与等级推导：只有实际需要只读的操作（Recovery Utility、只读 Graph Patch/纯分析、按旧授权 policy 的只读 Finalizer）在派发前核验只读能力组与真实拒写探针；普通 Validator 与可写 Finalizer 不因缺少只读证据被拒绝。
+
+Kilo 的 basic 使用 10 月 14 日 Planner 成功与 10 月 12 日默认 TUI Implementation
+成功的可核验记录；后续缺少报告不撤销已核验事实。当前输入或信任检查失败仍阻塞该次
+操作，高级角色、续接及历史恢复尚未取得所需证据。
+
+基线 HEAD 为 `13b203f62bbb68a60456c5acd7d28e4c54c625a4`，直接前驱已归档。早期候选矩阵使用 Orca CLI/runtime 1.4.222；Antigravity 当前完整闭环使用未修改的 1.4.224。Ubuntu 使用 `orca-ide`。submodule 固定 `cc5c85fb7a43ed52c6cd29157210020cd769d84c`；七个新候选均有上游 builtin identity。
 
 ## 原生事实与当前验收
 
 2026-10-13 用户明确禁止 patch Orca，接入只适配未修改的公开 CLI/runtime。此前独立
 源码副本的补丁与测试仅保留为诊断证据，停止匹配新版源码、构建或应用修复版的路线。
-当前为 12/12 tasks，新增生产注册 1（Antigravity）；其余六家仍延期或待真实验收。
+该轮完成 12/12 tasks 并注册 Antigravity；其余候选的当前等级与阻塞见上文。
 第二轮 mixed Controller、最终集成回归与限定审计通过；独立
 [verification](../../openspec/changes/add-next-worker-harness-adapters/verification.md) 结论 PASS。
 较早失败轮次的 prepared 资源、Scope 与未决操作继续保留。
@@ -24,7 +49,7 @@
 - Orca 公开支持 `worker-start --agent antigravity --model ID`，本项目已有
   `orca_managed` strategy。该命令没有逐次 launcher command/env 或精确 conversation
   参数入口，现有 reporter 与 bwrap 包装不能直接搬过去；也未证明 Orca 内部启动会
-  避开同一静默门槛。不能把它当作已可用替代方案或注册依据。
+  避开同一静默门槛。不能把它当作已可用替代方案或等级证据。
 - prepared 路径仍只接受原 handle 的 `tui-idle` satisfied/running；`terminal wait`
   仅公开 exit/tui-idle，没有静默阈值参数。`activation` 在就绪之后执行，改成
   `submit_draft` 不解决当前超时，也不能追加 Enter 试探未知输入。
@@ -165,7 +190,7 @@ doctor 可观察结果回归通过，Worker 检查不读取 Coordinator 凭据�
 | --- | --- | --- | --- |
 | Antigravity | 独立矩阵 1.3.3；当前注册 1.3.4 | hook conversation ID，精确 cache/history 或 native summary 工作区来源与 `brain/<ID>/.system_generated/logs/transcript_full.jsonl` 交叉核验；`--conversation ID` | 1.3.4 TUI 四角色、Implementation resume、Validator 同 Session 续接与只读 Recovery 通过；mixed Controller deliverable、人工中断/Recovery、集成及同 Scope 重启通过，已注册。 |
 | Kilo | `@kilocode/cli` 7.8.8；源码 tag [e2887f0](https://github.com/Kilo-Org/kilocode/tree/e2887f08e5a6394299c810ba508f358aaf4c5bc3) | 原生 session plugin；`kilo export ID --pure` 独立核验 ID/cwd；`--session ID` | 默认完整 TUI 的 Implementation、Validator 与输入探针通过；Planner、精确 resume、只读 Finalizer/Recovery 无可靠模型轮次。延时对照仍为空 Session，延期，未注册。 |
-| Kimi | `kimi --version` 2.1.1 | 原生 SessionStart；确定的 cwd 分区路径与 exact-ID ZIP export 交叉核验 manifest/wire | Planner 的精确绑定、工件、worker_done 与覆盖通过；usage.model 只保留请求 alias，缺实际响应模型事实。延期，未注册。 |
+| Kimi | `kimi --version` 2.1.1 | 原生 SessionStart；确定的 cwd 分区路径与 exact-ID ZIP export 交叉核验 manifest/wire | Planner 的精确绑定、工件、worker_done 与覆盖通过；usage.model 只保留请求 alias，缺实际响应模型事实。2026-10-14 基础两角色在 prepared 阶段被 `agent-trust-workspace` 阻塞（现场 `/var/tmp/orca-harness-acceptance-ehbi1C`，[证据](../../artifacts/next-worker-harness-adapters/ip04-2026-10-14T10-54-18-998Z-5e735251-9a5b-40fa-8d19-00ab562e274e.json)），当前 unavailable。 |
 | Hermes | CLI banner 0.17.0 / e589b739；实际 checkout `e20ff352b91623d51ae05ea586a1800aee852402` | resume-capable pre_llm_call hook；公开 `sessions export --session-id ID -` | `--cli` 修复 cwd，真实只读 Finalizer 的精确绑定、工具和 worker_done 通过；export 不证明 inactive/compacted 全历史，coverage partial，缺实际响应模型事实。延期，未注册。 |
 | Cline | `cline --version` 3.0.70 / SDK 0.0.92 | global JS plugin 的 host Session/cwd 与精确 manifest/messages 交叉核验；`--id ID` | `--tui --yolo` 本地入口、输入探针、真实 Validator 精确绑定和 worker_done 通过；messages 是可覆盖的上下文快照，coverage partial，modelInfo 是客户端配置。延期，未注册；旧 unknown 不重放。 |
 | Muse | 本机 `muse` 不存在；官方格式离线 fixtures | 原生 hook、UUIDv7 对应 Session 与消息 frame；按 ID resume | 离线实现；真实验收延期，未注册。 |

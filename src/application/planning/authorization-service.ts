@@ -10,6 +10,8 @@
  * 自觉遵守。
  */
 
+import { isDeepStrictEqual } from 'node:util';
+
 import {
   authorizeOperation,
   manifestCandidateMismatches,
@@ -179,13 +181,14 @@ export type RecordApprovalResult =
  * 任何预算，也不构成 Graph Revision。
  */
 export type ModelReauthorizationInput = {
+  readonly finalizerPolicy?: ExecutionAuthorizationManifest['finalizerPolicy'];
   readonly store: BranchCoordinationStore;
   readonly coordinationScopeId: CoordinationScopeId;
   readonly writer: CoordinationWriter;
   /** 审阅时读到的 Scope revision；落盘前不一致即说明这份审阅已经过期。 */
   readonly expectedScopeRevision: Revision;
   readonly workerProfiles: readonly WorkerProfileRef[];
-  readonly recoveryUtilityProfile: RecoveryUtilityProfile;
+  readonly recoveryUtilityProfile: RecoveryUtilityProfile | null;
   /** 实际 Graph head version；授权必须绑定它，而不是沿用批准时的旧版本。 */
   readonly graphVersion: GraphVersion;
   /**
@@ -208,9 +211,10 @@ export type ModelReauthorizationInput = {
  * 重置任何预算，也不构成 Graph Revision。
  */
 export function modelReauthorizationManifest(input: {
+  readonly finalizerPolicy?: ExecutionAuthorizationManifest['finalizerPolicy'];
   readonly base: ExecutionAuthorizationManifest;
   readonly workerProfiles: readonly WorkerProfileRef[];
-  readonly recoveryUtilityProfile: RecoveryUtilityProfile;
+  readonly recoveryUtilityProfile: RecoveryUtilityProfile | null;
   readonly graphVersion: GraphVersion;
   readonly maxActiveWorkPackages?: number;
 }): ProposeManifestResult {
@@ -218,12 +222,18 @@ export function modelReauthorizationManifest(input: {
     input.maxActiveWorkPackages === undefined
       ? input.base.limits
       : { ...input.base.limits, maxActiveWorkPackages: input.maxActiveWorkPackages };
+  const unchangedBindings = input.base.manifestVersion === 4 &&
+    input.finalizerPolicy === undefined &&
+    isDeepStrictEqual(input.workerProfiles, input.base.workerProfiles) &&
+    isDeepStrictEqual(input.recoveryUtilityProfile, input.base.recoveryUtilityProfile);
   const parsed = parseManifest({
     ...input.base,
+    manifestVersion: unchangedBindings ? 4 : 5,
     graph: { ...input.base.graph, version: input.graphVersion },
     workerProfiles: input.workerProfiles,
     recoveryUtilityProfile: input.recoveryUtilityProfile,
     limits,
+    ...(input.finalizerPolicy === undefined ? {} : { finalizerPolicy: input.finalizerPolicy }),
   });
   if (!parsed.ok) {
     return { kind: 'rejected', failure: { code: parsed.field, message: parsed.message } };
@@ -256,6 +266,7 @@ function readAcceptedReauthorization(input: ModelReauthorizationInput): RecordAp
   }
   const rebuilt = modelReauthorizationManifest({
     base: accepted.manifest,
+    ...(input.finalizerPolicy === undefined ? {} : { finalizerPolicy: input.finalizerPolicy }),
     workerProfiles: input.workerProfiles,
     recoveryUtilityProfile: input.recoveryUtilityProfile,
     graphVersion: input.graphVersion,
@@ -348,6 +359,7 @@ export function recordModelReauthorization(input: ModelReauthorizationInput): Re
   }
   const rebuilt = modelReauthorizationManifest({
     base: current.authorization.manifest,
+    ...(input.finalizerPolicy === undefined ? {} : { finalizerPolicy: input.finalizerPolicy }),
     workerProfiles: input.workerProfiles,
     recoveryUtilityProfile: input.recoveryUtilityProfile,
     graphVersion: input.graphVersion,

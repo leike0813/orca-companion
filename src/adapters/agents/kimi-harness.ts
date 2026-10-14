@@ -4,9 +4,10 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import type {
   HarnessSessionReport, HarnessTranscriptCoverageResult, HarnessTranscriptProofResult,
-  PreparedHarnessTerminal, ProveHarnessSessionInput, WorkerHarness, WorkerHarnessLaunchInput,
+  PreparedHarnessTerminal, ProveHarnessSessionInput, WorkerHarnessLaunchInput,
   WorkerModelCatalogQuery, WorkerModelCatalogResult,
 } from '../../application/ports/worker-harness.js';
+import { createWorkerHarness } from '../../application/ports/worker-harness.js';
 import type { TranscriptCoverageEvidence } from '../../application/recovery/recovery-capsule.js';
 import type { PreparedTerminalStrategy } from '../../application/worker-launch.js';
 import type { WorkerModelSelection } from '../../domain/model-configuration.js';
@@ -486,7 +487,7 @@ async function queryKimiModels(input: WorkerModelCatalogQuery): Promise<WorkerMo
   } catch { return unavailable('catalog_query_failed'); }
 }
 
-export const kimiHarness: WorkerHarness = {
+export const kimiHarness = createWorkerHarness({
   id: KIMI_HARNESS_ID,
   prepareLaunch: (input) => launch(input),
   prepareReadOnlyLaunch: (input) => launch({ ...input, sandboxMode: 'read-only-local-control' }),
@@ -505,5 +506,5 @@ export const kimiHarness: WorkerHarness = {
   proveSession: proveKimiTranscript,
   inspectTranscript: inspectKimiTranscript,
   recoveryInstructions: () => KIMI_RECOVERY_INSTRUCTIONS,
-};
+});
 

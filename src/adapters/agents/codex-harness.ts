@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import type { WorkerHarness } from '../../application/ports/worker-harness.js';
+import { createWorkerHarness } from '../../application/ports/worker-harness.js';
 import { createCodexWorkerLaunch, createCodexResumeLaunch, installCodexSessionStartReporter } from './codex-launch.js';
 import { proveCodexTranscript, inspectCodexTranscript, readCodexTranscriptIdentity } from './codex-transcript.js';
 import { probeHarnessReadOnlyWorker } from './read-only-execution-wrapper.js';
 import { queryWorkerModels } from './worker-model-catalog.js';
 
-export const codexHarness: WorkerHarness = {
+export const codexHarness = createWorkerHarness({
   id: 'codex',
   prepareLaunch: createCodexWorkerLaunch,
   prepareReadOnlyLaunch: (input) => createCodexWorkerLaunch({ ...input, sandboxMode: 'read-only-local-control' }),
@@ -30,4 +30,4 @@ export const codexHarness: WorkerHarness = {
     expectedCodexHome: input.expectedStateRoot,
   })),
   inspectTranscript: inspectCodexTranscript,
-};
+});

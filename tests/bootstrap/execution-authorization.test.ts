@@ -189,6 +189,8 @@ function facts(input?: {
   return {
     store,
     coordinationScopeId: SCOPE,
+    // 授权资格走固定夹具：真实等级推导由 support/registry 测试覆盖，发布摘要不进入行为测试输入。
+    workerSupportFor: () => ({ level: 'complete', qualificationRef: 'fixture:qualification' }),
     policy: input?.policy ?? policy(),
     workspace: { canonicalWorktreePath: '/tmp/canonical', canonicalBranch: 'main' },
     routeMapRef: { kind: 'route-map', id: '42', version: MAP_VERSION },
@@ -794,6 +796,8 @@ async function openAuthorizationHost(directory: string): Promise<AuthorizationHo
     trackerFactory: hostTracker,
     loadIntegration: () => Promise.resolve({ ChatOpenAICompletions: CapableChatModel }),
     executionBackend: permissiveHostBackend(),
+    // 与 facts() 共用同一份资格夹具，审阅与批准因此指向同一个指纹。
+    workerSupportFor: () => ({ level: 'complete', qualificationRef: 'fixture:qualification' }),
     readOnlyWorkerProbe: () => {
       probeCalls.value += 1;
       return Promise.resolve(capability.value);
@@ -861,10 +865,10 @@ test('审阅与批准各自核验只读 Worker 能力：不可用不写授权，
     }
     expect(blocked.review.gate.ready).toBe(false);
     expect(blocked.review.gate.blockers.join(' ')).toContain('read_only_worker_unavailable');
-    // Capsule 与 Finalizer 的实际只读配置与本次结论都在审阅里可见。
+    // Recovery 仍需要只读；Finalizer 的修复权限在完整授权审阅中可见。
     expect(manifestRow(blocked, 'Worker Sandbox')).toContain('capsule=bwrap-read-only');
-    expect(manifestRow(blocked, 'Worker Sandbox')).toContain('finalizer=bwrap-read-only');
-    expect(manifestRow(blocked, 'Read-only Workers')).toContain('bwrap-read-only');
+    expect(manifestRow(blocked, 'Worker Sandbox')).toContain('finalizer=workspace-write');
+    expect(manifestRow(blocked, 'Finalizer')).toContain('范围内修复');
 
     const refused = await harness.host.ports.executionAuthorization.approve({
       fingerprint: blocked.review.fingerprint,
@@ -881,7 +885,7 @@ test('审阅与批准各自核验只读 Worker 能力：不可用不写授权，
       return;
     }
     expect(ready.review.gate.ready).toBe(true);
-    expect(manifestRow(ready, 'Read-only Workers')).toContain('可用');
+    expect(manifestRow(ready, 'Read-only Workers')).toContain('Recovery');
     const approved = await harness.host.ports.executionAuthorization.approve({
       fingerprint: ready.review.fingerprint,
       expectedRevision: ready.review.scopeRevision,

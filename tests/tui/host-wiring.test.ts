@@ -563,7 +563,7 @@ test('host projectDetails绑定Scope、Session和所见revision，并连续读�
       writer,
       authorizationId: 'approved-project-details',
       authorizationVersion: 1,
-      manifestVersion: 4,
+      manifestVersion: manifest.manifestVersion,
       fingerprint: 'approved-project-details-fingerprint',
       approvalRef: 'approved-project-details-review',
       manifest,
@@ -966,7 +966,7 @@ test('执行设置端口：保存默认额度经生产 CAS，当前批准额度�
     const approved = store.transact({
       kind: 'record-authorization', coordinationScopeId: scopeId,
       expectedRevision: scope.scope.revision, writer,
-      authorizationId: 'exec-settings-auth', authorizationVersion: 1, manifestVersion: 4,
+      authorizationId: 'exec-settings-auth', authorizationVersion: 1, manifestVersion: manifest.manifestVersion,
       fingerprint: 'exec-settings-fingerprint', approvalRef: 'exec-settings-review', manifest,
     });
     if (approved.kind !== 'committed') throw new Error(`授权未记录：${JSON.stringify(approved)}`);

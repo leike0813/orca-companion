@@ -12,10 +12,38 @@ import type { WorkPackageId } from '../../src/application/dto/identity.js';
 import {
   evaluateDeliveryVerdict,
   type FinalizerReportFacts,
+  type FinalizerVerification,
 } from '../../src/domain/delivery-verdict.js';
+import type { EvidenceRecord } from '../../src/domain/worker-report.js';
 
 const WP_1 = 'wp-1' as WorkPackageId;
 const WP_2 = 'wp-2' as WorkPackageId;
+const HEAD = 'a'.repeat(40);
+const TREE = 'b'.repeat(40);
+
+function command(overrides: Partial<EvidenceRecord> = {}): EvidenceRecord {
+  return {
+    evidenceId: 'test-1',
+    kind: 'command',
+    coveredPaths: ['src'],
+    command: 'pnpm test',
+    summary: '复验通过',
+    outcome: 'passed',
+    ...overrides,
+  };
+}
+
+function verification(overrides: Partial<FinalizerVerification> = {}): FinalizerVerification {
+  return {
+    head: HEAD,
+    tree: TREE,
+    expectedHead: HEAD,
+    expectedTree: TREE,
+    commands: [command()],
+    integrationRef: 'integration-1',
+    ...overrides,
+  };
+}
 
 function facts(overrides: Partial<FinalizerReportFacts> = {}): FinalizerReportFacts {
   return {
@@ -102,3 +130,95 @@ test('证据与既有权威事实不一致时阻塞而不是覆盖', () => {
   });
   expect(decision.kind === 'blocked' ? decision.mismatches : []).toEqual(['unknown-ref']);
 });
+
+test('可写项目级会话在最终版本与集成可核验时接受交付', () => {
+  expect(
+    evaluateDeliveryVerdict(
+      facts({
+        session: { kind: 'new_project', sessionBindingId: 'session-binding-2' },
+        readOnly: false,
+        verification: verification(),
+      }),
+    ),
+  ).toEqual({
+    kind: 'accepted',
+    verdict: { kind: 'deliverable', evidenceRefs: ['orca-result-1'] },
+    deliverable: true,
+  });
+});
+
+test('旧只读会话不要求也不合成最终版本复验', () => {
+  const decision = evaluateDeliveryVerdict(facts());
+
+  expect(decision).toEqual({
+    kind: 'accepted',
+    verdict: { kind: 'deliverable', evidenceRefs: ['orca-result-1'] },
+    deliverable: true,
+  });
+});
+
+test('可写 Finalizer 缺少最终版本复验时阻塞', () => {
+  expect(
+    evaluateDeliveryVerdict(
+      facts({ session: { kind: 'new_project', sessionBindingId: 'session-binding-2' }, readOnly: false }),
+    ),
+  ).toMatchObject({ kind: 'blocked', code: 'final_version_unverified' });
+});
+
+test.each([
+  ['HEAD 不是完整 Git OID', { head: 'abc' }],
+  ['tree 不是完整 Git OID', { tree: 'b'.repeat(39) }],
+  ['HEAD 与期望版本不一致', { expectedHead: 'c'.repeat(40) }],
+  ['tree 与期望版本不一致', { expectedTree: 'd'.repeat(40) }],
+] satisfies readonly (readonly [string, Partial<FinalizerVerification>])[])(
+  '可写 Finalizer 的 %s 时阻塞',
+  (_label, overrides) => {
+    expect(
+      evaluateDeliveryVerdict(
+        facts({
+          session: { kind: 'new_project', sessionBindingId: 'session-binding-2' },
+          readOnly: false,
+          verification: verification(overrides),
+        }),
+      ),
+    ).toMatchObject({ kind: 'blocked', code: 'final_version_unverified' });
+  },
+);
+
+test.each([
+  ['复验命令失败', [command({ outcome: 'failed' })]],
+  ['只有非 command 证据', [command({ kind: 'inspection' })]],
+  ['复验命令为空', [command({ command: '   ' })]],
+  ['没有任何证据', []],
+] satisfies readonly (readonly [string, readonly EvidenceRecord[]])[])(
+  '可写 Finalizer %s 时不接受交付',
+  (_label, commands) => {
+    expect(
+      evaluateDeliveryVerdict(
+        facts({
+          session: { kind: 'new_project', sessionBindingId: 'session-binding-2' },
+          readOnly: false,
+          verification: verification({ commands }),
+        }),
+      ),
+    ).toMatchObject({ kind: 'blocked', code: 'verification_failed' });
+  },
+);
+
+test.each([
+  ['缺少集成引用', null],
+  ['集成引用不在权威事实中', 'unknown-integration'],
+] satisfies readonly (readonly [string, string | null])[])(
+  '可写 Finalizer %s 时不接受交付',
+  (_label, integrationRef) => {
+    expect(
+      evaluateDeliveryVerdict(
+        facts({
+          session: { kind: 'new_project', sessionBindingId: 'session-binding-2' },
+          readOnly: false,
+          verification: verification({ integrationRef }),
+        }),
+      ),
+    ).toMatchObject({ kind: 'blocked', code: 'integration_unverified' });
+  },
+);

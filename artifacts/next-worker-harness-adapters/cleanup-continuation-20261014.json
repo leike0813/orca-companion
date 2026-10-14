@@ -1,0 +1,788 @@
+{
+  "schema": "next-harness-cleanup/1",
+  "observedAt": "2026-10-14T07:07:33.253Z",
+  "orcaVersion": "1.4.224",
+  "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2",
+  "scope": "Resources attributed by existing next-worker-harness-adapters evidence; no unrelated projects operated",
+  "inventory": [
+    {
+      "worktree": {
+        "id": "ea2d6f9f-1791-4d44-a842-76cc8060eada::/var/tmp/orca-harness-acceptance-Lp8Hg5/project-companion-harness-matrix-a14990da-6f0e-4d8e-bdf2-ad303a2b121a",
+        "path": "/var/tmp/orca-harness-acceptance-Lp8Hg5/project-companion-harness-matrix-a14990da-6f0e-4d8e-bdf2-ad303a2b121a",
+        "isMain": true,
+        "instance": "fa9513c2-05d4-44eb-b08d-4ecca773b44e"
+      },
+      "terminalCount": 0,
+      "omittedHosts": []
+    },
+    {
+      "worktree": {
+        "id": "152dc5be-59ae-450d-8a6d-c1093831cf22::/var/tmp/orca-harness-acceptance-m5DJtB/project-companion-harness-matrix-76f34149-033e-46d6-9111-d08d1dcf6724",
+        "path": "/var/tmp/orca-harness-acceptance-m5DJtB/project-companion-harness-matrix-76f34149-033e-46d6-9111-d08d1dcf6724",
+        "isMain": true,
+        "instance": "577904ee-20a4-4494-8eb8-a6814eeecb09"
+      },
+      "terminalCount": 0,
+      "omittedHosts": []
+    },
+    {
+      "worktree": {
+        "id": "4c0c1dae-75ad-4500-acbe-e77b8d79a4c8::/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+        "path": "/var/tmp/orca-harness-acceptance-ncWTVr/project-companion-harness-matrix-08812582-8e7b-40d9-99fe-3f17689570f2",
+        "isMain": true,
+        "instance": "3b1d1292-af46-4a16-989e-ba933f022b83"
+      },
+      "terminalCount": 0,
+      "omittedHosts": []
+    },
+    {
+      "worktree": {
+        "id": "c4e7f327-9077-4d09-a9d6-09fd7c248655::/var/tmp/orca-terminal-check-gkaUFl/project",
+        "path": "/var/tmp/orca-terminal-check-gkaUFl/project",
+        "isMain": true,
+        "instance": "5676ffb0-b1a5-460e-97db-dc815ff82856"
+      },
+      "terminalCount": 0,
+      "omittedHosts": []
+    },
+    {
+      "worktree": {
+        "id": "e9e9e857-489a-415d-be6d-c81bb0a3293e::/var/tmp/orca-ip04-mixed-controller-R6AahD/repo",
+        "path": "/var/tmp/orca-ip04-mixed-controller-R6AahD/repo",
+        "isMain": true,
+        "instance": "3f796277-d889-4910-843a-243fad8fdb3d"
+      },
+      "terminalCount": 0,
+      "omittedHosts": []
+    },
+    {
+      "worktree": {
+        "id": "e9e9e857-489a-415d-be6d-c81bb0a3293e::/home/joshua/orca/workspaces/repo/wp-03ea5cb8acd988a9afaa7fc37665aec402158ff3fea6bde51e16352d949905cd",
+        "path": "/home/joshua/orca/workspaces/repo/wp-03ea5cb8acd988a9afaa7fc37665aec402158ff3fea6bde51e16352d949905cd",
+        "isMain": false,
+        "instance": "a16cf902-f407-4d1f-8301-39c6062addf7"
+      },
+      "terminalCount": 0,
+      "omittedHosts": []
+    },
+    {
+      "worktree": {
+        "id": "b8892625-8eb2-4840-a5a6-bd203633710f::/var/tmp/orca-ip04-mixed-controller-lO3X04/repo",
+        "path": "/var/tmp/orca-ip04-mixed-controller-lO3X04/repo",
+        "isMain": true,
+        "instance": "5500dc53-a3f0-4ba0-8d21-c2d7828c3071"
+      },
+      "terminalCount": 0,
+      "omittedHosts": []
+    },
+    {
+      "worktree": {
+        "id": "b8892625-8eb2-4840-a5a6-bd203633710f::/home/joshua/orca/workspaces/repo/wp-4df591c3081059d5d9a2c1cbd832bed0de2345623e266ad174e88d7bcdcf1291",
+        "path": "/home/joshua/orca/workspaces/repo/wp-4df591c3081059d5d9a2c1cbd832bed0de2345623e266ad174e88d7bcdcf1291",
+        "isMain": false,
+        "instance": "d9274f8e-a631-4e55-aa13-8020e4b7fe7a"
+      },
+      "terminalCount": 0,
+      "omittedHosts": []
+    },
+    {
+      "worktree": {
+        "id": "dd5d100e-1d8c-445c-b380-d199ce3d2af5::/var/tmp/orca-harness-acceptance-ysTX88/project-companion-harness-matrix-ba1a4681-b216-40e4-b331-64c2e054624a",
+        "path": "/var/tmp/orca-harness-acceptance-ysTX88/project-companion-harness-matrix-ba1a4681-b216-40e4-b331-64c2e054624a",
+        "isMain": true,
+        "instance": "9ee9bcb5-012a-4560-8344-7c01f6fd05e2"
+      },
+      "terminalCount": 0,
+      "omittedHosts": []
+    },
+    {
+      "worktree": {
+        "id": "5933a893-0af8-4516-b04f-6471ad4b9a02::/var/tmp/orca-ip04-mixed-controller-ardK9O/repo",
+        "path": "/var/tmp/orca-ip04-mixed-controller-ardK9O/repo",
+        "isMain": true,
+        "instance": "89872eb5-7d63-4877-9104-0ec0884d5be3"
+      },
+      "terminalCount": 0,
+      "omittedHosts": []
+    },
+    {
+      "worktree": {
+        "id": "5933a893-0af8-4516-b04f-6471ad4b9a02::/home/joshua/orca/workspaces/repo/wp-8f415138f6e8d1d2e8717eb6293ccba4fb415f9ca6e4ecbbc83c85262b3c4313",
+        "path": "/home/joshua/orca/workspaces/repo/wp-8f415138f6e8d1d2e8717eb6293ccba4fb415f9ca6e4ecbbc83c85262b3c4313",
+        "isMain": false,
+        "instance": "ebe0b947-52a1-479a-8866-e7a4d746a95d"
+      },
+      "terminalCount": 0,
+      "omittedHosts": []
+    },
+    {
+      "worktree": {
+        "id": "0322d9d2-c926-495b-91bf-7fc38db5e074::/var/tmp/orca-harness-acceptance-fndTfZ/project-companion-harness-matrix-6fb8f182-766a-4dfa-97c1-5082175f6989",
+        "path": "/var/tmp/orca-harness-acceptance-fndTfZ/project-companion-harness-matrix-6fb8f182-766a-4dfa-97c1-5082175f6989",
+        "isMain": true,
+        "instance": "bbbc3a2a-2381-4c34-9f68-76b5a26155c9"
+      },
+      "terminalCount": 0,
+      "omittedHosts": []
+    },
+    {
+      "worktree": {
+        "id": "b6bfb85d-7b8e-4173-9bee-276d4eede089::/var/tmp/orca-ip04-mixed-controller-wbaa9R/repo",
+        "path": "/var/tmp/orca-ip04-mixed-controller-wbaa9R/repo",
+        "isMain": true,
+        "instance": "340bb49a-5f33-47e4-912e-b9407b620c04"
+      },
+      "terminalCount": 0,
+      "omittedHosts": []
+    },
+    {
+      "worktree": {
+        "id": "b6bfb85d-7b8e-4173-9bee-276d4eede089::/home/joshua/orca/workspaces/repo/wp-2d9ba044ed3798bc6d3e808c054370a0c82b765bfd932a8e402dd96435162dd5",
+        "path": "/home/joshua/orca/workspaces/repo/wp-2d9ba044ed3798bc6d3e808c054370a0c82b765bfd932a8e402dd96435162dd5",
+        "isMain": false,
+        "instance": "6039299a-2994-4d51-9c6b-a55f4c19b798"
+      },
+      "terminalCount": 0,
+      "omittedHosts": []
+    }
+  ],
+  "workers": [
+    {
+      "run": "run_d394e13d9181",
+      "workers": [
+        {
+          "dispatchId": "ctx_8b80837d560c",
+          "workerState": "succeeded",
+          "terminalHandle": "term_8081bb0f-caa3-4a61-9672-48b7c5951d58",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_a7c88f86524f",
+          "workerState": "abandoned",
+          "terminalHandle": "term_fbde4b8b-1a8a-486e-92f9-523b7cd92a5c",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_4c412ecb90f2",
+          "workerState": "abandoned",
+          "terminalHandle": "term_81d5c84f-8301-439b-a566-461328494de5",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_2d5c0b835751",
+          "workerState": "abandoned",
+          "terminalHandle": "term_a11cd906-1223-4ba4-9dfc-bc969e805911",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_bf4790e84daa",
+          "workerState": "abandoned",
+          "terminalHandle": "term_f3567ae6-e149-4eda-874a-910d6a71c985",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_5ec18b3c01e5",
+          "workerState": "abandoned",
+          "terminalHandle": "term_6c83aaef-8ea4-4eb3-bc56-2eae1d6bbfce",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_084559fbdac7",
+          "workerState": "succeeded",
+          "terminalHandle": "term_2d93b900-1c50-4de3-9b9a-b1df4c676619",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_daeb4c675219",
+          "workerState": "abandoned",
+          "terminalHandle": "term_7d91f0bf-0852-4cad-8bcd-f8960e40b2ad",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_f452547b015a",
+          "workerState": "succeeded",
+          "terminalHandle": "term_21a33f54-a71a-4b63-b945-04eff3bdb99f",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_b7b9763255f0",
+          "workerState": "succeeded",
+          "terminalHandle": "term_21b73544-b7c5-40fc-bf41-422e0910cf72",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_a29424a31caa",
+          "workerState": "abandoned",
+          "terminalHandle": "term_a2188a8c-427c-4e9f-a13b-f2ef68636975",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_354f0f437f96",
+          "workerState": "succeeded",
+          "terminalHandle": "term_7f0f3740-8a8c-46bb-986f-da323f9ff82d",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_3b76eba70c9d",
+          "workerState": "succeeded",
+          "terminalHandle": "term_09e64615-86eb-4da3-9322-fa6f1bda7930",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_427ffa0ea9c0",
+          "workerState": "succeeded",
+          "terminalHandle": "term_b45eda52-6b57-4fbf-86ad-b48d539a8a64",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_6f221c4b8dc6",
+          "workerState": "succeeded",
+          "terminalHandle": "term_f381f779-4fa0-49bd-8e77-a90c440d4e6f",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_c28de9f7ef00",
+          "workerState": "succeeded",
+          "terminalHandle": "term_baa2f035-4d6e-4144-b1ca-52b971637ed5",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_692789eb0684",
+          "workerState": "succeeded",
+          "terminalHandle": "term_e5468ee4-df27-48b8-bbc5-261c7dccacbf",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_dd523c61e72f",
+          "workerState": "abandoned",
+          "terminalHandle": "term_bed59c9c-261d-4b0d-81c9-6e523602ee63",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_00fe2e1b29e5",
+          "workerState": "succeeded",
+          "terminalHandle": "term_4fd6d1e6-5781-485f-ba3a-f59610b35e26",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_5e75b7a6d86c",
+          "workerState": "abandoned",
+          "terminalHandle": "term_cedbf86e-c427-4603-b92c-538bb4a62205",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_fea1b2f2249a",
+          "workerState": "abandoned",
+          "terminalHandle": "term_5e93127a-9f95-4ba2-ae58-3ad223a7b07c",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_e7c4598ce9f8",
+          "workerState": "succeeded",
+          "terminalHandle": "term_f7fa4205-230b-444a-86b6-5fde28f05cf9",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_6eef17c19400",
+          "workerState": "failed",
+          "terminalHandle": "term_15c5e941-9a78-4356-8b20-3ea0ec2802f9",
+          "liveness": {
+            "verdict": "exited",
+            "source": "execution_host"
+          }
+        },
+        {
+          "dispatchId": "ctx_0f5a71a7ca9b",
+          "workerState": "succeeded",
+          "terminalHandle": "term_70cadfb3-053d-47b7-9502-3a19f7c38f6b",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_0dc0914ec772",
+          "workerState": "succeeded",
+          "terminalHandle": "term_50f7b7d0-cf47-497a-bd2c-aaa275547fbf",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_80eb9967dced",
+          "workerState": "failed",
+          "terminalHandle": "term_0c09320d-f49b-42b8-8fd4-e026c2300338",
+          "liveness": {
+            "verdict": "exited",
+            "source": "execution_host"
+          }
+        },
+        {
+          "dispatchId": "ctx_0d54b5b8ca44",
+          "workerState": "succeeded",
+          "terminalHandle": "term_57bb9b28-4345-45fa-a8dc-48387ffc7d3f",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_1cc1f2474eba",
+          "workerState": "succeeded",
+          "terminalHandle": "term_09706f99-9a47-4208-aa05-8bc70a819996",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_e079d6366aaa",
+          "workerState": "succeeded",
+          "terminalHandle": "term_0df6ef92-84f8-4c3f-9a22-9079aff4a2aa",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_ec2c8e5608b9",
+          "workerState": "succeeded",
+          "terminalHandle": "term_acd0074f-ed11-48a1-bf73-939e2f5e04e0",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_6534c5861f95",
+          "workerState": "succeeded",
+          "terminalHandle": "term_1a0226a7-ebd4-415a-8df0-c9aef2c61a2a",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_21321bfb8b5f",
+          "workerState": "succeeded",
+          "terminalHandle": "term_f4ff7d76-7ee7-4da2-93c6-b3594b0dd6b9",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_234f9a8bc88c",
+          "workerState": "succeeded",
+          "terminalHandle": "term_c7f721e1-ee00-4f8f-8c44-896aafa9ff5a",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_b9abc50ff143",
+          "workerState": "succeeded",
+          "terminalHandle": "term_bb91710f-7870-47ea-ac7f-d8160341bc2b",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_07827a25b410",
+          "workerState": "succeeded",
+          "terminalHandle": "term_3c93863d-5c74-4a4d-b2da-8563f455e39b",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_12e838de8d90",
+          "workerState": "succeeded",
+          "terminalHandle": "term_78ac8e33-c315-4801-8dd3-c25814465f8d",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_45bfa372d510",
+          "workerState": "succeeded",
+          "terminalHandle": "term_55fa0b85-c844-4b04-96fd-84a31e118941",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        }
+      ]
+    },
+    {
+      "run": "run_ca667d0144a9",
+      "workers": [
+        {
+          "dispatchId": "ctx_82bf4dbff628",
+          "workerState": "succeeded",
+          "terminalHandle": "term_2f6bc7d5-aa11-4de1-92b8-11ddb698d2c0",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_3521b1ac0138",
+          "workerState": "succeeded",
+          "terminalHandle": "term_ee5ba9e7-46ab-409d-8a35-6c8e836cf9b3",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_03905bd3ef22",
+          "workerState": "succeeded",
+          "terminalHandle": "term_0205f73c-2447-41e1-8163-670ee76ce140",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_7ebb460dbe30",
+          "workerState": "failed",
+          "terminalHandle": "term_fc579c20-e3aa-4836-bf9e-58ef6753459f",
+          "liveness": {
+            "verdict": "exited",
+            "source": "execution_host"
+          }
+        },
+        {
+          "dispatchId": "ctx_40329b05739c",
+          "workerState": "succeeded",
+          "terminalHandle": "term_cb549db8-8f55-4cbb-9301-395fa006dada",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_84d14da5e898",
+          "workerState": "succeeded",
+          "terminalHandle": "term_6ae8ca97-383b-4d68-9457-28380bc19150",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        }
+      ]
+    },
+    {
+      "run": "run_b281ef85822d",
+      "workers": [
+        {
+          "dispatchId": "ctx_137c1a92c054",
+          "workerState": "failed",
+          "terminalHandle": "term_daf57821-2058-4d29-9cf1-a1713dfd3322",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        }
+      ]
+    },
+    {
+      "run": "run_29050ec0b187",
+      "workers": [
+        {
+          "dispatchId": "ctx_ccd3473c1f4e",
+          "workerState": "failed",
+          "terminalHandle": "term_635a494e-01c2-4290-b7a8-33208fe3da4c",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        }
+      ]
+    },
+    {
+      "run": "run_1f5f5380d7a1",
+      "workers": [
+        {
+          "dispatchId": "ctx_75624fb855da",
+          "workerState": "succeeded",
+          "terminalHandle": "term_375c0762-aa7b-4692-85d5-a600d59de759",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_f2ad11c57904",
+          "workerState": "succeeded",
+          "terminalHandle": "term_2d0fc5e0-ea45-4968-966e-97a2d0c1fbe3",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_c740fba5b701",
+          "workerState": "succeeded",
+          "terminalHandle": "term_ce88b609-a2d5-4b7d-a676-6fd4e831b9e2",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_f8970fb49e5f",
+          "workerState": "failed",
+          "terminalHandle": "term_b4374fda-1166-4873-811a-c5ffbc3ba46d",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_47c19b856cc0",
+          "workerState": "succeeded",
+          "terminalHandle": "term_c69cbe82-a7a2-4430-9d42-f3af43c3e549",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        }
+      ]
+    },
+    {
+      "run": "run_bfb47acf1251",
+      "workers": [
+        {
+          "dispatchId": "ctx_32b35e5696ec",
+          "workerState": "succeeded",
+          "terminalHandle": "term_5b74b04f-5887-46a7-a670-73fc4f61066d",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_e81a96fb9f41",
+          "workerState": "succeeded",
+          "terminalHandle": "term_78f24aae-0d54-408a-87d1-f89c1431391e",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_fed17bda3fc2",
+          "workerState": "succeeded",
+          "terminalHandle": "term_f3930a2c-cc0d-4560-b38f-d6867d0b8829",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_c30daff0f1a3",
+          "workerState": "succeeded",
+          "terminalHandle": "term_50ad9714-34b0-4957-931b-92044bb999e5",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_a5bb475c428a",
+          "workerState": "succeeded",
+          "terminalHandle": "term_d4e0d306-7f4b-46a3-a384-b8991a56debd",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_2c9fed969849",
+          "workerState": "succeeded",
+          "terminalHandle": "term_70b2c2b7-58af-4158-98f5-4d7df7e2c92f",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_15772bbc653c",
+          "workerState": "succeeded",
+          "terminalHandle": "term_e96c113f-e4c5-4b5b-9e7a-84144c1b7259",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_a801183d223c",
+          "workerState": "succeeded",
+          "terminalHandle": "term_2227644c-d5fe-485f-88c1-4ba3022b7eef",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_e424ef1595f7",
+          "workerState": "succeeded",
+          "terminalHandle": "term_b2805c92-9d5a-4d15-b3a7-c91857fb2cbb",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_8c95539c0a3a",
+          "workerState": "succeeded",
+          "terminalHandle": "term_fd5bbbb1-f88c-4d6d-bda8-3ed92ca94d1f",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_6107022890f6",
+          "workerState": "succeeded",
+          "terminalHandle": "term_a6721ad2-d4cd-4247-99a8-aa41692b7387",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_4f6ccb585643",
+          "workerState": "succeeded",
+          "terminalHandle": "term_be35cc65-05ff-4562-861c-640dcc5368bf",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_d8d0549d5d82",
+          "workerState": "succeeded",
+          "terminalHandle": "term_839cd455-5970-4667-9220-3777007744d7",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        },
+        {
+          "dispatchId": "ctx_509465e717b5",
+          "workerState": "succeeded",
+          "terminalHandle": "term_9d687c4e-ea4e-4ef3-ad55-5d12e3ee2406",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          }
+        }
+      ]
+    },
+    {
+      "run": "run_3c725fe4d971",
+      "workers": []
+    }
+  ],
+  "cleanup": [
+    {
+      "worktree": "b6bfb85d-7b8e-4173-9bee-276d4eede089::/home/joshua/orca/workspaces/repo/wp-2d9ba044ed3798bc6d3e808c054370a0c82b765bfd932a8e402dd96435162dd5",
+      "reason": "Successful completed Controller; historical exact terminal close receipts; clean and merged to main",
+      "archive": "/var/tmp/orca-harness-evidence/wbaa9R-successful-worker-20261014.tar.gz",
+      "publicRemove": {
+        "requestId": "a3bcdc7a-43c2-470e-9cbd-a2b6379970a7",
+        "removed": true
+      },
+      "readback": "only main worktree remains"
+    },
+    {
+      "setupId": "b6bfb85d-7b8e-4173-9bee-276d4eede089",
+      "archive": "/var/tmp/orca-harness-evidence/wbaa9R-successful-fixture-20261014.tar.gz",
+      "publicSetupDelete": {
+        "requestId": "c9d294ce-1e6a-4e5f-b215-38c01b698011",
+        "ok": true
+      },
+      "readback": "absent from repo list; fixture files retained offline"
+    }
+  ],
+  "preserved": [
+    "Other fixture checkouts and records retained: empty inventory is not proof of process exit",
+    "Old Kilo and Cline unknown terminal-create operations never replayed",
+    "No old terminal replaced; historical handles return terminal_handle_stale",
+    "Successful main fixture files and private origin retained after public deregistration"
+  ]
+}

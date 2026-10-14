@@ -101,6 +101,7 @@ export function workerProfileFixture(
     role,
     harness: 'codex',
     modelSelection: modelConfigurationFixture(overrides),
+    supportLevel: 'complete', qualificationRef: 'fixture:qualification',
   };
 }
 
@@ -115,6 +116,7 @@ export function recoveryUtilityProfileFixture(): RecoveryUtilityProfile {
     profileRef: { kind: 'worker-profile', id: profileRefFor('recovery_utility') },
     harness: 'codex',
     modelSelection: modelConfigurationFixture(),
+    supportLevel: 'complete', qualificationRef: 'fixture:qualification',
   };
 }
 

@@ -2,41 +2,56 @@
 
 ## Purpose
 
-定义在所有 Work Package 通过验证之后，独立只读 Finalizer 如何检查整个项目、给出项目级交付结论，以及 Controller 如何接受或阻塞该结论。
+定义在所有 Work Package 通过验证之后，独立 Finalizer 如何按原授权 policy 在新的项目级 Session 检查整个项目、可选地在批准范围内修复、给出项目级交付结论，以及 Controller 如何核验并接受或阻塞该结论。
 
 ## Requirements
 
 ### Requirement: Finalizer 使用新的只读项目级会话
 
-当所有 Work Package 均通过验证且不存在未决交互或未结算 mutation 时，Controller SHALL 派发一个独立的 Finalizer，并使用一个新的、只读权限的项目级 harness 会话。Finalizer SHALL 检查整个项目而非单个 Work Package，且 SHALL NOT 修改代码、Specification Unit、配置或 Git 历史。
+Finalizer SHALL 使用新的独立项目级 Session，检查整个项目而非单个 Work Package。显式批准 `finalizerPolicy` 的授权 SHALL 允许 Finalizer 在项目级隔离 worktree 内修复已批准 Scope Envelope 内的缺陷并生成测试产物；修复后 SHALL 复验并报告最终代码版本与证据。原授权缺少修复 policy SHALL 继续保持原只读权限，不能由当前配置自动补写。
 
 #### Scenario: 全部通过后派发只读 Finalizer
 
-- **WHEN** 所有 Work Package 均通过验证且无未决交互
-- **THEN** Controller 派发一个使用只读项目级会话的独立 Finalizer
+- **WHEN** 所有 Work Package 已通过验证并完成集成且没有未决工作
+- **THEN** 按原授权 policy 派发新的 Finalizer；有修复授权时可写，旧只读授权仍为只读
 
 #### Scenario: 存在未决工作时不予收尾
 
-- **WHEN** 仍有 Work Package 未通过验证，或存在未决交互与未结算 mutation
-- **THEN** Controller 不派发 Finalizer，并保持项目未收尾状态
+- **WHEN** 有工作包未通过、未集成、交互或未结算 mutation
+- **THEN** 不派发 Finalizer，保持未收尾
+
+#### Scenario: 授权范围内修复并生成测试产物
+
+- **WHEN** Finalizer 在授权范围内修复缺陷
+- **THEN** 支持测试缓存/构建/报告写入 ignored 或临时目录，核验实际 Git 路径、最终干净 HEAD、复验命令与预算，再受控集成
+
+#### Scenario: 准入重放与重启
+
+- **WHEN** 原 Finalizer 已准入或已派发后重启
+- **THEN** 复用原授权、基线、Task/Dispatch/worktree 与 Session，不重复消费预算或换 ID 派发
 
 ### Requirement: Delivery Verdict 由独立结论构成并被确定性接受
 
-Finalizer SHALL 以结构化的 Delivery Verdict 报告项目级结论与阻塞项。Controller SHALL 在核验该 Finalizer 的角色、会话、证据与其覆盖范围后接受该结论；Controller SHALL NOT 以 Worker 完成通知或单任务验证结论替代项目级交付结论。当结论为阻塞时，Controller SHALL 记录阻塞项并保持项目不可交付状态。
+Finalizer SHALL 以结构化的 Delivery Verdict 报告项目级结论与阻塞项。Controller SHALL 在核验该 Finalizer 的精确身份、覆盖范围、实际改动、最终验证 HEAD/tree 与复验证据后接受该结论；Controller SHALL NOT 以 Worker 完成通知或单任务验证结论替代项目级交付结论。当结论为阻塞时，Controller SHALL 记录阻塞项并保持项目不可交付状态。
 
-该结论 SHALL NOT 改写 Execution Graph、Accepted Worker Result、Git 历史或 Operation Intent 记录；当 Finalizer 的证据与这些既有权威事实不一致时，Controller SHALL 报告不一致并阻塞，而不是以收尾结论覆盖它们。
+Worker 普通提交后 SHALL 验证最终干净 HEAD，宿主只复用已批准 Git Policy 的 integrate/push 并核验 canonical 最终版本后接受 deliverable。旧 Work Package 验证记录保持历史语义，不能替代对修复后代码的复验；结论 SHALL 持久绑定最终 HEAD/tree，不接受与最终代码不符的旧证据，也不得改写 Execution Graph、Accepted Worker Result、Git 历史或 Operation Intent 记录。
 
 #### Scenario: 接受可交付结论
 
-- **WHEN** Finalizer 返回可交付结论且 Controller 核验通过其角色、会话与证据
-- **THEN** Controller 记录该 Delivery Verdict，并将项目标记为可交付
+- **WHEN** Finalizer 复验最终代码且授权、范围、预算、集成及精确版本均通过
+- **THEN** 记录绑定最终版本的 Delivery Verdict 并投影可交付
 
 #### Scenario: 阻塞结论保持不可交付
 
-- **WHEN** Finalizer 返回带阻塞项的结论
-- **THEN** Controller 记录阻塞项，并保持项目不可交付状态直到阻塞项被解决
+- **WHEN** Finalizer 返回阻塞项或修复/复验未通过
+- **THEN** 保留真实产出和证据，记录阻塞，不标记可交付
 
 #### Scenario: 发现不一致时阻塞
 
-- **WHEN** Finalizer 的证据与已记录的 Accepted Worker Result 或集成记录不一致
-- **THEN** Controller 报告不一致并阻塞交付结论
+- **WHEN** 最终 HEAD/tree、范围、预算、身份或证据无法核验或不一致
+- **THEN** 拒绝结算或集成，不以旧通过记录掩盖变化
+
+#### Scenario: 交付后版本变化
+
+- **WHEN** 当前 canonical HEAD/tree 或工作区偏离持久交付版本
+- **THEN** 展示版本 blocker 与原结论失效，保留历史验证身份

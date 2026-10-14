@@ -29,12 +29,16 @@ function resolveNativeWorkerRuntime(
       stateRoot = absolute(env['KIMI_CODE_HOME']?.trim() || join(home, '.kimi-code'));
       roots = [stateRoot];
       break;
-    case 'kilo':
+    case 'kilo': {
+      const stateHome = env['XDG_STATE_HOME'] || join(home, '.local', 'state');
       stateRoot = absolute(join(env['XDG_DATA_HOME'] || join(home, '.local', 'share'), 'kilo'));
       roots = [stateRoot,
-        absolute(join(env['XDG_STATE_HOME'] || join(home, '.local', 'state'), 'kilo')),
+        absolute(join(stateHome, 'kilo')),
+        // Kilo stores sandbox policy beside its native state directory before accepting prompts.
+        absolute(join(stateHome, 'kilo-sandbox-policy')),
         absolute(join(env['XDG_CACHE_HOME'] || join(home, '.cache'), 'kilo'))];
       break;
+    }
     case 'hermes':
       stateRoot = absolute(env['HERMES_HOME'] || join(home, '.hermes'));
       roots = [stateRoot];

@@ -46,6 +46,7 @@ export type ReadinessDeclaration = {
   readonly role: WorkerRole;
   readonly producer:
     | { readonly kind: 'worker'; readonly role: WorkerRole; readonly sessionBindingId: string }
+    | { readonly kind: 'orca-worker'; readonly role: WorkerRole; readonly dispatchId: string }
     | { readonly kind: 'coordinator-session'; readonly coordinatorSessionId: string };
   readonly workPackageId: WorkPackageId;
   readonly worktreeId: string;
@@ -144,14 +145,15 @@ export async function admitSpecification(
     });
   }
   if (
-    input.declaration.producer.kind !== 'worker' ||
+    (input.declaration.producer.kind !== 'worker' && input.declaration.producer.kind !== 'orca-worker') ||
     input.declaration.producer.role !== 'planner' ||
-    input.declaration.producer.sessionBindingId.length === 0
+    (input.declaration.producer.kind === 'worker' ? input.declaration.producer.sessionBindingId.length === 0 :
+      input.declaration.producer.dispatchId.length === 0)
   ) {
     failures.push({
       code: 'role_not_authorized',
       field: 'declaration.producer',
-      message: 'Specification Unit 必须来自具有精确 Session Binding 的 Specification Planner Worker',
+      message: 'Specification Unit 必须来自具有精确执行绑定的 Specification Planner Worker',
     });
   }
   if (!roleIsAuthorized(input.authority, 'planner')) {

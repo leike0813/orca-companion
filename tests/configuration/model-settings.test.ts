@@ -84,3 +84,51 @@ test('复用连接和模型只追加配置快照，历史 effort 保持不变', 
   expect(projectStore.value.coordinatorModels[1]).toEqual(firstSnapshot);
   expect(firstSnapshot?.effort).toBe('high');
 });
+
+test('关闭 Recovery Utility 只移除该角色引用，保留 profile 与其他字段并推进 revision', () => {
+  const projectStore = new ProjectStore();
+  const service = createModelSettingsService({ projectStore, credentials: new Credentials(), library });
+  expect(service.save({ expectedRevision: 0, role: 'planner', modelSelection: modelSelectionFixture() }).kind).toBe('saved');
+  expect(service.save({ expectedRevision: 1, role: 'recovery_utility', modelSelection: modelSelectionFixture({ model: 'recovery-model' }) }).kind).toBe('saved');
+  const before = structuredClone(projectStore.value);
+
+  const result = service.disableRecoveryUtility({ expectedRevision: 2 });
+
+  expect(result).toMatchObject({ kind: 'saved', revision: 3, configurationRef: null, profileRef: null });
+  expect(projectStore.value.revision).toBe(3);
+  expect(projectStore.value.execution.workerProfileRefs.recovery_utility).toBeUndefined();
+  expect(projectStore.value.execution.workerProfileRefs.planner).toBe(before.execution.workerProfileRefs.planner);
+  expect(projectStore.value.execution.workerProfiles).toEqual(before.execution.workerProfiles);
+  expect(projectStore.value.coordinatorModels).toEqual(before.coordinatorModels);
+  expect(projectStore.value.defaultCoordinatorModelRef).toBe(before.defaultCoordinatorModelRef);
+
+  // 用已过期的 revision 再次关闭是 CAS 冲突，不覆盖较新的配置。
+  expect(service.disableRecoveryUtility({ expectedRevision: 2 })).toMatchObject({ kind: 'rejected', code: 'conflict' });
+  expect(projectStore.value.revision).toBe(3);
+});
+
+test('没有配置 Recovery Utility 时关闭被拒绝，且不推进 revision', () => {
+  const projectStore = new ProjectStore();
+  const service = createModelSettingsService({ projectStore, credentials: new Credentials(), library });
+  expect(service.disableRecoveryUtility({ expectedRevision: 0 })).toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  expect(projectStore.value.revision).toBe(0);
+});
+
+test('注入支持等级后按角色最低等级拒绝等级不足的 harness', () => {
+  const projectStore = new ProjectStore();
+  const support: Record<string, 'basic'> = { codex: 'basic' };
+  const service = createModelSettingsService({
+    projectStore,
+    credentials: new Credentials(),
+    library,
+    supportFor: (harness) => ({ level: support[harness] ?? 'unavailable', qualificationRef: 'qualification:' + harness }),
+  });
+
+  // planner 的最低等级是 basic：相等即可保存。
+  expect(service.save({ expectedRevision: 0, role: 'planner', modelSelection: modelSelectionFixture() })).toMatchObject({ kind: 'saved', revision: 1 });
+  // validator 与 recovery_utility 需要更高等级，basic 一律拒绝，且不追加 profile。
+  expect(service.save({ expectedRevision: 1, role: 'validator', modelSelection: modelSelectionFixture() })).toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  expect(service.save({ expectedRevision: 1, role: 'recovery_utility', modelSelection: modelSelectionFixture() })).toMatchObject({ kind: 'rejected', code: 'invalid_input' });
+  expect(projectStore.value.revision).toBe(1);
+  expect(projectStore.value.execution.workerProfiles).toHaveLength(1);
+});

@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { kiloHarness, kiloReporterPluginSource, kiloReporterSource, kiloReportingDefinition, kiloReportingInstalled, maintainKiloReporting, parseKiloExport, inspectKiloTranscript, readKiloTranscriptIdentity } from '../../../src/adapters/agents/kilo-harness.js';
 import { REPORT_TRAMPOLINE } from '../../../src/adapters/agents/worker-harness-reporting.js';
-import { CODEX_MODEL_DESCRIPTOR_FILENAME } from '../../../src/adapters/agents/codex-model-launcher.js';
+import { CODEX_MODEL_DESCRIPTOR_FILENAME, codexModelLaunchCommand, writeCodexModelLaunch } from '../../../src/adapters/agents/codex-model-launcher.js';
 import { candidateSessionPaths } from '../../../src/adapters/agents/candidate-worker-launch.js';
 import { modelSelectionFixture } from '../../support/model-configurations.js';
 
@@ -41,10 +41,12 @@ function nativeFixture() {
   process.env['XDG_CACHE_HOME'] = join(root, 'cache');
   process.env['XDG_CONFIG_HOME'] = join(root, 'config');
   const workspace = join(root, 'workspace'), nativeRoot = join(root, 'data', 'kilo');
-  const runtimeRoots = [nativeRoot, join(root, 'state', 'kilo'), join(root, 'cache', 'kilo')];
+  const runtimeRoots = [nativeRoot, join(root, 'state', 'kilo'), join(root, 'state', 'kilo-sandbox-policy'), join(root, 'cache', 'kilo')];
   mkdirSync(workspace); for (const path of runtimeRoots) mkdirSync(path, { recursive: true });
   return { root, workspace, nativeRoot, runtimeRoots };
 }
+
+const bwrapUsable = spawnSync('bwrap', ['--version'], { encoding: 'utf8' }).status === 0;
 
 function exportedSession(id: string, directory: string, messageIds = ['m1', 'm2']) {
   return { info: { id, directory }, messages: messageIds.map((messageId) => ({ info: { id: messageId, role: 'user' }, parts: [{ type: 'text', text: messageId }] })) };
@@ -286,5 +288,25 @@ describe('Kilo native adapter surfaces', () => {
     await expect(kiloHarness.prepareResume({ launchId, modelSelection: modelSelectionFixture({ model: 'native/model', effort: null, effortCapability: null, catalogSource: null }),
       sandboxMode: 'workspace-write', stateRoot: artifactRoot, sessionId, originalStateRoot: nativeRoot,
       transcriptRef: join(nativeRoot, 'orca-companion-exports', 'another_session.json') }).prepare({ worktreePath: workspace })).rejects.toThrow();
+  });
+
+  it.skipIf(!bwrapUsable)('只读边界放开 XDG state 下的 sandbox policy，同时仍拒写 workspace 与 Git', () => {
+    const { root, workspace } = nativeFixture();
+    mkdirSync(join(workspace, '.git'));
+    // 保持 artifacts 父目录与 XDG native root 分离，复现生产 launcher 的实际目录关系。
+    const stateRoot = candidateSessionPaths('kilo', join(root, 'artifacts'), 'sandbox-policy').stateRoot;
+    mkdirSync(stateRoot, { recursive: true });
+    const coordination = join(workspace, '.git', 'coordination.sqlite');
+    writeFileSync(coordination, 'retained');
+    const probe = "const fs = require('node:fs'); const run = (p) => { try { fs.writeFileSync(p, 'x'); return 'allowed'; } catch (error) { return error.code; } };"
+      + ' process.stdout.write(JSON.stringify({ policy: run(process.argv[1]), workspace: run(process.argv[2]), git: run(process.argv[3]), coordination: run(process.argv[4]) }));';
+    const launch = writeCodexModelLaunch({ stateRoot, descriptor: { version: 2, executable: process.execPath, harness: 'kilo',
+      args: ['-e', probe, join(root, 'state', 'kilo-sandbox-policy', 'policy.json'), join(workspace, 'blocked.txt'), join(workspace, '.git', 'blocked.txt'), coordination],
+      readOnly: { workspace, stateRoot } } });
+    const result = spawnSync('script', ['-qec', codexModelLaunchCommand(launch), '--echo', 'never', '/dev/null'], { env: { ...process.env }, encoding: 'utf8', timeout: 30_000 });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toEqual({ policy: 'allowed', workspace: 'EROFS', git: 'EROFS', coordination: 'EROFS' });
+    expect(readFileSync(coordination, 'utf8')).toBe('retained');
   });
 });

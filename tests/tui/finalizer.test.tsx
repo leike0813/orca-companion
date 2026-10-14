@@ -62,6 +62,17 @@ function renderPanel(finalizer: FinalizerView): RenderedTui {
 }
 
 describe('delivery-finalization / Finalizer 门禁与 Delivery Verdict 投影', () => {
+  test('Finalizer displays the verified version and invalidates a stale deliverable verdict', () => {
+    const finalizer = makeFinalizer({ readOnlyProfile: 'not_required',
+      gate: { ready: false, blockers: ['finalizer-version-changed'] },
+      verdict: { verdictId: 'verdict-1', kind: 'deliverable', refs: ['test-1'], sessionBindingRef: 'session-1',
+        recordedAt: 100, verifiedHead: 'a'.repeat(40), verifiedTree: 'b'.repeat(40) } });
+    const rows = finalizerRows(finalizer).join('\n');
+    expect(rows).toContain('verdict 已失效');
+    expect(rows).not.toContain(DELIVERABLE);
+    expect(rows).toContain('a'.repeat(40));
+    expect(rows).toContain('b'.repeat(40));
+  });
   test('Scenario: 只读无法强制时阻塞', () => {
     const finalizer = makeFinalizer({
       readOnlyProfile: 'unenforceable',

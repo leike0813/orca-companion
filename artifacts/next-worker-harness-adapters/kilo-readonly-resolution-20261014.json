@@ -1,0 +1,564 @@
+{
+  "schema": "kilo-readonly-resolution/1",
+  "observedAt": "2026-10-14T09:08:29.683Z",
+  "orcaVersion": "1.4.224",
+  "kiloVersion": "7.8.8",
+  "rootFix": {
+    "owner": "src/adapters/agents/worker-runtime.ts",
+    "nativeRoot": "${XDG_STATE_HOME:-~/.local/state}/kilo-sandbox-policy",
+    "before": {
+      "source": "/home/joshua/.local/share/kilo/log/opencode.log",
+      "evidence": [
+        "timestamp=2026-10-14T07:10:56.341Z level=INFO run=539d5164 message=created id=ses_ec6c006abffeL0RuEWHUee7PrX slug=swift-forest version=7.8.8 projectID=555c8094dfbf5fd01b97259f20a9799c317c9361 directory=/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682 path=\"\" workspaceID=undefined parentID=undefined title=\"New session - 2026-10-14T07:10:56.341Z\" agent=code model.id=MiniMax-M3.1-Flash-Preview model.providerID=minimax-cn-coding-plan metadata=undefined permission=undefined cost=0 tokens.input=0 tokens.output=0 tokens.reasoning=0 tokens.cache.read=0 tokens.cache.write=0 time.created=1791961856341 time.updated=1791961856341",
+        "timestamp=2026-10-14T07:11:00.864Z level=ERROR run=539d5164 message=failed ref=err_e270a2d5 error=\"Error: EROFS: read-only file system, mkdir '/home/joshua/.local/state/kilo-sandbox-policy/60ceb030ac198d7678c1028541927674b5bff50d54310a26ee19993401f4f536'\" cause=\"Error: EROFS: read-only file system, mkdir '/home/joshua/.local/state/kilo-sandbox-policy/60ceb030ac198d7678c1028541927674b5bff50d54310a26ee19993401f4f536'\\n    at async c (/$bunfs/root/src/cli/tui/worker.js:2427:11386)\\n    at SessionHttpApi.prompt (/$bunfs/root/src/cli/tui/worker.js:2314:24940)\\n    at SessionHttpApi.prompt (definition) (/$bunfs/root/src/cli/tui/worker.js:5005:15753)\"",
+        "timestamp=2026-10-14T07:13:39.547Z level=INFO run=bcb8af58 message=created id=ses_ec6bd8924ffenr6L7Z0RdUPEtn slug=tidy-canyon version=7.8.8 projectID=555c8094dfbf5fd01b97259f20a9799c317c9361 directory=/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682 path=\"\" workspaceID=undefined parentID=undefined title=\"New session - 2026-10-14T07:13:39.547Z\" agent=code model.id=MiniMax-M3.1-Flash-Preview model.providerID=minimax-cn-coding-plan metadata=undefined permission=undefined cost=0 tokens.input=0 tokens.output=0 tokens.reasoning=0 tokens.cache.read=0 tokens.cache.write=0 time.created=1791962019547 time.updated=1791962019547",
+        "timestamp=2026-10-14T07:13:43.823Z level=ERROR run=bcb8af58 message=failed ref=err_7b9db55d error=\"Error: EROFS: read-only file system, mkdir '/home/joshua/.local/state/kilo-sandbox-policy/6c763d10377763221c1cac6c76305662bb7077177432a34b9065c36255033436'\" cause=\"Error: EROFS: read-only file system, mkdir '/home/joshua/.local/state/kilo-sandbox-policy/6c763d10377763221c1cac6c76305662bb7077177432a34b9065c36255033436'\\n    at async c (/$bunfs/root/src/cli/tui/worker.js:2427:11386)\\n    at SessionHttpApi.prompt (/$bunfs/root/src/cli/tui/worker.js:2314:24940)\\n    at SessionHttpApi.prompt (definition) (/$bunfs/root/src/cli/tui/worker.js:5005:15753)\""
+      ]
+    },
+    "singleVariablePrototype": {
+      "sessionId": "ses_ec6748c7affejapefl4vtyCucQ",
+      "exportPath": "/var/tmp/kilo-policy-root-export-20261014.json",
+      "result": "final assistant response after adding only native policy state root"
+    },
+    "finalProductionLaunch": {
+      "at": "2026-10-14T09:04:22.202Z",
+      "proof": {
+        "kind": "proven",
+        "proof": {
+          "providerSessionId": "ses_ec6596f4effeiM6qVIg5GzeT0P",
+          "transcriptRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ec6596f4effeiM6qVIg5GzeT0P.json",
+          "observedAt": "2026-10-14T09:03:21.286Z"
+        }
+      },
+      "coverage": {
+        "kind": "covered",
+        "evidence": {
+          "coverage": "complete",
+          "readableRange": {
+            "transcriptRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ec6596f4effeiM6qVIg5GzeT0P.json",
+            "fromEventRef": "msg_139a6a368001hgU1jGKqQF9vx2",
+            "toEventRef": "msg_139a6ba3d001LvMtDdVvRi5SLK"
+          },
+          "gaps": [],
+          "lastCompleteEventRef": "msg_139a6ba3d001LvMtDdVvRi5SLK"
+        }
+      },
+      "exportPath": "/var/tmp/kilo-final-root-check-export-20261014.json",
+      "report": {
+        "harness": "kilo",
+        "sessionId": "ses_ec6596f4effeiM6qVIg5GzeT0P",
+        "transcriptPath": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ec6596f4effeiM6qVIg5GzeT0P.json",
+        "cwd": "/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682",
+        "observedAt": "2026-10-14T09:03:21.286Z",
+        "stateRoot": "/home/joshua/.local/share/kilo",
+        "runtimeRoots": [
+          "/home/joshua/.local/share/kilo",
+          "/home/joshua/.local/state/kilo",
+          "/home/joshua/.local/state/kilo-sandbox-policy",
+          "/home/joshua/.cache/kilo"
+        ]
+      },
+      "messages": [
+        {
+          "id": "msg_139a6a368001hgU1jGKqQF9vx2",
+          "role": "user",
+          "text": [
+            "Reply exactly KILO_FINAL_ROOT_CHECK_20261014. Do not use tools or modify files."
+          ]
+        },
+        {
+          "id": "msg_139a6ba3d001LvMtDdVvRi5SLK",
+          "role": "assistant",
+          "finish": "stop",
+          "text": [
+            "KILO_FINAL_ROOT_CHECK_20261014"
+          ]
+        }
+      ]
+    },
+    "protection": "Real bwrap regression proves policy writable and workspace/Git/coordination file EROFS; existing overlap/ABI/seccomp rejection preserved"
+  },
+  "inputInvestigation": {
+    "capturedDispatch": {
+      "kind": "accepted",
+      "operation": {
+        "operationId": "kilo-input-capture3-20261014:worker-start",
+        "backendRequestId": "2f18b99f-458e-4562-bbc1-80373c675787",
+        "target": {
+          "kind": "worker-task",
+          "id": "task_74595e2f2966"
+        }
+      },
+      "value": {
+        "state": "ready",
+        "stage": null,
+        "runId": "run_69d30cfe1205",
+        "taskId": "task_74595e2f2966",
+        "dispatchId": "ctx_8e433fcae425"
+      }
+    },
+    "frame": {
+      "bytes": 4914,
+      "pasteFrames": 1,
+      "exactSubmitByte": 13,
+      "source": "/var/tmp/orca-harness-acceptance-kO5qmi/state/kilo/input-capture3/stdin.log"
+    },
+    "prototypes": [
+      {
+        "name": "kilo-native-pty-role-implementation-20261014",
+        "result": {
+          "harness": "kilo",
+          "role": "implementation",
+          "kind": "ran",
+          "launchId": "kilo-native-pty-role-implementation-20261014",
+          "taskId": "task_8ee41c7864a1",
+          "contextToken": null,
+          "dispatchId": "ctx_990bd323c90e",
+          "sessionId": "ses_ec66f07bfffeizhat4EhQ6fCH5",
+          "transcriptRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ec66f07bfffeizhat4EhQ6fCH5.json",
+          "stateRoot": "/home/joshua/.local/share/kilo",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-kO5qmi/state/kilo/819b45d2cb178bf1ff3f/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        }
+      },
+      {
+        "name": "kilo-input-bridge-role-implementation-20261014",
+        "result": {
+          "harness": "kilo",
+          "role": "implementation",
+          "kind": "ran",
+          "launchId": "kilo-input-bridge-role-implementation-20261014",
+          "taskId": "task_4be66403a00f",
+          "contextToken": null,
+          "dispatchId": "ctx_ed799506e3a6",
+          "sessionId": "ses_ec6635578ffet1z5ED39KgsukA",
+          "transcriptRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ec6635578ffet1z5ED39KgsukA.json",
+          "stateRoot": "/home/joshua/.local/share/kilo",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-kO5qmi/state/kilo/9feed7e049aeccc52d7d/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        }
+      },
+      {
+        "name": "kilo-transparent-input-role-implementation-20261014",
+        "result": {
+          "harness": "kilo",
+          "role": "implementation",
+          "kind": "ran",
+          "launchId": "kilo-transparent-input-role-implementation-20261014",
+          "taskId": "task_eaf41d23cc4d",
+          "contextToken": null,
+          "dispatchId": "ctx_0e74bc3911ca",
+          "sessionId": "ses_ec6619226ffems8CoKTMzEABF9",
+          "transcriptRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ec6619226ffems8CoKTMzEABF9.json",
+          "stateRoot": "/home/joshua/.local/share/kilo",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-kO5qmi/state/kilo/6a22ea1535af3c7f22fc/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        }
+      },
+      {
+        "name": "kilo-transparent-input-role-finalizer-20261014",
+        "result": {
+          "harness": "kilo",
+          "role": "finalizer",
+          "kind": "blocked",
+          "launchId": "kilo-transparent-input-role-finalizer-20261014",
+          "taskId": null,
+          "contextToken": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_a33b07cb00f2\",\"taskId\":\"task_3fa6e4d5231b\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_a33b07cb00f2\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"      ●tGet usagewanalytics,ecentralizedobilling,ssharedwcontext, and other 1)\",\"      at runLoop (/$bunfs/root/src/cli/tui/worker.js:25:21247)\",\"      at evaluate (/$bunfs/root/src/cli/tui/worker.js:25:20629)\",\"      at <anonymous> (/$bunfs/root/src/cli/tui/worker.js:25:23255)\",\"Failed to write OpenViking plugin log: 47 |     if (normalizedLevel === \\\"ERROR\\\") console.error(message, data ?? \\\"\\\")\",\"48 |     return\",\"49 |   }\",\"50 |\",\"51 |   try {\",\"52 |     fs.appendFileSync(logFilePath, `${JSON.stringify(entry)}\\\\n`, \\\"utf8\\\")\",\"            ^\",\"ER | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"            ^\",\"EROFS: read-only file system, open '/home/joshua/.config/opencode/openviking/openviking-memory.log'\",\"    path: \\\"/home/j ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\" syscall: \\\"open\\\", █🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"   errno: -30,     ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"    code: \\\"EROFS\\\"  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"      at log (/hom                                                            26.10.13-1/node_modules/@openviking/openco\",\"de-plugin/lib/utils.mjs:52:8)\",\"      at handleSessionError (/home/joshua/.cache/kilo/packages/@openviking/opencode-plugin@2026.10.13-1/node_modules/@op\",\"enviking/opencode-plugin/lib/memory-session.mjs:210:5)\",\"      at handleEvent (/home/joshua/.cache/kilo/packages/@openviking/opencode-plugin@2026.10.13-1/node_modules/@openvikin\",\"g/opencode-plugin/lib/memory-session.mjs:166:13)\",\"      at <anonymous> (/home/joshua/.cache/kilo/packages/@openviking/opencode-plugin@2026.10.13-1/node_modules/@openvikin\",\"g/opencode-plugin/index.mjs:44:28)\",\"      at <anonymous> (/$bunfs/root/src/cli/tui/worker.js:3157"
+          }
+        }
+      }
+    ],
+    "formalMatrix": {
+      "evidence": "ip04-2026-10-14T08-44-08-445Z-41c485aa-165c-44ec-b59c-8e1ed5fd46b6.json",
+      "fixtureRoot": "/var/tmp/orca-harness-acceptance-0FbJ8r",
+      "runId": "run_4b006bfc667d",
+      "tests": {
+        "failed": 2,
+        "passed": 50,
+        "skipped": 2
+      },
+      "status": "failed; standalone PTY did not reliably deliver prepared role input"
+    },
+    "postSettlementFinalizerComparison": {
+      "sessionId": "ses_ec663177fffe3oX9BbgvLhLrOf",
+      "savedMessageCount": 6,
+      "publicMessageCount": 6,
+      "equal": true,
+      "source": "/var/tmp/kilo-finalizer-coverage-comparison-20261014.json",
+      "note": "Later equality does not change the original failed qualification or permit replay"
+    },
+    "productionDecision": "Only native root fix retained. PTY/input-bridge experiments remain outside production launcher; complete qualification unmet."
+  },
+  "validation": {
+    "full": {
+      "command": "pnpm exec vitest run --maxWorkers=4",
+      "passed": 2554,
+      "skipped": 18,
+      "passedFiles": 213,
+      "skippedFiles": 9,
+      "exitCode": 0,
+      "log": "/var/tmp/kilo-final-regression-20261014.log"
+    },
+    "scoped": {
+      "passed": 73,
+      "files": 4
+    },
+    "typecheck": "passed",
+    "eslint": "passed",
+    "build": "passed",
+    "openSpecStrict": "passed",
+    "gitDiffCheck": "passed"
+  },
+  "cleanup": {
+    "settledWorkers": {
+      "at": "2026-10-14T09:05:08.757Z",
+      "results": [
+        {
+          "dispatch": "ctx_8e433fcae425",
+          "handle": "term_66544f8c-a558-4660-91a6-92ed4b13d8d3",
+          "incarnationId": "a9f1d23b-1a1d-4c27-b4dc-a690566ac120",
+          "settled": "succeeded",
+          "release": {
+            "id": "4c994f5b-816b-456c-841f-0c6b72cfd8ac",
+            "ok": true,
+            "result": {
+              "dispatchId": "ctx_8e433fcae425",
+              "state": "retained",
+              "reason": "external_terminal",
+              "processAction": "none",
+              "archive": null,
+              "mutation": {
+                "requestId": "743232b6-fee3-451f-bc71-fd8bd6455e1a",
+                "replayed": false
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          },
+          "close": {
+            "id": "a31bb2c0-6022-42e0-8f0a-c57ae50298f0",
+            "ok": true,
+            "result": {
+              "close": {
+                "handle": "term_66544f8c-a558-4660-91a6-92ed4b13d8d3",
+                "tabId": "b60c6555-37f1-4653-a5ad-5d8958cde58c",
+                "ptyKilled": true
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          }
+        },
+        {
+          "dispatch": "ctx_990bd323c90e",
+          "handle": "term_aaea19a5-9e8c-4a6a-b0af-96607db4de4a",
+          "incarnationId": "8a9e0c97-b6fc-46d6-a2d2-183dc1b63fc8",
+          "settled": "succeeded",
+          "release": {
+            "id": "05aa7693-34ab-4be8-9391-09ff2786adee",
+            "ok": true,
+            "result": {
+              "dispatchId": "ctx_990bd323c90e",
+              "state": "retained",
+              "reason": "external_terminal",
+              "processAction": "none",
+              "archive": null,
+              "mutation": {
+                "requestId": "f869c78a-648e-4351-a5b7-decabb100354",
+                "replayed": false
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          },
+          "close": {
+            "id": "c69d30ca-ab7f-4d29-80ee-31b745014e88",
+            "ok": true,
+            "result": {
+              "close": {
+                "handle": "term_aaea19a5-9e8c-4a6a-b0af-96607db4de4a",
+                "tabId": "f251ec2f-c0c7-4b42-8762-cb961360ce85",
+                "ptyKilled": true
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          }
+        },
+        {
+          "dispatch": "ctx_ed799506e3a6",
+          "handle": "term_6601057d-ac3a-4d50-8263-83f549252983",
+          "incarnationId": "8cad5da8-c08d-4e30-88f4-5d1cd08fb4a1",
+          "settled": "succeeded",
+          "release": {
+            "id": "f9cf68b0-6abb-4a1c-9391-d8d44f840939",
+            "ok": true,
+            "result": {
+              "dispatchId": "ctx_ed799506e3a6",
+              "state": "retained",
+              "reason": "external_terminal",
+              "processAction": "none",
+              "archive": null,
+              "mutation": {
+                "requestId": "c30bdb6e-3810-417f-9481-5de196abd6c0",
+                "replayed": false
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          },
+          "close": {
+            "id": "01c057ff-8a48-44e5-9742-af29603bd9ea",
+            "ok": true,
+            "result": {
+              "close": {
+                "handle": "term_6601057d-ac3a-4d50-8263-83f549252983",
+                "tabId": "50c2b880-80d0-40f2-8229-0e37ef031d8a",
+                "ptyKilled": true
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          }
+        },
+        {
+          "dispatch": "ctx_0e74bc3911ca",
+          "handle": "term_510b8ef4-71cd-4194-b85f-9fe62f0075e1",
+          "incarnationId": "a56723d0-cc31-4000-8afb-dad4dcfd36de",
+          "settled": "succeeded",
+          "release": {
+            "id": "73d455ba-e247-411a-bd75-670f419e0af5",
+            "ok": true,
+            "result": {
+              "dispatchId": "ctx_0e74bc3911ca",
+              "state": "retained",
+              "reason": "external_terminal",
+              "processAction": "none",
+              "archive": null,
+              "mutation": {
+                "requestId": "ea918ed7-c5fa-4fb6-802b-6a4e00f4df75",
+                "replayed": false
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          },
+          "close": {
+            "id": "a3e33d5f-8403-435b-b42b-f76a08970ac5",
+            "ok": true,
+            "result": {
+              "close": {
+                "handle": "term_510b8ef4-71cd-4194-b85f-9fe62f0075e1",
+                "tabId": "d8be048b-79c8-4ea4-97a6-b9e6bae92e0b",
+                "ptyKilled": true
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          }
+        }
+      ]
+    },
+    "readonlyDiagnostics": {
+      "at": "2026-10-14T09:05:40.697Z",
+      "results": [
+        {
+          "handle": "term_117b2c94-3fb0-414c-a512-edc179b94af5",
+          "incarnation": "c73dd071-397b-4a9a-857f-fbc23c587b66",
+          "session": "ses_ec6748c7affejapefl4vtyCucQ",
+          "close": {
+            "id": "4b46b561-490c-4706-a667-09819606cdc6",
+            "ok": true,
+            "result": {
+              "close": {
+                "handle": "term_117b2c94-3fb0-414c-a512-edc179b94af5",
+                "tabId": "8e69a058-66af-4ad9-becb-066a42eade12",
+                "ptyKilled": true
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          }
+        },
+        {
+          "handle": "term_20408d44-9158-4457-9de8-96178a2b081f",
+          "incarnation": "627c2d7a-6ffe-4cdb-aeb0-26a67653aedb",
+          "session": "ses_ec6596f4effeiM6qVIg5GzeT0P",
+          "close": {
+            "id": "c0302f54-6d39-4360-bbf8-ce82dc180aa6",
+            "ok": true,
+            "result": {
+              "close": {
+                "handle": "term_20408d44-9158-4457-9de8-96178a2b081f",
+                "tabId": "c6e0303e-a060-4b0c-ae49-1f7dd47798aa",
+                "ptyKilled": true
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          }
+        }
+      ]
+    },
+    "formalMatrix": {
+      "at": "2026-10-14T09:06:40.330Z",
+      "run": "run_4b006bfc667d",
+      "results": [
+        {
+          "dispatch": "ctx_bd468cd515ae",
+          "handle": "term_4ada5141-6c54-4dca-a591-bdf40d4f3c75",
+          "incarnation": "a952afa0-31cd-4027-8361-4160f7ea8294",
+          "release": {
+            "id": "4d20e427-71f5-41bc-9910-167142788f8d",
+            "ok": true,
+            "result": {
+              "dispatchId": "ctx_bd468cd515ae",
+              "state": "retained",
+              "reason": "external_terminal",
+              "processAction": "none",
+              "archive": null,
+              "mutation": {
+                "requestId": "91e55e7a-fd49-47e9-864d-0077e7b00932",
+                "replayed": false
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          },
+          "close": {
+            "id": "97e926ed-337b-4d42-bc44-67aca20029cc",
+            "ok": true,
+            "result": {
+              "close": {
+                "handle": "term_4ada5141-6c54-4dca-a591-bdf40d4f3c75",
+                "tabId": "cd7fea1f-cd15-4d0a-991a-fbfca22fdd3e",
+                "ptyKilled": true
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          }
+        },
+        {
+          "dispatch": "ctx_edd006f3a256",
+          "handle": "term_60751876-bde6-4f78-b1ea-6e74f8ab7733",
+          "incarnation": "b9548ccc-db49-41a3-a93f-1aaa058a3195",
+          "release": {
+            "id": "0c70850e-67fb-43d7-8900-068587e0126f",
+            "ok": true,
+            "result": {
+              "dispatchId": "ctx_edd006f3a256",
+              "state": "retained",
+              "reason": "external_terminal",
+              "processAction": "none",
+              "archive": null,
+              "mutation": {
+                "requestId": "c7ea62e2-8651-408c-a6a8-645e103215e8",
+                "replayed": false
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          },
+          "close": {
+            "id": "d3c9b36d-c05c-4af9-87f6-984b4d95b42c",
+            "ok": true,
+            "result": {
+              "close": {
+                "handle": "term_60751876-bde6-4f78-b1ea-6e74f8ab7733",
+                "tabId": "fe5df2a9-30cc-42ad-b83f-d85662129f72",
+                "ptyKilled": true
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          }
+        }
+      ],
+      "preserved": "unsettled Dispatches and coordinator retained"
+    },
+    "unusedShells": {
+      "at": "2026-10-14T09:06:44.396Z",
+      "results": [
+        {
+          "name": "input-capture",
+          "handle": "term_0c78e4bf-0fb7-4e16-929f-332bbc0ae705",
+          "incarnation": "115343af-b999-4553-99d3-58b94a1cabd1",
+          "close": {
+            "id": "728ed97e-790f-47f9-bdf7-a5ee5a2057aa",
+            "ok": true,
+            "result": {
+              "close": {
+                "handle": "term_0c78e4bf-0fb7-4e16-929f-332bbc0ae705",
+                "tabId": "adf7fe8d-5159-46f3-9507-1ec6681431dd",
+                "ptyKilled": true
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          }
+        },
+        {
+          "name": "input-capture2",
+          "handle": "term_a276883b-7081-4cbf-82e9-e66a2b80063b",
+          "incarnation": "5a8e40ba-bf4c-4632-984c-68eede9a20a8",
+          "close": {
+            "id": "118d4745-2a5f-4039-b67c-9566f427198d",
+            "ok": true,
+            "result": {
+              "close": {
+                "handle": "term_a276883b-7081-4cbf-82e9-e66a2b80063b",
+                "tabId": "8e44245c-c376-4e0a-a244-63aae3981206",
+                "ptyKilled": true
+              }
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          }
+        }
+      ]
+    },
+    "preserved": "Unsettled original/qualification/prototype Dispatches, exact empty-session readonly resources, coordination terminals, all fixture files and unknown receipts"
+  },
+  "productionRegistration": false
+}

@@ -6,31 +6,36 @@
 
 ### Requirement: Dispatch 与真实 harness session 精确绑定
 
-Controller SHALL 为 Specification Planner、Implementation、Validator 与 Finalizer 的每个 Worker Dispatch 建立并核验 Session Binding，覆盖确切的角色、harness 身份、harness session 身份、可引用 transcript 来源、该次启动实际使用的非秘密 runtime roots 与观察时间；绑定 SHALL 由该角色 profile 所绑定 harness 的 adapter 签发。当无法证明该 session 身份、harness 身份、transcript 来源或 runtime roots 时，Controller SHALL 将该绑定判为不可用并阻塞该 Dispatch 的推进，而不得按工作目录、时间、最近一次输出或最近会话推断。
+Controller SHALL 为 Specification Planner、Implementation、Validator 与 Finalizer 的每个 Worker Dispatch 建立并核验 Worker Execution Binding。基础级 SHALL 固定真实 Orca Task/Dispatch、exact Worker terminal、角色、Attempt 与物化授权；增强和完整级 SHALL 另有由该角色 profile 所绑定 harness 的 adapter 签发的原生 Session Binding，覆盖确切的角色、harness 身份、harness session 身份、可引用 transcript 来源、该次启动实际使用的非秘密 runtime roots 与观察时间。仅允许对应绑定支持的操作，不以 Orca terminal 身份冒充原生 Session。当无法证明所需绑定时，Controller SHALL 将该绑定判为不可用并阻塞该 Dispatch 的推进，而不得按工作目录、时间、最近一次输出或最近会话推断。
 
 #### Scenario: 精确绑定成功
 
-- **WHEN** Orca 报告某 Dispatch 的 harness session 身份与 transcript 来源
-- **THEN** Controller 记录包含角色、harness、session 身份、transcript 引用与 runtime roots 的 Session Binding，并仅以该来源读取该 Dispatch 的输出
+- **WHEN** Orca 报告增强或完整级 Dispatch 的原生 session 身份与 transcript 来源
+- **THEN** Controller 记录包含角色、harness、session 身份、transcript 引用与 runtime roots 的原生 Session Binding，并仅以该来源读取该 Dispatch 的输出
 
 #### Scenario: 四个主要角色均要求精确绑定
 
 - **WHEN** Controller 准备推进 Specification Planner、Implementation、Validator 或 Finalizer 的任一 Worker Dispatch
-- **THEN** 该 Dispatch 必须先具有可核验的 Session Binding 与 transcript 引用
+- **THEN** 该 Dispatch 必须先具有可核验的 Worker Execution Binding；增强和完整级另需精确原生 Session Binding
 
 #### Scenario: 无法证明 session 身份时阻塞
 
-- **WHEN** Dispatch 的 harness session 身份、transcript 来源或 runtime roots 无法被证明
-- **THEN** Controller 把该绑定判为不可用，并在重新核验前不据其输出推进生命周期
+- **WHEN** 增强或完整级 Dispatch 的原生 session 身份、transcript 来源或 runtime roots 无法被证明
+- **THEN** Controller 把该原生绑定判为不可用，并在重新核验前不据其输出推进生命周期
 
 #### Scenario: harness 身份不匹配时不绑定
 
-- **WHEN** 报告的 session 事实来自与该 Dispatch 绑定 profile 不同的 harness
-- **THEN** Controller 拒绝该绑定并阻塞该 Dispatch，不把另一 harness 的会话当作原 session
+- **WHEN** 报告的原生 session 事实来自与该 Dispatch 绑定 profile 不同的 harness
+- **THEN** Controller 拒绝该原生绑定并阻塞该 Dispatch，不把另一 harness 的会话当作原 session
+
+#### Scenario: 基础绑定重启
+
+- **WHEN** 基础任务派发后 Companion 重启
+- **THEN** 沿原 Orca 身份对账、核验结果，不等待原生报告、不重复派发
 
 ### Requirement: Worker 存活与终态必须可核验
 
-Controller SHALL 将 Worker 存活判定为 live、exited 或 unverifiable 三者之一。仅在能够证明进程存活或其所在执行主机已被列举且明确不含该终端时，Controller 才可判定为 live 或 exited；信息缺失或不完整时 SHALL 判定为 unverifiable，且不得据此推断退出或触发重复派发。Worker Task 只有在匹配的 Task、Dispatch、Attempt、角色、Session Binding 与终态收据均可核验时，才可进入结算。
+Controller SHALL 将 Worker 存活判定为 live、exited 或 unverifiable 三者之一。仅在能够证明进程存活或其所在执行主机已被列举且明确不含该终端时，Controller 才可判定为 live 或 exited；信息缺失或不完整时 SHALL 判定为 unverifiable，且不得据此推断退出或触发重复派发。结果结算 SHALL 核验 Task、Dispatch、Attempt、角色、Worker Execution Binding 与结果收据，unknown 沿原 OperationId 对账。Worker Task 只有在匹配的 Task、Dispatch、Attempt、角色、Worker Execution Binding（增强和完整级另需原生 Session Binding）与终态收据均可核验时，才可进入结算。
 
 #### Scenario: 信息不完整时判为 unverifiable
 
@@ -44,8 +49,13 @@ Controller SHALL 将 Worker 存活判定为 live、exited 或 unverifiable 三�
 
 #### Scenario: 终态身份不匹配时不结算
 
-- **WHEN** 某个终态收据无法匹配该 Worker 的 Task、Dispatch、Attempt、角色或 Session Binding
+- **WHEN** 某个终态收据无法匹配该 Worker 的 Task、Dispatch、Attempt、角色、Worker Execution Binding 或原生 Session Binding
 - **THEN** Controller 不结算该 Worker Task，并把终态判定为不可核验
+
+#### Scenario: 身份不一致
+
+- **WHEN** Delivery 属于其他 Dispatch 或 Attempt
+- **THEN** 阻塞结算，不按当前默认 profile 或最近任务猜归属
 
 ### Requirement: 会话中断只形成 Session Segment 前置事实
 

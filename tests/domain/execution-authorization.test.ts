@@ -44,11 +44,13 @@ function baseManifest(): Record<string, unknown> {
       role,
       harness: 'codex',
       modelSelection: executionModelConfiguration(),
+      supportLevel: 'complete', qualificationRef: 'fixture:qualification',
     })),
     recoveryUtilityProfile: {
       profileRef: { kind: 'worker-profile', id: 'p-recovery' },
       harness: 'codex',
       modelSelection: executionModelConfiguration(),
+      supportLevel: 'complete', qualificationRef: 'fixture:qualification',
     },
     permissions: {
       planner: true,
@@ -72,6 +74,41 @@ function omit(raw: Record<string, unknown>, ...keys: readonly string[]): Record<
     delete copy[key];
   }
   return copy;
+}
+
+test('Finalizer repair permission is explicit, bounded and fingerprinted', () => {
+  const legacy = parseManifest(baseManifest());
+  const repair = parseManifest({ ...baseManifest(), finalizerPolicy: { mode: 'repair', repairLimit: 1 } });
+  expect(legacy.ok).toBe(true);
+  expect(repair.ok).toBe(true);
+  if (!legacy.ok || !repair.ok) return;
+  expect(legacy.value.finalizerPolicy).toBeUndefined();
+  expect(repair.value.finalizerPolicy).toEqual({ mode: 'repair', repairLimit: 1 });
+  expect(manifestFingerprint(legacy.value)).not.toBe(manifestFingerprint(repair.value));
+  for (const raw of [
+    { ...baseManifest(), manifestVersion: 4, finalizerPolicy: { mode: 'repair', repairLimit: 1 } },
+    { ...baseManifest(), finalizerPolicy: { mode: 'repair', repairLimit: 0 } },
+    { ...baseManifest(), finalizerPolicy: { mode: 'repair', repairLimit: DEFAULT_EXECUTION_LIMITS.validatorRepairs + 1 } },
+    { ...baseManifest(), finalizerPolicy: { mode: 'repair', repairLimit: 1 }, permissions: { ...(baseManifest().permissions as object), gitIntegration: false } },
+  ]) expect(parseManifest(raw).ok).toBe(false);
+});
+
+/**
+ * 显式 v4 兼容夹具：从当前夹具移除两处资格绑定，得到迁移前的旧形状。
+ *
+ * v4 解析必须逐字段读回这份内容且不注入默认资格字段，否则既有 v4 记录的指纹会被改写。
+ */
+function v4Manifest(): Record<string, unknown> {
+  const raw: Record<string, unknown> = { ...baseManifest(), manifestVersion: 4 };
+  raw['workerProfiles'] = (raw['workerProfiles'] as Record<string, unknown>[]).map((profile) =>
+    omit(profile, 'supportLevel', 'qualificationRef'),
+  );
+  raw['recoveryUtilityProfile'] = omit(
+    raw['recoveryUtilityProfile'] as Record<string, unknown>,
+    'supportLevel',
+    'qualificationRef',
+  );
+  return raw;
 }
 
 function manifestFixture(): ExecutionAuthorizationManifest {
@@ -289,6 +326,70 @@ test('拒绝旧 Manifest 版本、缺模型绑定与重复角色的授权', () =
   const profiles = duplicated['workerProfiles'] as Record<string, unknown>[];
   profiles[1] = { ...profiles[0]!, id: undefined, profileRef: { kind: 'worker-profile', id: 'p-planner-2' } };
   expect(parseManifest(duplicated).ok).toBe(false);
+});
+
+test('v5 缺 supportLevel / qualificationRef 或等级低于角色下限即拒绝', () => {
+  for (const key of ['supportLevel', 'qualificationRef'] as const) {
+    const raw = baseManifest();
+    const profiles = raw['workerProfiles'] as Record<string, unknown>[];
+    delete profiles[0]![key];
+
+    const parsed = parseManifest(raw);
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.field).toContain(`workerProfiles[0].${key}`);
+    }
+  }
+
+  // Recovery Utility 不是豁免通道：它的资格绑定同样必填。
+  const utility = baseManifest();
+  delete (utility['recoveryUtilityProfile'] as Record<string, unknown>)['qualificationRef'];
+  const utilityParsed = parseManifest(utility);
+  expect(utilityParsed.ok).toBe(false);
+  if (!utilityParsed.ok) {
+    expect(utilityParsed.field).toContain('recoveryUtilityProfile.qualificationRef');
+  }
+
+  // 等级按角色下限判定：validator 需要 enhanced，basic 不够。
+  const basicValidator = baseManifest();
+  const validatorProfiles = basicValidator['workerProfiles'] as Record<string, unknown>[];
+  const validatorIndex = validatorProfiles.findIndex((profile) => profile['role'] === 'validator');
+  validatorProfiles[validatorIndex] = { ...validatorProfiles[validatorIndex]!, supportLevel: 'basic' };
+  const basicParsed = parseManifest(basicValidator);
+  expect(basicParsed.ok).toBe(false);
+  if (!basicParsed.ok) {
+    expect(basicParsed.field).toContain('workerProfiles[2].supportLevel');
+    expect(basicParsed.message).toContain('validator');
+  }
+});
+
+test('v5 允许 Recovery Utility 为 null：关闭历史恢复也必须是显式批准', () => {
+  const parsed = parseManifest({ ...baseManifest(), recoveryUtilityProfile: null });
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok) {
+    expect(parsed.value.recoveryUtilityProfile).toBeNull();
+  }
+});
+
+test('显式 v4 Manifest 按旧形状读回、指纹逐位保持；null Recovery Utility 仍被拒绝', () => {
+  const oldShape = v4Manifest();
+  const parsed = parseManifest(oldShape);
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) {
+    return;
+  }
+  // 逐字段读回：v4 不新增 supportLevel / qualificationRef，也不丢弃任何旧字段。
+  expect(parsed.value).toStrictEqual(oldShape);
+  // 迁移前同一份旧形状内容的指纹；补默认资格字段会立刻改变它，因此必须逐位保持。
+  expect(manifestFingerprint(parsed.value)).toBe(
+    'b21c0aee91f60278af9e3491f753bb02fd8ef23b47fa89ff5c02017f55d8d933',
+  );
+
+  const withNullUtility = parseManifest({ ...oldShape, recoveryUtilityProfile: null });
+  expect(withNullUtility.ok).toBe(false);
+  if (!withNullUtility.ok) {
+    expect(withNullUtility.field).toContain('recoveryUtilityProfile');
+  }
 });
 
 test('modelSelection 缺少可信来源或结构不合法时拒绝', () => {

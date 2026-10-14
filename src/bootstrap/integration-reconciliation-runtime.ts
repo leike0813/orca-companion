@@ -16,6 +16,8 @@ import { existsSync } from 'node:fs';
 import type { WorkerSandboxMode } from '../application/ports/worker-harness.js';
 import type { HarnessSessionFacts } from '../adapters/agents/session-binding.js';
 import { resolveWorkerHarness } from '../application/ports/worker-harness.js';
+import { workerHarnessSupport } from '../adapters/agents/worker-harness-qualifications.js';
+import { workerSupportLevelAllows } from '../domain/worker-harness-support.js';
 import {
   bindHarnessSessionFromStartReport,
   installHarnessSessionReporter,
@@ -843,6 +845,23 @@ export function createIntegrationReconciliationRuntime(
     const registered = resolveWorkerHarness(workerHarnessRegistry, harness);
     if (registered.kind === 'rejected') {
       return { kind: 'step_failed', code: registered.code, message: registered.message };
+    }
+    const authorization = input.store.query({
+      kind: 'authorization', coordinationScopeId: input.coordinationScopeId,
+      authorizationId: input.execution.authorizationId,
+    });
+    if (authorization.kind !== 'authorization' || authorization.authorization === null) {
+      return { kind: 'step_failed', code: 'authorization_unavailable', message: '无法核验原 Validator 授权' };
+    }
+    const manifest = authorization.authorization.manifest;
+    if (manifest.manifestVersion === 5) {
+      const profile = manifest.workerProfiles.find((entry) => entry.role === 'validator' &&
+        entry.harness === harness && entry.profileRef.id === input.originalMaterializationBinding.workerProfileRef);
+      if (profile === undefined ||
+          !workerSupportLevelAllows(profile.supportLevel ?? 'unavailable', 'enhanced') ||
+          !workerSupportLevelAllows(workerHarnessSupport(harness).level, 'enhanced')) {
+        return { kind: 'step_failed', code: 'worker_support_insufficient', message: '集成复验需要原授权绑定及当前 enhanced 能力' };
+      }
     }
     const live = input.liveTerminalVerified === undefined ? false : await input.liveTerminalVerified();
     const continuity = decideValidatorSessionContinuity({

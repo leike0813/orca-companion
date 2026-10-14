@@ -89,3 +89,91 @@ test('落后基线派发独立 Planner Task，重放不重复派发；Accepted R
   expect(accepted.kind).toBe('committed');
   expect((await driveBaselineWorker(input)).kind).toBe('verified');
 });
+
+test('v5 basic 的非 Codex Planner：按授权 profile 的 harness 派发，只用 Orca 归属不要求原生 Session', async () => {
+  directory = mkdtempSync(join(tmpdir(), 'baseline-worker-basic-'));
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, encoding: 'utf8' }).trim();
+  git('init', '-q');
+  git('config', 'user.name', 'Verification');
+  git('config', 'user.email', 'verification@example.invalid');
+  writeFileSync(join(directory, 'README.md'), '# basic\n');
+  git('add', '.');
+  git('commit', '-qm', 'baseline');
+  const requiredBaselineHead = git('rev-parse', 'HEAD');
+  const planned = planBaselineReconciliation({ workPackageId, requiredBaselineHead, worktreeBaseHead: 'base-1', relation: 'behind' });
+  if (planned.kind !== 'required') throw new Error('测试基线未落后');
+  const plan = planned.plan;
+  expect(recordBaselineReconciliation({ store: harness.store, coordinationScopeId: harness.scopeId, writer: harness.writer, plan }).kind).toBe('recorded');
+
+  // 已批准 profile 是 basic 的非 Codex harness：原授权决定身份模式，调用方不能自行降级。
+  const approval = harness.authorization();
+  const scopeBefore = harness.store.query({ kind: 'scope', coordinationScopeId: harness.scopeId });
+  if (scopeBefore.kind !== 'scope' || scopeBefore.scope === null) throw new Error('Scope 缺失');
+  const recorded = harness.store.transact({
+    kind: 'record-authorization', coordinationScopeId: harness.scopeId, expectedRevision: scopeBefore.scope.revision,
+    writer: harness.writer, authorizationId: 'auth-basic', authorizationVersion: 2,
+    manifestVersion: approval.manifest.manifestVersion, fingerprint: 'fingerprint-basic', approvalRef: 'approval-basic',
+    manifest: {
+      ...approval.manifest,
+      workerProfiles: approval.manifest.workerProfiles.map((profile) => profile.role === 'planner'
+        ? { ...profile, harness: 'claude', supportLevel: 'basic' as const, qualificationRef: 'fixture:basic' }
+        : profile),
+    },
+  });
+  expect(recorded.kind).toBe('committed');
+  const scopeAfter = harness.store.query({ kind: 'scope', coordinationScopeId: harness.scopeId });
+  const activeAuthorizationId = scopeAfter.kind === 'scope' && scopeAfter.scope !== null ? scopeAfter.scope.authorizationId : null;
+  if (activeAuthorizationId !== 'auth-basic') throw new Error('测试前置：新授权未成为当前授权');
+
+  let sessionObservations = 0;
+  const backend: ExecutionBackend = {
+    query: (query) => {
+      if (query.operation === 'worktree-list') {
+        return Promise.resolve({ kind: 'accepted' as const, value: { worktrees: [{
+          worktreeId: 'wt-wp-b', path: directory, branch: 'wp-b', head: requiredBaselineHead,
+          displayName: 'wp-b', comment: workPackageComment(workPackageId), isMainWorktree: false,
+        }], totalCount: 1, truncated: false, hostScope: { hostIds: ['local'], omittedHostIds: [] } } });
+      }
+      if (query.operation === 'terminal-list') {
+        return Promise.resolve({ kind: 'accepted' as const, value: { terminals: [{ handle: 'term-basic', connected: true, writable: true, title: 'basic-title' }], hostIds: ['local'], omittedHostIds: [], totalCount: 1, truncated: false } });
+      }
+      if (query.operation === 'terminal-wait') {
+        return Promise.resolve({ kind: 'accepted' as const, value: { wait: { handle: query.terminal, condition: 'tui-idle', status: 'running', satisfied: true } } });
+      }
+      if (query.operation === 'terminal-read') {
+        return Promise.resolve({ kind: 'accepted' as const, value: { terminal: { draft: '[Pasted Content]' } } });
+      }
+      if (query.operation === 'worker-show') {
+        return Promise.resolve({ kind: 'accepted' as const, value: {
+          dispatchId: 'baseline-dispatch', taskId: 'orca-baseline-task', exactWorker: true, agentTerminalHandle: 'term-basic',
+        } });
+      }
+      return Promise.resolve({ kind: 'rejected' as const, code: 'unexpected_query', message: query.operation });
+    },
+    mutate: (mutation, scope) => {
+      const value = mutation.operation === 'task-create' ? { id: 'orca-baseline-task' }
+        : mutation.operation === 'terminal-create' ? { handle: 'term-basic' }
+          : mutation.operation === 'worker-start' ? { dispatchId: 'baseline-dispatch' }
+            : null;
+      return Promise.resolve({ kind: 'accepted' as const, operation: { operationId: scope.operationId, target: scope.target }, value });
+    },
+  };
+  const input = {
+    store: harness.store, backend, writer: harness.writer, coordinationScopeId: harness.scopeId,
+    plan, repoSelector: 'path:/work', canonicalWorktree: '/work', worktree: 'wt-wp-b',
+    execution: { backendIdentityRef: 'coordinator', graphGeneration: 1, authorizationId: 'auth-basic',
+      runId: EXECUTION_RUN_ID, consumerGeneration: 1, timeoutMs: 30_000 },
+    workerLaunch: { kind: 'prepared_terminal' as const, harness: 'claude', activation: 'submit_draft' as const,
+      title: 'basic-title', prepare: () => Promise.resolve({ title: 'basic-title', command: 'claude-launch' }) },
+    operationIds: { task: 'basic-task' as OperationId, workerPrepare: 'basic-prepare' as OperationId,
+      workerStart: 'basic-start' as OperationId, workerActivate: 'basic-activate' as OperationId },
+    observeSession: () => { sessionObservations += 1; return Promise.resolve(null); },
+  };
+  const dispatched = await driveBaselineWorker(input);
+  expect(dispatched.kind).toBe('dispatched');
+  expect(sessionObservations).toBe(0);
+  const record = harness.store.query({ kind: 'baseline-reconciliations', coordinationScopeId: harness.scopeId, workPackageId });
+  const row = record.kind === 'baseline-reconciliations' ? record.reconciliations[0] : undefined;
+  expect(row?.orcaTaskId).toBe('orca-baseline-task');
+  expect(row?.dispatchId).toBe('baseline-dispatch');
+});

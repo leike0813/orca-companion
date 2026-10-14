@@ -29,8 +29,13 @@ import {
   type FinalizerGateFacts,
 } from '../../src/application/finalize-project.js';
 import { initializeCoordinationScope } from '../../src/application/planning/initialize-scope.js';
-import type { CoordinationWriter } from '../../src/application/ports/branch-coordination-store.js';
-import type { FinalizerReportFacts } from '../../src/domain/delivery-verdict.js';
+import type {
+  BranchCoordinationStore,
+  CoordinationCommand,
+  CoordinationWriter,
+} from '../../src/application/ports/branch-coordination-store.js';
+import type { FinalizerReportFacts, FinalizerVerification } from '../../src/domain/delivery-verdict.js';
+import type { EvidenceRecord } from '../../src/domain/worker-report.js';
 import type { RoleAuthorities } from '../../src/domain/planning/execution-authorization.js';
 import {
   initialWorkPackageStatus,
@@ -43,6 +48,8 @@ const SESSION_A = 'session-a' as CoordinatorSessionId;
 const CYCLE = 'cycle-1' as PlanningCycleId;
 const WP_1 = 'wp-1' as WorkPackageId;
 const WP_2 = 'wp-2' as WorkPackageId;
+const HEAD = 'a'.repeat(40);
+const TREE = 'b'.repeat(40);
 
 const AUTHORITY: RoleAuthorities = {
   planner: true,
@@ -96,6 +103,70 @@ function report(overrides: Partial<FinalizerReportFacts> = {}): FinalizerReportF
     authoritativeRefs: ['orca-result-1'],
     ...overrides,
   };
+}
+
+function command(overrides: Partial<EvidenceRecord> = {}): EvidenceRecord {
+  return {
+    evidenceId: 'test-1',
+    kind: 'command',
+    coveredPaths: ['src'],
+    command: 'pnpm test',
+    summary: '复验通过',
+    outcome: 'passed',
+    ...overrides,
+  };
+}
+
+function verification(overrides: Partial<FinalizerVerification> = {}): FinalizerVerification {
+  return {
+    head: HEAD,
+    tree: TREE,
+    expectedHead: HEAD,
+    expectedTree: TREE,
+    commands: [command()],
+    integrationRef: 'integration-1',
+    ...overrides,
+  };
+}
+
+const WRITABLE_SESSION = { kind: 'new_project', sessionBindingId: 'session-binding-2' } as const;
+
+function repairGate(overrides: Partial<FinalizerGateFacts> = {}): FinalizerGateFacts {
+  return gate({ finalizerPolicy: { mode: 'repair', repairLimit: 2 }, ...overrides });
+}
+
+function writableReport(overrides: Partial<FinalizerReportFacts> = {}): FinalizerReportFacts {
+  return report({
+    session: WRITABLE_SESSION,
+    readOnly: false,
+    authoritativeRefs: ['orca-result-1', 'integration-1'],
+    verification: verification(),
+    ...overrides,
+  });
+}
+
+/** 包装真实 store，记录 `transact` 收到的命令，用于核验写结论时传入的最终版本。 */
+function capturingStore(inner: CoordinationStore): {
+  readonly store: BranchCoordinationStore;
+  readonly commands: readonly CoordinationCommand[];
+} {
+  const commands: CoordinationCommand[] = [];
+  return {
+    commands,
+    store: {
+      query: (query) => inner.query(query),
+      transact: (transaction) => {
+        commands.push(transaction);
+        return inner.transact(transaction);
+      },
+    },
+  };
+}
+
+function recordedVerdictCommand(commands: readonly CoordinationCommand[]):
+  | { readonly verifiedHead?: string | null; readonly verifiedTree?: string | null }
+  | undefined {
+  return commands.find((entry) => entry.kind === 'record-delivery-verdict');
 }
 
 function input(overrides: Partial<FinalizeProjectInput> = {}): FinalizeProjectInput {
@@ -273,4 +344,119 @@ test('持久化的 Session Binding 引用来自已核验报告', () => {
   );
 
   expect(result.kind === 'accepted' ? result.record.sessionBindingRef : null).toBe('session-binding-verified');
+});
+
+test('已批准修复 policy 时派发可写项目级 Finalizer', () => {
+  expect(planFinalizerDispatch(gate({ finalizerPolicy: { mode: 'repair', repairLimit: 2 } }))).toEqual({
+    kind: 'dispatch',
+    plan: {
+      role: 'finalizer',
+      sessionKind: 'new',
+      readOnly: false,
+      coversWorkPackageIds: [WP_1, WP_2],
+    },
+  });
+});
+
+test('可写项目级会话通过核验后写入绑定的最终版本', () => {
+  const capture = capturingStore(store);
+  const result = finalizeProject(
+    input({
+      store: capture.store,
+      gate: repairGate(),
+      report: writableReport(),
+      authoritativeRefs: ['orca-result-1', 'integration-1'],
+    }),
+  );
+
+  expect(result.kind).toBe('accepted');
+  if (result.kind !== 'accepted') {
+    return;
+  }
+  expect(result.record.sessionBindingRef).toBe('session-binding-2');
+  const recorded = recordedVerdictCommand(capture.commands);
+  expect(recorded?.verifiedHead).toBe(HEAD);
+  expect(recorded?.verifiedTree).toBe(TREE);
+});
+
+test('旧只读 Finalizer 缺省复验时写入空版本引用', () => {
+  const capture = capturingStore(store);
+  const result = finalizeProject(input({ store: capture.store }));
+
+  expect(result.kind).toBe('accepted');
+  const recorded = recordedVerdictCommand(capture.commands);
+  expect(recorded?.verifiedHead).toBeNull();
+  expect(recorded?.verifiedTree).toBeNull();
+});
+
+const WRITABLE_REJECTIONS = [
+  [
+    '最终版本与期望不一致',
+    'final_version_unverified',
+    () => writableReport({ verification: verification({ expectedHead: 'c'.repeat(40) }) }),
+  ],
+  [
+    '复验命令失败',
+    'verification_failed',
+    () => writableReport({ verification: verification({ commands: [command({ outcome: 'failed' })] }) }),
+  ],
+  [
+    '缺少集成引用',
+    'integration_unverified',
+    () => writableReport({ verification: verification({ integrationRef: null }) }),
+  ],
+] satisfies readonly (readonly [string, string, () => FinalizerReportFacts])[];
+
+test.each(WRITABLE_REJECTIONS)('可写 Finalizer %s 时阻塞且不写入结论', (_label, code, build) => {
+  const result = finalizeProject(
+    input({ gate: repairGate(), report: build(), authoritativeRefs: ['orca-result-1', 'integration-1'] }),
+  );
+
+  expect(result).toMatchObject({ kind: 'blocked', code });
+  expect(verdictRecords()).toBe(0);
+});
+
+test('可写项目级会话缺少复验时不写入结论', () => {
+  const result = finalizeProject(
+    input({
+      gate: repairGate(),
+      report: report({ session: WRITABLE_SESSION, readOnly: false, authoritativeRefs: ['orca-result-1', 'integration-1'] }),
+      authoritativeRefs: ['orca-result-1', 'integration-1'],
+    }),
+  );
+
+  expect(result).toMatchObject({ kind: 'blocked', code: 'final_version_unverified' });
+  expect(verdictRecords()).toBe(0);
+});
+
+test('未批准修复 policy 时报告不能自行升级为可写会话', () => {
+  const result = finalizeProject(
+    input({ report: writableReport(), authoritativeRefs: ['orca-result-1', 'integration-1'] }),
+  );
+
+  expect(result).toMatchObject({ kind: 'blocked', code: 'session_not_authorized' });
+  expect(verdictRecords()).toBe(0);
+});
+
+test('未批准修复 policy 时非只读会话被拒绝', () => {
+  const result = finalizeProject(input({ report: report({ readOnly: false }) }));
+
+  expect(result).toMatchObject({ kind: 'blocked', code: 'session_not_authorized' });
+  expect(verdictRecords()).toBe(0);
+});
+
+test('已批准修复 policy 时旧只读会话被拒绝', () => {
+  const result = finalizeProject(input({ gate: repairGate() }));
+
+  expect(result).toMatchObject({ kind: 'blocked', code: 'session_not_authorized' });
+  expect(verdictRecords()).toBe(0);
+});
+
+test('复用既有会话仍被拒绝且不写入结论', () => {
+  const result = finalizeProject(
+    input({ report: report({ session: { kind: 'reused', sessionBindingId: 'session-binding-1' } }) }),
+  );
+
+  expect(result).toMatchObject({ kind: 'blocked', code: 'session_reused' });
+  expect(verdictRecords()).toBe(0);
 });

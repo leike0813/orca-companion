@@ -273,6 +273,24 @@ test('非 Execution Lease 持有者不能集成', async () => {
   expect(requests).toHaveLength(0);
 });
 
+test('Finalizer integrates its verified version without fabricating Validator acceptance', async () => {
+  const { port, requests, scopes } = fakePort({ initialHeads: { source: COMMIT_HEAD }, tree: MERGED_TREE, headFor: () => COMMIT_HEAD });
+  const result = await integrateWorkPackage(input(port, { status: { kind: 'finalizer', workPackageId: WP,
+    verifiedHead: COMMIT_HEAD, verifiedTree: MERGED_TREE } }));
+  expect(result.kind).toBe('integrated');
+  expect(requests.map(request => request.step)).toEqual(['integrate_canonical', 'push']);
+  expect(scopes.every(scope => scope.target.kind === 'finalizer')).toBe(true);
+});
+
+test.each(['source', 'canonical'] as const)('Finalizer refuses a changed %s version before Git mutations', async target => {
+  const { port, requests } = fakePort({ initialHeads: { source: target === 'source' ? BASELINE : COMMIT_HEAD,
+    canonical: target === 'canonical' ? INTEGRATED_HEAD : BASELINE }, tree: MERGED_TREE });
+  const result = await integrateWorkPackage(input(port, { status: { kind: 'finalizer', workPackageId: WP,
+    verifiedHead: COMMIT_HEAD, verifiedTree: MERGED_TREE } }));
+  expect(result.kind).toBe('rejected');
+  expect(requests).toHaveLength(0);
+});
+
 test('越界的 remote 请求被拒绝且不产生副作用', async () => {
   const { port, requests } = fakePort();
 

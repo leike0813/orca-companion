@@ -6,7 +6,13 @@
 
 当前接入约束：用户于 2026-10-13 明确禁止 patch Orca，Companion 只适配未修改的
 公开 CLI/runtime。此前独立源码修复产物仅保留为诊断证据，不继续构建、应用或以其
-作为验收前提。新增生产注册 1（Antigravity）；本项目启动适配的公开选项与未决合同见
+作为验收前提。注册表包含全部 14 家已实现 adapter，登记只表达身份；当前等级：
+complete = Command Code、Qwen Code、Antigravity；enhanced = Codex；basic = Claude、
+OpenCode、pi、OMP、Kilo；Kimi、Hermes、Cline、Muse、Cursor 未达 basic（Kimi 基础
+真实运行被 `agent-trust-workspace` 阻塞；Command Code 已用独立现场
+`/var/tmp/orca-harness-acceptance-uUxIxc` 复核基础路径）。Recovery Utility 只开放
+complete 级。等级与证据以 `src/adapters/agents/worker-harness-qualifications.ts` 与
+`src/domain/worker-harness-support.ts` 为准。本项目启动适配的公开选项与未决合同见
 [当前调查](research/next-worker-harness-adapters.md#原生事实与当前验收)。
 
 当前 Antigravity 候选适配保留真实 TUI，在本项目 launcher 内使用系统 `script` PTY
@@ -52,6 +58,11 @@ Controller 结束之后替换，1.3.5 未重跑完整角色矩阵，既有完整
 共享只读 bwrap 保留前台 Session/进程组，使用继承 FD 安装 seccomp，拒绝 TIOCSTI/TIOCLINUX；x64/arm64 之外、外来 ABI、x32 或安装失败拒绝启动。Ubuntu x86_64 的实际 ioctl 拒绝、前台身份、文件拒写与精确工件可写已核验；arm64/Windows 未实测。Command Code/Qwen 的原生无 prompt 模型目录不可用，可手填 exact ID，effort/catalogSource 保持 null。可写角色使用原生 `--yolo`，没有额外 OS workspace sandbox。
 
 新一批 Antigravity/Kilo/Kimi/Hermes/Cline/Muse/Cursor 的当前资格、原生版本、独立报告安装与阻塞原因见[接入记录](research/next-worker-harness-adapters.md)。Antigravity 已通过四角色、精确 Session 续接、Recovery 与完整 mixed Controller，已注册；其余六家仍未注册。其他候选的具体延期与重验条件见[探索记录](../artifacts/next-worker-harness-adapters/exploration-20261012.json)。前驱的其他[候选研究](research/next-worker-harness-candidates.md)及下方带日期的基线与旧矩阵保留各自验证范围。
+
+2026-10-14 Kilo 7.8.8 在未修改 Orca 1.4.224 上修复了原生
+`kilo-sandbox-policy` 状态根遗漏，首次只读模型轮次取得精确 Session 与完整 export；
+prepared 输入的完整矩阵仍失败，保持未注册。当前根因、范围和原回执见
+[续探记录](research/next-worker-harness-continuation-20261014.md#kilo-后续原生状态根修复输入资格仍未通过)。
 
 2026-10-13 续接核验的本机 CLI/runtime 为 1.4.224。原 Antigravity Controller fixture
 的 prepared 与协调终端均返回 `terminal_handle_stale`，精确 worktree 的终端列表为空；
@@ -115,7 +126,7 @@ Claude 通过 SessionStart hook、pi/OMP 通过原生 session extension 报告�
 - OMP 18.4.10 的 `--config` 只是设置 overlay（`startup.setupWizard:false`、`tui.titleState:false`）；模型 registry 来自 agent dir 的 `models.json`（OMP 启动后迁移为 `models.yml`）。公共 extension 在 `session_start`/`agent_start`/`agent_end` 把标题设为 OMP ready/working，供 Orca 判 readiness；报告只在 `existsSync` 确认真实 session 文件后写入，不落空 path 记录。transcript 首行 `{"type":"title","v":1}` 是文件级 metadata，不参与会话条目树。
 - 历史认证配置实验：pi 的自定义 provider `apiKey` 使用 `$ENV` 形式，OMP 使用裸变量名；当前 Worker 认证完全由 harness 自己提供。
 - 只读包装器：`--ro-bind / /` 之后仅按需 `--tmpfs /tmp` 与精确 `--bind` 状态根（可另加 reporter 目录）；`/run` 保持根挂载只读，保留 DNS symlink 与 runtime socket，单独 tmpfs 会以 `bwrap: Can't create file at /etc/resolv.conf` 失败。workspace、状态根或 reporter 落在 `/tmp` 之下时放弃该 tmpfs。
-- 当前 `doctor` 核验配置引用的每个角色 profile（不限于只读角色），输出原生模型目录与生产包装器的只读探针结论；探针包含可执行版本，但不建立真实角色 Session。未配置的角色不假装核验过，目录失败只标记该候选不可用并允许手填 exact ID。
+- 当前 `doctor` 核验配置引用的每个角色 profile（不限于只读角色），输出原生模型目录；生产只读探针结论只对实际需要只读的用途（Recovery Utility、只读规划辅助、按旧 policy 的只读 Finalizer）呈现，普通 Validator 与可写 Finalizer 不作只读探测；探针包含可执行版本，但不建立真实角色 Session。未配置的角色不假装核验过，目录失败只标记该候选不可用并允许手填 exact ID。
 
 CLI 参数核验同时参考[Claude CLI 合同](https://code.claude.com/docs/en/cli-reference)、[pi 原生模型配置](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md)与本机 `--help`；版本升级必须重跑会话绑定、恢复和只读验收。
 
@@ -230,9 +241,9 @@ Codex sandbox 与正式 Worker 共用 `-c model=...`；当前 sandbox 不接受 
 
 - **根因与上游修复**：旧版在 `daemon_mounts.rs::reject_daemon_mount_aliases` 中要求 socket 目录的 `st_dev` 与其 `mnt_id` 对应 mountinfo 的 device 相同；本机 btrfs 分别为 `0:28` 与 `0:27`。上游 [#47968](https://github.com/openai/codex/pull/47968)（`a708fc683934d7d7ea7560354968fedd2be28581`）针对经实际文件描述符确认的 btrfs 处理该差异，同时保留挂载与别名隔离检查。隔离 alpha 已包含此修复。
 - **真实能力判据**：共享 `utility-readonly-local-control` profile 继承 `:read-only`，移除无效 `use_legacy_landlock`。探针复制与生产启动同源的 `config.toml` 到临时 `CODEX_HOME`，并复用配置冲突检查；不调用模型、不读取认证文件。宿主写哨兵、受限命令读取、实际追加写入返回 `EROFS/EACCES/EPERM`、宿主回读内容未变，四项齐备才是 `available`。普通非零退出、`ENOENT`、`ENOSPC`、超时或配置冲突均不放行。
-- **本机对照**：同一主机上，正式版 `0.157.1` 返回 `unavailable / sandbox-read`，原因为 `cannot establish app-server socket mount isolation`；隔离 alpha 返回 `available / host-verify`。alpha 的完整 `doctor` 退出 0，`read-only-worker` 为 `ok`。旧版 `workspace-write` 与 `read-only` 都受影响，只有获授权的全权限普通角色可避开该问题。Capsule 与 Finalizer 始终只读。
+- **本机对照**：同一主机上，正式版 `0.157.1` 返回 `unavailable / sandbox-read`，原因为 `cannot establish app-server socket mount isolation`；隔离 alpha 返回 `available / host-verify`。alpha 的完整 `doctor` 退出 0，`read-only-worker` 为 `ok`。旧版 `workspace-write` 与 `read-only` 都受影响，只有获授权的全权限普通角色可避开该问题。Capsule 始终只读；Finalizer 的权限模式由原授权 policy 决定：缺省只读，显式 `finalizerPolicy`（repair）时可写修复。
 - **隔离边界实测**：alpha 沙箱内不可访问宿主 daemon 目录真实条目，普通专用 Unix socket 仍可连接。临时包装器只影响本次验收启动的进程，不接入共享 Codex daemon。此前失败的 TMPDIR、tmpfs CODEX_HOME、禁用 daemon 自动启动及嵌套 userns/bwrap 路径未重复采用。
-- **产品门禁**：`doctor` 独立报告能力；审阅与批准分别现探；Capsule 和 Finalizer 只在确认没有既有派发或 intent 后现探。失败给出 `read_only_worker_unavailable`，零新派发、零 Recovery 预算消耗，不进入报告等待。已有派发仍按原身份对账。结论不写入 Manifest、SQLite 或缓存，Route Planning 启动不使用该门禁。
+- **产品门禁**：`doctor` 独立报告能力；审阅与批准分别对实际需要只读的 Recovery Utility 与只读规划辅助操作现探；Capsule 与旧 policy 的只读 Finalizer 只在确认没有既有派发或 intent 后现探，可写 Finalizer 与普通 Validator 不因缺只读能力被拒绝。失败给出 `read_only_worker_unavailable`，零新派发、零 Recovery 预算消耗，不进入报告等待。已有派发仍按原身份对账。结论不写入 Manifest、SQLite 或缓存，Route Planning 启动不使用该门禁。
 - **真实 Recovery**：共享生产提示复验为 3 passed / 1 skipped（77.77 秒），Run `run_606501f396da`，被中断 Validator `ctx_988d7f2e2c0f`，取得按宿主 coverage 校验的 `complete` Capsule。日志 `/tmp/codex-btrfs-fix.KK41s5/recovery-shared-retry.log`。此前一次重跑在 Worker 启动前因终端列举不完整被拒绝，未放松该安全门。
 - **PTY 真实结果**：不中断模式 8 passed / 1 skipped（541.12 秒，Run `run_5eff0872e5ac`）；中断模式 8 passed / 1 skipped（687.09 秒，Run `run_cbbd604ac768`）。两组均取得持久化 `deliverable`，canonical 与获批本地 origin 的 HEAD 一致，重启前后真实 Dispatch 集合相同。中断组另有 `recovered/replaced` 记录及真实 Capsule、替代 Segment；刻意关闭的原 Implementation 失败，其余 5 个 Dispatch 成功。未制造中断的一组 4 个 Dispatch 全部成功。跳过的是需要可控在途操作的 reconciling 画面场景，不能据此声明该场景已验收。
 - **验收现场与证据**：两个模式分别使用全新隔离 Git 仓库、专用协调身份。全部精确 Codex Session 记录均为 `0.159.0-alpha.3`、`minimax-cn/MiniMax-M3`。只读 tracker 通过 `GH_REPO=leike0813/orca-companion-test` 读取现有 Route Map #1；Git origin 是本地裸仓库，验收不写外部 issue 或 remote。环境脚本、失败记录、最终日志 `pty-final-{acceptance,recovery}.log` 与脱敏事实 `final-runtime-evidence.json` 保留在 `/tmp/codex-btrfs-fix.KK41s5/`。Capsule 的报告提示、原生 payload/body 读回及 Finalizer 原生结果适配均经过真实闭环复验。
@@ -321,7 +332,7 @@ Codex sandbox 与正式 Worker 共用 `-c model=...`；当前 sandbox 不接受 
   - **后续证据**：2026-09-26 的隔离 alpha 运行已补齐 Planner 交付、Specification Admission、Implementation/Validator、受控集成及只读 Finalizer，并取得持久化 `deliverable`；当前基线见上文「只读 Worker 能力」。前驱要求的 Graph Patch Planner 与 baseline reconciliation 同链路场景经同日复验定因：派发门禁与用户消息时序不可兼得，详见上文「Graph Patch Planner 的派发门禁与「图修订请求」的时序」；多包代际的第二个包还受 `merge --ff-only` 与授权 baseline 的限制（见「Work Package worktree 的 base ref」）。
 - **沙箱主机诊断**（2026-09-24，已被下一条取代）：当次记录的是 bwrap 无法建立 uid map（`kernel.apparmor_restrict_unprivileged_userns=1` 且发行版 `bwrap-userns-restrict` profile 未加载）。加载该 profile 后 bwrap 本身已可用。
 - **旧版 Codex Linux 沙箱基线**：0.156.1 至本机正式版 0.157.1 的文件系统受限会话因 btrfs device 判定失败而不可用；独立 bwrap 成功并不证明 Codex 沙箱可用。当前隔离 alpha 的修复、探针与真实验收结论统一见上文「只读 Worker 能力」。系统挂载未修改。
-- **普通角色的沙箱授权**：`execution.codexSandbox` 默认 `workspace-write`；选择 `danger-full-access` 必须由 Manifest 的 `codex-sandbox-danger-full-access` 风险明确授权，派发与替代 Session 均重验。Finalizer 与 Capsule 不使用此字段，固定复用继承 `:read-only` 的 `read-only-local-control` profile，并开放本机 Orca 控制通道所需网络；真实可运行性以当前探针为准。
+- **普通角色的沙箱授权**：`execution.codexSandbox` 默认 `workspace-write`；选择 `danger-full-access` 必须由 Manifest 的 `codex-sandbox-danger-full-access` 风险明确授权，派发与替代 Session 均重验。缺省只读 Finalizer 与 Capsule 不使用此字段，固定复用继承 `:read-only` 的 `read-only-local-control` profile，并开放本机 Orca 控制通道所需网络；显式 `finalizerPolicy`（repair）的 Finalizer 在独立项目级 worktree 内以普通可写 Codex 沙箱运行（默认 `workspace-write`；`danger-full-access` 需原授权携带同一风险，否则阻塞）。真实可运行性以当前探针为准。
 - **Orca worktree root 前置：`workspaceDir` 必须指向真实目录**（2026-09-24，`m2-wire-execution-runtime`）：真实闭环第一次尝试停在 `materialize-worktree` lane（intent `state=blocked`，原因 `no_backend_request_id`：副作用是否发生无法证明）。独立复现 `orca worktree create` 得到 `runtime_error: ENOTDIR: not a directory, stat '/home/joshua/orca/workspaces/<repo>/<name>'`：本机 Orca 全局设置 `workspaceDir = /home/joshua/orca/workspaces`，而 `/home/joshua/orca` 是一个 09-21 创建、当时没有任何进程持有的陈旧 unix socket，因此**任何**仓库的 worktree 创建都会失败。删除该陈旧 socket 后 `orca worktree create` 与 `worktree rm` 均即时成功（约 2s），lane 级 fail-closed 行为本身正确。真实闭环的运行前置因此是：`workspaceDir`（或它下面的目录）必须是可创建目录的普通路径。
 - **`worker_done` 的真实载荷形状**（2026-09-24，`m2-wire-execution-runtime`）：真实 Codex Worker 完成时投递的 `worker_done` 载荷是 Orca 自己的规范形状（实测 `payload` 原文）：`{"taskId":"task_…","dispatchId":"ctx_…","outcome":"succeeded","filesModified":[…]}`，结果叙述在 `body`，`from_handle` 是 Worker 自己的终端。它**不**回显 Companion 的 Task Envelope 身份，也没有 `result` 字段。Companion 的 Delivery 入口最初只接受 Companion 形状，因此真实运行时每条 Delivery 都被判 `result_missing` → 归类 blocked → 不产生 `delivery-accept-result`/`delivery-ack`，闭环停在 Planner 交付之后；现已改为接受两种形状（Orca 规范形状只作 locator，用 `materialization_bindings.orcaTaskId` + Session Segment 逐项解析归属，结果正文归一化为 `{outcome, filesModified, summary}` 后写回 Orca Task 并回读）。修复后真实闭环连续前进：Planner、Implementation、Validator 三条 Delivery 全部结算成功并推进到下一角色。
 - **受控 Git 集成的重放分支**（2026-09-24，`m2-wire-execution-runtime`）：真实闭环走到集成时，`git-integration` intent 收尾为 `rejected`，随后同一 Work Package 的再次尝试被阻塞，原因是 `integrateWorkPackage` 判定 `git-integration-commit:…` 的意图「尚无已接受的确定结果（settled）」——即 commit 步的 intent 已经收尾但不是 `accepted`，重放路径因此拒绝再次发起副作用（fail-closed 行为本身正确），但它只在进程内 blocker 里给出原因，重启后不可复现。下一轮需要：(a) 把这一步的首次结论与原因落成可持久观察的事实；(b) 让 commit 步能按 Git 事实对账「已经提交」（source HEAD 已变化 / canonical 已含该 commit），而不是把「已提交但没有 accepted 意图」永远读成阻塞。

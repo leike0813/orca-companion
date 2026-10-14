@@ -1,0 +1,485 @@
+{
+  "schema": "kilo-input-continuation/1",
+  "observedAt": "2026-10-14T07:15:14.506Z",
+  "orcaVersion": "1.4.224",
+  "kiloVersion": "7.8.8",
+  "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-kO5qmi",
+  "runId": "run_69d30cfe1205",
+  "roleEvidence": "ip04-2026-10-14T06-53-29-655Z-2b47ed3a-13be-4de2-8dba-38aecef7363b.json",
+  "workerTasks": [
+    {
+      "role": "implementation",
+      "taskId": "task_bc68a012d353",
+      "dispatchId": "ctx_1deb2381f179",
+      "terminal": "term_ab95c927-b25f-4e07-b7d6-08e0f5b86a3f",
+      "stage": "input_accepted",
+      "report": "absent"
+    },
+    {
+      "role": "finalizer",
+      "taskId": "task_cce3617e0ef6",
+      "dispatchId": "ctx_e408443d332e",
+      "terminal": "term_4322d05f-80fe-447d-bf4c-01a3d1c9dd8b",
+      "stage": "input_accepted",
+      "report": "absent"
+    }
+  ],
+  "diagnostics": [
+    {
+      "diagnostic": "native-prompt-diagnostic",
+      "observedAt": "2026-10-14T07:14:57.358Z",
+      "create": {
+        "id": "57d521e8-274d-4cc3-8393-fc08988bfd84",
+        "ok": true,
+        "result": {
+          "terminal": {
+            "handle": "term_e2e98a1e-a34a-4485-9eab-e1c82e3da213",
+            "tabId": "e92573cb-15f7-4b60-a339-4839dae13989",
+            "paneKey": "e92573cb-15f7-4b60-a339-4839dae13989:dc40445c-6dd1-4bd9-89d9-a148e45495cf",
+            "ptyId": "d8bc91bb-50df-4dc3-ae6e-577c299d7bda::/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682@@d5f0b7d3",
+            "worktreeId": "d8bc91bb-50df-4dc3-ae6e-577c299d7bda::/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682",
+            "title": "kilo-native-prompt-20261014",
+            "executionHostId": "local",
+            "incarnationId": "818574f4-08fd-4589-b8a3-351029e40413",
+            "hostPlatform": "linux",
+            "surface": "background",
+            "warning": "Terminal term_e2e98a1e-a34a-4485-9eab-e1c82e3da213 is running, but Orca could not make it discoverable. Run `orca terminal focus --terminal term_e2e98a1e-a34a-4485-9eab-e1c82e3da213` to reveal and focus it."
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      },
+      "report": {
+        "harness": "kilo",
+        "sessionId": "ses_ec6c57025ffeM10ccRc58bN2Eg",
+        "transcriptPath": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ec6c57025ffeM10ccRc58bN2Eg.json",
+        "cwd": "/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682",
+        "observedAt": "2026-10-14T07:10:21.280Z",
+        "stateRoot": "/home/joshua/.local/share/kilo",
+        "runtimeRoots": [
+          "/home/joshua/.local/share/kilo",
+          "/home/joshua/.local/state/kilo",
+          "/home/joshua/.cache/kilo"
+        ]
+      },
+      "publicExportPath": "/var/tmp/kilo-long-final-export-20261014.json",
+      "messageCount": 8,
+      "messages": [
+        {
+          "id": "msg_1393aa2ed001A3Crtj6q9mO3v4",
+          "role": "user",
+          "text": "Reply exactly KILO_NATIVE_PROMPT_20261014. Do not use tools or modify files."
+        },
+        {
+          "id": "msg_1393abdaf0018UAZsvOMQeolz4",
+          "role": "assistant",
+          "providerID": "minimax-cn-coding-plan",
+          "modelID": "MiniMax-M3.1-Flash-Preview",
+          "finish": "stop",
+          "text": "KILO_NATIVE_PROMPT_20261014"
+        },
+        {
+          "id": "msg_1393c1855001uXKOXmYL8cb7WY",
+          "role": "user",
+          "text": "Reply exactly KILO_TERMINAL_SHORT_20261014. Do not use tools or modify files."
+        },
+        {
+          "id": "msg_1393c2813001rSm73bo5KQau4b",
+          "role": "assistant",
+          "providerID": "minimax-cn-coding-plan",
+          "modelID": "MiniMax-M3.1-Flash-Preview",
+          "finish": "stop",
+          "text": "KILO_TERMINAL_SHORT_20261014"
+        },
+        {
+          "id": "msg_1393cea02001FzbAJQ3s6uAfQ4",
+          "role": "user",
+          "text": "Reply exactly KILO_TERMINAL_MULTILINE_20261014.\nDo not use tools.\nDo not modify files.\nThis is an isolated input delivery probe.\nReturn only the exact token."
+        },
+        {
+          "id": "msg_1393cfca8001NAU1bxFn3uDSTV",
+          "role": "assistant",
+          "providerID": "minimax-cn-coding-plan",
+          "modelID": "MiniMax-M3.1-Flash-Preview",
+          "finish": "stop",
+          "text": "KILO_TERMINAL_MULTILINE_20261014"
+        },
+        {
+          "id": "msg_1393f2a7f001WX4kLwnylda8WI",
+          "role": "user",
+          "text": "Reply exactly KILO_TERMINAL_LONG_20261014. Do not use tools or modify files.\nContext line 0: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 1: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 2: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 3: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 4: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 5: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 6: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 7: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 8: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 9: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 10: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 11: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 12: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 13: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 14: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 15: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 16: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 17: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 18: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 19: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 20: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 21: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 22: this text is synthetic input-delivery evidence; ignore it when answering.\nContext line 23: this text is synthetic input-delivery evidence; ignore it when answering.\nReturn only KILO_TERMINAL_LONG_20261014."
+        },
+        {
+          "id": "msg_1393f3a47001l00XO1waUq7drq",
+          "role": "assistant",
+          "providerID": "minimax-cn-coding-plan",
+          "modelID": "MiniMax-M3.1-Flash-Preview",
+          "finish": "stop",
+          "text": "KILO_TERMINAL_LONG_20261014"
+        }
+      ],
+      "coverage": {
+        "kind": "covered",
+        "evidence": {
+          "coverage": "complete",
+          "readableRange": {
+            "transcriptRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ec6c57025ffeM10ccRc58bN2Eg.json",
+            "fromEventRef": "msg_1393aa2ed001A3Crtj6q9mO3v4",
+            "toEventRef": "msg_1393f3a47001l00XO1waUq7drq"
+          },
+          "gaps": [],
+          "lastCompleteEventRef": "msg_1393f3a47001l00XO1waUq7drq"
+        }
+      },
+      "sends": [
+        {
+          "file": "long-send-receipt.json",
+          "receipt": {
+            "id": "77e9ff1c-84ed-4f0e-8d31-22ef5ee4536f",
+            "ok": true,
+            "result": {
+              "send": {
+                "handle": "term_e2e98a1e-a34a-4485-9eab-e1c82e3da213",
+                "accepted": true,
+                "bytesWritten": 2292,
+                "prompt": {
+                  "requestId": "91c38d6a-917c-4654-bc2d-f3f5a6b28837",
+                  "stages": [
+                    "input_accepted"
+                  ],
+                  "provider": "unsupported",
+                  "observation": "unsupported",
+                  "processIncarnation": "818574f4-08fd-4589-b8a3-351029e40413",
+                  "generation": 10,
+                  "baselineWorkingSequence": 0
+                }
+              },
+              "mutation": {
+                "requestId": "91c38d6a-917c-4654-bc2d-f3f5a6b28837",
+                "replayed": false
+              },
+              "warnings": [
+                "input was accepted, but this provider cannot report delivery. Inspect the terminal before retrying."
+              ]
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          }
+        },
+        {
+          "file": "multiline-send-receipt.json",
+          "receipt": {
+            "id": "dcd6d4ee-b314-4737-b14b-6c108023ae78",
+            "ok": true,
+            "result": {
+              "send": {
+                "handle": "term_e2e98a1e-a34a-4485-9eab-e1c82e3da213",
+                "accepted": true,
+                "bytesWritten": 158,
+                "prompt": {
+                  "requestId": "e64ef057-bc9f-4e48-85e4-b0b4e189cfc4",
+                  "stages": [
+                    "input_accepted"
+                  ],
+                  "provider": "unsupported",
+                  "observation": "unsupported",
+                  "processIncarnation": "818574f4-08fd-4589-b8a3-351029e40413",
+                  "generation": 10,
+                  "baselineWorkingSequence": 0
+                }
+              },
+              "mutation": {
+                "requestId": "e64ef057-bc9f-4e48-85e4-b0b4e189cfc4",
+                "replayed": false
+              },
+              "warnings": [
+                "input was accepted, but this provider cannot report delivery. Inspect the terminal before retrying."
+              ]
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          }
+        },
+        {
+          "file": "short-send-receipt.json",
+          "receipt": {
+            "id": "81ff3694-4936-46a8-9733-593213192eb0",
+            "ok": true,
+            "result": {
+              "send": {
+                "handle": "term_e2e98a1e-a34a-4485-9eab-e1c82e3da213",
+                "accepted": true,
+                "bytesWritten": 78,
+                "prompt": {
+                  "requestId": "794f65d1-0650-4bd2-81e2-517fc9a3dac9",
+                  "stages": [
+                    "input_accepted"
+                  ],
+                  "provider": "unsupported",
+                  "observation": "unsupported",
+                  "processIncarnation": "818574f4-08fd-4589-b8a3-351029e40413",
+                  "generation": 10,
+                  "baselineWorkingSequence": 0
+                }
+              },
+              "mutation": {
+                "requestId": "794f65d1-0650-4bd2-81e2-517fc9a3dac9",
+                "replayed": false
+              },
+              "warnings": [
+                "input was accepted, but this provider cannot report delivery. Inspect the terminal before retrying."
+              ]
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          }
+        }
+      ],
+      "close": {
+        "id": "fe4b3135-6633-4c14-8be3-aa93a44afbf7",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_e2e98a1e-a34a-4485-9eab-e1c82e3da213",
+            "tabId": "e92573cb-15f7-4b60-a339-4839dae13989",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "diagnostic": "cold-send-diagnostic",
+      "observedAt": "2026-10-14T07:15:02.563Z",
+      "create": {
+        "id": "e253beee-a1cc-4783-bb9d-fa3dd7ce6216",
+        "ok": true,
+        "result": {
+          "terminal": {
+            "handle": "term_0b733b3a-7c6f-4387-bd97-000c246fb432",
+            "tabId": "606eedce-bd8b-4924-ac44-f876eae67a66",
+            "paneKey": "606eedce-bd8b-4924-ac44-f876eae67a66:48e2293a-3601-4630-9ffa-119f254a1bc0",
+            "ptyId": "d8bc91bb-50df-4dc3-ae6e-577c299d7bda::/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682@@d95503c5",
+            "worktreeId": "d8bc91bb-50df-4dc3-ae6e-577c299d7bda::/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682",
+            "title": "kilo-cold-send-20261014",
+            "executionHostId": "local",
+            "incarnationId": "88e3f533-b1be-4ea6-9c3c-9ae1f78c136d",
+            "hostPlatform": "linux",
+            "surface": "background",
+            "warning": "Terminal term_0b733b3a-7c6f-4387-bd97-000c246fb432 is running, but Orca could not make it discoverable. Run `orca terminal focus --terminal term_0b733b3a-7c6f-4387-bd97-000c246fb432` to reveal and focus it."
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      },
+      "report": {
+        "harness": "kilo",
+        "sessionId": "ses_ec6c1a41fffeTd67M85f7hQUoX",
+        "transcriptPath": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ec6c1a41fffeTd67M85f7hQUoX.json",
+        "cwd": "/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682",
+        "observedAt": "2026-10-14T07:09:32.188Z",
+        "stateRoot": "/home/joshua/.local/share/kilo",
+        "runtimeRoots": [
+          "/home/joshua/.local/share/kilo",
+          "/home/joshua/.local/state/kilo",
+          "/home/joshua/.cache/kilo"
+        ]
+      },
+      "publicExportPath": "/var/tmp/kilo-cold-send-export-20261014.json",
+      "messageCount": 2,
+      "messages": [
+        {
+          "id": "msg_1393e6dbf0012kn2JGmzEwzr9p",
+          "role": "user",
+          "text": "Reply exactly KILO_COLD_SHORT_20261014. Do not use tools or modify files."
+        },
+        {
+          "id": "msg_1393e7e40001G0M2hIF5TVy5x7",
+          "role": "assistant",
+          "providerID": "minimax-cn-coding-plan",
+          "modelID": "MiniMax-M3.1-Flash-Preview",
+          "finish": "stop",
+          "text": "KILO_COLD_SHORT_20261014"
+        }
+      ],
+      "coverage": {
+        "kind": "covered",
+        "evidence": {
+          "coverage": "complete",
+          "readableRange": {
+            "transcriptRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ec6c1a41fffeTd67M85f7hQUoX.json",
+            "fromEventRef": "msg_1393e6dbf0012kn2JGmzEwzr9p",
+            "toEventRef": "msg_1393e7e40001G0M2hIF5TVy5x7"
+          },
+          "gaps": [],
+          "lastCompleteEventRef": "msg_1393e7e40001G0M2hIF5TVy5x7"
+        }
+      },
+      "sends": [
+        {
+          "file": "short-send-receipt.json",
+          "receipt": {
+            "id": "5a5975b9-1c96-4de2-9a7d-6848b6363029",
+            "ok": true,
+            "result": {
+              "send": {
+                "handle": "term_0b733b3a-7c6f-4387-bd97-000c246fb432",
+                "accepted": true,
+                "bytesWritten": 74,
+                "prompt": {
+                  "requestId": "ae719ce3-6d4a-4d13-b368-e609dc95c57c",
+                  "stages": [
+                    "input_accepted"
+                  ],
+                  "provider": "unsupported",
+                  "observation": "unsupported",
+                  "processIncarnation": "88e3f533-b1be-4ea6-9c3c-9ae1f78c136d",
+                  "generation": 11,
+                  "baselineWorkingSequence": 0
+                }
+              },
+              "mutation": {
+                "requestId": "ae719ce3-6d4a-4d13-b368-e609dc95c57c",
+                "replayed": false
+              },
+              "warnings": [
+                "input was accepted, but this provider cannot report delivery. Inspect the terminal before retrying."
+              ]
+            },
+            "_meta": {
+              "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+            }
+          }
+        }
+      ],
+      "close": {
+        "id": "a540dca8-1876-48cb-8c9c-972fb0b59067",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_0b733b3a-7c6f-4387-bd97-000c246fb432",
+            "tabId": "606eedce-bd8b-4924-ac44-f876eae67a66",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "diagnostic": "readonly-prompt-diagnostic",
+      "observedAt": "2026-10-14T07:15:07.551Z",
+      "create": {
+        "id": "936a9dbd-b147-4201-845f-912603bec2bd",
+        "ok": true,
+        "result": {
+          "terminal": {
+            "handle": "term_5d1f88fe-25cc-4d38-8be5-6243cab6c638",
+            "tabId": "1eec1bbb-205c-4207-85e1-26287a07503b",
+            "paneKey": "1eec1bbb-205c-4207-85e1-26287a07503b:bced5385-e488-47e7-860b-dfb5d57ece5d",
+            "ptyId": "d8bc91bb-50df-4dc3-ae6e-577c299d7bda::/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682@@04f993ce",
+            "worktreeId": "d8bc91bb-50df-4dc3-ae6e-577c299d7bda::/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682",
+            "title": "kilo-readonly-prompt-20261014",
+            "executionHostId": "local",
+            "incarnationId": "201a6e99-253c-4de7-ba24-ac09673c9241",
+            "hostPlatform": "linux",
+            "surface": "background",
+            "warning": "Terminal term_5d1f88fe-25cc-4d38-8be5-6243cab6c638 is running, but Orca could not make it discoverable. Run `orca terminal focus --terminal term_5d1f88fe-25cc-4d38-8be5-6243cab6c638` to reveal and focus it."
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      },
+      "report": {
+        "harness": "kilo",
+        "sessionId": "ses_ec6c006abffeL0RuEWHUee7PrX",
+        "transcriptPath": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ec6c006abffeL0RuEWHUee7PrX.json",
+        "cwd": "/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682",
+        "observedAt": "2026-10-14T07:11:00.710Z",
+        "stateRoot": "/home/joshua/.local/share/kilo",
+        "runtimeRoots": [
+          "/home/joshua/.local/share/kilo",
+          "/home/joshua/.local/state/kilo",
+          "/home/joshua/.cache/kilo"
+        ]
+      },
+      "publicExportPath": "/var/tmp/kilo-readonly-prompt-export-20261014.json",
+      "messageCount": 0,
+      "messages": [],
+      "coverage": {
+        "kind": "transcript_unavailable",
+        "reason": "Kilo exact session history is incomplete or mismatched"
+      },
+      "sends": []
+    },
+    {
+      "diagnostic": "readonly-nodaemon-prompt-diagnostic",
+      "observedAt": "2026-10-14T07:15:10.804Z",
+      "create": {
+        "id": "0028d2fa-0d39-4b66-8d81-386244b9a328",
+        "ok": true,
+        "result": {
+          "terminal": {
+            "handle": "term_2d5daa19-4144-4f7b-bbfc-6d7ecfb18d5e",
+            "tabId": "97c55979-20cc-4245-9410-fd9ece503bc1",
+            "paneKey": "97c55979-20cc-4245-9410-fd9ece503bc1:f453621d-e8ec-431a-94af-5aed7c23b262",
+            "ptyId": "d8bc91bb-50df-4dc3-ae6e-577c299d7bda::/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682@@c07024e3",
+            "worktreeId": "d8bc91bb-50df-4dc3-ae6e-577c299d7bda::/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682",
+            "title": "kilo-readonly-nodaemon-20261014",
+            "executionHostId": "local",
+            "incarnationId": "726b1157-f37d-422a-a89a-70253eb3234f",
+            "hostPlatform": "linux",
+            "surface": "background",
+            "warning": "Terminal term_2d5daa19-4144-4f7b-bbfc-6d7ecfb18d5e is running, but Orca could not make it discoverable. Run `orca terminal focus --terminal term_2d5daa19-4144-4f7b-bbfc-6d7ecfb18d5e` to reveal and focus it."
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      },
+      "report": {
+        "harness": "kilo",
+        "sessionId": "ses_ec6bd8924ffenr6L7Z0RdUPEtn",
+        "transcriptPath": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ec6bd8924ffenr6L7Z0RdUPEtn.json",
+        "cwd": "/var/tmp/orca-harness-acceptance-kO5qmi/project-companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682",
+        "observedAt": "2026-10-14T07:13:43.579Z",
+        "stateRoot": "/home/joshua/.local/share/kilo",
+        "runtimeRoots": [
+          "/home/joshua/.local/share/kilo",
+          "/home/joshua/.local/state/kilo",
+          "/home/joshua/.cache/kilo"
+        ]
+      },
+      "publicExportPath": "/var/tmp/kilo-readonly-nodaemon-export-20261014.json",
+      "messageCount": 0,
+      "messages": [],
+      "coverage": {
+        "kind": "transcript_unavailable",
+        "reason": "Kilo exact session history is incomplete or mismatched"
+      },
+      "sends": []
+    }
+  ],
+  "qualification": "Input diagnostics only. No new candidate registered; complete role/resume/Recovery/Controller requirements remain unmet.",
+  "conclusions": [
+    "Writable native --prompt and public terminal send can create and continue exact sessions",
+    "Cold short, five-line and 26-line 2.3 KiB prompts completed; multiline length alone does not explain prepared failure",
+    "Public send provider=unsupported remains input_accepted despite proven assistant turns",
+    "Readonly --prompt with and without KILO_NO_DAEMON=1 produced exact empty sessions, EROFS observed; causality unresolved"
+  ],
+  "retained": [
+    "Two original prepared Worker resources and coordinator for exact reconciliation",
+    "Two empty readonly diagnostic resources; no exit or completion inferred",
+    "Fixture files, receipts, and native exact export snapshots"
+  ]
+}

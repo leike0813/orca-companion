@@ -33,6 +33,7 @@ import {
   knownTerminalHandleFor,
   prepareWorkerLaunch,
   verifyPreparedWorker,
+  type PreparedTerminalBinding,
   type WorkerLaunchStrategy,
 } from '../../application/worker-launch.js';
 import { beginIntent, blockLane, resolveLane, settleIntent } from '../../application/coordination/intent-service.js';
@@ -49,6 +50,7 @@ import {
   type HarnessSessionFacts,
   type SessionBindingFailureCode,
 } from './session-binding.js';
+import type { WorkerExecutionBinding } from '../../domain/task-contract.js';
 
 /** Utility Worker 的 Task Envelope 结构版本；读取到未知版本在边界 fail closed。 */
 export const UTILITY_WORKER_ENVELOPE_SCHEMA_VERSION = 1;
@@ -251,11 +253,22 @@ export type UtilityWorkerDispatchResult =
   | { readonly kind: 'unknown'; readonly operationId: OperationId; readonly reason: string }
   | { readonly kind: 'rejected'; readonly code: string; readonly message: string };
 
+/**
+ * 角色外 Task 的归属身份模式。
+ *
+ * `native` 要求精确 harness Session（Recovery 与所有需要 provider transcript 的路径的唯一形态）；
+ * `basic` 只认 Orca 归属事实——Task、Dispatch 与 exact terminal，不合成 provider Session。缺省是
+ * `native`，只有按已批准的低等级 profile 派发时才显式选择 `basic`。
+ */
+export type ScopedWorkerIdentityMode = 'native' | 'basic';
+
 /** 角色外独立 Task 的共用受控派发；调用方负责提供已校验的任务正文与持久绑定。 */
 export type ScopedWorkerDispatchInput = Omit<UtilityWorkerDispatchInput, 'envelope' | 'observeSession'> & {
   readonly workPackageId: string;
   readonly spec: string;
   readonly existingOrcaTaskId?: string;
+  /** 归属身份模式；缺省 `native`。`basic` 不调用 `observeSession`。 */
+  readonly identity?: ScopedWorkerIdentityMode;
   readonly observeSession: (dispatchId: string) => Promise<HarnessSessionFacts | null>;
   readonly onTaskCreated?: (orcaTaskId: string) => { readonly code: string; readonly message: string } | null;
   readonly onDispatchStarted?: (orcaTaskId: string, dispatchId: string) => { readonly code: string; readonly message: string } | null;
@@ -263,6 +276,20 @@ export type ScopedWorkerDispatchInput = Omit<UtilityWorkerDispatchInput, 'envelo
 
 export type ScopedWorkerDispatchResult =
   | Omit<Extract<UtilityWorkerDispatchResult, { readonly kind: 'dispatched' }>, 'envelope'>
+  | Exclude<UtilityWorkerDispatchResult, { readonly kind: 'dispatched' }>;
+
+/**
+ * `basic` 模式的 dispatched 结果：只有真读回的 Orca 归属，没有 provider Session，因此与
+ * `UtilityWorkerDispatchResult` 的 Recovery 形态不兼容——需要 Recovery 的调用方继续用缺省的
+ * `native` 模式。
+ */
+export type BasicScopedWorkerDispatchResult =
+  | {
+      readonly kind: 'dispatched';
+      readonly orcaTaskId: string;
+      readonly dispatchId: string;
+      readonly executionBinding: Extract<WorkerExecutionBinding, { readonly kind: 'orca_worker' }>;
+    }
   | Exclude<UtilityWorkerDispatchResult, { readonly kind: 'dispatched' }>;
 
 function freshRevision(
@@ -484,12 +511,50 @@ async function runProtected(
 }
 
 /**
+ * basic 等级的归属核验：`worker-show` 必须读回同一个 Dispatch、同一个 Task 与 exact terminal。
+ * 任何一项缺失或不可读都返回 null——不猜身份，也不合成 provider Session。
+ */
+async function readOrcaWorkerBinding(
+  backend: ExecutionBackend,
+  dispatchId: string,
+  orcaTaskId: string,
+  terminal: PreparedTerminalBinding | null,
+): Promise<Extract<WorkerExecutionBinding, { readonly kind: 'orca_worker' }> | null> {
+  const shown = await backend.query({ operation: 'worker-show', dispatchId });
+  if (shown.kind !== 'accepted') {
+    return null;
+  }
+  const value = shown.value as {
+    readonly dispatchId?: unknown;
+    readonly taskId?: unknown;
+    readonly agentTerminalHandle?: unknown;
+    readonly exactWorker?: unknown;
+  };
+  const observed = typeof value.agentTerminalHandle === 'string' && value.agentTerminalHandle.length > 0
+    ? value.agentTerminalHandle
+    : null;
+  // 这次权威读回必须与已核验的 prepared terminal 一致；没有 prepared terminal 时它自己就是身份。
+  const terminalHandle = observed !== null && (terminal === null || observed === terminal.handle) ? observed : null;
+  return value.exactWorker === true && value.dispatchId === dispatchId && value.taskId === orcaTaskId && terminalHandle !== null
+    ? { kind: 'orca_worker', orcaTaskId, terminalHandle }
+    : null;
+}
+
+/**
  * 派发受限 Utility Worker 生成 Recovery Capsule。
  *
  * 它复用前驱的 Task Envelope 约定与派发顺序：`task-create`（spec 是信封 JSON）→ `worker-start` →
  * 精确 Session Binding 核验。任一步不可核验即返回结构化失败，绝不猜 dispatch 或 session 身份。
  */
-export async function dispatchScopedWorker(input: ScopedWorkerDispatchInput): Promise<ScopedWorkerDispatchResult> {
+export async function dispatchScopedWorker(
+  input: ScopedWorkerDispatchInput & { readonly identity: 'basic' },
+): Promise<BasicScopedWorkerDispatchResult>;
+export async function dispatchScopedWorker(
+  input: ScopedWorkerDispatchInput & { readonly identity?: 'native' },
+): Promise<ScopedWorkerDispatchResult>;
+export async function dispatchScopedWorker(
+  input: ScopedWorkerDispatchInput,
+): Promise<ScopedWorkerDispatchResult | BasicScopedWorkerDispatchResult> {
   const taskTarget = { kind: 'work-package', id: input.workPackageId };
   let orcaTaskId = input.existingOrcaTaskId ?? null;
   if (orcaTaskId === null) {
@@ -502,6 +567,11 @@ export async function dispatchScopedWorker(input: ScopedWorkerDispatchInput): Pr
       const taskId = orcaTaskIdFromReceipt(value);
       if (taskId === null) return { code: 'invalid_receipt', message: 'task-create 回执缺少可核验的 task id' };
       return input.onTaskCreated?.(taskId) ?? null;
+    }, async () => {
+      const listed = await input.backend.query({ operation: 'task-list', backendIdentityRef: input.execution.backendIdentityRef,
+        runId: input.execution.runId });
+      const matches = listed.kind === 'accepted' ? listedTasksOf(listed.value)?.filter(task => task.spec === input.spec) : null;
+      return matches?.length === 1 ? { kind: 'observed', value: { taskId: matches[0]!.id } } : { kind: 'unobserved' };
     });
     if (created.kind !== 'accepted') return created;
     orcaTaskId = orcaTaskIdFromReceipt(created.value);
@@ -647,6 +717,14 @@ export async function dispatchScopedWorker(input: ScopedWorkerDispatchInput): Pr
   const adoption = await verifyPreparedWorker(input.backend, dispatchId, launch.preparedTerminal);
   if (adoption !== null) {
     return adoption;
+  }
+
+  if (input.identity === 'basic') {
+    // basic 归属：只承认 worker-show 读回的 exact Task/Dispatch/terminal，不合成 provider Session。
+    const claim = await readOrcaWorkerBinding(input.backend, dispatchId, orcaTaskId, launch.preparedTerminal);
+    return claim === null
+      ? { kind: 'binding_unavailable', code: 'session_not_reported', message: '无法按 worker-show 读回该 Dispatch 的 exact Task/Dispatch/terminal' }
+      : { kind: 'dispatched', orcaTaskId, dispatchId, executionBinding: claim };
   }
 
   const facts = await input.observeSession(dispatchId);

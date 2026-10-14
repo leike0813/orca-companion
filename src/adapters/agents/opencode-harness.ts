@@ -22,9 +22,9 @@ import type {
   HarnessTranscriptProofResult,
   PreparedHarnessTerminal,
   ProveHarnessSessionInput,
-  WorkerHarness,
   WorkerHarnessLaunchInput,
 } from '../../application/ports/worker-harness.js';
+import { createWorkerHarness } from '../../application/ports/worker-harness.js';
 import type { TranscriptCoverageEvidence, TranscriptGap } from '../../application/recovery/recovery-capsule.js';
 import { workerModelSelectionSchema } from '../../domain/model-configuration.js';
 import type { WorkerModelSelection } from '../../domain/model-configuration.js';
@@ -874,7 +874,7 @@ export async function prepareOpencodeRecoveryMaterial(
 }
 
 /** 应用层 WorkerHarness 端口实现；由 bootstrap registry 显式注册。 */
-export const opencodeHarness: WorkerHarness = {
+export const opencodeHarness = createWorkerHarness({
   id: OPENCODE_HARNESS_ID,
   prepareLaunch: (input) => createOpencodeWorkerLaunch(input),
   prepareReadOnlyLaunch: (input) => createOpencodeWorkerLaunch({ ...input, sandboxMode: 'read-only-local-control' }),
@@ -891,4 +891,4 @@ export const opencodeHarness: WorkerHarness = {
   },
   proveSession: (input) => proveOpencodeTranscript(input),
   inspectTranscript: (transcriptRef) => inspectOpencodeTranscript(transcriptRef),
-};
+});

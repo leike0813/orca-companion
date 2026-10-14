@@ -9,6 +9,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { WORKER_SUPPORT_LEVELS, minimumWorkerSupportLevel, workerSupportLevelAllows, type WorkerSupportLevel } from '../worker-harness-support.js';
 
 import {
   parseEntityRef,
@@ -39,7 +40,7 @@ import {
 } from './budget-policy.js';
 
 /** Manifest 的结构版本；字段集合变化时递增，读取到未知版本即拒绝。 */
-export const MANIFEST_VERSION = 4;
+export const MANIFEST_VERSION = 5;
 
 export const WORKER_ROLES = ['planner', 'implementation', 'validator', 'finalizer'] as const;
 
@@ -56,6 +57,8 @@ export type WorkerProfileRef = {
    * 缺少 modelSelection 的授权无法证明 Worker 实际用什么模型运行，解析层直接拒绝。
    */
   readonly modelSelection: WorkerModelSelection;
+  readonly supportLevel?: import('../worker-harness-support.js').WorkerSupportLevel;
+  readonly qualificationRef?: string;
 };
 
 /**
@@ -68,6 +71,8 @@ export type RecoveryUtilityProfile = {
   readonly profileRef: EntityRef<'worker-profile'>;
   readonly harness: string;
   readonly modelSelection: WorkerModelSelection;
+  readonly supportLevel?: import('../worker-harness-support.js').WorkerSupportLevel;
+  readonly qualificationRef?: string;
 };
 
 /** 角色权限；每一项都是显式布尔值，没有「默认允许」的解读空间。 */
@@ -105,6 +110,7 @@ export type ManifestGraphRef = {
 };
 
 export type ExecutionAuthorizationManifest = {
+  readonly finalizerPolicy?: { readonly mode: 'repair'; readonly repairLimit: number };
   readonly manifestVersion: number;
   readonly coordinationScopeId: CoordinationScopeId;
   readonly planningCycleId: PlanningCycleId;
@@ -115,7 +121,7 @@ export type ExecutionAuthorizationManifest = {
   readonly baselineHead: string;
   readonly orcaRunId: string;
   readonly workerProfiles: readonly WorkerProfileRef[];
-  readonly recoveryUtilityProfile: RecoveryUtilityProfile;
+  readonly recoveryUtilityProfile: RecoveryUtilityProfile | null;
   readonly permissions: RoleAuthorities;
   readonly limits: ExecutionLimits;
   readonly workspacePolicy: WorkspacePolicy;
@@ -211,7 +217,19 @@ function readWorkerHarness(
   return harness;
 }
 
-function parseWorkerProfiles(raw: unknown, path: string): IdentityResult<readonly WorkerProfileRef[]> {
+function parseSupportBinding(record: Record<string, unknown>, path: string, version: number,
+  role: WorkerRole | 'recovery_utility'): IdentityResult<Pick<WorkerProfileRef, 'supportLevel' | 'qualificationRef'>> {
+  if (version === 4) return { ok: true, value: {} };
+  const supportLevel = record['supportLevel'];
+  if (typeof supportLevel !== 'string' || !WORKER_SUPPORT_LEVELS.includes(supportLevel as WorkerSupportLevel) ||
+    !workerSupportLevelAllows(supportLevel as WorkerSupportLevel, minimumWorkerSupportLevel(role)))
+    return { ok: false, field: `${path}.supportLevel`, message: `角色 ${role} 的支持等级不足` };
+  const reference = readString(record, 'qualificationRef', path);
+  if (!reference.ok) return reference;
+  return { ok: true, value: { supportLevel: supportLevel as WorkerSupportLevel, qualificationRef: reference.value } };
+}
+
+function parseWorkerProfiles(raw: unknown, path: string, version: number): IdentityResult<readonly WorkerProfileRef[]> {
   if (!Array.isArray(raw) || raw.length === 0) {
     return { ok: false, field: path, message: '至少需要一个 Worker Profile' };
   }
@@ -237,11 +255,14 @@ function parseWorkerProfiles(raw: unknown, path: string): IdentityResult<readonl
     if (!modelSelection.ok) {
       return modelSelection;
     }
+    const support = parseSupportBinding(record, `${path}[${index}]`, version, role as WorkerRole);
+    if (!support.ok) return support;
     profiles.push({
       profileRef: { kind: 'worker-profile', id: profileRef.value.id },
       role: role as WorkerRole,
       harness: harness.value,
       modelSelection: modelSelection.value,
+      ...support.value,
     });
   }
   const seenRoles = new Set<string>();
@@ -260,7 +281,8 @@ function parseWorkerProfiles(raw: unknown, path: string): IdentityResult<readonl
   return { ok: true, value: profiles };
 }
 
-function parseRecoveryUtilityProfile(raw: unknown, path: string): IdentityResult<RecoveryUtilityProfile> {
+function parseRecoveryUtilityProfile(raw: unknown, path: string, version: number): IdentityResult<RecoveryUtilityProfile | null> {
+  if (version === 5 && raw === null) return { ok: true, value: null };
   if (typeof raw !== 'object' || raw === null) {
     return { ok: false, field: path, message: '必须是对象' };
   }
@@ -277,12 +299,15 @@ function parseRecoveryUtilityProfile(raw: unknown, path: string): IdentityResult
   if (!modelSelection.ok) {
     return modelSelection;
   }
+  const support = parseSupportBinding(record, path, version, 'recovery_utility');
+  if (!support.ok) return support;
   return {
     ok: true,
     value: {
       profileRef: { kind: 'worker-profile', id: profileRef.value.id },
       harness: harness.value,
       modelSelection: modelSelection.value,
+      ...support.value,
     },
   };
 }
@@ -431,7 +456,7 @@ export function parseManifest(raw: unknown, path = 'manifest'): IdentityResult<E
   if (!manifestVersion.ok) {
     return manifestVersion;
   }
-  if (manifestVersion.value !== MANIFEST_VERSION) {
+  if (manifestVersion.value !== 4 && manifestVersion.value !== MANIFEST_VERSION) {
     return { ok: false, field: `${path}.manifestVersion`, message: `未知 Manifest 版本 ${manifestVersion.value}` };
   }
   const coordinationScopeId = readString(record, 'coordinationScopeId', path);
@@ -470,13 +495,14 @@ export function parseManifest(raw: unknown, path = 'manifest'): IdentityResult<E
   if (!orcaRunId.ok) {
     return orcaRunId;
   }
-  const workerProfiles = parseWorkerProfiles(record['workerProfiles'], `${path}.workerProfiles`);
+  const workerProfiles = parseWorkerProfiles(record['workerProfiles'], `${path}.workerProfiles`, manifestVersion.value);
   if (!workerProfiles.ok) {
     return workerProfiles;
   }
   const recoveryUtilityProfile = parseRecoveryUtilityProfile(
     record['recoveryUtilityProfile'],
     `${path}.recoveryUtilityProfile`,
+    manifestVersion.value,
   );
   if (!recoveryUtilityProfile.ok) {
     return recoveryUtilityProfile;
@@ -505,6 +531,18 @@ export function parseManifest(raw: unknown, path = 'manifest'): IdentityResult<E
   if (!acceptedRisks.ok) {
     return acceptedRisks;
   }
+  let finalizerPolicy: ExecutionAuthorizationManifest['finalizerPolicy'];
+  if (record['finalizerPolicy'] !== undefined) {
+    const policy = record['finalizerPolicy'];
+    if (manifestVersion.value !== 5 || typeof policy !== 'object' || policy === null ||
+        (policy as Record<string, unknown>)['mode'] !== 'repair')
+      return { ok: false, field: `${path}.finalizerPolicy`, message: 'Finalizer 修复需要显式 v5 policy' };
+    const limit = (policy as Record<string, unknown>)['repairLimit'];
+    if (typeof limit !== 'number' || !Number.isSafeInteger(limit) || limit <= 0 || limit > limits.value.validatorRepairs ||
+        !permissions.value.finalizer || !permissions.value.gitIntegration)
+      return { ok: false, field: `${path}.finalizerPolicy.repairLimit`, message: 'Finalizer 修复额度或权限不可证明' };
+    finalizerPolicy = { mode: 'repair', repairLimit: limit };
+  }
 
   return {
     ok: true,
@@ -530,6 +568,7 @@ export function parseManifest(raw: unknown, path = 'manifest'): IdentityResult<E
       gitPolicy: gitPolicy.value,
       dependencyPolicy: dependencyPolicy.value,
       acceptedRisks: acceptedRisks.value,
+      ...(finalizerPolicy === undefined ? {} : { finalizerPolicy }),
     },
   };
 }

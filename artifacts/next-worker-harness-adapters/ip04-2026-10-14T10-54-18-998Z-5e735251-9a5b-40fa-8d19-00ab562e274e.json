@@ -1,0 +1,82 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-14T10:54:18.998Z",
+  "finishedAt": "2026-10-14T10:54:35.316Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-a56406ff-c400-4871-969e-86fc8c23f208",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ehbi1C",
+  "runId": "run_bb51bb16dbd5",
+  "coordinatorTerminalHandle": "term_84b6f1ef-d6c9-4b72-9acd-1a6dd18d8789",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "kimi",
+      "level": "basic",
+      "modelSelection": {
+        "model": "MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "blocked",
+          "launchId": "ip04:kimi:planner",
+          "taskId": "task_a5e94cca8adc",
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "readOnlyVerified": null,
+          "terminalHandle": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "prepare_failed",
+            "message": "prepared-terminal 失败：agent-trust-workspace"
+          }
+        },
+        {
+          "role": "implementation",
+          "kind": "blocked",
+          "launchId": "ip04:kimi:implementation",
+          "taskId": "task_ebc747f47dc9",
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "readOnlyVerified": null,
+          "terminalHandle": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "prepare_failed",
+            "message": "prepared-terminal 失败：agent-trust-workspace"
+          }
+        }
+      ],
+      "resume": null,
+      "validatorContinuation": null,
+      "recovery": null,
+      "blockers": [
+        "planner：prepare_failed prepared-terminal 失败：agent-trust-workspace",
+        "implementation：prepare_failed prepared-terminal 失败：agent-trust-workspace"
+      ],
+      "qualification": {
+        "harness": "kimi",
+        "evidenceRef": "report:ip04/companion-harness-matrix-a56406ff-c400-4871-969e-86fc8c23f208#kimi",
+        "facts": []
+      },
+      "derivedLevel": "unavailable"
+    }
+  ]
+}

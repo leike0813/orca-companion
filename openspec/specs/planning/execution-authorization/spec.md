@@ -55,12 +55,17 @@ Execution Authorization Manifest SHALL 一次性绑定 Destination、Route Map �
 
 ### Requirement: Model-bound authorization and explicit model reapproval
 
-Manifest v4 SHALL 完整绑定各生产角色的不可变 `modelSelection`（harness、model、effort 与目录来源）、并行包额度、图容量与集成复验预算；旧版本 Manifest（v1/v2/v3）SHALL 被明确拒绝，MUST NOT 被当作包含模型授权，也不自动迁移。执行期限定更新 SHALL 仅改变模型选择或并行额度，并经完整指纹和 Scope revision 重新批准；SHALL 保持 Graph Generation、Run、其他权限、政策和预算消费，不创建 Graph Revision。取消、重规划和未决 mutation SHALL 拒绝重新授权。
+Manifest SHALL 完整绑定各生产角色的不可变 `modelSelection`（harness、model、effort 与目录来源）、并行包额度、图容量与集成复验预算。新 Manifest v5 SHALL 额外固定每个 Worker Profile 的 `supportLevel` 与 `qualificationRef`，`recoveryUtilityProfile` 为显式配置或 null（null 表示历史恢复关闭）。旧版本 Manifest（v1/v2/v3）SHALL 被明确拒绝，MUST NOT 被当作包含模型授权，也不自动迁移；v4 SHALL 保留原合同、指纹与原生 Session 路径读取，不补等级、不关闭恢复。执行期限定更新 SHALL 仅改变模型选择、支持绑定、Recovery 选择或并行额度，并经完整指纹和 Scope revision 重新批准；SHALL 保持 Graph Generation、Run、其他权限、政策和预算消费，不创建 Graph Revision。取消、重规划和未决 mutation SHALL 拒绝重新授权。
 
 #### Scenario: 重新批准生效于新任务
 
 - **WHEN** 用户保存配置后审阅并批准完整新 Manifest
 - **THEN** SHALL 追加唯一授权并推进当前指针；既有 Task 不重启且预算不重置
+
+#### Scenario: 降低并行额度后的在途包
+
+- **WHEN** 重新批准的 Manifest 把并行包额度降到低于当前在途包数
+- **THEN** 在途包继续执行，空槽回收至新额度后才接纳新包
 
 #### Scenario: 陈旧审阅或重复批准
 
@@ -71,6 +76,30 @@ Manifest v4 SHALL 完整绑定各生产角色的不可变 `modelSelection`（har
 
 - **WHEN** 读取 Manifest v1、v2 或 v3
 - **THEN** SHALL 以结构化原因拒绝，不补默认模型选择、不按当前配置推断
+
+#### Scenario: 关闭恢复
+
+- **WHEN** 用户批准 Recovery Utility 为 null 的 Manifest
+- **THEN** 正常运行获准角色；中断需要历史恢复时明确阻塞并保留产出与预算
+
+#### Scenario: 旧授权仍可读取
+
+- **WHEN** 已有 v4 Task 返回结果
+- **THEN** 沿原授权及原生 Session 合同结算，不使用新等级或当前 profile 改写其含义
+
+### Requirement: Explicit project finalizer repair authorization
+
+新授权 MAY 包含 `finalizerPolicy: {mode: 'repair', repairLimit}`；额度 SHALL 为正安全整数且不超过批准时的 Validator 修复上限，并同时要求 Finalizer 与 Git Integration 权限。授权审阅 SHALL 展示修复与复验、额度和受控集成。缺该字段的授权 SHALL 保持只读；v4 SHALL 拒绝携带该字段。已准入 Finalizer 的权限、模型与预算 SHALL 始终读取原授权。
+
+#### Scenario: 原授权不扩大权限
+
+- **WHEN** 读取缺 finalizerPolicy 的 v4 或 v5 授权
+- **THEN** Finalizer SHALL 继续只读；不能按当前配置开启代码修改
+
+#### Scenario: 修复准入重放
+
+- **WHEN** 同一图世代的 Finalizer 准入被重放或执行授权被重新批准
+- **THEN** SHALL 保留原基线与授权，不重复扣费、不重置已消费额度
 
 ### Requirement: Materialized tasks retain exact model authorization
 

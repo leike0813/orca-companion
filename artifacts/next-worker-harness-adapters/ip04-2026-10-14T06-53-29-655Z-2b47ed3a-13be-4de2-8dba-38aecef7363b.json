@@ -1,0 +1,85 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-14T06:53:29.655Z",
+  "finishedAt": "2026-10-14T07:00:06.652Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-0ae81a83-e3bb-4743-9378-3f429d7ee682",
+  "orcaExecutable": "/home/joshua/.local/bin/orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-kO5qmi",
+  "runId": "run_69d30cfe1205",
+  "coordinatorTerminalHandle": "term_c81aaf36-257c-407c-b605-f79a913331ab",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "kilo",
+      "modelSelection": {
+        "model": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "implementation",
+          "kind": "blocked",
+          "launchId": "ip04:kilo:implementation",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_1deb2381f179\",\"taskId\":\"task_bc68a012d353\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_1deb2381f179\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview M | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                                                      ctrl+t variants  tab agents  ctrl+p commands\",\"                          ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"                            Get usage analytics, centralized billing, shared context, and other\",\"                            features you need to scale AI coding across your org.\",\"                          ● Tip Run /init to auto-generate project rules based on yo"
+          }
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "launchId": "ip04:kilo:finalizer",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_e408443d332e\",\"taskId\":\"task_cce3617e0ef6\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_e408443d332e\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"(message, data ?? \\\"\\\")\",\"48 |     returny file system, open '/home/joshua/.config/opencode/openviking/openviking-memory.log'\",\"49 |   }: \\\"/home/joshua/.config/opencode/openviking/openviking-memory.log\\\",\",\"50 | all: \\\"open\\\",\",\"51 |   try {0,\",\"52 |     fs.appendFileSync(logFilePath, `${JSON.stringify(entry)}\\\\n`, \\\"utf8\\\")\",\"            ^             ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"EROFS: read-only file systemGet usage analytics, centralized billing, shared context, and other og'es/@openviking/openco\",\"    path: \\\"/home/jos | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"            ^\",\"EROFS: read-only file system, open '/home/joshua/.config/opencode/openviking/openviking-memory.log'\",\"    path: \\\"/home/joshua/.config/opencode/openviking/openvi\",\" syscall: \\\"open\\\",\",\"   errno: -30,\",\"    code: \\\"EROFS\\\"\",\"      at log (/home/joshua/.cache/kilo/packages/@openvikin                                                            co\",\"de-plugin/lib/utils.mjs:52:8)\",\"      at saveState (/home/joshua/.cache/kilo/packages/@openviking/opencode-plugin@2026.10.13-1/node_modules/@openviking/\",\"opencode-plugin/lib/memory-session.mjs:103:7)\",\"Failed to write OpenViking plugin log: 47 |     if (normalizedLevel === \\\"ERROR\\\") console.error(message, data ?? \\\"\\\")\",\"48 |     return\",\"49 |   }\",\"50 |\",\"51 |   try {\",\"52 |     fs.appendFileSyncFailed to write OpenViking plugin log: 47 |     if (normalizedLevel === \\\"ERROR\\\") console.error\",\"(message, data ?? \\\"\\\")\",\"48 |     returny file system, open '/home/joshua/.config/opencode/openviking/openviking-memory.log'\",\"49 |   }: \\\"/home/joshua/.config/opencode/openviking/openviking-memory.log\\\",\",\"50 | all: \\\"open\\\",\",\"51 |   try {0,\",\"52 |     fs.appendFileSyn"
+          }
+        }
+      ],
+      "resume": {
+        "harness": "kilo",
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "dispatchId": null,
+        "contextPreserved": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "validatorContinuation": null,
+      "recovery": null,
+      "blockers": [
+        "implementation：session_report_missing kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_1deb2381f179\",\"taskId\":\"task_bc68a012d353\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_1deb2381f179\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview M | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix a TODO in the codebase\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                                                      ctrl+t variants  tab agents  ctrl+p commands\",\"                          ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"                            Get usage analytics, centralized billing, shared context, and other\",\"                            features you need to scale AI coding across your org.\",\"                          ● Tip Run /init to auto-generate project rules based on yo",
+        "finalizer：session_report_missing kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_e408443d332e\",\"taskId\":\"task_cce3617e0ef6\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_e408443d332e\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"(message, data ?? \\\"\\\")\",\"48 |     returny file system, open '/home/joshua/.config/opencode/openviking/openviking-memory.log'\",\"49 |   }: \\\"/home/joshua/.config/opencode/openviking/openviking-memory.log\\\",\",\"50 | all: \\\"open\\\",\",\"51 |   try {0,\",\"52 |     fs.appendFileSync(logFilePath, `${JSON.stringify(entry)}\\\\n`, \\\"utf8\\\")\",\"            ^             ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"EROFS: read-only file systemGet usage analytics, centralized billing, shared context, and other og'es/@openviking/openco\",\"    path: \\\"/home/jos | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"            ^\",\"EROFS: read-only file system, open '/home/joshua/.config/opencode/openviking/openviking-memory.log'\",\"    path: \\\"/home/joshua/.config/opencode/openviking/openvi\",\" syscall: \\\"open\\\",\",\"   errno: -30,\",\"    code: \\\"EROFS\\\"\",\"      at log (/home/joshua/.cache/kilo/packages/@openvikin                                                            co\",\"de-plugin/lib/utils.mjs:52:8)\",\"      at saveState (/home/joshua/.cache/kilo/packages/@openviking/opencode-plugin@2026.10.13-1/node_modules/@openviking/\",\"opencode-plugin/lib/memory-session.mjs:103:7)\",\"Failed to write OpenViking plugin log: 47 |     if (normalizedLevel === \\\"ERROR\\\") console.error(message, data ?? \\\"\\\")\",\"48 |     return\",\"49 |   }\",\"50 |\",\"51 |   try {\",\"52 |     fs.appendFileSyncFailed to write OpenViking plugin log: 47 |     if (normalizedLevel === \\\"ERROR\\\") console.error\",\"(message, data ?? \\\"\\\")\",\"48 |     returny file system, open '/home/joshua/.config/opencode/openviking/openviking-memory.log'\",\"49 |   }: \\\"/home/joshua/.config/opencode/openviking/openviking-memory.log\\\",\",\"50 | all: \\\"open\\\",\",\"51 |   try {0,\",\"52 |     fs.appendFileSyn",
+        "resume：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复"
+      ]
+    }
+  ]
+}

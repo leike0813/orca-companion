@@ -1,8 +1,9 @@
 import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import type { HarnessSessionReport, ProveHarnessSessionInput, WorkerHarness, WorkerHarnessLaunchInput } from '../../application/ports/worker-harness.js';
+import type { HarnessSessionReport, ProveHarnessSessionInput, WorkerHarnessLaunchInput } from '../../application/ports/worker-harness.js';
 import type { HarnessTranscriptCoverageResult } from '../../application/ports/worker-harness.js';
+import { createWorkerHarness } from '../../application/ports/worker-harness.js';
 import { candidateSessionPaths, installCandidateReporter, prepareCandidateLaunch, type CandidateResume } from './candidate-worker-launch.js';
 import { probeHarnessReadOnlyWorker } from './read-only-execution-wrapper.js';
 import { reportingCommand, reportingRoot, REPORT_TRAMPOLINE, readReportingJson, readReportingText } from './worker-harness-reporting.js';
@@ -294,7 +295,7 @@ export function inspectCursorTranscript(transcriptRef: string): Promise<HarnessT
   } catch { return Promise.resolve({ kind: 'transcript_unavailable', reason: 'Cursor transcript 为空、损坏、超限或不可安全读取' }); }
 }
 
-export const cursorHarness: WorkerHarness = {
+export const cursorHarness = createWorkerHarness({
   id: 'cursor',
   prepareLaunch: (input) => launch(input),
   prepareReadOnlyLaunch: (input) => launch({ ...input, sandboxMode: 'read-only-local-control' }),
@@ -332,4 +333,4 @@ export const cursorHarness: WorkerHarness = {
     'Cursor JSONL 的事件引用格式为 line:N；保留 user/assistant 消息原有顺序与 message.content。',
     'transcript_path 为 null、workspace_roots 非单根或 transcript 不可读时停止恢复。',
   ],
-};
+});
