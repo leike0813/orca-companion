@@ -23,7 +23,7 @@ import {
 } from '../adapters/agents/chat-model-factory.js';
 import { verifyModelCapabilities } from '../adapters/agents/capability-probe.js';
 import { JsonCredentialStore } from '../adapters/storage/credential-store.js';
-import { queryWorkerModels } from '../adapters/agents/worker-model-catalog.js';
+import { requireWorkerHarness } from './worker-harness.js';
 import type { CredentialStore } from '../application/ports/credential-store.js';
 import {
   configurationByRef,
@@ -700,7 +700,7 @@ export function createOrcaDoctorProbe(environment: OrcaDoctorProbeEnvironment): 
       for (const profile of profiles) {
         let catalog = catalogs.get(profile.harness);
         if (catalog === undefined) {
-          const result = await queryWorkerModels({ harness: profile.harness, cwd: environment.cwd, env: environment.env });
+          const result = await requireWorkerHarness(profile.harness).queryModels({ cwd: environment.cwd, env: environment.env });
           catalog = result.kind === 'available'
             ? `原生模型目录可用（${result.models.length} 项）`
             : `原生模型目录不可用（${result.code}），可手填未验证模型 ID`;

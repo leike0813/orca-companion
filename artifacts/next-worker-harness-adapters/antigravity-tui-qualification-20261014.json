@@ -1,0 +1,41 @@
+{
+  "schema": "antigravity-tui-qualification/1",
+  "observedAt": "2026-10-14T03:38:35.000Z",
+  "orcaVersion": "1.4.224",
+  "nativeVersion": "1.3.4",
+  "orcaModified": false,
+  "productionRegistered": true,
+  "fourRoles": {
+    "passed": true,
+    "evidence": "ip04-2026-10-14T02-15-07-641Z-5cf6ca74-2bd4-450d-b9de-dcfc280266b6.json"
+  },
+  "implementationResume": {
+    "passed": true,
+    "evidence": "ip04-2026-10-14T02-15-07-641Z-5cf6ca74-2bd4-450d-b9de-dcfc280266b6.json"
+  },
+  "validatorRecoveryContinuation": {
+    "passed": true,
+    "evidence": "ip04-2026-10-14T02-42-26-090Z-425d6eb9-bcb6-44a2-903e-6f57e500e3fc.json"
+  },
+  "limitations": [
+    "Native background RUNNING snapshots remain unavailable for complete transcript coverage; unknown notifications are not treated as completion.",
+    "Qwen provider-update startup modal remains an independent native readiness/input risk; the earlier blocked Controller attempt is retained as failed evidence.",
+    "The installed agy binary became 1.3.5 after Controller completion; its production wrapper probe passed, but the full role qualification remains recorded for 1.3.4."
+  ],
+  "mixedController": {
+    "state": "passed",
+    "fixture": "/var/tmp/orca-ip04-mixed-controller-wbaa9R",
+    "coordinationScopeId": "ip04-mixed-controller-33ba70e3-434f-4925-8c91-20003d91e78e",
+    "orcaRunId": "run_ca667d0144a9",
+    "qwenVersion": "0.25.1",
+    "acceptedRoles": ["planner", "implementation", "validator", "finalizer"],
+    "recoveryCount": 1,
+    "bindingCount": 5,
+    "settlementCount": 4,
+    "verdict": "deliverable",
+    "restartPreserved": true,
+    "evidence": "controller-20261014T033336705Z-09c8d325-3fc7-4e49-bcd9-aebad90db5e1.json",
+    "cleanupEvidence": "controller-cleanup-20261014.json",
+    "earlierBlockedEvidence": "controller-qwen-startup-20261014.json"
+  }
+}

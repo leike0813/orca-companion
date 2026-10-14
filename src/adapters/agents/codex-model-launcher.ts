@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { workerModelSelectionSchema, type WorkerModelSelection } from '../../domain/model-configuration.js';
 import { READ_ONLY_EXECUTION_WRAPPER_SOURCE } from './read-only-execution-wrapper.js';
 import { WORKER_RUNTIME_SOURCE } from './worker-runtime.js';
+import { ANTIGRAVITY_TUI_OUTPUT_SOURCE } from './antigravity-tui-output.js';
 
 // Orca recognizes codex-* process entrypoints as Codex before inspecting children.
 export const CODEX_MODEL_LAUNCHER_FILENAME = 'worker-model-launcher.mjs';
@@ -19,6 +20,7 @@ export type CodexModelLaunchDescriptor = {
   readonly reporterPath?: string;
   readonly expectedStateRoot?: string;
   readonly runtimeReportPath?: string;
+  readonly outputProtocol?: 'antigravity-tui';
   readonly readOnly?: {
     readonly workspace: string;
     readonly stateRoot: string;
@@ -76,6 +78,8 @@ import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 ${WORKER_RUNTIME_SOURCE}
 ${READ_ONLY_EXECUTION_WRAPPER_SOURCE}
+${ANTIGRAVITY_TUI_OUTPUT_SOURCE}
+const shellQuote = ${shellQuote.toString()};
 function fail(message) {
   process.stderr.write('companion worker launcher: ' + message + '\\n');
   process.exit(2);
@@ -83,11 +87,18 @@ function fail(message) {
 let descriptor;
 try { descriptor = JSON.parse(readFileSync(process.argv[2], 'utf8')); }
 catch { fail('cannot read launch descriptor'); }
-const allowed = ['version', 'executable', 'args', 'harness', 'reporterPath', 'expectedStateRoot', 'runtimeReportPath', 'readOnly'];
+const allowed = ['version', 'executable', 'args', 'harness', 'reporterPath', 'expectedStateRoot', 'runtimeReportPath', 'readOnly', 'outputProtocol'];
 if (!descriptor || descriptor.version !== ${CODEX_MODEL_DESCRIPTOR_VERSION}
   || Object.keys(descriptor).some(key => !allowed.includes(key))
   || typeof descriptor.executable !== 'string' || !Array.isArray(descriptor.args)
   || descriptor.args.some(arg => typeof arg !== 'string')) fail('invalid launch descriptor');
+const filteredTui = descriptor.outputProtocol !== undefined;
+if (filteredTui && (descriptor.outputProtocol !== 'antigravity-tui' || descriptor.harness !== 'antigravity')) fail('invalid output protocol');
+if (filteredTui && (process.platform !== 'linux' || !process.stdin.isTTY)) fail('native TUI output requires Linux terminal');
+const nativeExecutable = filteredTui ? 'script' : descriptor.executable;
+const nativeArgs = filteredTui
+  ? ['--quiet', '--flush', '--return', '--echo', 'never', '--command', [descriptor.executable, ...descriptor.args].map(shellQuote).join(' '), '/dev/null']
+  : descriptor.args;
 const env = { ...process.env };
 delete env.ORCA_COMPANION_SESSION_REPORTER;
 if (descriptor.reporterPath !== undefined) {
@@ -137,12 +148,30 @@ if (descriptor.readOnly !== undefined) {
     env.TMPDIR = temp;
     readOnlyArgs = readOnlyExecutionArguments({
       workspace, stateRoot: artifacts, reportDirectory: boundary.reportDirectory,
-      writableRoots, protectedPaths, executable: descriptor.executable, args: descriptor.args,
+      writableRoots, protectedPaths, executable: nativeExecutable, args: nativeArgs,
     });
   } catch { fail('read-only runtime unavailable'); }
 }
-const child = spawn(readOnlyArgs === null ? descriptor.executable : 'bwrap', readOnlyArgs ?? descriptor.args,
-  { env, stdio: terminalFilter === null ? 'inherit' : ['inherit', 'inherit', 'inherit', 'pipe'] });
+const child = spawn(readOnlyArgs === null ? nativeExecutable : 'bwrap', readOnlyArgs ?? nativeArgs,
+  { env, stdio: ['inherit', filteredTui ? 'pipe' : 'inherit', 'inherit', ...(terminalFilter === null ? [] : ['pipe'])] });
+let outputFailure = false;
+if (filteredTui) {
+  const stop = () => {
+    if (outputFailure) return;
+    outputFailure = true;
+    child.kill('SIGTERM');
+    const timer = setTimeout(() => child.kill('SIGKILL'), 3000);
+    timer.unref();
+  };
+  const output = createAntigravityTuiOutput(bytes => {
+    if (!process.stdout.write(bytes)) child.stdout.pause();
+  });
+  child.stdout.on('data', bytes => output.push(bytes));
+  process.stdout.on('drain', () => child.stdout.resume());
+  process.stdout.on('error', () => stop());
+  child.stdout.on('end', () => output.end());
+  child.stdout.on('error', () => stop());
+}
 if (terminalFilter !== null) {
   child.stdio[3].on('error', () => { child.kill('SIGTERM'); });
   child.stdio[3].end(terminalFilter);
@@ -150,9 +179,14 @@ if (terminalFilter !== null) {
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => { if (!child.killed) child.kill(signal); });
 child.on('error', error => {
   process.stderr.write('companion worker launcher: spawn failed (' + (error.code ?? 'unknown') + ')\\n');
-  process.exit(1);
+  if (filteredTui) { outputFailure = true; process.exitCode = 1; }
+  else process.exit(1);
 });
-child.on('close', (code, signal) => process.exit(typeof code === 'number' ? code : signal ? 1 : 0));
+child.on('close', (code, signal) => {
+  const status = outputFailure ? 1 : typeof code === 'number' ? code : signal ? 1 : 0;
+  if (filteredTui) process.exitCode = status;
+  else process.exit(status);
+});
 `;
 }
 export function installCodexModelLauncher(stateRoot: string): string {

@@ -1,0 +1,21 @@
+{
+  "schema": "antigravity-foreground-recovery-probe/1",
+  "scope": "foreground reading after original Validator continuation; not the pending-action qualification",
+  "sourceSessionId": "c6c9373d-8bd3-4226-9825-e685469a0622",
+  "sourceTranscriptRef": "/home/joshua/.gemini/antigravity-cli/brain/c6c9373d-8bd3-4226-9825-e685469a0622/.system_generated/logs/transcript_full.jsonl",
+  "kind": "ran",
+  "coverage": "complete",
+  "sessionId": "7e242cb7-49bd-4c8a-b4eb-69a921d6597e",
+  "dispatchId": "ctx_15772bbc653c",
+  "terminalState": "succeeded",
+  "modelEvidence": "gemini-3.8-flash-medium",
+  "sourceBehaviorVerified": false,
+  "readOnlyVerified": true,
+  "permissionDenied": {
+    "path": "/var/tmp/orca-harness-acceptance-fndTfZ/project-companion-harness-matrix-6fb8f182-766a-4dfa-97c1-5082175f6989/.companion/utility-write-probe-e1b911fd-c490-4f22-8cc4-dd6a413d2491",
+    "code": "EROFS",
+    "eventRef": "step:2"
+  },
+  "deliveryAcked": false,
+  "blocker": null
+}

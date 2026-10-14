@@ -1,0 +1,148 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-13T10:39:31.367Z",
+  "finishedAt": "2026-10-13T10:48:15.399Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-ba1a4681-b216-40e4-b331-64c2e054624a",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ysTX88",
+  "runId": "run_1f5f5380d7a1",
+  "coordinatorTerminalHandle": "term_c4d8eea2-7f33-4a4c-8798-2584edb8fb18",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "antigravity",
+      "modelSelection": {
+        "model": "gemini-3.8-flash-medium",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "gemini-3.8-flash-medium",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "ip04:antigravity:planner",
+          "taskId": "task_87ff7bc7d8a4",
+          "dispatchId": "ctx_47c19b856cc0",
+          "sessionId": "6ae1b055-033b-4d2a-a0d4-1c127d5aca31",
+          "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/6ae1b055-033b-4d2a-a0d4-1c127d5aca31/.system_generated/logs/transcript_full.jsonl",
+          "stateRoot": "/home/joshua/.gemini/antigravity-cli",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-ysTX88/state/antigravity/3184bf2ed91c776a846d/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "gemini-3.8-flash-medium",
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "blocked",
+          "launchId": "ip04:antigravity:implementation",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "worker_start_failed",
+            "message": "Orca 未接受 prepared Worker：unknown"
+          }
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "launchId": "ip04:antigravity:validator",
+          "taskId": "task_ed8f65c8d453",
+          "dispatchId": "ctx_c740fba5b701",
+          "sessionId": "0e859c0a-048b-4e68-a5dc-a4be8b8b0a23",
+          "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/0e859c0a-048b-4e68-a5dc-a4be8b8b0a23/.system_generated/logs/transcript_full.jsonl",
+          "stateRoot": "/home/joshua/.gemini/antigravity-cli",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-ysTX88/state/antigravity/03716ddd4dc67d9eddaf/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "gemini-3.8-flash-medium",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "launchId": "ip04:antigravity:finalizer",
+          "taskId": null,
+          "dispatchId": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "transcript 不可读：Antigravity 精确活动 transcript 不可完整核验"
+          }
+        }
+      ],
+      "resume": {
+        "harness": "antigravity",
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "dispatchId": null,
+        "contextPreserved": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "validatorContinuation": {
+        "harness": "antigravity",
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "dispatchId": null,
+        "contextPreserved": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "resume_exception",
+          "message": "Antigravity 原 Session 身份不可证明"
+        }
+      },
+      "recovery": {
+        "kind": "blocked",
+        "sourceSessionId": "0e859c0a-048b-4e68-a5dc-a4be8b8b0a23",
+        "sourceTranscriptRef": "/home/joshua/.gemini/antigravity-cli/brain/0e859c0a-048b-4e68-a5dc-a4be8b8b0a23/.system_generated/logs/transcript_full.jsonl",
+        "utility": null,
+        "capsuleRef": null,
+        "coverage": null,
+        "sourceBehaviorVerified": false,
+        "readOnlyVerified": false,
+        "permissionDenied": null,
+        "deliveryId": null,
+        "deliveryAcked": false,
+        "blocker": {
+          "code": "source_identity_unavailable",
+          "message": "Independent original transcript identity failed"
+        }
+      },
+      "blockers": [
+        "implementation：worker_start_failed Orca 未接受 prepared Worker：unknown",
+        "finalizer：transcript_unavailable transcript 不可读：Antigravity 精确活动 transcript 不可完整核验",
+        "resume：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复",
+        "recovery：source_identity_unavailable Independent original transcript identity failed",
+        "validator-continuation：resume_exception Antigravity 原 Session 身份不可证明"
+      ]
+    }
+  ]
+}

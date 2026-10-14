@@ -22,6 +22,23 @@ scripts/worker-harness-reporting.mjs 提供 install/status/uninstall --harness�
 
 WorkerHarness、Session Binding、process-runner、worker-runtime、readonly wrapper、Controller、授权/预算与 Recovery 为唯一事实源。各候选实现只处理原生协议与格式。native runtime roots 从实际 launch 环境解析，保持真实 HOME/XDG；只读仓库/Git/common dir/协调库与可写 native roots 无法分离时拒绝。生产 registry 仅收真实验收通过者，候选 tests 显式注入，不扩大生产 enum 以暴露未验证项。
 
+### D-05：Antigravity 原生 TUI 输出适配
+
+Antigravity 使用真实原生 TUI 与精确 `--conversation`。现有 launcher 的封闭私有
+`outputProtocol: antigravity-tui` 只允许 Antigravity；Linux 系统 `script` 保持原生
+PTY、尺寸、输入与信号，运行在同一只读边界内。launcher 内过滤三种完整、重复的
+输入协议设置，其他输出重置去重；控制字符串内不解析，缓冲有界，未知及截断字节
+原样转发。真实输入框、标题、hook 与 Session 仍由原生进程提供，不绘制替代 UI。
+Orca 继续拥有 preamble 提交、公开就绪与监督生命周期。新模式重新通过完整矩阵。
+Session 身份可以从原生 conversation_summaries.db 按完整 ID 只读核验 workspace；
+这不读取 Orca DB。transcript 的配对 GENERIC/ERROR 是已终结工具事件，RUNNING
+和未知状态仍拒绝完整覆盖。
+
+Recovery 读取配方使用 Task Envelope 已提供的输出字段与可信覆盖证据，只用有界
+前台 Node 读取精确 JSONL。原生 run_command 以 RunPersistent=false、
+WaitMsBeforeAsync=30000 等待短读取，不通过额外目录搜索寻找协议；原生后台任务
+留下的 RUNNING 启动记录仍按覆盖不可证明拒绝。
+
 ### D-04：分级验收与现场回收
 
 Antigravity 优先，目标 gemini-3.8-flash-medium；Kilo/Kimi/Hermes/Cline 目标 MiniMax-M3.1-Flash-Preview，使用原生用户配置。真实测试串行，复用现有四角色/resume/Validator/Recovery 与 mixed Controller fixtures。Muse/Cursor 离线覆盖完整原生协议与拒绝边界，后续真实任务明确前置账号、版本、Orca 接管及只读嵌套 sandbox 验收。每轮保留 receipt 与 exact Session 证据后，公开 CLI 回收已终结的测试资源；unknown 不换 ID 重试或清理。

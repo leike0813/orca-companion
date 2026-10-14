@@ -1,0 +1,146 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-14T02:15:07.641Z",
+  "finishedAt": "2026-10-14T02:24:43.952Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-6fb8f182-766a-4dfa-97c1-5082175f6989",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-fndTfZ",
+  "runId": "run_bfb47acf1251",
+  "coordinatorTerminalHandle": "term_842bf69b-aa03-45e2-bd72-9d4fe52e882c",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "antigravity",
+      "modelSelection": {
+        "model": "gemini-3.8-flash-medium",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "gemini-3.8-flash-medium",
+      "roles": [
+        {
+          "harness": "antigravity",
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "ip04:antigravity:planner",
+          "taskId": "task_fb4f8f34dbcc",
+          "contextToken": null,
+          "dispatchId": "ctx_509465e717b5",
+          "sessionId": "51a40988-4bd4-4ce4-a60e-b96eb5262221",
+          "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/51a40988-4bd4-4ce4-a60e-b96eb5262221/.system_generated/logs/transcript_full.jsonl",
+          "stateRoot": "/home/joshua/.gemini/antigravity-cli",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-fndTfZ/state/antigravity/3184bf2ed91c776a846d/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "gemini-3.8-flash-medium",
+          "blocker": null
+        },
+        {
+          "harness": "antigravity",
+          "role": "implementation",
+          "kind": "ran",
+          "launchId": "ip04:antigravity:implementation",
+          "taskId": "task_3efdbbb3a3ce",
+          "contextToken": null,
+          "dispatchId": "ctx_d8d0549d5d82",
+          "sessionId": "c7c78314-6e42-46a4-817b-eaf6b260929e",
+          "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/c7c78314-6e42-46a4-817b-eaf6b260929e/.system_generated/logs/transcript_full.jsonl",
+          "stateRoot": "/home/joshua/.gemini/antigravity-cli",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-fndTfZ/state/antigravity/9070c2f35548a6966b58/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "gemini-3.8-flash-medium",
+          "blocker": null
+        },
+        {
+          "harness": "antigravity",
+          "role": "validator",
+          "kind": "ran",
+          "launchId": "ip04:antigravity:validator",
+          "taskId": "task_594c43eee945",
+          "contextToken": "7859e1db-c72a-44c4-80a9-3d1f13dbe421",
+          "dispatchId": "ctx_4f6ccb585643",
+          "sessionId": "c6c9373d-8bd3-4226-9825-e685469a0622",
+          "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/c6c9373d-8bd3-4226-9825-e685469a0622/.system_generated/logs/transcript_full.jsonl",
+          "stateRoot": "/home/joshua/.gemini/antigravity-cli",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-fndTfZ/state/antigravity/03716ddd4dc67d9eddaf/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "gemini-3.8-flash-medium",
+          "blocker": null
+        },
+        {
+          "harness": "antigravity",
+          "role": "finalizer",
+          "kind": "ran",
+          "launchId": "ip04:antigravity:finalizer",
+          "taskId": "task_bf0970709f47",
+          "contextToken": null,
+          "dispatchId": "ctx_6107022890f6",
+          "sessionId": "8e87b58c-80aa-4b62-b5be-110a9803269d",
+          "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/8e87b58c-80aa-4b62-b5be-110a9803269d/.system_generated/logs/transcript_full.jsonl",
+          "stateRoot": "/home/joshua/.gemini/antigravity-cli",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-fndTfZ/state/antigravity/30f4436bbdb48d1239a4/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "gemini-3.8-flash-medium",
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "harness": "antigravity",
+        "kind": "ran",
+        "sessionId": "c7c78314-6e42-46a4-817b-eaf6b260929e",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null,
+        "dispatchId": "ctx_8c95539c0a3a",
+        "modelEvidence": "gemini-3.8-flash-medium",
+        "contextPreserved": null
+      },
+      "recovery": {
+        "kind": "blocked",
+        "sourceSessionId": "c6c9373d-8bd3-4226-9825-e685469a0622",
+        "sourceTranscriptRef": "/home/joshua/.gemini/antigravity-cli/brain/c6c9373d-8bd3-4226-9825-e685469a0622/.system_generated/logs/transcript_full.jsonl",
+        "utility": null,
+        "capsuleRef": null,
+        "coverage": {
+          "coverage": "complete",
+          "readableRange": {
+            "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/c6c9373d-8bd3-4226-9825-e685469a0622/.system_generated/logs/transcript_full.jsonl",
+            "fromEventRef": "step:0",
+            "toEventRef": "step:23"
+          },
+          "gaps": [],
+          "lastCompleteEventRef": "step:23"
+        },
+        "sourceBehaviorVerified": false,
+        "readOnlyVerified": false,
+        "permissionDenied": null,
+        "deliveryId": null,
+        "deliveryAcked": false,
+        "blocker": {
+          "code": "transcript_unavailable",
+          "message": "transcript 不可读：Antigravity 精确活动 transcript 不可完整核验"
+        }
+      },
+      "validatorContinuation": {
+        "harness": "antigravity",
+        "kind": "ran",
+        "sessionId": "c6c9373d-8bd3-4226-9825-e685469a0622",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null,
+        "dispatchId": "ctx_a801183d223c",
+        "modelEvidence": "gemini-3.8-flash-medium",
+        "contextPreserved": true
+      }
+    }
+  ]
+}

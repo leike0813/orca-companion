@@ -1,0 +1,56 @@
+{
+  "schema": "mixed-controller-qwen-startup/1",
+  "observedAt": "2026-10-14T03:08:25.871Z",
+  "result": "blocked",
+  "orcaVersion": "1.4.224",
+  "orcaModified": false,
+  "coordinationScopeId": "ip04-mixed-controller-f7c116b9-3be3-42b9-aedd-08246186e9b2",
+  "runId": "run_f00be143e685",
+  "acceptedRoles": [
+    "planner",
+    "implementation"
+  ],
+  "pendingRole": "validator",
+  "taskId": "task_1fa02b804c49",
+  "dispatchId": "ctx_42e946fccf7c",
+  "dispatchStatus": "dispatched",
+  "workerState": "ready",
+  "stage": "input_accepted",
+  "exactWorker": true,
+  "agentWait": null,
+  "terminalHandle": "term_edac64e3-248c-4bb3-a2af-e20ce024a950",
+  "incarnationId": "f2beb4fb-c060-465e-9e41-217b19f74b30",
+  "providerSessionId": "5a79b247-b1ea-466d-8045-04c163ab2b81",
+  "nativeVersion": "0.25.0",
+  "nativePid": 1117458,
+  "nativeSidecarVerified": true,
+  "transcriptExists": false,
+  "reportBytes": 0,
+  "observedStartupMenu": {
+    "title": "Built-in Provider Updates",
+    "providers": [
+      "Coding Plan",
+      "DeepSeek API Key",
+      "MiniMax API Key"
+    ],
+    "selection": "Remind me later (esc)"
+  },
+  "nativeAutomaticUpdate": {
+    "from": "0.25.0",
+    "to": "0.25.1",
+    "completed": true,
+    "requestedByCompanion": false
+  },
+  "blocker": {
+    "code": "planner_session_unbound",
+    "reason": "report_unreadable"
+  },
+  "hostStopped": true,
+  "workerTerminalPreserved": true,
+  "unknownInputNotResent": true,
+  "productionRegistered": false,
+  "limitations": [
+    "Startup menu coincided with accepted dispatch/activation; no model turn is proved. Exact input swallowing mechanism remains unproved.",
+    "No completed mixed Controller, Recovery, integration, deliverable verdict or restart evidence."
+  ]
+}

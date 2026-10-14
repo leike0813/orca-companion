@@ -1,0 +1,326 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-13T10:21:39.284Z",
+  "scope": "Companion-only native input feasibility; not production harness qualification",
+  "environment": {
+    "platform": "Ubuntu x86_64",
+    "orca": "1.4.224",
+    "antigravity": "1.3.4",
+    "model": "gemini-3.8-flash-medium",
+    "upstreamSnapshot": "cc5c85fb7a43ed52c6cd29157210020cd769d84c",
+    "orcaModified": false
+  },
+  "production": {
+    "tasksCompleted": 9,
+    "tasksTotal": 12,
+    "newHarnessesRegistered": 0,
+    "mixedController": "not_passed"
+  },
+  "nativeMode": {
+    "arguments": [
+      "--input-format",
+      "stream-json",
+      "--output-format",
+      "stream-json",
+      "--model",
+      "gemini-3.8-flash-medium",
+      "--print="
+    ],
+    "termDumbDisablesPeriodicOutput": false,
+    "streamHasPeriodicEscapeOutput": false,
+    "readOnlyProbe": {
+      "path": "/var/tmp/ocp-agy-print-proof-20261013-Kl1VUT",
+      "exitCode": 0,
+      "sentinelUnchanged": true,
+      "reportExists": true
+    },
+    "exactResume": {
+      "path": "/var/tmp/ocp-agy-stream-resume-20261013-9iSr4I",
+      "sessionId": "1165e471-cfc0-4cf0-a53a-c700846bacdf",
+      "exitCode": 0,
+      "identity": {
+        "providerSessionId": "1165e471-cfc0-4cf0-a53a-c700846bacdf"
+      },
+      "coverage": "complete",
+      "resultTurns": [
+        {
+          "status": "SUCCESS",
+          "numTurns": 2
+        },
+        {
+          "status": "SUCCESS",
+          "numTurns": 3
+        }
+      ],
+      "sameProcessContextRetained": true,
+      "usageSemantics": "cumulative per conversation; do not sum turn totals"
+    }
+  },
+  "contrasts": [
+    {
+      "mode": "outer bridge; stdout/stderr piped",
+      "path": "/var/tmp/ocp-agy-input-bridge-20261013-kM4ScI",
+      "ready": {
+        "handle": "term_af223e87-623a-47af-93f6-8af72fd19ee7",
+        "condition": "tui-idle",
+        "satisfied": true,
+        "status": "running",
+        "exitCode": null
+      },
+      "workerStartError": "agent_unconfigured",
+      "requestId": "bf1ff58a-f19f-4196-833a-ab13610a4ea8"
+    },
+    {
+      "mode": "outer bridge; native stdout/stderr inherited",
+      "path": "/var/tmp/ocp-agy-bridge-contrast-20261013-IOyWCa",
+      "ready": {
+        "handle": "term_f0d275be-c3c2-4abb-a5e0-621b7fb4b082",
+        "condition": "tui-idle",
+        "satisfied": true,
+        "status": "running",
+        "exitCode": null
+      },
+      "workerStartError": "agent_unconfigured",
+      "requestId": "db5ecdbd-4eeb-40a4-871d-dcbfbabee8ce"
+    },
+    {
+      "mode": "no bridge; native launcher",
+      "path": "/var/tmp/ocp-agy-bridge-contrast-20261013-IOyWCa",
+      "ready": {
+        "handle": "term_f2745858-1417-4481-8273-db25ca0ac01e",
+        "condition": "tui-idle",
+        "satisfied": true,
+        "status": "running",
+        "exitCode": null
+      },
+      "workerStartError": "dispatch_inactive",
+      "requestId": "9296acf9-7dc4-4da4-9859-9ee9617aac55",
+      "dispatchId": "ctx_e187cb472c9f",
+      "workerState": "failed",
+      "failureStage": "process_exited",
+      "exitCode": 1,
+      "interpretation": "Agent preflight passed and Worker was materialized; this is a side-effecting failure. Do not classify as rejected or retry with a new operation ID.",
+      "inputProtocolFailure": "not independently captured; do not infer exact error from process exit"
+    }
+  ],
+  "inlineProbe": {
+    "path": "/var/tmp/ocp-agy-inline-bridge-20261013-ch3PAR",
+    "prototype": "/var/tmp/ocp-agy-inline-bridge-20261013-ch3PAR/worker-model-launcher.mjs",
+    "workspace": "1113b789-f8c6-449a-b62e-944046c1a522::/home/joshua/Workspace/Code/JavaScript/orca-companion",
+    "terminal": "term_1889e464-712e-4770-8061-3cbd5e9d15ea",
+    "incarnation": "d5e886d5-2e5a-4b31-ae22-5cab3ff04bf0",
+    "coordinator": "term_02e0c236-25dd-44a8-a3bc-0737b3134942",
+    "run": "run_16a3f36bdf6d",
+    "task": "task_ea2c94143b93",
+    "dispatch": "ctx_43422de71c99",
+    "operationRequestId": "88d8c0ca-c6f1-4b7a-ac62-66d560fa069f",
+    "ready": {
+      "handle": "term_1889e464-712e-4770-8061-3cbd5e9d15ea",
+      "condition": "tui-idle",
+      "satisfied": true,
+      "status": "running",
+      "exitCode": null
+    },
+    "workerStart": {
+      "state": "ready",
+      "stage": "input_accepted",
+      "turnStart": "unsupported",
+      "promptObservation": "unsupported"
+    },
+    "submission": {
+      "count": 1,
+      "bytes": 5600,
+      "lines": 87,
+      "multilineMarkerIntact": true,
+      "unicodeIntact": true
+    },
+    "session": {
+      "id": "97e98418-f9a5-4565-b229-d26d14748bad",
+      "hookObservedAt": "2026-10-13T10:15:33.453Z",
+      "exactNativeIdentity": "97e98418-f9a5-4565-b229-d26d14748bad",
+      "coverage": "complete",
+      "eventRange": {
+        "from": "step:0",
+        "to": "step:7"
+      },
+      "bindingProof": {
+        "dispatchStartedAt": "2026-10-13T10:15:28Z",
+        "bindingDeadlineAt": "2026-10-13T10:15:58.000Z",
+        "proof": {
+          "kind": "proven",
+          "proof": {
+            "providerSessionId": "97e98418-f9a5-4565-b229-d26d14748bad",
+            "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/97e98418-f9a5-4565-b229-d26d14748bad/.system_generated/logs/transcript_full.jsonl",
+            "observedAt": "2026-10-13T10:15:33.453Z"
+          }
+        }
+      },
+      "observedHookModel": "gemini-3.8-flash-medium"
+    },
+    "nativeResult": {
+      "status": "SUCCESS",
+      "modelResultMarkerIntact": true,
+      "modelResultUnicodeIntact": true,
+      "packageNameConfirmed": true,
+      "numTurns": 1,
+      "usage": {
+        "input_tokens": 35384,
+        "output_tokens": 2510,
+        "thinking_tokens": 2008,
+        "cache_read_tokens": 75610,
+        "total_tokens": 37894
+      }
+    },
+    "settlement": {
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "workerDoneCount": 1,
+      "messageId": "msg_c6aed5c775f7",
+      "deliveryId": "delivery_0f7d4c1ff1ba",
+      "outcome": "succeeded",
+      "identityVerified": true,
+      "acknowledged": "delivery_0f7d4c1ff1ba"
+    },
+    "boundary": "Existing production descriptor, real native user state, bwrap/seccomp, repository/Git read-only; only stdin framing added inside actual launcher; stdout/stderr inherited unchanged"
+  },
+  "interpretation": {
+    "proven": "Inline one-turn framing preserved real native identity and public readiness, delivered Orca preamble once, produced exact native report/transcript and successful supervised completion.",
+    "notProven": [
+      "precise daemon classification rule behind outer-wrapper failure",
+      "production stream launcher",
+      "public supervised multi-turn follow-up and resumed dispatch",
+      "role matrix with stream bridge",
+      "mixed Controller interruption/Recovery/integration/deliverable/restart",
+      "production registration"
+    ],
+    "prototypeLimits": [
+      "one-turn admission only",
+      "parser self-check covers 11 representative framing cases, not full terminal input contract",
+      "native result observation/queue/interrupt/EOF not production implemented"
+    ],
+    "preserved": [
+      "original mixed Controller scopes, resources and pending operations",
+      "Orca install and submodule",
+      "existing production harness registry"
+    ],
+    "redaction": "Raw preamble, capabilities, native tool command and full transcript retained only in mode-0600 temporary files; evidence contains selected non-secret fields."
+  },
+  "cleanup": {
+    "path": "/var/tmp/ocp-agy-inline-bridge-20261013-ch3PAR/cleanup.json",
+    "allConfirmedExited": true,
+    "allClosed": true,
+    "terminals": [
+      {
+        "terminal": "term_d3dec9ab-fffa-4fb2-98ba-f08f9de53279",
+        "incarnation": "e06a1fba-79e2-4904-9b94-6f430ff1c42b",
+        "exit": "exited",
+        "exitCode": -1,
+        "closeReceipt": "772c571b-d37f-4c1d-be6e-876e591b9029",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_d3dec9ab-fffa-4fb2-98ba-f08f9de53279",
+            "tabId": "cd94ac9c-1fde-43f8-ac4d-918a828156b3",
+            "ptyKilled": true
+          }
+        }
+      },
+      {
+        "terminal": "term_f9fece4e-d170-48ad-a117-363ed0750471",
+        "incarnation": "e92bdc6e-f65a-4470-9f56-ead1a21ac9a2",
+        "exit": "exited",
+        "exitCode": -1,
+        "closeReceipt": "63443262-74f0-4b8f-b8e1-7ca55ba450c2",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_f9fece4e-d170-48ad-a117-363ed0750471",
+            "tabId": "54c3b57b-bfbc-4653-8ba9-a89cc182f7ae",
+            "ptyKilled": true
+          }
+        }
+      },
+      {
+        "terminal": "term_fbbcf86f-ba10-4911-9bb4-105a522877fc",
+        "incarnation": "b1cc1f00-73a1-4c70-9af4-410b9253ea02",
+        "exit": "exited",
+        "exitCode": -1,
+        "closeReceipt": "3320b8a9-5198-49eb-b929-bae9c1d26edd",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_fbbcf86f-ba10-4911-9bb4-105a522877fc",
+            "tabId": "c249377b-d680-4027-b21b-3480e65dd7b9",
+            "ptyKilled": true
+          }
+        }
+      },
+      {
+        "terminal": "term_f0d275be-c3c2-4abb-a5e0-621b7fb4b082",
+        "incarnation": "6a59197f-4202-4381-b859-6cf6de0b84d7",
+        "exit": "exited",
+        "exitCode": -1,
+        "closeReceipt": "05bd7514-d124-4bda-b2f8-a54de4d83ee8",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_f0d275be-c3c2-4abb-a5e0-621b7fb4b082",
+            "tabId": "f213279f-cdc6-4e9b-929f-c5182e1236e2",
+            "ptyKilled": true
+          }
+        }
+      },
+      {
+        "terminal": "term_f2745858-1417-4481-8273-db25ca0ac01e",
+        "incarnation": "c5c2022c-cc67-44a0-9c8b-9fae2fa4df84",
+        "exit": "exited",
+        "exitCode": -1,
+        "closeReceipt": "eeaf2fc2-026e-4544-8c13-c3f2dd8b8b4c",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_f2745858-1417-4481-8273-db25ca0ac01e",
+            "tabId": "c9c963fe-06fe-4865-b4e1-29d66647d07a",
+            "ptyKilled": true
+          }
+        }
+      },
+      {
+        "terminal": "term_02e0c236-25dd-44a8-a3bc-0737b3134942",
+        "incarnation": "03b9e39e-c10b-4c17-b832-86d9ab68487c",
+        "exit": "exited",
+        "exitCode": -1,
+        "closeReceipt": "f9c9760a-2975-4e0d-8b6d-3e8caf3031a2",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_02e0c236-25dd-44a8-a3bc-0737b3134942",
+            "tabId": "21ea46cf-a2eb-4d0c-af9b-2f82d9042ff6",
+            "ptyKilled": true
+          }
+        }
+      },
+      {
+        "terminal": "term_1889e464-712e-4770-8061-3cbd5e9d15ea",
+        "incarnation": "d5e886d5-2e5a-4b31-ae22-5cab3ff04bf0",
+        "exit": "exited",
+        "exitCode": -1,
+        "closeReceipt": "9cea4ce5-32e8-4daa-8528-1d04564d6045",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_1889e464-712e-4770-8061-3cbd5e9d15ea",
+            "tabId": "1430e277-eb09-42ce-a883-1de6b3362412",
+            "ptyKilled": true
+          }
+        }
+      }
+    ]
+  },
+  "validation": {
+    "framingSelfCheck": "11 checks passed",
+    "diffCheck": "passed",
+    "openSpecStrict": "passed",
+    "productionTests": "not rerun; this round changed documents/evidence and temporary probes only"
+  }
+}

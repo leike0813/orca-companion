@@ -1,0 +1,46 @@
+{
+  "observedAt": "2026-10-14T03:55:15Z",
+  "status": "verification_passed",
+  "verification": "../../openspec/changes/add-next-worker-harness-adapters/verification.md",
+  "fullTestLog": "/var/tmp/ocp-agy-final-registration-tests-20261014.log",
+  "targetedAudit": "audit-20261014.json",
+  "commands": [
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm lint",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm build",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm exec vitest run --maxWorkers=4",
+      "exitCode": 0,
+      "passed": 2551,
+      "skipped": 18
+    },
+    {
+      "command": "openspec validate add-next-worker-harness-adapters --strict",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    }
+  ],
+  "productionProbe": {
+    "kind": "available",
+    "stage": "host-verify",
+    "harness": "antigravity",
+    "harnessVersion": "1.3.5",
+    "executableOverride": false
+  },
+  "limitations": [
+    "Native 1.3.5 production wrapper probe is not a repeated four-role qualification.",
+    "Independent verification artifact is not produced in apply."
+  ]
+}

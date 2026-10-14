@@ -1,0 +1,82 @@
+{
+  "change": "add-next-worker-harness-adapters",
+  "observedAt": "2026-10-13T05:26:08Z",
+  "result": "blocked_original_terminal_unavailable",
+  "productionRegistration": false,
+  "orcaVersion": "1.4.224",
+  "runtimeId": "de628ab7-cfd4-4fcf-a7b3-6a90e4de8dc9",
+  "fixtureRoot": "/var/tmp/orca-ip04-mixed-controller-R6AahD",
+  "repository": "/var/tmp/orca-ip04-mixed-controller-R6AahD/repo",
+  "coordinationScopeId": "ip04-mixed-controller-485da76f-4ba2-4c13-941a-ff479dde1049",
+  "orcaRunId": "run_3c725fe4d971",
+  "originalTerminalCreateBackendRequestId": "87c71bb8-dc8a-4b7a-9023-0205ffe4292e",
+  "preparedTerminal": {
+    "handle": "term_dbf35862-aad9-454b-868f-10e78551eee4",
+    "worktree": "/home/joshua/orca/workspaces/repo/wp-03ea5cb8acd988a9afaa7fc37665aec402158ff3fea6bde51e16352d949905cd",
+    "show": { "receiptId": "8f12c337-37c8-4aa0-8195-ebca30bddd64", "errorCode": "terminal_handle_stale" },
+    "wait": { "receiptId": "83c57d9c-6641-4dc3-a73f-0c264239cba5", "errorCode": "terminal_handle_stale" },
+    "list": {
+      "receiptIds": ["10427581-05f0-4bbc-b2dd-2c2697884378", "2ff40894-e1e4-470b-b122-24e5738a9ce5"],
+      "totalCount": 0,
+      "truncated": false,
+      "hostIds": ["local"],
+      "omittedHostIds": []
+    },
+    "readiness": "unproven",
+    "liveness": "unverifiable"
+  },
+  "coordinatorTerminal": {
+    "handle": "term_9fa3f57a-c016-4d1f-adeb-e3f10e00fa02",
+    "show": { "receiptId": "1e143ce1-ef10-4171-b923-e764fe6246ea", "errorCode": "terminal_handle_stale" },
+    "list": { "receiptId": "333423cc-26ac-405c-91a0-4355d2f47dee", "totalCount": 0, "truncated": false, "omittedHostIds": [] }
+  },
+  "worktree": {
+    "receiptId": "67a01a0d-d243-4779-877d-ab2cf7b656ee",
+    "instanceId": "a16cf902-f407-4d1f-8301-39c6062addf7",
+    "head": "01dd4e763f75008858030b6f12f035376af994a9",
+    "isArchived": false
+  },
+  "run": {
+    "receiptId": "8e367f01-6b84-408f-b58f-f241eda8cb08",
+    "coordinatorHandle": "term_9fa3f57a-c016-4d1f-adeb-e3f10e00fa02",
+    "consumerGeneration": 1,
+    "legacy": false
+  },
+  "task": { "receiptId": "98008685-ec46-46af-8b2d-15df9f38f70c", "id": "task_e5664e96498c", "status": "ready" },
+  "workers": { "receiptId": "0ee6092d-2366-46d1-9b6f-3c10b25c6209", "total": 0, "hasMore": false },
+  "actions": [
+    "Queried only the original exact terminal handles, worktree, Run and Task through the public CLI.",
+    "Opened the existing Orca desktop with the public open command, then repeated exact-worktree terminal lists; both remained empty.",
+    "Requested GUI inspection/restoration of existing fixture terminals without creating replacements."
+  ],
+  "validation": { "command": "pnpm exec vitest run tests/adapters/agents/antigravity-harness.test.ts tests/application/worker-launch.test.ts --maxWorkers=2", "testFilesPassed": 2, "testsPassed": 20, "exitCode": 0 },
+  "uncertainty": "Stale handles and an empty terminal inventory do not prove process exit, terminal deletion, or the cause of the earlier readiness timeout. Historical 1.4.222 acceptance is not 1.4.224 acceptance.",
+  "resumeWhen": "The original resources are restored and their exact identity is proven, followed by a public tui-idle receipt with satisfied=true and status=running. Any changed runtime handle also needs a supported identity reconciliation before Controller recovery.",
+  "resourcePolicy": "Keep the original Scope, authorization, Run, Task and terminal-create intent. Do not create a new terminal, replace stored handles, replay accepted mutations or clean up an unproven process.",
+  "guiFollowUp": {
+    "observedAt": "2026-10-13T07:27:23Z",
+    "userObservation": "Existing fixture worktree terminal is visible in Orca and shows an input area.",
+    "listReceiptId": "98a8e02d-a7c9-44ef-80e9-46bd3c9f1a67",
+    "handle": "term_ebc00c49-0459-4dbc-933d-eed079421bd9",
+    "incarnationId": "3ae12a0a-07d3-45dc-9e48-0bdabdd2e8a4",
+    "originalIncarnationId": "5090d715-9cf1-484a-95e4-c9a36ef7a803",
+    "orphaned": true,
+    "connected": true,
+    "writable": true,
+    "omittedHostIds": ["local"],
+    "showReceiptId": "4d04935e-3fc0-4ee5-ad54-0ca685e8b05e",
+    "paneRuntimeId": -1,
+    "rendererGraphEpoch": 1,
+    "agentWait": null,
+    "readReceiptId": "07b7c144-79ad-4615-88e5-7087638cc141",
+    "outputSummary": "Stream contains an Antigravity 1.3.3 banner followed by a shell prompt; this does not prove current agent liveness or continuity with the original launch.",
+    "originalHandleShowReceiptId": "884a8046-7b19-4f1f-b091-8cdaaf848ab0",
+    "originalHandleErrorCode": "terminal_handle_stale",
+    "wait": { "receiptId": "f506564e-d9d5-400e-a9e9-96a53ed48804", "timeoutMs": 10000, "errorCode": "timeout" },
+    "sameOriginalResourceProven": false,
+    "newFixtureApproval": "User explicitly approved preserving the original scene and creating an independent isolated fixture to continue the full Antigravity/Qwen Controller acceptance.",
+    "newFixtureCreated": false
+  },
+  "controllerRerun": false,
+  "verificationArtifactCreated": false
+}

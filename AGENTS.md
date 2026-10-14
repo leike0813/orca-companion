@@ -44,6 +44,7 @@ git submodule update --init references/orca
 
 `references/orca` 默认只读，仅用于核查接口和实现：
 
+- Companion 适配未修改的 Orca 公开 CLI/runtime；禁止通过修改 Orca 源码、打补丁或替换定制版 Orca 满足接入与验收条件。能力缺口在本项目 adapter/launcher 内解决，无法可靠适配的候选保持阻塞或延期。
 - Companion 代码不得导入上游私有源码或为其建立 TypeScript alias。
 - submodule 不进入 workspace、常规 build/lint/test 扫描或发布包。
 - 普通 Companion 工作不得修改上游、安装其整套依赖或让发布包依赖该目录存在。
@@ -119,7 +120,7 @@ type OperationOutcome<T> =
 - Worker liveness 至少保留 `live`、`exited` 与 `unverifiable`；不可达或信息不完整不能推断退出或触发重复派发。
 - 禁止伪造 terminal 身份、写 Orca DB 补绑定或使用私有接口绕过能力缺口。
 
-Worker Harness 经 `src/application/ports/worker-harness.ts` 端口与 `src/bootstrap/worker-harness.ts` 显式注册表接入，注册项为 codex、claude、opencode、pi、omp、command-code、qwen-code；未注册身份在派发前拒绝。逐角色 profile 固定 harness 与 `modelSelection`（model、effort 及可信目录来源），恢复、Retry 和 Validator 续接从原 Task 的授权绑定读取它们。端口同时提供原生模型目录的有界查询、精确 transcript 身份复核与 Recovery 读取配方，由所属 adapter 拥有；启动在 harness 真实用户环境中进行，`worker-runtime.ts` 只把真实 launch 环境解析出的非秘密 runtime roots 写入精确 Session 报告。Planner、Implementation、Validator 和 Finalizer 使用角色隔离 Session；Validator 在同一任务的“验证—范围内修复—复验”内复用同一真实 Session。Finalizer 使用新的只读项目级 Session。精确 Session Binding 由各 adapter 的 hook、extension 或公开 session API 与 transcript 共同证明，不能按 cwd/mtime 猜最新 transcript，也不能用 terminal 输出冒充 provider transcript。
+Worker Harness 经 `src/application/ports/worker-harness.ts` 端口与 `src/bootstrap/worker-harness.ts` 显式注册表接入，注册项为 codex、claude、opencode、pi、omp、command-code、qwen-code、antigravity；未注册身份在派发前拒绝。逐角色 profile 固定 harness 与 `modelSelection`（model、effort 及可信目录来源），恢复、Retry 和 Validator 续接从原 Task 的授权绑定读取它们。端口同时提供原生模型目录的有界查询、精确 transcript 身份复核与 Recovery 读取配方，由所属 adapter 拥有；启动在 harness 真实用户环境中进行，`worker-runtime.ts` 只把真实 launch 环境解析出的非秘密 runtime roots 写入精确 Session 报告。Planner、Implementation、Validator 和 Finalizer 使用角色隔离 Session；Validator 在同一任务的“验证—范围内修复—复验”内复用同一真实 Session。Finalizer 使用新的只读项目级 Session。精确 Session Binding 由各 adapter 的 hook、extension 或公开 session API 与 transcript 共同证明，不能按 cwd/mtime 猜最新 transcript，也不能用 terminal 输出冒充 provider transcript。
 
 Worker 不管理 provider 连接、凭据或原生配置：认证、登录态与 provider endpoint 由 harness 在自己的真实用户环境中提供，启动继承真实 `process.env`；Codex 用 inline `-c` hooks 与 `--no-daemon`，Claude 用只叠加 report/security 的 `--settings` 并保留 native setting sources，pi/omp 用 extension，OpenCode 用 `--standalone` 与公开 Session API。Coordinator 连接仅使用 managed API Key 引用。只读角色与探针共用 `read-only-execution-wrapper.ts` 的 bwrap 包装器：仓库、Git、Git common dir 与协调库拒写，真实 native state 目录与 Companion 工件目录可写；可写根与拒写根重叠且无法证明时能力判为不可用。
 

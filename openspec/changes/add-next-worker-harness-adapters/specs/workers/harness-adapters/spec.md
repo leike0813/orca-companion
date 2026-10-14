@@ -21,7 +21,12 @@ Companion SHALL 提供独立的原生报告插件安装、状态检查与卸载�
 
 ### Requirement: 下一批候选保持精确原生 Session 契约
 
-Antigravity、Kilo、Kimi、Hermes、Cline、Meta Muse 与 Cursor adapters SHALL 实现真实 TUI 启动、精确身份绑定、按原 Session 恢复、有界模型目录、transcript 覆盖检查与 Recovery 读取配方。公开 hook、plugin 或 Session API 报告 SHALL 与精确 native metadata/transcript 独立交叉核验；无法证明身份、工作区或活动历史覆盖时 SHALL 阻塞，MUST NOT 从最近会话、终端文本或私有数据库猜测。只读路径 SHALL 复用已验证的生产包装器，同时保留真实 Orca foreground 身份。
+Antigravity、Kilo、Kimi、Hermes、Cline、Meta Muse 与 Cursor adapters SHALL 在公开 Orca 终端内启动真实原生 TUI，实现精确身份绑定、按原 Session 恢复、有界模型目录、transcript 覆盖检查与 Recovery 读取配方。公开 hook、plugin 或 Session API 报告 SHALL 与精确 native metadata/transcript 独立交叉核验；无法证明身份、工作区或活动历史覆盖时 SHALL 阻塞，MUST NOT 从最近会话、终端文本或私有数据库猜测。只读路径 SHALL 复用已验证的生产包装器，同时保留真实 Orca foreground 身份。
+
+#### Scenario: 原生 TUI 的重复协议输出
+
+- **WHEN** Antigravity 原生 TUI 重申已生效的输入协议设置
+- **THEN** 同一 launcher 仅过滤完整识别且重复的协议设置，保留真实输入框、其他字节和全部 stdin；解析有界、控制字符串内的内容不被过滤，其他输出使后续设置重新转发。Orca 继续拥有 preamble 提交、公开就绪和监督生命周期，不伪造标题、状态或 Session
 
 #### Scenario: 按精确身份恢复
 

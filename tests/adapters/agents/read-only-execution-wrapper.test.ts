@@ -250,25 +250,25 @@ test('受限命令超时或 launcher 启动失败时不得报告可用', async (
 
 const selection: WorkerModelSelection = { model: 'native-model', effort: null, effortCapability: null, catalogSource: null };
 
-test('通用探针按 binding 的 harness 选实现：native 两次都走同一生产 descriptor，codex 走 Codex profile', async () => {
+test.each([['claude', 'claude'], ['antigravity', 'agy']])('通用探针按 binding 的 %s 选实现：native 两次都走同一生产 descriptor，codex 走 Codex profile', async (harness, executable) => {
   const launcher = fakeLauncher();
-  const nativeResult = await probeHarnessReadOnlyWorker('claude', selection, {
+  const nativeResult = await probeHarnessReadOnlyWorker(harness, selection, {
     env: { PATH: '/usr/bin' },
     runner: launcher.runner,
     timeoutMs: 5_000,
   });
   expect(nativeResult.kind).toBe('available');
-  expect(nativeResult.harness).toBe('claude');
+  expect(nativeResult.harness).toBe(harness);
   expect(nativeResult.harnessVersion).toBe('2.1.289');
   expect(nativeResult.codexVersion).toBe('2.1.289');
   // 两次运行都是生产 launcher 命令，且共用同一个 descriptor 目录（同一状态根）。
   expect(launcher.descriptors).toHaveLength(2);
   expect(launcher.descriptors[0]?.executable).toBe(process.execPath);
-  expect(launcher.descriptors[1]?.executable).toBe('claude');
+  expect(launcher.descriptors[1]?.executable).toBe(executable);
   expect(launcher.descriptors[1]?.args).toEqual(['--version']);
   expect(launcher.descriptors[0]?.readOnly?.stateRoot).toBe(launcher.descriptors[1]?.readOnly?.stateRoot);
   expect(launcher.descriptors[1]?.readOnly).toEqual(launcher.descriptors[0]?.readOnly);
-  expect(describeHarnessReadOnlyCapability(nativeResult)).toContain('claude');
+  expect(describeHarnessReadOnlyCapability(nativeResult)).toContain(harness);
 
   const codexResult = await probeHarnessReadOnlyWorker('codex', selection, {
     env: { PATH: '/usr/bin' },

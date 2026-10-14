@@ -56,6 +56,9 @@ export const IDENTITY_ENVIRONMENT_KEYS: readonly string[] = [
   'ORCA_TERMINAL_HANDLE',
   'ORCA_PANE_KEY',
   'ORCA_TAB_ID',
+  'ORCA_AGENT_SESSION_ID',
+  'ORCA_AGENT_SESSION_SPAWN_TOKEN',
+  'ORCA_STRUCTURED_SESSION',
 ];
 
 export function toChildEnvironment(env: Readonly<Record<string, string | undefined>>): Record<string, string> {

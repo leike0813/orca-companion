@@ -1,0 +1,152 @@
+{
+  "observedAt": "2026-10-14T03:37:23.141Z",
+  "run": "run_ca667d0144a9",
+  "fixture": "/var/tmp/orca-ip04-mixed-controller-wbaa9R",
+  "controllerTestExit": 0,
+  "closed": [
+    {
+      "dispatch": "ctx_84d14da5e898",
+      "handle": "term_6ae8ca97-383b-4d68-9457-28380bc19150",
+      "incarnationId": "11773f18-f60e-41ee-bbab-dd60992a631a",
+      "release": {
+        "dispatchId": "ctx_84d14da5e898",
+        "state": "retained",
+        "reason": "external_terminal",
+        "processAction": "none",
+        "archive": null,
+        "mutation": {
+          "requestId": "d14774c2-7bca-4bc4-971d-fcb008233385",
+          "replayed": false
+        }
+      },
+      "closed": {
+        "close": {
+          "handle": "term_6ae8ca97-383b-4d68-9457-28380bc19150",
+          "tabId": "19b53578-0c13-41ca-9324-ff9773a0f6ed",
+          "ptyKilled": true
+        }
+      }
+    },
+    {
+      "dispatch": "ctx_40329b05739c",
+      "handle": "term_cb549db8-8f55-4cbb-9301-395fa006dada",
+      "incarnationId": "80b7964e-3628-47c1-923a-347f6372dcdc",
+      "release": {
+        "dispatchId": "ctx_40329b05739c",
+        "state": "retained",
+        "reason": "external_terminal",
+        "processAction": "none",
+        "archive": null,
+        "mutation": {
+          "requestId": "f79f0db4-fdda-4ae8-8872-12ff86ef850f",
+          "replayed": false
+        }
+      },
+      "closed": {
+        "close": {
+          "handle": "term_cb549db8-8f55-4cbb-9301-395fa006dada",
+          "tabId": "bfb20304-51fe-4eeb-9dde-5b4e4b2d2aad",
+          "ptyKilled": true
+        }
+      }
+    },
+    {
+      "dispatch": "ctx_03905bd3ef22",
+      "handle": "term_0205f73c-2447-41e1-8163-670ee76ce140",
+      "incarnationId": "f981b9b8-afe0-428c-b5b3-daa8d7678d81",
+      "release": {
+        "dispatchId": "ctx_03905bd3ef22",
+        "state": "retained",
+        "reason": "external_terminal",
+        "processAction": "none",
+        "archive": null,
+        "mutation": {
+          "requestId": "b42b5f1d-b6fe-453e-a6b1-640cd142e384",
+          "replayed": false
+        }
+      },
+      "closed": {
+        "close": {
+          "handle": "term_0205f73c-2447-41e1-8163-670ee76ce140",
+          "tabId": "8c8403cd-a1d3-4223-8020-a0b76257b9de",
+          "ptyKilled": true
+        }
+      }
+    },
+    {
+      "dispatch": "ctx_3521b1ac0138",
+      "handle": "term_ee5ba9e7-46ab-409d-8a35-6c8e836cf9b3",
+      "incarnationId": "79cf9104-1eaf-4866-abcf-cbabbb416e9d",
+      "release": {
+        "dispatchId": "ctx_3521b1ac0138",
+        "state": "retained",
+        "reason": "external_terminal",
+        "processAction": "none",
+        "archive": null,
+        "mutation": {
+          "requestId": "1b349538-7a5c-4f9c-8c38-632c69b20744",
+          "replayed": false
+        }
+      },
+      "closed": {
+        "close": {
+          "handle": "term_ee5ba9e7-46ab-409d-8a35-6c8e836cf9b3",
+          "tabId": "5b6c369e-ef8a-4e8b-8607-ada2f3ed5045",
+          "ptyKilled": true
+        }
+      }
+    },
+    {
+      "dispatch": "ctx_82bf4dbff628",
+      "handle": "term_2f6bc7d5-aa11-4de1-92b8-11ddb698d2c0",
+      "incarnationId": "eccb2736-f42c-4ec5-b292-6fdfd68326b4",
+      "release": {
+        "dispatchId": "ctx_82bf4dbff628",
+        "state": "retained",
+        "reason": "external_terminal",
+        "processAction": "none",
+        "archive": null,
+        "mutation": {
+          "requestId": "b035b2ea-f470-4806-baaa-2c408c7335bc",
+          "replayed": false
+        }
+      },
+      "closed": {
+        "close": {
+          "handle": "term_2f6bc7d5-aa11-4de1-92b8-11ddb698d2c0",
+          "tabId": "61c820a5-fce2-4fc0-b4c9-51ff2549174c",
+          "ptyKilled": true
+        }
+      }
+    },
+    {
+      "handle": "term_3f7b419e-7198-412d-82fb-df34fddf467e",
+      "incarnationId": "b4b64417-693d-43d1-bf61-2e97a2a932ea",
+      "worktreePath": "/home/joshua/orca/workspaces/repo/wp-2d9ba044ed3798bc6d3e808c054370a0c82b765bfd932a8e402dd96435162dd5",
+      "closed": {
+        "close": {
+          "handle": "term_3f7b419e-7198-412d-82fb-df34fddf467e",
+          "tabId": "c3efc54b-7594-4a9b-b1b9-0b55c7a0678e",
+          "ptyKilled": true
+        }
+      }
+    },
+    {
+      "handle": "term_c222ffed-3586-41a6-84af-9c5a3eadb0a2",
+      "incarnationId": "b03719f1-d9c2-4b86-a165-51855a12c6d9",
+      "worktreePath": "/var/tmp/orca-ip04-mixed-controller-wbaa9R/repo",
+      "closed": {
+        "close": {
+          "handle": "term_c222ffed-3586-41a6-84af-9c5a3eadb0a2",
+          "tabId": "c27cdada-f1a6-4f8d-a3f8-7c66752567e5",
+          "ptyKilled": true
+        }
+      }
+    }
+  ],
+  "retained": [
+    "Successful fixture and worktree files retained for independent verification",
+    "Earlier failed Controller fixtures and unknown resources untouched"
+  ],
+  "state": "complete"
+}

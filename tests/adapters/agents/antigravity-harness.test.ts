@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, test } from 'vitest';
 import { antigravityHarness, antigravityReporterSource } from '../../../src/adapters/agents/antigravity-harness.js';
 import { COMPANION_REPORT_HOOK, maintainReporting, readReportingJson, REPORT_TRAMPOLINE } from '../../../src/adapters/agents/worker-harness-reporting.js';
@@ -55,6 +56,28 @@ describe('Antigravity exact native Session', () => {
     expect((await antigravityHarness.inspectTranscript(f.transcript)).kind).toBe('covered');
     writeFileSync(f.transcript, JSON.stringify({ step_index: 2, status: 'DONE', type: 'PLANNER_RESPONSE', content: 'out', created_at: 'now' }));
     expect((await antigravityHarness.inspectTranscript(f.transcript)).kind).toBe('transcript_unavailable');
+  });
+  test('persisted exact native summary survives cache replacement and refuses workspace conflicts', async () => {
+    const f = fixture();
+    writeFileSync(join(f.native, 'cache', 'conversation_metadata.json'), '{"conversations":{}}');
+    const db = new DatabaseSync(join(f.native, 'conversation_summaries.db'));
+    try {
+      db.exec('CREATE TABLE conversation_summaries (conversation_id TEXT PRIMARY KEY, workspace_uris TEXT)');
+      const save = db.prepare('INSERT OR REPLACE INTO conversation_summaries VALUES (?,?)');
+      save.run(sessionId, JSON.stringify([pathToFileURL(f.workspace).href]));
+      expect(await antigravityHarness.readTranscriptIdentity({ transcriptRef: f.transcript, workspace: f.workspace })).toEqual({ providerSessionId: sessionId });
+      save.run(sessionId, JSON.stringify([pathToFileURL(f.root).href]));
+      expect(await antigravityHarness.readTranscriptIdentity({ transcriptRef: f.transcript, workspace: f.workspace })).toMatchObject({ kind: 'transcript_unavailable' });
+    } finally { db.close(); }
+  });
+  test.each(['ERROR', 'RUNNING', 'UNKNOWN'])('paired tool %s preserves only proven terminal coverage', async status => {
+    const f = fixture();
+    const time = '2026-10-11T00:00:01Z';
+    writeFileSync(f.transcript, readFileSync(f.transcript, 'utf8') + [
+      { step_index: 1, type: 'PLANNER_RESPONSE', source: 'MODEL', status: 'DONE', created_at: time, tool_calls: [{ name: 'view_file' }] },
+      { step_index: 2, type: 'GENERIC', source: 'MODEL', status, created_at: time, content: 'tool failed' },
+    ].map(row => JSON.stringify(row)).join('\n') + '\n');
+    expect((await antigravityHarness.inspectTranscript(f.transcript)).kind).toBe(status === 'ERROR' ? 'covered' : 'transcript_unavailable');
   });
   test('reporter forwards only native identity and actual runtime paths', () => {
     const f = fixture(), reporter = join(f.root, 'report.mjs'), output = join(f.root, 'report.jsonl'), runtime = join(f.root, 'runtime.json');

@@ -1,6 +1,7 @@
 import { constants, closeSync, fstatSync, lstatSync, openSync, readSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
 import type { HarnessSessionReport, ProveHarnessSessionInput, WorkerHarness, WorkerHarnessLaunchInput } from '../../application/ports/worker-harness.js';
 import { candidateSessionPaths, installCandidateReporter, prepareCandidateLaunch, type CandidateResume } from './candidate-worker-launch.js';
 import { probeHarnessReadOnlyWorker } from './read-only-execution-wrapper.js';
@@ -26,18 +27,43 @@ function readNativeText(path: string): string {
   } finally { closeSync(fd); }
 }
 
+/** Exact summaries survive replacement of the TUI's cache entries. */
+function persistedWorkspace(stateRoot: string, sessionId: string): unknown[] | null {
+  const path = join(stateRoot, 'conversation_summaries.db');
+  try {
+    const stat = lstatSync(path);
+    if (!stat.isFile() || stat.size > 32 * 1024 * 1024 || realpathSync(path) !== path) throw new Error('native summary path');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    db.exec('PRAGMA busy_timeout=100');
+    const row = db.prepare('SELECT workspace_uris FROM conversation_summaries WHERE conversation_id=? LIMIT 1').get(sessionId);
+    if (row === undefined) return null;
+    if (typeof row['workspace_uris'] !== 'string' || Buffer.byteLength(row['workspace_uris']) > 65536) throw new Error('native summary workspace');
+    const roots: unknown = JSON.parse(row['workspace_uris']);
+    if (!Array.isArray(roots)) throw new Error('native summary workspace');
+    return roots as unknown[];
+  } finally { db.close(); }
+}
+
 function identity(transcriptRef: string, workspace: string): { readonly providerSessionId: string } | null {
   try {
     if (!isAbsolute(transcriptRef) || lstatSync(transcriptRef).isSymbolicLink() || realpathSync(transcriptRef) !== resolve(transcriptRef)) return null;
     const logs = dirname(transcriptRef), brain = dirname(dirname(logs)), id = brain.split('/').at(-1)!;
     const stateRoot = dirname(dirname(brain));
     if (!ID.test(id) || !['transcript.jsonl', 'transcript_full.jsonl'].some((name) => transcriptRef === join(stateRoot, 'brain', id, '.system_generated', 'logs', name))) return null;
+    const roots = persistedWorkspace(stateRoot, id);
+    if (roots !== null && (roots.length !== 1 || typeof roots[0] !== 'string'
+      || realpathSync(fileURLToPath(roots[0])) !== realpathSync(workspace))) return null;
     const cache = optionalNativeJson(join(stateRoot, 'cache', 'conversation_metadata.json'), 4 * 1024 * 1024);
     const entry = (cache['conversations'] as Record<string, { summary?: Record<string, unknown> }> | undefined)?.[id]?.summary;
     if (entry !== undefined) {
       if (entry['ID'] !== id || !Array.isArray(entry['WorkspaceURIs']) || entry['WorkspaceURIs'].length !== 1
         || realpathSync(fileURLToPath(String(entry['WorkspaceURIs'][0]))) !== realpathSync(workspace)) return null;
-    } else {
+    } else if (roots === null) {
       const index = optionalNativeJson(join(stateRoot, 'cache', 'last_conversations.json'));
       const matches = Object.entries(index).filter(([, value]) => value === id);
       if (matches.length > 1) return null;
@@ -71,7 +97,7 @@ function requireSetup(): void {
 
 function launch(input: WorkerHarnessLaunchInput, resume?: CandidateResume) {
   if (input.modelSelection.effort !== null) throw new Error('Antigravity 当前目录未证明独立 effort override');
-  return prepareCandidateLaunch({ harness: 'antigravity', executable: 'agy', input,
+  return prepareCandidateLaunch({ harness: 'antigravity', executable: 'agy', input, outputProtocol: 'antigravity-tui',
     ...(resume === undefined ? {} : { resume }),
     arguments: () => ['--dangerously-skip-permissions', '--model', input.modelSelection.model,
       ...(input.modelSelection.effort === null ? [] : ['--effort', input.modelSelection.effort]),
@@ -109,7 +135,10 @@ export function inspectAntigravityTranscript(transcriptRef: string) {
     const lines = new TextDecoder('utf8', { fatal: true }).decode(bytes).trim().split('\n');
     if (lines.length > 20000) throw new Error('transcript lines');
     const rows = lines.map((line): Record<string, unknown> => JSON.parse(line) as Record<string, unknown>);
-    if (rows.some((row, index) => row['step_index'] !== index || row['status'] !== 'DONE'
+    if (rows.some((row, index) => row['step_index'] !== index || !(row['status'] === 'DONE'
+      || (row['status'] === 'ERROR' && row['type'] === 'GENERIC' && row['source'] === 'MODEL'
+        && rows[index - 1]?.['type'] === 'PLANNER_RESPONSE' && Array.isArray(rows[index - 1]?.['tool_calls'])
+        && (rows[index - 1]!['tool_calls'] as unknown[]).length > 0))
       || !['USER_INPUT', 'PLANNER_RESPONSE', 'GENERIC', 'SYSTEM_MESSAGE'].includes(String(row['type']))
       || !['USER_EXPLICIT', 'MODEL', 'SYSTEM'].includes(String(row['source']))
       || typeof row['created_at'] !== 'string' || !Number.isFinite(Date.parse(row['created_at']))
@@ -157,5 +186,7 @@ export const antigravityHarness: WorkerHarness = {
   inspectTranscript: inspectAntigravityTranscript,
   recoveryInstructions: () => ['只读取 binding 指定的精确 Antigravity transcript；step_index 是事件身份，引用格式 step:N。',
     '按 step_index 活动顺序读取 USER_INPUT、PLANNER_RESPONSE、tool 记录；不得替换 transcript 路径或借用其它 conversation。',
-    'status 不为 DONE、缺失事件或未知结构时停止；input_tokens/cache_read_tokens/output_tokens 是原生 usage。'],
+    'Task Envelope 已给出完整输出字段与可信覆盖证据；taskKind 是任务标签，无需搜索 schema、测试程序、Orca 安装文件或其他目录。',
+    '用有界 Node 读取精确 JSONL，逐行 JSON.parse 并输出必要 step_index/content。run_command 使用 RunPersistent=false、WaitMsBeforeAsync=30000，在前台完成读取。',
+    '只接受 DONE 与紧接原生工具调用的 GENERIC/ERROR 终态；活动事件、缺失事件或未知结构时停止。input_tokens/cache_read_tokens/output_tokens 是原生 usage。'],
 };

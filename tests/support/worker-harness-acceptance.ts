@@ -703,6 +703,7 @@ async function launchPreparedTerminal(input: {
   readonly reporterPath: string;
   readonly reportPath: string;
   readonly spec?: string;
+  readonly expectedAssistantText?: string;
 }): Promise<LaunchOutcome> {
   const { fixture, binding, role, launchId, strategy } = input;
   const taskCreated = await fixture.backend.mutate(
@@ -833,13 +834,18 @@ async function launchPreparedTerminal(input: {
     modelTranscript = clineRecoveryMaterialPath(input.stateRoot, modelTranscript);
   }
   let transcriptEvidence = extractTranscriptEvidence(modelTranscript);
+  const expectedAssistantText = input.expectedAssistantText
+    ?? (role === 'finalizer' ? completionToken(binding.harness, role) : null);
   // worker_done 可以先于最终 assistant 响应落盘；只从精确来源等待，不用终端回显补结果。
-  for (let attempt = 0; role === 'finalizer' && !transcriptEvidence.output.includes(completionToken(binding.harness, role)) && attempt < 15; attempt += 1) {
+  for (let attempt = 0; expectedAssistantText !== null && !transcriptEvidence.output.includes(expectedAssistantText) && attempt < 15; attempt += 1) {
     await new Promise((settle) => setTimeout(settle, 1_000));
     coverage = await requireWorkerHarness(binding.harness).inspectTranscript(bound.binding.transcriptRef);
     if (coverage.kind !== 'covered') return { kind: 'blocked', code: 'transcript_unavailable', message: coverage.reason };
     if (binding.harness === 'opencode' && await prepareOpencodeRecoveryMaterial(bound.binding.transcriptRef, input.stateRoot, coverage.evidence) === null) continue;
     transcriptEvidence = extractTranscriptEvidence(modelTranscript);
+  }
+  if (input.expectedAssistantText !== undefined && !transcriptEvidence.output.includes(input.expectedAssistantText)) {
+    return { kind: 'blocked', code: 'assistant_evidence_missing', message: '精确 transcript 的预期 assistant 证据尚不可读' };
   }
 
   if (binding.harness === 'antigravity') {
@@ -938,6 +944,7 @@ export async function runRole(input: {
     outcome = await launchPreparedTerminal({
       fixture, binding, role, launchId, strategy,
       spec,
+      ...(contextToken === null ? {} : { expectedAssistantText: contextToken }),
       stateRoot: roots.actual, reporterPath: paths.reporterPath, reportPath: paths.reportPath,
     });
   } catch (error) {

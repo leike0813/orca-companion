@@ -4,6 +4,45 @@
 
 ## Worker Harness 当前基线
 
+当前接入约束：用户于 2026-10-13 明确禁止 patch Orca，Companion 只适配未修改的
+公开 CLI/runtime。此前独立源码修复产物仅保留为诊断证据，不继续构建、应用或以其
+作为验收前提。新增生产注册 1（Antigravity）；本项目启动适配的公开选项与未决合同见
+[当前调查](research/next-worker-harness-adapters.md#原生事实与当前验收)。
+
+当前 Antigravity 候选适配保留真实 TUI，在本项目 launcher 内使用系统 `script` PTY
+和有界解析器去重三种完整的重复输入协议设置，stdin 与其他输出保留，复用生产
+bwrap/seccomp。原生 summary 按完整 ID 只读核验工作区，配对工具 ERROR 可作为
+终态；RUNNING/未知仍拒绝完整覆盖。stream 单轮探针虽通过，完整矩阵失败于原生
+composer 就绪与持久身份复核，因此不沿该路径接入。
+
+未修改的 Orca 1.4.224 / agy 1.3.4 已通过 TUI 过滤原型的公开就绪、真实监督
+结算与精确 Session/覆盖。2026-10-14 沿新矩阵原资源确认隔离仓库的信任菜单后，
+四个原句柄均取得 `tui-idle satisfied/running`；完整角色矩阵与恢复已通过，mixed
+Controller 第一轮阻塞于 Qwen 启动绑定，第二轮完整闭环通过后注册 Antigravity。
+原失败 Controller 资源保留。
+见[TUI 原型证据](../artifacts/next-worker-harness-adapters/antigravity-tui-filter-20261013.json)
+与[当前调查](research/next-worker-harness-adapters.md#原生事实与当前验收)。
+
+本轮续接四角色、Implementation exact resume 与 Validator 同 Session 标记续接
+已通过。首轮 Recovery 的后台搜索留下 RUNNING 原生事件，仍保留为失败证据。
+有界前台读取配方与夹具最终 assistant 证据等待修正后，新 Validator→Recovery→
+原 Session 续接通过完整覆盖、来源行为及 EROFS 核验，见
+[资格汇总](../artifacts/next-worker-harness-adapters/antigravity-tui-qualification-20261014.json)。
+mixed Controller 的原 prepared 已公开就绪，Planner/Implementation 已接纳。
+Qwen Validator 启动期间出现原生 provider 更新菜单，只有精确 runtime sidecar、
+没有 transcript，绑定窗口到期；输入进入模型不可证明，宿主已停止且现场保留。
+见[启动证据](../artifacts/next-worker-harness-adapters/controller-qwen-startup-20261014.json)。
+独立第二轮使用 Qwen 0.25.1，精确 Session 与 user/assistant 历史可读后完成
+计划内 Validator 中断、Capsule 与替代 Session、Git 集成和私有 origin 推送。
+Finalizer deliverable 与同 Scope 重启均通过，5 个 binding、1 次 Recovery、4 项
+结算及已消耗预算保持；见[完整闭环证据](../artifacts/next-worker-harness-adapters/controller-20261014T033336705Z-09c8d325-3fc7-4e49-bcd9-aebad90db5e1.json)。
+Antigravity 1.3.4 / gemini-3.8-flash-medium 已加入生产注册；本轮已结算终端按
+精确句柄公开关闭，仓库保留供独立验证。0.25.1 的 provider 更新菜单逻辑与
+0.25.0 相同，本轮通过不证明该启动风险消失；Companion 未改原生 provider 设置。
+注册及 doctor 目录 owner 修复后的全量回归 2551 passed / 18 skipped，types/lint/build 通过。通用生产只读
+探针不覆盖 executable，实测 available/host-verify，自报 agy 1.3.5；该二进制在
+Controller 结束之后替换，1.3.5 未重跑完整角色矩阵，既有完整资格仍记录为 1.3.4。
+
 ### 新候选真实验收（2026-10-11）
 
 当前正式注册 codex、claude、opencode、pi、omp、command-code、qwen-code。Orca CLI/runtime 1.4.222，实际使用 `orca-ide`；submodule 保持下述固定 SHA。Command Code 与 Qwen Code 使用中国区 MiniMax M Plan 的 `MiniMax-M3.1-Flash-Preview`，通过四角色、精确同 Session 续接、Validator 续接及只读 Recovery Utility 的完整真实矩阵：45 passed、2 skipped。证据见[本轮矩阵](../artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.md)。独立[混合 Controller 验收](../artifacts/next-worker-harness-adapters/controller-20261011T085821980Z-89759c30-e5f4-4a09-8624-89e137fe85f5.md)也已通过：Command Code 规划/实现，Qwen 验证/恢复/Finalizer；人工中断精确 Validator 后完成 Capsule 与替代 Session、Git 集成和私有 origin 推送，取得 deliverable。同 Scope 重启保持 5 个 binding、1 次 Recovery、4 项结算和已消耗预算。
@@ -12,7 +51,40 @@
 
 共享只读 bwrap 保留前台 Session/进程组，使用继承 FD 安装 seccomp，拒绝 TIOCSTI/TIOCLINUX；x64/arm64 之外、外来 ABI、x32 或安装失败拒绝启动。Ubuntu x86_64 的实际 ioctl 拒绝、前台身份、文件拒写与精确工件可写已核验；arm64/Windows 未实测。Command Code/Qwen 的原生无 prompt 模型目录不可用，可手填 exact ID，effort/catalogSource 保持 null。可写角色使用原生 `--yolo`，没有额外 OS workspace sandbox。
 
-新一批 Antigravity/Kilo/Kimi/Hermes/Cline/Muse/Cursor 的当前资格、原生版本、独立报告安装与阻塞原因见[接入记录](research/next-worker-harness-adapters.md)。Antigravity 已通过四角色、精确 Session 续接与 Recovery；mixed Controller 暂停在新 worktree 的 prepared terminal 就绪核验，尚未通过。这批七家均未注册。其他候选的具体延期与重验条件见[探索记录](../artifacts/next-worker-harness-adapters/exploration-20261012.json)。前驱的其他[候选研究](research/next-worker-harness-candidates.md)及下方带日期的基线与旧矩阵保留各自验证范围。
+新一批 Antigravity/Kilo/Kimi/Hermes/Cline/Muse/Cursor 的当前资格、原生版本、独立报告安装与阻塞原因见[接入记录](research/next-worker-harness-adapters.md)。Antigravity 已通过四角色、精确 Session 续接、Recovery 与完整 mixed Controller，已注册；其余六家仍未注册。其他候选的具体延期与重验条件见[探索记录](../artifacts/next-worker-harness-adapters/exploration-20261012.json)。前驱的其他[候选研究](research/next-worker-harness-candidates.md)及下方带日期的基线与旧矩阵保留各自验证范围。
+
+2026-10-13 续接核验的本机 CLI/runtime 为 1.4.224。原 Antigravity Controller fixture
+的 prepared 与协调终端均返回 `terminal_handle_stale`，精确 worktree 的终端列表为空；
+原 worktree、Run（consumer generation 1）和 ready Planner Task 仍可读。终端退出与身份
+恢复尚不可证明，因此未重建终端或重跑 Controller；1.4.222 的历史矩阵不作为新版验收。
+公共回执和恢复条件见[续接记录](../artifacts/next-worker-harness-adapters/controller-recovery-20261013.json)。
+GUI 显示后可读到一个 orphaned 新句柄，但 incarnation 与原回执不同，列举遗漏 local host，
+公开 `tui-idle` 仍超时；原 launch 连续性尚不可证明。
+
+用户批准的独立新 fixture 已恢复 Controller，使用 Orca 1.4.224 / Antigravity 1.3.4。
+父 structured agent 身份环境现与终端身份一起过滤，调用身份由可信 Scope 显式提供。
+新 prepared 资源可精确核验，公开 screen 匹配底部 composer 规则；该规则在固定源码与
+安装包中均要求 3 秒静默。文本 cursor 不变，但停止测试前后 `lastOutputAt` 持续前移，
+八次采样均距最近输出不足 2 秒；就绪等待仍超时。周期性非文本输出是主要解释，
+原始字节和内部可信网格/verdict 尚不可见。测试进程已停止，原生终端与两轮现场保留，
+Run 无 Worker 派发；完整 Controller 与生产注册仍未通过。证据及恢复条件见
+[新现场就绪记录](../artifacts/next-worker-harness-adapters/controller-readiness-20261013.json)。
+
+同一隔离 worktree 的独立原生输出捕获进一步复现了阻塞机制：Antigravity 1.3.4
+每约 2 秒重申括号粘贴与键盘协议，22 字节控制块不新增文本，却更新 Orca 的原始
+输出时钟，持续打断 3 秒静默门槛。捕获与离线回放见
+[协议输出诊断](../artifacts/next-worker-harness-adapters/tui-idle-protocol-output-20261013.json)。
+诊断终端已结束并关闭，原现场保留；原进程未直接采样，内部可信网格判定仍不可见。
+用户随后批准在独立源码副本修复：PTY 保存有界活动时钟，只有已知的强输入框规则
+读取它；原始字节、输出时钟、弱标题与前台进程计时保持不变。固定 SHA 的原始
+ingestion 回归三项均失败，修复后限定验证 279 项通过，核心 parser/activity 严格
+类型检查及补丁适用性检查通过。20 块捕获经实际 ingestion 方法回放后，第 12 秒
+轮询起可接受固定可信 composer；四项 PTY/leaf 轮询回归确认缺可信屏幕时仍拒绝。
+源码副本 package 版本为 1.4.214，安装版为 1.4.224；完整上游依赖、build 与真实
+屏幕模型尚未验证。原 submodule 与安装版未改，public tui-idle / Controller 仍未通过。
+可审阅[补丁](../artifacts/next-worker-harness-adapters/orca-tui-idle-activity-20261013.patch)
+及[限定验证证据](../artifacts/next-worker-harness-adapters/tui-idle-repair-20261013.json)
+不改变当前生产资格。
 
 ### 原生环境检查（2026-10-07）
 

@@ -1,0 +1,90 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-14T02:42:26.090Z",
+  "finishedAt": "2026-10-14T02:46:18.487Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-6fb8f182-766a-4dfa-97c1-5082175f6989",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-fndTfZ",
+  "runId": "run_bfb47acf1251",
+  "coordinatorTerminalHandle": "term_842bf69b-aa03-45e2-bd72-9d4fe52e882c",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "antigravity",
+      "modelSelection": {
+        "model": "gemini-3.8-flash-medium",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "gemini-3.8-flash-medium",
+      "roles": [
+        {
+          "harness": "antigravity",
+          "role": "validator",
+          "kind": "ran",
+          "launchId": "ip04:antigravity:validator-final-evidence",
+          "taskId": "task_29c311274cdd",
+          "contextToken": "d4aadc54-c2ef-4063-bbbf-6b4ba84594a3",
+          "dispatchId": "ctx_fed17bda3fc2",
+          "sessionId": "389f5fdc-5e3c-4029-974f-bbb2afe73258",
+          "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/389f5fdc-5e3c-4029-974f-bbb2afe73258/.system_generated/logs/transcript_full.jsonl",
+          "stateRoot": "/home/joshua/.gemini/antigravity-cli",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-fndTfZ/state/antigravity/1dea449c2290955cc401/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "modelEvidence": "gemini-3.8-flash-medium",
+          "blocker": null
+        }
+      ],
+      "recovery": {
+        "kind": "ran",
+        "sourceSessionId": "389f5fdc-5e3c-4029-974f-bbb2afe73258",
+        "sourceTranscriptRef": "/home/joshua/.gemini/antigravity-cli/brain/389f5fdc-5e3c-4029-974f-bbb2afe73258/.system_generated/logs/transcript_full.jsonl",
+        "utility": {
+          "taskId": "task_292634e12142",
+          "dispatchId": "ctx_e81a96fb9f41",
+          "sessionId": "37009e90-fbf9-4db6-98a8-d15f1f9cfa0d",
+          "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/37009e90-fbf9-4db6-98a8-d15f1f9cfa0d/.system_generated/logs/transcript_full.jsonl",
+          "coverage": "complete",
+          "modelEvidence": "gemini-3.8-flash-medium",
+          "terminalState": "succeeded"
+        },
+        "capsuleRef": "recovery-capsule:ip04:antigravity:recovery-final-evidence",
+        "coverage": {
+          "coverage": "complete",
+          "readableRange": {
+            "transcriptRef": "/home/joshua/.gemini/antigravity-cli/brain/389f5fdc-5e3c-4029-974f-bbb2afe73258/.system_generated/logs/transcript_full.jsonl",
+            "fromEventRef": "step:0",
+            "toEventRef": "step:11"
+          },
+          "gaps": [],
+          "lastCompleteEventRef": "step:11"
+        },
+        "sourceBehaviorVerified": true,
+        "readOnlyVerified": true,
+        "permissionDenied": {
+          "path": "/var/tmp/orca-harness-acceptance-fndTfZ/project-companion-harness-matrix-6fb8f182-766a-4dfa-97c1-5082175f6989/.companion/utility-write-probe-d47a2580-6273-4670-b17b-949670884449",
+          "code": "EROFS",
+          "eventRef": "step:2"
+        },
+        "deliveryId": null,
+        "deliveryAcked": false,
+        "blocker": null
+      },
+      "validatorContinuation": {
+        "harness": "antigravity",
+        "kind": "ran",
+        "sessionId": "389f5fdc-5e3c-4029-974f-bbb2afe73258",
+        "sameSession": true,
+        "coverage": "complete",
+        "blocker": null,
+        "dispatchId": "ctx_32b35e5696ec",
+        "modelEvidence": "gemini-3.8-flash-medium",
+        "contextPreserved": true
+      }
+    }
+  ]
+}

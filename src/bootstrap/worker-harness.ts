@@ -8,6 +8,7 @@ import { codexHarness } from '../adapters/agents/codex-harness.js';
 import { opencodeHarness } from '../adapters/agents/opencode-harness.js';
 import { commandCodeHarness } from '../adapters/agents/command-code-harness.js';
 import { qwenHarness } from '../adapters/agents/qwen-harness.js';
+import { antigravityHarness } from '../adapters/agents/antigravity-harness.js';
 import { createNativeWorkerLaunch, installNativeSessionStartReporter, proveNativeTranscript, inspectNativeTranscript, nativeTranscriptIdentity, nativeRecoveryInstructions, type NativeHarness } from '../adapters/agents/native-worker.js';
 import { probeHarnessReadOnlyWorker, assertReadOnlyExecutionWrapperAvailable } from '../adapters/agents/read-only-execution-wrapper.js';
 import { bindHarnessSession, type HarnessSessionFacts, type SessionBindingResult } from '../adapters/agents/session-binding.js';
@@ -66,6 +67,7 @@ export const workerHarnessRegistry: WorkerHarnessRegistry = new Map([
   ['opencode', opencodeHarness],
   ['command-code', commandCodeHarness],
   ['qwen-code', qwenHarness],
+  ['antigravity', antigravityHarness],
   ...(['claude', 'pi', 'omp'] as const).map((id) => [id, nativeHarness(id)] as const),
 ]);
 

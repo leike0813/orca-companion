@@ -384,6 +384,15 @@ IC-11 图依据读取可选使用 `readFiles` 与 `readFileRange`。调用必须
 
 七家新候选共用 `candidate-worker-launch.ts`，其 prepared strategy 为 `activation: 'none'`：当前 Orca `worker-start` 拥有 preamble 的写入与提交。Companion 在该回执后只核验接管与原生 Session；`input_accepted` 仍不证明模型轮次开始，启动就绪或输入交付缺口保持阻塞。
 
+Antigravity 的原生 TUI 输出由 `antigravity-tui-output.ts` 做有界重复协议过滤，
+嵌入同一共享 launcher，通过封闭私有 `outputProtocol` 选择。系统 script 在同一
+只读边界内提供真实 PTY，stdin、信号和原生 UI 保持；只过滤完整且重复的三种输入
+协议设置，其他字节、未知/截断控制序列原样转发，控制字符串内不做过滤。Orca
+继续拥有 preamble 写入与提交、公开就绪、监督生命周期；过滤器不输出状态、标题
+或 Session。新模式资格独立验收，生产注册仍按完整矩阵。
+Antigravity 的精确原生 summary 可按完整 ID 只读核验 workspace，不读取 Orca DB；
+transcript 的配对 GENERIC/ERROR 工具终态不构成覆盖缺口，活动/未知事件仍拒绝。
+
 ```ts
 type TaskEnvelope = {
   schemaVersion: number;
@@ -422,7 +431,7 @@ Planner 首次派发固定 `specificationUnitPath` 并将 `specBinding` 置空�
 
 Session Segment 记录角色、Task、Dispatch、Attempt、Binding、最后 transcript 位置与可核验终态。信息不足时 liveness 为 `unverifiable`，不能推断退出或触发重复派发。
 
-- **测试 seam**：Worker Harness Adapter contract tests 覆盖 codex、claude、opencode、pi、omp、command-code、qwen-code 七个注册项。真实矩阵在显式隔离项目中验证精确 binding、四角色、原 Session 续接、Recovery 与生产只读路径；只有实际运行产生的 artifact（hook/extension 报告、精确 transcript、真实 usage）才计入验证结论，未运行项如实记录为未验证，不得据此写全 PASS。领域层测试 Task Envelope parser 和三值 liveness。
+- **测试 seam**：Worker Harness Adapter contract tests 覆盖 codex、claude、opencode、pi、omp、command-code、qwen-code、antigravity 八个注册项。真实矩阵在显式隔离项目中验证精确 binding、四角色、原 Session 续接、Recovery 与生产只读路径；只有实际运行产生的 artifact（hook/extension 报告、精确 transcript、真实 usage）才计入验证结论，未运行项如实记录为未验证，不得据此写全 PASS。领域层测试 Task Envelope parser 和三值 liveness。
 
 ## IC-08 Delivery settlement、Validation 与 Finalizer
 

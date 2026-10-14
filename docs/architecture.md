@@ -28,7 +28,7 @@ schema 20 的 Branch Store 在副作用前原子登记包级 lane，直到可证
 
 `application/integration-reconciliation.ts` 拥有稳定复验轮次、独立预算与 Git 意图；`bootstrap/integration-reconciliation-runtime.ts` 通过新的真实 Task/Dispatch 续接原 Validator provider Session。先在包内合并 canonical，再验证精确合并树，最后由 Controller 提交并快进 canonical。设置用例 `application/configuration/execution-settings.ts` 复用配置 CAS；保存默认值与批准执行期 Manifest 是两个明确用户意图，批准不重置图、Run 或已消费预算。
 
-Worker Harness 的应用端口位于 `application/ports/worker-harness.ts`，bootstrap 的 `worker-harness.ts` 显式注册七项：codex、claude、opencode、pi、omp、`command-code` 与 `qwen-code`。CodeBuddy 按 D-01 排除。新增 C/Q 的 2026-10-11 最终真实资格矩阵已 PASS，见 [验收报告](../artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.md)及 [结构化证据](../artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.json)。独立[混合 Controller 闭环](../artifacts/next-worker-harness-adapters/controller-20261011T085821980Z-89759c30-e5f4-4a09-8624-89e137fe85f5.md)已取得 deliverable，并核验人工中断后的 Capsule/替代 Validator、集成、推送及同 Scope 重启事实不变。
+Worker Harness 的应用端口位于 `application/ports/worker-harness.ts`，bootstrap 的 `worker-harness.ts` 显式注册八项：codex、claude、opencode、pi、omp、`command-code`、`qwen-code` 与 `antigravity`。CodeBuddy 按 D-01 排除。新增 C/Q 的 2026-10-11 最终真实资格矩阵已 PASS，见 [验收报告](../artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.md)及 [结构化证据](../artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.json)。独立[混合 Controller 闭环](../artifacts/next-worker-harness-adapters/controller-20261011T085821980Z-89759c30-e5f4-4a09-8624-89e137fe85f5.md)已取得 deliverable，并核验人工中断后的 Capsule/替代 Validator、集成、推送及同 Scope 重启事实不变。Antigravity 在未修改 Orca 1.4.224 与原生 agy 1.3.4、Ubuntu x86_64 上的原生 TUI 矩阵已 PASS，见[资格证据](../artifacts/next-worker-harness-adapters/antigravity-tui-qualification-20261014.json)；独立[混合 Controller 闭环](../artifacts/next-worker-harness-adapters/controller-20261014T033336705Z-09c8d325-3fc7-4e49-bcd9-aebad90db5e1.json)取得 deliverable，并核验 restart 保留与一次 Recovery。
 
 角色生命周期只使用注册项的启动、恢复、证明、只读启动、探测与原生模型目录查询能力，terminal 创建、激活和接管仍由 `application/worker-launch.ts` 拥有。`WorkerHarness.readTranscriptIdentity` 由各 adapter 独立读取精确 provider transcript，`recoveryInstructions` 返回该 harness 的阅读指引；Bootstrap 按注册项委派，不按 harness 名称另写恢复规则。模型、harness 与 effort 沿物化时固定的授权/profile 读取，恢复沿原 Task 的 transcript 与绑定核验，不能按 cwd/mtime 猜会话。
 
@@ -109,6 +109,11 @@ Application 是业务规则的外部 interface。小型纯用例可以直接是�
 | 测试 seam | contract test 覆盖 parser/error passthrough；真实集成只在显式隔离目标运行 |
 
 Adapter 以外部系统为单位保持内聚。`orca-cli` 只做封闭 operation catalog、进程和 schema 转换；`storage` 分别实现 Branch Coordination Store、LangGraph checkpointer 与 IC-13 UI 输入存储，不共享表或伪装跨库事务。IC-04 的会话历史在 checkpoint 库中按稳定 entry、正文块、step 和 Wake 关联追加，控制记录保持小型；正文范围与 metadata keyset 由 `application/coordinator/history.ts` 定义。有效上下文、工具恢复、待处理输入和 UI 分页各自按用途读取，压缩历史保留原文且不进入常规模型输入读取。TUI 只保留当前 Session 的有界正文/派生缓存及来源锚点；SQLite 是已提交原文的唯一权威。
+
+Antigravity 的 TUI 输出适配由 `adapters/agents/antigravity-tui-output.ts` 与所属 launcher
+拥有：Linux 系统 `script` 提供真实 PTY，有界解析仅去重已完整识别的重复输入协议。
+该私有选择不扩展 WorkerHarness DTO；Orca 保持公开就绪、输入提交与监督生命周期的
+权威。精确原生 Session 与覆盖由 `antigravity-harness.ts` 独立核验，详见 IC-07。
 
 协调宿主与调试宿主共享 `workflow/coordinator/turn-driver.ts` 与 IC-04 的轮次端口，因此「一次请求能否发出、结束后停在哪里」只有一份实现，宿主只负责把图结局映射为轮次结局。`adapters/agents/debug-read-tools.ts` 实现调试专用的有界只读文件与 Git 访问，不进入协调工具注册表，也不成为通用只读能力。
 

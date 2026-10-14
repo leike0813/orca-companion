@@ -1,0 +1,89 @@
+{
+  "change": "add-next-worker-harness-adapters",
+  "observedAt": "2026-10-13T09:02:00Z",
+  "result": "isolated_orca_source_repair_verified_not_applied_to_runtime",
+  "authorization": "User approved implementation and verification in an independent temporary Orca source copy.",
+  "controllerPassed": false,
+  "publicTuiIdlePassed": false,
+  "productionRegistration": false,
+  "source": {
+    "commit": "cc5c85fb7a43ed52c6cd29157210020cd769d84c",
+    "packageVersion": "1.4.214",
+    "installedOrcaVersion": "1.4.224",
+    "nativeAntigravityVersion": "1.3.4",
+    "copy": "/var/tmp/orca-tui-idle-fix-20261013-lDj0mK",
+    "baselineCopy": "/var/tmp/orca-tui-idle-baseline-20261013-59Vk9P",
+    "patch": "artifacts/next-worker-harness-adapters/orca-tui-idle-activity-20261013.patch",
+    "patchFiles": 13,
+    "originalSubmoduleChanged": false,
+    "installedRuntimeChanged": false,
+    "dependenciesInstalled": false,
+    "nativeTerminalOperationsDuringRepair": 0
+  },
+  "repair": {
+    "owner": "Orca runtime PTY record; no Companion readiness bypass",
+    "activity": "Bounded per-PTY scanner and three input-mode values distinguish complete repeated bracketed-paste, modifyOtherKeys and absolute kitty settings. Other output counts as activity and forgets the previous mode evidence.",
+    "parser": "Reuse and extend the existing scanner with non-CSI observations, pending state, generic ESC/CSI and C1 control strings. Oversized unfinished escapes retain an unrecognized bounded prefix; OSC may end in BEL, other control strings require ST.",
+    "rawOutput": "onPtyData keeps raw byte forwarding, output sequence and both PTY/leaf lastOutputAt clocks unchanged.",
+    "strongReadiness": "Only existing strong quiet-ready body rules consume the activity clock. The 3000ms threshold, trusted-grid composer and working/menu/overlay vetoes remain.",
+    "weakReadiness": "Weak title and foreground-process lanes retain the raw clock. An untrusted or absent screen cannot use protocol reassertions to relax foreground readiness.",
+    "recheckTimers": "Keep existing raw-clock scheduling. These timers re-evaluate evidence when they fire and do not decide readiness themselves; switching to an already quiet activity clock would cause unnecessary 50ms rechecks while a screen or working veto still holds.",
+    "pending": "Unfinished parsing closes readiness lanes while preserving blocked/working verdicts.",
+    "lifecycle": "Same-incarnation reattach preserves activity. Incarnation replacement, dropped-output gap and confirmed PTY exit clear activity/parser state. No separate persistent clock or wire DTO is added."
+  },
+  "verification": {
+    "toolchain": "Existing Companion node_modules symlink: Vitest 5.0.1 and Vite 8.3.0. A temporary config avoids unavailable Electron tsconfig; no dependency installation.",
+    "baseline": {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node_modules/.bin/vitest run --config verification.vitest.config.mjs src/main/runtime/orca-runtime-on-pty-data-activity.test.ts --reporter=json --outputFile=baseline-test-result.json",
+      "exitCode": 1,
+      "tests": 3,
+      "failed": 3,
+      "failures": ["Periodic protocol bytes prevent readiness", "Replacement retains stale readiness", "Dropped-output gap retains stale readiness"]
+    },
+    "scopedTests": {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node_modules/.bin/vitest run --config verification.vitest.config.mjs src/main/runtime/tui-idle-protocol-output.test.ts src/main/runtime/orca-runtime-on-pty-data-activity.test.ts src/main/runtime/verification-captured-output.test.ts src/main/runtime/tui-idle-evidence.test.ts src/main/runtime/runtime-terminal-idle-polls.test.ts src/main/runtime/antigravity-terminal-readiness.test.ts src/main/runtime/agent-state-rules/agent-state-rules-engine.test.ts src/main/runtime/agent-state-rules/agent-state-rule-regions.test.ts src/shared/codex-composer-ready-scanner.test.ts src/shared/draft-paste-ready-scanner.test.ts src/shared/draft-paste-ready-scanner-grok-trace-replay.test.ts --reporter=json --outputFile=verification-test-result.json",
+      "exitCode": 0,
+      "files": 11,
+      "passed": 279,
+      "failed": 0,
+      "uniqueScenarios": 276,
+      "duplicateScenarios": 3,
+      "duplicateReason": "Temporary captured-output replay reuses the three ingestion tests; it is excluded from the upstream patch.",
+      "coverage": ["Actual onPtyData raw forwarding and clocks", "Both PTY and leaf evidence", "Both idle poll branches with and without a trusted screen", "Three-second boundary", "Every split of the captured protocol batch", "Mixed/text/title/clear/screen-switch/unknown output", "Generic, C1 and oversized incomplete escapes", "Control-string payload isolation", "Mode changes and relative/stack kitty commands", "Working and overlay vetoes", "Incarnation replacement and dropped-output gaps", "Existing Codex/Grok/draft scanners and agent rules"]
+    },
+    "strictCoreTypecheck": {
+      "command": "node_modules/.bin/tsc --ignoreConfig --noEmit --strict --target ES2023 --module ESNext --moduleResolution bundler --types node --skipLibCheck src/shared/terminal-escape-scanner.ts src/main/runtime/terminal-output-activity.ts",
+      "exitCode": 0
+    },
+    "patchCheck": {
+      "command": "git apply --check --whitespace=error-all artifacts/next-worker-harness-adapters/orca-tui-idle-activity-20261013.patch (from the unchanged references/orca checkout, using the absolute patch path)",
+      "exitCode": 0,
+      "applied": false
+    },
+    "notCompleted": [
+      "Full upstream runtime test fails to load without @orca/process-host and the full Electron/native dependency graph.",
+      "Broader upstream typecheck cannot complete with the reused dependency set; only the new core parser/activity modules pass strict checking.",
+      "Full upstream lint/build, viewport emulator replay and hidden Electron runtime validation were not run.",
+      "The packaged source is 1.4.214, not the installed 1.4.224; the patch is not an installed-version build."
+    ]
+  },
+  "captureReplay": {
+    "source": "/var/tmp/ocp-agy-raw-output-20261013-6br8Pq",
+    "outputRecords": 20,
+    "protocolReassertions": 16,
+    "rawLastOutputAtMs": 33641.01,
+    "lastActivityAtMs": 7541.604,
+    "originalReadyPollsMs": [],
+    "repairedReadyPollsMs": [12000, 14000, 16000, 18000, 20000, 22000, 24000, 26000, 28000, 30000, 32000, 34000],
+    "method": "Replay every timed raw read through the actual onPtyData method with external runtime/provider effects stubbed, and compare the original raw-clock gate against repaired evidence at two-second poll times.",
+    "screen": "Fixed trusted composer; no viewport emulator loaded.",
+    "conservativeDifference": "Other output at 5625.548ms forgets mode evidence. The first following protocol batch at 7541.604ms counts as activity; the next two-second poll after its three-second window is 12000ms. The earlier exact-chunk diagnostic filter started at 10000ms.",
+    "limitation": "Independent native diagnostic capture, not the original live process trace. No public CLI wait or complete Controller result."
+  },
+  "next": [
+    "Review and validate the patch against source matching the actual runtime version before building or replacing Orca.",
+    "Apply only within a separately authorized runtime test/deployment scope; installation, build dependencies and replacement of the running app are outside this source-copy approval.",
+    "Require public exact-handle tui-idle satisfied=true/status=running before restoring the original prepared terminal into Controller execution.",
+    "Complete interruption, Recovery, integration, deliverable and same-Scope restart before production registration."
+  ]
+}

@@ -8,7 +8,7 @@ import { nativeRecoveryInstructions } from '../../src/adapters/agents/native-wor
 import { recoveryCapsuleInstructions } from '../../src/adapters/agents/utility-worker.js';
 import { parseHarnessSessionReport } from '../../src/application/ports/worker-harness.js';
 
-test.each(['codex', 'claude', 'opencode', 'pi', 'omp', 'command-code', 'qwen-code'])('按显式身份解析 %s', (id) => {
+test.each(['codex', 'claude', 'opencode', 'pi', 'omp', 'command-code', 'qwen-code', 'antigravity'])('按显式身份解析 %s', (id) => {
   const result = resolveWorkerHarness(workerHarnessRegistry, id);
   expect(result.kind).toBe('resolved');
   if (result.kind === 'resolved') expect(result.harness.id).toBe(id);
@@ -17,7 +17,7 @@ test('未注册的 harness 在派发前拒绝', () => {
   expect(resolveWorkerHarness(workerHarnessRegistry, 'unknown')).toMatchObject({ kind: 'rejected', code: 'worker_harness_unregistered' });
 });
 
-test.each(['codex', 'claude', 'opencode', 'pi', 'omp', 'command-code', 'qwen-code'])('%s 注册项提供 transcript 身份与 recovery 配方', (id) => {
+test.each(['codex', 'claude', 'opencode', 'pi', 'omp', 'command-code', 'qwen-code', 'antigravity'])('%s 注册项提供 transcript 身份与 recovery 配方', (id) => {
   const result = resolveWorkerHarness(workerHarnessRegistry, id);
   expect(result.kind).toBe('resolved');
   if (result.kind === 'resolved') {

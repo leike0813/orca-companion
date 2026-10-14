@@ -47,6 +47,7 @@ const EXECUTABLES: Readonly<Record<WorkerHarnessId, string>> = {
   omp: 'omp',
   'command-code': 'command-code',
   'qwen-code': 'qwen',
+  antigravity: 'agy',
 };
 
 type CatalogEntry = {
@@ -190,6 +191,7 @@ function catalogCommand(harness: WorkerHarnessId, executable: string, env: Reado
       return { args: ['models', '--json'], provenance: 'models-json', parse: parseOmpCatalog };
     case 'command-code':
     case 'qwen-code':
+    case 'antigravity':
       return null;
   }
 }

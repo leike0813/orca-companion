@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join } from 'node:path';
 import type { WorkerHarnessLaunchInput, PreparedHarnessTerminal } from '../../application/ports/worker-harness.js';
 import type { PreparedTerminalStrategy } from '../../application/worker-launch.js';
 import { workerModelSelectionSchema } from '../../domain/model-configuration.js';
-import { CODEX_MODEL_DESCRIPTOR_VERSION, codexModelLaunchCommand, writeCodexModelLaunch } from './codex-model-launcher.js';
+import { CODEX_MODEL_DESCRIPTOR_VERSION, codexModelLaunchCommand, writeCodexModelLaunch, type CodexModelLaunchDescriptor } from './codex-model-launcher.js';
 import { assertReadOnlyExecutionWrapperAvailable } from './read-only-execution-wrapper.js';
 import { readReportingText } from './worker-harness-reporting.js';
 
@@ -35,6 +35,7 @@ export function prepareCandidateLaunch(options: {
   readonly reporterSource: (reportPath: string, runtimeReportPath: string) => string;
   readonly checkSetup: () => void | Promise<void>;
   readonly verifyResume?: (workspace: string, resume: CandidateResume) => Promise<void>;
+  readonly outputProtocol?: CodexModelLaunchDescriptor['outputProtocol'];
 }): PreparedTerminalStrategy<PreparedHarnessTerminal> {
   if (!options.input.launchId || !workerModelSelectionSchema.safeParse(options.input.modelSelection).success) {
     throw new Error('Worker launch/model selection invalid');
@@ -64,6 +65,7 @@ export function prepareCandidateLaunch(options: {
       const launch = writeCodexModelLaunch({ stateRoot, descriptor: {
         version: CODEX_MODEL_DESCRIPTOR_VERSION, executable: options.executable, harness: options.harness,
         args: options.arguments(worktreePath), reporterPath, runtimeReportPath,
+        ...(options.outputProtocol === undefined ? {} : { outputProtocol: options.outputProtocol }),
         ...(options.resume === undefined ? {} : { expectedStateRoot: options.resume.originalStateRoot }),
         ...(readOnly ? { readOnly: { workspace: worktreePath, stateRoot } } : {}),
       } });

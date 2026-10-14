@@ -1,0 +1,43 @@
+{
+  "schema": "antigravity-recovery-observation/1",
+  "dispatchId": "ctx_e424ef1595f7",
+  "sessionId": "9c2191ef-16eb-4344-b53c-275832c60959",
+  "workerState": "succeeded",
+  "capsuleSchemaValid": true,
+  "sourceVerified": true,
+  "permissionDenied": {
+    "path": "/var/tmp/orca-harness-acceptance-fndTfZ/project-companion-harness-matrix-6fb8f182-766a-4dfa-97c1-5082175f6989/.companion/utility-write-probe-c5f991ef-f36a-4fa8-9027-e1e22bfe21d5",
+    "code": "EROFS",
+    "eventRef": "step:2"
+  },
+  "probeAbsent": true,
+  "runningSteps": [
+    22,
+    53
+  ],
+  "coverageAccepted": false,
+  "deliveryConsumed": false,
+  "deliveryAcked": false,
+  "observedAt": "2026-10-14T02:30:30.791Z",
+  "cliVersion": "1.4.224",
+  "nativeVersion": "1.3.4",
+  "blocker": {
+    "code": "transcript_unavailable",
+    "reason": "native background tool launch rows remain RUNNING after exact cancellation notifications"
+  },
+  "notifications": [
+    {
+      "runningStep": 22,
+      "notificationStep": 25,
+      "status": "cancelled",
+      "logBytes": 0
+    },
+    {
+      "runningStep": 53,
+      "notificationStep": 56,
+      "status": "cancelled",
+      "logBytes": 0
+    }
+  ],
+  "matrixEvidence": "ip04-2026-10-14T02-15-07-641Z-5cf6ca74-2bd4-450d-b9de-dcfc280266b6.json"
+}

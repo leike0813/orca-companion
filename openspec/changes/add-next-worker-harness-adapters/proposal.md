@@ -6,7 +6,7 @@
 
 ## What Changes
 
-- 七家实现现有 WorkerHarness 契约：真实 TUI 启动、精确 Session 绑定、按 ID 恢复、transcript 覆盖、Recovery 与原生模型目录。
+- 七家实现现有 WorkerHarness 契约：公开终端内启动真实原生 TUI、精确 Session 绑定、按 ID 恢复、transcript 覆盖、Recovery 与原生模型目录；Antigravity 在本项目 launcher 中过滤重复输入协议设置。
 - 新增独立报告插件 install/status/uninstall 接入步骤，仅维护 Companion 自有条目；普通原生启动无动作。
 - Antigravity 使用已登录订阅与 gemini-3.8-flash-medium；Kilo/Kimi/Hermes/Cline 使用中国 MiniMax M Plan 的 MiniMax-M3.1-Flash-Preview。
 - Muse/Cursor 完成实现和离线验证，明确后续真实验收任务，验收前不注册。其他候选同样只有完整真实验收通过才注册。

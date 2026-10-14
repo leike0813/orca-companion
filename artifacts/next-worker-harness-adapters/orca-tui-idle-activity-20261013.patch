@@ -1,0 +1,838 @@
+diff --git a/src/main/runtime/orca-runtime-emit-daemon-pty-transient-fact.ts b/src/main/runtime/orca-runtime-emit-daemon-pty-transient-fact.ts
+index 8ce8833..923d530 100644
+--- a/src/main/runtime/orca-runtime-emit-daemon-pty-transient-fact.ts
++++ b/src/main/runtime/orca-runtime-emit-daemon-pty-transient-fact.ts
+@@ -1,6 +1,7 @@
+ // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+ import { OrcaRuntimeWithScheduleWaitBlockedCheck } from './orca-runtime-schedule-wait-blocked-check'
+ import type { PtyTransientFact } from '../providers/types'
++import { TerminalOutputActivity } from './terminal-output-activity'
+ import type {
+   TerminalSideEffectBatch,
+   TerminalSideEffectFact
+@@ -63,6 +64,7 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
+     if (pty) {
+       pty.tailPendingAnsi = ''
+       pty.commandPaint = undefined
++      pty.outputActivity = new TerminalOutputActivity()
+     }
+     for (const leaf of this.getLeavesForPty(ptyId)) {
+       leaf.tailPendingAnsi = ''
+diff --git a/src/main/runtime/orca-runtime-on-pty-data-activity.test.ts b/src/main/runtime/orca-runtime-on-pty-data-activity.test.ts
+new file mode 100644
+index 0000000..dea5d2c
+--- /dev/null
++++ b/src/main/runtime/orca-runtime-on-pty-data-activity.test.ts
+@@ -0,0 +1,151 @@
++import { afterEach, describe, expect, it, vi } from 'vitest'
++import { OrcaRuntimeWithOnPtyData } from './orca-runtime-on-pty-data'
++import { OrcaRuntimeWithRecordPtyWorktree } from './orca-runtime-record-pty-worktree'
++import { OrcaRuntimeWithEmitDaemonPtyTransientFact } from './orca-runtime-emit-daemon-pty-transient-fact'
++import { makeTuiIdleLeaf, makeTuiIdlePty } from './tui-idle-wait-test-harness'
++import { leafTuiIdleEvidence, ptyTuiIdleEvidence, type TuiIdleEvidenceSource } from './tui-idle-evidence-source'
++import { evaluateTuiIdle } from './tui-idle-evidence'
++
++// Isolate ingestion and lifecycle from Electron, providers and the rest of the runtime chain.
++vi.mock('./orca-runtime', () => ({ OrcaRuntimeService: class {} }))
++vi.mock('./orca-runtime-prepare-pty-execution-context', () => ({ OrcaRuntimeWithPreparePtyExecutionContext: class {} }))
++vi.mock('./orca-runtime-refresh-repo-worktree-scan', () => ({ OrcaRuntimeWithRefreshRepoWorktreeScan: class {} }))
++vi.mock('./orca-runtime-schedule-wait-blocked-check', () => ({ OrcaRuntimeWithScheduleWaitBlockedCheck: class {} }))
++
++const PROTOCOLS = '\x1b[?2004h\x1b[>4;2m\x1b[=1;1u'
++const COMPOSER = ['────────────', '>', '────────────', '? for shortcuts']
++const TAIL = {
++  tailBuffer: [], tailTranscriptBuffer: [], tailTranscriptChars: 0,
++  tailPartialLine: '', tailPendingAnsi: '', tailRedrawCursor: null,
++  tailTruncated: false, tailLinesTotal: 0, preview: '', waitBlockedAt: null,
++}
++
++class Records extends OrcaRuntimeWithRecordPtyWorktree {
++  readonly pty = makeTuiIdlePty({ ...TAIL, incarnationId: 'incarnation-1' })
++  readonly ptysById = new Map([[this.pty.ptyId, this.pty]])
++  readonly wslDistroByPtyId = new Map()
++  invalidatePtyIncarnationHandle() {}
++  record(ptyId: string, worktreeId: string, state = {}) {
++    return this.recordPtyWorktree(ptyId, worktreeId, state)
++  }
++}
++
++class Ingestion extends OrcaRuntimeWithOnPtyData {
++  readonly records = new Records()
++  readonly leaf = makeTuiIdleLeaf(TAIL)
++  readonly ptyOutputSequenceById = new Map()
++  readonly providerModeTrackersByPtyId = new Map()
++  readonly providerModeSnapshotScansByPtyId = new Map()
++  readonly oscTitleScanTailByPtyId = new Map()
++  readonly forwarded: string[] = []
++  readonly terminalStreamConsumers = { publish: (_id: string, data: string) => this.forwarded.push(data) }
++  readonly graphSequence = 0
++  readonly graphStatus = 'ready'
++  recordOsc7MetadataForPty() { return { cwd: null, cwdChanged: false } }
++  processAgentStatusOscForPty(_id: string, data: string) {
++    return { cleanData: data, payloads: [], lastPayloadCleanOffset: null }
++  }
++  recordRecentPtyOutputForPathProvenance() {}
++  shouldAnswerQueriesForLiveChunk() { return false }
++  maybeHydrateHeadlessFromRenderer() {}
++  trackHeadlessTerminalData() { return Promise.resolve() }
++  getOrCreatePtyWorktreeRecord() { return this.records.pty }
++  getLeavesForPty() { return [this.leaf] }
++  recordPtyWorktree(id: string, worktreeId: string, state = {}) {
++    return this.records.record(id, worktreeId, state)
++  }
++  makeRuntimePaneKey() { return 'pane-1' }
++  scheduleWaitBlockedCheck() {}
++  getOrCreatePtyTitleTrackerEntry() {
++    return { tracker: { handleChunk() {} }, pendingFacts: [], chunkTouchedSessionTabs: false }
++  }
++  emitTerminalAgentStatusEvents() {}
++  restoreAgentPromptLifecycleByteOrder() {}
++  flushPendingTerminalSideEffectFacts() {}
++}
++
++function source(runtime: Ingestion): TuiIdleEvidenceSource {
++  return {
++    quiescenceMs: 3000,
++    getOutputActivity: () => runtime.records.pty.outputActivity,
++    getTabTitle: () => null,
++    getAdoptedPtyIdleStatus: () => null,
++    getPaneAgent: () => 'antigravity',
++    getFirstPartyAgentStatus: () => null,
++    readScreenLines: () => null,
++    readRuledScreen: () => ({ lines: COMPOSER, alternateScreen: false }),
++  }
++}
++
++class Gaps extends OrcaRuntimeWithEmitDaemonPtyTransientFact {
++  readonly oscTitleScanTailByPtyId = new Map()
++  readonly osc7ScanTailByPtyId = new Map()
++  readonly agentStatusOscProcessorsByPtyId = new Map()
++  readonly ptyOutputSequenceById = new Map()
++  constructor(private readonly ingestion: Ingestion) { super() }
++  getOrCreatePtyWorktreeRecord() { return this.ingestion.records.pty }
++  getLeavesForPty() { return [this.ingestion.leaf] }
++  disposeHeadlessTerminal() {}
++}
++
++describe('raw PTY ingestion and activity readiness', () => {
++  afterEach(() => vi.useRealTimers())
++
++  it('preserves raw bytes and both raw clocks while PTY and leaf readiness use the same activity', () => {
++    vi.useFakeTimers()
++    const runtime = new Ingestion()
++    const pty = runtime.records.pty
++    for (const at of [0, 2000, 4000, 6000]) {
++      vi.setSystemTime(at)
++      runtime.onPtyData(pty.ptyId, PROTOCOLS, at)
++      expect(pty.lastOutputAt).toBe(at)
++      expect(runtime.leaf.lastOutputAt).toBe(at)
++      for (const evidence of [
++        ptyTuiIdleEvidence(source(runtime), pty, () => ''),
++        leafTuiIdleEvidence(source(runtime), runtime.leaf, () => ''),
++      ]) {
++        expect(evaluateTuiIdle(evidence).kind).toBe(at < 3000 ? 'pending' : 'ready-strong')
++      }
++    }
++    expect(runtime.forwarded.join('')).toBe(PROTOCOLS.repeat(4))
++  })
++
++  it('keeps a same-incarnation reattach, but refuses the old clock and split escape after replacement', () => {
++    vi.useFakeTimers()
++    const runtime = new Ingestion()
++    const pty = runtime.records.pty
++    const verdict = () => evaluateTuiIdle(ptyTuiIdleEvidence(source(runtime), pty, () => '')).kind
++    runtime.onPtyData(pty.ptyId, PROTOCOLS, 0)
++    vi.setSystemTime(6000)
++    runtime.records.record(pty.ptyId, 'worktree-1', { incarnationId: 'incarnation-1' })
++    expect(verdict()).toBe('ready-strong')
++    runtime.onPtyData(pty.ptyId, '\x1b[?2004', 6000)
++    expect(verdict()).toBe('pending')
++    vi.setSystemTime(10000)
++    runtime.records.record(pty.ptyId, 'worktree-1', { incarnationId: 'incarnation-2' })
++    expect(verdict()).toBe('pending')
++    runtime.onPtyData(pty.ptyId, 'h', 10000)
++    vi.setSystemTime(12999)
++    expect(verdict()).toBe('pending')
++    vi.setSystemTime(13000)
++    expect(verdict()).toBe('ready-strong')
++  })
++
++  it('discards split protocol state and old quiet evidence across a dropped-output gap', () => {
++    vi.useFakeTimers()
++    const runtime = new Ingestion()
++    const pty = runtime.records.pty
++    const verdict = () => evaluateTuiIdle(ptyTuiIdleEvidence(source(runtime), pty, () => '')).kind
++    runtime.onPtyData(pty.ptyId, PROTOCOLS, 0)
++    runtime.onPtyData(pty.ptyId, '\x1b[?2004', 2000)
++    new Gaps(runtime).notePtyDataGap(pty.ptyId, 10)
++    vi.setSystemTime(6000)
++    expect(verdict()).toBe('pending')
++    runtime.onPtyData(pty.ptyId, PROTOCOLS, 6000)
++    runtime.onPtyData(pty.ptyId, PROTOCOLS, 8000)
++    vi.setSystemTime(8999)
++    expect(verdict()).toBe('pending')
++    vi.setSystemTime(9000)
++    expect(verdict()).toBe('ready-strong')
++  })
++})
+diff --git a/src/main/runtime/orca-runtime-on-pty-data.ts b/src/main/runtime/orca-runtime-on-pty-data.ts
+index e665d55..a6c43e9 100644
+--- a/src/main/runtime/orca-runtime-on-pty-data.ts
++++ b/src/main/runtime/orca-runtime-on-pty-data.ts
+@@ -5,6 +5,7 @@ import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
+ import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
+ import { normalizeTerminalChunk } from './terminal-ansi-normalization'
+ import { observeTerminalCommandPaint } from './terminal-command-paint'
++import { TerminalOutputActivity } from './terminal-output-activity'
+ import {
+   appendCompletedTerminalTranscript,
+   buildPreview,
+@@ -91,6 +92,8 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
+       pty.connected = true
+       pty.disconnectedAt = null
+       pty.lastOutputAt = at
++      pty.outputActivity ??= new TerminalOutputActivity()
++      pty.outputActivity.observe(data, at)
+       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
+       ptyNormalized = normalized
+       pty.tailPendingAnsi = normalized.pendingAnsi
+diff --git a/src/main/runtime/orca-runtime-on-pty-exit.ts b/src/main/runtime/orca-runtime-on-pty-exit.ts
+index abcf2fc..e00a4f4 100644
+--- a/src/main/runtime/orca-runtime-on-pty-exit.ts
++++ b/src/main/runtime/orca-runtime-on-pty-exit.ts
+@@ -134,6 +134,9 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
+       this.clearWaitBlockedCheckState(ptyId)
+       this.recentPtyPathCandidatesById.delete(ptyId)
+       this.ptyOutputSequenceById.delete(ptyId)
++      if (pty) {
++        pty.outputActivity = undefined
++      }
+       this.providerSequenceInitializedPtys.delete(ptyId)
+       this.providerSequenceOffsetByPtyId.delete(ptyId)
+       this.providerSnapshotPreferredPtys.delete(ptyId)
+diff --git a/src/main/runtime/orca-runtime-record-pty-worktree.ts b/src/main/runtime/orca-runtime-record-pty-worktree.ts
+index cfe3b3e..d96496d 100644
+--- a/src/main/runtime/orca-runtime-record-pty-worktree.ts
++++ b/src/main/runtime/orca-runtime-record-pty-worktree.ts
+@@ -1,6 +1,7 @@
+ // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+ import { OrcaRuntimeWithRefreshRepoWorktreeScan } from './orca-runtime-refresh-repo-worktree-scan'
+ import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
++import { TerminalOutputActivity } from './terminal-output-activity'
+ import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+ import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
+ import { parseWslUncPath } from '../../shared/wsl-paths'
+@@ -126,6 +127,9 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
+       pty.agentSessionOwners = []
+     }
+     if (state.incarnationId !== undefined) {
++      if (pty.incarnationId !== state.incarnationId) {
++        pty.outputActivity = new TerminalOutputActivity()
++      }
+       if (pty.incarnationId && state.incarnationId && pty.incarnationId !== state.incarnationId) {
+         this.invalidatePtyIncarnationHandle(ptyId)
+       }
+diff --git a/src/main/runtime/orca-runtime-runtime-id.ts b/src/main/runtime/orca-runtime-runtime-id.ts
+index dbbfdcc..18a901f 100644
+--- a/src/main/runtime/orca-runtime-runtime-id.ts
++++ b/src/main/runtime/orca-runtime-runtime-id.ts
+@@ -338,6 +338,7 @@ export class OrcaRuntimeWithRuntimeId {
+   // Why one source: every tui-idle site must read the same evidence, or they rank one pane differently.
+   protected readonly tuiIdleEvidenceSource: TuiIdleEvidenceSource = {
+     quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
++    getOutputActivity: (ptyId) => (ptyId ? this.ptysById.get(ptyId)?.outputActivity : undefined),
+     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
+     getAdoptedPtyIdleStatus: (pty) => this.getAdoptedPtyExplicitIdleStatus(pty),
+     getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
+diff --git a/src/main/runtime/runtime-terminal-idle-polls.test.ts b/src/main/runtime/runtime-terminal-idle-polls.test.ts
+index 5149c63..ed94b36 100644
+--- a/src/main/runtime/runtime-terminal-idle-polls.test.ts
++++ b/src/main/runtime/runtime-terminal-idle-polls.test.ts
+@@ -5,6 +5,7 @@ import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-term
+ import type { RuntimeTerminalWait } from '../../shared/runtime-types'
+ import type { TuiAgent } from '../../shared/tui-agent'
+ import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
++import { TerminalOutputActivity } from './terminal-output-activity'
+ 
+ const INTERVAL_MS = 2000
+ 
+@@ -65,6 +66,56 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
+     vi.useRealTimers()
+   })
+ 
++  it.each([
++    ['pty', true], ['leaf', true], ['pty', false], ['leaf', false]
++  ] as const)('requires a trusted composer for protocol-only %s readiness (screen=%s)', async (kind, trusted) => {
++    vi.setSystemTime(0)
++    const activity = new TerminalOutputActivity()
++    const protocols = '\x1b[?2004h\x1b[>4;2m\x1b[=1;1u'
++    activity.observe(protocols, 0)
++    const pty = makePty('pty-1', { lastOutputAt: 0, outputActivity: activity })
++    const leaf = makeLeaf('tab-1', { ptyId: 'pty-1', lastOutputAt: 0 })
++    const resolved: RuntimeTerminalWait[] = []
++    const foreground = vi.fn(() => Promise.resolve('agy'))
++    const polls = new RuntimeTerminalIdlePolls({
++      intervalMs: INTERVAL_MS,
++      quiescenceMs: 3000,
++      getOutputActivity: () => activity,
++      getTabTitle: () => null,
++      getAdoptedPtyIdleStatus: () => null,
++      getPaneAgent: () => 'antigravity',
++      getFirstPartyAgentStatus: () => null,
++      readScreenLines: () => null,
++      readRuledScreen: () => trusted ? {
++        lines: ['────────────', '>', '────────────', '? for shortcuts'],
++        alternateScreen: false,
++      } : null,
++      readVisibleScreen: () => null,
++      getForegroundProcess: foreground,
++      hasCommandPainted: () => true,
++      getLiveLeaf: () => leaf,
++      resolve: (_waiter, result) => resolved.push(result),
++    })
++    const waiter = makeWaiter('handle-1')
++    if (kind === 'pty') polls.startPty(waiter, pty)
++    else polls.startLeaf(waiter, leaf)
++    try {
++      await vi.advanceTimersByTimeAsync(2000)
++      activity.observe(protocols, 2000)
++      pty.lastOutputAt = 2000
++      leaf.lastOutputAt = 2000
++      await vi.advanceTimersByTimeAsync(2000)
++      expect(resolved.length).toBe(trusted ? 1 : 0)
++      if (trusted) {
++        expect(resolved[0]?.satisfied).toBe(true)
++        expect(resolved[0]?.status).toBe('running')
++      }
++      expect(foreground).not.toHaveBeenCalled()
++    } finally {
++      waiter.cancelIdlePoll?.()
++    }
++  })
++
+   it('allocates one interval for 20 concurrent waiters and still resolves them on the first tick', () => {
+     const resolved: { handle: string; result: RuntimeTerminalWait }[] = []
+     const polls = new RuntimeTerminalIdlePolls({
+diff --git a/src/main/runtime/runtime-terminal-state-records.ts b/src/main/runtime/runtime-terminal-state-records.ts
+index 78e0f47..936044e 100644
+--- a/src/main/runtime/runtime-terminal-state-records.ts
++++ b/src/main/runtime/runtime-terminal-state-records.ts
+@@ -13,6 +13,7 @@ import type { PtyProviderBufferSnapshot } from '../providers/types'
+ import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
+ import type { TerminalTailWaitState } from './terminal-wait-tail-state'
+ import type { TerminalCommandPaint } from './terminal-command-paint'
++import type { TerminalOutputActivity } from './terminal-output-activity'
+ import type { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
+ import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+ import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+@@ -100,6 +101,7 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
+   lastOutputAt: number | null
+   /** See terminal-command-paint.ts; absent until the pane's first output, and again after a gap or a new process. */
+   commandPaint?: TerminalCommandPaint
++  outputActivity?: TerminalOutputActivity
+ }
+ 
+ export type RuntimePtyTabCloseAuthority = {
+diff --git a/src/main/runtime/terminal-output-activity.ts b/src/main/runtime/terminal-output-activity.ts
+new file mode 100644
+index 0000000..17cd785
+--- /dev/null
++++ b/src/main/runtime/terminal-output-activity.ts
+@@ -0,0 +1,62 @@
++import { createTerminalEscapeScanner } from '../../shared/terminal-escape-scanner'
++
++/** A quiet clock that excludes proven input-mode reassertions, never raw output. */
++export class TerminalOutputActivity {
++  private at = 0
++  private lastActivityAt: number | null = null
++  private readonly modes = new Map<string, string>()
++  private readonly scanner = createTerminalEscapeScanner({
++    onText: (text) => {
++      if (text.length > 0) this.markActivity()
++    },
++    onOtherEscape: () => this.markActivity(),
++    onCsi: (marker, params, final) => {
++      const mode = inputMode(marker, params, final)
++      if (!mode) {
++        this.markActivity()
++      } else if (this.modes.get(mode) !== `${params}${final}`) {
++        this.markActivity(false)
++        this.modes.set(mode, `${params}${final}`)
++      }
++    }
++  })
++
++  observe(data: string, at: number): void {
++    this.at = at
++    this.scanner.observe(data)
++  }
++
++  get quietSince(): number | null {
++    return this.scanner.hasPendingEscape() ? null : this.lastActivityAt
++  }
++
++  get pending(): boolean {
++    return this.scanner.hasPendingEscape()
++  }
++
++  private markActivity(forgetModes = true): void {
++    this.lastActivityAt = this.at
++    // Other output may reset protocol state; only uninterrupted reassertions are proven.
++    if (forgetModes) {
++      this.modes.clear()
++    }
++  }
++}
++
++function inputMode(marker: string, params: string, final: string): string | null {
++  if (marker === '?' && params === '2004' && (final === 'h' || final === 'l')) {
++    return 'bracketed-paste'
++  }
++  if (marker === '>' && /^4;[0-2]$/.test(params) && final === 'm') {
++    return 'modify-other-keys'
++  }
++  if (
++    marker === '=' &&
++    /^[0-9]{1,2};1$/.test(params) &&
++    Number(params.split(';')[0]) <= 31 &&
++    final === 'u'
++  ) {
++    return 'kitty-absolute'
++  }
++  return null
++}
+diff --git a/src/main/runtime/tui-idle-evidence-source.ts b/src/main/runtime/tui-idle-evidence-source.ts
+index 4340dd0..056706f 100644
+--- a/src/main/runtime/tui-idle-evidence-source.ts
++++ b/src/main/runtime/tui-idle-evidence-source.ts
+@@ -14,6 +14,7 @@ import {
+   type AgentStateVerdict
+ } from './agent-state-rules/agent-state-rules-engine'
+ import type { TuiIdleHookTurn } from './tui-idle-hook-lane'
++import type { TerminalOutputActivity } from './terminal-output-activity'
+ import type {
+   FirstPartyAgentStatus,
+   TuiIdleEvaluationInput,
+@@ -23,6 +24,7 @@ import type {
+ /** The runtime state every tui-idle site reads its evidence from. */
+ export type TuiIdleEvidenceSource = {
+   quiescenceMs: number
++  getOutputActivity?(ptyId: string | null | undefined): TerminalOutputActivity | undefined
+   getTabTitle(tabId: string): string | null
+   getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
+   getPaneAgent(ptyId: string | null | undefined): TuiAgent | null
+@@ -106,7 +108,7 @@ export function leafTuiIdleEvidence(
+   const agent = source.getPaneAgent(leaf.ptyId)
+   const readScreen = screenReader(source, agent, leaf.ptyId)
+   return {
+-    record: leaf,
++    record: { ...leaf, outputActivity: source.getOutputActivity?.(leaf.ptyId) },
+     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
+     rendererTitle: leaf.paneTitle ?? source.getTabTitle(leaf.tabId),
+     readPositiveBodyEvidence: () =>
+@@ -131,7 +133,7 @@ export function ptyTuiIdleEvidence(
+   const agent = source.getPaneAgent(pty.ptyId)
+   const readScreen = screenReader(source, agent, pty.ptyId)
+   return {
+-    record: pty,
++    record: { ...pty, outputActivity: source.getOutputActivity?.(pty.ptyId) ?? pty.outputActivity },
+     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
+     readPositiveBodyEvidence: () =>
+       (agent !== 'qoder' &&
+diff --git a/src/main/runtime/tui-idle-evidence.ts b/src/main/runtime/tui-idle-evidence.ts
+index 8d8218a..b1437ca 100644
+--- a/src/main/runtime/tui-idle-evidence.ts
++++ b/src/main/runtime/tui-idle-evidence.ts
+@@ -9,6 +9,7 @@ import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-tit
+ import { resolveExplicitTerminalTitleAgentType } from '../../shared/terminal-title-agent-type'
+ import type { TuiAgent } from '../../shared/tui-agent'
+ import type { TerminalAgent } from '../../shared/terminal-agent'
++import type { TerminalOutputActivity } from './terminal-output-activity'
+ import { isTuiAgent } from '../../shared/tui-agent-config'
+ import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
+ import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
+@@ -61,6 +62,7 @@ import { evaluateHookTurn, type TuiIdleHookTurn } from './tui-idle-hook-lane'
+ export type TuiIdleEvidenceRecord = {
+   lastAgentStatus: AgentStatus | null
+   lastOutputAt: number | null
++  outputActivity?: TerminalOutputActivity
+   lastOscTitle?: string | null
+ }
+ 
+@@ -146,12 +148,12 @@ export function hasSustainedTitleIdle(
+   // no local output clock, so for an agent that WILL announce rest explicitly there is no
+   // corroboration available at all. Settling here let a busy Codex/Devin satisfy the wait
+   // from a name-only title (#6011); hold out for tier 1/2 or the caller's timeout instead.
+-  return hasQuietOutput(record, quiescenceMs)
++  return hasQuietOutput(record.lastOutputAt, quiescenceMs)
+ }
+ 
+ /** Why a missing clock is not quiet: an adopted or restored pane cannot measure it. */
+-function hasQuietOutput(record: TuiIdleEvidenceRecord, quiescenceMs: number): boolean {
+-  return record.lastOutputAt !== null && Date.now() - record.lastOutputAt >= quiescenceMs
++function hasQuietOutput(at: number | null, quiescenceMs: number): boolean {
++  return at !== null && Date.now() - at >= quiescenceMs
+ }
+ 
+ /**
+@@ -239,7 +241,9 @@ export function hasQuietReadyScreen(
+   }
+   // Why: same rule as the tier-3 lane — without an output clock there is no
+   // corroboration available, so hold out instead of settling.
+-  if (!hasQuietOutput(record, quiescenceMs)) {
++  // Protocol reassertions only corroborate a known composer; weak lanes keep the raw clock.
++  const at = record.outputActivity ? record.outputActivity.quietSince : record.lastOutputAt
++  if (!hasQuietOutput(at, quiescenceMs)) {
+     return false
+   }
+   // Why last: a streaming pane never pays for the screen projection.
+@@ -249,6 +253,13 @@ export function hasQuietReadyScreen(
+ /** The one place the tiers are combined; every settle site branches only on the verdict. */
+ export function evaluateTuiIdle(input: TuiIdleEvaluationInput): TuiIdleVerdict {
+   const verdict = rankTuiIdleEvidence(input)
++  if (
++    input.record.outputActivity?.pending &&
++    verdict.kind !== 'blocked' &&
++    verdict.kind !== 'working'
++  ) {
++    return { kind: 'pending', quietForeground: 'closed' }
++  }
+   // Why over the verdict rather than per lane: an overlay refuses input whichever lane would
+   // settle, and only a ready verdict pays for the screen read.
+   return isTuiIdleReadyVerdict(verdict) && input.readScreenInputVeto() === true
+@@ -352,7 +363,7 @@ function isSettledWeakIdle(
+   return (
+     verdict.state === 'idle' &&
+     verdict.strength === 'weak' &&
+-    ((!verdict.requiresQuiet && !launchReadiness) || hasQuietOutput(record, quiescenceMs))
++    ((!verdict.requiresQuiet && !launchReadiness) || hasQuietOutput(record.lastOutputAt, quiescenceMs))
+   )
+ }
+ 
+diff --git a/src/main/runtime/tui-idle-protocol-output.test.ts b/src/main/runtime/tui-idle-protocol-output.test.ts
+new file mode 100644
+index 0000000..027ef0b
+--- /dev/null
++++ b/src/main/runtime/tui-idle-protocol-output.test.ts
+@@ -0,0 +1,194 @@
++import { afterEach, describe, expect, it, vi } from 'vitest'
++import { createTerminalEscapeScanner } from '../../shared/terminal-escape-scanner'
++import { evaluateTuiIdle, type TuiIdleEvaluationInput } from './tui-idle-evidence'
++import { evaluateAgentStateRules } from './agent-state-rules/agent-state-rules-engine'
++import { TerminalOutputActivity } from './terminal-output-activity'
++
++const PROTOCOLS = '\x1b[?2004h\x1b[>4;2m\x1b[=1;1u'
++const COMPOSER = ['────────────', '>', '────────────', '? for shortcuts']
++
++function input(screen: readonly string[] | null = COMPOSER): TuiIdleEvaluationInput {
++  return {
++    record: { lastAgentStatus: null, lastOscTitle: null, lastOutputAt: 0 },
++    agent: 'antigravity',
++    firstPartyStatus: null,
++    quiescenceMs: 3000,
++    titleObservedAtEpochMs: null,
++    readTailBlockedReason: () => null,
++    readPositiveBodyEvidence: () => false,
++    readQuietReadyBodyEvidence: () =>
++      evaluateAgentStateRules('antigravity', { readScreenLines: () => screen })?.state === 'idle',
++    readAgentRuleVerdict: () =>
++      evaluateAgentStateRules('antigravity', { readScreenLines: () => screen }),
++    readScreenInputVeto: () => false,
++  }
++}
++
++describe('protocol output at a trusted Antigravity composer', () => {
++  afterEach(() => vi.useRealTimers())
++
++  it('becomes ready after three seconds despite two-second input protocol reassertions', () => {
++    vi.useFakeTimers()
++    const evidence = input()
++    evidence.record.outputActivity = new TerminalOutputActivity()
++    for (const at of [0, 2000, 4000, 6000]) {
++      vi.setSystemTime(at)
++      evidence.record.lastOutputAt = at
++      evidence.record.outputActivity.observe(PROTOCOLS, at)
++      expect(evaluateTuiIdle(evidence).kind).toBe(at < 3000 ? 'pending' : 'ready-strong')
++    }
++    expect(evaluateTuiIdle(evidence).kind).toBe('ready-strong')
++    expect(evidence.record.lastOutputAt).toBe(6000)
++  })
++
++  it('preserves the three-second boundary', () => {
++    vi.useFakeTimers()
++    const evidence = input()
++    const activity = new TerminalOutputActivity()
++    evidence.record.outputActivity = activity
++    activity.observe(PROTOCOLS, 0)
++    activity.observe(PROTOCOLS, 2000)
++    evidence.record.lastOutputAt = 2000
++    vi.setSystemTime(2999)
++    expect(evaluateTuiIdle(evidence).kind).toBe('pending')
++    vi.setSystemTime(3000)
++    expect(evaluateTuiIdle(evidence).kind).toBe('ready-strong')
++  })
++
++  it('handles every split of a repeated protocol batch without being ready while incomplete', () => {
++    vi.useFakeTimers()
++    for (let split = 1; split < PROTOCOLS.length; split += 1) {
++      const evidence = input()
++      const activity = new TerminalOutputActivity()
++      evidence.record.outputActivity = activity
++      activity.observe(PROTOCOLS, 0)
++      activity.observe(PROTOCOLS.slice(0, split), 2000)
++      evidence.record.lastOutputAt = 2000
++      vi.setSystemTime(6000)
++      // At complete sequence boundaries there is no unfinished escape to veto input.
++      const complete = [8, 15].includes(split)
++      expect(evaluateTuiIdle(evidence).kind).toBe(complete ? 'ready-strong' : 'pending')
++      activity.observe(PROTOCOLS.slice(split), 6000)
++      expect(evaluateTuiIdle(evidence).kind).toBe('ready-strong')
++    }
++  })
++
++  it.each([
++    'answer', '\r', '\x07', '\x9b?999h', '\x1b[2J', '\x1b[?1049h',
++    '\x1b]0;title\x07', '\x1bPpayload\x1b\\', '\x1bc', '\x1bZ',
++    '\x1b[?999h', '\x1b[>1u', '\x1b[=1;2u', '\x1b[=2;1u',
++    '\x1b[?2004l', '\x1b[>4;1m', `${PROTOCOLS}answer`,
++    `\x1b[${'1'.repeat(600)}m`,
++  ])('requires a fresh quiet interval after other output %j', (data) => {
++    vi.useFakeTimers()
++    const evidence = input()
++    const activity = new TerminalOutputActivity()
++    evidence.record.outputActivity = activity
++    activity.observe(PROTOCOLS, 0)
++    activity.observe(PROTOCOLS, 2000)
++    activity.observe(data, 4000)
++    evidence.record.lastOutputAt = 4000
++    vi.setSystemTime(6999)
++    expect(evaluateTuiIdle(evidence).kind).toBe('pending')
++    vi.setSystemTime(7000)
++    expect(evaluateTuiIdle(evidence).kind).toBe('ready-strong')
++  })
++
++  it('does not interpret protocol settings hidden inside an unfinished control string', () => {
++    vi.useFakeTimers()
++    const evidence = input()
++    const activity = new TerminalOutputActivity()
++    evidence.record.outputActivity = activity
++    activity.observe(PROTOCOLS, 0)
++    activity.observe(`\x1b]0;${PROTOCOLS}`, 2000)
++    vi.setSystemTime(6000)
++    expect(evaluateTuiIdle(evidence).kind).toBe('pending')
++    activity.observe('\x1b', 6000)
++    expect(evaluateTuiIdle(evidence).kind).toBe('pending')
++    activity.observe('\\', 6001)
++    vi.setSystemTime(9000)
++    expect(evaluateTuiIdle(evidence).kind).toBe('pending')
++    vi.setSystemTime(9001)
++    expect(evaluateTuiIdle(evidence).kind).toBe('ready-strong')
++  })
++
++  it('requires the DCS string terminator even after a bell', () => {
++    vi.useFakeTimers()
++    const evidence = input()
++    const activity = new TerminalOutputActivity()
++    evidence.record.outputActivity = activity
++    activity.observe(PROTOCOLS, 0)
++    activity.observe(`\x1bP${PROTOCOLS}\x07`, 2000)
++    vi.setSystemTime(6000)
++    expect(evaluateTuiIdle(evidence).kind).toBe('pending')
++    activity.observe('\x1b\\', 6000)
++    vi.setSystemTime(8999)
++    expect(evaluateTuiIdle(evidence).kind).toBe('pending')
++    vi.setSystemTime(9000)
++    expect(evaluateTuiIdle(evidence).kind).toBe('ready-strong')
++  })
++
++  it.each(['\x1b(', '\x9b2004', '\x1b[1:', '\x9dtitle', `\x1b[${'1'.repeat(600)}`])(
++    'holds incomplete generic escapes and bounded oversized sequences %j', (data) => {
++      vi.useFakeTimers()
++      const evidence = input()
++      const activity = new TerminalOutputActivity()
++      evidence.record.outputActivity = activity
++      activity.observe(PROTOCOLS, 0)
++      activity.observe(data, 2000)
++      vi.setSystemTime(6000)
++      expect(evaluateTuiIdle(evidence).kind).toBe('pending')
++      activity.observe(data.startsWith('\x9d') ? '\x9c' : 'B', 6000)
++      vi.setSystemTime(8999)
++      expect(evaluateTuiIdle(evidence).kind).toBe('pending')
++      vi.setSystemTime(9000)
++      expect(evaluateTuiIdle(evidence).kind).toBe('ready-strong')
++    },
++  )
++
++  it.each([null, ['────────────', '>', '────────────', 'esc to cancel'],
++    ['Trust this workspace?', '> Yes'], ['Select model', '> gemini']])(
++    'refuses an unproven or blocked composer %j', (screen) => {
++      vi.useFakeTimers()
++      const evidence = input(screen)
++      const activity = new TerminalOutputActivity()
++      evidence.record.outputActivity = activity
++      activity.observe(PROTOCOLS, 0)
++      activity.observe(PROTOCOLS, 6000)
++      vi.setSystemTime(6000)
++      expect(evaluateTuiIdle(evidence).kind).toBe('pending')
++    },
++  )
++
++  it('preserves working and overlay vetoes after protocol-only output', () => {
++    vi.useFakeTimers()
++    vi.setSystemTime(6000)
++    const evidence = input()
++    const activity = new TerminalOutputActivity()
++    evidence.record.outputActivity = activity
++    activity.observe(PROTOCOLS, 0)
++    activity.observe(PROTOCOLS, 6000)
++    evidence.firstPartyStatus = { state: 'working', updatedAt: 6000 }
++    expect(evaluateTuiIdle(evidence).kind).toBe('working')
++    evidence.firstPartyStatus = null
++    evidence.readScreenInputVeto = () => true
++    expect(evaluateTuiIdle(evidence).kind).toBe('pending')
++  })
++})
++
++describe('escape scanner activity observations', () => {
++  it('reports non-CSI escapes and unfinished input without treating their payload as text', () => {
++    const other: string[] = []
++    const scanner = createTerminalEscapeScanner({
++      onText: () => {}, onCsi: () => {}, onOtherEscape: (data) => other.push(data),
++    })
++    scanner.observe('\x1b]0;title')
++    expect(scanner.hasPendingEscape()).toBe(true)
++    scanner.observe('\x07')
++    expect(scanner.hasPendingEscape()).toBe(false)
++    expect(other.length).toBeGreaterThan(0)
++    other.length = 0
++    scanner.observe('\x1bc')
++    expect(other.length).toBeGreaterThan(0)
++  })
++})
+diff --git a/src/shared/terminal-escape-scanner.ts b/src/shared/terminal-escape-scanner.ts
+index 323eac9..738d76c 100644
+--- a/src/shared/terminal-escape-scanner.ts
++++ b/src/shared/terminal-escape-scanner.ts
+@@ -1,78 +1,93 @@
+ const ESC = '\x1b'
+-// Longest unfinished escape carried into the next read; anything longer is noise, not a split.
++// Oversized unfinished escapes retain only an unrecognized prefix until their final byte.
+ const MAX_CARRIED_ESCAPE_CHARS = 512
+ 
+ /* oxlint-disable no-control-regex -- these match terminal escape sequences, which start with ESC */
+-const CSI_RE = /^\x1b\[([?>=<]?)([0-9;]*)([ -/]*[@-~])/
+-const UNFINISHED_CSI_RE = /^\x1b\[[?>=<]?[0-9;]*[ -/]*$/
++const CSI_RE = /^(?:\x1b\[|\x9b)([?>=<]?)([0-9;]*)([ -/]*[@-~])/
++const OTHER_CSI_RE = /^(?:\x1b\[|\x9b)[0-?]*[ -/]*[@-~]/
++const UNFINISHED_CSI_RE = /^(?:\x1b\[|\x9b)[0-?]*[ -/]*$/
++const ESCAPE_RE = /^\x1b[ -/]*[0-~]/
++const UNFINISHED_ESCAPE_RE = /^\x1b[ -/]*$/
+ // Terminal control strings (titles, graphics, queries) never paint their payload text.
+-const STRING_RE = /^\x1b[\]PX^_][\s\S]*?(?:\x07|\x1b\\)/
+-const STRING_START_RE = /^\x1b[\]PX^_]/
+-const STRING_END_RE = /\x07|\x1b\\/
++const OSC_RE = /^(?:\x1b\]|\x9d)[\s\S]*?(?:\x07|\x1b\\|\x9c)/
++const OTHER_STRING_RE = /^(?:\x1b[PX^_]|[\x90\x98\x9e\x9f])[\s\S]*?(?:\x1b\\|\x9c)/
++const STRING_START_RE = /^(?:\x1b[\]PX^_]|[\x90\x98\x9d-\x9f])/
++const OSC_START_RE = /^(?:\x1b\]|\x9d)/
++const OSC_END_RE = /\x07|\x1b\\|\x9c/
++const STRING_END_RE = /\x1b\\|\x9c/
+ 
+ type TerminalEscapeObserver = {
+   onCsi: (privateMarker: string, params: string, final: string) => void
+   onText: (text: string) => void
++  onOtherEscape?: (data: string) => void
+ }
+ 
+ /** Incremental painted-text/CSI reader; terminal string payloads are never painted text. */
+ export function createTerminalEscapeScanner(observer: TerminalEscapeObserver): {
+   observe: (data: string) => void
++  hasPendingEscape: () => boolean
+ } {
+   let carry = ''
+-  let stringPending = false
++  let stringPendingEnd: RegExp | null = null
++  const escapeStart = /[\x1b\x90\x98\x9b\x9d-\x9f]/g
+   return {
++    hasPendingEscape: () => carry.length > 0 || stringPendingEnd !== null,
+     observe(data: string): void {
+       const input = carry + data
+       carry = ''
+       let index = 0
+-      if (stringPending) {
+-        const end = STRING_END_RE.exec(input)
++      if (stringPendingEnd) {
++        observer.onOtherEscape?.(input)
++        const end = stringPendingEnd.exec(input)
+         if (!end) {
+           carry = input.endsWith(ESC) ? ESC : ''
+           return
+         }
+-        stringPending = false
++        stringPendingEnd = null
+         index = end.index + end[0].length
+       }
+       while (index < input.length) {
+-        const escapeAt = input.indexOf(ESC, index)
++        escapeStart.lastIndex = index
++        const escapeAt = escapeStart.exec(input)?.index ?? -1
+         if (escapeAt === -1) {
+           observer.onText(input.slice(index))
+           break
+         }
+         observer.onText(input.slice(index, escapeAt))
+         const rest = input.slice(escapeAt)
+-        const sequence = CSI_RE.exec(rest) ?? STRING_RE.exec(rest)
++        const csi = CSI_RE.exec(rest)
++        const sequence =
++          csi ?? OTHER_CSI_RE.exec(rest) ?? OSC_RE.exec(rest) ?? OTHER_STRING_RE.exec(rest)
+         if (sequence) {
+-          if (sequence[0][1] === '[') {
+-            observer.onCsi(sequence[1], sequence[2], sequence[3])
++          if (csi) {
++            observer.onCsi(csi[1], csi[2], csi[3])
++          } else {
++            observer.onOtherEscape?.(sequence[0])
+           }
+           index = escapeAt + sequence[0].length
+           continue
+         }
+         if (STRING_START_RE.test(rest)) {
+-          stringPending = true
++          observer.onOtherEscape?.(rest)
++          stringPendingEnd = OSC_START_RE.test(rest) ? OSC_END_RE : STRING_END_RE
+           carry = rest.endsWith(ESC) ? ESC : ''
+           break
+         }
+-        if (isUnfinishedEscape(rest)) {
+-          carry = rest
++        if (UNFINISHED_CSI_RE.test(rest) || UNFINISHED_ESCAPE_RE.test(rest)) {
++          if (rest.length <= MAX_CARRIED_ESCAPE_CHARS) {
++            carry = rest
++          } else {
++            observer.onOtherEscape?.(rest)
++            carry = UNFINISHED_CSI_RE.test(rest)
++              ? `${rest.startsWith(ESC) ? `${ESC}[` : '\x9b'}:`
++              : `${ESC} `
++          }
+           break
+         }
+-        index = escapeAt + 2
++        const escape = ESCAPE_RE.exec(rest)?.[0] ?? rest.slice(0, 1)
++        observer.onOtherEscape?.(escape)
++        index = escapeAt + escape.length
+       }
+     }
+   }
+ }
+-
+-function isUnfinishedEscape(rest: string): boolean {
+-  if (rest.length > MAX_CARRIED_ESCAPE_CHARS) {
+-    return false
+-  }
+-  return (
+-    rest === ESC ||
+-    UNFINISHED_CSI_RE.test(rest) ||
+-    (STRING_START_RE.test(rest) && !STRING_END_RE.test(rest))
+-  )
+-}

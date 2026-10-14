@@ -1,8 +1,19 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
+
+import * as readOnlyWrapper from '../src/adapters/agents/read-only-execution-wrapper.js';
+import { antigravityHarness } from '../src/adapters/agents/antigravity-harness.js';
+import { PROJECT_CONFIG_FILENAME, PROJECT_CONFIG_SCHEMA_VERSION } from '../src/application/configuration/project-config.js';
+import {
+  coordinatorConfigurationFixture,
+  credentialStoreFixture,
+  projectConnectionsFixture,
+  projectExecutionProfilesFixture,
+} from './support/model-configurations.js';
 
 import {
   DOCTOR_SCHEMA_VERSION,
@@ -221,6 +232,9 @@ test('身份声明类环境变量不会被隐式继承', () => {
     ORCA_TERMINAL_HANDLE: 'term_secret',
     ORCA_PANE_KEY: 'pane_secret',
     ORCA_TAB_ID: 'tab_secret',
+    ORCA_AGENT_SESSION_ID: 'parent-session',
+    ORCA_AGENT_SESSION_SPAWN_TOKEN: 'parent-spawn-token',
+    ORCA_STRUCTURED_SESSION: '1',
     ORCA_USER_DATA_PATH: '/tmp/orca',
     EMPTY: undefined,
   });
@@ -351,6 +365,50 @@ test('doctor 命令把结构化缺失能力写进诊断行，退出码为非零'
     'tool_calling',
     'usage',
   ]);
+});
+
+test('doctor 使用所属 harness 的原生目录并报告 Antigravity 可用，不读取 Coordinator 凭据', async () => {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'ocp-doctor-catalog-'));
+  const profiles = projectExecutionProfilesFixture();
+  const credentials = credentialStoreFixture();
+  const catalog = vi.spyOn(antigravityHarness, 'queryModels').mockResolvedValue({
+    kind: 'available',
+    source: 'antigravity:fixture:agy models',
+    models: [{ model: 'gemini-3.8-flash-medium', effortCapability: null }],
+  });
+  const readOnly = vi.spyOn(readOnlyWrapper, 'probeHarnessReadOnlyWorker').mockResolvedValue({
+    kind: 'available', stage: 'host-verify', profile: 'bwrap-read-only', diagnostics: [],
+    harness: 'antigravity', harnessVersion: 'fixture', codexVersion: null,
+  });
+  try {
+    writeFileSync(path.join(cwd, PROJECT_CONFIG_FILENAME), JSON.stringify({
+      schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
+      ...projectConnectionsFixture(),
+      coordinatorModels: [coordinatorConfigurationFixture()],
+      defaultCoordinatorModelRef: 'coordinator-default',
+      tracker: { kind: 'github', routeMapIssueNumber: 42 },
+      planning: { maxMutations: 3 },
+      context: { maxInputTokens: 120_000 },
+      execution: {
+        harness: 'antigravity', codexSandbox: 'workspace-write', acceptedRisks: [],
+        workerProfiles: profiles.workerProfiles.map((profile) => ({ ...profile, harness: 'antigravity' })),
+        workerProfileRefs: profiles.workerProfileRefs,
+      },
+    }), 'utf8');
+    const result = await createOrcaDoctorProbe({ cwd, env: {}, credentialStore: credentials }).readReadOnlyWorkers!();
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.detail);
+    expect(result.value).toHaveLength(profiles.workerProfiles.length);
+    for (const fact of result.value) {
+      expect(fact).toMatchObject({ harness: 'antigravity', capability: 'available' });
+      expect(fact.detail).toContain('原生模型目录可用');
+    }
+    expect(credentials.reads).toEqual([]);
+  } finally {
+    catalog.mockRestore();
+    readOnly.mockRestore();
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });
 
 test('本机只读 Worker 不可用时 doctor 报独立检查项并以非零结束', async () => {
