@@ -1,5 +1,26 @@
 # Implementation Plan
 
+## 分级续办（基线 21ddd79）
+
+本轮沿 tasks 6.1–6.4 执行，当前准入合同以 `workers/harness-support`、IC-07 和
+`grade-worker-harness-admission` 的落地实现为准。首轮的版本、完整矩阵与 PASS
+保留其原验证范围；下列按完整资格才注册的首轮实施记录不作为本轮准入门禁。
+
+- 复用 `tests/support/worker-harness-acceptance.ts` 和既有真实矩阵，先验证
+  Hermes/Cline 的 basic；Kimi 在精确隔离目录处理原生信任后复核基础角色；
+  Kilo 与有希望的候选继续 enhanced。
+- basic 不要求原生 Session、完整历史或响应模型回显；enhanced 要求精确 Session、
+  四角色、Implementation resume 和 Validator 同 Session 续接；complete 才追加
+  完整历史、Recovery 与 mixed Controller。只读按实际操作单独核验。
+- 修改范围：当前 change artifacts、`worker-harness-qualifications.ts`、相关既有
+  tests、研究/兼容性文档与当前支持摘要；必要的原生启动修复限所属 adapter。
+  新证据追加到 `artifacts/next-worker-harness-adapters/`，不覆盖旧失败现场。
+- Kimi 常规工具审批在真实轮次复现；所属 adapter 使用原生逐次 `--yolo`
+  （Ask When Needed），保留原生风险审批，不写默认权限或信任数据库。
+- Muse/Cursor 缺 CLI/原生登录及获批模型时只记录前置条件，不安装或推测配置。
+- 验证使用相关 adapter/资格/registry/模型设置/doctor 回归、types/lint/build、
+  OpenSpec strict 与 diff；真实结果按实际 Task/Dispatch/工件独立存证。
+
 ## 1. 实施基线
 
 predecessor-contract：直接前驱 archive/2026-10-11-add-testable-worker-harness-adapters；HEAD 13b203f62bbb68a60456c5acd7d28e4c54c625a4，起始工作区干净。主规格 workers/harness-adapters、WorkerHarness 和七项 registry 已核验。冻结 IC-02 mutation/unknown、IC-07 Session/Envelope、IC-08结算、IC-09恢复/预算、IC-14 modelSelection；只增加独立报告安装行为。Project schema5、Manifest4、SQLite schema不变。lab active 独立保留。

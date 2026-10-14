@@ -37,8 +37,8 @@ const BUNDLED_LEVELS: ReadonlyArray<{ readonly harness: string; readonly level: 
   { harness: 'qwen-code', level: 'complete' },
   { harness: 'antigravity', level: 'complete' },
   { harness: 'kilo', level: 'basic' },
-  { harness: 'kimi', level: 'unavailable' },
-  { harness: 'hermes', level: 'unavailable' },
+  { harness: 'kimi', level: 'enhanced' },
+  { harness: 'hermes', level: 'enhanced' },
   { harness: 'cline', level: 'unavailable' },
   { harness: 'muse', level: 'unavailable' },
   { harness: 'cursor', level: 'unavailable' },
@@ -82,7 +82,7 @@ describe('打包的资格摘要', () => {
         expect(facts.some((fact) => fact.capability === capability && fact.state === 'verified'), `${harness}/${capability}`).toBe(true);
       }
     }
-    for (const harness of ['kimi', 'hermes', 'cline', 'muse', 'cursor']) {
+    for (const harness of ['cline', 'muse', 'cursor']) {
       expect(workerSupportLevelAllows(workerHarnessSupport(harness).level, 'basic'), harness).toBe(false);
     }
   });
@@ -234,6 +234,14 @@ describe('qualificationFromAcceptance', () => {
       capability: 'session_resume', state: 'failed', evidenceRef: null, diagnostic: 'session_not_continued',
     });
     expect(deriveWorkerSupportLevel(contextLost)).toBe('basic');
+  });
+
+  test.each(['resume', 'validatorContinuation'])('%s 因原身份缺失而阻塞不作会话续接失败结论', (field) => {
+    const record = onlyRecord(acceptance(harnessEntry({
+      [field]: { kind: 'blocked', sameSession: false, contextPreserved: false, blocker: { code: 'original_unavailable' } },
+    })));
+    expect(record.facts.some((fact) => fact.capability === 'session_resume')).toBe(false);
+    expect(deriveWorkerSupportLevel(record)).toBe('basic');
   });
 
   test('只读结论不参与通用等级：拒写失败或缺证据仍是 enhanced', () => {

@@ -9,9 +9,9 @@
 - 七家实现现有 WorkerHarness 契约：公开终端内启动真实原生 TUI、精确 Session 绑定、按 ID 恢复、transcript 覆盖、Recovery 与原生模型目录；Antigravity 在本项目 launcher 中过滤重复输入协议设置。
 - 新增独立报告插件 install/status/uninstall 接入步骤，仅维护 Companion 自有条目；普通原生启动无动作。
 - Antigravity 使用已登录订阅与 gemini-3.8-flash-medium；Kilo/Kimi/Hermes/Cline 使用中国 MiniMax M Plan 的 MiniMax-M3.1-Flash-Preview。
-- Muse/Cursor 完成实现和离线验证，明确后续真实验收任务，验收前不注册。其他候选同样只有完整真实验收通过才注册。
+- 七家均可显式登记身份，按已落地的 basic/enhanced/complete 规则取得角色准入；Muse/Cursor 完成实现和离线验证，基础真实证据不足时保持 unavailable。
 - 持续存证并回收不用的测试终端/worktree，更新当前支持与失败原因。
-- 按候选独立收敛探索，优先完成有希望的完整接入。原生能力缺口经可复核调查仍无法解决时，可记录阻塞证据、恢复验收前置条件并延期；延期不阻塞其他候选，也不作为真实验收通过。
+- 按候选独立收敛探索，优先补齐基础角色，再验证精确续接和高级能力。原生能力缺口经可复核调查仍无法解决时，记录具体阻塞和重验前置条件；只限制需要该能力的操作，不作为真实验收通过。
 
 ## Capabilities
 

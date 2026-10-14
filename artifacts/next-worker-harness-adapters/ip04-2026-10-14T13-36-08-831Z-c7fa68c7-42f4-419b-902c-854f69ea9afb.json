@@ -1,0 +1,100 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-14T13:36:08.831Z",
+  "finishedAt": "2026-10-14T13:37:01.934Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-a56406ff-c400-4871-969e-86fc8c23f208",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-ehbi1C",
+  "runId": "run_bb51bb16dbd5",
+  "coordinatorTerminalHandle": "term_84b6f1ef-d6c9-4b72-9acd-1a6dd18d8789",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "kimi",
+      "level": "basic",
+      "modelSelection": {
+        "model": "MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "roles": [
+        {
+          "harness": "kimi",
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "graded-yolo-20261014:kimi:planner",
+          "taskId": "task_cdfb95e6b77f",
+          "contextToken": null,
+          "terminalHandle": "term_28207120-cadc-44dc-95ba-2f30b9eeab46",
+          "dispatchId": "ctx_ff30d44422f4",
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": "/var/tmp/orca-harness-acceptance-ehbi1C/state/kimi/4da5f160cb5ed15974c2",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-ehbi1C/state/kimi/4da5f160cb5ed15974c2/session-start.mjs",
+          "coverage": null,
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "readOnlyVerified": null,
+          "modelEvidence": null,
+          "blocker": null
+        },
+        {
+          "harness": "kimi",
+          "role": "implementation",
+          "kind": "ran",
+          "launchId": "graded-yolo-20261014:kimi:implementation",
+          "taskId": "task_aff5ba004fb4",
+          "contextToken": null,
+          "terminalHandle": "term_05793959-7e0b-4427-9485-2675bf3f5b36",
+          "dispatchId": "ctx_f30fcd6f77f6",
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": "/var/tmp/orca-harness-acceptance-ehbi1C/state/kimi/31cbb16fdd1135f93cec",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-ehbi1C/state/kimi/31cbb16fdd1135f93cec/session-start.mjs",
+          "coverage": null,
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "readOnlyVerified": null,
+          "modelEvidence": null,
+          "blocker": null
+        }
+      ],
+      "resume": null,
+      "validatorContinuation": null,
+      "recovery": null,
+      "qualification": {
+        "harness": "kimi",
+        "evidenceRef": "report:kimi-yolo-basic#kimi",
+        "facts": [
+          {
+            "capability": "planner_result",
+            "state": "verified",
+            "evidenceRef": "report:kimi-yolo-basic#kimi/roles.planner",
+            "diagnostic": null
+          },
+          {
+            "capability": "implementation_result",
+            "state": "verified",
+            "evidenceRef": "report:kimi-yolo-basic#kimi/roles.implementation",
+            "diagnostic": null
+          },
+          {
+            "capability": "task_input",
+            "state": "verified",
+            "evidenceRef": "report:kimi-yolo-basic#kimi/roles",
+            "diagnostic": null
+          },
+          {
+            "capability": "orca_binding",
+            "state": "verified",
+            "evidenceRef": "report:kimi-yolo-basic#kimi/roles.dispatchId",
+            "diagnostic": null
+          }
+        ]
+      },
+      "derivedLevel": "basic"
+    }
+  ]
+}

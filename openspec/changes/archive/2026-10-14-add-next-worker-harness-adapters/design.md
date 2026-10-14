@@ -6,7 +6,7 @@
 
 ## Goals / Non-Goals
 
-七家完成 adapter；五家使用现有订阅探索真实资格，优先完成可接入候选，通过完整验收后注册。不能可靠解决的候选保留具体阻塞和后续验收前置条件，单独延期，不阻塞其他候选。Muse/Cursor 离线完成，后续真实验收前不注册。不修改 ledger-lab、上游源码、Coordinator 认证、schema 或 #52 布局。
+七家完成 adapter 并显式登记身份；五家使用现有订阅按当前 basic/enhanced/complete 规则探索真实资格。不能可靠解决的能力保留具体阻塞和后续验收前置条件，只限制需要该能力的操作。Muse/Cursor 离线完成，缺少基础真实证据时保持 unavailable。不修改 ledger-lab、上游源码、Coordinator 认证、schema 或 #52 布局。
 
 ## Decisions
 
@@ -20,7 +20,7 @@ scripts/worker-harness-reporting.mjs 提供 install/status/uninstall --harness�
 
 ### D-03：复用生产与恢复接缝
 
-WorkerHarness、Session Binding、process-runner、worker-runtime、readonly wrapper、Controller、授权/预算与 Recovery 为唯一事实源。各候选实现只处理原生协议与格式。native runtime roots 从实际 launch 环境解析，保持真实 HOME/XDG；只读仓库/Git/common dir/协调库与可写 native roots 无法分离时拒绝。生产 registry 仅收真实验收通过者，候选 tests 显式注入，不扩大生产 enum 以暴露未验证项。
+WorkerHarness、Session Binding、process-runner、worker-runtime、readonly wrapper、Controller、授权/预算与 Recovery 为唯一事实源。各候选实现只处理原生协议与格式。native runtime roots 从实际 launch 环境解析，保持真实 HOME/XDG；只读仓库/Git/common dir/协调库与可写 native roots 无法分离时拒绝。registry 显式登记已实现 adapter；`worker-harness-qualifications.ts` 拥有事实摘要，`worker-harness-support.ts` 唯一推导等级，身份登记不授予角色权限。
 
 ### D-05：Antigravity 原生 TUI 输出适配
 
@@ -43,7 +43,7 @@ WaitMsBeforeAsync=30000 等待短读取，不通过额外目录搜索寻找协�
 
 Antigravity 优先，目标 gemini-3.8-flash-medium；Kilo/Kimi/Hermes/Cline 目标 MiniMax-M3.1-Flash-Preview，使用原生用户配置。真实测试串行，复用现有四角色/resume/Validator/Recovery 与 mixed Controller fixtures。Muse/Cursor 离线覆盖完整原生协议与拒绝边界，后续真实任务明确前置账号、版本、Orca 接管及只读嵌套 sandbox 验收。每轮保留 receipt 与 exact Session 证据后，公开 CLI 回收已终结的测试资源；unknown 不换 ID 重试或清理。
 
-每个候选的探索以完整资格通过或具体延期结论收敛；单轮超时和未尝试项不足以作为延期结论。延期记录已尝试的路径、不能满足的合同、原生来源和重新验收前置条件。身份、覆盖、只读和恢复标准不因延期调整，mixed Controller 与生产注册只消费完整通过者。
+每个候选按等级取得真实证据：basic 使用 Planner/Implementation 的精确 Orca 绑定、成功结果与工件；enhanced 增加四角色精确 Session、Implementation resume 和 Validator 同 Session 续接；complete 增加完整历史、Recovery 与 mixed Controller。模型回显、usage、目录只作诊断，只读按任务需要单独核验。单轮超时和未尝试项不足以否定已有成功事实；不能满足的能力须记录尝试路径、原生来源和重新验收前置条件，保持对应操作拒绝。
 
 ## Risks / Trade-offs
 

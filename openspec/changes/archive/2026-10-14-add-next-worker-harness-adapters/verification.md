@@ -1,5 +1,9 @@
 # Verification
 
+本文件保留首轮 12 项验收的输入和 PASS 范围。基于 `21ddd79` 的分级续办见
+[本轮报告](../../../docs/research/worker-harness-graded-validation-20261014.md) 与 tasks 6；
+当前身份登记和准入等级以实现及新增真实证据为准。
+
 ## 验收对象
 
 - Change：`add-next-worker-harness-adapters`，schema `orchestrated-delivery`。

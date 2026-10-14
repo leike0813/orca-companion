@@ -12,12 +12,13 @@
  * artifacts/next-worker-harness-adapters 的独立摘要证据；现场默认保留，交由用户显式回收。
  */
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
+import * as hermesAdapter from '../../src/adapters/agents/hermes-harness.js';
 import type { ExecutionBackend } from '../../src/application/ports/execution-backend.js';
 import { buildExecutionScope } from '../../src/application/ports/execution-backend.js';
 import type { CoordinationScopeId, CoordinatorSessionId, RuntimeIncarnationId } from '../../src/application/dto/identity.js';
@@ -336,7 +337,7 @@ test.each(['failed', 'cancelled', 'completed', 'done'])('基础级只承认 succ
   expect(outcome).toMatchObject({ kind: 'blocked', code: 'worker_not_succeeded', taskId: 'task-basic', dispatchId: 'dispatch-basic', terminalHandle: 'exact-created' });
 }, 15_000);
 /** 增强级只用精确原生 Session：即使没有 recovery 能力组，也要读出输出与拒写证据。 */
-test('增强级没有 recovery 能力组时按精确原生 Session 结算', async () => {
+test.each(['fixture-native', 'hermes'] as const)('增强级从 %s 的精确原生来源读取最终结果', async (harness) => {
   const directory = mkdtempSync(join(tmpdir(), 'enhanced-native-'));
   const transcript = join(directory, 'transcript.json');
   const reportPath = join(directory, 'session-report.json');
@@ -344,34 +345,55 @@ test('增强级没有 recovery 能力组时按精确原生 Session 结算', asyn
   const assistant = { type: 'message', message: { role: 'assistant', model: 'fixture-model', content: [{ type: 'text', text: 'enhanced answer' }] } };
   const denied = { type: 'function_call_result', output: { type: 'text', text: JSON.stringify({ permissionDenied: true, path: probePath, code: 'EROFS' }) } };
   writeFileSync(transcript, JSON.stringify({ info: { id: 'ses-enhanced' }, messages: [assistant, denied] }), 'utf8');
-  writeFileSync(reportPath, JSON.stringify({ sessionId: 'ses-enhanced', transcriptPath: transcript, cwd: '/fixture/project', observedAt: '2026-10-14T00:00:00.000Z', harness: 'fixture-native' }), 'utf8');
+  writeFileSync(reportPath, JSON.stringify({ sessionId: 'ses-enhanced', transcriptPath: transcript, cwd: '/fixture/project', observedAt: '2026-10-14T00:00:00.000Z', harness }), 'utf8');
   const registry = workerHarnessRegistry as Map<string, WorkerHarness>;
-  const previous = registry.get('fixture-native');
+  const previous = registry.get(harness);
+  let materialReads = 0;
+  let coverageReads = 0;
+  const material = harness !== 'hermes' ? null : vi.spyOn(hermesAdapter, 'prepareHermesRecoveryMaterial').mockImplementation(() => {
+    // 模拟 export 在结算后继续追加：首次范围已变，随后最终 assistant 才出现。
+    if (++materialReads === 1) return Promise.resolve(null);
+    const path = hermesAdapter.hermesRecoveryMaterialPath(directory, transcript);
+    mkdirSync(join(path, '..'), { recursive: true });
+    writeFileSync(path, materialReads === 2 ? JSON.stringify({ role: 'assistant', content: 'pending' }) + '\n'
+      : [assistant, denied].map((record) => JSON.stringify(record)).join('\n') + '\n');
+    return Promise.resolve(['fixture material']);
+  });
   const fake: WorkerHarness = {
-    id: 'fixture-native',
-    prepareLaunch: () => ({ kind: 'prepared_terminal', harness: 'fixture-native', activation: 'none', title: 'same-title', prepare: () => Promise.resolve({ title: 'same-title', command: 'fixture-command', stateRoot: directory }) }),
+    id: harness,
+    prepareLaunch: () => ({ kind: 'prepared_terminal', harness, activation: 'none', title: 'same-title', prepare: () => Promise.resolve({ title: 'same-title', command: 'fixture-command', stateRoot: directory }) }),
     queryModels: () => Promise.resolve({ kind: 'unavailable', code: 'fixture', message: 'fixture' }),
     sessionPaths: () => ({ stateRoot: directory, reporterPath: join(directory, 'reporter.json'), reportPath }),
     installReporter: () => undefined,
     capabilities: { nativeSession: {
       proveSession: () => Promise.resolve({ kind: 'proven', proof: { providerSessionId: 'ses-enhanced', transcriptRef: transcript, observedAt: '2026-10-14T00:00:00.000Z' } }),
       readTranscriptIdentity: () => Promise.resolve({ providerSessionId: 'ses-enhanced' }),
-    } },
+    }, ...(harness !== 'hermes' ? {} : { recovery: {
+      inspectTranscript: () => Promise.resolve(++coverageReads === 1
+        ? { kind: 'transcript_unavailable' as const, reason: 'native snapshot is still being written' }
+        : { kind: 'covered' as const, evidence: {
+        coverage: 'partial' as const, readableRange: { transcriptRef: transcript, fromEventRef: 'message:1', toEventRef: 'message:2' },
+        lastCompleteEventRef: 'message:2', gaps: [],
+      } }),
+      recoveryInstructions: () => [],
+    } }) },
   };
-  registry.set('fixture-native', fake);
+  registry.set(harness, fake);
   const launched = ACCEPTANCE_DIAGNOSTICS.harnessLaunched;
   try {
-    const binding: HarnessBinding = { harness: 'fixture-native', modelSelection: { model: 'fixture-model', effort: null, effortCapability: null, catalogSource: null }, expectedModel: 'fixture-model' };
+    const binding: HarnessBinding = { harness, modelSelection: { model: 'fixture-model', effort: null, effortCapability: null, catalogSource: null }, expectedModel: 'fixture-model' };
     const outcome = await launchPreparedTerminal({
       fixture: { ...basicFixture('succeeded'), level: 'enhanced' }, binding, role: 'planner', launchId: 'unit:enhanced',
       strategy: fake.prepareLaunch({ launchId: 'unit:enhanced', modelSelection: binding.modelSelection, sandboxMode: 'workspace-write' }),
       stateRoot: directory, reporterPath: join(directory, 'reporter.json'), reportPath, readOnlyProbePath: probePath,
+      expectedAssistantText: 'enhanced answer',
     });
-    expect(outcome).toMatchObject({ kind: 'ran', worker: { sessionId: 'ses-enhanced', transcriptRef: transcript, coverage: null, readOnlyVerified: true, modelEvidence: 'fixture-model' } });
+    expect(outcome).toMatchObject({ kind: 'ran', worker: { sessionId: 'ses-enhanced', transcriptRef: transcript, coverage: harness === 'hermes' ? 'partial' : null, readOnlyVerified: true, modelEvidence: 'fixture-model' } });
     if (outcome.kind === 'ran') expect(outcome.worker.output).toContain('enhanced answer');
   } finally {
     ACCEPTANCE_DIAGNOSTICS.harnessLaunched = launched;
-    if (previous === undefined) registry.delete('fixture-native'); else registry.set('fixture-native', previous);
+    material?.mockRestore();
+    if (previous === undefined) registry.delete(harness); else registry.set(harness, previous);
     rmSync(directory, { recursive: true, force: true });
   }
 });

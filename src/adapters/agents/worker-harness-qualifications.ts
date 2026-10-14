@@ -41,7 +41,8 @@ const IP15_MATRIX = 'artifacts/worker-harness-adapters/ip15-2026-10-06T05-02-57-
 const IP15_MATRIX_READ_ONLY = 'artifacts/worker-harness-adapters/README.md';
 const COMMAND_QWEN_MATRIX = 'artifacts/next-worker-harness-adapters/ip04-2026-10-11T05-08-24-154Z-7fc1a011-b14e-47d2-8e5a-e550e0635a8d.json';
 const COMMAND_BASIC = 'artifacts/next-worker-harness-adapters/ip04-2026-10-14T10-55-18-402Z-43432fa6-df72-4e03-b63f-5cb3f5fe6d1d.json';
-const KIMI_BASIC = 'artifacts/next-worker-harness-adapters/ip04-2026-10-14T10-54-18-998Z-5e735251-9a5b-40fa-8d19-00ab562e274e.json';
+const KIMI_ENHANCED = 'artifacts/next-worker-harness-adapters/ip04-2026-10-14T13-59-22-461Z-b759fd59-591a-4350-ac07-4e86a19c5749.json';
+const HERMES_ENHANCED = 'artifacts/next-worker-harness-adapters/ip04-2026-10-14T13-47-09-882Z-9b7cbd78-6396-4085-aa3a-8cd4f3ac4faa.json';
 const COMMAND_QWEN_CONTROLLER = 'artifacts/next-worker-harness-adapters/controller-20261011T085821980Z-89759c30-e5f4-4a09-8624-89e137fe85f5.json';
 const ANTIGRAVITY_ROLES = 'artifacts/next-worker-harness-adapters/ip04-2026-10-14T02-15-07-641Z-5cf6ca74-2bd4-450d-b9de-dcfc280266b6.json';
 const ANTIGRAVITY_RECOVERY = 'artifacts/next-worker-harness-adapters/ip04-2026-10-14T02-42-26-090Z-425d6eb9-bcb6-44a2-903e-6f57e500e3fc.json';
@@ -49,8 +50,7 @@ const ANTIGRAVITY_CONTROLLER = 'artifacts/next-worker-harness-adapters/antigravi
 const CODEX_RUNTIME = 'docs/orca-compatibility.md';
 const CODEX_RESUME_PROBE = 'artifacts/execution-concurrency/provider-resume-probe.json';
 const KILO_MATRIX = 'artifacts/next-worker-harness-adapters/ip04-2026-10-14T08-44-08-445Z-41c485aa-165c-44ec-b59c-8e1ed5fd46b6.json';
-const KIMI_MATRIX = 'artifacts/next-worker-harness-adapters/ip04-2026-10-11T12-31-02-708Z-e4c1fe79-220b-4544-ab2e-8bb7029d8191.json';
-const CONTINUATION = 'artifacts/next-worker-harness-adapters/continuation-20261012.json';
+const KILO_ENHANCED = 'artifacts/next-worker-harness-adapters/ip04-2026-10-14T13-37-47-768Z-ddf96f16-587f-48fb-bf2c-97247e6fbb96.json';
 const DEFAULT_TUI_MATRIX = 'artifacts/next-worker-harness-adapters/default-tui-matrix-20261012.json';
 const CANDIDATE_DISPOSITION = 'docs/research/next-worker-harness-adapters.md';
 
@@ -151,35 +151,44 @@ const BUNDLED_QUALIFICATIONS: readonly WorkerHarnessQualification[] = [
   {
     // 缺少新报告不撤销已核验的单次成功：Planner 使用最新矩阵，Implementation 保留默认 TUI 成功记录。
     harness: 'kilo',
-    evidenceRef: KILO_MATRIX,
+    evidenceRef: KILO_ENHANCED,
     facts: [
       verified('task_input', `${KILO_MATRIX}#roles.planner`),
       verified('orca_binding', `${KILO_MATRIX}#roles.planner.dispatchId`),
       verified('planner_result', `${KILO_MATRIX}#roles.planner`),
       verified('implementation_result', `${DEFAULT_TUI_MATRIX}#singleVariableNoEnter.kiloImplementation`),
+      verified('validator_result', `${KILO_ENHANCED}#roles.validator`),
       verified('native_session', `${KILO_MATRIX}#roles.planner.sessionId`),
     ],
   },
   {
     harness: 'kimi',
-    evidenceRef: KIMI_BASIC,
+    evidenceRef: KIMI_ENHANCED,
     facts: [
-      verified('task_input', `${KIMI_MATRIX}#roles.planner`),
-      verified('orca_binding', `${KIMI_MATRIX}#roles.planner.dispatchId`),
-      verified('planner_result', `${KIMI_MATRIX}#roles.planner`),
-      verified('native_session', `${KIMI_MATRIX}#roles.planner.sessionId`),
+      verified('task_input', `${KIMI_ENHANCED}#roles`),
+      verified('orca_binding', `${KIMI_ENHANCED}#roles.dispatchId`),
+      verified('planner_result', `${KIMI_ENHANCED}#roles.planner`),
+      verified('implementation_result', `${KIMI_ENHANCED}#roles.implementation`),
+      verified('validator_result', `${KIMI_ENHANCED}#roles.validator`),
+      verified('finalizer_result', `${KIMI_ENHANCED}#roles.finalizer`),
+      verified('native_session', `${KIMI_ENHANCED}#roles.sessionId`),
+      verified('session_resume', `${KIMI_ENHANCED}#resume.sameSession+validatorContinuation.contextPreserved`),
+      verified('transcript_coverage', `${KIMI_ENHANCED}#roles.coverage`),
     ],
   },
   {
-    // 只读 Finalizer 在 2026-10-12 的续测里真实结算并核验产物，但公开 export 不覆盖 inactive/compacted
-    // 历史，coverage 是实测的 partial，因此完整历史明确不成立。
+    // 四角色与原 Session 续接通过；公开 export 仍不覆盖 inactive/compacted 历史。
     harness: 'hermes',
-    evidenceRef: CONTINUATION,
+    evidenceRef: HERMES_ENHANCED,
     facts: [
-      verified('task_input', `${CONTINUATION}#roles[hermes].finalizer`),
-      verified('orca_binding', `${CONTINUATION}#roles[hermes].finalizer.dispatchId`),
-      verified('finalizer_result', `${CONTINUATION}#roles[hermes].finalizer`),
-      verified('native_session', `${CONTINUATION}#roles[hermes].finalizer.sessionId`),
+      verified('task_input', `${HERMES_ENHANCED}#roles`),
+      verified('orca_binding', `${HERMES_ENHANCED}#roles.dispatchId`),
+      verified('planner_result', `${HERMES_ENHANCED}#roles.planner`),
+      verified('implementation_result', `${HERMES_ENHANCED}#roles.implementation`),
+      verified('validator_result', `${HERMES_ENHANCED}#roles.validator`),
+      verified('finalizer_result', `${HERMES_ENHANCED}#roles.finalizer`),
+      verified('native_session', `${HERMES_ENHANCED}#roles.sessionId`),
+      verified('session_resume', `${HERMES_ENHANCED}#resume.sameSession+validatorContinuation.contextPreserved`),
       failed('transcript_coverage', 'coverage_incomplete'),
     ],
   },
@@ -338,7 +347,10 @@ function qualificationForHarness(
   const continuedSession = resume?.kind === 'ran' && resume.sameSession === true
     && continuation?.kind === 'ran' && continuation.sameSession === true && continuation.contextPreserved === true;
   if (continuedSession) facts.push(verified('session_resume', `${ref}/resume.sameSession+validatorContinuation.contextPreserved`));
-  else if (resume?.sameSession === false || continuation?.contextPreserved === false) facts.push(failed('session_resume', 'session_not_continued'));
+  else if ((resume?.kind === 'ran' && resume.sameSession === false)
+    || (continuation?.kind === 'ran' && (continuation.sameSession === false || continuation.contextPreserved === false))) {
+    facts.push(failed('session_resume', 'session_not_continued'));
+  }
 
   // 只读只认拒写探针的实际结论：角色自带的 `readOnlyVerified`（权限拒绝工具或哨兵），或 Recovery
   // 的同一结论。产物核验与 succeeded 本身不构成只读证明。

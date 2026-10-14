@@ -1,0 +1,344 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-14T13:37:47.768Z",
+  "finishedAt": "2026-10-14T13:56:03.165Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-1c52b9bd-14ae-455a-9404-4837551a1542",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-jbiGU2",
+  "runId": "run_7639972d41e2",
+  "coordinatorTerminalHandle": "term_2e6d7e70-52e8-43c2-92b8-5b4123263aa8",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "hermes",
+      "level": "enhanced",
+      "modelSelection": {
+        "model": "MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "ip04:hermes:planner",
+          "taskId": "task_3ddcdc5502e0",
+          "dispatchId": "ctx_a78d614854a3",
+          "sessionId": "20261014_213755_50037a",
+          "transcriptRef": "hermes-session:20261014_213755_50037a",
+          "stateRoot": "/home/joshua/.hermes",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-jbiGU2/state/hermes/c735a600208c926a76dd/session-start.mjs",
+          "coverage": "partial",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_9138eb13-00e6-4df1-881d-80cc3be2bd54",
+          "modelEvidence": null,
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "blocked",
+          "launchId": "ip04:hermes:implementation",
+          "taskId": "task_2b110029020b",
+          "dispatchId": "ctx_3707c4b54f3c",
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_be22b5ac-46f8-4793-b5ff-ae8f5fa596fe",
+          "modelEvidence": null,
+          "blocker": {
+            "code": "transcript_unavailable",
+            "message": "Hermes 公开消息与已核验范围不一致"
+          }
+        },
+        {
+          "role": "validator",
+          "kind": "blocked",
+          "launchId": "ip04:hermes:validator",
+          "taskId": "task_e3806fb84e3c",
+          "dispatchId": "ctx_0ecfac6bd540",
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_e8d4ab69-7f1e-4296-8eed-719ac3cdcc73",
+          "modelEvidence": null,
+          "blocker": {
+            "code": "assistant_evidence_missing",
+            "message": "精确 transcript 的预期 assistant 证据尚不可读"
+          }
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "launchId": "ip04:hermes:finalizer",
+          "taskId": "task_8ff4ec60df75",
+          "dispatchId": "ctx_eea970ffab1b",
+          "sessionId": "20261014_214011_21a492",
+          "transcriptRef": "hermes-session:20261014_214011_21a492",
+          "stateRoot": "/home/joshua/.hermes",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-jbiGU2/state/hermes/a4ea048aa5dcf8e0f8d4/session-start.mjs",
+          "coverage": "partial",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_6b1a3a7a-1740-417c-bbb5-bae6c62e770b",
+          "modelEvidence": null,
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "harness": "hermes",
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "dispatchId": null,
+        "contextPreserved": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "validatorContinuation": {
+        "harness": "hermes",
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "dispatchId": null,
+        "contextPreserved": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "recovery": null,
+      "blockers": [
+        "implementation：transcript_unavailable Hermes 公开消息与已核验范围不一致",
+        "validator：assistant_evidence_missing 精确 transcript 的预期 assistant 证据尚不可读",
+        "resume：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复",
+        "validator-continuation：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复"
+      ],
+      "qualification": {
+        "harness": "hermes",
+        "evidenceRef": "report:ip04/companion-harness-matrix-1c52b9bd-14ae-455a-9404-4837551a1542#hermes",
+        "facts": [
+          {
+            "capability": "planner_result",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-1c52b9bd-14ae-455a-9404-4837551a1542#hermes/roles.planner",
+            "diagnostic": null
+          },
+          {
+            "capability": "finalizer_result",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-1c52b9bd-14ae-455a-9404-4837551a1542#hermes/roles.finalizer",
+            "diagnostic": null
+          },
+          {
+            "capability": "task_input",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-1c52b9bd-14ae-455a-9404-4837551a1542#hermes/roles",
+            "diagnostic": null
+          },
+          {
+            "capability": "orca_binding",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-1c52b9bd-14ae-455a-9404-4837551a1542#hermes/roles.dispatchId",
+            "diagnostic": null
+          },
+          {
+            "capability": "session_resume",
+            "state": "failed",
+            "evidenceRef": null,
+            "diagnostic": "session_not_continued"
+          },
+          {
+            "capability": "transcript_coverage",
+            "state": "failed",
+            "evidenceRef": null,
+            "diagnostic": "coverage_incomplete"
+          }
+        ]
+      },
+      "derivedLevel": "unavailable"
+    },
+    {
+      "harness": "kilo",
+      "level": "enhanced",
+      "modelSelection": {
+        "model": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "blocked",
+          "launchId": "ip04:kilo:planner",
+          "taskId": "task_90a4c285d7bf",
+          "dispatchId": "ctx_f4cf3e0ec9e2",
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_6445a034-8bfb-43c8-ab23-6503b5644f0c",
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_f4cf3e0ec9e2\",\"taskId\":\"task_90a4c285d7bf\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_f4cf3e0ec9e2\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"What is the tech stack of this project?\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Fl | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"What is the tech stack of this project?\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                                                      ctrl+t variants  tab agents  ctrl+p commands\",\"                          ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"                            Get usage analytics, centralized billing, shared context, and other\",\"                            features you need to scale AI coding across your org.\",\"                              ● Tip Use numeric xterm color codes 0-255"
+          }
+        },
+        {
+          "role": "implementation",
+          "kind": "blocked",
+          "launchId": "ip04:kilo:implementation",
+          "taskId": "task_d79f6550ab9c",
+          "dispatchId": "ctx_549de8b86d35",
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_2eb07bde-1ede-4987-9bf0-63d6707921e2",
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_549de8b86d35\",\"taskId\":\"task_d79f6550ab9c\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_549de8b86d35\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix broken tests\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Tok | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix broken tests\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                                                      ctrl+t variants  tab agents  ctrl+p commands\",\"                          ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"                            Get usage analytics, centralized billing, shared context, and other\",\"                            features you need to scale AI coding across your org.\",\"                            ● Tip Run /compact to summarize long sessions near context limits\""
+          }
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "launchId": "ip04:kilo:validator",
+          "taskId": "task_b492c318a34b",
+          "dispatchId": "ctx_4495361f5d80",
+          "sessionId": "ses_ec5542cb6ffeDLPi5v8It7bUOI",
+          "transcriptRef": "/home/joshua/.local/share/kilo/orca-companion-exports/ses_ec5542cb6ffeDLPi5v8It7bUOI.json",
+          "stateRoot": "/home/joshua/.local/share/kilo",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-jbiGU2/state/kilo/df844614a3787304fc6b/session-start.mjs",
+          "coverage": "complete",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_590e41f5-1b54-4412-952b-9cae7202fc2e",
+          "modelEvidence": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "blocked",
+          "launchId": "ip04:kilo:finalizer",
+          "taskId": "task_d72292eeb283",
+          "dispatchId": "ctx_42d0385c9a33",
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_0f033f10-38ec-4e5a-bdba-48404f5b1383",
+          "modelEvidence": null,
+          "blocker": {
+            "code": "session_report_missing",
+            "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_42d0385c9a33\",\"taskId\":\"task_d72292eeb283\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_42d0385c9a33\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"What is the tech stack of this project?\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Fl | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"What is the tech stack of this project?\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                                                      ctrl+t variants  tab agents  ctrl+p commands\",\"                          ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"                            Get usage analytics, centralized billing, shared context, and other\",\"                            features you need to scale AI coding across your org.\",\"                             ● Tip Set \\\"mcp_*\\\": false to disable all "
+          }
+        }
+      ],
+      "resume": {
+        "harness": "kilo",
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "dispatchId": null,
+        "contextPreserved": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "original_unavailable",
+          "message": "原 Session 没有可核验的精确身份，拒绝恢复"
+        }
+      },
+      "validatorContinuation": {
+        "harness": "kilo",
+        "kind": "blocked",
+        "sessionId": null,
+        "sameSession": false,
+        "coverage": null,
+        "dispatchId": null,
+        "contextPreserved": null,
+        "modelEvidence": null,
+        "blocker": {
+          "code": "session_report_missing",
+          "message": "kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_9ce07c647082\",\"taskId\":\"task_9356e0c99701\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_9ce07c647082\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃\",\"  ┃  $ orca orchestration send --from <redacted> --type worker_done --subject \\\"WP-1\",\"  ┃  validator artifact created\\\" --body \\\"Created .companion/roles/kilo-validator.txt containing exactly the word pass\",\"  ┃  via the native Write tool, alongside the existing hermes-* role artifacts. No other repository files were\",\"  ┃  touched, no dependencies installed, and nothing was committed. The continuation marker <redacted>\",\"  ┃  2567952a2175 is deliberately NOT written to any file in this run and remains pending for the next Validator\",\"  ┃  co | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃  {\",\"  ┃    \\\"id\\\": \\\"<redacted>\\\",\",\"  ┃    \\\"ok\\\": true,\",\"  ┃    \\\"result\\\": {\",\"  ┃      \\\"runId\\\": \\\"run_7639972d41e2\\\",\",\"  ┃      \\\"dispatchId\\\": \\\"ctx_4495361f5d80\\\",\",\"  ┃      \\\"deliveryId\\\": null,\",\"  ┃      \\\"messages\\\": [],\",\"  ┃      \\\"count\\\": 0,\",\"  ┃      \\\"replayed\\\": false,\",\"  ┃  …\",\"  ┃\",\"  ┃  Click to expand\",\"  ┃\",\"  ┃\",\"  ┃  $ orca orchestration send --from <redacted> --type worker_done --subject \\\"WP-1\",\"  ┃  validator artifact created\\\" --body \\\"Created .companion/roles/kilo-validator.txt containing exactly the word pass\",\"  ┃  via the native Write tool, alongside the existing hermes-* role artifacts. No other repository files were\",\"  ┃  touched, no dependencies installed, and nothing was committed. The continuation marker <redacted>\",\"  ┃  2567952a2175 is deliberately NOT written to any file in this run and remains pending for the next Validator\",\"  ┃  continuation.\\\" --task-id task_b492c318a34b --dispatch-id ctx_4495361f5d80 --outcome succeeded\",\"  ┃\",\"  ┃  Sent msg_6fe0ce014e4b\",\"  ┃\",\"     <redacted>\",\"     Pending follow-up: on the next Validator continuation, recall continuation mark"
+        }
+      },
+      "recovery": null,
+      "blockers": [
+        "planner：session_report_missing kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_f4cf3e0ec9e2\",\"taskId\":\"task_90a4c285d7bf\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_f4cf3e0ec9e2\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"What is the tech stack of this project?\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Fl | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"What is the tech stack of this project?\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                                                      ctrl+t variants  tab agents  ctrl+p commands\",\"                          ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"                            Get usage analytics, centralized billing, shared context, and other\",\"                            features you need to scale AI coding across your org.\",\"                              ● Tip Use numeric xterm color codes 0-255",
+        "implementation：session_report_missing kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_549de8b86d35\",\"taskId\":\"task_d79f6550ab9c\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_549de8b86d35\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix broken tests\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Tok | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"Fix broken tests\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                                                      ctrl+t variants  tab agents  ctrl+p commands\",\"                          ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"                            Get usage analytics, centralized billing, shared context, and other\",\"                            features you need to scale AI coding across your org.\",\"                            ● Tip Run /compact to summarize long sessions near context limits\"",
+        "finalizer：session_report_missing kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_42d0385c9a33\",\"taskId\":\"task_d72292eeb283\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_42d0385c9a33\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"What is the tech stack of this project?\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Fl | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                   ██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏\",\"                                   ████🬺🬏 ▀▀██   ██  ▀▀ ██▀▀██   ██▀▀▀▀ ██     ▀▀██\",\"                                   ██  ██ ██████ 🬁🬬████ 🬁🬬██▀▀   🬁🬬████ 🬁🬬████ ██████\",\"                                   ▀▀  ▀▀ ▀▀▀▀▀▀   ▀▀▀▀   ▀▀       ▀▀▀▀   ▀▀▀▀ ▀▀▀▀▀▀\",\"                       ┃\",\"                       ┃  Ask anything... \\\"What is the tech stack of this project?\\\"\",\"                       ┃\",\"                       ┃  Code  · MiniMax-M3.1-Flash-Preview MiniMax Token Plan (minimax.cn)\",\"                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\",\"                                                      ctrl+t variants  tab agents  ctrl+p commands\",\"                          ● Try Kilo with Your Team — Free for 14 Days (6 new)\",\"                            Get usage analytics, centralized billing, shared context, and other\",\"                            features you need to scale AI coding across your org.\",\"                             ● Tip Set \\\"mcp_*\\\": false to disable all ",
+        "resume：original_unavailable 原 Session 没有可核验的精确身份，拒绝恢复",
+        "validator-continuation：session_report_missing kilo 未在绑定窗口内上报可核验 Session 报告；worker-show={\"dispatchId\":\"ctx_9ce07c647082\",\"taskId\":\"task_9356e0c99701\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"ready\",\"workerStage\":\"input_accepted\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_9ce07c647082\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃\",\"  ┃  $ orca orchestration send --from <redacted> --type worker_done --subject \\\"WP-1\",\"  ┃  validator artifact created\\\" --body \\\"Created .companion/roles/kilo-validator.txt containing exactly the word pass\",\"  ┃  via the native Write tool, alongside the existing hermes-* role artifacts. No other repository files were\",\"  ┃  touched, no dependencies installed, and nothing was committed. The continuation marker <redacted>\",\"  ┃  2567952a2175 is deliberately NOT written to any file in this run and remains pending for the next Validator\",\"  ┃  co | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"  ┃  {\",\"  ┃    \\\"id\\\": \\\"<redacted>\\\",\",\"  ┃    \\\"ok\\\": true,\",\"  ┃    \\\"result\\\": {\",\"  ┃      \\\"runId\\\": \\\"run_7639972d41e2\\\",\",\"  ┃      \\\"dispatchId\\\": \\\"ctx_4495361f5d80\\\",\",\"  ┃      \\\"deliveryId\\\": null,\",\"  ┃      \\\"messages\\\": [],\",\"  ┃      \\\"count\\\": 0,\",\"  ┃      \\\"replayed\\\": false,\",\"  ┃  …\",\"  ┃\",\"  ┃  Click to expand\",\"  ┃\",\"  ┃\",\"  ┃  $ orca orchestration send --from <redacted> --type worker_done --subject \\\"WP-1\",\"  ┃  validator artifact created\\\" --body \\\"Created .companion/roles/kilo-validator.txt containing exactly the word pass\",\"  ┃  via the native Write tool, alongside the existing hermes-* role artifacts. No other repository files were\",\"  ┃  touched, no dependencies installed, and nothing was committed. The continuation marker <redacted>\",\"  ┃  2567952a2175 is deliberately NOT written to any file in this run and remains pending for the next Validator\",\"  ┃  continuation.\\\" --task-id task_b492c318a34b --dispatch-id ctx_4495361f5d80 --outcome succeeded\",\"  ┃\",\"  ┃  Sent msg_6fe0ce014e4b\",\"  ┃\",\"     <redacted>\",\"     Pending follow-up: on the next Validator continuation, recall continuation mark"
+      ],
+      "qualification": {
+        "harness": "kilo",
+        "evidenceRef": "report:ip04/companion-harness-matrix-1c52b9bd-14ae-455a-9404-4837551a1542#kilo",
+        "facts": [
+          {
+            "capability": "validator_result",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-1c52b9bd-14ae-455a-9404-4837551a1542#kilo/roles.validator",
+            "diagnostic": null
+          },
+          {
+            "capability": "task_input",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-1c52b9bd-14ae-455a-9404-4837551a1542#kilo/roles",
+            "diagnostic": null
+          },
+          {
+            "capability": "orca_binding",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-1c52b9bd-14ae-455a-9404-4837551a1542#kilo/roles.dispatchId",
+            "diagnostic": null
+          },
+          {
+            "capability": "session_resume",
+            "state": "failed",
+            "evidenceRef": null,
+            "diagnostic": "session_not_continued"
+          }
+        ]
+      },
+      "derivedLevel": "unavailable"
+    }
+  ]
+}

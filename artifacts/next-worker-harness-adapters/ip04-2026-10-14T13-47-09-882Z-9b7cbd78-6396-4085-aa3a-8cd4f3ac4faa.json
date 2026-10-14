@@ -1,0 +1,184 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-14T13:47:09.882Z",
+  "finishedAt": "2026-10-14T13:51:17.400Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-66210661-6151-45c6-b1dc-bcf539f733d3",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-Oz3Kdc",
+  "runId": "run_9fca84511f89",
+  "coordinatorTerminalHandle": "term_24354995-995d-431e-b563-310be8f72e7e",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "hermes",
+      "level": "enhanced",
+      "modelSelection": {
+        "model": "MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "ip04:hermes:planner",
+          "taskId": "task_f101318d4cfa",
+          "dispatchId": "ctx_dd12b03fea10",
+          "sessionId": "20261014_214719_15e0bb",
+          "transcriptRef": "hermes-session:20261014_214719_15e0bb",
+          "stateRoot": "/home/joshua/.hermes",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-Oz3Kdc/state/hermes/c735a600208c926a76dd/session-start.mjs",
+          "coverage": "partial",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_4bcb7ed2-77f5-499f-838d-e8ebbfb6f007",
+          "modelEvidence": null,
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "launchId": "ip04:hermes:implementation",
+          "taskId": "task_0652ba86ee1d",
+          "dispatchId": "ctx_6de9ef0fab4c",
+          "sessionId": "20261014_214750_a70f16",
+          "transcriptRef": "hermes-session:20261014_214750_a70f16",
+          "stateRoot": "/home/joshua/.hermes",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-Oz3Kdc/state/hermes/aa2b251828195fb7571d/session-start.mjs",
+          "coverage": "partial",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_5dda9406-7a5a-4176-b8b7-05bd136625ea",
+          "modelEvidence": null,
+          "blocker": null
+        },
+        {
+          "role": "validator",
+          "kind": "ran",
+          "launchId": "ip04:hermes:validator",
+          "taskId": "task_414bb7cc150d",
+          "dispatchId": "ctx_f232bad32b75",
+          "sessionId": "20261014_214828_fb91fb",
+          "transcriptRef": "hermes-session:20261014_214828_fb91fb",
+          "stateRoot": "/home/joshua/.hermes",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-Oz3Kdc/state/hermes/98b46485ac65277310f9/session-start.mjs",
+          "coverage": "partial",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_2347afb5-a209-4160-a425-fe8cf94c76d0",
+          "modelEvidence": null,
+          "blocker": null
+        },
+        {
+          "role": "finalizer",
+          "kind": "ran",
+          "launchId": "ip04:hermes:finalizer",
+          "taskId": "task_7e4716fdfba0",
+          "dispatchId": "ctx_f2ae77dd8620",
+          "sessionId": "20261014_214906_6b74ec",
+          "transcriptRef": "hermes-session:20261014_214906_6b74ec",
+          "stateRoot": "/home/joshua/.hermes",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-Oz3Kdc/state/hermes/a4ea048aa5dcf8e0f8d4/session-start.mjs",
+          "coverage": "partial",
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_eefa7e8c-df36-412c-b570-facfc3cddcf6",
+          "modelEvidence": null,
+          "blocker": null
+        }
+      ],
+      "resume": {
+        "harness": "hermes",
+        "kind": "ran",
+        "sessionId": "20261014_214750_a70f16",
+        "sameSession": true,
+        "coverage": "partial",
+        "blocker": null,
+        "dispatchId": "ctx_2eea2b7cc667",
+        "modelEvidence": null,
+        "contextPreserved": null
+      },
+      "validatorContinuation": {
+        "harness": "hermes",
+        "kind": "ran",
+        "sessionId": "20261014_214828_fb91fb",
+        "sameSession": true,
+        "coverage": "partial",
+        "blocker": null,
+        "dispatchId": "ctx_0771b551316b",
+        "modelEvidence": null,
+        "contextPreserved": true
+      },
+      "recovery": null,
+      "blockers": [],
+      "qualification": {
+        "harness": "hermes",
+        "evidenceRef": "report:ip04/companion-harness-matrix-66210661-6151-45c6-b1dc-bcf539f733d3#hermes",
+        "facts": [
+          {
+            "capability": "planner_result",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-66210661-6151-45c6-b1dc-bcf539f733d3#hermes/roles.planner",
+            "diagnostic": null
+          },
+          {
+            "capability": "implementation_result",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-66210661-6151-45c6-b1dc-bcf539f733d3#hermes/roles.implementation",
+            "diagnostic": null
+          },
+          {
+            "capability": "validator_result",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-66210661-6151-45c6-b1dc-bcf539f733d3#hermes/roles.validator",
+            "diagnostic": null
+          },
+          {
+            "capability": "finalizer_result",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-66210661-6151-45c6-b1dc-bcf539f733d3#hermes/roles.finalizer",
+            "diagnostic": null
+          },
+          {
+            "capability": "task_input",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-66210661-6151-45c6-b1dc-bcf539f733d3#hermes/roles",
+            "diagnostic": null
+          },
+          {
+            "capability": "orca_binding",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-66210661-6151-45c6-b1dc-bcf539f733d3#hermes/roles.dispatchId",
+            "diagnostic": null
+          },
+          {
+            "capability": "native_session",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-66210661-6151-45c6-b1dc-bcf539f733d3#hermes/roles.sessionId",
+            "diagnostic": null
+          },
+          {
+            "capability": "session_resume",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-66210661-6151-45c6-b1dc-bcf539f733d3#hermes/resume.sameSession+validatorContinuation.contextPreserved",
+            "diagnostic": null
+          },
+          {
+            "capability": "transcript_coverage",
+            "state": "failed",
+            "evidenceRef": null,
+            "diagnostic": "coverage_incomplete"
+          }
+        ]
+      },
+      "derivedLevel": "enhanced"
+    }
+  ]
+}

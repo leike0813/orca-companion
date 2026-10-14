@@ -1,0 +1,99 @@
+{
+  "scope": "2026-10-14 graded continuation; only the two Cline auth-blocked Dispatches",
+  "proofs": [
+    {
+      "before": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_81e0314981ae",
+          "taskId": "task_6d7fdfd6541a",
+          "dispatchStatus": "dispatched",
+          "workerState": "ready",
+          "workerStage": "input_accepted",
+          "agentTerminalHandle": "term_645caa31-c0b6-4e4f-a843-fd1c28ea4ec3",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "stop": {
+        "kind": "accepted",
+        "operation": {
+          "operationId": "cline-auth-blocked-20261014:ctx_81e0314981ae:stop",
+          "backendRequestId": "b3458901-acd6-43d3-adee-3fe9e14c06cb",
+          "target": {
+            "kind": "worker-task",
+            "id": "task_6d7fdfd6541a"
+          }
+        },
+        "value": {
+          "dispatchId": "ctx_81e0314981ae",
+          "state": "stop_unknown",
+          "alreadySettled": false,
+          "processAction": "none"
+        }
+      },
+      "after": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_81e0314981ae",
+          "taskId": "task_6d7fdfd6541a",
+          "dispatchStatus": "dispatched",
+          "workerState": "stop_unknown",
+          "workerStage": "stop_outcome_unknown",
+          "agentTerminalHandle": "term_645caa31-c0b6-4e4f-a843-fd1c28ea4ec3",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "reason": "Cline native TUI showed Signing in with Cline / Waiting for sign-in; no credentials or login flow were changed",
+      "observedAt": "2026-10-14T13:37:18.106Z"
+    },
+    {
+      "before": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_44c343d062c0",
+          "taskId": "task_564f8c9395ed",
+          "dispatchStatus": "dispatched",
+          "workerState": "ready",
+          "workerStage": "input_accepted",
+          "agentTerminalHandle": "term_1fb02ed0-21a7-4e11-b8b0-a4c47c696175",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "stop": {
+        "kind": "accepted",
+        "operation": {
+          "operationId": "cline-auth-blocked-20261014:ctx_44c343d062c0:stop",
+          "backendRequestId": "00639c5e-29c1-4982-bd20-a04e37efce76",
+          "target": {
+            "kind": "worker-task",
+            "id": "task_564f8c9395ed"
+          }
+        },
+        "value": {
+          "dispatchId": "ctx_44c343d062c0",
+          "state": "stop_unknown",
+          "alreadySettled": false,
+          "processAction": "none"
+        }
+      },
+      "after": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_44c343d062c0",
+          "taskId": "task_564f8c9395ed",
+          "dispatchStatus": "dispatched",
+          "workerState": "stop_unknown",
+          "workerStage": "stop_outcome_unknown",
+          "agentTerminalHandle": "term_1fb02ed0-21a7-4e11-b8b0-a4c47c696175",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "reason": "Cline native TUI showed Signing in with Cline / Waiting for sign-in; no credentials or login flow were changed",
+      "observedAt": "2026-10-14T13:38:53.219Z"
+    }
+  ]
+}

@@ -319,6 +319,7 @@ describe('Kimi Code native adapter surfaces', () => {
     const descriptorPath = join(candidateSessionPaths('kimi', companionRoot, launchId).stateRoot, CODEX_MODEL_DESCRIPTOR_FILENAME);
     const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8')) as { readonly args: readonly string[] };
     expect(prepared.stateRoot).toBe(candidateSessionPaths('kimi', companionRoot, launchId).stateRoot);
+    expect(descriptor.args).toContain('--yolo');
     expect(descriptor.args).toContain('--session'); expect(descriptor.args).toContain(sessionId);
     await expect(kimiHarness.prepareResume({ launchId, modelSelection: modelSelectionFixture({ model: 'native/model', effort: null, effortCapability: null, catalogSource: null }),
       sandboxMode: 'workspace-write', stateRoot: companionRoot, sessionId, originalStateRoot: nativeRoot,

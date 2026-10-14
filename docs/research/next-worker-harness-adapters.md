@@ -1,6 +1,6 @@
 # 新一批 Worker Harness 接入
 
-对应 change：`add-next-worker-harness-adapters`。本页记录本轮资格；前驱的候选调查与 PASS 保留原验证范围。
+对应 change：`add-next-worker-harness-adapters`。当前续办结果见[分级续验](worker-harness-graded-validation-20261014.md)：Kimi、Hermes 提升 enhanced，Kilo 保持 basic，Cline/Muse/Cursor 保持 unavailable。下文各轮证据与 PASS 保留原验证范围。
 
 六家候选的 2026-10-14 续探见
 [续探记录](next-worker-harness-continuation-20261014.md)：包括旧资源精确回收、
@@ -10,12 +10,12 @@ Kilo 新 Run 的 prepared 派发失败、Kimi 基础两角色的 agent-trust-wor
 opencode、pi、omp、command-code、qwen-code、antigravity、kilo、kimi、hermes、
 cline、muse、cursor），等级由 `src/domain/worker-harness-support.ts` 从
 `src/adapters/agents/worker-harness-qualifications.ts` 的证据推导。当前等级：
-complete = command-code、qwen-code、antigravity；enhanced = codex；basic = claude、
-opencode、pi、omp、kilo；kimi、hermes、cline、muse、cursor 未达 basic。2026-10-14
+complete = command-code、qwen-code、antigravity；enhanced = codex、kimi、hermes；
+basic = claude、opencode、pi、omp、kilo；cline、muse、cursor 未达 basic。2026-10-14
 以 Command Code 独立验证基础路径（隔离现场 `/var/tmp/orca-harness-acceptance-uUxIxc`，
 Planner/Implementation 均 ran/succeeded、工件核验通过、原生字段全为 null，55 passed /
 2 skipped，[证据](../../artifacts/next-worker-harness-adapters/ip04-2026-10-14T10-55-18-402Z-43432fa6-df72-4e03-b63f-5cb3f5fe6d1d.json)）；
-Kimi 的基础真实运行在 prepared 阶段被 `agent-trust-workspace` 阻塞（两个角色均
+早期 Kimi 基础真实运行在 prepared 阶段被 `agent-trust-workspace` 阻塞（两个角色均
 `prepare_failed`、无 Task 启动，现场 `/var/tmp/orca-harness-acceptance-ehbi1C`，
 [证据](../../artifacts/next-worker-harness-adapters/ip04-2026-10-14T10-54-18-998Z-5e735251-9a5b-40fa-8d19-00ab562e274e.json)）。
 Recovery Utility 与历史恢复只开放 complete 级。下文带日期的轮次记录保留当轮结论；

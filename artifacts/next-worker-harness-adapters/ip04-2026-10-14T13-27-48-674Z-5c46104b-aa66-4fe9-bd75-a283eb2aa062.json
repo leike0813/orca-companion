@@ -1,0 +1,166 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-14T13:27:48.674Z",
+  "finishedAt": "2026-10-14T13:45:35.526Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-2da759b1-e091-4a3b-a1f9-15f1383c58fa",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-E45HkZ",
+  "runId": "run_0aae1174fdbc",
+  "coordinatorTerminalHandle": "term_9d1b4f62-dc9a-421a-a772-61a841d2b242",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "hermes",
+      "level": "basic",
+      "modelSelection": {
+        "model": "MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "ran",
+          "launchId": "ip04:hermes:planner",
+          "taskId": "task_0ddfd3f66a76",
+          "dispatchId": "ctx_4dba9335c633",
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": "/var/tmp/orca-harness-acceptance-E45HkZ/state/hermes/c735a600208c926a76dd",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-E45HkZ/state/hermes/c735a600208c926a76dd/session-start.mjs",
+          "coverage": null,
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_a680c227-d197-4456-8292-4e5fe0ee6e02",
+          "modelEvidence": null,
+          "blocker": null
+        },
+        {
+          "role": "implementation",
+          "kind": "ran",
+          "launchId": "ip04:hermes:implementation",
+          "taskId": "task_a15f92836c61",
+          "dispatchId": "ctx_0b09d6c60e5d",
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": "/var/tmp/orca-harness-acceptance-E45HkZ/state/hermes/aa2b251828195fb7571d",
+          "reporterPath": "/var/tmp/orca-harness-acceptance-E45HkZ/state/hermes/aa2b251828195fb7571d/session-start.mjs",
+          "coverage": null,
+          "terminalState": "succeeded",
+          "artifactOk": true,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_4ae79996-64f4-447c-b628-6e1c02b91324",
+          "modelEvidence": null,
+          "blocker": null
+        }
+      ],
+      "resume": null,
+      "validatorContinuation": null,
+      "recovery": null,
+      "blockers": [],
+      "qualification": {
+        "harness": "hermes",
+        "evidenceRef": "report:ip04/companion-harness-matrix-2da759b1-e091-4a3b-a1f9-15f1383c58fa#hermes",
+        "facts": [
+          {
+            "capability": "planner_result",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-2da759b1-e091-4a3b-a1f9-15f1383c58fa#hermes/roles.planner",
+            "diagnostic": null
+          },
+          {
+            "capability": "implementation_result",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-2da759b1-e091-4a3b-a1f9-15f1383c58fa#hermes/roles.implementation",
+            "diagnostic": null
+          },
+          {
+            "capability": "task_input",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-2da759b1-e091-4a3b-a1f9-15f1383c58fa#hermes/roles",
+            "diagnostic": null
+          },
+          {
+            "capability": "orca_binding",
+            "state": "verified",
+            "evidenceRef": "report:ip04/companion-harness-matrix-2da759b1-e091-4a3b-a1f9-15f1383c58fa#hermes/roles.dispatchId",
+            "diagnostic": null
+          }
+        ]
+      },
+      "derivedLevel": "basic"
+    },
+    {
+      "harness": "cline",
+      "level": "basic",
+      "modelSelection": {
+        "model": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "expectedModel": "MiniMax-M3.1-Flash-Preview",
+      "roles": [
+        {
+          "role": "planner",
+          "kind": "blocked",
+          "launchId": "ip04:cline:planner",
+          "taskId": "task_6d7fdfd6541a",
+          "dispatchId": "ctx_81e0314981ae",
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_645caa31-c0b6-4e4f-a843-fd1c28ea4ec3",
+          "modelEvidence": null,
+          "blocker": {
+            "code": "worker_not_succeeded",
+            "message": "Worker 未完成：ready；worker-show={\"dispatchId\":\"ctx_81e0314981ae\",\"taskId\":\"task_6d7fdfd6541a\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"stop_unknown\",\"workerStage\":\"stop_outcome_unknown\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_81e0314981ae\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                                           @@\",\"                                                         @@@@@@\",\"                                                    @@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@    @@@@    @@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                               @@@@@@     | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                                           @@\",\"                                                         @@@@@@\",\"                                                    @@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@    @@@@    @@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                                 @@@@@    @@@@.   @@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                    @@@@@@@@@@@@@@@@.\",\"                                                 Signing in with Cline\",\"                                          WorkOS device authorization timed out\",\"                                                     Esc to go back\",\"                                             "
+          }
+        },
+        {
+          "role": "implementation",
+          "kind": "blocked",
+          "launchId": "ip04:cline:implementation",
+          "taskId": "task_564f8c9395ed",
+          "dispatchId": "ctx_44c343d062c0",
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "readOnlyVerified": null,
+          "terminalHandle": "term_1fb02ed0-21a7-4e11-b8b0-a4c47c696175",
+          "modelEvidence": null,
+          "blocker": {
+            "code": "worker_not_succeeded",
+            "message": "Worker 未完成：stop_unknown；worker-show={\"dispatchId\":\"ctx_44c343d062c0\",\"taskId\":\"task_564f8c9395ed\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"stop_unknown\",\"workerStage\":\"stop_outcome_unknown\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_44c343d062c0\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                                           @@\",\"                                                         @@@@@@\",\"                                                    @@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@    @@@@    @@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                               @@@@@@     | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                                           @@\",\"                                                         @@@@@@\",\"                                                    @@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@    @@@@    @@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                                 @@@@@    @@@@.   @@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                    @@@@@@@@@@@@@@@@.\",\"                                                 Signing in with Cline\",\"                                              The device code has expired.\",\"                                                     Esc to go back\",\"                                             Esc t"
+          }
+        }
+      ],
+      "resume": null,
+      "validatorContinuation": null,
+      "recovery": null,
+      "blockers": [
+        "planner：worker_not_succeeded Worker 未完成：ready；worker-show={\"dispatchId\":\"ctx_81e0314981ae\",\"taskId\":\"task_6d7fdfd6541a\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"stop_unknown\",\"workerStage\":\"stop_outcome_unknown\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_81e0314981ae\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                                           @@\",\"                                                         @@@@@@\",\"                                                    @@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@    @@@@    @@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                               @@@@@@     | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                                           @@\",\"                                                         @@@@@@\",\"                                                    @@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@    @@@@    @@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                                 @@@@@    @@@@.   @@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                    @@@@@@@@@@@@@@@@.\",\"                                                 Signing in with Cline\",\"                                          WorkOS device authorization timed out\",\"                                                     Esc to go back\",\"                                             ",
+        "implementation：worker_not_succeeded Worker 未完成：stop_unknown；worker-show={\"dispatchId\":\"ctx_44c343d062c0\",\"taskId\":\"task_564f8c9395ed\",\"dispatchStatus\":\"dispatched\",\"workerState\":\"stop_unknown\",\"workerStage\":\"stop_outcome_unknown\",\"agentTerminalHandle\":\"<redacted>\",\"observationStatus\":\"live\",\"exactWorker\":true} | worker-read={\"dispatchId\":\"ctx_44c343d062c0\",\"source\":\"terminal\",\"sourceIdentity\":\"<redacted>\",\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                                           @@\",\"                                                         @@@@@@\",\"                                                    @@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@    @@@@    @@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                               @@@@@@     | screen={\"terminal\":{\"handle\":\"<redacted>\",\"status\":\"running\",\"tail\":[\"                                                           @@\",\"                                                         @@@@@@\",\"                                                    @@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                 @@@@@    @@@@    @@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                               @@@@@@     *@@@     @@@@@@\",\"                                                 @@@@@    @@@@.   @@@@@\",\"                                                 @@@@@@@@@@@@@@@@@@@@@@\",\"                                                  @@@@@@@@@@@@@@@@@@@@\",\"                                                    @@@@@@@@@@@@@@@@.\",\"                                                 Signing in with Cline\",\"                                              The device code has expired.\",\"                                                     Esc to go back\",\"                                             Esc t"
+      ],
+      "qualification": {
+        "harness": "cline",
+        "evidenceRef": "report:ip04/companion-harness-matrix-2da759b1-e091-4a3b-a1f9-15f1383c58fa#cline",
+        "facts": []
+      },
+      "derivedLevel": "unavailable"
+    }
+  ]
+}

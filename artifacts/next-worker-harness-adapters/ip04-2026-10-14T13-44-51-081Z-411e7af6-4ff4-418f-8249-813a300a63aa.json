@@ -1,0 +1,62 @@
+{
+  "schema": "worker-harness-acceptance/1",
+  "startedAt": "2026-10-14T13:44:51.081Z",
+  "finishedAt": "2026-10-14T13:44:53.862Z",
+  "baseDir": "/var/tmp",
+  "identity": "companion-harness-matrix-6fb87741-ddd9-4a28-9e1c-dcb723683552",
+  "orcaExecutable": "orca-ide",
+  "fixtureRoot": "/var/tmp/orca-harness-acceptance-fj3nEj",
+  "runId": "run_04187c36aedc",
+  "coordinatorTerminalHandle": "term_540d51e8-65bf-43ee-9450-de82f48e57a2",
+  "setupBlocker": null,
+  "harnesses": [
+    {
+      "harness": "cline",
+      "level": "basic",
+      "modelSelection": {
+        "model": "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview",
+        "effort": null,
+        "effortCapability": null,
+        "catalogSource": null
+      },
+      "nativeEnvironment": {
+        "CLINE_PROVIDER_SETTINGS_PATH": "/home/joshua/.cline/data/settings/providers-minimax-mplan.json"
+      },
+      "roles": [
+        {
+          "harness": "cline",
+          "role": "planner",
+          "kind": "blocked",
+          "launchId": "graded-cline-native-profile-20261014:planner",
+          "taskId": "task_2f3eab160b74",
+          "dispatchId": null,
+          "terminalHandle": "term_4b741988-7322-4326-a86e-fdf3444a2e69",
+          "contextToken": null,
+          "sessionId": null,
+          "transcriptRef": null,
+          "stateRoot": null,
+          "reporterPath": null,
+          "coverage": null,
+          "terminalState": null,
+          "artifactOk": null,
+          "readOnlyVerified": null,
+          "modelEvidence": null,
+          "blocker": {
+            "code": "worker_start_failed",
+            "message": "Orca 未接受 prepared Worker：unknown"
+          }
+        }
+      ],
+      "resume": null,
+      "validatorContinuation": null,
+      "recovery": null,
+      "qualification": {
+        "harness": "cline",
+        "evidenceRef": "report:cline-native-profile-basic#cline",
+        "facts": []
+      },
+      "derivedLevel": "unavailable"
+    }
+  ],
+  "originalProviderFileUnchanged": true
+}

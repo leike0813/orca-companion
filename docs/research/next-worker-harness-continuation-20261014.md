@@ -1,5 +1,9 @@
 # 未注册 Worker Harness 续探（2026-10-14）
 
+本页保留分级准入落地前的续探。按 `21ddd79` 新规则继续验证后的当前结果见
+[分级续验](worker-harness-graded-validation-20261014.md)：Kimi/Hermes 已达 enhanced，
+Kilo 为 basic；本页的「未注册」和模型回显阻塞不作为当前等级判断。
+
 本轮承接 [handoff](../../openspec/changes/add-next-worker-harness-adapters/handoff.md)，
 核验六家延期候选并重开 Kilo 的隔离输入对照。六家继续保持未注册；原 change 的
 12/12 与 verification PASS 不代表这些候选通过真实资格，本轮也未归档或提交。

@@ -7,10 +7,11 @@
 当前接入约束：用户于 2026-10-13 明确禁止 patch Orca，Companion 只适配未修改的
 公开 CLI/runtime。此前独立源码修复产物仅保留为诊断证据，不继续构建、应用或以其
 作为验收前提。注册表包含全部 14 家已实现 adapter，登记只表达身份；当前等级：
-complete = Command Code、Qwen Code、Antigravity；enhanced = Codex；basic = Claude、
-OpenCode、pi、OMP、Kilo；Kimi、Hermes、Cline、Muse、Cursor 未达 basic（Kimi 基础
-真实运行被 `agent-trust-workspace` 阻塞；Command Code 已用独立现场
-`/var/tmp/orca-harness-acceptance-uUxIxc` 复核基础路径）。Recovery Utility 只开放
+complete = Command Code、Qwen Code、Antigravity；enhanced = Codex、Kimi、Hermes；
+basic = Claude、OpenCode、pi、OMP、Kilo；Cline、Muse、Cursor 未达 basic。
+Kimi/Hermes 的四角色、精确 resume 和 Validator 上下文续接已通过；Kimi 历史为
+complete、Hermes 为 partial，两家均未完成 Recovery/mixed Controller 资格。
+具体矩阵、输入与 unknown 边界见[分级续验](research/worker-harness-graded-validation-20261014.md)。Recovery Utility 只开放
 complete 级。等级与证据以 `src/adapters/agents/worker-harness-qualifications.ts` 与
 `src/domain/worker-harness-support.ts` 为准。本项目启动适配的公开选项与未决合同见
 [当前调查](research/next-worker-harness-adapters.md#原生事实与当前验收)。

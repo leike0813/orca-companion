@@ -222,7 +222,7 @@ function requireSetup(): void {
 function launch(input: WorkerHarnessLaunchInput, resume?: CandidateResume): PreparedTerminalStrategy<PreparedHarnessTerminal> {
   if (input.modelSelection.effort !== null) throw new Error('Kimi Code requires an exact native model ID with null effort');
   return prepareCandidateLaunch({ harness: KIMI_HARNESS_ID, executable: 'kimi', input, ...(resume === undefined ? {} : { resume }),
-    arguments: () => ['--model', input.modelSelection.model, ...(resume === undefined ? [] : ['--session', resume.sessionId])],
+    arguments: () => ['--yolo', '--model', input.modelSelection.model, ...(resume === undefined ? [] : ['--session', resume.sessionId])],
     reporterSource: kimiReporterSource, checkSetup: requireSetup,
     verifyResume: async (workspace, original) => {
       const archive = await exportArchive(original.transcriptRef, workspace);

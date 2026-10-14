@@ -805,7 +805,8 @@ export async function launchPreparedTerminal(input: {
     { operation: 'worker-start', taskId, ...prepared.worker, worktree: 'path:' + fixture.projectDir, runId: fixture.runId, timeoutMs: WORKER_START_TIMEOUT_MS },
     fixture.scopeFor(launchId + ':worker-start', { kind: 'worker-task', id: taskId }),
   );
-  if (started.kind !== 'accepted') return { kind: 'blocked', code: 'worker_start_failed', message: 'Orca 未接受 prepared Worker：' + started.kind, ...identity };
+  if (started.kind !== 'accepted') return { kind: 'blocked', code: 'worker_start_failed', message: 'Orca 未接受 prepared Worker：'
+    + (started.kind === 'unknown' ? JSON.stringify(started) : started.kind), ...identity };
   const dispatchId = stringField(started.value, 'dispatchId', 'dispatch_id');
   if (dispatchId === null) return { kind: 'blocked', code: 'dispatch_identity_missing', message: 'worker-start 回执缺少 dispatch id', ...identity };
   identity.dispatchId = dispatchId;
@@ -855,6 +856,12 @@ export async function launchPreparedTerminal(input: {
     return { kind: 'blocked', code, message: binding.harness + ' 未在绑定窗口内上报可核验 Session 报告；' + diagnosis, ...identity };
   }
 
+  // 验收读取在原 Worker 结算后核验原生快照，避免运行中的 ZIP/export 变化被判为身份失败。
+  const terminalState = await waitForSettle(fixture.backend, dispatchId, SETTLE_DEADLINE_MS);
+  if (terminalState === null || !SETTLED_SUCCESS_STATES.has(terminalState)) {
+    return { kind: 'blocked', code: 'worker_not_succeeded', message: `Worker 未完成：${terminalState ?? 'unknown'}；${await diagnoseDispatch(fixture, dispatchId, terminalHandle)}`, ...identity };
+  }
+
   const proofInput = {
     report,
     workspace: fixture.projectDir,
@@ -889,10 +896,6 @@ export async function launchPreparedTerminal(input: {
     const diagnosis = await diagnoseDispatch(fixture, dispatchId, terminalHandle);
     return { kind: 'blocked', code: bound.code, message: 'Session Binding 不可用：' + bound.message + '；' + diagnosis, ...identity };
   }
-  const terminalState = await waitForSettle(fixture.backend, dispatchId, SETTLE_DEADLINE_MS);
-  if (terminalState === null || !SETTLED_SUCCESS_STATES.has(terminalState)) {
-    return { kind: 'blocked', code: 'worker_not_succeeded', message: `Worker 未完成：${terminalState ?? 'unknown'}；${await diagnoseDispatch(fixture, dispatchId, terminalHandle)}`, ...identity };
-  }
   // 增强级只需要精确原生 Session：recovery 能力组只是可选的覆盖证据，缺失时有界直读同一精确 transcript。
   const inspector = requireWorkerHarness(binding.harness).capabilities?.recovery?.inspectTranscript;
   if (fixture.level === 'complete' && inspector === undefined) {
@@ -900,8 +903,8 @@ export async function launchPreparedTerminal(input: {
   }
   // coverage 必须在真正 settled 之后读取，否则首个 event 后即 complete 会掩盖后续 tail 截断。
   let coverage: HarnessTranscriptCoverageResult | null = inspector === undefined ? null : await inspector(bound.binding.transcriptRef);
-  // Kilo's session.updated export can finish after worker_done; observe the same snapshot without redelivery.
-  for (let attempt = 0; inspector !== undefined && binding.harness === 'kilo' && coverage?.kind !== 'covered' && attempt < 15; attempt += 1) {
+  // 原生 export 可晚于 worker_done 完成；只重读同一精确来源，不重新交付输入。
+  for (let attempt = 0; inspector !== undefined && coverage?.kind !== 'covered' && attempt < 15; attempt += 1) {
     await new Promise((settle) => setTimeout(settle, 1_000));
     coverage = await inspector(bound.binding.transcriptRef);
   }
@@ -910,26 +913,25 @@ export async function launchPreparedTerminal(input: {
   }
   const evidence = coverage === null ? null : coverage.evidence;
   let modelTranscript = bound.binding.transcriptRef;
-  if (evidence !== null && binding.harness === 'opencode') {
-    let material = await prepareOpencodeRecoveryMaterial(modelTranscript, input.stateRoot, evidence);
+  const recoveryMaterial = binding.harness === 'opencode'
+    ? { prepare: prepareOpencodeRecoveryMaterial, path: opencodeRecoveryMaterialPath }
+    : binding.harness === 'hermes'
+      ? { prepare: prepareHermesRecoveryMaterial, path: hermesRecoveryMaterialPath }
+      : binding.harness === 'cline'
+        ? { prepare: prepareClineRecoveryMaterial, path: clineRecoveryMaterialPath }
+        : null;
+  if (evidence !== null && recoveryMaterial !== null) {
+    let material = await recoveryMaterial.prepare(modelTranscript, input.stateRoot, evidence);
     // worker_done 可先于最后一条 assistant/idle 消息落盘；重读范围并重新核验，绝不沿旧证据签材料。
     for (let attempt = 0; inspector !== undefined && material === null && attempt < 5; attempt += 1) {
       await new Promise((settle) => setTimeout(settle, 1_000));
       const refreshed = await inspector(modelTranscript);
       if (refreshed.kind !== 'covered') return { kind: 'blocked', code: 'transcript_unavailable', message: refreshed.reason, ...identity };
       coverage = refreshed;
-      material = await prepareOpencodeRecoveryMaterial(modelTranscript, input.stateRoot, refreshed.evidence);
+      material = await recoveryMaterial.prepare(modelTranscript, input.stateRoot, refreshed.evidence);
     }
     if (material === null) return { kind: 'blocked', code: 'transcript_unavailable', message: '公开消息与已核验范围不一致', ...identity };
-    modelTranscript = opencodeRecoveryMaterialPath(input.stateRoot, modelTranscript);
-  }
-  if (evidence !== null && binding.harness === 'hermes') {
-    if (await prepareHermesRecoveryMaterial(modelTranscript, input.stateRoot, evidence) === null) return { kind: 'blocked', code: 'transcript_unavailable', message: 'Hermes 公开消息与已核验范围不一致', ...identity };
-    modelTranscript = hermesRecoveryMaterialPath(input.stateRoot, modelTranscript);
-  }
-  if (evidence !== null && binding.harness === 'cline') {
-    if (prepareClineRecoveryMaterial(modelTranscript, input.stateRoot, evidence) === null) return { kind: 'blocked', code: 'transcript_unavailable', message: 'Cline 原生消息与已核验范围不一致', ...identity };
-    modelTranscript = clineRecoveryMaterialPath(input.stateRoot, modelTranscript);
+    modelTranscript = recoveryMaterial.path(input.stateRoot, modelTranscript);
   }
   let transcriptEvidence = extractTranscriptEvidence(modelTranscript);
   const expectedAssistantText = input.expectedAssistantText
@@ -941,7 +943,7 @@ export async function launchPreparedTerminal(input: {
       const refreshed = await inspector(bound.binding.transcriptRef);
       if (refreshed.kind !== 'covered') return { kind: 'blocked', code: 'transcript_unavailable', message: refreshed.reason, ...identity };
       coverage = refreshed;
-      if (binding.harness === 'opencode' && await prepareOpencodeRecoveryMaterial(bound.binding.transcriptRef, input.stateRoot, refreshed.evidence) === null) continue;
+      if (recoveryMaterial !== null && await recoveryMaterial.prepare(bound.binding.transcriptRef, input.stateRoot, refreshed.evidence) === null) continue;
     }
     transcriptEvidence = extractTranscriptEvidence(modelTranscript);
   }

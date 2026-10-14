@@ -1,0 +1,774 @@
+{
+  "startedFor": "2026-10-14 graded continuation; only this run qualification-ended succeeded + exact terminals; unknown/blocked resources retained",
+  "finishedAt": "2026-10-14T14:05:29.520Z",
+  "records": [
+    {
+      "source": "ip04-2026-10-14T13-27-48-674Z-5c46104b-aa66-4fe9-bd75-a283eb2aa062.json",
+      "dispatchId": "ctx_4dba9335c633",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_4dba9335c633",
+          "taskId": "task_0ddfd3f66a76",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_a680c227-d197-4456-8292-4e5fe0ee6e02",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "e85a4a8c-5da5-42ef-89d7-f132b6cc6abe",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_a680c227-d197-4456-8292-4e5fe0ee6e02",
+            "tabId": "dc04d0a2-dd43-4c9a-8886-434dcf8af689",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-27-48-674Z-5c46104b-aa66-4fe9-bd75-a283eb2aa062.json",
+      "dispatchId": "ctx_0b09d6c60e5d",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_0b09d6c60e5d",
+          "taskId": "task_a15f92836c61",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_4ae79996-64f4-447c-b628-6e1c02b91324",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "49be2ea8-619e-4b65-85cf-0838e0dd8982",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_4ae79996-64f4-447c-b628-6e1c02b91324",
+            "tabId": "0627d7f8-fdf3-431e-99b0-9c1d6c66482a",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-31-40-584Z-c06ebb50-69a3-4927-bf7b-6bf59287433d.json",
+      "dispatchId": "ctx_aa1f3e260d95",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_aa1f3e260d95",
+          "taskId": "task_b8c4fd545bc7",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_31d22edd-7822-4612-9c71-b3dbf1cf85b2",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "5d1563b1-0bb3-4895-bfe8-76498f3326e9",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_31d22edd-7822-4612-9c71-b3dbf1cf85b2",
+            "tabId": "02d4bf36-d56c-46b7-b2a7-ad423ce1330b",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-31-40-584Z-c06ebb50-69a3-4927-bf7b-6bf59287433d.json",
+      "dispatchId": "ctx_b5df3067f1cd",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_b5df3067f1cd",
+          "taskId": "task_5e13ff3f7613",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_3948383b-7245-4167-b438-77a3011037dc",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "dc5b7b95-e2a3-4d9d-a75c-c613c11fb45f",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_3948383b-7245-4167-b438-77a3011037dc",
+            "tabId": "695c25d7-dbd8-49bf-a23e-9fff5689092a",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-36-08-831Z-c7fa68c7-42f4-419b-902c-854f69ea9afb.json",
+      "dispatchId": "ctx_ff30d44422f4",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_ff30d44422f4",
+          "taskId": "task_cdfb95e6b77f",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_28207120-cadc-44dc-95ba-2f30b9eeab46",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "1edf90e4-043d-4c72-b7fd-43a058699e9a",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_28207120-cadc-44dc-95ba-2f30b9eeab46",
+            "tabId": "42083b18-aa1b-4eb8-8115-13f29da6f458",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-36-08-831Z-c7fa68c7-42f4-419b-902c-854f69ea9afb.json",
+      "dispatchId": "ctx_f30fcd6f77f6",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_f30fcd6f77f6",
+          "taskId": "task_aff5ba004fb4",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_05793959-7e0b-4427-9485-2675bf3f5b36",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "0829ef79-fb06-4341-8c15-c6c7ef8ff098",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_05793959-7e0b-4427-9485-2675bf3f5b36",
+            "tabId": "a06f01aa-793a-4f0c-aa07-5671517b42b5",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-37-47-768Z-ddf96f16-587f-48fb-bf2c-97247e6fbb96.json",
+      "dispatchId": "ctx_a78d614854a3",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_a78d614854a3",
+          "taskId": "task_3ddcdc5502e0",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_9138eb13-00e6-4df1-881d-80cc3be2bd54",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "f3893489-11cc-48a4-9e4a-28b19747a5a7",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_9138eb13-00e6-4df1-881d-80cc3be2bd54",
+            "tabId": "2591c257-5c5b-4034-bd51-be3940ed0b5e",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-37-47-768Z-ddf96f16-587f-48fb-bf2c-97247e6fbb96.json",
+      "dispatchId": "ctx_eea970ffab1b",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_eea970ffab1b",
+          "taskId": "task_8ff4ec60df75",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_6b1a3a7a-1740-417c-bbb5-bae6c62e770b",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "c0d6394a-db71-473d-a594-67f052fc6ba7",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_6b1a3a7a-1740-417c-bbb5-bae6c62e770b",
+            "tabId": "1f7cbef9-a9d0-4634-99df-f258c59f5a68",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-37-47-768Z-ddf96f16-587f-48fb-bf2c-97247e6fbb96.json",
+      "dispatchId": "ctx_4495361f5d80",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_4495361f5d80",
+          "taskId": "task_b492c318a34b",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_590e41f5-1b54-4412-952b-9cae7202fc2e",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "2699aeb6-c56c-42c8-a321-30a6f710a578",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_590e41f5-1b54-4412-952b-9cae7202fc2e",
+            "tabId": "eed8ca47-8764-42a4-a6c7-4fb253d79ff0",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-47-09-882Z-9b7cbd78-6396-4085-aa3a-8cd4f3ac4faa.json",
+      "dispatchId": "ctx_dd12b03fea10",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_dd12b03fea10",
+          "taskId": "task_f101318d4cfa",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_4bcb7ed2-77f5-499f-838d-e8ebbfb6f007",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "5b8a1a65-48a7-45c8-a55b-0d7f291fe7cb",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_4bcb7ed2-77f5-499f-838d-e8ebbfb6f007",
+            "tabId": "1c2643f6-9318-4a33-9c4b-5d1c4bc2b958",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-47-09-882Z-9b7cbd78-6396-4085-aa3a-8cd4f3ac4faa.json",
+      "dispatchId": "ctx_6de9ef0fab4c",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_6de9ef0fab4c",
+          "taskId": "task_0652ba86ee1d",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_5dda9406-7a5a-4176-b8b7-05bd136625ea",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "3646c3df-0596-45a3-aa07-c004b4b0cea0",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_5dda9406-7a5a-4176-b8b7-05bd136625ea",
+            "tabId": "6c16c6b7-97b1-42e5-b468-8d3af7126304",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-47-09-882Z-9b7cbd78-6396-4085-aa3a-8cd4f3ac4faa.json",
+      "dispatchId": "ctx_f232bad32b75",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_f232bad32b75",
+          "taskId": "task_414bb7cc150d",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_2347afb5-a209-4160-a425-fe8cf94c76d0",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "551ab2c9-eac3-47ca-8607-6be0d2e5cb29",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_2347afb5-a209-4160-a425-fe8cf94c76d0",
+            "tabId": "2227a61e-334d-4712-af4a-e1564f420abd",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-47-09-882Z-9b7cbd78-6396-4085-aa3a-8cd4f3ac4faa.json",
+      "dispatchId": "ctx_f2ae77dd8620",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_f2ae77dd8620",
+          "taskId": "task_7e4716fdfba0",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_eefa7e8c-df36-412c-b570-facfc3cddcf6",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "19c2b854-e4e5-46be-be5e-f8795e00dded",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_eefa7e8c-df36-412c-b570-facfc3cddcf6",
+            "tabId": "63ec232a-a174-43bc-9e36-0a3a298c9086",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-47-09-882Z-9b7cbd78-6396-4085-aa3a-8cd4f3ac4faa.json",
+      "dispatchId": "ctx_2eea2b7cc667",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_2eea2b7cc667",
+          "taskId": "task_8d726ade4742",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_f8acf358-a80b-436f-8765-def5995a5c19",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "6987d90a-8e5e-4324-af5c-223c16a89dd5",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_f8acf358-a80b-436f-8765-def5995a5c19",
+            "tabId": "d8d9df09-5173-46bb-9a94-69fb58bb3a7f",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-47-09-882Z-9b7cbd78-6396-4085-aa3a-8cd4f3ac4faa.json",
+      "dispatchId": "ctx_0771b551316b",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_0771b551316b",
+          "taskId": "task_f6b8ee0ce413",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_63ba9f85-a39e-4603-b5c8-fec00b4c907c",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "0fe35cc5-891c-49cc-9651-e98b36d9c2fc",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_63ba9f85-a39e-4603-b5c8-fec00b4c907c",
+            "tabId": "3a13c2ea-4e5d-4097-8eb3-28b014129272",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-52-25-437Z-c02567b7-70d9-4ea2-84e8-3f3378b24f26.json",
+      "dispatchId": "ctx_802589c74743",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_802589c74743",
+          "taskId": "task_b2aa59414a48",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_dadec714-465e-4038-9717-4b8d5682e00d",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "68814469-1be9-4181-ae13-c3eb77d4b879",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_dadec714-465e-4038-9717-4b8d5682e00d",
+            "tabId": "2a6afbf9-63ec-4892-83ce-54bcd6c83839",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-56-12-879Z-17f49d74-91c4-4f2c-b8fa-78eeddafd681.json",
+      "dispatchId": "ctx_9b380df83269",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_9b380df83269",
+          "taskId": "task_a5f3c6c02c22",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_6045efdd-2bf4-40c2-a9fb-a8eec5776902",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "a3f57cf9-11ec-48b2-a4a0-60a5837b6424",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_6045efdd-2bf4-40c2-a9fb-a8eec5776902",
+            "tabId": "a8c57963-1e9f-459d-a51d-a4ec1d089fb0",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-56-12-879Z-17f49d74-91c4-4f2c-b8fa-78eeddafd681.json",
+      "dispatchId": "ctx_d5d7634e0ea3",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_d5d7634e0ea3",
+          "taskId": "task_293ca4cc4309",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_61a65579-569d-4f41-9f11-71f013d3f7cf",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "a71409d0-2d94-4dd8-bf2c-b3604d508cf0",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_61a65579-569d-4f41-9f11-71f013d3f7cf",
+            "tabId": "c95c3e0d-1b5a-4dde-9885-dcb623186176",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-59-22-461Z-b759fd59-591a-4350-ac07-4e86a19c5749.json",
+      "dispatchId": "ctx_e239f66c9172",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_e239f66c9172",
+          "taskId": "task_b194fea292d9",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_dafa40aa-eb70-4bf7-a680-e3400850cbd8",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "07d6b689-11ec-4804-8a20-4fdf1b4b8abb",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_dafa40aa-eb70-4bf7-a680-e3400850cbd8",
+            "tabId": "63c9e327-73e3-41b0-8f48-7c5b1bb8042a",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-59-22-461Z-b759fd59-591a-4350-ac07-4e86a19c5749.json",
+      "dispatchId": "ctx_5d756e7669ac",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_5d756e7669ac",
+          "taskId": "task_92440d5bc826",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_aab06293-16da-4e9e-80fb-a7faf36683b4",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "f6176e4d-a21a-4263-9416-0a8bacd0c1b7",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_aab06293-16da-4e9e-80fb-a7faf36683b4",
+            "tabId": "2a56bfce-44a6-48a2-95d7-38ed391aba39",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-59-22-461Z-b759fd59-591a-4350-ac07-4e86a19c5749.json",
+      "dispatchId": "ctx_9ce777f1bbbe",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_9ce777f1bbbe",
+          "taskId": "task_66b546c73fa2",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_4db47454-b5e8-4b7d-9c17-2da1a6c05778",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "b0d27c0c-6821-42a7-bbcc-5bbc7fa555f7",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_4db47454-b5e8-4b7d-9c17-2da1a6c05778",
+            "tabId": "b02d6b04-b6f5-4406-9fd4-7866f0f8adcd",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-59-22-461Z-b759fd59-591a-4350-ac07-4e86a19c5749.json",
+      "dispatchId": "ctx_c9c5a835f40f",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_c9c5a835f40f",
+          "taskId": "task_a14a2571b7ad",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_2f4a0b1d-3f89-4a58-8a3f-4fa536b003cc",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "6d1c349d-1545-49de-9761-8fe0348e19fc",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_2f4a0b1d-3f89-4a58-8a3f-4fa536b003cc",
+            "tabId": "81164ed6-4b33-47d0-95ef-6c49188d0305",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-59-22-461Z-b759fd59-591a-4350-ac07-4e86a19c5749.json",
+      "dispatchId": "ctx_8cc5b93b97ee",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_8cc5b93b97ee",
+          "taskId": "task_f3989fdf9f7f",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_cf9951bb-4b19-45b2-b3c1-ee6c957fe46f",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "ba08dca4-022e-449d-a6d9-3b7368e608b5",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_cf9951bb-4b19-45b2-b3c1-ee6c957fe46f",
+            "tabId": "cbd2657c-0000-47c2-9c44-569c5454e17d",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    },
+    {
+      "source": "ip04-2026-10-14T13-59-22-461Z-b759fd59-591a-4350-ac07-4e86a19c5749.json",
+      "dispatchId": "ctx_b3a9d4e7758f",
+      "live": {
+        "kind": "accepted",
+        "value": {
+          "dispatchId": "ctx_b3a9d4e7758f",
+          "taskId": "task_402f46ca9962",
+          "dispatchStatus": "completed",
+          "workerState": "succeeded",
+          "workerStage": "settled",
+          "agentTerminalHandle": "term_3851c192-da6a-4a79-9995-b41c33925276",
+          "observationStatus": "live",
+          "exactWorker": true
+        }
+      },
+      "closeBasis": "qualification ended; accepted succeeded Worker, exact original terminal, same fixture workspace; no new input submitted",
+      "closed": {
+        "id": "aa062e9e-0011-4f72-937d-5069db4f8e59",
+        "ok": true,
+        "result": {
+          "close": {
+            "handle": "term_3851c192-da6a-4a79-9995-b41c33925276",
+            "tabId": "e124f267-3b16-400e-90bf-d39e09fac3e2",
+            "ptyKilled": true
+          }
+        },
+        "_meta": {
+          "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2"
+        }
+      }
+    }
+  ]
+}

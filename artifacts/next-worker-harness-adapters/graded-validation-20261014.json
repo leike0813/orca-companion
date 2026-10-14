@@ -1,0 +1,113 @@
+{
+  "schema": "worker-harness-graded-continuation/1",
+  "baseline": "21ddd799d72688e81f0bb1c566c9d33aa138145d",
+  "completedAt": "2026-10-14 14:08:38 UTC",
+  "environment": {
+    "platform": "Ubuntu x86_64",
+    "orcaVersion": "1.4.224",
+    "runtimeId": "9504f185-ea15-49a0-bdf1-909bde15d5f2",
+    "upstreamSubmodule": "cc5c85fb7a43ed52c6cd29157210020cd769d84c"
+  },
+  "support": {
+    "kimi": "enhanced",
+    "hermes": "enhanced",
+    "kilo": "basic",
+    "cline": "unavailable",
+    "muse": "unavailable",
+    "cursor": "unavailable"
+  },
+  "qualificationEvidence": {
+    "kimi": "ip04-2026-10-14T13-59-22-461Z-b759fd59-591a-4350-ac07-4e86a19c5749.json",
+    "hermes": "ip04-2026-10-14T13-47-09-882Z-9b7cbd78-6396-4085-aa3a-8cd4f3ac4faa.json",
+    "kilo": "ip04-2026-10-14T13-37-47-768Z-ddf96f16-587f-48fb-bf2c-97247e6fbb96.json",
+    "clineNativeProfile": "ip04-2026-10-14T13-44-51-081Z-411e7af6-4ff4-418f-8249-813a300a63aa.json"
+  },
+  "checks": [
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm lint",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm build",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm exec vitest run --maxWorkers=4",
+      "exitCode": 0,
+      "filesPassed": 216,
+      "filesSkipped": 9,
+      "testsPassed": 2738,
+      "testsSkipped": 18
+    },
+    {
+      "command": "openspec validate add-next-worker-harness-adapters --strict",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    },
+    {
+      "command": "Node assert: recompute Kimi/Hermes from actual evidence; compare bundled levels; no Recovery/mixed Controller; exact successful cleanup owners",
+      "exitCode": 0
+    }
+  ],
+  "realRuns": [
+    {
+      "scope": "Hermes/Cline basic",
+      "exitCode": 1,
+      "testsPassed": 59,
+      "testsFailed": 2,
+      "testsSkipped": 2,
+      "conclusion": "Hermes basic proved; Cline auth-blocked, two stop_unknown preserved"
+    },
+    {
+      "scope": "Hermes/Kilo enhanced before snapshot refresh fix",
+      "exitCode": 1,
+      "testsPassed": 58,
+      "testsFailed": 3,
+      "testsSkipped": 2,
+      "conclusion": "Historical failures preserved; Kilo Validator proved, missing reports prevent enhancement"
+    },
+    {
+      "scope": "Hermes enhanced after fix",
+      "exitCode": 0,
+      "testsPassed": 61,
+      "testsSkipped": 2,
+      "conclusion": "Four roles, exact resume and same-session Validator context proved; coverage partial"
+    },
+    {
+      "scope": "Kimi basic with native yolo",
+      "exitCode": 0,
+      "conclusion": "Planner/Implementation succeeded, exact Orca bindings/artifacts, no native identity required"
+    },
+    {
+      "scope": "Kimi enhanced with post-settlement snapshot proof",
+      "exitCode": 0,
+      "conclusion": "Four roles and exact resume/Validator context succeeded; coverage complete"
+    },
+    {
+      "scope": "Cline explicit pre-approved native profile",
+      "exitCode": 1,
+      "conclusion": "Native MiniMax UI reached, original provider file unchanged; worker-start unknown retained"
+    }
+  ],
+  "boundaries": {
+    "recoveryAndMixedControllerForKimiHermes": "unverified",
+    "hermesCompleteHistory": "failed_partial",
+    "clineUnknownMutations": "retained_not_retried",
+    "museCursorNativeSetup": "missing"
+  },
+  "cleanup": {
+    "evidence": "graded-cleanup-final-20261014.json",
+    "closed": 24,
+    "failed": 0,
+    "retained": "failed, unknown, unsettled, coordinator terminals and all files"
+  },
+  "committed": false,
+  "archived": false
+}
